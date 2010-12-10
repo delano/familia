@@ -1,0 +1,92 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<html lang='en'>
+  <head>
+    <title>: Familia::Tools [familia 0.5.3.]</title>
+    <meta content='text/html; charset=UTF-8' http-equiv='Content-Type'>
+    <link href='../../rdoc-style.css' media='screen' rel='stylesheet' type='text/css'>
+    <script type='text/javascript'>
+      //<![CDATA[
+        function popupCode(url) {
+          window.open(url, "Code", "resizable=yes,scrollbars=yes,toolbar=no,status=no,height=150,width=400")
+        }
+        
+        function toggleCode(id) {
+          var code = document.getElementById(id)
+        
+          code.style.display = code.style.display != 'block' ? 'block' : 'none'
+          return true
+        }
+        
+        // Make codeblocks hidden by default
+        document.writeln('<' + 'style type="text/css">.method .source pre { display: none }<\/style>')
+      //]]>
+    </script>
+  </head>
+  <body class='page'>
+    <div class='class' id='wrapper'>
+      <div class='header'>
+        <h1 class='name'>
+          <span class='type'>Module</span>
+          Familia::Tools
+        </h1>
+        <ol class='paths'>
+          <li>
+            <a href="../../files/lib/familia_rb.html">lib/familia.rb</a>
+          </li>
+        </ol>
+      </div>
+      <div id='content'>
+        <div id='text'>
+          <div id='method-list'>
+            <h2>Methods</h2>
+            <h3>public instance</h3>
+            <ol>
+              <li><a href="#M000114">move_keys</a></li>
+              <li><a href="#M000115">rename</a></li>
+            </ol>
+          </div>
+          <div id='section'>
+            <div id='methods'>
+              <h2>Public instance methods</h2>
+              <div class='method public-instance' id='method-M000114'>
+                <a name='M000114'>      </a>
+                <div class='synopsis'>
+                  <span class='name'>move_keys</span>
+                  <span class='arguments'>(filter, source_uri, target_uri, &amp;each_key)</span>
+                </div>
+                <div class='source'>
+                  <a class='source-toggle' href='#' onclick="toggleCode('M000114-source'); return false">
+                    [show source]
+                  </a>
+                  <pre id='M000114-source'><span class="ruby-comment cmt"># File lib/familia.rb, line 869</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">move_keys</span>(<span class="ruby-identifier">filter</span>, <span class="ruby-identifier">source_uri</span>, <span class="ruby-identifier">target_uri</span>, <span class="ruby-operator">&amp;</span><span class="ruby-identifier">each_key</span>)&#x000A;      <span class="ruby-keyword kw">if</span> <span class="ruby-identifier">target_uri</span> <span class="ruby-operator">==</span> <span class="ruby-identifier">source_uri</span>&#x000A;        <span class="ruby-identifier">raise</span> <span class="ruby-node">&quot;Source and target are the same (#{target_uri})&quot;</span>&#x000A;      <span class="ruby-keyword kw">end</span>&#x000A;      <span class="ruby-constant">Familia</span>.<span class="ruby-identifier">connect</span> <span class="ruby-identifier">target_uri</span>&#x000A;      <span class="ruby-identifier">source_keys</span> = <span class="ruby-constant">Familia</span>.<span class="ruby-identifier">redis</span>(<span class="ruby-identifier">source_uri</span>).<span class="ruby-identifier">keys</span>(<span class="ruby-identifier">filter</span>)&#x000A;      <span class="ruby-identifier">puts</span> <span class="ruby-node">&quot;Moving #{source_keys.size} keys from #{source_uri} to #{target_uri} (filter: #{filter})&quot;</span>&#x000A;      <span class="ruby-identifier">source_keys</span>.<span class="ruby-identifier">each_with_index</span> <span class="ruby-keyword kw">do</span> <span class="ruby-operator">|</span><span class="ruby-identifier">key</span>,<span class="ruby-identifier">idx</span><span class="ruby-operator">|</span>&#x000A;        <span class="ruby-identifier">type</span> = <span class="ruby-constant">Familia</span>.<span class="ruby-identifier">redis</span>(<span class="ruby-identifier">source_uri</span>).<span class="ruby-identifier">type</span> <span class="ruby-identifier">key</span>&#x000A;        <span class="ruby-identifier">ttl</span> = <span class="ruby-constant">Familia</span>.<span class="ruby-identifier">redis</span>(<span class="ruby-identifier">source_uri</span>).<span class="ruby-identifier">ttl</span> <span class="ruby-identifier">key</span>&#x000A;        <span class="ruby-keyword kw">if</span> <span class="ruby-identifier">source_uri</span>.<span class="ruby-identifier">host</span> <span class="ruby-operator">==</span> <span class="ruby-identifier">target_uri</span>.<span class="ruby-identifier">host</span> <span class="ruby-operator">&amp;&amp;</span> <span class="ruby-identifier">source_uri</span>.<span class="ruby-identifier">port</span> <span class="ruby-operator">==</span> <span class="ruby-identifier">target_uri</span>.<span class="ruby-identifier">port</span>&#x000A;          <span class="ruby-constant">Familia</span>.<span class="ruby-identifier">redis</span>(<span class="ruby-identifier">source_uri</span>).<span class="ruby-identifier">move</span> <span class="ruby-identifier">key</span>, <span class="ruby-identifier">target_uri</span>.<span class="ruby-identifier">db</span>&#x000A;        <span class="ruby-keyword kw">else</span>&#x000A;          <span class="ruby-keyword kw">case</span> <span class="ruby-identifier">type</span>&#x000A;          <span class="ruby-keyword kw">when</span> <span class="ruby-value str">&quot;string&quot;</span>&#x000A;            <span class="ruby-identifier">value</span> = <span class="ruby-constant">Familia</span>.<span class="ruby-identifier">redis</span>(<span class="ruby-identifier">source_uri</span>).<span class="ruby-identifier">get</span> <span class="ruby-identifier">key</span>&#x000A;          <span class="ruby-keyword kw">when</span> <span class="ruby-value str">&quot;list&quot;</span>&#x000A;            <span class="ruby-identifier">value</span> = <span class="ruby-constant">Familia</span>.<span class="ruby-identifier">redis</span>(<span class="ruby-identifier">source_uri</span>).<span class="ruby-identifier">lrange</span> <span class="ruby-identifier">key</span>, <span class="ruby-value">0</span>, <span class="ruby-value">-1</span>&#x000A;          <span class="ruby-keyword kw">when</span> <span class="ruby-value str">&quot;set&quot;</span>&#x000A;            <span class="ruby-identifier">value</span> = <span class="ruby-constant">Familia</span>.<span class="ruby-identifier">redis</span>(<span class="ruby-identifier">source_uri</span>).<span class="ruby-identifier">smembers</span> <span class="ruby-identifier">key</span>&#x000A;          <span class="ruby-keyword kw">else</span>&#x000A;            <span class="ruby-identifier">raise</span> <span class="ruby-constant">Familia</span><span class="ruby-operator">::</span><span class="ruby-constant">Problem</span>, <span class="ruby-node">&quot;unknown key type: #{type}&quot;</span>&#x000A;          <span class="ruby-keyword kw">end</span>&#x000A;          <span class="ruby-identifier">raise</span> <span class="ruby-value str">&quot;Not implemented&quot;</span>&#x000A;        <span class="ruby-keyword kw">end</span>&#x000A;        <span class="ruby-identifier">each_key</span>.<span class="ruby-identifier">call</span>(<span class="ruby-identifier">idx</span>, <span class="ruby-identifier">type</span>, <span class="ruby-identifier">key</span>, <span class="ruby-identifier">ttl</span>) <span class="ruby-keyword kw">unless</span> <span class="ruby-identifier">each_key</span>.<span class="ruby-identifier">nil?</span>&#x000A;      <span class="ruby-keyword kw">end</span>&#x000A;    <span class="ruby-keyword kw">end</span></pre>
+                </div>
+              </div>
+              <div class='method public-instance' id='method-M000115'>
+                <a name='M000115'>      </a>
+                <div class='synopsis'>
+                  <span class='name'>rename</span>
+                  <span class='arguments'>(filter, source_uri, target_uri=nil, &amp;each_key)</span>
+                </div>
+                <div class='description'>
+                  <p>
+                  Use the return value from each_key as the new key name
+                  </p>
+                </div>
+                <div class='source'>
+                  <a class='source-toggle' href='#' onclick="toggleCode('M000115-source'); return false">
+                    [show source]
+                  </a>
+                  <pre id='M000115-source'><span class="ruby-comment cmt"># File lib/familia.rb, line 898</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">rename</span>(<span class="ruby-identifier">filter</span>, <span class="ruby-identifier">source_uri</span>, <span class="ruby-identifier">target_uri</span>=<span class="ruby-keyword kw">nil</span>, <span class="ruby-operator">&amp;</span><span class="ruby-identifier">each_key</span>)&#x000A;      <span class="ruby-identifier">target_uri</span> <span class="ruby-operator">||=</span> <span class="ruby-identifier">source_uri</span>&#x000A;      <span class="ruby-identifier">move_keys</span> <span class="ruby-identifier">filter</span>, <span class="ruby-identifier">source_uri</span>, <span class="ruby-identifier">target_uri</span> <span class="ruby-keyword kw">if</span> <span class="ruby-identifier">source_uri</span> <span class="ruby-operator">!=</span> <span class="ruby-identifier">target_uri</span>&#x000A;      <span class="ruby-identifier">source_keys</span> = <span class="ruby-constant">Familia</span>.<span class="ruby-identifier">redis</span>(<span class="ruby-identifier">source_uri</span>).<span class="ruby-identifier">keys</span>(<span class="ruby-identifier">filter</span>)&#x000A;      <span class="ruby-identifier">puts</span> <span class="ruby-node">&quot;Renaming #{source_keys.size} keys from #{source_uri} (filter: #{filter})&quot;</span>&#x000A;      <span class="ruby-identifier">source_keys</span>.<span class="ruby-identifier">each_with_index</span> <span class="ruby-keyword kw">do</span> <span class="ruby-operator">|</span><span class="ruby-identifier">key</span>,<span class="ruby-identifier">idx</span><span class="ruby-operator">|</span>&#x000A;        <span class="ruby-constant">Familia</span>.<span class="ruby-identifier">trace</span> <span class="ruby-identifier">:RENAME1</span>, <span class="ruby-constant">Familia</span>.<span class="ruby-identifier">redis</span>(<span class="ruby-identifier">source_uri</span>), <span class="ruby-node">&quot;#{key}&quot;</span>, <span class="ruby-value str">''</span>&#x000A;        <span class="ruby-identifier">type</span> = <span class="ruby-constant">Familia</span>.<span class="ruby-identifier">redis</span>(<span class="ruby-identifier">source_uri</span>).<span class="ruby-identifier">type</span> <span class="ruby-identifier">key</span>&#x000A;        <span class="ruby-identifier">ttl</span> = <span class="ruby-constant">Familia</span>.<span class="ruby-identifier">redis</span>(<span class="ruby-identifier">source_uri</span>).<span class="ruby-identifier">ttl</span> <span class="ruby-identifier">key</span>&#x000A;        <span class="ruby-identifier">newkey</span> = <span class="ruby-identifier">each_key</span>.<span class="ruby-identifier">call</span>(<span class="ruby-identifier">idx</span>, <span class="ruby-identifier">type</span>, <span class="ruby-identifier">key</span>, <span class="ruby-identifier">ttl</span>) <span class="ruby-keyword kw">unless</span> <span class="ruby-identifier">each_key</span>.<span class="ruby-identifier">nil?</span>&#x000A;        <span class="ruby-constant">Familia</span>.<span class="ruby-identifier">trace</span> <span class="ruby-identifier">:RENAME2</span>, <span class="ruby-constant">Familia</span>.<span class="ruby-identifier">redis</span>(<span class="ruby-identifier">source_uri</span>), <span class="ruby-node">&quot;#{key} -&gt; #{newkey}&quot;</span>, <span class="ruby-identifier">caller</span>[<span class="ruby-value">0</span>]&#x000A;        <span class="ruby-identifier">ret</span> = <span class="ruby-constant">Familia</span>.<span class="ruby-identifier">redis</span>(<span class="ruby-identifier">source_uri</span>).<span class="ruby-identifier">renamenx</span> <span class="ruby-identifier">key</span>, <span class="ruby-identifier">newkey</span>&#x000A;      <span class="ruby-keyword kw">end</span>&#x000A;    <span class="ruby-keyword kw">end</span></pre>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div id='footer-push'></div>
+    </div>
+    <div id='footer'>
+      <a href="http://github.com/mislav/hanna/tree/master"><strong>Hanna</strong> RDoc template</a>
+    </div>
+  </body>
+</html>
