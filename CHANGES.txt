@@ -1,0 +1,6 @@
+FAMILIA, CHANGES
+
+#### 0.5.3 (2010-12-10) ###############################
+
+Initial public release
+

@@ -1,0 +1,14 @@
+# Familia - 0.5 BETA
+
+**Organize and store ruby objects in Redis**
+
+
+## More Information
+
+* [Codes](http://github.com/delano/familia)
+* [RDocs](http://delano.github.com/familia)
+
+
+## Credits
+
+* [Delano Mandelbaum](http://goldensword.ca)
