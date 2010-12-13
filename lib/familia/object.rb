@@ -521,6 +521,7 @@ module Familia::Object
     def size
       redis.scard rediskey
     end
+    alias_method :length, :size
     
     def << v
       redis.sadd rediskey, to_redis(v)
@@ -571,18 +572,96 @@ module Familia::Object
   end
   
   class SortedSet < RedisObject
-    #define_method :"#{name}_key" do
-    #  key(name)
-    #end
-    #define_method :"#{name}_size" do
-    #  self.class.redis.zcard key(name)
-    #end
-    #define_method :"clear_#{name}" do
-    #  self.class.redis.del key(name)
-    #end
-    #define_method :"#{name}?" do
-    #  self.send(:"#{name}_size") > 0
-    #end
+    
+    def size
+      redis.zcard rediskey
+    end
+    alias_method :length, :size
+    
+    # e.g. obj.metrics[VALUE] = SCORE
+    def []= v, score
+      redis.zadd rediskey, score, to_redis(v)
+    end
+    alias_method :add, :[]=
+    
+    def score v
+      redis.zscore(rediskey, to_redis(v)).to_f
+    end
+    
+    # rank of member +v+ when ordered lowest to highest (starts at 0)
+    def rank v
+      redis.zrank(rediskey, to_redis(v)).to_i
+    end
+    
+    # rank of member +v+ when ordered highest to lowest (starts at 0)
+    def revrank v
+      redis.zrevrank(rediskey, to_redis(v)).to_i
+    end
+    
+    def members opts={}
+      range 0, -1, opts
+    end
+    alias_method :to_a, :members
+    
+    def membersrev opts={}
+      rangerev 0, -1, opts
+    end
+    
+    def range sidx, eidx, opts={}
+      opts[:with_scores] = true if opts[:withscores]
+      redis.zrange rediskey, sidx, eidx, opts
+    end
+
+    def rangerev sidx, eidx, opts={}
+      opts[:with_scores] = true if opts[:withscores]
+      redis.zrevrange rediskey, sidx, eidx, opts
+    end
+    
+    # e.g. obj.metrics.rangebyscore (now-12.hours), now, :limit => [0, 10]
+    def rangebyscore sscore, escore, opts={}
+      opts[:with_scores] = true if opts[:withscores]
+      redis.zrangebyscore rediskey, sscore, escore, opts
+    end
+    
+    def remrangebyrank srank, erank
+      redis.zremrangebyrank rediskey, srank, erank
+    end
+
+    def remrangebyscore sscore, escore
+      redis.zremrangebyscore rediskey, sscore, escore
+    end
+    
+    def increment v, by=1
+      redis.zincrby(rediskey, by, v).to_i
+    end
+    alias_method :incr, :increment
+    alias_method :incrby, :increment
+
+    def decrement v, by=1
+      increment v, -by
+    end
+    alias_method :decr, :decrement
+    alias_method :decrby, :decrement
+    
+    def delete v
+      redis.zrem rediskey, to_redis(v)
+    end
+    alias_method :remove, :delete
+    
+    def at idx
+      range(idx, idx).first
+    end
+
+    # Return the first element in the list. Redis: ZRANGE(0)
+    def first
+      at(0)
+    end
+
+    # Return the last element in the list. Redis: ZRANGE(-1)
+    def last
+      at(-1)
+    end
+    
     #define_method :"add_#{name_singular}" do |score,obj|
     #  objid = klass === obj ? obj.index : obj
     #  #Familia.ld "#{self.class} Add #{objid} (#{score}) to #{key(name)}"
