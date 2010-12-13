@@ -4,11 +4,11 @@ require 'familia/test_helpers'
 @a = Bone.new 'atoken', 'akey'
 
 ## Familia::Object::SortedSet#add
-@a.metrics.add :metric2, 2
-@a.metrics.add :metric4, 4
-@a.metrics.add :metric0, 0
-@a.metrics.add :metric1, 1
-@a.metrics.add :metric3, 3
+@a.metrics.add 2, :metric2
+@a.metrics.add 4, :metric4
+@a.metrics.add 0, :metric0
+@a.metrics.add 1, :metric1
+@a.metrics.add 3, :metric3
 #=> true
 
 ## Familia::Object::SortedSet#members
