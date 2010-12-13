@@ -125,7 +125,7 @@ module Familia
     def index(r=nil)  @index = r if r; @index end
     def index=(r) @index = r; r end
     def split(r) r.split(Familia.delim) end
-    def key *args
+    def rediskey *args
       el = args.flatten.compact
       el.unshift @apiversion unless @apiversion.nil?
       el.join(Familia.delim)

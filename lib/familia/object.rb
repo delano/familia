@@ -7,34 +7,36 @@ module Familia::Object
     def redisinfo
       info = {
         :db   => self.class.db || 0,
-        :key  => key,
+        :key  => rediskey,
         :type => redistype,
         :ttl  => realttl
       }
     end
     def exists?
-      Familia.redis(self.class.uri).exists self.key
-    end
-    def destroy!(suffix=nil)
-      ret = Familia.redis(self.class.uri).del self.key(suffix)
-      Familia.trace :DELETED, Familia.redis(self.class.uri), "#{key(suffix)}: #{ret}", caller.first
+      Familia.redis(self.class.uri).exists rediskey
+    end      
+    def destroy!
+      ret = Familia.redis(self.class.uri).del rediskey
+      if Familia.debug?
+        Familia.trace :DELETED, Familia.redis(self.class.uri), "#{rediskey}: #{ret}", caller.first
+      end
       ret
     end
     def allkeys
-      keynames = [key]
+      keynames = [rediskey]
       self.class.suffixes.each do |sfx| 
-        keynames << key(sfx)
+        keynames << rediskey(sfx)
       end
       keynames
     end
-    def key(suffix=nil)
+    def rediskey(suffix=nil)
       raise EmptyIndex, self.class if index.nil? || index.empty?
       if suffix.nil?
         suffix = self.class.suffix.kind_of?(Proc) ? 
                      self.class.suffix.call(self) : 
                      self.class.suffix
       end
-      self.class.key self.index, suffix
+      self.class.rediskey self.index, suffix
     end
     def save(force=false)
       Familia.trace :SAVE, Familia.redis(self.class.uri), redisuri, caller.first
@@ -42,9 +44,9 @@ module Familia::Object
       ##return false unless force || self.gibbled? || self.gibbler_cache.nil?
       preprocess if respond_to?(:preprocess)
       self.update_time if self.respond_to?(:update_time)
-      ret = Familia.redis(self.class.uri).set self.key, self.to_json
+      ret = Familia.redis(self.class.uri).set rediskey, self.to_json
       unless self.ttl.nil? || self.ttl <= 0
-        Familia.trace :SET_EXPIRE, Familia.redis(self.class.uri), "#{self.key} to #{self.ttl}"
+        Familia.trace :SET_EXPIRE, Familia.redis(self.class.uri), "#{rediskey} to #{self.ttl}"
         expire(self.ttl) 
       end
       ret == "OK"
@@ -63,10 +65,10 @@ module Familia::Object
     end
     def expire(ttl=nil)
       ttl ||= self.class.ttl
-      Familia.redis(self.class.uri).expire self.key, ttl.to_i
+      Familia.redis(self.class.uri).expire rediskey, ttl.to_i
     end
     def realttl
-      Familia.redis(self.class.uri).ttl self.key
+      Familia.redis(self.class.uri).ttl rediskey
     end
     def ttl=(v)
       @ttl = v.to_i
@@ -76,16 +78,16 @@ module Familia::Object
     end
     def raw(suffix=nil)
       suffix ||= :object
-      Familia.redis(self.class.uri).get key(suffix)
+      Familia.redis(self.class.uri).get rediskey(suffix)
     end
     def redisuri(suffix=nil)
       u = URI.parse self.class.uri.to_s
       u.db ||= self.class.db.to_s
-      u.key = key(suffix)
+      u.key = rediskey(suffix)
       u
     end
     def redistype(suffix=nil)
-      Familia.redis(self.class.uri).type key(suffix)
+      Familia.redis(self.class.uri).type rediskey(suffix)
     end
     # Finds the shortest available unique key (lower limit of 6)
     def shortid
@@ -106,8 +108,8 @@ module Familia::Object
       # unique for each instance of this class so they can refer
       # to the index of this specific instance. 
       # i.e. 
-      #     familia_object.key              == v1:bone:INDEXVALUE:object
-      #     familia_object.redis_object.key == v1:bone:INDEXVALUE:name
+      #     familia_object.rediskey              == v1:bone:INDEXVALUE:object
+      #     familia_object.redis_object.rediskey == v1:bone:INDEXVALUE:name
       #
       # See RedisObject.install_familia_object
       self.class.redis_objects.each_pair do |name, redis_object_class|
@@ -160,7 +162,7 @@ module Familia::Object
       redis.flushdb
     end
     def keys(suffix=nil)
-      self.redis.keys(key('*',suffix)) || []
+      self.redis.keys(rediskey('*',suffix)) || []
     end
     def all(suffix=nil)
       # objects that could not be parsed will be nil
@@ -170,7 +172,7 @@ module Familia::Object
       size(filter) > 0
     end
     def size(filter='*')
-      self.redis.keys(key(filter)).compact.size
+      self.redis.keys(rediskey(filter)).compact.size
     end
     def suffix=(val)   
       suffixes << (@suffix = val)
@@ -223,7 +225,7 @@ module Familia::Object
       ids.compact.collect { |json| self.from_json(json) }.compact
     end
     def rawmultiget(*ids)
-      ids.collect! { |objid| self.key(objid) }
+      ids.collect! { |objid| rediskey(objid) }
       return [] if ids.compact.empty?
       Familia.trace :MULTIGET, self.redis, "#{ids.size}: #{ids}", caller
       ids = self.redis.mget *ids
@@ -250,7 +252,7 @@ module Familia::Object
     def from_redis(objid, suffix=nil)
       objid &&= objid.to_s
       return nil if objid.nil? || objid.empty?
-      this_key = key(objid, suffix)
+      this_key = rediskey(objid, suffix)
       #Familia.ld "Reading key: #{this_key}"
       me = from_key(this_key)
       me.gibbler  # prime the gibbler cache (used to check for changes)
@@ -259,35 +261,35 @@ module Familia::Object
     def exists?(objid, suffix=nil)
       objid &&= objid.to_s
       return false if objid.nil? || objid.empty?
-      ret = Familia.redis(self.uri).exists key(objid, suffix)
-      Familia.trace :EXISTS, Familia.redis(self.uri), "#{key(objid)} #{ret}", caller.first
+      ret = Familia.redis(self.uri).exists rediskey(objid, suffix)
+      Familia.trace :EXISTS, Familia.redis(self.uri), "#{rediskey(objid)} #{ret}", caller.first
       ret
     end
     def destroy!(runid, suffix=nil)
-      ret = Familia.redis(self.uri).del key(runid, suffix)
-      Familia.trace :DELETED, Familia.redis(self.uri), "#{key(runid)}: #{ret}", caller.first
+      ret = Familia.redis(self.uri).del rediskey(runid, suffix)
+      Familia.trace :DELETED, Familia.redis(self.uri), "#{rediskey(runid)}: #{ret}", caller.first
       ret
     end
     def find(suffix='*')
-      list = Familia.redis(self.uri).keys(key('*', suffix)) || []
+      list = Familia.redis(self.uri).keys(rediskey('*', suffix)) || []
     end
-    def key(runid, suffix=nil)
+    def rediskey(runid, suffix=nil)
       suffix ||= self.suffix
       runid ||= ''
       runid &&= runid.to_s
-      str = Familia.key(prefix, runid, suffix)
+      str = Familia.rediskey(prefix, runid, suffix)
       str
     end
     def expand(short_key, suffix=nil)
       suffix ||= self.suffix
-      expand_key = Familia.key(self.prefix, "#{short_key}*", suffix)
+      expand_key = Familia.rediskey(self.prefix, "#{short_key}*", suffix)
       Familia.trace :EXPAND, Familia.redis(self.uri), expand_key, caller.first
       list = Familia.redis(self.uri).keys expand_key
       case list.size
       when 0
         nil
       when 1 
-        matches = list.first.match(/\A#{Familia.key(prefix)}\:(.+?)\:#{suffix}/) || []
+        matches = list.first.match(/\A#{Familia.rediskey(prefix)}\:(.+?)\:#{suffix}/) || []
         matches[1]
       else
         raise Familia::NonUniqueKey, "Short key returned more than 1 match" 
@@ -396,8 +398,9 @@ module Familia::Object
     end
     
     attr_reader :name, :parent
-    def initialize n, p
+    def initialize n, p, opts={}
       @name, @parent = n, p
+      @opts = {}
       if name.to_s.match(/s$/i)
         @name_plural = @name.to_s.clone
         @name_singular = @name.to_s[0..-2]
@@ -407,10 +410,112 @@ module Familia::Object
       end
     end
     
+    # returns a redis key based on the parent 
+    # object so it will include the proper index.
     def rediskey
-      parent.key(name)
+      parent.rediskey(name)
     end
     
+    def redis
+      parent.class.redis
+    end
+    
+    def destroy! 
+      redis.del rediskey
+    end
+    
+    def exists?
+      !size.zero?
+    end
+    
+    def to_redis v
+      return v unless @opts[:dump]
+      RedisObject.dump(v, self)
+    end
+    
+    def RedisObject.dump(v, klass)
+      case v
+      when String, Fixnum, Bignum, Float
+        v
+      else
+        # TODO: dump to / load from JSON
+        v
+      end
+    end
+    
+    def RedisObject.load(v, klass)
+      v
+    end
+    
+  end
+  
+  
+  class List < RedisObject
+    
+    def size
+      redis.llen rediskey
+    end
+    
+    def push v
+      redis.rpush rediskey, to_redis(v)
+    end
+    
+    ## Make the value stored at KEY identical to the given list
+    #define_method :"#{name}_sync" do |*latest|
+    #  latest = latest.flatten.compact
+    #  # Do nothing if we're given an empty Array. 
+    #  # Otherwise this would clear all current values
+    #  if latest.empty?
+    #    false
+    #  else
+    #    # Convert to a list of index values if we got the actual objects
+    #    latest = latest.collect { |obj| obj.index } if klass === latest.first
+    #    current = send("#{name_plural}raw")
+    #    added = latest-current
+    #    removed = current-latest
+    #    #Familia.info "#{self.index}: adding: #{added}"
+    #    added.each { |v| self.send("add_#{name_singular}", v) }
+    #    #Familia.info "#{self.index}: removing: #{removed}"
+    #    removed.each { |v| self.send("remove_#{name_singular}", v) }
+    #    true
+    #  end
+    #end
+    #define_method :"#{name}?" do
+    #  self.send(:"#{name}_size") > 0
+    #end
+    #define_method :"add_#{name_singular}" do |obj|
+    #  objid = klass === obj ? obj.index : obj
+    #  #Familia.ld "#{self.class} Add #{objid} to #{key(name)}"
+    #  ret = self.class.redis.rpush key(name), objid
+    #  # TODO : copy to zset and set
+    #  #unless self.ttl.nil? || self.ttl <= 0
+    #  #  Familia.trace :SET_EXPIRE, Familia.redis(self.class.uri), "#{self.key} to #{self.ttl}"
+    #  #  Familia.redis(self.class.uri).expire key(name), self.ttl
+    #  #end
+    #  ret
+    #end
+    #define_method :"remove_#{name_singular}" do |obj|
+    #  objid = klass === obj ? obj.index : obj
+    #  #Familia.ld "#{self.class} Remove #{objid} from #{key(name)}"
+    #  self.class.redis.lrem key(name), 0, objid
+    #end
+    #define_method :"#{name_plural}raw" do |*args|
+    #  count = args.first-1 unless args.empty?
+    #  count ||= -1
+    #  list = self.class.redis.lrange(key(name), 0, count) || []
+    #end
+    #define_method :"#{name_plural}" do |*args|
+    #  list = send("#{name_plural}raw", *args)
+    #  if klass.nil? 
+    #    list 
+    #  elsif klass.include?(Familia) 
+    #    klass.multiget(*list)
+    #  elsif klass.respond_to?(:from_json)
+    #    list.collect { |str| klass.from_json(str) }
+    #  else
+    #    list
+    #  end
+    #end
   end
   
   class Set < RedisObject
@@ -620,76 +725,6 @@ module Familia::Object
     #end
   end
 
-  class List < RedisObject
-    
-    
-    
-    #define_method :"#{name}_key" do
-    #  key(name)
-    #end
-    #define_method :"#{name}_size" do
-    #  self.class.redis.llen key(name)
-    #end
-    #define_method :"clear_#{name}" do
-    #  self.class.redis.del key(name)
-    #end
-    ## Make the value stored at KEY identical to the given list
-    #define_method :"#{name}_sync" do |*latest|
-    #  latest = latest.flatten.compact
-    #  # Do nothing if we're given an empty Array. 
-    #  # Otherwise this would clear all current values
-    #  if latest.empty?
-    #    false
-    #  else
-    #    # Convert to a list of index values if we got the actual objects
-    #    latest = latest.collect { |obj| obj.index } if klass === latest.first
-    #    current = send("#{name_plural}raw")
-    #    added = latest-current
-    #    removed = current-latest
-    #    #Familia.info "#{self.index}: adding: #{added}"
-    #    added.each { |v| self.send("add_#{name_singular}", v) }
-    #    #Familia.info "#{self.index}: removing: #{removed}"
-    #    removed.each { |v| self.send("remove_#{name_singular}", v) }
-    #    true
-    #  end
-    #end
-    #define_method :"#{name}?" do
-    #  self.send(:"#{name}_size") > 0
-    #end
-    #define_method :"add_#{name_singular}" do |obj|
-    #  objid = klass === obj ? obj.index : obj
-    #  #Familia.ld "#{self.class} Add #{objid} to #{key(name)}"
-    #  ret = self.class.redis.rpush key(name), objid
-    #  # TODO : copy to zset and set
-    #  #unless self.ttl.nil? || self.ttl <= 0
-    #  #  Familia.trace :SET_EXPIRE, Familia.redis(self.class.uri), "#{self.key} to #{self.ttl}"
-    #  #  Familia.redis(self.class.uri).expire key(name), self.ttl
-    #  #end
-    #  ret
-    #end
-    #define_method :"remove_#{name_singular}" do |obj|
-    #  objid = klass === obj ? obj.index : obj
-    #  #Familia.ld "#{self.class} Remove #{objid} from #{key(name)}"
-    #  self.class.redis.lrem key(name), 0, objid
-    #end
-    #define_method :"#{name_plural}raw" do |*args|
-    #  count = args.first-1 unless args.empty?
-    #  count ||= -1
-    #  list = self.class.redis.lrange(key(name), 0, count) || []
-    #end
-    #define_method :"#{name_plural}" do |*args|
-    #  list = send("#{name_plural}raw", *args)
-    #  if klass.nil? 
-    #    list 
-    #  elsif klass.include?(Familia) 
-    #    klass.multiget(*list)
-    #  elsif klass.respond_to?(:from_json)
-    #    list.collect { |str| klass.from_json(str) }
-    #  else
-    #    list
-    #  end
-    #end
-  end
 
   class Counter < RedisObject
   end

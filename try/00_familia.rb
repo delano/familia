@@ -14,10 +14,19 @@ class ::Bone < Storable
   list :tags
 end
 
-## Test list
-@a = Bone.new 'sometoken', 'somename'
-@b = Bone.new 'btoken', 'bname'
-p [1, @a.key]
-p [1, @a.owners.rediskey]
-p [1, @b.owners.rediskey]
-#=> true
+## Redis Objects are unique per instance of a Familia class
+@a = Bone.new 'atoken'
+@b = Bone.new 'btoken'
+@a.owners.rediskey == @b.owners.rediskey
+#=> false
+
+## Familia::List#push
+@a.owners.push :value1
+#=> false
+
+## Familia::List#size
+@a.owners.size
+#=> 1
+
+
+@a.owners.destroy!

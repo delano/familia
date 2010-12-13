@@ -2,9 +2,12 @@ FAMILIA, CHANGES
 
 #### 0.6.0 (2010-12-10) ###############################
 
-NOTE: 0.6 syntax is not compatible with previous versions. 
+NOTE: Mucho refactoring. 0.6 syntax is not compatible with previous versions. 
 
-CHANGE: Mucho refactoring.
+CHANGE: All methods name "key" are now "rediskey"
+CHANGE: Familia#destroy! no longer takes a suffix argument. It now deletes
+        the object and all suffixes. See destroy. 
+ADDED: Familia#destroy deletes just the object. 
 
 
 #### 0.5.3 (2010-12-10) ###############################
