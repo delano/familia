@@ -22,31 +22,39 @@ end
 @a.owners.rediskey == @b.owners.rediskey
 #=> false
 
-## Familia::List#push
+## Familia::Object::List#push
 ret = @a.owners.push :value1
 ret.class
 #=> Familia::Object::List
 
-## Familia::List#<<
+## Familia::Object::List#<<
 ret = @a.owners << :value2 << :value3 << :value4
 ret.class
 #=> Familia::Object::List
 
-## Familia::List#pop
+## Familia::Object::List#pop
 @a.owners.pop
 #=> 'value4'
 
-## Familia::List#first
+## Familia::Object::List#first
 @a.owners.first
 #=> 'value1'
 
-## Familia::List#last
+## Familia::Object::List#last
 @a.owners.last
 #=> 'value3'
 
-## Familia::List#size
+## Familia::Object::List#to_a
+@a.owners.to_a
+#=> ['value1','value2','value3']
+
+## Familia::Object::List#delete
+@a.owners.delete 'value3'
+#=> 1
+
+## Familia::Object::List#size
 @a.owners.size
-#=> 3
+#=> 2
 
 
 @a.owners.destroy!
