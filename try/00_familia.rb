@@ -10,8 +10,10 @@ class ::Bone < Storable
   def index
     [token, name].join(':')
   end
-  list :owners
-  list :tags
+  list   :owners
+  set    :tags
+  hash   :props
+  string :msg
 end
 
 ## Redis Objects are unique per instance of a Familia class
@@ -21,12 +23,30 @@ end
 #=> false
 
 ## Familia::List#push
-@a.owners.push :value1
-#=> false
+ret = @a.owners.push :value1
+ret.class
+#=> Familia::Object::List
+
+## Familia::List#<<
+ret = @a.owners << :value2 << :value3 << :value4
+ret.class
+#=> Familia::Object::List
+
+## Familia::List#pop
+@a.owners.pop
+#=> 'value4'
+
+## Familia::List#first
+@a.owners.first
+#=> 'value1'
+
+## Familia::List#last
+@a.owners.last
+#=> 'value3'
 
 ## Familia::List#size
 @a.owners.size
-#=> 1
+#=> 3
 
 
 @a.owners.destroy!

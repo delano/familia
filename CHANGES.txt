@@ -7,6 +7,7 @@ NOTE: Mucho refactoring. 0.6 syntax is not compatible with previous versions.
 CHANGE: All methods name "key" are now "rediskey"
 CHANGE: Familia#destroy! no longer takes a suffix argument. It now deletes
         the object and all suffixes. See destroy. 
+CHANGE: Redis Object class methods now take the following args: name, options={}
 ADDED: Familia#destroy deletes just the object. 
 
 

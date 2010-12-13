@@ -111,7 +111,7 @@ module Familia::Object
       #     familia_object.rediskey              == v1:bone:INDEXVALUE:object
       #     familia_object.redis_object.rediskey == v1:bone:INDEXVALUE:name
       #
-      # See RedisObject.install_familia_object
+      # See RedisObject.install_redis_object
       self.class.redis_objects.each_pair do |name, redis_object_class|
         redis_object = redis_object_class.new name, self
         self.send("#{name}=", redis_object)
@@ -308,10 +308,9 @@ module Familia::Object
     # Auto-extended into a class that includes Familia
     module ClassMethods
       
-      def string(opts={})
-        name, klass = opts.keys.first, opts.values.first
-        strings[name] = klass
-        install_familia_object Familia::Object::String, name
+      def string(name, opts={}, &blk)
+        strings[name] = opts[:class]
+        install_redis_object Familia::Object::String, name
       end
       def string?(name)
         strings.has_key? name.to_s.to_sym
@@ -321,14 +320,9 @@ module Familia::Object
         @strings
       end
 
-      def hash(opts={}, &blk)
-        if Hash === opts
-          name, klass = opts.keys.first, opts.values.first
-        else
-          name, klass = opts, nil
-        end
-        hashes[name] = klass
-        install_familia_object Familia::Object::HashKey, name
+      def hash(name, opts={}, &blk)
+        hashes[name] = opts[:class]
+        install_redis_object Familia::Object::HashKey, name
       end
       def hashes
         @hashes ||= {}
@@ -338,14 +332,9 @@ module Familia::Object
         @hashes.has_key? name.to_s.to_sym
       end
 
-      def set(opts={})
-        if Hash === opts
-          name, klass = opts.keys.first, opts.values.first
-        else
-          name, klass = opts, nil
-        end
-        sets[name] = klass
-        install_familia_object Familia::Object::Set, name
+      def set(name, opts={}, &blk)
+        sets[name] = opts[:class]
+        install_redis_object Familia::Object::Set, name
       end
       def sets
         @sets ||= {}
@@ -355,14 +344,9 @@ module Familia::Object
         sets.has_key? :"#{name}"
       end
 
-      def zset(opts={})
-        if Hash === opts
-          name, klass = opts.keys.first, opts.values.first
-        else
-          name, klass = opts, nil
-        end
-        zsets[name] = klass
-        install_familia_object Familia::Object::SortedSet, name
+      def zset(name, opts={}, &blk)
+        zsets[name] = opts[:class]
+        install_redis_object Familia::Object::SortedSet, name
       end
       def zsets
         @zsets ||= {}
@@ -372,14 +356,9 @@ module Familia::Object
         zsets.has_key? :"#{name}"
       end
 
-      def list(opts={})
-        if Hash === opts
-          name, klass = opts.keys.first, opts.values.first
-        else
-          name, klass = opts, nil
-        end
-        lists[name] = klass
-        install_familia_object Familia::Object::List, name
+      def list(name, opts={}, &blk)
+        lists[name] = opts[:class]
+        install_redis_object Familia::Object::List, name
       end
       def lists
         @lists ||= {}
@@ -388,9 +367,10 @@ module Familia::Object
       def list?(name)
         lists.has_key? :"#{name}"
       end
+      
       # Creates an instance method called +name+ that
       # returns an instance of the RedisObject +klass+ 
-      def install_familia_object klass, name
+      def install_redis_object klass, name
         self.suffixes << name
         self.redis_objects[name] = klass
         self.send :attr_accessor, name
@@ -401,13 +381,6 @@ module Familia::Object
     def initialize n, p, opts={}
       @name, @parent = n, p
       @opts = {}
-      if name.to_s.match(/s$/i)
-        @name_plural = @name.to_s.clone
-        @name_singular = @name.to_s[0..-2]
-      else
-        @name_plural = "#{@name}s"
-        @name_singular = @name
-      end
     end
     
     # returns a redis key based on the parent 
@@ -430,7 +403,12 @@ module Familia::Object
     
     def to_redis v
       return v unless @opts[:dump]
-      RedisObject.dump(v, self)
+      RedisObject.dump v, @opts[:class]
+    end
+    
+    def from_redis v
+      return v unless @opts[:dump]
+      RedisObject.load v, @opts[:class]
     end
     
     def RedisObject.dump(v, klass)
@@ -438,13 +416,13 @@ module Familia::Object
       when String, Fixnum, Bignum, Float
         v
       else
-        # TODO: dump to / load from JSON
+        # TODO: dump to JSON
         v
       end
     end
     
     def RedisObject.load(v, klass)
-      v
+      v # TODO: load from JSON, including Fixnum, Bignum, Float
     end
     
   end
@@ -455,9 +433,63 @@ module Familia::Object
     def size
       redis.llen rediskey
     end
+    alias_method :length, :size
     
-    def push v
+    def << v
       redis.rpush rediskey, to_redis(v)
+      redis.ltrim rediskey, -@opts[:maxlength], -1 if @opts[:maxlength]
+      self
+    end
+    alias_method :push, :<<
+
+    def unshift v
+      redis.lpush rediskey, to_redis(v)
+      redis.ltrim rediskey, 0, @opts[:maxlength] - 1 if @opts[:maxlength]
+      self
+    end
+    
+    def pop
+      from_redis redis.rpop(rediskey)
+    end
+    
+    def shift
+      from_redis redis.lpop(key)
+    end
+    
+    def [] idx, count=nil
+      if idx.is_a? Range
+        range idx.first, idx.last
+      elsif count
+        case count <=> 0
+        when 1  then range(idx, idx + count - 1)
+        when 0  then []
+        when -1 then nil
+        end
+      else
+        at idx
+      end
+    end
+    alias_method :slice, :[]
+    
+    def delete v, count=0
+      redis.lrem rediskey, count, to_redis(v)
+    end
+    
+    def range sidx=0, eidx=-1
+      redis.lrange rediskey, sidx, eidx
+    end
+    alias_method :to_a, :range
+    
+    def at idx
+      from_redis redis.lindex(rediskey, idx)
+    end
+    
+    def first
+      at 0
+    end
+
+    def last
+      at -1
     end
     
     ## Make the value stored at KEY identical to the given list
