@@ -42,7 +42,7 @@ module Familia
   class << self
     attr_reader :conf, :classes, :clients
     attr_accessor :debug, :secret, :delim, :dump_method, :load_method
-    attr_writer :apiversion
+    attr_writer :apiversion, :uri
     def debug?() @debug == true end
     def info *msg
       STDERR.puts *msg

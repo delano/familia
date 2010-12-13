@@ -25,7 +25,7 @@ module Familia::Object
     end
     
     def redis
-      parent.class.redis
+      parent.redis
     end
     
     def update_expiration(ttl=nil)

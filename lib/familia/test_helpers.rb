@@ -24,6 +24,7 @@ class Session < Storable
   ttl 60 # seconds to live
 end
 
+
 class Customer < Storable
   include Familia
   index :custid
@@ -31,5 +32,6 @@ class Customer < Storable
   field :name
   include Familia::Stamps
   # string :object, :class => self  # example of manual override
+  class_list :customers, :suffix => []
 end
 

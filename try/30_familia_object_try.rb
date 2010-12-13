@@ -39,3 +39,20 @@ obj = Customer.from_redis :delano
 obj.custid
 #=> :delano
 
+## Familia::Object.class_list
+Customer.customers.class
+#=> Familia::Object::List
+
+## Familia::Object class rediskey
+Customer.customers.rediskey
+#=> 'v1:customer:customers'
+
+## Familia::Object.class_list
+Customer.customers << :delano << :tucker << :morton
+Customer.customers.size
+#=> 3
+
+## Familia::Object class clear
+Customer.customers.clear
+#=> 1
+

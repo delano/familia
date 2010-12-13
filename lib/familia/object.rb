@@ -7,16 +7,16 @@ module Familia::Object
   # Auto-extended into a class that includes Familia
   module ClassMethods
     
-    # e.g. 
-    #
-    #      list(klass, name, opts)
-    #      list?(name)
-    #      lists
-    #
     RedisObject.klasses.each_pair do |kind, klass|
+      # e.g. 
+      #
+      #      list(name, klass, opts)
+      #      list?(name)
+      #      lists
+      #
       define_method :"#{kind}" do |*args, &blk|
         name, opts = *args
-        install_redis_object klass, name, opts
+        install_redis_object name, klass, opts
         redis_objects[name.to_s.to_sym]
       end
       define_method :"#{kind}?" do |name|
@@ -26,6 +26,25 @@ module Familia::Object
       define_method :"#{kind}s" do 
         names = redis_objects.keys.select { |name| send(:"#{kind}?", name) }
         names.collect! { |name| redis_objects[name] }
+        names
+      end
+      # e.g. 
+      #
+      #      class_list(name, klass, opts)
+      #      class_list?(name)
+      #      class_lists
+      #
+      define_method :"class_#{kind}" do |*args, &blk|
+        name, opts = *args
+        install_class_redis_object name, klass, opts
+      end
+      define_method :"class_#{kind}?" do |name|
+        obj = class_redis_objects[name.to_s.to_sym]
+        !obj.nil? && klass == obj.klass
+      end
+      define_method :"class_#{kind}s" do 
+        names = class_redis_objects.keys.select { |name| send(:"#{kind}?", name) }
+        names.collect! { |name| class_redis_objects[name] }
         names
       end
     end
@@ -42,12 +61,32 @@ module Familia::Object
     
     # Creates an instance method called +name+ that
     # returns an instance of the RedisObject +klass+ 
-    def install_redis_object klass, name, opts
-      self.redis_objects[name] = OpenStruct.new
-      self.redis_objects[name].name = name
-      self.redis_objects[name].klass = klass
-      self.redis_objects[name].opts = opts || {}
+    def install_redis_object name, klass, opts
+      name = name.to_s.to_sym
+      opts ||= {}
+      redis_objects[name] = OpenStruct.new
+      redis_objects[name].name = name
+      redis_objects[name].klass = klass
+      redis_objects[name].opts = opts
       self.send :attr_accessor, name
+      redis_objects[name]
+    end
+    
+    # Creates a class method called +name+ that
+    # returns an instance of the RedisObject +klass+ 
+    def install_class_redis_object name, klass, opts
+      name = name.to_s.to_sym
+      opts ||= {}
+      opts[:suffix] ||= nil
+      # TODO: metaclass.redis_objects
+      class_redis_objects[name] = OpenStruct.new
+      class_redis_objects[name].name = name
+      class_redis_objects[name].klass = klass
+      class_redis_objects[name].opts = opts 
+      redis_object = klass.new name, self, opts
+      metaclass.send :attr_accessor, name
+      self.send("#{name}=", redis_object)
+      class_redis_objects[name]
     end
     
     def from_redisdump dump
@@ -113,6 +152,13 @@ module Familia::Object
     def suffixes
       redis_objects.keys.uniq
     end
+    def class_redis_objects
+      @class_redis_objects ||= {}
+      @class_redis_objects
+    end
+    def class_redis_objects? name
+      class_redis_objects.has_key? name.to_s.to_sym
+    end
     def redis_object? name
       redis_objects.has_key? name.to_s.to_sym
     end
@@ -166,10 +212,10 @@ module Familia::Object
         nil
       end
     end
-    def from_redis(objid, suffix=nil)
+    def from_redis(objid)
       objid &&= objid.to_s
       return nil if objid.nil? || objid.empty?
-      this_key = rediskey(objid, suffix)
+      this_key = rediskey(objid, self.suffix)
       me = from_key(this_key)
       me
     end
@@ -180,7 +226,7 @@ module Familia::Object
       Familia.trace :EXISTS, Familia.redis(self.uri), "#{rediskey(objid)} #{ret}", caller.first
       ret
     end
-    def destroy!(runid, suffix=nil)
+    def destroy!(idx, suffix=nil)  # TODO: remove suffix arg
       ret = Familia.redis(self.uri).del rediskey(runid, suffix)
       Familia.trace :DELETED, Familia.redis(self.uri), "#{rediskey(runid)}: #{ret}", caller.first
       ret
@@ -188,16 +234,13 @@ module Familia::Object
     def find(suffix='*')
       list = Familia.redis(self.uri).keys(rediskey('*', suffix)) || []
     end
-    def rediskey(runid, suffix=nil)
-      suffix ||= self.suffix
-      runid ||= ''
-      runid &&= runid.to_s
-      str = Familia.rediskey(prefix, runid, suffix)
-      str
+    def rediskey(idx, suffix=nil)
+      raise RuntimeError, "No index for #{self}" if idx.to_s.empty?
+      idx &&= idx.to_s
+      Familia.rediskey(prefix, idx, suffix)
     end
-    def expand(short_key, suffix=nil)
-      suffix ||= self.suffix
-      expand_key = Familia.rediskey(self.prefix, "#{short_key}*", suffix)
+    def expand(short_idx, suffix=self.suffix)
+      expand_key = Familia.rediskey(self.prefix, "#{short_idx}*", suffix)
       Familia.trace :EXPAND, Familia.redis(self.uri), expand_key, caller.first
       list = Familia.redis(self.uri).keys expand_key
       case list.size
@@ -245,6 +288,10 @@ module Familia::Object
         redis_object = klass.new name, self, opts
         self.send("#{name}=", redis_object)
       end
+    end
+    
+    def redis
+      self.class.redis
     end
     
     def redisinfo
