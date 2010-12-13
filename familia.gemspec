@@ -22,6 +22,7 @@ Gem::Specification.new do |s|
      "README.rdoc",
      "Rakefile",
      "VERSION.yml",
+     "familia.gemspec",
      "lib/familia.rb"
   ]
   s.homepage = %q{http://github.com/delano/familia}
