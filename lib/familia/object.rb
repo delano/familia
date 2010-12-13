@@ -474,8 +474,10 @@ module Familia::Object
     def delete v, count=0
       redis.lrem rediskey, count, to_redis(v)
     end
+    alias_method :remove, :delete
     
     def range sidx=0, eidx=-1
+      # TODO: handle @opts[:marshal]
       redis.lrange rediskey, sidx, eidx
     end
     alias_method :to_a, :range
@@ -512,52 +514,39 @@ module Familia::Object
     #    true
     #  end
     #end
-    #define_method :"#{name}?" do
-    #  self.send(:"#{name}_size") > 0
-    #end
-    #define_method :"add_#{name_singular}" do |obj|
-    #  objid = klass === obj ? obj.index : obj
-    #  #Familia.ld "#{self.class} Add #{objid} to #{key(name)}"
-    #  ret = self.class.redis.rpush key(name), objid
-    #  # TODO : copy to zset and set
-    #  #unless self.ttl.nil? || self.ttl <= 0
-    #  #  Familia.trace :SET_EXPIRE, Familia.redis(self.class.uri), "#{self.key} to #{self.ttl}"
-    #  #  Familia.redis(self.class.uri).expire key(name), self.ttl
-    #  #end
-    #  ret
-    #end
-    #define_method :"remove_#{name_singular}" do |obj|
-    #  objid = klass === obj ? obj.index : obj
-    #  #Familia.ld "#{self.class} Remove #{objid} from #{key(name)}"
-    #  self.class.redis.lrem key(name), 0, objid
-    #end
-    #define_method :"#{name_plural}raw" do |*args|
-    #  count = args.first-1 unless args.empty?
-    #  count ||= -1
-    #  list = self.class.redis.lrange(key(name), 0, count) || []
-    #end
-    #define_method :"#{name_plural}" do |*args|
-    #  list = send("#{name_plural}raw", *args)
-    #  if klass.nil? 
-    #    list 
-    #  elsif klass.include?(Familia) 
-    #    klass.multiget(*list)
-    #  elsif klass.respond_to?(:from_json)
-    #    list.collect { |str| klass.from_json(str) }
-    #  else
-    #    list
-    #  end
-    #end
   end
   
   class Set < RedisObject
     
-    #define_method :"#{name}_key" do
-    #  key(name)
-    #end
-    #define_method :"#{name}_size" do
-    #  self.class.redis.scard key(name)
-    #end
+    def size
+      redis.scard rediskey
+    end
+    
+    def << v
+      redis.sadd rediskey, to_redis(v)
+      self
+    end
+    alias_method :add, :<<
+    
+    def members
+      # TODO: handle @opts[:marshal]
+      redis.smembers rediskey
+    end
+    alias_method :to_a, :members
+    
+    def member? v
+      redis.sismember rediskey, to_redis(v)
+    end
+    alias_method :include?, :member?
+    
+    def delete v
+      redis.srem rediskey, to_redis(v)
+    end
+    
+    def intersection *setkeys
+      # TODO
+    end
+    
     ## Make the value stored at KEY identical to the given list
     #define_method :"#{name}_sync" do |*latest|
     #  latest = latest.flatten.compact
@@ -578,41 +567,7 @@ module Familia::Object
     #    true
     #  end
     #end
-    #define_method :"#{name}?" do
-    #  self.send(:"#{name}_size") > 0
-    #end
-    #define_method :"clear_#{name}" do
-    #  self.class.redis.del key(name)
-    #end
-    #define_method :"add_#{name_singular}" do |obj|
-    #  objid = klass === obj ? obj.index : obj
-    #  #Familia.ld "#{self.class} Add #{objid} to #{key(name)}"
-    #  self.class.redis.sadd key(name), objid
-    #end
-    #define_method :"remove_#{name_singular}" do |obj|
-    #  objid = klass === obj ? obj.index : obj
-    #  #Familia.ld "#{self.class} Remove #{objid} from #{key(name)}"
-    #  self.class.redis.srem key(name), objid
-    #end
-    ## Example:
-    ##
-    ##     list = obj.response_time 10, :score => (now-12.hours)..now
-    ##
-    #define_method :"#{name_plural}raw" do 
-    #  list = self.class.redis.smembers(key(name)) || []
-    #end
-    #define_method :"#{name_plural}" do 
-    #  list = send("#{name_plural}raw")
-    #  if klass.nil? 
-    #    list 
-    #  elsif klass.include?(Familia) 
-    #    klass.multiget(*list)
-    #  elsif klass.respond_to?(:from_json)
-    #    list.collect { |str| klass.from_json(str) }
-    #  else
-    #    list
-    #  end
-    #end
+    
   end
   
   class SortedSet < RedisObject
