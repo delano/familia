@@ -54,5 +54,22 @@ Customer.customers.size
 
 ## Familia::Object class clear
 Customer.customers.clear
-#=> 1
+##=> 1
+
+
+## Familia::Object class replace 1
+Customer.message.value = "msg1"
+#=> "msg1"
+
+## Familia::Object class replace 2
+Customer.message.value
+#=> "msg1"
+
+## Familia::Object class replace 3
+Customer.message = "msg2"
+#=> "msg2"
+
+## Familia::Object class replace 4
+Customer.message.value
+#=> "msg2"
 

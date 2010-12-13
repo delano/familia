@@ -451,7 +451,8 @@ module Familia::Object
     def value= v
       redis.set rediskey, to_redis(v)
     end
-    alias_method :set, :value=    
+    alias_method :replace, :value=
+    alias_method :set, :value=  
     
     def nil?
       value.nil?

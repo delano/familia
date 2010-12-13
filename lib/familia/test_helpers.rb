@@ -33,5 +33,6 @@ class Customer < Storable
   include Familia::Stamps
   # string :object, :class => self  # example of manual override
   class_list :customers, :suffix => []
+  class_string :message
 end
 

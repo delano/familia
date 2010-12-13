@@ -69,6 +69,9 @@ module Familia::Object
       redis_objects[name].klass = klass
       redis_objects[name].opts = opts
       self.send :attr_reader, name
+      define_method "#{name}=" do |v|
+        self.send(name).replace v
+      end
       redis_objects[name]
     end
     
@@ -83,11 +86,14 @@ module Familia::Object
       class_redis_objects[name].name = name
       class_redis_objects[name].klass = klass
       class_redis_objects[name].opts = opts 
-      redis_object = klass.new name, self, opts
-      redis_object.freeze
       # An accessor method created in the metclass will
       # access the instance variables for this class. 
       metaclass.send :attr_reader, name
+      metaclass.send :define_method, "#{name}=" do |v|
+        send(name).replace v
+      end
+      redis_object = klass.new name, self, opts
+      redis_object.freeze
       self.instance_variable_set("@#{name}", redis_object)
       class_redis_objects[name]
     end
