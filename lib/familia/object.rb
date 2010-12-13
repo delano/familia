@@ -23,6 +23,7 @@ module Familia::Object
       ret
     end
     def allkeys
+      # TODO: Use redis_objects instead
       keynames = [rediskey]
       self.class.suffixes.each do |sfx| 
         keynames << rediskey(sfx)
@@ -174,14 +175,10 @@ module Familia::Object
     def size(filter='*')
       self.redis.keys(rediskey(filter)).compact.size
     end
-    def suffix=(val)   
-      suffixes << (@suffix = val)
-      val
-    end
     def suffix(a=nil, &blk) 
       @suffix = a || blk if a || !blk.nil?
       val = @suffix || Familia.default_suffix
-      self.suffixes << val
+      self.redis_objects[@suffix] = Familia::Object::String
       val
     end
     def prefix=(a)  @prefix = a end
@@ -196,9 +193,7 @@ module Familia::Object
       @ttl
     end
     def suffixes
-      @suffixes ||= []
-      @suffixes.uniq!
-      @suffixes
+      redis_objects.keys.uniq
     end
     def redis_objects
       @redis_objects ||= {}
@@ -371,7 +366,6 @@ module Familia::Object
       # Creates an instance method called +name+ that
       # returns an instance of the RedisObject +klass+ 
       def install_redis_object klass, name
-        self.suffixes << name
         self.redis_objects[name] = klass
         self.send :attr_accessor, name
       end
@@ -495,6 +489,7 @@ module Familia::Object
       at -1
     end
     
+    # TODO: def replace
     ## Make the value stored at KEY identical to the given list
     #define_method :"#{name}_sync" do |*latest|
     #  latest = latest.flatten.compact
@@ -770,8 +765,8 @@ module Familia::Object
     end
     
   end
-
-
+  
+  
   class Counter < RedisObject
   end
   

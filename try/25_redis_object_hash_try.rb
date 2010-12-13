@@ -1,7 +1,7 @@
 require 'familia'
 require 'familia/test_objects'
 
-@a = Bone.new 'atoken'
+@a = Bone.new 'atoken', 'akey'
 
 ## Familia::Object::HashKey#has_key? knows when there's no key
 @a.props.has_key? 'fieldA'

@@ -2,7 +2,7 @@
 require 'familia'
 require 'familia/test_objects'
 
-@a = Bone.new 'atoken'
+@a = Bone.new 'atoken', 'akey'
 
 ## Familia::Object::Set#add
 ret = @a.tags.add :a

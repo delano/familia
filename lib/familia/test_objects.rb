@@ -4,7 +4,7 @@ class Bone < Storable
   include Familia
   field :token
   field :name
-  def index
+  def id
     [token, name].join(':')
   end
   list   :owners

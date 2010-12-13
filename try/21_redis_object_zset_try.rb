@@ -1,7 +1,7 @@
 require 'familia'
 require 'familia/test_objects'
 
-@a = Bone.new 'atoken'
+@a = Bone.new 'atoken', 'akey'
 
 ## Familia::Object::SortedSet#add
 @a.metrics.add :metric2, 2

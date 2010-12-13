@@ -8,6 +8,7 @@ CHANGE: All methods name "key" are now "rediskey"
 CHANGE: Familia#destroy! no longer takes a suffix argument. It now deletes
         the object and all suffixes. See destroy. 
 CHANGE: Redis Object class methods now take the following args: name, options={}
+CHANGE: Familia class suffixes are now derived from redis_objects
 ADDED: Familia#destroy deletes just the object. 
 
 
