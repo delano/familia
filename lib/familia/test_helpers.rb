@@ -30,13 +30,6 @@ class Customer < Storable
   field :custid => Symbol
   field :name
   include Familia::Stamps
+  # string :object, :class => self  # example of manual override
 end
 
-module Global 
-  class << self
-    include Familia
-    def index
-      :global
-    end
-  end
-end

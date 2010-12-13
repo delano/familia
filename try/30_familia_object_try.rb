@@ -38,3 +38,4 @@ obj.save
 obj = Customer.from_redis :delano
 obj.custid
 #=> :delano
+
