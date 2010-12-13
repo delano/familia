@@ -380,7 +380,8 @@ module Familia::Object
     attr_reader :name, :parent
     def initialize n, p, opts={}
       @name, @parent = n, p
-      @opts = {}
+      @opts = opts
+      init if respond_to? :init
     end
     
     # returns a redis key based on the parent 
@@ -662,68 +663,6 @@ module Familia::Object
       at(-1)
     end
     
-    #define_method :"add_#{name_singular}" do |score,obj|
-    #  objid = klass === obj ? obj.index : obj
-    #  #Familia.ld "#{self.class} Add #{objid} (#{score}) to #{key(name)}"
-    #  self.class.redis.zadd key(name), score, objid
-    #end
-    ##p "Adding: #{self}#remove_#{name_singular}"
-    #define_method :"remove_#{name_singular}" do |obj|
-    #  objid = klass === obj ? obj.index : obj
-    #  #Familia.ld "#{self.class} Remove #{objid} from #{key(name)}"
-    #  self.class.redis.zrem key(name), objid
-    #end
-    ## Example:
-    ##
-    ##     list = obj.response_time 10, :score => (now-12.hours)..now
-    ##
-    #define_method :"#{name_plural}raw" do |*args|
-    #  
-    #  count = args.first-1 unless args.empty?
-    #  count ||= -1
-    #  
-    #  opts = args[1] || {}
-    #  if Range === opts[:score]
-    #    lo, hi = opts[:score].first, opts[:score].last
-    #    list = self.class.redis.zrangebyscore(key(name), lo, hi, :limit => [0, count]) || []
-    #  else                       
-    #    list = self.class.redis.zrange(key(name), 0, count) || []
-    #  end
-    #end
-    #define_method :"#{name_plural}" do |*args|
-    #  list = send("#{name_plural}raw", *args)
-    #  if klass.nil? 
-    #    list 
-    #  elsif klass.include?(Familia) 
-    #    klass.multiget(*list)
-    #  elsif klass.respond_to?(:from_json)
-    #    list.collect { |str| klass.from_json(str) }
-    #  else
-    #    list
-    #  end
-    #end
-    #define_method :"#{name_plural}rev" do |*args|
-    #  
-    #  count = args.first-1 unless args.empty?
-    #  count ||= -1
-    #  
-    #  opts = args[1] || {}
-    #  if Range === opts[:score]
-    #    lo, hi = opts[:score].first, opts[:score].last
-    #    list = self.class.redis.zrangebyscore(key(name), lo, hi, :limit => [0, count]) || []
-    #  else                       
-    #    list = self.class.redis.zrevrange(key(name), 0, count) || []
-    #  end
-    #  if klass.nil? 
-    #    list 
-    #  elsif klass.include?(Familia) 
-    #    klass.multiget(*list)
-    #  elsif klass.respond_to?(:from_json)
-    #    list.collect { |str| klass.from_json(str) }
-    #  else
-    #    list
-    #  end
-    #end
   end
 
   class HashKey < RedisObject
@@ -757,38 +696,30 @@ module Familia::Object
 
   class String < RedisObject
     
-    #define_method :"#{name}_key" do
-    #  key(name)
-    #end
-    #define_method :"#{name}?" do
-    #  #Familia.ld "EXISTS? #{self.class.strings[name]} #{key(name)}"
-    #  self.class.strings[name].redis.exists key(name)
-    #end
-    #define_method :"clear_#{name}" do
-    #  self.class.redis.del key(name)
-    #end
-    #define_method :"#{name}" do
-    #  #Familia.ld "#{self.class} Return string #{key(name)}"
-    #  content = self.class.redis.get key(name)
-    #  #Familia.ld "TODO: don't reload #{self.class} every time"
-    #  if !content.nil?
-    #    begin
-    #      content = self.class.strings[name].from_json content if klass != String && content.is_a?(String)
-    #    rescue => ex
-    #      msg = "Error loading #{name} for #{key}: #{ex.message}"
-    #      Familia.info "#{msg}: #{$/}#{content}"
-    #      raise Familia::Problem, msg
-    #    end
-    #  else
-    #    content = self.class.strings[name].new
-    #  end
-    #  content
-    #end
-    #define_method :"#{name}=" do |content|
-    #  Familia.ld "#{self.class} Modify string #{key(name)} (#{content.class})"
-    #  self.class.redis.set key(name), (content.is_a?(String) ? content : content.to_json)
-    #  content
-    #end
+    def init
+      p [111, @opts]
+      redis.setnx rediskey, @opts[:default] if @opts[:default]
+    end
+    
+    def size
+      to_s.size
+    end
+    alias_method :length, :size
+    
+    def value
+      redis.get rediskey
+    end
+    alias_method :to_s, :value 
+    
+    def value= v
+      redis.set rediskey, to_redis(v)
+    end
+    alias_method :set, :value=    
+    
+    def nil?
+      value.nil?
+    end
+    
   end
 
 
