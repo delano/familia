@@ -252,24 +252,38 @@ module Familia::Object
     end
     alias_method :length, :size
     
+    # NOTE: The argument order is the reverse of #add
     # e.g. obj.metrics[VALUE] = SCORE
     def []= v, score
+      add score, v
+    end
+    
+    # NOTE: The argument order is the reverse of #[]=
+    def add score, v
       redis.zadd rediskey, score, to_redis(v)
     end
-    alias_method :add, :[]=
     
     def score v
-      redis.zscore(rediskey, to_redis(v)).to_f
+      ret = redis.zscore rediskey, to_redis(v)
+      ret.nil? ? nil : ret.to_f
     end
+    alias_method :[], :score
+    
+    def member? v
+      !rank(v).nil?
+    end
+    alias_method :include?, :member?
     
     # rank of member +v+ when ordered lowest to highest (starts at 0)
     def rank v
-      redis.zrank(rediskey, to_redis(v)).to_i
+      ret = redis.zrank rediskey, to_redis(v)
+      ret.nil? ? nil : ret.to_i
     end
     
     # rank of member +v+ when ordered highest to lowest (starts at 0)
     def revrank v
-      redis.zrevrank(rediskey, to_redis(v)).to_i
+      ret = redis.zrevrank rediskey, to_redis(v)
+      ret.nil? ? nil : ret.to_i
     end
     
     def members opts={}
