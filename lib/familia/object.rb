@@ -666,38 +666,86 @@ module Familia::Object
   end
 
   class HashKey < RedisObject
-    #define_method :"#{name}_key" do
-    #  key(name)
-    #end
-    #define_method :"has_#{name}?" do |field|
-    #  self.class.redis.hexists key(name), field
-    #end
-    #define_method :"#{name}_size" do 
-    #  self.class.redis.hlen key(name)
-    #end
-    #define_method :"clear_#{name}" do
-    #  self.class.redis.del key(name)
-    #end
-    #define_method :"#{name}_keys" do 
-    #  self.class.redis.hkeys key(name)
-    #end
-    #define_method :"set_#{name}" do |hash|
-    #  self.class.redis.hmset key(name), *hash.to_a.flatten
-    #end
-    #define_method :"get_#{name}" do |*fields|
-    #  ret = self.class.redis.hmget key(name), *fields
-    #  ret.collect! { |obj| blk.call(obj) } if blk
-    #  fields.size == 1 ? ret.first : ret
-    #end
-    #define_method :"del_#{name}" do |field|
-    #  self.class.redis.hdel key(name), field
-    #end
+    
+    def size
+      redis.hlen rediskey
+    end
+    alias_method :length, :size
+    
+    def []= n, v
+      redis.hset rediskey, n, to_redis(v)
+    end
+    alias_method :store, :[]=
+    
+    def [] n
+      redis.hget rediskey, n
+    end
+    
+    def fetch n, default=nil
+      ret = self[n]
+      if ret.nil? 
+        raise IndexError.new("No such index for: #{n}") if default.nil?
+        default
+      else
+        ret
+      end
+    end
+    
+    def keys
+      redis.hkeys rediskey
+    end
+    
+    def values
+      redis.hvals rediskey
+    end
+    
+    def all
+      redis.hgetall rediskey
+    end
+    alias_method :to_hash, :all
+    alias_method :clone, :all
+    
+    def has_key? n
+      redis.hexists rediskey, n
+    end
+    alias_method :include?, :has_key?
+    alias_method :member?, :has_key?
+    
+    def delete n
+      redis.hdel rediskey, n
+    end
+    alias_method :remove, :delete
+    alias_method :rem, :delete
+    alias_method :del, :delete
+    
+    def increment n, by=1
+      redis.hincrby(rediskey, n, by).to_i
+    end
+    alias_method :incr, :increment
+    alias_method :incrby, :increment
+    
+    def decrement n, by=1
+      increment n, -by
+    end
+    alias_method :decr, :decrement
+    alias_method :decrby, :decrement
+    
+    def update h={}
+      raise ArgumentError, "Argument to bulk_set must be a hash" unless Hash === h
+      redis.hmset(rediskey, h.inject([]){ |ret,pair| ret + [pair[0], to_redis(pair[1])] })
+    end
+    alias_method :merge!, :update
+    
+    def values_at *names
+      redis.hmget rediskey, *names.flatten.compact
+    end
+    
   end
-
+  
   class String < RedisObject
     
     def init
-      p [111, @opts]
+      # TODO: supply opts from parent
       redis.setnx rediskey, @opts[:default] if @opts[:default]
     end
     
@@ -709,7 +757,8 @@ module Familia::Object
     def value
       redis.get rediskey
     end
-    alias_method :to_s, :value 
+    alias_method :to_s, :value
+    alias_method :get, :value
     
     def value= v
       redis.set rediskey, to_redis(v)
