@@ -68,7 +68,7 @@ module Familia::Object
       redis_objects[name].name = name
       redis_objects[name].klass = klass
       redis_objects[name].opts = opts
-      self.send :attr_accessor, name
+      self.send :attr_reader, name
       redis_objects[name]
     end
     
@@ -78,14 +78,16 @@ module Familia::Object
       name = name.to_s.to_sym
       opts ||= {}
       opts[:suffix] ||= nil
-      # TODO: metaclass.redis_objects
+      # TODO: investigate metaclass.redis_objects
       class_redis_objects[name] = OpenStruct.new
       class_redis_objects[name].name = name
       class_redis_objects[name].klass = klass
       class_redis_objects[name].opts = opts 
       redis_object = klass.new name, self, opts
-      metaclass.send :attr_accessor, name
-      self.send("#{name}=", redis_object)
+      # An accessor method created in the metclass will
+      # access the instance variables for this class. 
+      metaclass.send :attr_reader, name
+      self.instance_variable_set("@#{name}", redis_object)
       class_redis_objects[name]
     end
     
@@ -296,7 +298,7 @@ module Familia::Object
         klass, opts = redis_object_definition.klass, redis_object_definition.opts
         redis_object = klass.new name, self, opts
         # TODO: redis_object.freeze
-        self.send("#{name}=", redis_object)
+        self.instance_variable_set "@#{name}", redis_object
       end
     end
     
