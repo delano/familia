@@ -97,11 +97,10 @@ module Familia::Object
     def suffix(a=nil, &blk) 
       @suffix = a || blk if a || !blk.nil?
       val = @suffix || Familia.default_suffix
-      self.redis_objects[@suffix] = Familia::Object::String
       val
     end
-    def prefix=(a)  @prefix = a end
-    def prefix(a=nil) @prefix = a if a; @prefix || self.name.downcase end
+    def prefix=(a) @prefix = a end
+    def prefix(a=nil) @prefix = a if a; @prefix || self.name.downcase.to_sym end
     def index(i=nil, &blk) 
       @index = i || blk if i || !blk.nil?
       @index ||= Familia.index
@@ -113,6 +112,9 @@ module Familia::Object
     end
     def suffixes
       redis_objects.keys.uniq
+    end
+    def redis_object? name
+      redis_objects.has_key? name.to_s.to_sym
     end
     def redis_objects
       @redis_objects ||= {}
@@ -146,19 +148,20 @@ module Familia::Object
     end
     
     def from_key(akey)
-      Familia.trace :LOAD, Familia.redis(self.uri), "#{self.uri}/#{akey}", caller if Familia.debug?
-      return nil unless Familia.redis(self.uri).exists akey
-      raise Familia::Problem, "Null key" if akey.nil? || akey.empty?    
-      run_json = Familia.redis(self.uri).get akey
-      if run_json.nil? || run_json.empty?
-        Familia.info  "No content @ #{akey}" 
-        return
-      end
+      raise ArgumentError, "Null key" if akey.nil? || akey.empty?    
+      Familia.trace :LOAD, redis, "#{self.uri}/#{akey}", caller if Familia.debug?
+      return unless redis.exists akey
+      v = redis.get akey
       begin
-        self.from_json(run_json)
+        if v.to_s.empty?
+          Familia.info  "No content @ #{akey}"
+          nil
+        else
+          self.send Familia.load_method, v
+        end
       rescue => ex
+        Familia.info v
         Familia.info "Non-fatal error parsing JSON for #{akey}: #{ex.message}"
-        Familia.info run_json
         Familia.info ex.backtrace
         nil
       end
@@ -167,9 +170,7 @@ module Familia::Object
       objid &&= objid.to_s
       return nil if objid.nil? || objid.empty?
       this_key = rediskey(objid, suffix)
-      #Familia.ld "Reading key: #{this_key}"
       me = from_key(this_key)
-      me.gibbler  # prime the gibbler cache (used to check for changes)
       me
     end
     def exists?(objid, suffix=nil)
@@ -221,7 +222,16 @@ module Familia::Object
   module InstanceMethods
     
     def initialize *args
-      super *args
+      super *args   # call Storable#initialize or equivalent
+      
+      # :object is a special redis object because its reserved
+      # for storing the marshaled instance data (e.g. to_json).
+      # When it isn't defined explicitly we define it here b/c
+      # it's assumed to exist in other places (see #save).
+      unless self.class.redis_object? :object
+        self.class.string :object, :class => self.class
+      end
+      
       # Generate instances of each RedisObject. These need to be
       # unique for each instance of this class so they can refer
       # to the index of this specific instance. 
@@ -264,7 +274,7 @@ module Familia::Object
       keynames
     end
     def rediskey(suffix=nil)
-      raise EmptyIndex, self.class if index.nil? || index.empty?
+      raise Familia::EmptyIndex, self.class if index.to_s.empty?
       if suffix.nil?
         suffix = self.class.suffix.kind_of?(Proc) ? 
                      self.class.suffix.call(self) : 
@@ -272,18 +282,13 @@ module Familia::Object
       end
       self.class.rediskey self.index, suffix
     end
-    def save(force=false)
+    def save
       Familia.trace :SAVE, Familia.redis(self.class.uri), redisuri, caller.first
-      ## Don't save if there are no changes
-      ##return false unless force || self.gibbled? || self.gibbler_cache.nil?
       preprocess if respond_to?(:preprocess)
       self.update_time if self.respond_to?(:update_time)
-      ret = Familia.redis(self.class.uri).set rediskey, self.to_json
-      unless self.ttl.nil? || self.ttl <= 0
-        Familia.trace :SET_EXPIRE, Familia.redis(self.class.uri), "#{rediskey} to #{self.ttl}"
-        expire(self.ttl) 
-      end
-      ret == "OK"
+      ret = self.object.value = self
+      self.object.update_expiration self.ttl # does nothing unless if not specified
+      true
     end
     def index
       if @index.nil?

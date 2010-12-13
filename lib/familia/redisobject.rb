@@ -1,6 +1,7 @@
 module Familia::Object
   
   class RedisObject
+    
     @klasses = {}
     class << self
       attr_reader :klasses
@@ -27,37 +28,71 @@ module Familia::Object
       parent.class.redis
     end
     
+    def update_expiration(ttl=nil)
+      ttl ||= @opts[:ttl]
+      return unless ttl && ttl.to_i > 0
+      #Familia.trace :SET_EXPIRE, Familia.redis(self.class.uri), "#{rediskey} to #{self.ttl}"
+      expire ttl.to_i
+    end
+    
+    def move db
+      redis.move rediskey, db
+    end
+    
     def destroy! 
+      clear
+      # TODO: delete redis objects for this instance
+    end
+    
+    # TODO: rename, renamenx
+    
+    def type 
+      redis.type rediskey
+    end
+    
+    def clear 
       redis.del rediskey
     end
+    alias_method :delete, :clear
     
     def exists?
       !size.zero?
     end
     
+    def expire sec
+      redis.expire rediskey, sec.to_i
+    end
+    
+    def expireat unixtime
+      redis.expireat rediskey, unixtime
+    end
+    
     def to_redis v
-      return v unless @opts[:dump]
-      RedisObject.dump v, @opts[:class]
-    end
-    
-    def from_redis v
-      return v unless @opts[:dump]
-      RedisObject.load v, @opts[:class]
-    end
-    
-    def RedisObject.dump(v, klass)
-      case v
-      when String, Fixnum, Bignum, Float
-        v
+      return v unless @opts[:class]
+      if v.respond_to? Familia.dump_method
+        v.send Familia.dump_method
       else
-        # TODO: dump to JSON
+        Familia.ld "No such method: #{v.class}.#{Familia.dump_method}"
         v
       end
     end
     
-    def RedisObject.load(v, klass)
-      v # TODO: load from JSON, including Fixnum, Bignum, Float
-    end
+    def from_redis v
+      return v unless @opts[:class]
+      case @opts[:class]
+      when String
+        v.to_s
+      when Fixnum, Float
+        @opts[:class].induced_from v
+      else
+        if @opts[:class].method_defined? Familia.load_method
+          @opts[:class].send Familia.load_method, v
+        else
+          Familia.ld "No such method: #{@opts[:class]}##{Familia.load_method}"
+          v
+        end
+      end
+    end 
     
   end
   
@@ -78,6 +113,7 @@ module Familia::Object
 
     def unshift v
       redis.lpush rediskey, to_redis(v)
+      # TODO: test maxlength
       redis.ltrim rediskey, 0, @opts[:maxlength] - 1 if @opts[:maxlength]
       self
     end
@@ -384,8 +420,6 @@ module Familia::Object
   class String < RedisObject
     
     def init
-      # TODO: supply opts from parent
-      p 1
       redis.setnx rediskey, @opts[:default] if @opts[:default]
     end
     

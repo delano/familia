@@ -37,9 +37,11 @@ module Familia
   @suffix = :object.freeze
   @index = :id.freeze
   @debug = false.freeze
+  @dump_method = :to_json
+  @load_method = :from_json
   class << self
     attr_reader :conf, :classes, :clients
-    attr_accessor :debug, :secret, :delim
+    attr_accessor :debug, :secret, :delim, :dump_method, :load_method
     attr_writer :apiversion
     def debug?() @debug == true end
     def info *msg

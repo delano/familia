@@ -11,7 +11,7 @@ require 'familia/test_helpers'
 @a.props['fieldA'] = '1'
 @a.props['fieldB'] = '2'
 @a.props['fieldC'] = '3'
-#=> '1'
+#=> '3'
 
 ## Familia::Object::HashKey#[]
 @a.props['fieldA']
