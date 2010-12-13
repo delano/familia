@@ -142,7 +142,6 @@ module Familia
     obj.send :include, Familia::Object::InstanceMethods
     obj.send :include, Gibbler::Complex
     obj.extend Familia::Object::ClassMethods
-    obj.extend Familia::Object::RedisObject::ClassMethods
     Familia.classes << obj
   end
   

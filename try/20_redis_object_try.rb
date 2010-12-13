@@ -1,6 +1,6 @@
 
 require 'familia'
-require 'familia/test_objects'
+require 'familia/test_helpers'
 Familia.apiversion = 'v1'
 
 
