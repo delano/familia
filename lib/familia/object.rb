@@ -19,22 +19,15 @@ module Familia::Object
         install_redis_object klass, name, opts
         redis_objects[name.to_s.to_sym]
       end
+      define_method :"#{kind}?" do |name|
+        obj = redis_objects[name.to_s.to_sym]
+        !obj.nil? && klass == obj.klass
+      end
       define_method :"#{kind}s" do 
         names = redis_objects.keys.select { |name| send(:"#{kind}?", name) }
-        names.collect { |name| redis_objects[name] }
+        names.collect! { |name| redis_objects[name] }
+        names
       end
-      define_method :"#{kind}?" do |name|
-        klass === redis_objects[name.to_s.to_sym].klass
-      end
-    end
-    
-    # Creates an instance method called +name+ that
-    # returns an instance of the RedisObject +klass+ 
-    def install_redis_object klass, name, opts
-      self.redis_objects[name] = OpenStruct.new
-      self.redis_objects[name].klass = klass
-      self.redis_objects[name].opts = opts || {}
-      self.send :attr_accessor, name
     end
     
     def inherited(obj)
@@ -46,6 +39,17 @@ module Familia::Object
       obj.db = self.db
       Familia.classes << obj
     end
+    
+    # Creates an instance method called +name+ that
+    # returns an instance of the RedisObject +klass+ 
+    def install_redis_object klass, name, opts
+      self.redis_objects[name] = OpenStruct.new
+      self.redis_objects[name].name = name
+      self.redis_objects[name].klass = klass
+      self.redis_objects[name].opts = opts || {}
+      self.send :attr_accessor, name
+    end
+    
     def from_redisdump dump
       dump # todo
     end
