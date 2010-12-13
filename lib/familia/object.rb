@@ -264,9 +264,18 @@ module Familia::Object
   
   module InstanceMethods
     
+    # A default initialize method. This will be replaced
+    # if a class defines its own initialize method after
+    # including Familia. In that case, the replacement
+    # must call initialize_redis_objects.
     def initialize *args
-      super *args   # call Storable#initialize or equivalent
-      
+      super   # call Storable#initialize or equivalent
+      initialize_redis_objects
+    end
+    
+    # This needs to be called in the initialize method of
+    # any class that includes Familia. 
+    def initialize_redis_objects
       # :object is a special redis object because its reserved
       # for storing the marshaled instance data (e.g. to_json).
       # When it isn't defined explicitly we define it here b/c
@@ -286,6 +295,7 @@ module Familia::Object
       self.class.redis_objects.each_pair do |name, redis_object_definition|
         klass, opts = redis_object_definition.klass, redis_object_definition.opts
         redis_object = klass.new name, self, opts
+        # TODO: redis_object.freeze
         self.send("#{name}=", redis_object)
       end
     end
