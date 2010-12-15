@@ -1,3 +1,4 @@
+# encoding: utf-8
 class Symbol
   unless method_defined?(:to_proc)
     def to_proc
