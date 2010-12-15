@@ -10,10 +10,6 @@ Familia.apiversion = 'v1'
 @a.owners.rediskey == @b.owners.rediskey
 #=> false
 
-## Familia objects have no writer method for redis objects
-@a.respond_to? :owners=
-#=> false
-
 ## Redis Objects are frozen 
 @a.owners.frozen?
 #=> true

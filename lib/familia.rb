@@ -2,14 +2,7 @@
 FAMILIA_LIB_HOME = File.expand_path File.dirname(__FILE__) unless defined?(FAMILIA_LIB_HOME)
 require 'uri/redis'
 require 'gibbler'
-
-class Symbol
-  unless method_defined?(:to_proc)
-    def to_proc
-      proc { |obj, *args| obj.send(self, *args) }
-    end
-  end
-end
+require 'familia/core_ext'
 
 module Familia
   module VERSION
