@@ -5,11 +5,11 @@
 
 Gem::Specification.new do |s|
   s.name = %q{familia}
-  s.version = "0.5.3"
+  s.version = "0.6.0"
 
   s.required_rubygems_version = Gem::Requirement.new(">= 0") if s.respond_to? :required_rubygems_version=
   s.authors = ["Delano Mandelbaum"]
-  s.date = %q{2010-12-10}
+  s.date = %q{2010-12-15}
   s.description = %q{Organize and store ruby objects in Redis}
   s.email = %q{delano@solutious.com}
   s.extra_rdoc_files = [
@@ -23,7 +23,22 @@ Gem::Specification.new do |s|
      "Rakefile",
      "VERSION.yml",
      "familia.gemspec",
-     "lib/familia.rb"
+     "lib/familia.rb",
+     "lib/familia/core_ext.rb",
+     "lib/familia/helpers.rb",
+     "lib/familia/object.rb",
+     "lib/familia/redisobject.rb",
+     "lib/familia/test_helpers.rb",
+     "lib/familia/tools.rb",
+     "try/00_familia.rb",
+     "try/10_familia_try.rb",
+     "try/20_redis_object_try.rb",
+     "try/21_redis_object_zset_try.rb",
+     "try/22_redis_object_set_try.rb",
+     "try/23_redis_object_list_try.rb",
+     "try/24_redis_object_string_try.rb",
+     "try/25_redis_object_hash_try.rb",
+     "try/30_familia_object_try.rb"
   ]
   s.homepage = %q{http://github.com/delano/familia}
   s.rdoc_options = ["--charset=UTF-8"]
