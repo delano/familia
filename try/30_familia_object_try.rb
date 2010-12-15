@@ -54,7 +54,7 @@ Customer.customers.size
 
 ## Familia::Object class clear
 Customer.customers.clear
-##=> 1
+#=> 1
 
 
 ## Familia::Object class replace 1

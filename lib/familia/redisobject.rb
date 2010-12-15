@@ -1,3 +1,4 @@
+
 module Familia::Object
   
   class RedisObject
@@ -445,11 +446,15 @@ module Familia::Object
     def value
       redis.get rediskey
     end
-    alias_method :to_s, :value
     alias_method :get, :value
+    
+    def to_s
+      value.to_s  # value can return nil which to_s should not
+    end
     
     def value= v
       redis.set rediskey, to_redis(v)
+      to_redis(v)
     end
     alias_method :replace, :value=
     alias_method :set, :value=  

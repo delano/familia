@@ -1,4 +1,4 @@
-
+require 'ostruct'
 
 module Familia::Object
   require 'familia/redisobject'
@@ -331,6 +331,13 @@ module Familia::Object
       end
       ret
     end
+    
+    #def rediskeys
+    #  self.class.redis_objects.each do |redis_object_definition|
+    #    
+    #  end
+    #end
+    
     def allkeys
       # TODO: Use redis_objects instead
       keynames = [rediskey]
