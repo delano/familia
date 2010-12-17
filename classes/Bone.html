@@ -1,7 +1,7 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
 <html lang='en'>
   <head>
-    <title>: Symbol [familia 0.6.0.]</title>
+    <title>: Bone [familia 0.6.0.]</title>
     <meta content='text/html; charset=UTF-8' http-equiv='Content-Type'>
     <link href='../rdoc-style.css' media='screen' rel='stylesheet' type='text/css'>
     <script type='text/javascript'>
@@ -27,46 +27,49 @@
       <div class='header'>
         <h1 class='name'>
           <span class='type'>Class</span>
-          Symbol
+          Bone
         </h1>
         <ol class='paths'>
           <li>
-            <a href="../files/lib/familia/core_ext_rb.html">lib/familia/core_ext.rb</a>
+            <a href="../files/lib/familia/test_helpers_rb.html">lib/familia/test_helpers.rb</a>
           </li>
         </ol>
         <div class='parent'>
           Parent:
-          <strong>Object</strong>
+          <strong>Storable</strong>
         </div>
       </div>
       <div id='content'>
         <div id='text'>
-          <div id='description'>
-            <p>
-            encoding: utf-8
-            </p>
-          </div>
           <div id='method-list'>
             <h2>Methods</h2>
             <h3>public instance</h3>
             <ol>
-              <li><a href="#M000001">to_proc</a></li>
+              <li><a href="#M000030">id</a></li>
             </ol>
+          </div>
+          <div id='context'>
+            <div id='includes'>
+              <h2>Included modules</h2>
+              <ol>
+                <li><a href="Familia.html">Familia</a></li>
+              </ol>
+            </div>
           </div>
           <div id='section'>
             <div id='methods'>
               <h2>Public instance methods</h2>
-              <div class='method public-instance' id='method-M000001'>
-                <a name='M000001'>      </a>
+              <div class='method public-instance' id='method-M000030'>
+                <a name='M000030'>      </a>
                 <div class='synopsis'>
-                  <span class='name'>to_proc</span>
+                  <span class='name'>id</span>
                   <span class='arguments'>()</span>
                 </div>
                 <div class='source'>
-                  <a class='source-toggle' href='#' onclick="toggleCode('M000001-source'); return false">
+                  <a class='source-toggle' href='#' onclick="toggleCode('M000030-source'); return false">
                     [show source]
                   </a>
-                  <pre id='M000001-source'><span class="ruby-comment cmt"># File lib/familia/core_ext.rb, line 4</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">to_proc</span>&#x000A;      <span class="ruby-identifier">proc</span> { <span class="ruby-operator">|</span><span class="ruby-identifier">obj</span>, <span class="ruby-operator">*</span><span class="ruby-identifier">args</span><span class="ruby-operator">|</span> <span class="ruby-identifier">obj</span>.<span class="ruby-identifier">send</span>(<span class="ruby-keyword kw">self</span>, <span class="ruby-operator">*</span><span class="ruby-identifier">args</span>) }&#x000A;    <span class="ruby-keyword kw">end</span></pre>
+                  <pre id='M000030-source'><span class="ruby-comment cmt"># File lib/familia/test_helpers.rb, line 7</span>&#x000A;  <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">id</span>&#x000A;    [<span class="ruby-identifier">token</span>, <span class="ruby-identifier">name</span>].<span class="ruby-identifier">join</span>(<span class="ruby-value str">':'</span>)&#x000A;  <span class="ruby-keyword kw">end</span></pre>
                 </div>
               </div>
             </div>
