@@ -1,4 +1,4 @@
-# Familia - 0.5 BETA
+# Familia - 0.6 BETA
 
 **Organize and store ruby objects in Redis**
 
