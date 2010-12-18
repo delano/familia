@@ -5,6 +5,7 @@ FAMILIA, CHANGES
 * CHANGE: Default initialize method calls initialize_redis_objects before super
 * CHANGE: Familia::String: lazy-set default value
 * ADDED: Familia.index can accept an Array of field names
+* ADDED: Support for using redis objects directly
 
 
 #### 0.6.0 (2010-12-10) ###############################

@@ -13,20 +13,45 @@ module Familia
     end
     
     attr_reader :name, :parent
-    def initialize n, p, opts={}
-      @name, @parent = n, p
+    attr_accessor :redis
+    
+    # +name+: If parent is set, this will be used as the suffix 
+    # for rediskey. Otherwise this becomes the value of the key.
+    # +parent+: The Familia object that this redis object belongs
+    # to. This can be a class that includes Familia or an instance.
+    # 
+    # Options:
+    # 
+    # :ttl => the time to live in seconds. When not nil, this will
+    # set the redis expire for this key whenever #save is called. 
+    # You can also call it explicitly via #update_expiration.
+    #
+    # :default => the default value (String-only)
+    #
+    # :class => A class that responds to Familia.load_method and 
+    # Familia.dump_method. These will be used when loading and
+    # saving data from/to redis to unmarshal/marshal the class. 
+    #
+    # :redis => an instance of Redis. Should already be connected. 
+    #
+    # Uses the redis connection of the parent or the value of 
+    # opts[:redis] or Familia.redis (in that order).
+    def initialize name, parent=nil, opts={}
+      @name, @parent = name, parent
       @opts = opts
+      @redis = parent.redis if parent?
+      @redis ||= @opts.delete(:redis) || Familia.redis
       init if respond_to? :init
     end
     
     # returns a redis key based on the parent 
     # object so it will include the proper index.
     def rediskey
-      parent.rediskey(name)
+      parent? ? parent.rediskey(name) : Familia.rediskey(name)
     end
     
-    def redis
-      parent.redis
+    def parent?
+      Class === parent || parent.kind_of?(Familia)
     end
     
     def update_expiration(ttl=nil)
