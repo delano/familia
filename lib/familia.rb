@@ -118,7 +118,7 @@ module Familia
   end
   
   class Problem < RuntimeError; end
-  class EmptyIndex < Problem; end
+  class NoIndex < Problem; end
   class NonUniqueKey < Problem; end
   class NotConnected < Problem
     attr_reader :uri

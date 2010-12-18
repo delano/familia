@@ -1,5 +1,9 @@
 FAMILIA, CHANGES
 
+#### 0.6.1 (2010-12-10) ###############################
+
+* ADDED: Familia.index can accept an Array of field names
+
 #### 0.6.0 (2010-12-10) ###############################
 
 NOTE: Mucho refactoring. 0.6 syntax is not compatible with previous versions. 

@@ -346,7 +346,7 @@ module Familia
       keynames
     end
     def rediskey(suffix=nil)
-      raise Familia::EmptyIndex, self.class if index.to_s.empty?
+      raise Familia::NoIndex, self.class if index.to_s.empty?
       if suffix.nil?
         suffix = self.class.suffix.kind_of?(Proc) ? 
                      self.class.suffix.call(self) : 
@@ -363,18 +363,28 @@ module Familia
       true
     end
     def index
-      return @index unless @index.to_s.empty?
-      @index = case self.class.index
+      case self.class.index
       when Proc
         self.class.index.call(self)
-      when Symbol
-        if self.class.redis_object?(self.class.index)
-          raise Familia::EmptyIndex, "Cannot use a RedisObject as an index"
+      when Array
+        parts = self.class.index.collect { |meth| 
+          unless self.respond_to? meth
+            raise NoIndex, "No such method: `#{meth}' for #{self.class}"
+          end
+          self.send(meth) 
+        }
+        parts.join Familia.delim
+      when Symbol, String
+        if self.class.redis_object?(self.class.index.to_sym)
+          raise Familia::NoIndex, "Cannot use a RedisObject as an index"
         else
-          self.send(self.class.index)
+          unless self.respond_to? meth
+            raise NoIndex, "No such method: `#{meth}' for #{self.class}"
+          end
+          self.send self.class.index
         end
       else
-        raise Familia::EmptyIndex, self
+        raise Familia::NoIndex, self
       end
     end
     def index=(i)
