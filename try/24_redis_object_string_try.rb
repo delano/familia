@@ -38,4 +38,29 @@ Familia.apiversion = 'v1'
 @ret.value
 #=> '1000'
 
+## Familia::String#increment
+@ret.increment 
+#=> 1001
+
+## Familia::String#incrementby
+@ret.incrementby 99
+#=> 1100
+
+## Familia::String#decrement
+@ret.decrement 
+#=> 1099
+
+## Familia::String#decrementby
+@ret.decrementby 49
+#=> 1050
+
+## Familia::String#append
+@ret.append 'bytes'
+#=> 9
+
+## Familia::String#value after append
+@ret.value
+#=> '1050bytes'
+
+
 @ret.destroy!

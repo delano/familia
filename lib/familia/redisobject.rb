@@ -516,6 +516,51 @@ module Familia
     alias_method :replace, :value=
     alias_method :set, :value=  
     
+    def increment
+      redis.incr rediskey
+    end
+    alias_method :incr, :increment
+
+    def incrementby int
+      redis.incrby rediskey, int.to_i
+    end
+    alias_method :incrby, :incrementby
+
+    def decrement
+      redis.decr rediskey
+    end
+    alias_method :decr, :decrement
+
+    def decrementby int
+      redis.decrby rediskey, int.to_i
+    end
+    alias_method :decrby, :decrementby
+    
+    def append v
+      redis.append rediskey, v
+    end
+    alias_method :<<, :append
+
+    def getbit offset
+      redis.getbit rediskey, offset
+    end
+
+    def setbit offset, v
+      redis.setbit rediskey, offset, v
+    end
+
+    def getrange spoint, epoint
+      redis.getrange rediskey, spoint, epoint
+    end
+
+    def setrange offset, v
+      redis.setrange rediskey, offset, v
+    end
+    
+    def getset v
+      redis.getset rediskey, v
+    end
+    
     def nil?
       value.nil?
     end
