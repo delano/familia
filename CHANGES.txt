@@ -2,7 +2,8 @@ FAMILIA, CHANGES
 
 #### 0.6.1 (2010-12-10) ###############################
 
-* CHANEG: Default initialize method calls initialize_redis_objects before super
+* CHANGE: Default initialize method calls initialize_redis_objects before super
+* CHANGE: Familia::String: lazy-set default value
 * ADDED: Familia.index can accept an Array of field names
 
 

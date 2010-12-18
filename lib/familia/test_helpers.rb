@@ -2,11 +2,9 @@ require 'storable'
 
 class Bone < Storable
   include Familia
+  index [:token, :name]
   field :token
   field :name
-  def id
-    [token, name].join(':')
-  end
   list   :owners
   set    :tags
   zset   :metrics

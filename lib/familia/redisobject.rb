@@ -449,7 +449,6 @@ module Familia
   class String < RedisObject
     
     def init
-      redis.setnx rediskey, @opts[:default] if @opts[:default]
     end
     
     def size
@@ -458,6 +457,7 @@ module Familia
     alias_method :length, :size
     
     def value
+      redis.setnx rediskey, @opts[:default] if @opts[:default]
       redis.get rediskey
     end
     alias_method :get, :value
