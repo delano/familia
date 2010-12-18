@@ -217,9 +217,23 @@ module Familia::Object
     def delete v
       redis.srem rediskey, to_redis(v)
     end
+    alias_method :rem, :delete
+    alias_method :del, :delete
     
     def intersection *setkeys
       # TODO
+    end
+    
+    def pop
+      redis.spop rediskey
+    end
+    
+    def move dstkey, v
+      redis.smove rediskey, dstkey, v
+    end
+    
+    def random
+      redis.srandmember rediskey
     end
     
     ## Make the value stored at KEY identical to the given list
