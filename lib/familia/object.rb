@@ -378,8 +378,8 @@ module Familia
         if self.class.redis_object?(self.class.index.to_sym)
           raise Familia::NoIndex, "Cannot use a RedisObject as an index"
         else
-          unless self.respond_to? meth
-            raise NoIndex, "No such method: `#{meth}' for #{self.class}"
+          unless self.respond_to? self.class.index
+            raise NoIndex, "No such method: `#{self.class.index}' for #{self.class}"
           end
           self.send self.class.index
         end
