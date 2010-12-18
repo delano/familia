@@ -6,7 +6,7 @@ module Familia
   # Auto-extended into a class that includes Familia
   module ClassMethods
     
-    Familia::RedisObject.klasses.each_pair do |kind, klass|
+    Familia::RedisObject.registration.each_pair do |kind, klass|
       # e.g. 
       #
       #      list(name, klass, opts)
@@ -50,11 +50,15 @@ module Familia
     
     def inherited(obj)
       obj.db = self.db
+      obj.ttl = self.ttl
+      obj.uri = self.uri
       Familia.classes << obj
       super(obj)
     end
     def extended(obj)
       obj.db = self.db
+      obj.ttl = self.ttl
+      obj.uri = self.uri
       Familia.classes << obj
     end
     

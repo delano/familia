@@ -2,20 +2,47 @@
 module Familia
   
   class RedisObject
+    @registration = {}
+    @classes = []
     
-    @klasses = {}
+    # To be called inside every class that inherits RedisObject
+    # +meth+ becomes the base for the class and instances methods
+    # that are created for the given +klass+ (e.g. Obj.list)
+    def RedisObject.register klass, meth
+      registration[meth] = klass
+    end
+    
+    def RedisObject.registration
+      @registration
+    end
+    
+    def RedisObject.classes
+      @classes
+    end
+    
     @db, @ttl = nil, nil
     class << self
-      attr_reader :klasses
-      attr_accessor :db
-      attr_writer :ttl
-      # To be called inside every class that inherits RedisObject
-      def register kind, klass
-        klasses[kind] = klass
-      end
+      attr_accessor :parent
+      attr_writer :ttl, :classes, :db, :uri
       def ttl v=nil
         @ttl = v unless v.nil?
-        @ttl
+        @ttl || (parent ? parent.ttl : nil)
+      end
+      def db v=nil
+        @db = v unless v.nil?
+        @db || (parent ? parent.db : nil)
+      end
+      def uri v=nil
+        @uri = v unless v.nil?
+        @uri || (parent ? parent.uri : Familia.uri)
+      end
+      def inherited(obj)
+        obj.db = self.db
+        obj.ttl = self.ttl
+        obj.uri = self.uri
+        obj.parent = self
+        RedisObject.classes << obj
+        super(obj)
       end
     end
     
@@ -230,7 +257,7 @@ module Familia
     #  end
     #end
     
-    Familia::RedisObject.register :list, self
+    Familia::RedisObject.register self, :list
   end
   
   class Set < RedisObject
@@ -300,7 +327,7 @@ module Familia
     #  end
     #end
     
-    Familia::RedisObject.register :set, self
+    Familia::RedisObject.register self, :set
   end
   
   class SortedSet < RedisObject
@@ -408,7 +435,7 @@ module Familia
       at(-1)
     end
     
-    Familia::RedisObject.register :zset, self
+    Familia::RedisObject.register self, :zset
   end
 
   class HashKey < RedisObject
@@ -486,7 +513,7 @@ module Familia
       redis.hmget rediskey, *names.flatten.compact
     end
     
-    Familia::RedisObject.register :hash, self
+    Familia::RedisObject.register self, :hash
   end
   
   class String < RedisObject
@@ -565,13 +592,7 @@ module Familia
       value.nil?
     end
     
-    Familia::RedisObject.register :string, self
-  end
-  
-  
-  class Counter < RedisObject
-    
-    #Familia::RedisObject.register :counter, self
+    Familia::RedisObject.register self, :string
   end
   
 end
