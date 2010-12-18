@@ -6,6 +6,7 @@ module Familia
     @klasses = {}
     class << self
       attr_reader :klasses
+      attr_accessor :db
       # To be called inside every class that inherits RedisObject
       def register(kind, klass)
         klasses[kind] = klass
@@ -40,7 +41,7 @@ module Familia
       @name, @parent = name, parent
       @opts = opts
       @redis = parent.redis if parent?
-      @redis ||= @opts.delete(:redis) || Familia.redis
+      @redis ||= @opts.delete(:redis) || Familia.redis(self.class.db)
       init if respond_to? :init
     end
     

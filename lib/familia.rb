@@ -75,7 +75,11 @@ module Familia
       @conf
     end
     def redis(uri=nil)
-      uri &&= URI.parse uri if String === uri
+      if Integer === uri
+        uri = Familia.uri(uri)
+      else
+        uri &&= URI.parse uri if String === uri
+      end
       uri ||= Familia.uri
       connect(uri) unless @clients[uri.serverid] 
       #STDERR.puts "REDIS: #{uri} #{caller[0]}" if Familia.debug?
