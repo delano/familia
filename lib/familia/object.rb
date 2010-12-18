@@ -364,12 +364,18 @@ module Familia::Object
       true
     end
     def index
-      if @index.nil?
-        self.class.index.kind_of?(Proc) ? 
-            self.class.index.call(self) : 
-            self.send(self.class.index)
+      return @index unless @index.to_s.empty?
+      @index = case self.class.index
+      when Proc
+        self.class.index.call(self)
+      when Symbol
+        if self.class.redis_object?(self.class.index)
+          raise Familia::EmptyIndex, "Cannot use a RedisObject as an index"
+        else
+          self.send(self.class.index)
+        end
       else
-        @index
+        raise Familia::EmptyIndex, self
       end
     end
     def index=(i)
