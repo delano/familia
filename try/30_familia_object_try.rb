@@ -25,19 +25,31 @@ Bone.suffix
 #=> 'v1:bone:atoken:akey:object'
 
 ## Familia#save
-obj = Customer.new :delano, "Delano Mandelbaum"
-obj.save
+@cust = Customer.new :delano, "Delano Mandelbaum"
+@cust.save
 #=> true
 
-## Familia#save with an object that expires
-obj = Session.new 'sessionid', :delano
-obj.save
-#=> true
+## Customer.instances
+Customer.instances.all
+#=> ['delano']
 
 ## Familia.from_redis
 obj = Customer.from_redis :delano
 obj.custid
 #=> :delano
+
+## Customer.destroy
+@cust.destroy!
+#=> 1
+
+## Customer.instances
+Customer.instances.size
+#=> 0
+
+## Familia#save with an object that expires
+obj = Session.new 'sessionid', :delano
+obj.save
+#=> true
 
 ## Familia.class_list
 Customer.customers.class

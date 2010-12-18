@@ -50,4 +50,4 @@ require 'familia/test_helpers'
 #=> ['1', '40', '3']
 
 
-@a.props.destroy!
+@a.props.clear

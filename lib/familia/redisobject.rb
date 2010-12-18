@@ -105,22 +105,23 @@ module Familia
     def move db
       redis.move rediskey, db
     end
-    
-    def destroy! 
-      clear
-      # TODO: delete redis objects for this instance
-    end
-    
+        
     # TODO: rename, renamenx
     
     def type 
       redis.type rediskey
     end
     
-    def clear 
+    def delete 
       redis.del rediskey
     end
-    alias_method :delete, :clear
+    alias_method :clear, :delete
+    alias_method :del, :delete
+    
+    #def destroy! 
+    #  clear
+    #  # TODO: delete redis objects for this instance
+    #end
     
     def exists?
       !size.zero?
@@ -267,6 +268,10 @@ module Familia
     end
     alias_method :length, :size
     
+    def empty?
+      size == 0
+    end
+    
     def << v
       redis.sadd rediskey, to_redis(v)
       self
@@ -277,6 +282,7 @@ module Familia
       # TODO: handle @opts[:marshal]
       redis.smembers rediskey
     end
+    alias_method :all, :members
     alias_method :to_a, :members
     
     def member? v
@@ -536,9 +542,12 @@ module Familia
       value.to_s  # value can return nil which to_s should not
     end
     
+    def to_i
+      value.to_i
+    end
+    
     def value= v
       redis.set rediskey, to_redis(v)
-      to_redis(v)
     end
     alias_method :replace, :value=
     alias_method :set, :value=  

@@ -22,7 +22,7 @@ Familia.apiversion = 'v1'
 #=> 'DECENT!'
 
 ## Familia::String#destroy!
-@a.value.destroy!
+@a.value.clear
 #=> 1
 
 ## Familia::String.new
@@ -63,4 +63,4 @@ Familia.apiversion = 'v1'
 #=> '1050bytes'
 
 
-@ret.destroy!
+@ret.clear

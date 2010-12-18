@@ -138,6 +138,7 @@ module Familia
     obj.send :include, Familia::InstanceMethods
     obj.send :include, Gibbler::Complex
     obj.extend Familia::ClassMethods
+    obj.class_set :instances
     Familia.classes << obj
   end
   

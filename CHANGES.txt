@@ -7,6 +7,8 @@ FAMILIA, CHANGES
 * ADDED: Familia.index can accept an Array of field names
 * ADDED: Support for using redis objects directly
 * ADDED RedisObject.ttl, RedisObject.db
+* ADDED: Familia classes maintain a set of instances (by index) which is updated
+automatically anytime an instance is saved or destroyed. 
 
 
 #### 0.6.0 (2010-12-10) ###############################

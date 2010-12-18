@@ -38,4 +38,4 @@ ret.class
 @a.owners.size
 #=> 2
 
-@a.owners.destroy!
+@a.owners.clear

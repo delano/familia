@@ -52,6 +52,8 @@ module Familia
       obj.db = self.db
       obj.ttl = self.ttl
       obj.uri = self.uri
+      obj.parent = self
+      obj.class_set :instances
       Familia.classes << obj
       super(obj)
     end
@@ -59,6 +61,8 @@ module Familia
       obj.db = self.db
       obj.ttl = self.ttl
       obj.uri = self.uri
+      obj.parent = self
+      obj.class_set :instances
       Familia.classes << obj
     end
     
@@ -105,9 +109,14 @@ module Familia
     def from_redisdump dump
       dump # todo
     end
-    def db(db=nil) 
-      @db = db if db; 
-      @db
+    attr_accessor :parent
+    def ttl v=nil
+      @ttl = v unless v.nil?
+      @ttl || (parent ? parent.ttl : nil)
+    end
+    def db v=nil
+      @db = v unless v.nil?
+      @db || (parent ? parent.db : nil)
     end
     def db=(db) @db = db end
     def host(host=nil) @host = host if host; @host end
@@ -124,7 +133,7 @@ module Familia
       @uri = URI.parse Familia.uri.to_s
       @uri.db = @db if @db 
       Familia.connect @uri #unless Familia.connected?(@uri)
-      @uri
+      @uri || (parent ? parent.uri : Familia.uri)
     end
     def redis
       Familia.redis(self.uri)
@@ -157,10 +166,6 @@ module Familia
       @index = i || blk if i || !blk.nil?
       @index ||= Familia.index
       @index
-    end
-    def ttl(sec=nil)
-      @ttl = sec.to_i unless sec.nil? 
-      @ttl
     end
     def suffixes
       redis_objects.keys.uniq
@@ -330,13 +335,6 @@ module Familia
     def exists?
       Familia.redis(self.class.uri).exists rediskey
     end      
-    def destroy!
-      ret = Familia.redis(self.class.uri).del rediskey
-      if Familia.debug?
-        Familia.trace :DELETED, Familia.redis(self.class.uri), "#{rediskey}: #{ret}", caller.first
-      end
-      ret
-    end
     
     #def rediskeys
     #  self.class.redis_objects.each do |redis_object_definition|
@@ -362,12 +360,23 @@ module Familia
       self.class.rediskey self.index, suffix
     end
     def save
-      Familia.trace :SAVE, Familia.redis(self.class.uri), redisuri, caller.first
+      #Familia.trace :SAVE, Familia.redis(self.class.uri), redisuri, caller.first
       preprocess if respond_to?(:preprocess)
       self.update_time if self.respond_to?(:update_time)
-      ret = self.object.value = self
-      self.object.update_expiration self.ttl # does nothing unless if not specified
+      ret = self.object.set self               # object is a name reserved by Familia
+      unless ret.nil?
+        self.class.instances.add index         # use this set instead of Klass.keys
+        self.object.update_expiration self.ttl # does nothing unless if not specified
+      end
       true
+    end
+    def destroy!
+      ret = self.object.delete
+      if Familia.debug?
+        Familia.trace :DELETED, Familia.redis(self.class.uri), "#{rediskey}: #{ret}", caller.first
+      end
+      self.class.instances.rem index if ret > 0
+      ret
     end
     def index
       case self.class.index

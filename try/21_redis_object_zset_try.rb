@@ -63,4 +63,4 @@ require 'familia/test_helpers'
 @a.metrics.members
 #=> ['metric2']
 
-@a.metrics.destroy!
+@a.metrics.clear
