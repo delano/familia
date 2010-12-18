@@ -6,6 +6,7 @@ FAMILIA, CHANGES
 * CHANGE: Familia::String: lazy-set default value
 * ADDED: Familia.index can accept an Array of field names
 * ADDED: Support for using redis objects directly
+* ADDED RedisObject.ttl, RedisObject.db
 
 
 #### 0.6.0 (2010-12-10) ###############################

@@ -4,12 +4,18 @@ module Familia
   class RedisObject
     
     @klasses = {}
+    @db, @ttl = nil, nil
     class << self
       attr_reader :klasses
       attr_accessor :db
+      attr_writer :ttl
       # To be called inside every class that inherits RedisObject
-      def register(kind, klass)
+      def register kind, klass
         klasses[kind] = klass
+      end
+      def ttl v=nil
+        @ttl = v unless v.nil?
+        @ttl
       end
     end
     
@@ -18,6 +24,7 @@ module Familia
     
     # +name+: If parent is set, this will be used as the suffix 
     # for rediskey. Otherwise this becomes the value of the key.
+    # If this is an Array, the elements will be joined.
     # 
     # Options:
     #
@@ -34,17 +41,20 @@ module Familia
     # Familia.dump_method. These will be used when loading and
     # saving data from/to redis to unmarshal/marshal the class. 
     #
-    # :redis => an instance of Redis. Should already be connected. 
+    # :db => the redis database to use (ignored if :redis is used).
+    #
+    # :redis => an instance of Redis.
     #
     # Uses the redis connection of the parent or the value of 
     # opts[:redis] or Familia.redis (in that order).
     def initialize name, opts={}
-      puts caller[0]
-      @name = name
-      @parent = opts.delete(:parent)
+      @name, @opts = name, opts
+      @name = @name.join(Familia.delim) if Array === @name
+      @opts[:ttl] ||= self.class.ttl
+      @opts[:db] ||= self.class.db
+      @parent = @opts.delete(:parent)
       @redis = parent.redis if parent?
-      @redis ||= opts.delete(:redis) || Familia.redis(self.class.db)
-      @opts = opts # set after we've deleted keys
+      @redis ||= @opts.delete(:redis) || Familia.redis(@opts[:db])
       init if respond_to? :init
     end
     
@@ -87,6 +97,10 @@ module Familia
     
     def exists?
       !size.zero?
+    end
+    
+    def ttl
+      redis.ttl rediskey
     end
     
     def expire sec
