@@ -1,5 +1,5 @@
 
-module Familia::Object
+module Familia
   
   class RedisObject
     
@@ -187,7 +187,7 @@ module Familia::Object
     #  end
     #end
     
-    Familia::Object::RedisObject.register :list, self
+    Familia::RedisObject.register :list, self
   end
   
   class Set < RedisObject
@@ -257,7 +257,7 @@ module Familia::Object
     #  end
     #end
     
-    Familia::Object::RedisObject.register :set, self
+    Familia::RedisObject.register :set, self
   end
   
   class SortedSet < RedisObject
@@ -365,7 +365,7 @@ module Familia::Object
       at(-1)
     end
     
-    Familia::Object::RedisObject.register :zset, self
+    Familia::RedisObject.register :zset, self
   end
 
   class HashKey < RedisObject
@@ -443,7 +443,7 @@ module Familia::Object
       redis.hmget rediskey, *names.flatten.compact
     end
     
-    Familia::Object::RedisObject.register :hash, self
+    Familia::RedisObject.register :hash, self
   end
   
   class String < RedisObject
@@ -477,13 +477,13 @@ module Familia::Object
       value.nil?
     end
     
-    Familia::Object::RedisObject.register :string, self
+    Familia::RedisObject.register :string, self
   end
   
   
   class Counter < RedisObject
     
-    #Familia::Object::RedisObject.register :counter, self
+    #Familia::RedisObject.register :counter, self
   end
   
 end

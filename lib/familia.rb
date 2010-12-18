@@ -48,22 +48,6 @@ module Familia
       info "%s (%d:%s): %s" % [label, Thread.current.object_id, redis_client.object_id, ident] 
       info "  +-> %s" % [context].flatten[0..3].join("\n      ") if context
     end
-  end
-  
-  class Problem < RuntimeError; end
-  class EmptyIndex < Problem; end
-  class NonUniqueKey < Problem; end
-  class NotConnected < Problem
-    attr_reader :uri
-    def initialize uri
-      @uri = uri
-    end
-    def message
-      "No client for #{uri.serverid}"
-    end
-  end
-  
-  module ClassMethods
     def uri(db=nil)
       if db.nil?
         @uri
@@ -133,17 +117,29 @@ module Familia
     end
   end
   
+  class Problem < RuntimeError; end
+  class EmptyIndex < Problem; end
+  class NonUniqueKey < Problem; end
+  class NotConnected < Problem
+    attr_reader :uri
+    def initialize uri
+      @uri = uri
+    end
+    def message
+      "No client for #{uri.serverid}"
+    end
+  end
+  
   def self.included(obj)
-    obj.send :include, Familia::Object::InstanceMethods
+    obj.send :include, Familia::InstanceMethods
     obj.send :include, Gibbler::Complex
-    obj.extend Familia::Object::ClassMethods
+    obj.extend Familia::ClassMethods
     Familia.classes << obj
   end
   
   require 'familia/object'
   require 'familia/helpers'
 
-  extend Familia::ClassMethods
 end
 
 

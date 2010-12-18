@@ -1,13 +1,12 @@
 require 'ostruct'
 
-module Familia::Object
+module Familia
   require 'familia/redisobject'
-
   
   # Auto-extended into a class that includes Familia
   module ClassMethods
     
-    RedisObject.klasses.each_pair do |kind, klass|
+    Familia::RedisObject.klasses.each_pair do |kind, klass|
       # e.g. 
       #
       #      list(name, klass, opts)
