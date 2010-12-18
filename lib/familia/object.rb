@@ -80,6 +80,7 @@ module Familia
       name = name.to_s.to_sym
       opts ||= {}
       opts[:suffix] ||= nil
+      opts[:parent] ||= self
       # TODO: investigate metaclass.redis_objects
       class_redis_objects[name] = OpenStruct.new
       class_redis_objects[name].name = name
@@ -91,7 +92,7 @@ module Familia
       metaclass.send :define_method, "#{name}=" do |v|
         send(name).replace v
       end
-      redis_object = klass.new name, self, opts
+      redis_object = klass.new name, opts
       redis_object.freeze
       self.instance_variable_set("@#{name}", redis_object)
       class_redis_objects[name]
@@ -302,7 +303,9 @@ module Familia
       # See RedisObject.install_redis_object
       self.class.redis_objects.each_pair do |name, redis_object_definition|
         klass, opts = redis_object_definition.klass, redis_object_definition.opts
-        redis_object = klass.new name, self, opts
+        opts ||= {}
+        opts[:parent] ||= self
+        redis_object = klass.new name, opts
         redis_object.freeze
         self.instance_variable_set "@#{name}", redis_object
       end

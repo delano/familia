@@ -18,10 +18,11 @@ module Familia
     
     # +name+: If parent is set, this will be used as the suffix 
     # for rediskey. Otherwise this becomes the value of the key.
-    # +parent+: The Familia object that this redis object belongs
-    # to. This can be a class that includes Familia or an instance.
     # 
     # Options:
+    #
+    # :parent: The Familia object that this redis object belongs
+    # to. This can be a class that includes Familia or an instance.
     # 
     # :ttl => the time to live in seconds. When not nil, this will
     # set the redis expire for this key whenever #save is called. 
@@ -37,11 +38,13 @@ module Familia
     #
     # Uses the redis connection of the parent or the value of 
     # opts[:redis] or Familia.redis (in that order).
-    def initialize name, parent=nil, opts={}
-      @name, @parent = name, parent
-      @opts = opts
+    def initialize name, opts={}
+      puts caller[0]
+      @name = name
+      @parent = opts.delete(:parent)
       @redis = parent.redis if parent?
-      @redis ||= @opts.delete(:redis) || Familia.redis(self.class.db)
+      @redis ||= opts.delete(:redis) || Familia.redis(self.class.db)
+      @opts = opts # set after we've deleted keys
       init if respond_to? :init
     end
     
