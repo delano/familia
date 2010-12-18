@@ -277,8 +277,8 @@ module Familia
     # including Familia. In that case, the replacement
     # must call initialize_redis_objects.
     def initialize *args
-      super   # call Storable#initialize or equivalent
       initialize_redis_objects
+      super   # call Storable#initialize or equivalent
     end
     
     # This needs to be called in the initialize method of
