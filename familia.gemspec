@@ -5,11 +5,11 @@
 
 Gem::Specification.new do |s|
   s.name = %q{familia}
-  s.version = "0.6.0"
+  s.version = "0.6.1"
 
   s.required_rubygems_version = Gem::Requirement.new(">= 0") if s.respond_to? :required_rubygems_version=
   s.authors = ["Delano Mandelbaum"]
-  s.date = %q{2010-12-17}
+  s.date = %q{2010-12-18}
   s.description = %q{Organize and store ruby objects in Redis}
   s.email = %q{delano@solutious.com}
   s.extra_rdoc_files = [
