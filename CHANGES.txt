@@ -1,6 +1,6 @@
 FAMILIA, CHANGES
 
-#### 0.6.1 (2010-12-10) ###############################
+#### 0.6.1 (2010-12-18) ###############################
 
 * CHANGE: Default initialize method calls initialize_redis_objects before super
 * CHANGE: Familia::String: lazy-set default value
