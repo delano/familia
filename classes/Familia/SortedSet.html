@@ -1,0 +1,496 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<html lang='en'>
+  <head>
+    <title>: Familia::SortedSet [familia 0.6.1.]</title>
+    <meta content='text/html; charset=UTF-8' http-equiv='Content-Type'>
+    <link href='../../rdoc-style.css' media='screen' rel='stylesheet' type='text/css'>
+    <script type='text/javascript'>
+      //<![CDATA[
+        function popupCode(url) {
+          window.open(url, "Code", "resizable=yes,scrollbars=yes,toolbar=no,status=no,height=150,width=400")
+        }
+        
+        function toggleCode(id) {
+          var code = document.getElementById(id)
+        
+          code.style.display = code.style.display != 'block' ? 'block' : 'none'
+          return true
+        }
+        
+        // Make codeblocks hidden by default
+        document.writeln('<' + 'style type="text/css">.method .source pre { display: none }<\/style>')
+      //]]>
+    </script>
+  </head>
+  <body class='page'>
+    <div class='class' id='wrapper'>
+      <div class='header'>
+        <h1 class='name'>
+          <span class='type'>Class</span>
+          Familia::SortedSet
+        </h1>
+        <ol class='paths'>
+          <li>
+            <a href="../../files/lib/familia/redisobject_rb.html">lib/familia/redisobject.rb</a>
+          </li>
+        </ol>
+        <div class='parent'>
+          Parent:
+          <strong><a href="RedisObject.html">Familia::RedisObject</a></strong>
+        </div>
+      </div>
+      <div id='content'>
+        <div id='text'>
+          <div id='method-list'>
+            <h2>Methods</h2>
+            <h3>public instance</h3>
+            <ol>
+              <li><a href="#M000197">[]</a></li>
+              <li><a href="#M000194">[]=</a></li>
+              <li><a href="#M000195">add</a></li>
+              <li><a href="#M000218">at</a></li>
+              <li><a href="#M000214">decr</a></li>
+              <li><a href="#M000215">decrby</a></li>
+              <li><a href="#M000213">decrement</a></li>
+              <li><a href="#M000216">delete</a></li>
+              <li><a href="#M000219">first</a></li>
+              <li><a href="#M000199">include?</a></li>
+              <li><a href="#M000211">incr</a></li>
+              <li><a href="#M000212">incrby</a></li>
+              <li><a href="#M000210">increment</a></li>
+              <li><a href="#M000220">last</a></li>
+              <li><a href="#M000193">length</a></li>
+              <li><a href="#M000198">member?</a></li>
+              <li><a href="#M000202">members</a></li>
+              <li><a href="#M000204">membersrev</a></li>
+              <li><a href="#M000205">range</a></li>
+              <li><a href="#M000207">rangebyscore</a></li>
+              <li><a href="#M000206">rangerev</a></li>
+              <li><a href="#M000200">rank</a></li>
+              <li><a href="#M000217">remove</a></li>
+              <li><a href="#M000208">remrangebyrank</a></li>
+              <li><a href="#M000209">remrangebyscore</a></li>
+              <li><a href="#M000201">revrank</a></li>
+              <li><a href="#M000196">score</a></li>
+              <li><a href="#M000192">size</a></li>
+              <li><a href="#M000203">to_a</a></li>
+            </ol>
+          </div>
+          <div id='section'>
+            <div id='methods'>
+              <h2>Public instance methods</h2>
+              <div class='method public-instance' id='method-M000197'>
+                <a name='M000197'>      </a>
+                <div class='synopsis'>
+                  <span class='name'>[]</span>
+                  <span class='arguments'>(v)</span>
+                </div>
+                <div class='description'>
+                  <p>
+                  Alias for <a href="SortedSet.html#M000196">score</a>
+                  </p>
+                </div>
+              </div>
+              <div class='method public-instance' id='method-M000194'>
+                <a name='M000194'>      </a>
+                <div class='synopsis'>
+                  <span class='name'>[]=</span>
+                  <span class='arguments'>(v, score)</span>
+                </div>
+                <div class='description'>
+                  <p>
+                  NOTE: The argument order is the reverse of <a
+                  href="SortedSet.html#M000195">add</a> e.g. obj.metrics[VALUE] = SCORE
+                  </p>
+                </div>
+                <div class='source'>
+                  <a class='source-toggle' href='#' onclick="toggleCode('M000194-source'); return false">
+                    [show source]
+                  </a>
+                  <pre id='M000194-source'><span class="ruby-comment cmt"># File lib/familia/redisobject.rb, line 348</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-operator">[]=</span> <span class="ruby-identifier">v</span>, <span class="ruby-identifier">score</span>&#x000A;      <span class="ruby-identifier">add</span> <span class="ruby-identifier">score</span>, <span class="ruby-identifier">v</span>&#x000A;    <span class="ruby-keyword kw">end</span></pre>
+                </div>
+              </div>
+              <div class='method public-instance' id='method-M000195'>
+                <a name='M000195'>      </a>
+                <div class='synopsis'>
+                  <span class='name'>add</span>
+                  <span class='arguments'>(score, v)</span>
+                </div>
+                <div class='description'>
+                  <p>
+                  NOTE: The argument order is the reverse of #[]=
+                  </p>
+                </div>
+                <div class='source'>
+                  <a class='source-toggle' href='#' onclick="toggleCode('M000195-source'); return false">
+                    [show source]
+                  </a>
+                  <pre id='M000195-source'><span class="ruby-comment cmt"># File lib/familia/redisobject.rb, line 353</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">add</span> <span class="ruby-identifier">score</span>, <span class="ruby-identifier">v</span>&#x000A;      <span class="ruby-identifier">redis</span>.<span class="ruby-identifier">zadd</span> <span class="ruby-identifier">rediskey</span>, <span class="ruby-identifier">score</span>, <span class="ruby-identifier">to_redis</span>(<span class="ruby-identifier">v</span>)&#x000A;    <span class="ruby-keyword kw">end</span></pre>
+                </div>
+              </div>
+              <div class='method public-instance' id='method-M000218'>
+                <a name='M000218'>      </a>
+                <div class='synopsis'>
+                  <span class='name'>at</span>
+                  <span class='arguments'>(idx)</span>
+                </div>
+                <div class='source'>
+                  <a class='source-toggle' href='#' onclick="toggleCode('M000218-source'); return false">
+                    [show source]
+                  </a>
+                  <pre id='M000218-source'><span class="ruby-comment cmt"># File lib/familia/redisobject.rb, line 430</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">at</span> <span class="ruby-identifier">idx</span>&#x000A;      <span class="ruby-identifier">range</span>(<span class="ruby-identifier">idx</span>, <span class="ruby-identifier">idx</span>).<span class="ruby-identifier">first</span>&#x000A;    <span class="ruby-keyword kw">end</span></pre>
+                </div>
+              </div>
+              <div class='method public-instance' id='method-M000214'>
+                <a name='M000214'>      </a>
+                <div class='synopsis'>
+                  <span class='name'>decr</span>
+                  <span class='arguments'>(v, by=1)</span>
+                </div>
+                <div class='description'>
+                  <p>
+                  Alias for <a href="SortedSet.html#M000213">decrement</a>
+                  </p>
+                </div>
+              </div>
+              <div class='method public-instance' id='method-M000215'>
+                <a name='M000215'>      </a>
+                <div class='synopsis'>
+                  <span class='name'>decrby</span>
+                  <span class='arguments'>(v, by=1)</span>
+                </div>
+                <div class='description'>
+                  <p>
+                  Alias for <a href="SortedSet.html#M000213">decrement</a>
+                  </p>
+                </div>
+              </div>
+              <div class='method public-instance' id='method-M000213'>
+                <a name='M000213'>      </a>
+                <div class='synopsis'>
+                  <span class='name'>decrement</span>
+                  <span class='arguments'>(v, by=1)</span>
+                </div>
+                <div class='source'>
+                  <a class='source-toggle' href='#' onclick="toggleCode('M000213-source'); return false">
+                    [show source]
+                  </a>
+                  <pre id='M000213-source'><span class="ruby-comment cmt"># File lib/familia/redisobject.rb, line 419</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">decrement</span> <span class="ruby-identifier">v</span>, <span class="ruby-identifier">by</span>=<span class="ruby-value">1</span>&#x000A;      <span class="ruby-identifier">increment</span> <span class="ruby-identifier">v</span>, <span class="ruby-operator">-</span><span class="ruby-identifier">by</span>&#x000A;    <span class="ruby-keyword kw">end</span></pre>
+                </div>
+              </div>
+              <div class='method public-instance' id='method-M000216'>
+                <a name='M000216'>      </a>
+                <div class='synopsis'>
+                  <span class='name'>delete</span>
+                  <span class='arguments'>(v)</span>
+                </div>
+                <div class='source'>
+                  <a class='source-toggle' href='#' onclick="toggleCode('M000216-source'); return false">
+                    [show source]
+                  </a>
+                  <pre id='M000216-source'><span class="ruby-comment cmt"># File lib/familia/redisobject.rb, line 425</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">delete</span> <span class="ruby-identifier">v</span>&#x000A;      <span class="ruby-identifier">redis</span>.<span class="ruby-identifier">zrem</span> <span class="ruby-identifier">rediskey</span>, <span class="ruby-identifier">to_redis</span>(<span class="ruby-identifier">v</span>)&#x000A;    <span class="ruby-keyword kw">end</span></pre>
+                </div>
+              </div>
+              <div class='method public-instance' id='method-M000219'>
+                <a name='M000219'>      </a>
+                <div class='synopsis'>
+                  <span class='name'>first</span>
+                  <span class='arguments'>()</span>
+                </div>
+                <div class='description'>
+                  <p>
+                  Return the first element in the list. Redis: ZRANGE(0)
+                  </p>
+                </div>
+                <div class='source'>
+                  <a class='source-toggle' href='#' onclick="toggleCode('M000219-source'); return false">
+                    [show source]
+                  </a>
+                  <pre id='M000219-source'><span class="ruby-comment cmt"># File lib/familia/redisobject.rb, line 435</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">first</span>&#x000A;      <span class="ruby-identifier">at</span>(<span class="ruby-value">0</span>)&#x000A;    <span class="ruby-keyword kw">end</span></pre>
+                </div>
+              </div>
+              <div class='method public-instance' id='method-M000199'>
+                <a name='M000199'>      </a>
+                <div class='synopsis'>
+                  <span class='name'>include?</span>
+                  <span class='arguments'>(v)</span>
+                </div>
+                <div class='description'>
+                  <p>
+                  Alias for <a href="SortedSet.html#M000198">member?</a>
+                  </p>
+                </div>
+              </div>
+              <div class='method public-instance' id='method-M000211'>
+                <a name='M000211'>      </a>
+                <div class='synopsis'>
+                  <span class='name'>incr</span>
+                  <span class='arguments'>(v, by=1)</span>
+                </div>
+                <div class='description'>
+                  <p>
+                  Alias for <a href="SortedSet.html#M000210">increment</a>
+                  </p>
+                </div>
+              </div>
+              <div class='method public-instance' id='method-M000212'>
+                <a name='M000212'>      </a>
+                <div class='synopsis'>
+                  <span class='name'>incrby</span>
+                  <span class='arguments'>(v, by=1)</span>
+                </div>
+                <div class='description'>
+                  <p>
+                  Alias for <a href="SortedSet.html#M000210">increment</a>
+                  </p>
+                </div>
+              </div>
+              <div class='method public-instance' id='method-M000210'>
+                <a name='M000210'>      </a>
+                <div class='synopsis'>
+                  <span class='name'>increment</span>
+                  <span class='arguments'>(v, by=1)</span>
+                </div>
+                <div class='source'>
+                  <a class='source-toggle' href='#' onclick="toggleCode('M000210-source'); return false">
+                    [show source]
+                  </a>
+                  <pre id='M000210-source'><span class="ruby-comment cmt"># File lib/familia/redisobject.rb, line 413</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">increment</span> <span class="ruby-identifier">v</span>, <span class="ruby-identifier">by</span>=<span class="ruby-value">1</span>&#x000A;      <span class="ruby-identifier">redis</span>.<span class="ruby-identifier">zincrby</span>(<span class="ruby-identifier">rediskey</span>, <span class="ruby-identifier">by</span>, <span class="ruby-identifier">v</span>).<span class="ruby-identifier">to_i</span>&#x000A;    <span class="ruby-keyword kw">end</span></pre>
+                </div>
+              </div>
+              <div class='method public-instance' id='method-M000220'>
+                <a name='M000220'>      </a>
+                <div class='synopsis'>
+                  <span class='name'>last</span>
+                  <span class='arguments'>()</span>
+                </div>
+                <div class='description'>
+                  <p>
+                  Return the last element in the list. Redis: ZRANGE(-1)
+                  </p>
+                </div>
+                <div class='source'>
+                  <a class='source-toggle' href='#' onclick="toggleCode('M000220-source'); return false">
+                    [show source]
+                  </a>
+                  <pre id='M000220-source'><span class="ruby-comment cmt"># File lib/familia/redisobject.rb, line 440</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">last</span>&#x000A;      <span class="ruby-identifier">at</span>(<span class="ruby-value">-1</span>)&#x000A;    <span class="ruby-keyword kw">end</span></pre>
+                </div>
+              </div>
+              <div class='method public-instance' id='method-M000193'>
+                <a name='M000193'>      </a>
+                <div class='synopsis'>
+                  <span class='name'>length</span>
+                  <span class='arguments'>()</span>
+                </div>
+                <div class='description'>
+                  <p>
+                  Alias for <a href="SortedSet.html#M000192">size</a>
+                  </p>
+                </div>
+              </div>
+              <div class='method public-instance' id='method-M000198'>
+                <a name='M000198'>      </a>
+                <div class='synopsis'>
+                  <span class='name'>member?</span>
+                  <span class='arguments'>(v)</span>
+                </div>
+                <div class='source'>
+                  <a class='source-toggle' href='#' onclick="toggleCode('M000198-source'); return false">
+                    [show source]
+                  </a>
+                  <pre id='M000198-source'><span class="ruby-comment cmt"># File lib/familia/redisobject.rb, line 363</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">member?</span> <span class="ruby-identifier">v</span>&#x000A;      <span class="ruby-operator">!</span><span class="ruby-identifier">rank</span>(<span class="ruby-identifier">v</span>).<span class="ruby-identifier">nil?</span>&#x000A;    <span class="ruby-keyword kw">end</span></pre>
+                </div>
+              </div>
+              <div class='method public-instance' id='method-M000202'>
+                <a name='M000202'>      </a>
+                <div class='synopsis'>
+                  <span class='name'>members</span>
+                  <span class='arguments'>(opts={})</span>
+                </div>
+                <div class='source'>
+                  <a class='source-toggle' href='#' onclick="toggleCode('M000202-source'); return false">
+                    [show source]
+                  </a>
+                  <pre id='M000202-source'><span class="ruby-comment cmt"># File lib/familia/redisobject.rb, line 380</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">members</span> <span class="ruby-identifier">opts</span>={}&#x000A;      <span class="ruby-identifier">range</span> <span class="ruby-value">0</span>, <span class="ruby-value">-1</span>, <span class="ruby-identifier">opts</span>&#x000A;    <span class="ruby-keyword kw">end</span></pre>
+                </div>
+              </div>
+              <div class='method public-instance' id='method-M000204'>
+                <a name='M000204'>      </a>
+                <div class='synopsis'>
+                  <span class='name'>membersrev</span>
+                  <span class='arguments'>(opts={})</span>
+                </div>
+                <div class='source'>
+                  <a class='source-toggle' href='#' onclick="toggleCode('M000204-source'); return false">
+                    [show source]
+                  </a>
+                  <pre id='M000204-source'><span class="ruby-comment cmt"># File lib/familia/redisobject.rb, line 385</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">membersrev</span> <span class="ruby-identifier">opts</span>={}&#x000A;      <span class="ruby-identifier">rangerev</span> <span class="ruby-value">0</span>, <span class="ruby-value">-1</span>, <span class="ruby-identifier">opts</span>&#x000A;    <span class="ruby-keyword kw">end</span></pre>
+                </div>
+              </div>
+              <div class='method public-instance' id='method-M000205'>
+                <a name='M000205'>      </a>
+                <div class='synopsis'>
+                  <span class='name'>range</span>
+                  <span class='arguments'>(sidx, eidx, opts={})</span>
+                </div>
+                <div class='source'>
+                  <a class='source-toggle' href='#' onclick="toggleCode('M000205-source'); return false">
+                    [show source]
+                  </a>
+                  <pre id='M000205-source'><span class="ruby-comment cmt"># File lib/familia/redisobject.rb, line 389</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">range</span> <span class="ruby-identifier">sidx</span>, <span class="ruby-identifier">eidx</span>, <span class="ruby-identifier">opts</span>={}&#x000A;      <span class="ruby-identifier">opts</span>[<span class="ruby-identifier">:with_scores</span>] = <span class="ruby-keyword kw">true</span> <span class="ruby-keyword kw">if</span> <span class="ruby-identifier">opts</span>[<span class="ruby-identifier">:withscores</span>]&#x000A;      <span class="ruby-identifier">redis</span>.<span class="ruby-identifier">zrange</span> <span class="ruby-identifier">rediskey</span>, <span class="ruby-identifier">sidx</span>, <span class="ruby-identifier">eidx</span>, <span class="ruby-identifier">opts</span>&#x000A;    <span class="ruby-keyword kw">end</span></pre>
+                </div>
+              </div>
+              <div class='method public-instance' id='method-M000207'>
+                <a name='M000207'>      </a>
+                <div class='synopsis'>
+                  <span class='name'>rangebyscore</span>
+                  <span class='arguments'>(sscore, escore, opts={})</span>
+                </div>
+                <div class='description'>
+                  <p>
+                  e.g. obj.metrics.rangebyscore (now-12.hours), now, :limit => [0, 10]
+                  </p>
+                </div>
+                <div class='source'>
+                  <a class='source-toggle' href='#' onclick="toggleCode('M000207-source'); return false">
+                    [show source]
+                  </a>
+                  <pre id='M000207-source'><span class="ruby-comment cmt"># File lib/familia/redisobject.rb, line 400</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">rangebyscore</span> <span class="ruby-identifier">sscore</span>, <span class="ruby-identifier">escore</span>, <span class="ruby-identifier">opts</span>={}&#x000A;      <span class="ruby-identifier">opts</span>[<span class="ruby-identifier">:with_scores</span>] = <span class="ruby-keyword kw">true</span> <span class="ruby-keyword kw">if</span> <span class="ruby-identifier">opts</span>[<span class="ruby-identifier">:withscores</span>]&#x000A;      <span class="ruby-identifier">redis</span>.<span class="ruby-identifier">zrangebyscore</span> <span class="ruby-identifier">rediskey</span>, <span class="ruby-identifier">sscore</span>, <span class="ruby-identifier">escore</span>, <span class="ruby-identifier">opts</span>&#x000A;    <span class="ruby-keyword kw">end</span></pre>
+                </div>
+              </div>
+              <div class='method public-instance' id='method-M000206'>
+                <a name='M000206'>      </a>
+                <div class='synopsis'>
+                  <span class='name'>rangerev</span>
+                  <span class='arguments'>(sidx, eidx, opts={})</span>
+                </div>
+                <div class='source'>
+                  <a class='source-toggle' href='#' onclick="toggleCode('M000206-source'); return false">
+                    [show source]
+                  </a>
+                  <pre id='M000206-source'><span class="ruby-comment cmt"># File lib/familia/redisobject.rb, line 394</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">rangerev</span> <span class="ruby-identifier">sidx</span>, <span class="ruby-identifier">eidx</span>, <span class="ruby-identifier">opts</span>={}&#x000A;      <span class="ruby-identifier">opts</span>[<span class="ruby-identifier">:with_scores</span>] = <span class="ruby-keyword kw">true</span> <span class="ruby-keyword kw">if</span> <span class="ruby-identifier">opts</span>[<span class="ruby-identifier">:withscores</span>]&#x000A;      <span class="ruby-identifier">redis</span>.<span class="ruby-identifier">zrevrange</span> <span class="ruby-identifier">rediskey</span>, <span class="ruby-identifier">sidx</span>, <span class="ruby-identifier">eidx</span>, <span class="ruby-identifier">opts</span>&#x000A;    <span class="ruby-keyword kw">end</span></pre>
+                </div>
+              </div>
+              <div class='method public-instance' id='method-M000200'>
+                <a name='M000200'>      </a>
+                <div class='synopsis'>
+                  <span class='name'>rank</span>
+                  <span class='arguments'>(v)</span>
+                </div>
+                <div class='description'>
+                  <p>
+                  rank of member <tt>v</tt> when ordered lowest to highest (starts at 0)
+                  </p>
+                </div>
+                <div class='source'>
+                  <a class='source-toggle' href='#' onclick="toggleCode('M000200-source'); return false">
+                    [show source]
+                  </a>
+                  <pre id='M000200-source'><span class="ruby-comment cmt"># File lib/familia/redisobject.rb, line 369</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">rank</span> <span class="ruby-identifier">v</span>&#x000A;      <span class="ruby-identifier">ret</span> = <span class="ruby-identifier">redis</span>.<span class="ruby-identifier">zrank</span> <span class="ruby-identifier">rediskey</span>, <span class="ruby-identifier">to_redis</span>(<span class="ruby-identifier">v</span>)&#x000A;      <span class="ruby-identifier">ret</span>.<span class="ruby-identifier">nil?</span> <span class="ruby-value">? </span><span class="ruby-keyword kw">nil</span> <span class="ruby-operator">:</span> <span class="ruby-identifier">ret</span>.<span class="ruby-identifier">to_i</span>&#x000A;    <span class="ruby-keyword kw">end</span></pre>
+                </div>
+              </div>
+              <div class='method public-instance' id='method-M000217'>
+                <a name='M000217'>      </a>
+                <div class='synopsis'>
+                  <span class='name'>remove</span>
+                  <span class='arguments'>(v)</span>
+                </div>
+                <div class='description'>
+                  <p>
+                  Alias for <a href="SortedSet.html#M000216">delete</a>
+                  </p>
+                </div>
+              </div>
+              <div class='method public-instance' id='method-M000208'>
+                <a name='M000208'>      </a>
+                <div class='synopsis'>
+                  <span class='name'>remrangebyrank</span>
+                  <span class='arguments'>(srank, erank)</span>
+                </div>
+                <div class='source'>
+                  <a class='source-toggle' href='#' onclick="toggleCode('M000208-source'); return false">
+                    [show source]
+                  </a>
+                  <pre id='M000208-source'><span class="ruby-comment cmt"># File lib/familia/redisobject.rb, line 405</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">remrangebyrank</span> <span class="ruby-identifier">srank</span>, <span class="ruby-identifier">erank</span>&#x000A;      <span class="ruby-identifier">redis</span>.<span class="ruby-identifier">zremrangebyrank</span> <span class="ruby-identifier">rediskey</span>, <span class="ruby-identifier">srank</span>, <span class="ruby-identifier">erank</span>&#x000A;    <span class="ruby-keyword kw">end</span></pre>
+                </div>
+              </div>
+              <div class='method public-instance' id='method-M000209'>
+                <a name='M000209'>      </a>
+                <div class='synopsis'>
+                  <span class='name'>remrangebyscore</span>
+                  <span class='arguments'>(sscore, escore)</span>
+                </div>
+                <div class='source'>
+                  <a class='source-toggle' href='#' onclick="toggleCode('M000209-source'); return false">
+                    [show source]
+                  </a>
+                  <pre id='M000209-source'><span class="ruby-comment cmt"># File lib/familia/redisobject.rb, line 409</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">remrangebyscore</span> <span class="ruby-identifier">sscore</span>, <span class="ruby-identifier">escore</span>&#x000A;      <span class="ruby-identifier">redis</span>.<span class="ruby-identifier">zremrangebyscore</span> <span class="ruby-identifier">rediskey</span>, <span class="ruby-identifier">sscore</span>, <span class="ruby-identifier">escore</span>&#x000A;    <span class="ruby-keyword kw">end</span></pre>
+                </div>
+              </div>
+              <div class='method public-instance' id='method-M000201'>
+                <a name='M000201'>      </a>
+                <div class='synopsis'>
+                  <span class='name'>revrank</span>
+                  <span class='arguments'>(v)</span>
+                </div>
+                <div class='description'>
+                  <p>
+                  rank of member <tt>v</tt> when ordered highest to lowest (starts at 0)
+                  </p>
+                </div>
+                <div class='source'>
+                  <a class='source-toggle' href='#' onclick="toggleCode('M000201-source'); return false">
+                    [show source]
+                  </a>
+                  <pre id='M000201-source'><span class="ruby-comment cmt"># File lib/familia/redisobject.rb, line 375</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">revrank</span> <span class="ruby-identifier">v</span>&#x000A;      <span class="ruby-identifier">ret</span> = <span class="ruby-identifier">redis</span>.<span class="ruby-identifier">zrevrank</span> <span class="ruby-identifier">rediskey</span>, <span class="ruby-identifier">to_redis</span>(<span class="ruby-identifier">v</span>)&#x000A;      <span class="ruby-identifier">ret</span>.<span class="ruby-identifier">nil?</span> <span class="ruby-value">? </span><span class="ruby-keyword kw">nil</span> <span class="ruby-operator">:</span> <span class="ruby-identifier">ret</span>.<span class="ruby-identifier">to_i</span>&#x000A;    <span class="ruby-keyword kw">end</span></pre>
+                </div>
+              </div>
+              <div class='method public-instance' id='method-M000196'>
+                <a name='M000196'>      </a>
+                <div class='synopsis'>
+                  <span class='name'>score</span>
+                  <span class='arguments'>(v)</span>
+                </div>
+                <div class='source'>
+                  <a class='source-toggle' href='#' onclick="toggleCode('M000196-source'); return false">
+                    [show source]
+                  </a>
+                  <pre id='M000196-source'><span class="ruby-comment cmt"># File lib/familia/redisobject.rb, line 357</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">score</span> <span class="ruby-identifier">v</span>&#x000A;      <span class="ruby-identifier">ret</span> = <span class="ruby-identifier">redis</span>.<span class="ruby-identifier">zscore</span> <span class="ruby-identifier">rediskey</span>, <span class="ruby-identifier">to_redis</span>(<span class="ruby-identifier">v</span>)&#x000A;      <span class="ruby-identifier">ret</span>.<span class="ruby-identifier">nil?</span> <span class="ruby-value">? </span><span class="ruby-keyword kw">nil</span> <span class="ruby-operator">:</span> <span class="ruby-identifier">ret</span>.<span class="ruby-identifier">to_f</span>&#x000A;    <span class="ruby-keyword kw">end</span></pre>
+                </div>
+              </div>
+              <div class='method public-instance' id='method-M000192'>
+                <a name='M000192'>      </a>
+                <div class='synopsis'>
+                  <span class='name'>size</span>
+                  <span class='arguments'>()</span>
+                </div>
+                <div class='source'>
+                  <a class='source-toggle' href='#' onclick="toggleCode('M000192-source'); return false">
+                    [show source]
+                  </a>
+                  <pre id='M000192-source'><span class="ruby-comment cmt"># File lib/familia/redisobject.rb, line 341</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">size</span>&#x000A;      <span class="ruby-identifier">redis</span>.<span class="ruby-identifier">zcard</span> <span class="ruby-identifier">rediskey</span>&#x000A;    <span class="ruby-keyword kw">end</span></pre>
+                </div>
+              </div>
+              <div class='method public-instance' id='method-M000203'>
+                <a name='M000203'>      </a>
+                <div class='synopsis'>
+                  <span class='name'>to_a</span>
+                  <span class='arguments'>(opts={})</span>
+                </div>
+                <div class='description'>
+                  <p>
+                  Alias for <a href="SortedSet.html#M000202">members</a>
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div id='footer-push'></div>
+    </div>
+    <div id='footer'>
+      <a href="http://github.com/mislav/hanna/tree/master"><strong>Hanna</strong> RDoc template</a>
+    </div>
+  </body>
+</html>
