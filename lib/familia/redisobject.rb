@@ -92,7 +92,7 @@ module Familia
     end
     
     def parent?
-      Class === parent || parent.kind_of?(Familia)
+      Class === parent || Module === parent || parent.kind_of?(Familia)
     end
     
     def update_expiration(ttl=nil)

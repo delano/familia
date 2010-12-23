@@ -4,6 +4,7 @@ FAMILIA, CHANGES
 
 * FIXED: Familia::ClassMethods.ttl=
 * FIXED: Familia.class_lists (etc) methods. 
+* FIXED: Redis objects check if parent is a Module
 * CHANGE: redis_objects, class_redis_objects maintain order they're defined in. (See Bluth::Queue)
 
 

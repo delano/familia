@@ -43,6 +43,11 @@ module Familia
       end
       define_method :"class_#{kind}s" do 
         names = class_redis_objects_order.select { |name| ret = send(:"class_#{kind}?", name) }
+        # TODO: This returns instances of the RedisObject class which
+        # also contain the options. This is different from the instance
+        # RedisObjects defined above which returns the OpenStruct of name, klass, and opts. 
+        #names.collect! { |name| self.send name }
+        # OR NOT:
         names.collect! { |name| class_redis_objects[name] }
         names
       end
