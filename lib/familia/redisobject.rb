@@ -217,12 +217,18 @@ module Familia
       redis.lrem rediskey, count, to_redis(v)
     end
     alias_method :remove, :delete
+    alias_method :rem, :delete
+    alias_method :del, :delete
     
     def range sidx=0, eidx=-1
       # TODO: handle @opts[:marshal]
       redis.lrange rediskey, sidx, eidx
     end
     alias_method :to_a, :range
+    
+    def each &blk
+      range.each &blk
+    end
     
     def at idx
       from_redis redis.lindex(rediskey, idx)
@@ -284,6 +290,10 @@ module Familia
     end
     alias_method :all, :members
     alias_method :to_a, :members
+    
+    def each &blk
+      members.each &blk
+    end
     
     def member? v
       redis.sismember rediskey, to_redis(v)
@@ -381,6 +391,10 @@ module Familia
       range 0, -1, opts
     end
     alias_method :to_a, :members
+    
+    def each &blk
+      members.each &blk
+    end
     
     def membersrev opts={}
       rangerev 0, -1, opts
@@ -605,3 +619,4 @@ module Familia
   end
   
 end
+
