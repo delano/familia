@@ -195,7 +195,7 @@ module Familia
     end
     
     def shift
-      from_redis redis.lpop(key)
+      from_redis redis.lpop(rediskey)
     end
     
     def [] idx, count=nil
