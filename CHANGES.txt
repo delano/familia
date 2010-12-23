@@ -1,5 +1,10 @@
 FAMILIA, CHANGES
 
+#### 0.6.2 (2010-12-18) ###############################
+
+* FIXED: Familia::ClassMethods.ttl=
+* FIXED: Familia.class_lists (etc) methods. 
+
 #### 0.6.1 (2010-12-18) ###############################
 
 * CHANGE: Default initialize method calls initialize_redis_objects before super

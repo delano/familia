@@ -42,7 +42,7 @@ module Familia
         !obj.nil? && klass == obj.klass
       end
       define_method :"class_#{kind}s" do 
-        names = class_redis_objects.keys.select { |name| send(:"#{kind}?", name) }
+        names = class_redis_objects.keys.select { |name| ret = send(:"class_#{kind}?", name) }
         names.collect! { |name| class_redis_objects[name] }
         names
       end
@@ -50,8 +50,8 @@ module Familia
     
     def inherited(obj)
       obj.db = self.db
-      obj.ttl = self.ttl
       obj.uri = self.uri
+      obj.ttl = self.ttl
       obj.parent = self
       obj.class_set :instances
       Familia.classes << obj
@@ -69,6 +69,7 @@ module Familia
     # Creates an instance method called +name+ that
     # returns an instance of the RedisObject +klass+ 
     def install_redis_object name, klass, opts
+      raise ArgumentError, "Name is blank" if name.to_s.empty?
       name = name.to_s.to_sym
       opts ||= {}
       redis_objects[name] = OpenStruct.new
@@ -85,11 +86,12 @@ module Familia
     # Creates a class method called +name+ that
     # returns an instance of the RedisObject +klass+ 
     def install_class_redis_object name, klass, opts
+      raise ArgumentError, "Name is blank" if name.to_s.empty?
       name = name.to_s.to_sym
       opts ||= {}
       opts[:suffix] ||= nil
       opts[:parent] ||= self
-      # TODO: investigate metaclass.redis_objects
+      # TODO: investigate using metaclass.redis_objects
       class_redis_objects[name] = OpenStruct.new
       class_redis_objects[name].name = name
       class_redis_objects[name].klass = klass
@@ -114,6 +116,7 @@ module Familia
       @ttl = v unless v.nil?
       @ttl || (parent ? parent.ttl : nil)
     end
+    def ttl=(v) @ttl = v end
     def db v=nil
       @db = v unless v.nil?
       @db || (parent ? parent.db : nil)
@@ -397,7 +400,7 @@ module Familia
           unless self.respond_to? self.class.index
             raise NoIndex, "No such method: `#{self.class.index}' for #{self.class}"
           end
-          self.send self.class.index
+          self.send( self.class.index)
         end
       else
         raise Familia::NoIndex, self
