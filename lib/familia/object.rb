@@ -229,6 +229,10 @@ module Familia
       ids = self.redis.mget *ids
     end
     
+    def load_method
+      Familia.load_method
+    end
+    
     def from_key(akey)
       raise ArgumentError, "Null key" if akey.nil? || akey.empty?    
       Familia.trace :LOAD, redis, "#{self.uri}/#{akey}", caller if Familia.debug?
@@ -239,7 +243,7 @@ module Familia
           Familia.info  "No content @ #{akey}"
           nil
         else
-          self.send Familia.load_method, v
+          self.send load_method, v
         end
       rescue => ex
         Familia.info v

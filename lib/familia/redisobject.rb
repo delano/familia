@@ -139,12 +139,20 @@ module Familia
       redis.expireat rediskey, unixtime
     end
     
+    def dump_method
+      @opts[:dump_method] || Familia.dump_method
+    end
+    
+    def load_method
+      @opts[:load_method] || Familia.load_method
+    end
+    
     def to_redis v
       return v unless @opts[:class]
-      if v.respond_to? Familia.dump_method
-        v.send Familia.dump_method
+      if v.respond_to? dump_method
+        v.send dump_method
       else
-        Familia.ld "No such method: #{v.class}.#{Familia.dump_method}"
+        Familia.ld "No such method: #{v.class}.#{dump_method}"
         v
       end
     end
@@ -157,10 +165,10 @@ module Familia
       when Fixnum, Float
         @opts[:class].induced_from v
       else
-        if @opts[:class].method_defined? Familia.load_method
-          @opts[:class].send Familia.load_method, v
+        if @opts[:class].method_defined? load_method
+          @opts[:class].send load_method, v
         else
-          Familia.ld "No such method: #{@opts[:class]}##{Familia.load_method}"
+          Familia.ld "No such method: #{@opts[:class]}##{load_method}"
           v
         end
       end
