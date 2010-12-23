@@ -4,6 +4,8 @@ FAMILIA, CHANGES
 
 * FIXED: Familia::ClassMethods.ttl=
 * FIXED: Familia.class_lists (etc) methods. 
+* CHANGE: redis_objects, class_redis_objects maintain order they're defined in. (See Bluth::Queue)
+
 
 #### 0.6.1 (2010-12-18) ###############################
 

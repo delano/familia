@@ -23,7 +23,7 @@ module Familia
         !obj.nil? && klass == obj.klass
       end
       define_method :"#{kind}s" do 
-        names = redis_objects.keys.select { |name| send(:"#{kind}?", name) }
+        names = redis_objects_order.select { |name| send(:"#{kind}?", name) }
         names.collect! { |name| redis_objects[name] }
         names
       end
@@ -42,7 +42,7 @@ module Familia
         !obj.nil? && klass == obj.klass
       end
       define_method :"class_#{kind}s" do 
-        names = class_redis_objects.keys.select { |name| ret = send(:"class_#{kind}?", name) }
+        names = class_redis_objects_order.select { |name| ret = send(:"class_#{kind}?", name) }
         names.collect! { |name| class_redis_objects[name] }
         names
       end
@@ -72,6 +72,7 @@ module Familia
       raise ArgumentError, "Name is blank" if name.to_s.empty?
       name = name.to_s.to_sym
       opts ||= {}
+      redis_objects_order << name
       redis_objects[name] = OpenStruct.new
       redis_objects[name].name = name
       redis_objects[name].klass = klass
@@ -92,6 +93,7 @@ module Familia
       opts[:suffix] ||= nil
       opts[:parent] ||= self
       # TODO: investigate using metaclass.redis_objects
+      class_redis_objects_order << name
       class_redis_objects[name] = OpenStruct.new
       class_redis_objects[name].name = name
       class_redis_objects[name].klass = klass
@@ -173,6 +175,10 @@ module Familia
     def suffixes
       redis_objects.keys.uniq
     end
+    def class_redis_objects_order
+      @class_redis_objects_order ||= []
+      @class_redis_objects_order
+    end
     def class_redis_objects
       @class_redis_objects ||= {}
       @class_redis_objects
@@ -182,6 +188,10 @@ module Familia
     end
     def redis_object? name
       redis_objects.has_key? name.to_s.to_sym
+    end
+    def redis_objects_order
+      @redis_objects_order ||= []
+      @redis_objects_order
     end
     def redis_objects
       @redis_objects ||= {}
