@@ -176,15 +176,18 @@ module Familia
     end
     alias_method :length, :size
     
-    def << v
-      redis.rpush rediskey, to_redis(v)
+    def push *values
+      values.flatten.compact.each { |v| redis.rpush rediskey, to_redis(v) }
       redis.ltrim rediskey, -@opts[:maxlength], -1 if @opts[:maxlength]
       self
     end
-    alias_method :push, :<<
-
-    def unshift v
-      redis.lpush rediskey, to_redis(v)
+    
+    def << v
+      push v
+    end
+    
+    def unshift *values
+      values.flatten.compact.each { |v| redis.lpush rediskey, to_redis(v) }
       # TODO: test maxlength
       redis.ltrim rediskey, 0, @opts[:maxlength] - 1 if @opts[:maxlength]
       self
@@ -278,11 +281,14 @@ module Familia
       size == 0
     end
     
-    def << v
-      redis.sadd rediskey, to_redis(v)
+    def add *values
+      values.flatten.compact.each { |v| redis.sadd rediskey, to_redis(v) }
       self
     end
-    alias_method :add, :<<
+    
+    def << v
+      add v
+    end
     
     def members
       # TODO: handle @opts[:marshal]
