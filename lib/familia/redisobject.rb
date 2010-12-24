@@ -55,7 +55,10 @@ module Familia
     # 
     # Options:
     #
-    # :parent: The Familia object that this redis object belongs
+    # :extend => Extend this instance with the functionality in an 
+    # other module. Literally: "self.extend opts[:extend]".
+    #
+    # :parent => The Familia object that this redis object belongs
     # to. This can be a class that includes Familia or an instance.
     # 
     # :ttl => the time to live in seconds. When not nil, this will
@@ -79,6 +82,7 @@ module Familia
       @name = @name.join(Familia.delim) if Array === @name
       @opts[:ttl] ||= self.class.ttl
       @opts[:db] ||= self.class.db
+      self.extend @opts[:extend] if Module === @opts[:extend]
       @parent = @opts.delete(:parent)
       @redis ||= @opts.delete(:redis)
       init if respond_to? :init
@@ -498,11 +502,13 @@ module Familia
     def []= n, v
       redis.hset rediskey, n, to_redis(v)
     end
+    alias_method :put, :[]=
     alias_method :store, :[]=
     
     def [] n
       redis.hget rediskey, n
     end
+    alias_method :get, :[]=
     
     def fetch n, default=nil
       ret = self[n]

@@ -11,7 +11,7 @@ FAMILIA, CHANGES
 * ADDED: InstanceMethods#initialize calls init if available
 * ADDED: Can set index values via InstanceMethods#index=
 * ADDED: empty? method for List, Set, et al
-
+* ADDED: :extend option for RedisObject instances
 
 #### 0.6.1 (2010-12-18) ###############################
 
