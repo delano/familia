@@ -449,6 +449,7 @@ module Familia
       range 0, -1, opts
     end
     alias_method :to_a, :members
+    alias_method :all, :members
     
     def revmembers opts={}
       revrange 0, -1, opts

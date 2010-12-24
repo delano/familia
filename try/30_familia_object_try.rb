@@ -30,8 +30,8 @@ Bone.suffix
 #=> true
 
 ## Customer.instances
-Customer.instances.all
-#=> ['delano']
+Customer.instances.all.collect(&:custid)
+#=> [:delano]
 
 ## Familia.from_redis
 obj = Customer.from_redis :delano

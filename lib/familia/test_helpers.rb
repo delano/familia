@@ -12,7 +12,6 @@ class Bone < Storable
   string :value, :default => "GREAT!"
 end
 
-
 class Session < Storable
   include Familia
   index :sessid
@@ -21,7 +20,6 @@ class Session < Storable
   include Familia::Stamps
   ttl 60 # seconds to live
 end
-
 
 class Customer < Storable
   include Familia
