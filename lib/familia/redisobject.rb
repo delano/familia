@@ -437,16 +437,12 @@ module Familia
     end
     
     def members opts={}
-      range(0, -1, opts).collect do |v|
-        from_redis v
-      end
+      range 0, -1, opts
     end
     alias_method :to_a, :members
     
     def revmembers opts={}
-      revrange(0, -1, opts).collect do |v|
-        from_redis v
-      end
+      revrange 0, -1, opts
     end
     
     def each &blk
@@ -539,7 +535,7 @@ module Familia
     alias_method :store, :[]=
     
     def [] n
-      redis.hget rediskey, n
+      from_redis redis.hget(rediskey, n)
     end
     alias_method :get, :[]
     
@@ -558,10 +554,13 @@ module Familia
     end
     
     def values
-      redis.hvals rediskey
+      redis.hvals(rediskey).collect do |v|
+        from_redis v
+      end
     end
     
     def all
+      # TODO: from_redis
       redis.hgetall rediskey
     end
     alias_method :to_hash, :all
@@ -599,7 +598,9 @@ module Familia
     alias_method :merge!, :update
     
     def values_at *names
-      redis.hmget rediskey, *names.flatten.compact
+      redis.hmget(rediskey, *names.flatten.compact).collect do |v|
+        from_redis v
+      end
     end
     
     Familia::RedisObject.register self, :hash
