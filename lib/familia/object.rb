@@ -58,7 +58,7 @@ module Familia
       obj.uri = self.uri
       obj.ttl = self.ttl
       obj.parent = self
-      obj.class_set :instances
+      obj.class_zset :instances, :class => obj, :reference => true
       # :object is a special redis object because its reserved
       # for storing the marshaled instance data (e.g. to_json).
       # When it isn't defined explicitly we define it here b/c
@@ -72,7 +72,7 @@ module Familia
       obj.ttl = self.ttl
       obj.uri = self.uri
       obj.parent = self
-      obj.class_set :instances
+      obj.class_zset :instances, :class => obj, :reference => true
       Familia.classes << obj
     end
     
@@ -371,7 +371,8 @@ module Familia
       self.update_time if self.respond_to?(:update_time)
       ret = self.object.set self               # object is a name reserved by Familia
       unless ret.nil?
-        self.class.instances.add index         # use this set instead of Klass.keys
+        now = Time.now.utc.to_i
+        self.class.instances.add now, self     # use this set instead of Klass.keys
         self.object.update_expiration self.ttl # does nothing unless if not specified
       end
       true
@@ -381,7 +382,7 @@ module Familia
       if Familia.debug?
         Familia.trace :DELETED, Familia.redis(self.class.uri), "#{rediskey}: #{ret}", caller.first
       end
-      self.class.instances.rem index if ret > 0
+      self.class.instances.rem self if ret > 0
       ret
     end
     def index

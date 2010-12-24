@@ -163,12 +163,23 @@ module Familia
     
     def to_redis v
       return v unless @opts[:class]
-      # TODO: following similar logic a from_redis. How tho?? (Prob a level up)
-      if v.respond_to? dump_method
-        v.send dump_method
-      else
-        Familia.ld "No such method: #{v.class}.#{dump_method}"
+      case @opts[:class]
+      when String, Fixnum, Float, Gibbler::Digest
         v
+      else
+        if @opts[:reference] == true
+          unless v.respond_to? :index
+            raise Familia::Problem, "#{v.class} does not have an index method"
+          end
+          unless v.kind_of?(Familia)
+            raise Familia::Problem, "#{v.class} is not Familia"
+          end
+          v.index
+        elsif v.respond_to? dump_method
+          v.send dump_method
+        else
+          raise Familia::Problem, "No such method: #{v.class}.#{dump_method}"
+        end
       end
     end
     
@@ -187,8 +198,7 @@ module Familia
           if @opts[:class].respond_to? load_method
             @opts[:class].send load_method, v
           else
-            Familia.ld "No such method: #{@opts[:class]}##{load_method}"
-            v
+            raise Familia::Problem, "No such method: #{@opts[:class]}##{load_method}"
           end
         end
       end
@@ -498,7 +508,9 @@ module Familia
       redis.zrem rediskey, to_redis(v)
     end
     alias_method :remove, :delete
-    
+    alias_method :rem, :delete
+    alias_method :del, :delete
+      
     def at idx
       range(idx, idx).first
     end
