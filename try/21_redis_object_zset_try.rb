@@ -16,7 +16,7 @@ require 'familia/test_helpers'
 #=> ['metric0', 'metric1', 'metric2', 'metric3', 'metric4']
 
 ## Familia::SortedSet#members
-@a.metrics.membersrev
+@a.metrics.revmembers
 #=> ['metric4', 'metric3', 'metric2', 'metric1', 'metric0']
 
 ## Familia::SortedSet#rank

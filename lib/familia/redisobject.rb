@@ -418,12 +418,12 @@ module Familia
     end
     alias_method :to_a, :members
     
-    def each &blk
-      members.each &blk
+    def revmembers opts={}
+      revrange 0, -1, opts
     end
     
-    def membersrev opts={}
-      rangerev 0, -1, opts
+    def each &blk
+      members.each &blk
     end
     
     def range sidx, eidx, opts={}
@@ -431,7 +431,7 @@ module Familia
       redis.zrange rediskey, sidx, eidx, opts
     end
 
-    def rangerev sidx, eidx, opts={}
+    def revrange sidx, eidx, opts={}
       opts[:with_scores] = true if opts[:withscores]
       redis.zrevrange rediskey, sidx, eidx, opts
     end
