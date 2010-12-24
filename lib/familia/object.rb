@@ -146,11 +146,10 @@ module Familia
       self.uri = uri if !uri.to_s.empty?
       @uri ||= (parent ? parent.uri : Familia.uri)
       @uri.db = @db if @db && @uri.db.to_s != @db.to_s
-      Familia.connect @uri unless Familia.connected?(@uri)
       @uri
     end
     def redis
-      Familia.redis @uri
+      Familia.redis uri
     end
     def flushdb
       Familia.info "flushing #{uri}"
@@ -267,12 +266,12 @@ module Familia
       objid &&= objid.to_s
       return false if objid.nil? || objid.empty?
       ret = Familia.redis(self.uri).exists rediskey(objid, suffix)
-      Familia.trace :EXISTS, Familia.redis(self.uri), "#{rediskey(objid)} #{ret}", caller.first
+      Familia.trace :EXISTS, Familia.redis(self.uri), "#{rediskey(objid, suffix)} #{ret}", caller.first
       ret
     end
     def destroy!(idx, suffix=:object)  # TODO: remove suffix arg
       ret = Familia.redis(self.uri).del rediskey(runid, suffix)
-      Familia.trace :DELETED, Familia.redis(self.uri), "#{rediskey(runid)}: #{ret}", caller.first
+      Familia.trace :DELETED, Familia.redis(self.uri), "#{rediskey(runid, suffix)}: #{ret}", caller.first
       ret
     end
     def find(suffix='*')

@@ -70,7 +70,6 @@ module Familia
       uri &&= URI.parse uri if String === uri
       uri ||= Familia.uri
       conf = uri.conf
-      p [1, conf]
       conf[:thread_safe] = true
       client = Redis.new conf
       Familia.trace :CONNECT, client, conf.inspect, caller[0..3] if Familia.debug
