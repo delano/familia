@@ -47,7 +47,7 @@ module Familia
     end
     
     attr_reader :name, :parent
-    attr_accessor :redis
+    attr_writer :redis
     
     # +name+: If parent is set, this will be used as the suffix 
     # for rediskey. Otherwise this becomes the value of the key.
@@ -80,9 +80,13 @@ module Familia
       @opts[:ttl] ||= self.class.ttl
       @opts[:db] ||= self.class.db
       @parent = @opts.delete(:parent)
-      @redis = parent.redis if parent?
-      @redis ||= @opts.delete(:redis) || Familia.redis(@opts[:db])
+      @redis ||= @opts.delete(:redis)
       init if respond_to? :init
+    end
+    
+    def redis
+      return @redis if @redis
+      parent? ? parent.redis : Familia.redis(@opts[:db])
     end
     
     # returns a redis key based on the parent 

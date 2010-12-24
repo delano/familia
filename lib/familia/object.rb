@@ -59,6 +59,11 @@ module Familia
       obj.ttl = self.ttl
       obj.parent = self
       obj.class_set :instances
+      # :object is a special redis object because its reserved
+      # for storing the marshaled instance data (e.g. to_json).
+      # When it isn't defined explicitly we define it here b/c
+      # it's assumed to exist in other places (see #save).
+      obj.string :object, :class => obj unless obj.redis_object? :object
       Familia.classes << obj
       super(obj)
     end
@@ -138,15 +143,14 @@ module Familia
       @uri = uri 
     end
     def uri(uri=nil) 
-      self.uri = uri unless uri.to_s.empty?
-      return @uri if @uri
-      @uri = URI.parse Familia.uri.to_s
-      @uri.db = @db if @db 
-      Familia.connect @uri #unless Familia.connected?(@uri)
-      @uri || (parent ? parent.uri : Familia.uri)
+      self.uri = uri if !uri.to_s.empty?
+      @uri ||= (parent ? parent.uri : Familia.uri)
+      @uri.db = @db if @db && @uri.db.to_s != @db.to_s
+      Familia.connect @uri unless Familia.connected?(@uri)
+      @uri
     end
     def redis
-      Familia.redis(self.uri)
+      Familia.redis @uri
     end
     def flushdb
       Familia.info "flushing #{uri}"
@@ -259,14 +263,14 @@ module Familia
       me = from_key(this_key)
       me
     end
-    def exists?(objid, suffix=nil)
+    def exists?(objid, suffix=:object)
       objid &&= objid.to_s
       return false if objid.nil? || objid.empty?
       ret = Familia.redis(self.uri).exists rediskey(objid, suffix)
       Familia.trace :EXISTS, Familia.redis(self.uri), "#{rediskey(objid)} #{ret}", caller.first
       ret
     end
-    def destroy!(idx, suffix=nil)  # TODO: remove suffix arg
+    def destroy!(idx, suffix=:object)  # TODO: remove suffix arg
       ret = Familia.redis(self.uri).del rediskey(runid, suffix)
       Familia.trace :DELETED, Familia.redis(self.uri), "#{rediskey(runid)}: #{ret}", caller.first
       ret
@@ -311,22 +315,16 @@ module Familia
     def initialize *args
       initialize_redis_objects
       super   # call Storable#initialize or equivalent
+      #init *args if respond_to? :init
     end
     
     # This needs to be called in the initialize method of
     # any class that includes Familia. 
     def initialize_redis_objects
-      # :object is a special redis object because its reserved
-      # for storing the marshaled instance data (e.g. to_json).
-      # When it isn't defined explicitly we define it here b/c
-      # it's assumed to exist in other places (see #save).
-      unless self.class.redis_object? :object
-        self.class.string :object, :class => self.class
-      end
-      
       # Generate instances of each RedisObject. These need to be
       # unique for each instance of this class so they can refer
-      # to the index of this specific instance. 
+      # to the index of this specific instance.
+      #
       # i.e. 
       #     familia_object.rediskey              == v1:bone:INDEXVALUE:object
       #     familia_object.redis_object.rediskey == v1:bone:INDEXVALUE:name
