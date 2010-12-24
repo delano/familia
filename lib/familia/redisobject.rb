@@ -166,6 +166,7 @@ module Familia
     end
     
     def from_redis v
+      return @opts[:default] if v.nil? && @opts.has_key?(:default)
       return v unless @opts[:class]
       case @opts[:class]
       when String
@@ -173,7 +174,7 @@ module Familia
       when Fixnum, Float
         @opts[:class].induced_from v
       else
-        if @opts[:class].method_defined? load_method
+        if @opts[:class].respond_to? load_method
           @opts[:class].send load_method, v
         else
           Familia.ld "No such method: #{@opts[:class]}##{load_method}"
@@ -508,7 +509,7 @@ module Familia
     def [] n
       redis.hget rediskey, n
     end
-    alias_method :get, :[]=
+    alias_method :get, :[]
     
     def fetch n, default=nil
       ret = self[n]
