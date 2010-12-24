@@ -223,14 +223,17 @@ module Familia
     end
     
     def load_method
-      Familia.load_method
+      Familia.load_method  # TODO
+    end
+    def dump_method
+      Familia.dump_method  # TODO
     end
     
-    def from_key(akey)
-      raise ArgumentError, "Null key" if akey.nil? || akey.empty?    
-      Familia.trace :LOAD, redis, "#{self.uri}/#{akey}", caller if Familia.debug?
-      return unless redis.exists akey
-      v = redis.get akey
+    def from_key objkey
+      raise ArgumentError, "Null key" if objkey.to_s.empty?    
+      Familia.trace :LOAD, redis, "#{self.uri}/#{objkey}", caller if Familia.debug?
+      return unless redis.exists objkey
+      v = redis.get objkey
       begin
         if v.to_s.empty?
           Familia.info  "No content @ #{akey}"
@@ -245,29 +248,29 @@ module Familia
         nil
       end
     end
-    def from_redis(objid)
-      objid &&= objid.to_s
-      return nil if objid.nil? || objid.empty?
-      this_key = rediskey(objid, self.suffix)
-      me = from_key(this_key)
+    def from_redis idx, suffix=:object
+      idx &&= idx.to_s
+      return nil if idx.to_s.empty?
+      objkey = rediskey idx, suffix
+      me = from_key objkey
       me
     end
-    def exists?(objid, suffix=:object)
-      objid &&= objid.to_s
-      return false if objid.nil? || objid.empty?
-      ret = Familia.redis(self.uri).exists rediskey(objid, suffix)
-      Familia.trace :EXISTS, Familia.redis(self.uri), "#{rediskey(objid, suffix)} #{ret}", caller.first
+    def exists? idx, suffix=:object
+      idx &&= idx.to_s
+      return false if idx.to_s.empty?
+      ret = Familia.redis(self.uri).exists rediskey(idx, suffix)
+      Familia.trace :EXISTS, Familia.redis(self.uri), "#{rediskey(idx, suffix)} #{ret}", caller.first
       ret
     end
-    def destroy!(idx, suffix=:object)  # TODO: remove suffix arg
+    def destroy! idx, suffix=:object  # TODO: remove suffix arg
       ret = Familia.redis(self.uri).del rediskey(runid, suffix)
       Familia.trace :DELETED, Familia.redis(self.uri), "#{rediskey(runid, suffix)}: #{ret}", caller.first
       ret
     end
-    def find(suffix='*')
+    def find suffix='*'
       list = Familia.redis(self.uri).keys(rediskey('*', suffix)) || []
     end
-    def rediskey(idx, suffix=nil)
+    def rediskey idx, suffix=nil
       raise RuntimeError, "No index for #{self}" if idx.to_s.empty?
       idx &&= idx.to_s
       Familia.rediskey(prefix, idx, suffix)
@@ -286,12 +289,6 @@ module Familia
         raise Familia::NonUniqueKey, "Short key returned more than 1 match" 
       end
     end
-    ## TODO: Investigate
-    ##def float
-    ##  Proc.new do |v|
-    ##    v.nil? ? 0 : v.to_f
-    ##  end
-    ##end
   end
 
   
