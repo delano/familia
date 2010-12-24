@@ -211,16 +211,6 @@ module Familia
       me.save
       me
     end
-    def load_or_create(id)
-      if exists?(id)
-        from_redis(id)
-      else
-        me = new id
-        me.save
-        me
-      end
-    end
-    
     def multiget(*ids)
       ids = rawmultiget(*ids)
       ids.compact.collect { |json| self.from_json(json) }.compact
