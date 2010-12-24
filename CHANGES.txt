@@ -12,7 +12,7 @@ FAMILIA, CHANGES
 * ADDED: Can set index values via InstanceMethods#index=
 * ADDED: empty? method for List, Set, et al
 * ADDED: :extend option for RedisObject instances
-
+* ADDED: :reference option for storing the index value instead of the marshaled value
 
 #### 0.6.1 (2010-12-18) ###############################
 

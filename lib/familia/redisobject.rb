@@ -55,6 +55,16 @@ module Familia
     # 
     # Options:
     #
+    # :class => A class that responds to Familia.load_method and 
+    # Familia.dump_method. These will be used when loading and
+    # saving data from/to redis to unmarshal/marshal the class. 
+    #
+    # :reference => When true the index of the given value will be
+    # stored rather than the marshaled value. This assumes that 
+    # the marshaled object is stored at a separate key. When read, 
+    # from_redis looks for that separate key and returns the 
+    # unmarshaled object. :class must be specified. Default: false. 
+    #
     # :extend => Extend this instance with the functionality in an 
     # other module. Literally: "self.extend opts[:extend]".
     #
@@ -66,10 +76,6 @@ module Familia
     # You can also call it explicitly via #update_expiration.
     #
     # :default => the default value (String-only)
-    #
-    # :class => A class that responds to Familia.load_method and 
-    # Familia.dump_method. These will be used when loading and
-    # saving data from/to redis to unmarshal/marshal the class. 
     #
     # :db => the redis database to use (ignored if :redis is used).
     #
@@ -175,14 +181,7 @@ module Familia
       when Fixnum, Float
         @opts[:class].induced_from v
       else
-        # TODO: This needs some work. It might be double unencpding somewhere. 
-        # See:
-        #   stella/lib/stella/core_ext.rb:289:in `unpack'
-        #   stella/lib/stella/core_ext.rb:285:in `from_csv'
-        #   familia/lib/familia/redisobject.rb:182:in `from_redis'
-        #   lib/blamestella/models/familia_ext.rb:201:
-        #   views/site/_partials/report_summary.erb:25
-        if @opts[:marshal] == false
+        if @opts[:reference] == true
           @opts[:class].from_redis v
         else
           if @opts[:class].respond_to? load_method
@@ -257,7 +256,6 @@ module Familia
     alias_method :del, :delete
     
     def range sidx=0, eidx=-1
-      # TODO: handle @opts[:marshal]
       redis.lrange(rediskey, sidx, eidx).collect do |v|
         from_redis v
       end
@@ -330,8 +328,9 @@ module Familia
     end
     
     def members
-      # TODO: handle @opts[:marshal]
-      redis.smembers rediskey
+      redis.smembers(rediskey).each do |v|
+        from_redis v
+      end
     end
     alias_method :all, :members
     alias_method :to_a, :members
@@ -364,7 +363,7 @@ module Familia
     end
     
     def random
-      redis.srandmember rediskey
+      from_redis redis.srandmember(rediskey)
     end
     
     ## Make the value stored at KEY identical to the given list
