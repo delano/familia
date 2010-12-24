@@ -188,6 +188,10 @@ module Familia
     end
     alias_method :length, :size
     
+    def empty?
+      size == 0
+    end
+    
     def push *values
       values.flatten.compact.each { |v| redis.rpush rediskey, to_redis(v) }
       redis.ltrim rediskey, -@opts[:maxlength], -1 if @opts[:maxlength]
@@ -371,6 +375,10 @@ module Familia
     end
     alias_method :length, :size
     
+    def empty?
+      size == 0
+    end
+    
     # NOTE: The argument order is the reverse of #add
     # e.g. obj.metrics[VALUE] = SCORE
     def []= v, score
@@ -483,6 +491,10 @@ module Familia
     end
     alias_method :length, :size
     
+    def empty?
+      size == 0
+    end
+    
     def []= n, v
       redis.hset rediskey, n, to_redis(v)
     end
@@ -563,6 +575,10 @@ module Familia
       to_s.size
     end
     alias_method :length, :size
+    
+    def empty?
+      size == 0
+    end
     
     def value
       redis.setnx rediskey, @opts[:default] if @opts[:default]

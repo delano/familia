@@ -7,7 +7,11 @@ FAMILIA, CHANGES
 * FIXED: Redis objects check if parent is a Module
 * CHANGE: redis_objects, class_redis_objects maintain order they're defined in. (See Bluth::Queue)
 * CHANGE: Removed load_or_create
+* CHANGE: Depends on Storable 0.8.4
 * ADDED: InstanceMethods#initialize calls init if available
+* ADDED: Can set index values via InstanceMethods#index=
+* ADDED: empty? method for List, Set, et al
+
 
 #### 0.6.1 (2010-12-18) ###############################
 
