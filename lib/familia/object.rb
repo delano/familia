@@ -207,7 +207,7 @@ module Familia
     end
     def create(*args)
       me = new(*args)
-      raise "#{self} exists: #{me.to_json}" if me.exists?
+      raise "#{self} exists: #{me.rediskey}" if me.exists?
       me.save
       me
     end
@@ -409,8 +409,33 @@ module Familia
         raise Familia::NoIndex, self
       end
     end
-    def index=(i)
-      @index = i
+    def index=(v)
+      case self.class.index
+      when Proc
+        raise ArgumentError, "Cannot set a Proc index"
+      when Array
+        unless Array === v && v.size == self.class.index.size
+          raise ArgumentError, "Index mismatch (#{v.size} for #{self.class.index.size})"
+        end
+        parts = self.class.index.each_with_index { |meth,idx| 
+          unless self.respond_to? "#{meth}="
+            raise NoIndex, "No such method: `#{meth}=' for #{self.class}"
+          end
+          self.send("#{meth}=", v[idx]) 
+        }
+      when Symbol, String
+        if self.class.redis_object?(self.class.index.to_sym)
+          raise Familia::NoIndex, "Cannot use a RedisObject as an index"
+        else
+          unless self.respond_to? "#{self.class.index}="
+            raise NoIndex, "No such method: `#{self.class.index}=' for #{self.class}"
+          end
+          self.send("#{self.class.index}=", v)
+        end
+      else
+        raise Familia::NoIndex, self
+      end
+      
     end
     def expire(ttl=nil)
       ttl ||= self.class.ttl
