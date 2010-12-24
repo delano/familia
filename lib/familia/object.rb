@@ -314,7 +314,7 @@ module Familia
     def initialize *args
       initialize_redis_objects
       super   # call Storable#initialize or equivalent
-      #init *args if respond_to? :init
+      init *args if respond_to? :init
     end
     
     # This needs to be called in the initialize method of

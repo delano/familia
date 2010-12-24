@@ -1,12 +1,12 @@
 FAMILIA, CHANGES
 
-#### 0.6.2 (2010-12-18) ###############################
+#### 0.6.2 (2010-12-23) ###############################
 
 * FIXED: Familia::ClassMethods.ttl=
 * FIXED: Familia.class_lists (etc) methods. 
 * FIXED: Redis objects check if parent is a Module
 * CHANGE: redis_objects, class_redis_objects maintain order they're defined in. (See Bluth::Queue)
-
+* ADDED: InstanceMethods#initialize calls init if available
 
 #### 0.6.1 (2010-12-18) ###############################
 
