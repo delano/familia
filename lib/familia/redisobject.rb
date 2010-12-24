@@ -157,6 +157,7 @@ module Familia
     
     def to_redis v
       return v unless @opts[:class]
+      # TODO: following similar logic a from_redis. How tho?? (Prob a level up)
       if v.respond_to? dump_method
         v.send dump_method
       else
@@ -174,11 +175,22 @@ module Familia
       when Fixnum, Float
         @opts[:class].induced_from v
       else
-        if @opts[:class].respond_to? load_method
-          @opts[:class].send load_method, v
+        # TODO: This needs some work. It might be double unencpding somewhere. 
+        # See:
+        #   stella/lib/stella/core_ext.rb:289:in `unpack'
+        #   stella/lib/stella/core_ext.rb:285:in `from_csv'
+        #   familia/lib/familia/redisobject.rb:182:in `from_redis'
+        #   lib/blamestella/models/familia_ext.rb:201:
+        #   views/site/_partials/report_summary.erb:25
+        if @opts[:marshal] == false
+          @opts[:class].from_redis v
         else
-          Familia.ld "No such method: #{@opts[:class]}##{load_method}"
-          v
+          if @opts[:class].respond_to? load_method
+            @opts[:class].send load_method, v
+          else
+            Familia.ld "No such method: #{@opts[:class]}##{load_method}"
+            v
+          end
         end
       end
     end 
@@ -246,12 +258,18 @@ module Familia
     
     def range sidx=0, eidx=-1
       # TODO: handle @opts[:marshal]
-      redis.lrange rediskey, sidx, eidx
+      redis.lrange(rediskey, sidx, eidx).collect do |v|
+        from_redis v
+      end
     end
     alias_method :to_a, :range
     
     def each &blk
       range.each &blk
+    end
+    
+    def each_with_index &blk
+      range.each_with_index &blk
     end
     
     def at idx
@@ -419,32 +437,46 @@ module Familia
     end
     
     def members opts={}
-      range 0, -1, opts
+      range(0, -1, opts).collect do |v|
+        from_redis v
+      end
     end
     alias_method :to_a, :members
     
     def revmembers opts={}
-      revrange 0, -1, opts
+      revrange(0, -1, opts).collect do |v|
+        from_redis v
+      end
     end
     
     def each &blk
       members.each &blk
     end
+
+    def each_with_index &blk
+      members.each_with_index &blk
+    end
     
     def range sidx, eidx, opts={}
       opts[:with_scores] = true if opts[:withscores]
-      redis.zrange rediskey, sidx, eidx, opts
+      redis.zrange(rediskey, sidx, eidx, opts).collect do |v|
+        from_redis v
+      end
     end
 
     def revrange sidx, eidx, opts={}
       opts[:with_scores] = true if opts[:withscores]
-      redis.zrevrange rediskey, sidx, eidx, opts
+      redis.zrevrange(rediskey, sidx, eidx, opts).collect do |v|
+        from_redis v
+      end
     end
     
     # e.g. obj.metrics.rangebyscore (now-12.hours), now, :limit => [0, 10]
     def rangebyscore sscore, escore, opts={}
       opts[:with_scores] = true if opts[:withscores]
-      redis.zrangebyscore rediskey, sscore, escore, opts
+      redis.zrangebyscore(rediskey, sscore, escore, opts).collect do |v|
+        from_redis v
+      end
     end
     
     def remrangebyrank srank, erank
