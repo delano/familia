@@ -213,7 +213,7 @@ module Familia
     end
     
     def from_redis v
-      return @opts[:default] if v.nil? && @opts.has_key?(:default)
+      return @opts[:default] if v.nil?
       return v unless @opts[:class]
       case @opts[:class]
       when String
