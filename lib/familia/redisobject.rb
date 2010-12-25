@@ -346,7 +346,7 @@ module Familia
     end
     
     def members
-      redis.smembers(rediskey).each do |v|
+      redis.smembers(rediskey).collect do |v|
         from_redis v
       end
     end
@@ -471,8 +471,8 @@ module Familia
     alias_method :to_a, :members
     alias_method :all, :members
     
-    def revmembers opts={}
-      revrange 0, -1, opts
+    def revmembers count=-1, opts={}
+      revrange 0, count, opts
     end
     
     def each &blk
