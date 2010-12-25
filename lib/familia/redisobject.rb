@@ -172,7 +172,7 @@ module Familia
             raise Familia::Problem, "#{v.class} does not have an index method"
           end
           unless v.kind_of?(Familia)
-            raise Familia::Problem, "#{v.class} is not Familia"
+            raise Familia::Problem, "#{v.class} is not Familia (#{name})"
           end
           v.index
         elsif v.respond_to? dump_method

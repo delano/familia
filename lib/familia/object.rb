@@ -91,6 +91,9 @@ module Familia
       define_method "#{name}=" do |v|
         self.send(name).replace v
       end
+      define_method "#{name}?" do
+        !self.send(name).empty?
+      end
       redis_objects[name]
     end
     
@@ -113,6 +116,9 @@ module Familia
       metaclass.send :attr_reader, name
       metaclass.send :define_method, "#{name}=" do |v|
         send(name).replace v
+      end
+      metaclass.send :define_method, "#{name}?" do
+        !send(name).empty?
       end
       redis_object = klass.new name, opts
       redis_object.freeze
@@ -206,7 +212,7 @@ module Familia
       @redis_objects
     end
     def create *args
-      me = new *args
+      me = from_array *args
       raise "#{self} exists: #{me.rediskey}" if me.exists?
       me.save
       me
@@ -319,7 +325,6 @@ module Familia
     # must call initialize_redis_objects.
     def initialize *args
       initialize_redis_objects
-      super   # call Storable#initialize or equivalent
       init *args if respond_to? :init
     end
     
@@ -388,6 +393,7 @@ module Familia
       #Familia.trace :SAVE, Familia.redis(self.class.uri), redisuri, caller.first
       preprocess if respond_to?(:preprocess)
       self.update_time if self.respond_to?(:update_time)
+      # TODO: Check here (run checkup)
       ret = self.object.set self               # object is a name reserved by Familia
       unless ret.nil?
         now = Time.now.utc.to_i
