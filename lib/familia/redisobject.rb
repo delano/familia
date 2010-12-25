@@ -86,9 +86,10 @@ module Familia
     def initialize name, opts={}
       @name, @opts = name, opts
       @name = @name.join(Familia.delim) if Array === @name
-      @opts[:ttl] ||= self.class.ttl
-      @opts[:db] ||= self.class.db
+      Familia.ld [name, opts, caller[0]].inspect
       self.extend @opts[:extend] if Module === @opts[:extend]
+      @db = @opts.delete(:db)
+      @ttl = @opts.delete(:ttl) 
       @parent = @opts.delete(:parent)
       @redis ||= @opts.delete(:redis)
       init if respond_to? :init
@@ -96,7 +97,35 @@ module Familia
     
     def redis
       return @redis if @redis
-      parent? ? parent.redis : Familia.redis(@opts[:db])
+      parent? ? parent.redis : Familia.redis(db)
+    end
+    
+    def ttl
+      return @ttl if @ttl
+      @ttl ||= self.class.ttl
+      @ttl
+    end
+    
+    # Returns the most likely value for db, checking (in this order):
+    #   * the value from :class if it's a Familia object
+    #   * the value from :parent
+    #   * the value self.class.db
+    #   * assumes the db is 0
+    # 
+    # After this is called once, this method will always return the 
+    # same value.
+    def db 
+      return @db if @db
+      # Note it's important that we select this value at the last
+      # possible moment rather than in initialize b/c the value 
+      # could be modified after that but before this is called. 
+      if @opts[:class] && @opts[:class].ancestors.member?(Familia)
+        @db = @opts[:class].db 
+      else
+        @db = parent? ? parent.db : self.class.db
+      end
+      @db ||= 0
+      @db
     end
     
     # returns a redis key based on the parent 
