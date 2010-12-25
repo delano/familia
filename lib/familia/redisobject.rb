@@ -280,6 +280,14 @@ module Familia
       range.each_with_index &blk
     end
     
+    def collect &blk
+      range.collect &blk
+    end
+    
+    def select &blk
+      range.select &blk
+    end
+    
     def at idx
       from_redis redis.lindex(rediskey, idx)
     end
@@ -351,6 +359,14 @@ module Familia
     
     def each_with_index &blk
       members.each_with_index &blk
+    end
+    
+    def collect &blk
+      members.collect &blk
+    end
+    
+    def select &blk
+      members.select &blk
     end
     
     def member? v
@@ -465,6 +481,14 @@ module Familia
 
     def each_with_index &blk
       members.each_with_index &blk
+    end
+    
+    def collect &blk
+      members.collect &blk
+    end
+    
+    def select &blk
+      members.select &blk
     end
     
     def range sidx, eidx, opts={}
