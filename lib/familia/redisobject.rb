@@ -270,7 +270,12 @@ module Familia
         from_redis v
       end
     end
-    alias_method :to_a, :range
+    
+    def members count=-1
+      range 0, count
+    end
+    alias_method :all, :members
+    alias_method :to_a, :members
     
     def each &blk
       range.each &blk
