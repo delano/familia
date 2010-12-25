@@ -228,12 +228,6 @@ module Familia
       ids = self.redis.mget *ids
     end
     
-    def load_method
-      Familia.load_method  # TODO
-    end
-    def dump_method
-      Familia.dump_method  # TODO
-    end
     # Returns an instance based on +idx+ otherwise it
     # creates and saves a new instance base on +idx+. 
     # See from_index
@@ -255,21 +249,8 @@ module Familia
     def from_key objkey
       raise ArgumentError, "Null key" if objkey.to_s.empty?    
       Familia.trace :LOAD, redis, "#{self.uri}/#{objkey}", caller if Familia.debug?
-      return unless redis.exists objkey
-      v = redis.get objkey
-      begin
-        if v.to_s.empty?
-          Familia.info  "No content @ #{akey}"
-          nil
-        else
-          self.send load_method, v
-        end
-      rescue => ex
-        Familia.info v
-        Familia.info "Non-fatal error parsing JSON for #{akey}: #{ex.message}"
-        Familia.info ex.backtrace
-        nil
-      end
+      obj = Familia::String.new objkey, :class => self
+      obj.exists? ? obj.value : nil
     end
     def from_redis idx, suffix=:object
       obj = new

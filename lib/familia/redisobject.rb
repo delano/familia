@@ -102,7 +102,7 @@ module Familia
     # returns a redis key based on the parent 
     # object so it will include the proper index.
     def rediskey
-      parent? ? parent.rediskey(name) : Familia.rediskey(name)
+      parent? ? parent.rediskey(name) : [name].flatten.compact.join(Familia.delim)
     end
     
     def parent?
@@ -138,7 +138,7 @@ module Familia
     #end
     
     def exists?
-      !size.zero?
+      redis.exists(rediskey) && !size.zero?
     end
     
     def ttl
@@ -202,6 +202,11 @@ module Familia
           end
         end
       end
+    rescue => ex
+      Familia.info v
+      Familia.info "Parse error for #{rediskey} (#{load_method}): #{ex.message}"
+      Familia.info ex.backtrace
+      nil
     end 
     
   end
@@ -667,7 +672,7 @@ module Familia
     
     def value
       redis.setnx rediskey, @opts[:default] if @opts[:default]
-      redis.get rediskey
+      from_redis redis.get(rediskey)
     end
     alias_method :get, :value
     
