@@ -158,7 +158,7 @@ module Familia
     def keys(suffix=nil)
       self.redis.keys(rediskey('*',suffix)) || []
     end
-    def all(suffix=nil)
+    def all(suffix=:object)
       # objects that could not be parsed will be nil
       keys(suffix).collect { |k| from_key(k) }.compact 
     end
