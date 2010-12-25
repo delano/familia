@@ -338,7 +338,8 @@ module Familia
     
     def redisinfo
       info = {
-        :db   => self.class.db || 0,
+        :uri  => self.class.uri,
+        :db   => self.class.db,
         :key  => rediskey,
         :type => redistype,
         :ttl  => realttl
