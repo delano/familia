@@ -237,6 +237,7 @@ module Familia
       return from_redis(idx) if exists?(idx)
       obj = new 
       obj.index = idx
+      obj.save
       obj
     end
     def from_key objkey
