@@ -6,7 +6,6 @@ FAMILIA, CHANGES
 * FIXED: Familia.class_lists (etc) methods. 
 * FIXED: Redis objects check if parent is a Module
 * CHANGE: redis_objects, class_redis_objects maintain order they're defined in. (See Bluth::Queue)
-* CHANGE: Removed load_or_create
 * CHANGE: Depends on Storable 0.8.4
 * CHANGE: FamiliaObject.instances is now a sorted set
 * ADDED: InstanceMethods#initialize calls init if available

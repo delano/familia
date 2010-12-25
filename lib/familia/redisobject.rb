@@ -349,6 +349,10 @@ module Familia
       members.each &blk
     end
     
+    def each_with_index &blk
+      members.each_with_index &blk
+    end
+    
     def member? v
       redis.sismember rediskey, to_redis(v)
     end
@@ -445,8 +449,8 @@ module Familia
       ret.nil? ? nil : ret.to_i
     end
     
-    def members opts={}
-      range 0, -1, opts
+    def members count=-1, opts={}
+      range 0, count, opts
     end
     alias_method :to_a, :members
     alias_method :all, :members

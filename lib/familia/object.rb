@@ -228,7 +228,17 @@ module Familia
     def dump_method
       Familia.dump_method  # TODO
     end
-    
+    # Returns an instance based on +idx+ otherwise it
+    # creates and saves a new instance base on +idx+. 
+    # Note +idx+ needs to be an appropriate index for 
+    # the given class. If the index is multi-value it
+    # must be passed as an Array in the proper order.
+    def load_or_create idx
+      return from_redis(idx) if exists?(idx)
+      obj = new 
+      obj.index = idx
+      obj
+    end
     def from_key objkey
       raise ArgumentError, "Null key" if objkey.to_s.empty?    
       Familia.trace :LOAD, redis, "#{self.uri}/#{objkey}", caller if Familia.debug?
@@ -249,22 +259,24 @@ module Familia
       end
     end
     def from_redis idx, suffix=:object
-      idx &&= idx.to_s
-      return nil if idx.to_s.empty?
-      objkey = rediskey idx, suffix
+      obj = new
+      obj.index = idx
+      return nil if obj.index.to_s.empty?
+      objkey = rediskey obj.index, suffix
       me = from_key objkey
       me
     end
     def exists? idx, suffix=:object
-      idx &&= idx.to_s
-      return false if idx.to_s.empty?
-      ret = Familia.redis(self.uri).exists rediskey(idx, suffix)
-      Familia.trace :EXISTS, Familia.redis(self.uri), "#{rediskey(idx, suffix)} #{ret}", caller.first
+      obj = new
+      obj.index = idx
+      return false if obj.index.to_s.empty?
+      ret = Familia.redis(self.uri).exists rediskey(obj.index, suffix)
+      Familia.trace :EXISTS, Familia.redis(self.uri), "#{rediskey(obj.index, suffix)} #{ret}", caller.first
       ret
     end
-    def destroy! idx, suffix=:object  # TODO: remove suffix arg
-      ret = Familia.redis(self.uri).del rediskey(runid, suffix)
-      Familia.trace :DELETED, Familia.redis(self.uri), "#{rediskey(runid, suffix)}: #{ret}", caller.first
+    def destroy! idx, suffix=:object
+      ret = Familia.redis(self.uri).del rediskey(idx, suffix)
+      Familia.trace :DELETED, Familia.redis(self.uri), "#{rediskey(idx, suffix)}: #{ret}", caller.first
       ret
     end
     def find suffix='*'
