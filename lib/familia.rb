@@ -58,7 +58,9 @@ module Familia
     # Otherwise we'll return the default connection. 
     def redis(uri=nil)
       if Integer === uri
-        uri = Familia.uri(uri)
+        tmp = Familia.uri
+        tmp.db = uri
+        uri = tmp
       elsif String === uri
         uri &&= URI.parse uri
       end
