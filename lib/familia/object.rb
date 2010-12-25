@@ -205,8 +205,9 @@ module Familia
       @redis_objects ||= {}
       @redis_objects
     end
-    def create(*args)
-      me = new(*args)
+    # See from_array
+    def create idx
+      me = from_index idx
       raise "#{self} exists: #{me.rediskey}" if me.exists?
       me.save
       me
@@ -230,14 +231,18 @@ module Familia
     end
     # Returns an instance based on +idx+ otherwise it
     # creates and saves a new instance base on +idx+. 
+    # See create
+    def load_or_create idx
+      return from_redis(idx) if exists?(idx)
+      create idx
+    end
     # Note +idx+ needs to be an appropriate index for 
     # the given class. If the index is multi-value it
     # must be passed as an Array in the proper order.
-    def load_or_create idx
-      return from_redis(idx) if exists?(idx)
+    # Does not call save.
+    def from_index idx
       obj = new 
       obj.index = idx
-      obj.save
       obj
     end
     def from_key objkey
