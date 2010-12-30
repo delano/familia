@@ -263,7 +263,7 @@ module Familia
       return false if idx.to_s.empty?
       objkey = rediskey idx, suffix
       ret = Familia.redis(self.uri).exists objkey
-      Familia.trace :EXISTS, Familia.redis(self.uri), "#{rediskey(obj.index, suffix)} #{ret}", caller.first
+      Familia.trace :EXISTS, Familia.redis(self.uri), "#{rediskey(idx, suffix)} #{ret}", caller.first
       ret
     end
     def destroy! idx, suffix=:object

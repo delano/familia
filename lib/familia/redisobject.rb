@@ -674,7 +674,8 @@ module Familia
     
     def update h={}
       raise ArgumentError, "Argument to bulk_set must be a hash" unless Hash === h
-      redis.hmset(rediskey, h.inject([]){ |ret,pair| ret + [pair[0], to_redis(pair[1])] })
+      data = h.inject([]){ |ret,pair| ret << [pair[0], to_redis(pair[1])] }.flatten
+      redis.hmset(rediskey, *data)
     end
     alias_method :merge!, :update
     
