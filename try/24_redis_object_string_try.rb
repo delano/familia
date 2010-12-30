@@ -28,7 +28,7 @@ Familia.apiversion = 'v1'
 ## Familia::String.new
 @ret = Familia::String.new 'arbitrary:key'
 @ret.rediskey
-#=> 'v1:arbitrary:key'
+#=> 'arbitrary:key'
 
 ## instance set
 @ret.value = '1000'

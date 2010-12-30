@@ -91,6 +91,7 @@ module Familia
     def default_suffix=(a) @suffix = a end
     def index(r=nil)  @index = r if r; @index end
     def index=(r) @index = r; r end
+    def join(*r) r.join(Familia.delim) end
     def split(r) r.split(Familia.delim) end
     def rediskey *args
       el = args.flatten.compact

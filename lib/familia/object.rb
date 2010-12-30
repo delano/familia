@@ -253,18 +253,16 @@ module Familia
       obj.exists? ? obj.value : nil
     end
     def from_redis idx, suffix=:object
-      obj = new
-      obj.index = idx
-      return nil if obj.index.to_s.empty?
-      objkey = rediskey obj.index, suffix
+      return nil if idx.to_s.empty?
+      objkey = rediskey idx, suffix
+      Familia.trace :FROMREDIS, Familia.redis(self.uri), objkey, caller.first
       me = from_key objkey
       me
     end
     def exists? idx, suffix=:object
-      obj = new
-      obj.index = idx
-      return false if obj.index.to_s.empty?
-      ret = Familia.redis(self.uri).exists rediskey(obj.index, suffix)
+      return false if idx.to_s.empty?
+      objkey = rediskey idx, suffix
+      ret = Familia.redis(self.uri).exists objkey
       Familia.trace :EXISTS, Familia.redis(self.uri), "#{rediskey(obj.index, suffix)} #{ret}", caller.first
       ret
     end
@@ -276,8 +274,10 @@ module Familia
     def find suffix='*'
       list = Familia.redis(self.uri).keys(rediskey('*', suffix)) || []
     end
+    # idx can be a value or an Array of values used to create the index. 
     def rediskey idx, suffix=nil
       raise RuntimeError, "No index for #{self}" if idx.to_s.empty?
+      idx = Familia.join *idx if Array === idx
       idx &&= idx.to_s
       Familia.rediskey(prefix, idx, suffix)
     end
