@@ -1,7 +1,7 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
 <html lang='en'>
   <head>
-    <title>: Familia [familia 0.6.1.]</title>
+    <title>: Familia [familia 0.6.2.]</title>
     <meta content='text/html; charset=UTF-8' http-equiv='Content-Type'>
     <link href='../rdoc-style.css' media='screen' rel='stylesheet' type='text/css'>
     <script type='text/javascript'>
@@ -56,26 +56,24 @@
             <h2>Methods</h2>
             <h3>public class</h3>
             <ol>
-              <li><a href="#M000035">apiversion</a></li>
-              <li><a href="#M000036">conf=</a></li>
-              <li><a href="#M000038">connect</a></li>
-              <li><a href="#M000040">connected?</a></li>
+              <li><a href="#M000046">apiversion</a></li>
+              <li><a href="#M000036">connect</a></li>
+              <li><a href="#M000038">connected?</a></li>
               <li><a href="#M000030">debug?</a></li>
-              <li><a href="#M000041">default_suffix</a></li>
-              <li><a href="#M000042">default_suffix=</a></li>
-              <li><a href="#M000047">destroy</a></li>
-              <li><a href="#M000048">exists?</a></li>
-              <li><a href="#M000049">included</a></li>
-              <li><a href="#M000043">index</a></li>
-              <li><a href="#M000044">index=</a></li>
+              <li><a href="#M000039">default_suffix</a></li>
+              <li><a href="#M000040">default_suffix=</a></li>
+              <li><a href="#M000047">included</a></li>
+              <li><a href="#M000041">index</a></li>
+              <li><a href="#M000042">index=</a></li>
               <li><a href="#M000031">info</a></li>
+              <li><a href="#M000043">join</a></li>
               <li><a href="#M000032">ld</a></li>
-              <li><a href="#M000039">reconnect_all!</a></li>
-              <li><a href="#M000037">redis</a></li>
-              <li><a href="#M000046">rediskey</a></li>
-              <li><a href="#M000045">split</a></li>
+              <li><a href="#M000037">reconnect_all!</a></li>
+              <li><a href="#M000035">redis</a></li>
+              <li><a href="#M000045">rediskey</a></li>
+              <li><a href="#M000044">split</a></li>
               <li><a href="#M000033">trace</a></li>
-              <li><a href="#M000034">uri</a></li>
+              <li><a href="#M000034">uri=</a></li>
             </ol>
           </div>
           <div id='context'>
@@ -127,11 +125,6 @@
                     <td class='context-item-desc'></td>
                   </tr>
                   <tr class='top-aligned-row context-row'>
-                    <td class='context-item-name'>conf</td>
-                    <td class='context-item-value'>[R]</td>
-                    <td class='context-item-desc'></td>
-                  </tr>
-                  <tr class='top-aligned-row context-row'>
                     <td class='context-item-name'>debug</td>
                     <td class='context-item-value'>[RW]</td>
                     <td class='context-item-desc'></td>
@@ -158,7 +151,7 @@
                   </tr>
                   <tr class='top-aligned-row context-row'>
                     <td class='context-item-name'>uri</td>
-                    <td class='context-item-value'>[W]</td>
+                    <td class='context-item-value'>[R]</td>
                     <td class='context-item-desc'></td>
                   </tr>
                 </table>
@@ -166,56 +159,43 @@
             </div>
             <div id='methods'>
               <h2>Public class methods</h2>
-              <div class='method public-class' id='method-M000035'>
-                <a name='M000035'>      </a>
+              <div class='method public-class' id='method-M000046'>
+                <a name='M000046'>      </a>
                 <div class='synopsis'>
                   <span class='name'>apiversion</span>
                   <span class='arguments'>(r=nil, &amp;blk)</span>
                 </div>
                 <div class='source'>
-                  <a class='source-toggle' href='#' onclick="toggleCode('M000035-source'); return false">
+                  <a class='source-toggle' href='#' onclick="toggleCode('M000046-source'); return false">
                     [show source]
                   </a>
-                  <pre id='M000035-source'><span class="ruby-comment cmt"># File lib/familia.rb, line 60</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">apiversion</span>(<span class="ruby-identifier">r</span>=<span class="ruby-keyword kw">nil</span>, <span class="ruby-operator">&amp;</span><span class="ruby-identifier">blk</span>)  &#x000A;      <span class="ruby-keyword kw">if</span> <span class="ruby-identifier">blk</span>.<span class="ruby-identifier">nil?</span>&#x000A;        <span class="ruby-ivar">@apiversion</span> = <span class="ruby-identifier">r</span> <span class="ruby-keyword kw">if</span> <span class="ruby-identifier">r</span>; &#x000A;      <span class="ruby-keyword kw">else</span>&#x000A;        <span class="ruby-identifier">tmp</span> = <span class="ruby-ivar">@apiversion</span>&#x000A;        <span class="ruby-ivar">@apiversion</span> = <span class="ruby-identifier">r</span>&#x000A;        <span class="ruby-identifier">blk</span>.<span class="ruby-identifier">call</span>&#x000A;        <span class="ruby-ivar">@apiversion</span> = <span class="ruby-identifier">tmp</span>&#x000A;      <span class="ruby-keyword kw">end</span>&#x000A;      <span class="ruby-ivar">@apiversion</span> &#x000A;    <span class="ruby-keyword kw">end</span></pre>
+                  <pre id='M000046-source'><span class="ruby-comment cmt"># File lib/familia.rb, line 101</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">apiversion</span>(<span class="ruby-identifier">r</span>=<span class="ruby-keyword kw">nil</span>, <span class="ruby-operator">&amp;</span><span class="ruby-identifier">blk</span>)  &#x000A;      <span class="ruby-keyword kw">if</span> <span class="ruby-identifier">blk</span>.<span class="ruby-identifier">nil?</span>&#x000A;        <span class="ruby-ivar">@apiversion</span> = <span class="ruby-identifier">r</span> <span class="ruby-keyword kw">if</span> <span class="ruby-identifier">r</span>; &#x000A;      <span class="ruby-keyword kw">else</span>&#x000A;        <span class="ruby-identifier">tmp</span> = <span class="ruby-ivar">@apiversion</span>&#x000A;        <span class="ruby-ivar">@apiversion</span> = <span class="ruby-identifier">r</span>&#x000A;        <span class="ruby-identifier">blk</span>.<span class="ruby-identifier">call</span>&#x000A;        <span class="ruby-ivar">@apiversion</span> = <span class="ruby-identifier">tmp</span>&#x000A;      <span class="ruby-keyword kw">end</span>&#x000A;      <span class="ruby-ivar">@apiversion</span> &#x000A;    <span class="ruby-keyword kw">end</span></pre>
                 </div>
               </div>
               <div class='method public-class' id='method-M000036'>
                 <a name='M000036'>      </a>
                 <div class='synopsis'>
-                  <span class='name'>conf=</span>
-                  <span class='arguments'>(conf={})</span>
+                  <span class='name'>connect</span>
+                  <span class='arguments'>(uri=nil)</span>
                 </div>
                 <div class='source'>
                   <a class='source-toggle' href='#' onclick="toggleCode('M000036-source'); return false">
                     [show source]
                   </a>
-                  <pre id='M000036-source'><span class="ruby-comment cmt"># File lib/familia.rb, line 71</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">conf=</span>(<span class="ruby-identifier">conf</span>={})&#x000A;      <span class="ruby-ivar">@conf</span> = <span class="ruby-identifier">conf</span>&#x000A;      <span class="ruby-ivar">@uri</span> = <span class="ruby-constant">Redis</span>.<span class="ruby-identifier">uri</span>(<span class="ruby-ivar">@conf</span>).<span class="ruby-identifier">freeze</span>&#x000A;      <span class="ruby-identifier">connect</span> <span class="ruby-ivar">@uri</span>&#x000A;      <span class="ruby-ivar">@conf</span>&#x000A;    <span class="ruby-keyword kw">end</span></pre>
+                  <pre id='M000036-source'><span class="ruby-comment cmt"># File lib/familia.rb, line 71</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">connect</span>(<span class="ruby-identifier">uri</span>=<span class="ruby-keyword kw">nil</span>)&#x000A;      <span class="ruby-identifier">uri</span> <span class="ruby-operator">&amp;&amp;=</span> <span class="ruby-constant">URI</span>.<span class="ruby-identifier">parse</span> <span class="ruby-identifier">uri</span> <span class="ruby-keyword kw">if</span> <span class="ruby-constant">String</span> <span class="ruby-operator">===</span> <span class="ruby-identifier">uri</span>&#x000A;      <span class="ruby-identifier">uri</span> <span class="ruby-operator">||=</span> <span class="ruby-constant">Familia</span>.<span class="ruby-identifier">uri</span>&#x000A;      <span class="ruby-identifier">conf</span> = <span class="ruby-identifier">uri</span>.<span class="ruby-identifier">conf</span>&#x000A;      <span class="ruby-identifier">conf</span>[<span class="ruby-identifier">:thread_safe</span>] = <span class="ruby-keyword kw">true</span>&#x000A;      <span class="ruby-identifier">client</span> = <span class="ruby-constant">Redis</span>.<span class="ruby-identifier">new</span> <span class="ruby-identifier">conf</span>&#x000A;      <span class="ruby-constant">Familia</span>.<span class="ruby-identifier">trace</span> <span class="ruby-identifier">:CONNECT</span>, <span class="ruby-identifier">client</span>, <span class="ruby-identifier">conf</span>.<span class="ruby-identifier">inspect</span>, <span class="ruby-identifier">caller</span>[<span class="ruby-value">0</span><span class="ruby-operator">..</span><span class="ruby-value">3</span>] <span class="ruby-keyword kw">if</span> <span class="ruby-constant">Familia</span>.<span class="ruby-identifier">debug</span>&#x000A;      <span class="ruby-ivar">@clients</span>[<span class="ruby-identifier">uri</span>.<span class="ruby-identifier">serverid</span>] = <span class="ruby-identifier">client</span>&#x000A;    <span class="ruby-keyword kw">end</span></pre>
                 </div>
               </div>
               <div class='method public-class' id='method-M000038'>
                 <a name='M000038'>      </a>
                 <div class='synopsis'>
-                  <span class='name'>connect</span>
-                  <span class='arguments'>(uri=nil, local_conf={})</span>
+                  <span class='name'>connected?</span>
+                  <span class='arguments'>(uri=nil)</span>
                 </div>
                 <div class='source'>
                   <a class='source-toggle' href='#' onclick="toggleCode('M000038-source'); return false">
                     [show source]
                   </a>
-                  <pre id='M000038-source'><span class="ruby-comment cmt"># File lib/familia.rb, line 88</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">connect</span>(<span class="ruby-identifier">uri</span>=<span class="ruby-keyword kw">nil</span>, <span class="ruby-identifier">local_conf</span>={})&#x000A;      <span class="ruby-identifier">uri</span> <span class="ruby-operator">&amp;&amp;=</span> <span class="ruby-constant">URI</span>.<span class="ruby-identifier">parse</span> <span class="ruby-identifier">uri</span> <span class="ruby-keyword kw">if</span> <span class="ruby-constant">String</span> <span class="ruby-operator">===</span> <span class="ruby-identifier">uri</span>&#x000A;      <span class="ruby-identifier">uri</span> <span class="ruby-operator">||=</span> <span class="ruby-constant">Familia</span>.<span class="ruby-identifier">uri</span>&#x000A;      <span class="ruby-identifier">local_conf</span>[<span class="ruby-identifier">:thread_safe</span>] = <span class="ruby-keyword kw">true</span>&#x000A;      <span class="ruby-identifier">client</span> = <span class="ruby-constant">Redis</span>.<span class="ruby-identifier">new</span> <span class="ruby-identifier">local_conf</span>.<span class="ruby-identifier">merge</span>(<span class="ruby-identifier">uri</span>.<span class="ruby-identifier">conf</span>)&#x000A;      <span class="ruby-constant">Familia</span>.<span class="ruby-identifier">trace</span> <span class="ruby-identifier">:CONNECT</span>, <span class="ruby-identifier">client</span>, <span class="ruby-identifier">uri</span>.<span class="ruby-identifier">conf</span>.<span class="ruby-identifier">inspect</span>, <span class="ruby-identifier">caller</span>.<span class="ruby-identifier">first</span>&#x000A;      <span class="ruby-ivar">@clients</span>[<span class="ruby-identifier">uri</span>.<span class="ruby-identifier">serverid</span>] = <span class="ruby-identifier">client</span>&#x000A;    <span class="ruby-keyword kw">end</span></pre>
-                </div>
-              </div>
-              <div class='method public-class' id='method-M000040'>
-                <a name='M000040'>      </a>
-                <div class='synopsis'>
-                  <span class='name'>connected?</span>
-                  <span class='arguments'>(uri=nil)</span>
-                </div>
-                <div class='source'>
-                  <a class='source-toggle' href='#' onclick="toggleCode('M000040-source'); return false">
-                    [show source]
-                  </a>
-                  <pre id='M000040-source'><span class="ruby-comment cmt"># File lib/familia.rb, line 102</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">connected?</span>(<span class="ruby-identifier">uri</span>=<span class="ruby-keyword kw">nil</span>)&#x000A;      <span class="ruby-identifier">uri</span> <span class="ruby-operator">&amp;&amp;=</span> <span class="ruby-constant">URI</span>.<span class="ruby-identifier">parse</span> <span class="ruby-identifier">uri</span> <span class="ruby-keyword kw">if</span> <span class="ruby-constant">String</span> <span class="ruby-operator">===</span> <span class="ruby-identifier">uri</span>&#x000A;      <span class="ruby-ivar">@clients</span>.<span class="ruby-identifier">has_key?</span>(<span class="ruby-identifier">uri</span>.<span class="ruby-identifier">serverid</span>)&#x000A;    <span class="ruby-keyword kw">end</span></pre>
+                  <pre id='M000038-source'><span class="ruby-comment cmt"># File lib/familia.rb, line 86</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">connected?</span>(<span class="ruby-identifier">uri</span>=<span class="ruby-keyword kw">nil</span>)&#x000A;      <span class="ruby-identifier">uri</span> <span class="ruby-operator">&amp;&amp;=</span> <span class="ruby-constant">URI</span>.<span class="ruby-identifier">parse</span> <span class="ruby-identifier">uri</span> <span class="ruby-keyword kw">if</span> <span class="ruby-constant">String</span> <span class="ruby-operator">===</span> <span class="ruby-identifier">uri</span>&#x000A;      <span class="ruby-ivar">@clients</span>.<span class="ruby-identifier">has_key?</span>(<span class="ruby-identifier">uri</span>.<span class="ruby-identifier">serverid</span>)&#x000A;    <span class="ruby-keyword kw">end</span></pre>
                 </div>
               </div>
               <div class='method public-class' id='method-M000030'>
@@ -228,98 +208,72 @@
                   <a class='source-toggle' href='#' onclick="toggleCode('M000030-source'); return false">
                     [show source]
                   </a>
-                  <pre id='M000030-source'><span class="ruby-comment cmt"># File lib/familia.rb, line 39</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">debug?</span>() <span class="ruby-ivar">@debug</span> <span class="ruby-operator">==</span> <span class="ruby-keyword kw">true</span> <span class="ruby-keyword kw">end</span></pre>
+                  <pre id='M000030-source'><span class="ruby-comment cmt"># File lib/familia.rb, line 38</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">debug?</span>() <span class="ruby-ivar">@debug</span> <span class="ruby-operator">==</span> <span class="ruby-keyword kw">true</span> <span class="ruby-keyword kw">end</span></pre>
                 </div>
               </div>
-              <div class='method public-class' id='method-M000041'>
-                <a name='M000041'>      </a>
+              <div class='method public-class' id='method-M000039'>
+                <a name='M000039'>      </a>
                 <div class='synopsis'>
                   <span class='name'>default_suffix</span>
                   <span class='arguments'>(a=nil)</span>
                 </div>
                 <div class='source'>
-                  <a class='source-toggle' href='#' onclick="toggleCode('M000041-source'); return false">
+                  <a class='source-toggle' href='#' onclick="toggleCode('M000039-source'); return false">
                     [show source]
                   </a>
-                  <pre id='M000041-source'><span class="ruby-comment cmt"># File lib/familia.rb, line 106</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">default_suffix</span>(<span class="ruby-identifier">a</span>=<span class="ruby-keyword kw">nil</span>) <span class="ruby-ivar">@suffix</span> = <span class="ruby-identifier">a</span> <span class="ruby-keyword kw">if</span> <span class="ruby-identifier">a</span>; <span class="ruby-ivar">@suffix</span> <span class="ruby-keyword kw">end</span></pre>
+                  <pre id='M000039-source'><span class="ruby-comment cmt"># File lib/familia.rb, line 90</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">default_suffix</span>(<span class="ruby-identifier">a</span>=<span class="ruby-keyword kw">nil</span>) <span class="ruby-ivar">@suffix</span> = <span class="ruby-identifier">a</span> <span class="ruby-keyword kw">if</span> <span class="ruby-identifier">a</span>; <span class="ruby-ivar">@suffix</span> <span class="ruby-keyword kw">end</span></pre>
                 </div>
               </div>
-              <div class='method public-class' id='method-M000042'>
-                <a name='M000042'>      </a>
+              <div class='method public-class' id='method-M000040'>
+                <a name='M000040'>      </a>
                 <div class='synopsis'>
                   <span class='name'>default_suffix=</span>
                   <span class='arguments'>(a)</span>
                 </div>
                 <div class='source'>
-                  <a class='source-toggle' href='#' onclick="toggleCode('M000042-source'); return false">
+                  <a class='source-toggle' href='#' onclick="toggleCode('M000040-source'); return false">
                     [show source]
                   </a>
-                  <pre id='M000042-source'><span class="ruby-comment cmt"># File lib/familia.rb, line 107</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">default_suffix=</span>(<span class="ruby-identifier">a</span>) <span class="ruby-ivar">@suffix</span> = <span class="ruby-identifier">a</span> <span class="ruby-keyword kw">end</span></pre>
+                  <pre id='M000040-source'><span class="ruby-comment cmt"># File lib/familia.rb, line 91</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">default_suffix=</span>(<span class="ruby-identifier">a</span>) <span class="ruby-ivar">@suffix</span> = <span class="ruby-identifier">a</span> <span class="ruby-keyword kw">end</span></pre>
                 </div>
               </div>
               <div class='method public-class' id='method-M000047'>
                 <a name='M000047'>      </a>
                 <div class='synopsis'>
-                  <span class='name'>destroy</span>
-                  <span class='arguments'>(keyname, uri=nil)</span>
+                  <span class='name'>included</span>
+                  <span class='arguments'>(obj)</span>
                 </div>
                 <div class='source'>
                   <a class='source-toggle' href='#' onclick="toggleCode('M000047-source'); return false">
                     [show source]
                   </a>
-                  <pre id='M000047-source'><span class="ruby-comment cmt"># File lib/familia.rb, line 116</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">destroy</span> <span class="ruby-identifier">keyname</span>, <span class="ruby-identifier">uri</span>=<span class="ruby-keyword kw">nil</span>&#x000A;      <span class="ruby-constant">Familia</span>.<span class="ruby-identifier">redis</span>(<span class="ruby-identifier">uri</span>).<span class="ruby-identifier">del</span> <span class="ruby-identifier">keyname</span>&#x000A;    <span class="ruby-keyword kw">end</span></pre>
+                  <pre id='M000047-source'><span class="ruby-comment cmt"># File lib/familia.rb, line 127</span>&#x000A;  <span class="ruby-keyword kw">def</span> <span class="ruby-keyword kw">self</span>.<span class="ruby-identifier">included</span>(<span class="ruby-identifier">obj</span>)&#x000A;    <span class="ruby-identifier">obj</span>.<span class="ruby-identifier">send</span> <span class="ruby-identifier">:include</span>, <span class="ruby-constant">Familia</span><span class="ruby-operator">::</span><span class="ruby-constant">InstanceMethods</span>&#x000A;    <span class="ruby-identifier">obj</span>.<span class="ruby-identifier">send</span> <span class="ruby-identifier">:include</span>, <span class="ruby-constant">Gibbler</span><span class="ruby-operator">::</span><span class="ruby-constant">Complex</span>&#x000A;    <span class="ruby-identifier">obj</span>.<span class="ruby-identifier">extend</span> <span class="ruby-constant">Familia</span><span class="ruby-operator">::</span><span class="ruby-constant">ClassMethods</span>&#x000A;    <span class="ruby-identifier">obj</span>.<span class="ruby-identifier">class_zset</span> <span class="ruby-identifier">:instances</span>, <span class="ruby-identifier">:class</span> =<span class="ruby-operator">&gt;</span> <span class="ruby-identifier">obj</span>, <span class="ruby-identifier">:reference</span> =<span class="ruby-operator">&gt;</span> <span class="ruby-keyword kw">true</span>&#x000A;    <span class="ruby-comment cmt"># :object is a special redis object because its reserved</span>&#x000A;    <span class="ruby-comment cmt"># for storing the marshaled instance data (e.g. to_json).</span>&#x000A;    <span class="ruby-comment cmt"># When it isn't defined explicitly we define it here b/c</span>&#x000A;    <span class="ruby-comment cmt"># it's assumed to exist in other places (see #save).</span>&#x000A;    <span class="ruby-identifier">obj</span>.<span class="ruby-identifier">string</span> <span class="ruby-identifier">:object</span>, <span class="ruby-identifier">:class</span> =<span class="ruby-operator">&gt;</span> <span class="ruby-identifier">obj</span> <span class="ruby-keyword kw">unless</span> <span class="ruby-identifier">obj</span>.<span class="ruby-identifier">redis_object?</span> <span class="ruby-identifier">:object</span>&#x000A;    <span class="ruby-constant">Familia</span>.<span class="ruby-identifier">classes</span> <span class="ruby-operator">&lt;&lt;</span> <span class="ruby-identifier">obj</span>&#x000A;  <span class="ruby-keyword kw">end</span></pre>
                 </div>
               </div>
-              <div class='method public-class' id='method-M000048'>
-                <a name='M000048'>      </a>
-                <div class='synopsis'>
-                  <span class='name'>exists?</span>
-                  <span class='arguments'>(keyname, uri=nil)</span>
-                </div>
-                <div class='source'>
-                  <a class='source-toggle' href='#' onclick="toggleCode('M000048-source'); return false">
-                    [show source]
-                  </a>
-                  <pre id='M000048-source'><span class="ruby-comment cmt"># File lib/familia.rb, line 119</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">exists?</span> <span class="ruby-identifier">keyname</span>, <span class="ruby-identifier">uri</span>=<span class="ruby-keyword kw">nil</span>&#x000A;      <span class="ruby-constant">Familia</span>.<span class="ruby-identifier">redis</span>(<span class="ruby-identifier">uri</span>).<span class="ruby-identifier">exists</span> <span class="ruby-identifier">keyname</span>&#x000A;    <span class="ruby-keyword kw">end</span></pre>
-                </div>
-              </div>
-              <div class='method public-class' id='method-M000049'>
-                <a name='M000049'>      </a>
-                <div class='synopsis'>
-                  <span class='name'>included</span>
-                  <span class='arguments'>(obj)</span>
-                </div>
-                <div class='source'>
-                  <a class='source-toggle' href='#' onclick="toggleCode('M000049-source'); return false">
-                    [show source]
-                  </a>
-                  <pre id='M000049-source'><span class="ruby-comment cmt"># File lib/familia.rb, line 137</span>&#x000A;  <span class="ruby-keyword kw">def</span> <span class="ruby-keyword kw">self</span>.<span class="ruby-identifier">included</span>(<span class="ruby-identifier">obj</span>)&#x000A;    <span class="ruby-identifier">obj</span>.<span class="ruby-identifier">send</span> <span class="ruby-identifier">:include</span>, <span class="ruby-constant">Familia</span><span class="ruby-operator">::</span><span class="ruby-constant">InstanceMethods</span>&#x000A;    <span class="ruby-identifier">obj</span>.<span class="ruby-identifier">send</span> <span class="ruby-identifier">:include</span>, <span class="ruby-constant">Gibbler</span><span class="ruby-operator">::</span><span class="ruby-constant">Complex</span>&#x000A;    <span class="ruby-identifier">obj</span>.<span class="ruby-identifier">extend</span> <span class="ruby-constant">Familia</span><span class="ruby-operator">::</span><span class="ruby-constant">ClassMethods</span>&#x000A;    <span class="ruby-identifier">obj</span>.<span class="ruby-identifier">class_set</span> <span class="ruby-identifier">:instances</span>&#x000A;    <span class="ruby-constant">Familia</span>.<span class="ruby-identifier">classes</span> <span class="ruby-operator">&lt;&lt;</span> <span class="ruby-identifier">obj</span>&#x000A;  <span class="ruby-keyword kw">end</span></pre>
-                </div>
-              </div>
-              <div class='method public-class' id='method-M000043'>
-                <a name='M000043'>      </a>
+              <div class='method public-class' id='method-M000041'>
+                <a name='M000041'>      </a>
                 <div class='synopsis'>
                   <span class='name'>index</span>
                   <span class='arguments'>(r=nil)</span>
                 </div>
                 <div class='source'>
-                  <a class='source-toggle' href='#' onclick="toggleCode('M000043-source'); return false">
+                  <a class='source-toggle' href='#' onclick="toggleCode('M000041-source'); return false">
                     [show source]
                   </a>
-                  <pre id='M000043-source'><span class="ruby-comment cmt"># File lib/familia.rb, line 108</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">index</span>(<span class="ruby-identifier">r</span>=<span class="ruby-keyword kw">nil</span>)  <span class="ruby-ivar">@index</span> = <span class="ruby-identifier">r</span> <span class="ruby-keyword kw">if</span> <span class="ruby-identifier">r</span>; <span class="ruby-ivar">@index</span> <span class="ruby-keyword kw">end</span></pre>
+                  <pre id='M000041-source'><span class="ruby-comment cmt"># File lib/familia.rb, line 92</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">index</span>(<span class="ruby-identifier">r</span>=<span class="ruby-keyword kw">nil</span>)  <span class="ruby-ivar">@index</span> = <span class="ruby-identifier">r</span> <span class="ruby-keyword kw">if</span> <span class="ruby-identifier">r</span>; <span class="ruby-ivar">@index</span> <span class="ruby-keyword kw">end</span></pre>
                 </div>
               </div>
-              <div class='method public-class' id='method-M000044'>
-                <a name='M000044'>      </a>
+              <div class='method public-class' id='method-M000042'>
+                <a name='M000042'>      </a>
                 <div class='synopsis'>
                   <span class='name'>index=</span>
                   <span class='arguments'>(r)</span>
                 </div>
                 <div class='source'>
-                  <a class='source-toggle' href='#' onclick="toggleCode('M000044-source'); return false">
+                  <a class='source-toggle' href='#' onclick="toggleCode('M000042-source'); return false">
                     [show source]
                   </a>
-                  <pre id='M000044-source'><span class="ruby-comment cmt"># File lib/familia.rb, line 109</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">index=</span>(<span class="ruby-identifier">r</span>) <span class="ruby-ivar">@index</span> = <span class="ruby-identifier">r</span>; <span class="ruby-identifier">r</span> <span class="ruby-keyword kw">end</span></pre>
+                  <pre id='M000042-source'><span class="ruby-comment cmt"># File lib/familia.rb, line 93</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">index=</span>(<span class="ruby-identifier">r</span>) <span class="ruby-ivar">@index</span> = <span class="ruby-identifier">r</span>; <span class="ruby-identifier">r</span> <span class="ruby-keyword kw">end</span></pre>
                 </div>
               </div>
               <div class='method public-class' id='method-M000031'>
@@ -332,7 +286,20 @@
                   <a class='source-toggle' href='#' onclick="toggleCode('M000031-source'); return false">
                     [show source]
                   </a>
-                  <pre id='M000031-source'><span class="ruby-comment cmt"># File lib/familia.rb, line 40</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">info</span> <span class="ruby-operator">*</span><span class="ruby-identifier">msg</span>&#x000A;      <span class="ruby-constant">STDERR</span>.<span class="ruby-identifier">puts</span> <span class="ruby-operator">*</span><span class="ruby-identifier">msg</span>&#x000A;    <span class="ruby-keyword kw">end</span></pre>
+                  <pre id='M000031-source'><span class="ruby-comment cmt"># File lib/familia.rb, line 39</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">info</span> <span class="ruby-operator">*</span><span class="ruby-identifier">msg</span>&#x000A;      <span class="ruby-constant">STDERR</span>.<span class="ruby-identifier">puts</span> <span class="ruby-operator">*</span><span class="ruby-identifier">msg</span>&#x000A;    <span class="ruby-keyword kw">end</span></pre>
+                </div>
+              </div>
+              <div class='method public-class' id='method-M000043'>
+                <a name='M000043'>      </a>
+                <div class='synopsis'>
+                  <span class='name'>join</span>
+                  <span class='arguments'>(*r)</span>
+                </div>
+                <div class='source'>
+                  <a class='source-toggle' href='#' onclick="toggleCode('M000043-source'); return false">
+                    [show source]
+                  </a>
+                  <pre id='M000043-source'><span class="ruby-comment cmt"># File lib/familia.rb, line 94</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">join</span>(<span class="ruby-operator">*</span><span class="ruby-identifier">r</span>) <span class="ruby-identifier">r</span>.<span class="ruby-identifier">join</span>(<span class="ruby-constant">Familia</span>.<span class="ruby-identifier">delim</span>) <span class="ruby-keyword kw">end</span></pre>
                 </div>
               </div>
               <div class='method public-class' id='method-M000032'>
@@ -345,59 +312,68 @@
                   <a class='source-toggle' href='#' onclick="toggleCode('M000032-source'); return false">
                     [show source]
                   </a>
-                  <pre id='M000032-source'><span class="ruby-comment cmt"># File lib/familia.rb, line 43</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">ld</span> <span class="ruby-operator">*</span><span class="ruby-identifier">msg</span>&#x000A;      <span class="ruby-identifier">info</span> <span class="ruby-operator">*</span><span class="ruby-identifier">msg</span> <span class="ruby-keyword kw">if</span> <span class="ruby-identifier">debug?</span>&#x000A;    <span class="ruby-keyword kw">end</span></pre>
-                </div>
-              </div>
-              <div class='method public-class' id='method-M000039'>
-                <a name='M000039'>      </a>
-                <div class='synopsis'>
-                  <span class='name'>reconnect_all!</span>
-                  <span class='arguments'>()</span>
-                </div>
-                <div class='source'>
-                  <a class='source-toggle' href='#' onclick="toggleCode('M000039-source'); return false">
-                    [show source]
-                  </a>
-                  <pre id='M000039-source'><span class="ruby-comment cmt"># File lib/familia.rb, line 96</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">reconnect_all!</span>&#x000A;      <span class="ruby-constant">Familia</span>.<span class="ruby-identifier">classes</span>.<span class="ruby-identifier">each</span> <span class="ruby-keyword kw">do</span> <span class="ruby-operator">|</span><span class="ruby-identifier">klass</span><span class="ruby-operator">|</span>&#x000A;        <span class="ruby-identifier">klass</span>.<span class="ruby-identifier">redis</span>.<span class="ruby-identifier">client</span>.<span class="ruby-identifier">reconnect</span>&#x000A;        <span class="ruby-constant">Familia</span>.<span class="ruby-identifier">info</span> <span class="ruby-node">&quot;#{klass} ping: #{klass.redis.ping}&quot;</span> <span class="ruby-keyword kw">if</span> <span class="ruby-identifier">debug?</span>&#x000A;      <span class="ruby-keyword kw">end</span>&#x000A;    <span class="ruby-keyword kw">end</span></pre>
+                  <pre id='M000032-source'><span class="ruby-comment cmt"># File lib/familia.rb, line 42</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">ld</span> <span class="ruby-operator">*</span><span class="ruby-identifier">msg</span>&#x000A;      <span class="ruby-identifier">info</span> <span class="ruby-operator">*</span><span class="ruby-identifier">msg</span> <span class="ruby-keyword kw">if</span> <span class="ruby-identifier">debug?</span>&#x000A;    <span class="ruby-keyword kw">end</span></pre>
                 </div>
               </div>
               <div class='method public-class' id='method-M000037'>
                 <a name='M000037'>      </a>
                 <div class='synopsis'>
-                  <span class='name'>redis</span>
-                  <span class='arguments'>(uri=nil)</span>
+                  <span class='name'>reconnect_all!</span>
+                  <span class='arguments'>()</span>
                 </div>
                 <div class='source'>
                   <a class='source-toggle' href='#' onclick="toggleCode('M000037-source'); return false">
                     [show source]
                   </a>
-                  <pre id='M000037-source'><span class="ruby-comment cmt"># File lib/familia.rb, line 77</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">redis</span>(<span class="ruby-identifier">uri</span>=<span class="ruby-keyword kw">nil</span>)&#x000A;      <span class="ruby-keyword kw">if</span> <span class="ruby-constant">Integer</span> <span class="ruby-operator">===</span> <span class="ruby-identifier">uri</span>&#x000A;        <span class="ruby-identifier">uri</span> = <span class="ruby-constant">Familia</span>.<span class="ruby-identifier">uri</span>(<span class="ruby-identifier">uri</span>)&#x000A;      <span class="ruby-keyword kw">else</span>&#x000A;        <span class="ruby-identifier">uri</span> <span class="ruby-operator">&amp;&amp;=</span> <span class="ruby-constant">URI</span>.<span class="ruby-identifier">parse</span> <span class="ruby-identifier">uri</span> <span class="ruby-keyword kw">if</span> <span class="ruby-constant">String</span> <span class="ruby-operator">===</span> <span class="ruby-identifier">uri</span>&#x000A;      <span class="ruby-keyword kw">end</span>&#x000A;      <span class="ruby-identifier">uri</span> <span class="ruby-operator">||=</span> <span class="ruby-constant">Familia</span>.<span class="ruby-identifier">uri</span>&#x000A;      <span class="ruby-identifier">connect</span>(<span class="ruby-identifier">uri</span>) <span class="ruby-keyword kw">unless</span> <span class="ruby-ivar">@clients</span>[<span class="ruby-identifier">uri</span>.<span class="ruby-identifier">serverid</span>] &#x000A;      <span class="ruby-comment cmt">#STDERR.puts &quot;REDIS: #{uri} #{caller[0]}&quot; if Familia.debug?</span>&#x000A;      <span class="ruby-ivar">@clients</span>[<span class="ruby-identifier">uri</span>.<span class="ruby-identifier">serverid</span>]&#x000A;    <span class="ruby-keyword kw">end</span></pre>
+                  <pre id='M000037-source'><span class="ruby-comment cmt"># File lib/familia.rb, line 80</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">reconnect_all!</span>&#x000A;      <span class="ruby-constant">Familia</span>.<span class="ruby-identifier">classes</span>.<span class="ruby-identifier">each</span> <span class="ruby-keyword kw">do</span> <span class="ruby-operator">|</span><span class="ruby-identifier">klass</span><span class="ruby-operator">|</span>&#x000A;        <span class="ruby-identifier">klass</span>.<span class="ruby-identifier">redis</span>.<span class="ruby-identifier">client</span>.<span class="ruby-identifier">reconnect</span>&#x000A;        <span class="ruby-constant">Familia</span>.<span class="ruby-identifier">info</span> <span class="ruby-node">&quot;#{klass} ping: #{klass.redis.ping}&quot;</span> <span class="ruby-keyword kw">if</span> <span class="ruby-identifier">debug?</span>&#x000A;      <span class="ruby-keyword kw">end</span>&#x000A;    <span class="ruby-keyword kw">end</span></pre>
                 </div>
               </div>
-              <div class='method public-class' id='method-M000046'>
-                <a name='M000046'>      </a>
+              <div class='method public-class' id='method-M000035'>
+                <a name='M000035'>      </a>
                 <div class='synopsis'>
-                  <span class='name'>rediskey</span>
-                  <span class='arguments'>(*args)</span>
+                  <span class='name'>redis</span>
+                  <span class='arguments'>(uri=nil)</span>
+                </div>
+                <div class='description'>
+                  <p>
+                  A convenience method for returning the appropriate Redis connection. If
+                  <tt>uri</tt> is an Integer, we&#8217;ll treat it as a database number. If
+                  it&#8217;s a <a href="Familia/String.html">String</a>, we&#8217;ll treat it
+                  as a full URI (e.g. redis://1.2.3.4/15). Otherwise we&#8217;ll return the
+                  default connection.
+                  </p>
                 </div>
                 <div class='source'>
-                  <a class='source-toggle' href='#' onclick="toggleCode('M000046-source'); return false">
+                  <a class='source-toggle' href='#' onclick="toggleCode('M000035-source'); return false">
                     [show source]
                   </a>
-                  <pre id='M000046-source'><span class="ruby-comment cmt"># File lib/familia.rb, line 111</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">rediskey</span> <span class="ruby-operator">*</span><span class="ruby-identifier">args</span>&#x000A;      <span class="ruby-identifier">el</span> = <span class="ruby-identifier">args</span>.<span class="ruby-identifier">flatten</span>.<span class="ruby-identifier">compact</span>&#x000A;      <span class="ruby-identifier">el</span>.<span class="ruby-identifier">unshift</span> <span class="ruby-ivar">@apiversion</span> <span class="ruby-keyword kw">unless</span> <span class="ruby-ivar">@apiversion</span>.<span class="ruby-identifier">nil?</span>&#x000A;      <span class="ruby-identifier">el</span>.<span class="ruby-identifier">join</span>(<span class="ruby-constant">Familia</span>.<span class="ruby-identifier">delim</span>)&#x000A;    <span class="ruby-keyword kw">end</span></pre>
+                  <pre id='M000035-source'><span class="ruby-comment cmt"># File lib/familia.rb, line 59</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">redis</span>(<span class="ruby-identifier">uri</span>=<span class="ruby-keyword kw">nil</span>)&#x000A;      <span class="ruby-keyword kw">if</span> <span class="ruby-constant">Integer</span> <span class="ruby-operator">===</span> <span class="ruby-identifier">uri</span>&#x000A;        <span class="ruby-identifier">tmp</span> = <span class="ruby-constant">Familia</span>.<span class="ruby-identifier">uri</span>&#x000A;        <span class="ruby-identifier">tmp</span>.<span class="ruby-identifier">db</span> = <span class="ruby-identifier">uri</span>&#x000A;        <span class="ruby-identifier">uri</span> = <span class="ruby-identifier">tmp</span>&#x000A;      <span class="ruby-keyword kw">elsif</span> <span class="ruby-constant">String</span> <span class="ruby-operator">===</span> <span class="ruby-identifier">uri</span>&#x000A;        <span class="ruby-identifier">uri</span> <span class="ruby-operator">&amp;&amp;=</span> <span class="ruby-constant">URI</span>.<span class="ruby-identifier">parse</span> <span class="ruby-identifier">uri</span>&#x000A;      <span class="ruby-keyword kw">end</span>&#x000A;      <span class="ruby-identifier">uri</span> <span class="ruby-operator">||=</span> <span class="ruby-constant">Familia</span>.<span class="ruby-identifier">uri</span>&#x000A;      <span class="ruby-identifier">connect</span>(<span class="ruby-identifier">uri</span>) <span class="ruby-keyword kw">unless</span> <span class="ruby-ivar">@clients</span>[<span class="ruby-identifier">uri</span>.<span class="ruby-identifier">serverid</span>] &#x000A;      <span class="ruby-ivar">@clients</span>[<span class="ruby-identifier">uri</span>.<span class="ruby-identifier">serverid</span>]&#x000A;    <span class="ruby-keyword kw">end</span></pre>
                 </div>
               </div>
               <div class='method public-class' id='method-M000045'>
                 <a name='M000045'>      </a>
                 <div class='synopsis'>
-                  <span class='name'>split</span>
-                  <span class='arguments'>(r)</span>
+                  <span class='name'>rediskey</span>
+                  <span class='arguments'>(*args)</span>
                 </div>
                 <div class='source'>
                   <a class='source-toggle' href='#' onclick="toggleCode('M000045-source'); return false">
                     [show source]
                   </a>
-                  <pre id='M000045-source'><span class="ruby-comment cmt"># File lib/familia.rb, line 110</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">split</span>(<span class="ruby-identifier">r</span>) <span class="ruby-identifier">r</span>.<span class="ruby-identifier">split</span>(<span class="ruby-constant">Familia</span>.<span class="ruby-identifier">delim</span>) <span class="ruby-keyword kw">end</span></pre>
+                  <pre id='M000045-source'><span class="ruby-comment cmt"># File lib/familia.rb, line 96</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">rediskey</span> <span class="ruby-operator">*</span><span class="ruby-identifier">args</span>&#x000A;      <span class="ruby-identifier">el</span> = <span class="ruby-identifier">args</span>.<span class="ruby-identifier">flatten</span>.<span class="ruby-identifier">compact</span>&#x000A;      <span class="ruby-identifier">el</span>.<span class="ruby-identifier">unshift</span> <span class="ruby-ivar">@apiversion</span> <span class="ruby-keyword kw">unless</span> <span class="ruby-ivar">@apiversion</span>.<span class="ruby-identifier">nil?</span>&#x000A;      <span class="ruby-identifier">el</span>.<span class="ruby-identifier">join</span>(<span class="ruby-constant">Familia</span>.<span class="ruby-identifier">delim</span>)&#x000A;    <span class="ruby-keyword kw">end</span></pre>
+                </div>
+              </div>
+              <div class='method public-class' id='method-M000044'>
+                <a name='M000044'>      </a>
+                <div class='synopsis'>
+                  <span class='name'>split</span>
+                  <span class='arguments'>(r)</span>
+                </div>
+                <div class='source'>
+                  <a class='source-toggle' href='#' onclick="toggleCode('M000044-source'); return false">
+                    [show source]
+                  </a>
+                  <pre id='M000044-source'><span class="ruby-comment cmt"># File lib/familia.rb, line 95</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">split</span>(<span class="ruby-identifier">r</span>) <span class="ruby-identifier">r</span>.<span class="ruby-identifier">split</span>(<span class="ruby-constant">Familia</span>.<span class="ruby-identifier">delim</span>) <span class="ruby-keyword kw">end</span></pre>
                 </div>
               </div>
               <div class='method public-class' id='method-M000033'>
@@ -410,20 +386,20 @@
                   <a class='source-toggle' href='#' onclick="toggleCode('M000033-source'); return false">
                     [show source]
                   </a>
-                  <pre id='M000033-source'><span class="ruby-comment cmt"># File lib/familia.rb, line 46</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">trace</span> <span class="ruby-identifier">label</span>, <span class="ruby-identifier">redis_client</span>, <span class="ruby-identifier">ident</span>, <span class="ruby-identifier">context</span>=<span class="ruby-keyword kw">nil</span>&#x000A;      <span class="ruby-keyword kw">return</span> <span class="ruby-keyword kw">unless</span> <span class="ruby-constant">Familia</span>.<span class="ruby-identifier">debug?</span>&#x000A;      <span class="ruby-identifier">info</span> <span class="ruby-value str">&quot;%s (%d:%s): %s&quot;</span> <span class="ruby-operator">%</span> [<span class="ruby-identifier">label</span>, <span class="ruby-constant">Thread</span>.<span class="ruby-identifier">current</span>.<span class="ruby-identifier">object_id</span>, <span class="ruby-identifier">redis_client</span>.<span class="ruby-identifier">object_id</span>, <span class="ruby-identifier">ident</span>] &#x000A;      <span class="ruby-identifier">info</span> <span class="ruby-value str">&quot;  +-&gt; %s&quot;</span> <span class="ruby-operator">%</span> [<span class="ruby-identifier">context</span>].<span class="ruby-identifier">flatten</span>[<span class="ruby-value">0</span><span class="ruby-operator">..</span><span class="ruby-value">3</span>].<span class="ruby-identifier">join</span>(<span class="ruby-value str">&quot;\n      &quot;</span>) <span class="ruby-keyword kw">if</span> <span class="ruby-identifier">context</span>&#x000A;    <span class="ruby-keyword kw">end</span></pre>
+                  <pre id='M000033-source'><span class="ruby-comment cmt"># File lib/familia.rb, line 45</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">trace</span> <span class="ruby-identifier">label</span>, <span class="ruby-identifier">redis_client</span>, <span class="ruby-identifier">ident</span>, <span class="ruby-identifier">context</span>=<span class="ruby-keyword kw">nil</span>&#x000A;      <span class="ruby-keyword kw">return</span> <span class="ruby-keyword kw">unless</span> <span class="ruby-constant">Familia</span>.<span class="ruby-identifier">debug?</span>&#x000A;      <span class="ruby-identifier">info</span> <span class="ruby-value str">&quot;%s (%d:%s): %s&quot;</span> <span class="ruby-operator">%</span> [<span class="ruby-identifier">label</span>, <span class="ruby-constant">Thread</span>.<span class="ruby-identifier">current</span>.<span class="ruby-identifier">object_id</span>, <span class="ruby-identifier">redis_client</span>.<span class="ruby-identifier">object_id</span>, <span class="ruby-identifier">ident</span>] &#x000A;      <span class="ruby-identifier">info</span> <span class="ruby-value str">&quot;  +-&gt; %s&quot;</span> <span class="ruby-operator">%</span> [<span class="ruby-identifier">context</span>].<span class="ruby-identifier">flatten</span>[<span class="ruby-value">0</span><span class="ruby-operator">..</span><span class="ruby-value">3</span>].<span class="ruby-identifier">join</span>(<span class="ruby-value str">&quot;\n      &quot;</span>) <span class="ruby-keyword kw">if</span> <span class="ruby-identifier">context</span>&#x000A;    <span class="ruby-keyword kw">end</span></pre>
                 </div>
               </div>
               <div class='method public-class' id='method-M000034'>
                 <a name='M000034'>      </a>
                 <div class='synopsis'>
-                  <span class='name'>uri</span>
-                  <span class='arguments'>(db=nil)</span>
+                  <span class='name'>uri=</span>
+                  <span class='arguments'>(v)</span>
                 </div>
                 <div class='source'>
                   <a class='source-toggle' href='#' onclick="toggleCode('M000034-source'); return false">
                     [show source]
                   </a>
-                  <pre id='M000034-source'><span class="ruby-comment cmt"># File lib/familia.rb, line 51</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">uri</span>(<span class="ruby-identifier">db</span>=<span class="ruby-keyword kw">nil</span>)&#x000A;      <span class="ruby-keyword kw">if</span> <span class="ruby-identifier">db</span>.<span class="ruby-identifier">nil?</span>&#x000A;        <span class="ruby-ivar">@uri</span>&#x000A;      <span class="ruby-keyword kw">else</span>&#x000A;        <span class="ruby-identifier">uri</span> = <span class="ruby-constant">URI</span>.<span class="ruby-identifier">parse</span> <span class="ruby-ivar">@uri</span>.<span class="ruby-identifier">to_s</span>&#x000A;        <span class="ruby-identifier">uri</span>.<span class="ruby-identifier">db</span> = <span class="ruby-identifier">db</span>&#x000A;        <span class="ruby-identifier">uri</span>&#x000A;      <span class="ruby-keyword kw">end</span>&#x000A;    <span class="ruby-keyword kw">end</span></pre>
+                  <pre id='M000034-source'><span class="ruby-comment cmt"># File lib/familia.rb, line 50</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">uri=</span> <span class="ruby-identifier">v</span>&#x000A;      <span class="ruby-identifier">v</span> = <span class="ruby-constant">URI</span>.<span class="ruby-identifier">parse</span> <span class="ruby-identifier">v</span> <span class="ruby-keyword kw">unless</span> <span class="ruby-constant">URI</span> <span class="ruby-operator">===</span> <span class="ruby-identifier">v</span>&#x000A;      <span class="ruby-ivar">@uri</span> = <span class="ruby-identifier">v</span>&#x000A;    <span class="ruby-keyword kw">end</span></pre>
                 </div>
               </div>
             </div>

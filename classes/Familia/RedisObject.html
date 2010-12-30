@@ -1,7 +1,7 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
 <html lang='en'>
   <head>
-    <title>: Familia::RedisObject [familia 0.6.1.]</title>
+    <title>: Familia::RedisObject [familia 0.6.2.]</title>
     <meta content='text/html; charset=UTF-8' http-equiv='Content-Type'>
     <link href='../../rdoc-style.css' media='screen' rel='stylesheet' type='text/css'>
     <script type='text/javascript'>
@@ -45,31 +45,36 @@
             <h2>Methods</h2>
             <h3>public class</h3>
             <ol>
-              <li><a href="#M000139">classes</a></li>
-              <li><a href="#M000141">db</a></li>
-              <li><a href="#M000143">inherited</a></li>
-              <li><a href="#M000144">new</a></li>
-              <li><a href="#M000137">register</a></li>
-              <li><a href="#M000138">registration</a></li>
-              <li><a href="#M000140">ttl</a></li>
-              <li><a href="#M000142">uri</a></li>
+              <li><a href="#M000141">classes</a></li>
+              <li><a href="#M000143">db</a></li>
+              <li><a href="#M000145">inherited</a></li>
+              <li><a href="#M000146">new</a></li>
+              <li><a href="#M000139">register</a></li>
+              <li><a href="#M000140">registration</a></li>
+              <li><a href="#M000142">ttl</a></li>
+              <li><a href="#M000144">uri</a></li>
             </ol>
             <h3>public instance</h3>
             <ol>
-              <li><a href="#M000151">clear</a></li>
-              <li><a href="#M000152">del</a></li>
-              <li><a href="#M000150">delete</a></li>
-              <li><a href="#M000153">exists?</a></li>
-              <li><a href="#M000155">expire</a></li>
-              <li><a href="#M000156">expireat</a></li>
-              <li><a href="#M000158">from_redis</a></li>
-              <li><a href="#M000148">move</a></li>
-              <li><a href="#M000146">parent?</a></li>
-              <li><a href="#M000145">rediskey</a></li>
-              <li><a href="#M000157">to_redis</a></li>
-              <li><a href="#M000154">ttl</a></li>
-              <li><a href="#M000149">type</a></li>
-              <li><a href="#M000147">update_expiration</a></li>
+              <li><a href="#M000156">clear</a></li>
+              <li><a href="#M000149">db</a></li>
+              <li><a href="#M000157">del</a></li>
+              <li><a href="#M000155">delete</a></li>
+              <li><a href="#M000162">dump_method</a></li>
+              <li><a href="#M000158">exists?</a></li>
+              <li><a href="#M000160">expire</a></li>
+              <li><a href="#M000161">expireat</a></li>
+              <li><a href="#M000165">from_redis</a></li>
+              <li><a href="#M000163">load_method</a></li>
+              <li><a href="#M000153">move</a></li>
+              <li><a href="#M000151">parent?</a></li>
+              <li><a href="#M000159">realttl</a></li>
+              <li><a href="#M000147">redis</a></li>
+              <li><a href="#M000150">rediskey</a></li>
+              <li><a href="#M000164">to_redis</a></li>
+              <li><a href="#M000148">ttl</a></li>
+              <li><a href="#M000154">type</a></li>
+              <li><a href="#M000152">update_expiration</a></li>
             </ol>
           </div>
           <div id='section'>
@@ -104,7 +109,7 @@
                   </tr>
                   <tr class='top-aligned-row context-row'>
                     <td class='context-item-name'>redis</td>
-                    <td class='context-item-value'>[RW]</td>
+                    <td class='context-item-value'>[W]</td>
                     <td class='context-item-desc'></td>
                   </tr>
                   <tr class='top-aligned-row context-row'>
@@ -122,47 +127,47 @@
             </div>
             <div id='methods'>
               <h2>Public class methods</h2>
-              <div class='method public-class' id='method-M000139'>
-                <a name='M000139'>      </a>
+              <div class='method public-class' id='method-M000141'>
+                <a name='M000141'>      </a>
                 <div class='synopsis'>
                   <span class='name'>classes</span>
                   <span class='arguments'>()</span>
                 </div>
                 <div class='source'>
-                  <a class='source-toggle' href='#' onclick="toggleCode('M000139-source'); return false">
-                    [show source]
-                  </a>
-                  <pre id='M000139-source'><span class="ruby-comment cmt"># File lib/familia/redisobject.rb, line 19</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-constant">RedisObject</span>.<span class="ruby-identifier">classes</span>&#x000A;      <span class="ruby-ivar">@classes</span>&#x000A;    <span class="ruby-keyword kw">end</span></pre>
-                </div>
-              </div>
-              <div class='method public-class' id='method-M000141'>
-                <a name='M000141'>      </a>
-                <div class='synopsis'>
-                  <span class='name'>db</span>
-                  <span class='arguments'>(v=nil)</span>
-                </div>
-                <div class='source'>
                   <a class='source-toggle' href='#' onclick="toggleCode('M000141-source'); return false">
                     [show source]
                   </a>
-                  <pre id='M000141-source'><span class="ruby-comment cmt"># File lib/familia/redisobject.rb, line 31</span>&#x000A;      <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">db</span> <span class="ruby-identifier">v</span>=<span class="ruby-keyword kw">nil</span>&#x000A;        <span class="ruby-ivar">@db</span> = <span class="ruby-identifier">v</span> <span class="ruby-keyword kw">unless</span> <span class="ruby-identifier">v</span>.<span class="ruby-identifier">nil?</span>&#x000A;        <span class="ruby-ivar">@db</span> <span class="ruby-operator">||</span> (<span class="ruby-identifier">parent</span> <span class="ruby-value">? </span><span class="ruby-identifier">parent</span>.<span class="ruby-identifier">db</span> <span class="ruby-operator">:</span> <span class="ruby-keyword kw">nil</span>)&#x000A;      <span class="ruby-keyword kw">end</span></pre>
+                  <pre id='M000141-source'><span class="ruby-comment cmt"># File lib/familia/redisobject.rb, line 19</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-constant">RedisObject</span>.<span class="ruby-identifier">classes</span>&#x000A;      <span class="ruby-ivar">@classes</span>&#x000A;    <span class="ruby-keyword kw">end</span></pre>
                 </div>
               </div>
               <div class='method public-class' id='method-M000143'>
                 <a name='M000143'>      </a>
                 <div class='synopsis'>
-                  <span class='name'>inherited</span>
-                  <span class='arguments'>(obj)</span>
+                  <span class='name'>db</span>
+                  <span class='arguments'>(v=nil)</span>
                 </div>
                 <div class='source'>
                   <a class='source-toggle' href='#' onclick="toggleCode('M000143-source'); return false">
                     [show source]
                   </a>
-                  <pre id='M000143-source'><span class="ruby-comment cmt"># File lib/familia/redisobject.rb, line 39</span>&#x000A;      <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">inherited</span>(<span class="ruby-identifier">obj</span>)&#x000A;        <span class="ruby-identifier">obj</span>.<span class="ruby-identifier">db</span> = <span class="ruby-keyword kw">self</span>.<span class="ruby-identifier">db</span>&#x000A;        <span class="ruby-identifier">obj</span>.<span class="ruby-identifier">ttl</span> = <span class="ruby-keyword kw">self</span>.<span class="ruby-identifier">ttl</span>&#x000A;        <span class="ruby-identifier">obj</span>.<span class="ruby-identifier">uri</span> = <span class="ruby-keyword kw">self</span>.<span class="ruby-identifier">uri</span>&#x000A;        <span class="ruby-identifier">obj</span>.<span class="ruby-identifier">parent</span> = <span class="ruby-keyword kw">self</span>&#x000A;        <span class="ruby-constant">RedisObject</span>.<span class="ruby-identifier">classes</span> <span class="ruby-operator">&lt;&lt;</span> <span class="ruby-identifier">obj</span>&#x000A;        <span class="ruby-keyword kw">super</span>(<span class="ruby-identifier">obj</span>)&#x000A;      <span class="ruby-keyword kw">end</span></pre>
+                  <pre id='M000143-source'><span class="ruby-comment cmt"># File lib/familia/redisobject.rb, line 31</span>&#x000A;      <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">db</span> <span class="ruby-identifier">v</span>=<span class="ruby-keyword kw">nil</span>&#x000A;        <span class="ruby-ivar">@db</span> = <span class="ruby-identifier">v</span> <span class="ruby-keyword kw">unless</span> <span class="ruby-identifier">v</span>.<span class="ruby-identifier">nil?</span>&#x000A;        <span class="ruby-ivar">@db</span> <span class="ruby-operator">||</span> (<span class="ruby-identifier">parent</span> <span class="ruby-value">? </span><span class="ruby-identifier">parent</span>.<span class="ruby-identifier">db</span> <span class="ruby-operator">:</span> <span class="ruby-keyword kw">nil</span>)&#x000A;      <span class="ruby-keyword kw">end</span></pre>
                 </div>
               </div>
-              <div class='method public-class' id='method-M000144'>
-                <a name='M000144'>      </a>
+              <div class='method public-class' id='method-M000145'>
+                <a name='M000145'>      </a>
+                <div class='synopsis'>
+                  <span class='name'>inherited</span>
+                  <span class='arguments'>(obj)</span>
+                </div>
+                <div class='source'>
+                  <a class='source-toggle' href='#' onclick="toggleCode('M000145-source'); return false">
+                    [show source]
+                  </a>
+                  <pre id='M000145-source'><span class="ruby-comment cmt"># File lib/familia/redisobject.rb, line 39</span>&#x000A;      <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">inherited</span>(<span class="ruby-identifier">obj</span>)&#x000A;        <span class="ruby-identifier">obj</span>.<span class="ruby-identifier">db</span> = <span class="ruby-keyword kw">self</span>.<span class="ruby-identifier">db</span>&#x000A;        <span class="ruby-identifier">obj</span>.<span class="ruby-identifier">ttl</span> = <span class="ruby-keyword kw">self</span>.<span class="ruby-identifier">ttl</span>&#x000A;        <span class="ruby-identifier">obj</span>.<span class="ruby-identifier">uri</span> = <span class="ruby-keyword kw">self</span>.<span class="ruby-identifier">uri</span>&#x000A;        <span class="ruby-identifier">obj</span>.<span class="ruby-identifier">parent</span> = <span class="ruby-keyword kw">self</span>&#x000A;        <span class="ruby-constant">RedisObject</span>.<span class="ruby-identifier">classes</span> <span class="ruby-operator">&lt;&lt;</span> <span class="ruby-identifier">obj</span>&#x000A;        <span class="ruby-keyword kw">super</span>(<span class="ruby-identifier">obj</span>)&#x000A;      <span class="ruby-keyword kw">end</span></pre>
+                </div>
+              </div>
+              <div class='method public-class' id='method-M000146'>
+                <a name='M000146'>      </a>
                 <div class='synopsis'>
                   <span class='name'>new</span>
                   <span class='arguments'>(name, opts={})</span>
@@ -177,22 +182,34 @@
                   Options:
                   </p>
                   <p>
-                  :parent: The <a href="../Familia.html">Familia</a> object that this redis
+                  :class => A class that responds to Familia.load_method and
+                  Familia.dump_method. These will be used when loading and saving data
+                  from/to redis to unmarshal/marshal the class.
+                  </p>
+                  <p>
+                  :reference => When true the index of the given value will be stored rather
+                  than the marshaled value. This assumes that the marshaled object is stored
+                  at a separate key. When read, <a
+                  href="RedisObject.html#M000165">from_redis</a> looks for that separate key
+                  and returns the unmarshaled object. :class must be specified. Default:
+                  false.
+                  </p>
+                  <p>
+                  :extend => Extend this instance with the functionality in an other module.
+                  Literally: &#8220;self.extend opts[:extend]&#8221;.
+                  </p>
+                  <p>
+                  :parent => The <a href="../Familia.html">Familia</a> object that this redis
                   object belongs to. This can be a class that includes <a
                   href="../Familia.html">Familia</a> or an instance.
                   </p>
                   <p>
                   :ttl => the time to live in seconds. When not nil, this will set the redis
                   expire for this key whenever save is called. You can also call it
-                  explicitly via <a href="RedisObject.html#M000147">update_expiration</a>.
+                  explicitly via <a href="RedisObject.html#M000152">update_expiration</a>.
                   </p>
                   <p>
                   :default => the default value (String-only)
-                  </p>
-                  <p>
-                  :class => A class that responds to Familia.load_method and
-                  Familia.dump_method. These will be used when loading and saving data
-                  from/to redis to unmarshal/marshal the class.
                   </p>
                   <p>
                   :db => the redis database to use (ignored if :redis is used).
@@ -202,18 +219,18 @@
                   </p>
                   <p>
                   Uses the redis connection of the parent or the value of opts[:redis] or <a
-                  href="../Familia.html#M000037">Familia.redis</a> (in that order).
+                  href="../Familia.html#M000035">Familia.redis</a> (in that order).
                   </p>
                 </div>
                 <div class='source'>
-                  <a class='source-toggle' href='#' onclick="toggleCode('M000144-source'); return false">
+                  <a class='source-toggle' href='#' onclick="toggleCode('M000146-source'); return false">
                     [show source]
                   </a>
-                  <pre id='M000144-source'><span class="ruby-comment cmt"># File lib/familia/redisobject.rb, line 77</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">initialize</span> <span class="ruby-identifier">name</span>, <span class="ruby-identifier">opts</span>={}&#x000A;      <span class="ruby-ivar">@name</span>, <span class="ruby-ivar">@opts</span> = <span class="ruby-identifier">name</span>, <span class="ruby-identifier">opts</span>&#x000A;      <span class="ruby-ivar">@name</span> = <span class="ruby-ivar">@name</span>.<span class="ruby-identifier">join</span>(<span class="ruby-constant">Familia</span>.<span class="ruby-identifier">delim</span>) <span class="ruby-keyword kw">if</span> <span class="ruby-constant">Array</span> <span class="ruby-operator">===</span> <span class="ruby-ivar">@name</span>&#x000A;      <span class="ruby-ivar">@opts</span>[<span class="ruby-identifier">:ttl</span>] <span class="ruby-operator">||=</span> <span class="ruby-keyword kw">self</span>.<span class="ruby-identifier">class</span>.<span class="ruby-identifier">ttl</span>&#x000A;      <span class="ruby-ivar">@opts</span>[<span class="ruby-identifier">:db</span>] <span class="ruby-operator">||=</span> <span class="ruby-keyword kw">self</span>.<span class="ruby-identifier">class</span>.<span class="ruby-identifier">db</span>&#x000A;      <span class="ruby-ivar">@parent</span> = <span class="ruby-ivar">@opts</span>.<span class="ruby-identifier">delete</span>(<span class="ruby-identifier">:parent</span>)&#x000A;      <span class="ruby-ivar">@redis</span> = <span class="ruby-identifier">parent</span>.<span class="ruby-identifier">redis</span> <span class="ruby-keyword kw">if</span> <span class="ruby-identifier">parent?</span>&#x000A;      <span class="ruby-ivar">@redis</span> <span class="ruby-operator">||=</span> <span class="ruby-ivar">@opts</span>.<span class="ruby-identifier">delete</span>(<span class="ruby-identifier">:redis</span>) <span class="ruby-operator">||</span> <span class="ruby-constant">Familia</span>.<span class="ruby-identifier">redis</span>(<span class="ruby-ivar">@opts</span>[<span class="ruby-identifier">:db</span>])&#x000A;      <span class="ruby-identifier">init</span> <span class="ruby-keyword kw">if</span> <span class="ruby-identifier">respond_to?</span> <span class="ruby-identifier">:init</span>&#x000A;    <span class="ruby-keyword kw">end</span></pre>
+                  <pre id='M000146-source'><span class="ruby-comment cmt"># File lib/familia/redisobject.rb, line 86</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">initialize</span> <span class="ruby-identifier">name</span>, <span class="ruby-identifier">opts</span>={}&#x000A;      <span class="ruby-ivar">@name</span>, <span class="ruby-ivar">@opts</span> = <span class="ruby-identifier">name</span>, <span class="ruby-identifier">opts</span>&#x000A;      <span class="ruby-ivar">@name</span> = <span class="ruby-ivar">@name</span>.<span class="ruby-identifier">join</span>(<span class="ruby-constant">Familia</span>.<span class="ruby-identifier">delim</span>) <span class="ruby-keyword kw">if</span> <span class="ruby-constant">Array</span> <span class="ruby-operator">===</span> <span class="ruby-ivar">@name</span>&#x000A;      <span class="ruby-constant">Familia</span>.<span class="ruby-identifier">ld</span> [<span class="ruby-identifier">name</span>, <span class="ruby-identifier">opts</span>, <span class="ruby-identifier">caller</span>[<span class="ruby-value">0</span>]].<span class="ruby-identifier">inspect</span>&#x000A;      <span class="ruby-keyword kw">self</span>.<span class="ruby-identifier">extend</span> <span class="ruby-ivar">@opts</span>[<span class="ruby-identifier">:extend</span>] <span class="ruby-keyword kw">if</span> <span class="ruby-constant">Module</span> <span class="ruby-operator">===</span> <span class="ruby-ivar">@opts</span>[<span class="ruby-identifier">:extend</span>]&#x000A;      <span class="ruby-ivar">@db</span> = <span class="ruby-ivar">@opts</span>.<span class="ruby-identifier">delete</span>(<span class="ruby-identifier">:db</span>)&#x000A;      <span class="ruby-ivar">@ttl</span> = <span class="ruby-ivar">@opts</span>.<span class="ruby-identifier">delete</span>(<span class="ruby-identifier">:ttl</span>) &#x000A;      <span class="ruby-ivar">@parent</span> = <span class="ruby-ivar">@opts</span>.<span class="ruby-identifier">delete</span>(<span class="ruby-identifier">:parent</span>)&#x000A;      <span class="ruby-ivar">@redis</span> <span class="ruby-operator">||=</span> <span class="ruby-ivar">@opts</span>.<span class="ruby-identifier">delete</span>(<span class="ruby-identifier">:redis</span>)&#x000A;      <span class="ruby-identifier">init</span> <span class="ruby-keyword kw">if</span> <span class="ruby-identifier">respond_to?</span> <span class="ruby-identifier">:init</span>&#x000A;    <span class="ruby-keyword kw">end</span></pre>
                 </div>
               </div>
-              <div class='method public-class' id='method-M000137'>
-                <a name='M000137'>      </a>
+              <div class='method public-class' id='method-M000139'>
+                <a name='M000139'>      </a>
                 <div class='synopsis'>
                   <span class='name'>register</span>
                   <span class='arguments'>(klass, meth)</span>
@@ -227,91 +244,126 @@
                   </p>
                 </div>
                 <div class='source'>
-                  <a class='source-toggle' href='#' onclick="toggleCode('M000137-source'); return false">
+                  <a class='source-toggle' href='#' onclick="toggleCode('M000139-source'); return false">
                     [show source]
                   </a>
-                  <pre id='M000137-source'><span class="ruby-comment cmt"># File lib/familia/redisobject.rb, line 11</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-constant">RedisObject</span>.<span class="ruby-identifier">register</span> <span class="ruby-identifier">klass</span>, <span class="ruby-identifier">meth</span>&#x000A;      <span class="ruby-identifier">registration</span>[<span class="ruby-identifier">meth</span>] = <span class="ruby-identifier">klass</span>&#x000A;    <span class="ruby-keyword kw">end</span></pre>
-                </div>
-              </div>
-              <div class='method public-class' id='method-M000138'>
-                <a name='M000138'>      </a>
-                <div class='synopsis'>
-                  <span class='name'>registration</span>
-                  <span class='arguments'>()</span>
-                </div>
-                <div class='source'>
-                  <a class='source-toggle' href='#' onclick="toggleCode('M000138-source'); return false">
-                    [show source]
-                  </a>
-                  <pre id='M000138-source'><span class="ruby-comment cmt"># File lib/familia/redisobject.rb, line 15</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-constant">RedisObject</span>.<span class="ruby-identifier">registration</span>&#x000A;      <span class="ruby-ivar">@registration</span>&#x000A;    <span class="ruby-keyword kw">end</span></pre>
+                  <pre id='M000139-source'><span class="ruby-comment cmt"># File lib/familia/redisobject.rb, line 11</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-constant">RedisObject</span>.<span class="ruby-identifier">register</span> <span class="ruby-identifier">klass</span>, <span class="ruby-identifier">meth</span>&#x000A;      <span class="ruby-identifier">registration</span>[<span class="ruby-identifier">meth</span>] = <span class="ruby-identifier">klass</span>&#x000A;    <span class="ruby-keyword kw">end</span></pre>
                 </div>
               </div>
               <div class='method public-class' id='method-M000140'>
                 <a name='M000140'>      </a>
                 <div class='synopsis'>
-                  <span class='name'>ttl</span>
-                  <span class='arguments'>(v=nil)</span>
+                  <span class='name'>registration</span>
+                  <span class='arguments'>()</span>
                 </div>
                 <div class='source'>
                   <a class='source-toggle' href='#' onclick="toggleCode('M000140-source'); return false">
                     [show source]
                   </a>
-                  <pre id='M000140-source'><span class="ruby-comment cmt"># File lib/familia/redisobject.rb, line 27</span>&#x000A;      <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">ttl</span> <span class="ruby-identifier">v</span>=<span class="ruby-keyword kw">nil</span>&#x000A;        <span class="ruby-ivar">@ttl</span> = <span class="ruby-identifier">v</span> <span class="ruby-keyword kw">unless</span> <span class="ruby-identifier">v</span>.<span class="ruby-identifier">nil?</span>&#x000A;        <span class="ruby-ivar">@ttl</span> <span class="ruby-operator">||</span> (<span class="ruby-identifier">parent</span> <span class="ruby-value">? </span><span class="ruby-identifier">parent</span>.<span class="ruby-identifier">ttl</span> <span class="ruby-operator">:</span> <span class="ruby-keyword kw">nil</span>)&#x000A;      <span class="ruby-keyword kw">end</span></pre>
+                  <pre id='M000140-source'><span class="ruby-comment cmt"># File lib/familia/redisobject.rb, line 15</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-constant">RedisObject</span>.<span class="ruby-identifier">registration</span>&#x000A;      <span class="ruby-ivar">@registration</span>&#x000A;    <span class="ruby-keyword kw">end</span></pre>
                 </div>
               </div>
               <div class='method public-class' id='method-M000142'>
                 <a name='M000142'>      </a>
                 <div class='synopsis'>
-                  <span class='name'>uri</span>
+                  <span class='name'>ttl</span>
                   <span class='arguments'>(v=nil)</span>
                 </div>
                 <div class='source'>
                   <a class='source-toggle' href='#' onclick="toggleCode('M000142-source'); return false">
                     [show source]
                   </a>
-                  <pre id='M000142-source'><span class="ruby-comment cmt"># File lib/familia/redisobject.rb, line 35</span>&#x000A;      <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">uri</span> <span class="ruby-identifier">v</span>=<span class="ruby-keyword kw">nil</span>&#x000A;        <span class="ruby-ivar">@uri</span> = <span class="ruby-identifier">v</span> <span class="ruby-keyword kw">unless</span> <span class="ruby-identifier">v</span>.<span class="ruby-identifier">nil?</span>&#x000A;        <span class="ruby-ivar">@uri</span> <span class="ruby-operator">||</span> (<span class="ruby-identifier">parent</span> <span class="ruby-value">? </span><span class="ruby-identifier">parent</span>.<span class="ruby-identifier">uri</span> <span class="ruby-operator">:</span> <span class="ruby-constant">Familia</span>.<span class="ruby-identifier">uri</span>)&#x000A;      <span class="ruby-keyword kw">end</span></pre>
+                  <pre id='M000142-source'><span class="ruby-comment cmt"># File lib/familia/redisobject.rb, line 27</span>&#x000A;      <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">ttl</span> <span class="ruby-identifier">v</span>=<span class="ruby-keyword kw">nil</span>&#x000A;        <span class="ruby-ivar">@ttl</span> = <span class="ruby-identifier">v</span> <span class="ruby-keyword kw">unless</span> <span class="ruby-identifier">v</span>.<span class="ruby-identifier">nil?</span>&#x000A;        <span class="ruby-ivar">@ttl</span> <span class="ruby-operator">||</span> (<span class="ruby-identifier">parent</span> <span class="ruby-value">? </span><span class="ruby-identifier">parent</span>.<span class="ruby-identifier">ttl</span> <span class="ruby-operator">:</span> <span class="ruby-keyword kw">nil</span>)&#x000A;      <span class="ruby-keyword kw">end</span></pre>
+                </div>
+              </div>
+              <div class='method public-class' id='method-M000144'>
+                <a name='M000144'>      </a>
+                <div class='synopsis'>
+                  <span class='name'>uri</span>
+                  <span class='arguments'>(v=nil)</span>
+                </div>
+                <div class='source'>
+                  <a class='source-toggle' href='#' onclick="toggleCode('M000144-source'); return false">
+                    [show source]
+                  </a>
+                  <pre id='M000144-source'><span class="ruby-comment cmt"># File lib/familia/redisobject.rb, line 35</span>&#x000A;      <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">uri</span> <span class="ruby-identifier">v</span>=<span class="ruby-keyword kw">nil</span>&#x000A;        <span class="ruby-ivar">@uri</span> = <span class="ruby-identifier">v</span> <span class="ruby-keyword kw">unless</span> <span class="ruby-identifier">v</span>.<span class="ruby-identifier">nil?</span>&#x000A;        <span class="ruby-ivar">@uri</span> <span class="ruby-operator">||</span> (<span class="ruby-identifier">parent</span> <span class="ruby-value">? </span><span class="ruby-identifier">parent</span>.<span class="ruby-identifier">uri</span> <span class="ruby-operator">:</span> <span class="ruby-constant">Familia</span>.<span class="ruby-identifier">uri</span>)&#x000A;      <span class="ruby-keyword kw">end</span></pre>
                 </div>
               </div>
               <h2>Public instance methods</h2>
-              <div class='method public-instance' id='method-M000151'>
-                <a name='M000151'>      </a>
+              <div class='method public-instance' id='method-M000156'>
+                <a name='M000156'>      </a>
                 <div class='synopsis'>
                   <span class='name'>clear</span>
                   <span class='arguments'>()</span>
                 </div>
                 <div class='description'>
                   <p>
-                  Alias for <a href="RedisObject.html#M000150">delete</a>
+                  Alias for <a href="RedisObject.html#M000155">delete</a>
                   </p>
                 </div>
               </div>
-              <div class='method public-instance' id='method-M000152'>
-                <a name='M000152'>      </a>
+              <div class='method public-instance' id='method-M000149'>
+                <a name='M000149'>      </a>
+                <div class='synopsis'>
+                  <span class='name'>db</span>
+                  <span class='arguments'>()</span>
+                </div>
+                <div class='description'>
+                  <p>
+                  Returns the most likely value for db, checking (in this order):
+                  </p>
+                  <pre>* the value from :class if it's a Familia object&#x000A;* the value from :parent&#x000A;* the value self.class.db&#x000A;* assumes the db is 0</pre>
+                  <p>
+                  After this is called once, this method will always return the same value.
+                  </p>
+                </div>
+                <div class='source'>
+                  <a class='source-toggle' href='#' onclick="toggleCode('M000149-source'); return false">
+                    [show source]
+                  </a>
+                  <pre id='M000149-source'><span class="ruby-comment cmt"># File lib/familia/redisobject.rb, line 115</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">db</span> &#x000A;      <span class="ruby-keyword kw">return</span> <span class="ruby-ivar">@db</span> <span class="ruby-keyword kw">if</span> <span class="ruby-ivar">@db</span>&#x000A;      <span class="ruby-comment cmt"># Note it's important that we select this value at the last</span>&#x000A;      <span class="ruby-comment cmt"># possible moment rather than in initialize b/c the value </span>&#x000A;      <span class="ruby-comment cmt"># could be modified after that but before this is called. </span>&#x000A;      <span class="ruby-keyword kw">if</span> <span class="ruby-ivar">@opts</span>[<span class="ruby-identifier">:class</span>] <span class="ruby-operator">&amp;&amp;</span> <span class="ruby-ivar">@opts</span>[<span class="ruby-identifier">:class</span>].<span class="ruby-identifier">ancestors</span>.<span class="ruby-identifier">member?</span>(<span class="ruby-constant">Familia</span>)&#x000A;        <span class="ruby-ivar">@db</span> = <span class="ruby-ivar">@opts</span>[<span class="ruby-identifier">:class</span>].<span class="ruby-identifier">db</span> &#x000A;      <span class="ruby-keyword kw">else</span>&#x000A;        <span class="ruby-ivar">@db</span> = <span class="ruby-identifier">parent?</span> <span class="ruby-value">? </span><span class="ruby-identifier">parent</span>.<span class="ruby-identifier">db</span> <span class="ruby-operator">:</span> <span class="ruby-keyword kw">self</span>.<span class="ruby-identifier">class</span>.<span class="ruby-identifier">db</span>&#x000A;      <span class="ruby-keyword kw">end</span>&#x000A;      <span class="ruby-ivar">@db</span> <span class="ruby-operator">||=</span> <span class="ruby-value">0</span>&#x000A;      <span class="ruby-ivar">@db</span>&#x000A;    <span class="ruby-keyword kw">end</span></pre>
+                </div>
+              </div>
+              <div class='method public-instance' id='method-M000157'>
+                <a name='M000157'>      </a>
                 <div class='synopsis'>
                   <span class='name'>del</span>
                   <span class='arguments'>()</span>
                 </div>
                 <div class='description'>
                   <p>
-                  Alias for <a href="RedisObject.html#M000150">delete</a>
+                  Alias for <a href="RedisObject.html#M000155">delete</a>
                   </p>
                 </div>
               </div>
-              <div class='method public-instance' id='method-M000150'>
-                <a name='M000150'>      </a>
+              <div class='method public-instance' id='method-M000155'>
+                <a name='M000155'>      </a>
                 <div class='synopsis'>
                   <span class='name'>delete</span>
                   <span class='arguments'>()</span>
                 </div>
                 <div class='source'>
-                  <a class='source-toggle' href='#' onclick="toggleCode('M000150-source'); return false">
+                  <a class='source-toggle' href='#' onclick="toggleCode('M000155-source'); return false">
                     [show source]
                   </a>
-                  <pre id='M000150-source'><span class="ruby-comment cmt"># File lib/familia/redisobject.rb, line 115</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">delete</span> &#x000A;      <span class="ruby-identifier">redis</span>.<span class="ruby-identifier">del</span> <span class="ruby-identifier">rediskey</span>&#x000A;    <span class="ruby-keyword kw">end</span></pre>
+                  <pre id='M000155-source'><span class="ruby-comment cmt"># File lib/familia/redisobject.rb, line 156</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">delete</span> &#x000A;      <span class="ruby-identifier">redis</span>.<span class="ruby-identifier">del</span> <span class="ruby-identifier">rediskey</span>&#x000A;    <span class="ruby-keyword kw">end</span></pre>
                 </div>
               </div>
-              <div class='method public-instance' id='method-M000153'>
-                <a name='M000153'>      </a>
+              <div class='method public-instance' id='method-M000162'>
+                <a name='M000162'>      </a>
+                <div class='synopsis'>
+                  <span class='name'>dump_method</span>
+                  <span class='arguments'>()</span>
+                </div>
+                <div class='source'>
+                  <a class='source-toggle' href='#' onclick="toggleCode('M000162-source'); return false">
+                    [show source]
+                  </a>
+                  <pre id='M000162-source'><span class="ruby-comment cmt"># File lib/familia/redisobject.rb, line 183</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">dump_method</span>&#x000A;      <span class="ruby-ivar">@opts</span>[<span class="ruby-identifier">:dump_method</span>] <span class="ruby-operator">||</span> <span class="ruby-constant">Familia</span>.<span class="ruby-identifier">dump_method</span>&#x000A;    <span class="ruby-keyword kw">end</span></pre>
+                </div>
+              </div>
+              <div class='method public-instance' id='method-M000158'>
+                <a name='M000158'>      </a>
                 <div class='synopsis'>
                   <span class='name'>exists?</span>
                   <span class='arguments'>()</span>
@@ -326,79 +378,118 @@
                   </p>
                 </div>
                 <div class='source'>
-                  <a class='source-toggle' href='#' onclick="toggleCode('M000153-source'); return false">
+                  <a class='source-toggle' href='#' onclick="toggleCode('M000158-source'); return false">
                     [show source]
                   </a>
-                  <pre id='M000153-source'><span class="ruby-comment cmt"># File lib/familia/redisobject.rb, line 126</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">exists?</span>&#x000A;      <span class="ruby-operator">!</span><span class="ruby-identifier">size</span>.<span class="ruby-identifier">zero?</span>&#x000A;    <span class="ruby-keyword kw">end</span></pre>
+                  <pre id='M000158-source'><span class="ruby-comment cmt"># File lib/familia/redisobject.rb, line 167</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">exists?</span>&#x000A;      <span class="ruby-identifier">redis</span>.<span class="ruby-identifier">exists</span>(<span class="ruby-identifier">rediskey</span>) <span class="ruby-operator">&amp;&amp;</span> <span class="ruby-operator">!</span><span class="ruby-identifier">size</span>.<span class="ruby-identifier">zero?</span>&#x000A;    <span class="ruby-keyword kw">end</span></pre>
                 </div>
               </div>
-              <div class='method public-instance' id='method-M000155'>
-                <a name='M000155'>      </a>
+              <div class='method public-instance' id='method-M000160'>
+                <a name='M000160'>      </a>
                 <div class='synopsis'>
                   <span class='name'>expire</span>
                   <span class='arguments'>(sec)</span>
                 </div>
                 <div class='source'>
-                  <a class='source-toggle' href='#' onclick="toggleCode('M000155-source'); return false">
+                  <a class='source-toggle' href='#' onclick="toggleCode('M000160-source'); return false">
                     [show source]
                   </a>
-                  <pre id='M000155-source'><span class="ruby-comment cmt"># File lib/familia/redisobject.rb, line 134</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">expire</span> <span class="ruby-identifier">sec</span>&#x000A;      <span class="ruby-identifier">redis</span>.<span class="ruby-identifier">expire</span> <span class="ruby-identifier">rediskey</span>, <span class="ruby-identifier">sec</span>.<span class="ruby-identifier">to_i</span>&#x000A;    <span class="ruby-keyword kw">end</span></pre>
+                  <pre id='M000160-source'><span class="ruby-comment cmt"># File lib/familia/redisobject.rb, line 175</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">expire</span> <span class="ruby-identifier">sec</span>&#x000A;      <span class="ruby-identifier">redis</span>.<span class="ruby-identifier">expire</span> <span class="ruby-identifier">rediskey</span>, <span class="ruby-identifier">sec</span>.<span class="ruby-identifier">to_i</span>&#x000A;    <span class="ruby-keyword kw">end</span></pre>
                 </div>
               </div>
-              <div class='method public-instance' id='method-M000156'>
-                <a name='M000156'>      </a>
+              <div class='method public-instance' id='method-M000161'>
+                <a name='M000161'>      </a>
                 <div class='synopsis'>
                   <span class='name'>expireat</span>
                   <span class='arguments'>(unixtime)</span>
                 </div>
                 <div class='source'>
-                  <a class='source-toggle' href='#' onclick="toggleCode('M000156-source'); return false">
+                  <a class='source-toggle' href='#' onclick="toggleCode('M000161-source'); return false">
                     [show source]
                   </a>
-                  <pre id='M000156-source'><span class="ruby-comment cmt"># File lib/familia/redisobject.rb, line 138</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">expireat</span> <span class="ruby-identifier">unixtime</span>&#x000A;      <span class="ruby-identifier">redis</span>.<span class="ruby-identifier">expireat</span> <span class="ruby-identifier">rediskey</span>, <span class="ruby-identifier">unixtime</span>&#x000A;    <span class="ruby-keyword kw">end</span></pre>
+                  <pre id='M000161-source'><span class="ruby-comment cmt"># File lib/familia/redisobject.rb, line 179</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">expireat</span> <span class="ruby-identifier">unixtime</span>&#x000A;      <span class="ruby-identifier">redis</span>.<span class="ruby-identifier">expireat</span> <span class="ruby-identifier">rediskey</span>, <span class="ruby-identifier">unixtime</span>&#x000A;    <span class="ruby-keyword kw">end</span></pre>
                 </div>
               </div>
-              <div class='method public-instance' id='method-M000158'>
-                <a name='M000158'>      </a>
+              <div class='method public-instance' id='method-M000165'>
+                <a name='M000165'>      </a>
                 <div class='synopsis'>
                   <span class='name'>from_redis</span>
                   <span class='arguments'>(v)</span>
                 </div>
                 <div class='source'>
-                  <a class='source-toggle' href='#' onclick="toggleCode('M000158-source'); return false">
+                  <a class='source-toggle' href='#' onclick="toggleCode('M000165-source'); return false">
                     [show source]
                   </a>
-                  <pre id='M000158-source'><span class="ruby-comment cmt"># File lib/familia/redisobject.rb, line 152</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">from_redis</span> <span class="ruby-identifier">v</span>&#x000A;      <span class="ruby-keyword kw">return</span> <span class="ruby-identifier">v</span> <span class="ruby-keyword kw">unless</span> <span class="ruby-ivar">@opts</span>[<span class="ruby-identifier">:class</span>]&#x000A;      <span class="ruby-keyword kw">case</span> <span class="ruby-ivar">@opts</span>[<span class="ruby-identifier">:class</span>]&#x000A;      <span class="ruby-keyword kw">when</span> <span class="ruby-constant">String</span>&#x000A;        <span class="ruby-identifier">v</span>.<span class="ruby-identifier">to_s</span>&#x000A;      <span class="ruby-keyword kw">when</span> <span class="ruby-constant">Fixnum</span>, <span class="ruby-constant">Float</span>&#x000A;        <span class="ruby-ivar">@opts</span>[<span class="ruby-identifier">:class</span>].<span class="ruby-identifier">induced_from</span> <span class="ruby-identifier">v</span>&#x000A;      <span class="ruby-keyword kw">else</span>&#x000A;        <span class="ruby-keyword kw">if</span> <span class="ruby-ivar">@opts</span>[<span class="ruby-identifier">:class</span>].<span class="ruby-identifier">method_defined?</span> <span class="ruby-constant">Familia</span>.<span class="ruby-identifier">load_method</span>&#x000A;          <span class="ruby-ivar">@opts</span>[<span class="ruby-identifier">:class</span>].<span class="ruby-identifier">send</span> <span class="ruby-constant">Familia</span>.<span class="ruby-identifier">load_method</span>, <span class="ruby-identifier">v</span>&#x000A;        <span class="ruby-keyword kw">else</span>&#x000A;          <span class="ruby-constant">Familia</span>.<span class="ruby-identifier">ld</span> <span class="ruby-node">&quot;No such method: #{@opts[:class]}##{Familia.load_method}&quot;</span>&#x000A;          <span class="ruby-identifier">v</span>&#x000A;        <span class="ruby-keyword kw">end</span>&#x000A;      <span class="ruby-keyword kw">end</span>&#x000A;    <span class="ruby-keyword kw">end</span></pre>
+                  <pre id='M000165-source'><span class="ruby-comment cmt"># File lib/familia/redisobject.rb, line 213</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">from_redis</span> <span class="ruby-identifier">v</span>&#x000A;      <span class="ruby-keyword kw">return</span> <span class="ruby-ivar">@opts</span>[<span class="ruby-identifier">:default</span>] <span class="ruby-keyword kw">if</span> <span class="ruby-identifier">v</span>.<span class="ruby-identifier">nil?</span>&#x000A;      <span class="ruby-keyword kw">return</span> <span class="ruby-identifier">v</span> <span class="ruby-keyword kw">unless</span> <span class="ruby-ivar">@opts</span>[<span class="ruby-identifier">:class</span>]&#x000A;      <span class="ruby-keyword kw">case</span> <span class="ruby-ivar">@opts</span>[<span class="ruby-identifier">:class</span>]&#x000A;      <span class="ruby-keyword kw">when</span> <span class="ruby-constant">String</span>&#x000A;        <span class="ruby-identifier">v</span>.<span class="ruby-identifier">to_s</span>&#x000A;      <span class="ruby-keyword kw">when</span> <span class="ruby-constant">Fixnum</span>, <span class="ruby-constant">Float</span>&#x000A;        <span class="ruby-ivar">@opts</span>[<span class="ruby-identifier">:class</span>].<span class="ruby-identifier">induced_from</span> <span class="ruby-identifier">v</span>&#x000A;      <span class="ruby-keyword kw">else</span>&#x000A;        <span class="ruby-keyword kw">if</span> <span class="ruby-ivar">@opts</span>[<span class="ruby-identifier">:reference</span>] <span class="ruby-operator">==</span> <span class="ruby-keyword kw">true</span>&#x000A;          <span class="ruby-ivar">@opts</span>[<span class="ruby-identifier">:class</span>].<span class="ruby-identifier">from_redis</span> <span class="ruby-identifier">v</span>&#x000A;        <span class="ruby-keyword kw">else</span>&#x000A;          <span class="ruby-keyword kw">if</span> <span class="ruby-ivar">@opts</span>[<span class="ruby-identifier">:class</span>].<span class="ruby-identifier">respond_to?</span> <span class="ruby-identifier">load_method</span>&#x000A;            <span class="ruby-ivar">@opts</span>[<span class="ruby-identifier">:class</span>].<span class="ruby-identifier">send</span> <span class="ruby-identifier">load_method</span>, <span class="ruby-identifier">v</span>&#x000A;          <span class="ruby-keyword kw">else</span>&#x000A;            <span class="ruby-identifier">raise</span> <span class="ruby-constant">Familia</span><span class="ruby-operator">::</span><span class="ruby-constant">Problem</span>, <span class="ruby-node">&quot;No such method: #{@opts[:class]}##{load_method}&quot;</span>&#x000A;          <span class="ruby-keyword kw">end</span>&#x000A;        <span class="ruby-keyword kw">end</span>&#x000A;      <span class="ruby-keyword kw">end</span>&#x000A;    <span class="ruby-keyword kw">rescue</span> =<span class="ruby-operator">&gt;</span> <span class="ruby-identifier">ex</span>&#x000A;      <span class="ruby-constant">Familia</span>.<span class="ruby-identifier">info</span> <span class="ruby-identifier">v</span>&#x000A;      <span class="ruby-constant">Familia</span>.<span class="ruby-identifier">info</span> <span class="ruby-node">&quot;Parse error for #{rediskey} (#{load_method}): #{ex.message}&quot;</span>&#x000A;      <span class="ruby-constant">Familia</span>.<span class="ruby-identifier">info</span> <span class="ruby-identifier">ex</span>.<span class="ruby-identifier">backtrace</span>&#x000A;      <span class="ruby-keyword kw">nil</span>&#x000A;    <span class="ruby-keyword kw">end</span></pre>
                 </div>
               </div>
-              <div class='method public-instance' id='method-M000148'>
-                <a name='M000148'>      </a>
+              <div class='method public-instance' id='method-M000163'>
+                <a name='M000163'>      </a>
+                <div class='synopsis'>
+                  <span class='name'>load_method</span>
+                  <span class='arguments'>()</span>
+                </div>
+                <div class='source'>
+                  <a class='source-toggle' href='#' onclick="toggleCode('M000163-source'); return false">
+                    [show source]
+                  </a>
+                  <pre id='M000163-source'><span class="ruby-comment cmt"># File lib/familia/redisobject.rb, line 187</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">load_method</span>&#x000A;      <span class="ruby-ivar">@opts</span>[<span class="ruby-identifier">:load_method</span>] <span class="ruby-operator">||</span> <span class="ruby-constant">Familia</span>.<span class="ruby-identifier">load_method</span>&#x000A;    <span class="ruby-keyword kw">end</span></pre>
+                </div>
+              </div>
+              <div class='method public-instance' id='method-M000153'>
+                <a name='M000153'>      </a>
                 <div class='synopsis'>
                   <span class='name'>move</span>
                   <span class='arguments'>(db)</span>
                 </div>
                 <div class='source'>
-                  <a class='source-toggle' href='#' onclick="toggleCode('M000148-source'); return false">
+                  <a class='source-toggle' href='#' onclick="toggleCode('M000153-source'); return false">
                     [show source]
                   </a>
-                  <pre id='M000148-source'><span class="ruby-comment cmt"># File lib/familia/redisobject.rb, line 105</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">move</span> <span class="ruby-identifier">db</span>&#x000A;      <span class="ruby-identifier">redis</span>.<span class="ruby-identifier">move</span> <span class="ruby-identifier">rediskey</span>, <span class="ruby-identifier">db</span>&#x000A;    <span class="ruby-keyword kw">end</span></pre>
+                  <pre id='M000153-source'><span class="ruby-comment cmt"># File lib/familia/redisobject.rb, line 146</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">move</span> <span class="ruby-identifier">db</span>&#x000A;      <span class="ruby-identifier">redis</span>.<span class="ruby-identifier">move</span> <span class="ruby-identifier">rediskey</span>, <span class="ruby-identifier">db</span>&#x000A;    <span class="ruby-keyword kw">end</span></pre>
                 </div>
               </div>
-              <div class='method public-instance' id='method-M000146'>
-                <a name='M000146'>      </a>
+              <div class='method public-instance' id='method-M000151'>
+                <a name='M000151'>      </a>
                 <div class='synopsis'>
                   <span class='name'>parent?</span>
                   <span class='arguments'>()</span>
                 </div>
                 <div class='source'>
-                  <a class='source-toggle' href='#' onclick="toggleCode('M000146-source'); return false">
+                  <a class='source-toggle' href='#' onclick="toggleCode('M000151-source'); return false">
                     [show source]
                   </a>
-                  <pre id='M000146-source'><span class="ruby-comment cmt"># File lib/familia/redisobject.rb, line 94</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">parent?</span>&#x000A;      <span class="ruby-constant">Class</span> <span class="ruby-operator">===</span> <span class="ruby-identifier">parent</span> <span class="ruby-operator">||</span> <span class="ruby-identifier">parent</span>.<span class="ruby-identifier">kind_of?</span>(<span class="ruby-constant">Familia</span>)&#x000A;    <span class="ruby-keyword kw">end</span></pre>
+                  <pre id='M000151-source'><span class="ruby-comment cmt"># File lib/familia/redisobject.rb, line 135</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">parent?</span>&#x000A;      <span class="ruby-constant">Class</span> <span class="ruby-operator">===</span> <span class="ruby-identifier">parent</span> <span class="ruby-operator">||</span> <span class="ruby-constant">Module</span> <span class="ruby-operator">===</span> <span class="ruby-identifier">parent</span> <span class="ruby-operator">||</span> <span class="ruby-identifier">parent</span>.<span class="ruby-identifier">kind_of?</span>(<span class="ruby-constant">Familia</span>)&#x000A;    <span class="ruby-keyword kw">end</span></pre>
                 </div>
               </div>
-              <div class='method public-instance' id='method-M000145'>
-                <a name='M000145'>      </a>
+              <div class='method public-instance' id='method-M000159'>
+                <a name='M000159'>      </a>
+                <div class='synopsis'>
+                  <span class='name'>realttl</span>
+                  <span class='arguments'>()</span>
+                </div>
+                <div class='source'>
+                  <a class='source-toggle' href='#' onclick="toggleCode('M000159-source'); return false">
+                    [show source]
+                  </a>
+                  <pre id='M000159-source'><span class="ruby-comment cmt"># File lib/familia/redisobject.rb, line 171</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">realttl</span>&#x000A;      <span class="ruby-identifier">redis</span>.<span class="ruby-identifier">ttl</span> <span class="ruby-identifier">rediskey</span>&#x000A;    <span class="ruby-keyword kw">end</span></pre>
+                </div>
+              </div>
+              <div class='method public-instance' id='method-M000147'>
+                <a name='M000147'>      </a>
+                <div class='synopsis'>
+                  <span class='name'>redis</span>
+                  <span class='arguments'>()</span>
+                </div>
+                <div class='source'>
+                  <a class='source-toggle' href='#' onclick="toggleCode('M000147-source'); return false">
+                    [show source]
+                  </a>
+                  <pre id='M000147-source'><span class="ruby-comment cmt"># File lib/familia/redisobject.rb, line 98</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">redis</span>&#x000A;      <span class="ruby-keyword kw">return</span> <span class="ruby-ivar">@redis</span> <span class="ruby-keyword kw">if</span> <span class="ruby-ivar">@redis</span>&#x000A;      <span class="ruby-identifier">parent?</span> <span class="ruby-value">? </span><span class="ruby-identifier">parent</span>.<span class="ruby-identifier">redis</span> <span class="ruby-operator">:</span> <span class="ruby-constant">Familia</span>.<span class="ruby-identifier">redis</span>(<span class="ruby-identifier">db</span>)&#x000A;    <span class="ruby-keyword kw">end</span></pre>
+                </div>
+              </div>
+              <div class='method public-instance' id='method-M000150'>
+                <a name='M000150'>      </a>
                 <div class='synopsis'>
                   <span class='name'>rediskey</span>
                   <span class='arguments'>()</span>
@@ -410,40 +501,40 @@
                   </p>
                 </div>
                 <div class='source'>
-                  <a class='source-toggle' href='#' onclick="toggleCode('M000145-source'); return false">
+                  <a class='source-toggle' href='#' onclick="toggleCode('M000150-source'); return false">
                     [show source]
                   </a>
-                  <pre id='M000145-source'><span class="ruby-comment cmt"># File lib/familia/redisobject.rb, line 90</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">rediskey</span>&#x000A;      <span class="ruby-identifier">parent?</span> <span class="ruby-value">? </span><span class="ruby-identifier">parent</span>.<span class="ruby-identifier">rediskey</span>(<span class="ruby-identifier">name</span>) <span class="ruby-operator">:</span> <span class="ruby-constant">Familia</span>.<span class="ruby-identifier">rediskey</span>(<span class="ruby-identifier">name</span>)&#x000A;    <span class="ruby-keyword kw">end</span></pre>
+                  <pre id='M000150-source'><span class="ruby-comment cmt"># File lib/familia/redisobject.rb, line 131</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">rediskey</span>&#x000A;      <span class="ruby-identifier">parent?</span> <span class="ruby-value">? </span><span class="ruby-identifier">parent</span>.<span class="ruby-identifier">rediskey</span>(<span class="ruby-identifier">name</span>) <span class="ruby-operator">:</span> [<span class="ruby-identifier">name</span>].<span class="ruby-identifier">flatten</span>.<span class="ruby-identifier">compact</span>.<span class="ruby-identifier">join</span>(<span class="ruby-constant">Familia</span>.<span class="ruby-identifier">delim</span>)&#x000A;    <span class="ruby-keyword kw">end</span></pre>
                 </div>
               </div>
-              <div class='method public-instance' id='method-M000157'>
-                <a name='M000157'>      </a>
+              <div class='method public-instance' id='method-M000164'>
+                <a name='M000164'>      </a>
                 <div class='synopsis'>
                   <span class='name'>to_redis</span>
                   <span class='arguments'>(v)</span>
                 </div>
                 <div class='source'>
-                  <a class='source-toggle' href='#' onclick="toggleCode('M000157-source'); return false">
+                  <a class='source-toggle' href='#' onclick="toggleCode('M000164-source'); return false">
                     [show source]
                   </a>
-                  <pre id='M000157-source'><span class="ruby-comment cmt"># File lib/familia/redisobject.rb, line 142</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">to_redis</span> <span class="ruby-identifier">v</span>&#x000A;      <span class="ruby-keyword kw">return</span> <span class="ruby-identifier">v</span> <span class="ruby-keyword kw">unless</span> <span class="ruby-ivar">@opts</span>[<span class="ruby-identifier">:class</span>]&#x000A;      <span class="ruby-keyword kw">if</span> <span class="ruby-identifier">v</span>.<span class="ruby-identifier">respond_to?</span> <span class="ruby-constant">Familia</span>.<span class="ruby-identifier">dump_method</span>&#x000A;        <span class="ruby-identifier">v</span>.<span class="ruby-identifier">send</span> <span class="ruby-constant">Familia</span>.<span class="ruby-identifier">dump_method</span>&#x000A;      <span class="ruby-keyword kw">else</span>&#x000A;        <span class="ruby-constant">Familia</span>.<span class="ruby-identifier">ld</span> <span class="ruby-node">&quot;No such method: #{v.class}.#{Familia.dump_method}&quot;</span>&#x000A;        <span class="ruby-identifier">v</span>&#x000A;      <span class="ruby-keyword kw">end</span>&#x000A;    <span class="ruby-keyword kw">end</span></pre>
+                  <pre id='M000164-source'><span class="ruby-comment cmt"># File lib/familia/redisobject.rb, line 191</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">to_redis</span> <span class="ruby-identifier">v</span>&#x000A;      <span class="ruby-keyword kw">return</span> <span class="ruby-identifier">v</span> <span class="ruby-keyword kw">unless</span> <span class="ruby-ivar">@opts</span>[<span class="ruby-identifier">:class</span>]&#x000A;      <span class="ruby-keyword kw">case</span> <span class="ruby-ivar">@opts</span>[<span class="ruby-identifier">:class</span>]&#x000A;      <span class="ruby-keyword kw">when</span> <span class="ruby-constant">String</span>, <span class="ruby-constant">Fixnum</span>, <span class="ruby-constant">Float</span>, <span class="ruby-constant">Gibbler</span><span class="ruby-operator">::</span><span class="ruby-constant">Digest</span>&#x000A;        <span class="ruby-identifier">v</span>&#x000A;      <span class="ruby-keyword kw">else</span>&#x000A;        <span class="ruby-keyword kw">if</span> <span class="ruby-ivar">@opts</span>[<span class="ruby-identifier">:reference</span>] <span class="ruby-operator">==</span> <span class="ruby-keyword kw">true</span>&#x000A;          <span class="ruby-keyword kw">unless</span> <span class="ruby-identifier">v</span>.<span class="ruby-identifier">respond_to?</span> <span class="ruby-identifier">:index</span>&#x000A;            <span class="ruby-identifier">raise</span> <span class="ruby-constant">Familia</span><span class="ruby-operator">::</span><span class="ruby-constant">Problem</span>, <span class="ruby-node">&quot;#{v.class} does not have an index method&quot;</span>&#x000A;          <span class="ruby-keyword kw">end</span>&#x000A;          <span class="ruby-keyword kw">unless</span> <span class="ruby-identifier">v</span>.<span class="ruby-identifier">kind_of?</span>(<span class="ruby-constant">Familia</span>)&#x000A;            <span class="ruby-identifier">raise</span> <span class="ruby-constant">Familia</span><span class="ruby-operator">::</span><span class="ruby-constant">Problem</span>, <span class="ruby-node">&quot;#{v.class} is not Familia (#{name})&quot;</span>&#x000A;          <span class="ruby-keyword kw">end</span>&#x000A;          <span class="ruby-identifier">v</span>.<span class="ruby-identifier">index</span>&#x000A;        <span class="ruby-keyword kw">elsif</span> <span class="ruby-identifier">v</span>.<span class="ruby-identifier">respond_to?</span> <span class="ruby-identifier">dump_method</span>&#x000A;          <span class="ruby-identifier">v</span>.<span class="ruby-identifier">send</span> <span class="ruby-identifier">dump_method</span>&#x000A;        <span class="ruby-keyword kw">else</span>&#x000A;          <span class="ruby-identifier">raise</span> <span class="ruby-constant">Familia</span><span class="ruby-operator">::</span><span class="ruby-constant">Problem</span>, <span class="ruby-node">&quot;No such method: #{v.class}.#{dump_method}&quot;</span>&#x000A;        <span class="ruby-keyword kw">end</span>&#x000A;      <span class="ruby-keyword kw">end</span>&#x000A;    <span class="ruby-keyword kw">end</span></pre>
                 </div>
               </div>
-              <div class='method public-instance' id='method-M000154'>
-                <a name='M000154'>      </a>
+              <div class='method public-instance' id='method-M000148'>
+                <a name='M000148'>      </a>
                 <div class='synopsis'>
                   <span class='name'>ttl</span>
                   <span class='arguments'>()</span>
                 </div>
                 <div class='source'>
-                  <a class='source-toggle' href='#' onclick="toggleCode('M000154-source'); return false">
+                  <a class='source-toggle' href='#' onclick="toggleCode('M000148-source'); return false">
                     [show source]
                   </a>
-                  <pre id='M000154-source'><span class="ruby-comment cmt"># File lib/familia/redisobject.rb, line 130</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">ttl</span>&#x000A;      <span class="ruby-identifier">redis</span>.<span class="ruby-identifier">ttl</span> <span class="ruby-identifier">rediskey</span>&#x000A;    <span class="ruby-keyword kw">end</span></pre>
+                  <pre id='M000148-source'><span class="ruby-comment cmt"># File lib/familia/redisobject.rb, line 103</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">ttl</span>&#x000A;      <span class="ruby-ivar">@ttl</span> <span class="ruby-operator">||</span> <span class="ruby-keyword kw">self</span>.<span class="ruby-identifier">class</span>.<span class="ruby-identifier">ttl</span>&#x000A;    <span class="ruby-keyword kw">end</span></pre>
                 </div>
               </div>
-              <div class='method public-instance' id='method-M000149'>
-                <a name='M000149'>      </a>
+              <div class='method public-instance' id='method-M000154'>
+                <a name='M000154'>      </a>
                 <div class='synopsis'>
                   <span class='name'>type</span>
                   <span class='arguments'>()</span>
@@ -454,23 +545,23 @@
                   </p>
                 </div>
                 <div class='source'>
-                  <a class='source-toggle' href='#' onclick="toggleCode('M000149-source'); return false">
+                  <a class='source-toggle' href='#' onclick="toggleCode('M000154-source'); return false">
                     [show source]
                   </a>
-                  <pre id='M000149-source'><span class="ruby-comment cmt"># File lib/familia/redisobject.rb, line 111</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">type</span> &#x000A;      <span class="ruby-identifier">redis</span>.<span class="ruby-identifier">type</span> <span class="ruby-identifier">rediskey</span>&#x000A;    <span class="ruby-keyword kw">end</span></pre>
+                  <pre id='M000154-source'><span class="ruby-comment cmt"># File lib/familia/redisobject.rb, line 152</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">type</span> &#x000A;      <span class="ruby-identifier">redis</span>.<span class="ruby-identifier">type</span> <span class="ruby-identifier">rediskey</span>&#x000A;    <span class="ruby-keyword kw">end</span></pre>
                 </div>
               </div>
-              <div class='method public-instance' id='method-M000147'>
-                <a name='M000147'>      </a>
+              <div class='method public-instance' id='method-M000152'>
+                <a name='M000152'>      </a>
                 <div class='synopsis'>
                   <span class='name'>update_expiration</span>
                   <span class='arguments'>(ttl=nil)</span>
                 </div>
                 <div class='source'>
-                  <a class='source-toggle' href='#' onclick="toggleCode('M000147-source'); return false">
+                  <a class='source-toggle' href='#' onclick="toggleCode('M000152-source'); return false">
                     [show source]
                   </a>
-                  <pre id='M000147-source'><span class="ruby-comment cmt"># File lib/familia/redisobject.rb, line 98</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">update_expiration</span>(<span class="ruby-identifier">ttl</span>=<span class="ruby-keyword kw">nil</span>)&#x000A;      <span class="ruby-identifier">ttl</span> <span class="ruby-operator">||=</span> <span class="ruby-ivar">@opts</span>[<span class="ruby-identifier">:ttl</span>]&#x000A;      <span class="ruby-keyword kw">return</span> <span class="ruby-keyword kw">unless</span> <span class="ruby-identifier">ttl</span> <span class="ruby-operator">&amp;&amp;</span> <span class="ruby-identifier">ttl</span>.<span class="ruby-identifier">to_i</span> <span class="ruby-operator">&gt;</span> <span class="ruby-value">0</span>&#x000A;      <span class="ruby-comment cmt">#Familia.trace :SET_EXPIRE, Familia.redis(self.class.uri), &quot;#{rediskey} to #{self.ttl}&quot;</span>&#x000A;      <span class="ruby-identifier">expire</span> <span class="ruby-identifier">ttl</span>.<span class="ruby-identifier">to_i</span>&#x000A;    <span class="ruby-keyword kw">end</span></pre>
+                  <pre id='M000152-source'><span class="ruby-comment cmt"># File lib/familia/redisobject.rb, line 139</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">update_expiration</span>(<span class="ruby-identifier">ttl</span>=<span class="ruby-keyword kw">nil</span>)&#x000A;      <span class="ruby-identifier">ttl</span> <span class="ruby-operator">||=</span> <span class="ruby-ivar">@opts</span>[<span class="ruby-identifier">:ttl</span>] <span class="ruby-operator">||</span> <span class="ruby-keyword kw">self</span>.<span class="ruby-identifier">class</span>.<span class="ruby-identifier">ttl</span>&#x000A;      <span class="ruby-keyword kw">return</span> <span class="ruby-keyword kw">unless</span> <span class="ruby-identifier">ttl</span> <span class="ruby-operator">&amp;&amp;</span> <span class="ruby-identifier">ttl</span>.<span class="ruby-identifier">to_i</span> <span class="ruby-operator">&gt;</span> <span class="ruby-value">0</span>&#x000A;      <span class="ruby-constant">Familia</span>.<span class="ruby-identifier">info</span> <span class="ruby-node">&quot;#{rediskey} to #{ttl}&quot;</span>&#x000A;      <span class="ruby-identifier">expire</span> <span class="ruby-identifier">ttl</span>.<span class="ruby-identifier">to_i</span>&#x000A;    <span class="ruby-keyword kw">end</span></pre>
                 </div>
               </div>
             </div>
