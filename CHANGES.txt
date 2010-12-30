@@ -1,6 +1,6 @@
 FAMILIA, CHANGES
 
-#### 0.6.2 (2010-12-23) ###############################
+#### 0.6.2 (2010-12-29) ###############################
 
 * FIXED: Familia::ClassMethods.ttl=
 * FIXED: Familia.class_lists (etc) methods. 
