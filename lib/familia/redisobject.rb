@@ -101,9 +101,7 @@ module Familia
     end
     
     def ttl
-      return @ttl if @ttl
-      @ttl ||= self.class.ttl
-      @ttl
+      @ttl || self.class.ttl
     end
     
     # Returns the most likely value for db, checking (in this order):
@@ -139,9 +137,9 @@ module Familia
     end
     
     def update_expiration(ttl=nil)
-      ttl ||= @opts[:ttl]
+      ttl ||= @opts[:ttl] || self.class.ttl
       return unless ttl && ttl.to_i > 0
-      #Familia.trace :SET_EXPIRE, Familia.redis(self.class.uri), "#{rediskey} to #{self.ttl}"
+      Familia.info "#{rediskey} to #{ttl}"
       expire ttl.to_i
     end
     
@@ -170,7 +168,7 @@ module Familia
       redis.exists(rediskey) && !size.zero?
     end
     
-    def ttl
+    def realttl
       redis.ttl rediskey
     end
     
@@ -310,6 +308,10 @@ module Familia
     end
     alias_method :all, :members
     alias_method :to_a, :members
+    
+    #def revmembers count=1  #TODO
+    #  range -count, 0
+    #end
     
     def each &blk
       range.each &blk
@@ -703,6 +705,7 @@ module Familia
       redis.setnx rediskey, @opts[:default] if @opts[:default]
       from_redis redis.get(rediskey)
     end
+    alias_method :content, :value
     alias_method :get, :value
     
     def to_s
