@@ -86,7 +86,7 @@ module Familia
     def initialize name, opts={}
       @name, @opts = name, opts
       @name = @name.join(Familia.delim) if Array === @name
-      Familia.ld [name, opts, caller[0]].inspect
+      #Familia.ld [name, opts, caller[0]].inspect
       self.extend @opts[:extend] if Module === @opts[:extend]
       @db = @opts.delete(:db)
       @ttl = @opts.delete(:ttl) 
@@ -259,6 +259,7 @@ module Familia
     def << v
       push v
     end
+    alias_method :add, :<<
     
     def unshift *values
       values.flatten.compact.each { |v| redis.lpush rediskey, to_redis(v) }

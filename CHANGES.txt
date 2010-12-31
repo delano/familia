@@ -5,6 +5,7 @@ FAMILIA, CHANGES
 
 * FIXED: HashKey#update
 * FIXED: count in List#members, SortedSed#members
+* ADDED: List#add
 
 
 #### 0.6.2 (2010-12-29) ###############################
