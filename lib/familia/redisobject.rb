@@ -304,6 +304,7 @@ module Familia
     end
     
     def members count=-1
+      count -= 1 if count > 0
       range 0, count
     end
     alias_method :all, :members
@@ -507,12 +508,14 @@ module Familia
     end
     
     def members count=-1, opts={}
+      count -= 1 if count > 0
       range 0, count, opts
     end
     alias_method :to_a, :members
     alias_method :all, :members
     
     def revmembers count=-1, opts={}
+      count -= 1 if count > 0
       revrange 0, count, opts
     end
     
