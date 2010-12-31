@@ -139,7 +139,7 @@ module Familia
     def update_expiration(ttl=nil)
       ttl ||= @opts[:ttl] || self.class.ttl
       return unless ttl && ttl.to_i > 0
-      Familia.info "#{rediskey} to #{ttl}"
+      Familia.ld "#{rediskey} to #{ttl}"
       expire ttl.to_i
     end
     
