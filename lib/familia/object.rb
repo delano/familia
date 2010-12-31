@@ -306,7 +306,6 @@ module Familia
     # must call initialize_redis_objects.
     def initialize *args
       initialize_redis_objects
-      from_array *args if respond_to? :from_array
       init *args if respond_to? :init
     end
     
