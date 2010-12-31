@@ -5,11 +5,11 @@
 
 Gem::Specification.new do |s|
   s.name = %q{familia}
-  s.version = "0.6.3"
+  s.version = "0.6.4"
 
   s.required_rubygems_version = Gem::Requirement.new(">= 0") if s.respond_to? :required_rubygems_version=
   s.authors = ["Delano Mandelbaum"]
-  s.date = %q{2010-12-30}
+  s.date = %q{2010-12-31}
   s.description = %q{Organize and store ruby objects in Redis}
   s.email = %q{delano@solutious.com}
   s.extra_rdoc_files = [
@@ -55,18 +55,18 @@ Gem::Specification.new do |s|
       s.add_runtime_dependency(%q<redis>, [">= 2.1.0"])
       s.add_runtime_dependency(%q<uri-redis>, [">= 0.4.2"])
       s.add_runtime_dependency(%q<gibbler>, [">= 0.8.6"])
-      s.add_runtime_dependency(%q<storable>, [">= 0.8.5"])
+      s.add_runtime_dependency(%q<storable>, [">= 0.8.6"])
     else
       s.add_dependency(%q<redis>, [">= 2.1.0"])
       s.add_dependency(%q<uri-redis>, [">= 0.4.2"])
       s.add_dependency(%q<gibbler>, [">= 0.8.6"])
-      s.add_dependency(%q<storable>, [">= 0.8.5"])
+      s.add_dependency(%q<storable>, [">= 0.8.6"])
     end
   else
     s.add_dependency(%q<redis>, [">= 2.1.0"])
     s.add_dependency(%q<uri-redis>, [">= 0.4.2"])
     s.add_dependency(%q<gibbler>, [">= 0.8.6"])
-    s.add_dependency(%q<storable>, [">= 0.8.5"])
+    s.add_dependency(%q<storable>, [">= 0.8.6"])
   end
 end
 

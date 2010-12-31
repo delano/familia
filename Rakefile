@@ -28,7 +28,7 @@ begin
     gem.add_dependency("redis",      ">= 2.1.0")
     gem.add_dependency("uri-redis",  ">= 0.4.2")
     gem.add_dependency("gibbler",    ">= 0.8.6")
-    gem.add_dependency("storable",   ">= 0.8.5")
+    gem.add_dependency("storable",   ">= 0.8.6")
     
     #gem.add_development_dependency("rspec", ">= 1.2.9")
     #gem.add_development_dependency("mocha", ">= 0.9.8")
