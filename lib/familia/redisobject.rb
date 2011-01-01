@@ -101,7 +101,7 @@ module Familia
     end
     
     def ttl
-      @ttl || self.class.ttl
+      @ttl || (class? ? @opts[:class].ttl : (parent? ? parent.ttl : nil))
     end
     
     # Returns the most likely value for db, checking (in this order):
@@ -132,13 +132,17 @@ module Familia
       parent? ? parent.rediskey(name, nil) : [name].flatten.compact.join(Familia.delim)
     end
     
+    def class?
+      !@opts[:class].to_s.empty?
+    end
+    
     def parent?
       Class === parent || Module === parent || parent.kind_of?(Familia)
     end
     
     def update_expiration(ttl=nil)
-      ttl ||= @opts[:ttl] || self.class.ttl
-      return unless ttl && ttl.to_i > 0
+      ttl ||= self.ttl
+      return if ttl.to_i.zero?  # nil will be zero
       Familia.ld "#{rediskey} to #{ttl}"
       expire ttl.to_i
     end
@@ -722,7 +726,9 @@ module Familia
     end
     
     def value= v
-      redis.set rediskey, to_redis(v)
+      ret = redis.set rediskey, to_redis(v)
+      update_expiration
+      ret
     end
     alias_method :replace, :value=
     alias_method :set, :value=  
