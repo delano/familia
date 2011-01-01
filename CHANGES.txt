@@ -1,6 +1,10 @@
 FAMILIA, CHANGES
 
 
+#### 0.6.5 (2011-01-01) ###############################
+
+* FIXED: Classes that include Familia now use the suffix defined for that class.
+
 #### 0.6.4 (2010-12-31) ###############################
 
 * CHANGE: initialize does not call from_array (fix for Storable 0.8.6)

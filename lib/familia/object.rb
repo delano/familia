@@ -103,7 +103,6 @@ module Familia
       raise ArgumentError, "Name is blank" if name.to_s.empty?
       name = name.to_s.to_sym
       opts ||= {}
-      opts[:suffix] ||= nil
       opts[:parent] ||= self
       # TODO: investigate using metaclass.redis_objects
       class_redis_objects_order << name
@@ -274,8 +273,10 @@ module Familia
     def find suffix='*'
       list = Familia.redis(self.uri).keys(rediskey('*', suffix)) || []
     end
-    # idx can be a value or an Array of values used to create the index. 
-    def rediskey idx, suffix=nil
+    # idx can be a value or an Array of values used to create the index.
+    # We don't enforce a default suffix; that's left up to the instance.
+    # A nil +suffix+ will not be included in the key.
+    def rediskey idx, suffix=self.suffix
       raise RuntimeError, "No index for #{self}" if idx.to_s.empty?
       idx = Familia.join *idx if Array === idx
       idx &&= idx.to_s
@@ -362,7 +363,12 @@ module Familia
       end
       keynames
     end
-    def rediskey(suffix=nil)
+    # +suffix+ is the value to be used at the end of the redis key
+    # + ignored+ is literally ignored. It's around to maintain
+    # consistency with the class version of this method. 
+    # (RedisObject#rediskey may call against a class or instance).
+    def rediskey(suffix=nil, ignored=nil)
+      Familia.info "[#{self.class}] something was ignored" unless ignored.nil?
       raise Familia::NoIndex, self.class if index.to_s.empty?
       if suffix.nil?
         suffix = self.class.suffix.kind_of?(Proc) ? 

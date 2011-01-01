@@ -129,7 +129,7 @@ module Familia
     # returns a redis key based on the parent 
     # object so it will include the proper index.
     def rediskey
-      parent? ? parent.rediskey(name) : [name].flatten.compact.join(Familia.delim)
+      parent? ? parent.rediskey(name, nil) : [name].flatten.compact.join(Familia.delim)
     end
     
     def parent?
