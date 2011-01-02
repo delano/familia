@@ -17,7 +17,7 @@ name = "familia"
 begin
   require "jeweler"
   Jeweler::Tasks.new do |gem|
-    gem.version = "#{config[:MAJOR]}.#{config[:MINOR]}.#{config[:PATCH]}"
+    gem.version = "#{config[:MAJOR]}.#{config[:MINOR]}.#{config[:PATCH]}.#{config[:BUILD]}"
     gem.name = name
     gem.rubyforge_project = gem.name
     gem.summary = "Organize and store ruby objects in Redis"
