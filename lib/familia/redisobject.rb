@@ -46,7 +46,7 @@ module Familia
       end
     end
     
-    attr_reader :name, :parent
+    attr_reader :name, :parent, :ttl
     attr_writer :redis
     
     # +name+: If parent is set, this will be used as the suffix 
@@ -89,8 +89,11 @@ module Familia
       #Familia.ld [name, opts, caller[0]].inspect
       self.extend @opts[:extend] if Module === @opts[:extend]
       @db = @opts.delete(:db)
-      @ttl = @opts.delete(:ttl) 
       @parent = @opts.delete(:parent)
+      @ttl = @opts.delete(:ttl) 
+      @ttl ||= @opts[:class].ttl if class?
+      @ttl ||= self.class.ttl if self.class.respond_to?(:ttl)
+      @ttl ||= parent.ttl if parent?
       @redis ||= @opts.delete(:redis)
       init if respond_to? :init
     end
@@ -98,10 +101,6 @@ module Familia
     def redis
       return @redis if @redis
       parent? ? parent.redis : Familia.redis(db)
-    end
-    
-    def ttl
-      @ttl || (class? ? @opts[:class].ttl : (parent? ? parent.ttl : nil))
     end
     
     # Returns the most likely value for db, checking (in this order):
@@ -133,7 +132,7 @@ module Familia
     end
     
     def class?
-      !@opts[:class].to_s.empty?
+      !@opts[:class].to_s.empty? && @opts[:class].kind_of?(Familia)
     end
     
     def parent?
