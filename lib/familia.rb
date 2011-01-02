@@ -32,12 +32,15 @@ module Familia
   @dump_method = :to_json
   @load_method = :from_json
   class << self
-    attr_reader :classes, :clients, :uri
+    attr_reader :clients, :uri
     attr_accessor :debug, :secret, :delim, :dump_method, :load_method
     attr_writer :apiversion
     def debug?() @debug == true end
     def info *msg
       STDERR.puts *msg
+    end
+    def classes with_redis_objects=false
+      with_redis_objects ? [@classes, RedisObject.classes].flatten : @classes
     end
     def ld *msg
       info *msg if debug?
