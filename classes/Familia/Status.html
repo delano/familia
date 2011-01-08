@@ -1,7 +1,7 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
 <html lang='en'>
   <head>
-    <title>: Familia::Status [familia 0.6.4.]</title>
+    <title>: Familia::Status [familia 0.6.8]</title>
     <meta content='text/html; charset=UTF-8' http-equiv='Content-Type'>
     <link href='../../rdoc-style.css' media='screen' rel='stylesheet' type='text/css'>
     <script type='text/javascript'>
@@ -41,195 +41,195 @@
             <h2>Methods</h2>
             <h3>public class</h3>
             <ol>
-              <li><a href="#M000056">included</a></li>
+              <li><a href="#M000057">included</a></li>
             </ol>
             <h3>public instance</h3>
             <ol>
-              <li><a href="#M000066">disabled!</a></li>
-              <li><a href="#M000061">disabled?</a></li>
-              <li><a href="#M000065">expired!</a></li>
-              <li><a href="#M000060">expired?</a></li>
-              <li><a href="#M000062">failure!</a></li>
-              <li><a href="#M000057">failure?</a></li>
-              <li><a href="#M000064">pending!</a></li>
-              <li><a href="#M000059">pending?</a></li>
-              <li><a href="#M000068">status!</a></li>
-              <li><a href="#M000067">status?</a></li>
-              <li><a href="#M000063">success!</a></li>
-              <li><a href="#M000058">success?</a></li>
+              <li><a href="#M000067">disabled!</a></li>
+              <li><a href="#M000062">disabled?</a></li>
+              <li><a href="#M000066">expired!</a></li>
+              <li><a href="#M000061">expired?</a></li>
+              <li><a href="#M000063">failure!</a></li>
+              <li><a href="#M000058">failure?</a></li>
+              <li><a href="#M000065">pending!</a></li>
+              <li><a href="#M000060">pending?</a></li>
+              <li><a href="#M000069">status!</a></li>
+              <li><a href="#M000068">status?</a></li>
+              <li><a href="#M000064">success!</a></li>
+              <li><a href="#M000059">success?</a></li>
             </ol>
           </div>
           <div id='section'>
             <div id='methods'>
               <h2>Public class methods</h2>
-              <div class='method public-class' id='method-M000056'>
-                <a name='M000056'>      </a>
+              <div class='method public-class' id='method-M000057'>
+                <a name='M000057'>      </a>
                 <div class='synopsis'>
                   <span class='name'>included</span>
                   <span class='arguments'>(obj)</span>
                 </div>
                 <div class='source'>
-                  <a class='source-toggle' href='#' onclick="toggleCode('M000056-source'); return false">
+                  <a class='source-toggle' href='#' onclick="toggleCode('M000057-source'); return false">
                     [show source]
                   </a>
-                  <pre id='M000056-source'><span class="ruby-comment cmt"># File lib/familia/helpers.rb, line 44</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-keyword kw">self</span>.<span class="ruby-identifier">included</span>(<span class="ruby-identifier">obj</span>)&#x000A;      <span class="ruby-identifier">obj</span>.<span class="ruby-identifier">module_eval</span> <span class="ruby-keyword kw">do</span>&#x000A;        <span class="ruby-identifier">field</span> <span class="ruby-identifier">:status</span>&#x000A;        <span class="ruby-identifier">field</span> <span class="ruby-identifier">:message</span>&#x000A;        <span class="ruby-keyword kw">def</span>  <span class="ruby-identifier">failure?</span>()        <span class="ruby-identifier">status?</span> <span class="ruby-value str">'failure'</span>       <span class="ruby-keyword kw">end</span>&#x000A;        <span class="ruby-keyword kw">def</span>  <span class="ruby-identifier">success?</span>()        <span class="ruby-identifier">status?</span> <span class="ruby-value str">'success'</span>       <span class="ruby-keyword kw">end</span>&#x000A;        <span class="ruby-keyword kw">def</span>  <span class="ruby-identifier">pending?</span>()        <span class="ruby-identifier">status?</span> <span class="ruby-value str">'pending'</span>       <span class="ruby-keyword kw">end</span>&#x000A;        <span class="ruby-keyword kw">def</span>  <span class="ruby-identifier">expired?</span>()        <span class="ruby-identifier">status?</span> <span class="ruby-value str">'expired'</span>       <span class="ruby-keyword kw">end</span>&#x000A;        <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">disabled?</span>()        <span class="ruby-identifier">status?</span> <span class="ruby-value str">'disabled'</span>      <span class="ruby-keyword kw">end</span>&#x000A;        <span class="ruby-keyword kw">def</span>  <span class="ruby-identifier">failure!</span>(<span class="ruby-identifier">msg</span>=<span class="ruby-keyword kw">nil</span>) <span class="ruby-identifier">status!</span> <span class="ruby-value str">'failure'</span>,  <span class="ruby-identifier">msg</span> <span class="ruby-keyword kw">end</span>&#x000A;        <span class="ruby-keyword kw">def</span>  <span class="ruby-identifier">success!</span>(<span class="ruby-identifier">msg</span>=<span class="ruby-keyword kw">nil</span>) <span class="ruby-identifier">status!</span> <span class="ruby-value str">'success'</span>,  <span class="ruby-identifier">msg</span> <span class="ruby-keyword kw">end</span>&#x000A;        <span class="ruby-keyword kw">def</span>  <span class="ruby-identifier">pending!</span>(<span class="ruby-identifier">msg</span>=<span class="ruby-keyword kw">nil</span>) <span class="ruby-identifier">status!</span> <span class="ruby-value str">'pending'</span>,  <span class="ruby-identifier">msg</span> <span class="ruby-keyword kw">end</span>&#x000A;        <span class="ruby-keyword kw">def</span>  <span class="ruby-identifier">expired!</span>(<span class="ruby-identifier">msg</span>=<span class="ruby-keyword kw">nil</span>) <span class="ruby-identifier">status!</span> <span class="ruby-value str">'expired'</span>,  <span class="ruby-identifier">msg</span> <span class="ruby-keyword kw">end</span>&#x000A;        <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">disabled!</span>(<span class="ruby-identifier">msg</span>=<span class="ruby-keyword kw">nil</span>) <span class="ruby-identifier">status!</span> <span class="ruby-value str">'disabled'</span>, <span class="ruby-identifier">msg</span> <span class="ruby-keyword kw">end</span>&#x000A;        <span class="ruby-identifier">private</span>&#x000A;        <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">status?</span>(<span class="ruby-identifier">s</span>)&#x000A;          <span class="ruby-identifier">status</span>.<span class="ruby-identifier">to_s</span> <span class="ruby-operator">==</span> <span class="ruby-identifier">s</span>.<span class="ruby-identifier">to_s</span>&#x000A;        <span class="ruby-keyword kw">end</span>&#x000A;        <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">status!</span>(<span class="ruby-identifier">s</span>, <span class="ruby-identifier">msg</span>=<span class="ruby-keyword kw">nil</span>)&#x000A;          <span class="ruby-ivar">@updated</span> = <span class="ruby-constant">Time</span>.<span class="ruby-identifier">now</span>.<span class="ruby-identifier">utc</span>.<span class="ruby-identifier">to_f</span>&#x000A;          <span class="ruby-ivar">@status</span>, <span class="ruby-ivar">@message</span> = <span class="ruby-identifier">s</span>, <span class="ruby-identifier">msg</span>&#x000A;          <span class="ruby-identifier">save</span> <span class="ruby-keyword kw">if</span> <span class="ruby-identifier">respond_to?</span> <span class="ruby-identifier">:save</span>&#x000A;        <span class="ruby-keyword kw">end</span>&#x000A;      <span class="ruby-keyword kw">end</span>&#x000A;    <span class="ruby-keyword kw">end</span></pre>
+                  <pre id='M000057-source'><span class="ruby-comment cmt"># File lib/familia/helpers.rb, line 44</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-keyword kw">self</span>.<span class="ruby-identifier">included</span>(<span class="ruby-identifier">obj</span>)&#x000A;      <span class="ruby-identifier">obj</span>.<span class="ruby-identifier">module_eval</span> <span class="ruby-keyword kw">do</span>&#x000A;        <span class="ruby-identifier">field</span> <span class="ruby-identifier">:status</span>&#x000A;        <span class="ruby-identifier">field</span> <span class="ruby-identifier">:message</span>&#x000A;        <span class="ruby-keyword kw">def</span>  <span class="ruby-identifier">failure?</span>()        <span class="ruby-identifier">status?</span> <span class="ruby-value str">'failure'</span>       <span class="ruby-keyword kw">end</span>&#x000A;        <span class="ruby-keyword kw">def</span>  <span class="ruby-identifier">success?</span>()        <span class="ruby-identifier">status?</span> <span class="ruby-value str">'success'</span>       <span class="ruby-keyword kw">end</span>&#x000A;        <span class="ruby-keyword kw">def</span>  <span class="ruby-identifier">pending?</span>()        <span class="ruby-identifier">status?</span> <span class="ruby-value str">'pending'</span>       <span class="ruby-keyword kw">end</span>&#x000A;        <span class="ruby-keyword kw">def</span>  <span class="ruby-identifier">expired?</span>()        <span class="ruby-identifier">status?</span> <span class="ruby-value str">'expired'</span>       <span class="ruby-keyword kw">end</span>&#x000A;        <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">disabled?</span>()        <span class="ruby-identifier">status?</span> <span class="ruby-value str">'disabled'</span>      <span class="ruby-keyword kw">end</span>&#x000A;        <span class="ruby-keyword kw">def</span>  <span class="ruby-identifier">failure!</span>(<span class="ruby-identifier">msg</span>=<span class="ruby-keyword kw">nil</span>) <span class="ruby-identifier">status!</span> <span class="ruby-value str">'failure'</span>,  <span class="ruby-identifier">msg</span> <span class="ruby-keyword kw">end</span>&#x000A;        <span class="ruby-keyword kw">def</span>  <span class="ruby-identifier">success!</span>(<span class="ruby-identifier">msg</span>=<span class="ruby-keyword kw">nil</span>) <span class="ruby-identifier">status!</span> <span class="ruby-value str">'success'</span>,  <span class="ruby-identifier">msg</span> <span class="ruby-keyword kw">end</span>&#x000A;        <span class="ruby-keyword kw">def</span>  <span class="ruby-identifier">pending!</span>(<span class="ruby-identifier">msg</span>=<span class="ruby-keyword kw">nil</span>) <span class="ruby-identifier">status!</span> <span class="ruby-value str">'pending'</span>,  <span class="ruby-identifier">msg</span> <span class="ruby-keyword kw">end</span>&#x000A;        <span class="ruby-keyword kw">def</span>  <span class="ruby-identifier">expired!</span>(<span class="ruby-identifier">msg</span>=<span class="ruby-keyword kw">nil</span>) <span class="ruby-identifier">status!</span> <span class="ruby-value str">'expired'</span>,  <span class="ruby-identifier">msg</span> <span class="ruby-keyword kw">end</span>&#x000A;        <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">disabled!</span>(<span class="ruby-identifier">msg</span>=<span class="ruby-keyword kw">nil</span>) <span class="ruby-identifier">status!</span> <span class="ruby-value str">'disabled'</span>, <span class="ruby-identifier">msg</span> <span class="ruby-keyword kw">end</span>&#x000A;        <span class="ruby-identifier">private</span>&#x000A;        <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">status?</span>(<span class="ruby-identifier">s</span>)&#x000A;          <span class="ruby-identifier">status</span>.<span class="ruby-identifier">to_s</span> <span class="ruby-operator">==</span> <span class="ruby-identifier">s</span>.<span class="ruby-identifier">to_s</span>&#x000A;        <span class="ruby-keyword kw">end</span>&#x000A;        <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">status!</span>(<span class="ruby-identifier">s</span>, <span class="ruby-identifier">msg</span>=<span class="ruby-keyword kw">nil</span>)&#x000A;          <span class="ruby-ivar">@updated</span> = <span class="ruby-constant">Time</span>.<span class="ruby-identifier">now</span>.<span class="ruby-identifier">utc</span>.<span class="ruby-identifier">to_f</span>&#x000A;          <span class="ruby-ivar">@status</span>, <span class="ruby-ivar">@message</span> = <span class="ruby-identifier">s</span>, <span class="ruby-identifier">msg</span>&#x000A;          <span class="ruby-identifier">save</span> <span class="ruby-keyword kw">if</span> <span class="ruby-identifier">respond_to?</span> <span class="ruby-identifier">:save</span>&#x000A;        <span class="ruby-keyword kw">end</span>&#x000A;      <span class="ruby-keyword kw">end</span>&#x000A;    <span class="ruby-keyword kw">end</span></pre>
                 </div>
               </div>
               <h2>Public instance methods</h2>
+              <div class='method public-instance' id='method-M000067'>
+                <a name='M000067'>      </a>
+                <div class='synopsis'>
+                  <span class='name'>disabled!</span>
+                  <span class='arguments'>(msg=nil)</span>
+                </div>
+                <div class='source'>
+                  <a class='source-toggle' href='#' onclick="toggleCode('M000067-source'); return false">
+                    [show source]
+                  </a>
+                  <pre id='M000067-source'><span class="ruby-comment cmt"># File lib/familia/helpers.rb, line 57</span>&#x000A;        <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">disabled!</span>(<span class="ruby-identifier">msg</span>=<span class="ruby-keyword kw">nil</span>) <span class="ruby-identifier">status!</span> <span class="ruby-value str">'disabled'</span>, <span class="ruby-identifier">msg</span> <span class="ruby-keyword kw">end</span></pre>
+                </div>
+              </div>
+              <div class='method public-instance' id='method-M000062'>
+                <a name='M000062'>      </a>
+                <div class='synopsis'>
+                  <span class='name'>disabled?</span>
+                  <span class='arguments'>()</span>
+                </div>
+                <div class='source'>
+                  <a class='source-toggle' href='#' onclick="toggleCode('M000062-source'); return false">
+                    [show source]
+                  </a>
+                  <pre id='M000062-source'><span class="ruby-comment cmt"># File lib/familia/helpers.rb, line 52</span>&#x000A;        <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">disabled?</span>()        <span class="ruby-identifier">status?</span> <span class="ruby-value str">'disabled'</span>      <span class="ruby-keyword kw">end</span></pre>
+                </div>
+              </div>
               <div class='method public-instance' id='method-M000066'>
                 <a name='M000066'>      </a>
                 <div class='synopsis'>
-                  <span class='name'>disabled!</span>
+                  <span class='name'>expired!</span>
                   <span class='arguments'>(msg=nil)</span>
                 </div>
                 <div class='source'>
                   <a class='source-toggle' href='#' onclick="toggleCode('M000066-source'); return false">
                     [show source]
                   </a>
-                  <pre id='M000066-source'><span class="ruby-comment cmt"># File lib/familia/helpers.rb, line 57</span>&#x000A;        <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">disabled!</span>(<span class="ruby-identifier">msg</span>=<span class="ruby-keyword kw">nil</span>) <span class="ruby-identifier">status!</span> <span class="ruby-value str">'disabled'</span>, <span class="ruby-identifier">msg</span> <span class="ruby-keyword kw">end</span></pre>
+                  <pre id='M000066-source'><span class="ruby-comment cmt"># File lib/familia/helpers.rb, line 56</span>&#x000A;        <span class="ruby-keyword kw">def</span>  <span class="ruby-identifier">expired!</span>(<span class="ruby-identifier">msg</span>=<span class="ruby-keyword kw">nil</span>) <span class="ruby-identifier">status!</span> <span class="ruby-value str">'expired'</span>,  <span class="ruby-identifier">msg</span> <span class="ruby-keyword kw">end</span></pre>
                 </div>
               </div>
               <div class='method public-instance' id='method-M000061'>
                 <a name='M000061'>      </a>
                 <div class='synopsis'>
-                  <span class='name'>disabled?</span>
+                  <span class='name'>expired?</span>
                   <span class='arguments'>()</span>
                 </div>
                 <div class='source'>
                   <a class='source-toggle' href='#' onclick="toggleCode('M000061-source'); return false">
                     [show source]
                   </a>
-                  <pre id='M000061-source'><span class="ruby-comment cmt"># File lib/familia/helpers.rb, line 52</span>&#x000A;        <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">disabled?</span>()        <span class="ruby-identifier">status?</span> <span class="ruby-value str">'disabled'</span>      <span class="ruby-keyword kw">end</span></pre>
-                </div>
-              </div>
-              <div class='method public-instance' id='method-M000065'>
-                <a name='M000065'>      </a>
-                <div class='synopsis'>
-                  <span class='name'>expired!</span>
-                  <span class='arguments'>(msg=nil)</span>
-                </div>
-                <div class='source'>
-                  <a class='source-toggle' href='#' onclick="toggleCode('M000065-source'); return false">
-                    [show source]
-                  </a>
-                  <pre id='M000065-source'><span class="ruby-comment cmt"># File lib/familia/helpers.rb, line 56</span>&#x000A;        <span class="ruby-keyword kw">def</span>  <span class="ruby-identifier">expired!</span>(<span class="ruby-identifier">msg</span>=<span class="ruby-keyword kw">nil</span>) <span class="ruby-identifier">status!</span> <span class="ruby-value str">'expired'</span>,  <span class="ruby-identifier">msg</span> <span class="ruby-keyword kw">end</span></pre>
-                </div>
-              </div>
-              <div class='method public-instance' id='method-M000060'>
-                <a name='M000060'>      </a>
-                <div class='synopsis'>
-                  <span class='name'>expired?</span>
-                  <span class='arguments'>()</span>
-                </div>
-                <div class='source'>
-                  <a class='source-toggle' href='#' onclick="toggleCode('M000060-source'); return false">
-                    [show source]
-                  </a>
-                  <pre id='M000060-source'><span class="ruby-comment cmt"># File lib/familia/helpers.rb, line 51</span>&#x000A;        <span class="ruby-keyword kw">def</span>  <span class="ruby-identifier">expired?</span>()        <span class="ruby-identifier">status?</span> <span class="ruby-value str">'expired'</span>       <span class="ruby-keyword kw">end</span></pre>
-                </div>
-              </div>
-              <div class='method public-instance' id='method-M000062'>
-                <a name='M000062'>      </a>
-                <div class='synopsis'>
-                  <span class='name'>failure!</span>
-                  <span class='arguments'>(msg=nil)</span>
-                </div>
-                <div class='source'>
-                  <a class='source-toggle' href='#' onclick="toggleCode('M000062-source'); return false">
-                    [show source]
-                  </a>
-                  <pre id='M000062-source'><span class="ruby-comment cmt"># File lib/familia/helpers.rb, line 53</span>&#x000A;        <span class="ruby-keyword kw">def</span>  <span class="ruby-identifier">failure!</span>(<span class="ruby-identifier">msg</span>=<span class="ruby-keyword kw">nil</span>) <span class="ruby-identifier">status!</span> <span class="ruby-value str">'failure'</span>,  <span class="ruby-identifier">msg</span> <span class="ruby-keyword kw">end</span></pre>
-                </div>
-              </div>
-              <div class='method public-instance' id='method-M000057'>
-                <a name='M000057'>      </a>
-                <div class='synopsis'>
-                  <span class='name'>failure?</span>
-                  <span class='arguments'>()</span>
-                </div>
-                <div class='source'>
-                  <a class='source-toggle' href='#' onclick="toggleCode('M000057-source'); return false">
-                    [show source]
-                  </a>
-                  <pre id='M000057-source'><span class="ruby-comment cmt"># File lib/familia/helpers.rb, line 48</span>&#x000A;        <span class="ruby-keyword kw">def</span>  <span class="ruby-identifier">failure?</span>()        <span class="ruby-identifier">status?</span> <span class="ruby-value str">'failure'</span>       <span class="ruby-keyword kw">end</span></pre>
-                </div>
-              </div>
-              <div class='method public-instance' id='method-M000064'>
-                <a name='M000064'>      </a>
-                <div class='synopsis'>
-                  <span class='name'>pending!</span>
-                  <span class='arguments'>(msg=nil)</span>
-                </div>
-                <div class='source'>
-                  <a class='source-toggle' href='#' onclick="toggleCode('M000064-source'); return false">
-                    [show source]
-                  </a>
-                  <pre id='M000064-source'><span class="ruby-comment cmt"># File lib/familia/helpers.rb, line 55</span>&#x000A;        <span class="ruby-keyword kw">def</span>  <span class="ruby-identifier">pending!</span>(<span class="ruby-identifier">msg</span>=<span class="ruby-keyword kw">nil</span>) <span class="ruby-identifier">status!</span> <span class="ruby-value str">'pending'</span>,  <span class="ruby-identifier">msg</span> <span class="ruby-keyword kw">end</span></pre>
-                </div>
-              </div>
-              <div class='method public-instance' id='method-M000059'>
-                <a name='M000059'>      </a>
-                <div class='synopsis'>
-                  <span class='name'>pending?</span>
-                  <span class='arguments'>()</span>
-                </div>
-                <div class='source'>
-                  <a class='source-toggle' href='#' onclick="toggleCode('M000059-source'); return false">
-                    [show source]
-                  </a>
-                  <pre id='M000059-source'><span class="ruby-comment cmt"># File lib/familia/helpers.rb, line 50</span>&#x000A;        <span class="ruby-keyword kw">def</span>  <span class="ruby-identifier">pending?</span>()        <span class="ruby-identifier">status?</span> <span class="ruby-value str">'pending'</span>       <span class="ruby-keyword kw">end</span></pre>
-                </div>
-              </div>
-              <div class='method public-instance' id='method-M000068'>
-                <a name='M000068'>      </a>
-                <div class='synopsis'>
-                  <span class='name'>status!</span>
-                  <span class='arguments'>(s, msg=nil)</span>
-                </div>
-                <div class='source'>
-                  <a class='source-toggle' href='#' onclick="toggleCode('M000068-source'); return false">
-                    [show source]
-                  </a>
-                  <pre id='M000068-source'><span class="ruby-comment cmt"># File lib/familia/helpers.rb, line 62</span>&#x000A;        <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">status!</span>(<span class="ruby-identifier">s</span>, <span class="ruby-identifier">msg</span>=<span class="ruby-keyword kw">nil</span>)&#x000A;          <span class="ruby-ivar">@updated</span> = <span class="ruby-constant">Time</span>.<span class="ruby-identifier">now</span>.<span class="ruby-identifier">utc</span>.<span class="ruby-identifier">to_f</span>&#x000A;          <span class="ruby-ivar">@status</span>, <span class="ruby-ivar">@message</span> = <span class="ruby-identifier">s</span>, <span class="ruby-identifier">msg</span>&#x000A;          <span class="ruby-identifier">save</span> <span class="ruby-keyword kw">if</span> <span class="ruby-identifier">respond_to?</span> <span class="ruby-identifier">:save</span>&#x000A;        <span class="ruby-keyword kw">end</span></pre>
-                </div>
-              </div>
-              <div class='method public-instance' id='method-M000067'>
-                <a name='M000067'>      </a>
-                <div class='synopsis'>
-                  <span class='name'>status?</span>
-                  <span class='arguments'>(s)</span>
-                </div>
-                <div class='source'>
-                  <a class='source-toggle' href='#' onclick="toggleCode('M000067-source'); return false">
-                    [show source]
-                  </a>
-                  <pre id='M000067-source'><span class="ruby-comment cmt"># File lib/familia/helpers.rb, line 59</span>&#x000A;        <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">status?</span>(<span class="ruby-identifier">s</span>)&#x000A;          <span class="ruby-identifier">status</span>.<span class="ruby-identifier">to_s</span> <span class="ruby-operator">==</span> <span class="ruby-identifier">s</span>.<span class="ruby-identifier">to_s</span>&#x000A;        <span class="ruby-keyword kw">end</span></pre>
+                  <pre id='M000061-source'><span class="ruby-comment cmt"># File lib/familia/helpers.rb, line 51</span>&#x000A;        <span class="ruby-keyword kw">def</span>  <span class="ruby-identifier">expired?</span>()        <span class="ruby-identifier">status?</span> <span class="ruby-value str">'expired'</span>       <span class="ruby-keyword kw">end</span></pre>
                 </div>
               </div>
               <div class='method public-instance' id='method-M000063'>
                 <a name='M000063'>      </a>
                 <div class='synopsis'>
-                  <span class='name'>success!</span>
+                  <span class='name'>failure!</span>
                   <span class='arguments'>(msg=nil)</span>
                 </div>
                 <div class='source'>
                   <a class='source-toggle' href='#' onclick="toggleCode('M000063-source'); return false">
                     [show source]
                   </a>
-                  <pre id='M000063-source'><span class="ruby-comment cmt"># File lib/familia/helpers.rb, line 54</span>&#x000A;        <span class="ruby-keyword kw">def</span>  <span class="ruby-identifier">success!</span>(<span class="ruby-identifier">msg</span>=<span class="ruby-keyword kw">nil</span>) <span class="ruby-identifier">status!</span> <span class="ruby-value str">'success'</span>,  <span class="ruby-identifier">msg</span> <span class="ruby-keyword kw">end</span></pre>
+                  <pre id='M000063-source'><span class="ruby-comment cmt"># File lib/familia/helpers.rb, line 53</span>&#x000A;        <span class="ruby-keyword kw">def</span>  <span class="ruby-identifier">failure!</span>(<span class="ruby-identifier">msg</span>=<span class="ruby-keyword kw">nil</span>) <span class="ruby-identifier">status!</span> <span class="ruby-value str">'failure'</span>,  <span class="ruby-identifier">msg</span> <span class="ruby-keyword kw">end</span></pre>
                 </div>
               </div>
               <div class='method public-instance' id='method-M000058'>
                 <a name='M000058'>      </a>
                 <div class='synopsis'>
-                  <span class='name'>success?</span>
+                  <span class='name'>failure?</span>
                   <span class='arguments'>()</span>
                 </div>
                 <div class='source'>
                   <a class='source-toggle' href='#' onclick="toggleCode('M000058-source'); return false">
                     [show source]
                   </a>
-                  <pre id='M000058-source'><span class="ruby-comment cmt"># File lib/familia/helpers.rb, line 49</span>&#x000A;        <span class="ruby-keyword kw">def</span>  <span class="ruby-identifier">success?</span>()        <span class="ruby-identifier">status?</span> <span class="ruby-value str">'success'</span>       <span class="ruby-keyword kw">end</span></pre>
+                  <pre id='M000058-source'><span class="ruby-comment cmt"># File lib/familia/helpers.rb, line 48</span>&#x000A;        <span class="ruby-keyword kw">def</span>  <span class="ruby-identifier">failure?</span>()        <span class="ruby-identifier">status?</span> <span class="ruby-value str">'failure'</span>       <span class="ruby-keyword kw">end</span></pre>
+                </div>
+              </div>
+              <div class='method public-instance' id='method-M000065'>
+                <a name='M000065'>      </a>
+                <div class='synopsis'>
+                  <span class='name'>pending!</span>
+                  <span class='arguments'>(msg=nil)</span>
+                </div>
+                <div class='source'>
+                  <a class='source-toggle' href='#' onclick="toggleCode('M000065-source'); return false">
+                    [show source]
+                  </a>
+                  <pre id='M000065-source'><span class="ruby-comment cmt"># File lib/familia/helpers.rb, line 55</span>&#x000A;        <span class="ruby-keyword kw">def</span>  <span class="ruby-identifier">pending!</span>(<span class="ruby-identifier">msg</span>=<span class="ruby-keyword kw">nil</span>) <span class="ruby-identifier">status!</span> <span class="ruby-value str">'pending'</span>,  <span class="ruby-identifier">msg</span> <span class="ruby-keyword kw">end</span></pre>
+                </div>
+              </div>
+              <div class='method public-instance' id='method-M000060'>
+                <a name='M000060'>      </a>
+                <div class='synopsis'>
+                  <span class='name'>pending?</span>
+                  <span class='arguments'>()</span>
+                </div>
+                <div class='source'>
+                  <a class='source-toggle' href='#' onclick="toggleCode('M000060-source'); return false">
+                    [show source]
+                  </a>
+                  <pre id='M000060-source'><span class="ruby-comment cmt"># File lib/familia/helpers.rb, line 50</span>&#x000A;        <span class="ruby-keyword kw">def</span>  <span class="ruby-identifier">pending?</span>()        <span class="ruby-identifier">status?</span> <span class="ruby-value str">'pending'</span>       <span class="ruby-keyword kw">end</span></pre>
+                </div>
+              </div>
+              <div class='method public-instance' id='method-M000069'>
+                <a name='M000069'>      </a>
+                <div class='synopsis'>
+                  <span class='name'>status!</span>
+                  <span class='arguments'>(s, msg=nil)</span>
+                </div>
+                <div class='source'>
+                  <a class='source-toggle' href='#' onclick="toggleCode('M000069-source'); return false">
+                    [show source]
+                  </a>
+                  <pre id='M000069-source'><span class="ruby-comment cmt"># File lib/familia/helpers.rb, line 62</span>&#x000A;        <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">status!</span>(<span class="ruby-identifier">s</span>, <span class="ruby-identifier">msg</span>=<span class="ruby-keyword kw">nil</span>)&#x000A;          <span class="ruby-ivar">@updated</span> = <span class="ruby-constant">Time</span>.<span class="ruby-identifier">now</span>.<span class="ruby-identifier">utc</span>.<span class="ruby-identifier">to_f</span>&#x000A;          <span class="ruby-ivar">@status</span>, <span class="ruby-ivar">@message</span> = <span class="ruby-identifier">s</span>, <span class="ruby-identifier">msg</span>&#x000A;          <span class="ruby-identifier">save</span> <span class="ruby-keyword kw">if</span> <span class="ruby-identifier">respond_to?</span> <span class="ruby-identifier">:save</span>&#x000A;        <span class="ruby-keyword kw">end</span></pre>
+                </div>
+              </div>
+              <div class='method public-instance' id='method-M000068'>
+                <a name='M000068'>      </a>
+                <div class='synopsis'>
+                  <span class='name'>status?</span>
+                  <span class='arguments'>(s)</span>
+                </div>
+                <div class='source'>
+                  <a class='source-toggle' href='#' onclick="toggleCode('M000068-source'); return false">
+                    [show source]
+                  </a>
+                  <pre id='M000068-source'><span class="ruby-comment cmt"># File lib/familia/helpers.rb, line 59</span>&#x000A;        <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">status?</span>(<span class="ruby-identifier">s</span>)&#x000A;          <span class="ruby-identifier">status</span>.<span class="ruby-identifier">to_s</span> <span class="ruby-operator">==</span> <span class="ruby-identifier">s</span>.<span class="ruby-identifier">to_s</span>&#x000A;        <span class="ruby-keyword kw">end</span></pre>
+                </div>
+              </div>
+              <div class='method public-instance' id='method-M000064'>
+                <a name='M000064'>      </a>
+                <div class='synopsis'>
+                  <span class='name'>success!</span>
+                  <span class='arguments'>(msg=nil)</span>
+                </div>
+                <div class='source'>
+                  <a class='source-toggle' href='#' onclick="toggleCode('M000064-source'); return false">
+                    [show source]
+                  </a>
+                  <pre id='M000064-source'><span class="ruby-comment cmt"># File lib/familia/helpers.rb, line 54</span>&#x000A;        <span class="ruby-keyword kw">def</span>  <span class="ruby-identifier">success!</span>(<span class="ruby-identifier">msg</span>=<span class="ruby-keyword kw">nil</span>) <span class="ruby-identifier">status!</span> <span class="ruby-value str">'success'</span>,  <span class="ruby-identifier">msg</span> <span class="ruby-keyword kw">end</span></pre>
+                </div>
+              </div>
+              <div class='method public-instance' id='method-M000059'>
+                <a name='M000059'>      </a>
+                <div class='synopsis'>
+                  <span class='name'>success?</span>
+                  <span class='arguments'>()</span>
+                </div>
+                <div class='source'>
+                  <a class='source-toggle' href='#' onclick="toggleCode('M000059-source'); return false">
+                    [show source]
+                  </a>
+                  <pre id='M000059-source'><span class="ruby-comment cmt"># File lib/familia/helpers.rb, line 49</span>&#x000A;        <span class="ruby-keyword kw">def</span>  <span class="ruby-identifier">success?</span>()        <span class="ruby-identifier">status?</span> <span class="ruby-value str">'success'</span>       <span class="ruby-keyword kw">end</span></pre>
                 </div>
               </div>
             </div>
