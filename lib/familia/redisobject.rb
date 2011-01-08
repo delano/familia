@@ -197,7 +197,7 @@ module Familia
     
     def to_redis v
       return v unless @opts[:class]
-      case @opts[:class]
+      ret = case @opts[:class]
       when String, Fixnum, Float, Gibbler::Digest
         v
       else
@@ -215,34 +215,43 @@ module Familia
           raise Familia::Problem, "No such method: #{v.class}.#{dump_method}"
         end
       end
+      if ret.nil?
+        Familia.info "[#{self.class}\#to_redis] nil returned for #{@opts[:class]}\##{name}" 
+      end
+      ret
     end
     
     def from_redis v
       return @opts[:default] if v.nil?
       return v unless @opts[:class]
-      case @opts[:class]
+      ret = case @opts[:class]
       when String
         v.to_s
       when Fixnum, Float
         @opts[:class].induced_from v
       else
-        if @opts[:reference] == true
-          @opts[:class].from_redis v
-        else
-          if @opts[:class].respond_to? load_method
-            @opts[:class].send load_method, v
+        begin
+          if @opts[:reference] == true
+            @opts[:class].from_redis v
           else
-            raise Familia::Problem, "No such method: #{@opts[:class]}##{load_method}"
+            if @opts[:class].respond_to? load_method
+              @opts[:class].send load_method, v
+            else
+              raise Familia::Problem, "No such method: #{@opts[:class]}##{load_method}"
+            end
           end
+        rescue => ex
+          Familia.info v
+          Familia.info "Parse error for #{rediskey} (#{load_method}): #{ex.message}"
+          Familia.info ex.backtrace
+          nil
         end
       end
-    rescue => ex
-      Familia.info v
-      Familia.info "Parse error for #{rediskey} (#{load_method}): #{ex.message}"
-      Familia.info ex.backtrace
-      nil
+      if ret.nil?
+        Familia.info "[#{self.class}\#from_redis] nil returned for #{@opts[:class]}\##{name}" 
+      end
+      ret
     end 
-    
   end
   
   
@@ -306,9 +315,11 @@ module Familia
     alias_method :del, :delete
     
     def range sidx=0, eidx=-1
-      redis.lrange(rediskey, sidx, eidx).collect do |v|
-        from_redis v
-      end
+      redis.lrange(rediskey, sidx, eidx).collect { |v| from_redis(v) }.compact
+    end
+
+    def rangeraw sidx=0, eidx=-1
+      redis.lrange(rediskey, sidx, eidx)
     end
     
     def members count=-1
@@ -317,6 +328,11 @@ module Familia
     end
     alias_method :all, :members
     alias_method :to_a, :members
+    
+    def membersraw count=-1
+      count -= 1 if count > 0
+      rangeraw 0, count
+    end
     
     #def revmembers count=1  #TODO
     #  range -count, 0
@@ -330,12 +346,28 @@ module Familia
       range.each_with_index &blk
     end
     
+    def eachraw &blk
+      rangeraw.each &blk
+    end
+    
+    def eachraw_with_index &blk
+      rangeraw.each_with_index &blk
+    end
+    
     def collect &blk
       range.collect &blk
     end
     
     def select &blk
       range.select &blk
+    end
+
+    def collectraw &blk
+      rangeraw.collect &blk
+    end
+    
+    def selectraw &blk
+      rangeraw.select &blk
     end
     
     def at idx
@@ -396,12 +428,14 @@ module Familia
     end
     
     def members
-      redis.smembers(rediskey).collect do |v|
-        from_redis v
-      end
+      redis.smembers(rediskey).collect { |v| from_redis(v) }.compact
     end
     alias_method :all, :members
     alias_method :to_a, :members
+
+    def membersraw
+      redis.smembers(rediskey)
+    end
     
     def each &blk
       members.each &blk
@@ -418,6 +452,22 @@ module Familia
     def select &blk
       members.select &blk
     end
+
+    def eachraw &blk
+      membersraw.each &blk
+    end
+    
+    def eachraw_with_index &blk
+      membersraw.each_with_index &blk
+    end
+    
+    def collectraw &blk
+      membersraw.collect &blk
+    end
+    
+    def selectraw &blk
+      membersraw.select &blk
+    end
     
     def member? v
       redis.sismember rediskey, to_redis(v)
@@ -427,6 +477,7 @@ module Familia
     def delete v
       redis.srem rediskey, to_redis(v)
     end
+    alias_method :remove, :delete
     alias_method :rem, :delete
     alias_method :del, :delete
     
@@ -521,10 +572,20 @@ module Familia
     end
     alias_method :to_a, :members
     alias_method :all, :members
+
+    def membersraw count=-1, opts={}
+      count -= 1 if count > 0
+      rangeraw 0, count, opts
+    end
     
     def revmembers count=-1, opts={}
       count -= 1 if count > 0
       revrange 0, count, opts
+    end
+
+    def revmembersraw count=-1, opts={}
+      count -= 1 if count > 0
+      revrangeraw 0, count, opts
     end
     
     def each &blk
@@ -543,26 +604,48 @@ module Familia
       members.select &blk
     end
     
+    def eachraw &blk
+      membersraw.each &blk
+    end
+
+    def eachraw_with_index &blk
+      membersraw.each_with_index &blk
+    end
+    
+    def collectraw &blk
+      membersraw.collect &blk
+    end
+    
+    def selectraw &blk
+      membersraw.select &blk
+    end
+    
     def range sidx, eidx, opts={}
-      opts[:with_scores] = true if opts[:withscores]
-      redis.zrange(rediskey, sidx, eidx, opts).collect do |v|
-        from_redis v
-      end
+      rangeraw(sidx, eidx, opts).collect { |v| from_redis(v) }.compact
     end
 
     def revrange sidx, eidx, opts={}
+      revrangeraw(sidx, eidx, opts).collect { |v| from_redis(v) }.compact
+    end
+
+    def rangeraw sidx, eidx, opts={}
       opts[:with_scores] = true if opts[:withscores]
-      redis.zrevrange(rediskey, sidx, eidx, opts).collect do |v|
-        from_redis v
-      end
+      redis.zrange(rediskey, sidx, eidx, opts)
+    end
+
+    def revrangeraw sidx, eidx, opts={}
+      opts[:with_scores] = true if opts[:withscores]
+      redis.zrevrange(rediskey, sidx, eidx, opts)
     end
     
     # e.g. obj.metrics.rangebyscore (now-12.hours), now, :limit => [0, 10]
     def rangebyscore sscore, escore, opts={}
+      rangebyscoreraw(sscore, escore, opts).collect { |v| from_redis( v) }.compact
+    end
+    
+    def rangebyscoreraw sscore, escore, opts={}
       opts[:with_scores] = true if opts[:withscores]
-      redis.zrangebyscore(rediskey, sscore, escore, opts).collect do |v|
-        from_redis v
-      end
+      redis.zrangebyscore(rediskey, sscore, escore, opts)
     end
     
     def remrangebyrank srank, erank

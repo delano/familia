@@ -1,5 +1,12 @@
 FAMILIA, CHANGES
 
+#### 0.6.8 (2011-01-08) ###############################
+
+* CHANGE: RedisObject#members calls compact to remove nils
+* ADDED: RedisObject#to_redis/from_redis print message for nils to STDERR
+* ADDED: RedisObjects#membersraw for List, Set, and SortedSet
+
+
 #### 0.6.7 (2011-01-02) ###############################
 
 * FIXED: RedisObject#ttl, grab from instance first. 
