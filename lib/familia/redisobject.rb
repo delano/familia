@@ -48,6 +48,12 @@ module Familia
     
     attr_reader :name, :parent
     attr_writer :redis
+
+      # RedisObject instances are frozen. `cache` is a hash
+      # for you to store values retreived from Redis. This is
+      # not used anywhere by default, but you're encouraged
+      # to use it in your specific scenarios. 
+    attr_reader :cache
     
     # +name+: If parent is set, this will be used as the suffix 
     # for rediskey. Otherwise this becomes the value of the key.
@@ -92,7 +98,12 @@ module Familia
       @parent = @opts.delete(:parent)
       @ttl = @opts.delete(:ttl) 
       @redis ||= @opts.delete(:redis)
+      @cache = {}
       init if respond_to? :init
+    end
+    
+    def clear_cache
+      @cache.clear
     end
     
     def redis

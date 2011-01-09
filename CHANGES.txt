@@ -1,5 +1,10 @@
 FAMILIA, CHANGES
 
+#### 0.6.9 (2011-01-??) ###############################
+
+* ADDED: RedisObject#cache
+
+
 #### 0.6.8 (2011-01-08) ###############################
 
 * CHANGE: RedisObject#members calls compact to remove nils
