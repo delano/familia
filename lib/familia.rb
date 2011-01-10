@@ -32,7 +32,7 @@ module Familia
   @dump_method = :to_json
   @load_method = :from_json
   class << self
-    attr_reader :clients, :uri
+    attr_reader :clients, :uri, :logger
     attr_accessor :debug, :secret, :delim, :dump_method, :load_method
     attr_writer :apiversion
     def debug?() @debug == true end
@@ -71,14 +71,27 @@ module Familia
       connect(uri) unless @clients[uri.serverid] 
       @clients[uri.serverid]
     end
+    def log(level, path)
+      logger = Log4r::Logger.new('familia')
+      logger.outputters = Log4r::FileOutputter.new 'familia', :filename => path
+      logger.level = Log4r.const_get(level)
+      logger
+    end
     def connect(uri=nil)
       uri &&= URI.parse uri if String === uri
       uri ||= Familia.uri
       conf = uri.conf
-      conf[:thread_safe] = true
-      client = Redis.new conf
-      Familia.trace :CONNECT, client, conf.inspect, caller[0..3] if Familia.debug
-      @clients[uri.serverid] = client
+      conf[:thread_safe] = true unless conf.has_key?(:thread_safe)
+      if conf.has_key?(:logging) && conf[:logging].to_s == "true"
+        require 'logger'
+        require 'log4r'
+        @logger ||= log :DEBUG, "./familia.log"
+        conf[:logger] = Familia.logger
+      end
+      redis = Redis.new conf
+      p redis.client.logger
+      Familia.trace :CONNECT, redis, conf.inspect, caller[0..3] if Familia.debug
+      @clients[uri.serverid] = redis
     end
     def reconnect_all!
       Familia.classes.each do |klass|
