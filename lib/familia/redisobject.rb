@@ -326,7 +326,12 @@ module Familia
     alias_method :del, :delete
     
     def range sidx=0, eidx=-1
-      redis.lrange(rediskey, sidx, eidx).collect { |v| from_redis(v) }.compact
+      # TODO: Use mget here and everywhere like it.
+      #if @opts[:reference] == true
+      #  redis.lrange(rediskey, sidx, eidx)
+      #else
+        redis.lrange(rediskey, sidx, eidx).collect { |v| from_redis(v) }.compact
+      #end
     end
 
     def rangeraw sidx=0, eidx=-1
