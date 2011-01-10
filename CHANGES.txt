@@ -3,6 +3,8 @@ FAMILIA, CHANGES
 #### 0.6.9 (2011-01-09) ###############################
 
 * ADDED: RedisObject#cache
+* ADDED: RedisObject#echo
+# ADDED: Familia.logger (new option: :logger)
 
 
 #### 0.6.8 (2011-01-08) ###############################

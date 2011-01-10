@@ -106,6 +106,10 @@ module Familia
       @cache.clear
     end
     
+    def echo meth, trace
+      redis.echo "[#{self.class}\##{meth}] #{trace} (#{@opts[:class]}\##{name})"
+    end
+    
     def redis
       return @redis if @redis
       parent? ? parent.redis : Familia.redis(db)
@@ -278,6 +282,7 @@ module Familia
     end
     
     def push *values
+      echo :push, caller[0] if Familia.debug
       values.flatten.compact.each { |v| redis.rpush rediskey, to_redis(v) }
       redis.ltrim rediskey, -@opts[:maxlength], -1 if @opts[:maxlength]
       self
@@ -339,6 +344,7 @@ module Familia
     end
     
     def members count=-1
+      echo :members, caller[0] if Familia.debug
       count -= 1 if count > 0
       range 0, count
     end
@@ -444,6 +450,7 @@ module Familia
     end
     
     def members
+      echo :members, caller[0] if Familia.debug
       redis.smembers(rediskey).collect { |v| from_redis(v) }.compact
     end
     alias_method :all, :members
@@ -637,10 +644,12 @@ module Familia
     end
     
     def range sidx, eidx, opts={}
+      echo :range, caller[0] if Familia.debug
       rangeraw(sidx, eidx, opts).collect { |v| from_redis(v) }.compact
     end
 
     def revrange sidx, eidx, opts={}
+      echo :revrange, caller[0] if Familia.debug
       revrangeraw(sidx, eidx, opts).collect { |v| from_redis(v) }.compact
     end
 
@@ -656,10 +665,12 @@ module Familia
     
     # e.g. obj.metrics.rangebyscore (now-12.hours), now, :limit => [0, 10]
     def rangebyscore sscore, escore, opts={}
+      echo :rangebyscore, caller[0] if Familia.debug
       rangebyscoreraw(sscore, escore, opts).collect { |v| from_redis( v) }.compact
     end
     
     def rangebyscoreraw sscore, escore, opts={}
+      echo :rangebyscoreraw, caller[0] if Familia.debug
       opts[:with_scores] = true if opts[:withscores]
       redis.zrangebyscore(rediskey, sscore, escore, opts)
     end
@@ -813,6 +824,7 @@ module Familia
     end
     
     def value
+      echo :value, caller[0] if Familia.debug
       redis.setnx rediskey, @opts[:default] if @opts[:default]
       from_redis redis.get(rediskey)
     end
