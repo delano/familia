@@ -89,7 +89,6 @@ module Familia
         conf[:logger] = Familia.logger
       end
       redis = Redis.new conf
-      p redis.client.logger
       Familia.trace :CONNECT, redis, conf.inspect, caller[0..3] if Familia.debug
       @clients[uri.serverid] = redis
     end
