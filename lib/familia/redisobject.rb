@@ -227,7 +227,7 @@ module Familia
         end
       end
       if ret.nil?
-        Familia.info "[#{self.class}\#to_redis] nil returned for #{@opts[:class]}\##{name}" 
+        Familia.ld "[#{self.class}\#to_redis] nil returned for #{@opts[:class]}\##{name}" 
       end
       ret
     end
@@ -259,7 +259,7 @@ module Familia
         end
       end
       if ret.nil?
-        Familia.info "[#{self.class}\#from_redis] nil returned for #{@opts[:class]}\##{name}" 
+        Familia.ld "[#{self.class}\#from_redis] nil returned for #{@opts[:class]}\##{name}" 
       end
       ret
     end 
