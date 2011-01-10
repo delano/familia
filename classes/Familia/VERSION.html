@@ -1,7 +1,7 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
 <html lang='en'>
   <head>
-    <title>: Familia::VERSION [familia 0.6.8]</title>
+    <title>: Familia::VERSION [familia 0.6.9]</title>
     <meta content='text/html; charset=UTF-8' http-equiv='Content-Type'>
     <link href='../../rdoc-style.css' media='screen' rel='stylesheet' type='text/css'>
     <script type='text/javascript'>
@@ -41,8 +41,8 @@
             <h2>Methods</h2>
             <h3>public class</h3>
             <ol>
-              <li><a href="#M000137">load_config</a></li>
-              <li><a href="#M000136">to_s</a></li>
+              <li><a href="#M000138">load_config</a></li>
+              <li><a href="#M000137">to_s</a></li>
             </ol>
           </div>
           <div id='section'>
@@ -60,30 +60,30 @@
             </div>
             <div id='methods'>
               <h2>Public class methods</h2>
+              <div class='method public-class' id='method-M000138'>
+                <a name='M000138'>      </a>
+                <div class='synopsis'>
+                  <span class='name'>load_config</span>
+                  <span class='arguments'>()</span>
+                </div>
+                <div class='source'>
+                  <a class='source-toggle' href='#' onclick="toggleCode('M000138-source'); return false">
+                    [show source]
+                  </a>
+                  <pre id='M000138-source'><span class="ruby-comment cmt"># File lib/familia.rb, line 14</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-keyword kw">self</span>.<span class="ruby-identifier">load_config</span>&#x000A;      <span class="ruby-identifier">require</span> <span class="ruby-value str">'yaml'</span>&#x000A;      <span class="ruby-ivar">@version</span> <span class="ruby-operator">||=</span> <span class="ruby-constant">YAML</span>.<span class="ruby-identifier">load_file</span>(<span class="ruby-constant">File</span>.<span class="ruby-identifier">join</span>(<span class="ruby-constant">FAMILIA_LIB_HOME</span>, <span class="ruby-value str">'..'</span>, <span class="ruby-value str">'VERSION.yml'</span>))&#x000A;    <span class="ruby-keyword kw">end</span></pre>
+                </div>
+              </div>
               <div class='method public-class' id='method-M000137'>
                 <a name='M000137'>      </a>
                 <div class='synopsis'>
-                  <span class='name'>load_config</span>
+                  <span class='name'>to_s</span>
                   <span class='arguments'>()</span>
                 </div>
                 <div class='source'>
                   <a class='source-toggle' href='#' onclick="toggleCode('M000137-source'); return false">
                     [show source]
                   </a>
-                  <pre id='M000137-source'><span class="ruby-comment cmt"># File lib/familia.rb, line 14</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-keyword kw">self</span>.<span class="ruby-identifier">load_config</span>&#x000A;      <span class="ruby-identifier">require</span> <span class="ruby-value str">'yaml'</span>&#x000A;      <span class="ruby-ivar">@version</span> <span class="ruby-operator">||=</span> <span class="ruby-constant">YAML</span>.<span class="ruby-identifier">load_file</span>(<span class="ruby-constant">File</span>.<span class="ruby-identifier">join</span>(<span class="ruby-constant">FAMILIA_LIB_HOME</span>, <span class="ruby-value str">'..'</span>, <span class="ruby-value str">'VERSION.yml'</span>))&#x000A;    <span class="ruby-keyword kw">end</span></pre>
-                </div>
-              </div>
-              <div class='method public-class' id='method-M000136'>
-                <a name='M000136'>      </a>
-                <div class='synopsis'>
-                  <span class='name'>to_s</span>
-                  <span class='arguments'>()</span>
-                </div>
-                <div class='source'>
-                  <a class='source-toggle' href='#' onclick="toggleCode('M000136-source'); return false">
-                    [show source]
-                  </a>
-                  <pre id='M000136-source'><span class="ruby-comment cmt"># File lib/familia.rb, line 9</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-keyword kw">self</span>.<span class="ruby-identifier">to_s</span>&#x000A;      <span class="ruby-identifier">load_config</span>&#x000A;      [<span class="ruby-ivar">@version</span>[<span class="ruby-identifier">:MAJOR</span>], <span class="ruby-ivar">@version</span>[<span class="ruby-identifier">:MINOR</span>], <span class="ruby-ivar">@version</span>[<span class="ruby-identifier">:PATCH</span>]].<span class="ruby-identifier">join</span>(<span class="ruby-value str">'.'</span>)&#x000A;    <span class="ruby-keyword kw">end</span></pre>
+                  <pre id='M000137-source'><span class="ruby-comment cmt"># File lib/familia.rb, line 9</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-keyword kw">self</span>.<span class="ruby-identifier">to_s</span>&#x000A;      <span class="ruby-identifier">load_config</span>&#x000A;      [<span class="ruby-ivar">@version</span>[<span class="ruby-identifier">:MAJOR</span>], <span class="ruby-ivar">@version</span>[<span class="ruby-identifier">:MINOR</span>], <span class="ruby-ivar">@version</span>[<span class="ruby-identifier">:PATCH</span>]].<span class="ruby-identifier">join</span>(<span class="ruby-value str">'.'</span>)&#x000A;    <span class="ruby-keyword kw">end</span></pre>
                 </div>
               </div>
             </div>
