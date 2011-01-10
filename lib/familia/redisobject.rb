@@ -213,10 +213,13 @@ module Familia
     def to_redis v
       return v unless @opts[:class]
       ret = case @opts[:class]
-      when String, Fixnum, Float, Gibbler::Digest
+      when ::String, ::Fixnum, ::Float, Gibbler::Digest
         v
       else
-        if @opts[:reference] == true
+        if ::String === v
+          v
+          
+        elsif @opts[:reference] == true
           unless v.respond_to? :index
             raise Familia::Problem, "#{v.class} does not have an index method"
           end
@@ -224,8 +227,10 @@ module Familia
             raise Familia::Problem, "#{v.class} is not Familia (#{name})"
           end
           v.index
+
         elsif v.respond_to? dump_method
           v.send dump_method
+          
         else
           raise Familia::Problem, "No such method: #{v.class}.#{dump_method}"
         end

@@ -1,5 +1,11 @@
 FAMILIA, CHANGES
 
+#### 0.6.10 (2011-01-??) ###############################
+
+* CHANGE: RedisObject#to_redis returns the original String if the given value 
+is a String, even if :class is specified.
+
+
 #### 0.6.9 (2011-01-09) ###############################
 
 * ADDED: RedisObject#cache
