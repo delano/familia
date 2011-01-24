@@ -28,7 +28,7 @@ module Familia
   @classes = []
   @suffix = :object.freeze
   @index = :id.freeze
-  @debug = false.freeze
+  @debug = false
   @dump_method = :to_json
   @load_method = :from_json
   class << self
