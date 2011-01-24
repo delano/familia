@@ -360,7 +360,7 @@ module Familia
     
     def allkeys
       # TODO: Use redis_objects instead
-      keynames = [rediskey]
+      keynames = []
       self.class.suffixes.each do |sfx| 
         keynames << rediskey(sfx)
       end
