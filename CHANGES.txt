@@ -4,6 +4,7 @@ FAMILIA, CHANGES
 
 * CHANGE: RedisObject#to_redis returns the original String if the given value 
 is a String, even if :class is specified.
+* CHANGE: Update expiration when adding to List, Set, SortedSet, and HashKey
 
 
 #### 0.6.9 (2011-01-09) ###############################

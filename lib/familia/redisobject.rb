@@ -96,7 +96,7 @@ module Familia
       self.extend @opts[:extend] if Module === @opts[:extend]
       @db = @opts.delete(:db)
       @parent = @opts.delete(:parent)
-      @ttl = @opts.delete(:ttl) 
+      @ttl ||= @opts.delete(:ttl) 
       @redis ||= @opts.delete(:redis)
       @cache = {}
       init if respond_to? :init
@@ -290,6 +290,7 @@ module Familia
       echo :push, caller[0] if Familia.debug
       values.flatten.compact.each { |v| redis.rpush rediskey, to_redis(v) }
       redis.ltrim rediskey, -@opts[:maxlength], -1 if @opts[:maxlength]
+      update_expiration
       self
     end
     
@@ -302,6 +303,7 @@ module Familia
       values.flatten.compact.each { |v| redis.lpush rediskey, to_redis(v) }
       # TODO: test maxlength
       redis.ltrim rediskey, 0, @opts[:maxlength] - 1 if @opts[:maxlength]
+      update_expiration
       self
     end
     
@@ -447,6 +449,7 @@ module Familia
     
     def add *values
       values.flatten.compact.each { |v| redis.sadd rediskey, to_redis(v) }
+      update_expiration
       self
     end
     
@@ -568,7 +571,9 @@ module Familia
     
     # NOTE: The argument order is the reverse of #[]=
     def add score, v
-      redis.zadd rediskey, score, to_redis(v)
+      ret = redis.zadd rediskey, score, to_redis(v)
+      update_expiration
+      ret
     end
     
     def score v
@@ -736,7 +741,9 @@ module Familia
     end
     
     def []= n, v
-      redis.hset rediskey, n, to_redis(v)
+      ret = redis.hset rediskey, n, to_redis(v)
+      update_expiration
+      ret
     end
     alias_method :put, :[]=
     alias_method :store, :[]=
@@ -801,7 +808,9 @@ module Familia
     def update h={}
       raise ArgumentError, "Argument to bulk_set must be a hash" unless Hash === h
       data = h.inject([]){ |ret,pair| ret << [pair[0], to_redis(pair[1])] }.flatten
-      redis.hmset(rediskey, *data)
+      ret = redis.hmset(rediskey, *data)
+      update_expiration
+      ret
     end
     alias_method :merge!, :update
     
