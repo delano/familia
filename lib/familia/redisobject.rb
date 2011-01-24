@@ -169,7 +169,13 @@ module Familia
       redis.move rediskey, db
     end
         
-    # TODO: rename, renamenx
+    def rename newkey
+      redis.rename rediskey, newkey
+    end
+
+    def renamenx newkey
+      redis.renamenx rediskey, newkey
+    end
     
     def type 
       redis.type rediskey
@@ -200,6 +206,10 @@ module Familia
     
     def expireat unixtime
       redis.expireat rediskey, unixtime
+    end
+    
+    def persist
+      redis.persist rediskey
     end
     
     def dump_method
