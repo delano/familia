@@ -124,17 +124,16 @@ module Familia
     # After this is called once, this method will always return the 
     # same value.
     def db 
-      return @db if @db
       # Note it's important that we select this value at the last
       # possible moment rather than in initialize b/c the value 
       # could be modified after that but before this is called. 
       if @opts[:class] && @opts[:class].ancestors.member?(Familia)
-        @db = @opts[:class].db 
+        @opts[:class].db 
+      elsif parent?
+        parent.db
       else
-        @db = parent? ? parent.db : self.class.db
+        self.class.db || @db || 0
       end
-      @db ||= 0
-      @db
     end
     
     def ttl

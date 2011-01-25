@@ -2,6 +2,7 @@ FAMILIA, CHANGES
 
 #### 0.6.10 (2011-01-??) ###############################
 
+* FIXED: RedisObject#db does not set @db
 * CHANGE: RedisObject#to_redis returns the original String if the given value 
 is a String, even if :class is specified.
 * CHANGE: Update expiration when adding to List, Set, SortedSet, and HashKey
