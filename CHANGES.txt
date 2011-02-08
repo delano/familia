@@ -6,6 +6,7 @@ FAMILIA, CHANGES
 * CHANGE: RedisObject#to_redis returns the original String if the given value 
 is a String, even if :class is specified.
 * CHANGE: Update expiration when adding to List, Set, SortedSet, and HashKey
+* CHANGE: Only call Familia.ld when in debug mode.
 * ADDED: RedisObject#rename, renamenx, persist
 
 

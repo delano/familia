@@ -226,7 +226,7 @@ module Familia
     def rawmultiget(*ids)
       ids.collect! { |objid| rediskey(objid) }
       return [] if ids.compact.empty?
-      Familia.trace :MULTIGET, self.redis, "#{ids.size}: #{ids}", caller
+      Familia.trace :MULTIGET, self.redis, "#{ids.size}: #{ids}", caller if Familia.debug?
       ids = self.redis.mget *ids
     end
     
@@ -257,7 +257,7 @@ module Familia
     def from_redis idx, suffix=:object
       return nil if idx.to_s.empty?
       objkey = rediskey idx, suffix
-      Familia.trace :FROMREDIS, Familia.redis(self.uri), objkey, caller.first
+      Familia.trace :FROMREDIS, Familia.redis(self.uri), objkey, caller.first if Familia.debug?
       me = from_key objkey
       me
     end
@@ -265,12 +265,12 @@ module Familia
       return false if idx.to_s.empty?
       objkey = rediskey idx, suffix
       ret = Familia.redis(self.uri).exists objkey
-      Familia.trace :EXISTS, Familia.redis(self.uri), "#{rediskey(idx, suffix)} #{ret}", caller.first
+      Familia.trace :EXISTS, Familia.redis(self.uri), "#{rediskey(idx, suffix)} #{ret}", caller.first if Familia.debug?
       ret
     end
     def destroy! idx, suffix=:object
       ret = Familia.redis(self.uri).del rediskey(idx, suffix)
-      Familia.trace :DELETED, Familia.redis(self.uri), "#{rediskey(idx, suffix)}: #{ret}", caller.first
+      Familia.trace :DELETED, Familia.redis(self.uri), "#{rediskey(idx, suffix)}: #{ret}", caller.first if Familia.debug?
       ret
     end
     def find suffix='*'
@@ -287,7 +287,7 @@ module Familia
     end
     def expand(short_idx, suffix=self.suffix)
       expand_key = Familia.rediskey(self.prefix, "#{short_idx}*", suffix)
-      Familia.trace :EXPAND, Familia.redis(self.uri), expand_key, caller.first
+      Familia.trace :EXPAND, Familia.redis(self.uri), expand_key, caller.first if Familia.debug?
       list = Familia.redis(self.uri).keys expand_key
       case list.size
       when 0
@@ -381,7 +381,7 @@ module Familia
       self.class.rediskey self.index, suffix
     end
     def save
-      #Familia.trace :SAVE, Familia.redis(self.class.uri), redisuri, caller.first
+      #Familia.trace :SAVE, Familia.redis(self.class.uri), redisuri, caller.first if Familia.debug?
       preprocess if respond_to?(:preprocess)
       self.update_time if self.respond_to?(:update_time)
       # TODO: Check here (run checkup)
@@ -396,7 +396,7 @@ module Familia
     def destroy!
       ret = self.object.delete
       if Familia.debug?
-        Familia.trace :DELETED, Familia.redis(self.class.uri), "#{rediskey}: #{ret}", caller.first
+        Familia.trace :DELETED, Familia.redis(self.class.uri), "#{rediskey}: #{ret}", caller.first if Familia.debug?
       end
       self.class.instances.rem self if ret > 0
       ret
