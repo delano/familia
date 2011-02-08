@@ -1,6 +1,6 @@
 FAMILIA, CHANGES
 
-#### 0.6.10 (2011-01-??) ###############################
+#### 0.6.10 (2011-01-08) ###############################
 
 * FIXED: RedisObject#db does not set @db
 * CHANGE: RedisObject#to_redis returns the original String if the given value 
