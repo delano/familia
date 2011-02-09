@@ -249,15 +249,15 @@ module Familia
       obj
     end
     def from_key objkey
-      raise ArgumentError, "Null key" if objkey.to_s.empty?    
-      Familia.trace :LOAD, redis, "#{self.uri}/#{objkey}", caller if Familia.debug?
+      raise ArgumentError, "Empty key" if objkey.to_s.empty?    
+      Familia.trace :LOAD, Familia.redis(self.uri), objkey, caller if Familia.debug?
       obj = Familia::String.new objkey, :class => self
       obj.exists? ? obj.value : nil
     end
     def from_redis idx, suffix=:object
       return nil if idx.to_s.empty?
       objkey = rediskey idx, suffix
-      Familia.trace :FROMREDIS, Familia.redis(self.uri), objkey, caller.first if Familia.debug?
+      #Familia.trace :FROMREDIS, Familia.redis(self.uri), objkey, caller.first if Familia.debug?
       me = from_key objkey
       me
     end
@@ -265,12 +265,12 @@ module Familia
       return false if idx.to_s.empty?
       objkey = rediskey idx, suffix
       ret = Familia.redis(self.uri).exists objkey
-      Familia.trace :EXISTS, Familia.redis(self.uri), "#{rediskey(idx, suffix)} #{ret}", caller.first if Familia.debug?
+      Familia.trace :EXISTS, Familia.redis(self.uri), "#{rediskey(idx, suffix)} #{ret}", caller if Familia.debug?
       ret
     end
     def destroy! idx, suffix=:object
       ret = Familia.redis(self.uri).del rediskey(idx, suffix)
-      Familia.trace :DELETED, Familia.redis(self.uri), "#{rediskey(idx, suffix)}: #{ret}", caller.first if Familia.debug?
+      Familia.trace :DELETED, Familia.redis(self.uri), "#{rediskey(idx, suffix)}: #{ret}", caller if Familia.debug?
       ret
     end
     def find suffix='*'

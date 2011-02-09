@@ -47,8 +47,12 @@ module Familia
     end
     def trace label, redis_client, ident, context=nil
       return unless Familia.debug?
-      info "%s (%d:%s): %s" % [label, Thread.current.object_id, redis_client.object_id, ident] 
-      info "  +-> %s" % [context].flatten[0..3].join("\n      ") if context
+      info "[%s:%s] %s" % [label, redis_client.uri, ident] 
+      if context
+        context = [context].flatten
+        context.reject! { |line| line =~ /lib\/familia/ }
+        info "   %s" % context[0..6].join("\n   ") 
+      end
     end
     def uri= v
       v = URI.parse v unless URI === v
