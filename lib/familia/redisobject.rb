@@ -107,7 +107,7 @@ module Familia
     end
     
     def echo meth, trace
-      redis.echo "[#{self.class}\##{meth}] #{trace} (#{@opts[:class]}\##{name})"
+      redis.echo "[#{self.class}\##{meth}] #{trace} (#{@opts[:class]}\#)"
     end
     
     def redis
@@ -868,7 +868,7 @@ module Familia
     end
     
     def value
-      echo :value, caller[0] if Familia.debug
+      echo :value, caller[0..5] if Familia.debug
       redis.setnx rediskey, @opts[:default] if @opts[:default]
       from_redis redis.get(rediskey)
     end
