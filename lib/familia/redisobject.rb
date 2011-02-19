@@ -253,7 +253,7 @@ module Familia
     def multi_from_redis *values
       Familia.ld "multi_from_redis: (#{@opts}) #{values}"
       return [] if values.empty?
-      return *values unless @opts[:class]
+      return values.flatten unless @opts[:class]
       ret = case @opts[:class]
       when ::String
         v.to_s
