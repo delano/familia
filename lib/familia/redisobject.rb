@@ -222,7 +222,7 @@ module Familia
     def to_redis v
       return v unless @opts[:class]
       ret = case @opts[:class]
-      when ::String, ::Fixnum, ::Float, Gibbler::Digest
+      when ::Symbol, ::String, ::Fixnum, ::Float, Gibbler::Digest
         v
       else
         if ::String === v
@@ -250,37 +250,54 @@ module Familia
       ret
     end
     
+    def multi_from_redis *values
+      Familia.ld "multi_from_redis: (#{@opts}) #{values}"
+      return [] if values.empty?
+      return *values unless @opts[:class]
+      ret = case @opts[:class]
+      when ::String
+        v.to_s
+      when ::Symbol
+        v.to_s.to_sym
+      when ::Fixnum, ::Float
+        @opts[:class].induced_from v
+      else
+        objs = values
+        
+        if @opts[:reference] == true
+          objs = @opts[:class].rawmultiget *values
+        end
+        objs.compact!
+        if @opts[:class].respond_to? load_method
+          objs.collect! { |obj| 
+            begin
+              v = @opts[:class].send load_method, obj
+              if v.nil?
+                Familia.ld "[#{self.class}\#multi_from_redis] nil returned for #{@opts[:class]}\##{name}" 
+              end
+              v
+            rescue => ex
+              Familia.info v
+              Familia.info "Parse error for #{rediskey} (#{load_method}): #{ex.message}"
+              Familia.info ex.backtrace
+              nil
+            end
+          }
+        else
+          raise Familia::Problem, "No such method: #{@opts[:class]}##{load_method}"
+        end
+        objs.compact # don't use compact! b/c the return value appears in ret
+      end
+      ret
+    end
+    
     def from_redis v
       return @opts[:default] if v.nil?
       return v unless @opts[:class]
-      ret = case @opts[:class]
-      when String
-        v.to_s
-      when Fixnum, Float
-        @opts[:class].induced_from v
-      else
-        begin
-          if @opts[:reference] == true
-            @opts[:class].from_redis v
-          else
-            if @opts[:class].respond_to? load_method
-              @opts[:class].send load_method, v
-            else
-              raise Familia::Problem, "No such method: #{@opts[:class]}##{load_method}"
-            end
-          end
-        rescue => ex
-          Familia.info v
-          Familia.info "Parse error for #{rediskey} (#{load_method}): #{ex.message}"
-          Familia.info ex.backtrace
-          nil
-        end
-      end
-      if ret.nil?
-        Familia.ld "[#{self.class}\#from_redis] nil returned for #{@opts[:class]}\##{name}" 
-      end
-      ret
+      ret = multi_from_redis v
+      ret.first unless ret.nil? # return the object or nil
     end 
+    
   end
   
   
@@ -347,14 +364,10 @@ module Familia
     alias_method :del, :delete
     
     def range sidx=0, eidx=-1
-      # TODO: Use mget here and everywhere like it.
-      #if @opts[:reference] == true
-      #  redis.lrange(rediskey, sidx, eidx)
-      #else
-        redis.lrange(rediskey, sidx, eidx).collect { |v| from_redis(v) }.compact
-      #end
+      el = rangeraw sidx, eidx
+      multi_from_redis *el
     end
-
+    
     def rangeraw sidx=0, eidx=-1
       redis.lrange(rediskey, sidx, eidx)
     end
@@ -468,7 +481,8 @@ module Familia
     
     def members
       echo :members, caller[0] if Familia.debug
-      redis.smembers(rediskey).collect { |v| from_redis(v) }.compact
+      el = membersraw
+      multi_from_redis *el
     end
     alias_method :all, :members
     alias_method :to_a, :members
@@ -534,7 +548,11 @@ module Familia
     end
     
     def random
-      from_redis redis.srandmember(rediskey)
+      from_redis randomraw
+    end
+
+    def randomraw
+      redis.srandmember(rediskey)
     end
     
     ## Make the value stored at KEY identical to the given list
@@ -610,7 +628,8 @@ module Familia
     
     def members count=-1, opts={}
       count -= 1 if count > 0
-      range 0, count, opts
+      el = membersraw count, opts
+      multi_from_redis *el
     end
     alias_method :to_a, :members
     alias_method :all, :members
@@ -622,7 +641,8 @@ module Familia
     
     def revmembers count=-1, opts={}
       count -= 1 if count > 0
-      revrange 0, count, opts
+      el = revmembersraw count, opts
+      multi_from_redis *el
     end
 
     def revmembersraw count=-1, opts={}
@@ -664,19 +684,21 @@ module Familia
     
     def range sidx, eidx, opts={}
       echo :range, caller[0] if Familia.debug
-      rangeraw(sidx, eidx, opts).collect { |v| from_redis(v) }.compact
+      el = rangeraw(sidx, eidx, opts)
+      multi_from_redis *el
     end
-
-    def revrange sidx, eidx, opts={}
-      echo :revrange, caller[0] if Familia.debug
-      revrangeraw(sidx, eidx, opts).collect { |v| from_redis(v) }.compact
-    end
-
+    
     def rangeraw sidx, eidx, opts={}
       opts[:with_scores] = true if opts[:withscores]
       redis.zrange(rediskey, sidx, eidx, opts)
     end
-
+    
+    def revrange sidx, eidx, opts={}
+      echo :revrange, caller[0] if Familia.debug
+      el = revrangeraw(sidx, eidx, opts)
+      multi_from_redis *el
+    end
+    
     def revrangeraw sidx, eidx, opts={}
       opts[:with_scores] = true if opts[:withscores]
       redis.zrevrange(rediskey, sidx, eidx, opts)
@@ -685,7 +707,8 @@ module Familia
     # e.g. obj.metrics.rangebyscore (now-12.hours), now, :limit => [0, 10]
     def rangebyscore sscore, escore, opts={}
       echo :rangebyscore, caller[0] if Familia.debug
-      rangebyscoreraw(sscore, escore, opts).collect { |v| from_redis( v) }.compact
+      el = rangebyscoreraw(sscore, escore, opts)
+      multi_from_redis *el
     end
     
     def rangebyscoreraw sscore, escore, opts={}
@@ -777,9 +800,8 @@ module Familia
     end
     
     def values
-      redis.hvals(rediskey).collect do |v|
-        from_redis v
-      end
+      el = redis.hvals(rediskey)
+      multi_from_redis *el
     end
     
     def all
@@ -824,9 +846,8 @@ module Familia
     alias_method :merge!, :update
     
     def values_at *names
-      redis.hmget(rediskey, *names.flatten.compact).collect do |v|
-        from_redis v
-      end
+      el = redis.hmget(rediskey, *names.flatten.compact)
+      multi_from_redis *el
     end
     
     Familia::RedisObject.register self, :hash
