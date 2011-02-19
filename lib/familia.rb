@@ -47,7 +47,7 @@ module Familia
     end
     def trace label, redis_client, ident, context=nil
       return unless Familia.debug?
-      info "[%s:%s] %s" % [label, redis_client.uri, ident] 
+      info "[%s] %s/%s" % [label, redis_client.uri, ident] 
       if context
         context = [context].flatten
         context.reject! { |line| line =~ /lib\/familia/ }

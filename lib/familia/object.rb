@@ -252,7 +252,7 @@ module Familia
       raise ArgumentError, "Empty key" if objkey.to_s.empty?    
       Familia.trace :LOAD, Familia.redis(self.uri), objkey, caller if Familia.debug?
       obj = Familia::String.new objkey, :class => self
-      obj.exists? ? obj.value : nil
+      obj.value
     end
     def from_redis idx, suffix=:object
       return nil if idx.to_s.empty?
