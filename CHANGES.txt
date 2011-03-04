@@ -1,6 +1,6 @@
 FAMILIA, CHANGES
 
-#### 0.7.0 (2011-02-??) ###############################
+#### 0.7.0 (2011-03-04) ###############################
 
 * CHANGE: Use RedisObject#multi_from_redis when possible (uses mget command)
 * CHANGE: No need to check if a key exists before getting it. It will be nil anyway.
