@@ -85,7 +85,9 @@ module Familia
       uri &&= URI.parse uri if String === uri
       uri ||= Familia.uri
       conf = uri.conf
-      conf[:thread_safe] = true unless conf.has_key?(:thread_safe)
+      conf[:thread_safe] = "true" unless conf.has_key?(:thread_safe)
+      conf[:thread_safe] = conf[:thread_safe].to_s == "true"
+      conf[:logging] = conf[:logging].to_s == "true"
       if conf.has_key?(:logging) && conf[:logging].to_s == "true"
         require 'logger'
         require 'log4r'

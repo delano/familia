@@ -1,5 +1,13 @@
 FAMILIA, CHANGES
 
+
+#### 0.7.1 (2011-03-??) ###############################
+
+* FIXED: Explicitly convert boolean conf options to true or false. Redis client
+  treats "true" as false.
+* CHANGE: Fix for Familia objects with custom suffixes
+
+
 #### 0.7.0 (2011-03-04) ###############################
 
 * CHANGE: Use RedisObject#multi_from_redis when possible (uses mget command)
