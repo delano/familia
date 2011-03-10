@@ -146,7 +146,14 @@ module Familia
     # returns a redis key based on the parent 
     # object so it will include the proper index.
     def rediskey
-      parent? ? parent.rediskey(name, nil) : [name].flatten.compact.join(Familia.delim)
+      if parent? 
+        # We need to check if the parent has a specific suffix
+        # for the case where we have specified one other than :object.
+        suffix = parent.kind_of?(Familia) && parent.class.suffix != :object ? parent.class.suffix : name
+        parent.rediskey(name, nil)
+      else
+        [name].flatten.compact.join(Familia.delim)
+      end
     end
     
     def class?
