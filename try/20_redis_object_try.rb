@@ -21,8 +21,8 @@ Familia.apiversion = 'v1'
 #=> '20:50'
 
 ## Redis Objects can be stored to quantized keys
-Familia.split(@limiter.counter.rediskey).size
-#=> 5
+@limiter.counter.rediskey
+#=> "v1:limiter:requests:counter:20:50"
 
 ## Increment counter
 @limiter.counter.clear

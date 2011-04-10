@@ -81,6 +81,12 @@ module Familia
     # set the redis expire for this key whenever #save is called. 
     # You can also call it explicitly via #update_expiration.
     #
+    # :quantize => append a quantized timestamp to the rediskey.
+    # Takes one of the following:
+    #   Boolean: include the default stamp (now % 10 minutes)
+    #   Integer: the number of seconds to quantize to (e.g. 1.hour)
+    #   Array: All arguments for qstamp (quantum, pattern, Time.now)
+    #
     # :default => the default value (String-only)
     #
     # :dump_method => the instance method to call to serialize the
@@ -160,7 +166,17 @@ module Familia
       else
         k = [name].flatten.compact.join(Familia.delim)
       end
-      k = [k, qstamp].join(Familia.delim) if @opts[:quantize]
+      if @opts[:quantize]
+        args = case @opts[:quantize]
+        when Numeric
+          [@opts[:quantize]]        # :quantize => 1.minute
+        when Array
+          @opts[:quantize]          # :quantize => [1.day, '%m%D']
+        else
+          []                        # :quantize => true
+        end
+        k = [k, qstamp(*args)].join(Familia.delim)
+      end
       k
     end
     

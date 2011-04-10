@@ -36,5 +36,5 @@ class Limiter < Storable
   include Familia
   index :name
   field :name
-  string :counter, :quantize => true, :ttl => 1.hour
+  string :counter, :quantize => true, :ttl => 1.hour, :quantize => [10.minutes, '%H:%M', 1302468980]
 end
