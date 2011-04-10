@@ -130,6 +130,16 @@ module Familia
       end
       @apiversion 
     end
+    def now n=Time.now
+      n.utc.to_i
+    end
+    # A quantized timestamp
+    # e.g. 12:32 -> 12:30
+    # 
+    def qnow quantum=10.minutes, now=Familia.now
+      rounded = now - (now % quantum)
+      Time.at(rounded).utc.to_i
+    end
   end
   
   class Problem < RuntimeError; end

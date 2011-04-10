@@ -34,3 +34,11 @@ Bone.list? :owners
 definition = Bone.list :owners
 definition.klass
 #=> Familia::List
+
+## Familia.now
+Familia.now Time.parse('2011-04-10 20:56:20 UTC').utc
+#=> 1302468980
+
+## Familia.qnow
+Familia.qnow 10.minutes, 1302468980
+#=> 1302468600
