@@ -9,6 +9,7 @@ FAMILIA, CHANGES
 * CHANGE: Familia::String methods that modify the key now automatically update_expiration.
 * ADDED: Familia.qnow, Familia::Object.qstamp, RedisObject#qstamp
 * ADDED: RedisObject option: quantize
+* ADDED: Familia::Object#savenx
 
 
 #### 0.7.0 (2011-03-04) ###############################

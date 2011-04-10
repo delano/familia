@@ -391,18 +391,20 @@ module Familia
       end
       self.class.rediskey self.index, suffix
     end
-    def save
+    def save meth=:set
       #Familia.trace :SAVE, Familia.redis(self.class.uri), redisuri, caller.first if Familia.debug?
       preprocess if respond_to?(:preprocess)
       self.update_time if self.respond_to?(:update_time)
-      # TODO: Check here (run checkup)
-      ret = self.object.set self               # object is a name reserved by Familia
+      ret = self.object.send(meth, self)       # object is a name reserved by Familia
       unless ret.nil?
         now = Time.now.utc.to_i
         self.class.instances.add now, self     # use this set instead of Klass.keys
         self.object.update_expiration self.ttl # does nothing unless if not specified
       end
-      true
+      ret == "OK" || ret == 1
+    end
+    def savenx 
+      save :setnx
     end
     def destroy!
       ret = self.object.delete

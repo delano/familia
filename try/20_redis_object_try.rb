@@ -34,5 +34,6 @@ Familia.split(@limiter.counter.rediskey).size
 #=> 3600
 
 ## Check realttl
+sleep 2
 @limiter.counter.realttl
-#=> 3600
+#=> 3600-2
