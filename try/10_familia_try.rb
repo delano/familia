@@ -42,3 +42,13 @@ Familia.now Time.parse('2011-04-10 20:56:20 UTC').utc
 ## Familia.qnow
 Familia.qnow 10.minutes, 1302468980
 #=> 1302468600
+
+## Familia::Object.qstamp
+Limiter.qstamp 10.minutes, '%H:%M', 1302468980
+#=> '20:50'
+
+## Familia::Object#qstamp
+limiter = Limiter.new :request
+limiter.qstamp 10.minutes, '%H:%M', 1302468980
+#=> '20:50'
+

@@ -1,11 +1,13 @@
 FAMILIA, CHANGES
 
 
-#### 0.7.1 (2011-03-??) ###############################
+#### 0.7.1 (2011-04-09) ###############################
 
 * FIXED: Explicitly convert boolean conf options to true or false. Redis client
   treats "true" as false.
 * CHANGE: Fix for Familia objects with custom suffixes
+* ADDED: Familia.qnow, Familia::Object.qstamp, RedisObject#qstamp
+* ADDED: RedisObject option: quantize
 
 
 #### 0.7.0 (2011-03-04) ###############################

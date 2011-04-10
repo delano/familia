@@ -83,6 +83,12 @@ module Familia
     #
     # :default => the default value (String-only)
     #
+    # :dump_method => the instance method to call to serialize the
+    # object before sending it to Redis (default: Familia.dump_method).
+    #
+    # :load_method => the class method to call to deserialize the
+    # object after it's read from Redis (default: Familia.load_method).
+    #
     # :db => the redis database to use (ignored if :redis is used).
     #
     # :redis => an instance of Redis.
@@ -150,10 +156,12 @@ module Familia
         # We need to check if the parent has a specific suffix
         # for the case where we have specified one other than :object.
         suffix = parent.kind_of?(Familia) && parent.class.suffix != :object ? parent.class.suffix : name
-        parent.rediskey(name, nil)
+        k = parent.rediskey(name, nil)
       else
-        [name].flatten.compact.join(Familia.delim)
+        k = [name].flatten.compact.join(Familia.delim)
       end
+      k = [k, qstamp].join(Familia.delim) if @opts[:quantize]
+      k
     end
     
     def class?
@@ -162,6 +170,13 @@ module Familia
     
     def parent?
       Class === parent || Module === parent || parent.kind_of?(Familia)
+    end
+    
+    def qstamp quantum=nil, pattern=nil, now=Familia.now
+      quantum ||= ttl || 10.minutes
+      pattern ||= '%H%M'
+      rounded = now - (now % quantum)
+      Time.at(rounded).utc.strftime(pattern)
     end
     
     def update_expiration(ttl=nil)
@@ -897,6 +912,12 @@ module Familia
     end
     alias_method :replace, :value=
     alias_method :set, :value=  
+    
+    def setnx v
+      ret = redis.set rediskey, to_redis(v)
+      update_expiration
+      ret
+    end
     
     def increment
       redis.incr rediskey

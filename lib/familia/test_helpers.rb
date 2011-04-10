@@ -32,3 +32,9 @@ class Customer < Storable
   class_string :message
 end
 
+class Limiter < Storable
+  include Familia
+  index :name
+  field :name
+  string :counter, :quantize => true, :ttl => 1.hour
+end

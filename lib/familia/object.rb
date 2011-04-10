@@ -97,6 +97,13 @@ module Familia
       redis_objects[name]
     end
     
+    def qstamp quantum=nil, pattern=nil, now=Familia.now
+      quantum ||= ttl || 10.minutes
+      pattern ||= '%H%M'
+      rounded = now - (now % quantum)
+      Time.at(rounded).utc.strftime(pattern)
+    end
+    
     # Creates a class method called +name+ that
     # returns an instance of the RedisObject +klass+ 
     def install_class_redis_object name, klass, opts
@@ -333,6 +340,10 @@ module Familia
         redis_object.freeze
         self.instance_variable_set "@#{name}", redis_object
       end
+    end
+    
+    def qstamp quantum=nil, pattern=nil, now=Familia.now
+      self.class.qstamp ttl, pattern, now
     end
     
     def redis
