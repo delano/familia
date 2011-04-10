@@ -109,8 +109,8 @@ module Familia
     def install_class_redis_object name, klass, opts
       raise ArgumentError, "Name is blank" if name.to_s.empty?
       name = name.to_s.to_sym
-      opts ||= {}
-      opts[:parent] ||= self
+      opts = opts.nil? ? {} : opts.clone
+      opts[:parent] = self unless opts.has_key?(:parent)
       # TODO: investigate using metaclass.redis_objects
       class_redis_objects_order << name
       class_redis_objects[name] = OpenStruct.new
@@ -334,8 +334,8 @@ module Familia
       # See RedisObject.install_redis_object
       self.class.redis_objects.each_pair do |name, redis_object_definition|
         klass, opts = redis_object_definition.klass, redis_object_definition.opts
-        opts ||= {}
-        opts[:parent] ||= self
+        opts = opts.nil? ? {} : opts.clone
+        opts[:parent] = self unless opts.has_key?(:parent)
         redis_object = klass.new name, opts
         redis_object.freeze
         self.instance_variable_set "@#{name}", redis_object

@@ -5,8 +5,8 @@ Familia.apiversion = 'v1'
 
 
 ## Redis Objects are unique per instance of a Familia class
-@a = Bone.new 'atoken'
-@b = Bone.new 'btoken'
+@a = Bone.new 'atoken', :name1
+@b = Bone.new 'atoken', :name2
 @a.owners.rediskey == @b.owners.rediskey
 #=> false
 
@@ -33,7 +33,13 @@ Familia.split(@limiter.counter.rediskey).size
 @limiter.counter.ttl
 #=> 3600
 
+## Check ttl for a different instance
+## (this exists to make sure options are cloned for each instance)
+@limiter2 = Limiter.new :requests
+@limiter2.counter.ttl
+#=> 3600
+
 ## Check realttl
-sleep 2
+sleep 1
 @limiter.counter.realttl
-#=> 3600-2
+#=> 3600-1

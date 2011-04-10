@@ -50,9 +50,4 @@ Limiter.qstamp 10.minutes, '%H:%M', 1302468980
 ## Familia::Object#qstamp
 limiter = Limiter.new :request
 limiter.qstamp 10.minutes, '%H:%M', 1302468980
-#=> '20:50'
-
-## Familia::Object#qstamp
-limiter = Limiter.new :request
-limiter.qstamp 10.minutes, '%H:%M', 1302468980
-#=> '20:50'
+##=> '20:50'
