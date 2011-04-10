@@ -423,7 +423,9 @@ module Familia
           unless self.respond_to? meth
             raise NoIndex, "No such method: `#{meth}' for #{self.class}"
           end
-          self.send(meth) 
+          ret = self.send(meth)
+          ret = ret.index if ret.kind_of?(Familia)
+          ret
         }
         parts.join Familia.delim
       when Symbol, String
@@ -433,7 +435,9 @@ module Familia
           unless self.respond_to? self.class.index
             raise NoIndex, "No such method: `#{self.class.index}' for #{self.class}"
           end
-          self.send( self.class.index)
+          ret = self.send(self.class.index)
+          ret = ret.index if ret.kind_of?(Familia)
+          ret
         end
       else
         raise Familia::NoIndex, self

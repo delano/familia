@@ -11,6 +11,7 @@ FAMILIA, CHANGES
 * ADDED: Familia.qnow, Familia::Object.qstamp, RedisObject#qstamp
 * ADDED: RedisObject option: quantize
 * ADDED: Familia::Object#savenx
+* ADDED: Can now include a Familia object in Familia::Object.index (it uses its index)
 
 
 #### 0.7.0 (2011-03-04) ###############################
