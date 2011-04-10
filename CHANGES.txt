@@ -6,6 +6,7 @@ FAMILIA, CHANGES
 * FIXED: Explicitly convert boolean conf options to true or false. Redis client
   treats "true" as false.
 * CHANGE: Fix for Familia objects with custom suffixes
+* CHANGE: Familia::String methods that modify the key now automatically update_expiration.
 * ADDED: Familia.qnow, Familia::Object.qstamp, RedisObject#qstamp
 * ADDED: RedisObject option: quantize
 

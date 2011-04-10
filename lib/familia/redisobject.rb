@@ -920,27 +920,37 @@ module Familia
     end
     
     def increment
-      redis.incr rediskey
+      ret = redis.incr rediskey
+      update_expiration
+      ret
     end
     alias_method :incr, :increment
 
     def incrementby int
-      redis.incrby rediskey, int.to_i
+      ret = redis.incrby rediskey, int.to_i
+      update_expiration
+      ret
     end
     alias_method :incrby, :incrementby
 
     def decrement
-      redis.decr rediskey
+      ret = redis.decr rediskey
+      update_expiration
+      ret
     end
     alias_method :decr, :decrement
 
     def decrementby int
-      redis.decrby rediskey, int.to_i
+      ret = redis.decrby rediskey, int.to_i
+      update_expiration
+      ret
     end
     alias_method :decrby, :decrementby
     
     def append v
-      redis.append rediskey, v
+      ret = redis.append rediskey, v
+      update_expiration
+      ret
     end
     alias_method :<<, :append
 
@@ -949,7 +959,9 @@ module Familia
     end
 
     def setbit offset, v
-      redis.setbit rediskey, offset, v
+      ret = redis.setbit rediskey, offset, v
+      update_expiration
+      ret
     end
 
     def getrange spoint, epoint
@@ -957,11 +969,15 @@ module Familia
     end
 
     def setrange offset, v
-      redis.setrange rediskey, offset, v
+      ret = redis.setrange rediskey, offset, v
+      update_expiration
+      ret
     end
     
     def getset v
-      redis.getset rediskey, v
+      ret = redis.getset rediskey, v
+      update_expiration
+      ret
     end
     
     def nil?
