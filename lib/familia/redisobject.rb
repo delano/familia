@@ -930,7 +930,7 @@ module Familia
     alias_method :set, :value=  
     
     def setnx v
-      ret = redis.set rediskey, to_redis(v)
+      ret = redis.setnx rediskey, to_redis(v)
       update_expiration
       ret
     end
