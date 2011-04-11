@@ -55,17 +55,20 @@ Gem::Specification.new do |s|
       s.add_runtime_dependency(%q<uri-redis>, [">= 0.4.2"])
       s.add_runtime_dependency(%q<gibbler>, [">= 0.8.6"])
       s.add_runtime_dependency(%q<storable>, [">= 0.8.6"])
+      s.add_runtime_dependency(%q<multi_json>, [">= 0.0.5"])
     else
       s.add_dependency(%q<redis>, [">= 2.1.0"])
       s.add_dependency(%q<uri-redis>, [">= 0.4.2"])
       s.add_dependency(%q<gibbler>, [">= 0.8.6"])
       s.add_dependency(%q<storable>, [">= 0.8.6"])
+      s.add_dependency(%q<multi_json>, [">= 0.0.5"])
     end
   else
     s.add_dependency(%q<redis>, [">= 2.1.0"])
     s.add_dependency(%q<uri-redis>, [">= 0.4.2"])
     s.add_dependency(%q<gibbler>, [">= 0.8.6"])
     s.add_dependency(%q<storable>, [">= 0.8.6"])
+    s.add_dependency(%q<multi_json>, [">= 0.0.5"])
   end
 end
 

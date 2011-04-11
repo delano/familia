@@ -3,6 +3,7 @@ FAMILIA_LIB_HOME = File.expand_path File.dirname(__FILE__) unless defined?(FAMIL
 require 'uri/redis'
 require 'gibbler'
 require 'familia/core_ext'
+require 'multi_json'
 
 module Familia
   module VERSION

@@ -7,6 +7,27 @@ class Symbol
   end
 end
 
+class Hash
+  unless method_defined?(:to_json)
+    def to_json
+      MultiJson.encode self
+    end
+    def self.from_json str
+      MultiJson.decode str
+    end
+  end
+end
+class Array
+  unless method_defined?(:to_json)
+    def to_json
+      MultiJson.encode self
+    end
+    def self.from_json str
+      MultiJson.decode str
+    end
+  end
+end
+
 # Assumes Time::Units and Numeric mixins are available. 
 class String
   def in_seconds
