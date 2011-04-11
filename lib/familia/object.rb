@@ -409,17 +409,20 @@ module Familia
       save :setnx
     end
     def update! hsh=nil
-      if hsh.nil?
+      updated = false
+      hsh ||= {}
+      if hsh.empty?
         raise Familia::Problem, "No #{self.class}#{to_hash} method" unless respond_to?(:to_hash)
         ret = from_redis
         hsh = ret.to_hash if ret
       end
-      raise Familia::Problem, "No update data" if hsh.nil?
       hsh.keys.each { |field| 
         v = hsh[field.to_s] || hsh[field.to_s.to_sym]
-        self.send(:"#{field}=", v) unless v.nil?
+        next if v.nil?
+        self.send(:"#{field}=", v) 
+        updated = true
       }
-      self
+      updated
     end
     def destroy!
       ret = object_proxy.delete
