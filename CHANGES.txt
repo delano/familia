@@ -8,6 +8,7 @@ FAMILIA, CHANGES
 * FIXED: Clone options for each RedisObject instance to prevent cross contamination.
 * CHANGE: Fix for Familia objects with custom suffixes
 * CHANGE: Familia::String methods that modify the key now automatically update_expiration.
+* CHANGE: Familia::Object.prefix replaces :: in class names with Familia.delim
 * ADDED: Familia.qnow, Familia::Object.qstamp, RedisObject#qstamp
 * ADDED: RedisObject option: quantize
 * ADDED: Familia::Object#savenx

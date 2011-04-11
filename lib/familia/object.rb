@@ -186,7 +186,7 @@ module Familia
       val
     end
     def prefix=(a) @prefix = a end
-    def prefix(a=nil) @prefix = a if a; @prefix || self.name.downcase.to_sym end
+    def prefix(a=nil) @prefix = a if a; @prefix || self.name.downcase.gsub('::', Familia.delim).to_sym end
     # TODO: grab db, ttl, uri from parent
     #def parent=(a) @parent = a end
     #def parent(a=nil) @parent = a if a; @parent end
