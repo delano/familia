@@ -346,6 +346,10 @@ module Familia
       self.class.qstamp ttl, pattern, now
     end
     
+    def from_redis 
+      self.class.from_redis self.index
+    end
+    
     def redis
       self.class.redis
     end
