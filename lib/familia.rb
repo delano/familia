@@ -161,11 +161,6 @@ module Familia
     obj.send :include, Gibbler::Complex
     obj.extend Familia::ClassMethods
     obj.class_zset :instances, :class => obj, :reference => true
-    # :object is a special redis object because its reserved
-    # for storing the marshaled instance data (e.g. to_json).
-    # When it isn't defined explicitly we define it here b/c
-    # it's assumed to exist in other places (see #save).
-    obj.string :object, :class => obj unless obj.redis_object? :object
     Familia.classes << obj
   end
   

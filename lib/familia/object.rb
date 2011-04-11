@@ -52,18 +52,12 @@ module Familia
         names
       end
     end
-    
     def inherited(obj)
       obj.db = self.db
       obj.uri = self.uri
       obj.ttl = self.ttl
       obj.parent = self
       obj.class_zset :instances, :class => obj, :reference => true
-      # :object is a special redis object because its reserved
-      # for storing the marshaled instance data (e.g. to_json).
-      # When it isn't defined explicitly we define it here b/c
-      # it's assumed to exist in other places (see #save).
-      obj.string :object, :class => obj unless obj.redis_object? :object
       Familia.classes << obj
       super(obj)
     end
@@ -395,17 +389,21 @@ module Familia
       end
       self.class.rediskey self.index, suffix
     end
+    def object_writer
+      @object_writer ||= Familia::String.new self.rediskey, :ttl => ttl, :class => self.class
+      @object_writer
+    end
     def save meth=:set
       #Familia.trace :SAVE, Familia.redis(self.class.uri), redisuri, caller.first if Familia.debug?
       preprocess if respond_to?(:preprocess)
       self.update_time if self.respond_to?(:update_time)
-      ret = self.object.send(meth, self)       # object is a name reserved by Familia
+      ret = object_writer.send(meth, self)       # object is a name reserved by Familia
       unless ret.nil?
         now = Time.now.utc.to_i
         self.class.instances.add now, self     # use this set instead of Klass.keys
-        self.object.update_expiration self.ttl # does nothing unless if not specified
+        object_writer.update_expiration        # does nothing unless if not specified
       end
-      ret == "OK" || ret == 1
+      ret == "OK" || ret == true || ret == 1
     end
     def savenx 
       save :setnx
