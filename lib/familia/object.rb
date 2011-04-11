@@ -389,27 +389,40 @@ module Familia
       end
       self.class.rediskey self.index, suffix
     end
-    def object_writer
-      @object_writer ||= Familia::String.new self.rediskey, :ttl => ttl, :class => self.class
-      @object_writer
+    def object_proxy
+      @object_proxy ||= Familia::String.new self.rediskey, :ttl => ttl, :class => self.class
+      @object_proxy
     end
     def save meth=:set
       #Familia.trace :SAVE, Familia.redis(self.class.uri), redisuri, caller.first if Familia.debug?
       preprocess if respond_to?(:preprocess)
       self.update_time if self.respond_to?(:update_time)
-      ret = object_writer.send(meth, self)       # object is a name reserved by Familia
+      ret = object_proxy.send(meth, self)       # object is a name reserved by Familia
       unless ret.nil?
         now = Time.now.utc.to_i
         self.class.instances.add now, self     # use this set instead of Klass.keys
-        object_writer.update_expiration        # does nothing unless if not specified
+        object_proxy.update_expiration        # does nothing unless if not specified
       end
       ret == "OK" || ret == true || ret == 1
     end
     def savenx 
       save :setnx
     end
+    def update! hsh=nil
+      if hsh.nil?
+        raise Familia::Problem, "No #{self.class}#{to_hash} method" unless respond_to?(:to_hash)
+        ret = from_redis
+        hsh = ret.to_hash if ret
+      end
+      raise Familia::Problem, "No update data" if hsh.nil?
+      hsh.keys.each { |field| 
+        v = hsh[field.to_s] || hsh[field.to_s.to_sym]
+        self.send(:"#{field}=", v) unless v.nil?
+      }
+      self
+    end
     def destroy!
-      ret = self.object.delete
+      ret = object_proxy.delete
       if Familia.debug?
         Familia.trace :DELETED, Familia.redis(self.class.uri), "#{rediskey}: #{ret}", caller.first if Familia.debug?
       end

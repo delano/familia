@@ -9,13 +9,14 @@ FAMILIA, CHANGES
 * CHANGE: Fix for Familia objects with custom suffixes
 * CHANGE: Familia::String methods that modify the key now automatically update_expiration.
 * CHANGE: Familia::Object.prefix replaces :: in class names with Familia.delim
-* CHANGE: Use Familia::Object#object_writer instead of Familia::Object.string :object
+* CHANGE: Use Familia::Object#object_proxy instead of Familia::Object.string :object
 * ADDED: Familia.qnow, Familia::Object.qstamp, RedisObject#qstamp
 * ADDED: RedisObject option: quantize
 * ADDED: Familia::Object#savenx
 * ADDED: Can now include a Familia object in Familia::Object.index (it uses its index)
 * ADDED: Dependency multi_json
 * ADDED: Hash#to_json, Hash.from_json, Array#to_json, Array.from_json
+* ADDED: Familia::Object#update!
 
 
 #### 0.7.0 (2011-03-04) ###############################
