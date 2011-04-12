@@ -1,7 +1,7 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
 <html lang='en'>
   <head>
-    <title>: Familia::Stamps [familia 0.7.0]</title>
+    <title>: Familia::Stamps [familia 0.7.1]</title>
     <meta content='text/html; charset=UTF-8' http-equiv='Content-Type'>
     <link href='../../rdoc-style.css' media='screen' rel='stylesheet' type='text/css'>
     <script type='text/javascript'>
@@ -50,125 +50,125 @@
             <h2>Methods</h2>
             <h3>public class</h3>
             <ol>
-              <li><a href="#M000050">included</a></li>
+              <li><a href="#M000056">included</a></li>
             </ol>
             <h3>public instance</h3>
             <ol>
-              <li><a href="#M000052">created</a></li>
-              <li><a href="#M000054">created_age</a></li>
-              <li><a href="#M000051">init_stamps</a></li>
-              <li><a href="#M000056">update_time</a></li>
-              <li><a href="#M000057">update_time!</a></li>
-              <li><a href="#M000053">updated</a></li>
-              <li><a href="#M000055">updated_age</a></li>
+              <li><a href="#M000058">created</a></li>
+              <li><a href="#M000060">created_age</a></li>
+              <li><a href="#M000057">init_stamps</a></li>
+              <li><a href="#M000062">update_time</a></li>
+              <li><a href="#M000063">update_time!</a></li>
+              <li><a href="#M000059">updated</a></li>
+              <li><a href="#M000061">updated_age</a></li>
             </ol>
           </div>
           <div id='section'>
             <div id='methods'>
               <h2>Public class methods</h2>
-              <div class='method public-class' id='method-M000050'>
-                <a name='M000050'>      </a>
+              <div class='method public-class' id='method-M000056'>
+                <a name='M000056'>      </a>
                 <div class='synopsis'>
                   <span class='name'>included</span>
                   <span class='arguments'>(obj)</span>
                 </div>
                 <div class='source'>
-                  <a class='source-toggle' href='#' onclick="toggleCode('M000050-source'); return false">
+                  <a class='source-toggle' href='#' onclick="toggleCode('M000056-source'); return false">
                     [show source]
                   </a>
-                  <pre id='M000050-source'><span class="ruby-comment cmt"># File lib/familia/helpers.rb, line 11</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-keyword kw">self</span>.<span class="ruby-identifier">included</span>(<span class="ruby-identifier">obj</span>)&#x000A;      <span class="ruby-identifier">obj</span>.<span class="ruby-identifier">module_eval</span> <span class="ruby-keyword kw">do</span>&#x000A;        <span class="ruby-identifier">field</span> <span class="ruby-identifier">:created</span> =<span class="ruby-operator">&gt;</span> <span class="ruby-constant">Integer</span>&#x000A;        <span class="ruby-identifier">field</span> <span class="ruby-identifier">:updated</span> =<span class="ruby-operator">&gt;</span> <span class="ruby-constant">Integer</span>&#x000A;        <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">init_stamps</span>&#x000A;          <span class="ruby-identifier">now</span> = <span class="ruby-constant">Time</span>.<span class="ruby-identifier">now</span>.<span class="ruby-identifier">utc</span>.<span class="ruby-identifier">to_i</span>&#x000A;          <span class="ruby-ivar">@created</span> <span class="ruby-operator">||=</span> <span class="ruby-identifier">now</span>&#x000A;          <span class="ruby-ivar">@updated</span> <span class="ruby-operator">||=</span> <span class="ruby-identifier">now</span> &#x000A;        <span class="ruby-keyword kw">end</span>&#x000A;        <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">created</span>&#x000A;          <span class="ruby-ivar">@created</span> <span class="ruby-operator">||=</span> <span class="ruby-constant">Time</span>.<span class="ruby-identifier">now</span>.<span class="ruby-identifier">utc</span>.<span class="ruby-identifier">to_i</span>&#x000A;        <span class="ruby-keyword kw">end</span>&#x000A;        <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">updated</span>&#x000A;          <span class="ruby-ivar">@updated</span> <span class="ruby-operator">||=</span> <span class="ruby-constant">Time</span>.<span class="ruby-identifier">now</span>.<span class="ruby-identifier">utc</span>.<span class="ruby-identifier">to_i</span>&#x000A;        <span class="ruby-keyword kw">end</span>&#x000A;        <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">created_age</span>&#x000A;          <span class="ruby-constant">Time</span>.<span class="ruby-identifier">now</span>.<span class="ruby-identifier">utc</span>.<span class="ruby-identifier">to_i</span><span class="ruby-operator">-</span><span class="ruby-identifier">created</span>&#x000A;        <span class="ruby-keyword kw">end</span>&#x000A;        <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">updated_age</span>&#x000A;          <span class="ruby-constant">Time</span>.<span class="ruby-identifier">now</span>.<span class="ruby-identifier">utc</span>.<span class="ruby-identifier">to_i</span><span class="ruby-operator">-</span><span class="ruby-identifier">updated</span>&#x000A;        <span class="ruby-keyword kw">end</span>&#x000A;        <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">update_time</span>&#x000A;          <span class="ruby-ivar">@updated</span> = <span class="ruby-constant">Time</span>.<span class="ruby-identifier">now</span>.<span class="ruby-identifier">utc</span>.<span class="ruby-identifier">to_i</span>&#x000A;        <span class="ruby-keyword kw">end</span>&#x000A;        <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">update_time!</span>&#x000A;          <span class="ruby-identifier">update_time</span>&#x000A;          <span class="ruby-identifier">save</span> <span class="ruby-keyword kw">if</span> <span class="ruby-identifier">respond_to?</span> <span class="ruby-identifier">:save</span>&#x000A;          <span class="ruby-ivar">@updated</span>&#x000A;        <span class="ruby-keyword kw">end</span>&#x000A;      <span class="ruby-keyword kw">end</span>&#x000A;    <span class="ruby-keyword kw">end</span></pre>
+                  <pre id='M000056-source'><span class="ruby-comment cmt"># File lib/familia/helpers.rb, line 11</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-keyword kw">self</span>.<span class="ruby-identifier">included</span>(<span class="ruby-identifier">obj</span>)&#x000A;      <span class="ruby-identifier">obj</span>.<span class="ruby-identifier">module_eval</span> <span class="ruby-keyword kw">do</span>&#x000A;        <span class="ruby-identifier">field</span> <span class="ruby-identifier">:created</span> =<span class="ruby-operator">&gt;</span> <span class="ruby-constant">Integer</span>&#x000A;        <span class="ruby-identifier">field</span> <span class="ruby-identifier">:updated</span> =<span class="ruby-operator">&gt;</span> <span class="ruby-constant">Integer</span>&#x000A;        <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">init_stamps</span>&#x000A;          <span class="ruby-identifier">now</span> = <span class="ruby-constant">Time</span>.<span class="ruby-identifier">now</span>.<span class="ruby-identifier">utc</span>.<span class="ruby-identifier">to_i</span>&#x000A;          <span class="ruby-ivar">@created</span> <span class="ruby-operator">||=</span> <span class="ruby-identifier">now</span>&#x000A;          <span class="ruby-ivar">@updated</span> <span class="ruby-operator">||=</span> <span class="ruby-identifier">now</span> &#x000A;        <span class="ruby-keyword kw">end</span>&#x000A;        <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">created</span>&#x000A;          <span class="ruby-ivar">@created</span> <span class="ruby-operator">||=</span> <span class="ruby-constant">Time</span>.<span class="ruby-identifier">now</span>.<span class="ruby-identifier">utc</span>.<span class="ruby-identifier">to_i</span>&#x000A;        <span class="ruby-keyword kw">end</span>&#x000A;        <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">updated</span>&#x000A;          <span class="ruby-ivar">@updated</span> <span class="ruby-operator">||=</span> <span class="ruby-constant">Time</span>.<span class="ruby-identifier">now</span>.<span class="ruby-identifier">utc</span>.<span class="ruby-identifier">to_i</span>&#x000A;        <span class="ruby-keyword kw">end</span>&#x000A;        <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">created_age</span>&#x000A;          <span class="ruby-constant">Time</span>.<span class="ruby-identifier">now</span>.<span class="ruby-identifier">utc</span>.<span class="ruby-identifier">to_i</span><span class="ruby-operator">-</span><span class="ruby-identifier">created</span>&#x000A;        <span class="ruby-keyword kw">end</span>&#x000A;        <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">updated_age</span>&#x000A;          <span class="ruby-constant">Time</span>.<span class="ruby-identifier">now</span>.<span class="ruby-identifier">utc</span>.<span class="ruby-identifier">to_i</span><span class="ruby-operator">-</span><span class="ruby-identifier">updated</span>&#x000A;        <span class="ruby-keyword kw">end</span>&#x000A;        <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">update_time</span>&#x000A;          <span class="ruby-ivar">@updated</span> = <span class="ruby-constant">Time</span>.<span class="ruby-identifier">now</span>.<span class="ruby-identifier">utc</span>.<span class="ruby-identifier">to_i</span>&#x000A;        <span class="ruby-keyword kw">end</span>&#x000A;        <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">update_time!</span>&#x000A;          <span class="ruby-identifier">update_time</span>&#x000A;          <span class="ruby-identifier">save</span> <span class="ruby-keyword kw">if</span> <span class="ruby-identifier">respond_to?</span> <span class="ruby-identifier">:save</span>&#x000A;          <span class="ruby-ivar">@updated</span>&#x000A;        <span class="ruby-keyword kw">end</span>&#x000A;      <span class="ruby-keyword kw">end</span>&#x000A;    <span class="ruby-keyword kw">end</span></pre>
                 </div>
               </div>
               <h2>Public instance methods</h2>
-              <div class='method public-instance' id='method-M000052'>
-                <a name='M000052'>      </a>
+              <div class='method public-instance' id='method-M000058'>
+                <a name='M000058'>      </a>
                 <div class='synopsis'>
                   <span class='name'>created</span>
                   <span class='arguments'>()</span>
                 </div>
                 <div class='source'>
-                  <a class='source-toggle' href='#' onclick="toggleCode('M000052-source'); return false">
+                  <a class='source-toggle' href='#' onclick="toggleCode('M000058-source'); return false">
                     [show source]
                   </a>
-                  <pre id='M000052-source'><span class="ruby-comment cmt"># File lib/familia/helpers.rb, line 20</span>&#x000A;        <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">created</span>&#x000A;          <span class="ruby-ivar">@created</span> <span class="ruby-operator">||=</span> <span class="ruby-constant">Time</span>.<span class="ruby-identifier">now</span>.<span class="ruby-identifier">utc</span>.<span class="ruby-identifier">to_i</span>&#x000A;        <span class="ruby-keyword kw">end</span></pre>
+                  <pre id='M000058-source'><span class="ruby-comment cmt"># File lib/familia/helpers.rb, line 20</span>&#x000A;        <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">created</span>&#x000A;          <span class="ruby-ivar">@created</span> <span class="ruby-operator">||=</span> <span class="ruby-constant">Time</span>.<span class="ruby-identifier">now</span>.<span class="ruby-identifier">utc</span>.<span class="ruby-identifier">to_i</span>&#x000A;        <span class="ruby-keyword kw">end</span></pre>
                 </div>
               </div>
-              <div class='method public-instance' id='method-M000054'>
-                <a name='M000054'>      </a>
+              <div class='method public-instance' id='method-M000060'>
+                <a name='M000060'>      </a>
                 <div class='synopsis'>
                   <span class='name'>created_age</span>
                   <span class='arguments'>()</span>
                 </div>
                 <div class='source'>
-                  <a class='source-toggle' href='#' onclick="toggleCode('M000054-source'); return false">
+                  <a class='source-toggle' href='#' onclick="toggleCode('M000060-source'); return false">
                     [show source]
                   </a>
-                  <pre id='M000054-source'><span class="ruby-comment cmt"># File lib/familia/helpers.rb, line 26</span>&#x000A;        <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">created_age</span>&#x000A;          <span class="ruby-constant">Time</span>.<span class="ruby-identifier">now</span>.<span class="ruby-identifier">utc</span>.<span class="ruby-identifier">to_i</span><span class="ruby-operator">-</span><span class="ruby-identifier">created</span>&#x000A;        <span class="ruby-keyword kw">end</span></pre>
-                </div>
-              </div>
-              <div class='method public-instance' id='method-M000051'>
-                <a name='M000051'>      </a>
-                <div class='synopsis'>
-                  <span class='name'>init_stamps</span>
-                  <span class='arguments'>()</span>
-                </div>
-                <div class='source'>
-                  <a class='source-toggle' href='#' onclick="toggleCode('M000051-source'); return false">
-                    [show source]
-                  </a>
-                  <pre id='M000051-source'><span class="ruby-comment cmt"># File lib/familia/helpers.rb, line 15</span>&#x000A;        <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">init_stamps</span>&#x000A;          <span class="ruby-identifier">now</span> = <span class="ruby-constant">Time</span>.<span class="ruby-identifier">now</span>.<span class="ruby-identifier">utc</span>.<span class="ruby-identifier">to_i</span>&#x000A;          <span class="ruby-ivar">@created</span> <span class="ruby-operator">||=</span> <span class="ruby-identifier">now</span>&#x000A;          <span class="ruby-ivar">@updated</span> <span class="ruby-operator">||=</span> <span class="ruby-identifier">now</span> &#x000A;        <span class="ruby-keyword kw">end</span></pre>
-                </div>
-              </div>
-              <div class='method public-instance' id='method-M000056'>
-                <a name='M000056'>      </a>
-                <div class='synopsis'>
-                  <span class='name'>update_time</span>
-                  <span class='arguments'>()</span>
-                </div>
-                <div class='source'>
-                  <a class='source-toggle' href='#' onclick="toggleCode('M000056-source'); return false">
-                    [show source]
-                  </a>
-                  <pre id='M000056-source'><span class="ruby-comment cmt"># File lib/familia/helpers.rb, line 32</span>&#x000A;        <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">update_time</span>&#x000A;          <span class="ruby-ivar">@updated</span> = <span class="ruby-constant">Time</span>.<span class="ruby-identifier">now</span>.<span class="ruby-identifier">utc</span>.<span class="ruby-identifier">to_i</span>&#x000A;        <span class="ruby-keyword kw">end</span></pre>
+                  <pre id='M000060-source'><span class="ruby-comment cmt"># File lib/familia/helpers.rb, line 26</span>&#x000A;        <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">created_age</span>&#x000A;          <span class="ruby-constant">Time</span>.<span class="ruby-identifier">now</span>.<span class="ruby-identifier">utc</span>.<span class="ruby-identifier">to_i</span><span class="ruby-operator">-</span><span class="ruby-identifier">created</span>&#x000A;        <span class="ruby-keyword kw">end</span></pre>
                 </div>
               </div>
               <div class='method public-instance' id='method-M000057'>
                 <a name='M000057'>      </a>
                 <div class='synopsis'>
-                  <span class='name'>update_time!</span>
+                  <span class='name'>init_stamps</span>
                   <span class='arguments'>()</span>
                 </div>
                 <div class='source'>
                   <a class='source-toggle' href='#' onclick="toggleCode('M000057-source'); return false">
                     [show source]
                   </a>
-                  <pre id='M000057-source'><span class="ruby-comment cmt"># File lib/familia/helpers.rb, line 35</span>&#x000A;        <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">update_time!</span>&#x000A;          <span class="ruby-identifier">update_time</span>&#x000A;          <span class="ruby-identifier">save</span> <span class="ruby-keyword kw">if</span> <span class="ruby-identifier">respond_to?</span> <span class="ruby-identifier">:save</span>&#x000A;          <span class="ruby-ivar">@updated</span>&#x000A;        <span class="ruby-keyword kw">end</span></pre>
+                  <pre id='M000057-source'><span class="ruby-comment cmt"># File lib/familia/helpers.rb, line 15</span>&#x000A;        <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">init_stamps</span>&#x000A;          <span class="ruby-identifier">now</span> = <span class="ruby-constant">Time</span>.<span class="ruby-identifier">now</span>.<span class="ruby-identifier">utc</span>.<span class="ruby-identifier">to_i</span>&#x000A;          <span class="ruby-ivar">@created</span> <span class="ruby-operator">||=</span> <span class="ruby-identifier">now</span>&#x000A;          <span class="ruby-ivar">@updated</span> <span class="ruby-operator">||=</span> <span class="ruby-identifier">now</span> &#x000A;        <span class="ruby-keyword kw">end</span></pre>
                 </div>
               </div>
-              <div class='method public-instance' id='method-M000053'>
-                <a name='M000053'>      </a>
+              <div class='method public-instance' id='method-M000062'>
+                <a name='M000062'>      </a>
+                <div class='synopsis'>
+                  <span class='name'>update_time</span>
+                  <span class='arguments'>()</span>
+                </div>
+                <div class='source'>
+                  <a class='source-toggle' href='#' onclick="toggleCode('M000062-source'); return false">
+                    [show source]
+                  </a>
+                  <pre id='M000062-source'><span class="ruby-comment cmt"># File lib/familia/helpers.rb, line 32</span>&#x000A;        <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">update_time</span>&#x000A;          <span class="ruby-ivar">@updated</span> = <span class="ruby-constant">Time</span>.<span class="ruby-identifier">now</span>.<span class="ruby-identifier">utc</span>.<span class="ruby-identifier">to_i</span>&#x000A;        <span class="ruby-keyword kw">end</span></pre>
+                </div>
+              </div>
+              <div class='method public-instance' id='method-M000063'>
+                <a name='M000063'>      </a>
+                <div class='synopsis'>
+                  <span class='name'>update_time!</span>
+                  <span class='arguments'>()</span>
+                </div>
+                <div class='source'>
+                  <a class='source-toggle' href='#' onclick="toggleCode('M000063-source'); return false">
+                    [show source]
+                  </a>
+                  <pre id='M000063-source'><span class="ruby-comment cmt"># File lib/familia/helpers.rb, line 35</span>&#x000A;        <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">update_time!</span>&#x000A;          <span class="ruby-identifier">update_time</span>&#x000A;          <span class="ruby-identifier">save</span> <span class="ruby-keyword kw">if</span> <span class="ruby-identifier">respond_to?</span> <span class="ruby-identifier">:save</span>&#x000A;          <span class="ruby-ivar">@updated</span>&#x000A;        <span class="ruby-keyword kw">end</span></pre>
+                </div>
+              </div>
+              <div class='method public-instance' id='method-M000059'>
+                <a name='M000059'>      </a>
                 <div class='synopsis'>
                   <span class='name'>updated</span>
                   <span class='arguments'>()</span>
                 </div>
                 <div class='source'>
-                  <a class='source-toggle' href='#' onclick="toggleCode('M000053-source'); return false">
+                  <a class='source-toggle' href='#' onclick="toggleCode('M000059-source'); return false">
                     [show source]
                   </a>
-                  <pre id='M000053-source'><span class="ruby-comment cmt"># File lib/familia/helpers.rb, line 23</span>&#x000A;        <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">updated</span>&#x000A;          <span class="ruby-ivar">@updated</span> <span class="ruby-operator">||=</span> <span class="ruby-constant">Time</span>.<span class="ruby-identifier">now</span>.<span class="ruby-identifier">utc</span>.<span class="ruby-identifier">to_i</span>&#x000A;        <span class="ruby-keyword kw">end</span></pre>
+                  <pre id='M000059-source'><span class="ruby-comment cmt"># File lib/familia/helpers.rb, line 23</span>&#x000A;        <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">updated</span>&#x000A;          <span class="ruby-ivar">@updated</span> <span class="ruby-operator">||=</span> <span class="ruby-constant">Time</span>.<span class="ruby-identifier">now</span>.<span class="ruby-identifier">utc</span>.<span class="ruby-identifier">to_i</span>&#x000A;        <span class="ruby-keyword kw">end</span></pre>
                 </div>
               </div>
-              <div class='method public-instance' id='method-M000055'>
-                <a name='M000055'>      </a>
+              <div class='method public-instance' id='method-M000061'>
+                <a name='M000061'>      </a>
                 <div class='synopsis'>
                   <span class='name'>updated_age</span>
                   <span class='arguments'>()</span>
                 </div>
                 <div class='source'>
-                  <a class='source-toggle' href='#' onclick="toggleCode('M000055-source'); return false">
+                  <a class='source-toggle' href='#' onclick="toggleCode('M000061-source'); return false">
                     [show source]
                   </a>
-                  <pre id='M000055-source'><span class="ruby-comment cmt"># File lib/familia/helpers.rb, line 29</span>&#x000A;        <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">updated_age</span>&#x000A;          <span class="ruby-constant">Time</span>.<span class="ruby-identifier">now</span>.<span class="ruby-identifier">utc</span>.<span class="ruby-identifier">to_i</span><span class="ruby-operator">-</span><span class="ruby-identifier">updated</span>&#x000A;        <span class="ruby-keyword kw">end</span></pre>
+                  <pre id='M000061-source'><span class="ruby-comment cmt"># File lib/familia/helpers.rb, line 29</span>&#x000A;        <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">updated_age</span>&#x000A;          <span class="ruby-constant">Time</span>.<span class="ruby-identifier">now</span>.<span class="ruby-identifier">utc</span>.<span class="ruby-identifier">to_i</span><span class="ruby-operator">-</span><span class="ruby-identifier">updated</span>&#x000A;        <span class="ruby-keyword kw">end</span></pre>
                 </div>
               </div>
             </div>

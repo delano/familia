@@ -1,7 +1,7 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
 <html lang='en'>
   <head>
-    <title>File: README.rdoc [familia 0.7.0]</title>
+    <title>File: README.rdoc [familia 0.7.1]</title>
     <meta content='text/html; charset=UTF-8' http-equiv='Content-Type'>
     <link href='../rdoc-style.css' media='screen' rel='stylesheet' type='text/css'>
     <script type='text/javascript'>
@@ -31,18 +31,22 @@
         </div>
         <div class='last-update'>
           Last Update:
-          <span class='datetime'>2011-02-08 18:46:21 -0500</span>
+          <span class='datetime'>2011-04-11 23:56:54 -0400</span>
         </div>
       </div>
       <div id='content'>
         <div id='text'>
           <div id='description'>
             <p>
-            # <a href="../classes/Familia.html">Familia</a> - 0.6 BETA
+            # <a href="../classes/Familia.html">Familia</a> - 0.7 BETA
             </p>
             <p>
             **Organize and store ruby objects in Redis**
             </p>
+            <p>
+            ## Basic Example
+            </p>
+            <pre>class Bone &lt; Storable&#x000A;  include Familia&#x000A;  index [:token, :name]&#x000A;  field :token&#x000A;  field :name&#x000A;  list   :owners&#x000A;  set    :tags&#x000A;  zset   :metrics&#x000A;  hash   :props&#x000A;  string :value, :default =&gt; &quot;GREAT!&quot;&#x000A;end</pre>
             <p>
             ## More Information
             </p>

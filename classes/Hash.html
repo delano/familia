@@ -1,7 +1,7 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
 <html lang='en'>
   <head>
-    <title>: Symbol [familia 0.7.1]</title>
+    <title>: Hash [familia 0.7.1]</title>
     <meta content='text/html; charset=UTF-8' http-equiv='Content-Type'>
     <link href='../rdoc-style.css' media='screen' rel='stylesheet' type='text/css'>
     <script type='text/javascript'>
@@ -27,7 +27,7 @@
       <div class='header'>
         <h1 class='name'>
           <span class='type'>Class</span>
-          Symbol
+          Hash
         </h1>
         <ol class='paths'>
           <li>
@@ -41,32 +41,45 @@
       </div>
       <div id='content'>
         <div id='text'>
-          <div id='description'>
-            <p>
-            encoding: utf-8
-            </p>
-          </div>
           <div id='method-list'>
             <h2>Methods</h2>
+            <h3>public class</h3>
+            <ol>
+              <li><a href="#M000003">from_json</a></li>
+            </ol>
             <h3>public instance</h3>
             <ol>
-              <li><a href="#M000001">to_proc</a></li>
+              <li><a href="#M000002">to_json</a></li>
             </ol>
           </div>
           <div id='section'>
             <div id='methods'>
-              <h2>Public instance methods</h2>
-              <div class='method public-instance' id='method-M000001'>
-                <a name='M000001'>      </a>
+              <h2>Public class methods</h2>
+              <div class='method public-class' id='method-M000003'>
+                <a name='M000003'>      </a>
                 <div class='synopsis'>
-                  <span class='name'>to_proc</span>
+                  <span class='name'>from_json</span>
+                  <span class='arguments'>(str)</span>
+                </div>
+                <div class='source'>
+                  <a class='source-toggle' href='#' onclick="toggleCode('M000003-source'); return false">
+                    [show source]
+                  </a>
+                  <pre id='M000003-source'><span class="ruby-comment cmt"># File lib/familia/core_ext.rb, line 15</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-keyword kw">self</span>.<span class="ruby-identifier">from_json</span> <span class="ruby-identifier">str</span>&#x000A;      <span class="ruby-constant">MultiJson</span>.<span class="ruby-identifier">decode</span> <span class="ruby-identifier">str</span>&#x000A;    <span class="ruby-keyword kw">end</span></pre>
+                </div>
+              </div>
+              <h2>Public instance methods</h2>
+              <div class='method public-instance' id='method-M000002'>
+                <a name='M000002'>      </a>
+                <div class='synopsis'>
+                  <span class='name'>to_json</span>
                   <span class='arguments'>()</span>
                 </div>
                 <div class='source'>
-                  <a class='source-toggle' href='#' onclick="toggleCode('M000001-source'); return false">
+                  <a class='source-toggle' href='#' onclick="toggleCode('M000002-source'); return false">
                     [show source]
                   </a>
-                  <pre id='M000001-source'><span class="ruby-comment cmt"># File lib/familia/core_ext.rb, line 4</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">to_proc</span>&#x000A;      <span class="ruby-identifier">proc</span> { <span class="ruby-operator">|</span><span class="ruby-identifier">obj</span>, <span class="ruby-operator">*</span><span class="ruby-identifier">args</span><span class="ruby-operator">|</span> <span class="ruby-identifier">obj</span>.<span class="ruby-identifier">send</span>(<span class="ruby-keyword kw">self</span>, <span class="ruby-operator">*</span><span class="ruby-identifier">args</span>) }&#x000A;    <span class="ruby-keyword kw">end</span></pre>
+                  <pre id='M000002-source'><span class="ruby-comment cmt"># File lib/familia/core_ext.rb, line 12</span>&#x000A;    <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">to_json</span>&#x000A;      <span class="ruby-constant">MultiJson</span>.<span class="ruby-identifier">encode</span> <span class="ruby-keyword kw">self</span>&#x000A;    <span class="ruby-keyword kw">end</span></pre>
                 </div>
               </div>
             </div>
