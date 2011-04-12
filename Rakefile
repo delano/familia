@@ -29,9 +29,7 @@ begin
     gem.add_dependency("uri-redis",  ">= 0.4.2")
     gem.add_dependency("gibbler",    ">= 0.8.6")
     gem.add_dependency("storable",   ">= 0.8.6")
-    
-    #gem.add_development_dependency("rspec", ">= 1.2.9")
-    #gem.add_development_dependency("mocha", ">= 0.9.8")
+    gem.add_dependency("multi_json", ">= 0.0.5")
   end
   Jeweler::GemcutterTasks.new
 rescue LoadError
