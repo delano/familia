@@ -1,5 +1,10 @@
 FAMILIA, CHANGES
 
+#### 0.7.2 (2011-04-??) ###############################
+
+* CHANGE: RedisObject#qstamp now uses the quantized time in seconds as the suffix
+* ADDED: SortedSet#revrangebyscore
+
 
 #### 0.7.1 (2011-04-09) ###############################
 

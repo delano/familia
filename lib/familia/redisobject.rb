@@ -85,7 +85,7 @@ module Familia
     # Takes one of the following:
     #   Boolean: include the default stamp (now % 10 minutes)
     #   Integer: the number of seconds to quantize to (e.g. 1.hour)
-    #   Array: All arguments for qstamp (quantum, pattern, Time.now)
+    #   Array: All arguments for qstamp (quantum, Time.now)
     #
     # :default => the default value (String-only)
     #
@@ -166,17 +166,7 @@ module Familia
       else
         k = [name].flatten.compact.join(Familia.delim)
       end
-      if @opts[:quantize]
-        args = case @opts[:quantize]
-        when Numeric
-          [@opts[:quantize]]        # :quantize => 1.minute
-        when Array
-          @opts[:quantize]          # :quantize => [1.day, '%m%D']
-        else
-          []                        # :quantize => true
-        end
-        k = [k, qstamp(*args)].join(Familia.delim)
-      end
+      k = [k, qstamp].join(Familia.delim) if @opts[:quantize]
       k
     end
     
@@ -188,11 +178,18 @@ module Familia
       Class === parent || Module === parent || parent.kind_of?(Familia)
     end
     
-    def qstamp quantum=nil, pattern=nil, now=Familia.now
+    def qstamp quantum=nil, now=nil
+      case @opts[:quantize]
+      when Numeric
+        quantum ||= @opts[:quantize]         # :quantize => 1.minute
+      when Array
+        quantum ||= @opts[:quantize][0]      # :quantize => [1.day, Time.now.utc.to_i]
+        now ||= @opts[:quantize][1]
+      end
       quantum ||= ttl || 10.minutes
-      pattern ||= '%H%M'
+      now ||= Familia.now
       rounded = now - (now % quantum)
-      Time.at(rounded).utc.strftime(pattern)
+      Time.at(rounded).utc.to_i
     end
     
     def update_expiration(ttl=nil)
@@ -753,6 +750,19 @@ module Familia
       echo :rangebyscoreraw, caller[0] if Familia.debug
       opts[:with_scores] = true if opts[:withscores]
       redis.zrangebyscore(rediskey, sscore, escore, opts)
+    end
+
+    # e.g. obj.metrics.revrangebyscore (now-12.hours), now, :limit => [0, 10]
+    def revrangebyscore sscore, escore, opts={}
+      echo :revrangebyscore, caller[0] if Familia.debug
+      el = revrangebyscoreraw(sscore, escore, opts)
+      multi_from_redis *el
+    end
+    
+    def revrangebyscoreraw sscore, escore, opts={}
+      echo :revrangebyscoreraw, caller[0] if Familia.debug
+      opts[:with_scores] = true if opts[:withscores]
+      redis.zrevrangebyscore(rediskey, sscore, escore, opts)
     end
     
     def remrangebyrank srank, erank
