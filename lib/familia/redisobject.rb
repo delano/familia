@@ -286,25 +286,29 @@ module Familia
     end
     
     def multi_from_redis *values
+      multi_from_redis_with_nil(*values).compact
+    end
+    
+    def multi_from_redis_with_nil *values
       Familia.ld "multi_from_redis: (#{@opts}) #{values}"
       return [] if values.empty?
       return values.flatten unless @opts[:class]
       ret = case @opts[:class]
       when ::String
-        v.to_s
+        values
       when ::Symbol
-        v.to_s.to_sym
+        values.collect { |v| v.to_s.to_sym }
       when ::Fixnum, ::Float
-        @opts[:class].induced_from v
+        values.collect { |v| @opts[:class].induced_from(v) }
       else
         objs = values
         
         if @opts[:reference] == true
           objs = @opts[:class].rawmultiget *values
         end
-        objs.compact!
         if @opts[:class].respond_to? load_method
-          objs.collect! { |obj| 
+          objs.collect! do |obj| 
+            next if obj.nil?
             begin
               v = @opts[:class].send load_method, obj
               if v.nil?
@@ -317,11 +321,10 @@ module Familia
               Familia.info ex.backtrace
               nil
             end
-          }
+          end
         else
           raise Familia::Problem, "No such method: #{@opts[:class]}##{load_method}"
         end
-        objs.compact # don't use compact! b/c the return value appears in ret
       end
       ret
     end
@@ -895,7 +898,7 @@ module Familia
     
     def values_at *names
       el = redis.hmget(rediskey, *names.flatten.compact)
-      multi_from_redis *el
+      multi_from_redis_with_nil *el
     end
     
     Familia::RedisObject.register self, :hash

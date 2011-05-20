@@ -3,6 +3,7 @@ FAMILIA, CHANGES
 #### 0.7.2 (2011-04-??) ###############################
 
 * CHANGE: RedisObject#qstamp now uses the quantized time in seconds as the suffix
+* ADDED: RedisObject#multi_from_redis_with_nil w/ fix for String, Symbol, Fixnum
 * ADDED: SortedSet#revrangebyscore
 
 
