@@ -15,14 +15,14 @@ Familia.apiversion = 'v1'
 #=> true
 
 
-## Limiter#qstamp
+## Limiter counter qstamp
 @limiter = Limiter.new :requests
-@limiter.counter.qstamp 10.minutes, '%H:%M', 1302468980
-#=> '20:50'
+@limiter.counter.qstamp 10.minutes, 1302468980
+#=> 1302468600
 
 ## Redis Objects can be stored to quantized keys
 @limiter.counter.rediskey
-#=> "v1:limiter:requests:counter:20:50"
+#=> "v1:limiter:requests:counter:1302468600"
 
 ## Increment counter
 @limiter.counter.clear
