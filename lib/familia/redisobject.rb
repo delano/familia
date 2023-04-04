@@ -258,6 +258,10 @@ module Familia
     end
 
     def to_redis v
+      if v.class == TrueClass || v.class == FalseClass || v.class == NilClass
+        return v.send Familia.dump_method
+      end
+
       return v unless @opts[:class]
       ret = case @opts[:class]
       when ::Symbol, ::String, ::Integer, ::Float, Gibbler::Digest
