@@ -2,12 +2,12 @@ source 'https://rubygems.org'
 
 ruby '>= 2.6.8'
 
-gem 'redis'
+gem 'redis', '~> 4.8'
 gem 'uri-redis'
-gem 'gibbler', '>= 0.10.0.pre.RC1'
-gem 'storable', '>= 0.10.pre.RC1'
+gem 'gibbler'
+gem 'storable'
 gem 'multi_json'
 
 group :development, :test do
-  gem 'tryouts', '2.2.0.pre.RC1'
+  gem 'tryouts', '~> 2.2'
 end

@@ -1,35 +1,36 @@
 GEM
   remote: https://rubygems.org/
   specs:
+    attic (1.0.0)
+      rake (~> 13.0.6)
     drydock (0.6.9)
-    gibbler (0.10.0.pre.RC1)
-      rake
+    gibbler (1.0.0)
+      attic (~> 1.0)
+      rake (~> 13.0)
     multi_json (1.15.0)
-    rake (13.2.0)
+    rake (13.0.6)
     redis (4.8.1)
-    storable (0.10.pre.RC1)
-    sysinfo (0.9.0.pre.RC1)
+    storable (0.10.0)
+    sysinfo (0.10.0)
       drydock (< 1.0)
-      storable (= 0.10.pre.RC1)
-    tryouts (2.2.0.pre.RC1)
-      sysinfo (= 0.9.0.pre.RC1)
-    uri-redis (1.0.0)
-      redis (~> 4.1, >= 4.1.0)
+      storable (~> 0.10)
+    tryouts (2.2.0)
+      sysinfo (~> 0.10)
+    uri-redis (0.4.2)
 
 PLATFORMS
-  arm64-darwin-23
-  ruby
+  arm64-darwin-22
 
 DEPENDENCIES
-  gibbler (>= 0.10.0.pre.RC1)
+  gibbler
   multi_json
-  redis
-  storable (>= 0.10.pre.RC1)
-  tryouts (= 2.2.0.pre.RC1)
+  redis (~> 4.8)
+  storable
+  tryouts (~> 2.2)
   uri-redis
 
 RUBY VERSION
-   ruby 3.1.4p223
+   ruby 2.6.8p205
 
 BUNDLED WITH
-   2.5.7
+   2.4.12
