@@ -90,34 +90,34 @@ module Familia
       end
       redis_objects[name]
     end
-    
+
     def qstamp quantum=nil, pattern=nil, now=Familia.now
       quantum ||= ttl || 10.minutes
       pattern ||= '%H%M'
       rounded = now - (now % quantum)
       Time.at(rounded).utc.strftime(pattern)
     end
-    
+
     # Creates a class method called +name+ that
-    # returns an instance of the RedisObject +klass+ 
+    # returns an instance of the RedisObject +klass+
     def install_class_redis_object name, klass, opts
       raise ArgumentError, "Name is blank" if name.to_s.empty?
       name = name.to_s.to_sym
       opts = opts.nil? ? {} : opts.clone
       opts[:parent] = self unless opts.has_key?(:parent)
-      # TODO: investigate using metaclass.redis_objects
+      # TODO: investigate using attic.redis_objects
       class_redis_objects_order << name
       class_redis_objects[name] = OpenStruct.new
       class_redis_objects[name].name = name
       class_redis_objects[name].klass = klass
-      class_redis_objects[name].opts = opts 
+      class_redis_objects[name].opts = opts
       # An accessor method created in the metclass will
-      # access the instance variables for this class. 
-      metaclass.send :attr_reader, name
-      metaclass.send :define_method, "#{name}=" do |v|
+      # access the instance variables for this class.
+      attic.send :attr_reader, name
+      attic.send :define_method, "#{name}=" do |v|
         send(name).replace v
       end
-      metaclass.send :define_method, "#{name}?" do
+      attic.send :define_method, "#{name}?" do
         !send(name).empty?
       end
       redis_object = klass.new name, opts
