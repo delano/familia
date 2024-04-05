@@ -508,7 +508,7 @@ module Familia
     end
 
     def add *values
-      values.flatten.compact.each { |v| redis.sadd rediskey, to_redis(v) }
+      values.flatten.compact.each { |v| redis.sadd? rediskey, to_redis(v) }
       update_expiration
       self
     end
