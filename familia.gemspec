@@ -4,7 +4,7 @@ Gem::Specification.new do |s|
   s.summary     = "Organize and store ruby objects in Redis"
   s.description = "Familia: #{s.summary}"
   s.authors     = ["Delano Mandelbaum"]
-  s.email       = "delano@solutious.com"
+  s.email       = "gems@solutious.com"
   s.homepage    = "https://github.com/delano/familia"
   s.license     = "MIT"
 
@@ -14,10 +14,4 @@ Gem::Specification.new do |s|
   s.require_paths = ["lib"]
 
   s.required_ruby_version = Gem::Requirement.new(">= 2.7.8")
-
-  s.add_dependency "redis", ">= 4.8", "< 7"
-  s.add_dependency "uri-redis", ">= 1.0.0"
-  s.add_dependency "gibbler", "~> 1.0.0"
-  s.add_dependency "storable", "~> 0.10.0"
-  s.add_dependency "multi_json", "~> 1.15"
 end
