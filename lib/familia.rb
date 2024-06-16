@@ -46,13 +46,13 @@ module Familia
     def ld *msg
       info *msg if debug?
     end
-    def trace label, redis_client, ident, context=nil
+    def trace label, redis_instance, ident, context=nil
       return unless Familia.debug?
-      info "[%s] %s/%s" % [label, redis_client.uri, ident] 
+      info "[%s] %s/%s" % [label, redis_instance.id, ident]
       if context
         context = [context].flatten
         context.reject! { |line| line =~ /lib\/familia/ }
-        info "   %s" % context[0..6].join("\n   ") 
+        info "   %s" % context[0..6].join("\n   ")
       end
     end
     def uri= v
@@ -61,9 +61,9 @@ module Familia
     end
     # A convenience method for returning the appropriate Redis
     # connection. If +uri+ is an Integer, we'll treat it as a
-    # database number. If it's a String, we'll treat it as a 
+    # database number. If it's a String, we'll treat it as a
     # full URI (e.g. redis://1.2.3.4/15).
-    # Otherwise we'll return the default connection. 
+    # Otherwise we'll return the default connection.
     def redis(uri=nil)
       if Integer === uri
         tmp = Familia.uri
@@ -73,7 +73,7 @@ module Familia
         uri &&= URI.parse uri
       end
       uri ||= Familia.uri
-      connect(uri) unless @clients[uri.serverid] 
+      connect(uri) unless @clients[uri.serverid]
       @clients[uri.serverid]
     end
     def log(level, path)
@@ -111,29 +111,29 @@ module Familia
       el.unshift @apiversion unless @apiversion.nil?
       el.join(Familia.delim)
     end
-    def apiversion(r=nil, &blk)  
+    def apiversion(r=nil, &blk)
       if blk.nil?
-        @apiversion = r if r; 
+        @apiversion = r if r;
       else
         tmp = @apiversion
         @apiversion = r
         blk.call
         @apiversion = tmp
       end
-      @apiversion 
+      @apiversion
     end
     def now n=Time.now
       n.utc.to_i
     end
     # A quantized timestamp
     # e.g. 12:32 -> 12:30
-    # 
+    #
     def qnow quantum=10.minutes, now=Familia.now
       rounded = now - (now % quantum)
       Time.at(rounded).utc.to_i
     end
   end
-  
+
   class Problem < RuntimeError; end
   class NoIndex < Problem; end
   class NonUniqueKey < Problem; end
@@ -146,7 +146,7 @@ module Familia
       "No client for #{uri.serverid}"
     end
   end
-  
+
   def self.included(obj)
     obj.send :include, Familia::InstanceMethods
     obj.send :include, Gibbler::Complex
@@ -154,7 +154,7 @@ module Familia
     obj.class_zset :instances, :class => obj, :reference => true
     Familia.classes << obj
   end
-  
+
   require 'familia/object'
   require 'familia/helpers'
 
@@ -170,5 +170,5 @@ module Familia
     def included(obj)
       self.klasses << obj
     end
-  end  
+  end
 end
