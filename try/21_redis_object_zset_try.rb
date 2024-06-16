@@ -1,6 +1,8 @@
 require 'familia'
 require 'familia/test_helpers'
 
+# Familia.debug = true
+
 @a = Bone.new 'atoken', 'akey'
 
 ## Familia::SortedSet#add
@@ -9,11 +11,11 @@ require 'familia/test_helpers'
 @a.metrics.add 0, :metric0
 @a.metrics.add 1, :metric1
 @a.metrics.add 3, :metric3
-##=> true
+#=> true
 
 ## Familia::SortedSet#members
 @a.metrics.members
-##=> ['metric0', 'metric1', 'metric2', 'metric3', 'metric4']
+#=> ['metric0', 'metric1', 'metric2', 'metric3', 'metric4']
 
 ## Familia::SortedSet#members
 @a.metrics.revmembers
