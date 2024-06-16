@@ -13,7 +13,7 @@ Gem::Specification.new do |s|
   s.executables   = s.files.grep(%r{^exe/}) { |f| File.basename(f) }
   s.require_paths = ["lib"]
 
-  s.required_ruby_version = Gem::Requirement.new(">= 2.6.8")
+  s.required_ruby_version = Gem::Requirement.new(">= 2.7.8")
 
   s.add_dependency "redis", ">= 4.8", "< 7"
   s.add_dependency "uri-redis", ">= 1.0.0"
