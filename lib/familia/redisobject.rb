@@ -260,7 +260,7 @@ module Familia
     def to_redis v
       return v unless @opts[:class]
       ret = case @opts[:class]
-      when ::Symbol, ::String, ::Fixnum, ::Float, Gibbler::Digest
+      when ::Symbol, ::String, ::Integer, ::Float, Gibbler::Digest
         v
       else
         if ::String === v
@@ -297,7 +297,7 @@ module Familia
         v.to_s
       when ::Symbol
         v.to_s.to_sym
-      when ::Fixnum, ::Float
+      when ::Integer, ::Float
         @opts[:class].induced_from v
       else
         objs = values
