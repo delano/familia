@@ -2,12 +2,12 @@ require 'ostruct'
 
 module Familia
   require 'familia/redisobject'
-  
+
   # Auto-extended into a class that includes Familia
   module ClassMethods
-    
+
     Familia::RedisObject.registration.each_pair do |kind, klass|
-      # e.g. 
+      # e.g.
       #
       #      list(name, klass, opts)
       #      list?(name)
@@ -22,12 +22,12 @@ module Familia
         obj = redis_objects[name.to_s.to_sym]
         !obj.nil? && klass == obj.klass
       end
-      define_method :"#{kind}s" do 
+      define_method :"#{kind}s" do
         names = redis_objects_order.select { |name| send(:"#{kind}?", name) }
         names.collect! { |name| redis_objects[name] }
         names
       end
-      # e.g. 
+      # e.g.
       #
       #      class_list(name, klass, opts)
       #      class_list?(name)
@@ -41,11 +41,11 @@ module Familia
         obj = class_redis_objects[name.to_s.to_sym]
         !obj.nil? && klass == obj.klass
       end
-      define_method :"class_#{kind}s" do 
+      define_method :"class_#{kind}s" do
         names = class_redis_objects_order.select { |name| ret = send(:"class_#{kind}?", name) }
         # TODO: This returns instances of the RedisObject class which
         # also contain the options. This is different from the instance
-        # RedisObjects defined above which returns the OpenStruct of name, klass, and opts. 
+        # RedisObjects defined above which returns the OpenStruct of name, klass, and opts.
         #names.collect! { |name| self.send name }
         # OR NOT:
         names.collect! { |name| class_redis_objects[name] }
@@ -69,9 +69,9 @@ module Familia
       obj.class_zset :instances, :class => obj, :reference => true
       Familia.classes << obj
     end
-    
+
     # Creates an instance method called +name+ that
-    # returns an instance of the RedisObject +klass+ 
+    # returns an instance of the RedisObject +klass+
     def install_redis_object name, klass, opts
       raise ArgumentError, "Name is blank" if name.to_s.empty?
       name = name.to_s.to_sym
@@ -90,34 +90,34 @@ module Familia
       end
       redis_objects[name]
     end
-    
+
     def qstamp quantum=nil, pattern=nil, now=Familia.now
       quantum ||= ttl || 10.minutes
       pattern ||= '%H%M'
       rounded = now - (now % quantum)
       Time.at(rounded).utc.strftime(pattern)
     end
-    
+
     # Creates a class method called +name+ that
-    # returns an instance of the RedisObject +klass+ 
+    # returns an instance of the RedisObject +klass+
     def install_class_redis_object name, klass, opts
       raise ArgumentError, "Name is blank" if name.to_s.empty?
       name = name.to_s.to_sym
       opts = opts.nil? ? {} : opts.clone
       opts[:parent] = self unless opts.has_key?(:parent)
-      # TODO: investigate using metaclass.redis_objects
+      # TODO: investigate using attic.redis_objects
       class_redis_objects_order << name
       class_redis_objects[name] = OpenStruct.new
       class_redis_objects[name].name = name
       class_redis_objects[name].klass = klass
-      class_redis_objects[name].opts = opts 
+      class_redis_objects[name].opts = opts
       # An accessor method created in the metclass will
-      # access the instance variables for this class. 
-      metaclass.send :attr_reader, name
-      metaclass.send :define_method, "#{name}=" do |v|
+      # access the instance variables for this class.
+      attic.send :attr_reader, name
+      attic.send :define_method, "#{name}=" do |v|
         send(name).replace v
       end
-      metaclass.send :define_method, "#{name}?" do
+      attic.send :define_method, "#{name}?" do
         !send(name).empty?
       end
       redis_object = klass.new name, opts
@@ -125,7 +125,7 @@ module Familia
       self.instance_variable_set("@#{name}", redis_object)
       class_redis_objects[name]
     end
-    
+
     def from_redisdump dump
       dump # todo
     end
@@ -146,9 +146,9 @@ module Familia
     def port=(port) @port = port end
     def uri=(uri)
       uri = URI.parse uri if String === uri
-      @uri = uri 
+      @uri = uri
     end
-    def uri(uri=nil) 
+    def uri(uri=nil)
       self.uri = uri if !uri.to_s.empty?
       @uri ||= (parent ? parent.uri : Familia.uri)
       @uri.db = @db if @db && @uri.db.to_s != @db.to_s
@@ -166,7 +166,7 @@ module Familia
     end
     def all(suffix=:object)
       # objects that could not be parsed will be nil
-      keys(suffix).collect { |k| from_key(k) }.compact 
+      keys(suffix).collect { |k| from_key(k) }.compact
     end
     def any?(filter='*')
       size(filter) > 0
@@ -174,7 +174,7 @@ module Familia
     def size(filter='*')
       self.redis.keys(rediskey(filter)).compact.size
     end
-    def suffix(a=nil, &blk) 
+    def suffix(a=nil, &blk)
       @suffix = a || blk if a || !blk.nil?
       val = @suffix || Familia.default_suffix
       val
@@ -184,7 +184,7 @@ module Familia
     # TODO: grab db, ttl, uri from parent
     #def parent=(a) @parent = a end
     #def parent(a=nil) @parent = a if a; @parent end
-    def index(i=nil, &blk) 
+    def index(i=nil, &blk)
       @index = i || blk if i || !blk.nil?
       @index ||= Familia.index
       @index
@@ -230,9 +230,9 @@ module Familia
       Familia.trace :MULTIGET, self.redis, "#{ids.size}: #{ids}", caller if Familia.debug?
       ids = self.redis.mget *ids
     end
-    
+
     # Returns an instance based on +idx+ otherwise it
-    # creates and saves a new instance base on +idx+. 
+    # creates and saves a new instance base on +idx+.
     # See from_index
     def load_or_create idx
       return from_redis(idx) if exists?(idx)
@@ -240,17 +240,17 @@ module Familia
       obj.save
       obj
     end
-    # Note +idx+ needs to be an appropriate index for 
+    # Note +idx+ needs to be an appropriate index for
     # the given class. If the index is multi-value it
     # must be passed as an Array in the proper order.
     # Does not call save.
     def from_index idx
-      obj = new 
+      obj = new
       obj.index = idx
       obj
     end
     def from_key objkey
-      raise ArgumentError, "Empty key" if objkey.to_s.empty?    
+      raise ArgumentError, "Empty key" if objkey.to_s.empty?
       Familia.trace :LOAD, Familia.redis(self.uri), objkey, caller if Familia.debug?
       obj = Familia::String.new objkey, :class => self
       obj.value
@@ -293,18 +293,18 @@ module Familia
       case list.size
       when 0
         nil
-      when 1 
+      when 1
         matches = list.first.match(/\A#{Familia.rediskey(prefix)}\:(.+?)\:#{suffix}/) || []
         matches[1]
       else
-        raise Familia::NonUniqueKey, "Short key returned more than 1 match" 
+        raise Familia::NonUniqueKey, "Short key returned more than 1 match"
       end
     end
   end
 
-  
+
   module InstanceMethods
-    
+
     # A default initialize method. This will be replaced
     # if a class defines its own initialize method after
     # including Familia. In that case, the replacement
@@ -313,15 +313,15 @@ module Familia
       initialize_redis_objects
       init *args if respond_to? :init
     end
-    
+
     # This needs to be called in the initialize method of
-    # any class that includes Familia. 
+    # any class that includes Familia.
     def initialize_redis_objects
       # Generate instances of each RedisObject. These need to be
       # unique for each instance of this class so they can refer
       # to the index of this specific instance.
       #
-      # i.e. 
+      # i.e.
       #     familia_object.rediskey              == v1:bone:INDEXVALUE:object
       #     familia_object.redis_object.rediskey == v1:bone:INDEXVALUE:name
       #
@@ -335,19 +335,19 @@ module Familia
         self.instance_variable_set "@#{name}", redis_object
       end
     end
-    
+
     def qstamp quantum=nil, pattern=nil, now=Familia.now
       self.class.qstamp ttl, pattern, now
     end
-    
-    def from_redis 
+
+    def from_redis
       self.class.from_redis self.index
     end
-    
+
     def redis
       self.class.redis
     end
-    
+
     def redisinfo
       info = {
         :uri  => self.class.uri,
@@ -359,32 +359,32 @@ module Familia
     end
     def exists?
       Familia.redis(self.class.uri).exists rediskey
-    end      
-    
+    end
+
     #def rediskeys
     #  self.class.redis_objects.each do |redis_object_definition|
-    #    
+    #
     #  end
     #end
-    
+
     def allkeys
       # TODO: Use redis_objects instead
       keynames = []
-      self.class.suffixes.each do |sfx| 
+      self.class.suffixes.each do |sfx|
         keynames << rediskey(sfx)
       end
       keynames
     end
     # +suffix+ is the value to be used at the end of the redis key
     # + ignored+ is literally ignored. It's around to maintain
-    # consistency with the class version of this method. 
+    # consistency with the class version of this method.
     # (RedisObject#rediskey may call against a class or instance).
     def rediskey(suffix=nil, ignored=nil)
       Familia.info "[#{self.class}] something was ignored" unless ignored.nil?
       raise Familia::NoIndex, self.class if index.to_s.empty?
       if suffix.nil?
-        suffix = self.class.suffix.kind_of?(Proc) ? 
-                     self.class.suffix.call(self) : 
+        suffix = self.class.suffix.kind_of?(Proc) ?
+                     self.class.suffix.call(self) :
                      self.class.suffix
       end
       self.class.rediskey self.index, suffix
@@ -405,7 +405,7 @@ module Familia
       end
       ret == "OK" || ret == true || ret == 1
     end
-    def savenx 
+    def savenx
       save :setnx
     end
     def update! hsh=nil
@@ -416,10 +416,10 @@ module Familia
         ret = from_redis
         hsh = ret.to_hash if ret
       end
-      hsh.keys.each { |field| 
+      hsh.keys.each { |field|
         v = hsh[field.to_s] || hsh[field.to_s.to_sym]
         next if v.nil?
-        self.send(:"#{field}=", v) 
+        self.send(:"#{field}=", v)
         updated = true
       }
       updated
@@ -437,7 +437,7 @@ module Familia
       when Proc
         self.class.index.call(self)
       when Array
-        parts = self.class.index.collect { |meth| 
+        parts = self.class.index.collect { |meth|
           unless self.respond_to? meth
             raise NoIndex, "No such method: `#{meth}' for #{self.class}"
           end
@@ -469,11 +469,11 @@ module Familia
         unless Array === v && v.size == self.class.index.size
           raise ArgumentError, "Index mismatch (#{v.size} for #{self.class.index.size})"
         end
-        parts = self.class.index.each_with_index { |meth,idx| 
+        parts = self.class.index.each_with_index { |meth,idx|
           unless self.respond_to? "#{meth}="
             raise NoIndex, "No such method: `#{meth}=' for #{self.class}"
           end
-          self.send("#{meth}=", v[idx]) 
+          self.send("#{meth}=", v[idx])
         }
       when Symbol, String
         if self.class.redis_object?(self.class.index.to_sym)
@@ -487,7 +487,7 @@ module Familia
       else
         raise Familia::NoIndex, self
       end
-      
+
     end
     def expire(ttl=nil)
       ttl ||= self.class.ttl
@@ -526,8 +526,8 @@ module Familia
           len += 1
         end
       end
-      @id.shorten(len) 
+      @id.shorten(len)
     end
   end
-  
+
 end

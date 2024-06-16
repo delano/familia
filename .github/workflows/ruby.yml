@@ -1,0 +1,69 @@
+name: Ruby
+
+on:
+  push:
+    branches:
+      - main
+
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    name: Ruby ${{ matrix.ruby }}
+    strategy:
+      matrix:
+        include:
+          - ruby: '3.3'
+            bundler: latest
+            rubygems: latest
+
+          - ruby: '3.2'
+            bundler: latest
+            rubygems: latest
+
+          - ruby: '3.1'
+            bundler: latest
+            rubygems: latest
+
+          - ruby: '3.0'
+            bundler: latest
+            rubygems: latest
+
+          - ruby: '2.7'
+            bundler: '2.4.22'
+            rubygems: '3.2.3'
+
+    services:
+      redis:
+        image: redis:bookworm@sha256:e422889e156ebea83856b6ff973bfe0c86bce867d80def228044eeecf925592b
+        # Set health checks to wait until redis has started
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 3s
+          --health-retries 5
+        ports:
+          # https://docs.github.com/en/actions/using-containerized-services/creating-redis-service-containers#running-jobs-in-containers
+          # Maps port 6379 on service container to the host
+          - 6379:6379
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up Ruby
+      uses: ruby/setup-ruby@v1
+      with:
+        ruby-version: ${{ matrix.ruby }}
+        rubygems: ${{ matrix.rubygems }}
+        bundler: ${{ matrix.bundler }}
+        # When the following is true, also run "bundle install",
+        # and cache the result automatically. Ran into an issue
+        # with the caching and multiple ruby versions. Needs
+        # further investigation.
+        bundler-cache: false
+
+    - name: Re-run bundle install
+      run: bundle install
+
+    - name: Run the tryouts
+      run: bundle exec try -v
