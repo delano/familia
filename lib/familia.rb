@@ -36,6 +36,8 @@ module Familia
     attr_reader :clients, :uri, :logger
     attr_accessor :debug, :secret, :delim, :dump_method, :load_method
     attr_writer :apiversion
+
+    alias_method :url, :uri
     def debug?() @debug == true end
     def info *msg
       STDERR.puts *msg
