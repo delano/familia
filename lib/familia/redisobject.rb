@@ -46,7 +46,7 @@ module Familia
       end
     end
 
-    attr_reader :name, :parent
+    attr_reader :name, :parent, :opts
     attr_writer :redis
 
       # RedisObject instances are frozen. `cache` is a hash
@@ -734,7 +734,7 @@ module Familia
       #
       #   sorted_sets.rb:374:in `zrevrange': wrong number of arguments (given 4, expected 3) (ArgumentError)
       #
-      redis.zrange(rediskey, sidx, eidx, :withscores => opts[:withscores])
+      redis.zrange(rediskey, sidx, eidx, **opts)
     end
 
     def revrange sidx, eidx, opts={}
@@ -744,7 +744,7 @@ module Familia
     end
 
     def revrangeraw sidx, eidx, opts={}
-      redis.zrevrange(rediskey, sidx, eidx, :withscores => opts[:withscores])
+      redis.zrevrange(rediskey, sidx, eidx, **opts)
     end
 
     # e.g. obj.metrics.rangebyscore (now-12.hours), now, :limit => [0, 10]
@@ -756,7 +756,7 @@ module Familia
 
     def rangebyscoreraw sscore, escore, opts={}
       echo :rangebyscoreraw, caller[0] if Familia.debug
-      redis.zrangebyscore(rediskey, sscore, escore, :withscores => opts[:withscores])
+      redis.zrangebyscore(rediskey, sscore, escore, **opts)
     end
 
     def remrangebyrank srank, erank
