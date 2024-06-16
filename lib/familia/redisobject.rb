@@ -46,7 +46,7 @@ module Familia
       end
     end
 
-    attr_reader :name, :parent, :opts
+    attr_reader :name, :parent
     attr_writer :redis
 
       # RedisObject instances are frozen. `cache` is a hash
