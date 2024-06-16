@@ -9,5 +9,6 @@ gem 'storable', '~> 0.10.0'
 gem 'multi_json', '~> 1.15'
 
 group :development, :test do
-  gem 'tryouts', '~> 2.2'
+  gem 'pry-byebug', '~> 3.9', require: false
+  gem 'tryouts', '~> 2.2', require: false
 end
