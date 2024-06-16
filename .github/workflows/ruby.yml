@@ -34,6 +34,20 @@ jobs:
             bundler: '2.4.22'
             rubygems: '3.2.3'
 
+    services:
+      redis:
+        image: redis:bookworm@sha256:e422889e156ebea83856b6ff973bfe0c86bce867d80def228044eeecf925592b
+        # Set health checks to wait until redis has started
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 3s
+          --health-retries 5
+        ports:
+          # https://docs.github.com/en/actions/using-containerized-services/creating-redis-service-containers#running-jobs-in-containers
+          # Maps port 6379 on service container to the host
+          - 6379:6379
+
     steps:
     - uses: actions/checkout@v3
     - name: Set up Ruby
