@@ -34,7 +34,7 @@ PLATFORMS
 DEPENDENCIES
   gibbler (~> 1.0.0)
   multi_json (~> 1.15)
-  pry-byebug (~> 3.9)
+  pry-byebug (~> 3.10.1)
   redis (>= 4.8, < 5.0)
   storable (~> 0.10.0)
   tryouts (~> 2.2)
