@@ -1,6 +1,6 @@
 Gem::Specification.new do |s|
   s.name        = "familia"
-  s.version     = "0.10.0"
+  s.version     = "0.10.1"
   s.summary     = "Organize and store ruby objects in Redis"
   s.description = "Familia: #{s.summary}"
   s.authors     = ["Delano Mandelbaum"]

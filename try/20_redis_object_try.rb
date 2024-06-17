@@ -7,13 +7,12 @@ Familia.apiversion = 'v1'
 ## Redis Objects are unique per instance of a Familia class
 @a = Bone.new 'atoken', :name1
 @b = Bone.new 'atoken', :name2
-@a.owners.rediskey == @b.owners.rediskey
+@a.owners.rediskey.eql?(@b.owners.rediskey)
 #=> false
 
-## Redis Objects are frozen 
+## Redis Objects are frozen
 @a.owners.frozen?
 #=> true
-
 
 ## Limiter#qstamp
 @limiter = Limiter.new :requests

@@ -32,10 +32,13 @@ module Familia
   @debug = false
   @dump_method = :to_json
   @load_method = :from_json
+
   class << self
     attr_reader :clients, :uri, :logger
     attr_accessor :debug, :secret, :delim, :dump_method, :load_method
     attr_writer :apiversion
+
+    alias_method :url, :uri
     def debug?() @debug == true end
     def info *msg
       STDERR.puts *msg
@@ -48,7 +51,7 @@ module Familia
     end
     def trace label, redis_instance, ident, context=nil
       return unless Familia.debug?
-      info "[%s] %s/%s" % [label, redis_instance.id, ident]
+      info "[%s] %s %s" % [label, redis_instance.id, ident]
       if context
         context = [context].flatten
         context.reject! { |line| line =~ /lib\/familia/ }
@@ -87,7 +90,7 @@ module Familia
       uri ||= Familia.uri
       conf = uri.conf
       redis = Redis.new conf
-      Familia.trace :CONNECT, redis, conf.inspect, caller[0..3] if Familia.debug
+      Familia.trace(:CONNECT, redis, conf.inspect, caller[0..3])
       @clients[uri.serverid] = redis
     end
     def reconnect_all!

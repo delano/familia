@@ -7,6 +7,8 @@ on:
 
   pull_request:
 
+  workflow_dispatch:
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -49,7 +51,7 @@ jobs:
           - 6379:6379
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Set up Ruby
       uses: ruby/setup-ruby@v1
       with:
@@ -66,4 +68,4 @@ jobs:
       run: bundle install
 
     - name: Run the tryouts
-      run: bundle exec try -v
+      run: bundle exec try -v try/*_try.rb

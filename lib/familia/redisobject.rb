@@ -46,7 +46,7 @@ module Familia
       end
     end
 
-    attr_reader :name, :parent, :opts
+    attr_reader :name, :parent
     attr_writer :redis
 
       # RedisObject instances are frozen. `cache` is a hash
@@ -818,6 +818,11 @@ module Familia
       ret = redis.hset rediskey, n, to_redis(v)
       update_expiration
       ret
+    rescue TypeError => e
+      echo :hset, caller[0] if Familia.debug
+      klass = v.class
+      msg = "Cannot store #{n} => #{v.inspect} (#{klass}) in #{rediskey}"
+      raise e.class, msg
     end
     alias_method :put, :[]=
     alias_method :store, :[]=
