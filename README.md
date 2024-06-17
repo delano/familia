@@ -1,4 +1,4 @@
-# Familia - 0.10.0
+# Familia - 0.10.1
 
 **Organize and store ruby objects in Redis. A Ruby ORM for Redis.**
 
