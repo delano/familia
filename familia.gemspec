@@ -14,4 +14,9 @@ Gem::Specification.new do |s|
   s.require_paths = ["lib"]
 
   s.required_ruby_version = Gem::Requirement.new(">= 2.7.8")
+
+  # byebug only works with MRI
+  if RUBY_ENGINE == "ruby"
+    s.add_development_dependency 'byebug', '~> 11.0'
+  end
 end
