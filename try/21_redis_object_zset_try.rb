@@ -47,7 +47,7 @@ require 'familia/test_helpers'
 
 ## Familia::SortedSet#score
 @a.metrics.score 'metric4'
-#=> 54
+#=> 54.0
 
 ## Familia::SortedSet#remrangebyscore
 @a.metrics.remrangebyscore 3, 100
