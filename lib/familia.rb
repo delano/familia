@@ -51,12 +51,12 @@ module Familia
     end
     def trace label, redis_instance, ident, context=nil
       return unless Familia.debug?
-      info "[%s] %s %s" % [label, redis_instance.id, ident]
-      if context
+      codeline = if context
         context = [context].flatten
         context.reject! { |line| line =~ /lib\/familia/ }
-        info "   %s" % context[0..6].join("\n   ")
+        context.first
       end
+      info "[%s] -> %s <- %s %s" % [label, codeline, redis_instance.id, ident]
     end
     def uri= v
       v = URI.parse v unless URI === v
