@@ -262,6 +262,8 @@ module Familia
       ret = case @opts[:class]
       when ::Symbol, ::String, ::Integer, ::Float, Gibbler::Digest
         v
+      when ::NilClass
+        ""
       else
         if ::String === v
           v
