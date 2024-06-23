@@ -30,13 +30,13 @@ Familia.apiversion = 'v1'
 
 ## Check ttl
 @limiter.counter.ttl
-#=> 3600
+#=> 3600.0
 
 ## Check ttl for a different instance
 ## (this exists to make sure options are cloned for each instance)
 @limiter2 = Limiter.new :requests
 @limiter2.counter.ttl
-#=> 3600
+#=> 3600.0
 
 ## Check realttl
 sleep 1
