@@ -1,17 +1,23 @@
-Gem::Specification.new do |s|
-  s.name        = "familia"
-  s.version     = "0.10.1"
-  s.summary     = "Organize and store ruby objects in Redis"
-  s.description = "Familia: #{s.summary}"
-  s.authors     = ["Delano Mandelbaum"]
-  s.email       = "gems@solutious.com"
-  s.homepage    = "https://github.com/delano/familia"
-  s.license     = "MIT"
+Gem::Specification.new do |spec|
+  spec.name        = "familia"
+  spec.version     = "0.10.1"
+  spec.summary     = "Organize and store ruby objects in Redis"
+  spec.description = "Familia: #{spec.summary}"
+  spec.authors     = ["Delano Mandelbaum"]
+  spec.email       = "gems@solutious.com"
+  spec.homepage    = "https://github.com/delano/familia"
+  spec.license     = "MIT"
 
-  s.files         = `git ls-files -z`.split("\x0").reject { |f| f.match(%r{^(test|spec|features)/}) }
-  s.bindir        = "exe"
-  s.executables   = s.files.grep(%r{^exe/}) { |f| File.basename(f) }
-  s.require_paths = ["lib"]
+  spec.files         = `git ls-files -z`.split("\x0").reject { |f| f.match(%r{^(test|spec|features)/}) }
+  spec.bindir        = "exe"
+  spec.executables   = spec.files.grep(%r{^exe/}) { |f| File.basename(f) }
+  spec.require_paths = ["lib"]
 
-  s.required_ruby_version = Gem::Requirement.new(">= 2.7.8")
+  spec.required_ruby_version = Gem::Requirement.new(">= 2.7.8")
+
+  spec.add_dependency 'redis', '>= 4.8.1', '< 6.0'
+  spec.add_dependency 'uri-redis', '>= 1.3.0'
+  spec.add_dependency 'gibbler', '~> 1.0.0'
+  spec.add_dependency 'storable', '~> 0.10.0'
+  spec.add_dependency 'multi_json', '~> 1.15'
 end
