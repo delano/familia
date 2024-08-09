@@ -109,39 +109,35 @@ module Familia
     def reconnect_all!
       Familia.classes.each do |klass|
         klass.redis.client.reconnect
-        Familia.i
-        if debug?
-          nfo "#{klass} ping: #{
-    klass.redis.ping}"
-        end
+        Familia.info "#{klass} ping: #{klass.redis.ping}"
       end
     end
 
     def connected?(uri = nil)
       uri &&= URI.parse uri if uri.is_a?(String)
-      @clients.has_key?(uri.serverid)
+      @clients.key?(uri.serverid)
     end
 
-    def default_suffix(a = nil)
-      @suffix = a if a
+    def default_suffix(val = nil)
+      @suffix = val if val
       @suffix
     end
 
-    def default_suffix=(a)
-      @suffix = a
+    def default_suffix=(val)
+      @suffix = val
     end
 
-    def index(r = nil)
-      @index = r if r
+    def index(val = nil)
+      @index = val if val
       @index
     end
 
-    def join(*r)
-      r.join(Familia.delim)
+    def join(*val)
+      val.join(Familia.delim)
     end
 
-    def split(r)
-      r.split(Familia.delim)
+    def split(val)
+      val.split(Familia.delim)
     end
 
     def rediskey *args
@@ -150,20 +146,20 @@ module Familia
       el.join(Familia.delim)
     end
 
-    def apiversion(r = nil, &blk)
+    def apiversion(val = nil, &blk)
       if blk.nil?
-        @apiversion = r if r
+        @apiversion = val if val
       else
         tmp = @apiversion
-        @apiversion = r
+        @apiversion = val
         yield
         @apiversion = tmp
       end
       @apiversion
     end
 
-    def now(n = Time.now)
-      n.utc.to_i
+    def now(name = Time.now)
+      name.utc.to_i
     end
 
     # A quantized timestamp
