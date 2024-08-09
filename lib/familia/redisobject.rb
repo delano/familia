@@ -2,27 +2,21 @@ module Familia
   class RedisObject
     @registration = {}
     @classes = []
+    @db = nil
+    @ttl = nil
 
     # To be called inside every class that inherits RedisObject
     # +meth+ becomes the base for the class and instances methods
     # that are created for the given +klass+ (e.g. Obj.list)
-    def self.register(klass, meth)
+    class << self
+      def register(klass, meth)
       registration[meth] = klass
     end
 
-    class << self
-      attr_reader :registration
-    end
+      attr_reader :classes, :registration
 
-    class << self
-      attr_reader :classes
-    end
-
-    @db = nil
-    @ttl = nil
-    class << self
       attr_accessor :parent
-      attr_writer :ttl, :classes, :db, :uri
+      attr_writer :ttl, :db, :uri
 
       def ttl(v = nil)
         @ttl = v unless v.nil?
@@ -178,11 +172,11 @@ module Familia
       if @opts[:quantize]
         args = case @opts[:quantize]
                when Numeric
-                 [@opts[:quantize]]        # :quantize => 1.minute
+                 [@opts[:quantize]]  # :quantize => 1.minute
                when Array
-                 @opts[:quantize]          # :quantize => [1.day, '%m%D']
+                 @opts[:quantize]    # :quantize => [1.day, '%m%D']
                else
-                 []                        # :quantize => true
+                 []                  # :quantize => true
                end
         k = [k, qstamp(*args)].join(Familia.delim)
       end
