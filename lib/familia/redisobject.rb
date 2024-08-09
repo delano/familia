@@ -190,12 +190,16 @@ module Familia
         # Handle numeric quantum (e.g., seconds, minutes)
       when Array
         quantum, pattern = *quantum
-      else
-        pattern ||= '%H%M'
       end
       now ||= Familia.now
       rounded = now - (now % quantum)
-      Time.at(rounded).utc.strftime(pattern || '%H%M')
+
+      if pattern.nil?
+        Time.at(rounded).utc.to_i # 3605 -> 3600
+      else
+        Time.at(rounded).utc.strftime(pattern || '%H%M') # 3605 -> '1:00'
+      end
+
     end
 
     def class?
@@ -330,7 +334,7 @@ module Familia
     end
 
     def from_redis(val)
-      return @opts[:default] if v.nil?
+      return @opts[:default] if val.nil?
       return val unless @opts[:class]
 
       ret = multi_from_redis val
