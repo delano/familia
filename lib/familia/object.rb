@@ -6,6 +6,11 @@ module Familia
   # Auto-extended into a class that includes Familia
   module ClassMethods
 
+    # NOTE: The term `name` means different things here vs in
+    # Onetime::RedisHash. Here it means `Object#name` the string
+    # name of the current class. In Onetime::RedisHash it means
+    # the name of the redis key.
+    #
     Familia::RedisObject.registration.each_pair do |kind, klass|
       # e.g.
       #

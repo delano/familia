@@ -1,6 +1,4 @@
-
 module Familia
-
   class RedisObject
     @registration = {}
     @classes = []
@@ -8,38 +6,43 @@ module Familia
     # To be called inside every class that inherits RedisObject
     # +meth+ becomes the base for the class and instances methods
     # that are created for the given +klass+ (e.g. Obj.list)
-    def RedisObject.register klass, meth
+    def self.register(klass, meth)
       registration[meth] = klass
     end
 
-    def RedisObject.registration
-      @registration
+    class << self
+      attr_reader :registration
     end
 
-    def RedisObject.classes
-      @classes
+    class << self
+      attr_reader :classes
     end
 
-    @db, @ttl = nil, nil
+    @db = nil
+    @ttl = nil
     class << self
       attr_accessor :parent
       attr_writer :ttl, :classes, :db, :uri
-      def ttl v=nil
+
+      def ttl(v = nil)
         @ttl = v unless v.nil?
         @ttl || (parent ? parent.ttl : nil)
       end
-      def db v=nil
+
+      def db(v = nil)
         @db = v unless v.nil?
         @db || (parent ? parent.db : nil)
       end
-      def uri v=nil
+
+      def uri(v = nil)
         @uri = v unless v.nil?
         @uri || (parent ? parent.uri : Familia.uri)
       end
+
       def inherited(obj)
-        obj.db = self.db
-        obj.ttl = self.ttl
-        obj.uri = self.uri
+        obj.db = db
+        obj.ttl = ttl
+        obj.uri = uri
         obj.parent = self
         RedisObject.classes << obj
         super(obj)
@@ -49,10 +52,10 @@ module Familia
     attr_reader :name, :parent
     attr_writer :redis
 
-      # RedisObject instances are frozen. `cache` is a hash
-      # for you to store values retreived from Redis. This is
-      # not used anywhere by default, but you're encouraged
-      # to use it in your specific scenarios.
+    # RedisObject instances are frozen. `cache` is a hash
+    # for you to store values retreived from Redis. This is
+    # not used anywhere by default, but you're encouraged
+    # to use it in your specific scenarios.
     attr_reader :cache
 
     # +name+: If parent is set, this will be used as the suffix
@@ -101,11 +104,12 @@ module Familia
     #
     # Uses the redis connection of the parent or the value of
     # opts[:redis] or Familia.redis (in that order).
-    def initialize name, opts={}
-      @name, @opts = name, opts
-      @name = @name.join(Familia.delim) if Array === @name
-      #Familia.ld [name, opts, caller[0]].inspect
-      self.extend @opts[:extend] if Module === @opts[:extend]
+    def initialize(name, opts = {})
+      @name = name
+      @opts = opts
+      @name = @name.join(Familia.delim) if @name.is_a?(Array)
+      Familia.ld [self.class, name, opts, caller[0]].inspect
+      extend @opts[:extend] if @opts[:extend].is_a?(Module)
       @db = @opts.delete(:db)
       @parent = @opts.delete(:parent)
       @ttl ||= @opts.delete(:ttl)
@@ -118,12 +122,13 @@ module Familia
       @cache.clear
     end
 
-    def echo meth, trace
+    def echo(meth, trace)
       redis.echo "[#{self.class}\##{meth}] #{trace} (#{@opts[:class]}\#)"
     end
 
     def redis
       return @redis if @redis
+
       parent? ? parent.redis : Familia.redis(db)
     end
 
@@ -150,9 +155,9 @@ module Familia
 
     def ttl
       @ttl ||
-      (parent.ttl if parent?) ||
-      (@opts[:class].ttl if class?) ||
-      (self.class.ttl if self.class.respond_to?(:ttl))
+        (parent.ttl if parent?) ||
+        (@opts[:class].ttl if class?) ||
+        (self.class.ttl if self.class.respond_to?(:ttl))
     end
 
     # returns a redis key based on the parent
@@ -161,56 +166,57 @@ module Familia
       if parent?
         # We need to check if the parent has a specific suffix
         # for the case where we have specified one other than :object.
-        suffix = parent.kind_of?(Familia) && parent.class.suffix != :object ? parent.class.suffix : name
+        suffix = parent.is_a?(Familia) && parent.class.suffix != :object ? parent.class.suffix : name
         k = parent.rediskey(name, nil)
       else
         k = [name].flatten.compact.join(Familia.delim)
       end
       if @opts[:quantize]
         args = case @opts[:quantize]
-        when Numeric
-          [@opts[:quantize]]        # :quantize => 1.minute
-        when Array
-          @opts[:quantize]          # :quantize => [1.day, '%m%D']
-        else
-          []                        # :quantize => true
-        end
+               when Numeric
+                 [@opts[:quantize]]        # :quantize => 1.minute
+               when Array
+                 @opts[:quantize]          # :quantize => [1.day, '%m%D']
+               else
+                 []                        # :quantize => true
+               end
         k = [k, qstamp(*args)].join(Familia.delim)
       end
       k
     end
 
     def class?
-      !@opts[:class].to_s.empty? && @opts[:class].kind_of?(Familia)
+      !@opts[:class].to_s.empty? && @opts[:class].is_a?(Familia)
     end
 
     def parent?
-      Class === parent || Module === parent || parent.kind_of?(Familia)
+      parent.is_a?(Class) || parent.is_a?(Module) || parent.is_a?(Familia)
     end
 
-    def qstamp quantum=nil, pattern=nil, now=Familia.now
+    def qstamp(quantum = nil, pattern = nil, now = Familia.now)
       quantum ||= ttl || 10.minutes
       pattern ||= '%H%M'
       rounded = now - (now % quantum)
       Time.at(rounded).utc.strftime(pattern)
     end
 
-    def update_expiration(ttl=nil)
+    def update_expiration(ttl = nil)
       ttl ||= self.ttl
-      return if ttl.to_i.zero?  # nil will be zero
+      return if ttl.to_i.zero? # nil will be zero
+
       Familia.ld "#{rediskey} to #{ttl}"
       expire ttl.to_i
     end
 
-    def move db
+    def move(db)
       redis.move rediskey, db
     end
 
-    def rename newkey
+    def rename(newkey)
       redis.rename rediskey, newkey
     end
 
-    def renamenx newkey
+    def renamenx(newkey)
       redis.renamenx rediskey, newkey
     end
 
@@ -221,13 +227,13 @@ module Familia
     def delete
       redis.del rediskey
     end
-    alias_method :clear, :delete
-    alias_method :del, :delete
+    alias clear delete
+    alias del delete
 
-    #def destroy!
+    # def destroy!
     #  clear
     #  # TODO: delete redis objects for this instance
-    #end
+    # end
 
     def exists?
       redis.exists(rediskey) && !size.zero?
@@ -237,11 +243,11 @@ module Familia
       redis.ttl rediskey
     end
 
-    def expire sec
+    def expire(sec)
       redis.expire rediskey, sec.to_i
     end
 
-    def expireat unixtime
+    def expireat(unixtime)
       redis.expireat rediskey, unixtime
     end
 
@@ -257,44 +263,43 @@ module Familia
       @opts[:load_method] || Familia.load_method
     end
 
-    def to_redis v
+    def to_redis(v)
       return v unless @opts[:class]
+
       ret = case @opts[:class]
-      when ::Symbol, ::String, ::Integer, ::Float, Gibbler::Digest
-        v
-      when ::NilClass
-        ""
-      else
-        if ::String === v
-          v
+            when ::Symbol, ::String, ::Integer, ::Float, Gibbler::Digest
+              v
+            when ::NilClass
+              ''
+            else
+              if v.is_a?(::String)
+                v
 
-        elsif @opts[:reference] == true
-          unless v.respond_to? :index
-            raise Familia::Problem, "#{v.class} does not have an index method"
-          end
-          unless v.kind_of?(Familia)
-            raise Familia::Problem, "#{v.class} is not Familia (#{name})"
-          end
-          v.index
+              elsif @opts[:reference] == true
+                raise Familia::Problem, "#{v.class} does not have an index method" unless v.respond_to? :index
+                raise Familia::Problem, "#{v.class} is not Familia (#{name})" unless v.is_a?(Familia)
 
-        elsif v.respond_to? dump_method
-          v.send dump_method
+                v.index
 
-        else
-          raise Familia::Problem, "No such method: #{v.class}.#{dump_method}"
-        end
-      end
-      if ret.nil?
-        Familia.ld "[#{self.class}\#to_redis] nil returned for #{@opts[:class]}\##{name}"
-      end
+              elsif v.respond_to? dump_method
+                v.send dump_method
+
+              else
+                raise Familia::Problem, "No such method: #{v.class}.#{dump_method}"
+              end
+            end
+      Familia.ld "[#{self.class}\#to_redis] nil returned for #{@opts[:class]}\##{name}" if ret.nil?
       ret
     end
 
+    # NOTE: `multi` in this method name refers to multiple values from
+    # redis and not the Redis server MULTI command.
     def multi_from_redis *values
       Familia.ld "multi_from_redis: (#{@opts}) #{values}"
       return [] if values.empty?
       return values.flatten unless @opts[:class]
-      ret = case @opts[:class]
+
+      case @opts[:class]
       when ::String
         v.to_s
       when ::Symbol
@@ -304,49 +309,41 @@ module Familia
       else
         objs = values
 
-        if @opts[:reference] == true
-          objs = @opts[:class].rawmultiget *values
-        end
+        objs = @opts[:class].rawmultiget(*values) if @opts[:reference] == true
         objs.compact!
-        if @opts[:class].respond_to? load_method
-          objs.collect! { |obj|
-            begin
-              v = @opts[:class].send load_method, obj
-              if v.nil?
-                Familia.ld "[#{self.class}\#multi_from_redis] nil returned for #{@opts[:class]}\##{name}"
-              end
-              v
-            rescue => ex
-              Familia.info v
-              Familia.info "Parse error for #{rediskey} (#{load_method}): #{ex.message}"
-              Familia.info ex.backtrace
-              nil
-            end
-          }
-        else
+        unless @opts[:class].respond_to? load_method
           raise Familia::Problem, "No such method: #{@opts[:class]}##{load_method}"
         end
+
+        objs.collect! do |obj|
+          v = @opts[:class].send load_method, obj
+          Familia.ld "[#{self.class}\#multi_from_redis] nil returned for #{@opts[:class]}\##{name}" if v.nil?
+          v
+        rescue StandardError => e
+          Familia.info v
+          Familia.info "Parse error for #{rediskey} (#{load_method}): #{e.message}"
+          Familia.info e.backtrace
+          nil
+        end
+
         objs.compact # don't use compact! b/c the return value appears in ret
       end
-      ret
     end
 
-    def from_redis v
+    def from_redis(v)
       return @opts[:default] if v.nil?
       return v unless @opts[:class]
+
       ret = multi_from_redis v
       ret.first unless ret.nil? # return the object or nil
     end
-
   end
 
-
   class List < RedisObject
-
     def size
       redis.llen rediskey
     end
-    alias_method :length, :size
+    alias length size
 
     def empty?
       size == 0
@@ -360,10 +357,10 @@ module Familia
       self
     end
 
-    def << v
+    def <<(v)
       push v
     end
-    alias_method :add, :<<
+    alias add <<
 
     def unshift *values
       values.flatten.compact.each { |v| redis.lpush rediskey, to_redis(v) }
@@ -381,7 +378,7 @@ module Familia
       from_redis redis.lpop(rediskey)
     end
 
-    def [] idx, count=nil
+    def [](idx, count = nil)
       if idx.is_a? Range
         range idx.first, idx.last
       elsif count
@@ -394,74 +391,74 @@ module Familia
         at idx
       end
     end
-    alias_method :slice, :[]
+    alias slice []
 
-    def delete v, count=0
+    def delete(v, count = 0)
       redis.lrem rediskey, count, to_redis(v)
     end
-    alias_method :remove, :delete
-    alias_method :rem, :delete
-    alias_method :del, :delete
+    alias remove delete
+    alias rem delete
+    alias del delete
 
-    def range sidx=0, eidx=-1
+    def range(sidx = 0, eidx = -1)
       el = rangeraw sidx, eidx
-      multi_from_redis *el
+      multi_from_redis(*el)
     end
 
-    def rangeraw sidx=0, eidx=-1
+    def rangeraw(sidx = 0, eidx = -1)
       redis.lrange(rediskey, sidx, eidx)
     end
 
-    def members count=-1
+    def members(count = -1)
       echo :members, caller[0] if Familia.debug
       count -= 1 if count > 0
       range 0, count
     end
-    alias_method :all, :members
-    alias_method :to_a, :members
+    alias all members
+    alias to_a members
 
-    def membersraw count=-1
+    def membersraw(count = -1)
       count -= 1 if count > 0
       rangeraw 0, count
     end
 
-    #def revmembers count=1  #TODO
+    # def revmembers count=1  #TODO
     #  range -count, 0
-    #end
+    # end
 
-    def each &blk
-      range.each &blk
+    def each(&blk)
+      range.each(&blk)
     end
 
-    def each_with_index &blk
-      range.each_with_index &blk
+    def each_with_index(&blk)
+      range.each_with_index(&blk)
     end
 
-    def eachraw &blk
-      rangeraw.each &blk
+    def eachraw(&blk)
+      rangeraw.each(&blk)
     end
 
-    def eachraw_with_index &blk
-      rangeraw.each_with_index &blk
+    def eachraw_with_index(&blk)
+      rangeraw.each_with_index(&blk)
     end
 
-    def collect &blk
-      range.collect &blk
+    def collect(&blk)
+      range.collect(&blk)
     end
 
-    def select &blk
-      range.select &blk
+    def select(&blk)
+      range.select(&blk)
     end
 
-    def collectraw &blk
-      rangeraw.collect &blk
+    def collectraw(&blk)
+      rangeraw.collect(&blk)
     end
 
-    def selectraw &blk
-      rangeraw.select &blk
+    def selectraw(&blk)
+      rangeraw.select(&blk)
     end
 
-    def at idx
+    def at(idx)
       from_redis redis.lindex(rediskey, idx)
     end
 
@@ -470,12 +467,12 @@ module Familia
     end
 
     def last
-      at -1
+      at(-1)
     end
 
     # TODO: def replace
     ## Make the value stored at KEY identical to the given list
-    #define_method :"#{name}_sync" do |*latest|
+    # define_method :"#{name}_sync" do |*latest|
     #  latest = latest.flatten.compact
     #  # Do nothing if we're given an empty Array.
     #  # Otherwise this would clear all current values
@@ -493,17 +490,16 @@ module Familia
     #    removed.each { |v| self.send("remove_#{name_singular}", v) }
     #    true
     #  end
-    #end
+    # end
 
     Familia::RedisObject.register self, :list
   end
 
   class Set < RedisObject
-
     def size
       redis.scard rediskey
     end
-    alias_method :length, :size
+    alias length size
 
     def empty?
       size == 0
@@ -515,65 +511,65 @@ module Familia
       self
     end
 
-    def << v
+    def <<(v)
       add v
     end
 
     def members
       echo :members, caller[0] if Familia.debug
       el = membersraw
-      multi_from_redis *el
+      multi_from_redis(*el)
     end
-    alias_method :all, :members
-    alias_method :to_a, :members
+    alias all members
+    alias to_a members
 
     def membersraw
       redis.smembers(rediskey)
     end
 
-    def each &blk
-      members.each &blk
+    def each(&blk)
+      members.each(&blk)
     end
 
-    def each_with_index &blk
-      members.each_with_index &blk
+    def each_with_index(&blk)
+      members.each_with_index(&blk)
     end
 
-    def collect &blk
-      members.collect &blk
+    def collect(&blk)
+      members.collect(&blk)
     end
 
-    def select &blk
-      members.select &blk
+    def select(&blk)
+      members.select(&blk)
     end
 
-    def eachraw &blk
-      membersraw.each &blk
+    def eachraw(&blk)
+      membersraw.each(&blk)
     end
 
-    def eachraw_with_index &blk
-      membersraw.each_with_index &blk
+    def eachraw_with_index(&blk)
+      membersraw.each_with_index(&blk)
     end
 
-    def collectraw &blk
-      membersraw.collect &blk
+    def collectraw(&blk)
+      membersraw.collect(&blk)
     end
 
-    def selectraw &blk
-      membersraw.select &blk
+    def selectraw(&blk)
+      membersraw.select(&blk)
     end
 
-    def member? v
+    def member?(v)
       redis.sismember rediskey, to_redis(v)
     end
-    alias_method :include?, :member?
+    alias include? member?
 
-    def delete v
+    def delete(v)
       redis.srem rediskey, to_redis(v)
     end
-    alias_method :remove, :delete
-    alias_method :rem, :delete
-    alias_method :del, :delete
+    alias remove delete
+    alias rem delete
+    alias del delete
 
     def intersection *setkeys
       # TODO
@@ -583,7 +579,7 @@ module Familia
       redis.spop rediskey
     end
 
-    def move dstkey, v
+    def move(dstkey, v)
       redis.smove rediskey, dstkey, v
     end
 
@@ -596,7 +592,7 @@ module Familia
     end
 
     ## Make the value stored at KEY identical to the given list
-    #define_method :"#{name}_sync" do |*latest|
+    # define_method :"#{name}_sync" do |*latest|
     #  latest = latest.flatten.compact
     #  # Do nothing if we're given an empty Array.
     #  # Otherwise this would clear all current values
@@ -614,17 +610,16 @@ module Familia
     #    removed.each { |v| self.send("remove_#{name_singular}", v) }
     #    true
     #  end
-    #end
+    # end
 
     Familia::RedisObject.register self, :set
   end
 
   class SortedSet < RedisObject
-
     def size
       redis.zcard rediskey
     end
-    alias_method :length, :size
+    alias length size
 
     def empty?
       size == 0
@@ -632,103 +627,103 @@ module Familia
 
     # NOTE: The argument order is the reverse of #add
     # e.g. obj.metrics[VALUE] = SCORE
-    def []= v, score
+    def []=(v, score)
       add score, v
     end
 
     # NOTE: The argument order is the reverse of #[]=
-    def add score, v
+    def add(score, v)
       ret = redis.zadd rediskey, score, to_redis(v)
       update_expiration
       ret
     end
 
-    def score v
+    def score(v)
       ret = redis.zscore rediskey, to_redis(v)
       ret.nil? ? nil : ret.to_f
     end
-    alias_method :[], :score
+    alias [] score
 
-    def member? v
+    def member?(v)
       !rank(v).nil?
     end
-    alias_method :include?, :member?
+    alias include? member?
 
     # rank of member +v+ when ordered lowest to highest (starts at 0)
-    def rank v
+    def rank(v)
       ret = redis.zrank rediskey, to_redis(v)
       ret.nil? ? nil : ret.to_i
     end
 
     # rank of member +v+ when ordered highest to lowest (starts at 0)
-    def revrank v
+    def revrank(v)
       ret = redis.zrevrank rediskey, to_redis(v)
       ret.nil? ? nil : ret.to_i
     end
 
-    def members count=-1, opts={}
+    def members(count = -1, opts = {})
       count -= 1 if count > 0
       el = membersraw count, opts
-      multi_from_redis *el
+      multi_from_redis(*el)
     end
-    alias_method :to_a, :members
-    alias_method :all, :members
+    alias to_a members
+    alias all members
 
-    def membersraw count=-1, opts={}
+    def membersraw(count = -1, opts = {})
       count -= 1 if count > 0
       rangeraw 0, count, opts
     end
 
-    def revmembers count=-1, opts={}
+    def revmembers(count = -1, opts = {})
       count -= 1 if count > 0
       el = revmembersraw count, opts
-      multi_from_redis *el
+      multi_from_redis(*el)
     end
 
-    def revmembersraw count=-1, opts={}
+    def revmembersraw(count = -1, opts = {})
       count -= 1 if count > 0
       revrangeraw 0, count, opts
     end
 
-    def each &blk
-      members.each &blk
+    def each(&blk)
+      members.each(&blk)
     end
 
-    def each_with_index &blk
-      members.each_with_index &blk
+    def each_with_index(&blk)
+      members.each_with_index(&blk)
     end
 
-    def collect &blk
-      members.collect &blk
+    def collect(&blk)
+      members.collect(&blk)
     end
 
-    def select &blk
-      members.select &blk
+    def select(&blk)
+      members.select(&blk)
     end
 
-    def eachraw &blk
-      membersraw.each &blk
+    def eachraw(&blk)
+      membersraw.each(&blk)
     end
 
-    def eachraw_with_index &blk
-      membersraw.each_with_index &blk
+    def eachraw_with_index(&blk)
+      membersraw.each_with_index(&blk)
     end
 
-    def collectraw &blk
-      membersraw.collect &blk
+    def collectraw(&blk)
+      membersraw.collect(&blk)
     end
 
-    def selectraw &blk
-      membersraw.select &blk
+    def selectraw(&blk)
+      membersraw.select(&blk)
     end
 
-    def range sidx, eidx, opts={}
+    def range(sidx, eidx, opts = {})
       echo :range, caller[0] if Familia.debug
       el = rangeraw(sidx, eidx, opts)
-      multi_from_redis *el
+      multi_from_redis(*el)
     end
 
-    def rangeraw sidx, eidx, opts={}
+    def rangeraw(sidx, eidx, opts = {})
       # NOTE: :withscores (no underscore) is the correct naming for the
       # redis-4.x gem. We pass :withscores through explicitly b/c
       # redis.zrange et al only accept that one optional argument.
@@ -739,56 +734,56 @@ module Familia
       redis.zrange(rediskey, sidx, eidx, **opts)
     end
 
-    def revrange sidx, eidx, opts={}
+    def revrange(sidx, eidx, opts = {})
       echo :revrange, caller[0] if Familia.debug
       el = revrangeraw(sidx, eidx, opts)
-      multi_from_redis *el
+      multi_from_redis(*el)
     end
 
-    def revrangeraw sidx, eidx, opts={}
+    def revrangeraw(sidx, eidx, opts = {})
       redis.zrevrange(rediskey, sidx, eidx, **opts)
     end
 
     # e.g. obj.metrics.rangebyscore (now-12.hours), now, :limit => [0, 10]
-    def rangebyscore sscore, escore, opts={}
+    def rangebyscore(sscore, escore, opts = {})
       echo :rangebyscore, caller[0] if Familia.debug
       el = rangebyscoreraw(sscore, escore, opts)
-      multi_from_redis *el
+      multi_from_redis(*el)
     end
 
-    def rangebyscoreraw sscore, escore, opts={}
+    def rangebyscoreraw(sscore, escore, opts = {})
       echo :rangebyscoreraw, caller[0] if Familia.debug
       redis.zrangebyscore(rediskey, sscore, escore, **opts)
     end
 
-    def remrangebyrank srank, erank
+    def remrangebyrank(srank, erank)
       redis.zremrangebyrank rediskey, srank, erank
     end
 
-    def remrangebyscore sscore, escore
+    def remrangebyscore(sscore, escore)
       redis.zremrangebyscore rediskey, sscore, escore
     end
 
-    def increment v, by=1
+    def increment(v, by = 1)
       redis.zincrby(rediskey, by, v).to_i
     end
-    alias_method :incr, :increment
-    alias_method :incrby, :increment
+    alias incr increment
+    alias incrby increment
 
-    def decrement v, by=1
+    def decrement(v, by = 1)
       increment v, -by
     end
-    alias_method :decr, :decrement
-    alias_method :decrby, :decrement
+    alias decr decrement
+    alias decrby decrement
 
-    def delete v
+    def delete(v)
       redis.zrem rediskey, to_redis(v)
     end
-    alias_method :remove, :delete
-    alias_method :rem, :delete
-    alias_method :del, :delete
+    alias remove delete
+    alias rem delete
+    alias del delete
 
-    def at idx
+    def at(idx)
       range(idx, idx).first
     end
 
@@ -806,17 +801,16 @@ module Familia
   end
 
   class HashKey < RedisObject
-
     def size
       redis.hlen rediskey
     end
-    alias_method :length, :size
+    alias length size
 
     def empty?
       size == 0
     end
 
-    def []= n, v
+    def []=(n, v)
       ret = redis.hset rediskey, n, to_redis(v)
       update_expiration
       ret
@@ -826,18 +820,19 @@ module Familia
       msg = "Cannot store #{n} => #{v.inspect} (#{klass}) in #{rediskey}"
       raise e.class, msg
     end
-    alias_method :put, :[]=
-    alias_method :store, :[]=
+    alias put []=
+    alias store []=
 
-    def [] n
+    def [](n)
       from_redis redis.hget(rediskey, n)
     end
-    alias_method :get, :[]
+    alias get []
 
-    def fetch n, default=nil
+    def fetch(n, default = nil)
       ret = self[n]
       if ret.nil?
         raise IndexError.new("No such index for: #{n}") if default.nil?
+
         default
       else
         ret
@@ -850,67 +845,68 @@ module Familia
 
     def values
       el = redis.hvals(rediskey)
-      multi_from_redis *el
+      multi_from_redis(*el)
     end
 
     def all
-      # TODO: from_redis
+      # TODO: Use from_redis. Also name `all` is confusing with
+      # Onetime::Customer.all which returns all customers.
       redis.hgetall rediskey
     end
-    alias_method :to_hash, :all
-    alias_method :clone, :all
+    alias to_hash all
+    alias clone all
 
-    def has_key? n
+    def has_key?(n)
       redis.hexists rediskey, n
     end
-    alias_method :include?, :has_key?
-    alias_method :member?, :has_key?
+    alias include? has_key?
+    alias member? has_key?
 
-    def delete n
+    def delete(n)
       redis.hdel rediskey, n
     end
-    alias_method :remove, :delete
-    alias_method :rem, :delete
-    alias_method :del, :delete
+    alias remove delete
+    alias rem delete
+    alias del delete
 
-    def increment n, by=1
+    def increment(n, by = 1)
       redis.hincrby(rediskey, n, by).to_i
     end
-    alias_method :incr, :increment
-    alias_method :incrby, :increment
+    alias incr increment
+    alias incrby increment
 
-    def decrement n, by=1
+    def decrement(n, by = 1)
       increment n, -by
     end
-    alias_method :decr, :decrement
-    alias_method :decrby, :decrement
+    alias decr decrement
+    alias decrby decrement
 
-    def update h={}
-      raise ArgumentError, "Argument to bulk_set must be a hash" unless Hash === h
-      data = h.inject([]){ |ret,pair| ret << [pair[0], to_redis(pair[1])] }.flatten
+    def update(h = {})
+      raise ArgumentError, 'Argument to bulk_set must be a hash' unless h.is_a?(Hash)
+
+      data = h.inject([]) { |ret, pair| ret << [pair[0].class, to_redis(pair[1]).class] }.flatten
       ret = redis.hmset(rediskey, *data)
       update_expiration
       ret
     end
-    alias_method :merge!, :update
+    alias merge! update
 
     def values_at *names
       el = redis.hmget(rediskey, *names.flatten.compact)
-      multi_from_redis *el
+      multi_from_redis(*el)
     end
 
     Familia::RedisObject.register self, :hash
   end
 
   class String < RedisObject
-
     def init
     end
 
     def size
       to_s.size
     end
-    alias_method :length, :size
+    alias length size
 
     def empty?
       size == 0
@@ -921,26 +917,26 @@ module Familia
       redis.setnx rediskey, @opts[:default] if @opts[:default]
       from_redis redis.get(rediskey)
     end
-    alias_method :content, :value
-    alias_method :get, :value
+    alias content value
+    alias get value
 
     def to_s
-      value.to_s  # value can return nil which to_s should not
+      value.to_s # value can return nil which to_s should not
     end
 
     def to_i
       value.to_i
     end
 
-    def value= v
+    def value=(v)
       ret = redis.set rediskey, to_redis(v)
       update_expiration
       ret
     end
-    alias_method :replace, :value=
-    alias_method :set, :value=
+    alias replace value=
+    alias set value=
 
-    def setnx v
+    def setnx(v)
       ret = redis.setnx rediskey, to_redis(v)
       update_expiration
       ret
@@ -951,57 +947,57 @@ module Familia
       update_expiration
       ret
     end
-    alias_method :incr, :increment
+    alias incr increment
 
-    def incrementby int
+    def incrementby(int)
       ret = redis.incrby rediskey, int.to_i
       update_expiration
       ret
     end
-    alias_method :incrby, :incrementby
+    alias incrby incrementby
 
     def decrement
       ret = redis.decr rediskey
       update_expiration
       ret
     end
-    alias_method :decr, :decrement
+    alias decr decrement
 
-    def decrementby int
+    def decrementby(int)
       ret = redis.decrby rediskey, int.to_i
       update_expiration
       ret
     end
-    alias_method :decrby, :decrementby
+    alias decrby decrementby
 
-    def append v
+    def append(v)
       ret = redis.append rediskey, v
       update_expiration
       ret
     end
-    alias_method :<<, :append
+    alias << append
 
-    def getbit offset
+    def getbit(offset)
       redis.getbit rediskey, offset
     end
 
-    def setbit offset, v
+    def setbit(offset, v)
       ret = redis.setbit rediskey, offset, v
       update_expiration
       ret
     end
 
-    def getrange spoint, epoint
+    def getrange(spoint, epoint)
       redis.getrange rediskey, spoint, epoint
     end
 
-    def setrange offset, v
+    def setrange(offset, v)
       ret = redis.setrange rediskey, offset, v
       update_expiration
       ret
     end
 
-    def getset v
+    def getset(v)
       ret = redis.getset rediskey, v
       update_expiration
       ret
@@ -1013,5 +1009,4 @@ module Familia
 
     Familia::RedisObject.register self, :string
   end
-
 end
