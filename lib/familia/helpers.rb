@@ -5,7 +5,7 @@ module Familia
   #       include Familia
   #       field :name
   #       include Familia::Stamps
-  #     end 
+  #     end
   #
   module Stamps
     def self.included(obj)
@@ -15,7 +15,7 @@ module Familia
         def init_stamps
           now = Time.now.utc.to_i
           @created ||= now
-          @updated ||= now 
+          @updated ||= now
         end
         def created
           @created ||= Time.now.utc.to_i
@@ -40,6 +40,7 @@ module Familia
       end
     end
   end
+
   module Status
     def self.included(obj)
       obj.module_eval do

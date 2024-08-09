@@ -1,7 +1,23 @@
 
 module Familia
+
+  # Tools module provides utility methods for managing Redis keys and data
+  #
   module Tools
-    extend self
+    extend self # TODO: revisit module_function
+
+    # Move keys from one Redis instance to another
+    #
+    # @param filter [String] Pattern to filter keys
+    # @param source_uri [URI] Source Redis URI
+    # @param target_uri [URI] Target Redis URI
+    # @yield [index, type, key, ttl] Optional block to process each key
+    # @yieldparam index [Integer] Index of the current key
+    # @yieldparam type [String] Redis data type of the key
+    # @yieldparam key [String] The key being moved
+    # @yieldparam ttl [Integer] Time-to-live for the key
+    # @raise [RuntimeError] If source and target URIs are the same
+    # @raise [Familia::Problem] If an unknown key type is encountered
     def move_keys(filter, source_uri, target_uri, &each_key)
       if target_uri == source_uri
         raise "Source and target are the same (#{target_uri})"
@@ -30,7 +46,12 @@ module Familia
         each_key.call(idx, type, key, ttl) unless each_key.nil?
       end
     end
+
+    # Rename keys in Redis
+    #
     # Use the return value from each_key as the new key name
+    #
+    # Same args as `move_keys`
     def rename(filter, source_uri, target_uri=nil, &each_key)
       target_uri ||= source_uri
       move_keys filter, source_uri, target_uri if source_uri != target_uri
@@ -45,8 +66,14 @@ module Familia
         ret = Familia.redis(source_uri).renamenx key, newkey
       end
     end
-    
-    def get_any keyname, uri=nil
+
+    # Retrieve data for any Redis key type
+    #
+    # @param keyname [String] The key to retrieve data for
+    # @param uri [URI, nil] Redis URI (default: nil)
+    # @return [String, Array, Hash, nil] Data stored at the key, or nil if not found
+    #
+    def get_any(keyname, uri=nil)
       type = Familia.redis(uri).type keyname
       case type
       when "string"

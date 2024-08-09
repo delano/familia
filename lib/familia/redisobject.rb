@@ -1,4 +1,11 @@
 module Familia
+
+  # RedisObject - Base class for Redis data type wrappers
+  #
+  # This class provides common functionality for various Redis data types
+  # such as String, List, Set, SortedSet, and HashKey.
+  #
+  # @abstract Subclass and implement Redis data type specific methods
   class RedisObject
     @registration = {}
     @classes = []

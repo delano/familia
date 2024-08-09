@@ -20,6 +20,26 @@ module Familia
   end
 end
 
+# Familia - A Ruby ORM for Redis
+#
+# Familia provides a way to organize and store Ruby objects in Redis.
+# It includes various modules and classes to facilitate object-Redis interactions.
+#
+# @example Basic usage
+#   class Flower < Storable
+#     include Familia
+#     index [:token, :name]
+#     field  :token
+#     field  :name
+#     list   :owners
+#     set    :tags
+#     zset   :metrics
+#     hash   :props
+#     string :value, :default => "GREAT!"
+#   end
+#
+# @see https://github.com/delano/familia
+#
 module Familia
   include Gibbler::Complex
   @secret = '1-800-AWESOME' # Should be modified via Familia.secret = ''
@@ -201,6 +221,11 @@ module Familia
 end
 
 module Familia
+  # Collector - Module for collecting classes that include it
+  #
+  # This module is used to keep track of classes that include it,
+  # typically used for tracking Familia-enabled classes.
+  #
   module Collector
     def klasses
       @klasses ||= []

@@ -3,7 +3,11 @@ require 'ostruct'
 module Familia
   require 'familia/redisobject'
 
-  # Auto-extended into a class that includes Familia
+  # ClassMethods - Module containing class-level methods for Familia
+  #
+  # This module is extended into classes that include Familia, providing
+  # class-level functionality for Redis operations and object management.
+  #
   module ClassMethods
 
     # NOTE: The term `name` means different things here vs in
@@ -307,7 +311,11 @@ module Familia
     end
   end
 
-
+  # InstanceMethods - Module containing instance-level methods for Familia
+  #
+  # This module is included in classes that include Familia, providing
+  # instance-level functionality for Redis operations and object management.
+  #
   module InstanceMethods
 
     # A default initialize method. This will be replaced
