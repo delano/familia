@@ -78,7 +78,7 @@ module Familia
     # Creates an instance method called +name+ that
     # returns an instance of the RedisObject +klass+
     def install_redis_object name, klass, opts
-      raise ArgumentError, "Name is blank" if name.to_s.empty?
+      raise ArgumentError, "Name is blank (#{klass})" if name.to_s.empty?
       name = name.to_s.to_sym
       opts ||= {}
       redis_objects_order << name
@@ -106,7 +106,7 @@ module Familia
     # Creates a class method called +name+ that
     # returns an instance of the RedisObject +klass+
     def install_class_redis_object name, klass, opts
-      raise ArgumentError, "Name is blank" if name.to_s.empty?
+      raise ArgumentError, "Name is blank (klass)" if name.to_s.empty?
       name = name.to_s.to_sym
       opts = opts.nil? ? {} : opts.clone
       opts[:parent] = self unless opts.has_key?(:parent)

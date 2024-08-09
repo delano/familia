@@ -166,7 +166,11 @@ module Familia
       if parent?
         # We need to check if the parent has a specific suffix
         # for the case where we have specified one other than :object.
-        suffix = parent.is_a?(Familia) && parent.class.suffix != :object ? parent.class.suffix : name
+        suffix = if parent.is_a?(Familia) && parent.class.suffix != :object
+          parent.class.suffix
+        else
+          name
+        end
         k = parent.rediskey(name, nil)
       else
         k = [name].flatten.compact.join(Familia.delim)
@@ -185,19 +189,27 @@ module Familia
       k
     end
 
+    def qstamp(quantum = nil, pattern = nil, now = Familia.now)
+      quantum ||= @opts[:quantize] || ttl || 10.minutes
+      case quantum
+      when Numeric
+        # Handle numeric quantum (e.g., seconds, minutes)
+      when Array
+        quantum, pattern = *quantum
+      else
+        pattern ||= '%H%M'
+      end
+      now ||= Familia.now
+      rounded = now - (now % quantum)
+      Time.at(rounded).utc.strftime(pattern || '%H%M')
+    end
+
     def class?
       !@opts[:class].to_s.empty? && @opts[:class].is_a?(Familia)
     end
 
     def parent?
       parent.is_a?(Class) || parent.is_a?(Module) || parent.is_a?(Familia)
-    end
-
-    def qstamp(quantum = nil, pattern = nil, now = Familia.now)
-      quantum ||= ttl || 10.minutes
-      pattern ||= '%H%M'
-      rounded = now - (now % quantum)
-      Time.at(rounded).utc.strftime(pattern)
     end
 
     def update_expiration(ttl = nil)
