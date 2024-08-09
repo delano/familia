@@ -3,22 +3,7 @@
 FAMILIA_LIB_HOME = __dir__ unless defined?(FAMILIA_LIB_HOME)
 require 'uri/redis'
 require 'gibbler'
-require 'familia/core_ext'
 require 'multi_json'
-
-module Familia
-  module VERSION
-    def self.to_s
-      load_config
-      [@version[:MAJOR], @version[:MINOR], @version[:PATCH]].join('.')
-    end
-    alias inspect to_s
-    def self.load_config
-      require 'yaml'
-      @version ||= YAML.load_file(File.join(FAMILIA_LIB_HOME, '..', 'VERSION.yml'))
-    end
-  end
-end
 
 # Familia - A Ruby ORM for Redis
 #
@@ -237,3 +222,6 @@ module Familia
     end
   end
 end
+
+require_relative 'familia/core_ext'
+require_relative 'familia/version'
