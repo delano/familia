@@ -421,10 +421,6 @@ module Familia
       rangeraw 0, count
     end
 
-    # def revmembers count=1  #TODO
-    #  range -count, 0
-    # end
-
     def each(&blk)
       range.each(&blk)
     end
@@ -753,6 +749,19 @@ module Familia
     def rangebyscoreraw(sscore, escore, opts = {})
       echo :rangebyscoreraw, caller[0] if Familia.debug
       redis.zrangebyscore(rediskey, sscore, escore, **opts)
+    end
+
+    # e.g. obj.metrics.revrangebyscore (now-12.hours), now, :limit => [0, 10]
+    def revrangebyscore(sscore, escore, opts={})
+      echo :revrangebyscore, caller[0] if Familia.debug
+      el = revrangebyscoreraw(sscore, escore, opts)
+      multi_from_redis(*el)
+    end
+
+    def revrangebyscoreraw(sscore, escore, opts={})
+      echo :revrangebyscoreraw, caller[0] if Familia.debug
+      opts[:with_scores] = true if opts[:withscores]
+      redis.zrevrangebyscore(rediskey, sscore, escore, opts)
     end
 
     def remrangebyrank(srank, erank)
