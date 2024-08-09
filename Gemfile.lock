@@ -70,6 +70,7 @@ PLATFORMS
   ruby
 
 DEPENDENCIES
+  byebug (~> 11.0)
   familia!
   pry-byebug (~> 3.10.1)
   rubocop
