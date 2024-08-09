@@ -1,140 +1,182 @@
-# encoding: utf-8
-class Symbol
-  unless method_defined?(:to_proc)
-    def to_proc
-      proc { |obj, *args| obj.send(self, *args) }
-    end
-  end
-end
 
-class Hash
-  unless method_defined?(:to_json)
-    def to_json
-      MultiJson.encode self
-    end
-    def self.from_json str
-      MultiJson.decode str
-    end
-  end
-end
-class Array
-  unless method_defined?(:to_json)
-    def to_json
-      MultiJson.encode self
-    end
-    def self.from_json str
-      MultiJson.decode str
-    end
-  end
-end
-
-# Assumes Time::Units and Numeric mixins are available. 
+# Extends the String class with time-related functionality
+#
+# This implementaton assumes Time::Units and Numeric mixins are available.
+#
 class String
+  # Converts a string representation of time to seconds
+  #
+  # @example
+  #   "60m".in_seconds #=> 3600.0
+  #
+  # @return [Float, nil] The time in seconds, or nil if the string is invalid
   def in_seconds
-    # "60m" => ["60", "m"]
-    q,u = self.scan(/([\d\.]+)([s,m,h])?/).flatten
+    q, u = scan(/([\d.]+)([s,m,h])?/).flatten
     q &&= q.to_f and u ||= 's'
     q &&= q.in_seconds(u)
   end
 end
 
-unless defined?(Time::Units)
-  class Time
-    module Units
-      PER_MICROSECOND = 0.000001.freeze
-      PER_MILLISECOND = 0.001.freeze
-      PER_MINUTE = 60.0.freeze
-      PER_HOUR = 3600.0.freeze
-      PER_DAY = 86400.0.freeze
-    
-      def microseconds()    seconds * PER_MICROSECOND     end
-      def milliseconds()    seconds * PER_MILLISECOND    end
-      def seconds()         self                         end
-      def minutes()         seconds * PER_MINUTE          end
-      def hours()           seconds * PER_HOUR             end
-      def days()            seconds * PER_DAY               end
-      def weeks()           seconds * PER_DAY * 7           end
-      def years()           seconds * PER_DAY * 365        end 
-            
-      def in_years()        seconds / PER_DAY / 365      end
-      def in_weeks()        seconds / PER_DAY / 7       end
-      def in_days()         seconds / PER_DAY          end
-      def in_hours()        seconds / PER_HOUR          end
-      def in_minutes()      seconds / PER_MINUTE         end
-      def in_milliseconds() seconds / PER_MILLISECOND    end
-      def in_microseconds() seconds / PER_MICROSECOND   end
-    
-      def in_time
-        Time.at(self).utc
-      end
-    
-      def in_seconds(u=nil)
-        case u.to_s
-        when /\A(y)|(years?)\z/
-          years
-        when /\A(w)|(weeks?)\z/
-          weeks
-        when /\A(d)|(days?)\z/
-          days
-        when /\A(h)|(hours?)\z/
-          hours
-        when /\A(m)|(minutes?)\z/
-          minutes
-        when /\A(ms)|(milliseconds?)\z/
-          milliseconds
-        when /\A(us)|(microseconds?)|(μs)\z/
-          microseconds
-        else
-          self
-        end
-      end
-    
-      ## JRuby doesn't like using instance_methods.select here. 
-      ## It could be a bug or something quirky with Attic 
-      ## (although it works in 1.8 and 1.9). The error:
-      ##  
-      ##  lib/attic.rb:32:in `select': yield called out of block (LocalJumpError)
-      ##  lib/stella/mixins/numeric.rb:24
-      ##
-      ## Create singular methods, like hour and day. 
-      # instance_methods.select.each do |plural|
-      #   singular = plural.to_s.chop
-      #   alias_method singular, plural
-      # end
-    
-      alias_method :ms, :milliseconds
-      alias_method :'μs', :microseconds
-      alias_method :second, :seconds
-      alias_method :minute, :minutes
-      alias_method :hour, :hours
-      alias_method :day, :days
-      alias_method :week, :weeks
-      alias_method :year, :years
+# Extends the Time class with additional time unit functionality
+class Time
+  # Provides methods for working with various time units
+  module Units
+    PER_MICROSECOND = 0.000001
+    PER_MILLISECOND = 0.001
+    PER_MINUTE = 60.0
+    PER_HOUR = 3600.0
+    PER_DAY = 86_400.0
 
+    # Conversion methods to convert seconds to other time units
+    def microseconds
+      seconds * PER_MICROSECOND
     end
-  end
 
-  class Numeric
-    include Time::Units
-
-    def to_ms
-      (self*1000.to_f)
+    def milliseconds
+      seconds * PER_MILLISECOND
     end
-  
-    # TODO: Use 1024?
-    def to_bytes
-      args = case self.abs.to_i
-      when (1000)..(1000**2)
-        '%3.2f%s' % [(self / 1000.to_f).to_s, 'KB']
-      when (1000**2)..(1000**3)
-        '%3.2f%s' % [(self / (1000**2).to_f).to_s, 'MB']
-      when (1000**3)..(1000**4)
-        '%3.2f%s' % [(self / (1000**3).to_f).to_s, 'GB']
-      when (1000**4)..(1000**6)
-        '%3.2f%s' % [(self / (1000**4).to_f).to_s, 'TB']
+
+    def seconds
+      self
+    end
+
+    def minutes
+      seconds * PER_MINUTE
+    end
+
+    def hours
+      seconds * PER_HOUR
+    end
+
+    def days
+      seconds * PER_DAY
+    end
+
+    def weeks
+      seconds * PER_DAY * 7
+    end
+
+    def years
+      seconds * PER_DAY * 365
+    end
+
+    # Conversion methods to convert from seconds to other time units
+    def in_years
+      seconds / PER_DAY / 365
+    end
+
+    def in_weeks
+      seconds / PER_DAY / 7
+    end
+
+    def in_days
+      seconds / PER_DAY
+    end
+
+    def in_hours
+      seconds / PER_HOUR
+    end
+
+    def in_minutes
+      seconds / PER_MINUTE
+    end
+
+    def in_milliseconds
+      seconds / PER_MILLISECOND
+    end
+
+    def in_microseconds
+      seconds / PER_MICROSECOND
+    end
+
+    # Converts seconds to a Time object
+    #
+    # @return [Time] A Time object representing the seconds
+    def in_time
+      Time.at(self).utc
+    end
+
+    # Converts seconds to the specified time unit
+    #
+    # @param u [String, Symbol] The unit to convert to (e.g., 'y', 'w', 'd', 'h', 'm', 'ms', 'us')
+    # @return [Float] The converted time value
+    def in_seconds(u = nil)
+      case u.to_s
+      when /\A(y)|(years?)\z/
+        years
+      when /\A(w)|(weeks?)\z/
+        weeks
+      when /\A(d)|(days?)\z/
+        days
+      when /\A(h)|(hours?)\z/
+        hours
+      when /\A(m)|(minutes?)\z/
+        minutes
+      when /\A(ms)|(milliseconds?)\z/
+        milliseconds
+      when /\A(us)|(microseconds?)|(μs)\z/
+        microseconds
       else
-        [self.to_i, 'B'].join
+        self
       end
     end
+
+    ## JRuby doesn't like using instance_methods.select here.
+    ## It could be a bug or something quirky with Attic
+    ## (although it works in 1.8 and 1.9). The error:
+    ##
+    ##  lib/attic.rb:32:in `select': yield called out of block (LocalJumpError)
+    ##  lib/stella/mixins/numeric.rb:24
+    ##
+    ## Create singular methods, like hour and day.
+    # instance_methods.select.each do |plural|
+    #   singular = plural.to_s.chop
+    #   alias_method singular, plural
+    # end
+
+    # Aliases for convenience
+    alias ms milliseconds
+    alias μs microseconds
+    alias second seconds
+    alias minute minutes
+    alias hour hours
+    alias day days
+    alias week weeks
+    alias year years
   end
+end
+
+# Extends the Numeric class with time unit and byte conversion functionality
+class Numeric
+  include Time::Units
+
+  # Converts the number to milliseconds
+  #
+  # @return [Float] The number in milliseconds
+  def to_ms
+    (self * 1000.to_f)
+  end
+
+  # Converts the number to a human-readable byte representation using binary units
+  #
+  # @return [String] A string representing the number in bytes, KiB, MiB, GiB, or TiB
+  #
+  # @example
+  #   1024.to_bytes      #=> "1.00 KiB"
+  #   2_097_152.to_bytes #=> "2.00 MiB"
+  #   3_221_225_472.to_bytes #=> "3.00 GiB"
+  #
+  def to_bytes
+    units = ['B', 'KiB', 'MiB', 'GiB', 'TiB']
+    size = abs.to_f
+    unit = 0
+
+    while size > 1024 && unit < units.length - 1
+      size /= 1024
+      unit += 1
+    end
+
+    format('%3.2f %s', size, units[unit])
+  end
+
 end
