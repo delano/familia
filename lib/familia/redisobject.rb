@@ -302,9 +302,17 @@ module Familia
       ret
     end
 
+    def multi_from_redis(*values)
+      # Don't use compact! When using compact like this -- as the last
+      # expression in the method -- the return value is obviously intentional.
+      # Exclamation mark methods have return values too, usually nil. We don't
+      # want to return nil here.
+      multi_from_redis_with_nil(*values).compact
+    end
+
     # NOTE: `multi` in this method name refers to multiple values from
     # redis and not the Redis server MULTI command.
-    def multi_from_redis *values
+    def multi_from_redis_with_nil(*values)
       Familia.ld "multi_from_redis: (#{@opts}) #{values}"
       return [] if values.empty?
       return values.flatten unless @opts[:class]
@@ -313,11 +321,18 @@ module Familia
         raise Familia::Problem, "No such method: #{@opts[:class]}##{load_method}"
       end
 
-      values = @opts[:class].rawmultiget(*values) if @opts[:reference] == true
+      if @opts[:reference] == true
+        values = @opts[:class].rawmultiget(*values)
+      end
 
       values.collect! do |obj|
+        next if obj.nil?
+
         val = @opts[:class].send load_method, obj
-        Familia.ld "[#{self.class}\#multi_from_redis] nil returned for #{@opts[:class]}\##{name}" if val.nil?
+        if val.nil?
+          Familia.ld "[#{self.class}\#multi_from_redis] nil returned for #{@opts[:class]}\##{name}"
+        end
+
         val
       rescue StandardError => e
         Familia.info val
@@ -326,11 +341,7 @@ module Familia
         nil
       end
 
-      # Don't use compact! When using compact like this -- as the last
-      # expression in the method -- the return value is obviously intentional.
-      # Exclamation mark methods have return values too, usually nil. We don't
-      # want to return nil here.
-      values.compact
+      values
     end
 
     def from_redis(val)
