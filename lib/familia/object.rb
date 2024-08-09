@@ -3,6 +3,12 @@ require 'ostruct'
 module Familia
   require 'familia/redisobject'
 
+  # We define this do-nothing method because it reads better
+  # than simply Familia.suffix.
+  def self.default_suffix
+    suffix
+  end
+
   # ClassMethods - Module containing class-level methods for Familia
   #
   # This module is extended into classes that include Familia, providing

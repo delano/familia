@@ -40,7 +40,7 @@ module Familia
 
   class << self
     attr_reader :clients, :uri, :logger
-    attr_accessor :debug, :secret, :delim, :dump_method, :load_method
+    attr_accessor :debug, :secret, :delim, :dump_method, :load_method, :suffix
     attr_writer :apiversion, :index
 
     alias url uri
@@ -120,15 +120,6 @@ module Familia
     def connected?(uri = nil)
       uri &&= URI.parse uri if uri.is_a?(String)
       @clients.key?(uri.serverid)
-    end
-
-    def default_suffix(val = nil)
-      @suffix = val if val
-      @suffix
-    end
-
-    def default_suffix=(val)
-      @suffix = val
     end
 
     def index(val = nil)
