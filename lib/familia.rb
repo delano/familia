@@ -3,7 +3,6 @@
 FAMILIA_LIB_HOME = __dir__ unless defined?(FAMILIA_LIB_HOME)
 require 'uri/redis'
 require 'gibbler'
-require 'multi_json'
 
 # Familia - A Ruby ORM for Redis
 #
