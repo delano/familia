@@ -16,7 +16,7 @@ Gem::Specification.new do |spec|
   spec.required_ruby_version = Gem::Requirement.new(">= 2.7.8")
 
   spec.add_dependency 'redis', '>= 4.8.1', '< 6.0'
-  spec.add_dependency 'uri-redis', '>= 1.3.0'
+  spec.add_dependency 'uri-redis', '~> 1.3'
   spec.add_dependency 'gibbler', '~> 1.0.0'
   spec.add_dependency 'storable', '~> 0.10.0'
   spec.add_dependency 'multi_json', '~> 1.15'
