@@ -22,7 +22,7 @@ Gem::Specification.new do |spec|
   spec.add_dependency 'multi_json', '~> 1.15'
 
   # byebug only works with MRI
-  if RUBY_ENGINE == "ruby"
+  if RUBY_ENGINE == 'ruby'
     spec.add_development_dependency 'byebug', '~> 11.0'
   end
 end

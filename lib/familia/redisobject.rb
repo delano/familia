@@ -10,27 +10,26 @@ module Familia
     # that are created for the given +klass+ (e.g. Obj.list)
     class << self
       def register(klass, meth)
-        registration[meth] = klass
+        @registration[meth] = klass
       end
 
       attr_reader :classes, :registration
-
       attr_accessor :parent
       attr_writer :ttl, :db, :uri
 
-      def ttl(v = nil)
-        @ttl = v unless v.nil?
-        @ttl || (parent ? parent.ttl : nil)
+      def ttl(val = nil)
+        @ttl = val unless val.nil?
+        @ttl || @parent&.ttl
       end
 
-      def db(v = nil)
-        @db = v unless v.nil?
-        @db || (parent ? parent.db : nil)
+      def db(val = nil)
+        @db = val unless val.nil?
+        @db || @parent&.db
       end
 
-      def uri(v = nil)
-        @uri = v unless v.nil?
-        @uri || (parent ? parent.uri : Familia.uri)
+      def uri(val = nil)
+        @uri = val unless val.nil?
+        @uri || (@parent ? @parent.uri : Familia.uri)
       end
 
       def inherited(obj)
@@ -123,7 +122,7 @@ module Familia
     def redis
       return @redis if @redis
 
-      parent? ? parent.redis : Familia.redis(db)
+      parent? ? @parent.redis : Familia.redis(db)
     end
 
     # Returns the most likely value for db, checking (in this order):
@@ -141,7 +140,7 @@ module Familia
       if @opts[:class] && @opts[:class].ancestors.member?(Familia)
         @opts[:class].db
       elsif parent?
-        parent.db
+        @parent.db
       else
         self.class.db || @db || 0
       end
@@ -149,7 +148,7 @@ module Familia
 
     def ttl
       @ttl ||
-        (parent.ttl if parent?) ||
+        (@parent.ttl if parent?) ||
         (@opts[:class].ttl if class?) ||
         (self.class.ttl if self.class.respond_to?(:ttl))
     end
@@ -160,12 +159,12 @@ module Familia
       if parent?
         # We need to check if the parent has a specific suffix
         # for the case where we have specified one other than :object.
-        suffix = if parent.is_a?(Familia) && parent.class.suffix != :object
-          parent.class.suffix
-        else
-          name
-        end
-        k = parent.rediskey(name, nil)
+        suffix = if @parent.is_a?(Familia) && @parent.class.suffix != :object
+                   @parent.class.suffix
+                 else
+                   name
+                 end
+        k = @parent.rediskey(name, nil)
       else
         k = [name].flatten.compact.join(Familia.delim)
       end
@@ -207,7 +206,7 @@ module Familia
     end
 
     def parent?
-      parent.is_a?(Class) || parent.is_a?(Module) || parent.is_a?(Familia)
+     @parent.is_a?(Class) || @parent.is_a?(Module) || @parent.is_a?(Familia)
     end
 
     def update_expiration(ttl = nil)
@@ -273,31 +272,32 @@ module Familia
       @opts[:load_method] || Familia.load_method
     end
 
-    def to_redis(v)
-      return v unless @opts[:class]
+    def to_redis(val)
+      return val unless @opts[:class]
 
       ret = case @opts[:class]
             when ::Symbol, ::String, ::Integer, ::Float, Gibbler::Digest
-              v
+              val
             when ::NilClass
               ''
             else
-              if v.is_a?(::String)
-                v
+              if val.is_a?(::String)
+                val
 
               elsif @opts[:reference] == true
-                raise Familia::Problem, "#{v.class} does not have an index method" unless v.respond_to? :index
-                raise Familia::Problem, "#{v.class} is not Familia (#{name})" unless v.is_a?(Familia)
+                raise Familia::Problem, "#{val.class} does not have an index method" unless val.respond_to? :index
+                raise Familia::Problem, "#{val.class} is not Familia (#{name})" unless val.is_a?(Familia)
 
-                v.index
+                val.index
 
-              elsif v.respond_to? dump_method
-                v.send dump_method
+              elsif val.respond_to? dump_method
+                val.send dump_method
 
               else
-                raise Familia::Problem, "No such method: #{v.class}.#{dump_method}"
+                raise Familia::Problem, "No such method: #{val.class}.#{dump_method}"
               end
             end
+
       Familia.ld "[#{self.class}\#to_redis] nil returned for #{@opts[:class]}\##{name}" if ret.nil?
       ret
     end
@@ -371,8 +371,8 @@ module Familia
       self
     end
 
-    def <<(v)
-      push v
+    def <<(val)
+      push val
     end
     alias add <<
 
@@ -569,13 +569,13 @@ module Familia
       membersraw.select(&blk)
     end
 
-    def member?(v)
-      redis.sismember rediskey, to_redis(v)
+    def member?(val)
+      redis.sismember rediskey, to_redis(val)
     end
     alias include? member?
 
-    def delete(v)
-      redis.srem rediskey, to_redis(v)
+    def delete(val)
+      redis.srem rediskey, to_redis(val)
     end
     alias remove delete
     alias rem delete
@@ -589,8 +589,8 @@ module Familia
       redis.spop rediskey
     end
 
-    def move(dstkey, v)
-      redis.smove rediskey, dstkey, v
+    def move(dstkey, val)
+      redis.smove rediskey, dstkey, val
     end
 
     def random
@@ -632,47 +632,47 @@ module Familia
     alias length size
 
     def empty?
-      size == 0
+      size.zero?
     end
 
     # NOTE: The argument order is the reverse of #add
     # e.g. obj.metrics[VALUE] = SCORE
-    def []=(v, score)
-      add score, v
+    def []=(val, score)
+      add score, val
     end
 
     # NOTE: The argument order is the reverse of #[]=
-    def add(score, v)
-      ret = redis.zadd rediskey, score, to_redis(v)
+    def add(score, val)
+      ret = redis.zadd rediskey, score, to_redis(val)
       update_expiration
       ret
     end
 
-    def score(v)
-      ret = redis.zscore rediskey, to_redis(v)
-      ret.nil? ? nil : ret.to_f
+    def score(val)
+      ret = redis.zscore rediskey, to_redis(val)
+      ret&.to_f
     end
     alias [] score
 
-    def member?(v)
-      !rank(v).nil?
+    def member?(val)
+      !rank(val).nil?
     end
     alias include? member?
 
     # rank of member +v+ when ordered lowest to highest (starts at 0)
     def rank(v)
       ret = redis.zrank rediskey, to_redis(v)
-      ret.nil? ? nil : ret.to_i
+      ret&.to_i
     end
 
     # rank of member +v+ when ordered highest to lowest (starts at 0)
     def revrank(v)
       ret = redis.zrevrank rediskey, to_redis(v)
-      ret.nil? ? nil : ret.to_i
+      ret&.to_i
     end
 
     def members(count = -1, opts = {})
-      count -= 1 if count > 0
+      count -= 1 if count.positive?
       el = membersraw count, opts
       multi_from_redis(*el)
     end
@@ -680,18 +680,18 @@ module Familia
     alias all members
 
     def membersraw(count = -1, opts = {})
-      count -= 1 if count > 0
+      count -= 1 if count.positive?
       rangeraw 0, count, opts
     end
 
     def revmembers(count = -1, opts = {})
-      count -= 1 if count > 0
+      count -= 1 if count.positive?
       el = revmembersraw count, opts
       multi_from_redis(*el)
     end
 
     def revmembersraw(count = -1, opts = {})
-      count -= 1 if count > 0
+      count -= 1 if count.positive?
       revrangeraw 0, count, opts
     end
 
@@ -787,20 +787,20 @@ module Familia
       redis.zremrangebyscore rediskey, sscore, escore
     end
 
-    def increment(v, by = 1)
-      redis.zincrby(rediskey, by, v).to_i
+    def increment(val, by = 1)
+      redis.zincrby(rediskey, by, val).to_i
     end
     alias incr increment
     alias incrby increment
 
-    def decrement(v, by = 1)
-      increment v, -by
+    def decrement(val, by = 1)
+      increment val, -by
     end
     alias decr decrement
     alias decrby decrement
 
-    def delete(v)
-      redis.zrem rediskey, to_redis(v)
+    def delete(val)
+      redis.zrem rediskey, to_redis(val)
     end
     alias remove delete
     alias rem delete
@@ -833,28 +833,28 @@ module Familia
       size == 0
     end
 
-    def []=(n, v)
-      ret = redis.hset rediskey, n, to_redis(v)
+    def []=(name, val)
+      ret = redis.hset rediskey, name, to_redis(val)
       update_expiration
       ret
     rescue TypeError => e
       echo :hset, caller[0] if Familia.debug
-      klass = v.class
-      msg = "Cannot store #{n} => #{v.inspect} (#{klass}) in #{rediskey}"
+      klass = val.class
+      msg = "Cannot store #{name} => #{val.inspect} (#{klass}) in #{rediskey}"
       raise e.class, msg
     end
     alias put []=
     alias store []=
 
-    def [](n)
-      from_redis redis.hget(rediskey, n)
+    def [](name)
+      from_redis redis.hget(rediskey, name)
     end
     alias get []
 
-    def fetch(n, default = nil)
-      ret = self[n]
+    def fetch(name, default = nil)
+      ret = self[name]
       if ret.nil?
-        raise IndexError.new("No such index for: #{n}") if default.nil?
+        raise IndexError, "No such index for: #{name}" if default.nil?
 
         default
       else
@@ -879,35 +879,35 @@ module Familia
     alias to_hash all
     alias clone all
 
-    def has_key?(n)
-      redis.hexists rediskey, n
+    def has_key?(name)
+      redis.hexists rediskey, name
     end
     alias include? has_key?
     alias member? has_key?
 
-    def delete(n)
-      redis.hdel rediskey, n
+    def delete(name)
+      redis.hdel rediskey, name
     end
     alias remove delete
     alias rem delete
     alias del delete
 
-    def increment(n, by = 1)
-      redis.hincrby(rediskey, n, by).to_i
+    def increment(name, by = 1)
+      redis.hincrby(rediskey, name, by).to_i
     end
     alias incr increment
     alias incrby increment
 
-    def decrement(n, by = 1)
-      increment n, -by
+    def decrement(name, by = 1)
+      increment name, -by
     end
     alias decr decrement
     alias decrby decrement
 
-    def update(h = {})
-      raise ArgumentError, 'Argument to bulk_set must be a hash' unless h.is_a?(Hash)
+    def update(hsh = {})
+      raise ArgumentError, 'Argument to bulk_set must be a hash' unless hsh.is_a?(Hash)
 
-      data = h.inject([]) { |ret, pair| ret << [pair[0].class, to_redis(pair[1]).class] }.flatten
+      data = hsh.inject([]) { |ret, pair| ret << [pair[0].class, to_redis(pair[1]).class] }.flatten
       ret = redis.hmset(rediskey, *data)
       update_expiration
       ret
@@ -923,8 +923,7 @@ module Familia
   end
 
   class String < RedisObject
-    def init
-    end
+    def init; end
 
     def size
       to_s.size
@@ -932,7 +931,7 @@ module Familia
     alias length size
 
     def empty?
-      size == 0
+      size.zero?
     end
 
     def value
@@ -951,29 +950,29 @@ module Familia
       value.to_i
     end
 
-    def value=(v)
-      ret = redis.set rediskey, to_redis(v)
+    def value=(val)
+      ret = redis.set(rediskey, to_redis(val))
       update_expiration
       ret
     end
     alias replace value=
     alias set value=
 
-    def setnx(v)
-      ret = redis.setnx rediskey, to_redis(v)
+    def setnx(val)
+      ret = redis.setnx(rediskey, to_redis(val))
       update_expiration
       ret
     end
 
     def increment
-      ret = redis.incr rediskey
+      ret = redis.incr(rediskey)
       update_expiration
       ret
     end
     alias incr increment
 
-    def incrementby(int)
-      ret = redis.incrby rediskey, int.to_i
+    def incrementby(val)
+      ret = redis.incrby(rediskey, val.to_i)
       update_expiration
       ret
     end
@@ -986,15 +985,15 @@ module Familia
     end
     alias decr decrement
 
-    def decrementby(int)
-      ret = redis.decrby rediskey, int.to_i
+    def decrementby(val)
+      ret = redis.decrby rediskey, val.to_i
       update_expiration
       ret
     end
     alias decrby decrementby
 
-    def append(v)
-      ret = redis.append rediskey, v
+    def append(val)
+      ret = redis.append rediskey, val
       update_expiration
       ret
     end
@@ -1004,8 +1003,8 @@ module Familia
       redis.getbit rediskey, offset
     end
 
-    def setbit(offset, v)
-      ret = redis.setbit rediskey, offset, v
+    def setbit(offset, val)
+      ret = redis.setbit rediskey, offset, val
       update_expiration
       ret
     end
@@ -1014,14 +1013,14 @@ module Familia
       redis.getrange rediskey, spoint, epoint
     end
 
-    def setrange(offset, v)
-      ret = redis.setrange rediskey, offset, v
+    def setrange(offset, val)
+      ret = redis.setrange rediskey, offset, val
       update_expiration
       ret
     end
 
-    def getset(v)
-      ret = redis.getset rediskey, v
+    def getset(val)
+      ret = redis.getset rediskey, val
       update_expiration
       ret
     end

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 FAMILIA_LIB_HOME = __dir__ unless defined?(FAMILIA_LIB_HOME)
 require 'uri/redis'
 require 'gibbler'
