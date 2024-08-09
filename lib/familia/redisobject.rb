@@ -10,8 +10,8 @@ module Familia
     # that are created for the given +klass+ (e.g. Obj.list)
     class << self
       def register(klass, meth)
-      registration[meth] = klass
-    end
+        registration[meth] = klass
+      end
 
       attr_reader :classes, :registration
 
@@ -305,43 +305,36 @@ module Familia
       return [] if values.empty?
       return values.flatten unless @opts[:class]
 
-      case @opts[:class]
-      when ::String
-        v.to_s
-      when ::Symbol
-        v.to_s.to_sym
-      when ::Integer, ::Float
-        @opts[:class].induced_from v
-      else
-        objs = values
-
-        objs = @opts[:class].rawmultiget(*values) if @opts[:reference] == true
-        objs.compact!
-        unless @opts[:class].respond_to? load_method
-          raise Familia::Problem, "No such method: #{@opts[:class]}##{load_method}"
-        end
-
-        objs.collect! do |obj|
-          v = @opts[:class].send load_method, obj
-          Familia.ld "[#{self.class}\#multi_from_redis] nil returned for #{@opts[:class]}\##{name}" if v.nil?
-          v
-        rescue StandardError => e
-          Familia.info v
-          Familia.info "Parse error for #{rediskey} (#{load_method}): #{e.message}"
-          Familia.info e.backtrace
-          nil
-        end
-
-        objs.compact # don't use compact! b/c the return value appears in ret
+      unless @opts[:class].respond_to?(load_method)
+        raise Familia::Problem, "No such method: #{@opts[:class]}##{load_method}"
       end
+
+      values = @opts[:class].rawmultiget(*values) if @opts[:reference] == true
+
+      values.collect! do |obj|
+        val = @opts[:class].send load_method, obj
+        Familia.ld "[#{self.class}\#multi_from_redis] nil returned for #{@opts[:class]}\##{name}" if val.nil?
+        val
+      rescue StandardError => e
+        Familia.info val
+        Familia.info "Parse error for #{rediskey} (#{load_method}): #{e.message}"
+        Familia.info e.backtrace
+        nil
+      end
+
+      # Don't use compact! When using compact like this -- as the last
+      # expression in the method -- the return value is obviously intentional.
+      # Exclamation mark methods have return values too, usually nil. We don't
+      # want to return nil here.
+      values.compact
     end
 
-    def from_redis(v)
+    def from_redis(val)
       return @opts[:default] if v.nil?
-      return v unless @opts[:class]
+      return val unless @opts[:class]
 
-      ret = multi_from_redis v
-      ret.first unless ret.nil? # return the object or nil
+      ret = multi_from_redis val
+      ret&.first # return the object or nil
     end
   end
 
