@@ -166,23 +166,6 @@ module Familia
     end
   end
 
-  class Problem < RuntimeError; end
-  class NoIndex < Problem; end
-  class NonUniqueKey < Problem; end
-
-  class NotConnected < Problem
-    attr_reader :uri
-
-    def initialize(uri)
-      @uri = uri
-      super
-    end
-
-    def message
-      "No client for #{uri.serverid}"
-    end
-  end
-
   def self.included(obj)
     obj.send :include, Familia::InstanceMethods
     obj.send :include, Gibbler::Complex
@@ -191,6 +174,7 @@ module Familia
     Familia.classes << obj
   end
 
+  require 'familia/errors'
   require 'familia/object'
   require 'familia/helpers'
 end

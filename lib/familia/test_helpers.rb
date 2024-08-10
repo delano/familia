@@ -12,6 +12,18 @@ class Bone < Storable
   string :value, :default => "GREAT!"
 end
 
+class Blone < Familia::HashKey
+  include Familia
+  #index [:token, :name]
+  #field :token
+  #field :name
+  list   :owners
+  set    :tags
+  zset   :metrics
+  hash   :props
+  string :value, :default => "GREAT!"
+end
+
 class Bat < Storable
   include Familia::Stamps
   #index :sessid
