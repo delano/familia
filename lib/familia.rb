@@ -164,6 +164,13 @@ module Familia
       rounded = now - (now % quantum)
       Time.at(rounded).utc.to_i
     end
+
+    # We define this do-nothing method because it reads better
+    # than simply Familia.suffix in some contexts.
+    def default_suffix
+      suffix
+    end
+
   end
 
   def self.included(obj)
@@ -174,27 +181,12 @@ module Familia
     Familia.classes << obj
   end
 
-  require 'familia/errors'
-  require 'familia/object'
-  require 'familia/helpers'
-end
-
-module Familia
-  # Collector - Module for collecting classes that include it
-  #
-  # This module is used to keep track of classes that include it,
-  # typically used for tracking Familia-enabled classes.
-  #
-  module Collector
-    def klasses
-      @klasses ||= []
-      @klasses
-    end
-
-    def included(obj)
-      klasses << obj
-    end
-  end
+  require_relative 'familia/errors'
+  require_relative 'familia/redisobject'
+  require_relative 'familia/class_methods'
+  require_relative 'familia/instance_methods'
+  require_relative 'familia/helpers'
+  require_relative 'familia/version'
 end
 
 require_relative 'familia/core_ext'
