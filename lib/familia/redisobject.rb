@@ -361,7 +361,6 @@ module Familia
   end
 
   require_relative 'types/list'
-
   require_relative 'types/unsorted_set'
   require_relative 'types/sorted_set'
   require_relative 'types/hashkey'

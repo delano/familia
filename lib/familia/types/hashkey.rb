@@ -1,4 +1,4 @@
-
+# frozen_string_literal: true
 
 module Familia
   class HashKey < RedisObject
@@ -85,7 +85,8 @@ module Familia
     def update(hsh = {})
       raise ArgumentError, 'Argument to bulk_set must be a hash' unless hsh.is_a?(Hash)
 
-      data = hsh.inject([]) { |ret, pair| ret << [pair[0].class, to_redis(pair[1]).class] }.flatten
+      data = hsh.inject([]) { |ret, pair| ret << [pair[0], to_redis(pair[1])] }.flatten
+
       ret = redis.hmset(rediskey, *data)
       update_expiration
       ret

@@ -68,6 +68,7 @@ module Familia
       end
     end
     def inherited(obj)
+      Familia.ld "[#{self}] inherited by [#{obj}] (superclass: #{obj.superclass}, #{defined?(super)})"
       obj.db = self.db
       obj.uri = self.uri
       obj.ttl = self.ttl
@@ -77,6 +78,7 @@ module Familia
       super(obj)
     end
     def extended(obj)
+      Familia.ld "[#{self}] extended by [#{obj}] (superclass: #{obj.superclass}, #{defined?(super)})"
       obj.db = self.db
       obj.ttl = self.ttl
       obj.uri = self.uri
@@ -413,7 +415,7 @@ module Familia
       @object_proxy
     end
     def save meth=:set
-      #Familia.trace :SAVE, Familia.redis(self.class.uri), redisuri, caller.first if Familia.debug?
+      Familia.trace :SAVE, Familia.redis(self.class.uri), redisuri, caller.first if Familia.debug?
       preprocess if respond_to?(:preprocess)
       self.update_time if self.respond_to?(:update_time)
       ret = object_proxy.send(meth, self)       # object is a name reserved by Familia
