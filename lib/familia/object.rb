@@ -37,7 +37,7 @@ module Familia
         !obj.nil? && klass == obj.klass
       end
       define_method :"#{kind}s" do
-        names = redis_objects_order.select { |name| send(:"#{kind}?", name) }
+        names = redis_objects.keys.select { |name| send(:"#{kind}?", name) }
         names.collect! { |name| redis_objects[name] }
         names
       end
@@ -56,7 +56,7 @@ module Familia
         !obj.nil? && klass == obj.klass
       end
       define_method :"class_#{kind}s" do
-        names = class_redis_objects_order.select { |name| ret = send(:"class_#{kind}?", name) }
+        names = class_redis_objects.keys.select { |name| ret = send(:"class_#{kind}?", name) }
         # TODO: This returns instances of the RedisObject class which
         # also contain the options. This is different from the instance
         # RedisObjects defined above which returns the OpenStruct of name, klass, and opts.
@@ -66,6 +66,7 @@ module Familia
         names
       end
     end
+
     def inherited(obj)
       Familia.ld "[#{self}] inherited by [#{obj}] (superclass: #{obj.superclass}, #{defined?(super)})"
       obj.db = db
@@ -94,7 +95,6 @@ module Familia
 
       name = name.to_s.to_sym
       opts ||= {}
-      redis_objects_order << name
       redis_objects[name] = OpenStruct.new
       redis_objects[name].name = name
       redis_objects[name].klass = klass
@@ -107,6 +107,10 @@ module Familia
         !send(name).empty?
       end
       redis_objects[name]
+    end
+
+    def field(name, opts = {})
+      raise ArgumentError, 'Name is blank' if name.to_s.empty?
     end
 
     def qstamp(quantum = nil, pattern = nil, now = Familia.now)
@@ -125,7 +129,6 @@ module Familia
       opts = opts.nil? ? {} : opts.clone
       opts[:parent] = self unless opts.has_key?(:parent)
       # TODO: investigate using attic.redis_objects
-      class_redis_objects_order << name
       class_redis_objects[name] = OpenStruct.new
       class_redis_objects[name].name = name
       class_redis_objects[name].klass = klass
@@ -251,11 +254,6 @@ module Familia
       redis_objects.keys.uniq
     end
 
-    def class_redis_objects_order
-      @class_redis_objects_order ||= []
-      @class_redis_objects_order
-    end
-
     def class_redis_objects
       @class_redis_objects ||= {}
       @class_redis_objects
@@ -269,14 +267,14 @@ module Familia
       redis_objects.has_key? name.to_s.to_sym
     end
 
-    def redis_objects_order
-      @redis_objects_order ||= []
-      @redis_objects_order
-    end
-
     def redis_objects
       @redis_objects ||= {}
       @redis_objects
+    end
+
+    def defined_fields
+      @defined_fields ||= {}
+      @defined_fields
     end
 
     def create *args
@@ -447,11 +445,11 @@ module Familia
       Familia.redis(self.class.uri).exists rediskey
     end
 
-    # def rediskeys
-    #  self.class.redis_objects.each do |redis_object_definition|
-    #
-    #  end
-    # end
+    def rediskeys
+      self.class.redis_objects.each do |redis_object_definition|
+
+      end
+    end
 
     def allkeys
       # TODO: Use redis_objects instead
