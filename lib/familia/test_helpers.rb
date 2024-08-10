@@ -12,6 +12,15 @@ class Bone < Storable
   string :value, :default => "GREAT!"
 end
 
+class Bat < Storable
+  include Familia::Stamps
+  #index :sessid
+end
+
+class Bar < Storable
+  field :hole
+end
+
 class Session < Storable
   include Familia
   index :sessid

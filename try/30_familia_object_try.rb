@@ -69,19 +69,18 @@ Customer.customers.clear
 #=> 1
 
 
-## Familia class replace 1
+## Familia class replace 1 of 4
 Customer.message.value = "msg1"
 #=> "msg1"
 
-## Familia class replace 2
+## Familia class replace 2 of 4
 Customer.message.value
 #=> "msg1"
 
-## Familia class replace 3
+## Familia class replace 3 of 4
 Customer.message = "msg2"
 #=> "msg2"
 
-## Familia class replace 4
+## Familia class replace 4 of 4
 Customer.message.value
 #=> "msg2"
-

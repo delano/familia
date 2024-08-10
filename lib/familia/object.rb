@@ -3,9 +3,24 @@ require 'ostruct'
 module Familia
   require 'familia/redisobject'
 
-  # Auto-extended into a class that includes Familia
+  # We define this do-nothing method because it reads better
+  # than simply Familia.suffix.
+  def self.default_suffix
+    suffix
+  end
+
+  # ClassMethods - Module containing class-level methods for Familia
+  #
+  # This module is extended into classes that include Familia, providing
+  # class-level functionality for Redis operations and object management.
+  #
   module ClassMethods
 
+    # NOTE: The term `name` means different things here vs in
+    # Onetime::RedisHash. Here it means `Object#name` the string
+    # name of the current class. In Onetime::RedisHash it means
+    # the name of the redis key.
+    #
     Familia::RedisObject.registration.each_pair do |kind, klass|
       # e.g.
       #
@@ -53,6 +68,7 @@ module Familia
       end
     end
     def inherited(obj)
+      Familia.ld "[#{self}] inherited by [#{obj}] (superclass: #{obj.superclass}, #{defined?(super)})"
       obj.db = self.db
       obj.uri = self.uri
       obj.ttl = self.ttl
@@ -62,6 +78,7 @@ module Familia
       super(obj)
     end
     def extended(obj)
+      Familia.ld "[#{self}] extended by [#{obj}] (superclass: #{obj.superclass}, #{defined?(super)})"
       obj.db = self.db
       obj.ttl = self.ttl
       obj.uri = self.uri
@@ -73,7 +90,7 @@ module Familia
     # Creates an instance method called +name+ that
     # returns an instance of the RedisObject +klass+
     def install_redis_object name, klass, opts
-      raise ArgumentError, "Name is blank" if name.to_s.empty?
+      raise ArgumentError, "Name is blank (#{klass})" if name.to_s.empty?
       name = name.to_s.to_sym
       opts ||= {}
       redis_objects_order << name
@@ -101,7 +118,7 @@ module Familia
     # Creates a class method called +name+ that
     # returns an instance of the RedisObject +klass+
     def install_class_redis_object name, klass, opts
-      raise ArgumentError, "Name is blank" if name.to_s.empty?
+      raise ArgumentError, "Name is blank (klass)" if name.to_s.empty?
       name = name.to_s.to_sym
       opts = opts.nil? ? {} : opts.clone
       opts[:parent] = self unless opts.has_key?(:parent)
@@ -302,7 +319,11 @@ module Familia
     end
   end
 
-
+  # InstanceMethods - Module containing instance-level methods for Familia
+  #
+  # This module is included in classes that include Familia, providing
+  # instance-level functionality for Redis operations and object management.
+  #
   module InstanceMethods
 
     # A default initialize method. This will be replaced
@@ -394,7 +415,7 @@ module Familia
       @object_proxy
     end
     def save meth=:set
-      #Familia.trace :SAVE, Familia.redis(self.class.uri), redisuri, caller.first if Familia.debug?
+      Familia.trace :SAVE, Familia.redis(self.class.uri), redisuri, caller.first if Familia.debug?
       preprocess if respond_to?(:preprocess)
       self.update_time if self.respond_to?(:update_time)
       ret = object_proxy.send(meth, self)       # object is a name reserved by Familia
