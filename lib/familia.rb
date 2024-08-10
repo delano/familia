@@ -26,6 +26,7 @@ require 'gibbler'
 #
 module Familia
   include Gibbler::Complex
+  @debug = false
   @secret = '1-800-AWESOME' # Should be modified via Familia.secret = ''
   @apiversion = nil
   @uri = URI.parse 'redis://127.0.0.1'
@@ -34,7 +35,6 @@ module Familia
   @classes = []
   @suffix = :object
   @index = :id
-  @debug = false
   @dump_method = :to_json
   @load_method = :from_json
 
@@ -190,4 +190,3 @@ module Familia
 end
 
 require_relative 'familia/core_ext'
-require_relative 'familia/version'

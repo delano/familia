@@ -2,26 +2,26 @@ require 'storable'
 
 class Bone < Storable
   include Familia
-  index [:token, :name]
-  field :token
-  field :name
-  list   :owners
-  set    :tags
-  zset   :metrics
-  hash   :props
-  string :value, :default => "GREAT!"
+  index     [:token, :name]
+  field     :token
+  field     :name
+  list      :owners
+  set       :tags
+  zset      :metrics
+  hashkey   :props
+  string    :value, :default => "GREAT!"
 end
 
 class Blone < Familia::HashKey
   include Familia
-  #index [:token, :name]
-  #field :token
-  #field :name
-  list   :owners
-  set    :tags
-  zset   :metrics
-  hash   :props
-  string :value, :default => "GREAT!"
+  index     [:token, :name]
+  #string   :token
+  #string   :name
+  list      :owners
+  set       :tags
+  zset      :metrics
+  hashkey   :props
+  string    :value, :default => "GREAT!"
 end
 
 class Bat < Storable
