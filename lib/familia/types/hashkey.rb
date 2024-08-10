@@ -98,7 +98,8 @@ module Familia
       multi_from_redis(*el)
     end
 
-    Familia::RedisObject.register self, :hash
+    Familia::RedisObject.register self, :hash # legacy, deprecated
+    Familia::RedisObject.register self, :hashkey
   end
 
 end
