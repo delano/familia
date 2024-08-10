@@ -14,6 +14,7 @@ module Familia
     #
     Familia::RedisObject.registration.each_pair do |kind, klass|
       Familia.ld "[registration] #{kind} => #{klass}"
+
       # e.g.
       #
       #      list(name, klass, opts)
@@ -49,7 +50,7 @@ module Familia
         !obj.nil? && klass == obj.klass
       end
       define_method :"class_#{kind}s" do
-        names = class_redis_objects.keys.select { |name| ret = send(:"class_#{kind}?", name) }
+        names = class_redis_objects.keys.select { |name| send(:"class_#{kind}?", name) }
         # TODO: This returns instances of the RedisObject class which
         # also contain the options. This is different from the instance
         # RedisObjects defined above which returns the OpenStruct of name, klass, and opts.
@@ -84,6 +85,7 @@ module Familia
     # Creates an instance method called +name+ that
     # returns an instance of the RedisObject +klass+
     def install_redis_object(name, klass, opts)
+      Familia.ld "[install_redis_object] #{name} => #{klass} #{opts}"
       raise ArgumentError, "Name is blank (#{klass})" if name.to_s.empty?
 
       name = name.to_s.to_sym
@@ -100,48 +102,6 @@ module Familia
         !send(name).empty?
       end
       redis_objects[name]
-    end
-
-    #
-    # Where to store the data?
-    # * Implement def [] and []= for this class?
-    # * Is object_proxy the in-memory object that gets serialied to json?
-    #   Or the Familia::String instances that stores and restores that json?
-    # * How to store the field values that the index is config'd to use
-    #   b/c we would need those value available before storing to or
-    #   restoring from the object_proxy.
-    # * Maybe fields the index uses are regular attrs first. When
-    #   object_proxy then goes to serialize it can include the attrs
-    #   and vice versa can hydrate the attrs when reading in object_proxy
-    #   from an existing instance.
-    #
-
-    def field(name, opts = {})
-      raise ArgumentError, 'Name is blank' if name.to_s.empty?
-
-      name = name.to_s.to_sym
-      opts ||= {}
-      defined_fields[name] = OpenStruct.new
-      defined_fields[name].name = name
-      defined_fields[name].opts = opts
-      define_method name do
-        object_proxy[name]
-      end
-      define_method "#{name}=" do |val|
-        object_proxy[name] = val
-      end
-      define_method "#{name}?" do
-        !object_proxy[name].to_s.empty?
-      end
-
-      defined_fields[name]
-    end
-
-    def qstamp(quantum = nil, pattern = nil, now = Familia.now)
-      quantum ||= ttl || 10.minutes
-      pattern ||= '%H%M'
-      rounded = now - (now % quantum)
-      Time.at(rounded).utc.strftime(pattern)
     end
 
     # Creates a class method called +name+ that
@@ -176,6 +136,13 @@ module Familia
       dump # todo
     end
     attr_accessor :parent
+
+    def qstamp(quantum = nil, pattern = nil, now = Familia.now)
+      quantum ||= ttl || 10.minutes
+      pattern ||= '%H%M'
+      rounded = now - (now % quantum)
+      Time.at(rounded).utc.strftime(pattern)
+    end
 
     def ttl(v = nil)
       @ttl = v unless v.nil?
@@ -319,7 +286,7 @@ module Familia
       return [] if ids.compact.empty?
 
       Familia.trace :MULTIGET, redis, "#{ids.size}: #{ids}", caller if Familia.debug?
-      ids = redis.mget(*ids)
+      redis.mget(*ids)
     end
 
     # Returns an instance based on +idx+ otherwise it
@@ -375,7 +342,7 @@ module Familia
     end
 
     def find(suffix = '*')
-      list = Familia.redis(uri).keys(rediskey('*', suffix)) || []
+      Familia.redis(uri).keys(rediskey('*', suffix)) || []
     end
 
     # idx can be a value or an Array of values used to create the index.
