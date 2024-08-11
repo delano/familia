@@ -26,7 +26,7 @@ require 'gibbler'
 #
 module Familia
   include Gibbler::Complex
-  @debug = false
+  @debug = true
   @secret = '1-800-AWESOME' # Should be modified via Familia.secret = ''
   @apiversion = nil
   @uri = URI.parse 'redis://127.0.0.1'
@@ -95,13 +95,6 @@ module Familia
       @clients[uri.serverid]
     end
 
-    def log(level, path)
-      logger = Log4r::Logger.new('familia')
-      logger.outputters = Log4r::FileOutputter.new 'familia', filename: path
-      logger.level = Log4r.const_get(level)
-      logger
-    end
-
     def connect(uri = nil)
       uri &&= URI.parse uri if uri.is_a?(String)
       uri ||= Familia.uri
@@ -111,59 +104,12 @@ module Familia
       @clients[uri.serverid] = redis
     end
 
-    def reconnect_all!
-      Familia.classes.each do |klass|
-        klass.redis.client.reconnect
-        Familia.info "#{klass} ping: #{klass.redis.ping}"
-      end
-    end
 
-    def connected?(uri = nil)
-      uri &&= URI.parse uri if uri.is_a?(String)
-      @clients.key?(uri.serverid)
-    end
-
-    def index(val = nil)
-      @index = val if val
-      @index
-    end
-
-    def join(*val)
-      val.join(Familia.delim)
-    end
-
-    def split(val)
-      val.split(Familia.delim)
-    end
 
     def rediskey *args
       el = args.flatten.compact
       el.unshift @apiversion unless @apiversion.nil?
       el.join(Familia.delim)
-    end
-
-    def apiversion(val = nil, &blk)
-      if blk.nil?
-        @apiversion = val if val
-      else
-        tmp = @apiversion
-        @apiversion = val
-        yield
-        @apiversion = tmp
-      end
-      @apiversion
-    end
-
-    def now(name = Time.now)
-      name.utc.to_i
-    end
-
-    # A quantized timestamp
-    # e.g. 12:32 -> 12:30
-    #
-    def qnow(quantum = 10.minutes, now = Familia.now)
-      rounded = now - (now % quantum)
-      Time.at(rounded).utc.to_i
     end
 
     # We define this do-nothing method because it reads better
@@ -189,7 +135,7 @@ module Familia
   require_relative 'familia/instance_methods'
   require_relative 'familia/helpers'
   require_relative 'familia/version'
-  require_relative 'familia/horreum'
+  #require_relative 'familia/horreum'
 end
 
 require_relative 'familia/core_ext'

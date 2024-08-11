@@ -45,8 +45,14 @@ end
 class Customer < Storable
   include Familia
   index :custid
-  field :custid => Symbol
+  field :custid #=> Symbol
   field :name
+  field :created
+
+  field :reset_requested #=> Boolean
+  hashkey :password_reset #=> Familia::HashKey
+  list :sessions #=> Familia::List
+
   include Familia::Stamps
   # string :object, :class => self  # example of manual override
   class_list :customers, :suffix => []
@@ -58,4 +64,8 @@ class Limiter < Storable
   index :name
   field :name
   string :counter, :ttl => 1.hour, :quantize => [10.minutes, '%H:%M', 1302468980]
+end
+
+class Shape < Familia::Horreum
+
 end

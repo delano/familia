@@ -109,5 +109,7 @@ module Familia
     end
 
     Familia::RedisObject.register self, :string
+    Familia::RedisObject.register self, :counter
+    Familia::RedisObject.register self, :lock
   end
 end

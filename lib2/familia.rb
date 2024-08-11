@@ -19,9 +19,9 @@ module Familia
 
   module ClassMethods
 
-    def index(val = nil)
-      @index = val if val
-      @index
+    def identifier(val = nil)
+      @identifier = val if val
+      @identifier
     end
 
     def field(name)
@@ -40,13 +40,17 @@ module Familia
   end
 
   def identifier
-    self.class.index_fields.map { |var| instance_variable_get("@#{var}") }.join(':')
+    send(self.class.identifier)
   end
 
   def to_h
   end
 
   def to_a
+  end
+
+  def join(*args)
+    Familia.join(args.map { |field| send(field) }))
   end
 
   extend Logging

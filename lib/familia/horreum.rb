@@ -12,76 +12,87 @@ module Familia
   #     value change is performed directly on redis; Horreum is a cache
   #     that performs atomic operations on a hash in redis (via HashKey).
   #
-  # Differences between Familia and Familia::Horreum:
+  # Differences between Familia and Familia::Horreum: !==
   #
   #   * Familia provides class/module level access to redis types and
   #     operations; Horreum provides instance-level access to a single
   #     hash in redis.
   #   * Horreum includes Familia and uses `hashkey` to define a redis
   #     has that it refers to as simply "object".
+  #   * Horreum applies a default expiry to all keys. 5 years. So the
+  #     default behaviour is that all data is stored definitely. It also
+  #     uses this expiration as the updated timestamp.
   #
-  #
+  # Horreum is equivalent to Onetime::RedisHash.
   #
   class Horreum
-    include Familia
+
 
     hashkey :object
-    #attr_accessor :prefix, :identifier, :suffix, :cache
+    attr_accessor :prefix, :identifier, :suffix, :cache
 
     def initialize *args, **kwargs
       Familia.ld "[Horreum] Initializing #{self.class} with #{args.inspect} and #{kwargs.inspect}"
       initialize_redis_objects
+      # include Familia in subclass
       init(*args) if respond_to? :init
-      #super
+      super
     end
 
-#    def check_identifier!
-#      return unless self.identifier.to_s.empty?
-#
-#      raise Problem, "Identifier cannot be empty for #{self.class}"
-#    end
-#
-#    def destroy!
-#      clear
-#    end
-#
-#    def ttl
-#      (get_value(:ttl) || super).to_i
-#    end
-#
-#    def save
-#      hsh = { key: identifier }
-#      ret = update_fields hsh
-#      ret == 'OK'
-#    end
-#
-#    def update_fields(hsh = {})
-#      check_identifier!
-#      hsh[:updated] = OT.now.to_i
-#      hsh[:created] = OT.now.to_i unless has_key?(:created)
-#      update hsh
-#      ## NOTE: caching here like this only works if hsh has all keys
-#      # self.cache.replace hsh
-#    end
-#
-#    def refresh_cache
-#      cache.replace all unless self.identifier.to_s.empty?
-#    end
-#
-#    def update_time!
-#      check_identifier!
-#      OT.ld "[#{self.class}] Updating time for #{self.identifier}"
-#      put :updated, OT.now.to_i
-#    end
-#
-#    def cache
-#      @cache ||= {}
-#      @cache
-#    end
-#
-#    def short_identifier
-#      identifier[0, 12]
-#    end
+    def name identifier=nil  # TODO: Rename this method to `rediskey`. Too many collisions on "name".
+      self.identifier ||= identifier
+      @prefix ||= self.class.to_s.downcase.split('::').last.to_sym
+      @suffix ||= :object
+      Familia.rediskey prefix, self.identifier, suffix
+    end
+
+    def check_identifier!
+      return unless self.identifier.to_s.empty?
+
+      raise Problem, "Identifier cannot be empty for #{self.class}"
+    end
+
+    def destroy!
+      clear
+    end
+
+    def ttl
+      (get_value(:ttl) || super).to_i
+    end
+
+    def save
+      hsh = { key: identifier }
+      ret = update_fields hsh
+      ret == 'OK'
+    end
+
+    def update_fields(hsh = {})
+      check_identifier!
+      hsh[:updated] = OT.now.to_i
+      hsh[:created] = OT.now.to_i unless has_key?(:created)
+      update hsh
+      ## NOTE: caching here like this only works if hsh has all keys
+      # self.cache.replace hsh
+    end
+
+    def refresh_cache
+      cache.replace all unless self.identifier.to_s.empty?
+    end
+
+    def update_time!
+      check_identifier!
+      OT.ld "[#{self.class}] Updating time for #{self.identifier}"
+      put :updated, OT.now.to_i
+    end
+
+    def cache
+      @cache ||= {}
+      @cache
+    end
+
+    def short_identifier
+      identifier[0, 12]
+    end
 #
 #    # Support for accessing ModelBase hash keys via method names.
 #    # e.g.
