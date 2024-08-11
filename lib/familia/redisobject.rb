@@ -12,10 +12,10 @@ module Familia
     @db = nil
     @ttl = nil
 
-    # To be called inside every class that inherits RedisObject
-    # +meth+ becomes the base for the class and instances methods
-    # that are created for the given +klass+ (e.g. Obj.list)
     class << self
+      # To be called inside every class that inherits RedisObject
+      # +meth+ becomes the base for the class and instance methods
+      # that are created for the given +klass+ (e.g. Obj.list)
       def register(klass, meth)
         @registration[meth] = klass
       end

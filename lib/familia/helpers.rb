@@ -10,8 +10,8 @@ module Familia
   module Stamps
     def self.included(obj)
       obj.module_eval do
-        field :created => Integer
-        field :updated => Integer
+        field :created # => Integer
+        field :updated # => Integer (Storable.field support this syntax)
         def init_stamps
           now = Time.now.utc.to_i
           @created ||= now

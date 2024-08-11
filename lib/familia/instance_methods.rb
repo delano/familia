@@ -18,9 +18,10 @@ module Familia
     # This needs to be called in the initialize method of
     # any class that includes Familia.
     def initialize_redis_objects
+      Familia.ld "[Familia] Initializing #{self.class}"
       # Generate instances of each RedisObject. These need to be
-      # unique for each instance of this class so they can refer
-      # to the index of this specific instance.
+      # unique for each instance of this class so they can piggyback
+      # on the specifc index of this instance.
       #
       # i.e.
       #     familia_object.rediskey              == v1:bone:INDEXVALUE:object
@@ -28,6 +29,7 @@ module Familia
       #
       # See RedisObject.install_redis_object
       self.class.redis_objects.each_pair do |name, redis_object_definition|
+        Familia.ld "[#initialize_redis_objects] #{self.class} #{name} => #{redis_object_definition}"
         klass = redis_object_definition.klass
         opts = redis_object_definition.opts
         opts = opts.nil? ? {} : opts.clone

@@ -38,12 +38,13 @@ module Familia
   @dump_method = :to_json
   @load_method = :from_json
 
+  # Only ever accessed as Familia.methods
   class << self
     attr_reader :clients, :uri, :logger
     attr_accessor :debug, :secret, :delim, :dump_method, :load_method, :suffix
     attr_writer :apiversion, :index
-
     alias url uri
+
     def debug?
       @debug == true
     end
@@ -174,6 +175,7 @@ module Familia
   end
 
   def self.included(obj)
+    Familia.ld "Including Familia in #{obj}"
     obj.send :include, Familia::InstanceMethods
     obj.send :include, Gibbler::Complex
     obj.extend Familia::ClassMethods
@@ -187,6 +189,7 @@ module Familia
   require_relative 'familia/instance_methods'
   require_relative 'familia/helpers'
   require_relative 'familia/version'
+  require_relative 'familia/horreum'
 end
 
 require_relative 'familia/core_ext'
