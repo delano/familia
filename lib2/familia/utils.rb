@@ -16,11 +16,15 @@ module Familia
     end
 
     def join(*val)
-      val.join(Familia.delim)
+      val.flatten.join(Familia.delim)
     end
 
     def split(val)
       val.split(Familia.delim)
+    end
+
+    def rediskey(*val)
+      join(*val)
     end
 
     def now(name = Time.now)

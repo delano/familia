@@ -102,19 +102,12 @@ module Familia
     # Produces the full redis key for this object.
     def rediskey
       if parent?
-        # We need to check if the parent has a specific suffix
-        # for the case where we have specified one other than :object.
-        suffix = if @parent.is_a?(Familia) && @parent.class.suffix != :object
-                   @parent.class.suffix
-                 else
-                   name
-                 end
-        k = @parent.rediskey(name, nil)
+        @parent.rediskey(name)
       else
-        k = [name].flatten.compact.join(Familia.delim)
+        name
       end
 
-      k
+      Familia.join([name])
     end
 
     def class?

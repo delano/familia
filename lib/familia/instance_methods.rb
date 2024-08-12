@@ -134,6 +134,25 @@ module Familia
       ret
     end
 
+    # Generates an index value for the instance based on the class's index definition.
+    #
+    # @return [String, Object] The generated index value
+    # @raise [Familia::NoIndex] If the index cannot be generated
+    # @raise [Familia::NoIndex] If a RedisType is used as an index
+    #
+    # The index can be defined in the following ways:
+    # * Proc: Called with the instance as an argument
+    # * Array: Each element is treated as a method name, results are joined
+    # * Symbol/String: Treated as a method name to call
+    #
+    # For nested Familia objects, .index is called on the result.
+    # @example
+    #   class MyClass < Familia::Horreum
+    #     index :name
+    #   end
+    #   instance = MyClass.new
+    #   instance.index # => calls instance.name
+    #
     def index
       Familia.ld "[#index] #{self.class.index} for #{self.class}"
       case self.class.index

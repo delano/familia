@@ -34,7 +34,7 @@ module Familia
         # Tracks all the classes/modules that include Familia. It's
         # 10pm, do you know where you Familia members are?
         Familia.members << member
-        #super
+        super
       end
     end
 

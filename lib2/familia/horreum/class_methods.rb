@@ -246,26 +246,26 @@ module Familia
       #
       # TODO: Needs a lot of work since it's used in a bunch of places. Just eneds to be more grokable.
       #
-      def from_redis(idx, suffix = :object)
-        return nil if idx.to_s.empty?
+      def from_redis(identifier, suffix = :object)
+        return nil if identifier.to_s.empty?
 
-        objkey = rediskey idx, suffix
+        objkey = rediskey identifier, suffix
         # Familia.trace :FROMREDIS, Familia.redis(self.uri), objkey, caller.first if Familia.debug?
         from_key objkey
       end
 
-      def exists?(idx, suffix = :object)
-        return false if idx.to_s.empty?
+      def exists?(identifier, suffix = :object)
+        return false if identifier.to_s.empty?
 
-        objkey = rediskey idx, suffix
+        objkey = rediskey identifier, suffix
         ret = Familia.redis(uri).exists objkey
-        Familia.trace :EXISTS, Familia.redis(uri), "#{rediskey(idx, suffix)} #{ret}", caller if Familia.debug?
+        Familia.trace :EXISTS, Familia.redis(uri), "#{rediskey(identifier, suffix)} #{ret}", caller if Familia.debug?
         ret
       end
 
-      def destroy!(idx, suffix = :object)
-        ret = Familia.redis(uri).del rediskey(idx, suffix)
-        Familia.trace :DELETED, Familia.redis(uri), "#{rediskey(idx, suffix)}: #{ret}", caller if Familia.debug?
+      def destroy!(identifier, suffix = :object)
+        ret = Familia.redis(uri).del rediskey(identifier, suffix)
+        Familia.trace :DELETED, Familia.redis(uri), "#{rediskey(identifier, suffix)}: #{ret}", caller if Familia.debug?
         ret
       end
 
@@ -273,15 +273,13 @@ module Familia
         Familia.redis(uri).keys(rediskey('*', suffix)) || []
       end
 
-      # idx can be a value or an Array of values used to create the index.
+      # identifier can be a value or an Array of values used to create the index.
       # We don't enforce a default suffix; that's left up to the instance.
       # A nil +suffix+ will not be included in the key.
-      def rediskey(idx, suffix = self.suffix)
-        raise "No index for #{self}" if idx.to_s.empty?
-
-        idx = Familia.join(*idx) if idx.is_a?(Array)
-        idx &&= idx.to_s
-        Familia.rediskey(prefix, idx, suffix)
+      def rediskey(identifier, suffix = self.suffix)
+        raise NoIdentifier, self if identifier.to_s.empty?
+        identifier &&= identifier.to_s
+        Familia.rediskey(prefix, identifier, suffix)
       end
     end
 

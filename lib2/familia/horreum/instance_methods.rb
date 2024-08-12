@@ -66,39 +66,26 @@ module Familia
       end
 
       # +suffix+ is the value to be used at the end of the redis key
-      # + ignored+ is literally ignored. It's around to maintain
-      # consistency with the class version of this method.
-      # (RedisType#rediskey may call against a class or instance).
-      def rediskey(suffix = nil, ignored = nil)
-        Familia.info "[#{self.class}] something was ignored" unless ignored.nil?
-        raise Familia::NoIndex, self.class if index.to_s.empty?
-
-        if suffix.nil?
-          suffix = if self.class.suffix.is_a?(Proc)
-                    self.class.suffix.call(self)
-                  else
-                    self.class.suffix
-                  end
-        end
-        self.class.rediskey index, suffix
+      def rediskey(suffix = nil)
+        Familia.ld "[rediskey] #{identifier} for #{self.class}"
+        raise Familia::NoIdentifier, self.class if identifier.to_s.empty?
+        suffix ||= self.suffix
+        self.class.rediskey identifier, suffix
       end
 
-      def object_proxy
-        @object_proxy ||= Familia::String.new rediskey, ttl: ttl, class: self.class
-        @object_proxy
-      end
+      #def rediskey
+      #  if parent?
+      #    @parent.rediskey(name)
+      #  else
+      #    name
+      #  end
+      #
+      #  Familia.join([name])
+      #end
 
       def save(meth = :set)
         Familia.trace :SAVE, Familia.redis(self.class.uri), redisuri, caller.first if Familia.debug?
-        preprocess if respond_to?(:preprocess)
-        update_time if respond_to?(:update_time)
-        ret = object_proxy.send(meth, self) # object is a name reserved by Familia
-        unless ret.nil?
-          now = Time.now.utc.to_i
-          self.class.instances.add now, self
-          object_proxy.update_expiration # does nothing unless if not specified
-        end
-        ['OK', true, 1].include?(ret)
+
       end
 
       def savenx
@@ -107,90 +94,12 @@ module Familia
 
       def update!(hsh = nil)
         updated = false
-        hsh ||= {}
-        if hsh.empty?
-          raise Familia::Problem, "No #{self.class}#{to_hash} method" unless respond_to?(:to_hash)
 
-          ret = from_redis
-          hsh = ret.to_hash if ret
-        end
-        hsh.keys.each do |field|
-          v = hsh[field.to_s] || hsh[field.to_s.to_sym]
-          next if v.nil?
-
-          send(:"#{field}=", v)
-          updated = true
-        end
-        updated
       end
 
       def destroy!
-        ret = object_proxy.delete
-        if Familia.debug? && Familia.debug?
-          Familia.trace :DELETED, Familia.redis(self.class.uri), "#{rediskey}: #{ret}", caller.first
-        end
-        self.class.instances.rem self if ret > 0
+        ret = self.delete
         ret
-      end
-
-      def index
-        Familia.ld "[#index] #{self.class.index} for #{self.class}"
-        case self.class.index
-        when Proc
-          self.class.index.call(self)
-        when Array
-          parts = self.class.index.collect do |meth|
-            raise NoIndex, "No such method: `#{meth}' for #{self.class}" unless respond_to? meth
-
-            ret = send(meth)
-            ret = ret.index if ret.is_a?(Familia)
-            ret
-          end
-          parts.join Familia.delim
-        when Symbol, String
-          if self.class.redis_object?(self.class.index.to_sym)
-            raise Familia::NoIndex, 'Cannot use a RedisType as an index'
-          end
-
-          raise NoIndex, "No such method: `#{self.class.index}' for #{self.class}" unless respond_to? self.class.index
-
-          ret = send(self.class.index)
-          ret = ret.index if ret.is_a?(Familia)
-          ret
-
-        else
-          raise Familia::NoIndex, self
-        end
-      end
-
-      def index=(v)
-        case self.class.index
-        when Proc
-          raise ArgumentError, 'Cannot set a Proc index'
-        when Array
-          unless v.is_a?(Array) && v.size == self.class.index.size
-            raise ArgumentError, "Index mismatch (#{v.size} for #{self.class.index.size})"
-          end
-
-          parts = self.class.index.each_with_index do |meth, idx|
-            raise NoIndex, "No such method: `#{meth}=' for #{self.class}" unless respond_to? "#{meth}="
-
-            send("#{meth}=", v[idx])
-          end
-        when Symbol, String
-          if self.class.redis_object?(self.class.index.to_sym)
-            raise Familia::NoIndex, 'Cannot use a RedisType as an index'
-          end
-
-          unless respond_to? "#{self.class.index}="
-            raise NoIndex, "No such method: `#{self.class.index}=' for #{self.class}"
-          end
-
-          send("#{self.class.index}=", v)
-
-        else
-          raise Familia::NoIndex, self
-        end
       end
 
       def expire(ttl = nil)
@@ -208,6 +117,10 @@ module Familia
 
       def ttl
         @ttl || self.class.ttl
+      end
+
+      def suffix
+        @suffix || self.class.suffix
       end
 
       def raw(suffix = nil)
