@@ -1,6 +1,6 @@
 
 module Familia
-  class Set < RedisObject
+  class Set < RedisType
     def size
       redis.scard rediskey
     end
@@ -117,7 +117,7 @@ module Familia
     #  end
     # end
 
-    Familia::RedisObject.register self, :set
+    Familia::RedisType.register self, :set
   end
 
 end

@@ -1,7 +1,7 @@
 
 
 module Familia
-  class SortedSet < RedisObject
+  class SortedSet < RedisType
     def size
       redis.zcard rediskey
     end
@@ -196,7 +196,8 @@ module Familia
       at(-1)
     end
 
-    Familia::RedisObject.register self, :zset
+    Familia::RedisType.register self, :sorted_set
+    Familia::RedisType.register self, :zset
   end
 
 end

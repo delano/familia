@@ -1,7 +1,7 @@
 
 
 module Familia
-  class String < RedisObject
+  class String < RedisType
     def init; end
 
     def size
@@ -108,6 +108,8 @@ module Familia
       value.nil?
     end
 
-    Familia::RedisObject.register self, :string
+    Familia::RedisType.register self, :string
+    Familia::RedisType.register self, :counter
+    Familia::RedisType.register self, :lock
   end
 end

@@ -1,7 +1,7 @@
 
 module Familia
   class Problem < RuntimeError; end
-  class NoIndex < Problem; end
+  class NoIdentifier < Problem; end
   class NonUniqueKey < Problem; end
 
   class NotConnected < Problem
