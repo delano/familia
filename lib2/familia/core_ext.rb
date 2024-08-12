@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 
 # Extends the String class with time-related functionality
 #
@@ -21,74 +23,38 @@ end
 class Time
   # Provides methods for working with various time units
   module Units
+    # rubocop:disable Style/SingleLineMethods, Layout/ExtraSpacing
+
     PER_MICROSECOND = 0.000001
     PER_MILLISECOND = 0.001
     PER_MINUTE = 60.0
     PER_HOUR = 3600.0
-    PER_DAY = 86_400.0
+    PER_DAY = 86400.0
 
-    # Conversion methods to convert seconds to other time units
-    def microseconds
-      seconds * PER_MICROSECOND
-    end
+    # Conversion methods
+    #
+    # From other time units -> seconds
+    #
+    def microseconds()    seconds * PER_MICROSECOND     end
+    def milliseconds()    seconds * PER_MILLISECOND    end
+    def seconds()         self                         end
+    def minutes()         seconds * PER_MINUTE          end
+    def hours()           seconds * PER_HOUR             end
+    def days()            seconds * PER_DAY               end
+    def weeks()           seconds * PER_DAY * 7           end
+    def years()           seconds * PER_DAY * 365        end
 
-    def milliseconds
-      seconds * PER_MILLISECOND
-    end
+    # From seconds -> other time units
+    #
+    def in_years()        seconds / PER_DAY / 365      end
+    def in_weeks()        seconds / PER_DAY / 7       end
+    def in_days()         seconds / PER_DAY          end
+    def in_hours()        seconds / PER_HOUR          end
+    def in_minutes()      seconds / PER_MINUTE         end
+    def in_milliseconds() seconds / PER_MILLISECOND    end
+    def in_microseconds() seconds / PER_MICROSECOND   end
 
-    def seconds
-      self
-    end
-
-    def minutes
-      seconds * PER_MINUTE
-    end
-
-    def hours
-      seconds * PER_HOUR
-    end
-
-    def days
-      seconds * PER_DAY
-    end
-
-    def weeks
-      seconds * PER_DAY * 7
-    end
-
-    def years
-      seconds * PER_DAY * 365
-    end
-
-    # Conversion methods to convert from seconds to other time units
-    def in_years
-      seconds / PER_DAY / 365
-    end
-
-    def in_weeks
-      seconds / PER_DAY / 7
-    end
-
-    def in_days
-      seconds / PER_DAY
-    end
-
-    def in_hours
-      seconds / PER_HOUR
-    end
-
-    def in_minutes
-      seconds / PER_MINUTE
-    end
-
-    def in_milliseconds
-      seconds / PER_MILLISECOND
-    end
-
-    def in_microseconds
-      seconds / PER_MICROSECOND
-    end
-
+    #
     # Converts seconds to a Time object
     #
     # @return [Time] A Time object representing the seconds
@@ -100,7 +66,7 @@ class Time
     #
     # @param u [String, Symbol] The unit to convert to (e.g., 'y', 'w', 'd', 'h', 'm', 'ms', 'us')
     # @return [Float] The converted time value
-    def in_seconds(u = nil)
+    def in_seconds(u=nil)
       case u.to_s
       when /\A(y)|(years?)\z/
         years
@@ -121,7 +87,7 @@ class Time
       end
     end
 
-    # Aliases for convenience
+    # Starring Jennifer Garner, Victor Garber, and Carl Lumbly
     alias ms milliseconds
     alias μs microseconds
     alias second seconds
@@ -130,8 +96,11 @@ class Time
     alias day days
     alias week weeks
     alias year years
+
+    # rubocop:enable Style/SingleLineMethods, Layout/ExtraSpacing
   end
 end
+
 
 # Extends the Numeric class with time unit and byte conversion functionality
 class Numeric

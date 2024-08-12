@@ -16,12 +16,12 @@ module Familia
 
     class << self
       # To be called inside every class that inherits RedisObject
-      # +meth+ becomes the base for the class and instance methods
-      # that are created for the given +klass+ (e.g. Obj.list)
-      def register(klass, meth)
-        Familia.ld "[#{self}] Registering #{klass} as #{meth}"
+      # +methname+ is the term used for the class and instance methods
+      # that are created for the given +type+ (e.g. set, list, etc)
+      def register(type, methname)
+        Familia.ld "[#{self}] Registering #{type} as #{methname}"
 
-        @registered_types[meth] = klass
+        @registered_types[methname] = type
       end
 
       attr_reader :classes, :registered_types
@@ -71,12 +71,6 @@ module Familia
     # :class => A class that responds to Familia.load_method and
     # Familia.dump_method. These will be used when loading and
     # saving data from/to redis to unmarshal/marshal the class.
-    #
-    # :reference => When true the index of the given value will be
-    # stored rather than the marshaled value. This assumes that
-    # the marshaled object is stored at a separate key. When read,
-    # from_redis looks for that separate key and returns the
-    # unmarshaled object. :class must be specified. Default: false.
     #
     # :extend => Extend this instance with the functionality in an
     # other module. Literally: "self.extend opts[:extend]".
@@ -296,12 +290,6 @@ module Familia
             else
               if val.is_a?(::String)
                 val
-
-              elsif @opts[:reference] == true
-                raise Familia::Problem, "#{val.class} does not have an index method" unless val.respond_to? :index
-                raise Familia::Problem, "#{val.class} is not Familia (#{name})" unless val.is_a?(Familia)
-
-                val.index
 
               elsif val.respond_to? dump_method
                 val.send dump_method

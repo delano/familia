@@ -70,3 +70,6 @@ Performance/Size:
 
 Style/NegatedIfElseCondition:
   Enabled: true
+
+Naming/AsciiIdentifiers:
+  Enabled: false

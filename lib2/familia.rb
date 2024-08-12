@@ -11,6 +11,7 @@ require_relative 'familia/connection'
 require_relative 'familia/settings'
 require_relative 'familia/utils'
 
+require_relative 'familia/core_ext'
 
 module Familia
 

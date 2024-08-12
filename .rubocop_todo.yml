@@ -216,12 +216,6 @@ Metrics/ModuleLength:
 Metrics/PerceivedComplexity:
   Max: 10
 
-# Offense count: 1
-# Configuration parameters: AsciiConstants.
-Naming/AsciiIdentifiers:
-  Exclude:
-    - 'lib/familia/core_ext.rb'
-
 # Offense count: 2
 # This cop supports unsafe autocorrection (--autocorrect-all).
 # Configuration parameters: EnforcedStyleForLeadingUnderscores.
