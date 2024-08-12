@@ -2,6 +2,8 @@
 
 module Familia
   class HashKey < RedisObject
+    #@method_names = [:hash, :hashkey]
+
     def size
       redis.hlen rediskey
     end

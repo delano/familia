@@ -13,14 +13,6 @@ module Familia
     # reasonable sizes they can be put into one file again, horreum.rb obvs.
     #
     module InstanceMethods
-      # A default initialize method. This will be replaced
-      # if a class defines its own initialize method after
-      # including Familia. In that case, the replacement
-      # must call initialize_redis_objects.
-      def initialize *args
-        initialize_redis_objects
-        init(*args) if respond_to? :init
-      end
 
       # This needs to be called in the initialize method of
       # any class that includes Familia.
@@ -232,18 +224,6 @@ module Familia
 
       def redistype(suffix = nil)
         Familia.redis(self.class.uri).type rediskey(suffix)
-      end
-
-      # Finds the shortest available unique key (lower limit of 6)
-      def shortid
-        len = 6
-        loop do
-          self.class.expand(@id.shorten(len))
-          break
-        rescue Familia::NonUniqueKey
-          len += 1
-        end
-        @id.shorten(len)
       end
     end
   end

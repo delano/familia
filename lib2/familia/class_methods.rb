@@ -49,7 +49,7 @@ module Familia
       # the name of the redis key.
       #
       Familia::RedisObject.registered_types.each_pair do |kind, klass|
-        Familia.ld "[registered_types] #{kind} => #{klass}"
+        Familia.ld "[registered_types] #{self} #{kind} => #{klass}"
 
         # Once defined, these methods can be used at the class-level of a
         # Familia member to define *instance-level* relations to any of the
@@ -101,6 +101,7 @@ module Familia
 
         name = name.to_s.to_sym
         opts ||= {}
+
         redis_objects[name] = Struct.new(:name, :klass, :opts).new
         redis_objects[name].name = name
         redis_objects[name].klass = klass
@@ -126,14 +127,16 @@ module Familia
         name = name.to_s.to_sym
         opts = opts.nil? ? {} : opts.clone
         opts[:parent] = self unless opts.has_key?(:parent)
-        # TODO: investigate using attic.redis_objects
+
         class_redis_objects[name] = Struct.new(:name, :klass, :opts).new
         class_redis_objects[name].name = name
         class_redis_objects[name].klass = klass
         class_redis_objects[name].opts = opts
+
         # An accessor method created in the metclass will
         # access the instance variables for this class.
         superclass.send :attr_reader, name
+
         superclass.send :define_method, "#{name}=" do |v|
           send(name).replace v
         end
@@ -279,21 +282,6 @@ module Familia
         idx = Familia.join(*idx) if idx.is_a?(Array)
         idx &&= idx.to_s
         Familia.rediskey(prefix, idx, suffix)
-      end
-
-      def expand(short_idx, suffix = self.suffix)
-        expand_key = Familia.rediskey(prefix, "#{short_idx}*", suffix)
-        Familia.trace :EXPAND, Familia.redis(uri), expand_key, caller.first if Familia.debug?
-        list = Familia.redis(uri).keys expand_key
-        case list.size
-        when 0
-          nil
-        when 1
-          matches = list.first.match(/\A#{Familia.rediskey(prefix)}:(.+?):#{suffix}/) || []
-          matches[1]
-        else
-          raise Familia::NonUniqueKey, 'Short key returned more than 1 match'
-        end
       end
     end
 

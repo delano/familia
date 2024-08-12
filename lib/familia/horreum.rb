@@ -39,7 +39,7 @@ module Familia
       super
     end
 
-    def name identifier=nil  # TODO: Rename this method to `rediskey`. Too many collisions on "name".
+    def rediskey(identifier=nil)
       self.identifier ||= identifier
       @prefix ||= self.class.to_s.downcase.split('::').last.to_sym
       @suffix ||= :object
@@ -54,10 +54,6 @@ module Familia
 
     def destroy!
       clear
-    end
-
-    def ttl
-      (get_value(:ttl) || super).to_i
     end
 
     def save
@@ -75,24 +71,12 @@ module Familia
       # self.cache.replace hsh
     end
 
-    def refresh_cache
-      cache.replace all unless self.identifier.to_s.empty?
-    end
-
     def update_time!
       check_identifier!
       OT.ld "[#{self.class}] Updating time for #{self.identifier}"
       put :updated, OT.now.to_i
     end
 
-    def cache
-      @cache ||= {}
-      @cache
-    end
-
-    def short_identifier
-      identifier[0, 12]
-    end
 #
 #    # Support for accessing ModelBase hash keys via method names.
 #    # e.g.

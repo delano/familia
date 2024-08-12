@@ -6,9 +6,7 @@ class Subdomain < Familia::HashKey
 
 end
 
-class Customer
-
-  include Familia
+class Customer < Familia::Horreum
 
 
   #feature :safe_dump
@@ -24,13 +22,13 @@ class Customer
 
   identifier :custid
 
+  field :key
   field :custid
   field :sessid
   field :email
   field :role
   field :passphrase_encryption
   field :passphrase
-  field :key
   field :verified
   field :apitoken
   field :planid
@@ -39,7 +37,7 @@ class Customer
 
 end
 
-class Session
+class Session < Familia::Horreum
   include Familia
 
   identifier :generate_id
@@ -84,7 +82,7 @@ class Session
 end
 
 
-class CustomDomain
+class CustomDomain < Familia::Horreum
   include Familia
 
   identifier :derive_id
