@@ -8,8 +8,8 @@ require_relative './test_helpers'
 Bone.prefix
 #=> :bone
 
-## Familia#index
-@a.index
+## Familia#identifier
+@a.identifier
 #=> 'atoken:akey'
 
 ## Familia.suffix

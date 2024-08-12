@@ -123,6 +123,10 @@ module Familia
         # This is a class-level redis object so the parent class' rediskey
         # method is defined in Familia::Horreum::ClassMethods.
         parent.rediskey(name, nil)
+      else
+        # This is a standalone RedisType object where it's name
+        # is the full key.
+        name
       end
     end
 

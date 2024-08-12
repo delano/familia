@@ -26,7 +26,35 @@ module Familia
   #
   class Horreum
 
-    # Stuff inside here is working with the singleton class of the object
+    # == Singleton Class Context
+    #
+    # The code within this block operates on the singleton class (also known as
+    # eigenclass or metaclass) of the current class. This means:
+    #
+    # 1. Methods defined here become class methods, not instance methods.
+    # 2. Constants and variables set here belong to the class, not instances.
+    # 3. This is the place to define class-level behavior and properties.
+    #
+    # Use this context for:
+    # * Defining class methods
+    # * Setting class-level configurations
+    # * Creating factory methods
+    # * Establishing relationships with other classes
+    #
+    # Example:
+    #   class MyClass
+    #     class << self
+    #       def class_method
+    #         puts "This is a class method"
+    #       end
+    #     end
+    #   end
+    #
+    #   MyClass.class_method  # => "This is a class method"
+    #
+    # Note: Changes made here affect the class itself and all future instances,
+    # but not existing instances of the class.
+    #
     class << self
       def inherited(member)
         Familia.trace :INHERITED, nil, "Inherited by #{member}", caller if Familia.debug?
@@ -122,6 +150,7 @@ module Familia
 
       # If the unique_id is nil, raise an error
       raise Problem, 'Identifier is nil' if unique_id.nil?
+      raise Problem, 'Identifier is empty' if unique_id.empty?
 
       unique_id
     end
