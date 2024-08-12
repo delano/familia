@@ -1,3 +1,4 @@
+
 module Familia
 
   #
@@ -27,7 +28,6 @@ module Familia
 
     class << self
       def inherited(member)
-        p :RIGHT_AFTER_THIS
         Familia.trace :INHERITED, nil, "Inherited by #{member}", caller if Familia.debug?
         member.extend(ClassMethods)
         member.include(InstanceMethods)

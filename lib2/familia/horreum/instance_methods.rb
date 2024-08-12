@@ -154,7 +154,7 @@ module Familia
       end
 
       def redistype(suffix = nil)
-        p [1, redis]
+
         redis.type rediskey
       end
     end

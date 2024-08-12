@@ -32,17 +32,17 @@ module Familia
 
       def ttl(val = nil)
         @ttl = val unless val.nil?
-        @ttl || @parent&.ttl
+        @ttl || parent&.ttl
       end
 
       def db(val = nil)
         @db = val unless val.nil?
-        @db || @parent&.db
+        @db || parent&.db
       end
 
       def uri(val = nil)
         @uri = val unless val.nil?
-        @uri || (@parent ? @parent.uri : Familia.uri)
+        @uri || (parent ? parent.uri : Familia.uri)
       end
 
       def inherited(obj)
@@ -82,12 +82,12 @@ module Familia
     # Uses the redis connection of the parent or the value of
     # opts[:redis] or Familia.redis (in that order).
     def initialize(name, opts = {})
-      Familia.ld " [initializing] #{self.class} #{opts}"
+      #Familia.ld " [initializing] #{self.class} #{opts}"
       @name = name
       @name = @name.join(Familia.delim) if @name.is_a?(Array)
 
       # Remove all keys from the opts that are not in the allowed list
-      @opts ||= {}
+      @opts = opts || {}
       @opts = @opts.select { |k, _| %i[class parent ttl default db].include? k }
 
       init if respond_to? :init
@@ -96,18 +96,17 @@ module Familia
     def redis
       return @redis if @redis
 
-      parent? ? @parent.redis : Familia.redis(opts[:db])
+      parent? ? parent.redis : Familia.redis(opts[:db])
     end
 
     # Produces the full redis key for this object.
     def rediskey
+      Familia.ld "[rediskey] #{name} for #{self.class} (#{opts})"
       if parent?
-        @parent.rediskey(name)
+        parent.rediskey(name)
       else
         Familia.join([name])
       end
-
-
     end
 
     def class?
@@ -115,7 +114,15 @@ module Familia
     end
 
     def parent?
-      @parent.is_a?(Class) || @parent.is_a?(Module) || @parent.is_a?(Familia)
+      if parent.is_a?(Class) || parent.is_a?(Module)
+        parent <= Familia::Horreum
+      else
+        parent.is_a?(Familia::Horreum)
+      end
+    end
+
+    def parent
+      @opts[:parent]
     end
 
     include Commands

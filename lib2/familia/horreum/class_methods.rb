@@ -1,6 +1,6 @@
 # rubocop:disable all
 
-require 'attic'
+
 
 
 module Familia
@@ -49,7 +49,7 @@ module Familia
       # the name of the redis key.
       #
       Familia::RedisType.registered_types.each_pair do |kind, klass|
-        Familia.ld "[registered_types] #{self} #{kind} => #{klass}"
+        Familia.ld "[registered_types] #{kind} => #{klass}"
 
         # Once defined, these methods can be used at the class-level of a
         # Familia member to define *instance-level* relations to any of the
@@ -74,7 +74,7 @@ module Familia
         # Familia member to define *class-level relations* to any of the
         # RedisType types (e.g. class_set, class_list, class_hash, etc).
         define_method :"class_#{kind}" do |*args|
-          name, opts = *args
+          name, opts = *args # e.g. `class_set :name, {ttl: 10.minutes}`
           attach_class_redis_object_relation name, klass, opts
         end
         define_method :"class_#{kind}?" do |name|
@@ -96,7 +96,7 @@ module Familia
       # Creates an instance method called +name+ that
       # returns an instance of the RedisType +klass+
       def attach_instance_redis_object_relation(name, klass, opts)
-        Familia.ld "[Attaching instance-level #{name}] #{klass} => #{opts}"
+        #Familia.ld "[Attaching instance-level #{name}] #{klass} => #{opts}"
         raise ArgumentError, "Name is blank (#{klass})" if name.to_s.empty?
 
         name = name.to_s.to_sym
@@ -109,9 +109,6 @@ module Familia
 
         attr_reader name
 
-        define_method "#{name}=" do |val|
-          send(name).replace val
-        end
         define_method "#{name}?" do
           !send(name).empty?
         end
@@ -121,7 +118,7 @@ module Familia
       # Creates a class method called +name+ that
       # returns an instance of the RedisType +klass+
       def attach_class_redis_object_relation(name, klass, opts)
-        Familia.ld "[Attaching class-level #{name}] #{klass} => #{opts}"
+        Familia.ld "[#{self}] Attaching class-level #{name} #{klass} => #{opts}"
         raise ArgumentError, 'Name is blank (klass)' if name.to_s.empty?
 
         name = name.to_s.to_sym
@@ -133,14 +130,11 @@ module Familia
         class_redis_objects[name].klass = klass
         class_redis_objects[name].opts = opts
 
-        # An accessor method created in the metclass will
+        # An accessor method created in the metaclass will
         # access the instance variables for this class.
-        superclass.send :attr_reader, name
+        singleton_class.attr_reader name
 
-        superclass.send :define_method, "#{name}=" do |v|
-          send(name).replace v
-        end
-        superclass.send :define_method, "#{name}?" do
+        define_singleton_method "#{name}?" do
           !send(name).empty?
         end
 

@@ -29,7 +29,7 @@ module Familia
     # and not when it's a Logger.debug call.
     #severity_letter = 'T' if ENV.key?('FAMILIA_TRACE')
 
-    "#{severity_letter}, #{utc_datetime}: #{relative_path}:#{line} [#{pid}/#{thread_id}] #{msg}\n"
+    "#{severity_letter}, #{utc_datetime} #{pid} #{thread_id}: #{msg}  <#{relative_path}:#{line}>\n"
   end
 
   # The Logging module provides a set of methods and constants for logging messages
