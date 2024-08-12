@@ -18,7 +18,7 @@ module Familia
       # any class that includes Familia.
       def initialize_redis_objects
         Familia.ld "[Familia] Initializing #{self.class}"
-        # Generate instances of each RedisObject. These need to be
+        # Generate instances of each RedisType. These need to be
         # unique for each instance of this class so they can piggyback
         # on the specifc index of this instance.
         #
@@ -26,7 +26,7 @@ module Familia
         #     familia_object.rediskey              == v1:bone:INDEXVALUE:object
         #     familia_object.redis_object.rediskey == v1:bone:INDEXVALUE:name
         #
-        # See RedisObject.install_redis_object
+        # See RedisType.install_redis_object
         self.class.redis_objects.each_pair do |name, redis_object_definition|
           Familia.ld "[#initialize_redis_objects] #{self.class} #{name} => #{redis_object_definition}"
           klass = redis_object_definition.klass
@@ -68,7 +68,7 @@ module Familia
       # +suffix+ is the value to be used at the end of the redis key
       # + ignored+ is literally ignored. It's around to maintain
       # consistency with the class version of this method.
-      # (RedisObject#rediskey may call against a class or instance).
+      # (RedisType#rediskey may call against a class or instance).
       def rediskey(suffix = nil, ignored = nil)
         Familia.info "[#{self.class}] something was ignored" unless ignored.nil?
         raise Familia::NoIndex, self.class if index.to_s.empty?
@@ -149,7 +149,7 @@ module Familia
           parts.join Familia.delim
         when Symbol, String
           if self.class.redis_object?(self.class.index.to_sym)
-            raise Familia::NoIndex, 'Cannot use a RedisObject as an index'
+            raise Familia::NoIndex, 'Cannot use a RedisType as an index'
           end
 
           raise NoIndex, "No such method: `#{self.class.index}' for #{self.class}" unless respond_to? self.class.index
@@ -179,7 +179,7 @@ module Familia
           end
         when Symbol, String
           if self.class.redis_object?(self.class.index.to_sym)
-            raise Familia::NoIndex, 'Cannot use a RedisObject as an index'
+            raise Familia::NoIndex, 'Cannot use a RedisType as an index'
           end
 
           unless respond_to? "#{self.class.index}="

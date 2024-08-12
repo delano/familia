@@ -1,8 +1,8 @@
 # rubocop:disable all
 
-class Familia::RedisObject
+class Familia::RedisType
 
-  # Must be included in all RedisObject classes to provide Redis
+  # Must be included in all RedisType classes to provide Redis
   # commands. The class must have a rediskey method.
   module Commands
 

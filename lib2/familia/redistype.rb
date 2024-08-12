@@ -1,17 +1,17 @@
 # rubocop:disable all
 
-require_relative 'redisobject/commands'
-require_relative 'redisobject/serialization'
+require_relative 'redistype/commands'
+require_relative 'redistype/serialization'
 
 module Familia
 
-  # RedisObject - Base class for Redis data type wrappers
+  # RedisType - Base class for Redis data type wrappers
   #
   # This class provides common functionality for various Redis data types
   # such as String, List, Set, SortedSet, and HashKey.
   #
   # @abstract Subclass and implement Redis data type specific methods
-  class RedisObject
+  class RedisType
     @registered_types = {}
     @db = nil
     @ttl = nil
@@ -21,7 +21,7 @@ module Familia
       attr_accessor :parent
       attr_writer :ttl, :db, :uri
 
-      # To be called inside every class that inherits RedisObject
+      # To be called inside every class that inherits RedisType
       # +methname+ is the term used for the class and instance methods
       # that are created for the given +type+ (e.g. set, list, etc)
       def register(type, methname)

@@ -32,5 +32,5 @@ module Familia
   extend Utils
 end
 
-require_relative 'familia/redisobject'
+require_relative 'familia/redistype'
 require_relative 'familia/horreum'

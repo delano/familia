@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 module Familia
-  class HashKey < RedisObject
+  class HashKey < RedisType
     #@method_names = [:hash, :hashkey]
 
     def size
@@ -100,8 +100,8 @@ module Familia
       multi_from_redis(*el)
     end
 
-    Familia::RedisObject.register self, :hash # legacy, deprecated
-    Familia::RedisObject.register self, :hashkey
+    Familia::RedisType.register self, :hash # legacy, deprecated
+    Familia::RedisType.register self, :hashkey
   end
 
 end

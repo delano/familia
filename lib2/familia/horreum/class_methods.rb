@@ -48,12 +48,12 @@ module Familia
       # name of the current class. In Onetime::RedisHash it means
       # the name of the redis key.
       #
-      Familia::RedisObject.registered_types.each_pair do |kind, klass|
+      Familia::RedisType.registered_types.each_pair do |kind, klass|
         Familia.ld "[registered_types] #{self} #{kind} => #{klass}"
 
         # Once defined, these methods can be used at the class-level of a
         # Familia member to define *instance-level* relations to any of the
-        # RedisObject types (e.g. set, list, hash, etc).
+        # RedisType types (e.g. set, list, hash, etc).
         #
         define_method :"#{kind}" do |*args|
           name, opts = *args
@@ -72,7 +72,7 @@ module Familia
 
         # Once defined, these methods can be used at the class-level of a
         # Familia member to define *class-level relations* to any of the
-        # RedisObject types (e.g. class_set, class_list, class_hash, etc).
+        # RedisType types (e.g. class_set, class_list, class_hash, etc).
         define_method :"class_#{kind}" do |*args|
           name, opts = *args
           attach_class_redis_object_relation name, klass, opts
@@ -83,9 +83,9 @@ module Familia
         end
         define_method :"class_#{kind}s" do
           names = class_redis_objects.keys.select { |name| send(:"class_#{kind}?", name) }
-          # TODO: This returns instances of the RedisObject class which
+          # TODO: This returns instances of the RedisType class which
           # also contain the options. This is different from the instance
-          # RedisObjects defined above which returns the Struct of name, klass, and opts.
+          # RedisTypes defined above which returns the Struct of name, klass, and opts.
           # names.collect! { |name| self.send name }
           # OR NOT:
           names.collect! { |name| class_redis_objects[name] }
@@ -94,7 +94,7 @@ module Familia
       end
 
       # Creates an instance method called +name+ that
-      # returns an instance of the RedisObject +klass+
+      # returns an instance of the RedisType +klass+
       def attach_instance_redis_object_relation(name, klass, opts)
         Familia.ld "[Attaching instance-level #{name}] #{klass} => #{opts}"
         raise ArgumentError, "Name is blank (#{klass})" if name.to_s.empty?
@@ -119,7 +119,7 @@ module Familia
       end
 
       # Creates a class method called +name+ that
-      # returns an instance of the RedisObject +klass+
+      # returns an instance of the RedisType +klass+
       def attach_class_redis_object_relation(name, klass, opts)
         Familia.ld "[Attaching class-level #{name}] #{klass} => #{opts}"
         raise ArgumentError, 'Name is blank (klass)' if name.to_s.empty?

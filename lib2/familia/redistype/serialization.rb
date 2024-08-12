@@ -1,6 +1,6 @@
 # rubocop:disable all
 
-class Familia::RedisObject
+class Familia::RedisType
 
   module Serialization
 

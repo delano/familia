@@ -1,6 +1,6 @@
 
 module Familia
-  class List < RedisObject
+  class List < RedisType
     def size
       redis.llen rediskey
     end
@@ -149,7 +149,7 @@ module Familia
     #  end
     # end
 
-    Familia::RedisObject.register self, :list
+    Familia::RedisType.register self, :list
   end
 
 

@@ -70,7 +70,7 @@ module Familia::Features
             field_name = el
             callable = lambda { |obj|
               if obj.respond_to?(:[]) && obj[field_name]
-                obj[field_name] # Familia::RedisObject classes
+                obj[field_name] # Familia::RedisType classes
               elsif obj.respond_to?(field_name)
                 obj.send(field_name) # Onetime::Models::RedisHash classes via method_missing 😩
               end

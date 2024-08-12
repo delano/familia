@@ -30,7 +30,7 @@ Familia.apiversion = 'v1'
 #=> 1302468600
 
 ## Redis Objects can be stored to quantized numeric suffix. This
-## tryouts is disabled b/c `RedisObject#rediskey` takes no args
+## tryouts is disabled b/c `RedisType#rediskey` takes no args
 ## and relies on the `class Limiter` definition in test_helpers.rb
 ## for the `:quantize` option. The quantized suffix for the Limiter
 ## class is `'%H:%M'` so its redis keys will always look like that.
