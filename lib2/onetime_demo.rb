@@ -11,7 +11,7 @@ class Customer < Familia::Horreum
   #feature :safe_dump
   #feature :api_version
 
-  class_sorted_set :values
+  class_sorted_set :values, key: 'onetime:customer'
   class_hashkey :domains
 
   hashkey :stripe_customer
@@ -87,6 +87,8 @@ end
 
 class CustomDomain < Familia::Horreum
   #include Familia
+
+  class_sorted_set :values, key: 'onetime:customdomain:values'
 
   identifier :derive_id
 

@@ -13,11 +13,12 @@ module Familia
   # @abstract Subclass and implement Redis data type specific methods
   class RedisType
     @registered_types = {}
+    @valid_options = %i[class parent ttl default db key redis]
     @db = nil
     @ttl = nil
 
     class << self
-      attr_reader :registered_types
+      attr_reader :registered_types, :valid_options
       attr_accessor :parent
       attr_writer :ttl, :db, :uri
 
@@ -52,6 +53,10 @@ module Familia
         obj.parent = self
         super(obj)
       end
+
+      def valid_keys_only(opts)
+        opts.select { |k, _| RedisType.valid_options.include? k }
+      end
     end
 
     attr_reader :name, :parent, :opts
@@ -79,6 +84,9 @@ module Familia
     #
     # :redis => an instance of Redis.
     #
+    # :key => a hardcoded key to use instead of the deriving the from
+    # the name and parent (e.g. a derived key: customer:custid:secret_counter).
+    #
     # Uses the redis connection of the parent or the value of
     # opts[:redis] or Familia.redis (in that order).
     def initialize(name, opts = {})
@@ -88,7 +96,7 @@ module Familia
 
       # Remove all keys from the opts that are not in the allowed list
       @opts = opts || {}
-      @opts = @opts.select { |k, _| %i[class parent ttl default db].include? k }
+      @opts = RedisType.valid_keys_only(@opts)
 
       init if respond_to? :init
     end
@@ -102,6 +110,11 @@ module Familia
     # Produces the full redis key for this object.
     def rediskey
       Familia.ld "[rediskey] #{name} for #{self.class} (#{opts})"
+
+      # Return the hardcoded key if it's set. This is useful for
+      # support legacy keys that aren't derived in the same way.
+      return opts[:key] if opts[:key]
+
       if parent_instance?
         # This is an instance-level redis object so the parent instance's
         # rediskey method is defined in Familia::Horreum::InstanceMethods.
