@@ -16,7 +16,8 @@ module Familia
     end
 
     def join(*val)
-      val.flatten.join(Familia.delim)
+      p [111111, *val]
+      val.flatten.compact.join(Familia.delim)
     end
 
     def split(val)

@@ -276,10 +276,14 @@ module Familia
         Familia.redis(uri).keys(rediskey('*', suffix)) || []
       end
 
-      # identifier can be a value or an Array of values used to create the index.
+      # +identifier+ can be a value or an Array of values used to create the index.
       # We don't enforce a default suffix; that's left up to the instance.
+      # The suffix is used to differentiate between different types of objects.
+      #
+      #
       # A nil +suffix+ will not be included in the key.
       def rediskey(identifier, suffix = self.suffix)
+        Familia.ld "[.rediskey] #{identifier} for #{self.class} (#{suffix})"
         raise NoIdentifier, self if identifier.to_s.empty?
         identifier &&= identifier.to_s
         Familia.rediskey(prefix, identifier, suffix)

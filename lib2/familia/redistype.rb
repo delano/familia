@@ -102,10 +102,14 @@ module Familia
     # Produces the full redis key for this object.
     def rediskey
       Familia.ld "[rediskey] #{name} for #{self.class} (#{opts})"
-      if parent?
+      if parent_instance?
+        # This is an instance-level redis object so the parent instance's
+        # rediskey method is defined in Familia::Horreum::InstanceMethods.
         parent.rediskey(name)
-      else
-        Familia.join([name])
+      elsif parent_class?
+        # This is a class-level redis object so the parent class' rediskey
+        # method is defined in Familia::Horreum::ClassMethods.
+        parent.rediskey(name, nil)
       end
     end
 
@@ -113,12 +117,16 @@ module Familia
       !@opts[:class].to_s.empty? && @opts[:class].is_a?(Familia)
     end
 
+    def parent_instance?
+      parent.is_a?(Familia::Horreum)
+    end
+
+    def parent_class?
+      parent.is_a?(Class) && parent <= Familia::Horreum
+    end
+
     def parent?
-      if parent.is_a?(Class) || parent.is_a?(Module)
-        parent <= Familia::Horreum
-      else
-        parent.is_a?(Familia::Horreum)
-      end
+      parent_class? || parent_instance?
     end
 
     def parent

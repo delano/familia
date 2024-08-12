@@ -83,24 +83,6 @@ module Familia
         Familia.redis(self.class.uri).exists rediskey
       end
 
-      # +suffix+ is the value to be used at the end of the redis key
-      def rediskey(suffix = nil)
-        Familia.ld "[rediskey] #{identifier} for #{self.class}"
-        raise Familia::NoIdentifier, self.class if identifier.to_s.empty?
-        suffix ||= self.suffix
-        self.class.rediskey identifier, suffix
-      end
-
-      #def rediskey
-      #  if parent?
-      #    @parent.rediskey(name)
-      #  else
-      #    name
-      #  end
-      #
-      #  Familia.join([name])
-      #end
-
       def save(meth = :set)
         Familia.trace :SAVE, Familia.redis(self.class.uri), redisuri, caller.first if Familia.debug?
 
@@ -157,6 +139,21 @@ module Familia
 
         redis.type rediskey
       end
+
+      # +suffix+ is the value to be used at the end of the redis key
+      # (e.g. `customer:customer_id:scores` would have `scores` as the suffix
+      # and `customer_id` would have been the identifier in that case).
+      #
+      # identifier is the value that distinguishes this object from others.
+      # Whether this is a Horreum or RedisType object, the value is taken
+      # from the `identifier` method).
+      #
+      def rediskey(suffix = self.suffix, ignored = nil)
+        Familia.ld "[#rediskey] #{identifier} for #{self.class}"
+        raise Familia::NoIdentifier, self.class if identifier.to_s.empty?
+        self.class.rediskey identifier, suffix
+      end
+
     end
   end
 end

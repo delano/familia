@@ -5,6 +5,7 @@ require 'redis'
 require 'uri/redis'
 
 require_relative 'familia/errors'
+require_relative 'familia/version'
 require_relative 'familia/logging'
 require_relative 'familia/connection'
 require_relative 'familia/settings'

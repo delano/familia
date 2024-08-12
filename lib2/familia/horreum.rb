@@ -53,10 +53,6 @@ module Familia
       send(self.class.identifier)
     end
 
-    def rediskey
-      #
-    end
-
     def save
       #
     end
