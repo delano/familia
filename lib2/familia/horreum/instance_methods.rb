@@ -17,7 +17,7 @@ module Familia
       # This needs to be called in the initialize method of
       # any class that includes Familia.
       def initialize_redis_objects
-        Familia.ld "[Familia] Initializing #{self.class}"
+
         # Generate instances of each RedisType. These need to be
         # unique for each instance of this class so they can piggyback
         # on the specifc index of this instance.
@@ -28,13 +28,31 @@ module Familia
         #
         # See RedisType.install_redis_object
         self.class.redis_objects.each_pair do |name, redis_object_definition|
-          Familia.ld "[#initialize_redis_objects] #{self.class} #{name} => #{redis_object_definition}"
+          Familia.ld "[#{self.class}] initialize_redis_objects #{name} => #{redis_object_definition}"
           klass = redis_object_definition.klass
           opts = redis_object_definition.opts
-          opts = opts.nil? ? {} : opts.clone
+
+          # As a subclass of Familia::Horreum, we add ourselves as the parent
+          # automatically. This is what determines the rediskey for RedisType
+          # instance and which redis connection.
+          #
+          #   e.g. If the parent's rediskey is `customer:customer_id:object`
+          #     then the rediskey for this RedisType instance will be
+          #     `customer:customer_id:name`.
+          #
           opts[:parent] = self unless opts.has_key?(:parent)
+
+          # Instantiate the RedisType object and below we store it in
+          # an instance variable.
           redis_object = klass.new name, opts
+
+          # Freezes the redis_object, making it immutable.
+          # This ensures the object's state remains consistent and prevents any modifications,
+          # safeguarding its integrity and making it thread-safe.
+          # Any attempts to change the object after this will raise a FrozenError.
           redis_object.freeze
+
+          # e.g. customer.name  #=> `#<Familia::HashKey:0x0000...>`
           instance_variable_set "@#{name}", redis_object
         end
       end

@@ -2,11 +2,114 @@
 
 require 'logger'
 
+module LoggerTraceRefinement
+  TRACE = -1 # can't set within the refine block
+  refine Logger do
+
+    def trace(progname = nil, &block)
+      add(LoggerTraceRefinement::TRACE, nil, progname, &block)
+    end
+
+  end
+end
+
 module Familia
   @logger = Logger.new($stdout)
   @logger.progname = name
+  @logger.formatter = proc do |severity, datetime, progname, msg|
+    severity_letter = severity[0]  # Get the first letter of the severity
+    pid = Process.pid
+    thread_id = Thread.current.object_id
+    full_path, line = caller[4].split(":")[0..1]
+    parent_path = Pathname.new(full_path).ascend.find { |p| p.basename.to_s == 'familia' }
+    relative_path = full_path.sub(parent_path.to_s, 'familia')
+    utc_datetime = datetime.utc.strftime("%m-%d %H:%M:%S.%6N")
 
+    # TODO: Only want to set to trace when it's a Logger.trace call
+    # and not when it's a Logger.debug call.
+    #severity_letter = 'T' if ENV.key?('FAMILIA_TRACE')
+
+    "#{severity_letter}, #{utc_datetime}: #{relative_path}:#{line} [#{pid}/#{thread_id}] #{msg}\n"
+  end
+
+  # The Logging module provides a set of methods and constants for logging messages
+  # at various levels of severity. It is designed to be used with the Ruby Logger class
+  # to facilitate logging in applications.
+  #
+  # == Constants:
+  # Logger::TRACE::
+  #   A custom log level for trace messages, typically used for very detailed
+  #   debugging information.
+  #
+  # == Methods:
+  # trace::
+  #   Logs a message at the TRACE level. This method is only available if the
+  #   LoggerTraceRefinement is used.
+  #
+  # debug::
+  #   Logs a message at the DEBUG level. This is used for low-level system information
+  #   for debugging purposes.
+  #
+  # info::
+  #   Logs a message at the INFO level. This is used for general information about
+  #   system operation.
+  #
+  # warn::
+  #   Logs a message at the WARN level. This is used for warning messages, typically
+  #   for non-critical issues that require attention.
+  #
+  # error::
+  #   Logs a message at the ERROR level. This is used for error messages, typically
+  #   for critical issues that require immediate attention.
+  #
+  # fatal::
+  #   Logs a message at the FATAL level. This is used for very severe error events
+  #   that will presumably lead the application to abort.
+  #
+  # == Usage:
+  # To use the Logging module, you need to include the LoggerTraceRefinement module
+  # and use the `using` keyword to enable the refinement. This will add the TRACE
+  # log level and the trace method to the Logger class.
+  #
+  # Example:
+  #   require 'logger'
+  #
+  #   module LoggerTraceRefinement
+  #     refine Logger do
+  #       TRACE = 0
+  #
+  #       def trace(progname = nil, &block)
+  #         add(TRACE, nil, progname, &block)
+  #       end
+  #     end
+  #   end
+  #
+  #   using LoggerTraceRefinement
+  #
+  #   logger = Logger.new(STDOUT)
+  #   logger.trace("This is a trace message")
+  #   logger.debug("This is a debug message")
+  #   logger.info("This is an info message")
+  #   logger.warn("This is a warning message")
+  #   logger.error("This is an error message")
+  #   logger.fatal("This is a fatal message")
+  #
+  # In this example, the LoggerTraceRefinement module is defined with a refinement
+  # for the Logger class. The TRACE constant and trace method are added to the Logger
+  # class within the refinement. The `using` keyword is used to apply the refinement
+  # in the scope where it's needed.
+  #
+  # == Conditions:
+  # The trace method and TRACE log level are only available if the LoggerTraceRefinement
+  # module is used with the `using` keyword. Without this, the Logger class will not
+  # have the trace method or the TRACE log level.
+  #
+  # == Minimum Ruby Version:
+  # This module requires Ruby 2.0.0 or later to use refinements.
+  #
   module Logging
+    # Gives our logger the ability to use our trace method.
+    using LoggerTraceRefinement
 
     def info(*msg)
       @logger.info(*msg)
@@ -39,15 +142,16 @@ module Familia
 
     #
     # @return [nil]
+    #
     def trace(label, redis_instance, ident, context = nil)
-      return unless Familia.debug?
-
+      return unless Familia.debug? && ENV.key?('FAMILIA_TRACE')
+      instance_id = redis_instance&.id
       codeline = if context
                    context = [context].flatten
                    context.reject! { |line| line =~ %r{lib/familia} }
                    context.first
                  end
-      info format('[%s] -> %s <- %s %s', label, codeline, redis_instance.id, ident)
+      @logger.trace format('[%s] %s -> %s <- at %s', label, instance_id, ident, codeline)
     end
 
   end
@@ -99,7 +203,7 @@ logger.error("This is an error message")
 require 'logger'
 
 logger = Logger.new($stdout)
-logger.progname = 'MyApp'
+logger.progname = 'Familia'
 
 logger.info("This is an info message")
 logger.warn("This is a warning message")
@@ -110,11 +214,24 @@ logger.error("This is an error message")
 ```ruby
 require 'logger'
 
+# Calling any of the methods above with a block
+#   (affects only the one entry).
+#   Doing so can have two benefits:
+#
+#   - Context: the block can evaluate the entire program context
+#     and create a context-dependent message.
+#   - Performance: the block is not evaluated unless the log level
+#     permits the entry actually to be written:
+#
+#       logger.error { my_slow_message_generator }
+#
+#     Contrast this with the string form, where the string is
+#     always evaluated, regardless of the log level:
+#
+#       logger.error("#{my_slow_message_generator}")
 logger = Logger.new($stdout)
 
 logger.info { "This is an info message" }
 logger.warn { "This is a warning message" }
 logger.error { "This is an error message" }
 ```
-
-These examples demonstrate various ways to use the [`Logger`](command:_github.copilot.openSymbolFromReferences?%5B%22%22%2C%5B%7B%22uri%22%3A%7B%22%24mid%22%3A1%2C%22fsPath%22%3A%22%2FUsers%2Fd%2FProjects%2Fopensource%2Fd%2Ffamilia%2Flib2%2Ffamilia%2Flogging.rb%22%2C%22external%22%3A%22file%3A%2F%2F%2FUsers%2Fd%2FProjects%2Fopensource%2Fd%2Ffamilia%2Flib2%2Ffamilia%2Flogging.rb%22%2C%22path%22%3A%22%2FUsers%2Fd%2FProjects%2Fopensource%2Fd%2Ffamilia%2Flib2%2Ffamilia%2Flogging.rb%22%2C%22scheme%22%3A%22file%22%7D%2C%22pos%22%3A%7B%22line%22%3A3%2C%22character%22%3A9%7D%7D%5D%5D "Go to definition") class in Ruby to log messages to the standard output.

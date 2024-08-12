@@ -82,7 +82,7 @@ module Familia
     # Uses the redis connection of the parent or the value of
     # opts[:redis] or Familia.redis (in that order).
     def initialize(name, opts = {})
-      Familia.ld " [initializing] #{self.class} #{caller[0]}"
+      Familia.ld " [initializing] #{self.class} #{opts}"
       @name = name
       @name = @name.join(Familia.delim) if @name.is_a?(Array)
 

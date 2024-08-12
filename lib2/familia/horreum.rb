@@ -27,7 +27,8 @@ module Familia
 
     class << self
       def inherited(member)
-        Familia.ld "[Horreum] Inherited by #{member}"
+        p :RIGHT_AFTER_THIS
+        Familia.trace :INHERITED, nil, "Inherited by #{member}", caller if Familia.debug?
         member.extend(ClassMethods)
         member.include(InstanceMethods)
 
@@ -43,7 +44,7 @@ module Familia
     # including Familia. In that case, the replacement
     # must call initialize_redis_objects.
     def initialize *args, **kwargs
-      Familia.ld "[Horreum] Initializing #{self.class} with #{args.inspect} and #{kwargs.inspect}"
+      Familia.ld "[Horreum] Initializing #{self.class} with arguments (#{args.inspect}, #{kwargs.inspect})"
       initialize_redis_objects
       init(*args) if respond_to? :init
     end
