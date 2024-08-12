@@ -15,7 +15,7 @@ module Familia
 
       conf = uri.conf
 
-      Familia.trace(:CONNECT, redis, conf.inspect, caller[0..3])
+      #Familia.trace(:CONNECT, redis, conf.inspect, caller[0..3])
 
       redis = Redis.new conf
 

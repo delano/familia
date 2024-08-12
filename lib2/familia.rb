@@ -33,5 +33,4 @@ module Familia
 end
 
 require_relative 'familia/redisobject'
-require_relative 'familia/class_methods'
-require_relative 'familia/instance_methods'
+require_relative 'familia/horreum'

@@ -1,9 +1,7 @@
 # rubocop:disable all
 
-
 require_relative 'redisobject/commands'
 require_relative 'redisobject/serialization'
-
 
 module Familia
 
@@ -56,8 +54,7 @@ module Familia
       end
     end
 
-    attr_reader :name, :parent
-    attr_writer :redis
+    attr_reader :name, :parent, :opts
 
     # +name+: If parent is set, this will be used as the suffix
     # for rediskey. Otherwise this becomes the value of the key.
@@ -85,27 +82,24 @@ module Familia
     # Uses the redis connection of the parent or the value of
     # opts[:redis] or Familia.redis (in that order).
     def initialize(name, opts = {})
-      @name = name
-      @opts = opts
-      @name = @name.join(Familia.delim) if @name.is_a?(Array)
       Familia.ld " [initializing] #{self.class} #{caller[0]}"
+      @name = name
+      @name = @name.join(Familia.delim) if @name.is_a?(Array)
 
-      @db = @opts.delete(:db)
-      @parent = @opts.delete(:parent)
-      @ttl ||= @opts.delete(:ttl)
-      @redis ||= @opts.delete(:redis)
-      @cache = {}
+      # Remove all keys from the opts that are not in the allowed list
+      @opts ||= {}
+      @opts = @opts.select { |k, _| %i[class parent ttl default db].include? k }
+
       init if respond_to? :init
     end
 
     def redis
       return @redis if @redis
 
-      parent? ? @parent.redis : Familia.redis(db)
+      parent? ? @parent.redis : Familia.redis(opts[:db])
     end
 
-    # returns a redis key based on the parent
-    # object so it will include the proper index.
+    # Produces the full redis key for this object.
     def rediskey
       if parent?
         # We need to check if the parent has a specific suffix

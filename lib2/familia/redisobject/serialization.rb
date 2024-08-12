@@ -76,7 +76,7 @@ class Familia::RedisObject
     end
 
     def update_expiration(ttl = nil)
-      ttl ||= self.ttl
+      ttl ||= opts[:ttl]
       return if ttl.to_i.zero? # nil will be zero
 
       Familia.ld "#{rediskey} to #{ttl}"

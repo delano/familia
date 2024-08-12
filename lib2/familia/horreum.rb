@@ -26,14 +26,15 @@ module Familia
   class Horreum
 
     class << self
-
       def inherited(member)
+        Familia.ld "[Horreum] Inherited by #{member}"
         member.extend(ClassMethods)
         member.include(InstanceMethods)
+
         # Tracks all the classes/modules that include Familia. It's
         # 10pm, do you know where you Familia members are?
         Familia.members << member
-        super
+        #super
       end
     end
 
@@ -76,3 +77,6 @@ module Familia
     end
   end
 end
+
+require_relative 'horreum/class_methods'
+require_relative 'horreum/instance_methods'

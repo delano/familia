@@ -6,9 +6,8 @@ class Subdomain < Familia::HashKey
 
 end
 
+
 class Customer < Familia::Horreum
-
-
   #feature :safe_dump
   #feature :api_version
 
@@ -36,9 +35,10 @@ class Customer < Familia::Horreum
   field :updated
 
 end
+@c = Customer.new
 
 class Session < Familia::Horreum
-  include Familia
+  #include Familia
 
   identifier :generate_id
 
@@ -80,10 +80,10 @@ class Session < Familia::Horreum
   end
 
 end
-
+@s = Session.new
 
 class CustomDomain < Familia::Horreum
-  include Familia
+  #include Familia
 
   identifier :derive_id
 
@@ -110,7 +110,7 @@ class CustomDomain < Familia::Horreum
     join(:display_domain, :custid).gibbler.shorten
   end
 end
-
+@d = CustomDomain.new
 
 
 
