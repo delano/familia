@@ -45,7 +45,7 @@ module Familia
     end
 
     def now(name = Time.now)
-      name.utc.to_i
+      name.utc.to_f
     end
 
     # A quantized timestamp

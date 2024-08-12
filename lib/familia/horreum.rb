@@ -11,7 +11,7 @@ module Familia
   #     value change is performed directly on redis; Horreum is a cache
   #     that performs atomic operations on a hash in redis (via HashKey).
   #
-  # Differences between Familia and Familia::Horreum: !==
+  # Differences between Familia and Familia::Horreum:
   #
   #   * Familia provides class/module level access to redis types and
   #     operations; Horreum provides instance-level access to a single
@@ -25,11 +25,12 @@ module Familia
   # Horreum is equivalent to Onetime::RedisHash.
   #
   class Horreum
+
+    # Stuff inside here is working with the singleton class of the object
     class << self
       def inherited(member)
         Familia.trace :INHERITED, nil, "Inherited by #{member}", caller if Familia.debug?
         member.extend(ClassMethods)
-        member.include(InstanceMethods)
 
         # Tracks all the classes/modules that include Familia. It's
         # 10pm, do you know where you Familia members are?
@@ -45,26 +46,94 @@ module Familia
     def initialize *args, **kwargs
       Familia.ld "[Horreum] Initializing #{self.class} with arguments (#{args.inspect}, #{kwargs.inspect})"
       initialize_redis_objects
+
+      # if args is not empty, it contains the values for the fields in the order
+      # they were defined in the class. This is the only way to set the fields
+      # when initializing a new object.
+      #
+      args.each_with_index do |value, index|
+        field = self.class.fields[index]
+        send(:"#{field}=", value)
+      end
+
+      # Check if the class has an init method and call it if it does.
       init(*args) if respond_to? :init
     end
 
-    def identifier
-      send(self.class.identifier)
+    # This needs to be called in the initialize method of
+    # any class that includes Familia.
+    def initialize_redis_objects
+      # Generate instances of each RedisType. These need to be
+      # unique for each instance of this class so they can piggyback
+      # on the specifc index of this instance.
+      #
+      # i.e.
+      #     familia_object.rediskey              == v1:bone:INDEXVALUE:object
+      #     familia_object.redis_object.rediskey == v1:bone:INDEXVALUE:name
+      #
+      # See RedisType.install_redis_object
+      self.class.redis_objects.each_pair do |name, redis_object_definition|
+        Familia.ld "[#{self.class}] initialize_redis_objects #{name} => #{redis_object_definition.to_a}"
+        klass = redis_object_definition.klass
+        opts = redis_object_definition.opts
+
+        # As a subclass of Familia::Horreum, we add ourselves as the parent
+        # automatically. This is what determines the rediskey for RedisType
+        # instance and which redis connection.
+        #
+        #   e.g. If the parent's rediskey is `customer:customer_id:object`
+        #     then the rediskey for this RedisType instance will be
+        #     `customer:customer_id:name`.
+        #
+        opts[:parent] = self # unless opts.key(:parent)
+
+        # Instantiate the RedisType object and below we store it in
+        # an instance variable.
+        redis_object = klass.new name, opts
+
+        # Freezes the redis_object, making it immutable.
+        # This ensures the object's state remains consistent and prevents any modifications,
+        # safeguarding its integrity and making it thread-safe.
+        # Any attempts to change the object after this will raise a FrozenError.
+        redis_object.freeze
+
+        # e.g. customer.name  #=> `#<Familia::HashKey:0x0000...>`
+        instance_variable_set :"@#{name}", redis_object
+      end
     end
 
-    def save; end
+    def identifier
+      definition = self.class.identifier # e.g.
+      # When definition is a symbol or string, assume it's an instance method
+      # to call on the object to get the unique identifier. When it's a callable
+      # object, call it with the object as the argument. When it's an array,
+      # call each method in turn and join the results. When it's nil, raise
+      # an error
+      unique_id = case definition
+                  when Symbol, String
+                    send(definition)
+                  when Proc
+                    definition.call(self)
+                  when Array
+                    Familia.join(definition.map { |method| send(method) })
+                  else
+                    raise Problem, "Invalid identifier definition: #{definition.inspect}"
+                  end
 
-    def update_fields; end
+      # If the unique_id is nil, raise an error
+      raise Problem, 'Identifier is nil' if unique_id.nil?
 
-    def to_h; end
+      unique_id
+    end
 
-    def to_a; end
-
-    def join(*args)
-      Familia.join(args.map { |field| send(field) })
+    def redis
+      self.class.redis
     end
   end
 end
 
 require_relative 'horreum/class_methods'
-require_relative 'horreum/instance_methods'
+require_relative 'horreum/commands'
+require_relative 'horreum/serialization'
+require_relative 'horreum/settings'
+require_relative 'horreum/utils'

@@ -96,7 +96,7 @@ module Familia
       # Creates an instance method called +name+ that
       # returns an instance of the RedisType +klass+
       def attach_instance_redis_object_relation(name, klass, opts)
-        #Familia.ld "[Attaching instance-level #{name}] #{klass} => #{opts}"
+        Familia.ld "[Attaching instance-level #{name}] #{klass} => (#{self}) #{opts}"
         raise ArgumentError, "Name is blank (#{klass})" if name.to_s.empty?
 
         name = name.to_s.to_sym
@@ -112,6 +112,7 @@ module Familia
         define_method "#{name}?" do
           !send(name).empty?
         end
+
         redis_objects[name]
       end
 
@@ -123,7 +124,7 @@ module Familia
 
         name = name.to_s.to_sym
         opts = opts.nil? ? {} : opts.clone
-        opts[:parent] = self unless opts.has_key?(:parent)
+        opts[:parent] = self unless opts.key?(:parent)
 
         class_redis_objects[name] = Struct.new(:name, :klass, :opts).new
         class_redis_objects[name].name = name

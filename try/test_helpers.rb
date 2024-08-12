@@ -38,11 +38,11 @@ class Customer < Familia::Horreum
 
   identifier :custid
 
-  field :key
   field :custid
   field :sessid
   field :email
   field :role
+  field :key
   field :passphrase_encryption
   field :passphrase
   field :verified
@@ -60,12 +60,12 @@ class Session < Familia::Horreum
 
   identifier :generate_id
 
+  field :sessid
   field :shrimp
-  field :key
   field :custid
   field :useragent
+  field :key
   field :authenticated
-  field :sessid
   field :ipaddress
   field :created
   field :updated
@@ -135,11 +135,16 @@ end
 @d.display_domain = "example.com"
 @d.custid = @c.custid
 
+
 class Limiter < Familia::Horreum
 
   identifier :name
   field :name
   string :counter, :ttl => 1.hour, :quantize => [10.minutes, '%H:%M', 1302468980]
+
+  def identifier
+    @name
+  end
 end
 
 class Shape < Familia::Horreum

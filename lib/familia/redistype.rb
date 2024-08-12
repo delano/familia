@@ -146,6 +146,18 @@ module Familia
       @opts[:parent]
     end
 
+    def ttl
+      @opts[:ttl] || self.class.ttl
+    end
+
+    def db
+      @opts[:db] || self.class.db
+    end
+
+    def uri
+      @opts[:uri] || self.class.uri
+    end
+
     include Commands
     include Serialization
   end

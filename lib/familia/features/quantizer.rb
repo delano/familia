@@ -4,6 +4,8 @@ module Familia::Features
 
   module Quantizer
 
+    # From Familia::RedisType
+    #
     def qstamp(quantum = nil, pattern = nil, now = Familia.now)
       quantum ||= @opts[:quantize] || ttl || 10.minutes
       case quantum
@@ -22,6 +24,12 @@ module Familia::Features
       end
 
     end
+
+    # From Familia::Horreum::InstanceMethods:
+    #
+    #def qstamp(_quantum = nil, pattern = nil, now = Familia.now)
+    #  self.class.qstamp ttl, pattern, now
+    #end
 
   end
 end
