@@ -1,6 +1,5 @@
 # frozen_string_literal: true
 
-
 # Extends the String class with time-related functionality
 #
 # This implementaton assumes Time::Units and Numeric mixins are available.
@@ -13,7 +12,7 @@ class String
   #
   # @return [Float, nil] The time in seconds, or nil if the string is invalid
   def in_seconds
-    q, u = scan(/([\d.]+)([s,m,h])?/).flatten
+    q, u = scan(/([\d.]+)([smh])?/).flatten
     q &&= q.to_f and u ||= 's'
     q &&= q.in_seconds(u)
   end
@@ -29,7 +28,7 @@ class Time
     PER_MILLISECOND = 0.001
     PER_MINUTE = 60.0
     PER_HOUR = 3600.0
-    PER_DAY = 86400.0
+    PER_DAY = 86_400.0
 
     # Conversion methods
     #
@@ -66,7 +65,7 @@ class Time
     #
     # @param u [String, Symbol] The unit to convert to (e.g., 'y', 'w', 'd', 'h', 'm', 'ms', 'us')
     # @return [Float] The converted time value
-    def in_seconds(u=nil)
+    def in_seconds(u = nil)
       case u.to_s
       when /\A(y)|(years?)\z/
         years
@@ -101,7 +100,6 @@ class Time
   end
 end
 
-
 # Extends the Numeric class with time unit and byte conversion functionality
 class Numeric
   include Time::Units
@@ -123,7 +121,7 @@ class Numeric
   #   3_221_225_472.to_bytes #=> "3.00 GiB"
   #
   def to_bytes
-    units = ['B', 'KiB', 'MiB', 'GiB', 'TiB']
+    units = %w[B KiB MiB GiB TiB]
     size = abs.to_f
     unit = 0
 
@@ -134,5 +132,4 @@ class Numeric
 
     format('%3.2f %s', size, units[unit])
   end
-
 end

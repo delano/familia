@@ -1,4 +1,3 @@
-
 module Familia
   class Set < RedisType
     def size
@@ -21,7 +20,7 @@ module Familia
     end
 
     def members
-      echo :members, caller[0] if Familia.debug
+      echo :members, caller(1..1).first if Familia.debug
       el = membersraw
       multi_from_redis(*el)
     end
@@ -119,5 +118,4 @@ module Familia
 
     Familia::RedisType.register self, :set
   end
-
 end

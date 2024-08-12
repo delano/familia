@@ -1,4 +1,3 @@
-
 module Familia
   class Problem < RuntimeError; end
   class NoIdentifier < Problem; end

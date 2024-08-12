@@ -1,5 +1,3 @@
-
-
 module Familia
   class String < RedisType
     def init; end

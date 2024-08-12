@@ -2,7 +2,7 @@
 
 module Familia
   class HashKey < RedisType
-    #@method_names = [:hash, :hashkey]
+    # @method_names = [:hash, :hashkey]
 
     def size
       redis.hlen rediskey
@@ -18,7 +18,7 @@ module Familia
       update_expiration
       ret
     rescue TypeError => e
-      echo :hset, caller[0] if Familia.debug
+      echo :hset, caller(1..1).first if Familia.debug
       klass = val.class
       msg = "Cannot store #{name} => #{val.inspect} (#{klass}) in #{rediskey}"
       raise e.class, msg
@@ -103,5 +103,4 @@ module Familia
     Familia::RedisType.register self, :hash # legacy, deprecated
     Familia::RedisType.register self, :hashkey
   end
-
 end

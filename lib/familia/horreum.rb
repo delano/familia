@@ -1,6 +1,4 @@
-
 module Familia
-
   #
   # Differences between Familia::Horreum and Familia::HashKey:
   #
@@ -25,7 +23,6 @@ module Familia
   # Horreum is equivalent to Onetime::RedisHash.
   #
   class Horreum
-
     class << self
       def inherited(member)
         Familia.trace :INHERITED, nil, "Inherited by #{member}", caller if Familia.debug?
@@ -53,21 +50,13 @@ module Familia
       send(self.class.identifier)
     end
 
-    def save
-      #
-    end
+    def save; end
 
-    def update_fields
-      #
-    end
+    def update_fields; end
 
-    def to_h
-      #
-    end
+    def to_h; end
 
-    def to_a
-      #
-    end
+    def to_a; end
 
     def join(*args)
       Familia.join(args.map { |field| send(field) })

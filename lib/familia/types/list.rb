@@ -1,4 +1,3 @@
-
 module Familia
   class List < RedisType
     def size
@@ -11,7 +10,7 @@ module Familia
     end
 
     def push *values
-      echo :push, caller[0] if Familia.debug
+      echo :push, caller(1..1).first if Familia.debug
       values.flatten.compact.each { |v| redis.rpush rediskey, to_redis(v) }
       redis.ltrim rediskey, -@opts[:maxlength], -1 if @opts[:maxlength]
       update_expiration
@@ -71,7 +70,7 @@ module Familia
     end
 
     def members(count = -1)
-      echo :members, caller[0] if Familia.debug
+      echo :members, caller(1..1).first if Familia.debug
       count -= 1 if count > 0
       range 0, count
     end
@@ -151,6 +150,4 @@ module Familia
 
     Familia::RedisType.register self, :list
   end
-
-
 end
