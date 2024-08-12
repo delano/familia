@@ -104,10 +104,10 @@ module Familia
       if parent?
         @parent.rediskey(name)
       else
-        name
+        Familia.join([name])
       end
 
-      Familia.join([name])
+
     end
 
     def class?

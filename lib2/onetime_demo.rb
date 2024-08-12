@@ -13,6 +13,7 @@ class Customer < Familia::Horreum
 
   class_sorted_set :values
   class_hashkey :domains
+
   hashkey :stripe_customer
   sorted_set :metadata
   sorted_set :custom_domains
@@ -36,6 +37,7 @@ class Customer < Familia::Horreum
 
 end
 @c = Customer.new
+@c.custid = "d@example.com"
 
 class Session < Familia::Horreum
   #include Familia
@@ -53,7 +55,8 @@ class Session < Familia::Horreum
   field :updated
 
   def generate_id
-    self.class.generate_id
+    @sessid ||= Familia.generate_id
+    @sessid
   end
 
   # The external identifier is used by the rate limiter to estimate a unique
@@ -111,6 +114,8 @@ class CustomDomain < Familia::Horreum
   end
 end
 @d = CustomDomain.new
+@d.display_domain = "example.com"
+@d.custid = @c.custid
 
 
 

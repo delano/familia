@@ -51,8 +51,8 @@ module Familia
         self.class.redis
       end
 
-      def redisinfo
-        info = {
+      def redisdetails
+        {
           uri: self.class.uri,
           db: self.class.db,
           key: rediskey,
@@ -124,19 +124,20 @@ module Familia
       end
 
       def raw(suffix = nil)
-        suffix ||= :object
-        Familia.redis(self.class.uri).get rediskey(suffix)
+        #suffix ||= :object
+        redis.get rediskey
       end
 
       def redisuri(suffix = nil)
-        u = URI.parse self.class.uri.to_s
-        u.db ||= self.class.db.to_s
+        u = Familia.redisuri(self.class.uri) # returns URI::Redis
+        u.db ||= self.class.db.to_s # TODO: revisit logic (should the horrerum instance know its uri?)
         u.key = rediskey(suffix)
         u
       end
 
       def redistype(suffix = nil)
-        Familia.redis(self.class.uri).type rediskey(suffix)
+        p [1, redis]
+        redis.type rediskey
       end
     end
   end

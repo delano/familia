@@ -27,6 +27,23 @@ module Familia
       join(*val)
     end
 
+    def redisuri(uri)
+      generic_uri = URI.parse(uri.to_s)
+
+      # Create a new URI::Redis object
+      redis_uri = URI::Redis.build(
+        scheme: generic_uri.scheme,
+        userinfo: generic_uri.userinfo,
+        host: generic_uri.host,
+        port: generic_uri.port,
+        path: generic_uri.path,
+        query: generic_uri.query,
+        fragment: generic_uri.fragment
+      )
+
+      redis_uri
+    end
+
     def now(name = Time.now)
       name.utc.to_i
     end

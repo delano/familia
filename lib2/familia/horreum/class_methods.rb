@@ -168,6 +168,15 @@ module Familia
         @db || (parent ? parent.db : nil)
       end
 
+      def uri(v = nil)
+        @uri = v unless v.nil?
+        @uri || (parent ? parent.uri : nil)
+      end
+
+      def redis
+        Familia.redis uri
+      end
+
       def all(suffix = :object)
         # objects that could not be parsed will be nil
         keys(suffix).collect { |k| from_key(k) }.compact
