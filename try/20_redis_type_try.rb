@@ -1,7 +1,8 @@
 
-require 'familia'
-require 'familia/test_helpers'
-Familia.apiversion = 'v1'
+require_relative '../lib/familia'
+require_relative './test_helpers'
+
+#Familia.apiversion = 'v1'
 
 
 ## Redis Objects are unique per instance of a Familia class

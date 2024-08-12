@@ -35,7 +35,7 @@ module Familia
       @uri = v
     end
 
-
-
+    alias url uri
+    alias url= uri=
   end
 end

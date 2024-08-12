@@ -1,9 +1,25 @@
 # rubocop:disable all
 
-require_relative 'familia'
+require_relative '../lib/familia'
 
-class Subdomain < Familia::HashKey
+class Bone < Familia::Horreum
+  identifier     [:token, :name]
+  field     :token
+  field     :name
+  list      :owners
+  set       :tags
+  zset      :metrics
+  hashkey   :props
+  string    :value, :default => "GREAT!"
+end
 
+class Blone < Familia::Horreum
+
+  list      :owners
+  set       :tags
+  zset      :metrics
+  hashkey   :props
+  string    :value, :default => "GREAT!"
 end
 
 
@@ -118,6 +134,17 @@ end
 @d = CustomDomain.new
 @d.display_domain = "example.com"
 @d.custid = @c.custid
+
+class Limiter < Familia::Horreum
+
+  identifier :name
+  field :name
+  string :counter, :ttl => 1.hour, :quantize => [10.minutes, '%H:%M', 1302468980]
+end
+
+class Shape < Familia::Horreum
+
+end
 
 
 

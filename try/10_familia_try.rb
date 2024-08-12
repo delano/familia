@@ -1,21 +1,24 @@
-require 'familia'
-require 'familia/test_helpers'
+
+require 'time'
+
+require_relative '../lib/familia'
+require_relative './test_helpers'
 
 ## Has all redis objects
 redis_objects = Familia::RedisType.registered_types.keys
 redis_objects.collect(&:to_s).sort
-#=> ["hash", "hashkey", "list", "set", "string", "zset"]
+#=> ["counter", "hash", "hashkey", "list", "lock", "set", "sorted_set", "string", "zset"]
 
 ## Familia created class methods for redis object class
-Familia::ClassMethods.public_method_defined? :list?
+Familia::Horreum::ClassMethods.public_method_defined? :list?
 #=> true
 
 ## Familia created class methods for redis object class
-Familia::ClassMethods.public_method_defined? :list
+Familia::Horreum::ClassMethods.public_method_defined? :list
 #=> true
 
 ## Familia created class methods for redis object class
-Familia::ClassMethods.public_method_defined? :lists
+Familia::Horreum::ClassMethods.public_method_defined? :lists
 #=> true
 
 ## A Familia object knows its redis objects

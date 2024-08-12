@@ -1,7 +1,7 @@
-require 'familia'
-require 'familia/test_helpers'
+require_relative '../lib/familia'
+require_relative './test_helpers'
 
-Familia.apiversion = 'v1'
+#Familia.apiversion = 'v1'
 
 @a = Bone.new 'atoken2', 'akey'
 
@@ -39,7 +39,7 @@ Familia.apiversion = 'v1'
 #=> '1000'
 
 ## Familia::String#increment
-@ret.increment 
+@ret.increment
 #=> 1001
 
 ## Familia::String#incrementby
@@ -47,7 +47,7 @@ Familia.apiversion = 'v1'
 #=> 1100
 
 ## Familia::String#decrement
-@ret.decrement 
+@ret.decrement
 #=> 1099
 
 ## Familia::String#decrementby

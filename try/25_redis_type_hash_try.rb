@@ -1,5 +1,5 @@
-require 'familia'
-require 'familia/test_helpers'
+require_relative '../lib/familia'
+require_relative './test_helpers'
 
 @a = Bone.new 'atoken', 'akey'
 
@@ -21,7 +21,7 @@ require 'familia/test_helpers'
 @a.props.has_key? 'fieldA'
 #=> true
 
-## Familia::HashKey#all 
+## Familia::HashKey#all
 @a.props.all.class
 #=> Hash
 

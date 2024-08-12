@@ -1,6 +1,6 @@
-require 'familia'
-require 'familia/test_helpers'
-Familia.apiversion = 'v1'
+require_relative '../lib/familia'
+require_relative './test_helpers'
+#Familia.apiversion = 'v1'
 
 @a = Bone.new 'atoken', 'akey'
 

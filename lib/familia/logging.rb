@@ -1,5 +1,6 @@
 # rubocop:disable all
 
+require 'pathname'
 require 'logger'
 
 module LoggerTraceRefinement
