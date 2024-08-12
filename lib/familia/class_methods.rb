@@ -7,13 +7,17 @@ module Familia
   # class-level functionality for Redis operations and object management.
   #
   module ClassMethods
+
+    # Metaprogramming to define class-level methods for defining and managing
+    # RedisObjects.
+    #
     # NOTE: The term `name` means different things here vs in
     # Onetime::RedisHash. Here it means `Object#name` the string
     # name of the current class. In Onetime::RedisHash it means
     # the name of the redis key.
     #
-    Familia::RedisObject.registration.each_pair do |kind, klass|
-      Familia.ld "[registration] #{kind} => #{klass}"
+    Familia::RedisObject.registered_types.each_pair do |kind, klass|
+      Familia.ld "[registered_types] #{kind} => #{klass}"
 
       # e.g.
       #
@@ -59,27 +63,6 @@ module Familia
         names.collect! { |name| class_redis_objects[name] }
         names
       end
-    end
-
-    def inherited(obj)
-      Familia.ld "[#{self}] inherited by [#{obj}] (superclass: #{obj.superclass}, #{defined?(super)})"
-      obj.db = db
-      obj.uri = uri
-      obj.ttl = ttl
-      obj.parent = self
-      obj.class_zset :instances, class: obj, reference: true
-      Familia.classes << obj
-      super(obj)
-    end
-
-    def extended(obj)
-      Familia.ld "[#{self}] extended by [#{obj}] (superclass: #{obj.superclass}, #{defined?(super)})"
-      obj.db = db
-      obj.ttl = ttl
-      obj.uri = uri
-      obj.parent = self
-      obj.class_zset :instances, class: obj, reference: true
-      Familia.classes << obj
     end
 
     # Creates an instance method called +name+ that

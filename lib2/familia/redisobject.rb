@@ -9,7 +9,7 @@ module Familia
   #
   # @abstract Subclass and implement Redis data type specific methods
   class RedisObject
-    @registration = {}
+    @registered_types = {}
     @classes = []
     @db = nil
     @ttl = nil
@@ -21,10 +21,10 @@ module Familia
       def register(klass, meth)
         Familia.ld "[#{self}] Registering #{klass} as #{meth}"
 
-        @registration[meth] = klass
+        @registered_types[meth] = klass
       end
 
-      attr_reader :classes, :registration
+      attr_reader :classes, :registered_types
       attr_accessor :parent
       attr_writer :ttl, :db, :uri
 

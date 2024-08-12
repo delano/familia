@@ -2,7 +2,7 @@ require 'familia'
 require 'familia/test_helpers'
 
 ## Has all redis objects
-redis_objects = Familia::RedisObject.registration.keys
+redis_objects = Familia::RedisObject.registered_types.keys
 redis_objects.collect(&:to_s).sort
 #=> ["hash", "hashkey", "list", "set", "string", "zset"]
 

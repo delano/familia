@@ -2,6 +2,10 @@
 
 require_relative 'familia'
 
+class Subdomain < Familia::HashKey
+
+end
+
 class Customer
 
   include Familia
@@ -10,14 +14,11 @@ class Customer
   #feature :safe_dump
   #feature :api_version
 
-  class_sorted_set :values  #@values = Familia::SortedSet.new name.to_s.downcase.gsub('::', Familia.delim).to_sym, db: 6
-  class_hashkey :domains  #@domains = Familia::HashKey.new name.to_s.downcase.gsub('::', Familia.delim).to_sym, db: 6
-
+  class_sorted_set :values
+  class_hashkey :domains
   hashkey :stripe_customer
-
   sorted_set :metadata
   sorted_set :custom_domains
-
 
   counter :secrets_created
 
@@ -111,6 +112,8 @@ class CustomDomain
     join(:display_domain, :custid).gibbler.shorten
   end
 end
+
+
 
 
 __END__

@@ -11,16 +11,17 @@ module Familia
   #
   class Horreum
     module ClassMethods
+
+      # Metaprogramming to add the class-level methods used when defining new
+      # familia classes (e.g. classes that `include Familia`).
+      #
       # NOTE: The term `name` means different things here vs in
       # Onetime::RedisHash. Here it means `Object#name` the string
       # name of the current class. In Onetime::RedisHash it means
       # the name of the redis key.
       #
-
-      Familia.ld "[Familia::RedisObject::ClassMethods] add_methods #{Familia::RedisObject.registration}"
-
-      Familia::RedisObject.registration.each_pair do |kind, klass|
-        Familia.ld "[registration] #{kind} => #{klass}"
+      Familia::RedisObject.registered_types.each_pair do |kind, klass|
+        Familia.ld "[registered_types] #{kind} => #{klass}"
 
         # e.g.
         #

@@ -1,47 +1,43 @@
 # rubocop:disable all
 # frozen_string_literal: true
 
-require 'securerandom'
 
+require 'redis'
 require 'uri/redis'
-require 'gibbler'
 
 require_relative 'familia/errors'
 require_relative 'familia/logging'
+require_relative 'familia/connection'
+require_relative 'familia/settings'
 require_relative 'familia/utils'
 
+
 module Familia
-  include Gibbler::Complex
 
   extend Logging
+  extend Connection
+  extend Settings
   extend Utils
 
-  @uri = URI.parse 'redis://127.0.0.1'
   @debug = true
-  @delim = ':'
-  @suffix = :object
+
+  @members = []
 
   class << self
-    attr_accessor :uri, :debug, :delim, :suffix
+    attr_accessor :debug
     attr_reader :members
 
-    def included(base)
-      Familia.ld "[Familia] including #{base}"
-      base.extend(ClassMethods)
-      base.extend(Familia::Horreum::ClassMethods)
-      base.include(Familia::Horreum::InstanceMethods)
+    def included(member)
+      Familia.ld "[Familia] including #{member}"
+      member.extend(ClassMethods)
+      member.extend(Familia::Horreum::ClassMethods)
+      member.include(Familia::Horreum::InstanceMethods)
 
       # Tracks all the classes/modules that include Familia. It's
       # 10pm, do you know where you Familia members are?
-      @members ||= []
-      @members << base
+      @members << member
     end
 
-    # We define this do-nothing method because it reads better
-    # than simply Familia.suffix in some contexts.
-    def default_suffix
-      suffix
-    end
   end
 
   module ClassMethods
@@ -62,11 +58,7 @@ module Familia
       @fields
     end
 
-    def generate_id
-      input = SecureRandom.hex(32)  # 16=128 bits, 32=256 bits
-      # Not using gibbler to make sure it's always SHA256
-      Digest::SHA256.hexdigest(input).to_i(16).to_s(36) # base-36 encoding
-    end
+
   end
 
   def initialize *args, **kwargs

@@ -1,8 +1,19 @@
 # rubocop:disable all
 
+require 'securerandom'
+
 module Familia
 
   module Utils
+
+    def debug?
+      @debug == true
+    end
+
+    def generate_id
+      input = SecureRandom.hex(32)  # 16=128 bits, 32=256 bits
+      Digest::SHA256.hexdigest(input).to_i(16).to_s(36) # base-36 encoding
+    end
 
     def join(*val)
       val.join(Familia.delim)

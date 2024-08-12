@@ -53,7 +53,7 @@ module Familia
       warn(*msg)
     end
 
-    def classes(with_redis_objects = false)
+    def classes(with_redis_objects = false) # now members
       with_redis_objects ? [@classes, RedisObject.classes].flatten : @classes
     end
 
