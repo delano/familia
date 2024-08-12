@@ -7,6 +7,11 @@ module Familia
   # instance-level functionality for Redis operations and object management.
   #
   class Horreum
+
+    #
+    # TODO: Needs to be gone through like ClassMethods. Then if they're
+    # reasonable sizes they can be put into one file again, horreum.rb obvs.
+    #
     module InstanceMethods
       # A default initialize method. This will be replaced
       # if a class defines its own initialize method after

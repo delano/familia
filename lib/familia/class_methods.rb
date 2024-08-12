@@ -251,14 +251,6 @@ module Familia
       @defined_fields
     end
 
-    def create *args
-      me = from_array(*args)
-      raise "#{self} exists: #{me.rediskey}" if me.exists?
-
-      me.save
-      me
-    end
-
     def multiget(*ids)
       ids = rawmultiget(*ids)
       ids.compact.collect { |json| from_json(json) }.compact

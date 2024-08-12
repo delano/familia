@@ -35,5 +35,12 @@ module Familia
       Time.at(rounded).utc.to_i
     end
 
+    def qstamp(quantum = nil, pattern = nil, now = Familia.now)
+      quantum ||= ttl || 10.minutes
+      pattern ||= '%H%M'
+      rounded = now - (now % quantum)
+      Time.at(rounded).utc.strftime(pattern)
+    end
+
   end
 end

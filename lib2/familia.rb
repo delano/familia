@@ -30,7 +30,6 @@ module Familia
 
     def included(member)
       Familia.ld "[Familia] including #{member}"
-      member.extend(ClassMethods)
       member.extend(Familia::Horreum::ClassMethods)
       member.include(Familia::Horreum::InstanceMethods)
 
@@ -42,23 +41,6 @@ module Familia
   end
 
   module ClassMethods
-
-    def identifier(val = nil)
-      @identifier = val if val
-      @identifier
-    end
-
-    def field(name)
-      @fields ||= []
-      @fields << name
-      attr_accessor name
-    end
-
-    def fields
-      @fields ||= []
-      @fields
-    end
-
 
   end
 

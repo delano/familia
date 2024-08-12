@@ -11,9 +11,37 @@ module Familia
   #
   class Horreum
     module ClassMethods
+      include Familia::Settings
+
+      attr_accessor :parent
+
+      # The object field or instance method to call to get the unique identifier
+      # for that instance. The value returned by this method will be used to
+      # generate the key for the object in Redis.
+      def identifier(val = nil)
+        @identifier = val if val
+        @identifier
+      end
+
+      # Define a field for the class. This will create getter and setter
+      # instance methods just like any "attr_accessor" methods.
+      def field(name)
+        fields << name
+        attr_accessor name
+      end
+
+      # Returns the list of field names defined for the class in the order
+      # that they were defined. i.e. `field :a; field :b; fields => [:a, :b]`.
+      def fields
+        @fields ||= []
+        @fields
+      end
 
       # Metaprogramming to add the class-level methods used when defining new
-      # familia classes (e.g. classes that `include Familia`).
+      # familia classes (e.g. classes that `include Familia`). Every class in
+      # types/ will have one or more of these methods.
+      #
+      # e.g. set, list, class_counter etc. are all defined here.
       #
       # NOTE: The term `name` means different things here vs in
       # Onetime::RedisHash. Here it means `Object#name` the string
@@ -23,11 +51,9 @@ module Familia
       Familia::RedisObject.registered_types.each_pair do |kind, klass|
         Familia.ld "[registered_types] #{kind} => #{klass}"
 
-        # e.g.
-        #
-        #      list(name, klass, opts)
-        #      list?(name)
-        #      lists
+        # Once defined, these methods can be used at the class-level of a
+        # Familia member to define *instance-level* relations to any of the
+        # RedisObject types (e.g. set, list, hash, etc).
         #
         define_method :"#{kind}" do |*args|
           name, opts = *args
@@ -44,12 +70,9 @@ module Familia
           names
         end
 
-        # e.g.
-        #
-        #      class_list(name, klass, opts)
-        #      class_list?(name)
-        #      class_lists
-        #
+        # Once defined, these methods can be used at the class-level of a
+        # Familia member to define *class-level relations* to any of the
+        # RedisObject types (e.g. class_set, class_list, class_hash, etc).
         define_method :"class_#{kind}" do |*args|
           name, opts = *args
           attach_class_redis_object_relation name, klass, opts
@@ -68,27 +91,6 @@ module Familia
           names.collect! { |name| class_redis_objects[name] }
           names
         end
-      end
-
-      def inherited(obj)
-        Familia.ld "[#{self}] inherited by [#{obj}] (superclass: #{obj.superclass}, #{defined?(super)})"
-        obj.db = db
-        obj.uri = uri
-        obj.ttl = ttl
-        obj.parent = self
-        obj.class_zset :instances, class: obj, reference: true
-        Familia.classes << obj
-        super(obj)
-      end
-
-      def extended(obj)
-        Familia.ld "[#{self}] extended by [#{obj}] (superclass: #{obj.superclass}, #{defined?(super)})"
-        obj.db = db
-        obj.ttl = ttl
-        obj.uri = uri
-        obj.parent = self
-        obj.class_zset :instances, class: obj, reference: true
-        Familia.classes << obj
       end
 
       # Creates an instance method called +name+ that
@@ -146,11 +148,6 @@ module Familia
         class_redis_objects[name]
       end
 
-      def from_redisdump(dump)
-        dump # todo
-      end
-      attr_accessor :parent
-
       def qstamp(quantum = nil, pattern = nil, now = Familia.now)
         quantum ||= ttl || 10.minutes
         pattern ||= '%H%M'
@@ -163,60 +160,9 @@ module Familia
         @ttl || (parent ? parent.ttl : nil)
       end
 
-      def ttl=(v)
-        @ttl = v
-      end
-
       def db(v = nil)
         @db = v unless v.nil?
         @db || (parent ? parent.db : nil)
-      end
-
-      def db=(db)
-        @db = db
-      end
-
-      def host(host = nil)
-        @host = host if host
-        @host
-      end
-
-      def host=(host)
-        @host = host
-      end
-
-      def port(port = nil)
-        @port = port if port
-        @port
-      end
-
-      def port=(port)
-        @port = port
-      end
-
-      def uri=(uri)
-        uri = URI.parse uri if uri.is_a?(String)
-        @uri = uri
-      end
-
-      def uri(uri = nil)
-        self.uri = uri unless uri.to_s.empty?
-        @uri ||= (parent ? parent.uri : Familia.uri)
-        @uri.db = @db if @db && @uri.db.to_s != @db.to_s
-        @uri
-      end
-
-      def redis
-        Familia.redis uri
-      end
-
-      def flushdb
-        Familia.info "flushing #{uri}"
-        redis.flushdb
-      end
-
-      def keys(suffix = nil)
-        redis.keys(rediskey('*', suffix)) || []
       end
 
       def all(suffix = :object)
@@ -237,26 +183,9 @@ module Familia
         @suffix || Familia.default_suffix
       end
 
-      def prefix=(a)
-        @prefix = a
-      end
-
       def prefix(a = nil)
         @prefix = a if a
         @prefix || name.downcase.gsub('::', Familia.delim).to_sym
-      end
-
-      # TODO: grab db, ttl, uri from parent
-      # def parent=(a) @parent = a end
-      # def parent(a=nil) @parent = a if a; @parent end
-      def index(i = nil, &blk)
-        @index = i || blk if i || !blk.nil?
-        @index ||= Familia.index
-        @index
-      end
-
-      def suffixes
-        redis_objects.keys.uniq
       end
 
       def class_redis_objects
@@ -303,27 +232,6 @@ module Familia
         redis.mget(*ids)
       end
 
-      # Returns an instance based on +idx+ otherwise it
-      # creates and saves a new instance base on +idx+.
-      # See from_index
-      def load_or_create(idx)
-        return from_redis(idx) if exists?(idx)
-
-        obj = from_index idx
-        obj.save
-        obj
-      end
-
-      # Note +idx+ needs to be an appropriate index for
-      # the given class. If the index is multi-value it
-      # must be passed as an Array in the proper order.
-      # Does not call save.
-      def from_index(idx)
-        obj = new
-        obj.index = idx
-        obj
-      end
-
       def from_key(objkey)
         raise ArgumentError, 'Empty key' if objkey.to_s.empty?
 
@@ -332,6 +240,9 @@ module Familia
         obj.value
       end
 
+      #
+      # TODO: Needs a lot of work since it's used in a bunch of places. Just eneds to be more grokable.
+      #
       def from_redis(idx, suffix = :object)
         return nil if idx.to_s.empty?
 
