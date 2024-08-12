@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Familia
   class SortedSet < RedisType
     def size

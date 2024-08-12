@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Familia
   #
   # Differences between Familia::Horreum and Familia::HashKey:

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Familia
   class String < RedisType
     def init; end

@@ -14,7 +14,7 @@ class String
   def in_seconds
     q, u = scan(/([\d.]+)([smh])?/).flatten
     q &&= q.to_f and u ||= 's'
-    q &&= q.in_seconds(u)
+    q&.in_seconds(u)
   end
 end
 

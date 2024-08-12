@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Familia
   class List < RedisType
     def size
@@ -6,7 +8,7 @@ module Familia
     alias length size
 
     def empty?
-      size == 0
+      size.zero?
     end
 
     def push *values
@@ -71,14 +73,14 @@ module Familia
 
     def members(count = -1)
       echo :members, caller(1..1).first if Familia.debug
-      count -= 1 if count > 0
+      count -= 1 if count.positive?
       range 0, count
     end
     alias all members
     alias to_a members
 
     def membersraw(count = -1)
-      count -= 1 if count > 0
+      count -= 1 if count.positive?
       rangeraw 0, count
     end
 

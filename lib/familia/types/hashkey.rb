@@ -10,7 +10,7 @@ module Familia
     alias length size
 
     def empty?
-      size == 0
+      size.zero?
     end
 
     def []=(name, val)

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Familia
   class Set < RedisType
     def size
@@ -6,7 +8,7 @@ module Familia
     alias length size
 
     def empty?
-      size == 0
+      size.zero?
     end
 
     def add *values
