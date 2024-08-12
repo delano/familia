@@ -38,9 +38,7 @@ class Session
   field :updated
 
   def generate_id
-    input = SecureRandom.hex(32)  # 16=128 bits, 32=256 bits
-    # Not using gibbler to make sure it's always SHA256
-    Digest::SHA256.hexdigest(input).to_i(16).to_s(36) # base-36 encoding
+    self.class.generate_id
   end
 
   # The external identifier is used by the rate limiter to estimate a unique
@@ -89,6 +87,9 @@ class CustomDomain
   field :updated
   field :_original_value
 
+  # Derive a unique identifier for the object based on the display domain and
+  # the customer ID. This is used to ensure that the same domain can't be
+  # added twice by the same customer while avoiding collisions between customers.
   def derive_id
     join(:display_domain, :custid).gibbler.shorten
   end

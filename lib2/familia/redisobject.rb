@@ -1,3 +1,5 @@
+# rubocop:disable all
+
 module Familia
 
   # RedisObject - Base class for Redis data type wrappers
@@ -365,5 +367,4 @@ module Familia
   require_relative 'types/sorted_set'
   require_relative 'types/hashkey'
   require_relative 'types/string'
-
 end

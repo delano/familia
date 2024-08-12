@@ -196,6 +196,7 @@ module Familia
       at(-1)
     end
 
+    Familia::RedisObject.register self, :sorted_set
     Familia::RedisObject.register self, :zset
   end
 

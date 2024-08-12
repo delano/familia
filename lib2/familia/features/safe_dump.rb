@@ -32,6 +32,9 @@ module Familia::Features
   # return `[:objid, :updated, :created, :active]`.
   #
   module SafeDump
+    @dump_method = :to_json
+    @load_method = :from_json
+
     @safe_dump_fields = []
     @safe_dump_field_map = {}
 

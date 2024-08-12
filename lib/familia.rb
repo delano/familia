@@ -104,8 +104,6 @@ module Familia
       @clients[uri.serverid] = redis
     end
 
-
-
     def rediskey *args
       el = args.flatten.compact
       el.unshift @apiversion unless @apiversion.nil?
