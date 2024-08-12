@@ -26,12 +26,21 @@ module Familia
     attr_reader :members
 
     def included(base)
+      Familia.ld "[Familia] including #{base}"
       base.extend(ClassMethods)
+      base.extend(Familia::Horreum::ClassMethods)
+      base.include(Familia::Horreum::InstanceMethods)
 
       # Tracks all the classes/modules that include Familia. It's
       # 10pm, do you know where you Familia members are?
       @members ||= []
       @members << base
+    end
+
+    # We define this do-nothing method because it reads better
+    # than simply Familia.suffix in some contexts.
+    def default_suffix
+      suffix
     end
   end
 
@@ -60,7 +69,9 @@ module Familia
     end
   end
 
-  def initialize
+  def initialize *args, **kwargs
+    Familia.ld "[Horreum] Initializing #{self.class} with #{args.inspect} and #{kwargs.inspect}"
+    initialize_redis_objects
   end
 
   def identifier
@@ -80,3 +91,5 @@ module Familia
 end
 
 require_relative 'familia/redisobject'
+require_relative 'familia/class_methods'
+require_relative 'familia/instance_methods'

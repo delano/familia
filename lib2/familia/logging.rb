@@ -24,6 +24,32 @@ module Familia
       @logger.error(*msg)
     end
 
+    # Logs a trace message for debugging purposes if Familia.debug? is true.
+    #
+    # @param label [Symbol] A label for the trace message (e.g., :EXPAND,
+    #   :FROMREDIS, :LOAD, :EXISTS).
+    # @param redis_instance [Object] The Redis instance being used.
+    # @param ident [String] An identifier or key related to the operation being
+    #   traced.
+    # @param context [Array<String>, String, nil] The calling context, typically
+    #   obtained from `caller` or `caller.first`. Default is nil.
+    #
+    # @example
+    #   Familia.trace :LOAD, Familia.redis(uri), objkey, caller if Familia.debug?
+
+    #
+    # @return [nil]
+    def trace(label, redis_instance, ident, context = nil)
+      return unless Familia.debug?
+
+      codeline = if context
+                   context = [context].flatten
+                   context.reject! { |line| line =~ %r{lib/familia} }
+                   context.first
+                 end
+      info format('[%s] -> %s <- %s %s', label, codeline, redis_instance.id, ident)
+    end
+
   end
 end
 

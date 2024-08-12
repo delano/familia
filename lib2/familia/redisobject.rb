@@ -19,6 +19,8 @@ module Familia
       # +meth+ becomes the base for the class and instance methods
       # that are created for the given +klass+ (e.g. Obj.list)
       def register(klass, meth)
+        Familia.ld "[#{self}] Registering #{klass} as #{meth}"
+
         @registration[meth] = klass
       end
 
@@ -110,8 +112,10 @@ module Familia
       @name = name
       @opts = opts
       @name = @name.join(Familia.delim) if @name.is_a?(Array)
-      Familia.ld [self.class, name, opts, caller[0]].inspect
+      Familia.ld " [initializing] #{self.class} #{caller[0]}"
+
       extend @opts[:extend] if @opts[:extend].is_a?(Module)
+
       @db = @opts.delete(:db)
       @parent = @opts.delete(:parent)
       @ttl ||= @opts.delete(:ttl)

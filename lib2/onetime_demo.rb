@@ -1,13 +1,27 @@
 # rubocop:disable all
 
+require_relative 'familia'
 
 class Customer
 
   include Familia
 
-  identifier :custid
+
+  #feature :safe_dump
+  #feature :api_version
+
+  class_sorted_set :values  #@values = Familia::SortedSet.new name.to_s.downcase.gsub('::', Familia.delim).to_sym, db: 6
+  class_hashkey :domains  #@domains = Familia::HashKey.new name.to_s.downcase.gsub('::', Familia.delim).to_sym, db: 6
+
+  hashkey :stripe_customer
+
+  sorted_set :metadata
+  sorted_set :custom_domains
+
 
   counter :secrets_created
+
+  identifier :custid
 
   field :custid
   field :sessid
@@ -25,6 +39,8 @@ class Customer
 end
 
 class Session
+  include Familia
+
   identifier :generate_id
 
   field :shrimp
@@ -68,6 +84,7 @@ end
 
 
 class CustomDomain
+  include Familia
 
   identifier :derive_id
 
@@ -99,16 +116,6 @@ end
 __END__
 
 
-  feature :safe_dump
-  feature :api_version
-
-  class_sorted_set :values  #@values = Familia::SortedSet.new name.to_s.downcase.gsub('::', Familia.delim).to_sym, db: 6
-  class_hashkey :domains  #@domains = Familia::HashKey.new name.to_s.downcase.gsub('::', Familia.delim).to_sym, db: 6
-
-  hashkey :stripe_customer
-
-  sorted_set :metadata
-  sorted_set :custom_domains
 
  # NOTE: The SafeDump mixin caches the safe_dump_field_map so updating this list
   # with hot reloading in dev mode will not work. You will need to restart the
