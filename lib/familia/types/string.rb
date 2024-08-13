@@ -14,7 +14,7 @@ module Familia
     end
 
     def value
-      echo :value, caller[0..5] if Familia.debug
+      echo :value, caller[0..0] if Familia.debug
       redis.setnx rediskey, @opts[:default] if @opts[:default]
       from_redis redis.get(rediskey)
     end

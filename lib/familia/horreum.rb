@@ -25,7 +25,6 @@ module Familia
   # Horreum is equivalent to Onetime::RedisHash.
   #
   class Horreum
-
     # == Singleton Class Context
     #
     # The code within this block operates on the singleton class (also known as
@@ -81,6 +80,22 @@ module Familia
       #
       args.each_with_index do |value, index|
         field = self.class.fields[index]
+        p [8, field, value]
+        send(:"#{field}=", value)
+      end
+
+      # Handle keyword arguments
+      # Fields is a known quantity, so we iterate over it rather than kwargs
+      # to ensure that we only set fields that are defined in the class. And
+      # to avoid runaways.
+      self.class.fields.each do |field|
+        field_sym = field.to_sym
+        # Redis will give us field names as strings back, but internally
+        # we use symbols. So we convert the field name to a symbol.
+        next unless kwargs.key?(field_sym) || kwargs.key?(field_sym.to_s)
+
+        value = kwargs[field_sym] || kwargs[field_sym.to_s]
+        p [9, field, value]
         send(:"#{field}=", value)
       end
 

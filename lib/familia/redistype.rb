@@ -16,10 +16,12 @@ module Familia
     @valid_options = %i[class parent ttl default db key redis]
     @db = nil
     @ttl = nil
+    @dump_method = :to_json
+    @load_method = :from_json
 
     class << self
       attr_reader :registered_types, :valid_options
-      attr_accessor :parent
+      attr_accessor :parent, :dump_method, :load_method
       attr_writer :ttl, :db, :uri
 
       # To be called inside every class that inherits RedisType
@@ -60,6 +62,7 @@ module Familia
     end
 
     attr_reader :name, :parent, :opts
+    attr_writer :dump_method, :load_method
 
     # +name+: If parent is set, this will be used as the suffix
     # for rediskey. Otherwise this becomes the value of the key.
@@ -160,6 +163,14 @@ module Familia
 
     def uri
       @opts[:uri] || self.class.uri
+    end
+
+    def dump_method
+      @dump_method || self.class.dump_method
+    end
+
+    def load_method
+      @load_method || self.class.load_method
     end
 
     include Commands

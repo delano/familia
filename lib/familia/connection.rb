@@ -1,6 +1,9 @@
 # frozen_string_literal: true
 
 module Familia
+  @uri = URI.parse 'redis://127.0.0.1'
+  @redis_clients = {}
+
   # The Connection module provides Redis connection management for Familia.
   # It allows easy setup and access to Redis clients across different URIs.
   module Connection
@@ -24,6 +27,8 @@ module Familia
       uri = URI.parse(uri) if uri.is_a?(String)
       uri ||= Familia.uri
 
+      raise ArgumentError, 'No URI specified' unless uri
+
       conf = uri.conf
 
       if Familia.enable_redis_logging
@@ -45,8 +50,13 @@ module Familia
     # @example
     #   Familia.redis('redis://localhost:6379')
     def redis(uri = nil)
+      p [1, uri]
       uri = URI.parse(uri) if uri.is_a?(String)
+      p [2, uri]
       uri ||= Familia.uri
+      p [3, uri]
+
+      raise ArgumentError, "No URI specified (#{Familia.uri})" unless uri
 
       connect(uri) unless @redis_clients[uri.serverid]
       @redis_clients[uri.serverid]

@@ -52,6 +52,16 @@ class Customer < Familia::Horreum
   field :planid
   field :created
   field :updated
+  field :reset_requested #=> Boolean
+
+  hashkey :password_reset #=> Familia::HashKey
+  list :sessions #=> Familia::List
+
+  #include Familia::Stamps
+  class_list :customers, suffix: []
+  class_string :message
+
+  class_zset :instances, class: self, reference: true
 
 end
 @c = Customer.new
@@ -96,7 +106,7 @@ class Session < Familia::Horreum
     elements << ipaddress || 'UNKNOWNIP'
     elements << custid || 'anon'
     @external_identifier ||= elements.gibbler.base(36)
-    OT.ld "[Session.external_identifier] sess identifier input: #{elements.inspect} (result: #{@external_identifier})"
+    Familia.ld "[Session.external_identifier] sess identifier input: #{elements.inspect} (result: #{@external_identifier})"
     @external_identifier
   end
 

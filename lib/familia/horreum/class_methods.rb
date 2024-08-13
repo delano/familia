@@ -14,7 +14,7 @@ module Familia
       include Familia::Settings
 
       attr_accessor :parent
-      attr_writer :redis
+      attr_writer :redis, :dump_method, :load_method
 
       def redis
         @redis || Familia.redis(uri)
@@ -114,6 +114,9 @@ module Familia
 
         attr_reader name
 
+        define_method :"#{name}=" do |val|
+          send(name).replace val
+        end
         define_method "#{name}?" do
           !send(name).empty?
         end
@@ -140,6 +143,9 @@ module Familia
         # access the instance variables for this class.
         singleton_class.attr_reader name
 
+        define_singleton_method "#{name}=" do |v|
+          send(name).replace v
+        end
         define_singleton_method "#{name}?" do
           !send(name).empty?
         end
@@ -243,9 +249,11 @@ module Familia
       def from_key(objkey)
         raise ArgumentError, 'Empty key' if objkey.to_s.empty?
 
+        Familia.ld "[.from_key] #{self} from key #{objkey})"
         Familia.trace :LOAD, Familia.redis(uri), objkey, caller if Familia.debug?
-        obj = Familia::String.new objkey, class: self
-        obj.value
+        obj = redis.hgetall(objkey) # horreum objects are saved as redis hashes
+        p [1111, obj]
+        self.new(**obj)
       end
 
       #
@@ -254,7 +262,8 @@ module Familia
       def from_redis(identifier, suffix = :object)
         return nil if identifier.to_s.empty?
 
-        objkey = rediskey identifier, suffix
+        objkey = rediskey(identifier, suffix)
+        Familia.ld "[.from_redis] #{self} from key #{objkey})"
         # Familia.trace :FROMREDIS, Familia.redis(self.uri), objkey, caller.first if Familia.debug?
         from_key objkey
       end
@@ -285,10 +294,18 @@ module Familia
       #
       # A nil +suffix+ will not be included in the key.
       def rediskey(identifier, suffix = self.suffix)
-        Familia.ld "[.rediskey] #{identifier} for #{self.class} (#{suffix})"
+        Familia.ld "[.rediskey] #{identifier} for #{self} (suffix:#{suffix})"
         raise NoIdentifier, self if identifier.to_s.empty?
         identifier &&= identifier.to_s
         Familia.rediskey(prefix, identifier, suffix)
+      end
+
+      def dump_method
+        @dump_method || :to_json # Familia.dump_method
+      end
+
+      def load_method
+        @load_method || :from_json # Familia.load_method
       end
     end
 

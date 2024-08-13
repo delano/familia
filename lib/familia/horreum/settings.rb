@@ -11,6 +11,12 @@ module Familia
     # Settings - Module containing settings for Familia::Horreum (InstanceMethods)
     #
     module Settings
+      attr_writer :dump_method, :load_method, :ttl, :suffix
+
+      def opts
+        @opts ||= {}
+        @opts
+      end
 
       def redisdetails
         {
@@ -35,6 +41,13 @@ module Familia
         @suffix || self.class.suffix
       end
 
+      def dump_method
+        @dump_method || self.class.dump_method
+      end
+
+      def load_method
+        @load_method || self.class.load_method
+      end
     end
 
     include Settings # these become Horreum instance methods

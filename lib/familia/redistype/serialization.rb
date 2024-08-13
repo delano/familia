@@ -6,9 +6,9 @@ class Familia::RedisType
 
     # Serialization method for individual values
     def to_redis(val)
-      return val unless @opts[:class]
+      return val unless opts[:class]
 
-      ret = case @opts[:class]
+      ret = case opts[:class]
             when ::Symbol, ::String, ::Integer, ::Float, Gibbler::Digest
               val
             when ::NilClass
@@ -25,7 +25,7 @@ class Familia::RedisType
               end
             end
 
-      Familia.ld "[#{self.class}\#to_redis] nil returned for #{@opts[:class]}\##{name}" if ret.nil?
+      Familia.ld "[#{self.class}\#to_redis] nil returned for #{opts[:class]}\##{name}" if ret.nil?
       ret
     end
 

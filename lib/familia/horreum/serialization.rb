@@ -11,6 +11,7 @@ module Familia
     # Methods that call load and dump (InstanceMethods)
     #
     module Serialization
+      #include Familia::RedisType::Serialization
 
       attr_writer :redis
 
@@ -21,20 +22,67 @@ module Familia
       def save
         Familia.trace :SAVE, Familia.redis(self.class.uri), redisuri, caller.first if Familia.debug?
 
-        redis.multi do |conn|
-
-        end
+#        redis.multi do |conn|
+#
+#        end
+#
+        ret = update_fields
+        ['OK', true, 1].include?(ret)
       end
 
       def update_fields
+        ret = redis.hmset(rediskey, to_h)
+        update_expiration
+        ret
       end
 
       def to_h
-
+        # Use self.class.fields to efficiently generate a hash
+        # of all the fields for this object
+        self.class.fields.inject({}) do |hsh, field|
+          val = send(field)
+          prepared = val.to_s
+          Familia.ld " [to_h] field: #{field} val: #{val.class} prepared: #{prepared.class}"
+          hsh[field] = prepared
+          hsh
+        end
       end
 
-      def to_a; end
+      def to_a
+        self.class.fields.map do |field|
+          val = send(field)
+          Familia.ld " [to_a] field: #{field} val: #{val}"
+          to_redis(val)
+        end
+      end
 
+      def to_redis(val)
+
+        prepared = case val.class
+              when ::Symbol, ::String, ::Numeric
+                val.to_s
+              when ::NilClass
+                ''
+              else
+                if val.respond_to? dump_method
+                  val.send dump_method
+
+                else
+                  raise Familia::Problem, "No such method: #{val.class}.#{dump_method}"
+                end
+              end
+
+        Familia.ld "[#{self.class}\#to_redis] nil returned for #{self.class}\##{name}" if prepared.nil?
+        prepared
+      end
+
+      def update_expiration(ttl = nil)
+        ttl ||= opts[:ttl]
+        return if ttl.to_i.zero? # nil will be zero
+
+        Familia.ld "#{rediskey} to #{ttl}"
+        expire ttl.to_i
+      end
     end
 
     include Serialization # these become Horreum instance methods
