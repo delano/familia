@@ -109,6 +109,8 @@ module Familia
   # This module requires Ruby 2.0.0 or later to use refinements.
   #
   module Logging
+    attr_reader :logger
+
     # Gives our logger the ability to use our trace method.
     using LoggerTraceRefinement
 

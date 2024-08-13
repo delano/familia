@@ -12,13 +12,26 @@ module Familia
     #
     module Serialization
 
-      def save
-        Familia.trace :SAVE, Familia.redis(self.class.uri), redisuri, caller.first if Familia.debug?
+      attr_writer :redis
+
+      def redis
+        @redis || self.class.redis
       end
 
-      def update_fields; end
+      def save
+        Familia.trace :SAVE, Familia.redis(self.class.uri), redisuri, caller.first if Familia.debug?
 
-      def to_h; end
+        redis.multi do |conn|
+
+        end
+      end
+
+      def update_fields
+      end
+
+      def to_h
+
+      end
 
       def to_a; end
 
@@ -26,4 +39,25 @@ module Familia
 
     include Serialization # these become Horreum instance methods
   end
+end
+
+__END__
+
+
+
+# From RedisHash
+def save
+  hsh = { :key => identifier }
+  ret = update_fields hsh
+  ret == "OK"
+end
+
+def update_fields hsh={}
+  check_identifier!
+  hsh[:updated] = OT.now.to_i
+  hsh[:created] = OT.now.to_i unless has_key?(:created)
+  ret = update hsh  # update is defined in HashKey
+  ## NOTE: caching here like this only works if hsh has all keys
+  #self.cache.replace hsh
+  ret
 end

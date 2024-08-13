@@ -14,6 +14,11 @@ module Familia
       include Familia::Settings
 
       attr_accessor :parent
+      attr_writer :redis
+
+      def redis
+        @redis || Familia.redis(uri)
+      end
 
       # The object field or instance method to call to get the unique identifier
       # for that instance. The value returned by this method will be used to
@@ -166,10 +171,6 @@ module Familia
       def uri(v = nil)
         @uri = v unless v.nil?
         @uri || (parent ? parent.uri : nil)
-      end
-
-      def redis
-        Familia.redis uri
       end
 
       def all(suffix = :object)
