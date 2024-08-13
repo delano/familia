@@ -2,6 +2,8 @@
 
 require_relative '../lib/familia'
 
+Familia.enable_redis_logging = true
+
 class Bone < Familia::Horreum
   identifier     [:token, :name]
   field     :token

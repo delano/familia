@@ -1,25 +1,30 @@
-# rubocop:disable all
+# frozen_string_literal: true
 
-
-#
 module Familia
-
-  @uri = URI.parse 'redis://127.0.0.1'
-  @redis_clients = {}
-  @enable_redis_logging = false
-
+  # The Connection module provides Redis connection management for Familia.
+  # It allows easy setup and access to Redis clients across different URIs.
   module Connection
+    # @return [Hash] A hash of Redis clients, keyed by server ID
+    attr_reader :redis_clients
 
-    attr_reader :redis_clients, :uri
+    # @return [URI] The default URI for Redis connections
+    attr_reader :uri
+
+    # @return [Boolean] Whether Redis logging is enabled
     attr_accessor :enable_redis_logging
 
+    # Establishes a connection to a Redis server.
+    #
+    # @param uri [String, URI, nil] The URI of the Redis server to connect to.
+    #   If nil, uses the default URI.
+    # @return [Redis] The connected Redis client
+    # @example
+    #   Familia.connect('redis://localhost:6379')
     def connect(uri = nil)
-      uri &&= URI.parse uri if uri.is_a?(String)
+      uri = URI.parse(uri) if uri.is_a?(String)
       uri ||= Familia.uri
 
       conf = uri.conf
-
-      #Familia.trace(:CONNECT, nil, conf.inspect, caller(1...3))
 
       if Familia.enable_redis_logging
         RedisLogger.logger = Familia.logger
@@ -28,22 +33,32 @@ module Familia
 
       conf = conf.merge({}) if Familia.logger
 
-      redis = Redis.new conf
-
+      redis = Redis.new(conf)
       @redis_clients[uri.serverid] = redis
     end
 
+    # Retrieves or creates a Redis client for the given URI.
+    #
+    # @param uri [String, URI, nil] The URI of the Redis server.
+    #   If nil, uses the default URI.
+    # @return [Redis] The Redis client for the specified URI
+    # @example
+    #   Familia.redis('redis://localhost:6379')
     def redis(uri = nil)
-      uri &&= URI.parse(uri)
+      uri = URI.parse(uri) if uri.is_a?(String)
       uri ||= Familia.uri
 
       connect(uri) unless @redis_clients[uri.serverid]
       @redis_clients[uri.serverid]
     end
 
+    # Sets the default URI for Redis connections.
+    #
+    # @param v [String, URI] The new default URI
+    # @example
+    #   Familia.uri = 'redis://localhost:6379'
     def uri=(v)
-      v = URI.parse v unless URI === v
-      @uri = v
+      @uri = v.is_a?(URI) ? v : URI.parse(v)
     end
 
     alias url uri

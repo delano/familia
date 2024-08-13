@@ -4,6 +4,8 @@
 require 'redis'
 require 'uri/redis'
 
+require_relative 'familia/core_ext'
+
 require_relative 'familia/errors'
 require_relative 'familia/version'
 require_relative 'familia/logging'
@@ -11,7 +13,6 @@ require_relative 'familia/connection'
 require_relative 'familia/settings'
 require_relative 'familia/utils'
 
-require_relative 'familia/core_ext'
 
 # Familia - A family warehouse for Redis
 #
@@ -44,6 +45,19 @@ module Familia
 
     def included(member)
       raise Problem, "#{member} should subclass Familia::Horreum"
+    end
+
+    # A convenience pattern for configuring Familia.
+    #
+    # @example
+    #  Familia.configure do |config|
+    #    config.debug = true
+    #    config.enable_redis_logging = true
+    #  end
+    #
+    #
+    def configure
+      yield self
     end
   end
 
