@@ -35,7 +35,6 @@ Customer.values.all.collect(&:custid)
 
 ## Familia.from_redis
 obj = Customer.from_redis :delano
-p [2222, obj.to_h]
 [obj.class, obj.custid]
 #=> [Customer, 'delano']
 

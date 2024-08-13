@@ -69,10 +69,10 @@ module Familia
     # A default initialize method. This will be replaced
     # if a class defines its own initialize method after
     # including Familia. In that case, the replacement
-    # must call initialize_redis_objects.
+    # must call initialize_redistype_relatives.
     def initialize *args, **kwargs
       Familia.ld "[Horreum] Initializing #{self.class} with arguments (#{args.inspect}, #{kwargs.inspect})"
-      initialize_redis_objects
+      initialize_redistype_relatives
 
       # if args is not empty, it contains the values for the fields in the order
       # they were defined in the class. This is the only way to set the fields
@@ -80,7 +80,6 @@ module Familia
       #
       args.each_with_index do |value, index|
         field = self.class.fields[index]
-        p [8, field, value]
         send(:"#{field}=", value)
       end
 
@@ -95,7 +94,6 @@ module Familia
         next unless kwargs.key?(field_sym) || kwargs.key?(field_sym.to_s)
 
         value = kwargs[field_sym] || kwargs[field_sym.to_s]
-        p [9, field, value]
         send(:"#{field}=", value)
       end
 
@@ -105,20 +103,20 @@ module Familia
 
     # This needs to be called in the initialize method of
     # any class that includes Familia.
-    def initialize_redis_objects
+    def initialize_redistype_relatives
       # Generate instances of each RedisType. These need to be
       # unique for each instance of this class so they can piggyback
       # on the specifc index of this instance.
       #
       # i.e.
       #     familia_object.rediskey              == v1:bone:INDEXVALUE:object
-      #     familia_object.redis_object.rediskey == v1:bone:INDEXVALUE:name
+      #     familia_object.redis_type.rediskey == v1:bone:INDEXVALUE:name
       #
-      # See RedisType.install_redis_object
-      self.class.redis_objects.each_pair do |name, redis_object_definition|
-        Familia.ld "[#{self.class}] initialize_redis_objects #{name} => #{redis_object_definition.to_a}"
-        klass = redis_object_definition.klass
-        opts = redis_object_definition.opts
+      # See RedisType.install_redis_type
+      self.class.redis_types.each_pair do |name, redis_type_definition|
+        Familia.ld "[#{self.class}] initialize_redistype_relatives #{name} => #{redis_type_definition.to_a}"
+        klass = redis_type_definition.klass
+        opts = redis_type_definition.opts
 
         # As a subclass of Familia::Horreum, we add ourselves as the parent
         # automatically. This is what determines the rediskey for RedisType
@@ -132,16 +130,16 @@ module Familia
 
         # Instantiate the RedisType object and below we store it in
         # an instance variable.
-        redis_object = klass.new name, opts
+        redis_type = klass.new name, opts
 
-        # Freezes the redis_object, making it immutable.
+        # Freezes the redis_type, making it immutable.
         # This ensures the object's state remains consistent and prevents any modifications,
         # safeguarding its integrity and making it thread-safe.
         # Any attempts to change the object after this will raise a FrozenError.
-        redis_object.freeze
+        redis_type.freeze
 
         # e.g. customer.name  #=> `#<Familia::HashKey:0x0000...>`
-        instance_variable_set :"@#{name}", redis_object
+        instance_variable_set :"@#{name}", redis_type
       end
     end
 

@@ -74,7 +74,7 @@ module Familia
     # Familia.dump_method. These will be used when loading and
     # saving data from/to redis to unmarshal/marshal the class.
     #
-    # :parent => The Familia object that this redis object belongs
+    # :parent => The Familia object that this redistype object belongs
     # to. This can be a class that includes Familia or an instance.
     #
     # :ttl => the time to live in seconds. When not nil, this will
@@ -119,11 +119,11 @@ module Familia
       return opts[:key] if opts[:key]
 
       if parent_instance?
-        # This is an instance-level redis object so the parent instance's
+        # This is an instance-level redistype object so the parent instance's
         # rediskey method is defined in Familia::Horreum::InstanceMethods.
         parent.rediskey(name)
       elsif parent_class?
-        # This is a class-level redis object so the parent class' rediskey
+        # This is a class-level redistype object so the parent class' rediskey
         # method is defined in Familia::Horreum::ClassMethods.
         parent.rediskey(name, nil)
       else

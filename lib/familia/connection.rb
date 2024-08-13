@@ -50,11 +50,8 @@ module Familia
     # @example
     #   Familia.redis('redis://localhost:6379')
     def redis(uri = nil)
-      p [1, uri]
       uri = URI.parse(uri) if uri.is_a?(String)
-      p [2, uri]
       uri ||= Familia.uri
-      p [3, uri]
 
       raise ArgumentError, "No URI specified (#{Familia.uri})" unless uri
 
@@ -67,8 +64,8 @@ module Familia
     # @param v [String, URI] The new default URI
     # @example
     #   Familia.uri = 'redis://localhost:6379'
-    def uri=(v)
-      @uri = v.is_a?(URI) ? v : URI.parse(v)
+    def uri=(val)
+      @uri = val.is_a?(URI) ? v : URI.parse(val)
     end
 
     alias url uri

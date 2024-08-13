@@ -4,25 +4,25 @@ require 'time'
 require_relative '../lib/familia'
 require_relative './test_helpers'
 
-## Has all redis objects
-redis_objects = Familia::RedisType.registered_types.keys
-redis_objects.collect(&:to_s).sort
+## Has all redistype relativess
+redistype_relatives = Familia::RedisType.registered_types.keys
+redistype_relatives.collect(&:to_s).sort
 #=> ["counter", "hash", "hashkey", "list", "lock", "set", "sorted_set", "string", "zset"]
 
-## Familia created class methods for redis object class
+## Familia created class methods for redistype list class
 Familia::Horreum::ClassMethods.public_method_defined? :list?
 #=> true
 
-## Familia created class methods for redis object class
+## Familia created class methods for redistype list class
 Familia::Horreum::ClassMethods.public_method_defined? :list
 #=> true
 
-## Familia created class methods for redis object class
+## Familia created class methods for redistype list class
 Familia::Horreum::ClassMethods.public_method_defined? :lists
 #=> true
 
-## A Familia object knows its redis objects
-Bone.redis_objects.is_a?(Hash) && Bone.redis_objects.has_key?(:owners)
+## A Familia object knows its redistype relativess
+Bone.redistype_relatives.is_a?(Hash) && Bone.redistype_relatives.has_key?(:owners)
 #=> true
 
 ## A Familia object knows its lists
@@ -33,7 +33,7 @@ Bone.lists.size
 Bone.list? :owners
 #=> true
 
-## A Familia object can get a specific redis object def
+## A Familia object can get a specific redistype relatives def
 definition = Bone.list :owners
 definition.klass
 #=> Familia::List

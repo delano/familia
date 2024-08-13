@@ -63,15 +63,15 @@ module Familia
         define_method :"#{kind}" do |*args|
           name, opts = *args
           attach_instance_redis_object_relation name, klass, opts
-          redis_objects[name.to_s.to_sym]
+          redis_types[name.to_s.to_sym]
         end
         define_method :"#{kind}?" do |name|
-          obj = redis_objects[name.to_s.to_sym]
+          obj = redis_types[name.to_s.to_sym]
           !obj.nil? && klass == obj.klass
         end
         define_method :"#{kind}s" do
-          names = redis_objects.keys.select { |name| send(:"#{kind}?", name) }
-          names.collect! { |name| redis_objects[name] }
+          names = redis_types.keys.select { |name| send(:"#{kind}?", name) }
+          names.collect! { |name| redis_types[name] }
           names
         end
 
@@ -83,17 +83,17 @@ module Familia
           attach_class_redis_object_relation name, klass, opts
         end
         define_method :"class_#{kind}?" do |name|
-          obj = class_redis_objects[name.to_s.to_sym]
+          obj = class_redis_types[name.to_s.to_sym]
           !obj.nil? && klass == obj.klass
         end
         define_method :"class_#{kind}s" do
-          names = class_redis_objects.keys.select { |name| send(:"class_#{kind}?", name) }
+          names = class_redis_types.keys.select { |name| send(:"class_#{kind}?", name) }
           # TODO: This returns instances of the RedisType class which
           # also contain the options. This is different from the instance
           # RedisTypes defined above which returns the Struct of name, klass, and opts.
           # names.collect! { |name| self.send name }
           # OR NOT:
-          names.collect! { |name| class_redis_objects[name] }
+          names.collect! { |name| class_redis_types[name] }
           names
         end
       end
@@ -107,10 +107,10 @@ module Familia
         name = name.to_s.to_sym
         opts ||= {}
 
-        redis_objects[name] = Struct.new(:name, :klass, :opts).new
-        redis_objects[name].name = name
-        redis_objects[name].klass = klass
-        redis_objects[name].opts = opts
+        redis_types[name] = Struct.new(:name, :klass, :opts).new
+        redis_types[name].name = name
+        redis_types[name].klass = klass
+        redis_types[name].opts = opts
 
         attr_reader name
 
@@ -121,7 +121,7 @@ module Familia
           !send(name).empty?
         end
 
-        redis_objects[name]
+        redis_types[name]
       end
 
       # Creates a class method called +name+ that
@@ -134,10 +134,10 @@ module Familia
         opts = opts.nil? ? {} : opts.clone
         opts[:parent] = self unless opts.key?(:parent)
 
-        class_redis_objects[name] = Struct.new(:name, :klass, :opts).new
-        class_redis_objects[name].name = name
-        class_redis_objects[name].klass = klass
-        class_redis_objects[name].opts = opts
+        class_redis_types[name] = Struct.new(:name, :klass, :opts).new
+        class_redis_types[name].name = name
+        class_redis_types[name].klass = klass
+        class_redis_types[name].opts = opts
 
         # An accessor method created in the metaclass will
         # access the instance variables for this class.
@@ -154,7 +154,7 @@ module Familia
         redis_object.freeze
         instance_variable_set("@#{name}", redis_object)
 
-        class_redis_objects[name]
+        class_redis_types[name]
       end
 
       def qstamp(quantum = nil, pattern = nil, now = Familia.now)
@@ -202,22 +202,22 @@ module Familia
         @prefix || name.downcase.gsub('::', Familia.delim).to_sym
       end
 
-      def class_redis_objects
-        @class_redis_objects ||= {}
-        @class_redis_objects
+      def class_redis_types
+        @class_redis_types ||= {}
+        @class_redis_types
       end
 
-      def class_redis_objects?(name)
-        class_redis_objects.has_key? name.to_s.to_sym
+      def class_redis_types?(name)
+        class_redis_types.has_key? name.to_s.to_sym
       end
 
       def redis_object?(name)
-        redis_objects.has_key? name.to_s.to_sym
+        redis_types.has_key? name.to_s.to_sym
       end
 
-      def redis_objects
-        @redis_objects ||= {}
-        @redis_objects
+      def redis_types
+        @redis_types ||= {}
+        @redis_types
       end
 
       def defined_fields
@@ -252,7 +252,6 @@ module Familia
         Familia.ld "[.from_key] #{self} from key #{objkey})"
         Familia.trace :LOAD, Familia.redis(uri), objkey, caller if Familia.debug?
         obj = redis.hgetall(objkey) # horreum objects are saved as redis hashes
-        p [1111, obj]
         self.new(**obj)
       end
 

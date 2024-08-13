@@ -8,7 +8,7 @@ require_relative './test_helpers'
 @limiter1 = Limiter.new :requests
 
 
-## Redis Objects are unique per instance of a Familia class
+## Redis Types are unique per instance of a Familia class
 @a = Bone.new 'atoken1', :name1
 @b = Bone.new 'atoken2', :name2
 p [@a.object_id, @b.object_id]
@@ -20,7 +20,7 @@ p [@a.name, @b.name]
 @a.owners.rediskey.eql?(@b.owners.rediskey)
 #=> false
 
-## Redis Objects are frozen
+## Redis Types are frozen
 @a.owners.frozen?
 #=> true
 
@@ -29,7 +29,7 @@ p [@a.name, @b.name]
 @limiter1.counter.qstamp(10.minutes, '%H:%M', 1302468980)
 ##=> '20:50'
 
-## Redis Objects can be stored to quantized stamp suffix
+## Redis Types can be stored to quantized stamp suffix
 @limiter1.counter.rediskey
 ##=> "v1:limiter:requests:counter:20:50"
 
@@ -38,7 +38,7 @@ p [@a.name, @b.name]
 @limiter2.counter.qstamp(10.minutes, pattern=nil, now=1302468980)
 ##=> 1302468600
 
-## Redis Objects can be stored to quantized numeric suffix. This
+## Redis Types can be stored to quantized numeric suffix. This
 ## tryouts is disabled b/c `RedisType#rediskey` takes no args
 ## and relies on the `class Limiter` definition in test_helpers.rb
 ## for the `:quantize` option. The quantized suffix for the Limiter
