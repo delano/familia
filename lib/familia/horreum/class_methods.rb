@@ -1,7 +1,7 @@
-# rubocop:disable all
+# frozen_string_literal: true
 
-require_relative 'redis_type_metaprogramming'
-
+require_relative 'redis_type_definitions'
+require_relative 'redis_object_relations'
 
 module Familia
   # ClassMethods - Module containing class-level methods for Familia
@@ -12,7 +12,8 @@ module Familia
   class Horreum
     module ClassMethods
       include Familia::Settings
-      include Familia::RedisTypeMetaprogramming
+      include Familia::RedisTypeDefinitions
+      include Familia::RedisObjectRelations
 
       attr_accessor :parent
       attr_writer :redis, :dump_method, :load_method
@@ -44,65 +45,6 @@ module Familia
       end
 
       define_redis_type_methods
-
-      # Creates an instance method called +name+ that
-      # returns an instance of the RedisType +klass+
-      def attach_instance_redis_object_relation(name, klass, opts)
-        Familia.ld "[Attaching instance-level #{name}] #{klass} => (#{self}) #{opts}"
-        raise ArgumentError, "Name is blank (#{klass})" if name.to_s.empty?
-
-        name = name.to_s.to_sym
-        opts ||= {}
-
-        redis_types[name] = Struct.new(:name, :klass, :opts).new
-        redis_types[name].name = name
-        redis_types[name].klass = klass
-        redis_types[name].opts = opts
-
-        attr_reader name
-
-        define_method :"#{name}=" do |val|
-          send(name).replace val
-        end
-        define_method "#{name}?" do
-          !send(name).empty?
-        end
-
-        redis_types[name]
-      end
-
-      # Creates a class method called +name+ that
-      # returns an instance of the RedisType +klass+
-      def attach_class_redis_object_relation(name, klass, opts)
-        Familia.ld "[#{self}] Attaching class-level #{name} #{klass} => #{opts}"
-        raise ArgumentError, 'Name is blank (klass)' if name.to_s.empty?
-
-        name = name.to_s.to_sym
-        opts = opts.nil? ? {} : opts.clone
-        opts[:parent] = self unless opts.key?(:parent)
-
-        class_redis_types[name] = Struct.new(:name, :klass, :opts).new
-        class_redis_types[name].name = name
-        class_redis_types[name].klass = klass
-        class_redis_types[name].opts = opts
-
-        # An accessor method created in the metaclass will
-        # access the instance variables for this class.
-        singleton_class.attr_reader name
-
-        define_singleton_method "#{name}=" do |v|
-          send(name).replace v
-        end
-        define_singleton_method "#{name}?" do
-          !send(name).empty?
-        end
-
-        redis_object = klass.new name, opts
-        redis_object.freeze
-        instance_variable_set("@#{name}", redis_object)
-
-        class_redis_types[name]
-      end
 
       def qstamp(quantum = nil, pattern = nil, now = Familia.now)
         quantum ||= ttl || 10.minutes
@@ -182,7 +124,7 @@ module Familia
 
       def multiget(*ids)
         ids = rawmultiget(*ids)
-        ids.compact.collect { |json| from_json(json) }.compact
+        ids.filter_map { |json| from_json(json) }
       end
 
       def rawmultiget(*ids)
@@ -200,7 +142,7 @@ module Familia
         Familia.trace :LOAD, Familia.redis(uri), objkey, caller if Familia.debug?
 
         obj = redis.hgetall(objkey) # horreum objects are persisted as redis hashes
-        self.new(**obj)
+        new(**obj)
       end
 
       def from_redis(identifier, suffix = :object)
@@ -240,6 +182,7 @@ module Familia
       def rediskey(identifier, suffix = self.suffix)
         Familia.ld "[.rediskey] #{identifier} for #{self} (suffix:#{suffix})"
         raise NoIdentifier, self if identifier.to_s.empty?
+
         identifier &&= identifier.to_s
         Familia.rediskey(prefix, identifier, suffix)
       end
@@ -252,6 +195,5 @@ module Familia
         @load_method || :from_json # Familia.load_method
       end
     end
-
   end
 end
