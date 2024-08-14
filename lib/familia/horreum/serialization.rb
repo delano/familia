@@ -19,21 +19,35 @@ module Familia
         @redis || self.class.redis
       end
 
+      def transaction
+        original_redis = self.redis
+
+        begin
+          redis.multi do |conn|
+            self.instance_variable_set(:@redis, conn)
+            yield(conn)
+          end
+        ensure
+          self.redis = original_redis
+        end
+      end
+
       def save
         Familia.trace :SAVE, Familia.redis(self.class.uri), redisuri, caller.first if Familia.debug?
 
-#        redis.multi do |conn|
-#
-#        end
-#
-        ret = update_fields
+        ret = commit_fields
         ['OK', true, 1].include?(ret)
       end
 
-      def update_fields
-        ret = redis.hmset(rediskey, to_h)
-        update_expiration
-        ret
+      def commit_fields
+        transaction do |conn|
+          hmset(to_h)
+          update_expiration
+        end
+      end
+
+      def destroy!
+        delete!
       end
 
       def to_h
@@ -96,7 +110,7 @@ __END__
 # From RedisHash
 def save
   hsh = { :key => identifier }
-  ret = update_fields hsh
+  ret = commit_fields hsh
   ret == "OK"
 end
 

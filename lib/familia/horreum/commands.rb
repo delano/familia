@@ -10,37 +10,46 @@ module Familia
 
     # Methods that call Redis commands (InstanceMethods)
     #
+    # NOTE: There is no hgetall for Horreum. This is because Horreum
+    # is a single hash in Redis that we aren't meant to have be working
+    # on in memory for more than, making changes -> committing. To
+    # emphasize this, instead of "refreshing" the object with hgetall,
+    # just load the object again.
+    #
     module Commands
 
       def exists?
-        Familia.redis(self.class.uri).exists rediskey
+        redis.exists rediskey
       end
 
       def expire(ttl = nil)
         ttl ||= self.class.ttl
-        Familia.redis(self.class.uri).expire rediskey, ttl.to_i
+        redis.expire rediskey, ttl.to_i
       end
 
       def realttl
-        Familia.redis(self.class.uri).ttl rediskey
+        redis.ttl rediskey
       end
 
-      def destroy!
-        ret = self.delete
-        ret
-      end
-
-      def raw(suffix = nil)
-        #suffix ||= :object
-        redis.get rediskey
+      def hdel!(field)
+        redis.hdel rediskey, field
       end
 
       def redistype(suffix = nil)
-        redis.type rediskey
+        redis.type rediskey(suffix)
       end
+
+      def hmset(suffix = nil)
+        redis.hmset rediskey(suffix), to_h
+      end
+
+      def delete!
+        redis.del rediskey
+      end
+      protected :delete!
 
     end
 
-    include Commands # these become Horreum instance methods
+    include Commands # these become Familia::Horreum instance methods
   end
 end
