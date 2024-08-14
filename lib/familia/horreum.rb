@@ -87,6 +87,12 @@ module Familia
         initialize_with_keyword_args(**kwargs)
       else
         Familia.debug "[Horreum] #{self.class} initialized with no arguments"
+        # If there are no arguments, we need to set the default values
+        # for the fields. This is done in the order they were defined.
+        # self.class.fields.each do |field|
+        #  default = self.class.defaults[field]
+        #  send(:"#{field}=", default) if default
+        # end
       end
 
       # Implementing classes can define an init method to do any
