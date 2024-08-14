@@ -1,22 +1,36 @@
 # frozen_string_literal: true
 
-require_relative 'redis_type_definitions'
-require_relative 'redis_object_relations'
+require_relative 'relations_management'
 
 module Familia
-  # ClassMethods - Module containing class-level methods for Familia
-  #
-  # This module is extended into classes that include Familia, providing
-  # class-level functionality for Redis operations and object management.
-  #
   class Horreum
+    @redis = nil
+    @identifier = nil
+    @fields = nil # []
+    @ttl = nil
+    @db = nil
+    @uri = nil
+    @suffix = nil
+    @prefix = nil
+    @class_redis_types = nil # {}
+    @redis_types = nil # {}
+    @defined_fields = nil # {}
+    @dump_method = nil
+    @load_method = nil
+
+    # ClassMethods - Module containing class-level methods for Familia
+    #
+    # This module is extended into classes that include Familia, providing
+    # class-level functionality for Redis operations and object management.
+    #
     module ClassMethods
       include Familia::Settings
-      include Familia::RedisTypeDefinitions
-      include Familia::RedisObjectRelations
+      include Familia::Horreum::RelationsManagement
 
       attr_accessor :parent
       attr_writer :redis, :dump_method, :load_method
+
+      setup_relations_management
 
       def redis
         @redis || Familia.redis(uri)
@@ -43,8 +57,6 @@ module Familia
         @fields ||= []
         @fields
       end
-
-      define_redis_type_methods
 
       def qstamp(quantum = nil, pattern = nil, now = Familia.now)
         quantum ||= ttl || 10.minutes
