@@ -1,3 +1,6 @@
+# rubocop:disable all
+
+require 'yaml'
 
 module Familia
   module VERSION
@@ -6,9 +9,12 @@ module Familia
       [@version[:MAJOR], @version[:MINOR], @version[:PATCH]].join('.')
     end
     alias inspect to_s
+    def self.version
+      @version ||= load_config
+      @version
+    end
     def self.load_config
-      require 'yaml'
-      @version ||= YAML.load_file(File.join(FAMILIA_LIB_HOME, '..', 'VERSION.yml'))
+      YAML.load_file(File.join(FAMILIA_LIB_HOME, '..', 'VERSION.yml'))
     end
   end
 end

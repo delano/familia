@@ -1,7 +1,7 @@
-
+# frozen_string_literal: true
 
 module Familia
-  class SortedSet < RedisObject
+  class SortedSet < RedisType
     def size
       redis.zcard rediskey
     end
@@ -104,7 +104,7 @@ module Familia
     end
 
     def range(sidx, eidx, opts = {})
-      echo :range, caller[0] if Familia.debug
+      echo :range, caller(1..1).first if Familia.debug
       el = rangeraw(sidx, eidx, opts)
       multi_from_redis(*el)
     end
@@ -121,7 +121,7 @@ module Familia
     end
 
     def revrange(sidx, eidx, opts = {})
-      echo :revrange, caller[0] if Familia.debug
+      echo :revrange, caller(1..1).first if Familia.debug
       el = revrangeraw(sidx, eidx, opts)
       multi_from_redis(*el)
     end
@@ -132,25 +132,25 @@ module Familia
 
     # e.g. obj.metrics.rangebyscore (now-12.hours), now, :limit => [0, 10]
     def rangebyscore(sscore, escore, opts = {})
-      echo :rangebyscore, caller[0] if Familia.debug
+      echo :rangebyscore, caller(1..1).first if Familia.debug
       el = rangebyscoreraw(sscore, escore, opts)
       multi_from_redis(*el)
     end
 
     def rangebyscoreraw(sscore, escore, opts = {})
-      echo :rangebyscoreraw, caller[0] if Familia.debug
+      echo :rangebyscoreraw, caller(1..1).first if Familia.debug
       redis.zrangebyscore(rediskey, sscore, escore, **opts)
     end
 
     # e.g. obj.metrics.revrangebyscore (now-12.hours), now, :limit => [0, 10]
-    def revrangebyscore(sscore, escore, opts={})
-      echo :revrangebyscore, caller[0] if Familia.debug
+    def revrangebyscore(sscore, escore, opts = {})
+      echo :revrangebyscore, caller(1..1).first if Familia.debug
       el = revrangebyscoreraw(sscore, escore, opts)
       multi_from_redis(*el)
     end
 
-    def revrangebyscoreraw(sscore, escore, opts={})
-      echo :revrangebyscoreraw, caller[0] if Familia.debug
+    def revrangebyscoreraw(sscore, escore, opts = {})
+      echo :revrangebyscoreraw, caller(1..1).first if Familia.debug
       opts[:with_scores] = true if opts[:withscores]
       redis.zrevrangebyscore(rediskey, sscore, escore, opts)
     end
@@ -196,7 +196,7 @@ module Familia
       at(-1)
     end
 
-    Familia::RedisObject.register self, :zset
+    Familia::RedisType.register self, :sorted_set
+    Familia::RedisType.register self, :zset
   end
-
 end

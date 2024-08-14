@@ -1,13 +1,14 @@
+# frozen_string_literal: true
 
 module Familia
-  class Set < RedisObject
+  class Set < RedisType
     def size
       redis.scard rediskey
     end
     alias length size
 
     def empty?
-      size == 0
+      size.zero?
     end
 
     def add *values
@@ -21,7 +22,7 @@ module Familia
     end
 
     def members
-      echo :members, caller[0] if Familia.debug
+      echo :members, caller(1..1).first if Familia.debug
       el = membersraw
       multi_from_redis(*el)
     end
@@ -117,7 +118,6 @@ module Familia
     #  end
     # end
 
-    Familia::RedisObject.register self, :set
+    Familia::RedisType.register self, :set
   end
-
 end

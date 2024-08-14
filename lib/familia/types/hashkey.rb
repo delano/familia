@@ -1,38 +1,40 @@
 # frozen_string_literal: true
 
 module Familia
-  class HashKey < RedisObject
+  class HashKey < RedisType
     def size
       redis.hlen rediskey
     end
     alias length size
 
     def empty?
-      size == 0
+      size.zero?
     end
 
-    def []=(name, val)
-      ret = redis.hset rediskey, name, to_redis(val)
+    def []=(field, val)
+      ret = redis.hset rediskey, field, to_redis(val)
       update_expiration
       ret
     rescue TypeError => e
-      echo :hset, caller[0] if Familia.debug
+      Familia.le "[hset]= #{e.message}"
+      Familia.ld "[hset]= #{rediskey} #{field}=#{val}" if Familia.debug
+      echo :hset, caller(1..1).first if Familia.debug # logs via echo to redis and back
       klass = val.class
-      msg = "Cannot store #{name} => #{val.inspect} (#{klass}) in #{rediskey}"
+      msg = "Cannot store #{field} => #{val.inspect} (#{klass}) in #{rediskey}"
       raise e.class, msg
     end
     alias put []=
     alias store []=
 
-    def [](name)
-      from_redis redis.hget(rediskey, name)
+    def [](field)
+      from_redis redis.hget(rediskey, field)
     end
     alias get []
 
-    def fetch(name, default = nil)
-      ret = self[name]
+    def fetch(field, default = nil)
+      ret = self[field]
       if ret.nil?
-        raise IndexError, "No such index for: #{name}" if default.nil?
+        raise IndexError, "No such index for: #{field}" if default.nil?
 
         default
       else
@@ -57,27 +59,27 @@ module Familia
     alias to_hash all
     alias clone all
 
-    def has_key?(name)
-      redis.hexists rediskey, name
+    def has_key?(field)
+      redis.hexists rediskey, field
     end
     alias include? has_key?
     alias member? has_key?
 
-    def delete(name)
-      redis.hdel rediskey, name
+    def delete(field)
+      redis.hdel rediskey, field
     end
     alias remove delete
     alias rem delete
     alias del delete
 
-    def increment(name, by = 1)
-      redis.hincrby(rediskey, name, by).to_i
+    def increment(field, by = 1)
+      redis.hincrby(rediskey, field, by).to_i
     end
     alias incr increment
     alias incrby increment
 
-    def decrement(name, by = 1)
-      increment name, -by
+    def decrement(field, by = 1)
+      increment field, -by
     end
     alias decr decrement
     alias decrby decrement
@@ -93,12 +95,12 @@ module Familia
     end
     alias merge! update
 
-    def values_at *names
-      el = redis.hmget(rediskey, *names.flatten.compact)
+    def values_at *fields
+      el = redis.hmget(rediskey, *fields.flatten.compact)
       multi_from_redis(*el)
     end
 
-    Familia::RedisObject.register self, :hash
+    Familia::RedisType.register self, :hash # legacy, deprecated
+    Familia::RedisType.register self, :hashkey
   end
-
 end

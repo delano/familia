@@ -1,13 +1,13 @@
-require 'familia'
-require 'familia/test_helpers'
+require_relative '../lib/familia'
+require_relative './test_helpers'
 
-Familia.apiversion = 'v1'
+#Familia.apiversion = 'v1'
 
 @a = Bone.new 'atoken2', 'akey'
 
 ## Bone#rediskey
 @a.rediskey
-#=> 'v1:bone:atoken2:akey:object'
+#=> 'bone:atoken2:akey:object'
 
 ## Familia::String#value should give default value
 @a.value.value
@@ -39,7 +39,7 @@ Familia.apiversion = 'v1'
 #=> '1000'
 
 ## Familia::String#increment
-@ret.increment 
+@ret.increment
 #=> 1001
 
 ## Familia::String#incrementby
@@ -47,7 +47,7 @@ Familia.apiversion = 'v1'
 #=> 1100
 
 ## Familia::String#decrement
-@ret.decrement 
+@ret.decrement
 #=> 1099
 
 ## Familia::String#decrementby

@@ -1,17 +1,18 @@
+# frozen_string_literal: true
 
 module Familia
-  class List < RedisObject
+  class List < RedisType
     def size
       redis.llen rediskey
     end
     alias length size
 
     def empty?
-      size == 0
+      size.zero?
     end
 
     def push *values
-      echo :push, caller[0] if Familia.debug
+      echo :push, caller(1..1).first if Familia.debug
       values.flatten.compact.each { |v| redis.rpush rediskey, to_redis(v) }
       redis.ltrim rediskey, -@opts[:maxlength], -1 if @opts[:maxlength]
       update_expiration
@@ -71,15 +72,15 @@ module Familia
     end
 
     def members(count = -1)
-      echo :members, caller[0] if Familia.debug
-      count -= 1 if count > 0
+      echo :members, caller(1..1).first if Familia.debug
+      count -= 1 if count.positive?
       range 0, count
     end
     alias all members
     alias to_a members
 
     def membersraw(count = -1)
-      count -= 1 if count > 0
+      count -= 1 if count.positive?
       rangeraw 0, count
     end
 
@@ -149,8 +150,6 @@ module Familia
     #  end
     # end
 
-    Familia::RedisObject.register self, :list
+    Familia::RedisType.register self, :list
   end
-
-
 end

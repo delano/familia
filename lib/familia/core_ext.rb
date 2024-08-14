@@ -1,3 +1,4 @@
+# frozen_string_literal: true
 
 # Extends the String class with time-related functionality
 #
@@ -11,9 +12,9 @@ class String
   #
   # @return [Float, nil] The time in seconds, or nil if the string is invalid
   def in_seconds
-    q, u = scan(/([\d.]+)([s,m,h])?/).flatten
+    q, u = scan(/([\d.]+)([smh])?/).flatten
     q &&= q.to_f and u ||= 's'
-    q &&= q.in_seconds(u)
+    q&.in_seconds(u)
   end
 end
 
@@ -21,74 +22,38 @@ end
 class Time
   # Provides methods for working with various time units
   module Units
+    # rubocop:disable Style/SingleLineMethods, Layout/ExtraSpacing
+
     PER_MICROSECOND = 0.000001
     PER_MILLISECOND = 0.001
     PER_MINUTE = 60.0
     PER_HOUR = 3600.0
     PER_DAY = 86_400.0
 
-    # Conversion methods to convert seconds to other time units
-    def microseconds
-      seconds * PER_MICROSECOND
-    end
+    # Conversion methods
+    #
+    # From other time units -> seconds
+    #
+    def microseconds()    seconds * PER_MICROSECOND     end
+    def milliseconds()    seconds * PER_MILLISECOND    end
+    def seconds()         self                         end
+    def minutes()         seconds * PER_MINUTE          end
+    def hours()           seconds * PER_HOUR             end
+    def days()            seconds * PER_DAY               end
+    def weeks()           seconds * PER_DAY * 7           end
+    def years()           seconds * PER_DAY * 365        end
 
-    def milliseconds
-      seconds * PER_MILLISECOND
-    end
+    # From seconds -> other time units
+    #
+    def in_years()        seconds / PER_DAY / 365      end
+    def in_weeks()        seconds / PER_DAY / 7       end
+    def in_days()         seconds / PER_DAY          end
+    def in_hours()        seconds / PER_HOUR          end
+    def in_minutes()      seconds / PER_MINUTE         end
+    def in_milliseconds() seconds / PER_MILLISECOND    end
+    def in_microseconds() seconds / PER_MICROSECOND   end
 
-    def seconds
-      self
-    end
-
-    def minutes
-      seconds * PER_MINUTE
-    end
-
-    def hours
-      seconds * PER_HOUR
-    end
-
-    def days
-      seconds * PER_DAY
-    end
-
-    def weeks
-      seconds * PER_DAY * 7
-    end
-
-    def years
-      seconds * PER_DAY * 365
-    end
-
-    # Conversion methods to convert from seconds to other time units
-    def in_years
-      seconds / PER_DAY / 365
-    end
-
-    def in_weeks
-      seconds / PER_DAY / 7
-    end
-
-    def in_days
-      seconds / PER_DAY
-    end
-
-    def in_hours
-      seconds / PER_HOUR
-    end
-
-    def in_minutes
-      seconds / PER_MINUTE
-    end
-
-    def in_milliseconds
-      seconds / PER_MILLISECOND
-    end
-
-    def in_microseconds
-      seconds / PER_MICROSECOND
-    end
-
+    #
     # Converts seconds to a Time object
     #
     # @return [Time] A Time object representing the seconds
@@ -121,20 +86,7 @@ class Time
       end
     end
 
-    ## JRuby doesn't like using instance_methods.select here.
-    ## It could be a bug or something quirky with Attic
-    ## (although it works in 1.8 and 1.9). The error:
-    ##
-    ##  lib/attic.rb:32:in `select': yield called out of block (LocalJumpError)
-    ##  lib/stella/mixins/numeric.rb:24
-    ##
-    ## Create singular methods, like hour and day.
-    # instance_methods.select.each do |plural|
-    #   singular = plural.to_s.chop
-    #   alias_method singular, plural
-    # end
-
-    # Aliases for convenience
+    # Starring Jennifer Garner, Victor Garber, and Carl Lumbly
     alias ms milliseconds
     alias μs microseconds
     alias second seconds
@@ -143,6 +95,8 @@ class Time
     alias day days
     alias week weeks
     alias year years
+
+    # rubocop:enable Style/SingleLineMethods, Layout/ExtraSpacing
   end
 end
 
@@ -167,7 +121,7 @@ class Numeric
   #   3_221_225_472.to_bytes #=> "3.00 GiB"
   #
   def to_bytes
-    units = ['B', 'KiB', 'MiB', 'GiB', 'TiB']
+    units = %w[B KiB MiB GiB TiB]
     size = abs.to_f
     unit = 0
 
@@ -178,5 +132,4 @@ class Numeric
 
     format('%3.2f %s', size, units[unit])
   end
-
 end

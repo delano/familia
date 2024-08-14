@@ -1,25 +1,28 @@
-require 'familia'
-require 'familia/test_helpers'
 
-## Has all redis objects
-redis_objects = Familia::RedisObject.registration.keys
-redis_objects.collect(&:to_s).sort
-#=> ["hash", "list", "set", "string", "zset"]
+require 'time'
 
-## Familia created class methods for redis object class
-Familia::ClassMethods.public_method_defined? :list?
+require_relative '../lib/familia'
+require_relative './test_helpers'
+
+## Has all redistype relativess
+registered_types = Familia::RedisType.registered_types.keys
+registered_types.collect(&:to_s).sort
+#=> ["counter", "hash", "hashkey", "list", "lock", "set", "sorted_set", "string", "zset"]
+
+## Familia created class methods for redistype list class
+Familia::Horreum::ClassMethods.public_method_defined? :list?
 #=> true
 
-## Familia created class methods for redis object class
-Familia::ClassMethods.public_method_defined? :list
+## Familia created class methods for redistype list class
+Familia::Horreum::ClassMethods.public_method_defined? :list
 #=> true
 
-## Familia created class methods for redis object class
-Familia::ClassMethods.public_method_defined? :lists
+## Familia created class methods for redistype list class
+Familia::Horreum::ClassMethods.public_method_defined? :lists
 #=> true
 
-## A Familia object knows its redis objects
-Bone.redis_objects.is_a?(Hash) && Bone.redis_objects.has_key?(:owners)
+## A Familia object knows its redistype relativess
+Bone.redis_types.is_a?(Hash) && Bone.redis_types.has_key?(:owners)
 #=> true
 
 ## A Familia object knows its lists
@@ -30,14 +33,15 @@ Bone.lists.size
 Bone.list? :owners
 #=> true
 
-## A Familia object can get a specific redis object def
+## A Familia object can get a specific redistype relatives def
 definition = Bone.list :owners
 definition.klass
 #=> Familia::List
 
 ## Familia.now
-Familia.now Time.parse('2011-04-10 20:56:20 UTC').utc
-#=> 1302468980
+parsed_time = Familia.now(Time.parse('2011-04-10 20:56:20 UTC').utc)
+[parsed_time, parsed_time.is_a?(Numeric), parsed_time.is_a?(Float)]
+#=> [1302468980.0, true, true]
 
 ## Familia.qnow
 Familia.qnow 10.minutes, 1302468980

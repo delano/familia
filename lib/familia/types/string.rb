@@ -1,7 +1,7 @@
-
+# frozen_string_literal: true
 
 module Familia
-  class String < RedisObject
+  class String < RedisType
     def init; end
 
     def size
@@ -14,7 +14,7 @@ module Familia
     end
 
     def value
-      echo :value, caller[0..5] if Familia.debug
+      echo :value, caller[0..0] if Familia.debug
       redis.setnx rediskey, @opts[:default] if @opts[:default]
       from_redis redis.get(rediskey)
     end
@@ -108,6 +108,8 @@ module Familia
       value.nil?
     end
 
-    Familia::RedisObject.register self, :string
+    Familia::RedisType.register self, :string
+    Familia::RedisType.register self, :counter
+    Familia::RedisType.register self, :lock
   end
 end

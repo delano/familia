@@ -1,6 +1,6 @@
-require 'familia'
-require 'familia/test_helpers'
-Familia.apiversion = 'v1'
+require_relative '../lib/familia'
+require_relative './test_helpers'
+#Familia.apiversion = 'v1'
 
 @a = Bone.new 'atoken', 'akey'
 
@@ -8,8 +8,8 @@ Familia.apiversion = 'v1'
 Bone.prefix
 #=> :bone
 
-## Familia#index
-@a.index
+## Familia#identifier
+@a.identifier
 #=> 'atoken:akey'
 
 ## Familia.suffix
@@ -18,32 +18,34 @@ Bone.suffix
 
 ## Familia#rediskey
 @a.rediskey
-#=> 'v1:bone:atoken:akey:object'
+#=> 'bone:atoken:akey:object'
 
 ## Familia#rediskey
 @a.rediskey
-#=> 'v1:bone:atoken:akey:object'
+#=> 'bone:atoken:akey:object'
 
 ## Familia#save
 @cust = Customer.new :delano, "Delano Mandelbaum"
 @cust.save
 #=> true
 
-## Customer.instances
-Customer.instances.all.collect(&:custid)
-#=> [:delano]
+## Customer.values (Updateing this sorted set of instance IDs is a Onetime
+# Secret feature. Disabled here b/c there's no code in Familia or the test
+# helpers that replicates this behaviour.) Leaving this here for reference.
+Customer.values.all.collect(&:custid)
+##=> ['delano']
 
 ## Familia.from_redis
 obj = Customer.from_redis :delano
-obj.custid
-#=> :delano
+[obj.class, obj.custid]
+#=> [Customer, 'delano']
 
 ## Customer.destroy
 @cust.destroy!
 #=> 1
 
 ## Customer.instances
-Customer.instances.size
+Customer.values.size
 #=> 0
 
 ## Familia#save with an object that expires
@@ -57,7 +59,7 @@ Customer.customers.class
 
 ## Familia class rediskey
 Customer.customers.rediskey
-#=> 'v1:customer:customers'
+#=> 'customer:customers'
 
 ## Familia.class_list
 Customer.customers << :delano << :tucker << :morton

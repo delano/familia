@@ -1,11 +1,12 @@
-require 'familia'
-require 'familia/test_helpers'
 
-Familia.apiversion = 'v1'
+require_relative '../lib/familia'
+require_relative './test_helpers'
+
+#Familia.apiversion = 'v1'
 
 
 ## Check for help class
-Bone.redis_objects.keys # consistent b/c hashes are ordered
+Bone.redis_types.keys # consistent b/c hashes are ordered
 #=> [:owners, :tags, :metrics, :props, :value]
 
 ## Familia has a uri
