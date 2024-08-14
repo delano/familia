@@ -69,41 +69,52 @@ module Familia
     # A default initialize method. This will be replaced
     # if a class defines its own initialize method after
     # including Familia. In that case, the replacement
-    # must call initialize_redistype_relatives.
-    def initialize *args, **kwargs
-      Familia.ld "[Horreum] Initializing #{self.class} with arguments (#{args.inspect}, #{kwargs.inspect})"
-      initialize_redistype_relatives
+    # must call initialize_relatives.
+    def initialize(*args, **kwargs)
+      Familia.ld "[Horreum] Initializing #{self.class}"
+      initialize_relatives
 
-      # if args is not empty, it contains the values for the fields in the order
-      # they were defined in the class. This is the only way to set the fields
-      # when initializing a new object.
+      # If there are positional arguments, they should be the field
+      # values in the order they were defined in the implementing class.
       #
-      args.each_with_index do |value, index|
-        field = self.class.fields[index]
-        send(:"#{field}=", value)
-      end
-
       # Handle keyword arguments
       # Fields is a known quantity, so we iterate over it rather than kwargs
       # to ensure that we only set fields that are defined in the class. And
       # to avoid runaways.
-      self.class.fields.each do |field|
-        field_sym = field.to_sym
-        # Redis will give us field names as strings back, but internally
-        # we use symbols. So we convert the field name to a symbol.
-        next unless kwargs.key?(field_sym) || kwargs.key?(field_sym.to_s)
-
-        value = kwargs[field_sym] || kwargs[field_sym.to_s]
-        send(:"#{field}=", value)
+      if args.any?
+        initialize_with_positional_args(*args)
+      elsif kwargs.any?
+        initialize_with_keyword_args(**kwargs)
+      else
+        Familia.debug "[Horreum] #{self.class} initialized with no arguments"
       end
 
-      # Check if the class has an init method and call it if it does.
-      init(*args) if respond_to? :init
+      # Implementing classes can define an init method to do any
+      # additional initialization. Notice that this is called
+      # after the fields are set.
+      init if respond_to?(:init)
     end
+
+    def initialize_with_positional_args(*args)
+      self.class.fields.zip(args).each do |field, value|
+        send(:"#{field}=", value) if value
+      end
+    end
+    private :initialize_with_positional_args
+
+    def initialize_with_keyword_args(**kwargs)
+      self.class.fields.each do |field|
+        # Redis will give us field names as strings back, but internally
+        # we use symbols. So we do both.
+        value = kwargs[field.to_sym] || kwargs[field.to_s]
+        send(:"#{field}=", value) if value
+      end
+    end
+    private :initialize_with_keyword_args
 
     # This needs to be called in the initialize method of
     # any class that includes Familia.
-    def initialize_redistype_relatives
+    def initialize_relatives
       # Generate instances of each RedisType. These need to be
       # unique for each instance of this class so they can piggyback
       # on the specifc index of this instance.
@@ -114,7 +125,7 @@ module Familia
       #
       # See RedisType.install_redis_type
       self.class.redis_types.each_pair do |name, redis_type_definition|
-        Familia.ld "[#{self.class}] initialize_redistype_relatives #{name} => #{redis_type_definition.to_a}"
+        Familia.ld "[#{self.class}] initialize_relatives #{name} => #{redis_type_definition.to_a}"
         klass = redis_type_definition.klass
         opts = redis_type_definition.opts
 
@@ -166,10 +177,6 @@ module Familia
       raise Problem, 'Identifier is empty' if unique_id.empty?
 
       unique_id
-    end
-
-    def redis
-      self.class.redis
     end
   end
 end

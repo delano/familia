@@ -251,13 +251,11 @@ module Familia
 
         Familia.ld "[.from_key] #{self} from key #{objkey})"
         Familia.trace :LOAD, Familia.redis(uri), objkey, caller if Familia.debug?
-        obj = redis.hgetall(objkey) # horreum objects are saved as redis hashes
+
+        obj = redis.hgetall(objkey) # horreum objects are persisted as redis hashes
         self.new(**obj)
       end
 
-      #
-      # TODO: Needs a lot of work since it's used in a bunch of places. Just eneds to be more grokable.
-      #
       def from_redis(identifier, suffix = :object)
         return nil if identifier.to_s.empty?
 
