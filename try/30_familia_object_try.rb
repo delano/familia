@@ -29,9 +29,11 @@ Bone.suffix
 @cust.save
 #=> true
 
-## Customer.instances
+## Customer.values (Updateing this sorted set of instance IDs is a Onetime
+# Secret feature. Disabled here b/c there's no code in Familia or the test
+# helpers that replicates this behaviour.) Leaving this here for reference.
 Customer.values.all.collect(&:custid)
-#=> ['delano']
+##=> ['delano']
 
 ## Familia.from_redis
 obj = Customer.from_redis :delano

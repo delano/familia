@@ -7,7 +7,7 @@ require_relative './test_helpers'
 
 ## Bone#rediskey
 @a.rediskey
-#=> 'v1:bone:atoken2:akey:object'
+#=> 'bone:atoken2:akey:object'
 
 ## Familia::String#value should give default value
 @a.value.value

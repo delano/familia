@@ -1,49 +1,36 @@
 module Familia
   class Horreum
-    # RedisTypeManagement
     #
-    # This module encapsulates the functionality for managing Redis-type fields
-    # and relations as a distinct feature of the system.
+    # RelationsManagement: Manages Redis-type fields and relations
     #
-    # Key points:
-    # - Feature Encapsulation: Treats Redis Type Field and Relation Management
-    #   as a cohesive, self-contained capability.
-    # - Implementation Independence: The core functionality (defining and managing
-    #   Redis-type fields and relations) is separated from its implementation details.
-    # - Interface vs Implementation: Provides a clear public interface, hiding
-    #   implementation specifics (such as metaprogramming) from the rest of the system.
+    # This module uses metaprogramming to dynamically create methods
+    # for managing different types of Redis objects (e.g., sets, lists, hashes).
     #
-    # This approach allows for:
-    # - Improved modularity and maintainability
-    # - Easier future modifications to the implementation without affecting dependent parts
-    # - Clear separation between the feature's interface and its internal workings
+    # Key metaprogramming features:
+    # * Dynamically defines methods for each Redis type (e.g., set, list, hashkey)
+    # * Creates both instance-level and class-level relation methods
+    # * Provides query methods for checking relation types
     #
     # Usage:
-    #   include RedisTypeManagement in classes that need this functionality.
-    #   Call setup_redis_type_management to initialize the feature.
+    #   Include this module in classes that need Redis-type management
+    #   Call setup_relations_accessors to initialize the feature
     #
     module RelationsManagement
       def self.included(base)
         base.extend(ClassMethods)
-        base.setup_relations_management
+        base.setup_relations_accessors
       end
 
       module ClassMethods
-        # Metaprogramming to add the class-level methods used when defining new
-        # familia classes (e.g. classes that `include Familia`). Every class in
-        # types/ will have one or more of these methods.
+        # Sets up all Redis-type related methods
+        # This method is the core of the metaprogramming logic
         #
-        # e.g. set, list, class_counter etc. are all defined here.
-        #
-        # NOTE: The term `name` means different things here vs in
-        # Onetime::RedisHash. Here it means `Object#name` the string
-        # name of the current class. In Onetime::RedisHash it means
-        # the name of the redis key.
-        #
-        def setup_relations_management
+        def setup_relations_accessors
           Familia::RedisType.registered_types.each_pair do |kind, klass|
             Familia.ld "[registered_types] #{kind} => #{klass}"
 
+            # Dynamically define instance-level relation methods
+            #
             # Once defined, these methods can be used at the class-level of a
             # Familia member to define *instance-level* relations to any of the
             # RedisType types (e.g. set, list, hash, etc).
@@ -63,6 +50,8 @@ module Familia
               names
             end
 
+            # Dynamically define class-level relation methods
+            #
             # Once defined, these methods can be used at the class-level of a
             # Familia member to define *class-level relations* to any of the
             # RedisType types (e.g. class_set, class_list, class_hash, etc).
@@ -88,9 +77,9 @@ module Familia
           end
         end
       end
+      # End of ClassMethods module
 
-      # Creates an instance method called +name+ that
-      # returns an instance of the RedisType +klass+
+      # Creates an instance-level relation
       def attach_instance_redis_object_relation(name, klass, opts)
         Familia.ld "[Attaching instance-level #{name}] #{klass} => (#{self}) #{opts}"
         raise ArgumentError, "Name is blank (#{klass})" if name.to_s.empty?
@@ -115,8 +104,7 @@ module Familia
         redis_types[name]
       end
 
-      # Creates a class method called +name+ that
-      # returns an instance of the RedisType +klass+
+      # Creates a class-level relation
       def attach_class_redis_object_relation(name, klass, opts)
         Familia.ld "[#{self}] Attaching class-level #{name} #{klass} => #{opts}"
         raise ArgumentError, 'Name is blank (klass)' if name.to_s.empty?
@@ -148,5 +136,6 @@ module Familia
         class_redis_types[name]
       end
     end
+    # End of RelationsManagement module
   end
 end

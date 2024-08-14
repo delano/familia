@@ -2,27 +2,24 @@
 
 module Familia
   #
-  # Differences between Familia::Horreum and Familia::HashKey:
+  # Horreum: A module for managing Redis-based object storage and relationships
   #
-  #   * Horreum is a module, HashKey is a class. When included in a class,
-  #     Horreum appears in the list of ancestors without getting involved
-  #     in the class hierarchy.
-  #   * HashKey is a wrapper around Redis hash operations where every
-  #     value change is performed directly on redis; Horreum is a cache
-  #     that performs atomic operations on a hash in redis (via HashKey).
+  # Key features:
+  # * Provides instance-level access to a single hash in Redis
+  # * Includes Familia for class/module level access to Redis types and operations
+  # * Uses 'hashkey' to define a Redis hash referred to as "object"
+  # * Applies a default expiry (5 years) to all keys
   #
-  # Differences between Familia and Familia::Horreum:
+  # Metaprogramming:
+  # * The class << self block defines class-level behavior
+  # * The `inherited` method extends ClassMethods to subclasses like
+  #  `MyModel` in the example below
   #
-  #   * Familia provides class/module level access to redis types and
-  #     operations; Horreum provides instance-level access to a single
-  #     hash in redis.
-  #   * Horreum includes Familia and uses `hashkey` to define a redis
-  #     has that it refers to as simply "object".
-  #   * Horreum applies a default expiry to all keys. 5 years. So the
-  #     default behaviour is that all data is stored definitely. It also
-  #     uses this expiration as the updated timestamp.
-  #
-  # Horreum is equivalent to Onetime::RedisHash.
+  # Usage:
+  #   class MyModel < Familia::Horreum
+  #     field :name
+  #     field :email
+  #   end
   #
   class Horreum
     # == Singleton Class Context
@@ -55,6 +52,7 @@ module Familia
     # but not existing instances of the class.
     #
     class << self
+      # Extends ClassMethods to subclasses and tracks Familia members
       def inherited(member)
         Familia.trace :INHERITED, nil, "Inherited by #{member}", caller if Familia.debug?
         member.extend(ClassMethods)
@@ -66,10 +64,8 @@ module Familia
       end
     end
 
-    # A default initialize method. This will be replaced
-    # if a class defines its own initialize method after
-    # including Familia. In that case, the replacement
-    # must call initialize_relatives.
+    # Instance initialization
+    # This method sets up the object's state, including Redis-related data
     def initialize(*args, **kwargs)
       Familia.ld "[Horreum] Initializing #{self.class}"
       initialize_relatives
@@ -101,25 +97,11 @@ module Familia
       init if respond_to?(:init)
     end
 
-    def initialize_with_positional_args(*args)
-      self.class.fields.zip(args).each do |field, value|
-        send(:"#{field}=", value) if value
-      end
-    end
-    private :initialize_with_positional_args
-
-    def initialize_with_keyword_args(**kwargs)
-      self.class.fields.each do |field|
-        # Redis will give us field names as strings back, but internally
-        # we use symbols. So we do both.
-        value = kwargs[field.to_sym] || kwargs[field.to_s]
-        send(:"#{field}=", value) if value
-      end
-    end
-    private :initialize_with_keyword_args
-
-    # This needs to be called in the initialize method of
-    # any class that includes Familia.
+    # Sets up related Redis objects for the instance
+    # This method is crucial for establishing Redis-based relationships
+    #
+    # This needs to be called in the initialize method.
+    #
     def initialize_relatives
       # Generate instances of each RedisType. These need to be
       # unique for each instance of this class so they can piggyback
@@ -160,6 +142,25 @@ module Familia
       end
     end
 
+    def initialize_with_positional_args(*args)
+      self.class.fields.zip(args).each do |field, value|
+        send(:"#{field}=", value) if value
+      end
+    end
+    private :initialize_with_positional_args
+
+    def initialize_with_keyword_args(**kwargs)
+      self.class.fields.each do |field|
+        # Redis will give us field names as strings back, but internally
+        # we use symbols. So we do both.
+        value = kwargs[field.to_sym] || kwargs[field.to_s]
+        send(:"#{field}=", value) if value
+      end
+    end
+    private :initialize_with_keyword_args
+
+    # Determines the unique identifier for the instance
+    # This method is used to generate Redis keys for the object
     def identifier
       definition = self.class.identifier # e.g.
       # When definition is a symbol or string, assume it's an instance method

@@ -4,6 +4,8 @@ require_relative 'relations_management'
 
 module Familia
   class Horreum
+    # Class-level instance variables
+    # These are set up as nil initially and populated later
     @redis = nil
     @identifier = nil
     @fields = nil # []
@@ -18,10 +20,15 @@ module Familia
     @dump_method = nil
     @load_method = nil
 
-    # ClassMethods - Module containing class-level methods for Familia
+    # ClassMethods: Provides class-level functionality for Horreum
     #
-    # This module is extended into classes that include Familia, providing
-    # class-level functionality for Redis operations and object management.
+    # This module is extended into classes that include Familia::Horreum,
+    # providing methods for Redis operations and object management.
+    #
+    # Key features:
+    # * Includes RelationsManagement for Redis-type field handling
+    # * Defines methods for managing fields, identifiers, and Redis keys
+    # * Provides utility methods for working with Redis objects
     #
     module ClassMethods
       include Familia::Settings
@@ -29,8 +36,6 @@ module Familia
 
       attr_accessor :parent
       attr_writer :redis, :dump_method, :load_method
-
-      setup_relations_management
 
       def redis
         @redis || Familia.redis(uri)
@@ -58,11 +63,27 @@ module Familia
         @fields
       end
 
-      def qstamp(quantum = nil, pattern = nil, now = Familia.now)
-        quantum ||= ttl || 10.minutes
-        pattern ||= '%H%M'
-        rounded = now - (now % quantum)
-        Time.at(rounded).utc.strftime(pattern)
+      def class_redis_types
+        @class_redis_types ||= {}
+        @class_redis_types
+      end
+
+      def class_redis_types?(name)
+        class_redis_types.has_key? name.to_s.to_sym
+      end
+
+      def redis_object?(name)
+        redis_types.has_key? name.to_s.to_sym
+      end
+
+      def redis_types
+        @redis_types ||= {}
+        @redis_types
+      end
+
+      def defined_fields
+        @defined_fields ||= {}
+        @defined_fields
       end
 
       def ttl(v = nil)
@@ -101,29 +122,6 @@ module Familia
       def prefix(a = nil)
         @prefix = a if a
         @prefix || name.downcase.gsub('::', Familia.delim).to_sym
-      end
-
-      def class_redis_types
-        @class_redis_types ||= {}
-        @class_redis_types
-      end
-
-      def class_redis_types?(name)
-        class_redis_types.has_key? name.to_s.to_sym
-      end
-
-      def redis_object?(name)
-        redis_types.has_key? name.to_s.to_sym
-      end
-
-      def redis_types
-        @redis_types ||= {}
-        @redis_types
-      end
-
-      def defined_fields
-        @defined_fields ||= {}
-        @defined_fields
       end
 
       def create *args
@@ -183,6 +181,13 @@ module Familia
 
       def find(suffix = '*')
         Familia.redis(uri).keys(rediskey('*', suffix)) || []
+      end
+
+      def qstamp(quantum = nil, pattern = nil, now = Familia.now)
+        quantum ||= ttl || 10.minutes
+        pattern ||= '%H%M'
+        rounded = now - (now % quantum)
+        Time.at(rounded).utc.strftime(pattern)
       end
 
       # +identifier+ can be a value or an Array of values used to create the index.

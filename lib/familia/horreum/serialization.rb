@@ -32,16 +32,29 @@ module Familia
         end
       end
 
+      # A thin wrapper around `commit_fields` that updates the timestamps and
+      # returns a boolean.
       def save
         Familia.trace :SAVE, Familia.redis(self.class.uri), redisuri, caller.first if Familia.debug?
 
-        ret = commit_fields
-        ['OK', true, 1].include?(ret)
+        # Update timestamp fields
+        self.updated = Familia.now.to_i
+        self.created = Familia.now.to_i unless self.created
+
+        # Thr return value of commit_fields is an array of strings: ["OK"].
+        ret = commit_fields # e.g. ["OK"]
+
+        Familia.ld "[save] #{self.class} #{rediskey} #{ret}"
+
+        # Convert the return value to a boolean
+        ret.all? { |value| value == "OK" }
       end
 
+      # +return: [Array<String>] The return value of the Redis multi command
       def commit_fields
+        Familia.ld "[commit_fields] #{self.class} #{rediskey} #{to_h}"
         transaction do |conn|
-          hmset(to_h)
+          hmset
           update_expiration
         end
       end

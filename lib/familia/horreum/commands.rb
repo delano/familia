@@ -40,6 +40,7 @@ module Familia
       end
 
       def hmset(suffix = nil)
+        suffix ||= self.class.suffix
         redis.hmset rediskey(suffix), to_h
       end
 

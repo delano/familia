@@ -16,7 +16,6 @@ class Bone < Familia::Horreum
 end
 
 class Blone < Familia::Horreum
-
   list      :owners
   set       :tags
   zset      :metrics
