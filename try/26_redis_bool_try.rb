@@ -37,3 +37,7 @@ end
 ## The exceptions prevented the hash from being updated
 @hashkey["test"]
 #=> "true"
+
+## Clear the hash key
+@hashkey.clear
+#=> 1

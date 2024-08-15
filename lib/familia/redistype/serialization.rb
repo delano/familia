@@ -84,7 +84,7 @@ class Familia::RedisType
 
       if ret.nil?
         ret = distinguisher(val, strict_values: true)
-        Familia.ld "  from value #{val}: #{ret}"
+        Familia.ld "  from value #{val}<#{val.class}>: #{ret}<#{ret.class}>"
       end
 
       Familia.trace :TOREDIS, redis, "#{val}<#{val.class}|#{opts[:class]}> => #{ret}<#{ret.class}>", caller(1..1) if Familia.debug?
