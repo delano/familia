@@ -16,7 +16,7 @@ require_relative 'familia/version'
 # @example Basic usage
 #   class Flower < Familia::Horreum
 #
-#     indentifer :my_identifier_method
+#     identifier :my_identifier_methodd
 #     field  :token
 #     field  :name
 #     list   :owners
