@@ -11,17 +11,17 @@ class Familia::RedisType
     # - For TrueClass, FalseClass, and NilClass, it traces the operation and converts the value to a string ("true", "false", or "").
     # - For any other class, it traces the operation and returns nil.
     #
-    # Alternative names for `value_to_discriminate` could be `input_value`, `value`, or `object`.
-    def discriminator(value_to_discriminate, strict_values = true)
-      case value_to_discriminate
+    # Alternative names for `value_to_distunguish` could be `input_value`, `value`, or `object`.
+    def distinguisher(value_to_distunguish, strict_values = true)
+      case value_to_distunguish
       when ::Symbol, ::String, ::Integer, ::Float
-        Familia.trace :TOREDIS_DISCRIMINATOR, redis, "string", caller(1..1) if Familia.debug?
+        Familia.trace :TOREDIS_DISTINGUISHER, redis, "string", caller(1..1) if Familia.debug?
         # Symbols and numerics are naturally serializable to strings
         # so it's a relatively low risk operation.
-        value_to_discriminate.to_s
+        value_to_distunguish.to_s
 
       when ::TrueClass, ::FalseClass, ::NilClass
-        Familia.trace :TOREDIS_DISCRIMINATOR, redis, "true/false/nil", caller(1..1) if Familia.debug?
+        Familia.trace :TOREDIS_DISTINGUISHER, redis, "true/false/nil", caller(1..1) if Familia.debug?
         # TrueClass, FalseClass, and NilClass are high risk because we can't
         # reliably determine the original type of the value from the serialized
         # string. This can lead to unexpected behavior when deserializing. For
@@ -30,26 +30,26 @@ class Familia::RedisType
         # still, if a NilClass value is serialized as an empty string we lose the
         # ability to distinguish between a nil value and an empty string when
         #
-        raise Familia::HighRiskFactor, value_to_discriminate if strict_values
-        value_to_discriminate.to_s #=> "true", "false", ""
+        raise Familia::HighRiskFactor, value_to_distunguish if strict_values
+        value_to_distunguish.to_s #=> "true", "false", ""
 
       else
-        if value_to_discriminate.is_a?(Familia::Horreum)
-          Familia.trace :TOREDIS_DISCRIMINATOR, redis, "horreum", caller(1..1) if Familia.debug?
-          value_to_discriminate.identifier
+        if value_to_distunguish.is_a?(Familia::Horreum)
+          Familia.trace :TOREDIS_DISTINGUISHER, redis, "horreum", caller(1..1) if Familia.debug?
+          value_to_distunguish.identifier
 
-        elsif dump_method && value_to_discriminate.respond_to?(dump_method)
-          Familia.trace :TOREDIS_DISCRIMINATOR, redis, "#{value_to_discriminate.class}##{dump_method}", caller(1..1) if Familia.debug?
-          value_to_discriminate.send(dump_method)
+        elsif dump_method && value_to_distunguish.respond_to?(dump_method)
+          Familia.trace :TOREDIS_DISTINGUISHER, redis, "#{value_to_distunguish.class}##{dump_method}", caller(1..1) if Familia.debug?
+          value_to_distunguish.send(dump_method)
 
         else
-          Familia.trace :TOREDIS_DISCRIMINATOR, redis, "else", caller(1..1) if Familia.debug?
-          raise Familia::HighRiskFactor, value_to_discriminate if strict_values
+          Familia.trace :TOREDIS_DISTINGUISHER, redis, "else", caller(1..1) if Familia.debug?
+          raise Familia::HighRiskFactor, value_to_distunguish if strict_values
           nil
         end
       end
     end
-    protected :discriminator
+    protected :distinguisher
 
     # Serializes an individual value for storage in Redis.
     #
@@ -78,12 +78,12 @@ class Familia::RedisType
       Familia.trace :TOREDIS, redis, "#{val}<#{val.class}|#{opts[:class]}>", caller(1..1) if Familia.debug?
 
       if opts[:class]
-        ret = discriminator(opts[:class], strict_values: false)
+        ret = distinguisher(opts[:class], strict_values: false)
         Familia.ld "  from opts[class] <#{opts[:class]}>: #{ret||'<nil>'}"
       end
 
       if ret.nil?
-        ret = discriminator(val, strict_values: true)
+        ret = distinguisher(val, strict_values: true)
         Familia.ld "  from value #{val}: #{ret}"
       end
 
