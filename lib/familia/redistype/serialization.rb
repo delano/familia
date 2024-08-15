@@ -11,14 +11,14 @@ class Familia::RedisType
     # - For TrueClass, FalseClass, and NilClass, it traces the operation and converts the value to a string ("true", "false", or "").
     # - For any other class, it traces the operation and returns nil.
     #
-    # Alternative names for `value_to_distunguish` could be `input_value`, `value`, or `object`.
-    def distinguisher(value_to_distunguish, strict_values = true)
-      case value_to_distunguish
+    # Alternative names for `value_to_distinguish` could be `input_value`, `value`, or `object`.
+    def distinguisher(value_to_distinguish, strict_values = true)
+      case value_to_distinguish
       when ::Symbol, ::String, ::Integer, ::Float
         Familia.trace :TOREDIS_DISTINGUISHER, redis, "string", caller(1..1) if Familia.debug?
         # Symbols and numerics are naturally serializable to strings
         # so it's a relatively low risk operation.
-        value_to_distunguish.to_s
+        value_to_distinguish.to_s
 
       when ::TrueClass, ::FalseClass, ::NilClass
         Familia.trace :TOREDIS_DISTINGUISHER, redis, "true/false/nil", caller(1..1) if Familia.debug?
@@ -30,21 +30,31 @@ class Familia::RedisType
         # still, if a NilClass value is serialized as an empty string we lose the
         # ability to distinguish between a nil value and an empty string when
         #
-        raise Familia::HighRiskFactor, value_to_distunguish if strict_values
-        value_to_distunguish.to_s #=> "true", "false", ""
+        raise Familia::HighRiskFactor, value_to_distinguish if strict_values
+        value_to_distinguish.to_s #=> "true", "false", ""
+
+      when Familia::Base, Class
+        Familia.trace :TOREDIS_DISTINGUISHER, redis, "base", caller(1..1) if Familia.debug?
+        if value_to_distinguish.is_a?(Class)
+          value_to_distinguish.name
+        else
+          value_to_distinguish.identifier
+        end
 
       else
-        if value_to_distunguish.is_a?(Familia::Horreum)
-          Familia.trace :TOREDIS_DISTINGUISHER, redis, "horreum", caller(1..1) if Familia.debug?
-          value_to_distunguish.identifier
+        Familia.trace :TOREDIS_DISTINGUISHER, redis, "else1 #{strict_values}", caller(1..1) if Familia.debug?
 
-        elsif dump_method && value_to_distunguish.respond_to?(dump_method)
-          Familia.trace :TOREDIS_DISTINGUISHER, redis, "#{value_to_distunguish.class}##{dump_method}", caller(1..1) if Familia.debug?
-          value_to_distunguish.send(dump_method)
+        if value_to_distinguish.class.ancestors.member?(Familia::Base)
+          Familia.trace :TOREDIS_DISTINGUISHER, redis, "isabase", caller(1..1) if Familia.debug?
+          value_to_distinguish.identifier
+
+        elsif dump_method && value_to_distinguish.respond_to?(dump_method)
+          Familia.trace :TOREDIS_DISTINGUISHER, redis, "#{value_to_distinguish.class}##{dump_method}", caller(1..1) if Familia.debug?
+          value_to_distinguish.send(dump_method)
 
         else
-          Familia.trace :TOREDIS_DISTINGUISHER, redis, "else", caller(1..1) if Familia.debug?
-          raise Familia::HighRiskFactor, value_to_distunguish if strict_values
+          Familia.trace :TOREDIS_DISTINGUISHER, redis, "else2 #{strict_values}", caller(1..1) if Familia.debug?
+          raise Familia::HighRiskFactor, value_to_distinguish if strict_values
           nil
         end
       end
@@ -54,36 +64,42 @@ class Familia::RedisType
     # Serializes an individual value for storage in Redis.
     #
     # This method prepares a value for storage in Redis by converting it to a string representation.
-    # If a class option is specified, it uses that class's serialization method (default: to_json).
+    # If a class option is specified, it uses that class's serialization method.
     # Otherwise, it relies on the value's own `to_s` method for serialization.
     #
     # @param val [Object] The value to be serialized.
+    # @param strict_values [Boolean] Whether to enforce strict value serialization (default: true). Only applies when no class option is specified because the class option is assumed to handle its own serialization.
     # @return [String] The serialized representation of the value.
     #
-    # @note When no class option is specified, this method directly returns the input value,
-    #       which implicitly calls `to_s` when Redis stores it. This behavior relies on
-    #       the object's own string representation.
+    # @note When no class option is specified, this method attempts to serialize the value directly.
+    #       If the serialization fails, it falls back to the value's own string representation.
     #
     # @example With a class option
-    #   to_redis(User.new(name: "John")) #=> '{"name":"John"}'
+    #   to_redis(User.new(name: "John"), strict_values: false) #=> '{"name":"John"}'
+    #   to_redis(nil, strict_values: false) #=> "" (empty string)
+    #   to_redis(true, strict_values: false) #=> "true"
     #
-    # @example Without a class option
+    # @example Without a class option and strict values
     #   to_redis(123) #=> "123" (which becomes "123" in Redis)
     #   to_redis("hello") #=> "hello"
+    #   to_redis(nil) # raises an exception
+    #   to_redis(true) # raises an exception
     #
-    def to_redis(val)
-      #return val.to_s unless opts[:class]
+    # @raise [Familia::HighRiskFactor]
+    #
+    def to_redis(val, strict_values = true)
       ret = nil
 
       Familia.trace :TOREDIS, redis, "#{val}<#{val.class}|#{opts[:class]}>", caller(1..1) if Familia.debug?
 
       if opts[:class]
-        ret = distinguisher(opts[:class], strict_values: false)
+        ret = distinguisher(opts[:class], strict_values)
         Familia.ld "  from opts[class] <#{opts[:class]}>: #{ret||'<nil>'}"
       end
 
       if ret.nil?
-        ret = distinguisher(val, strict_values: true)
+        # Enforce strict values when no class option is specified
+        ret = distinguisher(val, true)
         Familia.ld "  from value #{val}<#{val.class}>: #{ret}<#{ret.class}>"
       end
 

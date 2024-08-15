@@ -42,7 +42,7 @@ obj = Customer.from_redis :delano
 
 ## Customer.destroy
 @cust.destroy!
-#=> 1
+#=> true
 
 ## Customer.instances
 Customer.values.size

@@ -67,5 +67,18 @@ module Familia
   extend Utils
 end
 
+# A common module for Familia::RedisType and Familia::Horreum to include.
+#
+# This allows us to use a single comparison to check if a class is a
+# Familia class. e.g.
+#
+#     klass.include?(Familia::Base) # => true
+#     klass.ancestors.member?(Familia::Base) # => true
+#
+# @see Familia::Horreum
+# @see Familia::RedisType
+#
+module Familia::Base; end
+
 require_relative 'familia/redistype'
 require_relative 'familia/horreum'

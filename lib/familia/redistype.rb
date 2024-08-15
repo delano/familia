@@ -12,6 +12,8 @@ module Familia
   #
   # @abstract Subclass and implement Redis data type specific methods
   class RedisType
+    include Familia::Base
+
     @registered_types = {}
     @valid_options = %i[class parent ttl default db key redis]
     @db = nil

@@ -50,25 +50,26 @@ module Familia
     end
 
     def score(val)
-      ret = redis.zscore rediskey, to_redis(val)
+      ret = redis.zscore rediskey, to_redis(val, false)
       ret&.to_f
     end
     alias [] score
 
     def member?(val)
+      Familia.trace :MEMBER, redis, "#{val}<#{val.class}>", caller(1..1) if Familia.debug?
       !rank(val).nil?
     end
     alias include? member?
 
     # rank of member +v+ when ordered lowest to highest (starts at 0)
     def rank(v)
-      ret = redis.zrank rediskey, to_redis(v)
+      ret = redis.zrank rediskey, to_redis(v, false)
       ret&.to_i
     end
 
     # rank of member +v+ when ordered highest to lowest (starts at 0)
     def revrank(v)
-      ret = redis.zrevrank rediskey, to_redis(v)
+      ret = redis.zrevrank rediskey, to_redis(v, false)
       ret&.to_i
     end
 
@@ -201,7 +202,13 @@ module Familia
     alias decrby decrement
 
     def delete(val)
-      redis.zrem rediskey, to_redis(val)
+      Familia.trace :DELETE, redis, "#{val}<#{val.class}>", caller(1..1) if Familia.debug?
+      # We use `strict_values: false` here to allow for the deletion of values
+      # that are in the sorted set. If it's a horreum object, the value is
+      # the identifier and not a serialized version of the object. So either
+      # the value exists in the sorted set or it doesn't -- we don't need to
+      # raise an error if it's not found.
+      redis.zrem rediskey, to_redis(val, false)
     end
     alias remove delete
     alias rem delete
