@@ -14,7 +14,7 @@ module Familia
     end
 
     def message
-      "High risk factor for serlialization bugs: #{value}<#{value.class}>"
+      "High risk factor for serialization bugs: #{value}<#{value.class}>"
     end
   end
 

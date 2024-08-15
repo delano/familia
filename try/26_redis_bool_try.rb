@@ -20,7 +20,7 @@ begin
 rescue Familia::HighRiskFactor => e
   e.message
 end
-#=> "High risk factor for serlialization bugs: true<TrueClass>"
+#=> "High risk factor for serialization bugs: true<TrueClass>"
 
 ## Boolean values are returned as strings
 @hashkey["test"]
@@ -32,7 +32,7 @@ begin
 rescue Familia::HighRiskFactor => e
   e.message
 end
-#=> "High risk factor for serlialization bugs: <NilClass>"
+#=> "High risk factor for serialization bugs: <NilClass>"
 
 ## The exceptions prevented the hash from being updated
 @hashkey["test"]

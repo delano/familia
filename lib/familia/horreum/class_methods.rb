@@ -155,6 +155,11 @@ module Familia
         Familia.ld "[.from_key] #{self} from key #{objkey} (exists: #{does_exist})"
         Familia.trace :LOAD, redis, objkey, caller if Familia.debug?
 
+        # This is reason for calling exists first. We want to definitively and without any
+        # ambiguity know if the object exists in Redis. If it doesn't, we return nil. If
+        # it does, we proceed to load the object. Otherwise, hgetall will return an empty
+        # hash, which will be passed to the constructor, which will then be annoying to
+        # debug.
         return unless does_exist
 
         obj = redis.hgetall(objkey) # horreum objects are persisted as redis hashes
