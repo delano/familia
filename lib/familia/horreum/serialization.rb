@@ -84,23 +84,38 @@ module Familia
         end
       end
 
+      # The to_redis method in Familia::Redistype and Familia::Horreum serve similar purposes
+      # but have some key differences in their implementation:
+      #
+      # Similarities:
+      # - Both methods aim to serialize various data types for Redis storage
+      # - Both handle basic data types like String, Symbol, and Numeric
+      # - Both have provisions for custom serialization methods
+      #
+      # Differences:
+      # - Familia::Redistype uses the opts[:class] for type hints
+      # - Familia::Horreum had more explicit type checking and conversion
+      # - Familia::Redistype includes more extensive debug tracing
+      #
+      # The centralized Familia.distinguisher method accommodates both approaches by:
+      # 1. Handling a wide range of data types, including those from both implementations
+      # 2. Providing a 'strict_values' option for flexible type handling
+      # 3. Supporting custom serialization through a dump_method
+      # 4. Including debug tracing similar to Familia::Redistype
+      #
+      # By using Familia.distinguisher, we achieve more consistent behavior across
+      # different parts of the library while maintaining the flexibility to handle
+      # various data types and custom serialization needs. This centralization
+      # also makes it easier to extend or modify serialization behavior in the future.
+      #
       def to_redis(val)
+        prepared = Familia.distinguisher(val, false)
 
-        prepared = case val.class
-              when ::Symbol, ::String, ::Numeric
-                val.to_s
-              when ::NilClass
-                ''
-              else
-                if val.respond_to? dump_method
-                  val.send dump_method
+        if prepared.nil? && val.respond_to?(dump_method)
+          prepared = val.send(dump_method)
+        end
 
-                else
-                  raise Familia::Problem, "No such method: #{val.class}.#{dump_method}"
-                end
-              end
-
-        Familia.ld "[#{self.class}\#to_redis] nil returned for #{self.class}\##{name}" if prepared.nil?
+        Familia.ld "[#{self.class}#to_redis] nil returned for #{self.class}##{name}" if prepared.nil?
         prepared
       end
 
