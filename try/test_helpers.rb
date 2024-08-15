@@ -20,6 +20,7 @@ class Bone < Familia::Horreum
 end
 
 class Blone < Familia::Horreum
+  feature :safe_dump
   list      :owners
   set       :tags
   zset      :metrics
@@ -31,8 +32,27 @@ class Customer < Familia::Horreum
   db 15 # don't use Onetime's default DB
   ttl 5.years
 
-  #feature :safe_dump
+  feature :safe_dump
   #feature :api_version
+
+  # NOTE: The SafeDump mixin caches the safe_dump_field_map so updating this list
+  # with hot reloading in dev mode will not work. You will need to restart the
+  # server to see the changes.
+  @safe_dump_fields = [
+    :custid,
+    :role,
+    :verified,
+    :updated,
+    :created,
+
+    # NOTE: The secrets_created incrementer is null until the first secret
+    # is created. See CreateSecret for where the incrementer is called.
+    #
+    {secrets_created: ->(cust) { cust.secrets_created.value || 0 } },
+
+    # We use the hash syntax here since `:active?` is not a valid symbol.
+    {active: ->(cust) { cust.active? } }
+  ]
 
   class_sorted_set :values, key: 'onetime:customer'
   class_hashkey :domains
@@ -67,6 +87,9 @@ class Customer < Familia::Horreum
 
   class_zset :instances, class: self, reference: true
 
+  def active?
+    verified && !reset_requested
+  end
 end
 @c = Customer.new
 @c.custid = "d@example.com"
@@ -161,36 +184,3 @@ class Limiter < Familia::Horreum
     @name
   end
 end
-
-class Shape < Familia::Horreum
-
-end
-
-__END__
-
-
-
- # NOTE: The SafeDump mixin caches the safe_dump_field_map so updating this list
-  # with hot reloading in dev mode will not work. You will need to restart the
-  # server to see the changes.
-  @safe_dump_fields = [
-    :custid,
-    :role,
-    :verified,
-    :updated,
-    :created,
-
-    :stripe_customer_id,
-    :stripe_subscription_id,
-    :stripe_checkout_email,
-
-    {plan: ->(cust) { cust.load_plan } }, # safe_dump will be called automatically
-
-    # NOTE: The secrets_created incrementer is null until the first secret
-    # is created. See CreateSecret for where the incrementer is called.
-    #
-    {secrets_created: ->(cust) { cust.secrets_created || 0 } },
-
-    # We use the hash syntax here since `:active?` is not a valid symbol.
-    {active: ->(cust) { cust.active? } }
-  ]

@@ -58,6 +58,7 @@ module Familia
       def inherited(member)
         Familia.trace :INHERITED, nil, "Inherited by #{member}", caller if Familia.debug?
         member.extend(ClassMethods)
+        member.extend(Features)
 
         # Tracks all the classes/modules that include Familia. It's
         # 10pm, do you know where you Familia members are?
@@ -182,7 +183,7 @@ module Familia
                   end
 
       # If the unique_id is nil, raise an error
-      raise Problem, 'Identifier is nil' if unique_id.nil?
+      raise Problem, "Identifier is nil for #{self}" if unique_id.nil?
       raise Problem, 'Identifier is empty' if unique_id.empty?
 
       unique_id
