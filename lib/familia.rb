@@ -8,11 +8,6 @@ require_relative 'familia/core_ext'
 
 require_relative 'familia/errors'
 require_relative 'familia/version'
-require_relative 'familia/logging'
-require_relative 'familia/connection'
-require_relative 'familia/settings'
-require_relative 'familia/utils'
-
 
 # Familia - A family warehouse for Redis
 #
@@ -36,7 +31,7 @@ require_relative 'familia/utils'
 #
 module Familia
 
-  @debug = true
+  @debug = false
   @members = []
 
   class << self
@@ -60,6 +55,11 @@ module Familia
       yield self
     end
   end
+
+  require_relative 'familia/logging'
+  require_relative 'familia/connection'
+  require_relative 'familia/settings'
+  require_relative 'familia/utils'
 
   extend Logging
   extend Connection

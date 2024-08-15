@@ -7,7 +7,7 @@ module LoggerTraceRefinement
   # Set to same value as Logger::DEBUG since 0 is the floor
   # without either more invasive changes to the Logger class
   # or a CustomLogger class that inherits from Logger.
-  TRACE = 0 # can't set within the refine block
+  TRACE = 2 unless defined?(TRACE)
   refine Logger do
 
     def trace(progname = nil, &block)
@@ -120,7 +120,7 @@ module Familia
     attr_reader :logger
 
     # Gives our logger the ability to use our trace method.
-    using LoggerTraceRefinement
+    #using LoggerTraceRefinement if Familia.debug
 
     def info(*msg)
       @logger.info(*msg)
@@ -131,6 +131,7 @@ module Familia
     end
 
     def ld(*msg)
+      return unless Familia.debug?
       @logger.debug(*msg)
     end
 
@@ -162,7 +163,7 @@ module Familia
                    context.reject! { |line| line =~ %r{lib/familia} }
                    context.first
                  end
-      @logger.trace format('[%s] %s -> %s <- at %s', label, instance_id, ident, codeline)
+      @logger.debug format('[%s] %s -> %s <- at %s', label, instance_id, ident, codeline)
     end
 
   end

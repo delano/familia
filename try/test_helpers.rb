@@ -4,7 +4,7 @@ require 'digest'
 require_relative '../lib/familia'
 
 # ENV['FAMILIA_TRACE'] = '1'
-Familia.debug = true
+#Familia.debug = true
 Familia.enable_redis_logging = true
 Familia.enable_redis_counter = true
 

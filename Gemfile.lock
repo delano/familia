@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    familia (1.0.0.pre.pre.rc1)
+    familia (1.0.0.pre.rc1)
       redis (>= 4.8.1, < 6.0)
       uri-redis (~> 1.3)
 

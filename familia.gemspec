@@ -1,8 +1,10 @@
 # frozen_string_literal: true
 
+require_relative 'lib/familia/version'
+
 Gem::Specification.new do |spec|
   spec.name        = 'familia'
-  spec.version     = '1.0.0-pre.rc1'
+  spec.version     = Familia::VERSION.to_s
   spec.summary     = 'An ORM for Redis in Ruby.'
   spec.description = "Familia: #{spec.summary}. Organize and store ruby objects in Redis"
   spec.authors     = ['Delano Mandelbaum']
