@@ -11,7 +11,7 @@ module Familia
     # Settings - Module containing settings for Familia::Horreum (InstanceMethods)
     #
     module Settings
-      attr_writer :dump_method, :load_method, :ttl, :suffix
+      attr_writer :dump_method, :load_method, :suffix
 
       def opts
         @opts ||= {}
@@ -35,6 +35,14 @@ module Familia
 
       def ttl
         @ttl || self.class.ttl
+      end
+
+      def db=(v)
+        @db = v.to_i
+      end
+
+      def db
+        @db || self.class.db
       end
 
       def suffix

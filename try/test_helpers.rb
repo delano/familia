@@ -28,6 +28,9 @@ class Blone < Familia::Horreum
 end
 
 class Customer < Familia::Horreum
+  db 15 # don't use Onetime's default DB
+  ttl 5.years
+
   #feature :safe_dump
   #feature :api_version
 
@@ -69,6 +72,8 @@ end
 @c.custid = "d@example.com"
 
 class Session < Familia::Horreum
+  db 14 # don't use Onetime's default DB
+  ttl 180.minutes
 
   identifier :generate_id
 

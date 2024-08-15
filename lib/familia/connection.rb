@@ -60,11 +60,14 @@ module Familia
     # @example
     #   Familia.redis('redis://localhost:6379')
     def redis(uri = nil)
-      uri = URI.parse(uri) if uri.is_a?(String)
+      if uri.is_a?(Integer)
+        tmp = Familia.uri
+        tmp.db = uri
+        uri = tmp
+      elsif uri.is_a?(String)
+        uri &&= URI.parse uri
+      end
       uri ||= Familia.uri
-
-      raise ArgumentError, "No URI specified (#{Familia.uri})" unless uri
-
       connect(uri) unless @redis_clients[uri.serverid]
       @redis_clients[uri.serverid]
     end

@@ -38,7 +38,7 @@ module Familia
       attr_writer :redis, :dump_method, :load_method
 
       def redis
-        @redis || Familia.redis(uri)
+        @redis || Familia.redis(uri || db)
       end
 
       # The object field or instance method to call to get the unique identifier
@@ -69,11 +69,11 @@ module Familia
       end
 
       def class_redis_types?(name)
-        class_redis_types.has_key? name.to_s.to_sym
+        class_redis_types.key? name.to_s.to_sym
       end
 
       def redis_object?(name)
-        redis_types.has_key? name.to_s.to_sym
+        redis_types.key? name.to_s.to_sym
       end
 
       def redis_types
@@ -88,22 +88,22 @@ module Familia
 
       def ttl(v = nil)
         @ttl = v unless v.nil?
-        @ttl || (parent ? parent.ttl : nil)
+        @ttl || parent&.ttl
       end
 
       def db(v = nil)
         @db = v unless v.nil?
-        @db || (parent ? parent.db : nil)
+        @db || parent&.db
       end
 
       def uri(v = nil)
         @uri = v unless v.nil?
-        @uri || (parent ? parent.uri : nil)
+        @uri || parent&.uri
       end
 
       def all(suffix = :object)
         # objects that could not be parsed will be nil
-        keys(suffix).collect { |k| from_key(k) }.compact
+        keys(suffix).filter_map { |k| from_key(k) }
       end
 
       def any?(filter = '*')
