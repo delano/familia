@@ -141,3 +141,32 @@ module Familia::Features
     extend ClassMethods
   end
 end
+
+
+__END__
+
+if value_to_discriminate.is_a?(Familia::Horreum)
+  Familia.trace :DISCRIMINATOR, redis, "horreum", caller(1..1) if Familia.debug?
+  value_to_discriminate.identifier
+elsif dump_method && value_to_discriminate.respond_to?(dump_method)
+  Familia.trace :DISCRIMINATOR, redis, "#{value_to_discriminate.class}##{dump_method}", caller(1..1) if Familia.debug?
+  value_to_discriminate.send(dump_method)
+else
+  if dump_method
+    msg = if dump_method.to_s.empty?
+      "No dump_method available for #{value_to_discriminate.class}"
+    else
+      "No such method: #{value_to_discriminate.class}##{dump_method}"
+    end
+    raise Familia::Problem, msg
+  else
+    Familia.trace :DISCRIMINATOR, redis, "else", caller(1..1) if Familia.debug?
+    nil
+  end
+end
+
+
+if ret.nil? && dump_method && val.respond_to?(dump_method)
+  Familia.trace :TOREDIS, redis, "#{val.class}##{dump_method}", caller(1..1) if Familia.debug?
+  val.send dump_method
+end
