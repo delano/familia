@@ -9,7 +9,7 @@ class Familia::RedisType
       return val unless opts[:class]
 
       ret = case opts[:class]
-            when ::Symbol, ::String, ::Integer, ::Float, Gibbler::Digest
+            when ::Symbol, ::String, ::Integer, ::Float
               val
             when ::NilClass
               ''

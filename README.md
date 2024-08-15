@@ -13,16 +13,15 @@ Get it in one of the following ways:
 ## Basic Example
 
 ```ruby
-    class Flower < Storable
-      include Familia
-      index [:token, :name]
-      field  :token
-      field  :name
-      list   :owners
-      set    :tags
-      zset   :metrics
-      hash   :props
-      string :value, :default => "GREAT!"
+    class Flower < Familia::Horreum
+      identifier :generate_id
+      field   :token
+      field   :name
+      list    :owners
+      set     :tags
+      zset    :metrics
+      hashkey :props
+      string  :counter
     end
 ```
 

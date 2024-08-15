@@ -3,6 +3,7 @@
 require 'securerandom'
 
 module Familia
+  DIGEST_CLASS = Digest::SHA256
 
   module Utils
 
@@ -61,6 +62,11 @@ module Familia
       pattern ||= '%H%M'
       rounded = now - (now % quantum)
       Time.at(rounded).utc.strftime(pattern)
+    end
+
+    def generate_sha_hash(elements)
+      concatenated_string = Familia.join(elements)
+      DIGEST_CLASS.hexdigest(concatenated_string)
     end
 
   end

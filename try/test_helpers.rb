@@ -104,7 +104,7 @@ class Session < Familia::Horreum
     elements = []
     elements << ipaddress || 'UNKNOWNIP'
     elements << custid || 'anon'
-    @external_identifier ||= elements.gibbler.base(36)
+    @external_identifier ||= Familia.generate_sha_hash(elements)
     Familia.ld "[Session.external_identifier] sess identifier input: #{elements.inspect} (result: #{@external_identifier})"
     @external_identifier
   end
@@ -139,7 +139,7 @@ class CustomDomain < Familia::Horreum
   # the customer ID. This is used to ensure that the same domain can't be
   # added twice by the same customer while avoiding collisions between customers.
   def derive_id
-    join(:display_domain, :custid).gibbler.shorten
+    Familia.generate_sha_hash(:display_domain, :custid).slice(0, 8)
   end
 end
 @d = CustomDomain.new
