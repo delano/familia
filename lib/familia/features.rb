@@ -15,8 +15,8 @@ module Familia
 
       # If there's a value provied check that it's a valid feature
       if val
-        val &&= val.to_sym
-        raise Problem, "Unsupported feature: #{val}" unless Familia::Base.features.key?(val)
+        val = val.to_sym
+        raise Familia::Problem, "Unsupported feature: #{val}" unless Familia::Base.features.key?(val)
 
         # If the feature is already enabled, do nothing but log about it
         if @features_enabled.member?(val)
@@ -27,15 +27,14 @@ module Familia
         klass = Familia::Base.features[val]
 
         # Extend the Familia::Base subclass (e.g. Customer) with the feature module
-        self.send(:include, klass)
+        include klass
 
-        # Also extend Familia::RedisType with the feature module so that
-        # we can also call safe_dump on relations fields (e.g. list, set, zset, hashkey).
+        # NOTE: We may also want to extend Familia::RedisType here so that we can
+        # call safe_dump on relations fields (e.g. list, set, zset, hashkey). Or
+        # maybe that only makes sense for hashk/object relations.
         #
-        # TODO: Avoid this getting included multiple times (i.e. once for each
-        # Familia::Horreum subclass that includes the feature). Then re-enable
-        # this.
-        #Familia::RedisType.send(:include, klass)
+        # We'd need to avoid it getting included multiple times (i.e. once for each
+        # Familia::Horreum subclass that includes the feature).
 
         # Now that the feature is loaded successfully, add it to the list
         # enabled features for Familia::Base classes.
