@@ -141,3 +141,32 @@ module Familia::Features
     extend ClassMethods
   end
 end
+
+
+__END__
+
+if value_to_distunguish.is_a?(Familia::Horreum)
+  Familia.trace :DISTINGUISHER, redis, "horreum", caller(1..1) if Familia.debug?
+  value_to_distunguish.identifier
+elsif dump_method && value_to_distunguish.respond_to?(dump_method)
+  Familia.trace :DISTINGUISHER, redis, "#{value_to_distunguish.class}##{dump_method}", caller(1..1) if Familia.debug?
+  value_to_distunguish.send(dump_method)
+else
+  if dump_method
+    msg = if dump_method.to_s.empty?
+      "No dump_method available for #{value_to_distunguish.class}"
+    else
+      "No such method: #{value_to_distunguish.class}##{dump_method}"
+    end
+    raise Familia::Problem, msg
+  else
+    Familia.trace :DISTINGUISHER, redis, "else", caller(1..1) if Familia.debug?
+    nil
+  end
+end
+
+
+if ret.nil? && dump_method && val.respond_to?(dump_method)
+  Familia.trace :TOREDIS, redis, "#{val.class}##{dump_method}", caller(1..1) if Familia.debug?
+  val.send dump_method
+end

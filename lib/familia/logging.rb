@@ -4,11 +4,17 @@ require 'pathname'
 require 'logger'
 
 module LoggerTraceRefinement
-  TRACE = -1 # can't set within the refine block
+  # Set to same value as Logger::DEBUG since 0 is the floor
+  # without either more invasive changes to the Logger class
+  # or a CustomLogger class that inherits from Logger.
+  TRACE = 2 unless defined?(TRACE)
   refine Logger do
 
     def trace(progname = nil, &block)
+      Thread.current[:severity_letter] = 'T'
       add(LoggerTraceRefinement::TRACE, nil, progname, &block)
+    ensure
+      Thread.current[:severity_letter] = nil
     end
 
   end
@@ -26,9 +32,11 @@ module Familia
     relative_path = full_path.sub(parent_path.to_s, 'familia')
     utc_datetime = datetime.utc.strftime("%m-%d %H:%M:%S.%6N")
 
-    # TODO: Only want to set to trace when it's a Logger.trace call
-    # and not when it's a Logger.debug call.
-    #severity_letter = 'T' if ENV.key?('FAMILIA_TRACE')
+    # Get the severity letter from the thread local variable or use
+    # the default. The thread local variable is set in the trace
+    # method in the LoggerTraceRefinement module. The name of the
+    # variable `severity_letter` is arbitrary and could be anything.
+    severity_letter = Thread.current[:severity_letter] || severity_letter
 
     "#{severity_letter}, #{utc_datetime} #{pid} #{thread_id}: #{msg}  <#{relative_path}:#{line}>\n"
   end
@@ -112,7 +120,7 @@ module Familia
     attr_reader :logger
 
     # Gives our logger the ability to use our trace method.
-    using LoggerTraceRefinement
+    #using LoggerTraceRefinement if Familia.debug
 
     def info(*msg)
       @logger.info(*msg)
@@ -123,6 +131,7 @@ module Familia
     end
 
     def ld(*msg)
+      return unless Familia.debug?
       @logger.debug(*msg)
     end
 
@@ -142,7 +151,7 @@ module Familia
     #
     # @example
     #   Familia.trace :LOAD, Familia.redis(uri), objkey, caller if Familia.debug?
-
+    #
     #
     # @return [nil]
     #
@@ -154,7 +163,7 @@ module Familia
                    context.reject! { |line| line =~ %r{lib/familia} }
                    context.first
                  end
-      @logger.trace format('[%s] %s -> %s <- at %s', label, instance_id, ident, codeline)
+      @logger.debug format('[%s] %s -> %s <- at %s', label, instance_id, ident, codeline)
     end
 
   end

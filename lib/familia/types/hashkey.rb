@@ -11,6 +11,8 @@ module Familia
       size.zero?
     end
 
+    # +return+ [Integer] Returns 1 if the field is new and added, 0 if the
+    #  field already existed and the value was updated.
     def []=(field, val)
       ret = redis.hset rediskey, field, to_redis(val)
       update_expiration

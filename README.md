@@ -1,4 +1,4 @@
-# Familia - 0.10.2
+# Familia - 1.0.0-rc1
 
 **Organize and store ruby objects in Redis. A Ruby ORM for Redis.**
 
@@ -6,23 +6,22 @@
 
 Get it in one of the following ways:
 
-* In your Gemfile: `gem 'familia', '>= 0.10.2'`
+* In your Gemfile: `gem 'familia', '>= 1.0.0-rc1'`
 * Install it by hand: `gem install familia`
 * Or for development: `git clone git@github.com:delano/familia.git`
 
 ## Basic Example
 
 ```ruby
-    class Flower < Storable
-      include Familia
-      index [:token, :name]
-      field  :token
-      field  :name
-      list   :owners
-      set    :tags
-      zset   :metrics
-      hash   :props
-      string :value, :default => "GREAT!"
+    class Flower < Familia::Horreum
+      identifier :generate_id
+      field   :token
+      field   :name
+      list    :owners
+      set     :tags
+      zset    :metrics
+      hashkey :props
+      string  :counter
     end
 ```
 

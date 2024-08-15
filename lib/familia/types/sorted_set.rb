@@ -11,13 +11,38 @@ module Familia
       size.zero?
     end
 
-    # NOTE: The argument order is the reverse of #add
-    # e.g. obj.metrics[VALUE] = SCORE
+    # Adds a new element to the sorted set with the current timestamp as the
+    # score.
+    #
+    # This method provides a convenient way to add elements to the sorted set
+    # without explicitly specifying a score. It uses the current Unix timestamp
+    # as the score, which effectively sorts elements by their insertion time.
+    #
+    # @param val [Object] The value to be added to the sorted set.
+    # @return [Integer] Returns 1 if the element is new and added, 0 if the
+    #   element already existed and the score was updated.
+    #
+    # @example
+    #   sorted_set << "new_element"
+    #
+    # @note This is a non-standard operation for sorted sets as it doesn't allow
+    #   specifying a custom score. Use `add` or `[]=` for more control.
+    #
+    def <<(val)
+      add(Time.now.to_i, val)
+    end
+
+    # NOTE: The argument order is the reverse of #add. We do this to
+    # more naturally align with how the [] and []= methods are used.
+    #
+    # e.g.
+    #     obj.metrics[VALUE] = SCORE
+    #     obj.metrics[VALUE]  # => SCORE
+    #
     def []=(val, score)
       add score, val
     end
 
-    # NOTE: The argument order is the reverse of #[]=
     def add(score, val)
       ret = redis.zadd rediskey, score, to_redis(val)
       update_expiration
@@ -25,25 +50,26 @@ module Familia
     end
 
     def score(val)
-      ret = redis.zscore rediskey, to_redis(val)
+      ret = redis.zscore rediskey, to_redis(val, false)
       ret&.to_f
     end
     alias [] score
 
     def member?(val)
+      Familia.trace :MEMBER, redis, "#{val}<#{val.class}>", caller(1..1) if Familia.debug?
       !rank(val).nil?
     end
     alias include? member?
 
     # rank of member +v+ when ordered lowest to highest (starts at 0)
     def rank(v)
-      ret = redis.zrank rediskey, to_redis(v)
+      ret = redis.zrank rediskey, to_redis(v, false)
       ret&.to_i
     end
 
     # rank of member +v+ when ordered highest to lowest (starts at 0)
     def revrank(v)
-      ret = redis.zrevrank rediskey, to_redis(v)
+      ret = redis.zrevrank rediskey, to_redis(v, false)
       ret&.to_i
     end
 
@@ -176,7 +202,13 @@ module Familia
     alias decrby decrement
 
     def delete(val)
-      redis.zrem rediskey, to_redis(val)
+      Familia.trace :DELETE, redis, "#{val}<#{val.class}>", caller(1..1) if Familia.debug?
+      # We use `strict_values: false` here to allow for the deletion of values
+      # that are in the sorted set. If it's a horreum object, the value is
+      # the identifier and not a serialized version of the object. So either
+      # the value exists in the sorted set or it doesn't -- we don't need to
+      # raise an error if it's not found.
+      redis.zrem rediskey, to_redis(val, false)
     end
     alias remove delete
     alias rem delete

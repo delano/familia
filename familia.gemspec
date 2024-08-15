@@ -1,8 +1,10 @@
 # frozen_string_literal: true
 
+require_relative 'lib/familia/version'
+
 Gem::Specification.new do |spec|
   spec.name        = 'familia'
-  spec.version     = '0.10.2'
+  spec.version     = Familia::VERSION.to_s
   spec.summary     = 'An ORM for Redis in Ruby.'
   spec.description = "Familia: #{spec.summary}. Organize and store ruby objects in Redis"
   spec.authors     = ['Delano Mandelbaum']
@@ -17,9 +19,7 @@ Gem::Specification.new do |spec|
 
   spec.required_ruby_version = Gem::Requirement.new('>= 2.7.8')
 
-  spec.add_dependency 'gibbler', '~> 1.0.0'
   spec.add_dependency 'redis', '>= 4.8.1', '< 6.0'
-  spec.add_dependency 'storable', '~> 0.10.0'
   spec.add_dependency 'uri-redis', '~> 1.3'
 
   # byebug only works with MRI

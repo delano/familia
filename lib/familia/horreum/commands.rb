@@ -19,7 +19,8 @@ module Familia
     module Commands
 
       def exists?
-        redis.exists rediskey
+        ret = redis.exists rediskey
+        ret.positive?
       end
 
       def expire(ttl = nil)
@@ -45,7 +46,9 @@ module Familia
       end
 
       def delete!
-        redis.del rediskey
+        Familia.trace :DELETE!, redis, redisuri, caller(1..1) if Familia.debug?
+        ret = redis.del rediskey
+        ret.positive?
       end
       protected :delete!
 

@@ -1,8 +1,12 @@
 # rubocop:disable all
 
+require 'digest'
 require_relative '../lib/familia'
 
+# ENV['FAMILIA_TRACE'] = '1'
+#Familia.debug = true
 Familia.enable_redis_logging = true
+Familia.enable_redis_counter = true
 
 class Bone < Familia::Horreum
   identifier     [:token, :name]
@@ -23,8 +27,10 @@ class Blone < Familia::Horreum
   string    :value, :default => "GREAT!"
 end
 
-
 class Customer < Familia::Horreum
+  db 15 # don't use Onetime's default DB
+  ttl 5.years
+
   #feature :safe_dump
   #feature :api_version
 
@@ -32,7 +38,7 @@ class Customer < Familia::Horreum
   class_hashkey :domains
 
   hashkey :stripe_customer
-  sorted_set :metadata
+  sorted_set :timeline
   sorted_set :custom_domains
 
   counter :secrets_created
@@ -56,7 +62,6 @@ class Customer < Familia::Horreum
   hashkey :password_reset #=> Familia::HashKey
   list :sessions #=> Familia::List
 
-  #include Familia::Stamps
   class_list :customers, suffix: []
   class_string :message
 
@@ -67,7 +72,8 @@ end
 @c.custid = "d@example.com"
 
 class Session < Familia::Horreum
-  #include Familia
+  db 14 # don't use Onetime's default DB
+  ttl 180.minutes
 
   identifier :generate_id
 
@@ -104,7 +110,7 @@ class Session < Familia::Horreum
     elements = []
     elements << ipaddress || 'UNKNOWNIP'
     elements << custid || 'anon'
-    @external_identifier ||= elements.gibbler.base(36)
+    @external_identifier ||= Familia.generate_sha_hash(elements)
     Familia.ld "[Session.external_identifier] sess identifier input: #{elements.inspect} (result: #{@external_identifier})"
     @external_identifier
   end
@@ -113,7 +119,6 @@ end
 @s = Session.new
 
 class CustomDomain < Familia::Horreum
-  #include Familia
 
   class_sorted_set :values, key: 'onetime:customdomain:values'
 
@@ -139,13 +144,12 @@ class CustomDomain < Familia::Horreum
   # the customer ID. This is used to ensure that the same domain can't be
   # added twice by the same customer while avoiding collisions between customers.
   def derive_id
-    join(:display_domain, :custid).gibbler.shorten
+    Familia.generate_sha_hash(:display_domain, :custid).slice(0, 8)
   end
 end
 @d = CustomDomain.new
 @d.display_domain = "example.com"
 @d.custid = @c.custid
-
 
 class Limiter < Familia::Horreum
 
@@ -161,8 +165,6 @@ end
 class Shape < Familia::Horreum
 
 end
-
-
 
 __END__
 

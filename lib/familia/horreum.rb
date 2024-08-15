@@ -22,6 +22,8 @@ module Familia
   #   end
   #
   class Horreum
+    include Familia::Base
+
     # == Singleton Class Context
     #
     # The code within this block operates on the singleton class (also known as
@@ -113,9 +115,9 @@ module Familia
       #
       # See RedisType.install_redis_type
       self.class.redis_types.each_pair do |name, redis_type_definition|
-        Familia.ld "[#{self.class}] initialize_relatives #{name} => #{redis_type_definition.to_a}"
         klass = redis_type_definition.klass
         opts = redis_type_definition.opts
+        Familia.ld "[#{self.class}] initialize_relatives #{name} => #{klass} #{opts.keys}"
 
         # As a subclass of Familia::Horreum, we add ourselves as the parent
         # automatically. This is what determines the rediskey for RedisType

@@ -22,11 +22,11 @@ class Familia::RedisType
       redis.type rediskey
     end
 
-    def delete
+    def delete!
       redis.del rediskey
     end
-    alias clear delete
-    alias del delete
+    alias clear delete!
+    alias del delete!
 
     def exists?
       redis.exists(rediskey) && !size.zero?

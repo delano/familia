@@ -38,7 +38,7 @@ module Familia
       attr_writer :redis, :dump_method, :load_method
 
       def redis
-        @redis || Familia.redis(uri)
+        @redis || Familia.redis(uri || db)
       end
 
       # The object field or instance method to call to get the unique identifier
@@ -69,11 +69,11 @@ module Familia
       end
 
       def class_redis_types?(name)
-        class_redis_types.has_key? name.to_s.to_sym
+        class_redis_types.key? name.to_s.to_sym
       end
 
       def redis_object?(name)
-        redis_types.has_key? name.to_s.to_sym
+        redis_types.key? name.to_s.to_sym
       end
 
       def redis_types
@@ -88,22 +88,22 @@ module Familia
 
       def ttl(v = nil)
         @ttl = v unless v.nil?
-        @ttl || (parent ? parent.ttl : nil)
+        @ttl || parent&.ttl
       end
 
       def db(v = nil)
         @db = v unless v.nil?
-        @db || (parent ? parent.db : nil)
+        @db || parent&.db
       end
 
       def uri(v = nil)
         @uri = v unless v.nil?
-        @uri || (parent ? parent.uri : nil)
+        @uri || parent&.uri
       end
 
       def all(suffix = :object)
         # objects that could not be parsed will be nil
-        keys(suffix).collect { |k| from_key(k) }.compact
+        keys(suffix).filter_map { |k| from_key(k) }
       end
 
       def any?(filter = '*')
@@ -148,10 +148,23 @@ module Familia
       def from_key(objkey)
         raise ArgumentError, 'Empty key' if objkey.to_s.empty?
 
-        Familia.ld "[.from_key] #{self} from key #{objkey})"
-        Familia.trace :LOAD, Familia.redis(uri), objkey, caller if Familia.debug?
+        # We use a lower-level method here b/c we're working with the
+        # full key and not just the identifier.
+        does_exist = redis.exists(objkey).positive?
+
+        Familia.ld "[.from_key] #{self} from key #{objkey} (exists: #{does_exist})"
+        Familia.trace :LOAD, redis, objkey, caller if Familia.debug?
+
+        # This is reason for calling exists first. We want to definitively and without any
+        # ambiguity know if the object exists in Redis. If it doesn't, we return nil. If
+        # it does, we proceed to load the object. Otherwise, hgetall will return an empty
+        # hash, which will be passed to the constructor, which will then be annoying to
+        # debug.
+        return unless does_exist
 
         obj = redis.hgetall(objkey) # horreum objects are persisted as redis hashes
+        Familia.trace :HGETALL, redis, "#{objkey}: #{obj.inspect}", caller if Familia.debug?
+
         new(**obj)
       end
 
@@ -160,7 +173,7 @@ module Familia
 
         objkey = rediskey(identifier, suffix)
         Familia.ld "[.from_redis] #{self} from key #{objkey})"
-        # Familia.trace :FROMREDIS, Familia.redis(self.uri), objkey, caller.first if Familia.debug?
+        Familia.trace :FROMREDIS, Familia.redis(uri), objkey, caller(1..1).first if Familia.debug?
         from_key objkey
       end
 
@@ -168,19 +181,30 @@ module Familia
         return false if identifier.to_s.empty?
 
         objkey = rediskey identifier, suffix
-        ret = Familia.redis(uri).exists objkey
-        Familia.trace :EXISTS, Familia.redis(uri), "#{rediskey(identifier, suffix)} #{ret}", caller if Familia.debug?
-        ret
+
+        ret = redis.exists objkey
+        if Familia.debug?
+          Familia.trace :EXISTS, redis, "#{objkey} #{ret.inspect}",
+                        caller
+        end
+        ret.positive?
       end
 
       def destroy!(identifier, suffix = :object)
-        ret = Familia.redis(uri).del rediskey(identifier, suffix)
-        Familia.trace :DELETED, Familia.redis(uri), "#{rediskey(identifier, suffix)}: #{ret}", caller if Familia.debug?
-        ret
+        return false if identifier.to_s.empty?
+
+        objkey = rediskey identifier, suffix
+
+        ret = redis.del objkey
+        if Familia.debug?
+          Familia.trace :DELETED, redis, "#{objkey}: #{ret.inspect}",
+                        caller
+        end
+        ret.positive?
       end
 
       def find(suffix = '*')
-        Familia.redis(uri).keys(rediskey('*', suffix)) || []
+        redis.keys(rediskey('*', suffix)) || []
       end
 
       def qstamp(quantum = nil, pattern = nil, now = Familia.now)
