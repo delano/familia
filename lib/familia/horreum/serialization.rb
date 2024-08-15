@@ -35,7 +35,7 @@ module Familia
       # A thin wrapper around `commit_fields` that updates the timestamps and
       # returns a boolean.
       def save
-        Familia.trace :SAVE, Familia.redis(self.class.uri), redisuri, caller.first if Familia.debug?
+        Familia.trace :SAVE, redis, redisuri, caller(1..1) if Familia.debug?
 
         # Update timestamp fields
         self.updated = Familia.now.to_i
@@ -60,6 +60,7 @@ module Familia
       end
 
       def destroy!
+        Familia.trace :DESTROY, redis, redisuri, caller(1..1) if Familia.debug?
         delete!
       end
 
