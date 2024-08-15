@@ -17,10 +17,10 @@ Familia.debug = true
 ## Trying to store a boolean value to a hash key raises an exception
 begin
   @hashkey["test"] = true
-rescue TypeError => e
+rescue Familia::HighRiskFactor => e
   e.message
 end
-#=> "Cannot store test => true (TrueClass) in key"
+#=> "High risk factor for serlialization bugs: true<TrueClass>"
 
 ## Boolean values are returned as strings
 @hashkey["test"]
@@ -29,10 +29,10 @@ end
 ## Trying to store a nil value to a hash key raises an exception
 begin
   @hashkey["test"] = nil
-rescue TypeError => e
+rescue Familia::HighRiskFactor => e
   e.message
 end
-#=> "Cannot store test => nil (NilClass) in key"
+#=> "High risk factor for serlialization bugs: <NilClass>"
 
 ## The exceptions prevented the hash from being updated
 @hashkey["test"]

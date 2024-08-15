@@ -5,6 +5,19 @@ module Familia
   class NoIdentifier < Problem; end
   class NonUniqueKey < Problem; end
 
+  class HighRiskFactor < Problem
+    attr_reader :value
+
+    def initialize(value)
+      @value = value
+      super
+    end
+
+    def message
+      "High risk factor for serlialization bugs: #{value}<#{value.class}>"
+    end
+  end
+
   class NotConnected < Problem
     attr_reader :uri
 

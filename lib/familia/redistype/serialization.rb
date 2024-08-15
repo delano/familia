@@ -12,33 +12,44 @@ class Familia::RedisType
     # - For any other class, it traces the operation and returns nil.
     #
     # Alternative names for `value_to_discriminate` could be `input_value`, `value`, or `object`.
-    def discriminator(value_to_discriminate)
+    def discriminator(value_to_discriminate, strict_values = true)
       case value_to_discriminate
       when ::Symbol, ::String, ::Integer, ::Float
-        Familia.trace :DISCRIMINATOR, redis, "string", caller(1..1) if Familia.debug?
+        Familia.trace :TOREDIS_DISCRIMINATOR, redis, "string", caller(1..1) if Familia.debug?
+        # Symbols and numerics are naturally serializable to strings
+        # so it's a relatively low risk operation.
         value_to_discriminate.to_s
 
       when ::TrueClass, ::FalseClass, ::NilClass
-        Familia.trace :DISCRIMINATOR, redis, "true/false/nil", caller(1..1) if Familia.debug?
+        Familia.trace :TOREDIS_DISCRIMINATOR, redis, "true/false/nil", caller(1..1) if Familia.debug?
+        # TrueClass, FalseClass, and NilClass are high risk because we can't
+        # reliably determine the original type of the value from the serialized
+        # string. This can lead to unexpected behavior when deserializing. For
+        # example, if a TrueClass value is serialized as "true" and then later
+        # deserialized as a String, it can cause errors in the application. Worse
+        # still, if a NilClass value is serialized as an empty string we lose the
+        # ability to distinguish between a nil value and an empty string when
+        #
+        raise Familia::HighRiskFactor, value_to_discriminate if strict_values
         value_to_discriminate.to_s #=> "true", "false", ""
 
       else
         if value_to_discriminate.is_a?(Familia::Horreum)
-          Familia.trace :DISCRIMINATOR, redis, "horreum", caller(1..1) if Familia.debug?
+          Familia.trace :TOREDIS_DISCRIMINATOR, redis, "horreum", caller(1..1) if Familia.debug?
           value_to_discriminate.identifier
 
         elsif dump_method && value_to_discriminate.respond_to?(dump_method)
-          Familia.trace :DISCRIMINATOR, redis, "#{value_to_discriminate.class}##{dump_method}", caller(1..1) if Familia.debug?
+          Familia.trace :TOREDIS_DISCRIMINATOR, redis, "#{value_to_discriminate.class}##{dump_method}", caller(1..1) if Familia.debug?
           value_to_discriminate.send(dump_method)
 
         else
-          Familia.trace :DISCRIMINATOR, redis, "else", caller(1..1) if Familia.debug?
+          Familia.trace :TOREDIS_DISCRIMINATOR, redis, "else", caller(1..1) if Familia.debug?
+          raise Familia::HighRiskFactor, value_to_discriminate if strict_values
           nil
         end
       end
     end
     protected :discriminator
-
 
     # Serializes an individual value for storage in Redis.
     #
@@ -66,11 +77,15 @@ class Familia::RedisType
 
       Familia.trace :TOREDIS, redis, "#{val}<#{val.class}|#{opts[:class]}>", caller(1..1) if Familia.debug?
 
-      ret = discriminator(opts[:class]) if opts[:class]
-      Familia.ld "  from class #{opts[:class]}: #{ret||'<nil>'}"
+      if opts[:class]
+        ret = discriminator(opts[:class], strict_values: false)
+        Familia.ld "  from opts[class] <#{opts[:class]}>: #{ret||'<nil>'}"
+      end
 
-      ret = discriminator(val) if ret.nil?
-      Familia.ld "  from value #{val}: #{ret}"
+      if ret.nil?
+        ret = discriminator(val, strict_values: true)
+        Familia.ld "  from value #{val}: #{ret}"
+      end
 
       Familia.trace :TOREDIS, redis, "#{val}<#{val.class}|#{opts[:class]}> => #{ret}<#{ret.class}>", caller(1..1) if Familia.debug?
 
@@ -79,10 +94,9 @@ class Familia::RedisType
     end
 
     def multi_from_redis(*values)
-      # Don't use compact! When using compact like this -- as the last
-      # expression in the method -- the return value is obviously intentional.
-      # Exclamation mark methods have return values too, usually nil. We don't
-      # want to return nil here.
+      # Avoid using compact! here. Using compact! as the last expression in the method
+      # can unintentionally return nil if no changes are made, which is not desirable.
+      # Instead, use compact to ensure the method returns the expected value.
       multi_from_redis_with_nil(*values).compact
     end
 
