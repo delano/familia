@@ -4,28 +4,77 @@ class Familia::RedisType
 
   module Serialization
 
-    # Serialization method for individual values
+    # This method determines the appropriate value to return based on the class of the input argument.
+    # It uses a case statement to handle different classes:
+    # - For Symbol, String, Integer, and Float classes, it traces the operation and converts the value to a string.
+    # - For Familia::Horreum class, it traces the operation and returns the identifier of the value.
+    # - For TrueClass, FalseClass, and NilClass, it traces the operation and converts the value to a string ("true", "false", or "").
+    # - For any other class, it traces the operation and returns nil.
+    #
+    # Alternative names for `value_to_discriminate` could be `input_value`, `value`, or `object`.
+    def discriminator(value_to_discriminate)
+      case value_to_discriminate
+      when ::Symbol, ::String, ::Integer, ::Float
+        Familia.trace :DISCRIMINATOR, redis, "string", caller(1..1) if Familia.debug?
+        value_to_discriminate.to_s
+
+      when ::TrueClass, ::FalseClass, ::NilClass
+        Familia.trace :DISCRIMINATOR, redis, "true/false/nil", caller(1..1) if Familia.debug?
+        value_to_discriminate.to_s #=> "true", "false", ""
+
+      else
+        if value_to_discriminate.is_a?(Familia::Horreum)
+          Familia.trace :DISCRIMINATOR, redis, "horreum", caller(1..1) if Familia.debug?
+          value_to_discriminate.identifier
+
+        elsif dump_method && value_to_discriminate.respond_to?(dump_method)
+          Familia.trace :DISCRIMINATOR, redis, "#{value_to_discriminate.class}##{dump_method}", caller(1..1) if Familia.debug?
+          value_to_discriminate.send(dump_method)
+
+        else
+          Familia.trace :DISCRIMINATOR, redis, "else", caller(1..1) if Familia.debug?
+          nil
+        end
+      end
+    end
+    protected :discriminator
+
+
+    # Serializes an individual value for storage in Redis.
+    #
+    # This method prepares a value for storage in Redis by converting it to a string representation.
+    # If a class option is specified, it uses that class's serialization method (default: to_json).
+    # Otherwise, it relies on the value's own `to_s` method for serialization.
+    #
+    # @param val [Object] The value to be serialized.
+    # @return [String] The serialized representation of the value.
+    #
+    # @note When no class option is specified, this method directly returns the input value,
+    #       which implicitly calls `to_s` when Redis stores it. This behavior relies on
+    #       the object's own string representation.
+    #
+    # @example With a class option
+    #   to_redis(User.new(name: "John")) #=> '{"name":"John"}'
+    #
+    # @example Without a class option
+    #   to_redis(123) #=> "123" (which becomes "123" in Redis)
+    #   to_redis("hello") #=> "hello"
+    #
     def to_redis(val)
-      return val unless opts[:class]
+      #return val.to_s unless opts[:class]
+      ret = nil
 
-      ret = case opts[:class]
-            when ::Symbol, ::String, ::Integer, ::Float
-              val
-            when ::NilClass
-              ''
-            else
-              if val.is_a?(::String)
-                val
+      Familia.trace :TOREDIS, redis, "#{val}<#{val.class}|#{opts[:class]}>", caller(1..1) if Familia.debug?
 
-              elsif val.respond_to? dump_method
-                val.send dump_method
+      ret = discriminator(opts[:class]) if opts[:class]
+      Familia.ld "  from class #{opts[:class]}: #{ret||'<nil>'}"
 
-              else
-                raise Familia::Problem, "No such method: #{val.class}.#{dump_method}"
-              end
-            end
+      ret = discriminator(val) if ret.nil?
+      Familia.ld "  from value #{val}: #{ret}"
 
-      Familia.ld "[#{self.class}\#to_redis] nil returned for #{opts[:class]}\##{name}" if ret.nil?
+      Familia.trace :TOREDIS, redis, "#{val}<#{val.class}|#{opts[:class]}> => #{ret}<#{ret.class}>", caller(1..1) if Familia.debug?
+
+      Familia.warn "[#{self.class}\#to_redis] nil returned for #{opts[:class]}\##{name}" if ret.nil?
       ret
     end
 
