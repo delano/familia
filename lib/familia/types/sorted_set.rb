@@ -11,13 +11,38 @@ module Familia
       size.zero?
     end
 
-    # NOTE: The argument order is the reverse of #add
-    # e.g. obj.metrics[VALUE] = SCORE
+    # Adds a new element to the sorted set with the current timestamp as the
+    # score.
+    #
+    # This method provides a convenient way to add elements to the sorted set
+    # without explicitly specifying a score. It uses the current Unix timestamp
+    # as the score, which effectively sorts elements by their insertion time.
+    #
+    # @param val [Object] The value to be added to the sorted set.
+    # @return [Integer] Returns 1 if the element is new and added, 0 if the
+    #   element already existed and the score was updated.
+    #
+    # @example
+    #   sorted_set << "new_element"
+    #
+    # @note This is a non-standard operation for sorted sets as it doesn't allow
+    #   specifying a custom score. Use `add` or `[]=` for more control.
+    #
+    def <<(val)
+      add(Time.now.to_i, val)
+    end
+
+    # NOTE: The argument order is the reverse of #add. We do this to
+    # more naturally align with how the [] and []= methods are used.
+    #
+    # e.g.
+    #     obj.metrics[VALUE] = SCORE
+    #     obj.metrics[VALUE]  # => SCORE
+    #
     def []=(val, score)
       add score, val
     end
 
-    # NOTE: The argument order is the reverse of #[]=
     def add(score, val)
       ret = redis.zadd rediskey, score, to_redis(val)
       update_expiration
