@@ -1,6 +1,6 @@
 # rubocop:disable all
 
-require 'digest/'
+require 'digest'
 require_relative '../lib/familia'
 
 Familia.enable_redis_logging = true
