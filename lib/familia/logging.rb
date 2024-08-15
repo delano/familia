@@ -142,7 +142,7 @@ module Familia
     #
     # @example
     #   Familia.trace :LOAD, Familia.redis(uri), objkey, caller if Familia.debug?
-
+    #
     #
     # @return [nil]
     #

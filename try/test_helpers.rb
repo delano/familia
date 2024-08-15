@@ -1,8 +1,10 @@
 # rubocop:disable all
 
+require 'digest/'
 require_relative '../lib/familia'
 
 Familia.enable_redis_logging = true
+Familia.enable_redis_counter = true
 
 class Bone < Familia::Horreum
   identifier     [:token, :name]
@@ -22,7 +24,6 @@ class Blone < Familia::Horreum
   hashkey   :props
   string    :value, :default => "GREAT!"
 end
-
 
 class Customer < Familia::Horreum
   #feature :safe_dump
@@ -56,7 +57,6 @@ class Customer < Familia::Horreum
   hashkey :password_reset #=> Familia::HashKey
   list :sessions #=> Familia::List
 
-  #include Familia::Stamps
   class_list :customers, suffix: []
   class_string :message
 
@@ -67,7 +67,6 @@ end
 @c.custid = "d@example.com"
 
 class Session < Familia::Horreum
-  #include Familia
 
   identifier :generate_id
 
@@ -113,7 +112,6 @@ end
 @s = Session.new
 
 class CustomDomain < Familia::Horreum
-  #include Familia
 
   class_sorted_set :values, key: 'onetime:customdomain:values'
 
@@ -146,7 +144,6 @@ end
 @d.display_domain = "example.com"
 @d.custid = @c.custid
 
-
 class Limiter < Familia::Horreum
 
   identifier :name
@@ -161,8 +158,6 @@ end
 class Shape < Familia::Horreum
 
 end
-
-
 
 __END__
 
