@@ -2,7 +2,7 @@
 
 Gem::Specification.new do |spec|
   spec.name        = 'familia'
-  spec.version     = '0.10.2'
+  spec.version     = '1.0.0-pre.rc1'
   spec.summary     = 'An ORM for Redis in Ruby.'
   spec.description = "Familia: #{spec.summary}. Organize and store ruby objects in Redis"
   spec.authors     = ['Delano Mandelbaum']
