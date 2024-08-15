@@ -3,6 +3,8 @@
 require 'digest'
 require_relative '../lib/familia'
 
+# ENV['FAMILIA_TRACE'] = '1'
+Familia.debug = true
 Familia.enable_redis_logging = true
 Familia.enable_redis_counter = true
 
@@ -33,7 +35,7 @@ class Customer < Familia::Horreum
   class_hashkey :domains
 
   hashkey :stripe_customer
-  sorted_set :metadata
+  sorted_set :timeline
   sorted_set :custom_domains
 
   counter :secrets_created
