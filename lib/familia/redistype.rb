@@ -18,21 +18,19 @@ module Familia
     @valid_options = %i[class parent ttl default db key redis]
     @db = nil
     @ttl = nil
-    @dump_method = :to_json
-    @load_method = :from_json
 
     class << self
       attr_reader :registered_types, :valid_options
-      attr_accessor :parent, :dump_method, :load_method
+      attr_accessor :parent
       attr_writer :ttl, :db, :uri
 
       # To be called inside every class that inherits RedisType
       # +methname+ is the term used for the class and instance methods
-      # that are created for the given +type+ (e.g. set, list, etc)
-      def register(type, methname)
-        Familia.ld "[#{self}] Registering #{type} as #{methname}"
+      # that are created for the given +klass+ (e.g. set, list, etc)
+      def register(klass, methname)
+        Familia.ld "[#{self}] Registering #{klass} as #{methname}"
 
-        @registered_types[methname] = type
+        @registered_types[methname] = klass
       end
 
       def ttl(val = nil)

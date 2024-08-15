@@ -85,7 +85,7 @@ module Familia::Features
     end
 
     def self.included base
-      OT.ld "Including SafeDump in #{base} (#{base.object_id})"
+      Familia.ld "[Feature] Enabling SafeDump for #{base})"
       base.extend ClassMethods
 
       # Optionally define safe_dump_fields in the class to make
@@ -139,7 +139,10 @@ module Familia::Features
     end
 
     extend ClassMethods
+
+    Familia::Base.add_feature self, :safe_dump
   end
+
 end
 
 

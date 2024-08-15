@@ -5,7 +5,6 @@ require 'redis'
 require 'uri/redis'
 
 require_relative 'familia/core_ext'
-
 require_relative 'familia/errors'
 require_relative 'familia/version'
 
@@ -17,7 +16,7 @@ require_relative 'familia/version'
 # @example Basic usage
 #   class Flower < Familia::Horreum
 #
-#     indentifer :my_identifier_method
+#     identifier :my_identifier_method
 #     field  :token
 #     field  :name
 #     list   :owners
@@ -67,18 +66,7 @@ module Familia
   extend Utils
 end
 
-# A common module for Familia::RedisType and Familia::Horreum to include.
-#
-# This allows us to use a single comparison to check if a class is a
-# Familia class. e.g.
-#
-#     klass.include?(Familia::Base) # => true
-#     klass.ancestors.member?(Familia::Base) # => true
-#
-# @see Familia::Horreum
-# @see Familia::RedisType
-#
-module Familia::Base; end
-
+require_relative 'familia/base'
+require_relative 'familia/features'
 require_relative 'familia/redistype'
 require_relative 'familia/horreum'
