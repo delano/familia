@@ -58,7 +58,6 @@ module Familia
       # Onetime::Customer.all which returns all customers.
       redis.hgetall rediskey
     end
-    alias hgetall all
     alias to_hash all
     alias clone all
 
