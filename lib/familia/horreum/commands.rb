@@ -36,7 +36,7 @@ module Familia
         redis.hdel rediskey, field
       end
 
-      def redistype(suffix = nil)
+      def redistype
         redis.type rediskey(suffix)
       end
 
@@ -46,51 +46,49 @@ module Familia
       end
 
       # For parity with RedisType#hgetall
-      def hgetall(suffix = nil)
+      def hgetall
         Familia.trace :HGETALL, redis, redisuri, caller(1..1) if Familia.debug?
         redis.hgetall rediskey(suffix)
       end
       alias all hgetall
 
-      def hget(field, suffix = nil)
+      def hget(field)
         redis.hget rediskey(suffix), field
       end
 
       # @return The number of fields that were added to the hash. If the
       #  field already exists, this will return 0.
-      def hset(field, value, suffix = nil)
+      def hset(field, value)
         Familia.trace :HSET, redis, redisuri, caller(1..1) if Familia.debug?
-        suffix ||= self.class.suffix
-        redis.hset rediskey(suffix), field, value
+        redis.hset rediskey, field, value
       end
 
-      def hmset(suffix = nil)
-        suffix ||= self.class.suffix
+      def hmset
         redis.hmset rediskey(suffix), self.to_h
       end
 
-      def hkeys(suffix = nil)
+      def hkeys
         Familia.trace :HKEYS, redis, 'redisuri', caller(1..1) if Familia.debug?
         redis.hkeys rediskey(suffix)
       end
 
-      def hvals(suffix = nil)
+      def hvals
         redis.hvals rediskey(suffix)
       end
 
-      def hincrby(field, increment, suffix = nil)
+      def hincrby(field, increment)
         redis.hincrby rediskey(suffix), field, increment
       end
 
-      def hincrbyfloat(field, increment, suffix = nil)
+      def hincrbyfloat(field, increment)
         redis.hincrbyfloat rediskey(suffix), field, increment
       end
 
-      def hlen(suffix = nil)
+      def hlen
         redis.hlen rediskey(suffix)
       end
 
-      def hstrlen(field, suffix = nil)
+      def hstrlen(field)
         redis.hstrlen rediskey(suffix), field
       end
 

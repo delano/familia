@@ -27,9 +27,10 @@ module Familia
       # Whether this is a Horreum or RedisType object, the value is taken
       # from the `identifier` method).
       #
-      def rediskey(suffix = self.suffix, ignored = nil)
+      def rediskey(suffix = nil, ignored = nil)
         Familia.ld "[#rediskey] #{identifier} for #{self.class}"
         raise Familia::NoIdentifier, "No identifier for #{self.class}" if identifier.to_s.empty?
+        suffix ||= self.suffix # use the instance method to get the default suffix
         self.class.rediskey identifier, suffix
       end
 
