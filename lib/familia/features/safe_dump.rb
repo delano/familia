@@ -12,12 +12,14 @@ module Familia::Features
   # a symbol, the method with the same name will be called on the object to
   # retrieve the value. If the field is a hash, the key is the field name and
   # the value is a lambda that will be called with the object as an argument.
-  # the hash syntax allows you to:
+  # The hash syntax allows you to:
   #   * define a field name that is different from the method name
   #   * define a field that requires some computation on-the-fly
   #   * define a field that is not a method on the object
   #
   # Example:
+  #
+  #   feature :safe_dump
   #
   #   @safe_dump_fields = [
   #     :objid,
@@ -26,10 +28,25 @@ module Familia::Features
   #     { :active => ->(obj) { obj.active? } }
   #   ]
   #
-  # Internally, all fields are normalized to the hash syntax and store in
+  # Internally, all fields are normalized to the hash syntax and stored in
   # @safe_dump_field_map. `SafeDump.safe_dump_fields` returns only the list
   # of symbols in the order they were defined. From the example above, it would
   # return `[:objid, :updated, :created, :active]`.
+  #
+  # Standalone Usage:
+  #
+  # You can also use SafeDump by including it in your model and defining the
+  # safe dump fields using the class instance variable `@safe_dump_fields`.
+  #
+  # Example:
+  #
+  #   class MyModel
+  #     include Familia::Features::SafeDump
+  #
+  #     @safe_dump_fields = [
+  #       :id, :name, { active: ->(obj) { obj.active? } }
+  #     ]
+  #   end
   #
   module SafeDump
     @dump_method = :to_json

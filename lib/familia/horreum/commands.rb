@@ -45,6 +45,11 @@ module Familia
         redis.rename rediskey, newkey
       end
 
+      # For parity with RedisType (ed: what about hget and hset?)
+      def hgetall(suffix = nil)
+        redis.hgetall rediskey(suffix)
+      end
+
       def hmset(suffix = nil)
         suffix ||= self.class.suffix
         redis.hmset rediskey(suffix), to_h
