@@ -152,6 +152,34 @@ module Familia
         redis.mget(*ids)
       end
 
+      # Retrieves and instantiates an object from Redis using the full object
+      # key.
+      #
+      # @param objkey [String] The full Redis key for the object.
+      # @return [Object, nil] An instance of the class if the key exists, nil
+      #   otherwise.
+      # @raise [ArgumentError] If the provided key is empty.
+      #
+      # This method performs a two-step process to safely retrieve and
+      # instantiate objects:
+      #
+      # 1. It first checks if the key exists in Redis. This is crucial because:
+      #    - It provides a definitive answer about the object's existence.
+      #    - It prevents ambiguity that could arise from `hgetall` returning an
+      #      empty hash for non-existent keys, which could lead to the creation
+      #      of "empty" objects.
+      #
+      # 2. If the key exists, it retrieves the object's data and instantiates
+      #    it.
+      #
+      # This approach ensures that we only attempt to instantiate objects that
+      # actually exist in Redis, improving reliability and simplifying
+      # debugging.
+      #
+      # @example
+      #   User.from_key("user:123")  # Returns a User instance if it exists,
+      #   nil otherwise
+      #
       def from_key(objkey)
         raise ArgumentError, 'Empty key' if objkey.to_s.empty?
 
@@ -162,11 +190,11 @@ module Familia
         Familia.ld "[.from_key] #{self} from key #{objkey} (exists: #{does_exist})"
         Familia.trace :FROM_KEY, redis, objkey, caller if Familia.debug?
 
-        # This is reason for calling exists first. We want to definitively and without any
-        # ambiguity know if the object exists in Redis. If it doesn't, we return nil. If
-        # it does, we proceed to load the object. Otherwise, hgetall will return an empty
-        # hash, which will be passed to the constructor, which will then be annoying to
-        # debug.
+        # This is the reason for calling exists first. We want to definitively
+        # and without any ambiguity know if the object exists in Redis. If it
+        # doesn't, we return nil. If it does, we proceed to load the object.
+        # Otherwise, hgetall will return an empty hash, which will be passed to
+        # the constructor, which will then be annoying to debug.
         return unless does_exist
 
         obj = redis.hgetall(objkey) # horreum objects are persisted as redis hashes
@@ -175,6 +203,25 @@ module Familia
         new(**obj)
       end
 
+      # Retrieves and instantiates an object from Redis using its identifier.
+      #
+      # @param identifier [String, Integer] The unique identifier for the
+      #   object.
+      # @param suffix [Symbol] The suffix to use in the Redis key (default:
+      #   :object).
+      # @return [Object, nil] An instance of the class if found, nil otherwise.
+      #
+      # This method constructs the full Redis key using the provided identifier
+      # and suffix, then delegates to `from_key` for the actual retrieval and
+      # instantiation.
+      #
+      # It's a higher-level method that abstracts away the key construction,
+      # making it easier to retrieve objects when you only have their
+      # identifier.
+      #
+      # @example
+      #   User.from_redis(123)  # Equivalent to User.from_key("user:123:object")
+      #
       def from_redis(identifier, suffix = :object)
         return nil if identifier.to_s.empty?
 
@@ -190,10 +237,7 @@ module Familia
         objkey = rediskey identifier, suffix
 
         ret = redis.exists objkey
-        if Familia.debug?
-          Familia.trace :EXISTS, redis, "#{objkey} #{ret.inspect}",
-                        caller
-        end
+        Familia.trace :EXISTS, redis, "#{objkey} #{ret.inspect}", caller if Familia.debug?
         ret.positive?
       end
 
