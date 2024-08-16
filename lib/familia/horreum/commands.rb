@@ -50,6 +50,7 @@ module Familia
         Familia.trace :HGETALL, redis, redisuri, caller(1..1) if Familia.debug?
         redis.hgetall rediskey(suffix)
       end
+      alias all hgetall
 
       def hget(field, suffix = nil)
         redis.hget rediskey(suffix), field

@@ -59,8 +59,6 @@ module Familia
       redis.hgetall rediskey
     end
     alias all hgetall
-    alias to_hash hgetall
-    alias clone hgetall
 
     def has_key?(field)
       redis.hexists rediskey, field
