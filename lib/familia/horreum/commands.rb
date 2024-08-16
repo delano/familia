@@ -45,14 +45,25 @@ module Familia
         redis.rename rediskey, newkey
       end
 
-      # For parity with RedisType (ed: what about hget and hset?)
+      # For parity with RedisType#hgetall
       def hgetall(suffix = nil)
         redis.hgetall rediskey(suffix)
       end
 
+      def hget(field, suffix = nil)
+        redis.hget rediskey(suffix), field
+      end
+
+      # @return The number of fields that were added to the hash. If the
+      #  field already exists, this will return 0.
+      def hset(field, value, suffix = nil)
+        Familia.trace :HSET, redis, redisuri, caller(1..1) if Familia.debug?
+        redis.hset rediskey(suffix), field, value
+      end
+
       def hmset(suffix = nil)
         suffix ||= self.class.suffix
-        redis.hmset rediskey(suffix), to_h
+        redis.hmset rediskey(suffix), self.to_h
       end
 
       def delete!

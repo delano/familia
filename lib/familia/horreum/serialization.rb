@@ -10,6 +10,12 @@ module Familia
 
     # Methods that call load and dump (InstanceMethods)
     #
+    # Note on refresh methods:
+    # In this class, refresh! is the primary method that performs the Redis
+    # query and state update. The non-bang refresh method is provided as a
+    # convenience for method chaining, but still performs the same destructive
+    # update as refresh!. This deviates from common Ruby conventions to better
+    # fit the specific needs of this system.
     module Serialization
       #include Familia::RedisType::Serialization
 
@@ -63,13 +69,39 @@ module Familia
         Familia.trace :DESTROY, redis, redisuri, caller(1..1) if Familia.debug?
         delete!
       end
+      # Refreshes the object's state by querying Redis and overwriting the
+      # current field values. This method performs a destructive update on the
+      # object, regardless of unsaved changes.
+      #
+      # @note This is a destructive operation that will overwrite any unsaved
+      #   changes.
+      # @return [void]
+      def refresh!
+        Familia.trace :REFRESH, redis, redisuri, caller(1..1) if Familia.debug?
+        fields = hgetall
+        Familia.ld "[refresh] #{self.class} #{rediskey} #{fields.keys}"
+        optimistic_refresh(**fields)
+      end
+
+      # Refreshes the object's state and returns self to allow method chaining.
+      # This method calls refresh! internally, performing the actual Redis
+      # query and state update.
+      #
+      # @note While this method allows chaining, it still performs a
+      #   destructive update like refresh!.
+      # @return [self] Returns the object itself after refreshing, allowing
+      #   method chaining.
+      def refresh
+        refresh!
+        self
+      end
 
       def to_h
         # Use self.class.fields to efficiently generate a hash
         # of all the fields for this object
         self.class.fields.inject({}) do |hsh, field|
           val = send(field)
-          prepared = val.to_s
+          prepared = to_redis(val)
           Familia.ld " [to_h] field: #{field} val: #{val.class} prepared: #{prepared.class}"
           hsh[field] = prepared
           hsh
@@ -79,13 +111,14 @@ module Familia
       def to_a
         self.class.fields.map do |field|
           val = send(field)
-          Familia.ld " [to_a] field: #{field} val: #{val}"
-          to_redis(val)
+          prepared = to_redis(val)
+          Familia.ld " [to_a] field: #{field} val: #{val.class} prepared: #{prepared.class}"
+          prepared
         end
       end
 
-      # The to_redis method in Familia::Redistype and Familia::Horreum serve similar purposes
-      # but have some key differences in their implementation:
+      # The to_redis method in Familia::Redistype and Familia::Horreum serve
+      # similar purposes but have some key differences in their implementation:
       #
       # Similarities:
       # - Both methods aim to serialize various data types for Redis storage
@@ -97,16 +130,19 @@ module Familia
       # - Familia::Horreum had more explicit type checking and conversion
       # - Familia::Redistype includes more extensive debug tracing
       #
-      # The centralized Familia.distinguisher method accommodates both approaches by:
-      # 1. Handling a wide range of data types, including those from both implementations
+      # The centralized Familia.distinguisher method accommodates both approaches
+      # by:
+      # 1. Handling a wide range of data types, including those from both
+      #    implementations
       # 2. Providing a 'strict_values' option for flexible type handling
       # 3. Supporting custom serialization through a dump_method
       # 4. Including debug tracing similar to Familia::Redistype
       #
-      # By using Familia.distinguisher, we achieve more consistent behavior across
-      # different parts of the library while maintaining the flexibility to handle
-      # various data types and custom serialization needs. This centralization
-      # also makes it easier to extend or modify serialization behavior in the future.
+      # By using Familia.distinguisher, we achieve more consistent behavior
+      # across different parts of the library while maintaining the flexibility
+      # to handle various data types and custom serialization needs. This
+      # centralization also makes it easier to extend or modify serialization
+      # behavior in the future.
       #
       def to_redis(val)
         prepared = Familia.distinguisher(val, false)
@@ -115,7 +151,10 @@ module Familia
           prepared = val.send(dump_method)
         end
 
-        Familia.ld "[#{self.class}#to_redis] nil returned for #{self.class}##{name}" if prepared.nil?
+        if prepared.nil?
+          Familia.ld "[#{self.class}#to_redis] nil returned for #{self.class}##{name}"
+        end
+
         prepared
       end
 
@@ -127,28 +166,8 @@ module Familia
         expire ttl.to_i
       end
     end
+    # End of Serialization module
 
     include Serialization # these become Horreum instance methods
   end
-end
-
-__END__
-
-
-
-# From RedisHash
-def save
-  hsh = { :key => identifier }
-  ret = commit_fields hsh
-  ret == "OK"
-end
-
-def update_fields hsh={}
-  check_identifier!
-  hsh[:updated] = OT.now.to_i
-  hsh[:created] = OT.now.to_i unless has_key?(:created)
-  ret = update hsh  # update is defined in HashKey
-  ## NOTE: caching here like this only works if hsh has all keys
-  #self.cache.replace hsh
-  ret
 end

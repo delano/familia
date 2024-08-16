@@ -145,22 +145,63 @@ module Familia
       end
     end
 
+    # Initializes the object with positional arguments.
+    # Maps each argument to a corresponding field in the order they are defined.
+    #
+    # @param args [Array] List of values to be assigned to fields
+    # @return [Array<Symbol>] List of field names that were successfully updated
+    #   (i.e., had non-nil values assigned)
+    # @private
     def initialize_with_positional_args(*args)
-      self.class.fields.zip(args).each do |field, value|
-        send(:"#{field}=", value) if value
+      # Familia.trace :INITIALIZE_ARGS, redis, args, caller(1..1) if Familia.debug?
+      self.class.fields.zip(args).filter_map do |field, value|
+        if value
+          send(:"#{field}=", value)
+          field.to_sym
+        end
       end
     end
     private :initialize_with_positional_args
 
-    def initialize_with_keyword_args(**kwargs)
-      self.class.fields.each do |field|
+    # Initializes the object with keyword arguments.
+    # Assigns values to fields based on the provided hash of field names and values.
+    # Handles both symbol and string keys to accommodate different sources of data.
+    #
+    # @param fields [Hash] Hash of field names (as symbols or strings) and their values
+    # @return [Array<Symbol>] List of field names that were successfully updated
+    #   (i.e., had non-nil values assigned)
+    # @private
+    def initialize_with_keyword_args(**fields)
+      Familia.trace :INITIALIZE_KWARGS, redis, redisuri, caller(1..1) if Familia.debug?
+      self.class.fields.filter_map do |field|
         # Redis will give us field names as strings back, but internally
-        # we use symbols. So we do both.
-        value = kwargs[field.to_sym] || kwargs[field.to_s]
-        send(:"#{field}=", value) if value
+        # we use symbols. So we check for both.
+        value = fields[field.to_sym] || fields[field.to_s]
+        if value
+          send(:"#{field}=", value)
+          field.to_sym
+        end
       end
     end
     private :initialize_with_keyword_args
+
+    # A thin wrapper around the private initialize method that accepts a field
+    # hash and refreshes the existing object.
+    #
+    # This method is part of horreum.rb rather than serialization.rb because it
+    # operates solely on the provided values and doesn't query Redis or other
+    # external sources. That's why it's called "optimistic" refresh: it assumes
+    # the provided values are correct and updates the object accordingly.
+    #
+    # @see #refresh!
+    #
+    # @param fields [Hash] A hash of field names and their new values to update
+    #   the object with.
+    # @return [Array] The list of field names that were updated.
+    def optimistic_refresh(**fields)
+      Familia.ld "[refresh] #{self.class} #{rediskey} #{fields.keys}"
+      initialize_with_keyword_args(**fields)
+    end
 
     # Determines the unique identifier for the instance
     # This method is used to generate Redis keys for the object
@@ -183,7 +224,7 @@ module Familia
                   end
 
       # If the unique_id is nil, raise an error
-      raise Problem, "Identifier is nil for #{self}" if unique_id.nil?
+      raise Problem, "Identifier is nil for #{self.class}" if unique_id.nil?
       raise Problem, 'Identifier is empty' if unique_id.empty?
 
       unique_id
