@@ -170,12 +170,13 @@ module Familia
         return unless does_exist
 
         obj = redis.hgetall(objkey) # horreum objects are persisted as redis hashes
-        Familia.trace :HGETALL, redis, "#{objkey}: #{obj.inspect}", caller if Familia.debug?
+        Familia.trace :FROMKEY, redis, "#{objkey}: #{obj.inspect}", caller if Familia.debug?
 
         new(**obj)
       end
 
       def from_redis(identifier, suffix = :object)
+        # TODO: Rename to from_identifier, to disambuguate from `multi_from_redis`
         return nil if identifier.to_s.empty?
 
         objkey = rediskey(identifier, suffix)

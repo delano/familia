@@ -42,7 +42,7 @@ module Familia
     # variable `severity_letter` is arbitrary and could be anything.
     severity_letter = Thread.current[:severity_letter] || severity_letter
 
-    "#{severity_letter}, #{utc_datetime} #{pid} #{thread_id}: #{msg}  <#{relative_path}:#{line}>\n"
+    "#{severity_letter}, #{utc_datetime} #{pid} #{thread_id}: #{msg}  [#{relative_path}:#{line}]\n"
   end
 
   # The Logging module provides a set of methods and constants for logging messages

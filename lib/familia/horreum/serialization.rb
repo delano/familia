@@ -75,11 +75,11 @@ module Familia
       #
       # @note This is a destructive operation that will overwrite any unsaved
       #   changes.
-      # @return [void]
+      # @return The list of field names that were updated.
       def refresh!
         Familia.trace :REFRESH, redis, redisuri, caller(1..1) if Familia.debug?
         fields = hgetall
-        Familia.ld "[refresh] #{self.class} #{rediskey} #{fields.keys}"
+        Familia.ld "[refresh!] #{self.class} #{rediskey} #{fields}"
         optimistic_refresh(**fields)
       end
 
