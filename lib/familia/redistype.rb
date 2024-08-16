@@ -61,10 +61,10 @@ module Familia
       end
     end
 
-    attr_reader :name, :parent, :opts
+    attr_reader :keystring, :parent, :opts
     attr_writer :dump_method, :load_method
 
-    # +name+: If parent is set, this will be used as the suffix
+    # +keystring+: If parent is set, this will be used as the suffix
     # for rediskey. Otherwise this becomes the value of the key.
     # If this is an Array, the elements will be joined.
     #
@@ -92,10 +92,10 @@ module Familia
     #
     # Uses the redis connection of the parent or the value of
     # opts[:redis] or Familia.redis (in that order).
-    def initialize(name, opts = {})
+    def initialize(keystring, opts = {})
       #Familia.ld " [initializing] #{self.class} #{opts}"
-      @name = name
-      @name = @name.join(Familia.delim) if @name.is_a?(Array)
+      @keystring = keystring
+      @keystring = @keystring.join(Familia.delim) if @keystring.is_a?(Array)
 
       # Remove all keys from the opts that are not in the allowed list
       @opts = opts || {}
@@ -112,7 +112,7 @@ module Familia
 
     # Produces the full redis key for this object.
     def rediskey
-      Familia.ld "[rediskey] #{name} for #{self.class} (#{opts})"
+      Familia.ld "[rediskey] #{keystring} for #{self.class} (#{opts})"
 
       # Return the hardcoded key if it's set. This is useful for
       # support legacy keys that aren't derived in the same way.
@@ -121,15 +121,15 @@ module Familia
       if parent_instance?
         # This is an instance-level redistype object so the parent instance's
         # rediskey method is defined in Familia::Horreum::InstanceMethods.
-        parent.rediskey(name)
+        parent.rediskey(keystring)
       elsif parent_class?
         # This is a class-level redistype object so the parent class' rediskey
         # method is defined in Familia::Horreum::ClassMethods.
-        parent.rediskey(name, nil)
+        parent.rediskey(keystring, nil)
       else
-        # This is a standalone RedisType object where it's name
+        # This is a standalone RedisType object where it's keystring
         # is the full key.
-        name
+        keystring
       end
     end
 
