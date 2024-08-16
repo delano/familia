@@ -70,6 +70,7 @@ module Familia
         Familia.trace :DESTROY, redis, redisuri, caller(1..1) if Familia.debug?
         delete!
       end
+
       # Refreshes the object's state by querying Redis and overwriting the
       # current field values. This method performs a destructive update on the
       # object, regardless of unsaved changes.
@@ -171,4 +172,22 @@ module Familia
 
     include Serialization # these become Horreum instance methods
   end
+end
+
+__END__
+
+# Consider adding a retry mechanism for the refresh operation
+# if it fails to fetch the expected data:
+def refresh_with_retry(max_attempts = 3)
+  attempts = 0
+  base = 2
+  while attempts < max_attempts
+    refresh!
+    return if name == "Jane Doe" # Or whatever condition indicates a successful refresh
+    attempts += 1
+
+    sleep_time = 0.1 * (base ** attempts)
+    sleep(sleep_time) # Exponential backoff
+  end
+  raise "Failed to refresh after #{max_attempts} attempts"
 end

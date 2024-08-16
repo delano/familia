@@ -58,7 +58,12 @@ Familia.trace :LOAD, @customer.redis, @customer.redisuri, caller if Familia.debu
 #=> "Jane Doe"
 
 ## Unsaved changes are lost when an object reloads
+puts "Before change: #{@customer.name}"
 @customer.name = 'John Doe'
+puts "After local change: #{@customer.name}"
 @customer.refresh!
+puts "After refresh: #{@customer.name}"
+sleep(0.1) # Add a small delay
+puts "After delay: #{@customer.name}"
 @customer.name
 #=> "Jane Doe"
