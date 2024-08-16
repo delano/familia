@@ -160,7 +160,7 @@ module Familia
         does_exist = redis.exists(objkey).positive?
 
         Familia.ld "[.from_key] #{self} from key #{objkey} (exists: #{does_exist})"
-        Familia.trace :LOAD, redis, objkey, caller if Familia.debug?
+        Familia.trace :FROM_KEY, redis, objkey, caller if Familia.debug?
 
         # This is reason for calling exists first. We want to definitively and without any
         # ambiguity know if the object exists in Redis. If it doesn't, we return nil. If
@@ -170,7 +170,7 @@ module Familia
         return unless does_exist
 
         obj = redis.hgetall(objkey) # horreum objects are persisted as redis hashes
-        Familia.trace :HGETALL, redis, "#{objkey}: #{obj.inspect}", caller if Familia.debug?
+        Familia.trace :FROM_KEY2, redis, "#{objkey}: #{obj.inspect}", caller if Familia.debug?
 
         new(**obj)
       end
@@ -180,7 +180,7 @@ module Familia
 
         objkey = rediskey(identifier, suffix)
         Familia.ld "[.from_redis] #{self} from key #{objkey})"
-        Familia.trace :FROMREDIS, Familia.redis(uri), objkey, caller(1..1).first if Familia.debug?
+        Familia.trace :FROM_REDIS, Familia.redis(uri), objkey, caller(1..1).first if Familia.debug?
         from_key objkey
       end
 

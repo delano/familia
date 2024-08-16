@@ -165,6 +165,8 @@ end
 
 __END__
 
+# Some leftovers related to dump_method and load_method
+
 if value_to_distunguish.is_a?(Familia::Horreum)
   Familia.trace :DISTINGUISHER, redis, "horreum", caller(1..1) if Familia.debug?
   value_to_distunguish.identifier

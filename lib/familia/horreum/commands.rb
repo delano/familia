@@ -68,6 +68,31 @@ module Familia
         redis.hmset rediskey(suffix), self.to_h
       end
 
+      def hkeys(suffix = nil)
+        Familia.trace :HKEYS, redis, 'redisuri', caller(1..1) if Familia.debug?
+        redis.hkeys rediskey(suffix)
+      end
+
+      def hvals(suffix = nil)
+        redis.hvals rediskey(suffix)
+      end
+
+      def hincrby(field, increment, suffix = nil)
+        redis.hincrby rediskey(suffix), field, increment
+      end
+
+      def hincrbyfloat(field, increment, suffix = nil)
+        redis.hincrbyfloat rediskey(suffix), field, increment
+      end
+
+      def hlen(suffix = nil)
+        redis.hlen rediskey(suffix)
+      end
+
+      def hstrlen(field, suffix = nil)
+        redis.hstrlen rediskey(suffix), field
+      end
+
       def delete!
         Familia.trace :DELETE!, redis, redisuri, caller(1..1) if Familia.debug?
         ret = redis.del rediskey

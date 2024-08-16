@@ -153,7 +153,7 @@ module Familia
     #   (i.e., had non-nil values assigned)
     # @private
     def initialize_with_positional_args(*args)
-      # Familia.trace :INITIALIZE_ARGS, redis, args, caller(1..1) if Familia.debug?
+      Familia.trace :INITIALIZE_ARGS, redis, args, caller(1..1) if Familia.debug?
       self.class.fields.zip(args).filter_map do |field, value|
         if value
           send(:"#{field}=", value)
@@ -172,7 +172,7 @@ module Familia
     #   (i.e., had non-nil values assigned)
     # @private
     def initialize_with_keyword_args(**fields)
-      Familia.trace :INITIALIZE_KWARGS, redis, redisuri, caller(1..1) if Familia.debug?
+      Familia.trace :INITIALIZE_KWARGS, redis, fields.keys, caller(1..1) if Familia.debug?
       self.class.fields.filter_map do |field|
         # Redis will give us field names as strings back, but internally
         # we use symbols. So we check for both.
@@ -199,7 +199,7 @@ module Familia
     #   the object with.
     # @return [Array] The list of field names that were updated.
     def optimistic_refresh(**fields)
-      Familia.ld "[refresh] #{self.class} #{rediskey} #{fields.keys}"
+      Familia.ld "[optimistic_refresh] #{self.class} #{rediskey} #{fields.keys}"
       initialize_with_keyword_args(**fields)
     end
 

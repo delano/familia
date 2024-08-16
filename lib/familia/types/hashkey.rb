@@ -53,13 +53,14 @@ module Familia
       multi_from_redis(*el)
     end
 
-    def all
+    def hgetall
       # TODO: Use from_redis. Also name `all` is confusing with
       # Onetime::Customer.all which returns all customers.
       redis.hgetall rediskey
     end
-    alias to_hash all
-    alias clone all
+    alias all hgetall
+    alias to_hash hgetall
+    alias clone hgetall
 
     def has_key?(field)
       redis.hexists rediskey, field
