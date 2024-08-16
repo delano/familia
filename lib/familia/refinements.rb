@@ -1,5 +1,11 @@
 # frozen_string_literal: true
 
+require 'pathname'
+require 'logger'
+
+# Controls whether tracing is enabled via an environment variable
+FAMILIA_TRACE = ENV.fetch('FAMILIA_TRACE', 'false').downcase
+
 # FlexibleHashAccess
 #
 # This module provides a refinement for the Hash class to allow flexible access
@@ -37,9 +43,6 @@ module FlexibleHashAccess
     end
   end
 end
-
-# Controls whether tracing is enabled via an environment variable
-FAMILIA_TRACE = ENV.fetch('FAMILIA_TRACE', 'false').downcase
 
 # LoggerTraceRefinement
 #
