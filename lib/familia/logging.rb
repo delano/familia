@@ -3,27 +3,6 @@
 require 'pathname'
 require 'logger'
 
-FAMILIA_TRACE = ENV.fetch('FAMILIA_TRACE', 'false').downcase
-
-module LoggerTraceRefinement
-  ENABLED = ['1', 'true', 'yes'].include?(FAMILIA_TRACE)
-
-  # Set to same value as Logger::DEBUG since 0 is the floor
-  # without either more invasive changes to the Logger class
-  # or a CustomLogger class that inherits from Logger.
-  TRACE = 0 unless defined?(TRACE)
-  refine Logger do
-
-    def trace(progname = nil, &block)
-      Thread.current[:severity_letter] = 'T'
-      add(LoggerTraceRefinement::TRACE, nil, progname, &block)
-    ensure
-      Thread.current[:severity_letter] = nil
-    end
-
-  end
-end
-
 module Familia
   @logger = Logger.new($stdout)
   @logger.progname = name

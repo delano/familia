@@ -5,6 +5,7 @@ require 'redis'
 require 'uri/redis'
 
 require_relative 'familia/core_ext'
+require_relative 'familia/refinements'
 require_relative 'familia/errors'
 require_relative 'familia/version'
 
