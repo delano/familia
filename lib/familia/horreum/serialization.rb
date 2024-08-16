@@ -44,8 +44,9 @@ module Familia
         Familia.trace :SAVE, redis, redisuri, caller(1..1) if Familia.debug?
 
         # Update timestamp fields
+        self.key ||= self.identifier
         self.updated = Familia.now.to_i
-        self.created = Familia.now.to_i unless self.created
+        self.created ||= Familia.now.to_i
 
         # Thr return value of commit_fields is an array of strings: ["OK"].
         ret = commit_fields # e.g. ["OK"]
