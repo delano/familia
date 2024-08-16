@@ -70,6 +70,7 @@ class Customer < Familia::Horreum
   field :email
   field :role
   field :key
+  field :name
   field :passphrase_encryption
   field :passphrase
   field :verified

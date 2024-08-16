@@ -38,3 +38,27 @@ Familia.debug = true
 ## Remove the key
 @hashkey.clear
 #=> 1
+
+## Horreum objects can update and save their fields (1 of 2)
+@customer.name = 'John Doe'
+#=> "John Doe"
+
+## Horreum objects can update and save their fields (2 of 2)
+@customer.save
+#=> true
+
+## Horreum object fields have a fast writer method (1 of 2)
+Familia.trace :LOAD, @customer.redis, @customer.redisuri, caller if Familia.debug?
+@customer.name! 'Jane Doe'
+#=> 0
+
+## Horreum object fields have a fast writer method (2 of 2)
+@customer.refresh!
+@customer.name
+#=> "Jane Doe"
+
+## Unsaved changes are lost when an object reloads
+@customer.name = 'John Doe'
+@customer.refresh!
+@customer.name
+#=> "Jane Doe"

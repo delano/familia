@@ -8,15 +8,14 @@ module Familia
     # These are set up as nil initially and populated later
     @redis = nil
     @identifier = nil
-    @fields = nil # []
     @ttl = nil
     @db = nil
     @uri = nil
     @suffix = nil
     @prefix = nil
+    @fields = nil # []
     @class_redis_types = nil # {}
     @redis_types = nil # {}
-    @defined_fields = nil # {}
     @dump_method = nil
     @load_method = nil
 
@@ -54,6 +53,19 @@ module Familia
       def field(name)
         fields << name
         attr_accessor name
+
+        # Every field gets a fast writer method for immediately persisting
+        fast_writer! name
+      end
+
+      # @return The return value from redis client for hset command
+      def fast_writer!(name)
+        define_method :"#{name}!" do |value|
+          prepared = to_redis(value)
+          Familia.ld "[.fast_writer!] #{name} val: #{value.class} prepared: #{prepared.class}"
+          send :"#{name}=", value # use the existing accessor
+          hset name, prepared # persist to Redis without delay
+        end
       end
 
       # Returns the list of field names defined for the class in the order
@@ -79,11 +91,6 @@ module Familia
       def redis_types
         @redis_types ||= {}
         @redis_types
-      end
-
-      def defined_fields
-        @defined_fields ||= {}
-        @defined_fields
       end
 
       def ttl(v = nil)
@@ -236,5 +243,6 @@ module Familia
         @load_method || :from_json # Familia.load_method
       end
     end
+    # End of ClassMethods module
   end
 end
