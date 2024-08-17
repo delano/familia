@@ -70,6 +70,7 @@ class Customer < Familia::Horreum
   field :email
   field :role
   field :key
+  field :name
   field :passphrase_encryption
   field :passphrase
   field :verified
@@ -154,6 +155,7 @@ class CustomDomain < Familia::Horreum
   field :trd
   field :tld
   field :sld
+  # No :key field (so we can test hte behaviour in Horreum#initialize)
   field :txt_validation_host
   field :txt_validation_value
   field :status
@@ -167,7 +169,11 @@ class CustomDomain < Familia::Horreum
   # the customer ID. This is used to ensure that the same domain can't be
   # added twice by the same customer while avoiding collisions between customers.
   def derive_id
-    Familia.generate_sha_hash(:display_domain, :custid).slice(0, 8)
+    elements = [
+      display_domain,
+      custid
+    ]
+    Familia.generate_sha_hash(*elements).slice(0, 8)
   end
 end
 @d = CustomDomain.new
@@ -178,6 +184,8 @@ class Limiter < Familia::Horreum
 
   identifier :name
   field :name
+  # No :key field (so we can test hte behaviour in Horreum#initialize)
+
   string :counter, :ttl => 1.hour, :quantize => [10.minutes, '%H:%M', 1302468980]
 
   def identifier

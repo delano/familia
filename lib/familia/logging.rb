@@ -3,23 +3,6 @@
 require 'pathname'
 require 'logger'
 
-module LoggerTraceRefinement
-  # Set to same value as Logger::DEBUG since 0 is the floor
-  # without either more invasive changes to the Logger class
-  # or a CustomLogger class that inherits from Logger.
-  TRACE = 2 unless defined?(TRACE)
-  refine Logger do
-
-    def trace(progname = nil, &block)
-      Thread.current[:severity_letter] = 'T'
-      add(LoggerTraceRefinement::TRACE, nil, progname, &block)
-    ensure
-      Thread.current[:severity_letter] = nil
-    end
-
-  end
-end
-
 module Familia
   @logger = Logger.new($stdout)
   @logger.progname = name
@@ -38,7 +21,7 @@ module Familia
     # variable `severity_letter` is arbitrary and could be anything.
     severity_letter = Thread.current[:severity_letter] || severity_letter
 
-    "#{severity_letter}, #{utc_datetime} #{pid} #{thread_id}: #{msg}  <#{relative_path}:#{line}>\n"
+    "#{severity_letter}, #{utc_datetime} #{pid} #{thread_id}: #{msg}  [#{relative_path}:#{line}]\n"
   end
 
   # The Logging module provides a set of methods and constants for logging messages
@@ -120,7 +103,7 @@ module Familia
     attr_reader :logger
 
     # Gives our logger the ability to use our trace method.
-    #using LoggerTraceRefinement if Familia.debug
+    using LoggerTraceRefinement if LoggerTraceRefinement::ENABLED
 
     def info(*msg)
       @logger.info(*msg)
@@ -156,14 +139,14 @@ module Familia
     # @return [nil]
     #
     def trace(label, redis_instance, ident, context = nil)
-      return unless Familia.debug? && ENV.key?('FAMILIA_TRACE')
+      return unless LoggerTraceRefinement::ENABLED
       instance_id = redis_instance&.id
       codeline = if context
                    context = [context].flatten
                    context.reject! { |line| line =~ %r{lib/familia} }
                    context.first
                  end
-      @logger.debug format('[%s] %s -> %s <- at %s', label, instance_id, ident, codeline)
+      @logger.trace format('[%s] %s -> %s <- at %s', label, instance_id, ident, codeline)
     end
 
   end

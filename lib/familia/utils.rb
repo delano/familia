@@ -64,8 +64,8 @@ module Familia
       Time.at(rounded).utc.strftime(pattern)
     end
 
-    def generate_sha_hash(elements)
-      concatenated_string = Familia.join(elements)
+    def generate_sha_hash(*elements)
+      concatenated_string = Familia.join(*elements)
       DIGEST_CLASS.hexdigest(concatenated_string)
     end
 
@@ -112,10 +112,6 @@ module Familia
         if value_to_distinguish.class.ancestors.member?(Familia::Base)
           Familia.trace :TOREDIS_DISTINGUISHER, redis, "isabase", caller(1..1) if Familia.debug?
           value_to_distinguish.identifier
-
-        elsif dump_method && value_to_distinguish.respond_to?(dump_method)
-          Familia.trace :TOREDIS_DISTINGUISHER, redis, "#{value_to_distinguish.class}##{dump_method}", caller(1..1) if Familia.debug?
-          value_to_distinguish.send(dump_method)
 
         else
           Familia.trace :TOREDIS_DISTINGUISHER, redis, "else2 #{strict_values}", caller(1..1) if Familia.debug?
