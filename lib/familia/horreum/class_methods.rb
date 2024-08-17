@@ -36,20 +36,40 @@ module Familia
       attr_accessor :parent
       attr_writer :redis, :dump_method, :load_method
 
+      # Returns the Redis connection for the class.
+      #
+      # This method retrieves the Redis connection instance for the class. If no
+      # connection is set, it initializes a new connection using the provided URI
+      # or database configuration.
+      #
+      # @return [Redis] the Redis connection instance.
+      #
       def redis
         @redis || Familia.redis(uri || db)
       end
 
-      # The object field or instance method to call to get the unique identifier
-      # for that instance. The value returned by this method will be used to
-      # generate the key for the object in Redis.
+      # Sets or retrieves the unique identifier for the class.
+      #
+      # This method defines or returns the unique identifier used to generate the
+      # Redis key for the object. If a value is provided, it sets the identifier;
+      # otherwise, it returns the current identifier.
+      #
+      # @param [Object] val the value to set as the identifier (optional).
+      # @return [Object] the current identifier.
+      #
       def identifier(val = nil)
         @identifier = val if val
         @identifier
       end
 
-      # Define a field for the class. This will create getter and setter
-      # instance methods just like any "attr_accessor" methods.
+      # Defines a field for the class and creates accessor methods.
+      #
+      # This method defines a new field for the class, creating getter and setter
+      # instance methods similar to `attr_accessor`. It also generates a fast
+      # writer method for immediate persistence to Redis.
+      #
+      # @param [Symbol, String] name the name of the field to define.
+      #
       def field(name)
         fields << name
         attr_accessor name
@@ -58,13 +78,46 @@ module Familia
         fast_writer! name
       end
 
-      # @return The return value from redis client for hset command
+      # Defines a writer method with a bang (!) suffix for a given attribute name.
+      #
+      # The dynamically defined method performs the following:
+      # - Checks if the correct number of arguments is provided (exactly one).
+      # - Converts the provided value to a format suitable for Redis storage.
+      # - Uses the existing accessor method to set the attribute value.
+      # - Persists the value to Redis immediately using the hset command.
+      # - Includes custom error handling to raise an ArgumentError if the wrong number of arguments is given.
+      # - Raises a custom error message if an exception occurs during the execution of the method.
+      #
+      # @param [Symbol, String] name the name of the attribute for which the writer method is defined.
+      # @raise [ArgumentError] if the wrong number of arguments is provided.
+      # @raise [RuntimeError] if an exception occurs during the execution of the method.
+      #
       def fast_writer!(name)
-        define_method :"#{name}!" do |value|
-          prepared = to_redis(value)
-          Familia.ld "[.fast_writer!] #{name} val: #{value.class} prepared: #{prepared.class}"
-          send :"#{name}=", value # use the existing accessor
-          hset name, prepared # persist to Redis without delay
+        define_method :"#{name}!" do |*args|
+          # Check if the correct number of arguments is provided (exactly one).
+          if args.size != 1
+            raise ArgumentError, "wrong number of arguments (given #{args.size}, expected 1)"
+          end
+
+          value = args.first
+
+          begin
+            # Trace the operation if debugging is enabled.
+            Familia.trace :FAST_WRITER, redis, "#{name}: #{value.inspect}", caller if Familia.debug?
+
+            # Convert the provided value to a format suitable for Redis storage.
+            prepared = to_redis(value)
+            Familia.ld "[.fast_writer!] #{name} val: #{value.class} prepared: #{prepared.class}"
+
+            # Use the existing accessor method to set the attribute value.
+            send :"#{name}=", value
+
+            # Persist the value to Redis immediately using the hset command.
+            hset name, prepared
+          rescue Familia::Problem => e
+            # Raise a custom error message if an exception occurs during the execution of the method.
+            raise "#{name}! method failed: #{e.message}", e.backtrace
+          end
         end
       end
 
