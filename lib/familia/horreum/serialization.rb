@@ -1,30 +1,75 @@
 # rubocop:disable all
 #
 module Familia
-  # InstanceMethods - Module containing instance-level methods for Familia
-  #
-  # This module is included in classes that include Familia, providing
-  # instance-level functionality for Redis operations and object management.
+
+
+  # Familia::Horreum
   #
   class Horreum
-
-    # Methods that call load and dump (InstanceMethods)
+    # Serialization: Where Objects Go to Become Strings (and Vice Versa)!
     #
-    # Note on refresh methods:
-    # In this class, refresh! is the primary method that performs the Redis
-    # query and state update. The non-bang refresh method is provided as a
-    # convenience for method chaining, but still performs the same destructive
-    # update as refresh!. This deviates from common Ruby conventions to better
-    # fit the specific needs of this system.
+    # This module is chock-full of methods that'll make your head spin (in a
+    # good way)! We've got loaders, dumpers, and refreshers galore. It's like
+    # a laundromat for your data, but instead of quarters, it runs on Redis commands.
+    #
+    # A Note on Our Refreshing Refreshers:
+    # In the wild world of Ruby, '!' usually means "Watch out! I'm dangerous!"
+    # But here in Familia-land, we march to the beat of a different drummer.
+    # Our refresh! method is the real deal, doing all the heavy lifting.
+    # The non-bang refresh? Oh, it's just as rowdy, but it plays nice with
+    # method chaining. It's like the polite twin who still knows how to party.
+    #
+    # Remember: In Familia, refreshing isn't just a chore, it's a chance to
+    # dance with data! Whether you bang(!) or not, you're still invited to
+    # the Redis disco.
+    #
+    # (P.S. If you're reading these docs, lol sorry. I asked Claude 3.5 to
+    # write in the style of _why the lucky stiff today and got this uncanny
+    # valley response. I hope you enjoy reading it as much as I did writing
+    # the prompt for it. - @delano).
+    #
+    # (Ahem! What I meant to say was that if you're reading this, congratulations!
+    # You've stumbled upon the secret garden of documentation. Feel free to smell
+    # the Ruby roses, but watch out for the Redis thorns!)
+    #
     module Serialization
-      #include Familia::RedisType::Serialization
 
       attr_writer :redis
 
+      # Summon the mystical Redis connection from the depths of instance or class.
+      #
+      # This method is like a magical divining rod, always pointing to the nearest
+      # source of Redis goodness. It first checks if we have a personal Redis
+      # connection (@redis), and if not, it borrows the class's connection.
+      #
+      # @return [Redis] A shimmering Redis connection, ready for your bidding.
+      #
+      # @example Finding your Redis way
+      #   puts object.redis
+      #   # => #<Redis client v4.5.1 for redis://localhost:6379/0>
+      #
       def redis
         @redis || self.class.redis
       end
 
+      # Perform a sacred Redis transaction ritual.
+      #
+      # This method creates a protective circle around your Redis operations,
+      # ensuring they all succeed or fail together. It's like a group hug for your
+      # data operations, but with more ACID properties.
+      #
+      # @yield [conn] A block where you can perform your Redis incantations.
+      # @yieldparam conn [Redis] A Redis connection in multi mode.
+      #
+      # @example Performing a Redis rain dance
+      #   transaction do |conn|
+      #     conn.set("weather", "rainy")
+      #     conn.set("mood", "melancholic")
+      #   end
+      #
+      # @note This method temporarily replaces your Redis connection with a multi
+      #   connection. Don't worry, it puts everything back where it found it when it's done.
+      #
       def transaction
         original_redis = self.redis
 
@@ -38,26 +83,74 @@ module Familia
         end
       end
 
-      # A thin wrapper around `commit_fields` that updates the timestamps and
-      # returns a boolean.
+      # Save our precious data to Redis, with a sprinkle of timestamp magic!
+      #
+      # This method is like a conscientious historian, not only recording your
+      # object's current state but also meticulously timestamping when it was
+      # created and last updated. It's the record keeper of your data's life story!
+      #
+      # @return [Boolean] true if the save was successful, false if Redis was grumpy.
+      #
+      # @example Preserving your pet rock for posterity
+      #   rocky = PetRock.new(name: "Dwayne")
+      #   rocky.save
+      #   # => true (Dwayne is now immortalized in Redis)
+      #
+      # @note This method will leave breadcrumbs (traces) if you're in debug mode.
+      #   It's like Hansel and Gretel, but for data operations!
+      #
       def save
         Familia.trace :SAVE, redis, redisuri, caller(1..1) if Familia.debug?
 
-        # Update timestamp fields
+        # Update our object's life story
         self.key ||= self.identifier
         self.updated = Familia.now.to_i
         self.created ||= Familia.now.to_i
 
-        # Thr return value of commit_fields is an array of strings: ["OK"].
+        # Commit our tale to the Redis chronicles
         ret = commit_fields # e.g. ["OK"]
 
         Familia.ld "[save] #{self.class} #{rediskey} #{ret}"
 
-        # Convert the return value to a boolean
-        ret.all? { |value| value == "OK" }
+        # Did Redis accept our offering?
+        ret.uniq.all? { |value| value == "OK" }
       end
 
-      # +return: [Array<String>] The return value of the Redis multi command
+      # Apply a smattering of fields to this object like fairy dust.
+      #
+      # @param fields [Hash] A magical bag of named attributes to sprinkle onto this instance.
+      #   Each key-value pair is like a tiny spell, ready to enchant our object's properties.
+      #
+      # @return [self] Returns the newly bejeweled instance, now sparkling with fresh attributes.
+      #
+      # @example Giving your object a makeover
+      #   dragon.apply_fields(name: "Puff", breathes: "fire", loves: "little boys named Jackie")
+      #   # => #<Dragon:0x007f8a1c8b0a28 @name="Puff", @breathes="fire", @loves="little boys named Jackie">
+      #
+      def apply_fields(**fields)
+        fields.each do |field, value|
+          # Whisper the new value into the object's ear (if it's listening)
+          send("#{field}=", value) if respond_to?("#{field}=")
+        end
+        self
+      end
+
+      # Commit our precious fields to Redis.
+      #
+      # This method performs a sacred ritual, sending our cherished attributes
+      # on a journey through the ethernet to find their resting place in Redis.
+      #
+      # @return [Array<String>] A mystical array of strings, cryptic messages from the Redis gods.
+      #
+      # @note Be warned, young programmer! This method dabbles in the arcane art of transactions.
+      #   Side effects may include data persistence and a slight tingling sensation.
+      #
+      # @example Offering your changes to the Redis deities
+      #   unicorn.name = "Charlie"
+      #   unicorn.horn_length = "magnificent"
+      #   unicorn.commit_fields
+      #   # => ["OK", "OK"] (The Redis gods are pleased with your offering)
+      #
       def commit_fields
         Familia.ld "[commit_fields] #{self.class} #{rediskey} #{to_h}"
         transaction do |conn|
@@ -66,10 +159,30 @@ module Familia
         end
       end
 
+      # Dramatically vanquish this object from the face of Redis! (ed: delete it)
+      #
+      # This method is the doomsday device of our little data world. It will
+      # mercilessly eradicate all traces of our object from Redis, leaving naught
+      # but digital dust in its wake. Use with caution, lest you accidentally
+      # destroy the wrong data-verse!
+      #
+      # @return [void] Returns nothing, for nothing remains after destruction.
+      #
+      # @example Bidding a fond farewell to your pet rock
+      #   rocky = PetRock.new(name: "Dwayne")
+      #   rocky.destroy!
+      #   # => *poof* Rocky is no more. A moment of silence, please.
+      #
+      # @note If debugging is enabled, this method will leave a trace of its
+      #   destructive path, like breadcrumbs for future data archaeologists.
+      #
+      # @see #delete! The actual hitman carrying out the deed.
+      #
       def destroy!
         Familia.trace :DESTROY, redis, redisuri, caller(1..1) if Familia.debug?
         delete!
       end
+
 
       # Refreshes the object's state by querying Redis and overwriting the
       # current field values. This method performs a destructive update on the
@@ -98,9 +211,21 @@ module Familia
         self
       end
 
+      # Transform this object into a magical hash of wonders!
+      #
+      # This method performs an alchemical transmutation, turning our noble object
+      # into a more plebeian hash. But fear not, for in this form, it can slip through
+      # the cracks of the universe (or at least, into Redis) with ease.
+      #
+      # @return [Hash] A glittering hash, each key a field name, each value a Redis-ready treasure.
+      #
+      # @example Turning your dragon into a hash
+      #   dragon.to_h
+      #   # => {"name"=>"Puff", "breathes"=>"fire", "age"=>1000}
+      #
+      # @note Watch in awe as each field is lovingly prepared for its Redis adventure!
+      #
       def to_h
-        # Use self.class.fields to efficiently generate a hash
-        # of all the fields for this object
         self.class.fields.inject({}) do |hsh, field|
           val = send(field)
           prepared = to_redis(val)
@@ -110,6 +235,20 @@ module Familia
         end
       end
 
+      # Line up all our attributes in a neat little array parade!
+      #
+      # This method marshals all our object's attributes into an orderly procession,
+      # ready to march into Redis in perfect formation. It's like a little data army,
+      # but friendlier and less prone to conquering neighboring databases.
+      #
+      # @return [Array] A splendid array of Redis-ready values, in the order of our fields.
+      #
+      # @example Arranging your unicorn's attributes in a line
+      #   unicorn.to_a
+      #   # => ["Charlie", "magnificent", 5]
+      #
+      # @note Each value is carefully disguised in its Redis costume before joining the parade.
+      #
       def to_a
         self.class.fields.map do |field|
           val = send(field)
@@ -160,34 +299,39 @@ module Familia
         prepared
       end
 
+      # Set an expiration date for our data, like a "best before" sticker for Redis!
+      #
+      # This method gives our data a lifespan in Redis. It's like telling Redis,
+      # "Hey, this data is fresh now, but it might get stale after a while!"
+      #
+      # @param ttl [Integer, nil] The Time To Live in seconds. If nil, we'll check
+      #   our options for a default expiration time.
+      #
+      # @return [Boolean] true if the expiration was set successfully, false otherwise.
+      #   It's like asking Redis, "Did you stick that expiration label on properly?"
+      #
+      # @example Making your pet rock data mortal
+      #   rocky.update_expiration(86400) # Dwayne will live in Redis for one day
+      #
+      # @note If the TTL is zero, we assume our data wants to live forever.
+      #   Immortality in Redis! Who wouldn't want that?
+      #
       def update_expiration(ttl = nil)
         ttl ||= opts[:ttl]
-        return if ttl.to_i.zero? # nil will be zero
+        ttl = ttl.to_i
 
-        Familia.ld "#{rediskey} to #{ttl}"
-        expire ttl.to_i
+        return if ttl.zero?
+
+        Familia.ld "Setting expiration for #{rediskey} to #{ttl} seconds"
+
+        # EXPIRE command returns 1 if the timeout was set, 0 if key does not
+        # exist or the timeout could not be set.
+        expire(ttl).positive?
       end
+
     end
     # End of Serialization module
 
     include Serialization # these become Horreum instance methods
   end
-end
-
-__END__
-
-# Consider adding a retry mechanism for the refresh operation
-# if it fails to fetch the expected data:
-def refresh_with_retry(max_attempts = 3)
-  attempts = 0
-  base = 2
-  while attempts < max_attempts
-    refresh!
-    return if name == "Jane Doe" # Or whatever condition indicates a successful refresh
-    attempts += 1
-
-    sleep_time = 0.1 * (base ** attempts)
-    sleep(sleep_time) # Exponential backoff
-  end
-  raise "Failed to refresh after #{max_attempts} attempts"
 end
