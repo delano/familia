@@ -60,11 +60,31 @@ module Familia
 
       # @return The return value from redis client for hset command
       def fast_writer!(name)
-        define_method :"#{name}!" do |value|
-          prepared = to_redis(value)
-          Familia.ld "[.fast_writer!] #{name} val: #{value.class} prepared: #{prepared.class}"
-          send :"#{name}=", value # use the existing accessor
-          hset name, prepared # persist to Redis without delay
+        define_method :"#{name}!" do |*args|
+          # Check if the correct number of arguments is provided (exactly one).
+          if args.size != 1
+            raise ArgumentError, "wrong number of arguments (given #{args.size}, expected 1)"
+          end
+
+          value = args.first
+
+          begin
+            # Trace the operation if debugging is enabled.
+            Familia.trace :FAST_WRITER, redis, "#{name}: #{value.inspect}", caller if Familia.debug?
+
+            # Convert the provided value to a format suitable for Redis storage.
+            prepared = to_redis(value)
+            Familia.ld "[.fast_writer!] #{name} val: #{value.class} prepared: #{prepared.class}"
+
+            # Use the existing accessor method to set the attribute value.
+            send :"#{name}=", value
+
+            # Persist the value to Redis immediately using the hset command.
+            hset name, prepared
+          rescue Familia::Problem => e
+            # Raise a custom error message if an exception occurs during the execution of the method.
+            raise "#{name}! method failed: #{e.message}", e.backtrace
+          end
         end
       end
 
