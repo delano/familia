@@ -20,9 +20,12 @@ module Familia
 
       def exists?
         ret = redis.exists rediskey
-        ret.positive?
+        ret.positive? # differs from redis API but I think it's okay bc `exists?` is a predicate method.
       end
 
+      # Sets a timeout on key. After the timeout has expired, the key will automatically be deleted.
+      # Returns 1 if the timeout was set, 0 if key does not exist or the timeout could not be set.
+      #
       def expire(ttl = nil)
         ttl ||= self.class.ttl
         redis.expire rediskey, ttl.to_i
