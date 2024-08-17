@@ -18,6 +18,7 @@ module Familia
       update_expiration
       self
     end
+    alias append push
 
     def <<(val)
       push val
@@ -31,6 +32,7 @@ module Familia
       update_expiration
       self
     end
+    alias prepend unshift
 
     def pop
       from_redis redis.rpop(rediskey)

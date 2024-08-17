@@ -60,11 +60,12 @@ module Familia
     end
     alias all hgetall
 
-    def has_key?(field)
+    def key?(field)
       redis.hexists rediskey, field
     end
-    alias include? has_key?
-    alias member? has_key?
+    alias has_key? key?
+    alias include? key?
+    alias member? key?
 
     def delete(field)
       redis.hdel rediskey, field

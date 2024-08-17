@@ -35,6 +35,11 @@ module Familia
         redis.ttl rediskey
       end
 
+      # Deletes a field from the hash stored at the Redis key.
+      #
+      # @param field [String] The field to delete from the hash.
+      # @return [Integer] The number of fields that were removed from the hash (0 or 1).
+      # @note This method is destructive, as indicated by the bang (!).
       def hdel!(field)
         redis.hdel rediskey, field
       end
@@ -79,21 +84,45 @@ module Familia
         redis.hvals rediskey(suffix)
       end
 
-      def hincrby(field, increment)
+      def incr(field)
+        redis.hincrby rediskey(suffix), field, 1
+      end
+      alias increment incr
+
+      def incrby(field, increment)
         redis.hincrby rediskey(suffix), field, increment
       end
+      alias incrementby incrby
 
-      def hincrbyfloat(field, increment)
+      def incrbyfloat(field, increment)
         redis.hincrbyfloat rediskey(suffix), field, increment
       end
+      alias incrementbyfloat incrbyfloat
+
+      def decrby(field, decrement)
+        redis.decrby rediskey(suffix), field, decrement
+      end
+      alias decrementby decrby
+
+      def decr(field)
+        redis.hdecr field
+      end
+      alias decrement decr
 
       def hlen
         redis.hlen rediskey(suffix)
       end
+      alias hlength hlen
 
       def hstrlen(field)
         redis.hstrlen rediskey(suffix), field
       end
+      alias hstrlength hstrlen
+
+      def key?(field)
+        redis.hexists rediskey(suffix), field
+      end
+      alias has_key? key?
 
       def delete!
         Familia.trace :DELETE!, redis, redisuri, caller(1..1) if Familia.debug?
