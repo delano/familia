@@ -58,12 +58,36 @@ Familia.trace :LOAD, @customer.redis, @customer.redisuri, caller if Familia.debu
 #=> "Jane Doe"
 
 ## Unsaved changes are lost when an object reloads
-puts "Before change: #{@customer.name}"
 @customer.name = 'John Doe'
-puts "After local change: #{@customer.name}"
 @customer.refresh!
-puts "After refresh: #{@customer.name}"
-sleep(0.1) # Add a small delay
-puts "After delay: #{@customer.name}"
 @customer.name
 #=> "Jane Doe"
+
+## Horreum objects can be destroyed
+@customer.destroy!
+#=> true
+
+## All horrerum objects have a key field
+@customer.key
+#=> @identifier
+
+## Even ones that didn't define it
+@cd = CustomDomain.new "www.example.com", "@identifier"
+@cd.key
+#=> nil
+
+## We can call #identifier directly if we want to "lasy load" the unique identifier
+@cd.identifier
+#=> "7565befd"
+
+## The #key field will still be nil
+@cd.key
+#=> nil
+
+## But once we save
+@cd.save
+#=> true
+
+## The key will be set
+@cd.key
+#=> "7565befd"

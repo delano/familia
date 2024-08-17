@@ -94,6 +94,15 @@ module Familia
         # end
       end
 
+      # Automatically add a 'key' field if it's not already defined
+      # This ensures that every object has a unique identifier
+      unless self.class.fields.include?(:key)
+        # Define the 'key' field for this class
+        # This approach allows flexibility in how identifiers are generated
+        # while ensuring each object has a consistent way to be referenced
+        self.class.field :key # , default: -> { identifier }
+      end
+
       # Implementing classes can define an init method to do any
       # additional initialization. Notice that this is called
       # after the fields are set.
