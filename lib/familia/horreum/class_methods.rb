@@ -95,9 +95,7 @@ module Familia
       def fast_writer!(name)
         define_method :"#{name}!" do |*args|
           # Check if the correct number of arguments is provided (exactly one).
-          if args.size != 1
-            raise ArgumentError, "wrong number of arguments (given #{args.size}, expected 1)"
-          end
+          raise ArgumentError, "wrong number of arguments (given #{args.size}, expected 1)" if args.size != 1
 
           value = args.first
 
@@ -161,7 +159,7 @@ module Familia
         @uri || parent&.uri
       end
 
-      def all(suffix = :object)
+      def all(suffix = self.suffix)
         # objects that could not be parsed will be nil
         keys(suffix).filter_map { |k| from_key(k) }
       end
@@ -275,16 +273,17 @@ module Familia
       # @example
       #   User.from_redis(123)  # Equivalent to User.from_key("user:123:object")
       #
-      def from_redis(identifier, suffix = :object)
+      def from_redis(identifier, suffix = self.suffix)
         return nil if identifier.to_s.empty?
 
         objkey = rediskey(identifier, suffix)
+
         Familia.ld "[.from_redis] #{self} from key #{objkey})"
         Familia.trace :FROM_REDIS, Familia.redis(uri), objkey, caller(1..1).first if Familia.debug?
         from_key objkey
       end
 
-      def exists?(identifier, suffix = :object)
+      def exists?(identifier, suffix = self.suffix)
         return false if identifier.to_s.empty?
 
         objkey = rediskey identifier, suffix
@@ -295,7 +294,7 @@ module Familia
         ret.positive? # differs from redis API but I think it's okay bc `exists?` is a predicate method.
       end
 
-      def destroy!(identifier, suffix = :object)
+      def destroy!(identifier, suffix = self.suffix)
         return false if identifier.to_s.empty?
 
         objkey = rediskey identifier, suffix
