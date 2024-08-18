@@ -1,4 +1,4 @@
-# rubocop:disable all
+# frozen_string_literal: true
 
 require 'yaml'
 
@@ -7,7 +7,7 @@ module Familia
     def self.to_s
       load_config
       version = [@version[:MAJOR], @version[:MINOR], @version[:PATCH]].join('.')
-      version += "-#{@version[:PRE]}" if @version[:PRE]
+      version = "#{version}-#{@version[:PRE]}" if @version[:PRE]
       version
     end
     alias inspect to_s
