@@ -133,7 +133,7 @@ module Familia
     #   obtained from `caller` or `caller.first`. Default is nil.
     #
     # @example
-    #   Familia.trace :LOAD, Familia.redis(uri), objkey, caller if Familia.debug?
+    #   Familia.trace :LOAD, Familia.redis(uri), objkey, caller(1..1) if Familia.debug?
     #
     #
     # @return [nil]

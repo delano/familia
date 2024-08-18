@@ -103,7 +103,7 @@ module Familia
 
           begin
             # Trace the operation if debugging is enabled.
-            Familia.trace :FAST_WRITER, redis, "#{name}: #{value.inspect}", caller if Familia.debug?
+            Familia.trace :FAST_WRITER, redis, "#{name}: #{value.inspect}", caller(1..1) if Familia.debug?
 
             # Convert the provided value to a format suitable for Redis storage.
             prepared = to_redis(value)
@@ -201,7 +201,7 @@ module Familia
         ids.collect! { |objid| rediskey(objid) }
         return [] if ids.compact.empty?
 
-        Familia.trace :MULTIGET, redis, "#{ids.size}: #{ids}", caller if Familia.debug?
+        Familia.trace :MULTIGET, redis, "#{ids.size}: #{ids}", caller(1..1) if Familia.debug?
         redis.mget(*ids)
       end
 
@@ -241,7 +241,7 @@ module Familia
         does_exist = redis.exists(objkey).positive?
 
         Familia.ld "[.from_key] #{self} from key #{objkey} (exists: #{does_exist})"
-        Familia.trace :FROM_KEY, redis, objkey, caller if Familia.debug?
+        Familia.trace :FROM_KEY, redis, objkey, caller(1..1) if Familia.debug?
 
         # This is the reason for calling exists first. We want to definitively
         # and without any ambiguity know if the object exists in Redis. If it
@@ -251,7 +251,7 @@ module Familia
         return unless does_exist
 
         obj = redis.hgetall(objkey) # horreum objects are persisted as redis hashes
-        Familia.trace :FROM_KEY2, redis, "#{objkey}: #{obj.inspect}", caller if Familia.debug?
+        Familia.trace :FROM_KEY2, redis, "#{objkey}: #{obj.inspect}", caller(1..1) if Familia.debug?
 
         new(**obj)
       end
@@ -290,8 +290,9 @@ module Familia
         objkey = rediskey identifier, suffix
 
         ret = redis.exists objkey
-        Familia.trace :EXISTS, redis, "#{objkey} #{ret.inspect}", caller if Familia.debug?
-        ret.positive?
+        Familia.trace :EXISTS, redis, "#{objkey} #{ret.inspect}", caller(1..1) if Familia.debug?
+
+        ret.positive? # differs from redis API but I think it's okay bc `exists?` is a predicate method.
       end
 
       def destroy!(identifier, suffix = :object)
@@ -300,10 +301,7 @@ module Familia
         objkey = rediskey identifier, suffix
 
         ret = redis.del objkey
-        if Familia.debug?
-          Familia.trace :DELETED, redis, "#{objkey}: #{ret.inspect}",
-                        caller
-        end
+        Familia.trace :DELETED, redis, "#{objkey}: #{ret.inspect}", caller(1..1) if Familia.debug?
         ret.positive?
       end
 
