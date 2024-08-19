@@ -299,36 +299,6 @@ module Familia
         prepared
       end
 
-      # Set an expiration date for our data, like a "best before" sticker for Redis!
-      #
-      # This method gives our data a lifespan in Redis. It's like telling Redis,
-      # "Hey, this data is fresh now, but it might get stale after a while!"
-      #
-      # @param ttl [Integer, nil] The Time To Live in seconds. If nil, we'll check
-      #   our options for a default expiration time.
-      #
-      # @return [Boolean] true if the expiration was set successfully, false otherwise.
-      #   It's like asking Redis, "Did you stick that expiration label on properly?"
-      #
-      # @example Making your pet rock data mortal
-      #   rocky.update_expiration(86400) # Dwayne will live in Redis for one day
-      #
-      # @note If the TTL is zero, we assume our data wants to live forever.
-      #   Immortality in Redis! Who wouldn't want that?
-      #
-      def update_expiration(ttl = nil)
-        ttl ||= opts[:ttl]
-        ttl = ttl.to_i
-
-        return if ttl.zero?
-
-        Familia.ld "Setting expiration for #{rediskey} to #{ttl} seconds"
-
-        # EXPIRE command returns 1 if the timeout was set, 0 if key does not
-        # exist or the timeout could not be set.
-        expire(ttl).positive?
-      end
-
     end
     # End of Serialization module
 

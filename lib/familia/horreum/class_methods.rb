@@ -144,11 +144,6 @@ module Familia
         @redis_types
       end
 
-      def ttl(v = nil)
-        @ttl = v unless v.nil?
-        @ttl || parent&.ttl
-      end
-
       def db(v = nil)
         @db = v unless v.nil?
         @db || parent&.db

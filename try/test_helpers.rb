@@ -33,6 +33,7 @@ class Customer < Familia::Horreum
   ttl 5.years
 
   feature :safe_dump
+  #feature :expiration
   #feature :api_version
 
   # NOTE: The SafeDump mixin caches the safe_dump_field_map so updating this list
@@ -144,9 +145,12 @@ end
 
 class CustomDomain < Familia::Horreum
 
+  feature :expiration
+
   class_sorted_set :values, key: 'onetime:customdomain:values'
 
   identifier :derive_id
+
 
   field :display_domain
   field :custid
@@ -182,6 +186,7 @@ end
 
 class Limiter < Familia::Horreum
 
+  ttl 30.seconds
   identifier :name
   field :name
   # No :key field (so we can test hte behaviour in Horreum#initialize)
