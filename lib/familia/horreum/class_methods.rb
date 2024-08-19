@@ -95,15 +95,13 @@ module Familia
       def fast_writer!(name)
         define_method :"#{name}!" do |*args|
           # Check if the correct number of arguments is provided (exactly one).
-          if args.size != 1
-            raise ArgumentError, "wrong number of arguments (given #{args.size}, expected 1)"
-          end
+          raise ArgumentError, "wrong number of arguments (given #{args.size}, expected 1)" if args.size != 1
 
           value = args.first
 
           begin
             # Trace the operation if debugging is enabled.
-            Familia.trace :FAST_WRITER, redis, "#{name}: #{value.inspect}", caller if Familia.debug?
+            Familia.trace :FAST_WRITER, redis, "#{name}: #{value.inspect}", caller(1..1) if Familia.debug?
 
             # Convert the provided value to a format suitable for Redis storage.
             prepared = to_redis(value)
@@ -161,7 +159,8 @@ module Familia
         @uri || parent&.uri
       end
 
-      def all(suffix = :object)
+      def all(suffix = nil)
+        suffix ||= self.suffix
         # objects that could not be parsed will be nil
         keys(suffix).filter_map { |k| from_key(k) }
       end
@@ -185,11 +184,11 @@ module Familia
       end
 
       def create *args
-        me = from_array(*args)
-        raise "#{self} exists: #{me.rediskey}" if me.exists?
+        fobj = new(*args)
+        raise Familia::Problem, "#{self} already exists: #{fobj.rediskey}" if fobj.exists?
 
-        me.save
-        me
+        fobj.save
+        fobj
       end
 
       def multiget(*ids)
@@ -201,7 +200,7 @@ module Familia
         ids.collect! { |objid| rediskey(objid) }
         return [] if ids.compact.empty?
 
-        Familia.trace :MULTIGET, redis, "#{ids.size}: #{ids}", caller if Familia.debug?
+        Familia.trace :MULTIGET, redis, "#{ids.size}: #{ids}", caller(1..1) if Familia.debug?
         redis.mget(*ids)
       end
 
@@ -241,7 +240,7 @@ module Familia
         does_exist = redis.exists(objkey).positive?
 
         Familia.ld "[.from_key] #{self} from key #{objkey} (exists: #{does_exist})"
-        Familia.trace :FROM_KEY, redis, objkey, caller if Familia.debug?
+        Familia.trace :FROM_KEY, redis, objkey, caller(1..1) if Familia.debug?
 
         # This is the reason for calling exists first. We want to definitively
         # and without any ambiguity know if the object exists in Redis. If it
@@ -251,7 +250,7 @@ module Familia
         return unless does_exist
 
         obj = redis.hgetall(objkey) # horreum objects are persisted as redis hashes
-        Familia.trace :FROM_KEY2, redis, "#{objkey}: #{obj.inspect}", caller if Familia.debug?
+        Familia.trace :FROM_KEY2, redis, "#{objkey}: #{obj.inspect}", caller(1..1) if Familia.debug?
 
         new(**obj)
       end
@@ -273,37 +272,40 @@ module Familia
       # identifier.
       #
       # @example
-      #   User.from_redis(123)  # Equivalent to User.from_key("user:123:object")
+      #   User.from_identifier(123)  # Equivalent to User.from_key("user:123:object")
       #
-      def from_redis(identifier, suffix = :object)
+      def from_identifier(identifier, suffix = nil)
+        suffix ||= self.suffix
         return nil if identifier.to_s.empty?
 
         objkey = rediskey(identifier, suffix)
-        Familia.ld "[.from_redis] #{self} from key #{objkey})"
-        Familia.trace :FROM_REDIS, Familia.redis(uri), objkey, caller(1..1).first if Familia.debug?
+
+        Familia.ld "[.from_identifier] #{self} from key #{objkey})"
+        Familia.trace :FROM_IDENTIFIER, Familia.redis(uri), objkey, caller(1..1).first if Familia.debug?
         from_key objkey
       end
+      alias load from_identifier
 
-      def exists?(identifier, suffix = :object)
+      def exists?(identifier, suffix = nil)
+        suffix ||= self.suffix
         return false if identifier.to_s.empty?
 
         objkey = rediskey identifier, suffix
 
         ret = redis.exists objkey
-        Familia.trace :EXISTS, redis, "#{objkey} #{ret.inspect}", caller if Familia.debug?
-        ret.positive?
+        Familia.trace :EXISTS, redis, "#{objkey} #{ret.inspect}", caller(1..1) if Familia.debug?
+
+        ret.positive? # differs from redis API but I think it's okay bc `exists?` is a predicate method.
       end
 
-      def destroy!(identifier, suffix = :object)
+      def destroy!(identifier, suffix = nil)
+        suffix ||= self.suffix
         return false if identifier.to_s.empty?
 
         objkey = rediskey identifier, suffix
 
         ret = redis.del objkey
-        if Familia.debug?
-          Familia.trace :DELETED, redis, "#{objkey}: #{ret.inspect}",
-                        caller
-        end
+        Familia.trace :DELETED, redis, "#{objkey}: #{ret.inspect}", caller(1..1) if Familia.debug?
         ret.positive?
       end
 
@@ -322,9 +324,10 @@ module Familia
       # We don't enforce a default suffix; that's left up to the instance.
       # The suffix is used to differentiate between different types of objects.
       #
-      #
-      # A nil +suffix+ will not be included in the key.
-      def rediskey(identifier, suffix = self.suffix)
+      # A nil +suffix+ will not be included in the key. If a nil suffix is explicitly
+      # passed in, it'll still default to the class's suffix.
+      def rediskey(identifier, suffix = nil)
+        suffix ||= self.suffix
         Familia.ld "[.rediskey] #{identifier} for #{self} (suffix:#{suffix})"
         raise NoIdentifier, self if identifier.to_s.empty?
 
