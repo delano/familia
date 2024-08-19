@@ -272,18 +272,19 @@ module Familia
       # identifier.
       #
       # @example
-      #   User.from_redis(123)  # Equivalent to User.from_key("user:123:object")
+      #   User.from_identifier(123)  # Equivalent to User.from_key("user:123:object")
       #
-      def from_redis(identifier, suffix = nil)
+      def from_identifier(identifier, suffix = nil)
         suffix ||= self.suffix
         return nil if identifier.to_s.empty?
 
         objkey = rediskey(identifier, suffix)
 
-        Familia.ld "[.from_redis] #{self} from key #{objkey})"
-        Familia.trace :FROM_REDIS, Familia.redis(uri), objkey, caller(1..1).first if Familia.debug?
+        Familia.ld "[.from_identifier] #{self} from key #{objkey})"
+        Familia.trace :FROM_IDENTIFIER, Familia.redis(uri), objkey, caller(1..1).first if Familia.debug?
         from_key objkey
       end
+      alias load from_identifier
 
       def exists?(identifier, suffix = nil)
         suffix ||= self.suffix

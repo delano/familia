@@ -49,12 +49,12 @@ module Familia
     end
 
     def values
-      el = redis.hvals(rediskey)
-      multi_from_redis(*el)
+      elements = redis.hvals(rediskey)
+      multi_from_redis(*elements)
     end
 
     def hgetall
-      # TODO: Use from_redis. Also name `all` is confusing with
+      # TODO: Use from_redis. Also alias `all` is confusing with
       # Onetime::Customer.all which returns all customers.
       redis.hgetall rediskey
     end
@@ -98,8 +98,8 @@ module Familia
     alias merge! update
 
     def values_at *fields
-      el = redis.hmget(rediskey, *fields.flatten.compact)
-      multi_from_redis(*el)
+      elements = redis.hmget(rediskey, *fields.flatten.compact)
+      multi_from_redis(*elements)
     end
 
     Familia::RedisType.register self, :hash # legacy, deprecated
