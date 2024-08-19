@@ -126,26 +126,48 @@ module Familia
     #
     # @param label [Symbol] A label for the trace message (e.g., :EXPAND,
     #   :FROMREDIS, :LOAD, :EXISTS).
-    # @param redis_instance [Object] The Redis instance being used.
+    # @param redis_instance [Redis, Redis::Future, nil] The Redis instance or
+    #   Future being used.
     # @param ident [String] An identifier or key related to the operation being
     #   traced.
     # @param context [Array<String>, String, nil] The calling context, typically
     #   obtained from `caller` or `caller.first`. Default is nil.
     #
     # @example
-    #   Familia.trace :LOAD, Familia.redis(uri), objkey, caller(1..1) if Familia.debug?
-    #
+    #   Familia.trace :LOAD, Familia.redis(uri), objkey, caller(1..1) if
+    #   Familia.debug?
     #
     # @return [nil]
     #
+    # @note This method only executes if LoggerTraceRefinement::ENABLED is true.
+    # @note The redis_instance can be a Redis object, Redis::Future (used in
+    #   pipelined and multi blocks), or nil (when the redis connection isn't
+    #   relevant).
+    #
     def trace(label, redis_instance, ident, context = nil)
       return unless LoggerTraceRefinement::ENABLED
-      instance_id = redis_instance&.id
+
+      # Usually redis_instance is a Redis object, but it could be
+      # a Redis::Future which is what is used inside of pipelined
+      # and multi blocks. In some contexts it's nil where the
+      # redis connection isn't relevant.
+      instance_id = if redis_instance
+        case redis_instance
+        when Redis
+          redis_instance.id.respond_to?(:to_s) ? redis_instance.id.to_s : redis_instance.class.name
+        when Redis::Future
+          "Redis::Future"
+        else
+          redis_instance.class.name
+        end
+      end
+
       codeline = if context
                    context = [context].flatten
                    context.reject! { |line| line =~ %r{lib/familia} }
                    context.first
                  end
+
       @logger.trace format('[%s] %s -> %s <- at %s', label, instance_id, ident, codeline)
     end
 

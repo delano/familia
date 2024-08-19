@@ -13,29 +13,26 @@ module Familia
   # @abstract Subclass and implement Redis data type specific methods
   class RedisType
     include Familia::Base
+    extend Familia::Features
 
     @registered_types = {}
     @valid_options = %i[class parent ttl default db key redis]
     @db = nil
-    @ttl = nil
+
+    feature :expiration
 
     class << self
       attr_reader :registered_types, :valid_options
       attr_accessor :parent
-      attr_writer :ttl, :db, :uri
+      attr_writer :db, :uri
 
       # To be called inside every class that inherits RedisType
       # +methname+ is the term used for the class and instance methods
       # that are created for the given +klass+ (e.g. set, list, etc)
       def register(klass, methname)
-        Familia.ld "[#{self}] Registering #{klass} as #{methname}"
+        Familia.ld "[#{self}] Registering #{klass} as #{methname.inspect}"
 
         @registered_types[methname] = klass
-      end
-
-      def ttl(val = nil)
-        @ttl = val unless val.nil?
-        @ttl || parent&.ttl
       end
 
       def db(val = nil)
@@ -49,8 +46,9 @@ module Familia
       end
 
       def inherited(obj)
+        Familia.trace :REDISTYPE, nil, "#{obj} is my kinda type", caller(1..1) if Familia.debug?
         obj.db = db
-        obj.ttl = ttl
+        obj.ttl = ttl # method added via Features::Expiration
         obj.uri = uri
         obj.parent = self
         super(obj)
@@ -141,7 +139,6 @@ module Familia
     #   User.rediskey("123", nil)  # => "user:123"
     #
     def rediskey
-
       # Return the hardcoded key if it's set. This is useful for
       # support legacy keys that aren't derived in the same way.
       return opts[:key] if opts[:key]
@@ -179,10 +176,6 @@ module Familia
 
     def parent
       @opts[:parent]
-    end
-
-    def ttl
-      @opts[:ttl] || self.class.ttl
     end
 
     def db

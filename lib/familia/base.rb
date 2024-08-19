@@ -24,10 +24,28 @@ module Familia
 
       def add_feature(klass, methname)
         @features ||= {}
-        Familia.ld "[#{self}] Adding feature #{klass} as #{methname}"
+        Familia.ld "[#{self}] Adding feature #{klass} as #{methname.inspect}"
 
         features[methname] = klass
       end
+    end
+
+    # Yo, this class is like that one friend who never checks expiration dates.
+    # It's living life on the edge, data-style!
+    #
+    # @param ttl [Integer, nil] Time To Live? More like Time To Laugh! This param
+    #   is here for compatibility, but it's as useful as a chocolate teapot.
+    #
+    # @return [nil] Always returns nil. It's consistent in its laziness!
+    #
+    # @example Trying to teach an old dog new tricks
+    #   immortal_data.update_expiration(86400) # Nice try, but this data is here to stay!
+    #
+    # @note This method is a no-op. It's like shouting into the void, but less echo-y.
+    #
+    def update_expiration(_ = nil)
+      Familia.info "[update_expiration] Skipped for #{rediskey}. #{self.class} data is immortal!"
+      nil
     end
   end
 end

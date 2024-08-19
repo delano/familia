@@ -1,17 +1,15 @@
 # rubocop:disable all
-
+Familia.debug = true
 module Familia
 
-  @features_enabled = nil
 
   module Features
 
+    @features_enabled = nil
     attr_reader :features_enabled
 
     def feature(val = nil)
       @features_enabled ||= []
-
-      Familia.ld "[Familia::Settings] feature: #{val.inspect}"
 
       # If there's a value provied check that it's a valid feature
       if val
@@ -23,6 +21,8 @@ module Familia
           Familia.warn "[Familia::Settings] feature already enabled: #{val}"
           return
         end
+
+        Familia.trace :FEATURE, nil, "#{self} includes #{val.inspect}", caller(1..1) if Familia.debug?
 
         klass = Familia::Base.features[val]
 
@@ -48,4 +48,5 @@ module Familia
 
 end
 
+require_relative 'features/expiration'
 require_relative 'features/safe_dump'
