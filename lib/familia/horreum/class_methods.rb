@@ -159,7 +159,8 @@ module Familia
         @uri || parent&.uri
       end
 
-      def all(suffix = self.suffix)
+      def all(suffix = nil)
+        suffix ||= self.suffix
         # objects that could not be parsed will be nil
         keys(suffix).filter_map { |k| from_key(k) }
       end
@@ -273,7 +274,8 @@ module Familia
       # @example
       #   User.from_redis(123)  # Equivalent to User.from_key("user:123:object")
       #
-      def from_redis(identifier, suffix = self.suffix)
+      def from_redis(identifier, suffix = nil)
+        suffix ||= self.suffix
         return nil if identifier.to_s.empty?
 
         objkey = rediskey(identifier, suffix)
@@ -283,7 +285,8 @@ module Familia
         from_key objkey
       end
 
-      def exists?(identifier, suffix = self.suffix)
+      def exists?(identifier, suffix = nil)
+        suffix ||= self.suffix
         return false if identifier.to_s.empty?
 
         objkey = rediskey identifier, suffix
@@ -294,7 +297,8 @@ module Familia
         ret.positive? # differs from redis API but I think it's okay bc `exists?` is a predicate method.
       end
 
-      def destroy!(identifier, suffix = self.suffix)
+      def destroy!(identifier, suffix = nil)
+        suffix ||= self.suffix
         return false if identifier.to_s.empty?
 
         objkey = rediskey identifier, suffix
@@ -319,9 +323,10 @@ module Familia
       # We don't enforce a default suffix; that's left up to the instance.
       # The suffix is used to differentiate between different types of objects.
       #
-      #
-      # A nil +suffix+ will not be included in the key.
-      def rediskey(identifier, suffix = self.suffix)
+      # A nil +suffix+ will not be included in the key. If a nil suffix is explicitly
+      # passed in, it'll still default to the class's suffix.
+      def rediskey(identifier, suffix = nil)
+        suffix ||= self.suffix
         Familia.ld "[.rediskey] #{identifier} for #{self} (suffix:#{suffix})"
         raise NoIdentifier, self if identifier.to_s.empty?
 
