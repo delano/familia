@@ -184,11 +184,11 @@ module Familia
       end
 
       def create *args
-        me = from_array(*args)
-        raise "#{self} exists: #{me.rediskey}" if me.exists?
+        fobj = new(*args)
+        raise Familia::Problem, "#{self} already exists: #{fobj.rediskey}" if fobj.exists?
 
-        me.save
-        me
+        fobj.save
+        fobj
       end
 
       def multiget(*ids)
