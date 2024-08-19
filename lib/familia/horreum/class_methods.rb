@@ -286,6 +286,18 @@ module Familia
       end
       alias load from_identifier
 
+      # Checks if an object with the given identifier exists in Redis.
+      #
+      # @param identifier [String, Integer] The unique identifier for the object.
+      # @param suffix [Symbol, nil] The suffix to use in the Redis key (default: class suffix).
+      # @return [Boolean] true if the object exists, false otherwise.
+      #
+      # This method constructs the full Redis key using the provided identifier and suffix,
+      # then checks if the key exists in Redis.
+      #
+      # @example
+      #   User.exists?(123)  # Returns true if user:123:object exists in Redis
+      #
       def exists?(identifier, suffix = nil)
         suffix ||= self.suffix
         return false if identifier.to_s.empty?
@@ -298,6 +310,18 @@ module Familia
         ret.positive? # differs from redis API but I think it's okay bc `exists?` is a predicate method.
       end
 
+      # Destroys an object in Redis with the given identifier.
+      #
+      # @param identifier [String, Integer] The unique identifier for the object to destroy.
+      # @param suffix [Symbol, nil] The suffix to use in the Redis key (default: class suffix).
+      # @return [Boolean] true if the object was successfully destroyed, false otherwise.
+      #
+      # This method constructs the full Redis key using the provided identifier and suffix,
+      # then removes the corresponding key from Redis.
+      #
+      # @example
+      #   User.destroy!(123)  # Removes user:123:object from Redis
+      #
       def destroy!(identifier, suffix = nil)
         suffix ||= self.suffix
         return false if identifier.to_s.empty?
@@ -309,10 +333,36 @@ module Familia
         ret.positive?
       end
 
+      # Finds all keys in Redis matching the given suffix pattern.
+      #
+      # @param suffix [String] The suffix pattern to match (default: '*').
+      # @return [Array<String>] An array of matching Redis keys.
+      #
+      # This method searches for all Redis keys that match the given suffix pattern.
+      # It uses the class's rediskey method to construct the search pattern.
+      #
+      # @example
+      #   User.find  # Returns all keys matching user:*:object
+      #   User.find('active')  # Returns all keys matching user:*:active
+      #
       def find(suffix = '*')
         redis.keys(rediskey('*', suffix)) || []
       end
 
+      # Generates a quantized timestamp based on the given parameters.
+      #
+      # @param quantum [Integer, nil] The time quantum in seconds (default: class ttl or 10 minutes).
+      # @param pattern [String, nil] The strftime pattern to format the timestamp (default: '%H%M').
+      # @param now [Time] The current time (default: Familia.now).
+      # @return [String] A formatted timestamp string.
+      #
+      # This method rounds the current time to the nearest quantum and formats it
+      # according to the given pattern. It's useful for creating time-based buckets
+      # or keys with reduced granularity.
+      #
+      # @example
+      #   User.qstamp(1.hour, '%Y%m%d%H')  # Returns a string like "2023060114" for 2:30 PM
+      #
       def qstamp(quantum = nil, pattern = nil, now = Familia.now)
         quantum ||= ttl || 10.minutes
         pattern ||= '%H%M'
