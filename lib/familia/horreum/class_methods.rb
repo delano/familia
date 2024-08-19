@@ -183,8 +183,44 @@ module Familia
         @prefix || name.downcase.gsub('::', Familia.delim).to_sym
       end
 
-      def create *args
-        fobj = new(*args)
+      # Creates and persists a new instance of the class.
+      #
+      # @param *args [Array] Variable number of positional arguments to be passed
+      #   to the constructor.
+      # @param **kwargs [Hash] Keyword arguments to be passed to the constructor.
+      # @return [Object] The newly created and persisted instance.
+      # @raise [Familia::Problem] If an instance with the same identifier already
+      #   exists.
+      #
+      # This method serves as a factory method for creating and persisting new
+      # instances of the class. It combines object instantiation, existence
+      # checking, and persistence in a single operation.
+      #
+      # The method is flexible in accepting both positional and keyword arguments:
+      # - Positional arguments (*args) are passed directly to the constructor.
+      # - Keyword arguments (**kwargs) are passed as a hash to the constructor.
+      #
+      # After instantiation, the method checks if an object with the same
+      # identifier already exists. If it does, a Familia::Problem exception is
+      # raised to prevent overwriting existing data.
+      #
+      # Finally, the method saves the new instance returns it.
+      #
+      # @example Creating an object with keyword arguments
+      #   User.create(name: "John", age: 30)
+      #
+      # @example Creating an object with positional and keyword arguments (not recommended)
+      #   Product.create("SKU123", name: "Widget", price: 9.99)
+      #
+      # @note The behavior of this method depends on the implementation of #new,
+      #   #exists?, and #save in the class and its superclasses.
+      #
+      # @see #new
+      # @see #exists?
+      # @see #save
+      #
+      def create *args, **kwargs
+        fobj = new(*args, **kwargs)
         raise Familia::Problem, "#{self} already exists: #{fobj.rediskey}" if fobj.exists?
 
         fobj.save
@@ -381,7 +417,7 @@ module Familia
       # at the class level are created without the global default 'object'
       # suffix. See RedisType#rediskey "parent_class?" for more details.
       def rediskey(identifier, suffix = self.suffix)
-        Familia.ld "[.rediskey] #{identifier} for #{self} (suffix:#{suffix})"
+        # Familia.ld "[.rediskey] #{identifier} for #{self} (suffix:#{suffix})"
         raise NoIdentifier, self if identifier.to_s.empty?
 
         identifier &&= identifier.to_s
