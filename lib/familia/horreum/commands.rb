@@ -19,6 +19,7 @@ module Familia
     module Commands
 
       def exists?
+        # Trace output comes from the class method
         self.class.exists? identifier, suffix
       end
 
@@ -27,10 +28,12 @@ module Familia
       #
       def expire(ttl = nil)
         ttl ||= self.class.ttl
+        Familia.trace :EXPIRE, redis, ttl, caller(1..1) if Familia.debug?
         redis.expire rediskey, ttl.to_i
       end
 
       def realttl
+        Familia.trace :REALTTL, redis, redisuri, caller(1..1) if Familia.debug?
         redis.ttl rediskey
       end
 
@@ -40,15 +43,18 @@ module Familia
       # @return [Integer] The number of fields that were removed from the hash (0 or 1).
       # @note This method is destructive, as indicated by the bang (!).
       def hdel!(field)
+        Familia.trace :HDEL, redis, field, caller(1..1) if Familia.debug?
         redis.hdel rediskey, field
       end
 
       def redistype
+        Familia.trace :REDISTYPE, redis, redisuri, caller(1..1) if Familia.debug?
         redis.type rediskey(suffix)
       end
 
       # Parity with RedisType#rename
       def rename(newkey)
+        Familia.trace :RENAME, redis, "#{rediskey} -> #{newkey}", caller(1..1) if Familia.debug?
         redis.rename rediskey, newkey
       end
 
@@ -60,13 +66,14 @@ module Familia
       alias all hgetall
 
       def hget(field)
+        Familia.trace :HGET, redis, field, caller(1..1) if Familia.debug?
         redis.hget rediskey(suffix), field
       end
 
       # @return The number of fields that were added to the hash. If the
       #  field already exists, this will return 0.
       def hset(field, value)
-        Familia.trace :HSET, redis, redisuri, caller(1..1) if Familia.debug?
+        Familia.trace :HSET, redis, field, caller(1..1) if Familia.debug?
         redis.hset rediskey, field, value
       end
 

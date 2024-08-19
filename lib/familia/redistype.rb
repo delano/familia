@@ -141,7 +141,6 @@ module Familia
     #   User.rediskey("123", nil)  # => "user:123"
     #
     def rediskey
-      Familia.ld "[rediskey] #{keystring} for #{self.class} (#{opts})"
 
       # Return the hardcoded key if it's set. This is useful for
       # support legacy keys that aren't derived in the same way.

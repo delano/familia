@@ -80,13 +80,13 @@ module Familia
     def distinguisher(value_to_distinguish, strict_values = true)
       case value_to_distinguish
       when ::Symbol, ::String, ::Integer, ::Float
-        Familia.trace :TOREDIS_DISTINGUISHER, redis, "string", caller(1..1) if Familia.debug?
+        #Familia.trace :TOREDIS_DISTINGUISHER, redis, "string", caller(1..1) if Familia.debug?
         # Symbols and numerics are naturally serializable to strings
         # so it's a relatively low risk operation.
         value_to_distinguish.to_s
 
       when ::TrueClass, ::FalseClass, ::NilClass
-        Familia.trace :TOREDIS_DISTINGUISHER, redis, "true/false/nil", caller(1..1) if Familia.debug?
+        #Familia.trace :TOREDIS_DISTINGUISHER, redis, "true/false/nil", caller(1..1) if Familia.debug?
         # TrueClass, FalseClass, and NilClass are high risk because we can't
         # reliably determine the original type of the value from the serialized
         # string. This can lead to unexpected behavior when deserializing. For
@@ -99,7 +99,7 @@ module Familia
         value_to_distinguish.to_s #=> "true", "false", ""
 
       when Familia::Base, Class
-        Familia.trace :TOREDIS_DISTINGUISHER, redis, "base", caller(1..1) if Familia.debug?
+        #Familia.trace :TOREDIS_DISTINGUISHER, redis, "base", caller(1..1) if Familia.debug?
         if value_to_distinguish.is_a?(Class)
           value_to_distinguish.name
         else
@@ -107,14 +107,14 @@ module Familia
         end
 
       else
-        Familia.trace :TOREDIS_DISTINGUISHER, redis, "else1 #{strict_values}", caller(1..1) if Familia.debug?
+        #Familia.trace :TOREDIS_DISTINGUISHER, redis, "else1 #{strict_values}", caller(1..1) if Familia.debug?
 
         if value_to_distinguish.class.ancestors.member?(Familia::Base)
-          Familia.trace :TOREDIS_DISTINGUISHER, redis, "isabase", caller(1..1) if Familia.debug?
+          #Familia.trace :TOREDIS_DISTINGUISHER, redis, "isabase", caller(1..1) if Familia.debug?
           value_to_distinguish.identifier
 
         else
-          Familia.trace :TOREDIS_DISTINGUISHER, redis, "else2 #{strict_values}", caller(1..1) if Familia.debug?
+          #Familia.trace :TOREDIS_DISTINGUISHER, redis, "else2 #{strict_values}", caller(1..1) if Familia.debug?
           raise Familia::HighRiskFactor, value_to_distinguish if strict_values
           nil
         end
