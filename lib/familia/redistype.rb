@@ -110,7 +110,36 @@ module Familia
       parent? ? parent.redis : Familia.redis(opts[:db])
     end
 
-    # Produces the full redis key for this object.
+    # Produces the full Redis key for this object.
+    #
+    # @return [String] The full Redis key.
+    #
+    # This method determines the appropriate Redis key based on the context of the RedisType object:
+    #
+    # 1. If a hardcoded key is set in the options, it returns that key.
+    # 2. For instance-level RedisType objects, it uses the parent instance's rediskey method.
+    # 3. For class-level RedisType objects, it uses the parent class's rediskey method.
+    # 4. For standalone RedisType objects, it uses the keystring as the full Redis key.
+    #
+    # For class-level RedisType objects (parent_class? == true):
+    # - The suffix is optional and used to differentiate between different types of objects.
+    # - If no suffix is provided, the class's default suffix is used (via the self.suffix method).
+    # - If a nil suffix is explicitly passed, it won't appear in the resulting Redis key.
+    # - Passing nil as the suffix is how class-level RedisType objects are created without
+    #   the global default 'object' suffix.
+    #
+    # @example Instance-level RedisType
+    #   user_instance.some_redistype.rediskey  # => "user:123:some_redistype"
+    #
+    # @example Class-level RedisType
+    #   User.some_redistype.rediskey  # => "user:some_redistype"
+    #
+    # @example Standalone RedisType
+    #   RedisType.new("mykey").rediskey  # => "mykey"
+    #
+    # @example Class-level RedisType with explicit nil suffix
+    #   User.rediskey("123", nil)  # => "user:123"
+    #
     def rediskey
       Familia.ld "[rediskey] #{keystring} for #{self.class} (#{opts})"
 
@@ -128,7 +157,7 @@ module Familia
         parent.rediskey(keystring, nil)
       else
         # This is a standalone RedisType object where it's keystring
-        # is the full key.
+        # is the full redis key.
         keystring
       end
     end

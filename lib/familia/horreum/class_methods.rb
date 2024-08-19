@@ -374,10 +374,13 @@ module Familia
       # We don't enforce a default suffix; that's left up to the instance.
       # The suffix is used to differentiate between different types of objects.
       #
-      # A nil +suffix+ will not be included in the key. If a nil suffix is explicitly
-      # passed in, it'll still default to the class's suffix.
-      def rediskey(identifier, suffix = nil)
-        suffix ||= self.suffix
+      # +suffix+ If a nil value is explicitly passed in, it won't appear in the redis
+      # key that's returned. If no suffix is passed in, the class' suffix is used
+      # as the default (via the class method self.suffix). It's an important
+      # distinction b/c passing in an explicitly nil is how RedisType objects
+      # at the class level are created without the global default 'object'
+      # suffix. See RedisType#rediskey "parent_class?" for more details.
+      def rediskey(identifier, suffix = self.suffix)
         Familia.ld "[.rediskey] #{identifier} for #{self} (suffix:#{suffix})"
         raise NoIdentifier, self if identifier.to_s.empty?
 
