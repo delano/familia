@@ -1,7 +1,7 @@
 require_relative '../lib/familia'
 require_relative './test_helpers'
 
-Familia.debug = true
+Familia.debug = false
 
 @identifier = 'tryouts-27@onetimesecret.com'
 @customer = Customer.new @identifier

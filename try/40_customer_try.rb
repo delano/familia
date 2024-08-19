@@ -18,7 +18,7 @@ require_relative './test_helpers'
 #=> true
 
 ## Customer can be retrieved by identifier
-retrieved_customer = Customer.from_redis("test@example.com")
+retrieved_customer = Customer.from_identifier("test@example.com")
 retrieved_customer.custid
 #=> "test@example.com"
 

@@ -1,6 +1,7 @@
 require_relative '../lib/familia'
 require_relative './test_helpers'
-#Familia.apiversion = 'v1'
+
+Familia.debug = false
 
 @a = Bone.new 'atoken', 'akey'
 
