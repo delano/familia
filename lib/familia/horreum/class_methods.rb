@@ -380,27 +380,6 @@ module Familia
         redis.keys(rediskey('*', suffix)) || []
       end
 
-      # Generates a quantized timestamp based on the given parameters.
-      #
-      # @param quantum [Integer, nil] The time quantum in seconds (default: class ttl or 10 minutes).
-      # @param pattern [String, nil] The strftime pattern to format the timestamp (default: '%H%M').
-      # @param now [Time] The current time (default: Familia.now).
-      # @return [String] A formatted timestamp string.
-      #
-      # This method rounds the current time to the nearest quantum and formats it
-      # according to the given pattern. It's useful for creating time-based buckets
-      # or keys with reduced granularity.
-      #
-      # @example
-      #   User.qstamp(1.hour, '%Y%m%d%H')  # Returns a string like "2023060114" for 2:30 PM
-      #
-      def qstamp(quantum = nil, pattern = nil, now = Familia.now)
-        quantum ||= ttl || 10.minutes
-        pattern ||= '%H%M'
-        rounded = now - (now % quantum)
-        Time.at(rounded).utc.strftime(pattern)
-      end
-
       # +identifier+ can be a value or an Array of values used to create the index.
       # We don't enforce a default suffix; that's left up to the instance.
       # The suffix is used to differentiate between different types of objects.

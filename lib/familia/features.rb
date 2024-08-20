@@ -2,7 +2,6 @@
 Familia.debug = true
 module Familia
 
-
   module Features
 
     @features_enabled = nil
@@ -49,4 +48,5 @@ module Familia
 end
 
 require_relative 'features/expiration'
+require_relative 'features/quantization'
 require_relative 'features/safe_dump'

@@ -20,6 +20,7 @@ module Familia
     @db = nil
 
     feature :expiration
+    feature :quantization
 
     class << self
       attr_reader :registered_types, :valid_options
@@ -98,6 +99,12 @@ module Familia
       # Remove all keys from the opts that are not in the allowed list
       @opts = opts || {}
       @opts = RedisType.valid_keys_only(@opts)
+
+      # Apply the options to instance method setters of the same name
+      @opts.each do |k, v|
+        Familia.ld " [setting] #{k} #{v}"
+        send(:"#{k}=", v) if respond_to? :"#{k}="
+      end
 
       init if respond_to? :init
     end

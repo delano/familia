@@ -45,23 +45,36 @@ module Familia
       redis_uri
     end
 
-    def now(name = Time.now)
+    def Familia.now(name = Time.now)
       name.utc.to_f
     end
 
     # A quantized timestamp
-    # e.g. 12:32 -> 12:30
     #
-    def qnow(quantum = 10.minutes, now = Familia.now)
-      rounded = now - (now % quantum)
-      Time.at(rounded).utc.to_i
-    end
+    # @param quantum [Integer] The time quantum in seconds (default: 10 minutes).
+    # @param pattern [String, nil] The strftime pattern to format the timestamp.
+    # @param time [Integer, Float, Time, nil] A specific time to quantize (default: current time).
+    # @return [Integer, String] A unix timestamp or formatted timestamp string.
+    #
+    # @example
+    #   Familia.qstamp  # Returns an integer timestamp rounded to the nearest 10 minutes
+    #   Familia.qstamp(1.hour)  # Uses 1 hour quantum
+    #   Familia.qstamp(10.minutes, pattern: '%H:%M')  # Returns a formatted string like "12:30"
+    #   Familia.qstamp(10.minutes, time: 1302468980)  # Quantizes the given Unix timestamp
+    #   Familia.qstamp(10.minutes, time: Time.now)  # Quantizes the given Time object
+    #   Familia.qstamp(10.minutes, pattern: '%H:%M', time: 1302468980)  # Formats a specific time
+    #
+    def qstamp(quantum = 10.minutes, pattern: nil, time: nil)
+      time ||= Familia.now
+      time = time.to_f if time.is_a?(Time)
 
-    def qstamp(quantum = nil, pattern = nil, now = Familia.now)
-      quantum ||= ttl || 10.minutes
-      pattern ||= '%H%M'
-      rounded = now - (now % quantum)
-      Time.at(rounded).utc.strftime(pattern)
+      rounded = time - (time % quantum)
+
+      if pattern
+        Time.at(rounded).utc.strftime(pattern)
+      else
+        Time.at(rounded).utc.to_i
+      end
     end
 
     def generate_sha_hash(*elements)

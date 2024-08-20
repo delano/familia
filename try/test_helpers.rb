@@ -186,7 +186,10 @@ end
 
 class Limiter < Familia::Horreum
 
-  ttl 30.seconds
+  feature :expiration
+  feature :quantization
+
+  ttl 30.minutes
   identifier :name
   field :name
   # No :key field (so we can test hte behaviour in Horreum#initialize)
