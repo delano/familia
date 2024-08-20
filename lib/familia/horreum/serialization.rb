@@ -6,6 +6,24 @@ module Familia
   # Familia::Horreum
   #
   class Horreum
+    # List of valid return values for Redis commands.
+    # This includes:
+    # - "OK": Indicates successful execution of a command.
+    # - true: Indicates a successful boolean response.
+    # - 1: Indicates success for commands that return a count of affected items.
+    # - 0: Indicates success for commands that return a count of affected items, but no items were affected.
+    # - nil: Indicates the absence of a value, which can be considered a valid outcome in some contexts.
+    #
+    # This list is used to validate the return values of multiple Redis commands executed within methods.
+    # Methods that run multiple Redis commands will check if all return values are included in this list
+    # to determine overall success. If any return value is not in this list, it is considered unexpected
+    # and may be logged or handled accordingly.
+    @valid_command_return_values = ["OK", true, 1, 0, nil]
+
+    class << self
+      attr_accessor :valid_command_return_values
+    end
+
     # Serialization: Where Objects Go to Become Strings (and Vice Versa)!
     #
     # This module is chock-full of methods that'll make your head spin (in a
@@ -108,12 +126,12 @@ module Familia
         self.created ||= Familia.now.to_i
 
         # Commit our tale to the Redis chronicles
-        ret = commit_fields # e.g. ["OK"]
+        ret = commit_fields # e.g. MultiResult.new(true, ["OK", "OK"])
 
         Familia.ld "[save] #{self.class} #{rediskey} #{ret}"
 
         # Did Redis accept our offering?
-        ret.uniq.all? { |value| ["OK", true].include?(value) }
+        ret.successful?
       end
 
       # Apply a smattering of fields to this object like fairy dust.
@@ -126,10 +144,10 @@ module Familia
       #   fresh attributes.
       #
       # @example Giving your object a makeover
-      #   dragon.apply_fields(name: "Puff", breathes: "fire", loves: "little boys
+      #   dragon.apply_fields(name: "Puff", breathes: "fire", loves: "Toys
       #   named Jackie")
       #   # => #<Dragon:0x007f8a1c8b0a28 @name="Puff", @breathes="fire",
-      #   @loves="little boys named Jackie">
+      #   @loves="Toys named Jackie">
       #
       def apply_fields(**fields)
         fields.each do |field, value|
@@ -143,23 +161,48 @@ module Familia
       #
       # This method performs a sacred ritual, sending our cherished attributes
       # on a journey through the ethernet to find their resting place in Redis.
+      # It executes a transaction that includes setting field values and,
+      # if applicable, updating the expiration time.
       #
-      # @return [Array<String>] A mystical array of strings, cryptic messages
-      #   from the Redis gods.
+      # @return [MultiResult] A mystical object containing:
+      #   - success: A boolean indicating if all Redis commands succeeded
+      #   - results: An array of strings, cryptic messages from the Redis gods
+      #
+      # The MultiResult object responds to:
+      #   - successful?: Returns the boolean success value
+      #   - results: Returns the array of command return values
       #
       # @note Be warned, young programmer! This method dabbles in the arcane
       #   art of transactions. Side effects may include data persistence and a
-      #   slight tingling sensation.
+      #   slight tingling sensation. The method does not raise exceptions for
+      #   unexpected Redis responses, but logs warnings and returns a failure status.
       #
       # @example Offering your changes to the Redis deities
       #   unicorn.name = "Charlie"
       #   unicorn.horn_length = "magnificent"
-      #   unicorn.commit_fields
-      #   # => ["OK", "OK"] (The Redis gods are pleased with your offering)
+      #   result = unicorn.commit_fields
+      #   if result.successful?
+      #     puts "The Redis gods are pleased with your offering"
+      #     p result.results  # => ["OK", "OK"]
+      #   else
+      #     puts "The Redis gods frown upon your offering"
+      #     p result.results  # Examine the unexpected values
+      #   end
+      #
+      # @see Familia::Horreum.valid_command_return_values for the list of
+      #   acceptable Redis command return values.
+      #
+      # @note This method performs logging at various levels:
+      #   - Debug: Logs the object's class, Redis key, and current state before committing
+      #   - Warn: Logs any unexpected return values from Redis commands
+      #   - Debug: Logs the final result, including success status and all return values
+      #
+      # @note The expiration update is only performed for classes that have
+      #   the expiration feature enabled. For others, it's a no-op.
       #
       def commit_fields
         Familia.ld "[commit_fields] #{self.class} #{rediskey} #{to_h}"
-        transaction do |conn|
+        command_return_values = transaction do |conn|
           hmset
 
           # Only classes that have the expiration ferature enabled will
@@ -167,6 +210,26 @@ module Familia
           # this will be a no-op.
           update_expiration
         end
+
+        # The acceptable redis command return values are defined in the
+        # Horreum class. This is to ensure that all commands return values
+        # are validated against a consistent set of values.
+        acceptable_values = Familia::Horreum.valid_command_return_values
+
+        # Check if all return values are valid
+        summary_boolean = command_return_values.uniq.all? { |value|
+          acceptable_values.include?(value)
+        }
+
+        # Log the unexpected
+        unless summary_boolean
+          unexpected_values = command_return_values.reject { |value| acceptable_values.include?(value) }
+          Familia.warn "[commit_fields] Unexpected return values: #{unexpected_values}"
+        end
+
+        Familia.ld "[commit_fields] #{self.class} #{rediskey} #{summary_boolean}: #{command_return_values}"
+
+        MultiResult.new(summary_boolean, command_return_values)
       end
 
       # Dramatically vanquish this object from the face of Redis! (ed: delete it)
@@ -312,6 +375,71 @@ module Familia
 
     end
     # End of Serialization module
+
+    # Represents the result of a multiple Redis commands.
+    #
+    # This class encapsulates the outcome of a Redis "transaction",
+    # providing both a success indicator and the raw results from
+    # the Redis commands executed during the transaction ("MULTI").
+    #
+    # @attr_reader success [Boolean] Indicates whether all Redis commands
+    #   in the transaction were successful.
+    # @attr_reader results [Array<String>] An array of return values from
+    #   the Redis commands executed in the transaction.
+    #
+    # @example Creating a MultiResult
+    #   result = MultiResult.new(true, ["OK", "OK"])
+    #
+    # @example Checking the success of a commit
+    #   if result.successful?
+    #     puts "All commands succeeded"
+    #   else
+    #     puts "Some commands failed"
+    #   end
+    #
+    # @example Accessing raw results
+    #   result.results.each_with_index do |value, index|
+    #     puts "Command #{index + 1} returned: #{value}"
+    #   end
+    class MultiResult
+      # @return [Boolean] true if all commands in the transaction succeeded,
+      #   false otherwise
+      attr_reader :success
+
+      # @return [Array<String>] The raw return values from the Redis commands
+      attr_reader :results
+
+      # Creates a new MultiResult instance.
+      #
+      # @param success [Boolean] Whether all commands succeeded
+      # @param results [Array<String>] The raw results from Redis commands
+      def initialize(success, results)
+        @success = success
+        @results = results
+      end
+
+      # Returns a tuple representing the result of the transaction.
+      #
+      # @return [Array] A tuple containing the success status and the raw results.
+      #   The success status is a boolean indicating if all commands succeeded.
+      #   The raw results is an array of return values from the Redis commands.
+      #
+      # @example
+      #   [true, ["OK", true, 1]]
+      #
+      def tuple
+        [successful?, results]
+      end
+
+      # Convenient method to check if the commit was successful.
+      #
+      # @return [Boolean] true if all commands succeeded, false otherwise
+      def successful?
+        @success
+      end
+      alias success? successful?
+    end
+    # End of MultiResult class
 
     include Serialization # these become Horreum instance methods
   end

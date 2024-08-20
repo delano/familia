@@ -3,7 +3,7 @@
 
 
 module Familia::Features
-  #
+
   module Expiration
     @ttl = nil
 
@@ -57,7 +57,7 @@ module Familia::Features
     # @raise [Familia::Problem] If you try to feed it non-numbers or time-travel
     #   (negative numbers). It's strict, but fair!
     #
-    def update_expiration(ttl = nil)
+  def update_expiration(ttl = nil)
       ttl ||= self.ttl
       # It's important to raise exceptions here and not just log warnings. We
       # don't want to silently fail at setting expirations and cause data
@@ -67,14 +67,15 @@ module Familia::Features
       # good reason for the ttl to not be set in the first place. If the
       # class doesn't have a ttl, the default comes from Familia.ttl (which
       # is 0).
-      raise Familia::Problem, "TTL must be a number (#{ttl.class})" unless ttl.is_a?(Numeric)
-      raise Familia::Problem, "TTL must be positive (#{ttl})" unless ttl.is_a?(Numeric)
+      unless ttl.is_a?(Numeric)
+        raise Familia::Problem, "TTL must be a number (#{ttl.class} in #{self.class})"
+      end
 
       if ttl.zero?
         return Familia.ld "[update_expiration] No expiration for #{self.class} (#{rediskey})"
       end
 
-      Familia.info "[update_expiration] Expires #{rediskey} in #{ttl} seconds"
+      Familia.ld "[update_expiration] Expires #{rediskey} in #{ttl} seconds"
 
       # Redis' EXPIRE command returns 1 if the timeout was set, 0 if key does
       # not exist or the timeout could not be set. Via redis-rb here, it's
