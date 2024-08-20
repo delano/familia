@@ -3,8 +3,7 @@
 require 'digest'
 require_relative '../lib/familia'
 
-# ENV['FAMILIA_TRACE'] = '1'
-#Familia.debug = true
+Familia.debug = false # also # ENV['FAMILIA_TRACE'] = '1'
 Familia.enable_redis_logging = true
 Familia.enable_redis_counter = true
 
@@ -33,6 +32,7 @@ class Customer < Familia::Horreum
   ttl 5.years
 
   feature :safe_dump
+  #feature :expiration
   #feature :api_version
 
   # NOTE: The SafeDump mixin caches the safe_dump_field_map so updating this list
@@ -144,9 +144,12 @@ end
 
 class CustomDomain < Familia::Horreum
 
+  feature :expiration
+
   class_sorted_set :values, key: 'onetime:customdomain:values'
 
   identifier :derive_id
+
 
   field :display_domain
   field :custid
@@ -182,6 +185,10 @@ end
 
 class Limiter < Familia::Horreum
 
+  feature :expiration
+  feature :quantization
+
+  ttl 30.minutes
   identifier :name
   field :name
   # No :key field (so we can test hte behaviour in Horreum#initialize)

@@ -29,14 +29,6 @@ module Familia
         }
       end
 
-      def ttl=(v)
-        @ttl = v.to_i
-      end
-
-      def ttl
-        @ttl || self.class.ttl
-      end
-
       def db=(v)
         @db = v.to_i
       end

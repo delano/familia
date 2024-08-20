@@ -13,29 +13,27 @@ module Familia
   # @abstract Subclass and implement Redis data type specific methods
   class RedisType
     include Familia::Base
+    extend Familia::Features
 
     @registered_types = {}
     @valid_options = %i[class parent ttl default db key redis]
     @db = nil
-    @ttl = nil
+
+    feature :expiration
+    feature :quantization
 
     class << self
       attr_reader :registered_types, :valid_options
       attr_accessor :parent
-      attr_writer :ttl, :db, :uri
+      attr_writer :db, :uri
 
       # To be called inside every class that inherits RedisType
       # +methname+ is the term used for the class and instance methods
       # that are created for the given +klass+ (e.g. set, list, etc)
       def register(klass, methname)
-        Familia.ld "[#{self}] Registering #{klass} as #{methname}"
+        Familia.ld "[#{self}] Registering #{klass} as #{methname.inspect}"
 
         @registered_types[methname] = klass
-      end
-
-      def ttl(val = nil)
-        @ttl = val unless val.nil?
-        @ttl || parent&.ttl
       end
 
       def db(val = nil)
@@ -49,8 +47,9 @@ module Familia
       end
 
       def inherited(obj)
+        Familia.trace :REDISTYPE, nil, "#{obj} is my kinda type", caller(1..1) if Familia.debug?
         obj.db = db
-        obj.ttl = ttl
+        obj.ttl = ttl # method added via Features::Expiration
         obj.uri = uri
         obj.parent = self
         super(obj)
@@ -101,6 +100,12 @@ module Familia
       @opts = opts || {}
       @opts = RedisType.valid_keys_only(@opts)
 
+      # Apply the options to instance method setters of the same name
+      @opts.each do |k, v|
+        Familia.ld " [setting] #{k} #{v}"
+        send(:"#{k}=", v) if respond_to? :"#{k}="
+      end
+
       init if respond_to? :init
     end
 
@@ -110,10 +115,37 @@ module Familia
       parent? ? parent.redis : Familia.redis(opts[:db])
     end
 
-    # Produces the full redis key for this object.
+    # Produces the full Redis key for this object.
+    #
+    # @return [String] The full Redis key.
+    #
+    # This method determines the appropriate Redis key based on the context of the RedisType object:
+    #
+    # 1. If a hardcoded key is set in the options, it returns that key.
+    # 2. For instance-level RedisType objects, it uses the parent instance's rediskey method.
+    # 3. For class-level RedisType objects, it uses the parent class's rediskey method.
+    # 4. For standalone RedisType objects, it uses the keystring as the full Redis key.
+    #
+    # For class-level RedisType objects (parent_class? == true):
+    # - The suffix is optional and used to differentiate between different types of objects.
+    # - If no suffix is provided, the class's default suffix is used (via the self.suffix method).
+    # - If a nil suffix is explicitly passed, it won't appear in the resulting Redis key.
+    # - Passing nil as the suffix is how class-level RedisType objects are created without
+    #   the global default 'object' suffix.
+    #
+    # @example Instance-level RedisType
+    #   user_instance.some_redistype.rediskey  # => "user:123:some_redistype"
+    #
+    # @example Class-level RedisType
+    #   User.some_redistype.rediskey  # => "user:some_redistype"
+    #
+    # @example Standalone RedisType
+    #   RedisType.new("mykey").rediskey  # => "mykey"
+    #
+    # @example Class-level RedisType with explicit nil suffix
+    #   User.rediskey("123", nil)  # => "user:123"
+    #
     def rediskey
-      Familia.ld "[rediskey] #{keystring} for #{self.class} (#{opts})"
-
       # Return the hardcoded key if it's set. This is useful for
       # support legacy keys that aren't derived in the same way.
       return opts[:key] if opts[:key]
@@ -128,7 +160,7 @@ module Familia
         parent.rediskey(keystring, nil)
       else
         # This is a standalone RedisType object where it's keystring
-        # is the full key.
+        # is the full redis key.
         keystring
       end
     end
@@ -151,10 +183,6 @@ module Familia
 
     def parent
       @opts[:parent]
-    end
-
-    def ttl
-      @opts[:ttl] || self.class.ttl
     end
 
     def db

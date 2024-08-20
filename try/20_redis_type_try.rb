@@ -1,9 +1,7 @@
 
 require_relative '../lib/familia'
-require_relative '../lib/familia/features/quantizer'
 require_relative './test_helpers'
 
-#Familia.apiversion = 'v1'
 
 @limiter1 = Limiter.new :requests
 
@@ -24,7 +22,6 @@ p [@a.name, @b.name]
 @a.owners.frozen?
 #=> true
 
-
 ## Limiter#qstamp
 @limiter1.counter.qstamp(10.minutes, '%H:%M', 1302468980)
 ##=> '20:50'
@@ -35,8 +32,10 @@ p [@a.name, @b.name]
 
 ## Limiter#qstamp as a number
 @limiter2 = Limiter.new :requests
-@limiter2.counter.qstamp(10.minutes, pattern=nil, now=1302468980)
-##=> 1302468600
+p [@limiter1.ttl, @limiter2.ttl]
+p [@limiter1.counter.parent.ttl, @limiter2.counter.parent.ttl]
+@limiter2.counter.qstamp(10.minutes, pattern: nil, time: 1302468980)
+#=> 1302468600
 
 ## Redis Types can be stored to quantized numeric suffix. This
 ## tryouts is disabled b/c `RedisType#rediskey` takes no args
@@ -51,9 +50,13 @@ p [@a.name, @b.name]
 @limiter1.counter.increment
 #=> 1
 
-## Check ttl
+## Check counter ttl
 @limiter1.counter.ttl
 #=> 3600.0
+
+## Check limiter ttl
+@limiter1.ttl
+#=> 1800.0
 
 ## Check ttl for a different instance
 ## (this exists to make sure options are cloned for each instance)

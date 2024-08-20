@@ -23,8 +23,8 @@ module Familia
 
     def members
       echo :members, caller(1..1).first if Familia.debug
-      el = membersraw
-      multi_from_redis(*el)
+      elements = membersraw
+      multi_from_redis(*elements)
     end
     alias all members
     alias to_a members

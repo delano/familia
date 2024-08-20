@@ -65,8 +65,8 @@ module Familia
     alias del delete
 
     def range(sidx = 0, eidx = -1)
-      el = rangeraw sidx, eidx
-      multi_from_redis(*el)
+      elements = rangeraw sidx, eidx
+      multi_from_redis(*elements)
     end
 
     def rangeraw(sidx = 0, eidx = -1)

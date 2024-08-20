@@ -1,6 +1,7 @@
 require_relative '../lib/familia'
 require_relative './test_helpers'
-#Familia.apiversion = 'v1'
+
+Familia.debug = false
 
 @a = Bone.new 'atoken', 'akey'
 
@@ -36,7 +37,7 @@ Customer.values.all.collect(&:custid)
 ##=> ['delano']
 
 ## Familia.from_redis
-obj = Customer.from_redis :delano
+obj = Customer.from_identifier :delano
 [obj.class, obj.custid]
 #=> [Customer, 'delano']
 

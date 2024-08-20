@@ -56,7 +56,7 @@ module Familia
     class << self
       # Extends ClassMethods to subclasses and tracks Familia members
       def inherited(member)
-        Familia.trace :INHERITED, nil, "Inherited by #{member}", caller if Familia.debug?
+        Familia.trace :HORREUM, nil, "Welcome #{member} to the family", caller(1..1) if Familia.debug?
         member.extend(ClassMethods)
         member.extend(Features)
 

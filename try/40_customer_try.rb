@@ -18,7 +18,7 @@ require_relative './test_helpers'
 #=> true
 
 ## Customer can be retrieved by identifier
-retrieved_customer = Customer.from_redis("test@example.com")
+retrieved_customer = Customer.from_identifier("test@example.com")
 retrieved_customer.custid
 #=> "test@example.com"
 
@@ -35,7 +35,7 @@ retrieved_customer.custid
 @customer.planid = "premium"
 @customer.save
 ident = @customer.identifier
-Customer.from_redis(ident).planid
+Customer.from_identifier(ident).planid
 #=> "premium"
 
 ## Customer can increment secrets_created counter
@@ -90,7 +90,7 @@ Customer.instances.member?(@customer)
 
 ## Customer can be destroyed
 ret = @customer.destroy!
-cust = Customer.from_redis("test@example.com")
+cust = Customer.from_identifier("test@example.com")
 exists = Customer.exists?("test@example.com")
 [ret, cust.nil?, exists]
 #=> [true, true, false]

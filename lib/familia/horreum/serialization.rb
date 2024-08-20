@@ -113,19 +113,23 @@ module Familia
         Familia.ld "[save] #{self.class} #{rediskey} #{ret}"
 
         # Did Redis accept our offering?
-        ret.uniq.all? { |value| value == "OK" }
+        ret.uniq.all? { |value| ["OK", true].include?(value) }
       end
 
       # Apply a smattering of fields to this object like fairy dust.
       #
-      # @param fields [Hash] A magical bag of named attributes to sprinkle onto this instance.
-      #   Each key-value pair is like a tiny spell, ready to enchant our object's properties.
+      # @param fields [Hash] A magical bag of named attributes to sprinkle onto
+      #   this instance. Each key-value pair is like a tiny spell, ready to
+      #   enchant our object's properties.
       #
-      # @return [self] Returns the newly bejeweled instance, now sparkling with fresh attributes.
+      # @return [self] Returns the newly bejeweled instance, now sparkling with
+      #   fresh attributes.
       #
       # @example Giving your object a makeover
-      #   dragon.apply_fields(name: "Puff", breathes: "fire", loves: "little boys named Jackie")
-      #   # => #<Dragon:0x007f8a1c8b0a28 @name="Puff", @breathes="fire", @loves="little boys named Jackie">
+      #   dragon.apply_fields(name: "Puff", breathes: "fire", loves: "little boys
+      #   named Jackie")
+      #   # => #<Dragon:0x007f8a1c8b0a28 @name="Puff", @breathes="fire",
+      #   @loves="little boys named Jackie">
       #
       def apply_fields(**fields)
         fields.each do |field, value|
@@ -140,10 +144,12 @@ module Familia
       # This method performs a sacred ritual, sending our cherished attributes
       # on a journey through the ethernet to find their resting place in Redis.
       #
-      # @return [Array<String>] A mystical array of strings, cryptic messages from the Redis gods.
+      # @return [Array<String>] A mystical array of strings, cryptic messages
+      #   from the Redis gods.
       #
-      # @note Be warned, young programmer! This method dabbles in the arcane art of transactions.
-      #   Side effects may include data persistence and a slight tingling sensation.
+      # @note Be warned, young programmer! This method dabbles in the arcane
+      #   art of transactions. Side effects may include data persistence and a
+      #   slight tingling sensation.
       #
       # @example Offering your changes to the Redis deities
       #   unicorn.name = "Charlie"
@@ -155,6 +161,10 @@ module Familia
         Familia.ld "[commit_fields] #{self.class} #{rediskey} #{to_h}"
         transaction do |conn|
           hmset
+
+          # Only classes that have the expiration ferature enabled will
+          # actually set an expiration time on their keys. Otherwise
+          # this will be a no-op.
           update_expiration
         end
       end
@@ -182,7 +192,6 @@ module Familia
         Familia.trace :DESTROY, redis, redisuri, caller(1..1) if Familia.debug?
         delete!
       end
-
 
       # Refreshes the object's state by querying Redis and overwriting the
       # current field values. This method performs a destructive update on the
@@ -217,7 +226,8 @@ module Familia
       # into a more plebeian hash. But fear not, for in this form, it can slip through
       # the cracks of the universe (or at least, into Redis) with ease.
       #
-      # @return [Hash] A glittering hash, each key a field name, each value a Redis-ready treasure.
+      # @return [Hash] A glittering hash, each key a field name, each value a
+      #   Redis-ready treasure.
       #
       # @example Turning your dragon into a hash
       #   dragon.to_h
@@ -247,7 +257,8 @@ module Familia
       #   unicorn.to_a
       #   # => ["Charlie", "magnificent", 5]
       #
-      # @note Each value is carefully disguised in its Redis costume before joining the parade.
+      # @note Each value is carefully disguised in its Redis costume
+      # before joining the parade.
       #
       def to_a
         self.class.fields.map do |field|
@@ -297,36 +308,6 @@ module Familia
         end
 
         prepared
-      end
-
-      # Set an expiration date for our data, like a "best before" sticker for Redis!
-      #
-      # This method gives our data a lifespan in Redis. It's like telling Redis,
-      # "Hey, this data is fresh now, but it might get stale after a while!"
-      #
-      # @param ttl [Integer, nil] The Time To Live in seconds. If nil, we'll check
-      #   our options for a default expiration time.
-      #
-      # @return [Boolean] true if the expiration was set successfully, false otherwise.
-      #   It's like asking Redis, "Did you stick that expiration label on properly?"
-      #
-      # @example Making your pet rock data mortal
-      #   rocky.update_expiration(86400) # Dwayne will live in Redis for one day
-      #
-      # @note If the TTL is zero, we assume our data wants to live forever.
-      #   Immortality in Redis! Who wouldn't want that?
-      #
-      def update_expiration(ttl = nil)
-        ttl ||= opts[:ttl]
-        ttl = ttl.to_i
-
-        return if ttl.zero?
-
-        Familia.ld "Setting expiration for #{rediskey} to #{ttl} seconds"
-
-        # EXPIRE command returns 1 if the timeout was set, 0 if key does not
-        # exist or the timeout could not be set.
-        expire(ttl).positive?
       end
 
     end

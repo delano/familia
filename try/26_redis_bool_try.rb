@@ -1,7 +1,7 @@
 require_relative '../lib/familia'
 require_relative './test_helpers'
 
-Familia.debug = true
+Familia.debug = false
 
 @hashkey = Familia::HashKey.new 'key'
 

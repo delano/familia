@@ -81,7 +81,7 @@ module Familia
 
       # Creates an instance-level relation
       def attach_instance_redis_object_relation(name, klass, opts)
-        Familia.ld "[Attaching instance-level #{name}] #{klass} => (#{self}) #{opts}"
+        Familia.ld "[#{self}##{name}] Attaching instance-level #{klass} #{opts}"
         raise ArgumentError, "Name is blank (#{klass})" if name.to_s.empty?
 
         name = name.to_s.to_sym
@@ -106,7 +106,7 @@ module Familia
 
       # Creates a class-level relation
       def attach_class_redis_object_relation(name, klass, opts)
-        Familia.ld "[#{self}] Attaching class-level #{name} #{klass} => #{opts}"
+        Familia.ld "[#{self}.#{name}] Attaching class-level #{klass} #{opts}"
         raise ArgumentError, 'Name is blank (klass)' if name.to_s.empty?
 
         name = name.to_s.to_sym

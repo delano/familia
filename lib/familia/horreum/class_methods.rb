@@ -95,15 +95,13 @@ module Familia
       def fast_writer!(name)
         define_method :"#{name}!" do |*args|
           # Check if the correct number of arguments is provided (exactly one).
-          if args.size != 1
-            raise ArgumentError, "wrong number of arguments (given #{args.size}, expected 1)"
-          end
+          raise ArgumentError, "wrong number of arguments (given #{args.size}, expected 1)" if args.size != 1
 
           value = args.first
 
           begin
             # Trace the operation if debugging is enabled.
-            Familia.trace :FAST_WRITER, redis, "#{name}: #{value.inspect}", caller if Familia.debug?
+            Familia.trace :FAST_WRITER, redis, "#{name}: #{value.inspect}", caller(1..1) if Familia.debug?
 
             # Convert the provided value to a format suitable for Redis storage.
             prepared = to_redis(value)
@@ -146,11 +144,6 @@ module Familia
         @redis_types
       end
 
-      def ttl(v = nil)
-        @ttl = v unless v.nil?
-        @ttl || parent&.ttl
-      end
-
       def db(v = nil)
         @db = v unless v.nil?
         @db || parent&.db
@@ -161,9 +154,10 @@ module Familia
         @uri || parent&.uri
       end
 
-      def all(suffix = :object)
+      def all(suffix = nil)
+        suffix ||= self.suffix
         # objects that could not be parsed will be nil
-        keys(suffix).filter_map { |k| from_key(k) }
+        keys(suffix).filter_map { |k| from_rediskey(k) }
       end
 
       def any?(filter = '*')
@@ -184,12 +178,48 @@ module Familia
         @prefix || name.downcase.gsub('::', Familia.delim).to_sym
       end
 
-      def create *args
-        me = from_array(*args)
-        raise "#{self} exists: #{me.rediskey}" if me.exists?
+      # Creates and persists a new instance of the class.
+      #
+      # @param *args [Array] Variable number of positional arguments to be passed
+      #   to the constructor.
+      # @param **kwargs [Hash] Keyword arguments to be passed to the constructor.
+      # @return [Object] The newly created and persisted instance.
+      # @raise [Familia::Problem] If an instance with the same identifier already
+      #   exists.
+      #
+      # This method serves as a factory method for creating and persisting new
+      # instances of the class. It combines object instantiation, existence
+      # checking, and persistence in a single operation.
+      #
+      # The method is flexible in accepting both positional and keyword arguments:
+      # - Positional arguments (*args) are passed directly to the constructor.
+      # - Keyword arguments (**kwargs) are passed as a hash to the constructor.
+      #
+      # After instantiation, the method checks if an object with the same
+      # identifier already exists. If it does, a Familia::Problem exception is
+      # raised to prevent overwriting existing data.
+      #
+      # Finally, the method saves the new instance returns it.
+      #
+      # @example Creating an object with keyword arguments
+      #   User.create(name: "John", age: 30)
+      #
+      # @example Creating an object with positional and keyword arguments (not recommended)
+      #   Product.create("SKU123", name: "Widget", price: 9.99)
+      #
+      # @note The behavior of this method depends on the implementation of #new,
+      #   #exists?, and #save in the class and its superclasses.
+      #
+      # @see #new
+      # @see #exists?
+      # @see #save
+      #
+      def create *args, **kwargs
+        fobj = new(*args, **kwargs)
+        raise Familia::Problem, "#{self} already exists: #{fobj.rediskey}" if fobj.exists?
 
-        me.save
-        me
+        fobj.save
+        fobj
       end
 
       def multiget(*ids)
@@ -201,7 +231,7 @@ module Familia
         ids.collect! { |objid| rediskey(objid) }
         return [] if ids.compact.empty?
 
-        Familia.trace :MULTIGET, redis, "#{ids.size}: #{ids}", caller if Familia.debug?
+        Familia.trace :MULTIGET, redis, "#{ids.size}: #{ids}", caller(1..1) if Familia.debug?
         redis.mget(*ids)
       end
 
@@ -230,18 +260,18 @@ module Familia
       # debugging.
       #
       # @example
-      #   User.from_key("user:123")  # Returns a User instance if it exists,
+      #   User.from_rediskey("user:123")  # Returns a User instance if it exists,
       #   nil otherwise
       #
-      def from_key(objkey)
+      def from_rediskey(objkey)
         raise ArgumentError, 'Empty key' if objkey.to_s.empty?
 
         # We use a lower-level method here b/c we're working with the
         # full key and not just the identifier.
         does_exist = redis.exists(objkey).positive?
 
-        Familia.ld "[.from_key] #{self} from key #{objkey} (exists: #{does_exist})"
-        Familia.trace :FROM_KEY, redis, objkey, caller if Familia.debug?
+        Familia.ld "[.from_rediskey] #{self} from key #{objkey} (exists: #{does_exist})"
+        Familia.trace :FROM_KEY, redis, objkey, caller(1..1) if Familia.debug?
 
         # This is the reason for calling exists first. We want to definitively
         # and without any ambiguity know if the object exists in Redis. If it
@@ -251,7 +281,7 @@ module Familia
         return unless does_exist
 
         obj = redis.hgetall(objkey) # horreum objects are persisted as redis hashes
-        Familia.trace :FROM_KEY2, redis, "#{objkey}: #{obj.inspect}", caller if Familia.debug?
+        Familia.trace :FROM_KEY2, redis, "#{objkey}: #{obj.inspect}", caller(1..1) if Familia.debug?
 
         new(**obj)
       end
@@ -265,7 +295,7 @@ module Familia
       # @return [Object, nil] An instance of the class if found, nil otherwise.
       #
       # This method constructs the full Redis key using the provided identifier
-      # and suffix, then delegates to `from_key` for the actual retrieval and
+      # and suffix, then delegates to `from_rediskey` for the actual retrieval and
       # instantiation.
       #
       # It's a higher-level method that abstracts away the key construction,
@@ -273,59 +303,95 @@ module Familia
       # identifier.
       #
       # @example
-      #   User.from_redis(123)  # Equivalent to User.from_key("user:123:object")
+      #   User.from_identifier(123)  # Equivalent to User.from_rediskey("user:123:object")
       #
-      def from_redis(identifier, suffix = :object)
+      def from_identifier(identifier, suffix = nil)
+        suffix ||= self.suffix
         return nil if identifier.to_s.empty?
 
         objkey = rediskey(identifier, suffix)
-        Familia.ld "[.from_redis] #{self} from key #{objkey})"
-        Familia.trace :FROM_REDIS, Familia.redis(uri), objkey, caller(1..1).first if Familia.debug?
-        from_key objkey
-      end
 
-      def exists?(identifier, suffix = :object)
+        Familia.ld "[.from_identifier] #{self} from key #{objkey})"
+        Familia.trace :FROM_IDENTIFIER, Familia.redis(uri), objkey, caller(1..1).first if Familia.debug?
+        from_rediskey objkey
+      end
+      alias load from_identifier
+
+      # Checks if an object with the given identifier exists in Redis.
+      #
+      # @param identifier [String, Integer] The unique identifier for the object.
+      # @param suffix [Symbol, nil] The suffix to use in the Redis key (default: class suffix).
+      # @return [Boolean] true if the object exists, false otherwise.
+      #
+      # This method constructs the full Redis key using the provided identifier and suffix,
+      # then checks if the key exists in Redis.
+      #
+      # @example
+      #   User.exists?(123)  # Returns true if user:123:object exists in Redis
+      #
+      def exists?(identifier, suffix = nil)
+        suffix ||= self.suffix
         return false if identifier.to_s.empty?
 
         objkey = rediskey identifier, suffix
 
         ret = redis.exists objkey
-        Familia.trace :EXISTS, redis, "#{objkey} #{ret.inspect}", caller if Familia.debug?
-        ret.positive?
+        Familia.trace :EXISTS, redis, "#{objkey} #{ret.inspect}", caller(1..1) if Familia.debug?
+
+        ret.positive? # differs from redis API but I think it's okay bc `exists?` is a predicate method.
       end
 
-      def destroy!(identifier, suffix = :object)
+      # Destroys an object in Redis with the given identifier.
+      #
+      # @param identifier [String, Integer] The unique identifier for the object to destroy.
+      # @param suffix [Symbol, nil] The suffix to use in the Redis key (default: class suffix).
+      # @return [Boolean] true if the object was successfully destroyed, false otherwise.
+      #
+      # This method constructs the full Redis key using the provided identifier and suffix,
+      # then removes the corresponding key from Redis.
+      #
+      # @example
+      #   User.destroy!(123)  # Removes user:123:object from Redis
+      #
+      def destroy!(identifier, suffix = nil)
+        suffix ||= self.suffix
         return false if identifier.to_s.empty?
 
         objkey = rediskey identifier, suffix
 
         ret = redis.del objkey
-        if Familia.debug?
-          Familia.trace :DELETED, redis, "#{objkey}: #{ret.inspect}",
-                        caller
-        end
+        Familia.trace :DELETED, redis, "#{objkey}: #{ret.inspect}", caller(1..1) if Familia.debug?
         ret.positive?
       end
 
+      # Finds all keys in Redis matching the given suffix pattern.
+      #
+      # @param suffix [String] The suffix pattern to match (default: '*').
+      # @return [Array<String>] An array of matching Redis keys.
+      #
+      # This method searches for all Redis keys that match the given suffix pattern.
+      # It uses the class's rediskey method to construct the search pattern.
+      #
+      # @example
+      #   User.find  # Returns all keys matching user:*:object
+      #   User.find('active')  # Returns all keys matching user:*:active
+      #
       def find(suffix = '*')
         redis.keys(rediskey('*', suffix)) || []
-      end
-
-      def qstamp(quantum = nil, pattern = nil, now = Familia.now)
-        quantum ||= ttl || 10.minutes
-        pattern ||= '%H%M'
-        rounded = now - (now % quantum)
-        Time.at(rounded).utc.strftime(pattern)
       end
 
       # +identifier+ can be a value or an Array of values used to create the index.
       # We don't enforce a default suffix; that's left up to the instance.
       # The suffix is used to differentiate between different types of objects.
       #
-      #
-      # A nil +suffix+ will not be included in the key.
+      # +suffix+ If a nil value is explicitly passed in, it won't appear in the redis
+      # key that's returned. If no suffix is passed in, the class' suffix is used
+      # as the default (via the class method self.suffix). It's an important
+      # distinction b/c passing in an explicitly nil is how RedisType objects
+      # at the class level are created without the global default 'object'
+      # suffix. See RedisType#rediskey "parent_class?" for more details.
       def rediskey(identifier, suffix = self.suffix)
-        Familia.ld "[.rediskey] #{identifier} for #{self} (suffix:#{suffix})"
+        # Familia.ld "[.rediskey] #{identifier} for #{self} (suffix:#{suffix})"
         raise NoIdentifier, self if identifier.to_s.empty?
 
         identifier &&= identifier.to_s
