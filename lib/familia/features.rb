@@ -1,5 +1,5 @@
 # rubocop:disable all
-Familia.debug = true
+
 module Familia
 
   module Features
