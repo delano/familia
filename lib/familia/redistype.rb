@@ -102,7 +102,12 @@ module Familia
 
       # Apply the options to instance method setters of the same name
       @opts.each do |k, v|
-        Familia.ld " [setting] #{k} #{v}"
+        # Bewarde logging :parent instance here implicitly calls #to_s which for
+        # some classes could include the identifier which could still be nil at
+        # this point. This would result in a Familia::Problem being raised. So
+        # to be on the safe-side here until we have a better understanding of
+        # the issue, we'll just log the class name for each key-value pair.
+        Familia.ld " [setting] #{k} #{v.class}"
         send(:"#{k}=", v) if respond_to? :"#{k}="
       end
 

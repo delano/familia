@@ -38,7 +38,7 @@ module Familia
   #   # => "193tosc85k3u513do2mtmibchpd2ruh5l3nsp6dnl0ov1i91h7m7"
   #
   def generate_id(length: 32, encoding: 36)
-    raise ArgumentError, "Encoding must be between 2 and 32" unless (1..32).include?(encoding)
+    raise ArgumentError, "Encoding must be between 2 and 36" unless (1..36).include?(encoding)
 
     input = SecureRandom.hex(length)
     Digest::SHA256.hexdigest(input).to_i(16).to_s(encoding)
