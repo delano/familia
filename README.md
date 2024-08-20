@@ -1,4 +1,4 @@
-# Familia - 1.0.0-rc2 (August 2024)
+# Familia - 1.0.0-rc4 (August 2024)
 
 **Organize and store ruby objects in Redis. A Ruby ORM for Redis.**
 
