@@ -47,5 +47,15 @@ module Familia
       Familia.info "[update_expiration] Skipped for #{rediskey}. #{self.class} data is immortal!"
       nil
     end
+
+    def generate_id
+      @key ||= Familia.generate_id
+      @key
+    end
+
+    def uuid
+      @uuid ||= SecureRandom.uuid
+      @uuid
+    end
   end
 end
