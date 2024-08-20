@@ -418,9 +418,17 @@ module Familia
         @results = results
       end
 
-      # e.g. [true, ["OK", true, 1]]
+      # Returns a tuple representing the result of the transaction.
+      #
+      # @return [Array] A tuple containing the success status and the raw results.
+      #   The success status is a boolean indicating if all commands succeeded.
+      #   The raw results is an array of return values from the Redis commands.
+      #
+      # @example
+      #   [true, ["OK", true, 1]]
+      #
       def tuple
-        [success?, results]
+        [successful?, results]
       end
 
       # Convenient method to check if the commit was successful.

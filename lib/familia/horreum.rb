@@ -233,7 +233,7 @@ module Familia
                   end
 
       # If the unique_id is nil, raise an error
-      raise Problem, "Identifier is nil for #{self.class} #{custid}" if unique_id.nil?
+      raise Problem, "Identifier is nil for #{self.class} #{rediskey}" if unique_id.nil?
       raise Problem, 'Identifier is empty' if unique_id.empty?
 
       unique_id

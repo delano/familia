@@ -67,8 +67,9 @@ module Familia::Features
       # good reason for the ttl to not be set in the first place. If the
       # class doesn't have a ttl, the default comes from Familia.ttl (which
       # is 0).
-      raise Familia::Problem, "TTL must be a number (#{ttl.class} in #{self.class})" unless ttl.is_a?(Numeric)
-      raise Familia::Problem, "TTL must be positive (#{ttl})" unless ttl.is_a?(Numeric)
+      unless ttl.is_a?(Numeric)
+        raise Familia::Problem, "TTL must be a number (#{ttl.class} in #{self.class})"
+      end
 
       if ttl.zero?
         return Familia.ld "[update_expiration] No expiration for #{self.class} (#{rediskey})"
