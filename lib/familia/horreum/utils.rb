@@ -14,7 +14,7 @@ module Familia
 
       def redisuri(suffix = nil)
         u = Familia.redisuri(self.class.uri) # returns URI::Redis
-        u.db ||= self.class.db.to_s # TODO: revisit logic (should the horrerum instance know its uri?)
+        u.db = db if db # override the db if we have one
         u.key = rediskey(suffix)
         u
       end
