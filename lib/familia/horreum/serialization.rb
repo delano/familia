@@ -117,7 +117,7 @@ module Familia
       # @note This method will leave breadcrumbs (traces) if you're in debug mode.
       #   It's like Hansel and Gretel, but for data operations!
       #
-      def save
+      def save update_expiration: true
         Familia.trace :SAVE, redis, redisuri, caller(1..1) if Familia.debug?
 
         # Update our object's life story
@@ -126,7 +126,7 @@ module Familia
         self.created ||= Familia.now.to_i
 
         # Commit our tale to the Redis chronicles
-        ret = commit_fields # e.g. MultiResult.new(true, ["OK", "OK"])
+        ret = commit_fields update_expiration: true # e.g. MultiResult.new(true, ["OK", "OK"])
 
         Familia.ld "[save] #{self.class} #{rediskey} #{ret}"
 
@@ -200,15 +200,15 @@ module Familia
       # @note The expiration update is only performed for classes that have
       #   the expiration feature enabled. For others, it's a no-op.
       #
-      def commit_fields
-        Familia.ld "[commit_fields] #{self.class} #{rediskey} #{to_h}"
+      def commit_fields update_expiration: true
+        Familia.ld "[commit_fields1] #{self.class} #{rediskey} #{to_h} (update_expiration: #{update_expiration})"
         command_return_values = transaction do |conn|
           hmset
 
           # Only classes that have the expiration ferature enabled will
           # actually set an expiration time on their keys. Otherwise
-          # this will be a no-op.
-          update_expiration
+          # this will be a no-op that simply logs the attempt.
+          self.update_expiration if update_expiration
         end
 
         # The acceptable redis command return values are defined in the
@@ -227,7 +227,7 @@ module Familia
           Familia.warn "[commit_fields] Unexpected return values: #{unexpected_values}"
         end
 
-        Familia.ld "[commit_fields] #{self.class} #{rediskey} #{summary_boolean}: #{command_return_values}"
+        Familia.ld "[commit_fields2] #{self.class} #{rediskey} #{summary_boolean}: #{command_return_values}"
 
         MultiResult.new(summary_boolean, command_return_values)
       end
