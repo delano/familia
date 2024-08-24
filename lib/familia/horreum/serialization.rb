@@ -126,7 +126,7 @@ module Familia
         self.created ||= Familia.now.to_i
 
         # Commit our tale to the Redis chronicles
-        ret = commit_fields update_expiration: true # e.g. MultiResult.new(true, ["OK", "OK"])
+        ret = commit_fields(update_expiration) # e.g. MultiResult.new(true, ["OK", "OK"])
 
         Familia.ld "[save] #{self.class} #{rediskey} #{ret}"
 
@@ -224,7 +224,7 @@ module Familia
         # Log the unexpected
         unless summary_boolean
           unexpected_values = command_return_values.reject { |value| acceptable_values.include?(value) }
-          Familia.warn "[commit_fields] Unexpected return values: #{unexpected_values}"
+          Familia.warn "[commit_fields] Unexpected return values: #{unexpected_values.inspect}"
         end
 
         Familia.ld "[commit_fields2] #{self.class} #{rediskey} #{summary_boolean}: #{command_return_values}"
