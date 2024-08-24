@@ -69,6 +69,7 @@ module Familia
   # @param uri [String, URI] URI to convert
   # @return [URI::Redis] Redis URI object
   def redisuri(uri)
+    uri ||= Familia.uri
     generic_uri = URI.parse(uri.to_s)
 
     # Create a new URI::Redis object
@@ -77,7 +78,7 @@ module Familia
       userinfo: generic_uri.userinfo,
       host: generic_uri.host,
       port: generic_uri.port,
-      path: generic_uri.path,
+      path: generic_uri.path, # the db is stored in the path
       query: generic_uri.query,
       fragment: generic_uri.fragment
     )
