@@ -43,7 +43,7 @@ module Familia
     #
     # @note This method is a no-op. It's like shouting into the void, but less echo-y.
     #
-    def update_expiration(_ = nil)
+    def update_expiration(*)
       Familia.info "[update_expiration] Skipped for #{rediskey}. #{self.class} data is immortal!"
       nil
     end

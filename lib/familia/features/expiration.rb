@@ -37,25 +37,25 @@ module Familia::Features
       @ttl || self.class.ttl
     end
 
-    # Yo, check it out! We're gonna give our Redis data an expiration date!
+    # Sets an expiration time for the Redis data associated with this object.
     #
-    # It's like slapping a "Best Before" sticker on your favorite snack,
-    # but for data. How cool is that?
+    # This method allows setting a Time To Live (TTL) for the data in Redis,
+    # after which it will be automatically removed.
     #
-    # @param ttl [Integer, nil] The Time To Live in seconds. Nil? No worries!
-    #   We'll dig up the default from our secret stash.
+    # @param ttl [Integer, nil] The Time To Live in seconds. If nil, the default
+    #   TTL will be used.
     #
-    # @return [Boolean] Did Redis pin that expiry note successfully?
-    #   True for "Yep!", false for "Oops, butter fingers!"
+    # @return [Boolean] Returns true if the expiration was set successfully,
+    #   false otherwise.
     #
-    # @example Teaching your pet rock the concept of mortality
-    #   rocky.update_expiration(86400) # Dwayne gets to party in Redis for one whole day!
+    # @example Setting an expiration of one day
+    #   object.update_expiration(86400)
     #
-    # @note If TTL is zero, your data gets a VIP pass to the Redis eternity club.
-    #   Fancy, huh?
+    # @note If TTL is set to zero, the expiration will be removed, making the
+    #   data persist indefinitely.
     #
-    # @raise [Familia::Problem] If you try to feed it non-numbers or time-travel
-    #   (negative numbers). It's strict, but fair!
+    # @raise [Familia::Problem] Raises an error if the TTL is not a non-negative
+    #   integer.
     #
   def update_expiration(ttl = nil)
       ttl ||= self.ttl

@@ -24,7 +24,7 @@ module Familia
   class Horreum
     include Familia::Base
 
-    # == Singleton Class Context
+    # Singleton Class Context
     #
     # The code within this block operates on the singleton class (also known as
     # eigenclass or metaclass) of the current class. This means:
