@@ -6,18 +6,26 @@ module Familia
   # Familia::Horreum
   #
   class Horreum
-    # List of valid return values for Redis commands.
-    # This includes:
-    # - "OK": Indicates successful execution of a command.
-    # - true: Indicates a successful boolean response.
-    # - 1: Indicates success for commands that return a count of affected items.
-    # - 0: Indicates success for commands that return a count of affected items, but no items were affected.
-    # - nil: Indicates the absence of a value, which can be considered a valid outcome in some contexts.
+    # The Sacred Scrolls of Redis Responses
     #
-    # This list is used to validate the return values of multiple Redis commands executed within methods.
-    # Methods that run multiple Redis commands will check if all return values are included in this list
-    # to determine overall success. If any return value is not in this list, it is considered unexpected
-    # and may be logged or handled accordingly.
+    # Behold! The mystical runes that Redis whispers back to us:
+    #
+    # "OK" - The sweet sound of success, like a tiny "ding!" from the depths of data.
+    # true  - The boolean Buddha nods in agreement.
+    # 1     - A lonely digit, standing tall and proud. "I did something!" it proclaims.
+    # 0     - The silent hero. It tried its best, bless its heart.
+    # nil   - The zen master of responses. It's not nothing, it's... enlightenment!
+    #
+    # These sacred signs are our guide through the Redis wilderness. When we cast
+    # our spells (er, commands), we seek these friendly faces in the returned
+    # smoke signals.
+    #
+    # Should our Redis rituals summon anything else, we pause. We ponder. We
+    # possibly panic. For the unexpected in Redis-land is like finding a penguin
+    # in your pasta - delightfully confusing, but probably not what you ordered.
+    #
+    # May your Redis returns be ever valid, and your data ever flowing!
+    #
     @valid_command_return_values = ["OK", true, 1, 0, nil]
 
     class << self
@@ -117,7 +125,7 @@ module Familia
       # @note This method will leave breadcrumbs (traces) if you're in debug mode.
       #   It's like Hansel and Gretel, but for data operations!
       #
-      def save
+      def save update_expiration: true
         Familia.trace :SAVE, redis, redisuri, caller(1..1) if Familia.debug?
 
         # Update our object's life story
@@ -126,7 +134,9 @@ module Familia
         self.created ||= Familia.now.to_i
 
         # Commit our tale to the Redis chronicles
-        ret = commit_fields # e.g. MultiResult.new(true, ["OK", "OK"])
+        #
+        # e.g. `ret`  # => MultiResult.new(true, ["OK", "OK"])
+        ret = commit_fields(update_expiration: update_expiration)
 
         Familia.ld "[save] #{self.class} #{rediskey} #{ret}"
 
@@ -200,15 +210,15 @@ module Familia
       # @note The expiration update is only performed for classes that have
       #   the expiration feature enabled. For others, it's a no-op.
       #
-      def commit_fields
-        Familia.ld "[commit_fields] #{self.class} #{rediskey} #{to_h}"
+      def commit_fields update_expiration: true
+        Familia.ld "[commit_fields1] #{self.class} #{rediskey} #{to_h} (update_expiration: #{update_expiration})"
         command_return_values = transaction do |conn|
           hmset
 
           # Only classes that have the expiration ferature enabled will
           # actually set an expiration time on their keys. Otherwise
-          # this will be a no-op.
-          update_expiration
+          # this will be a no-op that simply logs the attempt.
+          self.update_expiration if update_expiration
         end
 
         # The acceptable redis command return values are defined in the
@@ -224,10 +234,10 @@ module Familia
         # Log the unexpected
         unless summary_boolean
           unexpected_values = command_return_values.reject { |value| acceptable_values.include?(value) }
-          Familia.warn "[commit_fields] Unexpected return values: #{unexpected_values}"
+          Familia.warn "[commit_fields] Unexpected return values: #{unexpected_values.inspect}"
         end
 
-        Familia.ld "[commit_fields] #{self.class} #{rediskey} #{summary_boolean}: #{command_return_values}"
+        Familia.ld "[commit_fields2] #{self.class} #{rediskey} #{summary_boolean}: #{command_return_values}"
 
         MultiResult.new(summary_boolean, command_return_values)
       end
@@ -256,13 +266,22 @@ module Familia
         delete!
       end
 
-      # Refreshes the object's state by querying Redis and overwriting the
-      # current field values. This method performs a destructive update on the
-      # object, regardless of unsaved changes.
+      # The Great Redis Refresh-o-matic 3000
       #
-      # @note This is a destructive operation that will overwrite any unsaved
-      #   changes.
-      # @return The list of field names that were updated.
+      # Imagine your object as a forgetful time traveler. This method is like
+      # zapping it with a memory ray from Redis-topia. ZAP! New memories!
+      #
+      # WARNING: This is not a gentle mind-meld. It's more like a full brain
+      # transplant. Any half-baked ideas floating in your object's head? POOF!
+      # Gone quicker than cake at a hobbit's birthday party. Unsaved spells
+      # will definitely be forgotten.
+      #
+      # @return What do you get for this daring act of digital amnesia? A shiny
+      # list of all the brain bits that got a makeover!
+      #
+      # Remember: In the game of Redis-Refresh, you win or you... well, you
+      # always win, but sometimes you forget why you played in the first place.
+      #
       def refresh!
         Familia.trace :REFRESH, redis, redisuri, caller(1..1) if Familia.debug?
         fields = hgetall
@@ -270,14 +289,20 @@ module Familia
         optimistic_refresh(**fields)
       end
 
-      # Refreshes the object's state and returns self to allow method chaining.
-      # This method calls refresh! internally, performing the actual Redis
-      # query and state update.
+      # Ah, the magical refresh dance! It's like giving your object a
+      # sip from the fountain of youth.
       #
-      # @note While this method allows chaining, it still performs a
-      #   destructive update like refresh!.
-      # @return [self] Returns the object itself after refreshing, allowing
-      #   method chaining.
+      # This method twirls your object around, dips it into the Redis pool,
+      # and brings it back sparkling clean and up-to-date. It's using the
+      # refresh! spell behind the scenes, so expect some Redis whispering.
+      #
+      # @note Caution, young Rubyist! While this method loves to play
+      #   chain-tag with other methods, it's still got that refresh! kick.
+      #   It'll update your object faster than you can say "matz!"
+      #
+      # @return [self] Your object, freshly bathed in Redis waters, ready
+      #   to dance with more methods in a conga line of Ruby joy!
+      #
       def refresh
         refresh!
         self
@@ -332,35 +357,43 @@ module Familia
         end
       end
 
-      # The to_redis method in Familia::Redistype and Familia::Horreum serve
-      # similar purposes but have some key differences in their implementation:
+      # Behold, the grand tale of two serialization sorcerers:
+      # Familia::Redistype and Familia::Horreum!
       #
-      # Similarities:
-      # - Both methods aim to serialize various data types for Redis storage
-      # - Both handle basic data types like String, Symbol, and Numeric
-      # - Both have provisions for custom serialization methods
+      # These twin wizards, though cut from the same magical cloth,
+      # have their own unique spells for turning Ruby objects into
+      # Redis-friendly potions. Let's peek into their spell books:
       #
-      # Differences:
-      # - Familia::Redistype uses the opts[:class] for type hints
-      # - Familia::Horreum had more explicit type checking and conversion
-      # - Familia::Redistype includes more extensive debug tracing
+      # Shared Incantations:
+      # - Both transform various data creatures for Redis safekeeping
+      # - They tame wild Strings, Symbols, and those slippery Numerics
+      # - Secret rituals (aka custom serialization) are welcome
       #
-      # The centralized Familia.distinguisher method accommodates both approaches
-      # by:
-      # 1. Handling a wide range of data types, including those from both
-      #    implementations
-      # 2. Providing a 'strict_values' option for flexible type handling
-      # 3. Supporting custom serialization through a dump_method
-      # 4. Including debug tracing similar to Familia::Redistype
+      # Mystical Differences:
+      # - Redistype reads the future in opts[:class] tea leaves
+      # - Horreum prefers to interrogate types more thoroughly
+      # - Redistype leaves a trail of debug breadcrumbs
       #
-      # By using Familia.distinguisher, we achieve more consistent behavior
-      # across different parts of the library while maintaining the flexibility
-      # to handle various data types and custom serialization needs. This
-      # centralization also makes it easier to extend or modify serialization
-      # behavior in the future.
+      # But wait! Enter the wise Familia.distinguisher,
+      # a grand unifier of serialization magic!
+      #
+      # This clever mediator:
+      # 1. Juggles a circus of data types from both realms
+      # 2. Offers a 'strict_values' toggle for the type-obsessed
+      # 3. Welcomes custom spells via dump_method
+      # 4. Sprinkles debug fairy dust à la Redistype
+      #
+      # By channeling the Familia.distinguisher, we've created a
+      # harmonious serialization symphony, flexible enough to dance
+      # with any data type that shimmies our way. And should we need
+      # to teach it new tricks, we know just where to wave our wands!
+      #
+      # @param value [Object] The mystical object to be transformed
+      #
+      # @return [String] The transformed, Redis-ready value.
       #
       def to_redis(val)
-        prepared = Familia.distinguisher(val, false)
+        prepared = Familia.distinguisher(val, strict_values: false)
 
         if prepared.nil? && val.respond_to?(dump_method)
           prepared = val.send(dump_method)
@@ -376,31 +409,33 @@ module Familia
     end
     # End of Serialization module
 
-    # Represents the result of a multiple Redis commands.
+    # The magical MultiResult, keeper of Redis's deepest secrets!
     #
-    # This class encapsulates the outcome of a Redis "transaction",
-    # providing both a success indicator and the raw results from
-    # the Redis commands executed during the transaction ("MULTI").
+    # This quirky little class wraps up the outcome of a Redis "transaction"
+    # (or as I like to call it, a "Redis dance party") with a bow made of
+    # pure Ruby delight. It knows if your commands were successful and
+    # keeps the results safe in its pocket dimension.
     #
-    # @attr_reader success [Boolean] Indicates whether all Redis commands
-    #   in the transaction were successful.
-    # @attr_reader results [Array<String>] An array of return values from
-    #   the Redis commands executed in the transaction.
+    # @attr_reader success [Boolean] The golden ticket! True if all your
+    #   Redis wishes came true in the transaction.
+    # @attr_reader results [Array<String>] A mystical array of return values,
+    #   each one a whisper from the Redis gods.
     #
-    # @example Creating a MultiResult
+    # @example Summoning a MultiResult from the void
     #   result = MultiResult.new(true, ["OK", "OK"])
     #
-    # @example Checking the success of a commit
+    # @example Divining the success of your Redis ritual
     #   if result.successful?
-    #     puts "All commands succeeded"
+    #     puts "Huzzah! The Redis spirits smile upon you!"
     #   else
-    #     puts "Some commands failed"
+    #     puts "Alas! The Redis gremlins have conspired against us!"
     #   end
     #
-    # @example Accessing raw results
+    # @example Peering into the raw essence of results
     #   result.results.each_with_index do |value, index|
-    #     puts "Command #{index + 1} returned: #{value}"
+    #     puts "Command #{index + 1} whispered back: #{value}"
     #   end
+    #
     class MultiResult
       # @return [Boolean] true if all commands in the transaction succeeded,
       #   false otherwise

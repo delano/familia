@@ -26,19 +26,19 @@ class Familia::RedisType
     # @raise [Familia::HighRiskFactor] If serialization fails under strict
     #   mode.
     #
-    def to_redis(val, strict_values = true)
+    def to_redis(val, strict_values: true)
       prepared = nil
 
       Familia.trace :TOREDIS, redis, "#{val}<#{val.class}|#{opts[:class]}>", caller(1..1) if Familia.debug?
 
       if opts[:class]
-        prepared = Familia.distinguisher(opts[:class], strict_values)
+        prepared = Familia.distinguisher(opts[:class], strict_values: strict_values)
         Familia.ld "  from opts[class] <#{opts[:class]}>: #{prepared||'<nil>'}"
       end
 
       if prepared.nil?
         # Enforce strict values when no class option is specified
-        prepared = Familia.distinguisher(val, true)
+        prepared = Familia.distinguisher(val, strict_values: true)
         Familia.ld "  from <#{val.class}> => <#{prepared.class}>"
       end
 

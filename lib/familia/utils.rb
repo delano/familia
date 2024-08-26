@@ -69,6 +69,7 @@ module Familia
   # @param uri [String, URI] URI to convert
   # @return [URI::Redis] Redis URI object
   def redisuri(uri)
+    uri ||= Familia.uri
     generic_uri = URI.parse(uri.to_s)
 
     # Create a new URI::Redis object
@@ -77,7 +78,7 @@ module Familia
       userinfo: generic_uri.userinfo,
       host: generic_uri.host,
       port: generic_uri.port,
-      path: generic_uri.path,
+      path: generic_uri.path, # the db is stored in the path
       query: generic_uri.query,
       fragment: generic_uri.fragment
     )
@@ -124,37 +125,60 @@ module Familia
       DIGEST_CLASS.hexdigest(concatenated_string)
     end
 
-    # This method determines the appropriate value to return based on the class of the input argument.
-    # It uses a case statement to handle different classes:
-    # - For Symbol, String, Integer, and Float classes, it traces the operation and converts the value to a string.
-    # - For Familia::Horreum class, it traces the operation and returns the identifier of the value.
-    # - For TrueClass, FalseClass, and NilClass, it traces the operation and converts the value to a string ("true", "false", or "").
+    # This method determines the appropriate transformation to apply based on
+    # the class of the input argument.
+    #
+    # @param [Object] value_to_distinguish The value to be processed. Keep in
+    #   mind that all data in redis is stored as a string so whatever the type
+    #   of the value, it will be converted to a string.
+    # @param [Boolean] strict_values Whether to enforce strict value handling.
+    #   Defaults to true.
+    # @return [String, nil] The processed value as a string or nil for unsupported
+    #   classes.
+    #
+    # The method uses a case statement to handle different classes:
+    # - For `Symbol`, `String`, `Integer`, and `Float` classes, it traces the
+    #   operation and converts the value to a string.
+    # - For `Familia::Horreum` class, it traces the operation and returns the
+    #   identifier of the value.
+    # - For `TrueClass`, `FalseClass`, and `NilClass`, it traces the operation and
+    #   converts the value to a string ("true", "false", or "").
     # - For any other class, it traces the operation and returns nil.
     #
-    # Alternative names for `value_to_distinguish` could be `input_value`, `value`, or `object`.
-    def distinguisher(value_to_distinguish, strict_values = true)
+    # Alternative names for `value_to_distinguish` could be `input_value`, `value`,
+    # or `object`.
+    #
+    def distinguisher(value_to_distinguish, strict_values: true)
       case value_to_distinguish
       when ::Symbol, ::String, ::Integer, ::Float
-        #Familia.trace :TOREDIS_DISTINGUISHER, redis, "string", caller(1..1) if Familia.debug?
+        Familia.trace :TOREDIS_DISTINGUISHER, redis, "string", caller(1..1) if Familia.debug?
+
         # Symbols and numerics are naturally serializable to strings
         # so it's a relatively low risk operation.
         value_to_distinguish.to_s
 
       when ::TrueClass, ::FalseClass, ::NilClass
-        #Familia.trace :TOREDIS_DISTINGUISHER, redis, "true/false/nil", caller(1..1) if Familia.debug?
-        # TrueClass, FalseClass, and NilClass are high risk because we can't
-        # reliably determine the original type of the value from the serialized
-        # string. This can lead to unexpected behavior when deserializing. For
-        # example, if a TrueClass value is serialized as "true" and then later
-        # deserialized as a String, it can cause errors in the application. Worse
-        # still, if a NilClass value is serialized as an empty string we lose the
-        # ability to distinguish between a nil value and an empty string when
+        Familia.trace :TOREDIS_DISTINGUISHER, redis, "true/false/nil", caller(1..1) if Familia.debug?
+
+        # TrueClass, FalseClass, and NilClass are considered high risk because their
+        # original types cannot be reliably determined from their serialized string
+        # representations. This can lead to unexpected behavior during deserialization.
+        # For instance, a TrueClass value serialized as "true" might be deserialized as
+        # a String, causing application errors. Even more problematic, a NilClass value
+        # serialized as an empty string makes it impossible to distinguish between a
+        # nil value and an empty string upon deserialization. Such scenarios can result
+        # in subtle, hard-to-diagnose bugs. To mitigate these risks, we raise an
+        # exception when encountering these types unless the strict_values option is
+        # explicitly set to false.
         #
         raise Familia::HighRiskFactor, value_to_distinguish if strict_values
         value_to_distinguish.to_s #=> "true", "false", ""
 
       when Familia::Base, Class
-        #Familia.trace :TOREDIS_DISTINGUISHER, redis, "base", caller(1..1) if Familia.debug?
+        Familia.trace :TOREDIS_DISTINGUISHER, redis, "base", caller(1..1) if Familia.debug?
+
+        # When called with a class we simply transform it to its name. For
+        # instances of Familia class, we store the identifier.
         if value_to_distinguish.is_a?(Class)
           value_to_distinguish.name
         else
@@ -162,14 +186,15 @@ module Familia
         end
 
       else
-        #Familia.trace :TOREDIS_DISTINGUISHER, redis, "else1 #{strict_values}", caller(1..1) if Familia.debug?
+         Familia.trace :TOREDIS_DISTINGUISHER, redis, "else1 #{strict_values}", caller(1..1) if Familia.debug?
 
         if value_to_distinguish.class.ancestors.member?(Familia::Base)
-          #Familia.trace :TOREDIS_DISTINGUISHER, redis, "isabase", caller(1..1) if Familia.debug?
+          Familia.trace :TOREDIS_DISTINGUISHER, redis, "isabase", caller(1..1) if Familia.debug?
+
           value_to_distinguish.identifier
 
         else
-          #Familia.trace :TOREDIS_DISTINGUISHER, redis, "else2 #{strict_values}", caller(1..1) if Familia.debug?
+          Familia.trace :TOREDIS_DISTINGUISHER, redis, "else2 #{strict_values}", caller(1..1) if Familia.debug?
           raise Familia::HighRiskFactor, value_to_distinguish if strict_values
           nil
         end

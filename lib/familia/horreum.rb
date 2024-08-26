@@ -24,7 +24,7 @@ module Familia
   class Horreum
     include Familia::Base
 
-    # == Singleton Class Context
+    # Singleton Class Context
     #
     # The code within this block operates on the singleton class (also known as
     # eigenclass or metaclass) of the current class. This means:
@@ -73,6 +73,18 @@ module Familia
       Familia.ld "[Horreum] Initializing #{self.class}"
       initialize_relatives
 
+      # Automatically add a 'key' field if it's not already defined. This ensures
+      # that every object horreum class has a unique identifier field. Ideally
+      # this logic would live somewhere else b/c we only need to call it once
+      # per class definition. Here it gets called every time an instance is
+      # instantiated/
+      unless self.class.fields.include?(:key)
+        # Define the 'key' field for this class
+        # This approach allows flexibility in how identifiers are generated
+        # while ensuring each object has a consistent way to be referenced
+        self.class.field :key # , default: -> { identifier }
+      end
+
       # If there are positional arguments, they should be the field
       # values in the order they were defined in the implementing class.
       #
@@ -92,15 +104,6 @@ module Familia
         #  default = self.class.defaults[field]
         #  send(:"#{field}=", default) if default
         # end
-      end
-
-      # Automatically add a 'key' field if it's not already defined
-      # This ensures that every object has a unique identifier
-      unless self.class.fields.include?(:key)
-        # Define the 'key' field for this class
-        # This approach allows flexibility in how identifiers are generated
-        # while ensuring each object has a consistent way to be referenced
-        self.class.field :key # , default: -> { identifier }
       end
 
       # Implementing classes can define an init method to do any

@@ -50,7 +50,7 @@ module Familia
     end
 
     def score(val)
-      ret = redis.zscore rediskey, to_redis(val, false)
+      ret = redis.zscore rediskey, to_redis(val, strict_values: false)
       ret&.to_f
     end
     alias [] score
@@ -63,13 +63,13 @@ module Familia
 
     # rank of member +v+ when ordered lowest to highest (starts at 0)
     def rank(v)
-      ret = redis.zrank rediskey, to_redis(v, false)
+      ret = redis.zrank rediskey, to_redis(v, strict_values: false)
       ret&.to_i
     end
 
     # rank of member +v+ when ordered highest to lowest (starts at 0)
     def revrank(v)
-      ret = redis.zrevrank rediskey, to_redis(v, false)
+      ret = redis.zrevrank rediskey, to_redis(v, strict_values: false)
       ret&.to_i
     end
 
@@ -208,7 +208,7 @@ module Familia
       # the identifier and not a serialized version of the object. So either
       # the value exists in the sorted set or it doesn't -- we don't need to
       # raise an error if it's not found.
-      redis.zrem rediskey, to_redis(val, false)
+      redis.zrem rediskey, to_redis(val, strict_values: false)
     end
     alias remove delete
     alias rem delete

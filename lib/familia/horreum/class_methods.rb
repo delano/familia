@@ -97,18 +97,18 @@ module Familia
           # Check if the correct number of arguments is provided (exactly one).
           raise ArgumentError, "wrong number of arguments (given #{args.size}, expected 1)" if args.size != 1
 
-          value = args.first
+          val = args.first
 
           begin
             # Trace the operation if debugging is enabled.
-            Familia.trace :FAST_WRITER, redis, "#{name}: #{value.inspect}", caller(1..1) if Familia.debug?
+            Familia.trace :FAST_WRITER, redis, "#{name}: #{val.inspect}", caller(1..1) if Familia.debug?
 
             # Convert the provided value to a format suitable for Redis storage.
-            prepared = to_redis(value)
-            Familia.ld "[.fast_writer!] #{name} val: #{value.class} prepared: #{prepared.class}"
+            prepared = to_redis(val)
+            Familia.ld "[.fast_writer!] #{name} val: #{val.class} prepared: #{prepared.class}"
 
             # Use the existing accessor method to set the attribute value.
-            send :"#{name}=", value
+            send :"#{name}=", val
 
             # Persist the value to Redis immediately using the hset command.
             hset name, prepared
