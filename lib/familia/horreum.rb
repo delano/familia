@@ -142,9 +142,11 @@ module Familia
         #
         opts[:parent] = self # unless opts.key(:parent)
 
+        suffix_override = opts.fetch(:suffix, name)
+
         # Instantiate the RedisType object and below we store it in
         # an instance variable.
-        redis_type = klass.new name, opts
+        redis_type = klass.new suffix_override, opts
 
         # Freezes the redis_type, making it immutable.
         # This ensures the object's state remains consistent and prevents any modifications,
