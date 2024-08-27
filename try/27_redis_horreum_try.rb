@@ -47,12 +47,12 @@ Familia.debug = false
 @customer.save
 #=> true
 
-## Horreum object fields have a fast writer method (1 of 2)
+## Horreum object fields have a fast attribute method (1 of 2)
 Familia.trace :LOAD, @customer.redis, @customer.redisuri, caller if Familia.debug?
 @customer.name! 'Jane Doe'
 #=> 0
 
-## Horreum object fields have a fast writer method (2 of 2)
+## Horreum object fields have a fast attribute method (2 of 2)
 @customer.refresh!
 @customer.name
 #=> "Jane Doe"

@@ -74,30 +74,82 @@ module Familia
         fields << name
         attr_accessor name
 
-        # Every field gets a fast writer method for immediately persisting
-        fast_writer! name
+        # Every field gets a fast attribute method for immediately persisting
+        fast_attribute! name
       end
 
-      # Defines a writer method with a bang (!) suffix for a given attribute name.
+      # Defines a fast attribute method with a bang (!) suffix for a given
+      # attribute name. Fast attribute methods are used to immediately read or
+      # write attribute values from/to Redis. Calling a fast attribute method
+      # has no effect on any of the object's other attributes and does not
+      # trigger a call to update the object's expiration time.
       #
       # The dynamically defined method performs the following:
-      # - Checks if the correct number of arguments is provided (exactly one).
+      # - Acts as both a reader and a writer method.
+      # - When called without arguments, retrieves the current value from Redis.
+      # - When called with an argument, persists the value to Redis immediately.
+      # - Checks if the correct number of arguments is provided (zero or one).
       # - Converts the provided value to a format suitable for Redis storage.
-      # - Uses the existing accessor method to set the attribute value.
-      # - Persists the value to Redis immediately using the hset command.
-      # - Includes custom error handling to raise an ArgumentError if the wrong number of arguments is given.
-      # - Raises a custom error message if an exception occurs during the execution of the method.
+      # - Uses the existing accessor method to set the attribute value when
+      #   writing.
+      # - Persists the value to Redis immediately using the hset command when
+      #   writing.
+      # - Includes custom error handling to raise an ArgumentError if the wrong
+      #   number of arguments is given.
+      # - Raises a custom error message if an exception occurs during the
+      #   execution of the method.
       #
-      # @param [Symbol, String] name the name of the attribute for which the writer method is defined.
-      # @raise [ArgumentError] if the wrong number of arguments is provided.
-      # @raise [RuntimeError] if an exception occurs during the execution of the method.
+      # @param [Symbol, String] name the name of the attribute for which the
+      #   fast method is defined.
+      # @return [Object] the current value of the attribute when called without
+      #   arguments.
+      # @raise [ArgumentError] if more than one argument is provided.
+      # @raise [RuntimeError] if an exception occurs during the execution of the
+      #   method.
       #
-      def fast_writer!(name)
+      def fast_attribute!(name = nil)
+        # Fast attribute accessor method for the '#{name}' attribute.
+        # This method provides immediate read and write access to the attribute
+        # in Redis.
+        #
+        # When called without arguments, it retrieves the current value of the
+        # attribute from Redis.
+        # When called with an argument, it immediately persists the new value to
+        # Redis.
+        #
+        # @overload #{name}!
+        #   Retrieves the current value of the attribute from Redis.
+        #   @return [Object] the current value of the attribute.
+        #
+        # @overload #{name}!(value)
+        #   Sets and immediately persists the new value of the attribute to
+        #   Redis.
+        #   @param value [Object] the new value to set for the attribute.
+        #   @return [Object] the newly set value.
+        #
+        # @raise [ArgumentError] if more than one argument is provided.
+        # @raise [RuntimeError] if an exception occurs during the execution of
+        #   the method.
+        #
+        # @note This method bypasses any object-level caching and interacts
+        #   directly with Redis. It does not trigger updates to other attributes
+        #   or the object's expiration time.
+        #
+        # @example
+        #
+        #      def #{name}!(*args)
+        #        # Method implementation
+        #      end
+        #
         define_method :"#{name}!" do |*args|
           # Check if the correct number of arguments is provided (exactly one).
-          raise ArgumentError, "wrong number of arguments (given #{args.size}, expected 1)" if args.size != 1
+          raise ArgumentError, "wrong number of arguments (given #{args.size}, expected 0 or 1)" if args.size > 1
 
           val = args.first
+
+          # If no value is provided to this fast attribute method, make a call
+          # to redis to return the current stored value of the hash field.
+          return hget name if val.nil?
 
           begin
             # Trace the operation if debugging is enabled.
@@ -105,7 +157,7 @@ module Familia
 
             # Convert the provided value to a format suitable for Redis storage.
             prepared = to_redis(val)
-            Familia.ld "[.fast_writer!] #{name} val: #{val.class} prepared: #{prepared.class}"
+            Familia.ld "[.fast_attribute!] #{name} val: #{val.class} prepared: #{prepared.class}"
 
             # Use the existing accessor method to set the attribute value.
             send :"#{name}=", val
