@@ -46,7 +46,7 @@ module Familia::Features
     end
 
     def qstamp(quantum = nil, pattern: nil, time: nil)
-      self.class.qstamp(quantum || ttl, pattern: pattern, time: time)
+      self.class.qstamp(quantum || self.class.ttl, pattern: pattern, time: time)
     end
 
     extend ClassMethods

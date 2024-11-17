@@ -130,8 +130,8 @@ module Familia
 
         # Update our object's life story
         self.key ||= self.identifier
-        self.updated = Familia.now.to_i
-        self.created ||= Familia.now.to_i
+        self.created ||= Familia.now.to_i if respond_to?(:created)
+        self.updated = Familia.now.to_i if respond_to?(:updated)
 
         # Commit our tale to the Redis chronicles
         #
