@@ -59,6 +59,15 @@ module Familia
         redis.rename rediskey, newkey
       end
 
+      # Retrieves the prefix for the current instance by delegating to its class.
+      #
+      # @return [String] The prefix associated with the class of the current instance.
+      # @example
+      #   instance.prefix
+      def prefix
+        self.class.prefix
+      end
+
       # For parity with RedisType#hgetall
       def hgetall
         Familia.trace :HGETALL, redis, redisuri, caller(1..1) if Familia.debug?
