@@ -107,8 +107,10 @@ module Familia
         redis.hset rediskey, field, value
       end
 
-      def hmset
-        redis.hmset rediskey(suffix), self.to_h
+      def hmset(hsh={})
+        hsh ||= self.to_h
+        Familia.trace :HMSET, redis, hsh, caller(1..1) if Familia.debug?
+        redis.hmset rediskey(suffix), hsh
       end
 
       def hkeys
