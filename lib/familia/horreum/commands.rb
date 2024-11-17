@@ -18,9 +18,22 @@ module Familia
     #
     module Commands
 
+      # Checks if the calling object's key exists in Redis and has a non-zero size.
+      #
+      # This method retrieves the Redis URI associated with the calling object's class
+      # using `Familia.redis_uri_by_class`. It then checks if the specified key exists
+      # in Redis and that its size is not zero. If debugging is enabled, it logs the
+      # existence check using `Familia.trace`.
+      #
+      # @return [Boolean] Returns `true` if the key exists in Redis and its size is not zero, otherwise `false`.
+      # @example
+      #   if some_object.exists?
+      #     # perform action
+      #   end
       def exists?
-        # Trace output comes from the class method
-        self.class.exists? identifier, suffix
+        true_or_false = self.class.redis.exists?(rediskey) && !size.zero?
+        Familia.trace :EXISTS, redis, "#{key} #{true_or_false.inspect}", caller(1..1) if Familia.debug?
+        true_or_false
       end
 
       # Sets a timeout on key. After the timeout has expired, the key will
@@ -33,6 +46,13 @@ module Familia
         redis.expire rediskey, ttl.to_i
       end
 
+      # Retrieves the remaining time to live (TTL) for the object's Redis key.
+      #
+      # This method accesses the ovjects Redis client to obtain the TTL of `rediskey`.
+      # If debugging is enabled, it logs the TTL retrieval operation using `Familia.trace`.
+      #
+      # @return [Integer] The TTL of the key in seconds. Returns -1 if the key does not exist
+      #   or has no associated expire time.
       def realttl
         Familia.trace :REALTTL, redis, redisuri, caller(1..1) if Familia.debug?
         redis.ttl rediskey
