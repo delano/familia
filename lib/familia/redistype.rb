@@ -38,10 +38,6 @@ module Familia
         @registered_types[methname] = klass
       end
 
-      def db(val = nil)
-        @db = val unless val.nil?
-        @db || parent&.db
-      end
 
       def uri(val = nil)
         @uri = val unless val.nil?
@@ -92,8 +88,11 @@ module Familia
     # :key => a hardcoded key to use instead of the deriving the from
     # the name and parent (e.g. a derived key: customer:custid:secret_counter).
     #
-    # Uses the redis connection of the parent or the value of
-    # opts[:redis] or Familia.redis (in that order).
+    # :suffix => the suffix to use for the key (e.g. 'scores' in customer:custid:scores).
+    # :prefix => the prefix to use for the key (e.g. 'customer' in customer:custid:scores).
+    #
+    # Connection precendence: uses the redis connection of the parent or the
+    # value of opts[:redis] or Familia.redis (in that order).
     def initialize(keystring, opts = {})
       #Familia.ld " [initializing] #{self.class} #{opts}"
       @keystring = keystring
