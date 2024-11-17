@@ -38,6 +38,10 @@ module Familia
         @registered_types[methname] = klass
       end
 
+      def db(val = nil)
+        @db = val unless val.nil?
+        @db || parent&.db
+      end
 
       def uri(val = nil)
         @uri = val unless val.nil?
