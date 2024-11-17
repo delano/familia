@@ -70,12 +70,12 @@ module Familia
     end
     alias include? member?
 
-    def delete(val)
-      redis.srem rediskey, to_redis(val)
+    # Removes a member from the set
+    # @param value The value to remove from the set
+    # @return [Integer] The number of members that were removed (0 or 1)
+    def remove(value)
+      redis.srem rediskey, to_redis(value)
     end
-    alias remove delete
-    alias rem delete
-    alias del delete
 
     def intersection *setkeys
       # TODO

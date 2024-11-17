@@ -1,5 +1,3 @@
-# frozen_string_literal: true
-
 module Familia
   class HashKey < RedisType
     def size
@@ -49,14 +47,13 @@ module Familia
     end
 
     def values
-      elements = redis.hvals(rediskey)
-      multi_from_redis(*elements)
+      redis.hvals(rediskey).map { |v| load v }
     end
 
     def hgetall
-      # TODO: Use from_redis. Also alias `all` is confusing with
-      # Onetime::Customer.all which returns all customers.
-      redis.hgetall rediskey
+      redis.hgetall(rediskey).each_with_object({}) do |(k,v), ret|
+        ret[k] = from_redis v
+      end
     end
     alias all hgetall
 
@@ -67,12 +64,12 @@ module Familia
     alias include? key?
     alias member? key?
 
-    def delete(field)
+    # Removes a field from the hash
+    # @param field [String] The field to remove
+    # @return [Integer] The number of fields that were removed (0 or 1)
+    def remove(field)
       redis.hdel rediskey, field
     end
-    alias remove delete
-    alias rem delete
-    alias del delete
 
     def increment(field, by = 1)
       redis.hincrby(rediskey, field, by).to_i

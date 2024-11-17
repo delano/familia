@@ -58,12 +58,11 @@ module Familia
         redis.ttl rediskey
       end
 
-      # Deletes a field from the hash stored at the Redis key.
+      # Removes a field from the hash stored at the Redis key.
       #
-      # @param field [String] The field to delete from the hash.
+      # @param field [String] The field to remove from the hash.
       # @return [Integer] The number of fields that were removed from the hash (0 or 1).
-      # @note This method is destructive, as indicated by the bang (!).
-      def hdel!(field)
+      def remove_field(field)
         Familia.trace :HDEL, redis, field, caller(1..1) if Familia.debug?
         redis.hdel rediskey, field
       end
@@ -162,12 +161,13 @@ module Familia
       end
       alias has_key? key?
 
+      # Deletes the entire Redis key
+      # @return [Boolean] true if the key was deleted, false otherwise
       def delete!
         Familia.trace :DELETE!, redis, redisuri, caller(1..1) if Familia.debug?
         ret = redis.del rediskey
         ret.positive?
       end
-      protected :delete!
 
     end
 

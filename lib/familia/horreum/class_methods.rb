@@ -399,8 +399,10 @@ module Familia
       # @param suffix [Symbol, nil] The suffix to use in the Redis key (default: class suffix).
       # @return [Boolean] true if the object was successfully destroyed, false otherwise.
       #
-      # This method constructs the full Redis key using the provided identifier and suffix,
-      # then removes the corresponding key from Redis.
+      # This method is part of Familia's high-level object lifecycle management. While `delete!`
+      # operates directly on Redis keys, `destroy!` operates at the object level and is used for
+      # ORM-style operations. Use `destroy!` when removing complete objects from the system, and
+      # `delete!` when working directly with Redis keys.
       #
       # @example
       #   User.destroy!(123)  # Removes user:123:object from Redis

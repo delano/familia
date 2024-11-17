@@ -253,6 +253,11 @@ module Familia
       #   rocky.destroy!
       #   # => *poof* Rocky is no more. A moment of silence, please.
       #
+      # This method is part of Familia's high-level object lifecycle management. While `delete!`
+      # operates directly on Redis keys, `destroy!` operates at the object level and is used for
+      # ORM-style operations. Use `destroy!` when removing complete objects from the system, and
+      # `delete!` when working directly with Redis keys.
+      #
       # @note If debugging is enabled, this method will leave a trace of its
       #   destructive path, like breadcrumbs for future data archaeologists.
       #

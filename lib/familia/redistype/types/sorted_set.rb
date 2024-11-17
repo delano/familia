@@ -201,18 +201,18 @@ module Familia
     alias decr decrement
     alias decrby decrement
 
-    def delete(val)
-      Familia.trace :DELETE, redis, "#{val}<#{val.class}>", caller(1..1) if Familia.debug?
+    # Removes a member from the sorted set
+    # @param value The value to remove from the sorted set
+    # @return [Integer] The number of members that were removed (0 or 1)
+    def remove(value)
+      Familia.trace :DELETE, redis, "#{value}<#{value.class}>", caller(1..1) if Familia.debug?
       # We use `strict_values: false` here to allow for the deletion of values
       # that are in the sorted set. If it's a horreum object, the value is
       # the identifier and not a serialized version of the object. So either
       # the value exists in the sorted set or it doesn't -- we don't need to
       # raise an error if it's not found.
-      redis.zrem rediskey, to_redis(val, strict_values: false)
+      redis.zrem rediskey, to_redis(value, strict_values: false)
     end
-    alias remove delete
-    alias rem delete
-    alias del delete
 
     def at(idx)
       range(idx, idx).first

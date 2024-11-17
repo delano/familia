@@ -22,11 +22,11 @@ class Familia::RedisType
       redis.type rediskey
     end
 
+    # Deletes the entire Redis key
+    # @return [Boolean] true if the key was deleted, false otherwise
     def delete!
       redis.del rediskey
     end
-    alias clear delete!
-    alias del delete!
 
     def exists?
       redis.exists(rediskey) && !size.zero?
