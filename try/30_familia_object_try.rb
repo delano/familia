@@ -68,7 +68,7 @@ Customer.customers.size
 #=> 3
 
 ## Familia class clear
-Customer.customers.clear
+Customer.customers.delete!
 #=> 1
 
 ## Familia class replace 1 of 4
@@ -89,4 +89,4 @@ Customer.message.value
 
 
 # Teardown
-Customer.values.clear
+Customer.values.delete!

@@ -50,4 +50,4 @@ require_relative './test_helpers'
 #=> ['1', '40', '3']
 
 
-@a.props.clear
+@a.props.delete!

@@ -47,7 +47,7 @@ module Familia
     end
 
     def values
-      redis.hvals(rediskey).map { |v| load v }
+      redis.hvals(rediskey).map { |v| from_redis v }
     end
 
     def hgetall

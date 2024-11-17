@@ -36,7 +36,7 @@ Familia.debug = false
 #=> @identifier
 
 ## Remove the key
-@hashkey.clear
+@hashkey.delete!
 #=> 1
 
 ## Horreum objects can update and save their fields (1 of 2)

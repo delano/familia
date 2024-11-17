@@ -22,7 +22,7 @@ require_relative './test_helpers'
 #=> 'DECENT!'
 
 ## Familia::String#destroy!
-@a.value.clear
+@a.value.delete!
 #=> 1
 
 ## Familia::String.new
@@ -63,4 +63,4 @@ require_relative './test_helpers'
 #=> '1050bytes'
 
 
-@ret.clear
+@ret.delete!

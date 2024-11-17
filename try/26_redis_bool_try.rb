@@ -39,5 +39,5 @@ end
 #=> "true"
 
 ## Clear the hash key
-@hashkey.clear
+@hashkey.delete!
 #=> 1

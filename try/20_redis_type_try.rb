@@ -46,7 +46,7 @@ p [@limiter1.counter.parent.ttl, @limiter2.counter.parent.ttl]
 ##=> "v1:limiter:requests:counter:1302468600"
 
 ## Increment counter
-@limiter1.counter.clear
+@limiter1.counter.delete!
 @limiter1.counter.increment
 #=> 1
 
