@@ -97,15 +97,8 @@ module Familia
       #   connection. Don't worry, it puts everything back where it found it when it's done.
       #
       def transaction
-        original_redis = self.redis
-
-        begin
-          redis.multi do |conn|
-            self.instance_variable_set(:@redis, conn)
-            yield(conn)
-          end
-        ensure
-          self.redis = original_redis
+        redis.multi do |conn|
+          yield(conn)
         end
       end
 
@@ -174,6 +167,10 @@ module Familia
       # It executes a transaction that includes setting field values and,
       # if applicable, updating the expiration time.
       #
+      # @param update_expiration [Boolean] Whether to update the expiration time
+      #  of the Redis key. This is true by default, but can be disabled if you
+      #  don't want to mess with the cosmic balance of your key's lifespan.
+      #
       # @return [MultiResult] A mystical object containing:
       #   - success: A boolean indicating if all Redis commands succeeded
       #   - results: An array of strings, cryptic messages from the Redis gods
@@ -213,7 +210,7 @@ module Familia
       def commit_fields update_expiration: true
         Familia.ld "[commit_fields1] #{self.class} #{rediskey} #{to_h} (update_expiration: #{update_expiration})"
         command_return_values = transaction do |conn|
-          hmset
+          conn.hmset rediskey(suffix), self.to_h # using the prepared connection
 
           # Only classes that have the expiration ferature enabled will
           # actually set an expiration time on their keys. Otherwise
