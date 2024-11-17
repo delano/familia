@@ -26,7 +26,9 @@ module Familia
       attr_reader :registered_types, :valid_options
       attr_accessor :parent
       attr_writer :db, :uri
+    end
 
+    module ClassMethods
       # To be called inside every class that inherits RedisType
       # +methname+ is the term used for the class and instance methods
       # that are created for the given +klass+ (e.g. set, list, etc)
@@ -59,6 +61,7 @@ module Familia
         opts.select { |k, _| RedisType.valid_options.include? k }
       end
     end
+    extend ClassMethods
 
     attr_reader :keystring, :parent, :opts
     attr_writer :dump_method, :load_method
