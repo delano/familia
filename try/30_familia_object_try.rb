@@ -71,7 +71,6 @@ Customer.customers.size
 Customer.customers.clear
 #=> 1
 
-
 ## Familia class replace 1 of 4
 Customer.message.value = "msg1"
 #=> "msg1"
@@ -87,3 +86,7 @@ Customer.message = "msg2"
 ## Familia class replace 4 of 4
 Customer.message.value
 #=> "msg2"
+
+
+# Teardown
+Customer.values.clear
