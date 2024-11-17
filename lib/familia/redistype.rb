@@ -16,7 +16,7 @@ module Familia
     extend Familia::Features
 
     @registered_types = {}
-    @valid_options = %i[class parent ttl default db key redis suffix]
+    @valid_options = %i[class parent ttl default db key redis suffix prefix]
     @db = nil
 
     feature :expiration
