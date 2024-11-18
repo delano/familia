@@ -1,4 +1,4 @@
-# Familia - 1.0.0-rc7 (August 2024)
+# Familia - 1.1.0-rc1 (November 2024)
 
 **Organize and store Ruby objects in Redis. A powerful Ruby ORM (of sorts) for Redis.**
 
@@ -9,7 +9,7 @@ Familia provides a flexible and feature-rich way to interact with Redis using Ru
 
 Get it in one of the following ways:
 
-* In your Gemfile: `gem 'familia', '>= 1.0.0-rc4'`
+* In your Gemfile: `gem 'familia', '>= 1.1.0-rc1'`
 * Install it by hand: `gem install familia --pre`
 * Or for development: `git clone git@github.com:delano/familia.git`
 
