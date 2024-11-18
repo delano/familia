@@ -36,6 +36,13 @@ module Familia
         true_or_false
       end
 
+      # Returns the number of fields in the main object hash
+      # @return [Integer] number of fields
+      def field_count
+        redis.hlen rediskey
+      end
+      alias size field_count
+
       # Sets a timeout on key. After the timeout has expired, the key will
       # automatically be deleted. Returns 1 if the timeout was set, 0 if key
       # does not exist or the timeout could not be set.
@@ -66,6 +73,7 @@ module Familia
         Familia.trace :HDEL, redis, field, caller(1..1) if Familia.debug?
         redis.hdel rediskey, field
       end
+      alias remove remove_field # deprecated
 
       def redistype
         Familia.trace :REDISTYPE, redis, redisuri, caller(1..1) if Familia.debug?
