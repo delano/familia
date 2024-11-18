@@ -1,12 +1,16 @@
+# frozen_string_literal: true
+
 module Familia
   class HashKey < RedisType
-    def size
+    # Returns the number of fields in the hash
+    # @return [Integer] number of fields
+    def field_count
       redis.hlen rediskey
     end
-    alias length size
+    alias size field_count
 
     def empty?
-      size.zero?
+      field_count.zero?
     end
 
     # +return+ [Integer] Returns 1 if the field is new and added, 0 if the

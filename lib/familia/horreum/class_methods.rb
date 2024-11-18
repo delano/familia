@@ -213,12 +213,16 @@ module Familia
       end
 
       def any?(filter = '*')
-        size(filter) > 0
+        matching_keys_count(filter) > 0
       end
 
-      def size(filter = '*')
+      # Returns the number of Redis keys matching the given filter pattern
+      # @param filter [String] Redis key pattern to match (default: '*')
+      # @return [Integer] Number of matching keys
+      def matching_keys_count(filter = '*')
         redis.keys(rediskey(filter)).compact.size
       end
+      alias size matching_keys_count # For backwards compatibility
 
       def suffix(a = nil, &blk)
         @suffix = a || blk if a || !blk.nil?
@@ -414,7 +418,7 @@ module Familia
         objkey = rediskey identifier, suffix
 
         ret = redis.del objkey
-        Familia.trace :DELETED, redis, "#{objkey}: #{ret.inspect}", caller(1..1) if Familia.debug?
+        Familia.trace :DELETED, redis, "#{objkey} #{ret.inspect}", caller(1..1) if Familia.debug?
         ret.positive?
       end
 

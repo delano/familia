@@ -2,13 +2,16 @@
 
 module Familia
   class SortedSet < RedisType
-    def size
+
+    # Returns the number of elements in the sorted set
+    # @return [Integer] number of elements
+    def element_count
       redis.zcard rediskey
     end
-    alias length size
+    alias size element_count
 
     def empty?
-      size.zero?
+      element_count.zero?
     end
 
     # Adds a new element to the sorted set with the current timestamp as the

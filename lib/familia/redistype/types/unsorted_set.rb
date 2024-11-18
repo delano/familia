@@ -2,13 +2,16 @@
 
 module Familia
   class Set < RedisType
-    def size
+
+    # Returns the number of elements in the unsorted set
+    # @return [Integer] number of elements
+    def element_count
       redis.scard rediskey
     end
-    alias length size
+    alias size element_count
 
     def empty?
-      size.zero?
+      element_count.zero?
     end
 
     def add *values

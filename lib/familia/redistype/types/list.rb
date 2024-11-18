@@ -2,13 +2,16 @@
 
 module Familia
   class List < RedisType
-    def size
+
+    # Returns the number of elements in the list
+    # @return [Integer] number of elements
+    def element_count
       redis.llen rediskey
     end
-    alias length size
+    alias size element_count
 
     def empty?
-      size.zero?
+      element_count.zero?
     end
 
     def push *values

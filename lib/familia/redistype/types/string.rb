@@ -4,13 +4,15 @@ module Familia
   class String < RedisType
     def init; end
 
-    def size
+    # Returns the number of elements in the list
+    # @return [Integer] number of elements
+    def char_count
       to_s.size
     end
-    alias length size
+    alias size char_count
 
     def empty?
-      size.zero?
+      char_count.zero?
     end
 
     def value
