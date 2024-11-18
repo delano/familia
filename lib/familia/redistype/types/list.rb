@@ -64,9 +64,10 @@ module Familia
     # @param value The value to remove
     # @param count [Integer] Number of elements to remove (0 means all)
     # @return [Integer] The number of removed elements
-    def remove(value, count = 0)
+    def remove_element(value, count = 0)
       redis.lrem rediskey, count, serialize_value(value)
     end
+    alias remove remove_element
 
     def range(sidx = 0, eidx = -1)
       elements = rangeraw sidx, eidx

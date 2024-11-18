@@ -76,9 +76,10 @@ module Familia
     # Removes a member from the set
     # @param value The value to remove from the set
     # @return [Integer] The number of members that were removed (0 or 1)
-    def remove(value)
+    def remove_element(value)
       redis.srem rediskey, serialize_value(value)
     end
+    alias remove remove_element # deprecated
 
     def intersection *setkeys
       # TODO

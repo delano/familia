@@ -207,8 +207,8 @@ module Familia
     # Removes a member from the sorted set
     # @param value The value to remove from the sorted set
     # @return [Integer] The number of members that were removed (0 or 1)
-    def remove(value)
-      Familia.trace :DELETE, redis, "#{value}<#{value.class}>", caller(1..1) if Familia.debug?
+    def remove_element(value)
+      Familia.trace :REMOVE_ELEMENT, redis, "#{value}<#{value.class}>", caller(1..1) if Familia.debug?
       # We use `strict_values: false` here to allow for the deletion of values
       # that are in the sorted set. If it's a horreum object, the value is
       # the identifier and not a serialized version of the object. So either
@@ -216,6 +216,7 @@ module Familia
       # raise an error if it's not found.
       redis.zrem rediskey, serialize_value(value, strict_values: false)
     end
+    alias remove remove_element # deprecated
 
     def at(idx)
       range(idx, idx).first

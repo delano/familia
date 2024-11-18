@@ -82,7 +82,7 @@ module Familia
         # Define the 'key' field for this class
         # This approach allows flexibility in how identifiers are generated
         # while ensuring each object has a consistent way to be referenced
-        self.class.field :key # , default: -> { identifier }
+        self.class.field :key
       end
 
       # If there are positional arguments, they should be the field

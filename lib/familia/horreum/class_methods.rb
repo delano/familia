@@ -341,6 +341,7 @@ module Familia
 
         new(**obj)
       end
+      alias from_rediskey find_by_key # deprecated
 
       # Retrieves and instantiates an object from Redis using its identifier.
       #
@@ -371,7 +372,8 @@ module Familia
         Familia.trace :FIND_BY_ID, Familia.redis(uri), objkey, caller(1..1).first if Familia.debug?
         find_by_key objkey
       end
-      alias load find_by_id
+      alias load find_by_id # deprecated
+      alias from_identifier find_by_id # deprecated
 
       # Checks if an object with the given identifier exists in Redis.
       #
@@ -418,7 +420,7 @@ module Familia
         objkey = rediskey identifier, suffix
 
         ret = redis.del objkey
-        Familia.trace :DELETED, redis, "#{objkey} #{ret.inspect}", caller(1..1) if Familia.debug?
+        Familia.trace :DESTROY!, redis, "#{objkey} #{ret.inspect}", caller(1..1) if Familia.debug?
         ret.positive?
       end
 

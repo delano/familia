@@ -71,9 +71,10 @@ module Familia
     # Removes a field from the hash
     # @param field [String] The field to remove
     # @return [Integer] The number of fields that were removed (0 or 1)
-    def remove(field)
+    def remove_field(field)
       redis.hdel rediskey, field
     end
+    alias remove remove_field # deprecated
 
     def increment(field, by = 1)
       redis.hincrby(rediskey, field, by).to_i
