@@ -215,7 +215,7 @@ module Familia
           # Only classes that have the expiration ferature enabled will
           # actually set an expiration time on their keys. Otherwise
           # this will be a no-op that simply logs the attempt.
-          self.update_expiration if update_expiration
+          self.update_expiration(ttl: nil) if update_expiration
         end
 
         # The acceptable redis command return values are defined in the

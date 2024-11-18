@@ -49,7 +49,7 @@ module Familia::Features
     #   false otherwise.
     #
     # @example Setting an expiration of one day
-    #   object.update_expiration(86400)
+    #   object.update_expiration(ttl: 86400)
     #
     # @note If TTL is set to zero, the expiration will be removed, making the
     #   data persist indefinitely.
@@ -57,7 +57,7 @@ module Familia::Features
     # @raise [Familia::Problem] Raises an error if the TTL is not a non-negative
     #   integer.
     #
-  def update_expiration(ttl = nil)
+    def update_expiration(ttl: nil)
       ttl ||= self.ttl
       # It's important to raise exceptions here and not just log warnings. We
       # don't want to silently fail at setting expirations and cause data

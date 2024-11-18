@@ -30,21 +30,21 @@ module Familia
       end
     end
 
-    # Yo, this class is like that one friend who never checks expiration dates.
-    # It's living life on the edge, data-style!
+    # Base implementation of update_expiration that maintains API compatibility
+    # with the :expiration feature's implementation.
     #
-    # @param ttl [Integer, nil] Time To Live? More like Time To Laugh! This param
-    #   is here for compatibility, but it's as useful as a chocolate teapot.
+    # This is a no-op implementation that gets overridden by features like
+    # :expiration. It accepts an optional ttl parameter to maintain interface
+    # compatibility with the overriding implementations.
     #
-    # @return [nil] Always returns nil. It's consistent in its laziness!
+    # @param ttl [Integer, nil] Time To Live in seconds (ignored in base implementation)
+    # @return [nil] Always returns nil
     #
-    # @example Trying to teach an old dog new tricks
-    #   immortal_data.update_expiration(86400) # Nice try, but this data is here to stay!
+    # @note This is a no-op implementation. Classes that need expiration
+    #       functionality should include the :expiration feature.
     #
-    # @note This method is a no-op. It's like shouting into the void, but less echo-y.
-    #
-    def update_expiration(*)
-      Familia.info "[update_expiration] Skipped for #{rediskey}. #{self.class} data is immortal!"
+    def update_expiration(ttl: nil)
+      Familia.ld "[update_expiration] Method not defined for #{self.class}. Key: #{rediskey} (caller: #{caller(1..1)})"
       nil
     end
 
