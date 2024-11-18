@@ -12,7 +12,7 @@ module Familia
     end
 
     def add *values
-      values.flatten.compact.each { |v| redis.sadd? rediskey, to_redis(v) }
+      values.flatten.compact.each { |v| redis.sadd? rediskey, serialize_value(v) }
       update_expiration
       self
     end
@@ -24,7 +24,7 @@ module Familia
     def members
       echo :members, caller(1..1).first if Familia.debug
       elements = membersraw
-      multi_from_redis(*elements)
+      deserialize_values(*elements)
     end
     alias all members
     alias to_a members
@@ -66,7 +66,7 @@ module Familia
     end
 
     def member?(val)
-      redis.sismember rediskey, to_redis(val)
+      redis.sismember rediskey, serialize_value(val)
     end
     alias include? member?
 
@@ -74,7 +74,7 @@ module Familia
     # @param value The value to remove from the set
     # @return [Integer] The number of members that were removed (0 or 1)
     def remove(value)
-      redis.srem rediskey, to_redis(value)
+      redis.srem rediskey, serialize_value(value)
     end
 
     def intersection *setkeys
@@ -90,7 +90,7 @@ module Familia
     end
 
     def random
-      from_redis randomraw
+      deserialize_value randomraw
     end
 
     def randomraw

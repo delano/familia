@@ -13,7 +13,7 @@ module Familia
 
     def push *values
       echo :push, caller(1..1).first if Familia.debug
-      values.flatten.compact.each { |v| redis.rpush rediskey, to_redis(v) }
+      values.flatten.compact.each { |v| redis.rpush rediskey, serialize_value(v) }
       redis.ltrim rediskey, -@opts[:maxlength], -1 if @opts[:maxlength]
       update_expiration
       self
@@ -26,7 +26,7 @@ module Familia
     alias add <<
 
     def unshift *values
-      values.flatten.compact.each { |v| redis.lpush rediskey, to_redis(v) }
+      values.flatten.compact.each { |v| redis.lpush rediskey, serialize_value(v) }
       # TODO: test maxlength
       redis.ltrim rediskey, 0, @opts[:maxlength] - 1 if @opts[:maxlength]
       update_expiration
@@ -35,11 +35,11 @@ module Familia
     alias prepend unshift
 
     def pop
-      from_redis redis.rpop(rediskey)
+      deserialize_value redis.rpop(rediskey)
     end
 
     def shift
-      from_redis redis.lpop(rediskey)
+      deserialize_value redis.lpop(rediskey)
     end
 
     def [](idx, count = nil)
@@ -62,12 +62,12 @@ module Familia
     # @param count [Integer] Number of elements to remove (0 means all)
     # @return [Integer] The number of removed elements
     def remove(value, count = 0)
-      redis.lrem rediskey, count, to_redis(value)
+      redis.lrem rediskey, count, serialize_value(value)
     end
 
     def range(sidx = 0, eidx = -1)
       elements = rangeraw sidx, eidx
-      multi_from_redis(*elements)
+      deserialize_values(*elements)
     end
 
     def rangeraw(sidx = 0, eidx = -1)
@@ -120,7 +120,7 @@ module Familia
     end
 
     def at(idx)
-      from_redis redis.lindex(rediskey, idx)
+      deserialize_value redis.lindex(rediskey, idx)
     end
 
     def first

@@ -156,7 +156,7 @@ module Familia
             Familia.trace :FAST_WRITER, redis, "#{name}: #{val.inspect}", caller(1..1) if Familia.debug?
 
             # Convert the provided value to a format suitable for Redis storage.
-            prepared = to_redis(val)
+            prepared = serialize_value(val)
             Familia.ld "[.fast_attribute!] #{name} val: #{val.class} prepared: #{prepared.class}"
 
             # Use the existing accessor method to set the attribute value.

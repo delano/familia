@@ -36,7 +36,7 @@ Bone.suffix
 Customer.values.all.collect(&:custid)
 ##=> ['delano']
 
-## Familia.from_redis
+## Can load an object from an identifier
 obj = Customer.from_identifier :delano
 [obj.class, obj.custid]
 #=> [Customer, 'delano']

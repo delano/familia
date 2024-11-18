@@ -328,7 +328,7 @@ module Familia
       def to_h
         self.class.fields.inject({}) do |hsh, field|
           val = send(field)
-          prepared = to_redis(val)
+          prepared = serialize_value(val)
           Familia.ld " [to_h] field: #{field} val: #{val.class} prepared: #{prepared.class}"
           hsh[field] = prepared
           hsh
@@ -353,7 +353,7 @@ module Familia
       def to_a
         self.class.fields.map do |field|
           val = send(field)
-          prepared = to_redis(val)
+          prepared = serialize_value(val)
           Familia.ld " [to_a] field: #{field} val: #{val.class} prepared: #{prepared.class}"
           prepared
         end
@@ -394,7 +394,7 @@ module Familia
       #
       # @return [String] The transformed, Redis-ready value.
       #
-      def to_redis(val)
+      def serialize_value(val)
         prepared = Familia.distinguisher(val, strict_values: false)
 
         if prepared.nil? && val.respond_to?(dump_method)
@@ -402,11 +402,12 @@ module Familia
         end
 
         if prepared.nil?
-          Familia.ld "[#{self.class}#to_redis] nil returned for #{self.class}##{name}"
+          Familia.ld "[#{self.class}#serialize_value] nil returned for #{self.class}##{name}"
         end
 
         prepared
       end
+      alias to_redis serialize_value
 
     end
     # End of Serialization module

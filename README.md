@@ -152,11 +152,11 @@ end
 
 ```ruby
 class ComplexObject < Familia::Horreum
-  def to_redis
+  def serialize_value
     custom_serialization_method
   end
 
-  def self.from_redis(data)
+  def self.deserialize_value(data)
     custom_deserialization_method(data)
   end
 end

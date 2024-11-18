@@ -17,16 +17,16 @@ class Familia::RedisType
     #   serialization.
     #
     # @example With a class option
-    #   to_redis(User.new(name: "Cloe"), strict_values: false) #=> '{"name":"Cloe"}'
+    #   serialize_value(User.new(name: "Cloe"), strict_values: false) #=> '{"name":"Cloe"}'
     #
     # @example Without a class option
-    #   to_redis(123) #=> "123"
-    #   to_redis("hello") #=> "hello"
+    #   serialize_value(123) #=> "123"
+    #   serialize_value("hello") #=> "hello"
     #
     # @raise [Familia::HighRiskFactor] If serialization fails under strict
     #   mode.
     #
-    def to_redis(val, strict_values: true)
+    def serialize_value(val, strict_values: true)
       prepared = nil
 
       Familia.trace :TOREDIS, redis, "#{val}<#{val.class}|#{opts[:class]}>", caller(1..1) if Familia.debug?
@@ -44,24 +44,26 @@ class Familia::RedisType
 
       Familia.trace :TOREDIS, redis, "#{val}<#{val.class}|#{opts[:class]}> => #{prepared}<#{prepared.class}>", caller(1..1) if Familia.debug?
 
-      Familia.warn "[#{self.class}\#to_redis] nil returned for #{opts[:class]}\##{name}" if prepared.nil?
+      Familia.warn "[#{self.class}\#serialize_value] nil returned for #{opts[:class]}\##{name}" if prepared.nil?
       prepared
     end
+    alias to_redis serialize_value
 
     # Deserializes multiple values from Redis, removing nil values.
     #
     # @param values [Array<String>] The values to deserialize.
     # @return [Array<Object>] Deserialized objects, with nil values removed.
     #
-    # @see #multi_from_redis_with_nil
+    # @see #deserialize_values_with_nil
     #
-    def multi_from_redis(*values)
+    def deserialize_values(*values)
       # Avoid using compact! here. Using compact! as the last expression in the
       # method can unintentionally return nil if no changes are made, which is
       # not desirable. Instead, use compact to ensure the method returns the
       # expected value.
-      multi_from_redis_with_nil(*values).compact
+      deserialize_values_with_nil(*values).compact
     end
+    alias from_redis deserialize_values
 
     # Deserializes multiple values from Redis, preserving nil values.
     #
@@ -75,11 +77,8 @@ class Familia::RedisType
     #   class's load method. If deserialization fails for a value, it's
     #   replaced with nil.
     #
-    # NOTE: `multi` in this method name refers to multiple values from
-    # redis and not the Redis server MULTI command.
-    #
-    def multi_from_redis_with_nil(*values)
-      Familia.ld "multi_from_redis: (#{@opts}) #{values}"
+    def deserialize_values_with_nil(*values)
+      Familia.ld "deserialize_values: (#{@opts}) #{values}"
       return [] if values.empty?
       return values.flatten unless @opts[:class]
 
@@ -92,7 +91,7 @@ class Familia::RedisType
 
         val = @opts[:class].send load_method, obj
         if val.nil?
-          Familia.ld "[#{self.class}\#multi_from_redis] nil returned for #{@opts[:class]}\##{name}"
+          Familia.ld "[#{self.class}\#deserialize_values] nil returned for #{@opts[:class]}\##{name}"
         end
 
         val
@@ -105,6 +104,7 @@ class Familia::RedisType
 
       values
     end
+    alias from_redis_with_nil deserialize_values_with_nil
 
     # Deserializes a single value from Redis.
     #
@@ -120,13 +120,14 @@ class Familia::RedisType
     # deserialization options that RedisType supports. It uses to_redis
     # for serialization since everything becomes a string in Redis.
     #
-    def from_redis(val)
+    def deserialize_value(val)
       return @opts[:default] if val.nil?
       return val unless @opts[:class]
 
-      ret = multi_from_redis val
+      ret = deserialize_values val
       ret&.first # return the object or nil
     end
+    alias from_redis deserialize_value
   end
 
 end

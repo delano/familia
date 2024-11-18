@@ -16,7 +16,7 @@ module Familia
     def value
       echo :value, caller(0..0) if Familia.debug
       redis.setnx rediskey, @opts[:default] if @opts[:default]
-      from_redis redis.get(rediskey)
+      deserialize_value redis.get(rediskey)
     end
     alias content value
     alias get value
@@ -30,7 +30,7 @@ module Familia
     end
 
     def value=(val)
-      ret = redis.set(rediskey, to_redis(val))
+      ret = redis.set(rediskey, serialize_value(val))
       update_expiration
       ret
     end
@@ -38,7 +38,7 @@ module Familia
     alias set value=
 
     def setnx(val)
-      ret = redis.setnx(rediskey, to_redis(val))
+      ret = redis.setnx(rediskey, serialize_value(val))
       update_expiration
       ret
     end

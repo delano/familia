@@ -12,7 +12,7 @@ module Familia
     # +return+ [Integer] Returns 1 if the field is new and added, 0 if the
     #  field already existed and the value was updated.
     def []=(field, val)
-      ret = redis.hset rediskey, field, to_redis(val)
+      ret = redis.hset rediskey, field, serialize_value(val)
       update_expiration
       ret
     rescue TypeError => e
@@ -27,7 +27,7 @@ module Familia
     alias store []=
 
     def [](field)
-      from_redis redis.hget(rediskey, field)
+      deserialize_value redis.hget(rediskey, field)
     end
     alias get []
 
@@ -47,12 +47,12 @@ module Familia
     end
 
     def values
-      redis.hvals(rediskey).map { |v| from_redis v }
+      redis.hvals(rediskey).map { |v| deserialize_value v }
     end
 
     def hgetall
       redis.hgetall(rediskey).each_with_object({}) do |(k,v), ret|
-        ret[k] = from_redis v
+        ret[k] = deserialize_value v
       end
     end
     alias all hgetall
@@ -86,7 +86,7 @@ module Familia
     def update(hsh = {})
       raise ArgumentError, 'Argument to bulk_set must be a hash' unless hsh.is_a?(Hash)
 
-      data = hsh.inject([]) { |ret, pair| ret << [pair[0], to_redis(pair[1])] }.flatten
+      data = hsh.inject([]) { |ret, pair| ret << [pair[0], serialize_value(pair[1])] }.flatten
 
       ret = redis.hmset(rediskey, *data)
       update_expiration
@@ -96,7 +96,7 @@ module Familia
 
     def values_at *fields
       elements = redis.hmget(rediskey, *fields.flatten.compact)
-      multi_from_redis(*elements)
+      deserialize_values(*elements)
     end
 
     Familia::RedisType.register self, :hash # legacy, deprecated
