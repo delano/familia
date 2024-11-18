@@ -209,7 +209,7 @@ module Familia
       def all(suffix = nil)
         suffix ||= self.suffix
         # objects that could not be parsed will be nil
-        keys(suffix).filter_map { |k| from_rediskey(k) }
+        keys(suffix).filter_map { |k| find_by_key(k) }
       end
 
       def any?(filter = '*')
@@ -312,17 +312,17 @@ module Familia
       # debugging.
       #
       # @example
-      #   User.from_rediskey("user:123")  # Returns a User instance if it exists,
+      #   User.find_by_key("user:123")  # Returns a User instance if it exists,
       #   nil otherwise
       #
-      def from_rediskey(objkey)
+      def find_by_key(objkey)
         raise ArgumentError, 'Empty key' if objkey.to_s.empty?
 
         # We use a lower-level method here b/c we're working with the
         # full key and not just the identifier.
         does_exist = redis.exists(objkey).positive?
 
-        Familia.ld "[.from_rediskey] #{self} from key #{objkey} (exists: #{does_exist})"
+        Familia.ld "[.find_by_key] #{self} from key #{objkey} (exists: #{does_exist})"
         Familia.trace :FROM_KEY, redis, objkey, caller(1..1) if Familia.debug?
 
         # This is the reason for calling exists first. We want to definitively
@@ -347,7 +347,7 @@ module Familia
       # @return [Object, nil] An instance of the class if found, nil otherwise.
       #
       # This method constructs the full Redis key using the provided identifier
-      # and suffix, then delegates to `from_rediskey` for the actual retrieval and
+      # and suffix, then delegates to `find_by_key` for the actual retrieval and
       # instantiation.
       #
       # It's a higher-level method that abstracts away the key construction,
@@ -355,19 +355,19 @@ module Familia
       # identifier.
       #
       # @example
-      #   User.from_identifier(123)  # Equivalent to User.from_rediskey("user:123:object")
+      #   User.find_by_id(123)  # Equivalent to User.find_by_key("user:123:object")
       #
-      def from_identifier(identifier, suffix = nil)
+      def find_by_id(identifier, suffix = nil)
         suffix ||= self.suffix
         return nil if identifier.to_s.empty?
 
         objkey = rediskey(identifier, suffix)
 
-        Familia.ld "[.from_identifier] #{self} from key #{objkey})"
-        Familia.trace :FROM_IDENTIFIER, Familia.redis(uri), objkey, caller(1..1).first if Familia.debug?
-        from_rediskey objkey
+        Familia.ld "[.find_by_id] #{self} from key #{objkey})"
+        Familia.trace :FIND_BY_ID, Familia.redis(uri), objkey, caller(1..1).first if Familia.debug?
+        find_by_key objkey
       end
-      alias load from_identifier
+      alias load find_by_id
 
       # Checks if an object with the given identifier exists in Redis.
       #

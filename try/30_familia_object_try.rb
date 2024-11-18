@@ -37,7 +37,7 @@ Customer.values.all.collect(&:custid)
 ##=> ['delano']
 
 ## Can load an object from an identifier
-obj = Customer.from_identifier :delano
+obj = Customer.find_by_id :delano
 [obj.class, obj.custid]
 #=> [Customer, 'delano']
 

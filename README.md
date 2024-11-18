@@ -188,7 +188,7 @@ flower.save
 ### Retrieving and Updating Objects
 
 ```ruby
-rose = Flower.from_identifier("rrose")
+rose = Flower.find_by_id("rrose")
 rose.name = "Pink Rose"
 rose.save
 ```
