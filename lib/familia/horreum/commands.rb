@@ -154,11 +154,6 @@ module Familia
       end
       alias decrement decr
 
-      def hlen
-        redis.hlen rediskey(suffix)
-      end
-      alias hlength hlen
-
       def hstrlen(field)
         redis.hstrlen rediskey(suffix), field
       end
