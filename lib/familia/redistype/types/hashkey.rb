@@ -99,6 +99,62 @@ module Familia
       deserialize_values(*elements)
     end
 
+    # The Great Redis Refresh-o-matic 3000 for HashKey!
+    #
+    # This method performs a complete refresh of the hash's state from Redis.
+    # It's like giving your hash a memory transfusion - out with the old state,
+    # in with the fresh data straight from Redis!
+    #
+    # @note This operation is atomic - it either succeeds completely or fails
+    #   safely. Any unsaved changes to the hash will be overwritten.
+    #
+    # @return [void] Returns nothing, but your hash will be sparkling clean
+    #   with all its fields synchronized with Redis.
+    #
+    # @raise [Familia::KeyNotFoundError] If the Redis key for this hash no
+    #   longer exists. Time travelers beware!
+    #
+    # @example Basic usage
+    #   my_hash.refresh!  # ZAP! Fresh data loaded
+    #
+    # @example With error handling
+    #   begin
+    #     my_hash.refresh!
+    #   rescue Familia::KeyNotFoundError
+    #     puts "Oops! Our hash seems to have vanished into the Redis void!"
+    #   end
+    def refresh!
+      Familia.trace :REFRESH, redis, redisuri, caller(1..1) if Familia.debug?
+      raise Familia::KeyNotFoundError, rediskey unless redis.exists(rediskey)
+
+      fields = hgetall
+      Familia.ld "[refresh!] #{self.class} #{rediskey} #{fields.keys}"
+
+      # For HashKey, we update by merging the fresh data
+      update(fields)
+    end
+
+    # The friendly neighborhood refresh method!
+    #
+    # This method is like refresh! but with better manners - it returns self
+    # so you can chain it with other methods. It's perfect for when you want
+    # to refresh your hash and immediately do something with it.
+    #
+    # @return [self] Returns the refreshed hash, ready for more adventures!
+    #
+    # @raise [Familia::KeyNotFoundError] If the Redis key does not exist.
+    #   The hash must exist in Redis-land for this to work!
+    #
+    # @example Refresh and chain
+    #   my_hash.refresh.keys  # Refresh and get all keys
+    #   my_hash.refresh['field']  # Refresh and get a specific field
+    #
+    # @see #refresh! For the heavy lifting behind the scenes
+    def refresh
+      refresh!
+      self
+    end
+
     Familia::RedisType.register self, :hash # legacy, deprecated
     Familia::RedisType.register self, :hashkey
   end

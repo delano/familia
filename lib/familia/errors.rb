@@ -30,4 +30,18 @@ module Familia
       "No client for #{uri.serverid}"
     end
   end
+
+  # Raised when attempting to refresh an object whose key doesn't exist in Redis
+  class KeyNotFoundError < Problem
+    attr_reader :key
+
+    def initialize(key)
+      @key = key
+      super
+    end
+
+    def message
+      "Key not found in Redis: #{key}"
+    end
+  end
 end

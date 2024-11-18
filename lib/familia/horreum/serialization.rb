@@ -278,14 +278,19 @@ module Familia
       # Gone quicker than cake at a hobbit's birthday party. Unsaved spells
       # will definitely be forgotten.
       #
-      # @return What do you get for this daring act of digital amnesia? A shiny
+      # @return [void] What do you get for this daring act of digital amnesia? A shiny
       # list of all the brain bits that got a makeover!
       #
       # Remember: In the game of Redis-Refresh, you win or you... well, you
       # always win, but sometimes you forget why you played in the first place.
       #
+      # @raise [Familia::KeyNotFoundError] If the Redis key does not exist.
+      #
+      # @example
+      #   object.refresh!
       def refresh!
         Familia.trace :REFRESH, redis, redisuri, caller(1..1) if Familia.debug?
+        raise Familia::KeyNotFoundError, rediskey unless redis.exists(rediskey)
         fields = hgetall
         Familia.ld "[refresh!] #{self.class} #{rediskey} #{fields.keys}"
         optimistic_refresh(**fields)
@@ -304,6 +309,8 @@ module Familia
       #
       # @return [self] Your object, freshly bathed in Redis waters, ready
       #   to dance with more methods in a conga line of Ruby joy!
+      #
+      # @raise [Familia::KeyNotFoundError] If the Redis key does not exist.
       #
       def refresh
         refresh!
