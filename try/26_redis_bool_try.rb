@@ -40,4 +40,4 @@ end
 
 ## Clear the hash key
 @hashkey.delete!
-#=> 1
+#=> true
