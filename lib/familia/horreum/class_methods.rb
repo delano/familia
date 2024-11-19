@@ -369,6 +369,7 @@ module Familia
         Familia.trace :FIND_BY_ID, Familia.redis(uri), objkey, caller(1..1).first if Familia.debug?
         find_by_key objkey
       end
+      alias find find_by_id
       alias load find_by_id # deprecated
       alias from_identifier find_by_id # deprecated
 
@@ -433,7 +434,7 @@ module Familia
       #   User.find  # Returns all keys matching user:*:object
       #   User.find('active')  # Returns all keys matching user:*:active
       #
-      def find(suffix = '*')
+      def find_keys(suffix = '*')
         redis.keys(rediskey('*', suffix)) || []
       end
 
