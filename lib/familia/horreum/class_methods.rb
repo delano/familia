@@ -193,6 +193,10 @@ module Familia
         @redis_types
       end
 
+      def has_relations?
+        @has_relations ||= false
+      end
+
       def db(v = nil)
         @db = v unless v.nil?
         @db || parent&.db

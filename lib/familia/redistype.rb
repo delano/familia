@@ -23,7 +23,7 @@ module Familia
     feature :quantization
 
     class << self
-      attr_reader :registered_types, :valid_options
+      attr_reader :registered_types, :valid_options, :has_relations
       attr_accessor :parent
       attr_writer :db, :uri
     end
@@ -59,6 +59,10 @@ module Familia
 
       def valid_keys_only(opts)
         opts.select { |k, _| RedisType.valid_options.include? k }
+      end
+
+      def has_relations?
+        @has_relations ||= false
       end
     end
     extend ClassMethods
