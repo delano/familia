@@ -59,6 +59,17 @@ module Familia::Features
     #
     def update_expiration(ttl: nil)
       ttl ||= self.ttl
+
+      if self.class.has_relations?
+        Familia.ld "[update_expiration] #{self.class} has relations: #{self.class.redis_types.keys}"
+        self.class.redis_types.each do |name, definition|
+          next if definition.opts[:ttl].nil?
+          obj = send(name)
+          Familia.ld "[update_expiration] Updating expiration for #{name} (#{obj.rediskey}) to #{ttl}"
+          obj.update_expiration(ttl: ttl)
+        end
+      end
+
       # It's important to raise exceptions here and not just log warnings. We
       # don't want to silently fail at setting expirations and cause data
       # retention issues (e.g. not removed in a timely fashion).

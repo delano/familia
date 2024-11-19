@@ -131,7 +131,7 @@ module Familia
         # e.g. `ret`  # => MultiResult.new(true, ["OK", "OK"])
         ret = commit_fields(update_expiration: update_expiration)
 
-        Familia.ld "[save] #{self.class} #{rediskey} #{ret}"
+        Familia.ld "[save] #{self.class} #{rediskey} #{ret} (update_expiration: #{update_expiration})"
 
         # Did Redis accept our offering?
         ret.successful?
@@ -211,12 +211,11 @@ module Familia
         Familia.ld "[commit_fields1] #{self.class} #{rediskey} #{to_h} (update_expiration: #{update_expiration})"
         command_return_values = transaction do |conn|
           conn.hmset rediskey(suffix), self.to_h # using the prepared connection
-
-          # Only classes that have the expiration ferature enabled will
-          # actually set an expiration time on their keys. Otherwise
-          # this will be a no-op that simply logs the attempt.
-          self.update_expiration(ttl: nil) if update_expiration
         end
+        # Only classes that have the expiration ferature enabled will
+        # actually set an expiration time on their keys. Otherwise
+        # this will be a no-op that simply logs the attempt.
+        self.update_expiration(ttl: nil) if update_expiration
 
         # The acceptable redis command return values are defined in the
         # Horreum class. This is to ensure that all commands return values

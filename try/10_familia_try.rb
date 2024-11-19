@@ -21,7 +21,7 @@ Familia::Horreum::ClassMethods.public_method_defined? :list
 Familia::Horreum::ClassMethods.public_method_defined? :lists
 #=> true
 
-## A Familia object knows its redistype relativess
+## A Familia object knows its redistype relatives
 Bone.redis_types.is_a?(Hash) && Bone.redis_types.has_key?(:owners)
 #=> true
 

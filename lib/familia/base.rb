@@ -44,7 +44,7 @@ module Familia
     #       functionality should include the :expiration feature.
     #
     def update_expiration(ttl: nil)
-      Familia.ld "[update_expiration] Method not defined for #{self.class}. Key: #{rediskey} (caller: #{caller(1..1)})"
+      Familia.ld "[update_expiration] Feature not enabled for #{self.class}. Key: #{rediskey} (caller: #{caller(1..1)})"
       nil
     end
 
