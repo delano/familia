@@ -54,6 +54,10 @@ module Familia
     # but not existing instances of the class.
     #
     class << self
+      attr_accessor :parent
+      attr_writer :redis, :dump_method, :load_method
+      attr_reader :has_relations
+
       # Extends ClassMethods to subclasses and tracks Familia members
       def inherited(member)
         Familia.trace :HORREUM, nil, "Welcome #{member} to the family", caller(1..1) if Familia.debug?

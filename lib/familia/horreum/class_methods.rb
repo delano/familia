@@ -33,9 +33,6 @@ module Familia
       include Familia::Settings
       include Familia::Horreum::RelationsManagement
 
-      attr_accessor :parent
-      attr_writer :redis, :dump_method, :load_method
-
       # Returns the Redis connection for the class.
       #
       # This method retrieves the Redis connection instance for the class. If no
