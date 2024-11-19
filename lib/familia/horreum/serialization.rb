@@ -97,15 +97,8 @@ module Familia
       #   connection. Don't worry, it puts everything back where it found it when it's done.
       #
       def transaction
-        original_redis = self.redis
-
-        begin
-          redis.multi do |conn|
-            self.instance_variable_set(:@redis, conn)
-            yield(conn)
-          end
-        ensure
-          self.redis = original_redis
+        redis.multi do |conn|
+          yield(conn)
         end
       end
 
@@ -130,15 +123,15 @@ module Familia
 
         # Update our object's life story
         self.key ||= self.identifier
-        self.updated = Familia.now.to_i
-        self.created ||= Familia.now.to_i
+        self.created ||= Familia.now.to_i if respond_to?(:created)
+        self.updated = Familia.now.to_i if respond_to?(:updated)
 
         # Commit our tale to the Redis chronicles
         #
         # e.g. `ret`  # => MultiResult.new(true, ["OK", "OK"])
         ret = commit_fields(update_expiration: update_expiration)
 
-        Familia.ld "[save] #{self.class} #{rediskey} #{ret}"
+        Familia.ld "[save] #{self.class} #{rediskey} #{ret} (update_expiration: #{update_expiration})"
 
         # Did Redis accept our offering?
         ret.successful?
@@ -173,6 +166,10 @@ module Familia
       # on a journey through the ethernet to find their resting place in Redis.
       # It executes a transaction that includes setting field values and,
       # if applicable, updating the expiration time.
+      #
+      # @param update_expiration [Boolean] Whether to update the expiration time
+      #  of the Redis key. This is true by default, but can be disabled if you
+      #  don't want to mess with the cosmic balance of your key's lifespan.
       #
       # @return [MultiResult] A mystical object containing:
       #   - success: A boolean indicating if all Redis commands succeeded
@@ -213,13 +210,12 @@ module Familia
       def commit_fields update_expiration: true
         Familia.ld "[commit_fields1] #{self.class} #{rediskey} #{to_h} (update_expiration: #{update_expiration})"
         command_return_values = transaction do |conn|
-          hmset
-
-          # Only classes that have the expiration ferature enabled will
-          # actually set an expiration time on their keys. Otherwise
-          # this will be a no-op that simply logs the attempt.
-          self.update_expiration if update_expiration
+          conn.hmset rediskey(suffix), self.to_h # using the prepared connection
         end
+        # Only classes that have the expiration ferature enabled will
+        # actually set an expiration time on their keys. Otherwise
+        # this will be a no-op that simply logs the attempt.
+        self.update_expiration(ttl: nil) if update_expiration
 
         # The acceptable redis command return values are defined in the
         # Horreum class. This is to ensure that all commands return values
@@ -256,6 +252,11 @@ module Familia
       #   rocky.destroy!
       #   # => *poof* Rocky is no more. A moment of silence, please.
       #
+      # This method is part of Familia's high-level object lifecycle management. While `delete!`
+      # operates directly on Redis keys, `destroy!` operates at the object level and is used for
+      # ORM-style operations. Use `destroy!` when removing complete objects from the system, and
+      # `delete!` when working directly with Redis keys.
+      #
       # @note If debugging is enabled, this method will leave a trace of its
       #   destructive path, like breadcrumbs for future data archaeologists.
       #
@@ -276,14 +277,19 @@ module Familia
       # Gone quicker than cake at a hobbit's birthday party. Unsaved spells
       # will definitely be forgotten.
       #
-      # @return What do you get for this daring act of digital amnesia? A shiny
+      # @return [void] What do you get for this daring act of digital amnesia? A shiny
       # list of all the brain bits that got a makeover!
       #
       # Remember: In the game of Redis-Refresh, you win or you... well, you
       # always win, but sometimes you forget why you played in the first place.
       #
+      # @raise [Familia::KeyNotFoundError] If the Redis key does not exist.
+      #
+      # @example
+      #   object.refresh!
       def refresh!
         Familia.trace :REFRESH, redis, redisuri, caller(1..1) if Familia.debug?
+        raise Familia::KeyNotFoundError, rediskey unless redis.exists(rediskey)
         fields = hgetall
         Familia.ld "[refresh!] #{self.class} #{rediskey} #{fields.keys}"
         optimistic_refresh(**fields)
@@ -302,6 +308,8 @@ module Familia
       #
       # @return [self] Your object, freshly bathed in Redis waters, ready
       #   to dance with more methods in a conga line of Ruby joy!
+      #
+      # @raise [Familia::KeyNotFoundError] If the Redis key does not exist.
       #
       def refresh
         refresh!
@@ -326,7 +334,7 @@ module Familia
       def to_h
         self.class.fields.inject({}) do |hsh, field|
           val = send(field)
-          prepared = to_redis(val)
+          prepared = serialize_value(val)
           Familia.ld " [to_h] field: #{field} val: #{val.class} prepared: #{prepared.class}"
           hsh[field] = prepared
           hsh
@@ -351,7 +359,7 @@ module Familia
       def to_a
         self.class.fields.map do |field|
           val = send(field)
-          prepared = to_redis(val)
+          prepared = serialize_value(val)
           Familia.ld " [to_a] field: #{field} val: #{val.class} prepared: #{prepared.class}"
           prepared
         end
@@ -392,7 +400,7 @@ module Familia
       #
       # @return [String] The transformed, Redis-ready value.
       #
-      def to_redis(val)
+      def serialize_value(val)
         prepared = Familia.distinguisher(val, strict_values: false)
 
         if prepared.nil? && val.respond_to?(dump_method)
@@ -400,11 +408,12 @@ module Familia
         end
 
         if prepared.nil?
-          Familia.ld "[#{self.class}#to_redis] nil returned for #{self.class}##{name}"
+          Familia.ld "[#{self.class}#serialize_value] nil returned for #{self.class}##{name}"
         end
 
         prepared
       end
+      alias to_redis serialize_value
 
     end
     # End of Serialization module

@@ -2,17 +2,20 @@
 
 module Familia
   class Set < RedisType
-    def size
+
+    # Returns the number of elements in the unsorted set
+    # @return [Integer] number of elements
+    def element_count
       redis.scard rediskey
     end
-    alias length size
+    alias size element_count
 
     def empty?
-      size.zero?
+      element_count.zero?
     end
 
     def add *values
-      values.flatten.compact.each { |v| redis.sadd? rediskey, to_redis(v) }
+      values.flatten.compact.each { |v| redis.sadd? rediskey, serialize_value(v) }
       update_expiration
       self
     end
@@ -24,7 +27,7 @@ module Familia
     def members
       echo :members, caller(1..1).first if Familia.debug
       elements = membersraw
-      multi_from_redis(*elements)
+      deserialize_values(*elements)
     end
     alias all members
     alias to_a members
@@ -66,16 +69,17 @@ module Familia
     end
 
     def member?(val)
-      redis.sismember rediskey, to_redis(val)
+      redis.sismember rediskey, serialize_value(val)
     end
     alias include? member?
 
-    def delete(val)
-      redis.srem rediskey, to_redis(val)
+    # Removes a member from the set
+    # @param value The value to remove from the set
+    # @return [Integer] The number of members that were removed (0 or 1)
+    def remove_element(value)
+      redis.srem rediskey, serialize_value(value)
     end
-    alias remove delete
-    alias rem delete
-    alias del delete
+    alias remove remove_element # deprecated
 
     def intersection *setkeys
       # TODO
@@ -90,7 +94,7 @@ module Familia
     end
 
     def random
-      from_redis randomraw
+      deserialize_value randomraw
     end
 
     def randomraw

@@ -31,11 +31,11 @@ ret.class
 #=> ['value1','value2','value3']
 
 ## Familia::List#delete
-@a.owners.delete 'value3'
+@a.owners.remove 'value3'
 #=> 1
 
 ## Familia::List#size
 @a.owners.size
 #=> 2
 
-@a.owners.clear
+@a.owners.delete!

@@ -31,4 +31,4 @@ ret.class
 #=> 3
 
 
-@a.tags.clear
+@a.tags.delete!

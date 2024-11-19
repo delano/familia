@@ -18,7 +18,7 @@ require_relative './test_helpers'
 #=> true
 
 ## Customer can be retrieved by identifier
-retrieved_customer = Customer.from_identifier("test@example.com")
+retrieved_customer = Customer.find_by_id("test@example.com")
 retrieved_customer.custid
 #=> "test@example.com"
 
@@ -35,11 +35,11 @@ retrieved_customer.custid
 @customer.planid = "premium"
 @customer.save
 ident = @customer.identifier
-Customer.from_identifier(ident).planid
+Customer.find_by_id(ident).planid
 #=> "premium"
 
 ## Customer can increment secrets_created counter
-@customer.secrets_created.clear
+@customer.secrets_created.delete!
 @customer.secrets_created.increment
 @customer.secrets_created.value
 #=> '1'
@@ -74,7 +74,7 @@ Customer.instances.member?(@customer)
 #=> true
 
 ## Customer can be removed from class-level sorted set
-Customer.instances.delete(@customer)
+Customer.instances.remove(@customer)
 Customer.instances.member?(@customer)
 #=> false
 
@@ -90,7 +90,7 @@ Customer.instances.member?(@customer)
 
 ## Customer can be destroyed
 ret = @customer.destroy!
-cust = Customer.from_identifier("test@example.com")
+cust = Customer.find_by_id("test@example.com")
 exists = Customer.exists?("test@example.com")
 [ret, cust.nil?, exists]
 #=> [true, true, false]
@@ -137,4 +137,4 @@ Customer.instances.uri.to_s
 
 
 # Teardown
-Customer.instances.clear
+Customer.instances.delete!

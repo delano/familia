@@ -33,9 +33,6 @@ module Familia
       include Familia::Settings
       include Familia::Horreum::RelationsManagement
 
-      attr_accessor :parent
-      attr_writer :redis, :dump_method, :load_method
-
       # Returns the Redis connection for the class.
       #
       # This method retrieves the Redis connection instance for the class. If no
@@ -156,7 +153,7 @@ module Familia
             Familia.trace :FAST_WRITER, redis, "#{name}: #{val.inspect}", caller(1..1) if Familia.debug?
 
             # Convert the provided value to a format suitable for Redis storage.
-            prepared = to_redis(val)
+            prepared = serialize_value(val)
             Familia.ld "[.fast_attribute!] #{name} val: #{val.class} prepared: #{prepared.class}"
 
             # Use the existing accessor method to set the attribute value.
@@ -196,6 +193,10 @@ module Familia
         @redis_types
       end
 
+      def has_relations?
+        @has_relations ||= false
+      end
+
       def db(v = nil)
         @db = v unless v.nil?
         @db || parent&.db
@@ -209,16 +210,20 @@ module Familia
       def all(suffix = nil)
         suffix ||= self.suffix
         # objects that could not be parsed will be nil
-        keys(suffix).filter_map { |k| from_rediskey(k) }
+        keys(suffix).filter_map { |k| find_by_key(k) }
       end
 
       def any?(filter = '*')
-        size(filter) > 0
+        matching_keys_count(filter) > 0
       end
 
-      def size(filter = '*')
+      # Returns the number of Redis keys matching the given filter pattern
+      # @param filter [String] Redis key pattern to match (default: '*')
+      # @return [Integer] Number of matching keys
+      def matching_keys_count(filter = '*')
         redis.keys(rediskey(filter)).compact.size
       end
+      alias size matching_keys_count # For backwards compatibility
 
       def suffix(a = nil, &blk)
         @suffix = a || blk if a || !blk.nil?
@@ -312,17 +317,17 @@ module Familia
       # debugging.
       #
       # @example
-      #   User.from_rediskey("user:123")  # Returns a User instance if it exists,
+      #   User.find_by_key("user:123")  # Returns a User instance if it exists,
       #   nil otherwise
       #
-      def from_rediskey(objkey)
+      def find_by_key(objkey)
         raise ArgumentError, 'Empty key' if objkey.to_s.empty?
 
         # We use a lower-level method here b/c we're working with the
         # full key and not just the identifier.
         does_exist = redis.exists(objkey).positive?
 
-        Familia.ld "[.from_rediskey] #{self} from key #{objkey} (exists: #{does_exist})"
+        Familia.ld "[.find_by_key] #{self} from key #{objkey} (exists: #{does_exist})"
         Familia.trace :FROM_KEY, redis, objkey, caller(1..1) if Familia.debug?
 
         # This is the reason for calling exists first. We want to definitively
@@ -337,6 +342,7 @@ module Familia
 
         new(**obj)
       end
+      alias from_rediskey find_by_key # deprecated
 
       # Retrieves and instantiates an object from Redis using its identifier.
       #
@@ -347,7 +353,7 @@ module Familia
       # @return [Object, nil] An instance of the class if found, nil otherwise.
       #
       # This method constructs the full Redis key using the provided identifier
-      # and suffix, then delegates to `from_rediskey` for the actual retrieval and
+      # and suffix, then delegates to `find_by_key` for the actual retrieval and
       # instantiation.
       #
       # It's a higher-level method that abstracts away the key construction,
@@ -355,19 +361,21 @@ module Familia
       # identifier.
       #
       # @example
-      #   User.from_identifier(123)  # Equivalent to User.from_rediskey("user:123:object")
+      #   User.find_by_id(123)  # Equivalent to User.find_by_key("user:123:object")
       #
-      def from_identifier(identifier, suffix = nil)
+      def find_by_id(identifier, suffix = nil)
         suffix ||= self.suffix
         return nil if identifier.to_s.empty?
 
         objkey = rediskey(identifier, suffix)
 
-        Familia.ld "[.from_identifier] #{self} from key #{objkey})"
-        Familia.trace :FROM_IDENTIFIER, Familia.redis(uri), objkey, caller(1..1).first if Familia.debug?
-        from_rediskey objkey
+        Familia.ld "[.find_by_id] #{self} from key #{objkey})"
+        Familia.trace :FIND_BY_ID, Familia.redis(uri), objkey, caller(1..1).first if Familia.debug?
+        find_by_key objkey
       end
-      alias load from_identifier
+      alias find find_by_id
+      alias load find_by_id # deprecated
+      alias from_identifier find_by_id # deprecated
 
       # Checks if an object with the given identifier exists in Redis.
       #
@@ -399,8 +407,10 @@ module Familia
       # @param suffix [Symbol, nil] The suffix to use in the Redis key (default: class suffix).
       # @return [Boolean] true if the object was successfully destroyed, false otherwise.
       #
-      # This method constructs the full Redis key using the provided identifier and suffix,
-      # then removes the corresponding key from Redis.
+      # This method is part of Familia's high-level object lifecycle management. While `delete!`
+      # operates directly on Redis keys, `destroy!` operates at the object level and is used for
+      # ORM-style operations. Use `destroy!` when removing complete objects from the system, and
+      # `delete!` when working directly with Redis keys.
       #
       # @example
       #   User.destroy!(123)  # Removes user:123:object from Redis
@@ -412,7 +422,7 @@ module Familia
         objkey = rediskey identifier, suffix
 
         ret = redis.del objkey
-        Familia.trace :DELETED, redis, "#{objkey}: #{ret.inspect}", caller(1..1) if Familia.debug?
+        Familia.trace :DESTROY!, redis, "#{objkey} #{ret.inspect}", caller(1..1) if Familia.debug?
         ret.positive?
       end
 
@@ -428,7 +438,7 @@ module Familia
       #   User.find  # Returns all keys matching user:*:object
       #   User.find('active')  # Returns all keys matching user:*:active
       #
-      def find(suffix = '*')
+      def find_keys(suffix = '*')
         redis.keys(rediskey('*', suffix)) || []
       end
 

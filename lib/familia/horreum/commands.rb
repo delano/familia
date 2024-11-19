@@ -18,10 +18,34 @@ module Familia
     #
     module Commands
 
-      def exists?
-        # Trace output comes from the class method
-        self.class.exists? identifier, suffix
+      def move(db)
+        redis.move rediskey, db
       end
+
+      # Checks if the calling object's key exists in Redis and has a non-zero size.
+      #
+      # This method retrieves the Redis URI associated with the calling object's class
+      # using `Familia.redis_uri_by_class`. It then checks if the specified key exists
+      # in Redis and that its size is not zero. If debugging is enabled, it logs the
+      # existence check using `Familia.trace`.
+      #
+      # @return [Boolean] Returns `true` if the key exists in Redis and its size is not zero, otherwise `false`.
+      # @example
+      #   if some_object.exists?
+      #     # perform action
+      #   end
+      def exists?
+        true_or_false = self.class.redis.exists?(rediskey) && !size.zero?
+        Familia.trace :EXISTS, redis, "#{key} #{true_or_false.inspect}", caller(1..1) if Familia.debug?
+        true_or_false
+      end
+
+      # Returns the number of fields in the main object hash
+      # @return [Integer] number of fields
+      def field_count
+        redis.hlen rediskey
+      end
+      alias size field_count
 
       # Sets a timeout on key. After the timeout has expired, the key will
       # automatically be deleted. Returns 1 if the timeout was set, 0 if key
@@ -33,20 +57,27 @@ module Familia
         redis.expire rediskey, ttl.to_i
       end
 
+      # Retrieves the remaining time to live (TTL) for the object's Redis key.
+      #
+      # This method accesses the ovjects Redis client to obtain the TTL of `rediskey`.
+      # If debugging is enabled, it logs the TTL retrieval operation using `Familia.trace`.
+      #
+      # @return [Integer] The TTL of the key in seconds. Returns -1 if the key does not exist
+      #   or has no associated expire time.
       def realttl
         Familia.trace :REALTTL, redis, redisuri, caller(1..1) if Familia.debug?
         redis.ttl rediskey
       end
 
-      # Deletes a field from the hash stored at the Redis key.
+      # Removes a field from the hash stored at the Redis key.
       #
-      # @param field [String] The field to delete from the hash.
+      # @param field [String] The field to remove from the hash.
       # @return [Integer] The number of fields that were removed from the hash (0 or 1).
-      # @note This method is destructive, as indicated by the bang (!).
-      def hdel!(field)
+      def remove_field(field)
         Familia.trace :HDEL, redis, field, caller(1..1) if Familia.debug?
         redis.hdel rediskey, field
       end
+      alias remove remove_field # deprecated
 
       def redistype
         Familia.trace :REDISTYPE, redis, redisuri, caller(1..1) if Familia.debug?
@@ -57,6 +88,15 @@ module Familia
       def rename(newkey)
         Familia.trace :RENAME, redis, "#{rediskey} -> #{newkey}", caller(1..1) if Familia.debug?
         redis.rename rediskey, newkey
+      end
+
+      # Retrieves the prefix for the current instance by delegating to its class.
+      #
+      # @return [String] The prefix associated with the class of the current instance.
+      # @example
+      #   instance.prefix
+      def prefix
+        self.class.prefix
       end
 
       # For parity with RedisType#hgetall
@@ -78,8 +118,10 @@ module Familia
         redis.hset rediskey, field, value
       end
 
-      def hmset
-        redis.hmset rediskey(suffix), self.to_h
+      def hmset(hsh={})
+        hsh ||= self.to_h
+        Familia.trace :HMSET, redis, hsh, caller(1..1) if Familia.debug?
+        redis.hmset rediskey(suffix), hsh
       end
 
       def hkeys
@@ -116,11 +158,6 @@ module Familia
       end
       alias decrement decr
 
-      def hlen
-        redis.hlen rediskey(suffix)
-      end
-      alias hlength hlen
-
       def hstrlen(field)
         redis.hstrlen rediskey(suffix), field
       end
@@ -131,12 +168,14 @@ module Familia
       end
       alias has_key? key?
 
+      # Deletes the entire Redis key
+      # @return [Boolean] true if the key was deleted, false otherwise
       def delete!
         Familia.trace :DELETE!, redis, redisuri, caller(1..1) if Familia.debug?
         ret = redis.del rediskey
         ret.positive?
       end
-      protected :delete!
+      alias clear delete!
 
     end
 

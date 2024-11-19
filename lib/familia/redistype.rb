@@ -16,17 +16,19 @@ module Familia
     extend Familia::Features
 
     @registered_types = {}
-    @valid_options = %i[class parent ttl default db key redis suffix]
+    @valid_options = %i[class parent ttl default db key redis suffix prefix]
     @db = nil
 
     feature :expiration
     feature :quantization
 
     class << self
-      attr_reader :registered_types, :valid_options
+      attr_reader :registered_types, :valid_options, :has_relations
       attr_accessor :parent
       attr_writer :db, :uri
+    end
 
+    module ClassMethods
       # To be called inside every class that inherits RedisType
       # +methname+ is the term used for the class and instance methods
       # that are created for the given +klass+ (e.g. set, list, etc)
@@ -58,7 +60,12 @@ module Familia
       def valid_keys_only(opts)
         opts.select { |k, _| RedisType.valid_options.include? k }
       end
+
+      def has_relations?
+        @has_relations ||= false
+      end
     end
+    extend ClassMethods
 
     attr_reader :keystring, :parent, :opts
     attr_writer :dump_method, :load_method
@@ -89,8 +96,11 @@ module Familia
     # :key => a hardcoded key to use instead of the deriving the from
     # the name and parent (e.g. a derived key: customer:custid:secret_counter).
     #
-    # Uses the redis connection of the parent or the value of
-    # opts[:redis] or Familia.redis (in that order).
+    # :suffix => the suffix to use for the key (e.g. 'scores' in customer:custid:scores).
+    # :prefix => the prefix to use for the key (e.g. 'customer' in customer:custid:scores).
+    #
+    # Connection precendence: uses the redis connection of the parent or the
+    # value of opts[:redis] or Familia.redis (in that order).
     def initialize(keystring, opts = {})
       #Familia.ld " [initializing] #{self.class} #{opts}"
       @keystring = keystring
@@ -210,9 +220,9 @@ module Familia
     include Serialization
   end
 
-  require_relative 'types/list'
-  require_relative 'types/unsorted_set'
-  require_relative 'types/sorted_set'
-  require_relative 'types/hashkey'
-  require_relative 'types/string'
+  require_relative 'redistype/types/list'
+  require_relative 'redistype/types/unsorted_set'
+  require_relative 'redistype/types/sorted_set'
+  require_relative 'redistype/types/hashkey'
+  require_relative 'redistype/types/string'
 end

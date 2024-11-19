@@ -22,8 +22,8 @@ require_relative './test_helpers'
 #=> 'DECENT!'
 
 ## Familia::String#destroy!
-@a.value.clear
-#=> 1
+@a.value.delete!
+#=> true
 
 ## Familia::String.new
 @ret = Familia::String.new 'arbitrary:key'
@@ -63,4 +63,4 @@ require_relative './test_helpers'
 #=> '1050bytes'
 
 
-@ret.clear
+@ret.delete!

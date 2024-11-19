@@ -4,19 +4,21 @@ module Familia
   class String < RedisType
     def init; end
 
-    def size
+    # Returns the number of elements in the list
+    # @return [Integer] number of elements
+    def char_count
       to_s.size
     end
-    alias length size
+    alias size char_count
 
     def empty?
-      size.zero?
+      char_count.zero?
     end
 
     def value
       echo :value, caller(0..0) if Familia.debug
       redis.setnx rediskey, @opts[:default] if @opts[:default]
-      from_redis redis.get(rediskey)
+      deserialize_value redis.get(rediskey)
     end
     alias content value
     alias get value
@@ -30,7 +32,7 @@ module Familia
     end
 
     def value=(val)
-      ret = redis.set(rediskey, to_redis(val))
+      ret = redis.set(rediskey, serialize_value(val))
       update_expiration
       ret
     end
@@ -38,7 +40,7 @@ module Familia
     alias set value=
 
     def setnx(val)
-      ret = redis.setnx(rediskey, to_redis(val))
+      ret = redis.setnx(rediskey, serialize_value(val))
       update_expiration
       ret
     end

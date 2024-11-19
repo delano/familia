@@ -6,6 +6,7 @@ require_relative '../../lib/redis_middleware'
 module Familia
   @uri = URI.parse 'redis://127.0.0.1'
   @redis_clients = {}
+  @redis_uri_by_class = {}
 
   # The Connection module provides Redis connection management for Familia.
   # It allows easy setup and access to Redis clients across different URIs.
@@ -25,17 +26,20 @@ module Familia
     # Establishes a connection to a Redis server.
     #
     # @param uri [String, URI, nil] The URI of the Redis server to connect to.
-    #   If nil, uses the default URI.
-    # @return [Redis] The connected Redis client
+    #   If nil, uses the default URI from `@redis_uri_by_class` or `Familia.uri`.
+    # @return [Redis] The connected Redis client.
+    # @raise [ArgumentError] If no URI is specified.
     # @example
     #   Familia.connect('redis://localhost:6379')
     def connect(uri = nil)
       uri = URI.parse(uri) if uri.is_a?(String)
+      uri ||= @redis_uri_by_class[self]
       uri ||= Familia.uri
 
       raise ArgumentError, 'No URI specified' unless uri
 
       conf = uri.conf
+      @redis_uri_by_class[self] = uri.serverid
 
       if Familia.enable_redis_logging
         RedisLogger.logger = Familia.logger
@@ -49,6 +53,9 @@ module Familia
       end
 
       redis = Redis.new(conf)
+
+      # Close the existing connection if it exists
+      @redis_clients[uri.serverid].close if @redis_clients[uri.serverid]
       @redis_clients[uri.serverid] = redis
     end
 
@@ -70,6 +77,15 @@ module Familia
       uri ||= Familia.uri
       connect(uri) unless @redis_clients[uri.serverid]
       @redis_clients[uri.serverid]
+    end
+
+    # Retrieves the Redis client associated with the given class.
+    #
+    # @param klass [Class] The class for which to retrieve the Redis client.
+    # @return [Redis] The Redis client associated with the given class.
+    def redis_uri_by_class(klass)
+      uri = @redis_uri_by_class[klass]
+      connect(uri)
     end
 
     # Sets the default URI for Redis connections.

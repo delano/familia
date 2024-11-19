@@ -16,6 +16,10 @@ module Familia
     #   Call setup_relations_accessors to initialize the feature
     #
     module RelationsManagement
+      # A practical flag to indicate that a Horreum member has relations,
+      # not just theoretically but actually at least one list/haskey/etc.
+      @has_relations = nil
+
       def self.included(base)
         base.extend(ClassMethods)
         base.setup_relations_accessors
@@ -31,14 +35,17 @@ module Familia
 
             # Dynamically define instance-level relation methods
             #
-            # Once defined, these methods can be used at the class-level of a
+            # Once defined, these methods can be used at the instance-level of a
             # Familia member to define *instance-level* relations to any of the
             # RedisType types (e.g. set, list, hash, etc).
             #
             define_method :"#{kind}" do |*args|
               name, opts = *args
+
+              # As log as we have at least one relation, we can set this flag.
+              @has_relations = true
+
               attach_instance_redis_object_relation name, klass, opts
-              redis_types[name.to_s.to_sym]
             end
             define_method :"#{kind}?" do |name|
               obj = redis_types[name.to_s.to_sym]

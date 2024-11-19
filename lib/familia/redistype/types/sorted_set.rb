@@ -2,13 +2,16 @@
 
 module Familia
   class SortedSet < RedisType
-    def size
+
+    # Returns the number of elements in the sorted set
+    # @return [Integer] number of elements
+    def element_count
       redis.zcard rediskey
     end
-    alias length size
+    alias size element_count
 
     def empty?
-      size.zero?
+      element_count.zero?
     end
 
     # Adds a new element to the sorted set with the current timestamp as the
@@ -44,13 +47,13 @@ module Familia
     end
 
     def add(score, val)
-      ret = redis.zadd rediskey, score, to_redis(val)
+      ret = redis.zadd rediskey, score, serialize_value(val)
       update_expiration
       ret
     end
 
     def score(val)
-      ret = redis.zscore rediskey, to_redis(val, strict_values: false)
+      ret = redis.zscore rediskey, serialize_value(val, strict_values: false)
       ret&.to_f
     end
     alias [] score
@@ -63,20 +66,20 @@ module Familia
 
     # rank of member +v+ when ordered lowest to highest (starts at 0)
     def rank(v)
-      ret = redis.zrank rediskey, to_redis(v, strict_values: false)
+      ret = redis.zrank rediskey, serialize_value(v, strict_values: false)
       ret&.to_i
     end
 
     # rank of member +v+ when ordered highest to lowest (starts at 0)
     def revrank(v)
-      ret = redis.zrevrank rediskey, to_redis(v, strict_values: false)
+      ret = redis.zrevrank rediskey, serialize_value(v, strict_values: false)
       ret&.to_i
     end
 
     def members(count = -1, opts = {})
       count -= 1 if count.positive?
       elements = membersraw count, opts
-      multi_from_redis(*elements)
+      deserialize_values(*elements)
     end
     alias to_a members
     alias all members
@@ -89,7 +92,7 @@ module Familia
     def revmembers(count = -1, opts = {})
       count -= 1 if count.positive?
       elements = revmembersraw count, opts
-      multi_from_redis(*elements)
+      deserialize_values(*elements)
     end
 
     def revmembersraw(count = -1, opts = {})
@@ -132,7 +135,7 @@ module Familia
     def range(sidx, eidx, opts = {})
       echo :range, caller(1..1).first if Familia.debug
       elements = rangeraw(sidx, eidx, opts)
-      multi_from_redis(*elements)
+      deserialize_values(*elements)
     end
 
     def rangeraw(sidx, eidx, opts = {})
@@ -149,7 +152,7 @@ module Familia
     def revrange(sidx, eidx, opts = {})
       echo :revrange, caller(1..1).first if Familia.debug
       elements = revrangeraw(sidx, eidx, opts)
-      multi_from_redis(*elements)
+      deserialize_values(*elements)
     end
 
     def revrangeraw(sidx, eidx, opts = {})
@@ -160,7 +163,7 @@ module Familia
     def rangebyscore(sscore, escore, opts = {})
       echo :rangebyscore, caller(1..1).first if Familia.debug
       elements = rangebyscoreraw(sscore, escore, opts)
-      multi_from_redis(*elements)
+      deserialize_values(*elements)
     end
 
     def rangebyscoreraw(sscore, escore, opts = {})
@@ -172,7 +175,7 @@ module Familia
     def revrangebyscore(sscore, escore, opts = {})
       echo :revrangebyscore, caller(1..1).first if Familia.debug
       elements = revrangebyscoreraw(sscore, escore, opts)
-      multi_from_redis(*elements)
+      deserialize_values(*elements)
     end
 
     def revrangebyscoreraw(sscore, escore, opts = {})
@@ -201,18 +204,19 @@ module Familia
     alias decr decrement
     alias decrby decrement
 
-    def delete(val)
-      Familia.trace :DELETE, redis, "#{val}<#{val.class}>", caller(1..1) if Familia.debug?
+    # Removes a member from the sorted set
+    # @param value The value to remove from the sorted set
+    # @return [Integer] The number of members that were removed (0 or 1)
+    def remove_element(value)
+      Familia.trace :REMOVE_ELEMENT, redis, "#{value}<#{value.class}>", caller(1..1) if Familia.debug?
       # We use `strict_values: false` here to allow for the deletion of values
       # that are in the sorted set. If it's a horreum object, the value is
       # the identifier and not a serialized version of the object. So either
       # the value exists in the sorted set or it doesn't -- we don't need to
       # raise an error if it's not found.
-      redis.zrem rediskey, to_redis(val, strict_values: false)
+      redis.zrem rediskey, serialize_value(value, strict_values: false)
     end
-    alias remove delete
-    alias rem delete
-    alias del delete
+    alias remove remove_element # deprecated
 
     def at(idx)
       range(idx, idx).first

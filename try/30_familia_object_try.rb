@@ -36,8 +36,8 @@ Bone.suffix
 Customer.values.all.collect(&:custid)
 ##=> ['delano']
 
-## Familia.from_redis
-obj = Customer.from_identifier :delano
+## Can load an object from an identifier
+obj = Customer.find_by_id :delano
 [obj.class, obj.custid]
 #=> [Customer, 'delano']
 
@@ -68,9 +68,8 @@ Customer.customers.size
 #=> 3
 
 ## Familia class clear
-Customer.customers.clear
-#=> 1
-
+Customer.customers.delete!
+#=> true
 
 ## Familia class replace 1 of 4
 Customer.message.value = "msg1"
@@ -87,3 +86,7 @@ Customer.message = "msg2"
 ## Familia class replace 4 of 4
 Customer.message.value
 #=> "msg2"
+
+
+# Teardown
+Customer.values.delete!

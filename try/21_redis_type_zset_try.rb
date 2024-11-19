@@ -65,4 +65,4 @@ require_relative './test_helpers'
 @a.metrics.members
 #=> ['metric2']
 
-@a.metrics.clear
+@a.metrics.delete!

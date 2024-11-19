@@ -20,9 +20,8 @@ Gem::Specification.new do |spec|
   spec.required_ruby_version = Gem::Requirement.new('>= 2.7.8')
 
   spec.add_dependency 'redis', '>= 4.8.1', '< 6.0'
+  spec.add_dependency 'stringio', '~> 3.1.1'
   spec.add_dependency 'uri-redis', '~> 1.3'
 
-  # byebug only works with MRI
-  spec.add_development_dependency 'byebug', '~> 11.0' if RUBY_ENGINE == 'ruby'
   spec.metadata['rubygems_mfa_required'] = 'true'
 end

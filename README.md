@@ -1,4 +1,4 @@
-# Familia - 1.0.0-rc7 (August 2024)
+# Familia - 1.1.0-rc1 (November 2024)
 
 **Organize and store Ruby objects in Redis. A powerful Ruby ORM (of sorts) for Redis.**
 
@@ -9,7 +9,7 @@ Familia provides a flexible and feature-rich way to interact with Redis using Ru
 
 Get it in one of the following ways:
 
-* In your Gemfile: `gem 'familia', '>= 1.0.0-rc4'`
+* In your Gemfile: `gem 'familia', '>= 1.1.0-rc1'`
 * Install it by hand: `gem install familia --pre`
 * Or for development: `git clone git@github.com:delano/familia.git`
 
@@ -152,11 +152,11 @@ end
 
 ```ruby
 class ComplexObject < Familia::Horreum
-  def to_redis
+  def serialize_value
     custom_serialization_method
   end
 
-  def self.from_redis(data)
+  def self.deserialize_value(data)
     custom_deserialization_method(data)
   end
 end
@@ -188,7 +188,7 @@ flower.save
 ### Retrieving and Updating Objects
 
 ```ruby
-rose = Flower.from_identifier("rrose")
+rose = Flower.find_by_id("rrose")
 rose.name = "Pink Rose"
 rose.save
 ```
