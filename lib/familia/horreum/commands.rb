@@ -18,6 +18,10 @@ module Familia
     #
     module Commands
 
+      def move(db)
+        redis.move rediskey, db
+      end
+
       # Checks if the calling object's key exists in Redis and has a non-zero size.
       #
       # This method retrieves the Redis URI associated with the calling object's class
@@ -171,6 +175,7 @@ module Familia
         ret = redis.del rediskey
         ret.positive?
       end
+      alias clear delete!
 
     end
 
