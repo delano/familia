@@ -35,8 +35,12 @@ module Familia
   @members = []
 
   class << self
-    attr_accessor :debug
+    attr_writer :debug
     attr_reader :members
+
+    def debug
+      @debug ||= ENV['FAMILIA_DEBUG'].to_s.match?(/^(true|1)$/i)
+    end
 
     def included(member)
       raise Problem, "#{member} should subclass Familia::Horreum"
