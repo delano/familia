@@ -461,9 +461,10 @@ module Familia
       def serialize_value(val)
         prepared = Familia.distinguisher(val, strict_values: false)
 
-        # If the distinguisher returns nil, try using the dump_method
-        if prepared.nil? && val.respond_to?(dump_method)
-          prepared = val.send(dump_method)
+        # If the distinguisher returns nil, try using the dump_method but only
+        # use JSON serialization for complex types that need it.
+        if prepared.nil? && (val.is_a?(Hash) || val.is_a?(Array))
+          prepared = val.respond_to?(dump_method) ? val.send(dump_method) : JSON.dump(val)
         end
 
         # If both the distinguisher and dump_method return nil, log an error
@@ -481,14 +482,15 @@ module Familia
       # Hash or Array types. Simple string values are returned as-is.
       #
       # @param val [String] The string value from Redis to deserialize
+      # @param symbolize_keys [Boolean] Whether to symbolize hash keys (default: true for compatibility)
       # @return [Object] The deserialized value (Hash, Array, or original string)
       #
-      def deserialize_value(val)
+      def deserialize_value(val, symbolize: true)
         return val if val.nil? || val == ""
 
         # Try to parse as JSON first for complex types
         begin
-          parsed = JSON.parse(val, symbolize_names: true)
+          parsed = JSON.parse(val, symbolize_names: symbolize)
           # Only return parsed value if it's a complex type (Hash/Array)
           # Simple values should remain as strings
           return parsed if parsed.is_a?(Hash) || parsed.is_a?(Array)
