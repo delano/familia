@@ -335,8 +335,10 @@ module Familia
         self.class.fields.inject({}) do |hsh, field|
           val = send(field)
           prepared = serialize_value(val)
-          Familia.ld " [to_h] field: #{field} val: #{val.class} prepared: #{prepared.class}"
-          hsh[field] = prepared
+          Familia.ld " [to_h] field: #{field} val: #{val.class} prepared: #{prepared&.class || '[nil]'}"
+
+          # Only include non-nil values in the hash for Redis
+          hsh[field] = prepared unless prepared.nil?
           hsh
         end
       end
@@ -403,17 +405,44 @@ module Familia
       def serialize_value(val)
         prepared = Familia.distinguisher(val, strict_values: false)
 
+        # If the distinguisher returns nil, try using the dump_method
         if prepared.nil? && val.respond_to?(dump_method)
           prepared = val.send(dump_method)
         end
 
+        # If both the distinguisher and dump_method return nil, log an error
         if prepared.nil?
-          Familia.ld "[#{self.class}#serialize_value] nil returned for #{self.class}##{name}"
+          Familia.ld "[#{self.class}#serialize_value] nil returned for #{self.class}"
         end
 
         prepared
       end
       alias to_redis serialize_value
+
+      # Converts a Redis string value back to its original Ruby type
+      #
+      # This method attempts to deserialize JSON strings back to their original
+      # Hash or Array types. Simple string values are returned as-is.
+      #
+      # @param val [String] The string value from Redis to deserialize
+      # @return [Object] The deserialized value (Hash, Array, or original string)
+      #
+      def deserialize_value(val)
+        return val if val.nil? || val == ""
+
+        # Try to parse as JSON first for complex types
+        begin
+          parsed = JSON.parse(val, symbolize_names: true)
+          # Only return parsed value if it's a complex type (Hash/Array)
+          # Simple values should remain as strings
+          return parsed if parsed.is_a?(Hash) || parsed.is_a?(Array)
+        rescue JSON::ParserError
+          # Not valid JSON, return as-is
+        end
+
+        val
+      end
+      alias from_redis deserialize_value
 
     end
     # End of Serialization module
