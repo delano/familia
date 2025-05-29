@@ -121,8 +121,9 @@ module Familia
       def save update_expiration: true
         Familia.trace :SAVE, redis, redisuri, caller(1..1) if Familia.debug?
 
-        # Update our object's life story
-        self.key ||= self.identifier
+        # Update our object's life story, keeping the mandatory built-in
+        # key field in sync with the field that is the chosen identifier.
+        self.key = self.identifier
         self.created ||= Familia.now.to_i if respond_to?(:created)
         self.updated = Familia.now.to_i if respond_to?(:updated)
 
