@@ -72,7 +72,14 @@ module Familia
     end
 
     # Instance initialization
-    # This method sets up the object's state, including Redis-related data
+    # This method sets up the object's state, including Redis-related data.
+    #
+    # Usage:
+    #
+    #   Session.new("abc123", "user456")                   # positional (brittle)
+    #   Session.new(sessid: "abc123", custid: "user456")   # hash (robust)
+    #   Session.new({sessid: "abc123", custid: "user456"}) # legacy hash (robust)
+    #
     def initialize(*args, **kwargs)
       Familia.ld "[Horreum] Initializing #{self.class}"
       initialize_relatives
@@ -89,25 +96,45 @@ module Familia
         self.class.field :key
       end
 
-      # If there are positional arguments, they should be the field
-      # values in the order they were defined in the implementing class.
+      # Detect if first argument is a hash (legacy support)
+      if args.size == 1 && args.first.is_a?(Hash) && kwargs.empty?
+        kwargs = args.first
+        args = []
+      end
+
+      # Initialize object with arguments using one of three strategies:
       #
-      # Handle keyword arguments
-      # Fields is a known quantity, so we iterate over it rather than kwargs
-      # to ensure that we only set fields that are defined in the class. And
-      # to avoid runaways.
-      if args.any?
-        initialize_with_positional_args(*args)
-      elsif kwargs.any?
+      # 1. **Keyword Arguments** (Recommended): Order-independent field assignment
+      #    Example: Customer.new(name: "John", email: "john@example.com")
+      #    - Robust against field reordering
+      #    - Self-documenting
+      #    - Only sets provided fields
+      #
+      # 2. **Positional Arguments** (Legacy): Field assignment by definition order
+      #    Example: Customer.new("john@example.com", "password123")
+      #    - Brittle: breaks if field order changes
+      #    - Compact syntax
+      #    - Maps to fields in class definition order
+      #
+      # 3. **No Arguments**: Object created with all fields as nil
+      #    - Minimal memory footprint in Redis
+      #    - Fields set on-demand via accessors or save()
+      #    - Avoids default value conflicts with nil-skipping serialization
+      #
+      # Note: We iterate over self.class.fields (not kwargs) to ensure only
+      # defined fields are set, preventing typos from creating undefined attributes.
+      #
+      if kwargs.any?
         initialize_with_keyword_args(**kwargs)
+      elsif args.any?
+        initialize_with_positional_args(*args)
       else
         Familia.ld "[Horreum] #{self.class} initialized with no arguments"
-        # If there are no arguments, we need to set the default values
-        # for the fields. This is done in the order they were defined.
-        # self.class.fields.each do |field|
-        #  default = self.class.defaults[field]
-        #  send(:"#{field}=", default) if default
-        # end
+        # Default values are intentionally NOT set here to:
+        # - Maintain Redis memory efficiency (only store non-nil values)
+        # - Avoid conflicts with nil-skipping serialization logic
+        # - Preserve consistent exists? behavior (empty vs default-filled objects)
+        # - Keep initialization lightweight for unused fields
       end
 
       # Implementing classes can define an init method to do any
