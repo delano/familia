@@ -208,7 +208,6 @@ module Familia
     end
     private :initialize_with_positional_args
 
-
     # Initializes the object with keyword arguments.
     # Assigns values to fields based on the provided hash of field names and values.
     # Handles both symbol and string keys to accommodate different sources of data.
@@ -280,6 +279,19 @@ module Familia
       raise Problem, 'Identifier is empty' if unique_id.empty?
 
       unique_id
+    end
+
+    # The principle is: **If Familia objects have `to_s`, then they should work
+    # everywhere strings are expected**, including as Redis hash field names.
+    def to_s
+      # Enable polymorphic string usage for Familia objects
+      # This allows passing Familia objects directly where strings are expected
+      # without requiring explicit .identifier calls
+      identifier.to_s
+    rescue => e
+      # Fallback for cases where identifier might fail
+      Familia.ld "[#{self.class}#to_s] Failed to get identifier: #{e.message}"
+      "#<#{self.class}:0x#{object_id.to_s(16)}>"
     end
   end
 end

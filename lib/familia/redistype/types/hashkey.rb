@@ -16,7 +16,7 @@ module Familia
     # +return+ [Integer] Returns 1 if the field is new and added, 0 if the
     #  field already existed and the value was updated.
     def []=(field, val)
-      ret = redis.hset rediskey, field, serialize_value(val)
+      ret = redis.hset rediskey, field.to_s, serialize_value(val)
       update_expiration
       ret
     rescue TypeError => e
@@ -31,12 +31,12 @@ module Familia
     alias store []=
 
     def [](field)
-      deserialize_value redis.hget(rediskey, field)
+      deserialize_value redis.hget(rediskey, field.to_s)
     end
     alias get []
 
     def fetch(field, default = nil)
-      ret = self[field]
+      ret = self[field.to_s]
       if ret.nil?
         raise IndexError, "No such index for: #{field}" if default.nil?
 
@@ -62,7 +62,7 @@ module Familia
     alias all hgetall
 
     def key?(field)
-      redis.hexists rediskey, field
+      redis.hexists rediskey, field.to_s
     end
     alias has_key? key?
     alias include? key?
@@ -72,12 +72,12 @@ module Familia
     # @param field [String] The field to remove
     # @return [Integer] The number of fields that were removed (0 or 1)
     def remove_field(field)
-      redis.hdel rediskey, field
+      redis.hdel rediskey, field.to_s
     end
     alias remove remove_field # deprecated
 
     def increment(field, by = 1)
-      redis.hincrby(rediskey, field, by).to_i
+      redis.hincrby(rediskey, field.to_s, by).to_i
     end
     alias incr increment
     alias incrby increment
@@ -100,7 +100,8 @@ module Familia
     alias merge! update
 
     def values_at *fields
-      elements = redis.hmget(rediskey, *fields.flatten.compact)
+      string_fields = fields.flatten.compact.map(&:to_s)
+      elements = redis.hmget(rediskey, *string_fields)
       deserialize_values(*elements)
     end
 
