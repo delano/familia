@@ -81,7 +81,7 @@ module Familia
       # that every object horreum class has a unique identifier field. Ideally
       # this logic would live somewhere else b/c we only need to call it once
       # per class definition. Here it gets called every time an instance is
-      # instantiated/
+      # instantiated.
       unless self.class.fields.include?(:key)
         # Define the 'key' field for this class
         # This approach allows flexibility in how identifiers are generated
@@ -181,6 +181,7 @@ module Familia
     end
     private :initialize_with_positional_args
 
+
     # Initializes the object with keyword arguments.
     # Assigns values to fields based on the provided hash of field names and values.
     # Handles both symbol and string keys to accommodate different sources of data.
@@ -203,6 +204,12 @@ module Familia
     end
     private :initialize_with_keyword_args
 
+    def initialize_with_keyword_args_from_redis(**fields)
+      # Deserialize Redis string values back to their original types
+      deserialized_fields = fields.transform_values { |value| deserialize_value(value) }
+      initialize_with_keyword_args(**deserialized_fields)
+    end
+
     # A thin wrapper around the private initialize method that accepts a field
     # hash and refreshes the existing object.
     #
@@ -218,7 +225,7 @@ module Familia
     # @return [Array] The list of field names that were updated.
     def optimistic_refresh(**fields)
       Familia.ld "[optimistic_refresh] #{self.class} #{rediskey} #{fields.keys}"
-      initialize_with_keyword_args(**fields)
+      initialize_with_keyword_args_from_redis(**fields)
     end
 
     # Determines the unique identifier for the instance

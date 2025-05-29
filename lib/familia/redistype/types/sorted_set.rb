@@ -2,7 +2,6 @@
 
 module Familia
   class SortedSet < RedisType
-
     # Returns the number of elements in the sorted set
     # @return [Integer] number of elements
     def element_count
