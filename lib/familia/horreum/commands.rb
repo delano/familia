@@ -22,22 +22,26 @@ module Familia
         redis.move rediskey, db
       end
 
-      # Checks if the calling object's key exists in Redis and has a non-zero size.
+      # Checks if the calling object's key exists in Redis.
       #
-      # This method retrieves the Redis URI associated with the calling object's class
-      # using `Familia.redis_uri_by_class`. It then checks if the specified key exists
-      # in Redis and that its size is not zero. If debugging is enabled, it logs the
-      # existence check using `Familia.trace`.
+      # @param check_size [Boolean] When true (default), also verifies the hash has a non-zero size.
+      #   When false, only checks key existence regardless of content.
+      # @return [Boolean] Returns `true` if the key exists in Redis. When `check_size` is true,
+      #   also requires the hash to have at least one field.
       #
-      # @return [Boolean] Returns `true` if the key exists in Redis and its size is not zero, otherwise `false`.
-      # @example
-      #   if some_object.exists?
-      #     # perform action
-      #   end
-      def exists?
-        true_or_false = self.class.redis.exists?(rediskey) && !size.zero?
-        Familia.trace :EXISTS, redis, "#{key} #{true_or_false.inspect}", caller(1..1) if Familia.debug?
-        true_or_false
+      # @example Check existence with size validation (default behavior)
+      #   some_object.exists?                    # => false for empty hashes
+      #   some_object.exists?(check_size: true)  # => false for empty hashes
+      #
+      # @example Check existence only
+      #   some_object.exists?(check_size: false)  # => true for empty hashes
+      #
+      # @note The default behavior maintains backward compatibility by treating empty hashes
+      #   as non-existent. Use `check_size: false` for pure key existence checking.
+      def exists?(check_size: true)
+        key_exists = self.class.redis.exists?(rediskey)
+        return key_exists unless check_size
+        key_exists && !size.zero?
       end
 
       # Returns the number of fields in the main object hash

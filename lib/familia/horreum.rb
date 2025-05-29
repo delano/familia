@@ -72,7 +72,14 @@ module Familia
     end
 
     # Instance initialization
-    # This method sets up the object's state, including Redis-related data
+    # This method sets up the object's state, including Redis-related data.
+    #
+    # Usage:
+    #
+    #   Session.new("abc123", "user456")                   # positional (brittle)
+    #   Session.new(sessid: "abc123", custid: "user456")   # hash (robust)
+    #   Session.new({sessid: "abc123", custid: "user456"}) # legacy hash (robust)
+    #
     def initialize(*args, **kwargs)
       Familia.ld "[Horreum] Initializing #{self.class}"
       initialize_relatives
@@ -81,7 +88,7 @@ module Familia
       # that every object horreum class has a unique identifier field. Ideally
       # this logic would live somewhere else b/c we only need to call it once
       # per class definition. Here it gets called every time an instance is
-      # instantiated/
+      # instantiated.
       unless self.class.fields.include?(:key)
         # Define the 'key' field for this class
         # This approach allows flexibility in how identifiers are generated
@@ -89,25 +96,45 @@ module Familia
         self.class.field :key
       end
 
-      # If there are positional arguments, they should be the field
-      # values in the order they were defined in the implementing class.
+      # Detect if first argument is a hash (legacy support)
+      if args.size == 1 && args.first.is_a?(Hash) && kwargs.empty?
+        kwargs = args.first
+        args = []
+      end
+
+      # Initialize object with arguments using one of three strategies:
       #
-      # Handle keyword arguments
-      # Fields is a known quantity, so we iterate over it rather than kwargs
-      # to ensure that we only set fields that are defined in the class. And
-      # to avoid runaways.
-      if args.any?
-        initialize_with_positional_args(*args)
-      elsif kwargs.any?
+      # 1. **Keyword Arguments** (Recommended): Order-independent field assignment
+      #    Example: Customer.new(name: "John", email: "john@example.com")
+      #    - Robust against field reordering
+      #    - Self-documenting
+      #    - Only sets provided fields
+      #
+      # 2. **Positional Arguments** (Legacy): Field assignment by definition order
+      #    Example: Customer.new("john@example.com", "password123")
+      #    - Brittle: breaks if field order changes
+      #    - Compact syntax
+      #    - Maps to fields in class definition order
+      #
+      # 3. **No Arguments**: Object created with all fields as nil
+      #    - Minimal memory footprint in Redis
+      #    - Fields set on-demand via accessors or save()
+      #    - Avoids default value conflicts with nil-skipping serialization
+      #
+      # Note: We iterate over self.class.fields (not kwargs) to ensure only
+      # defined fields are set, preventing typos from creating undefined attributes.
+      #
+      if kwargs.any?
         initialize_with_keyword_args(**kwargs)
+      elsif args.any?
+        initialize_with_positional_args(*args)
       else
         Familia.ld "[Horreum] #{self.class} initialized with no arguments"
-        # If there are no arguments, we need to set the default values
-        # for the fields. This is done in the order they were defined.
-        # self.class.fields.each do |field|
-        #  default = self.class.defaults[field]
-        #  send(:"#{field}=", default) if default
-        # end
+        # Default values are intentionally NOT set here to:
+        # - Maintain Redis memory efficiency (only store non-nil values)
+        # - Avoid conflicts with nil-skipping serialization logic
+        # - Preserve consistent exists? behavior (empty vs default-filled objects)
+        # - Keep initialization lightweight for unused fields
       end
 
       # Implementing classes can define an init method to do any
@@ -203,6 +230,12 @@ module Familia
     end
     private :initialize_with_keyword_args
 
+    def initialize_with_keyword_args_from_redis(**fields)
+      # Deserialize Redis string values back to their original types
+      deserialized_fields = fields.transform_values { |value| deserialize_value(value) }
+      initialize_with_keyword_args(**deserialized_fields)
+    end
+
     # A thin wrapper around the private initialize method that accepts a field
     # hash and refreshes the existing object.
     #
@@ -218,7 +251,7 @@ module Familia
     # @return [Array] The list of field names that were updated.
     def optimistic_refresh(**fields)
       Familia.ld "[optimistic_refresh] #{self.class} #{rediskey} #{fields.keys}"
-      initialize_with_keyword_args(**fields)
+      initialize_with_keyword_args_from_redis(**fields)
     end
 
     # Determines the unique identifier for the instance
@@ -246,6 +279,19 @@ module Familia
       raise Problem, 'Identifier is empty' if unique_id.empty?
 
       unique_id
+    end
+
+    # The principle is: **If Familia objects have `to_s`, then they should work
+    # everywhere strings are expected**, including as Redis hash field names.
+    def to_s
+      # Enable polymorphic string usage for Familia objects
+      # This allows passing Familia objects directly where strings are expected
+      # without requiring explicit .identifier calls
+      identifier.to_s
+    rescue => e
+      # Fallback for cases where identifier might fail
+      Familia.ld "[#{self.class}#to_s] Failed to get identifier: #{e.message}"
+      "#<#{self.class}:0x#{object_id.to_s(16)}>"
     end
   end
 end

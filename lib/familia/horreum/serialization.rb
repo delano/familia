@@ -121,8 +121,9 @@ module Familia
       def save update_expiration: true
         Familia.trace :SAVE, redis, redisuri, caller(1..1) if Familia.debug?
 
-        # Update our object's life story
-        self.key ||= self.identifier
+        # Update our object's life story, keeping the mandatory built-in
+        # key field in sync with the field that is the chosen identifier.
+        self.key = self.identifier
         self.created ||= Familia.now.to_i if respond_to?(:created)
         self.updated = Familia.now.to_i if respond_to?(:updated)
 
@@ -135,6 +136,41 @@ module Familia
 
         # Did Redis accept our offering?
         ret.successful?
+      end
+
+      # Updates multiple fields atomically in a Redis transaction.
+      #
+      # @param fields [Hash] Field names and values to update. Special key :update_expiration
+      #   controls whether to update key expiration (default: true)
+      # @return [MultiResult] Transaction result
+      #
+      # @example Update multiple fields without affecting expiration
+      #   metadata.batch_update(viewed: 1, updated: Time.now.to_i, update_expiration: false)
+      #
+      # @example Update fields with expiration refresh
+      #   user.batch_update(name: "John", email: "john@example.com")
+      #
+      def batch_update(**kwargs)
+        update_expiration = kwargs.delete(:update_expiration) { true }
+        fields = kwargs
+
+        Familia.trace :BATCH_UPDATE, redis, fields.keys, caller(1..1) if Familia.debug?
+
+        command_return_values = transaction do |conn|
+          fields.each do |field, value|
+            prepared_value = serialize_value(value)
+            conn.hset rediskey, field, prepared_value
+            # Update instance variable to keep object in sync
+            send("#{field}=", value) if respond_to?("#{field}=")
+          end
+        end
+
+        # Update expiration if requested and supported
+        self.update_expiration(ttl: nil) if update_expiration && respond_to?(:update_expiration)
+
+        # Return same MultiResult format as other methods
+        summary_boolean = command_return_values.all? { |ret| %w[OK 0 1].include?(ret.to_s) }
+        MultiResult.new(summary_boolean, command_return_values)
       end
 
       # Apply a smattering of fields to this object like fairy dust.
@@ -267,6 +303,26 @@ module Familia
         delete!
       end
 
+      # The Great Nilpocalypse: clear_fields!
+      #
+      # Imagine your object as a grand old mansion, every room stuffed with
+      # trinkets, secrets, and the odd rubber duck. This method? It flings open
+      # every window and lets a wild wind of nothingness sweep through, leaving
+      # each field as empty as a poet’s wallet.
+      #
+      # All your precious attributes—gone! Swept into the void! It’s a spring
+      # cleaning for the soul, a reset button for your existential dread.
+      #
+      # @return [void] Nothing left but echoes and nils.
+      #
+      # @example The Vanishing Act
+      #   wizard.clear_fields!
+      #   # => All fields are now nil, like a spell gone slightly too well.
+      #
+      def clear_fields!
+        self.class.fields.each { |field| send("#{field}=", nil) }
+      end
+
       # The Great Redis Refresh-o-matic 3000
       #
       # Imagine your object as a forgetful time traveler. This method is like
@@ -335,8 +391,10 @@ module Familia
         self.class.fields.inject({}) do |hsh, field|
           val = send(field)
           prepared = serialize_value(val)
-          Familia.ld " [to_h] field: #{field} val: #{val.class} prepared: #{prepared.class}"
-          hsh[field] = prepared
+          Familia.ld " [to_h] field: #{field} val: #{val.class} prepared: #{prepared&.class || '[nil]'}"
+
+          # Only include non-nil values in the hash for Redis
+          hsh[field] = prepared unless prepared.nil?
           hsh
         end
       end
@@ -403,17 +461,46 @@ module Familia
       def serialize_value(val)
         prepared = Familia.distinguisher(val, strict_values: false)
 
-        if prepared.nil? && val.respond_to?(dump_method)
-          prepared = val.send(dump_method)
+        # If the distinguisher returns nil, try using the dump_method but only
+        # use JSON serialization for complex types that need it.
+        if prepared.nil? && (val.is_a?(Hash) || val.is_a?(Array))
+          prepared = val.respond_to?(dump_method) ? val.send(dump_method) : JSON.dump(val)
         end
 
+        # If both the distinguisher and dump_method return nil, log an error
         if prepared.nil?
-          Familia.ld "[#{self.class}#serialize_value] nil returned for #{self.class}##{name}"
+          Familia.ld "[#{self.class}#serialize_value] nil returned for #{self.class}"
         end
 
         prepared
       end
       alias to_redis serialize_value
+
+      # Converts a Redis string value back to its original Ruby type
+      #
+      # This method attempts to deserialize JSON strings back to their original
+      # Hash or Array types. Simple string values are returned as-is.
+      #
+      # @param val [String] The string value from Redis to deserialize
+      # @param symbolize_keys [Boolean] Whether to symbolize hash keys (default: true for compatibility)
+      # @return [Object] The deserialized value (Hash, Array, or original string)
+      #
+      def deserialize_value(val, symbolize: true)
+        return val if val.nil? || val == ""
+
+        # Try to parse as JSON first for complex types
+        begin
+          parsed = JSON.parse(val, symbolize_names: symbolize)
+          # Only return parsed value if it's a complex type (Hash/Array)
+          # Simple values should remain as strings
+          return parsed if parsed.is_a?(Hash) || parsed.is_a?(Array)
+        rescue JSON::ParserError
+          # Not valid JSON, return as-is
+        end
+
+        val
+      end
+      alias from_redis deserialize_value
 
     end
     # End of Serialization module
@@ -473,6 +560,11 @@ module Familia
       #
       def tuple
         [successful?, results]
+      end
+      alias to_a tuple
+
+      def to_h
+        { success: successful?, results: results }
       end
 
       # Convenient method to check if the commit was successful.

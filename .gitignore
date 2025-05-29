@@ -8,6 +8,7 @@
 *.env
 *.log
 *.md
+!README.md
 *.txt
 !LICENSE.txt
 .ruby-version
