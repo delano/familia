@@ -42,29 +42,33 @@ raw_data = @test_obj.hgetall
 p [:plop, @test_obj]
 puts "Raw Redis data:"
 raw_data
-#=> {"id"=>"json_test_1", "config"=>"{\"theme\":\"dark\",\"notifications\":true,\"settings\":{\"volume\":80}}", "tags"=>"[\"ruby\",\"redis\",\"json\",\"familia\"]", "simple"=>"just a string"}
+#=> {"id"=>"json_test_1", "config"=>"{\"theme\":\"dark\",\"notifications\":true,\"settings\":{\"volume\":80}}", "tags"=>"[\"ruby\",\"redis\",\"json\",\"familia\"]", "simple"=>"just a string", "key"=>"json_test_1"}
 
 ## BUG: After refresh, JSON data comes back as strings instead of parsed objects
 @test_obj.refresh!
 
-## Test 4: Hash should be deserialized back to Hash, but it's a String!
+## Test 4: Hash should be deserialized back to Hash
 puts "Config after refresh:"
 puts @test_obj.config.inspect
 puts "Config class: "
 [@test_obj.config.class, @test_obj.config.inspect]
-#=> [String, "{\"theme\":\"dark\",\"notifications\":true,\"settings\":{\"volume\":80}}"]
+#=> [Hash, "{:theme=>\"dark\", :notifications=>true, :settings=>{:volume=>80}}"]
 
-## Test 5: Array should be deserialized back to Array, but it's a String!
+## Test 5: Array should be deserialized back to Array
 puts "Tags after refresh:"
 puts @test_obj.tags.inspect
 puts "Tags class: #{@test_obj.tags.class}"
-#=> "[\"ruby\",\"redis\",\"json\",\"familia\"]"
-#=> String
+@test_obj.tags.inspect
+@test_obj.tags.class
+#=> ["ruby", "redis", "json", "familia"]
+#=> Array
 
 ## Test 6: Simple string should remain a string (this works correctly)
 puts "Simple after refresh:"
 puts @test_obj.simple.inspect
 puts "Simple class: #{@test_obj.simple.class}"
+@test_obj.simple.inspect
+@test_obj.simple.class
 #=> "just a string"
 #=> String
 
