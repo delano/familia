@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    familia (1.1.0.pre.rc1)
+    familia (1.2.1)
       redis (>= 4.8.1, < 6.0)
       stringio (~> 3.1.1)
       uri-redis (~> 1.3)
