@@ -13,9 +13,14 @@ jobs:
   build:
     runs-on: ubuntu-latest
     name: Ruby ${{ matrix.ruby }}
+    continue-on-error: ${{ matrix.ruby == '3.5' }}
     strategy:
       matrix:
         include:
+          - ruby: '3.4'
+            bundler: latest
+            rubygems: latest
+
           - ruby: '3.3'
             bundler: latest
             rubygems: latest
@@ -28,13 +33,9 @@ jobs:
             bundler: latest
             rubygems: latest
 
-          - ruby: '3.0'
+          - ruby: '3.5'
             bundler: latest
             rubygems: latest
-
-          - ruby: '2.7'
-            bundler: '2.4.22'
-            rubygems: '3.2.3'
 
     services:
       redis:
@@ -63,6 +64,11 @@ jobs:
         # with the caching and multiple ruby versions. Needs
         # further investigation.
         bundler-cache: false
+
+    - name: Configure Bundler for secure gem installation
+      run: |
+        bundle config set --local path 'vendor/bundle'
+        bundle config set --local deployment 'false'
 
     - name: Re-run bundle install
       run: bundle install
