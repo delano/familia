@@ -15,6 +15,8 @@ GEM
     connection_pool (2.5.3)
     drydock (0.6.9)
     json (2.13.0)
+    kramdown (2.5.1)
+      rexml (>= 3.3.9)
     language_server-protocol (3.17.0.5)
     lint_roller (1.1.0)
     method_source (1.1.0)
@@ -36,6 +38,7 @@ GEM
     redis-client (0.25.1)
       connection_pool
     regexp_parser (2.10.0)
+    rexml (3.4.1)
     rubocop (1.78.0)
       json (~> 2.3)
       language_server-protocol (~> 3.17.0.2)
@@ -79,6 +82,7 @@ PLATFORMS
 DEPENDENCIES
   byebug (~> 11.0)
   familia!
+  kramdown
   pry-byebug (~> 3.10.1)
   rubocop
   rubocop-performance
