@@ -1,0 +1,9 @@
+--readme README.md
+--title "Familia Ruby Library Documentation"
+--markup markdown
+--markup-provider kramdown
+--protected
+--no-private
+lib/**/*.rb
+-
+- LICENSE.txt
