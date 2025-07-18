@@ -42,7 +42,8 @@ jobs:
       - name: Build YARD documentation
         run: |
           bundle exec yard doc --output-dir ./doc --readme README.md
-          # Create .nojekyll file to prevent GitHub Pages from processing with Jekyll
+          # Ensure doc directory exists and create .nojekyll file to prevent GitHub Pages Jekyll processing
+          mkdir -p ./doc
           touch ./doc/.nojekyll
 
       - name: Upload documentation artifacts

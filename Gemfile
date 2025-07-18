@@ -13,4 +13,5 @@ group :development, :test do
   gem 'rubocop-thread_safety', require: false
   gem 'tryouts', '~> 2.4', require: false
   gem 'yard', '~> 0.9', require: false
+  gem 'kramdown', require: false  # Required for YARD markdown processing
 end
