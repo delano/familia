@@ -18,3 +18,5 @@ log
 tmp
 vendor
 *.gem
+doc/
+.yardoc
