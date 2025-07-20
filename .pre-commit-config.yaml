@@ -33,7 +33,9 @@ default_install_hook_types:
   - pre-commit
   - prepare-commit-msg
 
-fail_fast: true
+# Allow multiple failures so they can be corrected at the same time
+# instead of after sequential commits.
+fail_fast: false
 
 repos:
   - repo: meta
