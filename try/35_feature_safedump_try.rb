@@ -42,12 +42,12 @@ Customer.safe_dump_fields
 @cust2.email = "test@example.com"
 @cust2.custid = "test@example.com"
 @all_safe_fields = @cust2.safe_dump.keys.sort
-
 @all_non_safe_fields = @cust2.instance_variables.map { |el|
   el.to_s[1..-1].to_sym # slice off the leading @
 }.sort
+# Check if any of the non-safe fields are in the safe dump (tryouts bug
+# if this comment is placed right before the last line.)
 p [1, all_non_safe_fields: @all_non_safe_fields]
-# Check if any of the non-safe fields are in the safe dump
 (@all_non_safe_fields & @all_safe_fields) - [:custid, :role, :verified, :updated, :created, :secrets_created]
 #=> []
 

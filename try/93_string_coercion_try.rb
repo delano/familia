@@ -25,7 +25,7 @@ end
 @session.useragent = 'Test Browser'
 @session.save
 
-## Complex identifier test with array-based identifier
+# Complex identifier test with array-based identifier
 @bone = Bone.new
 @bone.token = 'test_token'
 @bone.name = 'test_name'

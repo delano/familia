@@ -39,40 +39,37 @@ end
 
 ## Verify what's actually stored in Redis (raw)
 raw_data = @test_obj.hgetall
-p [:plop, @test_obj]
 puts "Raw Redis data:"
 raw_data
 #=> {"id"=>"json_test_1", "config"=>"{\"theme\":\"dark\",\"notifications\":true,\"settings\":{\"volume\":80}}", "tags"=>"[\"ruby\",\"redis\",\"json\",\"familia\"]", "simple"=>"just a string", "key"=>"json_test_1"}
 
 ## BUG: After refresh, JSON data comes back as strings instead of parsed objects
 @test_obj.refresh!
+#=> [:id, :config, :tags, :simple, :key]
 
 ## Test 4: Hash should be deserialized back to Hash
 puts "Config after refresh:"
-puts @test_obj.config.inspect
+puts @test_obj.config
 puts "Config class: "
-[@test_obj.config.class, @test_obj.config.inspect]
-#=> [Hash, "{:theme=>\"dark\", :notifications=>true, :settings=>{:volume=>80}}"]
+[@test_obj.config.class, @test_obj.config]
+#=> [Hash, {:theme=>"dark", :notifications=>true, :settings=>{:volume=>80}}]
 
 ## Test 5: Array should be deserialized back to Array
 puts "Tags after refresh:"
 puts @test_obj.tags.inspect
 puts "Tags class: #{@test_obj.tags.class}"
 @test_obj.tags.inspect
-@test_obj.tags.class
+@test_obj.tags
 #=> ["ruby", "redis", "json", "familia"]
-#=> Array
 
 ## Test 6: Simple string should remain a string (this works correctly)
 puts "Simple after refresh:"
 puts @test_obj.simple.inspect
 puts "Simple class: #{@test_obj.simple.class}"
-@test_obj.simple.inspect
-@test_obj.simple.class
-#=> "just a string"
-#=> String
+[@test_obj.simple.class, @test_obj.simple]
+#=> [String, "just a string"]
 
-## Demonstrate the asymmetry:
+# Demonstrate the asymmetry:
 puts "\n=== ASYMMETRY DEMONSTRATION ==="
 puts "Before save: config is #{@test_obj.config.class}"
 @test_obj.config = { example: "data" }
@@ -82,5 +79,5 @@ puts "After save: config is still #{@test_obj.config.class}"
 @test_obj.refresh!
 puts "After refresh: config is now #{@test_obj.config.class}!"
 
-## Clean up
+# Clean up
 @test_obj.destroy!

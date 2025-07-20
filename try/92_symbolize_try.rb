@@ -1,3 +1,5 @@
+# try/92_symbolize_try.rb
+
 require_relative '../lib/familia'
 require_relative './test_helpers'
 
@@ -13,7 +15,7 @@ end
 @test_obj = SymbolizeTest.new
 @test_obj.id = "symbolize_test_1"
 
-## Test with a hash containing string keys
+# Test with a hash containing string keys
 @test_hash = { "name" => "John", "age" => 30, "nested" => { "theme" => "dark" } }
 @test_obj.config = @test_hash
 @test_obj.save
@@ -92,5 +94,5 @@ end
 @test_obj.deserialize_value('invalid json')
 #=> "invalid json"
 
-## Clean up
+# Clean up
 @test_obj.destroy!
