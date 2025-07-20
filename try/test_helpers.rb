@@ -27,6 +27,40 @@ class Blone < Familia::Horreum
   string    :value, :default => "GREAT!"
 end
 
+# Minimal Context-Aware Redis Proxy for testing neutralization
+class ContextAwareRedisProxy
+  def initialize(redis_connection)
+    @redis = redis_connection
+    @call_log = []
+  end
+
+  attr_reader :call_log
+
+  def method_missing(method, *args, **kwargs)
+    @call_log << "#{method}(#{args.join(', ')})"
+
+    if Fiber[:atomic_context]
+      # NEUTRALIZED: Queue instead of execute
+      Fiber[:atomic_context] << { method: method, args: args, kwargs: kwargs }
+      return :queued
+    else
+      # COUPLED: Execute immediately
+      @redis.send(method, *args, **kwargs)
+    end
+  end
+
+  def respond_to_missing?(method, include_private = false)
+    @redis.respond_to?(method, include_private) || super
+  end
+end
+
+# Test class that uses the proxy
+class TestBone < Bone
+  def redis
+    @proxy ||= ContextAwareRedisProxy.new(super)
+  end
+end
+
 class Customer < Familia::Horreum
   db 15 # don't use Onetime's default DB
   ttl 5.years
@@ -197,5 +231,41 @@ class Limiter < Familia::Horreum
 
   def identifier
     @name
+  end
+end
+
+# Minimal Context-Aware Redis Proxy
+# Tests whether the tight coupling between method invocation and Redis execution
+# can be neutralized through context-aware command dispatch
+class ContextAwareRedisProxy
+  def initialize(redis_connection)
+    @redis = redis_connection
+    @call_log = []
+  end
+
+  attr_reader :call_log
+
+  def method_missing(method, *args, **kwargs)
+    @call_log << "#{method}(#{args.join(', ')})"
+
+    if Fiber[:atomic_context]
+      # NEUTRALIZED: Queue instead of execute
+      Fiber[:atomic_context] << { method: method, args: args, kwargs: kwargs }
+      return :queued
+    else
+      # COUPLED: Execute immediately
+      @redis.send(method, *args, **kwargs)
+    end
+  end
+
+  def respond_to_missing?(method, include_private = false)
+    @redis.respond_to?(method, include_private) || super
+  end
+end
+
+# Test class that uses the proxy
+class ContextProxyBone < Bone
+  def redis
+    @proxy ||= ContextAwareRedisProxy.new(super)
   end
 end
