@@ -1,6 +1,6 @@
 
-require_relative '../lib/familia'
-require_relative './test_helpers'
+require_relative '../../lib/familia'
+require_relative '../helpers/test_helpers'
 
 
 @limiter1 = Limiter.new :requests

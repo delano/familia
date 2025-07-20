@@ -1,5 +1,5 @@
-require_relative '../lib/familia'
-require_relative './test_helpers'
+require_relative '../../lib/familia'
+require_relative '../helpers/test_helpers'
 
 @a = Bone.new 'atoken', 'akey'
 

@@ -1,7 +1,7 @@
 # rubocop:disable all
 
 require 'digest'
-require_relative '../lib/familia'
+require_relative '../../lib/familia'
 
 Familia.debug = false # also # ENV['FAMILIA_TRACE'] = '1'
 Familia.enable_redis_logging = true

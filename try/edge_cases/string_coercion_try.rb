@@ -1,7 +1,7 @@
-# try/93_string_coercion_try.rb
+# try/string_coercion_try.rb
 
-require_relative '../lib/familia'
-require_relative './test_helpers'
+require_relative '../../lib/familia'
+require_relative '../helpers/test_helpers'
 
 Familia.debug = false
 

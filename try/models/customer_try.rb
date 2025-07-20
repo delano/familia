@@ -1,6 +1,6 @@
 # Customer Tryouts
-require_relative '../lib/familia'
-require_relative './test_helpers'
+require_relative '../../lib/familia'
+require_relative '../helpers/test_helpers'
 
 # Setup
 @now = Time.now.to_f

@@ -1,8 +1,8 @@
 
 require 'time'
 
-require_relative '../lib/familia'
-require_relative './test_helpers'
+require_relative '../../lib/familia'
+require_relative '../helpers/test_helpers'
 
 ## Has all redistype relativess
 registered_types = Familia::RedisType.registered_types.keys

@@ -1,4 +1,4 @@
-# try/95_context_aware_proxy_try.rb
+# try/context_aware_proxy_try.rb
 #
 # ⏺ 🎉 Perfect! All Tests Pass!
 #
@@ -33,7 +33,7 @@
 #
 #   You were absolutely right about the @bone.delete! causing tryouts issues!
 
-require_relative 'test_helpers'
+require_relative '../helpers/test_helpers'
 
 @bone = Bone.new('test123', 'test')
 @proxy = ContextAwareRedisProxy.new(@bone.redis)

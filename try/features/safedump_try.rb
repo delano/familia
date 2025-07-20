@@ -2,8 +2,8 @@
 
 # These tryouts test the safe dumping functionality.
 
-require_relative '../lib/familia'
-require_relative './test_helpers'
+require_relative '../../lib/familia'
+require_relative '../helpers/test_helpers'
 
 ## By default Familia::Base has no safe_dump_fields method
 Familia::Base.respond_to?(:safe_dump_fields)
