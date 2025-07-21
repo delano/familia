@@ -32,14 +32,11 @@ module Familia
     # @example
     #   Familia.connect('redis://localhost:6379')
     def connect(uri = nil)
-      uri = URI.parse(uri) if uri.is_a?(String)
-      uri ||= @redis_uri_by_class[self]
-      uri ||= Familia.uri
+      parsed_uri = URI.parse(uri) if uri.is_a?(String)
+      parsed_uri ||= Familia.uri
 
-      raise ArgumentError, 'No URI specified' unless uri
-
-      conf = uri.conf
-      @redis_uri_by_class[self] = uri.serverid
+      conf = parsed_uri.conf
+      @redis_uri_by_class[self] = parsed_uri.serverid
 
       if Familia.enable_redis_logging
         RedisLogger.logger = Familia.logger
@@ -55,8 +52,8 @@ module Familia
       redis = Redis.new(conf)
 
       # Close the existing connection if it exists
-      @redis_clients[uri.serverid].close if @redis_clients[uri.serverid]
-      @redis_clients[uri.serverid] = redis
+      @redis_clients[parsed_uri.serverid].close if @redis_clients[parsed_uri.serverid]
+      @redis_clients[parsed_uri.serverid] = redis
     end
 
     # Retrieves or creates a Redis client for the given URI.
@@ -81,12 +78,7 @@ module Familia
 
     # Retrieves the Redis client associated with the given class.
     #
-    # @param klass [Class] The class for which to retrieve the Redis client.
-    # @return [Redis] The Redis client associated with the given class.
-    def redis_uri_by_class(klass)
-      uri = @redis_uri_by_class[klass]
-      connect(uri)
-    end
+
 
     # Sets the default URI for Redis connections.
     #
