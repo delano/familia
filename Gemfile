@@ -8,7 +8,7 @@ group :test do
   if ENV['LOCAL_DEV']
     gem 'tryouts', path: '../../d/tryouts'
   else
-    gem 'tryouts', '~> 3.0', require: false
+    gem 'tryouts', '~> 3.1', require: false
   end
 end
 
