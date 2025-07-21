@@ -1,3 +1,5 @@
+# try/redis_types/sorted_set_try.rb
+
 require_relative '../../lib/familia'
 require_relative '../helpers/test_helpers'
 
@@ -6,6 +8,7 @@ require_relative '../helpers/test_helpers'
 @a = Bone.new 'atoken', 'akey'
 
 ## Familia::SortedSet#add
+@a = Bone.new 'atoken', 'akey'
 @a.metrics.add 2, :metric2
 @a.metrics.add 4, :metric4
 @a.metrics.add 0, :metric0

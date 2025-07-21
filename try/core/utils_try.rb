@@ -129,3 +129,10 @@ rescue ArgumentError => e
   e.message.include?("between 2 and 36")
 end
 #=> true
+
+# Cleanup - restore defaults, leave nothing but footprints
+Familia.delim(':')
+Familia.suffix(:object)
+Familia.ttl(0)
+Familia.db(nil)
+Familia.prefix(nil)

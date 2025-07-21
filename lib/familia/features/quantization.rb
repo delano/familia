@@ -28,7 +28,7 @@ module Familia::Features
         if quantum.is_a?(Array)
           quantum, pattern = quantum
         end
-        quantum ||= @opts[:quantize] || ttl || 10.minutes
+        quantum ||= @opts.fetch(:quantize, nil) || ttl || 10.minutes
 
         # Validate quantum
         unless quantum.is_a?(Numeric) && quantum.positive?

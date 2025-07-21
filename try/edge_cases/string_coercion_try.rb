@@ -6,11 +6,11 @@ require_relative '../helpers/test_helpers'
 Familia.debug = false
 
 # Error handling: object without proper identifier setup
-class ::BadIdentifierTest < Familia::Horreum
+class BadIdentifierTest < Familia::Horreum
   # No identifier method defined - should cause issues
 end
 
-@bad_obj = ::BadIdentifierTest.new
+@bad_obj = BadIdentifierTest.new
 
 # Test polymorphic string usage for Familia objects
 @customer_id = 'customer-string-coercion-test'
@@ -111,35 +111,44 @@ process_identifier(@customer)
 @metadata[@customer.to_s] # Same key access
 #=> 'customer_metadata'
 
-## Cleanup after test
+## Cleanup after test, 1
 @metadata.delete!
 #=> true
 
+## Cleanup after test, 2
 @customer.delete!
 #=> true
 
+## Cleanup after test, 3
 @session.delete!
 #=> true
 
 ## to_s handles identifier errors gracefully
-@bad_obj.to_s.include?('BadIdentifierTest')
+badboi = BadIdentifierTest.new
+badboi.to_s.include?('BadIdentifierTest')
 #=> true
 
 ## Array-based identifier works with to_s
-@bone.to_s
+bone = Bone.new
+bone.token = 'test_token'
+bone.name = 'test_name'
+bone.to_s
 #=> 'test_token:test_name'
 
 ## String operations on complex identifier
-@bone.to_s.split(':')
+bone = Bone.new 'test_token', 'test_name'
+bone.to_s.split(':')
 #=> ['test_token', 'test_name']
 
 ## Cleanup a key that does not exist
-@bone.delete!
+bone = Bone.new 'test_token', 'test_name'
+bone.delete!
 #=> false
 
 ## Cleanup a key that exists
-@bone.save
-@bone.delete!
+bone = Bone.new 'test_token', 'test_name'
+bone.save
+bone.delete!
 #=> true
 
 ## Performance consideration: to_s caching behavior

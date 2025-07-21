@@ -35,6 +35,8 @@
 
 require_relative '../helpers/test_helpers'
 
+Familia.connect # Important, it registers RedisCommandCounter
+
 @bone = Bone.new('test123', 'test')
 @proxy = ContextAwareRedisProxy.new(@bone.redis)
 @bone.delete! # Causes tryouts issues

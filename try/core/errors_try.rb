@@ -53,12 +53,13 @@ end
 #=> "redis://localhost"
 
 ## NotConnected error has custom message
+test_uri = URI.parse('redis://localhost:6379')
 begin
   raise Familia::NotConnected.new(test_uri)
 rescue Familia::NotConnected => e
   e.message.include?("No client for")
 end
-#=> true
+#> true
 
 ## KeyNotFoundError stores key
 begin
@@ -76,6 +77,11 @@ rescue Familia::KeyNotFoundError => e
 end
 #=> true
 
+## KeyNotFoundError has custom message again
+raise Familia::KeyNotFoundError.new("test:key")
+#=!> error.message.include?("Key not found in Redis")
+#=!> error.class == Familia::KeyNotFoundError
+
 ## All error classes inherit from Problem
 [
   Familia::NoIdentifier,
@@ -84,4 +90,4 @@ end
   Familia::NotConnected,
   Familia::KeyNotFoundError
 ].all? { |klass| klass.superclass == Familia::Problem }
-#=> true
+##=> true
