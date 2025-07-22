@@ -1,4 +1,12 @@
 PATH
+  remote: ../tryouts
+  specs:
+    tryouts (3.1.1)
+      minitest (~> 5.0)
+      rspec (~> 3.0)
+      sysinfo (>= 0.8, < 1.0)
+
+PATH
   remote: .
   specs:
     familia (1.2.1)
@@ -84,10 +92,6 @@ GEM
     sysinfo (0.10.0)
       drydock (< 1.0)
       storable (~> 0.10)
-    tryouts (3.1.0)
-      minitest (~> 5.0)
-      rspec (~> 3.0)
-      sysinfo (>= 0.8, < 1.0)
     unicode-display_width (3.1.4)
       unicode-emoji (~> 4.0, >= 4.0.4)
     unicode-emoji (4.0.4)
@@ -106,7 +110,7 @@ DEPENDENCIES
   rubocop
   rubocop-performance
   rubocop-thread_safety
-  tryouts (~> 3.1)
+  tryouts!
   yard (~> 0.9)
 
 BUNDLED WITH

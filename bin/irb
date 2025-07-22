@@ -1,3 +1,3 @@
 #!/bin/bash
 
-irb -ruri/redis -Ilib -r familia
+irb -ruri/redis -Ilib -r familia -Itry -r helpers/test_helpers
