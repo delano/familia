@@ -23,7 +23,7 @@ rescue LoadError
   puts "CSV gem not available, using basic output"
 end
 
-require_relative '../helpers/test_helpers'
+require_relative '../../helpers/test_helpers'
 require_relative 'atomic_saves_v3_connection_pool_helpers'
 
 # Stress Test Configuration - Central hub for all testing parameters
@@ -32,14 +32,14 @@ module StressTestConfig
   THREAD_COUNTS = [5, 10, 50, 100]
   FIBER_COUNTS = [10, 50, 100, 500]
   WORKER_POOL_SIZES = [5, 10, 20]
-  
+
   # Operations Configuration
   OPERATIONS_PER_THREAD = [10, 100, 500]
-  
+
   # Connection Pool Configuration
   POOL_SIZES = [5, 10, 20, 50]
   POOL_TIMEOUTS = [1, 5, 10] # seconds
-  
+
   # Operation Types
   OPERATION_MIXES = {
     read_heavy: { read: 80, write: 15, transaction: 5 },
@@ -47,7 +47,7 @@ module StressTestConfig
     transaction_heavy: { read: 10, write: 20, transaction: 70 },
     balanced: { read: 33, write: 33, transaction: 34 }
   }
-  
+
   # Test Scenarios
   SCENARIOS = [
     :pool_starvation,      # More threads than connections
@@ -57,7 +57,7 @@ module StressTestConfig
     :error_injection,      # Inject failures
     :mixed_workload        # Combine different operations
   ]
-  
+
   class << self
     # Intelligent configuration selection based on testing goals
     def for_development
@@ -70,7 +70,7 @@ module StressTestConfig
         operation_mixes: [:balanced]
       }
     end
-    
+
     def for_ci
       {
         thread_counts: THREAD_COUNTS.first(3),
@@ -81,7 +81,7 @@ module StressTestConfig
         operation_mixes: [:balanced, :read_heavy]
       }
     end
-    
+
     def for_production_validation
       {
         thread_counts: THREAD_COUNTS,
@@ -92,7 +92,7 @@ module StressTestConfig
         operation_mixes: OPERATION_MIXES.keys
       }
     end
-    
+
     def for_bottleneck_analysis
       {
         thread_counts: THREAD_COUNTS.select { |t| t >= 50 },
@@ -103,7 +103,7 @@ module StressTestConfig
         operation_mixes: [:transaction_heavy, :balanced]
       }
     end
-    
+
     def for_performance_tuning
       {
         thread_counts: [20, 50, 100],
@@ -114,7 +114,7 @@ module StressTestConfig
         operation_mixes: OPERATION_MIXES.keys
       }
     end
-    
+
     # Runtime configuration from environment variables
     def runtime_config
       {
@@ -126,58 +126,58 @@ module StressTestConfig
         operation_mixes: parse_env_symbols('STRESS_MIXES', OPERATION_MIXES.keys)
       }
     end
-    
+
     # Configuration validation
     def validate_config(config)
       errors = []
       warnings = []
-      
+
       # Thread count vs pool size validation
       if config[:thread_count] && config[:pool_size]
         if config[:thread_count] <= config[:pool_size]
           warnings << "Thread count (#{config[:thread_count]}) <= pool size (#{config[:pool_size]}) - may not create enough pressure"
         end
-        
+
         if config[:thread_count] > config[:pool_size] * 10
           warnings << "Thread count (#{config[:thread_count]}) >> pool size (#{config[:pool_size]}) - may cause excessive queueing"
         end
       end
-      
+
       # Operations per thread validation
       if config[:operations_per_thread]
         if config[:operations_per_thread] > 1000
           warnings << "High operation count (#{config[:operations_per_thread]}) may cause long test duration"
         end
-        
+
         if config[:operations_per_thread] < 10
           warnings << "Low operation count (#{config[:operations_per_thread]}) may not provide reliable metrics"
         end
       end
-      
+
       # Pool timeout validation
       if config[:pool_timeout]
         if config[:pool_timeout] < 1
           errors << "Pool timeout (#{config[:pool_timeout]}s) too low - may cause premature failures"
         end
-        
+
         if config[:pool_timeout] > 60
           warnings << "Pool timeout (#{config[:pool_timeout]}s) very high - failures may take long to detect"
         end
       end
-      
+
       # Scenario validation
       if config[:scenario] && !SCENARIOS.include?(config[:scenario])
         errors << "Unknown scenario: #{config[:scenario]}. Valid: #{SCENARIOS.join(', ')}"
       end
-      
+
       # Operation mix validation
       if config[:operation_mix] && !OPERATION_MIXES.key?(config[:operation_mix])
         errors << "Unknown operation mix: #{config[:operation_mix]}. Valid: #{OPERATION_MIXES.keys.join(', ')}"
       end
-      
+
       { errors: errors, warnings: warnings }
     end
-    
+
     # Default configuration for general testing
     def default
       {
@@ -189,36 +189,36 @@ module StressTestConfig
         scenario: :mixed_workload
       }
     end
-    
+
     # Merge configurations with validation
     def merge_and_validate(*configs)
       merged = configs.reduce({}) { |acc, config| acc.merge(config) }
       validation = validate_config(merged)
-      
+
       if validation[:errors].any?
         raise ArgumentError, "Configuration errors: #{validation[:errors].join('; ')}"
       end
-      
+
       if validation[:warnings].any?
         puts "Configuration warnings: #{validation[:warnings].join('; ')}"
       end
-      
+
       merged
     end
-    
+
     private
-    
+
     def parse_env_array(env_var, default)
       env_value = ENV[env_var]
       return default unless env_value
-      
+
       env_value.split(',').map(&:strip).map(&:to_i)
     end
-    
+
     def parse_env_symbols(env_var, default)
       env_value = ENV[env_var]
       return default unless env_value
-      
+
       env_value.split(',').map(&:strip).map(&:to_sym)
     end
   end
@@ -227,7 +227,7 @@ end
 # Metrics Collection
 class MetricsCollector
   attr_reader :metrics
-  
+
   def initialize
     @metrics = {
       operations: [],
@@ -237,7 +237,7 @@ class MetricsCollector
     }
     @mutex = Mutex.new
   end
-  
+
   def record_operation(type, duration, success, wait_time = nil)
     @mutex.synchronize do
       @metrics[:operations] << {
@@ -249,7 +249,7 @@ class MetricsCollector
       }
     end
   end
-  
+
   def record_error(error, context = {})
     @mutex.synchronize do
       @metrics[:errors] << {
@@ -260,7 +260,7 @@ class MetricsCollector
       }
     end
   end
-  
+
   def record_pool_stats(available, size)
     @mutex.synchronize do
       @metrics[:pool_stats] << {
@@ -271,12 +271,12 @@ class MetricsCollector
       }
     end
   end
-  
+
   def summary
     operations = @metrics[:operations]
     successful = operations.select { |op| op[:success] }
     failed = operations.reject { |op| op[:success] }
-    
+
     {
       total_operations: operations.size,
       successful_operations: successful.size,
@@ -288,7 +288,7 @@ class MetricsCollector
       max_pool_utilization: @metrics[:pool_stats].map { |s| s[:utilization] }.max || 0
     }
   end
-  
+
   def to_csv
     if defined?(CSV)
       CSV.generate do |csv|
@@ -322,7 +322,7 @@ class BankAccount
     self.balance = current + rand(-10..10)
     save
   end
-  
+
   def batch_update(updates)
     updates.each do |field, value|
       send("#{field}=", value)
@@ -334,7 +334,7 @@ end
 # Stress Test Runner
 class ConnectionPoolStressTest
   attr_reader :config, :metrics
-  
+
   def initialize(config = {})
     @config = {
       thread_count: 10,
@@ -344,16 +344,16 @@ class ConnectionPoolStressTest
       operation_mix: :balanced,
       scenario: :mixed_workload
     }.merge(config)
-    
+
     @metrics = MetricsCollector.new
     setup_connection_pool
   end
-  
+
   def setup_connection_pool
     # Reconfigure connection pool with test parameters
     pool_size = @config[:pool_size]
     pool_timeout = @config[:pool_timeout]
-    
+
     Familia.class_eval do
       @@connection_pool = ConnectionPool.new(
         size: pool_size,
@@ -363,11 +363,11 @@ class ConnectionPoolStressTest
       end
     end
   end
-  
+
   def run
     puts "\n=== Starting Stress Test ==="
     puts "Configuration: #{@config.inspect}"
-    
+
     case @config[:scenario]
     when :pool_starvation
       run_pool_starvation_test
@@ -382,20 +382,20 @@ class ConnectionPoolStressTest
     else
       run_mixed_workload_test
     end
-    
+
     puts "\n=== Test Complete ==="
     display_summary
   end
-  
+
   private
-  
+
   def run_pool_starvation_test
     # Create more threads than pool connections
     thread_count = @config[:pool_size] * 2
     threads = []
-    
+
     puts "Running pool starvation test with #{thread_count} threads and pool size #{@config[:pool_size]}"
-    
+
     thread_count.times do |i|
       threads << Thread.new do
         begin
@@ -403,12 +403,12 @@ class ConnectionPoolStressTest
           account.balance = 1000
           account.holder_name = "Thread#{i}"
           account.save  # Make sure account is saved
-          
+
           @config[:operations_per_thread].times do
             begin
               start = Time.now
               wait_start = Time.now
-              
+
               Familia.atomic do
                 wait_time = Time.now - wait_start
                 account.complex_operation
@@ -425,7 +425,7 @@ class ConnectionPoolStressTest
         end
       end
     end
-    
+
     # Monitor pool utilization
     monitor_thread = Thread.new do
       while threads.any?(&:alive?)
@@ -438,37 +438,37 @@ class ConnectionPoolStressTest
         sleep 0.1
       end
     end
-    
+
     threads.each(&:join)
     monitor_thread.kill
   end
-  
+
   def run_rapid_fire_test
     threads = []
-    
+
     puts "Running rapid fire test with #{@config[:thread_count]} threads"
-    
+
     @config[:thread_count].times do |i|
       threads << Thread.new do
         account = StressTestAccount.new
         account.balance = 1000
         account.holder_name = "RapidFire#{i}"
-        
+
         @config[:operations_per_thread].times do
           operation = select_operation
           execute_operation(account, operation)
         end
       end
     end
-    
+
     threads.each(&:join)
   end
-  
+
   def run_long_transactions_test
     threads = []
-    
+
     puts "Running long transactions test"
-    
+
     @config[:thread_count].times do |i|
       threads << Thread.new do
         account1 = StressTestAccount.new
@@ -477,24 +477,24 @@ class ConnectionPoolStressTest
         account2 = StressTestAccount.new
         account2.balance = 1000
         account2.holder_name = "Long2_#{i}"
-        
+
         @config[:operations_per_thread].times do
           begin
             start = Time.now
-            
+
             Familia.atomic do
               # Simulate long-running transaction
               account1.refresh!
               account2.refresh!
               sleep(0.1) # Hold connection longer
-              
+
               account1.withdraw(100)
               account2.deposit(100)
-              
+
               account1.save
               account2.save
             end
-            
+
             @metrics.record_operation(:long_transaction, Time.now - start, true)
           rescue => e
             @metrics.record_error(e, { thread: i })
@@ -503,39 +503,39 @@ class ConnectionPoolStressTest
         end
       end
     end
-    
+
     threads.each(&:join)
   end
-  
+
   def run_nested_transactions_test
     threads = []
-    
+
     puts "Running nested transactions test"
-    
+
     @config[:thread_count].times do |i|
       threads << Thread.new do
         account = StressTestAccount.new
         account.balance = 1000
         account.holder_name = "Nested#{i}"
-        
+
         @config[:operations_per_thread].times do
           begin
             start = Time.now
-            
+
             Familia.atomic do
               account.deposit(50)
               account.save
-              
+
               # Nested transaction (should be separate)
               Familia.atomic do
                 account.deposit(25)
                 account.save
               end
-              
+
               account.withdraw(10)
               account.save
             end
-            
+
             @metrics.record_operation(:nested_transaction, Time.now - start, true)
           rescue => e
             @metrics.record_error(e, { thread: i })
@@ -544,35 +544,35 @@ class ConnectionPoolStressTest
         end
       end
     end
-    
+
     threads.each(&:join)
   end
-  
+
   def run_error_injection_test
     threads = []
     error_rate = 0.1 # 10% error rate
-    
+
     puts "Running error injection test with #{(error_rate * 100).to_i}% error rate"
-    
+
     @config[:thread_count].times do |i|
       threads << Thread.new do
         account = StressTestAccount.new
         account.balance = 1000
         account.holder_name = "Error#{i}"
-        
+
         @config[:operations_per_thread].times do |op_num|
           begin
             start = Time.now
-            
+
             if rand < error_rate
               # Inject an error
               raise "Simulated error in thread #{i}, operation #{op_num}"
             end
-            
+
             Familia.atomic do
               account.complex_operation
             end
-            
+
             @metrics.record_operation(:with_errors, Time.now - start, true)
           rescue => e
             @metrics.record_error(e, { thread: i, operation: op_num })
@@ -581,53 +581,53 @@ class ConnectionPoolStressTest
         end
       end
     end
-    
+
     threads.each(&:join)
   end
-  
+
   def run_mixed_workload_test
     threads = []
     mix = StressTestConfig::OPERATION_MIXES[@config[:operation_mix]]
-    
+
     puts "Running mixed workload test with mix: #{mix.inspect}"
-    
+
     @config[:thread_count].times do |i|
       threads << Thread.new do
         account = StressTestAccount.new
         account.balance = 1000
         account.holder_name = "Mixed#{i}"
         account.save
-        
+
         @config[:operations_per_thread].times do
           operation = select_operation_from_mix(mix)
           execute_operation(account, operation)
         end
       end
     end
-    
+
     threads.each(&:join)
   end
-  
+
   def select_operation
     [:read, :write, :transaction].sample
   end
-  
+
   def select_operation_from_mix(mix)
     rand_num = rand(100)
     cumulative = 0
-    
+
     mix.each do |op, percentage|
       cumulative += percentage
       return op if rand_num < cumulative
     end
-    
+
     :read # fallback
   end
-  
+
   def execute_operation(account, operation)
     begin
       start = Time.now
-      
+
       case operation
       when :read
         account.refresh!
@@ -653,10 +653,10 @@ class ConnectionPoolStressTest
       @metrics.record_operation(operation, Time.now - start, false)
     end
   end
-  
+
   def display_summary
     summary = @metrics.summary
-    
+
     puts "\n=== Summary ==="
     summary.each do |key, value|
       puts "#{key}: #{value}"
@@ -668,7 +668,7 @@ end
 if __FILE__ == $0
   Familia.debug = false
   BankAccount.redis.flushdb
-  
+
   # Run a simple test
   test = ConnectionPoolStressTest.new(
     thread_count: 20,
@@ -678,9 +678,9 @@ if __FILE__ == $0
     operation_mix: :balanced,
     scenario: :pool_starvation
   )
-  
+
   test.run
-  
+
   # Output CSV
   puts "\n=== CSV Output ==="
   puts test.metrics.to_csv
