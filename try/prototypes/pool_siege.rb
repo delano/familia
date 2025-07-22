@@ -202,7 +202,12 @@ class PoolSiege
     test_thread = Thread.new { test.run }
 
     # Show progress while test runs
-    progress_tracker.show_progress while test_thread.alive?
+    # progress_tracker.show_progress while test_thread.alive?
+    while test_thread.alive?
+      progress_tracker.show_progress
+      sleep(0.5)  # Sleep 100ms between progress updates
+    end
+
     test_thread.join
 
     progress_tracker.finish
