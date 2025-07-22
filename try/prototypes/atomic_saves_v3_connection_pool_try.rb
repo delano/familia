@@ -1,5 +1,26 @@
 # try/prototypes/atomic_saves_v3_connection_pool_try.rb
 
+# re: Test 4, calling refresh! inside of an existing transation.
+##⏺ The issue is that refresh! is being called within the transaction, but
+#  Redis MULTI transactions queue commands and don't return results until
+#  EXEC. So refresh! inside the transaction isn't going to see the current
+#  state from Redis.
+#
+#  The problem is more fundamental: Redis MULTI/EXEC transactions don't
+#  work the way this code expects them to. In Redis:
+#
+#  1. MULTI starts queuing commands
+#  2. All subsequent commands are queued, not executed
+#  3. EXEC executes all queued commands atomically
+#
+#  But this code is trying to:
+#  1. Call refresh! (which does a GET) inside the transaction - this won't
+#     work as expected
+#  2. Read the current balance and modify it - this won't work inside MULTI
+#
+#  The atomic operations need to be restructured to work with Redis's
+#  actual transaction model. Let me fix this:
+
 require 'bundler/setup'
 require 'securerandom'
 # Using real ConnectionPool gem

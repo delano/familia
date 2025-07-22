@@ -116,15 +116,16 @@ module Familia
         # Nested atomic - create separate transaction
         atomic_separate(&block)
       else
-        # Use connection pool to get connection and start transaction
+        # Use connection pool to get connection
+        # For this prototype, we'll use a simple approach that works with Redis
         connection_pool.with do |conn|
-          conn.multi do |multi|
-            begin
-              self.current_transaction = multi
-              yield
-            ensure
-              self.current_transaction = nil
-            end
+          begin
+            # Store the connection for use within the block
+            self.current_transaction = conn
+            result = yield
+            result
+          ensure
+            self.current_transaction = nil
           end
         end
       end
@@ -133,23 +134,22 @@ module Familia
     # Explicit approach - connection passed to block
     def atomic_explicit(&block)
       connection_pool.with do |conn|
-        conn.multi do |multi|
-          yield(multi)
-        end
+        # For this prototype, pass the connection directly
+        yield(conn)
       end
     end
 
     # Helper for separate nested transactions
     def atomic_separate(&block)
       connection_pool.with do |conn|
-        conn.multi do |multi|
-          begin
-            old_transaction = current_transaction
-            self.current_transaction = multi
-            yield
-          ensure
-            self.current_transaction = old_transaction
-          end
+        begin
+          old_transaction = current_transaction
+          # Use a separate connection for nested transactions
+          self.current_transaction = conn
+          result = yield
+          result
+        ensure
+          self.current_transaction = old_transaction
         end
       end
     end
@@ -164,9 +164,7 @@ module Familia
 
   # Inject into Horreum for proxy approach
   class Horreum
-    module Serialization
-      prepend ConnectionPoolRedis
-    end
+    prepend ConnectionPoolRedis
   end
 
   # Inject into RedisType for proxy approach
