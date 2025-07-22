@@ -1,7 +1,7 @@
 # try/prototypes/atomic_saves_v3_connection_pool_try.rb
 
 # re: Test 4, calling refresh! inside of an existing transation.
-##⏺ The issue is that refresh! is being called within the transaction, but
+# The issue is that refresh! is being called within the transaction, but
 #  Redis MULTI transactions queue commands and don't return results until
 #  EXEC. So refresh! inside the transaction isn't going to see the current
 #  state from Redis.
@@ -23,7 +23,6 @@
 
 require 'bundler/setup'
 require 'securerandom'
-# Using real ConnectionPool gem
 require 'thread'
 
 require_relative '../helpers/test_helpers'
@@ -119,7 +118,7 @@ end
       # Each thread performs an atomic operation
       @shared_account.refresh!
       current_balance = @shared_account.balance
-      @shared_account.balance = current_balance - 100
+      @shared_account.balance = current_balance.to_f - 100
       @shared_account.save
     end
 

@@ -25,10 +25,13 @@ class BankAccount < Familia::Horreum
   field :balance
   field :holder_name
 
-  def initialize(account_number: nil, balance: 0, holder_name: nil)
-    @account_number = account_number || SecureRandom.hex(8)
-    @balance = balance.to_f
-    @holder_name = holder_name
+  def init
+    @account_number ||= SecureRandom.hex(8)
+    @balance = @balance.to_f if @balance
+  end
+
+  def balance
+    @balance&.to_f
   end
 
   def withdraw(amount)
@@ -74,6 +77,14 @@ class TransactionRecord < Familia::Horreum
     @amount = amount.to_f
     @status = "pending"
     @created_at = Time.now.to_i
+  end
+
+  def amount
+    @amount&.to_f
+  end
+
+  def created_at
+    @created_at&.to_i
   end
 
   def save(using: nil)
