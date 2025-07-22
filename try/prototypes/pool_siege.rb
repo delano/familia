@@ -67,6 +67,10 @@ class PoolSiege
         options[:shared_accounts] = n
       end
 
+      opts.on("--fresh-records", "Create a new account for every operation (tests record creation load)") do
+        options[:fresh_records] = true
+      end
+
       opts.on("--light", "Light load validation (5 threads, 5 pool, 50 ops)") do
         options.merge!(threads: 5, pool_size: 5, operations: 50, scenario: :mixed_workload)
       end
@@ -96,6 +100,7 @@ class PoolSiege
         puts "  pool_siege.rb -t 20 -p 5 -o 100 # Custom: 20 threads, 5 pool, 100 ops"
         puts "  pool_siege.rb -t 10 -d 30       # Run 10 threads for 30 seconds"
         puts "  pool_siege.rb -t 20 -a 3        # 20 threads contending over 3 shared accounts"
+        puts "  pool_siege.rb --light --fresh-records # Create new account for every operation"
         puts ""
         puts "Scenarios:"
         puts "  starvation     - More threads than connections (tests queueing)"
@@ -167,6 +172,8 @@ class PoolSiege
 
     if @options[:shared_accounts]
       puts "High-contention mode: #{@options[:threads]} threads contending over #{@options[:shared_accounts]} shared accounts"
+    elsif @options[:fresh_records]
+      puts "Fresh records mode: Creating new account for every operation"
     end
     puts ""
   end
@@ -210,7 +217,8 @@ class PoolSiege
       pool_timeout: 10,
       operation_mix: :balanced,
       scenario: @options[:scenario],
-      shared_accounts: @options[:shared_accounts] # Pass through the shared accounts option
+      shared_accounts: @options[:shared_accounts], # Pass through the shared accounts option
+      fresh_records: @options[:fresh_records] # Pass through the fresh records option
     }
 
     if @options[:scenario] == :pool_starvation

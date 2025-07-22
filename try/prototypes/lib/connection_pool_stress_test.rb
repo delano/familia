@@ -318,7 +318,7 @@ class BankAccount
     # Simulate complex read-modify-write pattern
     refresh!
     current = balance || 0
-    sleep(0.001) # Simulate processing time
+    # sleep(0.001) # Simulate processing time
     self.balance = current + rand(-10..10)
     save
   end
@@ -343,7 +343,8 @@ class ConnectionPoolStressTest
       pool_timeout: 5,
       operation_mix: :balanced,
       scenario: :mixed_workload,
-      shared_accounts: nil # nil means one account per thread (original behavior)
+      shared_accounts: nil, # nil means one account per thread (original behavior)
+      fresh_records: false # false means reuse accounts, true means create new each operation
     }.merge(config)
 
     @metrics = MetricsCollector.new
@@ -393,6 +394,20 @@ class ConnectionPoolStressTest
     end
   end
 
+  def get_account_for_operation(thread_index, operation_index)
+    if @config[:fresh_records]
+      # Create a new account for every operation
+      account = StressTestAccount.new
+      account.balance = 1000
+      account.holder_name = "T#{thread_index}_Op#{operation_index}"
+      account.save
+      account
+    else
+      # Use the existing account for this thread
+      get_account_for_thread(thread_index)
+    end
+  end
+
   def run
     puts "\n=== Starting Stress Test ==="
     puts "Configuration: #{@config.inspect}"
@@ -428,9 +443,8 @@ class ConnectionPoolStressTest
     thread_count.times do |i|
       threads << Thread.new do
         begin
-          account = get_account_for_thread(i)
-
-          @config[:operations_per_thread].times do
+          @config[:operations_per_thread].times do |op_index|
+            account = get_account_for_operation(i, op_index)
             begin
               start = Time.now
               wait_start = Time.now
@@ -453,20 +467,20 @@ class ConnectionPoolStressTest
     end
 
     # Monitor pool utilization
-    monitor_thread = Thread.new do
-      while threads.any?(&:alive?)
-        if Familia.connection_pool.respond_to?(:available)
-          @metrics.record_pool_stats(
-            Familia.connection_pool.available,
-            @config[:pool_size]
-          )
-        end
-        sleep 0.1
-      end
-    end
+    # monitor_thread = Thread.new do
+    #   while threads.any?(&:alive?)
+    #     if Familia.connection_pool.respond_to?(:available)
+    #       @metrics.record_pool_stats(
+    #         Familia.connection_pool.available,
+    #         @config[:pool_size]
+    #       )
+    #     end
+    #     # sleep 1
+    #   end
+    # end
 
     threads.each(&:join)
-    monitor_thread.kill
+    # monitor_thread.kill
   end
 
   def run_rapid_fire_test
@@ -476,9 +490,8 @@ class ConnectionPoolStressTest
 
     @config[:thread_count].times do |i|
       threads << Thread.new do
-        account = get_account_for_thread(i)
-
-        @config[:operations_per_thread].times do
+        @config[:operations_per_thread].times do |op_index|
+          account = get_account_for_operation(i, op_index)
           operation = select_operation
           execute_operation(account, operation)
         end
@@ -510,7 +523,7 @@ class ConnectionPoolStressTest
               # Simulate long-running transaction
               account1.refresh!
               account2.refresh!
-              sleep(0.1) # Hold connection longer
+              # sleep(0.1) # Hold connection longer
 
               account1.withdraw(100)
               account2.deposit(100)
@@ -617,9 +630,8 @@ class ConnectionPoolStressTest
 
     @config[:thread_count].times do |i|
       threads << Thread.new do
-        account = get_account_for_thread(i)
-
-        @config[:operations_per_thread].times do
+        @config[:operations_per_thread].times do |op_index|
+          account = get_account_for_operation(i, op_index)
           operation = select_operation_from_mix(mix)
           execute_operation(account, operation)
         end
