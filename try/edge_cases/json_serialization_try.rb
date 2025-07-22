@@ -1,4 +1,4 @@
-# try/json_bug_try.rb
+# try/edge_cases/json_serialization_try.rb
 
 require_relative '../../lib/familia'
 require_relative '../helpers/test_helpers'

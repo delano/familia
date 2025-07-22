@@ -1,9 +1,7 @@
 require_relative '../../lib/familia'
 require_relative '../helpers/test_helpers'
 
-#Familia.apiversion = 'v1'
-
-@a = Bone.new 'atoken2', 'akey'
+@a = Bone.new(token: 'atoken2', name: 'akey')
 
 ## Bone#rediskey
 @a.rediskey

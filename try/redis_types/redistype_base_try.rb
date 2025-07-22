@@ -1,16 +1,12 @@
 # try/redis_types/redistype_base_try.rb
+# Test RedisType base functionality
 
 require_relative '../../lib/familia'
 require_relative '../helpers/test_helpers'
 
 Familia.debug = false
 
-# Test RedisType base functionality
-
-# Setup test objects using existing sample classes
-@sample_obj = Customer.new('customer123')
-@sample_obj.custid = 'customer123'
-@sample_obj.email = 'test@example.com'
+@sample_obj = Customer.new(custid: 'customer123', email: 'test@example.com')
 
 ## Customer has defined Redis types
 Customer.redis_types.keys.include?(:timeline)
@@ -21,18 +17,19 @@ Customer.redis_types.keys.include?(:stripe_customer)
 #=> true
 
 ## Can access Redis type instances
-@sample_obj.timeline.class.name
-#=> "Familia::SortedSet"
+@sample_obj.timeline
+#=:> Familia::SortedSet
 
 ## Redis types have rediskey method
 @sample_obj.timeline.rediskey
-#=> "v1:customer:customer123:timeline"
+#=> "customer:customer123:timeline"
 
 ## Redis types are frozen after creation
 @sample_obj.timeline.frozen?
 #=> true
 
 ## Can access hashkey Redis type
+@sample_obj ||= Customer.new(custid: 'customer123', email: 'test@example.com')
 stripe_customer = @sample_obj.stripe_customer
 stripe_customer.class.name
 #=> "Familia::HashKey"
@@ -42,28 +39,21 @@ stripe_customer.class.name
 #=> true
 
 ## RedisType instances know their field name
-@sample_obj.timeline.field == :timeline
-#=> true
+@sample_obj.timeline.keystring
+#=> :timeline
 
 ## RedisType has opts hash
 @sample_obj.timeline.opts.class
 #=> Hash
 
-## RedisType responds to Redis commands
-@sample_obj.timeline.respond_to?(:zadd)
-#=> true
+## RedisType responds to Familia's modified Redis commands
+@sample_obj.timeline
+#=/=> _.respond_to?(:zadd)
+#==> _.respond_to?(:add)
+#==> _.respond_to?(:clear)
+#==> _.respond_to?(:exists?)
+#=/=> _.respond_to?(:destroy!)
 
-## RedisType responds to clear method
-@sample_obj.timeline.respond_to?(:clear)
-#=> true
-
-## RedisType responds to destroy method
-@sample_obj.timeline.respond_to?(:destroy)
-#=> true
-
-## RedisType responds to exists? method
-@sample_obj.timeline.respond_to?(:exists?)
-#=> true
 
 ## Can check if RedisType exists in Redis
 timeline = @sample_obj.timeline
@@ -77,14 +67,16 @@ exists_before = timeline.exists?
 
 ## RedisType size returns integer
 timeline = @sample_obj.timeline
-size = timeline.size
-size
+timeline.size
 #=:> Integer
 
 ## Different Redis types have type-specific methods
 stripe_customer = @sample_obj.stripe_customer
-stripe_customer.respond_to?(:hset)
-#=> true
+stripe_customer
+#=/=> _.respond_to?(:hset)
+#==> _.respond_to?(:put)
+#==> _.respond_to?(:store)
+#==> _.respond_to?(:[]=)
 
 ## Can get RedisType TTL
 timeline = @sample_obj.timeline

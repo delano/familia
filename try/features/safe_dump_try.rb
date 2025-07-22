@@ -59,8 +59,8 @@ field_map.keys.sort
 
 ## safe_dump_field_map values are callable
 field_map = SafeDumpTest.safe_dump_field_map
-field_map[:id].respond_to?(:call)
-#=> puts field_map[:id]
+field_map[:id]
+#==> _.respond_to?(:call)
 
 ## safe_dump returns hash with safe fields only
 dump = @test_obj.safe_dump

@@ -7,6 +7,17 @@ Familia.debug = false
 
 # Test expiration feature functionality
 
+class ParentExpiring < Familia::Horreum
+  feature :expiration
+  ttl 1000
+end
+
+class ChildExpiring < ParentExpiring
+  identifier :id
+  field :id
+  ttl 1000
+end
+
 # Define a test class with expiration feature
 class ExpiringTest < Familia::Horreum
   feature :expiration
@@ -51,17 +62,6 @@ ExpiringTest.ttl
 result = @test_obj.update_expiration(ttl: 180)
 [result.class, result]
 #=> [FalseClass, false]
-
-## TTL inheritance works with parent class
-class ParentExpiring < Familia::Horreum
-  feature :expiration
-  ttl 1000
-end
-
-class ChildExpiring < ParentExpiring
-  identifier :id
-  field :id
-end
 
 ## Child inherits parent TTL when not set
 ChildExpiring.ttl

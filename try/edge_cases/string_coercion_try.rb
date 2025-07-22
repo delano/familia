@@ -1,4 +1,4 @@
-# try/string_coercion_try.rb
+# try/edge_cases/string_coercion_try.rb
 
 require_relative '../../lib/familia'
 require_relative '../helpers/test_helpers'
