@@ -50,12 +50,12 @@ stamp2.class
 #=> Integer
 
 ## qstamp with quantum and pattern returns formatted string
-stamp3 = QuantizedTest.qstamp(3600, '%Y%m%d%H')
+stamp3 = QuantizedTest.qstamp(3600, pattern: '%Y%m%d%H')
 stamp3.class
 #=> String
 
-## qstamp with array argument [quantum, pattern]
-stamp4 = QuantizedTest.qstamp([3600, '%Y%m%d%H'])
+## qstamp with time argument
+stamp4 = QuantizedTest.qstamp(3600, pattern: '%Y%m%d%H', time: Time.new(2023, 6, 15, 14, 30, 0))
 stamp4.class
 #=> String
 
@@ -71,7 +71,7 @@ hour_stamp != day_stamp
 #=> true
 
 ## Pattern formatting works correctly
-time_str = QuantizedTest.qstamp(3600, '%Y-%m-%d %H:00:00')
+time_str = QuantizedTest.qstamp(3600, pattern: '%Y-%m-%d %H:00:00')
 time_str.match?(/\d{4}-\d{2}-\d{2} \d{2}:00:00/)
 #=> true
 
