@@ -23,16 +23,20 @@ class PoolSiege
     setup_connection_pool
     print_test_description
 
-    start_time = Time.now
-
-    if @options[:quiet]
-      run_silent_test
+    if @options[:profile]
+      run_with_profiling
     else
-      run_with_progress
-    end
+      start_time = Time.now
 
-    end_time = Time.now
-    print_final_results(end_time - start_time)
+      if @options[:quiet]
+        run_silent_test
+      else
+        run_with_progress
+      end
+
+      end_time = Time.now
+      print_final_results(end_time - start_time)
+    end
   end
 
   private
@@ -91,6 +95,10 @@ class PoolSiege
         options[:quiet] = true
       end
 
+      opts.on("--profile", "Enable profiling for performance analysis") do
+        options[:profile] = true
+      end
+
       opts.on("-h", "--help", "Show this help") do
         puts opts
         puts ""
@@ -114,7 +122,7 @@ class PoolSiege
     # Set defaults
     options[:threads] ||= 10
     options[:pool_size] ||= 5
-    options[:operations] ||= 100
+    # options[:operations] ||= 100
     options[:scenario] ||= :mixed_workload
 
     options
@@ -212,6 +220,68 @@ class PoolSiege
 
     progress_tracker.finish
     @results = test.metrics.summary
+  end
+
+  def run_with_profiling
+    puts "🔍 Running with performance profiling enabled..."
+
+    begin
+      require 'ruby-prof'
+    rescue LoadError => e
+      puts "❌ ruby-prof gem not available."
+      puts "    Install with: gem install ruby-prof"
+      puts "    Or add to Gemfile: gem 'ruby-prof', require: false"
+      puts "    Running without profiling instead..."
+      puts "Debug: #{e.message}" if ENV['DEBUG']
+
+      # Fall back to running without profiling
+      start_time = Time.now
+      run_silent_test
+      end_time = Time.now
+      print_final_results(end_time - start_time)
+      return
+    end
+
+    # Generate profile filename
+    timestamp = Time.now.strftime("%Y%m%d_%H%M%S")
+    scenario_name = @options[:scenario].to_s
+    profile_file = "pool_siege_#{scenario_name}_#{timestamp}.dump"
+    report_file = "pool_siege_#{scenario_name}_#{timestamp}_report.txt"
+
+    # Start profiling
+    profile = RubyProf::Profile.new
+    profile.start
+
+    # Run the test (silent mode for cleaner profiling)
+    start_time = Time.now
+    run_silent_test
+    end_time = Time.now
+
+    # Stop profiling
+    result = profile.stop
+
+    # Save profile data
+    File.open(profile_file, 'wb') do |file|
+      Marshal.dump(result, file)
+    end
+
+    # Generate text report
+    File.open(report_file, 'w') do |file|
+      printer = RubyProf::FlatPrinter.new(result)
+      printer.print(file, min_percent: 1)
+    end
+
+    # Show results
+    print_final_results(end_time - start_time)
+
+    puts ""
+    puts "📊 Profiling Complete:"
+    puts "   Profile data: #{profile_file}"
+    puts "   Text report: #{report_file}"
+    puts ""
+    puts "💡 To analyze the profile:"
+    puts "   cat #{report_file}"
+    puts "   # or load #{profile_file} in a profiling tool"
   end
 
   def create_stress_test

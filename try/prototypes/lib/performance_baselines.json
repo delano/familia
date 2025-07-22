@@ -1,0 +1,27 @@
+{
+  "basic_operations": {
+    "good_threshold": 0.0102,
+    "warning_threshold": 0.017,
+    "last_updated": "2025-07-22T16:01:28-07:00",
+    "sample_time": 0.0068
+  },
+  "pool_setup": {
+    "good_threshold": 0.225,
+    "warning_threshold": 0.375,
+    "last_updated": "2025-07-22T16:01:28-07:00",
+    "sample_time": 0.15,
+    "description": "Connection pool initialization with 5 connections"
+  },
+  "pool_siege_quick": {
+    "good_threshold": 0.0104,
+    "warning_threshold": 0.0173,
+    "last_updated": "2025-07-22T16:01:28-07:00",
+    "sample_time": 0.0069
+  },
+  "thread_safety": {
+    "good_threshold": 0.0054,
+    "warning_threshold": 0.009,
+    "last_updated": "2025-07-22T16:01:28-07:00",
+    "sample_time": 0.0036
+  }
+}
