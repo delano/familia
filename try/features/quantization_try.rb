@@ -76,8 +76,10 @@ time_str.match?(/\d{4}-\d{2}-\d{2} \d{2}:00:00/)
 #=> true
 
 ## Can pass custom time to qstamp
-test_time = Time.new(2023, 6, 15, 14, 30, 0)
-custom_stamp = QuantizedTest.qstamp(3600, '%Y%m%d%H', test_time)
+test_time = Time.utc(2023, 6, 15, 14, 30, 1)
+# NOTE: _Not_  Time.new(2023, 6, 15, 14, 30, 1).utc which is the current time
+# locally where this code is running, then converted to UTC.
+custom_stamp = QuantizedTest.qstamp(3600, pattern: '%Y%m%d%H', time: test_time)
 custom_stamp
 #=> "2023061514"
 
