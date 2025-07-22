@@ -2,7 +2,7 @@
 
 require 'bundler/setup'
 require 'securerandom'
-# ConnectionPool simulated in helpers file
+# Using real ConnectionPool gem
 require 'thread'
 
 require_relative '../helpers/test_helpers'
@@ -67,7 +67,7 @@ end
 @nested_results = Familia.atomic do
   @account5.deposit(100)
   @account5.save
-  
+
   # This should be a separate transaction
   Familia.atomic do
     @account5.deposit(200)
@@ -101,7 +101,7 @@ end
       @shared_account.balance = current_balance - 100
       @shared_account.save
     end
-    
+
     @mutex.synchronize { @results_array << result }
   end
 end
@@ -155,9 +155,9 @@ end
 #=> 100.0
 
 ## Summary: Connection Pool Integration Results
-# 
+#
 # ✅ Proxy approach works with connection pooling
-# ✅ Explicit approach provides clear transaction boundaries  
+# ✅ Explicit approach provides clear transaction boundaries
 # ✅ Nested transactions create separate transactions (as intended)
 # ✅ Thread safety handled automatically by connection pool
 # ✅ Error handling and rollback work correctly

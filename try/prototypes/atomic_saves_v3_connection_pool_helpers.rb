@@ -13,49 +13,10 @@
 # 4. **Separate Transaction Boundaries**: Each atomic block gets own transaction
 #
 # Approaches Tested:
-# - Proxy Approach: Familia.atomic { ... } (transparent, V2 style)  
+# - Proxy Approach: Familia.atomic { ... } (transparent, V2 style)
 # - Explicit Approach: Familia.atomic { |conn| ... } (clear boundaries)
 
-# Simulate ConnectionPool for testing without adding gem dependency
-class ConnectionPool
-  def initialize(options = {}, &block)
-    @size = options[:size] || 5
-    @timeout = options[:timeout] || 5
-    @creation_block = block || -> { Redis.new }
-    @pool = Array.new(@size) { @creation_block.call }
-    @available = @pool.dup
-    @mutex = Mutex.new
-  end
-  
-  attr_reader :size
-  
-  def with(&block)
-    conn = checkout
-    begin
-      yield(conn)
-    ensure
-      checkin(conn)
-    end
-  end
-  
-  private
-  
-  def checkout
-    @mutex.synchronize do
-      if @available.empty?
-        @creation_block.call
-      else
-        @available.pop
-      end
-    end
-  end
-  
-  def checkin(conn)
-    @mutex.synchronize do
-      @available.push(conn) if @available.size < @size
-    end
-  end
-end
+require 'connection_pool'
 
 # Test models
 class BankAccount < Familia::Horreum
@@ -208,7 +169,7 @@ module Familia
     end
   end
 
-  # Inject into RedisType for proxy approach  
+  # Inject into RedisType for proxy approach
   class RedisType
     prepend ConnectionPoolRedis
   end
