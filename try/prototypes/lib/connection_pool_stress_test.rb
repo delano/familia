@@ -344,7 +344,8 @@ class ConnectionPoolStressTest
       operation_mix: :balanced,
       scenario: :mixed_workload,
       shared_accounts: nil, # nil means one account per thread (original behavior)
-      fresh_records: false # false means reuse accounts, true means create new each operation
+      fresh_records: false, # false means reuse accounts, true means create new each operation
+      duration: nil # nil means operations-based, otherwise time-based in seconds
     }.merge(config)
 
     @metrics = MetricsCollector.new
@@ -488,12 +489,28 @@ class ConnectionPoolStressTest
 
     puts "Running rapid fire test with #{@config[:thread_count]} threads"
 
-    @config[:thread_count].times do |i|
-      threads << Thread.new do
-        @config[:operations_per_thread].times do |op_index|
-          account = get_account_for_operation(i, op_index)
-          operation = select_operation
-          execute_operation(account, operation)
+    if @config[:duration]
+      end_time = Time.now + @config[:duration]
+
+      @config[:thread_count].times do |i|
+        threads << Thread.new do
+          op_index = 0
+          while Time.now < end_time
+            account = get_account_for_operation(i, op_index)
+            operation = select_operation
+            execute_operation(account, operation)
+            op_index += 1
+          end
+        end
+      end
+    else
+      @config[:thread_count].times do |i|
+        threads << Thread.new do
+          @config[:operations_per_thread].times do |op_index|
+            account = get_account_for_operation(i, op_index)
+            operation = select_operation
+            execute_operation(account, operation)
+          end
         end
       end
     end
@@ -627,6 +644,35 @@ class ConnectionPoolStressTest
     mix = StressTestConfig::OPERATION_MIXES[@config[:operation_mix]]
 
     puts "Running mixed workload test with mix: #{mix.inspect}"
+
+    if @config[:duration]
+      run_duration_based_test(mix)
+    else
+      run_operations_based_test(mix)
+    end
+  end
+
+  def run_duration_based_test(mix)
+    threads = []
+    end_time = Time.now + @config[:duration]
+
+    @config[:thread_count].times do |i|
+      threads << Thread.new do
+        op_index = 0
+        while Time.now < end_time
+          account = get_account_for_operation(i, op_index)
+          operation = select_operation_from_mix(mix)
+          execute_operation(account, operation)
+          op_index += 1
+        end
+      end
+    end
+
+    threads.each(&:join)
+  end
+
+  def run_operations_based_test(mix)
+    threads = []
 
     @config[:thread_count].times do |i|
       threads << Thread.new do
