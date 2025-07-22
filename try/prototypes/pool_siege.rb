@@ -122,7 +122,7 @@ class PoolSiege
     # Set defaults
     options[:threads] ||= 10
     options[:pool_size] ||= 5
-    # options[:operations] ||= 100
+    options[:operations] ||= 100 unless options[:duration]
     options[:scenario] ||= :mixed_workload
 
     options
@@ -290,6 +290,7 @@ class PoolSiege
       operations_per_thread: @options[:operations] || 9999, # Large number for duration-based
       pool_size: @options[:pool_size],
       pool_timeout: 10,
+      duration: @options[:duration],
       operation_mix: :balanced,
       scenario: @options[:scenario],
       shared_accounts: @options[:shared_accounts], # Pass through the shared accounts option
