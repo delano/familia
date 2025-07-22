@@ -342,11 +342,14 @@ class ConnectionPoolStressTest
       pool_size: 10,
       pool_timeout: 5,
       operation_mix: :balanced,
-      scenario: :mixed_workload
+      scenario: :mixed_workload,
+      shared_accounts: nil # nil means one account per thread (original behavior)
     }.merge(config)
 
     @metrics = MetricsCollector.new
+    @shared_accounts = [] # Will hold shared account instances
     setup_connection_pool
+    setup_shared_accounts if @config[:shared_accounts]
   end
 
   def setup_connection_pool
@@ -361,6 +364,32 @@ class ConnectionPoolStressTest
       ) do
         Redis.new(url: Familia.uri.to_s)
       end
+    end
+  end
+
+  def setup_shared_accounts
+    # Create a limited set of accounts that all threads will contend over
+    @config[:shared_accounts].times do |i|
+      account = StressTestAccount.new
+      account.balance = 1000
+      account.holder_name = "SharedAccount#{i}"
+      account.save
+      @shared_accounts << account
+    end
+    puts "Created #{@shared_accounts.size} shared accounts for high-contention testing"
+  end
+
+  def get_account_for_thread(thread_index)
+    if @config[:shared_accounts]
+      # Return one of the shared accounts (round-robin distribution)
+      @shared_accounts[thread_index % @shared_accounts.size]
+    else
+      # Original behavior: create unique account per thread
+      account = StressTestAccount.new
+      account.balance = 1000
+      account.holder_name = "Thread#{thread_index}"
+      account.save
+      account
     end
   end
 
@@ -399,10 +428,7 @@ class ConnectionPoolStressTest
     thread_count.times do |i|
       threads << Thread.new do
         begin
-          account = StressTestAccount.new
-          account.balance = 1000
-          account.holder_name = "Thread#{i}"
-          account.save  # Make sure account is saved
+          account = get_account_for_thread(i)
 
           @config[:operations_per_thread].times do
             begin
@@ -450,9 +476,7 @@ class ConnectionPoolStressTest
 
     @config[:thread_count].times do |i|
       threads << Thread.new do
-        account = StressTestAccount.new
-        account.balance = 1000
-        account.holder_name = "RapidFire#{i}"
+        account = get_account_for_thread(i)
 
         @config[:operations_per_thread].times do
           operation = select_operation
@@ -593,10 +617,7 @@ class ConnectionPoolStressTest
 
     @config[:thread_count].times do |i|
       threads << Thread.new do
-        account = StressTestAccount.new
-        account.balance = 1000
-        account.holder_name = "Mixed#{i}"
-        account.save
+        account = get_account_for_thread(i)
 
         @config[:operations_per_thread].times do
           operation = select_operation_from_mix(mix)

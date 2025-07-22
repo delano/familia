@@ -63,8 +63,16 @@ class PoolSiege
         options[:scenario] = s.to_sym
       end
 
-      opts.on("--light", "Quick validation (5 threads, 5 pool, 50 ops)") do
+      opts.on("-a", "--accounts N", Integer, "Number of shared accounts for all threads (default: one per thread)") do |n|
+        options[:shared_accounts] = n
+      end
+
+      opts.on("--light", "Light load validation (5 threads, 5 pool, 50 ops)") do
         options.merge!(threads: 5, pool_size: 5, operations: 50, scenario: :mixed_workload)
+      end
+
+      opts.on("--quick", "Quick validation (2 threads, 2 pool, 10 ops)") do
+        options.merge!(threads: 2, pool_size: 2, operations: 10, scenario: :mixed_workload)
       end
 
       opts.on("--stress", "Find breaking point (50 threads, 5 pool, 100 ops)") do
@@ -87,6 +95,7 @@ class PoolSiege
         puts "  pool_siege.rb --stress          # Find breaking point"
         puts "  pool_siege.rb -t 20 -p 5 -o 100 # Custom: 20 threads, 5 pool, 100 ops"
         puts "  pool_siege.rb -t 10 -d 30       # Run 10 threads for 30 seconds"
+        puts "  pool_siege.rb -t 20 -a 3        # 20 threads contending over 3 shared accounts"
         puts ""
         puts "Scenarios:"
         puts "  starvation     - More threads than connections (tests queueing)"
@@ -155,6 +164,10 @@ class PoolSiege
       total_ops = @options[:threads] * @options[:operations]
       puts "#{scenario_desc}: #{@options[:threads]} threads using #{@options[:pool_size]} connections, #{total_ops} total operations"
     end
+
+    if @options[:shared_accounts]
+      puts "High-contention mode: #{@options[:threads]} threads contending over #{@options[:shared_accounts]} shared accounts"
+    end
     puts ""
   end
 
@@ -196,7 +209,8 @@ class PoolSiege
       pool_size: @options[:pool_size],
       pool_timeout: 10,
       operation_mix: :balanced,
-      scenario: @options[:scenario]
+      scenario: @options[:scenario],
+      shared_accounts: @options[:shared_accounts] # Pass through the shared accounts option
     }
 
     if @options[:scenario] == :pool_starvation
