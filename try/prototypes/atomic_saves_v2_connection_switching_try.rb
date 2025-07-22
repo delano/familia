@@ -4,7 +4,7 @@ require 'bundler/setup'
 require 'securerandom'
 
 require_relative '../helpers/test_helpers'
-require_relative 'atomic_save_v2_helpers'
+require_relative 'atomic_saves_v2_connection_switching_helpers'
 
 Familia.debug = false
 

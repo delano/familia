@@ -1,33 +1,35 @@
-# try/edge_cases/atomic_save_v2_helpers.rb
+# try/prototypes/atomic_saves_v2_connection_switching_helpers.rb
 
 ##
-# Summary of Atomic Save V2 Proof of Concept
+# Atomic Save V2 Proof of Concept - Connection Switching Approach
 #
-# This implementation successfully demonstrates atomic saves across
-# multiple Familia objects by:
+# This implementation demonstrates atomic saves across multiple Familia
+# objects by switching which Redis connection the `redis` method returns
+# based on transaction context.
 #
-# 1. **Connection Switching**: The `redis` method returns either the
-#    normal connection or a MULTI connection based on context
+# Key Features:
+# 1. **Connection Switching**: The `redis` method returns either normal
+#    connection or MULTI connection based on Thread-local context
 # 2. **Thread Safety**: Uses Thread-local storage for transaction state
-# 3. **No method_missing**: Clean implementation that works with existing
-#    code
-# 4. **Nested Transaction Support**: Handles nested atomic blocks
-#    transparently
-# 5. **Compatibility**: Works with existing methods like `batch_update`
-#    that use their own transactions
+# 3. **No method_missing**: Clean implementation via method overriding
+# 4. **Redis MULTI/EXEC**: Leverages Redis's native transaction support
 #
-# The key insight is that when we're inside `redis.multi do |multi|`,
-# all Redis commands sent to the `multi` connection are queued until
-# the block completes. By switching which connection the `redis` method
-# returns, we can make all existing Familia code work atomically
-# without changes.
+# Design Decision: TransactionalMethods Module REMOVED
 #
-# ### Next Steps for Production:
-# 1. Add connection pooling support
-# 2. Add transaction retry logic for optimistic locking
-# 3. Add deadlock detection and prevention
-# 4. Add performance monitoring
-# 5. Consider using Redis Lua scripts for complex atomic operations
+# We prefer that nested `Familia.atomic` calls create separate transactions
+# rather than being merged into the parent transaction. This provides clearer
+# transaction boundaries and more predictable behavior:
+#
+# Familia.atomic do
+#   account.save              # Transaction 1
+#
+#   Familia.atomic do
+#     account.batch_update()  # Transaction 2 (separate)
+#   end
+# end
+#
+# This approach avoids the complexity of the TransactionalMethods module
+# and makes transaction scope explicit and predictable.
 
 
 # Test models first - define before any module modifications
@@ -108,24 +110,10 @@ module Familia
     end
   end
 
-  # Override transaction method to work with atomic context
-  module TransactionalMethods
-    def transaction(&block)
-      if Familia.current_transaction
-        # We're already in an atomic context, just yield the current connection
-        yield(Familia.current_transaction)
-      else
-        # Normal transaction behavior
-        super(&block)
-      end
-    end
-  end
-
-  # Inject into Horreum
+  # Inject into Horreum - TransactionalMethods module removed per design decision
   class Horreum
     module Serialization
       prepend TransactionalRedis
-      prepend TransactionalMethods
     end
   end
 
