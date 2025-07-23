@@ -8,9 +8,14 @@ module Familia
   @ttl = 0 # see update_expiration. Zero is skip. nil is an exception.
   @db = nil
 
+  # Connection pool settings
+  @pool_size = 10
+  @pool_timeout = 5
+  @enable_connection_pool = true
+
   module Settings
 
-    attr_writer :delim, :suffix, :ttl, :db, :prefix
+    attr_writer :delim, :suffix, :ttl, :db, :prefix, :pool_size, :pool_timeout, :enable_connection_pool
 
     def delim(val = nil)
       @delim = val if val
@@ -41,6 +46,21 @@ module Familia
     # than simply Familia.suffix in some contexts.
     def default_suffix
       suffix
+    end
+
+    def pool_size(v = nil)
+      @pool_size = v unless v.nil?
+      @pool_size
+    end
+
+    def pool_timeout(v = nil)
+      @pool_timeout = v unless v.nil?
+      @pool_timeout
+    end
+
+    def enable_connection_pool(v = nil)
+      @enable_connection_pool = v unless v.nil?
+      @enable_connection_pool
     end
 
   end

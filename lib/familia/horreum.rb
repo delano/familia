@@ -23,6 +23,7 @@ module Familia
   #
   class Horreum
     include Familia::Base
+    prepend Familia::AtomicProxy
 
     # Singleton Class Context
     #
@@ -55,6 +56,7 @@ module Familia
     #
     class << self
       attr_accessor :parent
+      # TODO: Where are we calling redis= from now with connection pool?
       attr_writer :redis, :dump_method, :load_method
       attr_reader :has_relations
 
