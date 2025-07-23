@@ -49,9 +49,11 @@ PoolTestAccount.redis.flushdb
 Familia.pool_size
 #=> 5
 
+## Test 1: Connection pool configuration (continued)
 Familia.pool_timeout
 #=> 2
 
+## Test 1: Connection pool configuration (continued)
 Familia.enable_connection_pool
 #=> true
 
@@ -60,6 +62,7 @@ Familia.enable_connection_pool
 @account1.save
 #=> true
 
+## Test 2: Basic connection pool functionality (continued)
 @account1.balance
 #=> 1000.0
 
@@ -69,6 +72,7 @@ Familia.enable_connection_pool
 @account_db0.save
 #=> true
 
+## Test 3: Multiple DB support with connection pool (continued)
 # Switch to DB 1 and create another account
 Familia.redis(1).select(1)
 @account_db1 = PoolTestAccount.new(balance: 750, holder_name: "Charlie")
@@ -76,10 +80,12 @@ Familia.redis(1).select(1)
 @account_db1.save
 #=> true
 
+## Test 3: Multiple DB support with connection pool (continued)
 # Verify accounts are in different DBs
 @account_db0.balance
 #=> 500.0
 
+## Test 3: Multiple DB support with connection pool (continued)
 @account_db1.balance
 #=> 750.0
 
@@ -97,12 +103,14 @@ Familia.redis(1).select(1)
     @mutex.synchronize { @results << result }
   end
 end
+#=> 5
 
-# Wait for all threads to complete
+## Wait for all threads to complete
 @threads.each(&:join)
 @results.all?
 #=> true
 
+## Test 4: Connection pool thread safety (continued)
 @results.size
 #=> 5
 
@@ -112,6 +120,7 @@ end
 [@account_a.save, @account_b.save]
 #=> [true, true]
 
+## Test 5: Atomic transactions with connection pool (continued)
 # Test atomic transfer (proxy approach)
 @transfer_result = Familia.atomic do
   @account_a.balance -= 200
@@ -121,6 +130,7 @@ end
 @transfer_result
 #=> [true, true]
 
+## Test 5: Atomic transactions with connection pool (continued)
 # Verify transfer completed
 @account_a.refresh!
 @account_b.refresh!
@@ -133,6 +143,7 @@ end
 [@account_c.save, @account_d.save]
 #=> [true, true]
 
+## Test 6: Explicit connection approach in atomic blocks (continued)
 # Test atomic transfer with explicit connection
 @explicit_result = Familia.atomic do |conn|
   @account_c.balance -= 500
@@ -148,6 +159,7 @@ end
 @account_e.save
 #=> true
 
+## Test 7: Nested atomic transactions (continued)
 @nested_result = Familia.atomic do
   @account_e.balance += 100
   @account_e.save
@@ -161,6 +173,7 @@ end
 @nested_result
 #=> true
 
+## Test 7: Nested atomic transactions (continued)
 @account_e.refresh!
 @account_e.balance
 #=> 5150.0
@@ -195,6 +208,7 @@ end
 @error_account.save
 #=> true
 
+## Test 11: Error handling in atomic blocks (continued)
 # Test that errors properly clean up connection state
 begin
   Familia.atomic do
@@ -208,6 +222,7 @@ rescue => e
 end
 #=> "Simulated error"
 
+## Test 11: Error handling in atomic blocks (continued)
 # Verify account state wasn't corrupted
 @error_account.refresh!
 @error_account.balance
@@ -254,6 +269,7 @@ end
 @pool_stats[:pool_size]
 #=> 5
 
+## Test 14: Connection pool statistics and health (continued)
 @pool_stats[:connection_pools_count] >= 1
 #=> true
 
@@ -263,11 +279,13 @@ end
 @compat_result
 #=> "PONG"
 
+## Test 15: Backward compatibility - ensure existing code works (continued)
 # Test field operations work unchanged
 @compat_account = PoolTestAccount.new(balance: 9999, holder_name: "Compat")
 @compat_account.save
 #=> true
 
+## Test 15: Backward compatibility - ensure existing code works (continued)
 @compat_account.hget("balance").to_f
 #=> 9999.0
 
