@@ -81,8 +81,8 @@ module Familia
     #     conn.get('key')
     #   end
     def with_connection(uri = nil, &block)
-      target_uri = normalize_uri(uri)
-      server_id = server_id_without_db(target_uri)
+      target_uri = Familia.normalize_uri(uri)
+      server_id = Familia.server_id_without_db(target_uri)
       target_db = target_uri.db
 
       # Ensure pool exists
@@ -143,7 +143,7 @@ module Familia
 
     # Executes a new atomic transaction
     def atomic_new(uri, &block)
-      target_uri = normalize_uri(uri)
+      target_uri = Familia.normalize_uri(uri)
 
       with_connection(target_uri) do |conn|
         begin
@@ -164,7 +164,7 @@ module Familia
 
     # Executes a nested atomic transaction with a separate connection
     def atomic_nested(uri, &block)
-      target_uri = normalize_uri(uri)
+      target_uri = Familia.normalize_uri(uri)
 
       with_connection(target_uri) do |conn|
         begin
@@ -184,19 +184,6 @@ module Familia
       end
     end
 
-    # Helper methods that delegate to Connection module
-
-    def normalize_uri(uri)
-      send(:normalize_uri, uri)
-    end
-
-    def server_id_without_db(uri)
-      send(:server_id_without_db, uri)
-    end
-
-    def ensure_db_selected(connection, target_db)
-      send(:ensure_db_selected, connection, target_db)
-    end
   end
 
   # Proxy module to inject atomic-aware redis method into Horreum/RedisType

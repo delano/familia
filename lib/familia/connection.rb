@@ -40,6 +40,7 @@ module Familia
     attr_accessor :pool_timeout
 
     # Establishes a connection pool for a Redis server.
+    # Returns existing pool if one already exists for the server.
     #
     # @param uri [String, URI, nil] The URI of the Redis server to connect to.
     #   If nil, uses the default URI from `@redis_uri_by_class` or `Familia.uri`.
@@ -53,17 +54,13 @@ module Familia
 
       # Use server ID without DB for pooling (one pool per server)
       server_id = server_id_without_db(parsed_uri)
+      @redis_uri_by_class[self] ||= server_id
+
+      # Return existing pool if it exists (idempotent behavior)
+      return @connection_pools[server_id] if @connection_pools[server_id]
+
+      # Create new connection pool only if one doesn't exist
       conf = parsed_uri.conf
-      @redis_uri_by_class[self] = server_id
-
-      # Close existing pool if it exists
-      # TODO: What is the benefit of closing the existing pool before
-      # creating a new one? Seems disruptive if Familia.connect is
-      # called multiple times (intentionally or accidentally). It should
-      # probably just return the existing pool if it exists.
-      @connection_pools[server_id].shutdown(&:close) if @connection_pools[server_id]
-
-      # Create new connection pool
       @connection_pools[server_id] = if enable_connection_pool
         ConnectionPool.new(size: pool_size, timeout: pool_timeout) do
           create_redis_connection(conf)
@@ -72,6 +69,29 @@ module Familia
         # Fallback to direct connection for compatibility
         create_redis_connection(conf)
       end
+    end
+
+    # Force reconnection by closing existing pool and creating a new one.
+    # Use this method when you need to explicitly recreate connections.
+    #
+    # @param uri [String, URI, nil] The URI of the Redis server to reconnect to.
+    # @return [ConnectionPool] The new connection pool for the Redis server.
+    # @example
+    #   Familia.reconnect('redis://localhost:6379')
+    def reconnect(uri = nil)
+      parsed_uri = normalize_uri(uri)
+      server_id = server_id_without_db(parsed_uri)
+
+      # Close existing pool if it exists
+      existing_pool = @connection_pools.delete(server_id)
+      if existing_pool
+        # TODO: Why would the pool not respond to shutdown? Is this b/c we're supporting
+        # fallback to a regular single redis connection.
+        existing_pool.respond_to?(:shutdown) ? existing_pool.shutdown(&:close) : existing_pool.close
+      end
+
+      # Create new pool
+      connect(uri)
     end
 
     # Retrieves a Redis connection from the appropriate pool.
@@ -91,6 +111,7 @@ module Familia
       # Ensure pool exists
       connect(target_uri) unless @connection_pools[server_id]
 
+      # TODO: Remove pool or connection junk. Just the pool.
       pool_or_connection = @connection_pools[server_id]
 
       if enable_connection_pool && pool_or_connection.is_a?(ConnectionPool)
@@ -114,24 +135,6 @@ module Familia
 
     alias url uri
     alias url= uri=
-
-    private
-
-    # Creates a Redis connection with middleware configuration
-    def create_redis_connection(conf)
-      if Familia.enable_redis_logging
-        RedisLogger.logger = Familia.logger
-        RedisClient.register(RedisLogger)
-      end
-
-      if Familia.enable_redis_counter
-        # NOTE: This middleware stays thread-safe with a mutex so it will
-        # be a bottleneck when enabled in multi-threaded environments.
-        RedisClient.register(RedisCommandCounter)
-      end
-
-      Redis.new(conf)
-    end
 
     # Gets server ID without DB component for pool identification
     def server_id_without_db(uri)
@@ -158,6 +161,26 @@ module Familia
       else
         raise ArgumentError, "Invalid URI type: #{uri.class}"
       end
+    end
+
+    private
+
+    # Creates a Redis connection with middleware configuration
+    def create_redis_connection(conf)
+
+      # TODO: This should only happen once, not once per connection
+      if Familia.enable_redis_logging
+        RedisLogger.logger = Familia.logger
+        RedisClient.register(RedisLogger)
+      end
+
+      if Familia.enable_redis_counter
+        # NOTE: This middleware stays thread-safe with a mutex so it will
+        # be a bottleneck when enabled in multi-threaded environments.
+        RedisClient.register(RedisCommandCounter)
+      end
+
+      Redis.new(conf)
     end
 
     # Gets a connection from the pool with proper DB selection
