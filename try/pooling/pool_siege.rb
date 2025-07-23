@@ -91,6 +91,15 @@ class PoolSiege
         options[:threading_model] = model.to_sym
       end
 
+      opts.on("-w", "--workload SIZE", "Workload size: tiny (1 field), small (10), medium (100), large (1000), huge (10000)") do |size|
+        valid_sizes = %w[tiny small medium large huge]
+        unless valid_sizes.include?(size)
+          puts "Invalid workload size: #{size}. Valid options: #{valid_sizes.join(', ')}"
+          exit 1
+        end
+        options[:workload_size] = size.to_sym
+      end
+
       opts.on("--light", "Light load validation (5 threads, 5 pool, 50 ops)") do
         options.merge!(threads: 5, pool_size: 5, operations: 50, scenario: :mixed_workload)
       end
@@ -125,6 +134,8 @@ class PoolSiege
         puts "  pool_siege.rb -t 10 -d 30       # Run 10 threads for 30 seconds"
         puts "  pool_siege.rb -t 20 -a 3        # 20 threads contending over 3 shared accounts"
         puts "  pool_siege.rb --light --fresh-records # Create new account for every operation"
+        puts "  pool_siege.rb -t 10 -p 5 -w large    # Use large metadata payloads (1000 fields)"
+        puts "  pool_siege.rb -m thread_pool -w huge  # Thread pool model with huge payloads"
         puts ""
         puts "Scenarios:"
         puts "  starvation     - More threads than connections (tests queueing)"
@@ -347,7 +358,8 @@ class PoolSiege
       operation_mix: :balanced,
       scenario: @options[:scenario],
       shared_accounts: @options[:shared_accounts], # Pass through the shared accounts option
-      fresh_records: @options[:fresh_records] # Pass through the fresh records option
+      fresh_records: @options[:fresh_records], # Pass through the fresh records option
+      workload_size: @options[:workload_size] || :small # Default to small workload
     }
 
     if @options[:scenario] == :pool_starvation

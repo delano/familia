@@ -17,6 +17,7 @@
 # - Explicit Approach: Familia.atomic { |conn| ... } (clear boundaries)
 
 require 'connection_pool'
+require 'json'
 
 # Test models
 class BankAccount < Familia::Horreum
@@ -24,10 +25,12 @@ class BankAccount < Familia::Horreum
   field :account_number
   field :balance
   field :holder_name
+  field :metadata  # Variable-sized JSON field for workload simulation
 
   def init
     @account_number ||= SecureRandom.hex(8)
     @balance = @balance.to_f if @balance
+    @metadata = @metadata.is_a?(String) ? JSON.parse(@metadata) : @metadata rescue @metadata
   end
 
   def balance
@@ -41,6 +44,10 @@ class BankAccount < Familia::Horreum
 
   def deposit(amount)
     self.balance += amount
+  end
+
+  def metadata=(value)
+    @metadata = value.is_a?(Hash) || value.is_a?(Array) ? JSON.generate(value) : value
   end
 
   # Add method that accepts explicit connection

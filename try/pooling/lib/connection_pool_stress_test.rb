@@ -385,6 +385,36 @@ class BankAccount
     end
     save
   end
+
+  # Generate metadata of specified size
+  def generate_metadata(size_class = :small)
+    metadata_sizes = {
+      tiny: 1,      # 1 key-value pair
+      small: 10,    # 10 key-value pairs
+      medium: 100,  # 100 key-value pairs
+      large: 1000,  # 1000 key-value pairs
+      huge: 10000   # 10000 key-value pairs
+    }
+
+    num_keys = metadata_sizes[size_class] || 10
+
+    # Generate hash with specified number of keys
+    metadata = {}
+    num_keys.times do |i|
+      key = "field_#{i}"
+      # Create varied value types for more realistic JSON
+      value = case i % 5
+      when 0 then SecureRandom.hex(8)  # String
+      when 1 then rand(1..1000)        # Integer
+      when 2 then rand * 1000          # Float
+      when 3 then [rand(1..10), rand(1..10), rand(1..10)]  # Array
+      when 4 then { nested: SecureRandom.hex(4), value: rand(1..100) }  # Hash
+      end
+      metadata[key] = value
+    end
+
+    self.metadata = metadata
+  end
 end
 
 # Stress Test Runner
@@ -401,7 +431,8 @@ class ConnectionPoolStressTest
       scenario: :mixed_workload,
       shared_accounts: nil, # nil means one account per thread (original behavior)
       fresh_records: false, # false means reuse accounts, true means create new each operation
-      duration: nil # nil means operations-based, otherwise time-based in seconds
+      duration: nil, # nil means operations-based, otherwise time-based in seconds
+      workload_size: :small # Size of metadata: tiny, small, medium, large, huge
     }.merge(config)
 
     @metrics = MetricsCollector.new
@@ -431,6 +462,7 @@ class ConnectionPoolStressTest
       account = StressTestAccount.new
       account.balance = 1000
       account.holder_name = "SharedAccount#{i}"
+      account.generate_metadata(@config[:workload_size])
       account.save
       @shared_accounts << account
     end
@@ -446,6 +478,7 @@ class ConnectionPoolStressTest
       account = StressTestAccount.new
       account.balance = 1000
       account.holder_name = "Thread#{thread_index}"
+      account.generate_metadata(@config[:workload_size])
       account.save
       account
     end
@@ -457,6 +490,7 @@ class ConnectionPoolStressTest
       account = StressTestAccount.new
       account.balance = 1000
       account.holder_name = "T#{thread_index}_Op#{operation_index}"
+      account.generate_metadata(@config[:workload_size])
       account.save
       account
     else
@@ -530,7 +564,7 @@ class ConnectionPoolStressTest
           if Familia.connection_pool.respond_to?(:available)
             @metrics.record_pool_stats(
               Familia.connection_pool.available,
-              @config[:pool_size]
+              Familia.connection_pool.size
             )
           end
           sleep 0.01  # Poll every 10ms for finer granularity
@@ -582,7 +616,7 @@ class ConnectionPoolStressTest
           if Familia.connection_pool.respond_to?(:available)
             @metrics.record_pool_stats(
               Familia.connection_pool.available,
-              @config[:pool_size]
+              Familia.connection_pool.size
             )
           end
           sleep 0.01  # Poll every 10ms for finer granularity
