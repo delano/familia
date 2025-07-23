@@ -294,7 +294,7 @@ class MetricsCollector
     # If no connections are available, utilization is 100%
     in_use = [size - available, 0].max  # Ensure non-negative
     utilization = size > 0 ? (in_use.to_f / size * 100).round(2) : 0.0
-    
+
     stats_data = {
       available: available,
       size: size,
@@ -454,7 +454,7 @@ class ConnectionPoolStressTest
     else
       @config[:thread_count] * @config[:operations_per_thread]
     end
-    
+
     puts "Pre-generating #{total_needed} account IDs for profiling..."
     total_needed.times do
       @pre_generated_ids << SecureRandom.hex(8)

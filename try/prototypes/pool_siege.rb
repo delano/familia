@@ -76,7 +76,7 @@ class PoolSiege
         options[:fresh_records] = true
       end
 
-      opts.on("-m", "--threading-model MODEL", String, 
+      opts.on("-m", "--threading-model MODEL", String,
               "Threading model (traditional, fiber, thread_pool, hybrid, actor)") do |model|
         options[:threading_model] = model.to_sym
       end
@@ -201,15 +201,15 @@ class PoolSiege
     elsif @options[:fresh_records]
       puts "Fresh records mode: Creating new account for every operation"
     end
-    
+
     if @options[:threading_model] && @options[:threading_model] != :traditional
       puts "Threading model: #{@options[:threading_model]}"
     end
-    
+
     if @options[:profile_id_generation]
       puts "ID generation profiling: Using pre-generated account IDs"
     end
-    
+
     puts ""
   end
 

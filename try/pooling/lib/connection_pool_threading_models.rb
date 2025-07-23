@@ -129,7 +129,11 @@ module ThreadingModels
               account = create_test_account("#{worker_id}_#{account_id}")
               yield(account, account_id, op_num)
 
-              completed += 1 if defined?(Concurrent)
+              if defined?(Concurrent) && completed.respond_to?(:increment)
+                completed.increment
+              elsif completed.is_a?(Numeric)
+                completed += 1
+              end
             rescue ThreadError
               # Queue is empty
               break

@@ -82,6 +82,15 @@ class PoolSiege
         options[:fresh_records] = true
       end
 
+      opts.on("-m", "--threading-model MODEL", "Threading model: traditional, fiber, thread_pool, hybrid, actor") do |model|
+        valid_models = %w[traditional fiber thread_pool hybrid actor]
+        unless valid_models.include?(model)
+          puts "Invalid threading model: #{model}. Valid options: #{valid_models.join(', ')}"
+          exit 1
+        end
+        options[:threading_model] = model.to_sym
+      end
+
       opts.on("--light", "Light load validation (5 threads, 5 pool, 50 ops)") do
         options.merge!(threads: 5, pool_size: 5, operations: 50, scenario: :mixed_workload)
       end
@@ -231,7 +240,7 @@ class PoolSiege
 
   def run_with_profiling
     puts "🔍 Running with lightweight performance profiling..."
-    
+
     # Simple profiling data collection
     profile_data = {
       operation_times: [],
@@ -239,18 +248,18 @@ class PoolSiege
       redis_operation_times: [],
       method_counts: Hash.new(0)
     }
-    
+
     # Monkey patch to collect timing data
     original_atomic = Familia.method(:atomic)
     Familia.define_singleton_method(:atomic) do |&block|
       start_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
       wait_start = start_time
-      
+
       result = nil
       connection_pool.with do |conn|
         wait_end = Process.clock_gettime(Process::CLOCK_MONOTONIC)
         profile_data[:connection_wait_times] << (wait_end - wait_start) * 1000
-        
+
         op_start = Process.clock_gettime(Process::CLOCK_MONOTONIC)
         begin
           self.current_transaction = conn
@@ -261,28 +270,28 @@ class PoolSiege
         op_end = Process.clock_gettime(Process::CLOCK_MONOTONIC)
         profile_data[:redis_operation_times] << (op_end - op_start) * 1000
       end
-      
+
       end_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
       profile_data[:operation_times] << (end_time - start_time) * 1000
       profile_data[:method_counts][:atomic] += 1
-      
+
       result
     end
-    
+
     # Run the test
     start_time = Time.now
     run_silent_test
     end_time = Time.now
     total_time = end_time - start_time
-    
+
     # Restore original method
     Familia.define_singleton_method(:atomic, original_atomic)
-    
+
     # Generate report
     timestamp = Time.now.strftime("%Y%m%d_%H%M%S")
     scenario_name = @options[:scenario].to_s
     report_file = "pool_siege_#{scenario_name}_#{timestamp}_profile.txt"
-    
+
     File.open(report_file, 'w') do |f|
       f.puts "Pool Siege Lightweight Profiling Report"
       f.puts "=" * 50
@@ -290,7 +299,7 @@ class PoolSiege
       f.puts "Total Time: #{total_time.round(3)}s"
       f.puts "Total Operations: #{profile_data[:method_counts][:atomic]}"
       f.puts ""
-      
+
       if profile_data[:operation_times].any?
         f.puts "Operation Timing (ms):"
         f.puts "  Average: #{(profile_data[:operation_times].sum / profile_data[:operation_times].size).round(3)}"
@@ -299,7 +308,7 @@ class PoolSiege
         f.puts "  P95: #{percentile(profile_data[:operation_times], 0.95).round(3)}"
         f.puts ""
       end
-      
+
       if profile_data[:connection_wait_times].any?
         f.puts "Connection Pool Wait Time (ms):"
         f.puts "  Average: #{(profile_data[:connection_wait_times].sum / profile_data[:connection_wait_times].size).round(3)}"
@@ -308,7 +317,7 @@ class PoolSiege
         f.puts "  P95: #{percentile(profile_data[:connection_wait_times], 0.95).round(3)}"
         f.puts ""
       end
-      
+
       if profile_data[:redis_operation_times].any?
         f.puts "Redis Operation Time (ms):"
         f.puts "  Average: #{(profile_data[:redis_operation_times].sum / profile_data[:redis_operation_times].size).round(3)}"
@@ -317,10 +326,10 @@ class PoolSiege
         f.puts "  P95: #{percentile(profile_data[:redis_operation_times], 0.95).round(3)}"
       end
     end
-    
+
     # Show results
     print_final_results(total_time)
-    
+
     puts ""
     puts "📊 Lightweight Profiling Complete:"
     puts "   Report: #{report_file}"
@@ -346,7 +355,14 @@ class PoolSiege
       config[:thread_count] = @options[:pool_size] * 2 if @options[:scenario] == :pool_starvation
     end
 
-    ConnectionPoolStressTest.new(config)
+    # Use enhanced version if threading model specified
+    if @options[:threading_model] && @options[:threading_model] != :traditional
+      require_relative 'lib/connection_pool_threading_models'
+      config[:threading_model] = @options[:threading_model]
+      EnhancedConnectionPoolStressTest.new(config)
+    else
+      ConnectionPoolStressTest.new(config)
+    end
   end
 
   def print_final_results(elapsed_time)

@@ -524,20 +524,24 @@ class ConnectionPoolStressTest
     end
 
     # Monitor pool utilization
-    # monitor_thread = Thread.new do
-    #   while threads.any?(&:alive?)
-    #     if Familia.connection_pool.respond_to?(:available)
-    #       @metrics.record_pool_stats(
-    #         Familia.connection_pool.available,
-    #         @config[:pool_size]
-    #       )
-    #     end
-    #     # sleep 1
-    #   end
-    # end
+    monitor_thread = Thread.new do
+      begin
+        while threads.any?(&:alive?)
+          if Familia.connection_pool.respond_to?(:available)
+            @metrics.record_pool_stats(
+              Familia.connection_pool.available,
+              @config[:pool_size]
+            )
+          end
+          sleep 0.01  # Poll every 10ms for finer granularity
+        end
+      rescue => e
+        puts "Monitor thread error: #{e.message}" if ENV['FAMILIA_DEBUG']
+      end
+    end
 
     threads.each(&:join)
-    # monitor_thread.kill
+    monitor_thread.kill if monitor_thread.alive?
   end
 
   def run_rapid_fire_test
@@ -571,7 +575,25 @@ class ConnectionPoolStressTest
       end
     end
 
+    # Monitor pool utilization
+    monitor_thread = Thread.new do
+      begin
+        while threads.any?(&:alive?)
+          if Familia.connection_pool.respond_to?(:available)
+            @metrics.record_pool_stats(
+              Familia.connection_pool.available,
+              @config[:pool_size]
+            )
+          end
+          sleep 0.01  # Poll every 10ms for finer granularity
+        end
+      rescue => e
+        puts "Monitor thread error: #{e.message}" if ENV['FAMILIA_DEBUG']
+      end
+    end
+
     threads.each(&:join)
+    monitor_thread.kill if monitor_thread.alive?
   end
 
   def run_long_transactions_test
