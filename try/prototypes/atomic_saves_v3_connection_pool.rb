@@ -1,4 +1,6 @@
-# try/prototypes/atomic_saves_v3_connection_pool_try.rb
+# try/prototypes/atomic_saves_v3_connection_pool.rb
+
+# try -vf try/prototypes/atomic_saves_v3_connection_pool.rb
 
 # re: Test 4, calling refresh! inside of an existing transation.
 # The issue is that refresh! is being called within the transaction, but

@@ -1,10 +1,12 @@
-# try/edge_cases/atomic_save_v2_try.rb
+# try/prototypes/atomic_saves_v2_connection_switching.rb
+
+# try -vf try/prototypes/atomic_saves_v2_connection_switching.rb
 
 require 'bundler/setup'
 require 'securerandom'
 
 require_relative '../helpers/test_helpers'
-require_relative 'atomic_saves_v2_connection_switching_helpers'
+require_relative 'lib/atomic_saves_v2_connection_switching_helpers'
 
 Familia.debug = false
 
