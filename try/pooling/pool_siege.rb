@@ -41,6 +41,13 @@ class PoolSiege
 
   private
 
+  def percentile(values, percentile)
+    return 0 if values.empty?
+    sorted = values.sort
+    index = (percentile * (sorted.size - 1)).round
+    sorted[index]
+  end
+
   def parse_options(args)
     options = {}
 
@@ -223,65 +230,102 @@ class PoolSiege
   end
 
   def run_with_profiling
-    puts "🔍 Running with performance profiling enabled..."
-
-    begin
-      require 'ruby-prof'
-    rescue LoadError => e
-      puts "❌ ruby-prof gem not available."
-      puts "    Install with: gem install ruby-prof"
-      puts "    Or add to Gemfile: gem 'ruby-prof', require: false"
-      puts "    Running without profiling instead..."
-      puts "Debug: #{e.message}" if ENV['DEBUG']
-
-      # Fall back to running without profiling
-      start_time = Time.now
-      run_silent_test
-      end_time = Time.now
-      print_final_results(end_time - start_time)
-      return
+    puts "🔍 Running with lightweight performance profiling..."
+    
+    # Simple profiling data collection
+    profile_data = {
+      operation_times: [],
+      connection_wait_times: [],
+      redis_operation_times: [],
+      method_counts: Hash.new(0)
+    }
+    
+    # Monkey patch to collect timing data
+    original_atomic = Familia.method(:atomic)
+    Familia.define_singleton_method(:atomic) do |&block|
+      start_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      wait_start = start_time
+      
+      result = nil
+      connection_pool.with do |conn|
+        wait_end = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+        profile_data[:connection_wait_times] << (wait_end - wait_start) * 1000
+        
+        op_start = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+        begin
+          self.current_transaction = conn
+          result = yield
+        ensure
+          self.current_transaction = nil
+        end
+        op_end = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+        profile_data[:redis_operation_times] << (op_end - op_start) * 1000
+      end
+      
+      end_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      profile_data[:operation_times] << (end_time - start_time) * 1000
+      profile_data[:method_counts][:atomic] += 1
+      
+      result
     end
-
-    # Generate profile filename
-    timestamp = Time.now.strftime("%Y%m%d_%H%M%S")
-    scenario_name = @options[:scenario].to_s
-    profile_file = "pool_siege_#{scenario_name}_#{timestamp}.dump"
-    report_file = "pool_siege_#{scenario_name}_#{timestamp}_report.txt"
-
-    # Start profiling
-    profile = RubyProf::Profile.new
-    profile.start
-
-    # Run the test (silent mode for cleaner profiling)
+    
+    # Run the test
     start_time = Time.now
     run_silent_test
     end_time = Time.now
-
-    # Stop profiling
-    result = profile.stop
-
-    # Save profile data
-    File.open(profile_file, 'wb') do |file|
-      Marshal.dump(result, file)
+    total_time = end_time - start_time
+    
+    # Restore original method
+    Familia.define_singleton_method(:atomic, original_atomic)
+    
+    # Generate report
+    timestamp = Time.now.strftime("%Y%m%d_%H%M%S")
+    scenario_name = @options[:scenario].to_s
+    report_file = "pool_siege_#{scenario_name}_#{timestamp}_profile.txt"
+    
+    File.open(report_file, 'w') do |f|
+      f.puts "Pool Siege Lightweight Profiling Report"
+      f.puts "=" * 50
+      f.puts "Scenario: #{scenario_name}"
+      f.puts "Total Time: #{total_time.round(3)}s"
+      f.puts "Total Operations: #{profile_data[:method_counts][:atomic]}"
+      f.puts ""
+      
+      if profile_data[:operation_times].any?
+        f.puts "Operation Timing (ms):"
+        f.puts "  Average: #{(profile_data[:operation_times].sum / profile_data[:operation_times].size).round(3)}"
+        f.puts "  Min: #{profile_data[:operation_times].min.round(3)}"
+        f.puts "  Max: #{profile_data[:operation_times].max.round(3)}"
+        f.puts "  P95: #{percentile(profile_data[:operation_times], 0.95).round(3)}"
+        f.puts ""
+      end
+      
+      if profile_data[:connection_wait_times].any?
+        f.puts "Connection Pool Wait Time (ms):"
+        f.puts "  Average: #{(profile_data[:connection_wait_times].sum / profile_data[:connection_wait_times].size).round(3)}"
+        f.puts "  Min: #{profile_data[:connection_wait_times].min.round(3)}"
+        f.puts "  Max: #{profile_data[:connection_wait_times].max.round(3)}"
+        f.puts "  P95: #{percentile(profile_data[:connection_wait_times], 0.95).round(3)}"
+        f.puts ""
+      end
+      
+      if profile_data[:redis_operation_times].any?
+        f.puts "Redis Operation Time (ms):"
+        f.puts "  Average: #{(profile_data[:redis_operation_times].sum / profile_data[:redis_operation_times].size).round(3)}"
+        f.puts "  Min: #{profile_data[:redis_operation_times].min.round(3)}"
+        f.puts "  Max: #{profile_data[:redis_operation_times].max.round(3)}"
+        f.puts "  P95: #{percentile(profile_data[:redis_operation_times], 0.95).round(3)}"
+      end
     end
-
-    # Generate text report
-    File.open(report_file, 'w') do |file|
-      printer = RubyProf::FlatPrinter.new(result)
-      printer.print(file, min_percent: 1)
-    end
-
+    
     # Show results
-    print_final_results(end_time - start_time)
-
+    print_final_results(total_time)
+    
     puts ""
-    puts "📊 Profiling Complete:"
-    puts "   Profile data: #{profile_file}"
-    puts "   Text report: #{report_file}"
+    puts "📊 Lightweight Profiling Complete:"
+    puts "   Report: #{report_file}"
     puts ""
-    puts "💡 To analyze the profile:"
-    puts "   cat #{report_file}"
-    puts "   # or load #{profile_file} in a profiling tool"
+    puts "💡 View the report with: cat #{report_file}"
   end
 
   def create_stress_test

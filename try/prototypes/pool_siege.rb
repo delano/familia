@@ -12,6 +12,7 @@ require 'optparse'
 require 'io/console'
 require_relative '../helpers/test_helpers'
 require_relative 'lib/connection_pool_stress_test'
+require_relative 'lib/connection_pool_threading_models'
 
 class PoolSiege
   def initialize(args)
@@ -75,6 +76,11 @@ class PoolSiege
         options[:fresh_records] = true
       end
 
+      opts.on("-m", "--threading-model MODEL", String, 
+              "Threading model (traditional, fiber, thread_pool, hybrid, actor)") do |model|
+        options[:threading_model] = model.to_sym
+      end
+
       opts.on("--light", "Light load validation (5 threads, 5 pool, 50 ops)") do
         options.merge!(threads: 5, pool_size: 5, operations: 50, scenario: :mixed_workload)
       end
@@ -99,6 +105,10 @@ class PoolSiege
         options[:profile] = true
       end
 
+      opts.on("--profile-id-generation", "Profile account ID generation (pre-generate vs dynamic)") do
+        options[:profile_id_generation] = true
+      end
+
       opts.on("-h", "--help", "Show this help") do
         puts opts
         puts ""
@@ -109,12 +119,20 @@ class PoolSiege
         puts "  pool_siege.rb -t 10 -d 30       # Run 10 threads for 30 seconds"
         puts "  pool_siege.rb -t 20 -a 3        # 20 threads contending over 3 shared accounts"
         puts "  pool_siege.rb --light --fresh-records # Create new account for every operation"
+        puts "  pool_siege.rb -m thread_pool    # Use thread pool threading model"
         puts ""
         puts "Scenarios:"
         puts "  starvation     - More threads than connections (tests queueing)"
         puts "  rapid_fire     - Minimal work per connection (tests throughput)"
         puts "  long_transactions - Hold connections longer (tests timeout behavior)"
         puts "  mixed          - Balanced workload (default)"
+        puts ""
+        puts "Threading Models:"
+        puts "  traditional    - Standard Ruby threads (default)"
+        puts "  fiber          - Cooperative fiber-based concurrency"
+        puts "  thread_pool    - Fixed pool of worker threads"
+        puts "  hybrid         - Threads with fiber-based operations"
+        puts "  actor          - Actor model with message passing"
         exit
       end
     end.parse!(args)
@@ -183,12 +201,25 @@ class PoolSiege
     elsif @options[:fresh_records]
       puts "Fresh records mode: Creating new account for every operation"
     end
+    
+    if @options[:threading_model] && @options[:threading_model] != :traditional
+      puts "Threading model: #{@options[:threading_model]}"
+    end
+    
+    if @options[:profile_id_generation]
+      puts "ID generation profiling: Using pre-generated account IDs"
+    end
+    
     puts ""
   end
 
   def run_silent_test
     test = create_stress_test
-    test.run
+    if test.is_a?(EnhancedConnectionPoolStressTest)
+      test.run_with_model(@options[:threading_model])
+    else
+      test.run
+    end
     @results = test.metrics.summary
   end
 
@@ -207,7 +238,13 @@ class PoolSiege
     end
 
     # Start the test in a background thread
-    test_thread = Thread.new { test.run }
+    test_thread = Thread.new do
+      if test.is_a?(EnhancedConnectionPoolStressTest)
+        test.run_with_model(@options[:threading_model])
+      else
+        test.run
+      end
+    end
 
     # Show progress while test runs
     # progress_tracker.show_progress while test_thread.alive?
@@ -254,7 +291,13 @@ class PoolSiege
 
     # Run the test (silent mode for cleaner profiling)
     start_time = Time.now
-    run_silent_test
+    test = create_stress_test
+    if test.is_a?(EnhancedConnectionPoolStressTest)
+      test.run_with_model(@options[:threading_model])
+    else
+      test.run
+    end
+    @results = test.metrics.summary
     end_time = Time.now
 
     # Stop profiling
@@ -294,7 +337,10 @@ class PoolSiege
       operation_mix: :balanced,
       scenario: @options[:scenario],
       shared_accounts: @options[:shared_accounts], # Pass through the shared accounts option
-      fresh_records: @options[:fresh_records] # Pass through the fresh records option
+      fresh_records: @options[:fresh_records], # Pass through the fresh records option
+      threading_model: @options[:threading_model] || :traditional,
+      profile_id_generation: @options[:profile_id_generation],
+      worker_pool_size: @options[:threads] / 2  # For thread pool model
     }
 
     if @options[:scenario] == :pool_starvation
@@ -302,7 +348,12 @@ class PoolSiege
       config[:thread_count] = @options[:pool_size] * 2 if @options[:scenario] == :pool_starvation
     end
 
-    ConnectionPoolStressTest.new(config)
+    # Use enhanced stress test if a non-traditional threading model is specified
+    if @options[:threading_model] && @options[:threading_model] != :traditional
+      EnhancedConnectionPoolStressTest.new(config)
+    else
+      ConnectionPoolStressTest.new(config)
+    end
   end
 
   def print_final_results(elapsed_time)
@@ -346,11 +397,14 @@ class ProgressTracker
     @successful = 0
     @start_time = Time.now
     @last_update = Time.now
+    @mutex = Mutex.new
   end
 
   def update(success)
-    @completed += 1
-    @successful += 1 if success
+    @mutex.synchronize do
+      @completed += 1
+      @successful += 1 if success
+    end
   end
 
   def show_progress
@@ -377,10 +431,11 @@ class ProgressTracker
   end
 
   def show_ops_progress
-    percent = (@completed.to_f / @total_ops * 100).round(1)
-    success_rate = (@successful.to_f / @completed * 100).round(1) if @completed > 0
+    completed, successful = @mutex.synchronize { [@completed, @successful] }
+    percent = (completed.to_f / @total_ops * 100).round(1)
+    success_rate = (successful.to_f / completed * 100).round(1) if completed > 0
     elapsed = Time.now - @start_time
-    rate = (@completed / elapsed).round(1) if elapsed > 0
+    rate = (completed / elapsed).round(1) if elapsed > 0
 
     bar_width = 20
     filled = [(percent / 100.0 * bar_width).round, bar_width - 1].min
@@ -388,18 +443,19 @@ class ProgressTracker
     bar = "=" * filled + ">" + " " * spaces
 
     progress_line = sprintf("\rProgress: [%s] %5.1f%% (%d/%d ops) | Success: %5.1f%% | Rate: %5.1f ops/sec",
-                           bar, percent, @completed, @total_ops, success_rate || 0.0, rate || 0.0)
+                           bar, percent, completed, @total_ops, success_rate || 0.0, rate || 0.0)
 
     print progress_line
   end
 
   def show_time_progress
+    completed, successful = @mutex.synchronize { [@completed, @successful] }
     elapsed = Time.now - @start_time
-    success_rate = (@successful.to_f / @completed * 100).round(1) if @completed > 0
-    rate = (@completed / elapsed).round(1) if elapsed > 0
+    success_rate = (successful.to_f / completed * 100).round(1) if completed > 0
+    rate = (completed / elapsed).round(1) if elapsed > 0
 
     progress_line = sprintf("\rRunning: %5.1fs | Operations: %d | Success: %5.1f%% | Rate: %5.1f ops/sec",
-                           elapsed, @completed, success_rate || 0.0, rate || 0.0)
+                           elapsed, completed, success_rate || 0.0, rate || 0.0)
 
     print progress_line
   end
