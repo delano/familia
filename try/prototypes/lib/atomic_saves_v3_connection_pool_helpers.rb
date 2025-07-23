@@ -1,4 +1,4 @@
-# try/prototypes/atomic_saves_v3_connection_pool_helpers.rb
+# try/prototypes/lib/atomic_saves_v3_connection_pool_helpers.rb
 
 ##
 # Atomic Save V3 Proof of Concept - Connection Pool Integration

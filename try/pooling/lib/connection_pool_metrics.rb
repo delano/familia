@@ -1,4 +1,4 @@
-# try/prototypes/connection_pool_metrics.rb
+# try/pooling/lib/connection_pool_metrics.rb
 #
 # Enhanced Metrics Collection and Reporting for Connection Pool Stress Tests
 #

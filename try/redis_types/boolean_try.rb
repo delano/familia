@@ -1,3 +1,5 @@
+# try/redis_types/boolean_try.rb
+
 require_relative '../../lib/familia'
 require_relative '../helpers/test_helpers'
 

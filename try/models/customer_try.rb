@@ -1,3 +1,5 @@
+# try/models/customer_try.rb
+
 # Customer Tryouts
 require_relative '../../lib/familia'
 require_relative '../helpers/test_helpers'

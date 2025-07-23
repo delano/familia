@@ -1,4 +1,5 @@
 # try/redis_types/redistype_base_try.rb
+
 # Test RedisType base functionality
 
 require_relative '../../lib/familia'

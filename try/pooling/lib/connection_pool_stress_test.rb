@@ -1,4 +1,4 @@
-# try/prototypes/connection_pool_stress_test.rb
+# try/pooling/lib/connection_pool_stress_test.rb
 #
 # Connection Pool Stress Test Framework
 #

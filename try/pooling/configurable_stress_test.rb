@@ -1,4 +1,4 @@
-# try/prototypes/configurable_stress_test.rb
+# try/pooling/configurable_stress_test.rb
 #
 # Configurable Stress Test - Systematic testing using StressTestConfig
 #

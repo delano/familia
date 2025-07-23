@@ -1,4 +1,5 @@
-# rubocop:disable all
+# try/helpers/test_helpers.rb
+
 
 require 'digest'
 require_relative '../../lib/familia'

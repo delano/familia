@@ -1,4 +1,4 @@
-# try/prototypes/atomic_saves_v2_connection_switching_helpers.rb
+# try/prototypes/lib/atomic_saves_v2_connection_switching_helpers.rb
 
 ##
 # Atomic Save V2 Proof of Concept - Connection Switching Approach

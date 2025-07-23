@@ -1,4 +1,4 @@
-# try/prototypes/connection_pool_threading_models.rb
+# try/pooling/lib/connection_pool_threading_models.rb
 #
 # Different Threading Models for Connection Pool Stress Testing
 #
