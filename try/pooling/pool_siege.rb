@@ -124,6 +124,10 @@ class PoolSiege
         options[:profile] = true
       end
 
+      opts.on("--profile-id-generation", "Profile account ID generation (pre-generate vs dynamic)") do
+        options[:profile_id_generation] = true
+      end
+
       opts.on("-h", "--help", "Show this help") do
         puts opts
         puts ""
@@ -142,6 +146,13 @@ class PoolSiege
         puts "  rapid_fire     - Minimal work per connection (tests throughput)"
         puts "  long_transactions - Hold connections longer (tests timeout behavior)"
         puts "  mixed          - Balanced workload (default)"
+        puts ""
+        puts "Threading Models:"
+        puts "  traditional    - Standard Ruby threads (default)"
+        puts "  fiber          - Cooperative fiber-based concurrency"
+        puts "  thread_pool    - Fixed pool of worker threads"
+        puts "  hybrid         - Threads with fiber-based operations"
+        puts "  actor          - Actor model with message passing"
         exit
       end
     end.parse!(args)
@@ -210,6 +221,15 @@ class PoolSiege
     elsif @options[:fresh_records]
       puts "Fresh records mode: Creating new account for every operation"
     end
+
+    if @options[:threading_model] && @options[:threading_model] != :traditional
+      puts "Threading model: #{@options[:threading_model]}"
+    end
+
+    if @options[:profile_id_generation]
+      puts "ID generation profiling: Using pre-generated account IDs"
+    end
+
     puts ""
   end
 
@@ -359,7 +379,10 @@ class PoolSiege
       scenario: @options[:scenario],
       shared_accounts: @options[:shared_accounts], # Pass through the shared accounts option
       fresh_records: @options[:fresh_records], # Pass through the fresh records option
-      workload_size: @options[:workload_size] || :small # Default to small workload
+      workload_size: @options[:workload_size] || :small, # Default to small workload
+      threading_model: @options[:threading_model] || :traditional,
+      profile_id_generation: @options[:profile_id_generation],
+      worker_pool_size: @options[:threads] / 2,  # For thread pool model
     }
 
     if @options[:scenario] == :pool_starvation

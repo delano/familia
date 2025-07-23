@@ -290,10 +290,17 @@ class MetricsCollector
   end
 
   def record_pool_stats(available, size)
+    # Calculate utilization: if all connections are available, utilization is 0%
+    # If no connections are available, utilization is 100%
+    in_use = [size - available, 0].max  # Ensure non-negative
+    utilization_alt = size > 0 ? (in_use.to_f / size * 100).round(2) : 0.0
+    utilization = ((size - available).to_f / size * 100).round(2)
     stats_data = {
       available: available,
       size: size,
-      utilization: ((size - available).to_f / size * 100).round(2),
+      utilization: utilization,
+      utilization_alt: utilization_alt,
+      in_use: in_use,
       timestamp: Time.now.to_f
     }
 
@@ -432,13 +439,16 @@ class ConnectionPoolStressTest
       shared_accounts: nil, # nil means one account per thread (original behavior)
       fresh_records: false, # false means reuse accounts, true means create new each operation
       duration: nil, # nil means operations-based, otherwise time-based in seconds
-      workload_size: :small # Size of metadata: tiny, small, medium, large, huge
+      workload_size: :small, # Size of metadata: tiny, small, medium, large, huge
+      profile_id_generation: false, # if true, pre-generate account IDs
     }.merge(config)
 
     @metrics = MetricsCollector.new
     @shared_accounts = [] # Will hold shared account instances
+    @pre_generated_ids = [] # For ID generation profiling
     setup_connection_pool
     setup_shared_accounts if @config[:shared_accounts]
+    setup_pre_generated_ids if @config[:profile_id_generation]
   end
 
   def setup_connection_pool
@@ -474,6 +484,32 @@ class ConnectionPoolStressTest
     puts "Created #{@shared_accounts.size} shared accounts for high-contention testing"
   end
 
+  def setup_pre_generated_ids
+    # Pre-generate account IDs to test if SecureRandom is a bottleneck
+    total_needed = if @config[:duration]
+      # Estimate based on typical throughput
+      @config[:thread_count] * 100  # Assume ~100 ops/thread/sec as starting point
+    else
+      @config[:thread_count] * @config[:operations_per_thread]
+    end
+
+    puts "Pre-generating #{total_needed} account IDs for profiling..."
+    total_needed.times do
+      @pre_generated_ids << SecureRandom.hex(8)
+    end
+    @id_index = 0
+    @id_mutex = Mutex.new
+    puts "ID pre-generation complete"
+  end
+
+  def get_next_pre_generated_id
+    @id_mutex.synchronize do
+      id = @pre_generated_ids[@id_index % @pre_generated_ids.length]
+      @id_index += 1
+      id
+    end
+  end
+
   def get_account_for_thread(thread_index)
     if @config[:shared_accounts]
       # Return one of the shared accounts (round-robin distribution)
@@ -493,6 +529,10 @@ class ConnectionPoolStressTest
     if @config[:fresh_records]
       # Create a new account for every operation
       account = StressTestAccount.new
+      if @config[:profile_id_generation]
+        # Use pre-generated ID
+        account.instance_variable_set(:@account_number, get_next_pre_generated_id)
+      end
       account.balance = 1000
       account.holder_name = "T#{thread_index}_Op#{operation_index}"
       account.generate_metadata(@config[:workload_size])

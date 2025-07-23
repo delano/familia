@@ -26,7 +26,7 @@ require 'securerandom'
 require 'thread'
 
 require_relative '../helpers/test_helpers'
-require_relative 'atomic_saves_v3_connection_pool_helpers'
+require_relative 'lib/atomic_saves_v3_connection_pool_helpers'
 
 Familia.debug = false
 
