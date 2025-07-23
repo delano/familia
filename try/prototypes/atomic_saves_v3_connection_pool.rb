@@ -30,7 +30,7 @@ require 'thread'
 require_relative '../helpers/test_helpers'
 require_relative 'lib/atomic_saves_v3_connection_pool_helpers'
 
-Familia.debug = false
+# Familia.debug = false
 
 ## Clean database before tests
 BankAccount.redis.flushdb

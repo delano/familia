@@ -120,7 +120,7 @@ end
 [@account_a.save, @account_b.save]
 #=> [true, true]
 
-## Test 5: Atomic transactions with connection pool (continued)
+## Test 6: Atomic transactions with connection pool (continued)
 # Test atomic transfer (proxy approach)
 @transfer_result = Familia.atomic do
   @account_a.balance -= 200
@@ -130,20 +130,20 @@ end
 @transfer_result
 #=> [true, true]
 
-## Test 5: Atomic transactions with connection pool (continued)
+## Test 7: Atomic transactions with connection pool (continued)
 # Verify transfer completed
 @account_a.refresh!
 @account_b.refresh!
 [@account_a.balance, @account_b.balance]
 #=> [800.0, 700.0]
 
-## Test 6: Explicit connection approach in atomic blocks
+## Test 8: Explicit connection approach in atomic blocks
 @account_c = PoolTestAccount.new(balance: 2000, holder_name: "AccountC")
 @account_d = PoolTestAccount.new(balance: 300, holder_name: "AccountD")
 [@account_c.save, @account_d.save]
 #=> [true, true]
 
-## Test 6: Explicit connection approach in atomic blocks (continued)
+## Test 9: Explicit connection approach in atomic blocks (continued)
 # Test atomic transfer with explicit connection
 @explicit_result = Familia.atomic do |conn|
   @account_c.balance -= 500
@@ -154,12 +154,12 @@ end
 @explicit_result
 #=> [true, true]
 
-## Test 7: Nested atomic transactions
+## Test 10: Nested atomic transactions
 @account_e = PoolTestAccount.new(balance: 5000, holder_name: "AccountE")
 @account_e.save
 #=> true
 
-## Test 7: Nested atomic transactions (continued)
+## Test 11: Nested atomic transactions (continued)
 @nested_result = Familia.atomic do
   @account_e.balance += 100
   @account_e.save
@@ -173,19 +173,19 @@ end
 @nested_result
 #=> true
 
-## Test 7: Nested atomic transactions (continued)
+## Test 12: Nested atomic transactions (continued)
 @account_e.refresh!
 @account_e.balance
 #=> 5150.0
 
-## Test 8: with_connection method
+## Test 13: with_connection method
 @connection_test_result = Familia.with_connection do |conn|
   conn.set("test_key_#{SecureRandom.hex(4)}", "test_value")
 end
 @connection_test_result
 #=> "OK"
 
-## Test 9: Pipeline operations with connection pool
+## Test 14: Pipeline operations with connection pool
 @pipeline_results = Familia.pipeline do |conn|
   conn.set("pipe_key1", "value1")
   conn.set("pipe_key2", "value2")
@@ -194,7 +194,7 @@ end
 @pipeline_results.last
 #=> "value1"
 
-## Test 10: Multi/EXEC operations with connection pool
+## Test 15: Multi/EXEC operations with connection pool
 @multi_results = Familia.multi do |conn|
   conn.set("multi_key1", "value1")
   conn.set("multi_key2", "value2")
@@ -203,12 +203,12 @@ end
 @multi_results.size
 #=> 3
 
-## Test 11: Error handling in atomic blocks
+## Test 16: Error handling in atomic blocks
 @error_account = PoolTestAccount.new(balance: 100, holder_name: "ErrorTest")
 @error_account.save
 #=> true
 
-## Test 11: Error handling in atomic blocks (continued)
+## Test 17: Error handling in atomic blocks (continued)
 # Test that errors properly clean up connection state
 begin
   Familia.atomic do
@@ -222,19 +222,19 @@ rescue => e
 end
 #=> "Simulated error"
 
-## Test 11: Error handling in atomic blocks (continued)
+## Test 18: Error handling in atomic blocks (continued)
 # Verify account state wasn't corrupted
 @error_account.refresh!
 @error_account.balance
 #=> 100.0
 
-## Test 12: Connection pool with different Redis URIs
+## Test 19: Connection pool with different Redis URIs
 # This would test multiple pools if we had different servers
 @default_uri = Familia.uri.to_s
 @default_uri.include?("127.0.0.1")
 #=> true
 
-## Test 13: Pool exhaustion handling (timeout test)
+## Test 19: Pool exhaustion handling (timeout test)
 # This test simulates pool exhaustion by holding connections longer than timeout
 @timeout_threads = []
 @timeout_results = []
@@ -259,7 +259,7 @@ end
 @timeout_results.all? { |r| r == "PONG" }
 #=> true
 
-## Test 14: Connection pool statistics and health
+## Test 20: Connection pool statistics and health
 # Verify pool is functioning correctly
 @pool_stats = {
   pool_size: Familia.pool_size,
@@ -269,23 +269,23 @@ end
 @pool_stats[:pool_size]
 #=> 5
 
-## Test 14: Connection pool statistics and health (continued)
+## Test 21: Connection pool statistics and health (continued)
 @pool_stats[:connection_pools_count] >= 1
 #=> true
 
-## Test 15: Backward compatibility - ensure existing code works
+## Test 22: Backward compatibility - ensure existing code works
 # Test that non-pooled redis calls still work for compatibility
 @compat_result = PoolTestAccount.redis.ping
 @compat_result
 #=> "PONG"
 
-## Test 15: Backward compatibility - ensure existing code works (continued)
+## Test 22: Backward compatibility - ensure existing code works (continued)
 # Test field operations work unchanged
 @compat_account = PoolTestAccount.new(balance: 9999, holder_name: "Compat")
 @compat_account.save
 #=> true
 
-## Test 15: Backward compatibility - ensure existing code works (continued)
+## Test 23: Backward compatibility - ensure existing code works (continued)
 @compat_account.hget("balance").to_f
 #=> 9999.0
 

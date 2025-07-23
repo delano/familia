@@ -8,7 +8,7 @@ require 'securerandom'
 require_relative '../helpers/test_helpers'
 require_relative 'lib/atomic_saves_v2_connection_switching_helpers'
 
-Familia.debug = false
+# Familia.debug = false
 
 ## Clean database before tests
 BankAccount.redis.flushdb
