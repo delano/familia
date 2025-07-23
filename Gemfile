@@ -10,6 +10,9 @@ group :test do
   else
     gem 'tryouts', '~> 3.1.1', require: false
   end
+  gem 'concurrent-ruby', '~> 1.3.5', require: false
+  gem 'ruby-prof'
+  gem 'stackprof'
 end
 
 
