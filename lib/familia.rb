@@ -33,16 +33,12 @@ require_relative 'familia/version'
 #
 module Familia
 
-  @debug = false
+  @debug = ENV['FAMILIA_DEBUG'].to_s.match?(/^(true|1)$/i).freeze
   @members = []
 
   class << self
-    attr_writer :debug
+    attr_reader :debug
     attr_reader :members
-
-    def debug
-      @debug ||= ENV['FAMILIA_DEBUG'].to_s.match?(/^(true|1)$/i)
-    end
 
     def included(member)
       raise Problem, "#{member} should subclass Familia::Horreum"

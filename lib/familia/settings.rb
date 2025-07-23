@@ -38,6 +38,7 @@ module Familia
     end
 
     def db(v = nil)
+      Familia.trace :DB, redis, "#{@db} #{v}", caller(1..1) if Familia.debug?
       @db = v unless v.nil?
       @db
     end

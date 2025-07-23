@@ -1,10 +1,12 @@
 # try/helpers/test_helpers.rb
 
+# To enable tracing and debug mode, run with the env vars set.
+#
+# e.g. FAMILIA_TRACE=1 FAMILIA_DEBUG=1 bundle exec try
 
 require 'digest'
 require_relative '../../lib/familia'
 
-Familia.debug = false # also # ENV['FAMILIA_TRACE'] = '1'
 Familia.enable_redis_logging = true
 Familia.enable_redis_counter = true
 

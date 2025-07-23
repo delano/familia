@@ -62,11 +62,12 @@ end
 #   logger.trace("This is a trace message")
 #
 module LoggerTraceRefinement
-  # Indicates whether trace logging is enabled
-  ENABLED = %w[1 true yes].include?(FAMILIA_TRACE)
-
-  # The numeric level for trace logging (same as DEBUG)
-  TRACE = 0 unless defined?(TRACE)
+  unless defined?(ENABLED)
+    # Indicates whether trace logging is enabled
+    ENABLED = %w[1 true yes].include?(FAMILIA_TRACE).freeze
+    # The numeric level for trace logging (same as DEBUG)
+    TRACE = 0
+  end
 
   refine Logger do
     ##

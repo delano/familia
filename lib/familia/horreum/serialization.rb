@@ -347,7 +347,7 @@ module Familia
         Familia.trace :REFRESH, redis, redisuri, caller(1..1) if Familia.debug?
         raise Familia::KeyNotFoundError, rediskey unless redis.exists(rediskey)
         fields = hgetall
-        Familia.ld "[refresh!] #{self.class} #{rediskey} #{fields.keys}"
+        Familia.ld "[refresh!] #{self.class} #{rediskey} fields:#{fields.keys}"
         optimistic_refresh(**fields)
       end
 

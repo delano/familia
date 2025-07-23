@@ -1,6 +1,6 @@
 # try/connection_pool_test.rb
 
-# USAGE: bundle exec tryouts try/connection_pool_test.rb
+# USAGE: FAMILIA_TRACE=1 FAMILIA_DEBUG=1 bundle exec tryouts try/connection_pool_test.rb
 
 require 'bundler/setup'
 require 'securerandom'

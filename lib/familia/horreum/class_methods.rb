@@ -6,7 +6,7 @@ module Familia
   class Horreum
     # Class-level instance variables
     # These are set up as nil initially and populated later
-    @redis = nil
+    @redis = nil # TODO
     @identifier = nil
     @ttl = nil
     @db = nil
@@ -41,6 +41,7 @@ module Familia
       #
       # @return [Redis] the Redis connection instance.
       #
+      # TODO:
       def redis
         @redis || Familia.redis(uri || db)
       end
@@ -198,6 +199,7 @@ module Familia
       end
 
       def db(v = nil)
+        Familia.trace :DB, Familia.redis, "#{@db} #{v}", caller(1..1) if Familia.debug?
         @db = v unless v.nil?
         @db || parent&.db
       end
