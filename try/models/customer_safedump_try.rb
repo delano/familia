@@ -6,8 +6,8 @@ require_relative '../helpers/test_helpers'
 # Setup
 @now = Time.now.to_i
 @customer = Customer.new
-@customer.custid = "test@example.com"
-@customer.email = "test@example.com"
+@customer.custid = "test+customer_safedump@example.com"
+@customer.email = "test+customer_safedump@example.com"
 @customer.role = "user"
 @customer.key = "abc123"
 @customer.planid = "basic"
@@ -24,7 +24,7 @@ require_relative '../helpers/test_helpers'
 
 ## Safe dump includes correct custid
 @safe_dump[:custid]
-#=> "test@example.com"
+#=> "test+customer_safedump@example.com"
 
 ## Safe dump includes correct role
 @safe_dump[:role]
@@ -46,7 +46,7 @@ require_relative '../helpers/test_helpers'
 @customer.secrets_created.increment
 @safe_dump = @customer.safe_dump
 @safe_dump[:secrets_created]
-#=> "2"
+#=> "1"
 
 ## Safe dump includes correct active status when verified and not reset requested
 @safe_dump[:active]
@@ -85,3 +85,4 @@ require_relative '../helpers/test_helpers'
 
 # Teardown
 @customer.destroy!
+@customer.secrets_created.clear
