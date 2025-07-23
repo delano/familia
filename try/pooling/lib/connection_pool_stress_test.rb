@@ -446,13 +446,18 @@ class ConnectionPoolStressTest
     pool_size = @config[:pool_size]
     pool_timeout = @config[:pool_timeout]
 
-    Familia.class_eval do
-      @@connection_pool = ConnectionPool.new(
-        size: pool_size,
-        timeout: pool_timeout
-      ) do
-        Redis.new(url: Familia.uri.to_s)
-      end
+    # Use class_variable_set to properly set the class variable
+    Familia.class_variable_set(:@@connection_pool, ConnectionPool.new(
+      size: pool_size,
+      timeout: pool_timeout
+    ) do
+      Redis.new(url: Familia.uri.to_s)
+    end)
+
+    # Verify the pool was configured correctly
+    actual_size = Familia.connection_pool.size
+    if actual_size != pool_size
+      puts "WARNING: Pool size mismatch! Configured: #{pool_size}, Actual: #{actual_size}"
     end
   end
 
@@ -780,7 +785,25 @@ class ConnectionPoolStressTest
       end
     end
 
+    # Monitor pool utilization
+    monitor_thread = Thread.new do
+      begin
+        while threads.any?(&:alive?)
+          if Familia.connection_pool.respond_to?(:available)
+            @metrics.record_pool_stats(
+              Familia.connection_pool.available,
+              Familia.connection_pool.size
+            )
+          end
+          sleep 0.001  # Poll every 1ms for better granularity with fast operations
+        end
+      rescue => e
+        puts "Monitor thread error: #{e.message}" if ENV['FAMILIA_DEBUG']
+      end
+    end
+
     threads.each(&:join)
+    monitor_thread.kill if monitor_thread.alive?
   end
 
   def run_operations_based_test(mix)
@@ -796,7 +819,25 @@ class ConnectionPoolStressTest
       end
     end
 
+    # Monitor pool utilization
+    monitor_thread = Thread.new do
+      begin
+        while threads.any?(&:alive?)
+          if Familia.connection_pool.respond_to?(:available)
+            @metrics.record_pool_stats(
+              Familia.connection_pool.available,
+              Familia.connection_pool.size
+            )
+          end
+          sleep 0.001  # Poll every 1ms for better granularity with fast operations
+        end
+      rescue => e
+        puts "Monitor thread error: #{e.message}" if ENV['FAMILIA_DEBUG']
+      end
+    end
+
     threads.each(&:join)
+    monitor_thread.kill if monitor_thread.alive?
   end
 
   def select_operation
