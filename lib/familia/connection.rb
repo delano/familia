@@ -21,6 +21,20 @@ module Familia
     # @return [Boolean] Whether Redis command counter is enabled
     attr_accessor :enable_redis_counter
 
+    # Sets the default URI for Redis connections.
+    #
+    # NOTE: uri is not a property of the Settings module b/c it's not
+    # configured in class defintions like ttl or logical DB index.
+    #
+    # @param v [String, URI] The new default URI
+    # @example
+    #   Familia.uri = 'redis://localhost:6379'
+    def uri=(uri)
+      @uri = normalize_uri(uri)
+    end
+    alias url uri
+    alias url= uri=
+
     # Establishes a connection to a Redis server.
     #
     # @param uri [String, URI, nil] The URI of the Redis server to connect to.
@@ -78,20 +92,89 @@ module Familia
       end
     end
 
-    # Sets the default URI for Redis connections.
+    # Executes Redis commands atomically within a transaction (MULTI/EXEC).
     #
-    # NOTE: uri is not a property of the Settings module b/c it's not
-    # configured in class defintions like ttl or logical DB index.
+    # Redis transactions queue commands and execute them atomically as a single unit.
+    # All commands succeed together or all fail together, ensuring data consistency.
     #
-    # @param v [String, URI] The new default URI
-    # @example
-    #   Familia.uri = 'redis://localhost:6379'
-    def uri=(val)
-      @uri = val.is_a?(URI) ? val : URI.parse(val)
+    # @yield [Redis] The Redis transaction connection
+    # @return [Array] Results of all commands executed in the transaction
+    #
+    # @example Basic transaction usage
+    #   Familia.transaction do |trans|
+    #     trans.set("key1", "value1")
+    #     trans.incr("counter")
+    #     trans.lpush("list", "item")
+    #   end
+    #   # Returns: ["OK", 2, 1] - results of all commands
+    #
+    # @note **Comparison of Redis batch operations:**
+    #
+    #   | Feature         | Multi/Exec      | Pipeline        |
+    #   |-----------------|-----------------|-----------------|
+    #   | Atomicity       | Yes             | No              |
+    #   | Performance     | Good            | Better          |
+    #   | Error handling  | All-or-nothing  | Per-command     |
+    #   | Use case        | Data consistency| Bulk operations |
+    #
+    def transaction(&)
+      redis.multi do |conn|
+        Fiber[:familia_transaction] = conn
+        begin
+          block_result = yield(conn) # rubocop:disable Lint/UselessAssignment
+        ensure
+          Fiber[:familia_transaction] = nil # cleanup reference
+        end
+      end
+      block_result
     end
+    alias multi transaction
 
-    alias url uri
-    alias url= uri=
+    # Executes Redis commands in a pipeline for improved performance.
+    #
+    # Pipelines send multiple commands without waiting for individual responses,
+    # reducing network round-trips. Commands execute independently and can
+    # succeed or fail without affecting other commands in the pipeline.
+    #
+    # @yield [Redis] The Redis pipeline connection
+    # @return [Array] Results of all commands executed in the pipeline
+    #
+    # @example Basic pipeline usage
+    #   Familia.pipeline do |pipe|
+    #     pipe.set("key1", "value1")
+    #     pipe.incr("counter")
+    #     pipe.lpush("list", "item")
+    #   end
+    #   # Returns: ["OK", 2, 1] - results of all commands
+    #
+    # @example Error handling - commands succeed/fail independently
+    #   results = Familia.pipeline do |conn|
+    #     conn.set("valid_key", "value")     # This will succeed
+    #     conn.incr("string_key")            # This will fail (wrong type)
+    #     conn.set("another_key", "value2")  # This will still succeed
+    #   end
+    #   # Returns: ["OK", Redis::CommandError, "OK"]
+    #   # Notice how the error doesn't prevent other commands from executing
+    #
+    # @example Contrast with transaction behavior
+    #   results = Familia.transaction do |conn|
+    #     conn.set("inventory:item1", 100)
+    #     conn.incr("invalid_key")        # Fails, rolls back everything
+    #     conn.set("inventory:item2", 200) # Won't be applied
+    #   end
+    #   # Result: neither item1 nor item2 are set due to the error
+    #
+    def pipeline(&)
+      redis.pipeline do |conn|
+        Fiber[:familia_pipeline] = conn
+        begin
+          block_result = yield(conn) # rubocop:disable Lint/UselessAssignment
+        ensure
+          Fiber[:familia_pipeline] = nil # cleanup reference
+        end
+      end
+      block_result
+    end
 
   private
 
