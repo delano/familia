@@ -30,40 +30,6 @@ class Blone < Familia::Horreum
   string    :value, :default => "GREAT!"
 end
 
-# Minimal Context-Aware Redis Proxy for testing neutralization
-class ContextAwareRedisProxy
-  def initialize(redis_connection)
-    @redis = redis_connection
-    @call_log = []
-  end
-
-  attr_reader :call_log
-
-  def method_missing(method, *args, **kwargs)
-    @call_log << "#{method}(#{args.join(', ')})"
-
-    if Fiber[:atomic_context]
-      # NEUTRALIZED: Queue instead of execute
-      Fiber[:atomic_context] << { method: method, args: args, kwargs: kwargs }
-      return :queued
-    else
-      # COUPLED: Execute immediately
-      @redis.send(method, *args, **kwargs)
-    end
-  end
-
-  def respond_to_missing?(method, include_private = false)
-    @redis.respond_to?(method, include_private) || super
-  end
-end
-
-# Test class that uses the proxy
-class TestBone < Bone
-  def redis
-    @proxy ||= ContextAwareRedisProxy.new(super)
-  end
-end
-
 class Customer < Familia::Horreum
   db 15 # don't use Onetime's default DB
   ttl 5.years
@@ -148,34 +114,6 @@ class Session < Familia::Horreum
   field :created
   field :updated
 
-  def generate_id
-    @sessid ||= Familia.generate_id
-    @sessid
-  end
-
-  # The external identifier is used by the rate limiter to estimate a unique
-  # client. We can't use the session ID b/c the request agent can choose to
-  # not send cookies, or the user can clear their cookies (in both cases the
-  # session ID would change which would circumvent the rate limiter). The
-  # external identifier is a hash of the IP address and the customer ID
-  # which means that anonymous users from the same IP address are treated
-  # as the same client (as far as the limiter is concerned). Not ideal.
-  #
-  # To put it another way, the risk of colliding external identifiers is
-  # acceptable for the rate limiter, but not for the session data. Acceptable
-  # b/c the rate limiter is a temporary measure to prevent abuse, and the
-  # worse case scenario is that a user is rate limited when they shouldn't be.
-  # The session data is permanent and must be kept separate to avoid leaking
-  # data between users.
-  def external_identifier
-    elements = []
-    elements << ipaddress || 'UNKNOWNIP'
-    elements << custid || 'anon'
-    @external_identifier ||= Familia.generate_sha_hash(elements)
-    Familia.ld "[Session.external_identifier] sess identifier input: #{elements.inspect} (result: #{@external_identifier})"
-    @external_identifier
-  end
-
 end
 @s = Session.new
 
@@ -183,10 +121,9 @@ class CustomDomain < Familia::Horreum
 
   feature :expiration
 
-  class_sorted_set :values, key: 'onetime:customdomain:values'
+  class_sorted_set :values
 
-  identifier :derive_id
-
+  identifier :generate_id
 
   field :display_domain
   field :custid
@@ -204,18 +141,8 @@ class CustomDomain < Familia::Horreum
   field :created
   field :updated
   field :_original_value
-
-  # Derive a unique identifier for the object based on the display domain and
-  # the customer ID. This is used to ensure that the same domain can't be
-  # added twice by the same customer while avoiding collisions between customers.
-  def derive_id
-    elements = [
-      display_domain,
-      custid
-    ]
-    Familia.generate_sha_hash(*elements).slice(0, 8)
-  end
 end
+
 @d = CustomDomain.new
 @d.display_domain = "example.com"
 @d.custid = @c.custid
@@ -234,41 +161,5 @@ class Limiter < Familia::Horreum
 
   def identifier
     @name
-  end
-end
-
-# Minimal Context-Aware Redis Proxy
-# Tests whether the tight coupling between method invocation and Redis execution
-# can be neutralized through context-aware command dispatch
-class ContextAwareRedisProxy
-  def initialize(redis_connection)
-    @redis = redis_connection
-    @call_log = []
-  end
-
-  attr_reader :call_log
-
-  def method_missing(method, *args, **kwargs)
-    @call_log << "#{method}(#{args.join(', ')})"
-
-    if Fiber[:atomic_context]
-      # NEUTRALIZED: Queue instead of execute
-      Fiber[:atomic_context] << { method: method, args: args, kwargs: kwargs }
-      return :queued
-    else
-      # COUPLED: Execute immediately
-      @redis.send(method, *args, **kwargs)
-    end
-  end
-
-  def respond_to_missing?(method, include_private = false)
-    @redis.respond_to?(method, include_private) || super
-  end
-end
-
-# Test class that uses the proxy
-class ContextProxyBone < Bone
-  def redis
-    @proxy ||= ContextAwareRedisProxy.new(super)
   end
 end

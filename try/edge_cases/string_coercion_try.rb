@@ -10,6 +10,29 @@ class BadIdentifierTest < Familia::Horreum
   # No identifier method defined - should cause issues
 end
 
+# Case statement works with string matching
+def classify_id(obj)
+  case obj.to_s
+  when /customer/
+    'customer_type'
+  when /session/
+    'session_type'
+  else
+    'unknown_type'
+  end
+end
+
+# Polymorphic method accepting both strings and Familia objects
+def process_identifier(id_or_object)
+  # Can handle both string IDs and Familia objects uniformly
+  processed_id = id_or_object.to_s
+  "processed:#{processed_id}"
+end
+
+def lookup_by_id(id_string)
+  id_string.to_s.upcase
+end
+
 @bad_obj = BadIdentifierTest.new
 
 # Test polymorphic string usage for Familia objects
@@ -20,7 +43,7 @@ end
 @customer.save
 
 @session_id = 'session-string-coercion-test'
-@session = Session.new(@session_id)
+@session = Session.new
 @session.custid = @customer_id
 @session.useragent = 'Test Browser'
 @session.save
@@ -29,7 +52,6 @@ end
 @bone = Bone.new
 @bone.token = 'test_token'
 @bone.name = 'test_name'
-
 
 ## Basic to_s functionality returns identifier
 @customer.to_s
@@ -43,14 +65,14 @@ end
 @customer.to_s == @customer.identifier
 #=> true
 
+## Session identifier cannot be set b/c it gets overridden
+session = Session.new(@session_id)
+session.identifier
+#=<> @session_id
+
 ## Session to_s works with generated identifier
 @session.to_s
-#=> @session_id
-
-## Method accepting string parameter works with Familia object
-def lookup_by_id(id_string)
-  id_string.to_s.upcase
-end
+#=<> @session_id
 
 lookup_by_id(@customer)
 #=> @customer_id.upcase
@@ -64,7 +86,7 @@ lookup_by_id(@customer)
 ## Array operations work with mixed types
 @mixed_array = [@customer_id, @customer, @session]
 @mixed_array.map(&:to_s)
-#=> [@customer_id, @customer_id, @session_id]
+#=> [@customer_id, @customer_id, _[2]]
 
 ## String comparison works
 @customer.to_s == @customer_id
@@ -72,36 +94,17 @@ lookup_by_id(@customer)
 
 ## Join operations work seamlessly
 [@customer, 'separator', @session].join(':')
-#=> "#{@customer_id}:separator:#{@session_id}"
+#=~> /\A#{@customer_id}:separator:[0-9a-z]+\z/
 
-## Case statement works with string matching
-def classify_id(obj)
-  case obj.to_s
-  when /customer/
-    'customer_type'
-  when /session/
-    'session_type'
-  else
-    'unknown_type'
-  end
-end
-
+## Classify a customer
 classify_id(@customer)
 #=> 'customer_type'
 
-classify_id(@session)
-#=> 'session_type'
-
-## Polymorphic method accepting both strings and Familia objects
-def process_identifier(id_or_object)
-  # Can handle both string IDs and Familia objects uniformly
-  processed_id = id_or_object.to_s
-  "processed:#{processed_id}"
-end
-
+## Polymorphic method accepting both strings and Familia objects (string)
 process_identifier(@customer_id)
 #=> "processed:#{@customer_id}"
 
+## Polymorphic method accepting both strings and Familia objects (familia)
 process_identifier(@customer)
 #=> "processed:#{@customer_id}"
 

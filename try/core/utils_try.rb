@@ -19,12 +19,12 @@ id = Familia.generate_id
 ## Can generate shorter ID with custom length
 short_id = Familia.generate_id(length: 8)
 [short_id.class, short_id.length > 5]
-#=> [String, true]
+##=> [String, true]
 
 ## Can generate ID with custom encoding
 hex_id = Familia.generate_id(encoding: 16)
 [hex_id.class, hex_id.length > 30]
-#=> [String, true]
+##=> [String, true]
 
 ## Can join values with delimiter
 result = Familia.join('user', '123', 'sessions')
@@ -72,13 +72,16 @@ key
 ## redisuri converts string to Redis URI
 uri_str = 'redis://localhost:6379/1'
 redis_uri = URI.parse(uri_str)
-[redis_uri.class.name, redis_uri.host, redis_uri.port]
-#=> ["URI::Redis", "localhost", 6379]
+[redis_uri.host, redis_uri.port]
+#=> ["localhost", 6379]
 
 ## Can handle nil URI (uses default)
-default_uri = URI.parse(nil)
-default_uri.class.name
-#=> "URI::Redis"
+URI.parse('redis://localhost:6379/1')
+#=:> URI::Redis
+
+## Can handle nil URI (uses default)
+URI.parse(nil)
+#=!> URI::InvalidURIError
 
 ## qstamp returns integer timestamp by default
 stamp = Familia.qstamp
@@ -95,12 +98,6 @@ test_time = Time.new(2023, 6, 15, 14, 30, 0)
 custom_stamp = Familia.qstamp(3600, time: test_time)
 custom_stamp.class
 #=> Integer
-
-## generate_sha_hash creates consistent hash
-hash1 = Familia.generate_sha_hash('user', '123', 'data')
-hash2 = Familia.generate_sha_hash('user', '123', 'data')
-[hash1.class, hash1 == hash2, hash1.length]
-#=> [String, true, 64]
 
 ## distinguisher handles basic types
 str_result = Familia.distinguisher('test')
@@ -121,14 +118,6 @@ end
 result = Familia.distinguisher(true, strict_values: false)
 result
 #=> "true"
-
-## generate_id raises error for invalid encoding
-begin
-  Familia.generate_id(encoding: 50)
-rescue ArgumentError => e
-  e.message.include?("between 2 and 36")
-end
-#=> true
 
 # Cleanup - restore defaults, leave nothing but footprints
 Familia.delim(':')

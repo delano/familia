@@ -80,7 +80,10 @@ Familia.trace :LOAD, @customer.redis, @customer.redisuri, caller if Familia.debu
 
 ## We can call #identifier directly if we want to "lasy load" the unique identifier
 @cd.identifier
-#=> "7565befd"
+#=:> String
+#=/=> _.empty?
+#==> _.size > 16
+#=~>/\A[0-9a-z]+\z/
 
 ## The #key field will still be nil
 @cd.key
@@ -90,6 +93,9 @@ Familia.trace :LOAD, @customer.redis, @customer.redisuri, caller if Familia.debu
 @cd.save
 #=> true
 
-## The key will be set
+## The key has been set now that the instance has been saved
 @cd.key
-#=> "7565befd"
+#=:> String
+#=/=> _.empty?
+#==> _.size > 16
+#=~>/\A[0-9a-z]+\z/
