@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'concurrent-ruby'
+
 # RedisLogger is RedisClient middleware.
 #
 # This middleware addresses the need for detailed Redis command logging, which
@@ -63,35 +65,58 @@ end
 #   RedisClient.register(RedisCommandCounter)
 #
 # @see https://github.com/redis-rb/redis-client?tab=readme-ov-file#instrumentation-and-middlewares
+#
+# rubocop:disable ThreadSafety/ClassInstanceVariable
 module RedisCommandCounter
-  @count = 0
-  @mutex = Mutex.new
+  @count = Concurrent::AtomicFixnum.new(0)
 
   class << self
+
     # Gets the current count of Redis commands executed.
     # @return [Integer] The number of Redis commands executed.
-    attr_reader :count
+    def count
+      @count.value
+    end
 
     # Resets the command count to zero.
     # This method is thread-safe.
     # @return [Integer] The reset count (always 0).
     def reset
-      @mutex.synchronize { @count = 0 }
+      @count.value = 0
     end
 
     # Increments the command count.
     # This method is thread-safe.
     # @return [Integer] The new count after incrementing.
     def increment
-      @mutex.synchronize { @count += 1 }
+      @count.increment
     end
 
+    # Counts the number of Redis commands executed within a block.
+    #
+    # This method captures the command count before and after executing the
+    # provided block, returning the difference. This is useful for measuring
+    # how many Redis commands are executed by a specific operation.
+    #
+    # @yield [] The block of code to execute while counting commands.
+    # @return [Integer] The number of Redis commands executed within the block.
+    #
+    # @example Count commands in a block
+    #   commands_executed = RedisCommandCounter.count_commands do
+    #     redis.set('key1', 'value1')
+    #     redis.get('key1')
+    #   end
+    #   # commands_executed will be 2
     def count_commands
-      start_count = count
-      yield
-      end_count = count
-      end_count - start_count
+      start_count = count      # Capture the current command count before execution
+      yield                    # Execute the provided block
+      end_count = count        # Capture the command count after execution
+      end_count - start_count  # Return the difference (commands executed in block)
     end
+  end
+
+  def klass
+    RedisCommandCounter
   end
 
   # Counts the Redis command and delegates its execution.
@@ -103,7 +128,7 @@ module RedisCommandCounter
   # @param redis_config [Hash] The configuration options for the Redis connection.
   # @return [Object] The result of the Redis command execution.
   def call(command, redis_config)
-    RedisCommandCounter.increment
     yield
   end
 end
+# rubocop:enable ThreadSafety/ClassInstanceVariable
