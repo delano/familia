@@ -3,7 +3,6 @@
 require 'securerandom'
 
 module Familia
-  DIGEST_CLASS = Digest::SHA256
 
   module Utils
 
@@ -108,10 +107,6 @@ module Familia
       end
     end
 
-    def generate_sha_hash(*elements)
-      concatenated_string = Familia.join(*elements)
-      DIGEST_CLASS.hexdigest(concatenated_string)
-    end
 
     # This method determines the appropriate transformation to apply based on
     # the class of the input argument.
