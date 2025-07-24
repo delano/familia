@@ -1,6 +1,7 @@
-# frozen_string_literal: true
+# lib/familia/connection.rb
 
 require_relative '../../lib/redis_middleware'
+require_relative 'multi_result'
 
 #
 module Familia
