@@ -56,6 +56,15 @@ module Familia
     def configure
       yield self
     end
+
+    # Checks if debug mode is enabled
+    #
+    # e.g. Familia.debug = true
+    #
+    # @return [Boolean] true if debug mode is on, false otherwise
+    def debug?
+      @debug == true
+    end
   end
 
   require_relative 'familia/logging'

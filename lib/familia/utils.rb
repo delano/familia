@@ -6,41 +6,78 @@ module Familia
 
   module Utils
 
-    # Checks if debug mode is enabled
+    # Generates a cryptographically secure identifier using SecureRandom.
+    # Creates a random hexadecimal string and converts it to base-36 encoding
+    # for a compact, URL-safe identifier.
     #
-    # e.g. Familia.debug = true
+    # @return [String] A secure identifier in base-36 encoding
     #
-    # @return [Boolean] true if debug mode is on, false otherwise
-    def debug?
-      @debug == true
+    # @example Generate a 256-bit ID in base-36
+    #   Familia.generate_id # => "25nkfebno45yy36z47ffxef2a7vpg4qk06ylgxzwgpnz4q3os4"
+    #
+    # @security Uses SecureRandom for cryptographic entropy
+    # @see #convert_base_string for base conversion details
+    def generate_id
+      hexstr = SecureRandom.hex(32)
+      convert_base_string(hexstr)
     end
 
-    # Generates a unique ID using SHA256 and base-36 encoding
-    # @param length [Integer] length of the random input in bytes (default: 32)
-    # @param encoding [Integer] base encoding for the output (default: 36)
-    # @return [String] a unique identifier
+    # Generates a cryptographically secure short identifier by creating
+    # a 256-bit random value and then truncating it to 64 bits for a
+    # shorter but still secure identifier.
     #
-    # @example Generate a default ID
-    #   Familia.generate_id
-    #   # => "kuk79w6uxg81tk0kn5hsl6pr7ic16e9p6evjifzozkda9el6z"
+    # @return [String] A secure short identifier in base-36 encoding
     #
-    # @example Generate a shorter ID with 16 bytes input
-    #   Familia.generate_id(length: 16)
-    #   # => "z6gqw1b7ftzpvapydkt0iah0h0bev5hkhrs4mkf1gq4nq5csa"
+    # @example Generate a 64-bit short ID
+    #   Utils.generate_short_id # => "k8x2m9n4p7q1"
     #
-    # @example Generate an ID with hexadecimal encoding
-    #   Familia.generate_id(encoding: 16)
-    #   # => "d06a2a70cba543cd2bbd352c925bc30b0a9029ca79e72d6556f8d6d8603d5716"
-    #
-    # @example Generate a shorter ID with custom encoding
-    #   Familia.generate_id(length: 8, encoding: 32)
-    #   # => "193tosc85k3u513do2mtmibchpd2ruh5l3nsp6dnl0ov1i91h7m7"
-    #
-    def generate_id(length: 32, encoding: 36)
-      raise ArgumentError, "Encoding must be between 2 and 36" unless (1..36).include?(encoding)
+    # @security Uses SecureRandom for entropy with secure bit truncation
+    # @see #shorten_securely for truncation details
+    def generate_short_id
+      hexstr = SecureRandom.hex(32) # generate with all 256 bits
+      shorten_securely(hexstr, bits: 64) # and then shorten
+    end
 
-      input = SecureRandom.hex(length)
-      Digest::SHA256.hexdigest(input).to_i(16).to_s(encoding)
+    # Truncates a hexadecimal string to specified bit length and encodes in desired base.
+    # Takes the most significant bits from the hex string to maintain randomness
+    # distribution while reducing the identifier length for practical use.
+    #
+    # @param hash [String] A hexadecimal string (64 characters for 256 bits)
+    # @param bits [Integer] Number of bits to retain (default: 256, max: 256)
+    # @param base [Integer] Base encoding for output string (2-36, default: 36)
+    # @return [String] Truncated value encoded in the specified base
+    #
+    # @example Truncate to 128 bits in base-16
+    #   hash = "a1b2c3d4..." # 64-char hexadecimal string
+    #   Utils.shorten_securely(hash, bits: 128, base: 16) # => "a1b2c3d4e5f6e7c8"
+    #
+    # @example Default 256-bit truncation in base-36
+    #   Utils.shorten_securely(hash) # => "k8x2m9n4p7q1r5s3t6u0v2w8x1y4z7"
+    #
+    # @note Higher bit counts provide more security but longer identifiers
+    # @note Base-36 encoding uses 0-9 and a-z for compact, URL-safe strings
+    # @security Bit truncation preserves cryptographic properties of original value
+    def shorten_securely(hash, bits: 256, base: 36)
+      # Truncate to desired bit length
+      truncated = hash.to_i(16) >> (256 - bits)
+      convert_base_string(truncated.to_s, base: base)
+    end
+
+    # Converts a string representation of a number from one base to another.
+    # This utility method is flexible, allowing conversions between any bases
+    # supported by Ruby's `to_i` and `to_s` methods (i.e., 2 to 36).
+    #
+    # @param value_str [String] The string representation of the number to convert.
+    # @param from_base [Integer] The base of the input `value_str` (default: 16).
+    # @param base [Integer] The target base for the output string (default: 36).
+    # @return [String] The string representation of the number in the `base`.
+    # @raise [ArgumentError] If `from_base` or `base` are outside the valid range (2-36).
+    def convert_base_string(value_str, from_base: 16, base: 36)
+      unless from_base.between?(2, 36) && base.between?(2, 36)
+        raise ArgumentError, 'Bases must be between 2 and 36'
+      end
+
+      value_str.to_i(from_base).to_s(base)
     end
 
     # Joins array elements with Familia delimiter
