@@ -109,9 +109,19 @@ module Familia
 
       # Legacy behavior: create connection
       parsed_uri = normalize_uri(uri)
-      @redis ||= connect(parsed_uri)
-      @redis.select(parsed_uri.db) if parsed_uri.db
-      @redis
+
+      # Only cache when no specific URI/DB is requested to avoid DB conflicts
+      if uri.nil?
+        @redis ||= connect(parsed_uri)
+        @redis.select(parsed_uri.db) if parsed_uri.db
+        @redis
+      else
+        # When a specific DB is requested, create a new connection
+        # to avoid conflicts with cached connections
+        connection = connect(parsed_uri)
+        connection.select(parsed_uri.db) if parsed_uri.db
+        connection
+      end
     end
 
     # Executes Redis commands atomically within a transaction (MULTI/EXEC).
