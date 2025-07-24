@@ -77,3 +77,6 @@ Style/NegatedIfElseCondition:
 
 Naming/AsciiIdentifiers:
   Enabled: false
+
+Style/FrozenStringLiteralComment:
+  Enabled: false
