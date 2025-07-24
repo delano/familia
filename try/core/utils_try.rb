@@ -16,15 +16,69 @@ id = Familia.generate_id
 [id.class, id.length > 10]
 #=> [String, true]
 
-## Can generate shorter ID with custom length
-short_id = Familia.generate_id(length: 8)
-[short_id.class, short_id.length > 5]
-##=> [String, true]
+## Generated IDs are unique each time
+id1 = Familia.generate_id
+id2 = Familia.generate_id
+id1 != id2
+#=> true
 
-## Can generate ID with custom encoding
-hex_id = Familia.generate_id(encoding: 16)
+## Can generate ID with custom base encoding
+hex_id = Familia.generate_id(16)
 [hex_id.class, hex_id.length > 30]
-##=> [String, true]
+#=> [String, true]
+
+## Has generate_trace_id method
+Familia.respond_to?(:generate_trace_id)
+#=> true
+
+## Can generate trace ID with default base-36
+trace_id = Familia.generate_trace_id
+[trace_id.class, trace_id.length > 5, trace_id.length < 20]
+#=> [String, true, true]
+
+## Can generate trace ID with custom base
+hex_trace_id = Familia.generate_trace_id(16)
+[hex_trace_id.class, hex_trace_id.length == 16]
+#=> [String, true]
+
+## Has shorten_to_external_id method
+Familia.respond_to?(:shorten_to_external_id)
+#=> true
+
+## Can shorten to external ID (128 bits)
+full_id = Familia.generate_id
+external_id = Familia.shorten_to_external_id(full_id)
+[external_id.class, external_id.length < full_id.length]
+#=> [String, true]
+
+## Can shorten to external ID with custom base
+full_id = Familia.generate_id
+hex_external_id = Familia.shorten_to_external_id(full_id, base: 16)
+[hex_external_id.class, hex_external_id.length == 32]
+#=> [String, true]
+
+## Has shorten_to_trace_id method
+Familia.respond_to?(:shorten_to_trace_id)
+#=> true
+
+## Can shorten to trace ID (64 bits)
+full_id = Familia.generate_id
+trace_id = Familia.shorten_to_trace_id(full_id)
+[trace_id.class, trace_id.length < full_id.length]
+#=> [String, true]
+
+## Can shorten to trace ID with custom base
+full_id = Familia.generate_id
+hex_trace_id = Familia.shorten_to_trace_id(full_id, base: 16)
+[hex_trace_id.class, hex_trace_id.length == 16]
+#=> [String, true]
+
+## Shortened IDs are deterministic
+full_id = Familia.generate_id
+external_id1 = Familia.shorten_to_external_id(full_id)
+external_id2 = Familia.shorten_to_external_id(full_id)
+external_id1 == external_id2
+#=> true
 
 ## Can join values with delimiter
 result = Familia.join('user', '123', 'sessions')

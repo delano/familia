@@ -7,77 +7,77 @@ module Familia
   module Utils
 
     # Generates a cryptographically secure identifier using SecureRandom.
-    # Creates a random hexadecimal string and converts it to base-36 encoding
+    # Creates a random hexadecimal string and converts it to base encoding
     # for a compact, URL-safe identifier.
     #
-    # @return [String] A secure identifier in base-36 encoding
+    # @param base [Integer] The base encoding for output string (2-36, default: 36)
+    # @return [String] A secure identifier in the specified base encoding
     #
-    # @example Generate a 256-bit ID in base-36
-    #   Familia.generate_id # => "25nkfebno45yy36z47ffxef2a7vpg4qk06ylgxzwgpnz4q3os4"
+    # @example Generate a 256-bit ID in base-36 (default)
+    #   generate_id # => "25nkfebno45yy36z47ffxef2a7vpg4qk06ylgxzwgpnz4q3os4"
     #
-    # @security Uses SecureRandom for cryptographic entropy
-    # @see #convert_base_string for base conversion details
-    def generate_id
-      hexstr = SecureRandom.hex(32)
-      convert_base_string(hexstr)
+    # @example Generate a 256-bit ID in base-16
+    #   generate_id(16) # => "568bdb582bc5042bf435d3f126cf71593981067463709c880c91df1ad9777a34"
+    #
+    # @note Uses SecureRandom for cryptographic entropy (256 bits)
+    # @note Provides maximum security for permanent identifiers like user IDs, API keys
+    # @security 256 bits offers ~10^77 possible values, far exceeding UUID4's 128 bits
+    def generate_id(base = 36)
+      SecureRandom.hex(32).to_i(16).to_s(base)
     end
 
     # Generates a cryptographically secure short identifier by creating
-    # a 256-bit random value and then truncating it to 64 bits for a
-    # shorter but still secure identifier.
+    # a 64-bit random value for a shorter but still secure identifier.
+    # Suitable for tracing, logging, and other ephemeral use cases.
     #
-    # @return [String] A secure short identifier in base-36 encoding
+    # @param base [Integer] The base encoding for output string (2-36, default: 36)
+    # @return [String] A secure short identifier in the specified base encoding
     #
-    # @example Generate a 64-bit short ID
-    #   Utils.generate_short_id # => "k8x2m9n4p7q1"
+    # @example Generate a 64-bit short ID in base-36 (default)
+    #   generate_trace_id # => "lh7uap704unf"
     #
-    # @security Uses SecureRandom for entropy with secure bit truncation
-    # @see #shorten_securely for truncation details
-    def generate_short_id
-      hexstr = SecureRandom.hex(32) # generate with all 256 bits
-      shorten_securely(hexstr, bits: 64) # and then shorten
+    # @example Generate a 64-bit short ID in base-16
+    #   generate_trace_id(16) # => "94cf9f8cfb0eb692"
+    #
+    # @note Uses SecureRandom for cryptographic entropy (64 bits)
+    # @note Common trace ID sizes: AWS X-Ray (96 bits), OpenTelemetry (128 bits), many systems (64 bits)
+    # @note 64 bits provides ~18 quintillion possible values, sufficient for request tracing
+    # @security Collision risk negligible for ephemeral IDs with reasonable request volumes
+    def generate_trace_id(base = 36)
+      SecureRandom.hex(8).to_i(16).to_s(base)
     end
 
     # Truncates a hexadecimal string to specified bit length and encodes in desired base.
     # Takes the most significant bits from the hex string to maintain randomness
     # distribution while reducing the identifier length for practical use.
+    # Useful for creating deterministic shorter IDs from longer secure values.
     #
     # @param hash [String] A hexadecimal string (64 characters for 256 bits)
     # @param bits [Integer] Number of bits to retain (default: 256, max: 256)
     # @param base [Integer] Base encoding for output string (2-36, default: 36)
     # @return [String] Truncated value encoded in the specified base
     #
-    # @example Truncate to 128 bits in base-16
-    #   hash = "a1b2c3d4..." # 64-char hexadecimal string
-    #   Utils.shorten_securely(hash, bits: 128, base: 16) # => "a1b2c3d4e5f6e7c8"
+    # @example Truncate to 128 bits for external session ID
+    #   internal_id = generate_id # Full 256-bit internal ID
+    #   external_id = shorten_securely(internal_id, bits: 128) # Shorter external representation
     #
     # @example Default 256-bit truncation in base-36
-    #   Utils.shorten_securely(hash) # => "k8x2m9n4p7q1r5s3t6u0v2w8x1y4z7"
+    #   shorten_securely(hash) # => "k8x2m9n4p7q1r5s3t6u0v2w8x1y4z7"
     #
     # @note Higher bit counts provide more security but longer identifiers
     # @note Base-36 encoding uses 0-9 and a-z for compact, URL-safe strings
     # @security Bit truncation preserves cryptographic properties of original value
-    def shorten_securely(hash, bits: 256, base: 36)
-      # Truncate to desired bit length
-      truncated = hash.to_i(16) >> (256 - bits)
-      convert_base_string(truncated.to_s, base: base)
+    # @use_case Ideal for creating signed external IDs from internal secure identifiers
+    def shorten_to_external_id(hash, base: 36)
+      truncated = hash.to_i(36) >> (256 - 128)  # Always 128 bits
+      truncated.to_s(base)
     end
 
-    # Converts a string representation of a number from one base to another.
-    # This utility method is flexible, allowing conversions between any bases
-    # supported by Ruby's `to_i` and `to_s` methods (i.e., 2 to 36).
-    #
-    # @param value_str [String] The string representation of the number to convert.
-    # @param from_base [Integer] The base of the input `value_str` (default: 16).
-    # @param base [Integer] The target base for the output string (default: 36).
-    # @return [String] The string representation of the number in the `base`.
-    # @raise [ArgumentError] If `from_base` or `base` are outside the valid range (2-36).
-    def convert_base_string(value_str, from_base: 16, base: 36)
-      unless from_base.between?(2, 36) && base.between?(2, 36)
-        raise ArgumentError, 'Bases must be between 2 and 36'
-      end
-
-      value_str.to_i(from_base).to_s(base)
+    # The key is keeping track of whether you're talking about bytes (which
+    # represent storage) or bits (logical size of the randomnexx)!
+    def shorten_to_trace_id(hash, base: 36)
+      truncated = hash.to_i(36) >> (256 - 64)   # Always 64 bits
+      truncated.to_s(base)
     end
 
     # Joins array elements with Familia delimiter
