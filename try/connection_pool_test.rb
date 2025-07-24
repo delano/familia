@@ -122,7 +122,7 @@ end
 
 ## Test 6: Atomic transactions with connection pool (continued)
 # Test atomic transfer (proxy approach)
-@transfer_result = Familia.atomic do
+@transfer_result = Familia.transaction do
   @account_a.balance -= 200
   @account_b.balance += 200
   [@account_a.save, @account_b.save]
@@ -145,7 +145,7 @@ end
 
 ## Test 9: Explicit connection approach in atomic blocks (continued)
 # Test atomic transfer with explicit connection
-@explicit_result = Familia.atomic do |conn|
+@explicit_result = Familia.transaction do |conn|
   @account_c.balance -= 500
   @account_d.balance += 500
   # Note: In a real implementation, we'd need save(using: conn) method
@@ -160,12 +160,12 @@ end
 #=> true
 
 ## Test 11: Nested atomic transactions (continued)
-@nested_result = Familia.atomic do
+@nested_result = Familia.transaction do
   @account_e.balance += 100
   @account_e.save
 
   # Nested atomic operation
-  Familia.atomic do
+  Familia.transaction do
     @account_e.balance += 50
     @account_e.save
   end
@@ -211,7 +211,7 @@ end
 ## Test 17: Error handling in atomic blocks (continued)
 # Test that errors properly clean up connection state
 begin
-  Familia.atomic do
+  Familia.transaction do
     @error_account.balance += 50
     @error_account.save
     raise "Simulated error"

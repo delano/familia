@@ -70,4 +70,3 @@ class MultiResult
   end
   alias success? successful?
 end
-# End of MultiResult class

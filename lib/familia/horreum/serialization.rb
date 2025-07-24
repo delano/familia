@@ -26,10 +26,10 @@ module Familia
     #
     # May your Redis returns be ever valid, and your data ever flowing!
     #
-    @valid_command_return_values = ["OK", true, 1, 0, nil]
+    @valid_command_return_values = ["OK", true, 1, 0, nil].freeze
 
     class << self
-      attr_accessor :valid_command_return_values
+      attr_reader :valid_command_return_values
     end
 
     # Serialization: Where Objects Go to Become Strings (and Vice Versa)!
@@ -129,13 +129,12 @@ module Familia
 
         # Commit our tale to the Redis chronicles
         #
-        # e.g. `ret`  # => MultiResult.new(true, ["OK", "OK"])
         ret = commit_fields(update_expiration: update_expiration)
 
         Familia.ld "[save] #{self.class} #{rediskey} #{ret} (update_expiration: #{update_expiration})"
 
         # Did Redis accept our offering?
-        ret.successful?
+        !ret.nil?
       end
 
       # Updates multiple fields atomically in a Redis transaction.
@@ -244,34 +243,17 @@ module Familia
       #   the expiration feature enabled. For others, it's a no-op.
       #
       def commit_fields update_expiration: true
-        Familia.ld "[commit_fields1] #{self.class} #{rediskey} #{to_h} (update_expiration: #{update_expiration})"
-        command_return_values = transaction do |conn|
-          conn.hmset rediskey(suffix), self.to_h # using the prepared connection
-        end
+        prepared_value = to_h
+        Familia.ld "[commit_fields] Begin #{self.class} #{rediskey} #{prepared_value} (exp: #{update_expiration})"
+
+        result = self.hmset(prepared_value)
+
         # Only classes that have the expiration ferature enabled will
         # actually set an expiration time on their keys. Otherwise
         # this will be a no-op that simply logs the attempt.
         self.update_expiration(ttl: nil) if update_expiration
 
-        # The acceptable redis command return values are defined in the
-        # Horreum class. This is to ensure that all commands return values
-        # are validated against a consistent set of values.
-        acceptable_values = Familia::Horreum.valid_command_return_values
-
-        # Check if all return values are valid
-        summary_boolean = command_return_values.uniq.all? { |value|
-          acceptable_values.include?(value)
-        }
-
-        # Log the unexpected
-        unless summary_boolean
-          unexpected_values = command_return_values.reject { |value| acceptable_values.include?(value) }
-          Familia.warn "[commit_fields] Unexpected return values: #{unexpected_values.inspect}"
-        end
-
-        Familia.ld "[commit_fields2] #{self.class} #{rediskey} #{summary_boolean}: #{command_return_values}"
-
-        MultiResult.new(summary_boolean, command_return_values)
+        result
       end
 
       # Dramatically vanquish this object from the face of Redis! (ed: delete it)
