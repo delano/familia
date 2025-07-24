@@ -1,0 +1,74 @@
+# lib/familia/horreum/connection.rb
+
+module Familia
+  class Horreum
+
+    #
+    module Connection
+      attr_reader :uri
+
+      # Returns the Redis connection for the class.
+      #
+      # This method retrieves the Redis connection instance for the class. If no
+      # connection is set, it initializes a new connection using the provided URI
+      # or database configuration.
+      #
+      # @return [Redis] the Redis connection instance.
+      #
+      def redis
+        Fiber[:familia_transaction] || @redis || Familia.redis(uri || db)
+      end
+
+      def uri=(uri)
+        @uri = normalize_uri(uri)
+      end
+      alias url uri
+      alias url= uri=
+
+      # Perform a sacred Redis transaction ritual.
+      #
+      # This method creates a protective circle around your Redis operations,
+      # ensuring they all succeed or fail together. It's like a group hug for your
+      # data operations, but with more ACID properties.
+      #
+      # @yield [conn] A block where you can perform your Redis incantations.
+      # @yieldparam conn [Redis] A Redis connection in multi mode.
+      #
+      # @example Performing a Redis rain dance
+      #   transaction do |conn|
+      #     conn.set("weather", "rainy")
+      #     conn.set("mood", "melancholic")
+      #   end
+      #
+      # @note This method works with the global Familia.transaction context when available
+      #
+      def transaction
+        # If we're already in a Familia.transaction context, just yield the multi connection
+        if Fiber[:familia_transaction]
+          yield(Fiber[:familia_transaction])
+        else
+          # Otherwise, create a local transaction
+          block_result = redis.multi do |conn|
+            yield(conn)
+          end
+        end
+        block_result
+      end
+      alias multi transaction
+
+      def pipeline
+        # If we're already in a Familia.pipeline context, just yield the pipeline connection
+        if Fiber[:familia_pipeline]
+          yield(Fiber[:familia_pipeline])
+        else
+          # Otherwise, create a local transaction
+          block_result = redis.pipeline do |conn|
+            yield(conn)
+          end
+        end
+        block_result
+      end
+
+    end
+  end
+end

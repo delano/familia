@@ -60,48 +60,6 @@ module Familia
     #
     module Serialization
 
-      attr_writer :redis
-
-      # Summon the mystical Redis connection from the depths of instance or class.
-      #
-      # This method is like a magical divining rod, always pointing to the nearest
-      # source of Redis goodness. It first checks if we have a personal Redis
-      # connection (@redis), and if not, it borrows the class's connection.
-      #
-      # @return [Redis] A shimmering Redis connection, ready for your bidding.
-      #
-      # @example Finding your Redis way
-      #   puts object.redis
-      #   # => #<Redis client v4.5.1 for redis://localhost:6379/0>
-      #
-      def redis
-        @redis || self.class.redis
-      end
-
-      # Perform a sacred Redis transaction ritual.
-      #
-      # This method creates a protective circle around your Redis operations,
-      # ensuring they all succeed or fail together. It's like a group hug for your
-      # data operations, but with more ACID properties.
-      #
-      # @yield [conn] A block where you can perform your Redis incantations.
-      # @yieldparam conn [Redis] A Redis connection in multi mode.
-      #
-      # @example Performing a Redis rain dance
-      #   transaction do |conn|
-      #     conn.set("weather", "rainy")
-      #     conn.set("mood", "melancholic")
-      #   end
-      #
-      # @note This method temporarily replaces your Redis connection with a multi
-      #   connection. Don't worry, it puts everything back where it found it when it's done.
-      #
-      def transaction
-        redis.multi do |conn|
-          yield(conn)
-        end
-      end
-
       # Save our precious data to Redis, with a sprinkle of timestamp magic!
       #
       # This method is like a conscientious historian, not only recording your

@@ -63,6 +63,7 @@ module Familia
       def inherited(member)
         Familia.trace :HORREUM, nil, "Welcome #{member} to the family", caller(1..1) if Familia.debug?
         member.extend(ClassMethods)
+        member.extend(Connection)
         member.extend(Features)
 
         # Tracks all the classes/modules that include Familia. It's
@@ -282,6 +283,24 @@ module Familia
       unique_id
     end
 
+    attr_writer :redis
+
+    # Summon the mystical Redis connection from the depths of instance or class.
+    #
+    # This method is like a magical divining rod, always pointing to the nearest
+    # source of Redis goodness. It first checks if we have a personal Redis
+    # connection (@redis), and if not, it borrows the class's connection.
+    #
+    # @return [Redis] A shimmering Redis connection, ready for your bidding.
+    #
+    # @example Finding your Redis way
+    #   puts object.redis
+    #   # => #<Redis client v4.5.1 for redis://localhost:6379/0>
+    #
+    def redis
+      Fiber[:familia_transaction] || @redis || self.class.redis
+    end
+
     def generate_id
       @objid ||= Familia.generate_id
     end
@@ -303,6 +322,7 @@ end
 
 require_relative 'horreum/class_methods'
 require_relative 'horreum/commands'
+require_relative 'horreum/connection'
 require_relative 'horreum/serialization'
 require_relative 'horreum/settings'
 require_relative 'horreum/utils'

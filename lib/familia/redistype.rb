@@ -125,6 +125,7 @@ module Familia
     end
 
     def redis
+      return Fiber[:familia_transaction] if Fiber[:familia_transaction]
       return @redis if @redis
 
       parent? ? parent.redis : Familia.redis(opts[:db])
