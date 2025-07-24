@@ -25,6 +25,12 @@ module Familia
     # @return [Boolean] Whether Redis command counter is enabled
     attr_accessor :enable_redis_counter
 
+    # @return [Proc] A callable that provides Redis connections
+    attr_accessor :connection_provider
+
+    # @return [Boolean] Whether to require external connections (no fallback)
+    attr_accessor :connection_required
+
     # Sets the default URI for Redis connections.
     #
     # NOTE: uri is not a property of the Settings module b/c it's not
@@ -89,11 +95,24 @@ module Familia
     # @example
     #   Familia.redis('redis://localhost:6379/1')
     #   Familia.redis(2)  # Use DB 2 with default server
-    def redis(*)
-      if Thread.current.key?(:familia_connection)
-        Thread.current[:familia_connection]
+    def redis(uri = nil)
+      # First priority: Thread-local connection (middleware pattern)
+      return Thread.current[:familia_connection] if Thread.current.key?(:familia_connection)
+
+      # Second priority: Connection provider
+      if connection_provider
+        return connection_provider.call(uri)
+      end
+
+      # Third priority: Fallback behavior or error
+      if connection_required
+        raise Familia::NoConnectionAvailable, "No connection available. Set Familia.connection_provider or use middleware to provide connections."
       else
-        @redis ||= connect(*)
+        # Legacy behavior: create connection
+        parsed_uri = normalize_uri(uri)
+        @redis ||= connect(parsed_uri)
+        @redis.select(parsed_uri.db) if parsed_uri.db
+        @redis
       end
     end
 

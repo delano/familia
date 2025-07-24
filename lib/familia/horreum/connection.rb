@@ -19,6 +19,10 @@ module Familia
         Fiber[:familia_transaction] || @redis || Familia.redis(uri || db)
       end
 
+      def connect(*)
+        Familia.connect(*)
+      end
+
       def uri=(uri)
         @uri = normalize_uri(uri)
       end

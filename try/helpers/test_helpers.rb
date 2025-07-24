@@ -31,7 +31,7 @@ class Blone < Familia::Horreum
 end
 
 class Customer < Familia::Horreum
-  db 15 # don't use Onetime's default DB
+  db 15 # Use something other than the default DB
   ttl 5.years
 
   feature :safe_dump

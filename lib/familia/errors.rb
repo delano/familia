@@ -31,6 +31,8 @@ module Familia
     end
   end
 
+  class NoConnectionAvailable < Problem; end
+
   # Raised when attempting to refresh an object whose key doesn't exist in Redis
   class KeyNotFoundError < Problem
     attr_reader :key

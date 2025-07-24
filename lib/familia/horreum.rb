@@ -298,11 +298,13 @@ module Familia
     #   # => #<Redis client v4.5.1 for redis://localhost:6379/0>
     #
     def redis
-      Fiber[:familia_transaction] || @redis || self.class.redis
+      conn = Fiber[:familia_transaction] || @redis || self.class.redis
+      # conn.select(self.class.db)
+      conn
     end
 
     def generate_id
-      @objid ||= Familia.generate_id
+      @objid ||= Familia.generate_id # rubocop:disable Naming/MemoizedInstanceVariableName
     end
 
     # The principle is: **If Familia objects have `to_s`, then they should work
@@ -326,3 +328,6 @@ require_relative 'horreum/connection'
 require_relative 'horreum/serialization'
 require_relative 'horreum/settings'
 require_relative 'horreum/utils'
+
+# Include Connection module for instance methods after it's loaded
+Familia::Horreum.include(Familia::Horreum::Connection)
