@@ -16,6 +16,9 @@ module Familia
     # @return [URI] The default URI for Redis connections
     attr_reader :uri
 
+    # @return [Hash] A hash of Redis clients, keyed by server ID
+    attr_reader :redis_clients
+
     # @return [Boolean] Whether Redis command logging is enabled
     attr_accessor :enable_redis_logging
 
@@ -46,6 +49,7 @@ module Familia
     #   Familia.connect('redis://localhost:6379')
     def connect(uri = nil)
       parsed_uri = normalize_uri(uri)
+      serverid = parsed_uri.serverid
 
       if Familia.enable_redis_logging
         RedisLogger.logger = Familia.logger
@@ -65,7 +69,7 @@ module Familia
         Familia.warn(msg)
       end
 
-      @redis_clients[uri.serverid] = redis
+      @redis_clients[serverid] = redis
     end
 
     def reconnect(uri = nil)
@@ -177,25 +181,24 @@ module Familia
       block_result
     end
 
-  private
+    private
 
     # Normalizes various URI formats to a consistent URI object
     def normalize_uri(uri)
       case uri
       when Integer
-        # DB number with default server
-        familia_uri = Familia.uri.dup
-        familia_uri.db = uri
-        familia_uri
-      when String
+        new_uri = Familia.uri.dup
+        new_uri.db = uri
+        new_uri
+      when ->(obj) { obj.is_a?(String) || obj.instance_of?(::String) }
         URI.parse(uri)
       when URI
         uri
       when nil
         Familia.uri
       else
-        raise ArgumentError, "Invalid URI type: #{uri.class}"
+        raise ArgumentError, "Invalid URI type: #{uri.class.name}"
       end
     end
-end
+  end
 end

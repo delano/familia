@@ -282,6 +282,10 @@ module Familia
       unique_id
     end
 
+    def generate_id
+      @objid ||= Familia.generate_id
+    end
+
     # The principle is: **If Familia objects have `to_s`, then they should work
     # everywhere strings are expected**, including as Redis hash field names.
     def to_s
