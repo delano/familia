@@ -33,11 +33,11 @@ require_relative 'familia/version'
 #
 module Familia
 
-  @debug = ENV['FAMILIA_DEBUG'].to_s.match?(/^(true|1)$/i).freeze
+  @debug = ENV['FAMILIA_DEBUG'].to_s.downcase.match?(/^(true|1)$/i).freeze
   @members = []
 
   class << self
-    attr_reader :debug
+    attr_accessor :debug
     attr_reader :members
 
     def included(member)

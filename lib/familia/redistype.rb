@@ -14,7 +14,6 @@ module Familia
   class RedisType
     include Familia::Base
     extend Familia::Features
-    prepend Familia::AtomicProxy
 
     @registered_types = {}
     @valid_options = %i[class parent ttl default db key redis suffix prefix]

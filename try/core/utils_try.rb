@@ -71,12 +71,12 @@ key
 
 ## redisuri converts string to Redis URI
 uri_str = 'redis://localhost:6379/1'
-redis_uri = Familia.redisuri(uri_str)
+redis_uri = URI.parse(uri_str)
 [redis_uri.class.name, redis_uri.host, redis_uri.port]
 #=> ["URI::Redis", "localhost", 6379]
 
 ## Can handle nil URI (uses default)
-default_uri = Familia.redisuri(nil)
+default_uri = URI.parse(nil)
 default_uri.class.name
 #=> "URI::Redis"
 

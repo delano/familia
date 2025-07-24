@@ -7,90 +7,78 @@ module Familia
 
   module Utils
 
-  # Checks if debug mode is enabled
-  #
-  # e.g. Familia.debug = true
-  #
-  # @return [Boolean] true if debug mode is on, false otherwise
-  def debug?
-    @debug == true
-  end
+    # Checks if debug mode is enabled
+    #
+    # e.g. Familia.debug = true
+    #
+    # @return [Boolean] true if debug mode is on, false otherwise
+    def debug?
+      @debug == true
+    end
 
-  # Generates a unique ID using SHA256 and base-36 encoding
-  # @param length [Integer] length of the random input in bytes (default: 32)
-  # @param encoding [Integer] base encoding for the output (default: 36)
-  # @return [String] a unique identifier
-  #
-  # @example Generate a default ID
-  #   Familia.generate_id
-  #   # => "kuk79w6uxg81tk0kn5hsl6pr7ic16e9p6evjifzozkda9el6z"
-  #
-  # @example Generate a shorter ID with 16 bytes input
-  #   Familia.generate_id(length: 16)
-  #   # => "z6gqw1b7ftzpvapydkt0iah0h0bev5hkhrs4mkf1gq4nq5csa"
-  #
-  # @example Generate an ID with hexadecimal encoding
-  #   Familia.generate_id(encoding: 16)
-  #   # => "d06a2a70cba543cd2bbd352c925bc30b0a9029ca79e72d6556f8d6d8603d5716"
-  #
-  # @example Generate a shorter ID with custom encoding
-  #   Familia.generate_id(length: 8, encoding: 32)
-  #   # => "193tosc85k3u513do2mtmibchpd2ruh5l3nsp6dnl0ov1i91h7m7"
-  #
-  def generate_id(length: 32, encoding: 36)
-    raise ArgumentError, "Encoding must be between 2 and 36" unless (1..36).include?(encoding)
+    # Generates a unique ID using SHA256 and base-36 encoding
+    # @param length [Integer] length of the random input in bytes (default: 32)
+    # @param encoding [Integer] base encoding for the output (default: 36)
+    # @return [String] a unique identifier
+    #
+    # @example Generate a default ID
+    #   Familia.generate_id
+    #   # => "kuk79w6uxg81tk0kn5hsl6pr7ic16e9p6evjifzozkda9el6z"
+    #
+    # @example Generate a shorter ID with 16 bytes input
+    #   Familia.generate_id(length: 16)
+    #   # => "z6gqw1b7ftzpvapydkt0iah0h0bev5hkhrs4mkf1gq4nq5csa"
+    #
+    # @example Generate an ID with hexadecimal encoding
+    #   Familia.generate_id(encoding: 16)
+    #   # => "d06a2a70cba543cd2bbd352c925bc30b0a9029ca79e72d6556f8d6d8603d5716"
+    #
+    # @example Generate a shorter ID with custom encoding
+    #   Familia.generate_id(length: 8, encoding: 32)
+    #   # => "193tosc85k3u513do2mtmibchpd2ruh5l3nsp6dnl0ov1i91h7m7"
+    #
+    def generate_id(length: 32, encoding: 36)
+      raise ArgumentError, "Encoding must be between 2 and 36" unless (1..36).include?(encoding)
 
-    input = SecureRandom.hex(length)
-    Digest::SHA256.hexdigest(input).to_i(16).to_s(encoding)
-  end
+      input = SecureRandom.hex(length)
+      Digest::SHA256.hexdigest(input).to_i(16).to_s(encoding)
+    end
 
-  # Joins array elements with Familia delimiter
-  # @param val [Array] elements to join
-  # @return [String] joined string
-  def join(*val)
-    val.compact.join(Familia.delim)
-  end
+    # Joins array elements with Familia delimiter
+    # @param val [Array] elements to join
+    # @return [String] joined string
+    def join(*val)
+      val.compact.join(Familia.delim)
+    end
 
-  # Splits a string using Familia delimiter
-  # @param val [String] string to split
-  # @return [Array] split elements
-  def split(val)
-    val.split(Familia.delim)
-  end
+    # Splits a string using Familia delimiter
+    # @param val [String] string to split
+    # @return [Array] split elements
+    def split(val)
+      val.split(Familia.delim)
+    end
 
-  # Creates a Redis key from given values
-  # @param val [Array] elements to join for the key
-  # @return [String] Redis key
-  def rediskey(*val)
-    join(*val)
-  end
+    # Creates a Redis key from given values
+    # @param val [Array] elements to join for the key
+    # @return [String] Redis key
+    def rediskey(*val)
+      join(*val)
+    end
 
-  # Converts a generic URI to a Redis URI
-  # @param uri [String, URI] URI to convert
-  # @return [URI::Redis] Redis URI object
-  def redisuri(uri)
-    uri ||= Familia.uri
-    generic_uri = URI.parse(uri.to_s)
+    # Gets server ID without DB component for pool identification
+    def serverid(uri)
+      # Create a copy of URI without DB for server identification
+      uri = uri.dup
+      uri.db = nil
+      uri.serverid
+    end
 
-    # Create a new URI::Redis object
-    URI::Redis.build(
-      scheme: generic_uri.scheme,
-      userinfo: generic_uri.userinfo,
-      host: generic_uri.host,
-      port: generic_uri.port,
-      path: generic_uri.path, # the db is stored in the path
-      query: generic_uri.query,
-      fragment: generic_uri.fragment
-    )
-  end
-
-  # Returns current time in UTC as a float
-  # @param name [Time] time object (default: current time)
-  # @return [Float] time in seconds since epoch
-  def Familia.now(name = Time.now)
-    name.utc.to_f
-  end
-
+    # Returns current time in UTC as a float
+    # @param name [Time] time object (default: current time)
+    # @return [Float] time in seconds since epoch
+    def now(name = Time.now)
+      name.utc.to_f
+    end
 
     # A quantized timestamp
     #
