@@ -3,6 +3,9 @@
 require_relative '../../lib/redis_middleware'
 require_relative 'multi_result'
 
+# Familia
+#
+# A family warehouse for your redis data.
 #
 module Familia
   @uri = URI.parse 'redis://127.0.0.1:6379'
@@ -12,7 +15,6 @@ module Familia
   # It allows easy setup and access to Redis clients across different URIs
   # with robust connection pooling for thread safety.
   module Connection
-
     # @return [URI] The default URI for Redis connections
     attr_reader :uri
 
@@ -63,8 +65,8 @@ module Familia
       end
 
       if Familia.enable_redis_counter
-        # NOTE: This middleware stays thread-safe with a mutex so it will
-        # be a bottleneck when enabled in multi-threaded environments.
+        # NOTE: This middleware uses AtommicFixnum from concurrent-ruby which is
+        # less contentious than Mutex-based counters. Safe for
         RedisClient.register(RedisCommandCounter)
       end
 
@@ -100,20 +102,16 @@ module Familia
       return Thread.current[:familia_connection] if Thread.current.key?(:familia_connection)
 
       # Second priority: Connection provider
-      if connection_provider
-        return connection_provider.call(uri)
-      end
+      return connection_provider.call(uri) if connection_provider
 
       # Third priority: Fallback behavior or error
-      if connection_required
-        raise Familia::NoConnectionAvailable, "No connection available. Set Familia.connection_provider or use middleware to provide connections."
-      else
-        # Legacy behavior: create connection
-        parsed_uri = normalize_uri(uri)
-        @redis ||= connect(parsed_uri)
-        @redis.select(parsed_uri.db) if parsed_uri.db
-        @redis
-      end
+      raise Familia::NoConnectionAvailable, 'No connection available.' if connection_required
+
+      # Legacy behavior: create connection
+      parsed_uri = normalize_uri(uri)
+      @redis ||= connect(parsed_uri)
+      @redis.select(parsed_uri.db) if parsed_uri.db
+      @redis
     end
 
     # Executes Redis commands atomically within a transaction (MULTI/EXEC).
