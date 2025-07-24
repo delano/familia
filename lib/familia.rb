@@ -60,13 +60,11 @@ module Familia
 
   require_relative 'familia/logging'
   require_relative 'familia/connection'
-  require_relative 'familia/atomic'
   require_relative 'familia/settings'
   require_relative 'familia/utils'
 
   extend Logging
   extend Connection
-  extend Atomic
   extend Settings
   extend Utils
 end

@@ -23,7 +23,6 @@ module Familia
   #
   class Horreum
     include Familia::Base
-    prepend Familia::AtomicProxy
 
     # Singleton Class Context
     #
