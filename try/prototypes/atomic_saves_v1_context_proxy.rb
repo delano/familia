@@ -75,34 +75,34 @@ class ContextProxyBone < Bone
 end
 
 
-Familia.connect # Important, it registers RedisCommandCounter
+Familia.connect # Important, it registers DatabaseCommandCounter
 
 @bone = Bone.new('test123', 'test')
 @proxy = ContextAwareRedisProxy.new(@bone.redis)
 @bone.delete! # Causes tryouts issues
 
 ## Baseline behavior shows immediate execution (coupled)
-redis_count_before = RedisCommandCounter.count
+redis_count_before = DatabaseCommandCounter.count
 @proxy.hset(@bone.dbkey, 'test_field', 'test_value')
-redis_count_after = RedisCommandCounter.count
+redis_count_after = DatabaseCommandCounter.count
 redis_count_after > redis_count_before
 #=> true
 
 ## Context-aware proxy queues commands instead of executing
 @proxy.call_log.clear
 Fiber[:atomic_context] = []
-redis_count_before = RedisCommandCounter.count
+redis_count_before = DatabaseCommandCounter.count
 result = @proxy.hset(@bone.dbkey, 'test_field2', 'test_value2')
-redis_count_after = RedisCommandCounter.count
+redis_count_after = DatabaseCommandCounter.count
 [result, redis_count_after == redis_count_before, Fiber[:atomic_context].size > 0]
 #=> [:queued, true, true]
 
 ## Queued commands can be executed later
-redis_count_before = RedisCommandCounter.count
+redis_count_before = DatabaseCommandCounter.count
 Fiber[:atomic_context].each do |cmd|
   @bone.redis.send(cmd[:method], *cmd[:args], **cmd[:kwargs])
 end
-redis_count_after = RedisCommandCounter.count
+redis_count_after = DatabaseCommandCounter.count
 executed = redis_count_after > redis_count_before
 field_exists = @bone.redis.hexists(@bone.dbkey, 'test_field2')
 [executed, field_exists]

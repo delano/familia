@@ -1,8 +1,8 @@
-# lib/redis_middleware.rb
+# lib/middleware/database_middleware.rb
 
 require 'concurrent-ruby'
 
-# RedisLogger is RedisClient middleware.
+# DatabaseLogger is RedisClient middleware.
 #
 # This middleware addresses the need for detailed Redis command logging, which
 # was removed from the redis-rb gem due to performance concerns. However, in
@@ -10,8 +10,8 @@ require 'concurrent-ruby'
 # can be invaluable.
 #
 # @example Enable Redis command logging
-#   RedisLogger.logger = Logger.new(STDOUT)
-#   RedisClient.register(RedisLogger)
+#   DatabaseLogger.logger = Logger.new(STDOUT)
+#   RedisClient.register(DatabaseLogger)
 #
 # @see https://github.com/redis-rb/redis-client?tab=readme-ov-file#instrumentation-and-middlewares
 #
@@ -20,11 +20,11 @@ require 'concurrent-ruby'
 #   easily enabled or disabled as needed. The performance impact is minimal
 #   when logging is disabled, and the benefits during development and debugging
 #   often outweigh the slight performance cost when enabled.
-module RedisLogger
+module DatabaseLogger
   @logger = nil
 
   class << self
-    # Gets/sets the logger instance used by RedisLogger.
+    # Gets/sets the logger instance used by DatabaseLogger.
     # @return [Logger, nil] The current logger instance or nil if not set.
     attr_accessor :logger
   end
@@ -44,30 +44,30 @@ module RedisLogger
   #   is set, the minimal overhead is often offset by the valuable insights
   #   gained during development and debugging.
   def call(command, redis_config)
-    return yield unless RedisLogger.logger
+    return yield unless DatabaseLogger.logger
 
     start = Process.clock_gettime(Process::CLOCK_MONOTONIC, :microsecond)
     result = yield
     duration = Process.clock_gettime(Process::CLOCK_MONOTONIC, :microsecond) - start
-    RedisLogger.logger.debug("Redis: #{command.inspect} (#{duration}µs)")
+    DatabaseLogger.logger.debug("Redis: #{command.inspect} (#{duration}µs)")
     result
   end
 end
 
-# RedisCommandCounter is RedisClient middleware.
+# DatabaseCommandCounter is RedisClient middleware.
 #
 # This middleware counts the number of Redis commands executed. It can be
 # useful for performance monitoring and debugging, allowing you to track
 # the volume of Redis operations in your application.
 #
 # @example Enable Redis command counting
-#   RedisCommandCounter.reset
-#   RedisClient.register(RedisCommandCounter)
+#   DatabaseCommandCounter.reset
+#   RedisClient.register(DatabaseCommandCounter)
 #
 # @see https://github.com/redis-rb/redis-client?tab=readme-ov-file#instrumentation-and-middlewares
 #
 # rubocop:disable ThreadSafety/ClassInstanceVariable
-module RedisCommandCounter
+module DatabaseCommandCounter
   @count = Concurrent::AtomicFixnum.new(0)
 
   # We skip SELECT because depending on how the Familia is connecting to redis
@@ -116,7 +116,7 @@ module RedisCommandCounter
     # @return [Integer] The number of Redis commands executed within the block.
     #
     # @example Count commands in a block
-    #   commands_executed = RedisCommandCounter.count_commands do
+    #   commands_executed = DatabaseCommandCounter.count_commands do
     #     redis.set('key1', 'value1')
     #     redis.get('key1')
     #   end
@@ -130,7 +130,7 @@ module RedisCommandCounter
   end
 
   def klass
-    RedisCommandCounter
+    DatabaseCommandCounter
   end
 
   # Counts the Redis command and delegates its execution.

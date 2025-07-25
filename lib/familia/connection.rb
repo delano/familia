@@ -1,6 +1,6 @@
 # lib/familia/connection.rb
 
-require_relative '../../lib/redis_middleware'
+require_relative '../../lib/middleware/database_middleware'
 require_relative 'multi_result'
 
 # Familia
@@ -60,14 +60,14 @@ module Familia
       serverid = parsed_uri.serverid
 
       if Familia.enable_redis_logging
-        RedisLogger.logger = Familia.logger
-        RedisClient.register(RedisLogger)
+        DatabaseLogger.logger = Familia.logger
+        RedisClient.register(DatabaseLogger)
       end
 
       if Familia.enable_redis_counter
         # NOTE: This middleware uses AtommicFixnum from concurrent-ruby which is
         # less contentious than Mutex-based counters. Safe for
-        RedisClient.register(RedisCommandCounter)
+        RedisClient.register(DatabaseCommandCounter)
       end
 
       redis = Redis.new(parsed_uri.conf)

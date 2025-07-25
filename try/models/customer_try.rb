@@ -127,7 +127,7 @@ Customer.uri
 #=> nil
 
 ## Customer.destroy! makes only one call to Redis
-RedisCommandCounter.count_commands { @customer.destroy! }
+DatabaseCommandCounter.count_commands { @customer.destroy! }
 #=> 1
 
 ## Customer.logical_database returns the correct database number

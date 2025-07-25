@@ -42,7 +42,7 @@ Layout/SpaceAfterComma:
 Lint/UnusedMethodArgument:
   Exclude:
     - "lib/familia/base.rb"
-    - "lib/redis_middleware.rb"
+    - "lib/middleware/database_middleware.rb"
 
 # Offense count: 1
 # Configuration parameters: CountComments, CountAsOne, AllowedMethods, AllowedPatterns.
@@ -201,7 +201,7 @@ ThreadSafety/ClassAndModuleAttributes:
   Exclude:
     - "lib/familia/base.rb"
     - "lib/familia/horreum.rb"
-    - "lib/redis_middleware.rb"
+    - "lib/middleware/database_middleware.rb"
 
 # Offense count: 29
 ThreadSafety/ClassInstanceVariable:
