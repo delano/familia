@@ -1,5 +1,5 @@
-# rubocop:disable all
-#
+# lib/familia/horreum/commands.rb
+
 module Familia
   # InstanceMethods - Module containing instance-level methods for Familia
   #

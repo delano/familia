@@ -1,4 +1,4 @@
-# rubocop:disable all
+# lib/familia/redistype/serialization.rb
 
 class Familia::RedisType
 

@@ -1,4 +1,4 @@
-# rubocop:disable all
+# lib/familia/features/quantization.rb
 
 module Familia::Features
 

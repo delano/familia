@@ -1,4 +1,4 @@
-# rubocop:disable all
+# lib/familia/redistype.rb
 
 require_relative 'redistype/commands'
 require_relative 'redistype/serialization'

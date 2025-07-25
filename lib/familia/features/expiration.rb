@@ -1,5 +1,4 @@
-# rubocop:disable all
-# frozen_string_literal: true
+# lib/familia/features/expiration.rb
 
 
 module Familia::Features

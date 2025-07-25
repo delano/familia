@@ -1,4 +1,4 @@
-# rubocop:disable all
+# lib/familia/redistype/commands.rb
 
 class Familia::RedisType
 

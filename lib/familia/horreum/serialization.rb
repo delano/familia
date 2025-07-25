@@ -1,4 +1,4 @@
-# rubocop:disable all
+# lib/familia/horreum/serialization.rb
 #
 module Familia
 

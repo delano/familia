@@ -1,4 +1,4 @@
-# rubocop:disable all
+# lib/familia/logging.rb
 
 require 'pathname'
 require 'logger'

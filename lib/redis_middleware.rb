@@ -1,4 +1,4 @@
-# frozen_string_literal: true
+# lib/redis_middleware.rb
 
 require 'concurrent-ruby'
 

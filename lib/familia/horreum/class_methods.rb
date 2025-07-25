@@ -1,4 +1,4 @@
-# frozen_string_literal: true
+# lib/familia/horreum/class_methods.rb
 
 require_relative 'relations_management'
 

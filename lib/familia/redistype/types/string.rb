@@ -1,4 +1,4 @@
-# frozen_string_literal: true
+# lib/familia/redistype/types/string.rb
 
 module Familia
   class String < RedisType

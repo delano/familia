@@ -1,4 +1,4 @@
-# frozen_string_literal: true
+# lib/familia/redistype/types/hashkey.rb
 
 module Familia
   class HashKey < RedisType

@@ -1,4 +1,4 @@
-# rubocop:disable all
+# lib/familia/utils.rb
 
 require 'securerandom'
 

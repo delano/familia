@@ -1,4 +1,4 @@
-# rubocop:disable all
+# lib/familia/settings.rb
 
 module Familia
 

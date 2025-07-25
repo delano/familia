@@ -1,5 +1,5 @@
-# frozen_string_literal: true
-
+# lib/familia/errors.rb
+#
 module Familia
   class Problem < RuntimeError; end
   class NoIdentifier < Problem; end

@@ -1,4 +1,4 @@
-# frozen_string_literal: true
+# lib/familia/redistype/types/list.rb
 
 module Familia
   class List < RedisType

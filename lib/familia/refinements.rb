@@ -1,4 +1,4 @@
-# frozen_string_literal: true
+# lib/familia/refinements.rb
 
 require 'pathname'
 require 'logger'

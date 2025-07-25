@@ -1,4 +1,4 @@
-# frozen_string_literal: true
+# lib/familia/redistype/types/sorted_set.rb
 
 module Familia
   class SortedSet < RedisType

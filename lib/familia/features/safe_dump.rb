@@ -1,5 +1,4 @@
-# rubocop:disable all
-# frozen_string_literal: true
+# lib/familia/features/safe_dump.rb
 
 
 module Familia::Features
