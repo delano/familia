@@ -4,7 +4,7 @@ require_relative 'lib/familia/version'
 
 Gem::Specification.new do |spec|
   spec.name        = 'familia'
-  spec.version     = Familia::VERSION.to_s
+  spec.version     = Familia::VERSION
   spec.summary     = 'An ORM for Redis in Ruby.'
   spec.description = "Familia: #{spec.summary}. Organize and store ruby objects in Redis"
   spec.authors     = ['Delano Mandelbaum']
