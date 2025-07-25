@@ -9,6 +9,7 @@
 *.log
 *.md
 !README.md
+!CLAUDE.md
 *.txt
 !LICENSE.txt
 .ruby-version
