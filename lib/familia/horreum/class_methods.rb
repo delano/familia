@@ -43,7 +43,18 @@ module Familia
       # @return [Object] the current identifier field.
       #
       def identifier_field(val = nil)
-        @identifier_field = val if val
+        if val
+          # Validate identifier field definition at class definition time
+          case val
+          when Symbol, String, Proc
+            @identifier_field = val
+          else
+            raise Problem, <<~ERROR
+              Invalid identifier field definition: #{val.inspect}.
+              Use a field name (Symbol/String) or Proc.
+            ERROR
+          end
+        end
         @identifier_field
       end
 

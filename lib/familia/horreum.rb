@@ -253,22 +253,12 @@ module Familia
       definition = self.class.identifier_field
       return nil if definition.nil?
 
-      # When definition is a symbol or string, assume it's an instance method
-      # to call on the object to get the unique identifier. When it's a callable
-      # object, call it with the object as the argument. When it's an array,
-      # call each method in turn and join the results.
+      # Call the identifier field or proc (validation already done at class definition time)
       unique_id = case definition
                   when Symbol, String
                     send(definition)
                   when Proc
                     definition.call(self)
-                  when Array
-                    values = definition.map { |method| send(method) }
-                    # Return nil if any component is nil (incomplete identifier)
-                    return nil if values.any?(&:nil?)
-                    Familia.join(values)
-                  else
-                    raise Problem, "Invalid identifier definition: #{definition.inspect}"
                   end
 
       # Return nil for unpopulated identifiers (like unsaved ActiveRecord objects)

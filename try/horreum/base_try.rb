@@ -108,3 +108,11 @@ end
 #=/=> _.empty?
 #==> _.size > 16
 #=~>/\A[0-9a-z]+\z/
+
+## Array-based identifiers are no longer supported and raise clear errors at class definition time
+class ArrayIdentifierTest < Familia::Horreum
+  identifier_field [:token, :name]  # This should raise an error immediately
+  field :token
+  field :name
+end
+#=!> Familia::Problem

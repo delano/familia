@@ -1,12 +1,9 @@
 # try/datatypes/base_try.rb
 
-
 require_relative '../../lib/familia'
 require_relative '../helpers/test_helpers'
 
-
 @limiter1 = Limiter.new :requests
-
 
 ## Database Types are unique per instance of a Familia class
 @a = Bone.new 'atoken1', :name1
