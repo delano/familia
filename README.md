@@ -164,6 +164,29 @@ user.transaction do |conn|
 end
 ```
 
+### 12. Connection Management and Pooling
+
+Familia supports custom connection providers for advanced scenarios like connection pooling:
+
+```ruby
+# Using connection_pool gem for thread-safe pooling
+require 'connection_pool'
+
+# Create pools for each logical database
+pools = {
+  "redis://localhost:6379/0" => ConnectionPool.new(size: 10) { Redis.new(db: 0) },
+  "redis://localhost:6379/1" => ConnectionPool.new(size: 5) { Redis.new(db: 1) }
+}
+
+# Configure Familia to use the pools
+Familia.connection_provider = lambda do |uri|
+  pool = pools[uri] || pools["redis://localhost:6379/0"]
+  pool.with { |conn| conn }
+end
+```
+
+See the [Connection Pooling Guide](docs/connection_pooling.md) for detailed examples.
+
 
 ## Usage Examples
 
