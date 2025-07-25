@@ -16,7 +16,7 @@ module Familia
     extend Familia::Features
 
     @registered_types = {}
-    @valid_options = %i[class parent default_expiration default logical_database key redis suffix prefix]
+    @valid_options = %i[class parent default_expiration default logical_database dbkey dbclient suffix prefix]
     @logical_database = nil
 
     feature :expiration
@@ -89,9 +89,9 @@ module Familia
     #
     # :default => the default value (String-only)
     #
-    # :logical_database => the logical database index to use (ignored if :redis is used).
+    # :logical_database => the logical database index to use (ignored if :dbclient is used).
     #
-    # :redis => an instance of database client.
+    # :dbclient => an instance of database client.
     #
     # :dbkey => a hardcoded key to use instead of the deriving the from
     # the name and parent (e.g. a derived key: customer:custid:secret_counter).
@@ -99,8 +99,8 @@ module Familia
     # :suffix => the suffix to use for the key (e.g. 'scores' in customer:custid:scores).
     # :prefix => the prefix to use for the key (e.g. 'customer' in customer:custid:scores).
     #
-    # Connection precendence: uses the redis connection of the parent or the
-    # value of opts[:redis] or Familia.redis (in that order).
+    # Connection precendence: uses the database connection of the parent or the
+    # value of opts[:dbclient] or Familia.dbclient (in that order).
     def initialize(keystring, opts = {})
       #Familia.ld " [initializing] #{self.class} #{opts}"
       @keystring = keystring
@@ -124,11 +124,11 @@ module Familia
       init if respond_to? :init
     end
 
-    def redis
+    def dbclient
       return Fiber[:familia_transaction] if Fiber[:familia_transaction]
-      return @redis if @redis
+      return @dbclient if @dbclient
 
-      parent? ? parent.redis : Familia.redis(opts[:logical_database])
+      parent? ? parent.dbclient : Familia.dbclient(opts[:logical_database])
     end
 
     # Produces the full dbkey for this object.
@@ -176,7 +176,7 @@ module Familia
         parent.dbkey(keystring, nil)
       else
         # This is a standalone DataType object where it's keystring
-        # is the full redis key.
+        # is the full database key (dbkey).
         keystring
       end
     end

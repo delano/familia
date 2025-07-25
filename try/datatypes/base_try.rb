@@ -43,7 +43,7 @@ p [@limiter1.counter.parent.default_expiration, @limiter2.counter.parent.default
 ## tryouts is disabled b/c `DataType#dbkey` takes no args
 ## and relies on the `class Limiter` definition in test_helpers.rb
 ## for the `:quantize` option. The quantized suffix for the Limiter
-## class is `'%H:%M'` so its redis keys will always look like that.
+## class is `'%H:%M'` so its dbkeys will always look like that.
 @limiter2.counter.dbkey
 ##=> "v1:limiter:requests:counter:1302468600"
 

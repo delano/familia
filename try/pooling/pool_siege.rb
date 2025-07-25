@@ -276,7 +276,7 @@ class PoolSiege
     profile_data = {
       operation_times: [],
       connection_wait_times: [],
-      redis_operation_times: [],
+      database_operation_times: [],
       method_counts: Hash.new(0)
     }
 
@@ -299,7 +299,7 @@ class PoolSiege
           self.current_transaction = nil
         end
         op_end = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-        profile_data[:redis_operation_times] << (op_end - op_start) * 1000
+        profile_data[:database_operation_times] << (op_end - op_start) * 1000
       end
 
       end_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
@@ -349,12 +349,12 @@ class PoolSiege
         f.puts ""
       end
 
-      if profile_data[:redis_operation_times].any?
+      if profile_data[:database_operation_times].any?
         f.puts "Database Operation Time (ms):"
-        f.puts "  Average: #{(profile_data[:redis_operation_times].sum / profile_data[:redis_operation_times].size).round(3)}"
-        f.puts "  Min: #{profile_data[:redis_operation_times].min.round(3)}"
-        f.puts "  Max: #{profile_data[:redis_operation_times].max.round(3)}"
-        f.puts "  P95: #{percentile(profile_data[:redis_operation_times], 0.95).round(3)}"
+        f.puts "  Average: #{(profile_data[:database_operation_times].sum / profile_data[:database_operation_times].size).round(3)}"
+        f.puts "  Min: #{profile_data[:database_operation_times].min.round(3)}"
+        f.puts "  Max: #{profile_data[:database_operation_times].max.round(3)}"
+        f.puts "  P95: #{percentile(profile_data[:database_operation_times], 0.95).round(3)}"
       end
     end
 
@@ -503,7 +503,7 @@ end
 # Initialize Familia and run
 if __FILE__ == $0
   Familia.debug = false
-  BankAccount.redis.flushdb
+  BankAccount.dbclient.flushdb
 
   PoolSiege.new(ARGV).run
 end

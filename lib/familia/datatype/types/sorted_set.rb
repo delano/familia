@@ -5,7 +5,7 @@ module Familia
     # Returns the number of elements in the sorted set
     # @return [Integer] number of elements
     def element_count
-      redis.zcard dbkey
+      dbclient.zcard dbkey
     end
     alias size element_count
 
@@ -46,32 +46,32 @@ module Familia
     end
 
     def add(score, val)
-      ret = redis.zadd dbkey, score, serialize_value(val)
+      ret = dbclient.zadd dbkey, score, serialize_value(val)
       update_expiration
       ret
     end
 
     def score(val)
-      ret = redis.zscore dbkey, serialize_value(val, strict_values: false)
+      ret = dbclient.zscore dbkey, serialize_value(val, strict_values: false)
       ret&.to_f
     end
     alias [] score
 
     def member?(val)
-      Familia.trace :MEMBER, redis, "#{val}<#{val.class}>", caller(1..1) if Familia.debug?
+      Familia.trace :MEMBER, dbclient, "#{val}<#{val.class}>", caller(1..1) if Familia.debug?
       !rank(val).nil?
     end
     alias include? member?
 
     # rank of member +v+ when ordered lowest to highest (starts at 0)
     def rank(v)
-      ret = redis.zrank dbkey, serialize_value(v, strict_values: false)
+      ret = dbclient.zrank dbkey, serialize_value(v, strict_values: false)
       ret&.to_i
     end
 
     # rank of member +v+ when ordered highest to lowest (starts at 0)
     def revrank(v)
-      ret = redis.zrevrank dbkey, serialize_value(v, strict_values: false)
+      ret = dbclient.zrevrank dbkey, serialize_value(v, strict_values: false)
       ret&.to_i
     end
 
@@ -140,12 +140,12 @@ module Familia
     def rangeraw(sidx, eidx, opts = {})
       # NOTE: :withscores (no underscore) is the correct naming for the
       # redis-4.x gem. We pass :withscores through explicitly b/c
-      # redis.zrange et al only accept that one optional argument.
+      # dbclient.zrange et al only accept that one optional argument.
       # Passing `opts`` through leads to an ArgumentError:
       #
       #   sorted_sets.rb:374:in `zrevrange': wrong number of arguments (given 4, expected 3) (ArgumentError)
       #
-      redis.zrange(dbkey, sidx, eidx, **opts)
+      dbclient.zrange(dbkey, sidx, eidx, **opts)
     end
 
     def revrange(sidx, eidx, opts = {})
@@ -155,7 +155,7 @@ module Familia
     end
 
     def revrangeraw(sidx, eidx, opts = {})
-      redis.zrevrange(dbkey, sidx, eidx, **opts)
+      dbclient.zrevrange(dbkey, sidx, eidx, **opts)
     end
 
     # e.g. obj.metrics.rangebyscore (now-12.hours), now, :limit => [0, 10]
@@ -167,7 +167,7 @@ module Familia
 
     def rangebyscoreraw(sscore, escore, opts = {})
       echo :rangebyscoreraw, caller(1..1).first if Familia.debug
-      redis.zrangebyscore(dbkey, sscore, escore, **opts)
+      dbclient.zrangebyscore(dbkey, sscore, escore, **opts)
     end
 
     # e.g. obj.metrics.revrangebyscore (now-12.hours), now, :limit => [0, 10]
@@ -180,19 +180,19 @@ module Familia
     def revrangebyscoreraw(sscore, escore, opts = {})
       echo :revrangebyscoreraw, caller(1..1).first if Familia.debug
       opts[:with_scores] = true if opts[:withscores]
-      redis.zrevrangebyscore(dbkey, sscore, escore, opts)
+      dbclient.zrevrangebyscore(dbkey, sscore, escore, opts)
     end
 
     def remrangebyrank(srank, erank)
-      redis.zremrangebyrank dbkey, srank, erank
+      dbclient.zremrangebyrank dbkey, srank, erank
     end
 
     def remrangebyscore(sscore, escore)
-      redis.zremrangebyscore dbkey, sscore, escore
+      dbclient.zremrangebyscore dbkey, sscore, escore
     end
 
     def increment(val, by = 1)
-      redis.zincrby(dbkey, by, val).to_i
+      dbclient.zincrby(dbkey, by, val).to_i
     end
     alias incr increment
     alias incrby increment
@@ -207,13 +207,13 @@ module Familia
     # @param value The value to remove from the sorted set
     # @return [Integer] The number of members that were removed (0 or 1)
     def remove_element(value)
-      Familia.trace :REMOVE_ELEMENT, redis, "#{value}<#{value.class}>", caller(1..1) if Familia.debug?
+      Familia.trace :REMOVE_ELEMENT, dbclient, "#{value}<#{value.class}>", caller(1..1) if Familia.debug?
       # We use `strict_values: false` here to allow for the deletion of values
       # that are in the sorted set. If it's a horreum object, the value is
       # the identifier and not a serialized version of the object. So either
       # the value exists in the sorted set or it doesn't -- we don't need to
       # raise an error if it's not found.
-      redis.zrem dbkey, serialize_value(value, strict_values: false)
+      dbclient.zrem dbkey, serialize_value(value, strict_values: false)
     end
     alias remove remove_element # deprecated
 

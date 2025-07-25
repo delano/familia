@@ -6,7 +6,7 @@ module Familia
   class Horreum
     # Class-level instance variables
     # These are set up as nil initially and populated later
-    @redis = nil # TODO
+    @dbclient = nil # TODO
     @identifier = nil
     @default_expiration = nil
     @logical_database = nil
@@ -133,12 +133,12 @@ module Familia
           val = args.first
 
           # If no value is provided to this fast attribute method, make a call
-          # to redis to return the current stored value of the hash field.
+          # to the db to return the current stored value of the hash field.
           return hget name if val.nil?
 
           begin
             # Trace the operation if debugging is enabled.
-            Familia.trace :FAST_WRITER, redis, "#{name}: #{val.inspect}", caller(1..1) if Familia.debug?
+            Familia.trace :FAST_WRITER, dbclient, "#{name}: #{val.inspect}", caller(1..1) if Familia.debug?
 
             # Convert the provided value to a format suitable for Database storage.
             prepared = serialize_value(val)
@@ -178,7 +178,7 @@ module Familia
       end
 
       def logical_database(v = nil)
-        Familia.trace :DB, Familia.redis, "#{@logical_database} #{v}", caller(1..1) if Familia.debug?
+        Familia.trace :DB, Familia.dbclient, "#{@logical_database} #{v}", caller(1..1) if Familia.debug?
         @logical_database = v unless v.nil?
         @logical_database || parent&.logical_database
       end
@@ -197,7 +197,7 @@ module Familia
       # @param filter [String] dbkey pattern to match (default: '*')
       # @return [Integer] Number of matching keys
       def matching_keys_count(filter = '*')
-        redis.keys(dbkey(filter)).compact.size
+        dbclient.keys(dbkey(filter)).compact.size
       end
       alias size matching_keys_count # For backwards compatibility
 
@@ -264,8 +264,8 @@ module Familia
         ids.collect! { |objid| dbkey(objid) }
         return [] if ids.compact.empty?
 
-        Familia.trace :MULTIGET, redis, "#{ids.size}: #{ids}", caller(1..1) if Familia.debug?
-        redis.mget(*ids)
+        Familia.trace :MULTIGET, dbclient, "#{ids.size}: #{ids}", caller(1..1) if Familia.debug?
+        dbclient.mget(*ids)
       end
 
       # Retrieves and instantiates an object from Database using the full object
@@ -301,10 +301,10 @@ module Familia
 
         # We use a lower-level method here b/c we're working with the
         # full key and not just the identifier.
-        does_exist = redis.exists(objkey).positive?
+        does_exist = dbclient.exists(objkey).positive?
 
         Familia.ld "[.find_by_key] #{self} from key #{objkey} (exists: #{does_exist})"
-        Familia.trace :FROM_KEY, redis, objkey, caller(1..1) if Familia.debug?
+        Familia.trace :FROM_KEY, dbclient, objkey, caller(1..1) if Familia.debug?
 
         # This is the reason for calling exists first. We want to definitively
         # and without any ambiguity know if the object exists in Redis. If it
@@ -313,8 +313,8 @@ module Familia
         # the constructor, which will then be annoying to debug.
         return unless does_exist
 
-        obj = redis.hgetall(objkey) # horreum objects are persisted as redis hashes
-        Familia.trace :FROM_KEY2, redis, "#{objkey}: #{obj.inspect}", caller(1..1) if Familia.debug?
+        obj = dbclient.hgetall(objkey) # horreum objects are persisted as database hashes
+        Familia.trace :FROM_KEY2, dbclient, "#{objkey}: #{obj.inspect}", caller(1..1) if Familia.debug?
 
         new(**obj)
       end
@@ -346,7 +346,7 @@ module Familia
         objkey = dbkey(identifier, suffix)
 
         Familia.ld "[.find_by_id] #{self} from key #{objkey})"
-        Familia.trace :FIND_BY_ID, Familia.redis(uri), objkey, caller(1..1).first if Familia.debug?
+        Familia.trace :FIND_BY_ID, Familia.dbclient(uri), objkey, caller(1..1).first if Familia.debug?
         find_by_key objkey
       end
       alias find find_by_id
@@ -371,10 +371,10 @@ module Familia
 
         objkey = dbkey identifier, suffix
 
-        ret = redis.exists objkey
-        Familia.trace :EXISTS, redis, "#{objkey} #{ret.inspect}", caller(1..1) if Familia.debug?
+        ret = dbclient.exists objkey
+        Familia.trace :EXISTS, dbclient, "#{objkey} #{ret.inspect}", caller(1..1) if Familia.debug?
 
-        ret.positive? # differs from redis API but I think it's okay bc `exists?` is a predicate method.
+        ret.positive? # differs from Valkey API but I think it's okay bc `exists?` is a predicate method.
       end
 
       # Destroys an object in Database with the given identifier.
@@ -397,8 +397,8 @@ module Familia
 
         objkey = dbkey identifier, suffix
 
-        ret = redis.del objkey
-        Familia.trace :DESTROY!, redis, "#{objkey} #{ret.inspect}", caller(1..1) if Familia.debug?
+        ret = dbclient.del objkey
+        Familia.trace :DESTROY!, dbclient, "#{objkey} #{ret.inspect}", caller(1..1) if Familia.debug?
         ret.positive?
       end
 
@@ -415,7 +415,7 @@ module Familia
       #   User.find('active')  # Returns all keys matching user:*:active
       #
       def find_keys(suffix = '*')
-        redis.keys(dbkey('*', suffix)) || []
+        dbclient.keys(dbkey('*', suffix)) || []
       end
 
       # +identifier+ can be a value or an Array of values used to create the index.

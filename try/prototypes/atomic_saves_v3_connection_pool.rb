@@ -33,7 +33,7 @@ require_relative 'lib/atomic_saves_v3_connection_pool_helpers'
 # Familia.debug = false
 
 ## Clean database before tests
-BankAccount.redis.flushdb
+BankAccount.dbclient.flushdb
 #=> "OK"
 
 ## Test 1: Basic atomic operation with proxy approach

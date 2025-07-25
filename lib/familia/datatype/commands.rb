@@ -7,52 +7,52 @@ class Familia::DataType
   module Commands
 
     def move(logical_database)
-      redis.move dbkey, logical_database
+      dbclient.move dbkey, logical_database
     end
 
     def rename(newkey)
-      redis.rename dbkey, newkey
+      dbclient.rename dbkey, newkey
     end
 
     def renamenx(newkey)
-      redis.renamenx dbkey, newkey
+      dbclient.renamenx dbkey, newkey
     end
 
     def type
-      redis.type dbkey
+      dbclient.type dbkey
     end
 
     # Deletes the entire dbkey
     # @return [Boolean] true if the key was deleted, false otherwise
     def delete!
-      Familia.trace :DELETE!, redis, redisuri, caller(1..1) if Familia.debug?
-      ret = redis.del dbkey
+      Familia.trace :DELETE!, dbclient, uri, caller(1..1) if Familia.debug?
+      ret = dbclient.del dbkey
       ret.positive?
     end
     alias clear delete!
 
     def exists?
-      redis.exists(dbkey) && !size.zero?
+      dbclient.exists(dbkey) && !size.zero?
     end
 
     def current_expiration
-      redis.ttl dbkey
+      dbclient.ttl dbkey
     end
 
     def expire(sec)
-      redis.expire dbkey, sec.to_i
+      dbclient.expire dbkey, sec.to_i
     end
 
     def expireat(unixtime)
-      redis.expireat dbkey, unixtime
+      dbclient.expireat dbkey, unixtime
     end
 
     def persist
-      redis.persist dbkey
+      dbclient.persist dbkey
     end
 
     def echo(meth, trace)
-      redis.echo "[#{self.class}\##{meth}] #{trace} (#{@opts[:class]}\#)"
+      dbclient.echo "[#{self.class}\##{meth}] #{trace} (#{@opts[:class]}\#)"
     end
 
   end

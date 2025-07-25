@@ -55,8 +55,8 @@ module Familia
     #
     class << self
       attr_accessor :parent
-      # TODO: Where are we calling redis= from now with connection pool?
-      attr_writer :redis, :dump_method, :load_method
+      # TODO: Where are we calling dbclient= from now with connection pool?
+      attr_writer :dbclient, :dump_method, :load_method
       attr_reader :has_relations
 
       # Extends ClassMethods to subclasses and tracks Familia members
@@ -166,7 +166,7 @@ module Familia
 
         # As a subclass of Familia::Horreum, we add ourselves as the parent
         # automatically. This is what determines the dbkey for DataType
-        # instance and which redis connection.
+        # instance and which database connection.
         #
         #   e.g. If the parent's dbkey is `customer:customer_id:object`
         #     then the dbkey for this DataType instance will be
@@ -199,7 +199,7 @@ module Familia
     #   (i.e., had non-nil values assigned)
     # @private
     def initialize_with_positional_args(*args)
-      Familia.trace :INITIALIZE_ARGS, redis, args, caller(1..1) if Familia.debug?
+      Familia.trace :INITIALIZE_ARGS, dbclient, args, caller(1..1) if Familia.debug?
       self.class.fields.zip(args).filter_map do |field, value|
         if value
           send(:"#{field}=", value)
@@ -218,7 +218,7 @@ module Familia
     #   (i.e., had non-nil values assigned)
     # @private
     def initialize_with_keyword_args(**fields)
-      Familia.trace :INITIALIZE_KWARGS, redis, fields.keys, caller(1..1) if Familia.debug?
+      Familia.trace :INITIALIZE_KWARGS, dbclient, fields.keys, caller(1..1) if Familia.debug?
       self.class.fields.filter_map do |field|
         # Database will give us field names as strings back, but internally
         # we use symbols. So we check for both.
@@ -231,7 +231,7 @@ module Familia
     end
     private :initialize_with_keyword_args
 
-    def initialize_with_keyword_args_from_redis(**fields)
+    def initialize_with_keyword_args_deserialize_value(**fields)
       # Deserialize Database string values back to their original types
       deserialized_fields = fields.transform_values { |value| deserialize_value(value) }
       initialize_with_keyword_args(**deserialized_fields)
@@ -252,7 +252,7 @@ module Familia
     # @return [Array] The list of field names that were updated.
     def optimistic_refresh(**fields)
       Familia.ld "[optimistic_refresh] #{self.class} #{dbkey} #{fields.keys}"
-      initialize_with_keyword_args_from_redis(**fields)
+      initialize_with_keyword_args_deserialize_value(**fields)
     end
 
     # Determines the unique identifier for the instance
@@ -282,22 +282,22 @@ module Familia
       unique_id
     end
 
-    attr_writer :redis
+    attr_writer :dbclient
 
     # Summon the mystical Database connection from the depths of instance or class.
     #
     # This method is like a magical divining rod, always pointing to the nearest
     # source of Database goodness. It first checks if we have a personal Redis
-    # connection (@redis), and if not, it borrows the class's connection.
+    # connection (@dbclient), and if not, it borrows the class's connection.
     #
     # @return [Redis] A shimmering Database connection, ready for your bidding.
     #
     # @example Finding your Database way
-    #   puts object.redis
+    #   puts object.dbclient
     #   # => #<Redis client v5.4.1 for redis://localhost:6379/0>
     #
-    def redis
-      conn = Fiber[:familia_transaction] || @redis || self.class.redis
+    def dbclient
+      conn = Fiber[:familia_transaction] || @dbclient || self.class.dbclient
       # conn.select(self.class.logical_database)
       conn
     end

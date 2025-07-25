@@ -77,7 +77,7 @@ module Familia
       #   It's like Hansel and Gretel, but for data operations!
       #
       def save update_expiration: true
-        Familia.trace :SAVE, redis, redisuri, caller(1..1) if Familia.debug?
+        Familia.trace :SAVE, dbclient, uri, caller(1..1) if Familia.debug?
 
         # Update our object's life story, keeping the mandatory built-in
         # key field in sync with the field that is the chosen identifier.
@@ -111,7 +111,7 @@ module Familia
         update_expiration = kwargs.delete(:update_expiration) { true }
         fields = kwargs
 
-        Familia.trace :BATCH_UPDATE, redis, fields.keys, caller(1..1) if Familia.debug?
+        Familia.trace :BATCH_UPDATE, dbclient, fields.keys, caller(1..1) if Familia.debug?
 
         command_return_values = transaction do |conn|
           fields.each do |field, value|
@@ -239,7 +239,7 @@ module Familia
       # @see #delete! The actual hitman carrying out the deed.
       #
       def destroy!
-        Familia.trace :DESTROY, redis, redisuri, caller(1..1) if Familia.debug?
+        Familia.trace :DESTROY, dbclient, uri, caller(1..1) if Familia.debug?
         delete!
       end
 
@@ -284,8 +284,8 @@ module Familia
       # @example
       #   object.refresh!
       def refresh!
-        Familia.trace :REFRESH, redis, redisuri, caller(1..1) if Familia.debug?
-        raise Familia::KeyNotFoundError, dbkey unless redis.exists(dbkey)
+        Familia.trace :REFRESH, dbclient, uri, caller(1..1) if Familia.debug?
+        raise Familia::KeyNotFoundError, dbkey unless dbclient.exists(dbkey)
         fields = hgetall
         Familia.ld "[refresh!] #{self.class} #{dbkey} fields:#{fields.keys}"
         optimistic_refresh(**fields)
@@ -414,7 +414,6 @@ module Familia
 
         prepared
       end
-      alias to_redis serialize_value
 
       # Converts a Database string value back to its original Ruby type
       #
@@ -440,7 +439,6 @@ module Familia
 
         val
       end
-      alias from_redis deserialize_value
 
     end
 

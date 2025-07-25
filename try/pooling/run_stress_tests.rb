@@ -118,7 +118,7 @@ class StressTestRunner
 
   def run_single_test(config)
     # Clean database
-    BankAccount.redis.flushdb
+    BankAccount.dbclient.flushdb
 
     begin
       if config[:threading_model] == :traditional

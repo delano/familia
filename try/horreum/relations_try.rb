@@ -75,7 +75,7 @@ prefs = @test_user.preferences
 
 ## Can work with Set Database type
 @test_user.tags.clear
-@test_user.tags.add("ruby", "redis", "web")
+@test_user.tags.add("ruby", "valkey", "web")
 @test_user.tags.size
 #=> 3
 

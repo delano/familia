@@ -19,7 +19,7 @@ module Familia
     module Commands
 
       def move(logical_database)
-        redis.move dbkey, logical_database
+        dbclient.move dbkey, logical_database
       end
 
       # Checks if the calling object's key exists in Redis.
@@ -39,7 +39,7 @@ module Familia
       # @note The default behavior maintains backward compatibility by treating empty hashes
       #   as non-existent. Use `check_size: false` for pure key existence checking.
       def exists?(check_size: true)
-        key_exists = self.class.redis.exists?(dbkey)
+        key_exists = self.class.dbclient.exists?(dbkey)
         return key_exists unless check_size
         key_exists && !size.zero?
       end
@@ -47,7 +47,7 @@ module Familia
       # Returns the number of fields in the main object hash
       # @return [Integer] number of fields
       def field_count
-        redis.hlen dbkey
+        dbclient.hlen dbkey
       end
       alias size field_count
 
@@ -57,8 +57,8 @@ module Familia
       #
       def expire(default_expiration = nil)
         default_expiration ||= self.class.default_expiration
-        Familia.trace :EXPIRE, redis, default_expiration, caller(1..1) if Familia.debug?
-        redis.expire dbkey, default_expiration.to_i
+        Familia.trace :EXPIRE, dbclient, default_expiration, caller(1..1) if Familia.debug?
+        dbclient.expire dbkey, default_expiration.to_i
       end
 
       # Retrieves the remaining time to live (TTL) for the object's dbkey.
@@ -69,8 +69,8 @@ module Familia
       # @return [Integer] The TTL of the key in seconds. Returns -1 if the key does not exist
       #   or has no associated expire time.
       def current_expiration
-        Familia.trace :CURRENT_EXPIRATION, redis, redisuri, caller(1..1) if Familia.debug?
-        redis.ttl dbkey
+        Familia.trace :CURRENT_EXPIRATION, dbclient, uri, caller(1..1) if Familia.debug?
+        dbclient.ttl dbkey
       end
 
       # Removes a field from the hash stored at the dbkey.
@@ -78,20 +78,20 @@ module Familia
       # @param field [String] The field to remove from the hash.
       # @return [Integer] The number of fields that were removed from the hash (0 or 1).
       def remove_field(field)
-        Familia.trace :HDEL, redis, field, caller(1..1) if Familia.debug?
-        redis.hdel dbkey, field
+        Familia.trace :HDEL, dbclient, field, caller(1..1) if Familia.debug?
+        dbclient.hdel dbkey, field
       end
       alias remove remove_field # deprecated
 
       def datatype
-        Familia.trace :DATATYPE, redis, redisuri, caller(1..1) if Familia.debug?
-        redis.type dbkey(suffix)
+        Familia.trace :DATATYPE, dbclient, uri, caller(1..1) if Familia.debug?
+        dbclient.type dbkey(suffix)
       end
 
       # Parity with DataType#rename
       def rename(newkey)
-        Familia.trace :RENAME, redis, "#{storekey} -> #{newkey}", caller(1..1) if Familia.debug?
-        redis.rename dbkey, newkey
+        Familia.trace :RENAME, dbclient, "#{storekey} -> #{newkey}", caller(1..1) if Familia.debug?
+        dbclient.rename dbkey, newkey
       end
 
       # Retrieves the prefix for the current instance by delegating to its class.
@@ -105,78 +105,78 @@ module Familia
 
       # For parity with DataType#hgetall
       def hgetall
-        Familia.trace :HGETALL, redis, redisuri, caller(1..1) if Familia.debug?
-        redis.hgetall dbkey(suffix)
+        Familia.trace :HGETALL, dbclient, uri, caller(1..1) if Familia.debug?
+        dbclient.hgetall dbkey(suffix)
       end
       alias all hgetall
 
       def hget(field)
-        Familia.trace :HGET, redis, field, caller(1..1) if Familia.debug?
-        redis.hget dbkey(suffix), field
+        Familia.trace :HGET, dbclient, field, caller(1..1) if Familia.debug?
+        dbclient.hget dbkey(suffix), field
       end
 
       # @return The number of fields that were added to the hash. If the
       #  field already exists, this will return 0.
       def hset(field, value)
-        Familia.trace :HSET, redis, field, caller(1..1) if Familia.debug?
-        redis.hset dbkey, field, value
+        Familia.trace :HSET, dbclient, field, caller(1..1) if Familia.debug?
+        dbclient.hset dbkey, field, value
       end
 
       def hmset(hsh={})
         hsh ||= self.to_h
-        Familia.trace :HMSET, redis, hsh, caller(1..1) if Familia.debug?
-        redis.hmset dbkey(suffix), hsh
+        Familia.trace :HMSET, dbclient, hsh, caller(1..1) if Familia.debug?
+        dbclient.hmset dbkey(suffix), hsh
       end
 
       def hkeys
-        Familia.trace :HKEYS, redis, 'redisuri', caller(1..1) if Familia.debug?
-        redis.hkeys dbkey(suffix)
+        Familia.trace :HKEYS, dbclient, 'uri', caller(1..1) if Familia.debug?
+        dbclient.hkeys dbkey(suffix)
       end
 
       def hvals
-        redis.hvals dbkey(suffix)
+        dbclient.hvals dbkey(suffix)
       end
 
       def incr(field)
-        redis.hincrby dbkey(suffix), field, 1
+        dbclient.hincrby dbkey(suffix), field, 1
       end
       alias increment incr
 
       def incrby(field, increment)
-        redis.hincrby dbkey(suffix), field, increment
+        dbclient.hincrby dbkey(suffix), field, increment
       end
       alias incrementby incrby
 
       def incrbyfloat(field, increment)
-        redis.hincrbyfloat dbkey(suffix), field, increment
+        dbclient.hincrbyfloat dbkey(suffix), field, increment
       end
       alias incrementbyfloat incrbyfloat
 
       def decrby(field, decrement)
-        redis.decrby dbkey(suffix), field, decrement
+        dbclient.decrby dbkey(suffix), field, decrement
       end
       alias decrementby decrby
 
       def decr(field)
-        redis.hdecr field
+        dbclient.hdecr field
       end
       alias decrement decr
 
       def hstrlen(field)
-        redis.hstrlen dbkey(suffix), field
+        dbclient.hstrlen dbkey(suffix), field
       end
       alias hstrlength hstrlen
 
       def key?(field)
-        redis.hexists dbkey(suffix), field
+        dbclient.hexists dbkey(suffix), field
       end
       alias has_key? key?
 
       # Deletes the entire dbkey
       # @return [Boolean] true if the key was deleted, false otherwise
       def delete!
-        Familia.trace :DELETE!, redis, redisuri, caller(1..1) if Familia.debug?
-        ret = redis.del dbkey
+        Familia.trace :DELETE!, dbclient, uri, caller(1..1) if Familia.debug?
+        ret = dbclient.del dbkey
         ret.positive?
       end
       alias clear delete!

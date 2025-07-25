@@ -11,7 +11,7 @@ Familia.debug = false
 Familia.uri
 #=:> URI::Redis
 
-## Default URI points to localhost Redis
+## Default URI points to localhost database server
 Familia.uri.to_s
 #=> "redis://127.0.0.1"
 
@@ -25,13 +25,13 @@ Familia.connect
 #=:> Redis
 
 ## Can connect to different URI
-## Doesn't confirm the logical DB number, redis.options raises an error?
+## Doesn't confirm the logical DB number, dbclient.options raises an error?
 test_uri = 'redis://localhost:6379/2'
 Familia.connect(test_uri)
 #=:> Redis
 
 ## Database client responds to basic commands
-Familia.redis.ping
+Familia.dbclient.ping
 #=> "PONG"
 
 ## Multiple connections are managed separately
@@ -49,8 +49,8 @@ Familia.enable_database_counter
 #=> true
 
 ## Middleware gets registered when enabled
-redis3 = Familia.connect('redis://localhost:6379/3')
-redis3.ping
+dbclient = Familia.connect('redis://localhost:6379/3')
+dbclient.ping
 #=> "PONG"
 
 ## Cleanup

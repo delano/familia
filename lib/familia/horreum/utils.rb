@@ -12,14 +12,14 @@ module Familia
     #
     module Utils
 
-      def redisuri(suffix = nil)
-        u = Familia.redisuri(self.class.uri) # returns URI::Redis
+      def uri(suffix = nil)
+        u = Familia.uri(self.class.uri) # returns URI::Redis
         u.logical_database = logical_database if logical_database # override the logical_database if we have one
         u.key = dbkey(suffix)
         u
       end
 
-      # +suffix+ is the value to be used at the end of the redis key
+      # +suffix+ is the value to be used at the end of the db key
       # (e.g. `customer:customer_id:scores` would have `scores` as the suffix
       # and `customer_id` would have been the identifier in that case).
       #

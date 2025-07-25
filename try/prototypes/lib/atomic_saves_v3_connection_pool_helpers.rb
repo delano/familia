@@ -54,12 +54,12 @@ class BankAccount < Familia::Horreum
   def save(using: nil)
     if using
       # Use provided connection explicitly
-      old_redis = @redis
-      @redis = using
+      original_instance = @dbclient
+      @dbclient = using
       begin
         super()
       ensure
-        @redis = old_redis
+        @dbclient = original_instance
       end
     else
       # Use normal save behavior
@@ -96,12 +96,12 @@ class TransactionRecord < Familia::Horreum
 
   def save(using: nil)
     if using
-      old_redis = @redis
-      @redis = using
+      original_instance = @dbclient
+      @dbclient = using
       begin
         super()
       ensure
-        @redis = old_redis
+        @dbclient = original_instance
       end
     else
       super()
@@ -173,9 +173,9 @@ module Familia
     end
   end
 
-  # Override redis method for proxy approach
+  # Override dbclient method for proxy approach
   module ConnectionPoolRedis
-    def redis
+    def dbclient
       Familia.current_transaction || super
     end
   end

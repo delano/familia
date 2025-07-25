@@ -4,11 +4,11 @@
 # Atomic Save V2 Proof of Concept - Connection Switching Approach
 #
 # This implementation demonstrates atomic saves across multiple Familia
-# objects by switching which Database connection the `redis` method returns
+# objects by switching which Database connection the `dbclient` method returns
 # based on transaction context.
 #
 # Key Features:
-# 1. **Connection Switching**: The `redis` method returns either normal
+# 1. **Connection Switching**: The `dbclient` method returns either normal
 #    connection or MULTI connection based on Thread-local context
 # 2. **Thread Safety**: Uses Thread-local storage for transaction state
 # 3. **No method_missing**: Clean implementation via method overriding
@@ -91,7 +91,7 @@ module Familia
         yield
       else
         # Use Database multi with block form
-        redis.multi do |multi|
+        dbclient.multi do |multi|
           begin
             self.current_transaction = multi
             yield
@@ -103,9 +103,9 @@ module Familia
     end
   end
 
-  # Override the redis method in both base classes
-  module TransactionalRedis
-    def redis
+  # Override the dbclient method in both base classes
+  module TransactionalDatabase
+    def dbclient
       Familia.current_transaction || super
     end
   end
@@ -113,12 +113,12 @@ module Familia
   # Inject into Horreum - TransactionalMethods module removed per design decision
   class Horreum
     module Serialization
-      prepend TransactionalRedis
+      prepend TransactionalDatabase
     end
   end
 
   # Inject into DataType
   class DataType
-    prepend TransactionalRedis
+    prepend TransactionalDatabase
   end
 end

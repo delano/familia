@@ -126,7 +126,7 @@ module Familia
     #
     # @param label [Symbol] A label for the trace message (e.g., :EXPAND,
     #   :FROMREDIS, :LOAD, :EXISTS).
-    # @param redis_instance [Redis, Redis::Future, nil] The Database instance or
+    # @param dbclient [Redis, Redis::Future, nil] The Database instance or
     #   Future being used.
     # @param ident [String] An identifier or key related to the operation being
     #   traced.
@@ -134,31 +134,31 @@ module Familia
     #   obtained from `caller` or `caller.first`. Default is nil.
     #
     # @example
-    #   Familia.trace :LOAD, Familia.redis(uri), objkey, caller(1..1) if
+    #   Familia.trace :LOAD, Familia.dbclient(uri), objkey, caller(1..1) if
     #   Familia.debug?
     #
     # @return [nil]
     #
     # @note This method only executes if LoggerTraceRefinement::ENABLED is true.
-    # @note The redis_instance can be a Database object, Redis::Future (used in
-    #   pipelined and multi blocks), or nil (when the redis connection isn't
+    # @note The dbclient can be a Database object, Redis::Future (used in
+    #   pipelined and multi blocks), or nil (when the database connection isn't
     #   relevant).
     #
-    def trace(label, redis_instance, ident, context = nil)
+    def trace(label, dbclient, ident, context = nil)
       return unless LoggerTraceRefinement::ENABLED
 
-      # Usually redis_instance is a Database object, but it could be
+      # Usually dbclient is a Database object, but it could be
       # a Redis::Future which is what is used inside of pipelined
       # and multi blocks. In some contexts it's nil where the
-      # redis connection isn't relevant.
-      instance_id = if redis_instance
-        case redis_instance
+      # database connection isn't relevant.
+      instance_id = if dbclient
+        case dbclient
         when Redis
-          redis_instance.id.respond_to?(:to_s) ? redis_instance.id.to_s : redis_instance.class.name
+          dbclient.id.respond_to?(:to_s) ? dbclient.id.to_s : dbclient.class.name
         when Redis::Future
           "Redis::Future"
         else
-          redis_instance.class.name
+        dbclient.class.name
         end
       end
 

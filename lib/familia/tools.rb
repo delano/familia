@@ -7,21 +7,21 @@ module Familia
       raise "Source and target are the same (#{target_uri})" if target_uri == source_uri
 
       Familia.connect target_uri
-      source_keys = Familia.redis(source_uri).keys(filter)
+      source_keys = Familia.dbclient(source_uri).keys(filter)
       puts "Moving #{source_keys.size} keys from #{source_uri} to #{target_uri} (filter: #{filter})"
       source_keys.each_with_index do |key, idx|
-        type = Familia.redis(source_uri).type key
-        default_expiration = Familia.redis(source_uri).ttl key
+        type = Familia.dbclient(source_uri).type key
+        default_expiration = Familia.dbclient(source_uri).ttl key
         if source_uri.host == target_uri.host && source_uri.port == target_uri.port
-          Familia.redis(source_uri).move key, target_uri.db
+          Familia.dbclient(source_uri).move key, target_uri.db
         else
           case type
           when 'string'
-            Familia.redis(source_uri).get key
+            Familia.dbclient(source_uri).get key
           when 'list'
-            Familia.redis(source_uri).lrange key, 0, -1
+            Familia.dbclient(source_uri).lrange key, 0, -1
           when 'set'
-            Familia.redis(source_uri).smembers key
+            Familia.dbclient(source_uri).smembers key
           else
             raise Familia::Problem, "unknown key type: #{type}"
           end
@@ -35,31 +35,31 @@ module Familia
     def rename(filter, source_uri, target_uri = nil, &each_key)
       target_uri ||= source_uri
       move_keys filter, source_uri, target_uri if source_uri != target_uri
-      source_keys = Familia.redis(source_uri).keys(filter)
+      source_keys = Familia.dbclient(source_uri).keys(filter)
       puts "Renaming #{source_keys.size} keys from #{source_uri} (filter: #{filter})"
       source_keys.each_with_index do |key, idx|
-        Familia.trace :RENAME1, Familia.redis(source_uri), "#{key}", ''
-        type = Familia.redis(source_uri).type key
-        default_expiration = Familia.redis(source_uri).ttl key
+        Familia.trace :RENAME1, Familia.dbclient(source_uri), "#{key}", ''
+        type = Familia.dbclient(source_uri).type key
+        default_expiration = Familia.dbclient(source_uri).ttl key
         newkey = yield(idx, type, key, default_expiration) unless each_key.nil?
-        Familia.trace :RENAME2, Familia.redis(source_uri), "#{key} -> #{newkey}", caller(1..1).first
-        Familia.redis(source_uri).renamenx key, newkey
+        Familia.trace :RENAME2, Familia.dbclient(source_uri), "#{key} -> #{newkey}", caller(1..1).first
+        Familia.dbclient(source_uri).renamenx key, newkey
       end
     end
 
     def get_any(keyname, uri = nil)
-      type = Familia.redis(uri).type keyname
+      type = Familia.dbclient(uri).type keyname
       case type
       when 'string'
-        Familia.redis(uri).get keyname
+        Familia.dbclient(uri).get keyname
       when 'list'
-        Familia.redis(uri).lrange(keyname, 0, -1) || []
+        Familia.dbclient(uri).lrange(keyname, 0, -1) || []
       when 'set'
-        Familia.redis(uri).smembers(keyname) || []
+        Familia.dbclient(uri).smembers(keyname) || []
       when 'zset'
-        Familia.redis(uri).zrange(keyname, 0, -1) || []
+        Familia.dbclient(uri).zrange(keyname, 0, -1) || []
       when 'hash'
-        Familia.redis(uri).hgetall(keyname) || {}
+        Familia.dbclient(uri).hgetall(keyname) || {}
       else
         nil
       end

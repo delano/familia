@@ -23,7 +23,7 @@ test_obj.config
 
 ## Test 2: Store an Array - should serialize to JSON automatically
 test_obj = JsonTest.new
-test_obj.tags = ["ruby", "redis", "json", "familia"]
+test_obj.tags = ["ruby", "valkey", "json", "familia"]
 test_obj.tags
 #=:> Array
 
@@ -43,10 +43,10 @@ test_obj = JsonTest.new
 test_obj.id = "json_test_1"
 test_obj.config = { theme: "dark", notifications: true, settings: { volume: 80 } }
 test_obj.simple = "just a string"
-test_obj.tags = ["ruby", "redis", "json", "familia"]
+test_obj.tags = ["ruby", "valkey", "json", "familia"]
 test_obj.save
 test_obj.hgetall
-#=> {"id"=>"json_test_1", "config"=>"{\"theme\":\"dark\",\"notifications\":true,\"settings\":{\"volume\":80}}", "tags"=>"[\"ruby\",\"redis\",\"json\",\"familia\"]", "simple"=>"just a string", "key"=>"json_test_1"}
+#=> {"id"=>"json_test_1", "config"=>"{\"theme\":\"dark\",\"notifications\":true,\"settings\":{\"volume\":80}}", "tags"=>"[\"ruby\",\"valkey\",\"json\",\"familia\"]", "simple"=>"just a string", "key"=>"json_test_1"}
 
 ## Test 4: Hash should be deserialized back to Hash
 test_obj = JsonTest.new 'any_id_will_do'
@@ -63,7 +63,7 @@ puts test_obj.tags.inspect
 puts "Tags class: #{test_obj.tags.class}"
 test_obj.tags.inspect
 test_obj.tags
-##=> ["ruby", "redis", "json", "familia"]
+##=> ["ruby", "valkey", "json", "familia"]
 
 ## Test 6: Simple string should remain a string (this works correctly)
 test_obj = JsonTest.new 'any_id_will_do'

@@ -70,14 +70,14 @@ module Familia
         RedisClient.register(DatabaseCommandCounter)
       end
 
-      redis = Redis.new(parsed_uri.conf)
+      dbclient = Redis.new(parsed_uri.conf)
 
       if @database_clients.key?(serverid)
         msg = "Overriding existing connection for #{serverid}"
         Familia.warn(msg)
       end
 
-      @database_clients[serverid] = redis
+      @database_clients[serverid] = dbclient
     end
 
     def reconnect(uri = nil)
@@ -95,9 +95,9 @@ module Familia
     #
     # @return [Redis] The Database client for the specified URI
     # @example
-    #   Familia.redis('redis://localhost:6379/1')
-    #   Familia.redis(2)  # Use DB 2 with default server
-    def redis(uri = nil)
+    #   Familia.dbclient('redis://localhost:6379/1')
+    #   Familia.dbclient(2)  # Use DB 2 with default server
+    def dbclient(uri = nil)
       # First priority: Thread-local connection (middleware pattern)
       return Thread.current[:familia_connection] if Thread.current.key?(:familia_connection)
 
@@ -112,9 +112,9 @@ module Familia
 
       # Only cache when no specific URI/DB is requested to avoid DB conflicts
       if uri.nil?
-        @redis ||= connect(parsed_uri)
-        @redis.select(parsed_uri.db) if parsed_uri.db
-        @redis
+        @dbclient ||= connect(parsed_uri)
+        @dbclient.select(parsed_uri.db) if parsed_uri.db
+        @dbclient
       else
         # When a specific DB is requested, create a new connection
         # to avoid conflicts with cached connections
@@ -150,7 +150,7 @@ module Familia
     #   | Use case        | Data consistency| Bulk operations |
     #
     def transaction(&)
-      redis.multi do |conn|
+      dbclient.multi do |conn|
         Fiber[:familia_transaction] = conn
         begin
           block_result = yield(conn) # rubocop:disable Lint/UselessAssignment
@@ -197,7 +197,7 @@ module Familia
     #   # Result: neither item1 nor item2 are set due to the error
     #
     def pipeline(&)
-      redis.pipeline do |conn|
+      dbclient.pipeline do |conn|
         Fiber[:familia_pipeline] = conn
         begin
           block_result = yield(conn) # rubocop:disable Lint/UselessAssignment

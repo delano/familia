@@ -29,7 +29,7 @@ class Familia::DataType
     def serialize_value(val, strict_values: true)
       prepared = nil
 
-      Familia.trace :TOREDIS, redis, "#{val}<#{val.class}|#{opts[:class]}>", caller(1..1) if Familia.debug?
+      Familia.trace :TOREDIS, dbclient, "#{val}<#{val.class}|#{opts[:class]}>", caller(1..1) if Familia.debug?
 
       if opts[:class]
         prepared = Familia.distinguisher(opts[:class], strict_values: strict_values)
@@ -42,12 +42,11 @@ class Familia::DataType
         Familia.ld "  from <#{val.class}> => <#{prepared.class}>"
       end
 
-      Familia.trace :TOREDIS, redis, "#{val}<#{val.class}|#{opts[:class]}> => #{prepared}<#{prepared.class}>", caller(1..1) if Familia.debug?
+      Familia.trace :TOREDIS, dbclient, "#{val}<#{val.class}|#{opts[:class]}> => #{prepared}<#{prepared.class}>", caller(1..1) if Familia.debug?
 
       Familia.warn "[#{self.class}\#serialize_value] nil returned for #{opts[:class]}\##{name}" if prepared.nil?
       prepared
     end
-    alias to_redis serialize_value
 
     # Deserializes multiple values from Redis, removing nil values.
     #
@@ -63,7 +62,6 @@ class Familia::DataType
       # expected value.
       deserialize_values_with_nil(*values).compact
     end
-    alias from_redis deserialize_values
 
     # Deserializes multiple values from Redis, preserving nil values.
     #
@@ -104,9 +102,8 @@ class Familia::DataType
 
       values
     end
-    alias from_redis_with_nil deserialize_values_with_nil
 
-    # Deserializes a single value from Redis.
+    # Deserializes a single value from the database.
     #
     # @param val [String, nil] The value to deserialize.
     # @return [Object, nil] The deserialized object, the default value if
@@ -117,8 +114,8 @@ class Familia::DataType
     #
     # NOTE: Currently only the DataType class uses this method. Horreum
     # fields are a newer addition and don't support the full range of
-    # deserialization options that DataType supports. It uses to_redis
-    # for serialization since everything becomes a string in Redis.
+    # deserialization options that DataType supports. It uses serialize_value
+    # for serialization since everything becomes a string in Valkey.
     #
     def deserialize_value(val)
       return @opts[:default] if val.nil?
@@ -127,7 +124,6 @@ class Familia::DataType
       ret = deserialize_values val
       ret&.first # return the object or nil
     end
-    alias from_redis deserialize_value
   end
 
 end

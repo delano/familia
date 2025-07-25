@@ -17,8 +17,8 @@ module Familia
 
     def value
       echo :value, caller(0..0) if Familia.debug
-      redis.setnx dbkey, @opts[:default] if @opts[:default]
-      deserialize_value redis.get(dbkey)
+      dbclient.setnx dbkey, @opts[:default] if @opts[:default]
+      deserialize_value dbclient.get(dbkey)
     end
     alias content value
     alias get value
@@ -32,7 +32,7 @@ module Familia
     end
 
     def value=(val)
-      ret = redis.set(dbkey, serialize_value(val))
+      ret = dbclient.set(dbkey, serialize_value(val))
       update_expiration
       ret
     end
@@ -40,68 +40,68 @@ module Familia
     alias set value=
 
     def setnx(val)
-      ret = redis.setnx(dbkey, serialize_value(val))
+      ret = dbclient.setnx(dbkey, serialize_value(val))
       update_expiration
       ret
     end
 
     def increment
-      ret = redis.incr(dbkey)
+      ret = dbclient.incr(dbkey)
       update_expiration
       ret
     end
     alias incr increment
 
     def incrementby(val)
-      ret = redis.incrby(dbkey, val.to_i)
+      ret = dbclient.incrby(dbkey, val.to_i)
       update_expiration
       ret
     end
     alias incrby incrementby
 
     def decrement
-      ret = redis.decr dbkey
+      ret = dbclient.decr dbkey
       update_expiration
       ret
     end
     alias decr decrement
 
     def decrementby(val)
-      ret = redis.decrby dbkey, val.to_i
+      ret = dbclient.decrby dbkey, val.to_i
       update_expiration
       ret
     end
     alias decrby decrementby
 
     def append(val)
-      ret = redis.append dbkey, val
+      ret = dbclient.append dbkey, val
       update_expiration
       ret
     end
     alias << append
 
     def getbit(offset)
-      redis.getbit dbkey, offset
+      dbclient.getbit dbkey, offset
     end
 
     def setbit(offset, val)
-      ret = redis.setbit dbkey, offset, val
+      ret = dbclient.setbit dbkey, offset, val
       update_expiration
       ret
     end
 
     def getrange(spoint, epoint)
-      redis.getrange dbkey, spoint, epoint
+      dbclient.getrange dbkey, spoint, epoint
     end
 
     def setrange(offset, val)
-      ret = redis.setrange dbkey, offset, val
+      ret = dbclient.setrange dbkey, offset, val
       update_expiration
       ret
     end
 
     def getset(val)
-      ret = redis.getset dbkey, val
+      ret = dbclient.getset dbkey, val
       update_expiration
       ret
     end

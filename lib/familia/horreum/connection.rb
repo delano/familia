@@ -16,8 +16,8 @@ module Familia
       #
       # @return [Redis] the Database connection instance.
       #
-      def redis
-        Fiber[:familia_transaction] || @redis || Familia.redis(uri || logical_database)
+      def dbclient
+        Fiber[:familia_transaction] || @dbclient || Familia.dbclient(uri || logical_database)
       end
 
       def connect(*)
@@ -53,7 +53,7 @@ module Familia
           yield(Fiber[:familia_transaction])
         else
           # Otherwise, create a local transaction
-          block_result = redis.multi do |conn|
+          block_result = dbclient.multi do |conn|
             yield(conn)
           end
         end
@@ -67,7 +67,7 @@ module Familia
           yield(Fiber[:familia_pipeline])
         else
           # Otherwise, create a local transaction
-          block_result = redis.pipeline do |conn|
+          block_result = dbclient.pipeline do |conn|
             yield(conn)
           end
         end

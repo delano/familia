@@ -35,7 +35,7 @@ module DatabaseLogger
   # It logs the command and its execution time only if a logger is set.
   #
   # @param command [Array] The Database command and its arguments.
-  # @param redis_config [Hash] The configuration options for the Redis
+  # @param _config [Hash] The configuration options for the Redis
   #   connection.
   # @return [Object] The result of the Database command execution.
   #
@@ -43,7 +43,7 @@ module DatabaseLogger
   #   is set, as it quickly returns control to the Database client. When a logger
   #   is set, the minimal overhead is often offset by the valuable insights
   #   gained during development and debugging.
-  def call(command, redis_config)
+  def call(command, _config)
     return yield unless DatabaseLogger.logger
 
     start = Process.clock_gettime(Process::CLOCK_MONOTONIC, :microsecond)
@@ -117,8 +117,8 @@ module DatabaseCommandCounter
     #
     # @example Count commands in a block
     #   commands_executed = DatabaseCommandCounter.count_commands do
-    #     redis.set('key1', 'value1')
-    #     redis.get('key1')
+    #     dbclient.set('key1', 'value1')
+    #     dbclient.get('key1')
     #   end
     #   # commands_executed will be 2
     def count_commands
@@ -140,9 +140,9 @@ module DatabaseCommandCounter
   # and then yields to execute the actual command.
   #
   # @param command [Array] The Database command and its arguments.
-  # @param redis_config [Hash] The configuration options for the Database connection.
+  # @param _config [Hash] The configuration options for the Database connection.
   # @return [Object] The result of the Database command execution.
-  def call(command, redis_config)
+  def call(command, _config)
     klass.increment unless klass.skip_command?(command)
     yield
   end

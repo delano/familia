@@ -242,7 +242,7 @@ class ConfigurableStressTest
 
       begin
         # Clean database before each test
-        BankAccount.redis.flushdb
+        BankAccount.dbclient.flushdb
 
         # Run the test
         result = run_single_config(config)
