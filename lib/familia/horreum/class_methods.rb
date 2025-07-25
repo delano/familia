@@ -168,14 +168,6 @@ module Familia
         @class_redis_types
       end
 
-      def class_redis_types?(name)
-        class_redis_types.key? name.to_s.to_sym
-      end
-
-      def redis_object?(name)
-        redis_types.key? name.to_s.to_sym
-      end
-
       def redis_types
         @redis_types ||= {}
         @redis_types
