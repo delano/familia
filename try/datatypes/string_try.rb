@@ -1,12 +1,12 @@
-# try/redis_types/string_try.rb
+# try/datatypes/string_try.rb
 
 require_relative '../../lib/familia'
 require_relative '../helpers/test_helpers'
 
 @a = Bone.new(token: 'atoken2', name: 'akey')
 
-## Bone#rediskey
-@a.rediskey
+## Bone#dbkey
+@a.dbkey
 #=> 'bone:atoken2:akey:object'
 
 ## Familia::String#value should give default value
@@ -27,7 +27,7 @@ require_relative '../helpers/test_helpers'
 
 ## Familia::String.new
 @ret = Familia::String.new 'arbitrary:key'
-@ret.rediskey
+@ret.dbkey
 #=> 'arbitrary:key'
 
 ## instance set

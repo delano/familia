@@ -1,5 +1,4 @@
-# rubocop:disable all
-# frozen_string_literal: true
+# lib/familia/features/safe_dump.rb
 
 
 module Familia::Features
@@ -87,7 +86,7 @@ module Familia::Features
             field_name = el
             callable = lambda { |obj|
               if obj.respond_to?(:[]) && obj[field_name]
-                obj[field_name] # Familia::RedisType classes
+                obj[field_name] # Familia::DataType classes
               elsif obj.respond_to?(field_name)
                 obj.send(field_name) # Onetime::Models::RedisHash classes via method_missing 😩
               end

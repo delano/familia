@@ -70,7 +70,7 @@ Familia.debug = false
 [@customer.name, @customer.email]
 #=> ["Memory Only", "memory@test.com"]
 
-## apply_fields doesn't persist to Redis (2 of 2)
+## apply_fields doesn't persist to Database (2 of 2)
 @customer.refresh!
 [@customer.name, @customer.email]
 #=> ["Bob Jones", "jane@example.com"]
@@ -105,8 +105,8 @@ Familia.debug = false
 
 ## transaction method works with block
 result = @customer.transaction do |conn|
-  conn.hset @customer.rediskey, 'temp_field', 'temp_value'
-  conn.hset @customer.rediskey, 'another_field', 'another_value'
+  conn.hset @customer.dbkey, 'temp_field', 'temp_value'
+  conn.hset @customer.dbkey, 'another_field', 'another_value'
 end
 result.size
 #=> 2
@@ -121,11 +121,11 @@ result = @customer.batch_update()
 result.successful?
 #=> true
 
-## destroy! removes object from Redis (1 of 2)
+## destroy! removes object from Database (1 of 2)
 @customer.destroy!
 #=> true
 
-## After destroy!, Redis key no longer exists (2 of 2)
+## After destroy!, dbkey no longer exists (2 of 2)
 @customer.exists?
 #=> false
 

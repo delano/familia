@@ -102,24 +102,24 @@ exists = Customer.exists?("test@example.com")
 @customer.destroy!
 #=> false
 
-## Customer.db returns the correct database number
-Customer.db
+## Customer.logical_database returns the correct database number
+Customer.logical_database
 #=> 15
 
-## Customer.db returns the correct database number
-@customer.db
+## Customer.logical_database returns the correct database number
+@customer.logical_database
 #=> 15
 
-## @customer.redis.connection returns the correct redis URI
-@customer.redis.connection
+## @customer.dbclient.connection returns the correct database URI
+@customer.dbclient.connection
 #=> {:host=>"127.0.0.1", :port=>6379, :db=>15, :id=>"redis://127.0.0.1:6379/15", :location=>"127.0.0.1:6379"}
 
-## @customer.redis.uri returns the correct redis URI
-@customer.secrets_created.db
+## @customer.dbclient.uri returns the correct database URI
+@customer.secrets_created.logical_database
 #=> nil
 
-## @customer.redis.uri returns the correct redis URI
-@customer.secrets_created.redis.connection
+## @customer.dbclient.uri returns the correct database URI
+@customer.secrets_created.dbclient.connection
 #=> {:host=>"127.0.0.1", :port=>6379, :db=>15, :id=>"redis://127.0.0.1:6379/15", :location=>"127.0.0.1:6379"}
 
 ## Customer.url is nil by default
@@ -127,14 +127,14 @@ Customer.uri
 #=> nil
 
 ## Customer.destroy! makes only one call to Redis
-RedisCommandCounter.count_commands { @customer.destroy! }
+DatabaseCommandCounter.count_commands { @customer.destroy! }
 #=> 1
 
-## Customer.db returns the correct database number
-Customer.instances.db
+## Customer.logical_database returns the correct database number
+Customer.instances.logical_database
 #=> nil
 
-## Customer.db returns the correct database number
+## Customer.logical_database returns the correct database number
 Customer.instances.uri.to_s
 #=> 'redis://127.0.0.1/15/'
 

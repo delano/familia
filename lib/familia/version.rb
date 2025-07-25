@@ -1,25 +1,8 @@
-# frozen_string_literal: true
-
-require 'yaml'
+# lib/familia/version.rb
 
 module Familia
-  module VERSION
-    def self.to_s
-      load_config
-      version = [@version[:MAJOR], @version[:MINOR], @version[:PATCH]].join('.')
-      version = "#{version}-#{@version[:PRE]}" if @version[:PRE]
-      version
-    end
-    alias inspect to_s
-
-    def self.version
-      @version ||= load_config
-      @version
-    end
-
-    def self.load_config
-      version_file_path = File.join(__dir__, '..', '..', 'VERSION.yml')
-      @version = YAML.load_file(version_file_path)
-    end
+  # Version information for the Familia
+  unless defined?(Familia::VERSION)
+    VERSION = '2.0.0-pre'
   end
 end

@@ -4,11 +4,11 @@
 
 # re: Test 4, calling refresh! inside of an existing transation.
 # The issue is that refresh! is being called within the transaction, but
-#  Redis MULTI transactions queue commands and don't return results until
+#  Database MULTI transactions queue commands and don't return results until
 #  EXEC. So refresh! inside the transaction isn't going to see the current
 #  state from Redis.
 #
-#  The problem is more fundamental: Redis MULTI/EXEC transactions don't
+#  The problem is more fundamental: Database MULTI/EXEC transactions don't
 #  work the way this code expects them to. In Redis:
 #
 #  1. MULTI starts queuing commands
@@ -33,7 +33,7 @@ require_relative 'lib/atomic_saves_v3_connection_pool_helpers'
 # Familia.debug = false
 
 ## Clean database before tests
-BankAccount.redis.flushdb
+BankAccount.dbclient.flushdb
 #=> "OK"
 
 ## Test 1: Basic atomic operation with proxy approach

@@ -1,12 +1,12 @@
-# frozen_string_literal: true
+# lib/familia/datatype/types/unsorted_set.rb
 
 module Familia
-  class Set < RedisType
+  class Set < DataType
 
     # Returns the number of elements in the unsorted set
     # @return [Integer] number of elements
     def element_count
-      redis.scard rediskey
+      dbclient.scard dbkey
     end
     alias size element_count
 
@@ -15,7 +15,7 @@ module Familia
     end
 
     def add *values
-      values.flatten.compact.each { |v| redis.sadd? rediskey, serialize_value(v) }
+      values.flatten.compact.each { |v| dbclient.sadd? dbkey, serialize_value(v) }
       update_expiration
       self
     end
@@ -33,7 +33,7 @@ module Familia
     alias to_a members
 
     def membersraw
-      redis.smembers(rediskey)
+      dbclient.smembers(dbkey)
     end
 
     def each(&blk)
@@ -69,7 +69,7 @@ module Familia
     end
 
     def member?(val)
-      redis.sismember rediskey, serialize_value(val)
+      dbclient.sismember dbkey, serialize_value(val)
     end
     alias include? member?
 
@@ -77,7 +77,7 @@ module Familia
     # @param value The value to remove from the set
     # @return [Integer] The number of members that were removed (0 or 1)
     def remove_element(value)
-      redis.srem rediskey, serialize_value(value)
+      dbclient.srem dbkey, serialize_value(value)
     end
     alias remove remove_element # deprecated
 
@@ -86,11 +86,11 @@ module Familia
     end
 
     def pop
-      redis.spop rediskey
+      dbclient.spop dbkey
     end
 
     def move(dstkey, val)
-      redis.smove rediskey, dstkey, val
+      dbclient.smove dbkey, dstkey, val
     end
 
     def random
@@ -98,7 +98,7 @@ module Familia
     end
 
     def randomraw
-      redis.srandmember(rediskey)
+      dbclient.srandmember(dbkey)
     end
 
     ## Make the value stored at KEY identical to the given list
@@ -122,6 +122,6 @@ module Familia
     #  end
     # end
 
-    Familia::RedisType.register self, :set
+    Familia::DataType.register self, :set
   end
 end

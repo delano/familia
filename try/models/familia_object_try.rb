@@ -19,12 +19,12 @@ Bone.prefix
 Bone.suffix
 #=> :object
 
-## Familia#rediskey
-@a.rediskey
+## Familia#dbkey
+@a.dbkey
 #=> 'bone:atoken:akey:object'
 
-## Familia#rediskey
-@a.rediskey
+## Familia#dbkey
+@a.dbkey
 #=> 'bone:atoken:akey:object'
 
 ## Familia#save
@@ -60,8 +60,8 @@ obj.save
 Customer.customers.class
 #=> Familia::List
 
-## Familia class rediskey
-Customer.customers.rediskey
+## Familia class dbkey
+Customer.customers.dbkey
 #=> 'customer:customers'
 
 ## Familia.class_list

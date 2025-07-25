@@ -388,7 +388,7 @@ end
 # Run comparison if executed directly
 if __FILE__ == $0
   Familia.debug = false
-  BankAccount.redis.flushdb
+  BankAccount.dbclient.flushdb
 
   test = EnhancedConnectionPoolStressTest.new(
     thread_count: 20,

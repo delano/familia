@@ -8,7 +8,7 @@ require_relative '../helpers/test_helpers'
 
 
 ## Check for help class
-Bone.redis_types.keys # consistent b/c hashes are ordered
+Bone.related_fields.keys # consistent b/c hashes are ordered
 #=> [:owners, :tags, :metrics, :props, :value]
 
 ## Familia has a uri

@@ -1,8 +1,8 @@
-# frozen_string_literal: true
+# lib/familia/base.rb
 
 #
 module Familia
-  # A common module for Familia::RedisType and Familia::Horreum to include.
+  # A common module for Familia::DataType and Familia::Horreum to include.
   #
   # This allows us to use a single comparison to check if a class is a
   # Familia class. e.g.
@@ -11,7 +11,7 @@ module Familia
   #     klass.ancestors.member?(Familia::Base) # => true
   #
   # @see Familia::Horreum
-  # @see Familia::RedisType
+  # @see Familia::DataType
   #
   module Base
     @features = nil
@@ -34,17 +34,17 @@ module Familia
     # with the :expiration feature's implementation.
     #
     # This is a no-op implementation that gets overridden by features like
-    # :expiration. It accepts an optional ttl parameter to maintain interface
+    # :expiration. It accepts an optional default_expiration parameter to maintain interface
     # compatibility with the overriding implementations.
     #
-    # @param ttl [Integer, nil] Time To Live in seconds (ignored in base implementation)
+    # @param default_expiration [Integer, nil] Time To Live in seconds (ignored in base implementation)
     # @return [nil] Always returns nil
     #
     # @note This is a no-op implementation. Classes that need expiration
     #       functionality should include the :expiration feature.
     #
-    def update_expiration(ttl: nil)
-      Familia.ld "[update_expiration] Feature not enabled for #{self.class}. Key: #{rediskey} (caller: #{caller(1..1)})"
+    def update_expiration(default_expiration: nil)
+      Familia.ld "[update_expiration] Feature not enabled for #{self.class}. Key: #{dbkey} (caller: #{caller(1..1)})"
       nil
     end
 

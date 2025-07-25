@@ -1,42 +1,42 @@
-# frozen_string_literal: true
+# lib/familia/horreum/class_methods.rb
 
-require_relative 'relations_management'
+require_relative 'related_fields_management'
 
 module Familia
   class Horreum
     # Class-level instance variables
     # These are set up as nil initially and populated later
-    @redis = nil # TODO
+    @dbclient = nil # TODO
     @identifier = nil
-    @ttl = nil
-    @db = nil
+    @default_expiration = nil
+    @logical_database = nil
     @uri = nil
     @suffix = nil
     @prefix = nil
     @fields = nil # []
-    @class_redis_types = nil # {}
-    @redis_types = nil # {}
+    @class_related_fields = nil # {}
+    @related_fields = nil # {}
     @dump_method = nil
     @load_method = nil
 
     # ClassMethods: Provides class-level functionality for Horreum
     #
     # This module is extended into classes that include Familia::Horreum,
-    # providing methods for Redis operations and object management.
+    # providing methods for Database operations and object management.
     #
     # Key features:
-    # * Includes RelationsManagement for Redis-type field handling
-    # * Defines methods for managing fields, identifiers, and Redis keys
-    # * Provides utility methods for working with Redis objects
+    # * Includes RelatedFieldsManagement for DataType field handling
+    # * Defines methods for managing fields, identifiers, and dbkeys
+    # * Provides utility methods for working with Database objects
     #
     module ClassMethods
       include Familia::Settings
-      include Familia::Horreum::RelationsManagement
+      include Familia::Horreum::RelatedFieldsManagement
 
       # Sets or retrieves the unique identifier for the class.
       #
       # This method defines or returns the unique identifier used to generate the
-      # Redis key for the object. If a value is provided, it sets the identifier;
+      # dbkey for the object. If a value is provided, it sets the identifier;
       # otherwise, it returns the current identifier.
       #
       # @param [Object] val the value to set as the identifier (optional).
@@ -72,12 +72,12 @@ module Familia
       # The dynamically defined method performs the following:
       # - Acts as both a reader and a writer method.
       # - When called without arguments, retrieves the current value from Redis.
-      # - When called with an argument, persists the value to Redis immediately.
+      # - When called with an argument, persists the value to Database immediately.
       # - Checks if the correct number of arguments is provided (zero or one).
-      # - Converts the provided value to a format suitable for Redis storage.
+      # - Converts the provided value to a format suitable for Database storage.
       # - Uses the existing accessor method to set the attribute value when
       #   writing.
-      # - Persists the value to Redis immediately using the hset command when
+      # - Persists the value to Database immediately using the hset command when
       #   writing.
       # - Includes custom error handling to raise an ArgumentError if the wrong
       #   number of arguments is given.
@@ -133,21 +133,21 @@ module Familia
           val = args.first
 
           # If no value is provided to this fast attribute method, make a call
-          # to redis to return the current stored value of the hash field.
+          # to the db to return the current stored value of the hash field.
           return hget name if val.nil?
 
           begin
             # Trace the operation if debugging is enabled.
-            Familia.trace :FAST_WRITER, redis, "#{name}: #{val.inspect}", caller(1..1) if Familia.debug?
+            Familia.trace :FAST_WRITER, dbclient, "#{name}: #{val.inspect}", caller(1..1) if Familia.debug?
 
-            # Convert the provided value to a format suitable for Redis storage.
+            # Convert the provided value to a format suitable for Database storage.
             prepared = serialize_value(val)
             Familia.ld "[.fast_attribute!] #{name} val: #{val.class} prepared: #{prepared.class}"
 
             # Use the existing accessor method to set the attribute value.
             send :"#{name}=", val
 
-            # Persist the value to Redis immediately using the hset command.
+            # Persist the value to Database immediately using the hset command.
             hset name, prepared
           rescue Familia::Problem => e
             # Raise a custom error message if an exception occurs during the execution of the method.
@@ -163,32 +163,24 @@ module Familia
         @fields
       end
 
-      def class_redis_types
-        @class_redis_types ||= {}
-        @class_redis_types
+      def class_related_fields
+        @class_related_fields ||= {}
+        @class_related_fields
       end
 
-      def class_redis_types?(name)
-        class_redis_types.key? name.to_s.to_sym
-      end
-
-      def redis_object?(name)
-        redis_types.key? name.to_s.to_sym
-      end
-
-      def redis_types
-        @redis_types ||= {}
-        @redis_types
+      def related_fields
+        @related_fields ||= {}
+        @related_fields
       end
 
       def has_relations?
         @has_relations ||= false
       end
 
-      def db(v = nil)
-        Familia.trace :DB, Familia.redis, "#{@db} #{v}", caller(1..1) if Familia.debug?
-        @db = v unless v.nil?
-        @db || parent&.db
+      def logical_database(v = nil)
+        Familia.trace :DB, Familia.dbclient, "#{@logical_database} #{v}", caller(1..1) if Familia.debug?
+        @logical_database = v unless v.nil?
+        @logical_database || parent&.logical_database
       end
 
       def all(suffix = nil)
@@ -201,11 +193,11 @@ module Familia
         matching_keys_count(filter) > 0
       end
 
-      # Returns the number of Redis keys matching the given filter pattern
-      # @param filter [String] Redis key pattern to match (default: '*')
+      # Returns the number of dbkeys matching the given filter pattern
+      # @param filter [String] dbkey pattern to match (default: '*')
       # @return [Integer] Number of matching keys
       def matching_keys_count(filter = '*')
-        redis.keys(rediskey(filter)).compact.size
+        dbclient.keys(dbkey(filter)).compact.size
       end
       alias size matching_keys_count # For backwards compatibility
 
@@ -257,7 +249,7 @@ module Familia
       #
       def create *args, **kwargs
         fobj = new(*args, **kwargs)
-        raise Familia::Problem, "#{self} already exists: #{fobj.rediskey}" if fobj.exists?
+        raise Familia::Problem, "#{self} already exists: #{fobj.dbkey}" if fobj.exists?
 
         fobj.save
         fobj
@@ -269,17 +261,17 @@ module Familia
       end
 
       def rawmultiget(*ids)
-        ids.collect! { |objid| rediskey(objid) }
+        ids.collect! { |objid| dbkey(objid) }
         return [] if ids.compact.empty?
 
-        Familia.trace :MULTIGET, redis, "#{ids.size}: #{ids}", caller(1..1) if Familia.debug?
-        redis.mget(*ids)
+        Familia.trace :MULTIGET, dbclient, "#{ids.size}: #{ids}", caller(1..1) if Familia.debug?
+        dbclient.mget(*ids)
       end
 
-      # Retrieves and instantiates an object from Redis using the full object
+      # Retrieves and instantiates an object from Database using the full object
       # key.
       #
-      # @param objkey [String] The full Redis key for the object.
+      # @param objkey [String] The full dbkey for the object.
       # @return [Object, nil] An instance of the class if the key exists, nil
       #   otherwise.
       # @raise [ArgumentError] If the provided key is empty.
@@ -309,10 +301,10 @@ module Familia
 
         # We use a lower-level method here b/c we're working with the
         # full key and not just the identifier.
-        does_exist = redis.exists(objkey).positive?
+        does_exist = dbclient.exists(objkey).positive?
 
         Familia.ld "[.find_by_key] #{self} from key #{objkey} (exists: #{does_exist})"
-        Familia.trace :FROM_KEY, redis, objkey, caller(1..1) if Familia.debug?
+        Familia.trace :FROM_KEY, dbclient, objkey, caller(1..1) if Familia.debug?
 
         # This is the reason for calling exists first. We want to definitively
         # and without any ambiguity know if the object exists in Redis. If it
@@ -321,22 +313,22 @@ module Familia
         # the constructor, which will then be annoying to debug.
         return unless does_exist
 
-        obj = redis.hgetall(objkey) # horreum objects are persisted as redis hashes
-        Familia.trace :FROM_KEY2, redis, "#{objkey}: #{obj.inspect}", caller(1..1) if Familia.debug?
+        obj = dbclient.hgetall(objkey) # horreum objects are persisted as database hashes
+        Familia.trace :FROM_KEY2, dbclient, "#{objkey}: #{obj.inspect}", caller(1..1) if Familia.debug?
 
         new(**obj)
       end
-      alias from_rediskey find_by_key # deprecated
+      alias from_dbkey find_by_key # deprecated
 
-      # Retrieves and instantiates an object from Redis using its identifier.
+      # Retrieves and instantiates an object from Database using its identifier.
       #
       # @param identifier [String, Integer] The unique identifier for the
       #   object.
-      # @param suffix [Symbol] The suffix to use in the Redis key (default:
+      # @param suffix [Symbol] The suffix to use in the dbkey (default:
       #   :object).
       # @return [Object, nil] An instance of the class if found, nil otherwise.
       #
-      # This method constructs the full Redis key using the provided identifier
+      # This method constructs the full dbkey using the provided identifier
       # and suffix, then delegates to `find_by_key` for the actual retrieval and
       # instantiation.
       #
@@ -351,10 +343,10 @@ module Familia
         suffix ||= self.suffix
         return nil if identifier.to_s.empty?
 
-        objkey = rediskey(identifier, suffix)
+        objkey = dbkey(identifier, suffix)
 
         Familia.ld "[.find_by_id] #{self} from key #{objkey})"
-        Familia.trace :FIND_BY_ID, Familia.redis(uri), objkey, caller(1..1).first if Familia.debug?
+        Familia.trace :FIND_BY_ID, Familia.dbclient(uri), objkey, caller(1..1).first if Familia.debug?
         find_by_key objkey
       end
       alias find find_by_id
@@ -364,10 +356,10 @@ module Familia
       # Checks if an object with the given identifier exists in Redis.
       #
       # @param identifier [String, Integer] The unique identifier for the object.
-      # @param suffix [Symbol, nil] The suffix to use in the Redis key (default: class suffix).
+      # @param suffix [Symbol, nil] The suffix to use in the dbkey (default: class suffix).
       # @return [Boolean] true if the object exists, false otherwise.
       #
-      # This method constructs the full Redis key using the provided identifier and suffix,
+      # This method constructs the full dbkey using the provided identifier and suffix,
       # then checks if the key exists in Redis.
       #
       # @example
@@ -377,24 +369,24 @@ module Familia
         suffix ||= self.suffix
         return false if identifier.to_s.empty?
 
-        objkey = rediskey identifier, suffix
+        objkey = dbkey identifier, suffix
 
-        ret = redis.exists objkey
-        Familia.trace :EXISTS, redis, "#{objkey} #{ret.inspect}", caller(1..1) if Familia.debug?
+        ret = dbclient.exists objkey
+        Familia.trace :EXISTS, dbclient, "#{objkey} #{ret.inspect}", caller(1..1) if Familia.debug?
 
-        ret.positive? # differs from redis API but I think it's okay bc `exists?` is a predicate method.
+        ret.positive? # differs from Valkey API but I think it's okay bc `exists?` is a predicate method.
       end
 
-      # Destroys an object in Redis with the given identifier.
+      # Destroys an object in Database with the given identifier.
       #
       # @param identifier [String, Integer] The unique identifier for the object to destroy.
-      # @param suffix [Symbol, nil] The suffix to use in the Redis key (default: class suffix).
+      # @param suffix [Symbol, nil] The suffix to use in the dbkey (default: class suffix).
       # @return [Boolean] true if the object was successfully destroyed, false otherwise.
       #
       # This method is part of Familia's high-level object lifecycle management. While `delete!`
-      # operates directly on Redis keys, `destroy!` operates at the object level and is used for
+      # operates directly on dbkeys, `destroy!` operates at the object level and is used for
       # ORM-style operations. Use `destroy!` when removing complete objects from the system, and
-      # `delete!` when working directly with Redis keys.
+      # `delete!` when working directly with dbkeys.
       #
       # @example
       #   User.destroy!(123)  # Removes user:123:object from Redis
@@ -403,27 +395,27 @@ module Familia
         suffix ||= self.suffix
         return false if identifier.to_s.empty?
 
-        objkey = rediskey identifier, suffix
+        objkey = dbkey identifier, suffix
 
-        ret = redis.del objkey
-        Familia.trace :DESTROY!, redis, "#{objkey} #{ret.inspect}", caller(1..1) if Familia.debug?
+        ret = dbclient.del objkey
+        Familia.trace :DESTROY!, dbclient, "#{objkey} #{ret.inspect}", caller(1..1) if Familia.debug?
         ret.positive?
       end
 
-      # Finds all keys in Redis matching the given suffix pattern.
+      # Finds all keys in Database matching the given suffix pattern.
       #
       # @param suffix [String] The suffix pattern to match (default: '*').
-      # @return [Array<String>] An array of matching Redis keys.
+      # @return [Array<String>] An array of matching dbkeys.
       #
-      # This method searches for all Redis keys that match the given suffix pattern.
-      # It uses the class's rediskey method to construct the search pattern.
+      # This method searches for all dbkeys that match the given suffix pattern.
+      # It uses the class's dbkey method to construct the search pattern.
       #
       # @example
       #   User.find  # Returns all keys matching user:*:object
       #   User.find('active')  # Returns all keys matching user:*:active
       #
       def find_keys(suffix = '*')
-        redis.keys(rediskey('*', suffix)) || []
+        dbclient.keys(dbkey('*', suffix)) || []
       end
 
       # +identifier+ can be a value or an Array of values used to create the index.
@@ -433,15 +425,15 @@ module Familia
       # +suffix+ If a nil value is explicitly passed in, it won't appear in the redis
       # key that's returned. If no suffix is passed in, the class' suffix is used
       # as the default (via the class method self.suffix). It's an important
-      # distinction b/c passing in an explicitly nil is how RedisType objects
+      # distinction b/c passing in an explicitly nil is how DataType objects
       # at the class level are created without the global default 'object'
-      # suffix. See RedisType#rediskey "parent_class?" for more details.
-      def rediskey(identifier, suffix = self.suffix)
-        # Familia.ld "[.rediskey] #{identifier} for #{self} (suffix:#{suffix})"
+      # suffix. See DataType#dbkey "parent_class?" for more details.
+      def dbkey(identifier, suffix = self.suffix)
+        # Familia.ld "[.dbkey] #{identifier} for #{self} (suffix:#{suffix})"
         raise NoIdentifier, self if identifier.to_s.empty?
 
         identifier &&= identifier.to_s
-        Familia.rediskey(prefix, identifier, suffix)
+        Familia.dbkey(prefix, identifier, suffix)
       end
 
       def dump_method

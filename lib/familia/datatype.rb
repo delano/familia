@@ -1,23 +1,23 @@
-# rubocop:disable all
+# lib/familia/datatype.rb
 
-require_relative 'redistype/commands'
-require_relative 'redistype/serialization'
+require_relative 'datatype/commands'
+require_relative 'datatype/serialization'
 
 module Familia
 
-  # RedisType - Base class for Redis data type wrappers
+  # DataType - Base class for Database data type wrappers
   #
-  # This class provides common functionality for various Redis data types
+  # This class provides common functionality for various Database data types
   # such as String, List, Set, SortedSet, and HashKey.
   #
-  # @abstract Subclass and implement Redis data type specific methods
-  class RedisType
+  # @abstract Subclass and implement Database data type specific methods
+  class DataType
     include Familia::Base
     extend Familia::Features
 
     @registered_types = {}
-    @valid_options = %i[class parent ttl default db key redis suffix prefix]
-    @db = nil
+    @valid_options = %i[class parent default_expiration default logical_database dbkey dbclient suffix prefix]
+    @logical_database = nil
 
     feature :expiration
     feature :quantization
@@ -25,11 +25,11 @@ module Familia
     class << self
       attr_reader :registered_types, :valid_options, :has_relations
       attr_accessor :parent
-      attr_writer :db, :uri
+      attr_writer :logical_database, :uri
     end
 
     module ClassMethods
-      # To be called inside every class that inherits RedisType
+      # To be called inside every class that inherits DataType
       # +methname+ is the term used for the class and instance methods
       # that are created for the given +klass+ (e.g. set, list, etc)
       def register(klass, methname)
@@ -38,9 +38,9 @@ module Familia
         @registered_types[methname] = klass
       end
 
-      def db(val = nil)
-        @db = val unless val.nil?
-        @db || parent&.db
+      def logical_database(val = nil)
+        @logical_database = val unless val.nil?
+        @logical_database || parent&.logical_database
       end
 
       def uri(val = nil)
@@ -49,16 +49,16 @@ module Familia
       end
 
       def inherited(obj)
-        Familia.trace :REDISTYPE, nil, "#{obj} is my kinda type", caller(1..1) if Familia.debug?
-        obj.db = db
-        obj.ttl = ttl # method added via Features::Expiration
+        Familia.trace :DATATYPE, nil, "#{obj} is my kinda type", caller(1..1) if Familia.debug?
+        obj.logical_database = logical_database
+        obj.default_expiration = default_expiration # method added via Features::Expiration
         obj.uri = uri
         obj.parent = self
         super(obj)
       end
 
       def valid_keys_only(opts)
-        opts.select { |k, _| RedisType.valid_options.include? k }
+        opts.select { |k, _| DataType.valid_options.include? k }
       end
 
       def has_relations?
@@ -71,36 +71,36 @@ module Familia
     attr_writer :dump_method, :load_method
 
     # +keystring+: If parent is set, this will be used as the suffix
-    # for rediskey. Otherwise this becomes the value of the key.
+    # for dbkey. Otherwise this becomes the value of the key.
     # If this is an Array, the elements will be joined.
     #
     # Options:
     #
     # :class => A class that responds to Familia.load_method and
     # Familia.dump_method. These will be used when loading and
-    # saving data from/to redis to unmarshal/marshal the class.
+    # saving data from/to the database to unmarshal/marshal the class.
     #
-    # :parent => The Familia object that this redistype object belongs
+    # :parent => The Familia object that this datatype object belongs
     # to. This can be a class that includes Familia or an instance.
     #
-    # :ttl => the time to live in seconds. When not nil, this will
-    # set the redis expire for this key whenever #save is called.
+    # :default_expiration => the time to live in seconds. When not nil, this will
+    # set the default expiration for this dbkey whenever #save is called.
     # You can also call it explicitly via #update_expiration.
     #
     # :default => the default value (String-only)
     #
-    # :db => the redis database to use (ignored if :redis is used).
+    # :logical_database => the logical database index to use (ignored if :dbclient is used).
     #
-    # :redis => an instance of Redis.
+    # :dbclient => an instance of database client.
     #
-    # :key => a hardcoded key to use instead of the deriving the from
+    # :dbkey => a hardcoded key to use instead of the deriving the from
     # the name and parent (e.g. a derived key: customer:custid:secret_counter).
     #
     # :suffix => the suffix to use for the key (e.g. 'scores' in customer:custid:scores).
     # :prefix => the prefix to use for the key (e.g. 'customer' in customer:custid:scores).
     #
-    # Connection precendence: uses the redis connection of the parent or the
-    # value of opts[:redis] or Familia.redis (in that order).
+    # Connection precendence: uses the database connection of the parent or the
+    # value of opts[:dbclient] or Familia.dbclient (in that order).
     def initialize(keystring, opts = {})
       #Familia.ld " [initializing] #{self.class} #{opts}"
       @keystring = keystring
@@ -108,7 +108,7 @@ module Familia
 
       # Remove all keys from the opts that are not in the allowed list
       @opts = opts || {}
-      @opts = RedisType.valid_keys_only(@opts)
+      @opts = DataType.valid_keys_only(@opts)
 
       # Apply the options to instance method setters of the same name
       @opts.each do |k, v|
@@ -124,59 +124,59 @@ module Familia
       init if respond_to? :init
     end
 
-    def redis
+    def dbclient
       return Fiber[:familia_transaction] if Fiber[:familia_transaction]
-      return @redis if @redis
+      return @dbclient if @dbclient
 
-      parent? ? parent.redis : Familia.redis(opts[:db])
+      parent? ? parent.dbclient : Familia.dbclient(opts[:logical_database])
     end
 
-    # Produces the full Redis key for this object.
+    # Produces the full dbkey for this object.
     #
-    # @return [String] The full Redis key.
+    # @return [String] The full dbkey.
     #
-    # This method determines the appropriate Redis key based on the context of the RedisType object:
+    # This method determines the appropriate dbkey based on the context of the DataType object:
     #
     # 1. If a hardcoded key is set in the options, it returns that key.
-    # 2. For instance-level RedisType objects, it uses the parent instance's rediskey method.
-    # 3. For class-level RedisType objects, it uses the parent class's rediskey method.
-    # 4. For standalone RedisType objects, it uses the keystring as the full Redis key.
+    # 2. For instance-level DataType objects, it uses the parent instance's dbkey method.
+    # 3. For class-level DataType objects, it uses the parent class's dbkey method.
+    # 4. For standalone DataType objects, it uses the keystring as the full dbkey.
     #
-    # For class-level RedisType objects (parent_class? == true):
+    # For class-level DataType objects (parent_class? == true):
     # - The suffix is optional and used to differentiate between different types of objects.
     # - If no suffix is provided, the class's default suffix is used (via the self.suffix method).
-    # - If a nil suffix is explicitly passed, it won't appear in the resulting Redis key.
-    # - Passing nil as the suffix is how class-level RedisType objects are created without
+    # - If a nil suffix is explicitly passed, it won't appear in the resulting dbkey.
+    # - Passing nil as the suffix is how class-level DataType objects are created without
     #   the global default 'object' suffix.
     #
-    # @example Instance-level RedisType
-    #   user_instance.some_redistype.rediskey  # => "user:123:some_redistype"
+    # @example Instance-level DataType
+    #   user_instance.some_datatype.dbkey  # => "user:123:some_datatype"
     #
-    # @example Class-level RedisType
-    #   User.some_redistype.rediskey  # => "user:some_redistype"
+    # @example Class-level DataType
+    #   User.some_datatype.dbkey  # => "user:some_datatype"
     #
-    # @example Standalone RedisType
-    #   RedisType.new("mykey").rediskey  # => "mykey"
+    # @example Standalone DataType
+    #   DataType.new("mykey").dbkey  # => "mykey"
     #
-    # @example Class-level RedisType with explicit nil suffix
-    #   User.rediskey("123", nil)  # => "user:123"
+    # @example Class-level DataType with explicit nil suffix
+    #   User.dbkey("123", nil)  # => "user:123"
     #
-    def rediskey
+    def dbkey
       # Return the hardcoded key if it's set. This is useful for
       # support legacy keys that aren't derived in the same way.
-      return opts[:key] if opts[:key]
+      return opts[:dbkey] if opts[:dbkey]
 
       if parent_instance?
-        # This is an instance-level redistype object so the parent instance's
-        # rediskey method is defined in Familia::Horreum::InstanceMethods.
-        parent.rediskey(keystring)
+        # This is an instance-level datatype object so the parent instance's
+        # dbkey method is defined in Familia::Horreum::InstanceMethods.
+        parent.dbkey(keystring)
       elsif parent_class?
-        # This is a class-level redistype object so the parent class' rediskey
+        # This is a class-level datatype object so the parent class' dbkey
         # method is defined in Familia::Horreum::ClassMethods.
-        parent.rediskey(keystring, nil)
+        parent.dbkey(keystring, nil)
       else
-        # This is a standalone RedisType object where it's keystring
-        # is the full redis key.
+        # This is a standalone DataType object where it's keystring
+        # is the full database key (dbkey).
         keystring
       end
     end
@@ -201,8 +201,8 @@ module Familia
       @opts[:parent]
     end
 
-    def db
-      @opts[:db] || self.class.db
+    def logical_database
+      @opts[:logical_database] || self.class.logical_database
     end
 
     def uri
@@ -210,11 +210,11 @@ module Familia
       return @opts[:uri] if @opts[:uri]
 
       # If parent has a DB set, create a URI with that DB
-      if parent? && parent.respond_to?(:db) && parent.db
+      if parent? && parent.respond_to?(:logical_database) && parent.logical_database
         base_uri = self.class.uri || Familia.uri
         if base_uri
           uri_with_db = base_uri.dup
-          uri_with_db.db = parent.db
+          uri_with_db.db = parent.logical_database
           return uri_with_db
         end
       end
@@ -235,9 +235,9 @@ module Familia
     include Serialization
   end
 
-  require_relative 'redistype/types/list'
-  require_relative 'redistype/types/unsorted_set'
-  require_relative 'redistype/types/sorted_set'
-  require_relative 'redistype/types/hashkey'
-  require_relative 'redistype/types/string'
+  require_relative 'datatype/types/list'
+  require_relative 'datatype/types/unsorted_set'
+  require_relative 'datatype/types/sorted_set'
+  require_relative 'datatype/types/hashkey'
+  require_relative 'datatype/types/string'
 end

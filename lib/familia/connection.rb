@@ -1,42 +1,42 @@
 # lib/familia/connection.rb
 
-require_relative '../../lib/redis_middleware'
+require_relative '../../lib/middleware/database_middleware'
 require_relative 'multi_result'
 
 # Familia
 #
-# A family warehouse for your redis data.
+# A family warehouse for your keystore data.
 #
 module Familia
   @uri = URI.parse 'redis://127.0.0.1:6379'
-  @redis_clients = {}
+  @database_clients = {}
 
-  # The Connection module provides Redis connection management for Familia.
-  # It allows easy setup and access to Redis clients across different URIs
+  # The Connection module provides Database connection management for Familia.
+  # It allows easy setup and access to Database clients across different URIs
   # with robust connection pooling for thread safety.
   module Connection
-    # @return [URI] The default URI for Redis connections
+    # @return [URI] The default URI for Database connections
     attr_reader :uri
 
-    # @return [Hash] A hash of Redis clients, keyed by server ID
-    attr_reader :redis_clients
+    # @return [Hash] A hash of Database clients, keyed by server ID
+    attr_reader :database_clients
 
-    # @return [Boolean] Whether Redis command logging is enabled
-    attr_accessor :enable_redis_logging
+    # @return [Boolean] Whether Database command logging is enabled
+    attr_accessor :enable_database_logging
 
-    # @return [Boolean] Whether Redis command counter is enabled
-    attr_accessor :enable_redis_counter
+    # @return [Boolean] Whether Database command counter is enabled
+    attr_accessor :enable_database_counter
 
-    # @return [Proc] A callable that provides Redis connections
+    # @return [Proc] A callable that provides Database connections
     attr_accessor :connection_provider
 
     # @return [Boolean] Whether to require external connections (no fallback)
     attr_accessor :connection_required
 
-    # Sets the default URI for Redis connections.
+    # Sets the default URI for Database connections.
     #
     # NOTE: uri is not a property of the Settings module b/c it's not
-    # configured in class defintions like ttl or logical DB index.
+    # configured in class defintions like default_expiration or logical DB index.
     #
     # @param v [String, URI] The new default URI
     # @example
@@ -47,11 +47,11 @@ module Familia
     alias url uri
     alias url= uri=
 
-    # Establishes a connection to a Redis server.
+    # Establishes a connection to a Database server.
     #
-    # @param uri [String, URI, nil] The URI of the Redis server to connect to.
-    #   If nil, uses the default URI from `@redis_uri_by_class` or `Familia.uri`.
-    # @return [Redis] The connected Redis client.
+    # @param uri [String, URI, nil] The URI of the Database server to connect to.
+    #   If nil, uses the default URI from `@database_clients` or `Familia.uri`.
+    # @return [Redis] The connected Database client.
     # @raise [ArgumentError] If no URI is specified.
     # @example
     #   Familia.connect('redis://localhost:6379')
@@ -59,25 +59,25 @@ module Familia
       parsed_uri = normalize_uri(uri)
       serverid = parsed_uri.serverid
 
-      if Familia.enable_redis_logging
-        RedisLogger.logger = Familia.logger
-        RedisClient.register(RedisLogger)
+      if Familia.enable_database_logging
+        DatabaseLogger.logger = Familia.logger
+        RedisClient.register(DatabaseLogger)
       end
 
-      if Familia.enable_redis_counter
+      if Familia.enable_database_counter
         # NOTE: This middleware uses AtommicFixnum from concurrent-ruby which is
         # less contentious than Mutex-based counters. Safe for
-        RedisClient.register(RedisCommandCounter)
+        RedisClient.register(DatabaseCommandCounter)
       end
 
-      redis = Redis.new(parsed_uri.conf)
+      dbclient = Redis.new(parsed_uri.conf)
 
-      if @redis_clients.key?(serverid)
+      if @database_clients.key?(serverid)
         msg = "Overriding existing connection for #{serverid}"
         Familia.warn(msg)
       end
 
-      @redis_clients[serverid] = redis
+      @database_clients[serverid] = dbclient
     end
 
     def reconnect(uri = nil)
@@ -85,19 +85,19 @@ module Familia
       serverid = parsed_uri.serverid
 
       # Close the existing connection if it exists
-      @redis_clients[serverid].close if @redis_clients.key?(serverid)
+      @database_clients[serverid].close if @database_clients.key?(serverid)
 
       connect(parsed_uri)
     end
 
-    # Retrieves a Redis connection from the appropriate pool.
+    # Retrieves a Database connection from the appropriate pool.
     # Handles DB selection automatically based on the URI.
     #
-    # @return [Redis] The Redis client for the specified URI
+    # @return [Redis] The Database client for the specified URI
     # @example
-    #   Familia.redis('redis://localhost:6379/1')
-    #   Familia.redis(2)  # Use DB 2 with default server
-    def redis(uri = nil)
+    #   Familia.dbclient('redis://localhost:6379/1')
+    #   Familia.dbclient(2)  # Use DB 2 with default server
+    def dbclient(uri = nil)
       # First priority: Thread-local connection (middleware pattern)
       return Thread.current[:familia_connection] if Thread.current.key?(:familia_connection)
 
@@ -112,9 +112,9 @@ module Familia
 
       # Only cache when no specific URI/DB is requested to avoid DB conflicts
       if uri.nil?
-        @redis ||= connect(parsed_uri)
-        @redis.select(parsed_uri.db) if parsed_uri.db
-        @redis
+        @dbclient ||= connect(parsed_uri)
+        @dbclient.select(parsed_uri.db) if parsed_uri.db
+        @dbclient
       else
         # When a specific DB is requested, create a new connection
         # to avoid conflicts with cached connections
@@ -124,12 +124,12 @@ module Familia
       end
     end
 
-    # Executes Redis commands atomically within a transaction (MULTI/EXEC).
+    # Executes Database commands atomically within a transaction (MULTI/EXEC).
     #
-    # Redis transactions queue commands and execute them atomically as a single unit.
+    # Database transactions queue commands and execute them atomically as a single unit.
     # All commands succeed together or all fail together, ensuring data consistency.
     #
-    # @yield [Redis] The Redis transaction connection
+    # @yield [Redis] The Database transaction connection
     # @return [Array] Results of all commands executed in the transaction
     #
     # @example Basic transaction usage
@@ -140,7 +140,7 @@ module Familia
     #   end
     #   # Returns: ["OK", 2, 1] - results of all commands
     #
-    # @note **Comparison of Redis batch operations:**
+    # @note **Comparison of Database batch operations:**
     #
     #   | Feature         | Multi/Exec      | Pipeline        |
     #   |-----------------|-----------------|-----------------|
@@ -150,7 +150,7 @@ module Familia
     #   | Use case        | Data consistency| Bulk operations |
     #
     def transaction(&)
-      redis.multi do |conn|
+      dbclient.multi do |conn|
         Fiber[:familia_transaction] = conn
         begin
           block_result = yield(conn) # rubocop:disable Lint/UselessAssignment
@@ -162,13 +162,13 @@ module Familia
     end
     alias multi transaction
 
-    # Executes Redis commands in a pipeline for improved performance.
+    # Executes Database commands in a pipeline for improved performance.
     #
     # Pipelines send multiple commands without waiting for individual responses,
     # reducing network round-trips. Commands execute independently and can
     # succeed or fail without affecting other commands in the pipeline.
     #
-    # @yield [Redis] The Redis pipeline connection
+    # @yield [Redis] The Database pipeline connection
     # @return [Array] Results of all commands executed in the pipeline
     #
     # @example Basic pipeline usage
@@ -197,7 +197,7 @@ module Familia
     #   # Result: neither item1 nor item2 are set due to the error
     #
     def pipeline(&)
-      redis.pipeline do |conn|
+      dbclient.pipeline do |conn|
         Fiber[:familia_pipeline] = conn
         begin
           block_result = yield(conn) # rubocop:disable Lint/UselessAssignment

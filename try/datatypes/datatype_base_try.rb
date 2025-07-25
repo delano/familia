@@ -1,6 +1,6 @@
-# try/redis_types/redistype_base_try.rb
+# try/datatypes/datatype_base_try.rb
 
-# Test RedisType base functionality
+# Test DataType base functionality
 
 require_relative '../../lib/familia'
 require_relative '../helpers/test_helpers'
@@ -9,45 +9,45 @@ Familia.debug = false
 
 @sample_obj = Customer.new(custid: 'customer123', email: 'test@example.com')
 
-## Customer has defined Redis types
-Customer.redis_types.keys.include?(:timeline)
+## Customer has defined Database types
+Customer.related_fields.keys.include?(:timeline)
 #=> true
 
-## Customer has defined Redis types
-Customer.redis_types.keys.include?(:stripe_customer)
+## Customer has defined Database types
+Customer.related_fields.keys.include?(:stripe_customer)
 #=> true
 
-## Can access Redis type instances
+## Can access Database type instances
 @sample_obj.timeline
 #=:> Familia::SortedSet
 
-## Redis types have rediskey method
-@sample_obj.timeline.rediskey
+## Database types have dbkey method
+@sample_obj.timeline.dbkey
 #=> "customer:customer123:timeline"
 
-## Redis types are frozen after creation
+## Database types are frozen after creation
 @sample_obj.timeline.frozen?
 #=> true
 
-## Can access hashkey Redis type
+## Can access hashkey Database type
 @sample_obj ||= Customer.new(custid: 'customer123', email: 'test@example.com')
 stripe_customer = @sample_obj.stripe_customer
 stripe_customer.class.name
 #=> "Familia::HashKey"
 
-## RedisType instances know their owner
+## DataType instances know their owner
 @sample_obj.timeline.parent == @sample_obj
 #=> true
 
-## RedisType instances know their field name
+## DataType instances know their field name
 @sample_obj.timeline.keystring
 #=> :timeline
 
-## RedisType has opts hash
+## DataType has opts hash
 @sample_obj.timeline.opts.class
 #=> Hash
 
-## RedisType responds to Familia's modified Redis commands
+## DataType responds to Familia's modified Database commands
 @sample_obj.timeline
 #=/=> _.respond_to?(:zadd)
 #==> _.respond_to?(:add)
@@ -56,22 +56,22 @@ stripe_customer.class.name
 #=/=> _.respond_to?(:destroy!)
 
 
-## Can check if RedisType exists in Redis
+## Can check if DataType exists in Redis
 timeline = @sample_obj.timeline
 exists_before = timeline.exists?
 [exists_before.class, [true, false].include?(exists_before)]
 #=> [FalseClass, true]
 
-## RedisType has size/length methods
+## DataType has size/length methods
 @sample_obj.timeline.respond_to?(:size)
 #=> true
 
-## RedisType size returns integer
+## DataType size returns integer
 timeline = @sample_obj.timeline
 timeline.size
 #=:> Integer
 
-## Different Redis types have type-specific methods
+## Different Database types have type-specific methods
 stripe_customer = @sample_obj.stripe_customer
 stripe_customer
 #=/=> _.respond_to?(:hset)
@@ -79,19 +79,19 @@ stripe_customer
 #==> _.respond_to?(:store)
 #==> _.respond_to?(:[]=)
 
-## Can get RedisType TTL
+## Can get DataType default expiration
 timeline = @sample_obj.timeline
-ttl = timeline.ttl
-[ttl.class, ttl >= -1]
+default_expiration = timeline.default_expiration
+[default_expiration.class, default_expiration >= -1]
 #=> [Integer, true]
 
-## RedisType has db method
+## DataType has logical_database method
 timeline = @sample_obj.timeline
-db = timeline.db
+db = timeline.logical_database
 db
 #=:> NilClass
 
-## RedisType has uri method
+## DataType has uri method
 timeline = @sample_obj.timeline
 uri = timeline.uri
 uri.class.name

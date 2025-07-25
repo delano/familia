@@ -1,4 +1,4 @@
-# rubocop:disable all
+# lib/familia/utils.rb
 
 require 'securerandom'
 
@@ -102,10 +102,10 @@ module Familia
       val.split(Familia.delim)
     end
 
-    # Creates a Redis key from given values
+    # Creates a dbkey from given values
     # @param val [Array] elements to join for the key
-    # @return [String] Redis key
-    def rediskey(*val)
+    # @return [String] dbkey
+    def dbkey(*val)
       join(*val)
     end
 
@@ -157,7 +157,7 @@ module Familia
     # the class of the input argument.
     #
     # @param [Object] value_to_distinguish The value to be processed. Keep in
-    #   mind that all data in redis is stored as a string so whatever the type
+    #   mind that all data is stored as a string so whatever the type
     #   of the value, it will be converted to a string.
     # @param [Boolean] strict_values Whether to enforce strict value handling.
     #   Defaults to true.
@@ -179,14 +179,14 @@ module Familia
     def distinguisher(value_to_distinguish, strict_values: true)
       case value_to_distinguish
       when ::Symbol, ::String, ::Integer, ::Float
-        Familia.trace :TOREDIS_DISTINGUISHER, redis, "string", caller(1..1) if Familia.debug?
+        Familia.trace :TOREDIS_DISTINGUISHER, dbclient, "string", caller(1..1) if Familia.debug?
 
         # Symbols and numerics are naturally serializable to strings
         # so it's a relatively low risk operation.
         value_to_distinguish.to_s
 
       when ::TrueClass, ::FalseClass, ::NilClass
-        Familia.trace :TOREDIS_DISTINGUISHER, redis, "true/false/nil", caller(1..1) if Familia.debug?
+        Familia.trace :TOREDIS_DISTINGUISHER, dbclient, "true/false/nil", caller(1..1) if Familia.debug?
 
         # TrueClass, FalseClass, and NilClass are considered high risk because their
         # original types cannot be reliably determined from their serialized string
@@ -203,7 +203,7 @@ module Familia
         value_to_distinguish.to_s #=> "true", "false", ""
 
       when Familia::Base, Class
-        Familia.trace :TOREDIS_DISTINGUISHER, redis, "base", caller(1..1) if Familia.debug?
+        Familia.trace :TOREDIS_DISTINGUISHER, dbclient, "base", caller(1..1) if Familia.debug?
 
         # When called with a class we simply transform it to its name. For
         # instances of Familia class, we store the identifier.
@@ -214,15 +214,15 @@ module Familia
         end
 
       else
-         Familia.trace :TOREDIS_DISTINGUISHER, redis, "else1 #{strict_values}", caller(1..1) if Familia.debug?
+         Familia.trace :TOREDIS_DISTINGUISHER, dbclient, "else1 #{strict_values}", caller(1..1) if Familia.debug?
 
         if value_to_distinguish.class.ancestors.member?(Familia::Base)
-          Familia.trace :TOREDIS_DISTINGUISHER, redis, "isabase", caller(1..1) if Familia.debug?
+          Familia.trace :TOREDIS_DISTINGUISHER, dbclient, "isabase", caller(1..1) if Familia.debug?
 
           value_to_distinguish.identifier
 
         else
-          Familia.trace :TOREDIS_DISTINGUISHER, redis, "else2 #{strict_values}", caller(1..1) if Familia.debug?
+          Familia.trace :TOREDIS_DISTINGUISHER, dbclient, "else2 #{strict_values}", caller(1..1) if Familia.debug?
           raise Familia::HighRiskFactor, value_to_distinguish if strict_values
           nil
         end

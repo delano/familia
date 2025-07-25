@@ -136,8 +136,8 @@ parts = Familia.split('user:123:data')
 parts
 #=> ["user", "123", "data"]
 
-## Can create Redis key with default delimiter
-key = Familia.rediskey('v1', 'customer', 'email')
+## Can create dbkey with default delimiter
+key = Familia.dbkey('v1', 'customer', 'email')
 key
 #=> "v1:customer:email"
 
@@ -184,6 +184,6 @@ result
 # Cleanup - restore defaults, leave nothing but footprints
 Familia.delim(':')
 Familia.suffix(:object)
-Familia.ttl(0)
-Familia.db(nil)
+Familia.default_expiration(0)
+Familia.logical_database(nil)
 Familia.prefix(nil)

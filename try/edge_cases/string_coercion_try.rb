@@ -108,7 +108,7 @@ process_identifier(@customer_id)
 process_identifier(@customer)
 #=> "processed:#{@customer_id}"
 
-## Redis storage using object as string key
+## Database storage using object as string key
 @metadata = Familia::HashKey.new 'metadata'
 @metadata[@customer] = 'customer_metadata'
 @metadata[@customer.to_s] # Same key access

@@ -3,7 +3,7 @@
 ##
 # Atomic Save V3 Proof of Concept - Connection Pool Integration
 #
-# This implementation explores atomic saves with Redis connection pooling
+# This implementation explores atomic saves with Database connection pooling
 # for thread safety in multi-threaded environments (like Puma).
 #
 # Key Goals:
@@ -54,12 +54,12 @@ class BankAccount < Familia::Horreum
   def save(using: nil)
     if using
       # Use provided connection explicitly
-      old_redis = @redis
-      @redis = using
+      original_instance = @dbclient
+      @dbclient = using
       begin
         super()
       ensure
-        @redis = old_redis
+        @dbclient = original_instance
       end
     else
       # Use normal save behavior
@@ -96,12 +96,12 @@ class TransactionRecord < Familia::Horreum
 
   def save(using: nil)
     if using
-      old_redis = @redis
-      @redis = using
+      original_instance = @dbclient
+      @dbclient = using
       begin
         super()
       ensure
-        @redis = old_redis
+        @dbclient = original_instance
       end
     else
       super()
@@ -110,7 +110,7 @@ class TransactionRecord < Familia::Horreum
 end
 
 module Familia
-  # Connection pool for Redis connections
+  # Connection pool for Database connections
   @@connection_pool = ConnectionPool.new(size: 10, timeout: 5) do
     Redis.new(url: Familia.uri.to_s)
   end
@@ -173,9 +173,9 @@ module Familia
     end
   end
 
-  # Override redis method for proxy approach
+  # Override dbclient method for proxy approach
   module ConnectionPoolRedis
-    def redis
+    def dbclient
       Familia.current_transaction || super
     end
   end
@@ -185,8 +185,8 @@ module Familia
     prepend ConnectionPoolRedis
   end
 
-  # Inject into RedisType for proxy approach
-  class RedisType
+  # Inject into DataType for proxy approach
+  class DataType
     prepend ConnectionPoolRedis
   end
 end

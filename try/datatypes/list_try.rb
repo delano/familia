@@ -1,4 +1,4 @@
-# try/redis_types/list_try.rb
+# try/datatypes/list_try.rb
 
 
 require_relative '../../lib/familia'

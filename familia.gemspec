@@ -1,12 +1,12 @@
-# frozen_string_literal: true
+# lib/familia/settings.rb
 
 require_relative 'lib/familia/version'
 
 Gem::Specification.new do |spec|
   spec.name        = 'familia'
-  spec.version     = Familia::VERSION.to_s
-  spec.summary     = 'An ORM for Redis in Ruby.'
-  spec.description = "Familia: #{spec.summary}. Organize and store ruby objects in Redis"
+  spec.version     = Familia::VERSION
+  spec.summary     = 'An ORM for Valkey-compatible databases in Ruby.'
+  spec.description = "Familia: #{spec.summary}. Organize and store ruby objects in Valkey/Redis"
   spec.authors     = ['Delano Mandelbaum']
   spec.email       = 'gems@solutious.com'
   spec.homepage    = 'https://github.com/delano/familia'

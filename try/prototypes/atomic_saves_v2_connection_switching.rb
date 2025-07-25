@@ -11,7 +11,7 @@ require_relative 'lib/atomic_saves_v2_connection_switching_helpers'
 # Familia.debug = false
 
 ## Clean database before tests
-BankAccount.redis.flushdb
+BankAccount.dbclient.flushdb
 #=> "OK"
 
 ## Test 1: Basic atomic save - create accounts
@@ -105,8 +105,8 @@ end
 #=> [750.0, 950.0]
 
 ## Test 3: Verify transaction record was saved
-@txn_key = @txn.rediskey
-@saved_txn = TransactionRecord.from_redis(@txn_key)
+@txn_key = @txn.dbkey
+@saved_txn = TransactionRecord.deserialize_value(@txn_key)
 @saved_txn.status
 #=> "completed"
 

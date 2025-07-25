@@ -1,4 +1,4 @@
-# frozen_string_literal: true
+# lib/familia/core_ext.rb
 
 # Extends the String class with time-related functionality
 #

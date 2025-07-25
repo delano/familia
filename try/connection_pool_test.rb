@@ -42,7 +42,7 @@ class PoolTestSession < Familia::Horreum
 end
 
 ## Clean up before tests
-PoolTestAccount.redis.flushdb
+PoolTestAccount.dbclient.flushdb
 #=> "OK"
 
 ## Test 1: Connection pool configuration
@@ -74,9 +74,9 @@ Familia.enable_connection_pool
 
 ## Test 3: Multiple DB support with connection pool (continued)
 # Switch to DB 1 and create another account
-Familia.redis(1).select(1)
+Familia.dbclient(1).select(1)
 @account_db1 = PoolTestAccount.new(balance: 750, holder_name: "Charlie")
-@account_db1.class.db = 1
+@account_db1.class.logical_database = 1
 @account_db1.save
 #=> true
 
@@ -228,7 +228,7 @@ end
 @error_account.balance
 #=> 100.0
 
-## Test 19: Connection pool with different Redis URIs
+## Test 19: Connection pool with different Database URIs
 # This would test multiple pools if we had different servers
 @default_uri = Familia.uri.to_s
 @default_uri.include?("127.0.0.1")
@@ -274,8 +274,8 @@ end
 #=> true
 
 ## Test 22: Backward compatibility - ensure existing code works
-# Test that non-pooled redis calls still work for compatibility
-@compat_result = PoolTestAccount.redis.ping
+# Test that non-pooled commands still work for compatibility
+@compat_result = PoolTestAccount.dbclient.ping
 @compat_result
 #=> "PONG"
 
@@ -303,11 +303,11 @@ end
 # ✅ Backward compatibility maintained for existing code
 #
 # Key Benefits Achieved:
-# - Thread-safe Redis connections for multi-threaded environments
+# - Thread-safe Database connections for multi-threaded environments
 # - Efficient connection reuse and management
 # - Atomic transaction support with proper isolation
 # - Seamless integration with existing Familia patterns
 # - Configurable pool size and timeout settings
-# - Support for multiple Redis databases through single pools
+# - Support for multiple Database databases through single pools
 
 puts "Connection pool implementation test completed successfully!"

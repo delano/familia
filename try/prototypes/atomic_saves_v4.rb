@@ -9,7 +9,7 @@ class BankAccount < Familia::Horreum
   field :foreign_balance
   field :holder_name
 
-  string :metadata  # A separate redis key, to store JSON blog
+  string :metadata  # A separate dbkey, to store JSON blog
 
   def init
     @account_number ||= SecureRandom.hex(8)
@@ -41,17 +41,17 @@ class BankAccount < Familia::Horreum
     # it's not the block that is the issue; it's losing the object
     # oriented `self.fieldname = value` syntax and having to manually
     # resort to functional programming.
-    redis.multi do |multi|
-      multi.del(rediskey)
+    dbclient.multi do |multi|
+      multi.del(dbkey)
       # Also remove from the class-level values, :display_domains, :owners
-      multi.zrem(V2::CustomDomain.values.rediskey, identifier)
-      multi.hdel(V2::CustomDomain.display_domains.rediskey, display_domain)
-      multi.hdel(V2::CustomDomain.owners.rediskey, display_domain)
-      multi.del(brand.rediskey)
-      multi.del(logo.rediskey)
-      multi.del(icon.rediskey)
+      multi.zrem(V2::CustomDomain.values.dbkey, identifier)
+      multi.hdel(V2::CustomDomain.display_domains.dbkey, display_domain)
+      multi.hdel(V2::CustomDomain.owners.dbkey, display_domain)
+      multi.del(brand.dbkey)
+      multi.del(logo.dbkey)
+      multi.del(icon.dbkey)
       unless customer.nil?
-        multi.zrem(customer.custom_domains.rediskey, display_domain)
+        multi.zrem(customer.custom_domains.dbkey, display_domain)
       end
     end
   end
@@ -71,22 +71,22 @@ class BankAccount < Familia::Horreum
       }
 
       # By convention, we would not write any code that runs on initialization
-      # that has any redis operations. However if we did, they would still work
+      # that has any database operations. However if we did, they would still work
       # the would just run immediately and not with the following transaction.
       accnt = new attrs
 
       Familia.transaction do
 
-        # Inside this block, `accnt.redis` returns the open multi connection.
+        # Inside this block, `accnt.dbclient` returns the open multi connection.
         #
-        # Anything that calls redis commands, will be queues on the multi
+        # Anything that calls database commands, will be queues on the multi
         # connection, like attr.metadata = {...}. So neither the main object
         # key or the separate `metadata` string key will update unless both
         # succeed. This is PURPOSE1.
         accnt.save
 
-        # PROBLEM: what is returned here when we call accnt.class.redis? where
-        # does a class level method like `add` get its redis connection from then?
+        # PROBLEM: what is returned here when we call accnt.class.dbclient? where
+        # does a class level method like `add` get its db connection from then?
         #
         # This is PURPOSE2, a major reason for implementing transactions. We want
         # to prevent our relatable_object_ids index from being updated if the

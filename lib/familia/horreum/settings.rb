@@ -1,10 +1,10 @@
-# rubocop:disable all
+# lib/familia/horreum/settings.rb
 #
 module Familia
   # InstanceMethods - Module containing instance-level methods for Familia
   #
   # This module is included in classes that include Familia, providing
-  # instance-level functionality for Redis operations and object management.
+  # instance-level functionality for Database operations and object management.
   #
   class Horreum
 
@@ -18,23 +18,12 @@ module Familia
         @opts
       end
 
-      def redisdetails
-        {
-          uri: self.class.uri,
-          db: self.class.db,
-          key: rediskey,
-          type: redistype,
-          ttl: ttl,
-          realttl: realttl
-        }
+      def logical_database=(v)
+        @logical_database = v.to_i
       end
 
-      def db=(v)
-        @db = v.to_i
-      end
-
-      def db
-        @db || self.class.db
+      def logical_database
+        @logical_database || self.class.logical_database
       end
 
       def suffix

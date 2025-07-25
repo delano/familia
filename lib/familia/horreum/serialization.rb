@@ -1,4 +1,4 @@
-# rubocop:disable all
+# lib/familia/horreum/serialization.rb
 #
 module Familia
 
@@ -6,9 +6,9 @@ module Familia
   # Familia::Horreum
   #
   class Horreum
-    # The Sacred Scrolls of Redis Responses
+    # The Sacred Scrolls of Database Responses
     #
-    # Behold! The mystical runes that Redis whispers back to us:
+    # Behold! The mystical runes that Database whispers back to us:
     #
     # "OK" - The sweet sound of success, like a tiny "ding!" from the depths of data.
     # true  - The boolean Buddha nods in agreement.
@@ -16,15 +16,15 @@ module Familia
     # 0     - The silent hero. It tried its best, bless its heart.
     # nil   - The zen master of responses. It's not nothing, it's... enlightenment!
     #
-    # These sacred signs are our guide through the Redis wilderness. When we cast
+    # These sacred signs are our guide through the Database wilderness. When we cast
     # our spells (er, commands), we seek these friendly faces in the returned
     # smoke signals.
     #
-    # Should our Redis rituals summon anything else, we pause. We ponder. We
+    # Should our Database rituals summon anything else, we pause. We ponder. We
     # possibly panic. For the unexpected in Redis-land is like finding a penguin
     # in your pasta - delightfully confusing, but probably not what you ordered.
     #
-    # May your Redis returns be ever valid, and your data ever flowing!
+    # May your Database returns be ever valid, and your data ever flowing!
     #
     @valid_command_return_values = ["OK", true, 1, 0, nil].freeze
 
@@ -36,7 +36,7 @@ module Familia
     #
     # This module is chock-full of methods that'll make your head spin (in a
     # good way)! We've got loaders, dumpers, and refreshers galore. It's like
-    # a laundromat for your data, but instead of quarters, it runs on Redis commands.
+    # a laundromat for your data, but instead of quarters, it runs on Database commands.
     #
     # A Note on Our Refreshing Refreshers:
     # In the wild world of Ruby, '!' usually means "Watch out! I'm dangerous!"
@@ -47,7 +47,7 @@ module Familia
     #
     # Remember: In Familia, refreshing isn't just a chore, it's a chance to
     # dance with data! Whether you bang(!) or not, you're still invited to
-    # the Redis disco.
+    # the Database disco.
     #
     # (P.S. If you're reading these docs, lol sorry. I asked Claude 3.5 to
     # write in the style of _why the lucky stiff today and got this uncanny
@@ -56,7 +56,7 @@ module Familia
     #
     # (Ahem! What I meant to say was that if you're reading this, congratulations!
     # You've stumbled upon the secret garden of documentation. Feel free to smell
-    # the Ruby roses, but watch out for the Redis thorns!)
+    # the Ruby roses, but watch out for the Database thorns!)
     #
     module Serialization
 
@@ -66,7 +66,7 @@ module Familia
       # object's current state but also meticulously timestamping when it was
       # created and last updated. It's the record keeper of your data's life story!
       #
-      # @return [Boolean] true if the save was successful, false if Redis was grumpy.
+      # @return [Boolean] true if the save was successful, false if Database was grumpy.
       #
       # @example Preserving your pet rock for posterity
       #   rocky = PetRock.new(name: "Dwayne")
@@ -77,7 +77,7 @@ module Familia
       #   It's like Hansel and Gretel, but for data operations!
       #
       def save update_expiration: true
-        Familia.trace :SAVE, redis, redisuri, caller(1..1) if Familia.debug?
+        Familia.trace :SAVE, dbclient, uri, caller(1..1) if Familia.debug?
 
         # Update our object's life story, keeping the mandatory built-in
         # key field in sync with the field that is the chosen identifier.
@@ -85,17 +85,17 @@ module Familia
         self.created ||= Familia.now.to_i if respond_to?(:created)
         self.updated = Familia.now.to_i if respond_to?(:updated)
 
-        # Commit our tale to the Redis chronicles
+        # Commit our tale to the Database chronicles
         #
         ret = commit_fields(update_expiration: update_expiration)
 
-        Familia.ld "[save] #{self.class} #{rediskey} #{ret} (update_expiration: #{update_expiration})"
+        Familia.ld "[save] #{self.class} #{dbkey} #{ret} (update_expiration: #{update_expiration})"
 
-        # Did Redis accept our offering?
+        # Did Database accept our offering?
         !ret.nil?
       end
 
-      # Updates multiple fields atomically in a Redis transaction.
+      # Updates multiple fields atomically in a Database transaction.
       #
       # @param fields [Hash] Field names and values to update. Special key :update_expiration
       #   controls whether to update key expiration (default: true)
@@ -111,19 +111,19 @@ module Familia
         update_expiration = kwargs.delete(:update_expiration) { true }
         fields = kwargs
 
-        Familia.trace :BATCH_UPDATE, redis, fields.keys, caller(1..1) if Familia.debug?
+        Familia.trace :BATCH_UPDATE, dbclient, fields.keys, caller(1..1) if Familia.debug?
 
         command_return_values = transaction do |conn|
           fields.each do |field, value|
             prepared_value = serialize_value(value)
-            conn.hset rediskey, field, prepared_value
+            conn.hset dbkey, field, prepared_value
             # Update instance variable to keep object in sync
             send("#{field}=", value) if respond_to?("#{field}=")
           end
         end
 
         # Update expiration if requested and supported
-        self.update_expiration(ttl: nil) if update_expiration && respond_to?(:update_expiration)
+        self.update_expiration(default_expiration: nil) if update_expiration && respond_to?(:update_expiration)
 
         # Return same MultiResult format as other methods
         summary_boolean = command_return_values.all? { |ret| %w[OK 0 1].include?(ret.to_s) }
@@ -161,12 +161,12 @@ module Familia
       # if applicable, updating the expiration time.
       #
       # @param update_expiration [Boolean] Whether to update the expiration time
-      #  of the Redis key. This is true by default, but can be disabled if you
+      #  of the dbkey. This is true by default, but can be disabled if you
       #  don't want to mess with the cosmic balance of your key's lifespan.
       #
       # @return [MultiResult] A mystical object containing:
-      #   - success: A boolean indicating if all Redis commands succeeded
-      #   - results: An array of strings, cryptic messages from the Redis gods
+      #   - success: A boolean indicating if all Database commands succeeded
+      #   - results: An array of strings, cryptic messages from the Database gods
       #
       # The MultiResult object responds to:
       #   - successful?: Returns the boolean success value
@@ -175,26 +175,26 @@ module Familia
       # @note Be warned, young programmer! This method dabbles in the arcane
       #   art of transactions. Side effects may include data persistence and a
       #   slight tingling sensation. The method does not raise exceptions for
-      #   unexpected Redis responses, but logs warnings and returns a failure status.
+      #   unexpected Database responses, but logs warnings and returns a failure status.
       #
-      # @example Offering your changes to the Redis deities
+      # @example Offering your changes to the Database deities
       #   unicorn.name = "Charlie"
       #   unicorn.horn_length = "magnificent"
       #   result = unicorn.commit_fields
       #   if result.successful?
-      #     puts "The Redis gods are pleased with your offering"
+      #     puts "The Database gods are pleased with your offering"
       #     p result.results  # => ["OK", "OK"]
       #   else
-      #     puts "The Redis gods frown upon your offering"
+      #     puts "The Database gods frown upon your offering"
       #     p result.results  # Examine the unexpected values
       #   end
       #
       # @see Familia::Horreum.valid_command_return_values for the list of
-      #   acceptable Redis command return values.
+      #   acceptable Database command return values.
       #
       # @note This method performs logging at various levels:
-      #   - Debug: Logs the object's class, Redis key, and current state before committing
-      #   - Warn: Logs any unexpected return values from Redis commands
+      #   - Debug: Logs the object's class, dbkey, and current state before committing
+      #   - Warn: Logs any unexpected return values from Database commands
       #   - Debug: Logs the final result, including success status and all return values
       #
       # @note The expiration update is only performed for classes that have
@@ -202,14 +202,14 @@ module Familia
       #
       def commit_fields update_expiration: true
         prepared_value = to_h
-        Familia.ld "[commit_fields] Begin #{self.class} #{rediskey} #{prepared_value} (exp: #{update_expiration})"
+        Familia.ld "[commit_fields] Begin #{self.class} #{dbkey} #{prepared_value} (exp: #{update_expiration})"
 
         result = self.hmset(prepared_value)
 
         # Only classes that have the expiration ferature enabled will
         # actually set an expiration time on their keys. Otherwise
         # this will be a no-op that simply logs the attempt.
-        self.update_expiration(ttl: nil) if update_expiration
+        self.update_expiration(default_expiration: nil) if update_expiration
 
         result
       end
@@ -229,9 +229,9 @@ module Familia
       #   # => *poof* Rocky is no more. A moment of silence, please.
       #
       # This method is part of Familia's high-level object lifecycle management. While `delete!`
-      # operates directly on Redis keys, `destroy!` operates at the object level and is used for
+      # operates directly on dbkeys, `destroy!` operates at the object level and is used for
       # ORM-style operations. Use `destroy!` when removing complete objects from the system, and
-      # `delete!` when working directly with Redis keys.
+      # `delete!` when working directly with dbkeys.
       #
       # @note If debugging is enabled, this method will leave a trace of its
       #   destructive path, like breadcrumbs for future data archaeologists.
@@ -239,7 +239,7 @@ module Familia
       # @see #delete! The actual hitman carrying out the deed.
       #
       def destroy!
-        Familia.trace :DESTROY, redis, redisuri, caller(1..1) if Familia.debug?
+        Familia.trace :DESTROY, dbclient, uri, caller(1..1) if Familia.debug?
         delete!
       end
 
@@ -263,7 +263,7 @@ module Familia
         self.class.fields.each { |field| send("#{field}=", nil) }
       end
 
-      # The Great Redis Refresh-o-matic 3000
+      # The Great Database Refresh-o-matic 3000
       #
       # Imagine your object as a forgetful time traveler. This method is like
       # zapping it with a memory ray from Redis-topia. ZAP! New memories!
@@ -279,33 +279,33 @@ module Familia
       # Remember: In the game of Redis-Refresh, you win or you... well, you
       # always win, but sometimes you forget why you played in the first place.
       #
-      # @raise [Familia::KeyNotFoundError] If the Redis key does not exist.
+      # @raise [Familia::KeyNotFoundError] If the dbkey does not exist.
       #
       # @example
       #   object.refresh!
       def refresh!
-        Familia.trace :REFRESH, redis, redisuri, caller(1..1) if Familia.debug?
-        raise Familia::KeyNotFoundError, rediskey unless redis.exists(rediskey)
+        Familia.trace :REFRESH, dbclient, uri, caller(1..1) if Familia.debug?
+        raise Familia::KeyNotFoundError, dbkey unless dbclient.exists(dbkey)
         fields = hgetall
-        Familia.ld "[refresh!] #{self.class} #{rediskey} fields:#{fields.keys}"
+        Familia.ld "[refresh!] #{self.class} #{dbkey} fields:#{fields.keys}"
         optimistic_refresh(**fields)
       end
 
       # Ah, the magical refresh dance! It's like giving your object a
       # sip from the fountain of youth.
       #
-      # This method twirls your object around, dips it into the Redis pool,
+      # This method twirls your object around, dips it into the Database pool,
       # and brings it back sparkling clean and up-to-date. It's using the
-      # refresh! spell behind the scenes, so expect some Redis whispering.
+      # refresh! spell behind the scenes, so expect some Database whispering.
       #
       # @note Caution, young Rubyist! While this method loves to play
       #   chain-tag with other methods, it's still got that refresh! kick.
       #   It'll update your object faster than you can say "matz!"
       #
-      # @return [self] Your object, freshly bathed in Redis waters, ready
+      # @return [self] Your object, freshly bathed in Database waters, ready
       #   to dance with more methods in a conga line of Ruby joy!
       #
-      # @raise [Familia::KeyNotFoundError] If the Redis key does not exist.
+      # @raise [Familia::KeyNotFoundError] If the dbkey does not exist.
       #
       def refresh
         refresh!
@@ -325,7 +325,7 @@ module Familia
       #   dragon.to_h
       #   # => {"name"=>"Puff", "breathes"=>"fire", "age"=>1000}
       #
-      # @note Watch in awe as each field is lovingly prepared for its Redis adventure!
+      # @note Watch in awe as each field is lovingly prepared for its Database adventure!
       #
       def to_h
         self.class.fields.inject({}) do |hsh, field|
@@ -342,7 +342,7 @@ module Familia
       # Line up all our attributes in a neat little array parade!
       #
       # This method marshals all our object's attributes into an orderly procession,
-      # ready to march into Redis in perfect formation. It's like a little data army,
+      # ready to march into Database in perfect formation. It's like a little data army,
       # but friendlier and less prone to conquering neighboring databases.
       #
       # @return [Array] A splendid array of Redis-ready values, in the order of our fields.
@@ -351,7 +351,7 @@ module Familia
       #   unicorn.to_a
       #   # => ["Charlie", "magnificent", 5]
       #
-      # @note Each value is carefully disguised in its Redis costume
+      # @note Each value is carefully disguised in its Database costume
       # before joining the parade.
       #
       def to_a
@@ -364,21 +364,21 @@ module Familia
       end
 
       # Behold, the grand tale of two serialization sorcerers:
-      # Familia::Redistype and Familia::Horreum!
+      # Familia::DataType and Familia::Horreum!
       #
       # These twin wizards, though cut from the same magical cloth,
       # have their own unique spells for turning Ruby objects into
       # Redis-friendly potions. Let's peek into their spell books:
       #
       # Shared Incantations:
-      # - Both transform various data creatures for Redis safekeeping
+      # - Both transform various data creatures for Database safekeeping
       # - They tame wild Strings, Symbols, and those slippery Numerics
       # - Secret rituals (aka custom serialization) are welcome
       #
       # Mystical Differences:
-      # - Redistype reads the future in opts[:class] tea leaves
+      # - DataType reads the future in opts[:class] tea leaves
       # - Horreum prefers to interrogate types more thoroughly
-      # - Redistype leaves a trail of debug breadcrumbs
+      # - DataType leaves a trail of debug breadcrumbs
       #
       # But wait! Enter the wise Familia.distinguisher,
       # a grand unifier of serialization magic!
@@ -387,7 +387,7 @@ module Familia
       # 1. Juggles a circus of data types from both realms
       # 2. Offers a 'strict_values' toggle for the type-obsessed
       # 3. Welcomes custom spells via dump_method
-      # 4. Sprinkles debug fairy dust à la Redistype
+      # 4. Sprinkles debug fairy dust à la DataType
       #
       # By channeling the Familia.distinguisher, we've created a
       # harmonious serialization symphony, flexible enough to dance
@@ -414,14 +414,13 @@ module Familia
 
         prepared
       end
-      alias to_redis serialize_value
 
-      # Converts a Redis string value back to its original Ruby type
+      # Converts a Database string value back to its original Ruby type
       #
       # This method attempts to deserialize JSON strings back to their original
       # Hash or Array types. Simple string values are returned as-is.
       #
-      # @param val [String] The string value from Redis to deserialize
+      # @param val [String] The string value from Database to deserialize
       # @param symbolize_keys [Boolean] Whether to symbolize hash keys (default: true for compatibility)
       # @return [Object] The deserialized value (Hash, Array, or original string)
       #
@@ -440,7 +439,6 @@ module Familia
 
         val
       end
-      alias from_redis deserialize_value
 
     end
 

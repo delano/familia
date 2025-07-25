@@ -939,7 +939,7 @@ end
 # Run basic test if executed directly
 if __FILE__ == $0
   Familia.debug = false
-  BankAccount.redis.flushdb
+  BankAccount.dbclient.flushdb
 
   # Run a simple test
   test = ConnectionPoolStressTest.new(

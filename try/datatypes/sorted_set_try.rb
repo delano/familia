@@ -1,4 +1,4 @@
-# try/redis_types/sorted_set_try.rb
+# try/datatypes/sorted_set_try.rb
 
 require_relative '../../lib/familia'
 require_relative '../helpers/test_helpers'
