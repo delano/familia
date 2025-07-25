@@ -157,12 +157,11 @@ module Familia
       #
       # i.e.
       #     familia_object.rediskey              == v1:bone:INDEXVALUE:object
-      #     familia_object.redis_type.rediskey == v1:bone:INDEXVALUE:name
+      #     familia_object.related_object.rediskey == v1:bone:INDEXVALUE:name
       #
-      # See DataType.install_redis_type
-      self.class.redis_types.each_pair do |name, redis_type_definition|
-        klass = redis_type_definition.klass
-        opts = redis_type_definition.opts
+      self.class.related_fields.each_pair do |name, datatype_definition|
+        klass = datatype_definition.klass
+        opts = datatype_definition.opts
         Familia.ld "[#{self.class}] initialize_relatives #{name} => #{klass} #{opts.keys}"
 
         # As a subclass of Familia::Horreum, we add ourselves as the parent
@@ -179,16 +178,16 @@ module Familia
 
         # Instantiate the DataType object and below we store it in
         # an instance variable.
-        redis_type = klass.new suffix_override, opts
+        related_object = klass.new suffix_override, opts
 
-        # Freezes the redis_type, making it immutable.
+        # Freezes the related_object, making it immutable.
         # This ensures the object's state remains consistent and prevents any modifications,
         # safeguarding its integrity and making it thread-safe.
         # Any attempts to change the object after this will raise a FrozenError.
-        redis_type.freeze
+        related_object.freeze
 
         # e.g. customer.name  #=> `#<Familia::HashKey:0x0000...>`
-        instance_variable_set :"@#{name}", redis_type
+        instance_variable_set :"@#{name}", related_object
       end
     end
 

@@ -23,7 +23,7 @@ Familia::Horreum::ClassMethods.public_method_defined? :lists
 #=> true
 
 ## A Familia object knows its datatype relatives
-Bone.redis_types.is_a?(Hash) && Bone.redis_types.has_key?(:owners)
+Bone.related_fields.is_a?(Hash) && Bone.related_fields.has_key?(:owners)
 #=> true
 
 ## A Familia object knows its lists

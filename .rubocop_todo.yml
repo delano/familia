@@ -117,7 +117,7 @@ Style/Documentation:
     - "test/**/*"
     - "lib/familia/errors.rb"
     - "lib/familia/horreum/class_methods.rb"
-    - "lib/familia/horreum/relations_management.rb"
+    - "lib/familia/horreum/related_fields_management.rb"
     - "lib/familia/datatype/types/hashkey.rb"
     - "lib/familia/datatype/types/list.rb"
     - "lib/familia/datatype/types/sorted_set.rb"
@@ -148,7 +148,7 @@ Style/FormatStringToken:
 Style/FrozenStringLiteralComment:
   Exclude:
     - "**/*.arb"
-    - "lib/familia/horreum/relations_management.rb"
+    - "lib/familia/horreum/related_fields_management.rb"
 
 # Offense count: 1
 # This cop supports unsafe autocorrection (--autocorrect-all).

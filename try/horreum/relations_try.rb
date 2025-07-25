@@ -42,12 +42,12 @@ RelationsTestUser.has_relations?
 #=> true
 
 ## Class can list Redis type definitions
-redis_types = RelationsTestUser.redis_types
-redis_types.keys.sort
+related_fields = RelationsTestUser.related_fields
+related_fields.keys.sort
 #=> [:preferences, :scores, :sessions, :tags]
 
 ## Redis type definitions are accessible
-sessions_def = RelationsTestUser.redis_types[:sessions]
+sessions_def = RelationsTestUser.related_fields[:sessions]
 sessions_def.nil?
 #=> false
 

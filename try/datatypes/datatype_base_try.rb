@@ -10,11 +10,11 @@ Familia.debug = false
 @sample_obj = Customer.new(custid: 'customer123', email: 'test@example.com')
 
 ## Customer has defined Redis types
-Customer.redis_types.keys.include?(:timeline)
+Customer.related_fields.keys.include?(:timeline)
 #=> true
 
 ## Customer has defined Redis types
-Customer.redis_types.keys.include?(:stripe_customer)
+Customer.related_fields.keys.include?(:stripe_customer)
 #=> true
 
 ## Can access Redis type instances

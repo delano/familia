@@ -60,8 +60,8 @@ module Familia::Features
       default_expiration ||= self.default_expiration
 
       if self.class.has_relations?
-        Familia.ld "[update_expiration] #{self.class} has relations: #{self.class.redis_types.keys}"
-        self.class.redis_types.each do |name, definition|
+        Familia.ld "[update_expiration] #{self.class} has relations: #{self.class.related_fields.keys}"
+        self.class.related_fields.each do |name, definition|
           next if definition.opts[:default_expiration].nil?
           obj = send(name)
           Familia.ld "[update_expiration] Updating expiration for #{name} (#{obj.rediskey}) to #{default_expiration}"

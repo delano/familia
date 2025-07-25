@@ -1,6 +1,6 @@
 # lib/familia/horreum/class_methods.rb
 
-require_relative 'relations_management'
+require_relative 'related_fields_management'
 
 module Familia
   class Horreum
@@ -14,8 +14,8 @@ module Familia
     @suffix = nil
     @prefix = nil
     @fields = nil # []
-    @class_redis_types = nil # {}
-    @redis_types = nil # {}
+    @class_related_fields = nil # {}
+    @related_fields = nil # {}
     @dump_method = nil
     @load_method = nil
 
@@ -25,13 +25,13 @@ module Familia
     # providing methods for Redis operations and object management.
     #
     # Key features:
-    # * Includes RelationsManagement for Redis-type field handling
+    # * Includes RelatedFieldsManagement for DataType field handling
     # * Defines methods for managing fields, identifiers, and Redis keys
     # * Provides utility methods for working with Redis objects
     #
     module ClassMethods
       include Familia::Settings
-      include Familia::Horreum::RelationsManagement
+      include Familia::Horreum::RelatedFieldsManagement
 
       # Sets or retrieves the unique identifier for the class.
       #
@@ -163,14 +163,14 @@ module Familia
         @fields
       end
 
-      def class_redis_types
-        @class_redis_types ||= {}
-        @class_redis_types
+      def class_related_fields
+        @class_related_fields ||= {}
+        @class_related_fields
       end
 
-      def redis_types
-        @redis_types ||= {}
-        @redis_types
+      def related_fields
+        @related_fields ||= {}
+        @related_fields
       end
 
       def has_relations?
