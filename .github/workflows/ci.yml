@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+
+  pull_request:
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    timeout-minutes: 10
+
+    runs-on: ubuntu-24.04
+
+    strategy:
+      fail-fast: true
+      matrix:
+        ruby: ["3.4", "3.5"]
+        continue-on-error: [false]
+
+    services:
+      redis:
+        image: valkey/valkey:8.1-bookworm
+        # Set health checks to wait until redis has started
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 3s
+          --health-retries 5
+        ports:
+          # https://docs.github.com/en/actions/using-containerized-services/creating-redis-service-containers#running-jobs-in-containers
+          # Maps port 6379 on service container to the host
+          - 6379:6379
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          # When the following is true, also run "bundle install",
+          # and cache the result automatically. Ran into an issue
+          # with the caching and multiple ruby versions. Needs
+          # further investigation.
+          bundler-cache: true
+
+      - name: Setup tmate session
+        uses: mxschmitt/action-tmate@7b6a61a73bbb9793cb80ad69b8dd8ac19261834c # v3
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_enabled }}
+        with:
+          detached: true
+
+      - name: Configure Bundler for secure gem installation
+        run: |
+          bundle config set --local path 'vendor/bundle'
+          bundle config set --local deployment 'false'
+
+      - name: Re-run bundle install
+        run: bundle install
+
+      - name: Run the tryouts
+        run: bundle exec try -vf

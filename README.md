@@ -140,13 +140,6 @@ class Customer < Familia::Horreum
     verified && !reset_requested
   end
 end
-
-class Session < Familia::Horreum
-  def external_identifier
-    elements = [ipaddress || 'UNKNOWNIP', custid || 'anon']
-    @external_identifier ||= Familia.generate_sha_hash(elements)
-  end
-end
 ```
 ### 10. Open-ended Serialization
 

@@ -26,10 +26,10 @@ module Familia
     #
     # May your Redis returns be ever valid, and your data ever flowing!
     #
-    @valid_command_return_values = ["OK", true, 1, 0, nil]
+    @valid_command_return_values = ["OK", true, 1, 0, nil].freeze
 
     class << self
-      attr_accessor :valid_command_return_values
+      attr_reader :valid_command_return_values
     end
 
     # Serialization: Where Objects Go to Become Strings (and Vice Versa)!
@@ -60,48 +60,6 @@ module Familia
     #
     module Serialization
 
-      attr_writer :redis
-
-      # Summon the mystical Redis connection from the depths of instance or class.
-      #
-      # This method is like a magical divining rod, always pointing to the nearest
-      # source of Redis goodness. It first checks if we have a personal Redis
-      # connection (@redis), and if not, it borrows the class's connection.
-      #
-      # @return [Redis] A shimmering Redis connection, ready for your bidding.
-      #
-      # @example Finding your Redis way
-      #   puts object.redis
-      #   # => #<Redis client v4.5.1 for redis://localhost:6379/0>
-      #
-      def redis
-        @redis || self.class.redis
-      end
-
-      # Perform a sacred Redis transaction ritual.
-      #
-      # This method creates a protective circle around your Redis operations,
-      # ensuring they all succeed or fail together. It's like a group hug for your
-      # data operations, but with more ACID properties.
-      #
-      # @yield [conn] A block where you can perform your Redis incantations.
-      # @yieldparam conn [Redis] A Redis connection in multi mode.
-      #
-      # @example Performing a Redis rain dance
-      #   transaction do |conn|
-      #     conn.set("weather", "rainy")
-      #     conn.set("mood", "melancholic")
-      #   end
-      #
-      # @note This method temporarily replaces your Redis connection with a multi
-      #   connection. Don't worry, it puts everything back where it found it when it's done.
-      #
-      def transaction
-        redis.multi do |conn|
-          yield(conn)
-        end
-      end
-
       # Save our precious data to Redis, with a sprinkle of timestamp magic!
       #
       # This method is like a conscientious historian, not only recording your
@@ -129,13 +87,12 @@ module Familia
 
         # Commit our tale to the Redis chronicles
         #
-        # e.g. `ret`  # => MultiResult.new(true, ["OK", "OK"])
         ret = commit_fields(update_expiration: update_expiration)
 
         Familia.ld "[save] #{self.class} #{rediskey} #{ret} (update_expiration: #{update_expiration})"
 
         # Did Redis accept our offering?
-        ret.successful?
+        !ret.nil?
       end
 
       # Updates multiple fields atomically in a Redis transaction.
@@ -244,34 +201,17 @@ module Familia
       #   the expiration feature enabled. For others, it's a no-op.
       #
       def commit_fields update_expiration: true
-        Familia.ld "[commit_fields1] #{self.class} #{rediskey} #{to_h} (update_expiration: #{update_expiration})"
-        command_return_values = transaction do |conn|
-          conn.hmset rediskey(suffix), self.to_h # using the prepared connection
-        end
+        prepared_value = to_h
+        Familia.ld "[commit_fields] Begin #{self.class} #{rediskey} #{prepared_value} (exp: #{update_expiration})"
+
+        result = self.hmset(prepared_value)
+
         # Only classes that have the expiration ferature enabled will
         # actually set an expiration time on their keys. Otherwise
         # this will be a no-op that simply logs the attempt.
         self.update_expiration(ttl: nil) if update_expiration
 
-        # The acceptable redis command return values are defined in the
-        # Horreum class. This is to ensure that all commands return values
-        # are validated against a consistent set of values.
-        acceptable_values = Familia::Horreum.valid_command_return_values
-
-        # Check if all return values are valid
-        summary_boolean = command_return_values.uniq.all? { |value|
-          acceptable_values.include?(value)
-        }
-
-        # Log the unexpected
-        unless summary_boolean
-          unexpected_values = command_return_values.reject { |value| acceptable_values.include?(value) }
-          Familia.warn "[commit_fields] Unexpected return values: #{unexpected_values.inspect}"
-        end
-
-        Familia.ld "[commit_fields2] #{self.class} #{rediskey} #{summary_boolean}: #{command_return_values}"
-
-        MultiResult.new(summary_boolean, command_return_values)
+        result
       end
 
       # Dramatically vanquish this object from the face of Redis! (ed: delete it)
@@ -347,7 +287,7 @@ module Familia
         Familia.trace :REFRESH, redis, redisuri, caller(1..1) if Familia.debug?
         raise Familia::KeyNotFoundError, rediskey unless redis.exists(rediskey)
         fields = hgetall
-        Familia.ld "[refresh!] #{self.class} #{rediskey} #{fields.keys}"
+        Familia.ld "[refresh!] #{self.class} #{rediskey} fields:#{fields.keys}"
         optimistic_refresh(**fields)
       end
 
@@ -503,79 +443,6 @@ module Familia
       alias from_redis deserialize_value
 
     end
-    # End of Serialization module
-
-    # The magical MultiResult, keeper of Redis's deepest secrets!
-    #
-    # This quirky little class wraps up the outcome of a Redis "transaction"
-    # (or as I like to call it, a "Redis dance party") with a bow made of
-    # pure Ruby delight. It knows if your commands were successful and
-    # keeps the results safe in its pocket dimension.
-    #
-    # @attr_reader success [Boolean] The golden ticket! True if all your
-    #   Redis wishes came true in the transaction.
-    # @attr_reader results [Array<String>] A mystical array of return values,
-    #   each one a whisper from the Redis gods.
-    #
-    # @example Summoning a MultiResult from the void
-    #   result = MultiResult.new(true, ["OK", "OK"])
-    #
-    # @example Divining the success of your Redis ritual
-    #   if result.successful?
-    #     puts "Huzzah! The Redis spirits smile upon you!"
-    #   else
-    #     puts "Alas! The Redis gremlins have conspired against us!"
-    #   end
-    #
-    # @example Peering into the raw essence of results
-    #   result.results.each_with_index do |value, index|
-    #     puts "Command #{index + 1} whispered back: #{value}"
-    #   end
-    #
-    class MultiResult
-      # @return [Boolean] true if all commands in the transaction succeeded,
-      #   false otherwise
-      attr_reader :success
-
-      # @return [Array<String>] The raw return values from the Redis commands
-      attr_reader :results
-
-      # Creates a new MultiResult instance.
-      #
-      # @param success [Boolean] Whether all commands succeeded
-      # @param results [Array<String>] The raw results from Redis commands
-      def initialize(success, results)
-        @success = success
-        @results = results
-      end
-
-      # Returns a tuple representing the result of the transaction.
-      #
-      # @return [Array] A tuple containing the success status and the raw results.
-      #   The success status is a boolean indicating if all commands succeeded.
-      #   The raw results is an array of return values from the Redis commands.
-      #
-      # @example
-      #   [true, ["OK", true, 1]]
-      #
-      def tuple
-        [successful?, results]
-      end
-      alias to_a tuple
-
-      def to_h
-        { success: successful?, results: results }
-      end
-
-      # Convenient method to check if the commit was successful.
-      #
-      # @return [Boolean] true if all commands succeeded, false otherwise
-      def successful?
-        @success
-      end
-      alias success? successful?
-    end
-    # End of MultiResult class
 
     include Serialization # these become Horreum instance methods
   end

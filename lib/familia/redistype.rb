@@ -125,6 +125,7 @@ module Familia
     end
 
     def redis
+      return Fiber[:familia_transaction] if Fiber[:familia_transaction]
       return @redis if @redis
 
       parent? ? parent.redis : Familia.redis(opts[:db])
@@ -205,7 +206,21 @@ module Familia
     end
 
     def uri
-      @opts[:uri] || self.class.uri
+      # If a specific URI is set in opts, use it
+      return @opts[:uri] if @opts[:uri]
+
+      # If parent has a DB set, create a URI with that DB
+      if parent? && parent.respond_to?(:db) && parent.db
+        base_uri = self.class.uri || Familia.uri
+        if base_uri
+          uri_with_db = base_uri.dup
+          uri_with_db.db = parent.db
+          return uri_with_db
+        end
+      end
+
+      # Otherwise fall back to class URI
+      self.class.uri
     end
 
     def dump_method

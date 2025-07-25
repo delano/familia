@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'concurrent-ruby'
+
 # RedisLogger is RedisClient middleware.
 #
 # This middleware addresses the need for detailed Redis command logging, which
@@ -63,47 +65,86 @@ end
 #   RedisClient.register(RedisCommandCounter)
 #
 # @see https://github.com/redis-rb/redis-client?tab=readme-ov-file#instrumentation-and-middlewares
+#
+# rubocop:disable ThreadSafety/ClassInstanceVariable
 module RedisCommandCounter
-  @count = 0
-  @mutex = Mutex.new
+  @count = Concurrent::AtomicFixnum.new(0)
+
+  # We skip SELECT because depending on how the Familia is connecting to redis
+  # the number of SELECT commands can be a lot or just a little. For example in
+  # a configuration where there's a connection to each logical db, there's only
+  # one when the connection is made. When using a provider of via thread local
+  # it could theoretically double the number of statements executed.
+  @skip_commands = Set.new(['SELECT']).freeze
 
   class << self
+    # Gets the set of commands to skip counting.
+    # @return [Set] The commands that won't be counted.
+    attr_reader :skip_commands
+
     # Gets the current count of Redis commands executed.
     # @return [Integer] The number of Redis commands executed.
-    attr_reader :count
+    def count
+      @count.value
+    end
 
     # Resets the command count to zero.
     # This method is thread-safe.
     # @return [Integer] The reset count (always 0).
     def reset
-      @mutex.synchronize { @count = 0 }
+      @count.value = 0
     end
 
     # Increments the command count.
     # This method is thread-safe.
     # @return [Integer] The new count after incrementing.
     def increment
-      @mutex.synchronize { @count += 1 }
+      @count.increment
     end
 
-    def count_commands
-      start_count = count
-      yield
-      end_count = count
-      end_count - start_count
+    def skip_command?(command)
+      skip_commands.include?(command.first.to_s.upcase)
     end
+
+    # Counts the number of Redis commands executed within a block.
+    #
+    # This method captures the command count before and after executing the
+    # provided block, returning the difference. This is useful for measuring
+    # how many Redis commands are executed by a specific operation.
+    #
+    # @yield [] The block of code to execute while counting commands.
+    # @return [Integer] The number of Redis commands executed within the block.
+    #
+    # @example Count commands in a block
+    #   commands_executed = RedisCommandCounter.count_commands do
+    #     redis.set('key1', 'value1')
+    #     redis.get('key1')
+    #   end
+    #   # commands_executed will be 2
+    def count_commands
+      start_count = count      # Capture the current command count before execution
+      yield                    # Execute the provided block
+      end_count = count        # Capture the command count after execution
+      end_count - start_count  # Return the difference (commands executed in block)
+    end
+  end
+
+  def klass
+    RedisCommandCounter
   end
 
   # Counts the Redis command and delegates its execution.
   #
   # This method is called for each Redis command when the middleware is active.
-  # It increments the command count and then yields to execute the actual command.
+  # It increments the command count (unless the command is in the skip list)
+  # and then yields to execute the actual command.
   #
   # @param command [Array] The Redis command and its arguments.
   # @param redis_config [Hash] The configuration options for the Redis connection.
   # @return [Object] The result of the Redis command execution.
   def call(command, redis_config)
-    RedisCommandCounter.increment
+    klass.increment unless klass.skip_command?(command)
     yield
   end
 end
+# rubocop:enable ThreadSafety/ClassInstanceVariable

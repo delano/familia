@@ -28,7 +28,13 @@ module Familia::Features
         if quantum.is_a?(Array)
           quantum, pattern = quantum
         end
-        quantum ||= @opts[:quantize] || ttl || 10.minutes
+
+        # Previously we erronously included `@opts.fetch(:quantize, nil)` in
+        # the list of default values here, but @opts is for horreum instances
+        # not at the class level. This method `qstamp` is part of the initial
+        # definition for whatever horreum subclass we're in right now. That's
+        # why ttl works (e.g. `class Plop; feature :quantization; ttl 90; end`).
+        quantum ||= ttl || 10.minutes
 
         # Validate quantum
         unless quantum.is_a?(Numeric) && quantum.positive?

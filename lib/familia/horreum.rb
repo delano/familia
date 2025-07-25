@@ -55,6 +55,7 @@ module Familia
     #
     class << self
       attr_accessor :parent
+      # TODO: Where are we calling redis= from now with connection pool?
       attr_writer :redis, :dump_method, :load_method
       attr_reader :has_relations
 
@@ -62,6 +63,7 @@ module Familia
       def inherited(member)
         Familia.trace :HORREUM, nil, "Welcome #{member} to the family", caller(1..1) if Familia.debug?
         member.extend(ClassMethods)
+        member.extend(Connection)
         member.extend(Features)
 
         # Tracks all the classes/modules that include Familia. It's
@@ -281,6 +283,30 @@ module Familia
       unique_id
     end
 
+    attr_writer :redis
+
+    # Summon the mystical Redis connection from the depths of instance or class.
+    #
+    # This method is like a magical divining rod, always pointing to the nearest
+    # source of Redis goodness. It first checks if we have a personal Redis
+    # connection (@redis), and if not, it borrows the class's connection.
+    #
+    # @return [Redis] A shimmering Redis connection, ready for your bidding.
+    #
+    # @example Finding your Redis way
+    #   puts object.redis
+    #   # => #<Redis client v4.5.1 for redis://localhost:6379/0>
+    #
+    def redis
+      conn = Fiber[:familia_transaction] || @redis || self.class.redis
+      # conn.select(self.class.db)
+      conn
+    end
+
+    def generate_id
+      @objid ||= Familia.generate_id # rubocop:disable Naming/MemoizedInstanceVariableName
+    end
+
     # The principle is: **If Familia objects have `to_s`, then they should work
     # everywhere strings are expected**, including as Redis hash field names.
     def to_s
@@ -298,6 +324,10 @@ end
 
 require_relative 'horreum/class_methods'
 require_relative 'horreum/commands'
+require_relative 'horreum/connection'
 require_relative 'horreum/serialization'
 require_relative 'horreum/settings'
 require_relative 'horreum/utils'
+
+# Include Connection module for instance methods after it's loaded
+Familia::Horreum.include(Familia::Horreum::Connection)

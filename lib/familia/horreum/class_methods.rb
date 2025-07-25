@@ -6,7 +6,7 @@ module Familia
   class Horreum
     # Class-level instance variables
     # These are set up as nil initially and populated later
-    @redis = nil
+    @redis = nil # TODO
     @identifier = nil
     @ttl = nil
     @db = nil
@@ -32,18 +32,6 @@ module Familia
     module ClassMethods
       include Familia::Settings
       include Familia::Horreum::RelationsManagement
-
-      # Returns the Redis connection for the class.
-      #
-      # This method retrieves the Redis connection instance for the class. If no
-      # connection is set, it initializes a new connection using the provided URI
-      # or database configuration.
-      #
-      # @return [Redis] the Redis connection instance.
-      #
-      def redis
-        @redis || Familia.redis(uri || db)
-      end
 
       # Sets or retrieves the unique identifier for the class.
       #
@@ -198,13 +186,9 @@ module Familia
       end
 
       def db(v = nil)
+        Familia.trace :DB, Familia.redis, "#{@db} #{v}", caller(1..1) if Familia.debug?
         @db = v unless v.nil?
         @db || parent&.db
-      end
-
-      def uri(v = nil)
-        @uri = v unless v.nil?
-        @uri || parent&.uri
       end
 
       def all(suffix = nil)
@@ -468,6 +452,6 @@ module Familia
         @load_method || :from_json # Familia.load_method
       end
     end
-    # End of ClassMethods module
+
   end
 end

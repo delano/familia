@@ -31,6 +31,9 @@ module Familia
     end
   end
 
+  # Set Familia.connection_provider or use middleware to provide connections.
+  class NoConnectionAvailable < Problem; end
+
   # Raised when attempting to refresh an object whose key doesn't exist in Redis
   class KeyNotFoundError < Problem
     attr_reader :key

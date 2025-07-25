@@ -1,3 +1,4 @@
+# .rubocop.yml
 
 ##
 # This is the RuboCop configuration file.
@@ -12,9 +13,12 @@
 # as those documented at the top of the todo file). This is
 # useful for a gradual migration of the codebase.
 #
+# How to resolve "RuboCop version incompatibility found":
+#  `rubocop --stop-server`
+#
 inherit_from: .rubocop_todo.yml
 
-require:
+plugins:
   - rubocop-performance
   - rubocop-thread_safety
 
@@ -22,13 +26,13 @@ AllCops:
   NewCops: enable
   UseCache: true
   MaxFilesInCache: 100
-  TargetRubyVersion: 3.0
+  TargetRubyVersion: 3.4
   Exclude:
-    - 'migrate/**/*.rb'
-    - 'migrate/*.rb'
-    - 'try/**/*'
-    - 'try/*.rb'
-    - 'vendor/**/*'
+    - "migrate/**/*.rb"
+    - "migrate/*.rb"
+    - "try/**/*"
+    - "try/*.rb"
+    - "vendor/**/*"
 
 Gemspec/DeprecatedAttributeAssignment:
   Enabled: true
@@ -56,12 +60,12 @@ Metrics/CyclomaticComplexity:
 Metrics/MethodLength:
   Enabled: true
   Max: 40
-  CountAsOne: ['method_call']
+  CountAsOne: ["method_call"]
 
 Metrics/ModuleLength:
   Enabled: true
   Max: 250
-  CountAsOne: ['method_call']
+  CountAsOne: ["method_call"]
 
 Performance/Size:
   Enabled: true
@@ -72,4 +76,7 @@ Style/NegatedIfElseCondition:
   Enabled: true
 
 Naming/AsciiIdentifiers:
+  Enabled: false
+
+Style/FrozenStringLiteralComment:
   Enabled: false

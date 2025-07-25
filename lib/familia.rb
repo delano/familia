@@ -4,6 +4,7 @@
 require 'json'
 require 'redis'
 require 'uri/redis'
+require 'connection_pool'
 
 require_relative 'familia/core_ext'
 require_relative 'familia/refinements'
@@ -32,16 +33,12 @@ require_relative 'familia/version'
 #
 module Familia
 
-  @debug = false
+  @debug = ENV['FAMILIA_DEBUG'].to_s.downcase.match?(/^(true|1)$/i).freeze
   @members = []
 
   class << self
-    attr_writer :debug
+    attr_accessor :debug
     attr_reader :members
-
-    def debug
-      @debug ||= ENV['FAMILIA_DEBUG'].to_s.match?(/^(true|1)$/i)
-    end
 
     def included(member)
       raise Problem, "#{member} should subclass Familia::Horreum"
@@ -58,6 +55,15 @@ module Familia
     #
     def configure
       yield self
+    end
+
+    # Checks if debug mode is enabled
+    #
+    # e.g. Familia.debug = true
+    #
+    # @return [Boolean] true if debug mode is on, false otherwise
+    def debug?
+      @debug == true
     end
   end
 
