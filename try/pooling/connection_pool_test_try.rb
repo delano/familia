@@ -5,7 +5,7 @@
 require 'bundler/setup'
 require 'securerandom'
 require 'thread'
-require_relative 'helpers/test_helpers'
+require_relative '../helpers/test_helpers'
 
 # Ensure connection pooling is enabled
 Familia.enable_connection_pool = true
