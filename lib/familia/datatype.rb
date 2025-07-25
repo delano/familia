@@ -1,17 +1,17 @@
-# lib/familia/redistype.rb
+# lib/familia/datatype.rb
 
-require_relative 'redistype/commands'
-require_relative 'redistype/serialization'
+require_relative 'datatype/commands'
+require_relative 'datatype/serialization'
 
 module Familia
 
-  # RedisType - Base class for Redis data type wrappers
+  # DataType - Base class for Redis data type wrappers
   #
   # This class provides common functionality for various Redis data types
   # such as String, List, Set, SortedSet, and HashKey.
   #
   # @abstract Subclass and implement Redis data type specific methods
-  class RedisType
+  class DataType
     include Familia::Base
     extend Familia::Features
 
@@ -29,7 +29,7 @@ module Familia
     end
 
     module ClassMethods
-      # To be called inside every class that inherits RedisType
+      # To be called inside every class that inherits DataType
       # +methname+ is the term used for the class and instance methods
       # that are created for the given +klass+ (e.g. set, list, etc)
       def register(klass, methname)
@@ -49,7 +49,7 @@ module Familia
       end
 
       def inherited(obj)
-        Familia.trace :REDISTYPE, nil, "#{obj} is my kinda type", caller(1..1) if Familia.debug?
+        Familia.trace :DATATYPE, nil, "#{obj} is my kinda type", caller(1..1) if Familia.debug?
         obj.logical_database = logical_database
         obj.default_expiration = default_expiration # method added via Features::Expiration
         obj.uri = uri
@@ -58,7 +58,7 @@ module Familia
       end
 
       def valid_keys_only(opts)
-        opts.select { |k, _| RedisType.valid_options.include? k }
+        opts.select { |k, _| DataType.valid_options.include? k }
       end
 
       def has_relations?
@@ -80,7 +80,7 @@ module Familia
     # Familia.dump_method. These will be used when loading and
     # saving data from/to redis to unmarshal/marshal the class.
     #
-    # :parent => The Familia object that this redistype object belongs
+    # :parent => The Familia object that this datatype object belongs
     # to. This can be a class that includes Familia or an instance.
     #
     # :default_expiration => the time to live in seconds. When not nil, this will
@@ -108,7 +108,7 @@ module Familia
 
       # Remove all keys from the opts that are not in the allowed list
       @opts = opts || {}
-      @opts = RedisType.valid_keys_only(@opts)
+      @opts = DataType.valid_keys_only(@opts)
 
       # Apply the options to instance method setters of the same name
       @opts.each do |k, v|
@@ -135,30 +135,30 @@ module Familia
     #
     # @return [String] The full Redis key.
     #
-    # This method determines the appropriate Redis key based on the context of the RedisType object:
+    # This method determines the appropriate Redis key based on the context of the DataType object:
     #
     # 1. If a hardcoded key is set in the options, it returns that key.
-    # 2. For instance-level RedisType objects, it uses the parent instance's rediskey method.
-    # 3. For class-level RedisType objects, it uses the parent class's rediskey method.
-    # 4. For standalone RedisType objects, it uses the keystring as the full Redis key.
+    # 2. For instance-level DataType objects, it uses the parent instance's rediskey method.
+    # 3. For class-level DataType objects, it uses the parent class's rediskey method.
+    # 4. For standalone DataType objects, it uses the keystring as the full Redis key.
     #
-    # For class-level RedisType objects (parent_class? == true):
+    # For class-level DataType objects (parent_class? == true):
     # - The suffix is optional and used to differentiate between different types of objects.
     # - If no suffix is provided, the class's default suffix is used (via the self.suffix method).
     # - If a nil suffix is explicitly passed, it won't appear in the resulting Redis key.
-    # - Passing nil as the suffix is how class-level RedisType objects are created without
+    # - Passing nil as the suffix is how class-level DataType objects are created without
     #   the global default 'object' suffix.
     #
-    # @example Instance-level RedisType
-    #   user_instance.some_redistype.rediskey  # => "user:123:some_redistype"
+    # @example Instance-level DataType
+    #   user_instance.some_datatype.rediskey  # => "user:123:some_datatype"
     #
-    # @example Class-level RedisType
-    #   User.some_redistype.rediskey  # => "user:some_redistype"
+    # @example Class-level DataType
+    #   User.some_datatype.rediskey  # => "user:some_datatype"
     #
-    # @example Standalone RedisType
-    #   RedisType.new("mykey").rediskey  # => "mykey"
+    # @example Standalone DataType
+    #   DataType.new("mykey").rediskey  # => "mykey"
     #
-    # @example Class-level RedisType with explicit nil suffix
+    # @example Class-level DataType with explicit nil suffix
     #   User.rediskey("123", nil)  # => "user:123"
     #
     def rediskey
@@ -167,15 +167,15 @@ module Familia
       return opts[:key] if opts[:key]
 
       if parent_instance?
-        # This is an instance-level redistype object so the parent instance's
+        # This is an instance-level datatype object so the parent instance's
         # rediskey method is defined in Familia::Horreum::InstanceMethods.
         parent.rediskey(keystring)
       elsif parent_class?
-        # This is a class-level redistype object so the parent class' rediskey
+        # This is a class-level datatype object so the parent class' rediskey
         # method is defined in Familia::Horreum::ClassMethods.
         parent.rediskey(keystring, nil)
       else
-        # This is a standalone RedisType object where it's keystring
+        # This is a standalone DataType object where it's keystring
         # is the full redis key.
         keystring
       end
@@ -235,9 +235,9 @@ module Familia
     include Serialization
   end
 
-  require_relative 'redistype/types/list'
-  require_relative 'redistype/types/unsorted_set'
-  require_relative 'redistype/types/sorted_set'
-  require_relative 'redistype/types/hashkey'
-  require_relative 'redistype/types/string'
+  require_relative 'datatype/types/list'
+  require_relative 'datatype/types/unsorted_set'
+  require_relative 'datatype/types/sorted_set'
+  require_relative 'datatype/types/hashkey'
+  require_relative 'datatype/types/string'
 end

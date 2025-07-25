@@ -2,7 +2,7 @@
 
 #
 module Familia
-  # A common module for Familia::RedisType and Familia::Horreum to include.
+  # A common module for Familia::DataType and Familia::Horreum to include.
   #
   # This allows us to use a single comparison to check if a class is a
   # Familia class. e.g.
@@ -11,7 +11,7 @@ module Familia
   #     klass.ancestors.member?(Familia::Base) # => true
   #
   # @see Familia::Horreum
-  # @see Familia::RedisType
+  # @see Familia::DataType
   #
   module Base
     @features = nil

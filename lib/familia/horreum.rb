@@ -151,7 +151,7 @@ module Familia
     # This needs to be called in the initialize method.
     #
     def initialize_relatives
-      # Generate instances of each RedisType. These need to be
+      # Generate instances of each DataType. These need to be
       # unique for each instance of this class so they can piggyback
       # on the specifc index of this instance.
       #
@@ -159,25 +159,25 @@ module Familia
       #     familia_object.rediskey              == v1:bone:INDEXVALUE:object
       #     familia_object.redis_type.rediskey == v1:bone:INDEXVALUE:name
       #
-      # See RedisType.install_redis_type
+      # See DataType.install_redis_type
       self.class.redis_types.each_pair do |name, redis_type_definition|
         klass = redis_type_definition.klass
         opts = redis_type_definition.opts
         Familia.ld "[#{self.class}] initialize_relatives #{name} => #{klass} #{opts.keys}"
 
         # As a subclass of Familia::Horreum, we add ourselves as the parent
-        # automatically. This is what determines the rediskey for RedisType
+        # automatically. This is what determines the rediskey for DataType
         # instance and which redis connection.
         #
         #   e.g. If the parent's rediskey is `customer:customer_id:object`
-        #     then the rediskey for this RedisType instance will be
+        #     then the rediskey for this DataType instance will be
         #     `customer:customer_id:name`.
         #
         opts[:parent] = self # unless opts.key(:parent)
 
         suffix_override = opts.fetch(:suffix, name)
 
-        # Instantiate the RedisType object and below we store it in
+        # Instantiate the DataType object and below we store it in
         # an instance variable.
         redis_type = klass.new suffix_override, opts
 

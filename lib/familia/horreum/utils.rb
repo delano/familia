@@ -24,7 +24,7 @@ module Familia
       # and `customer_id` would have been the identifier in that case).
       #
       # identifier is the value that distinguishes this object from others.
-      # Whether this is a Horreum or RedisType object, the value is taken
+      # Whether this is a Horreum or DataType object, the value is taken
       # from the `identifier` method).
       #
       def rediskey(suffix = nil, ignored = nil)

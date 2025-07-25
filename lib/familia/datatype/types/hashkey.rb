@@ -1,7 +1,7 @@
-# lib/familia/redistype/types/hashkey.rb
+# lib/familia/datatype/types/hashkey.rb
 
 module Familia
-  class HashKey < RedisType
+  class HashKey < DataType
     # Returns the number of fields in the hash
     # @return [Integer] number of fields
     def field_count
@@ -161,7 +161,7 @@ module Familia
       self
     end
 
-    Familia::RedisType.register self, :hash # legacy, deprecated
-    Familia::RedisType.register self, :hashkey
+    Familia::DataType.register self, :hash # legacy, deprecated
+    Familia::DataType.register self, :hashkey
   end
 end

@@ -11,14 +11,14 @@
 # Configuration parameters: AutoCorrect, AllowBorderComment, AllowMarginComment.
 Layout/EmptyComment:
   Exclude:
-    - 'lib/familia/base.rb'
-    - 'lib/familia/connection.rb'
+    - "lib/familia/base.rb"
+    - "lib/familia/connection.rb"
 
 # Offense count: 1
 # This cop supports safe autocorrection (--autocorrect).
 Layout/EmptyLines:
   Exclude:
-    - 'Gemfile'
+    - "Gemfile"
 
 # Offense count: 2
 # This cop supports safe autocorrection (--autocorrect).
@@ -26,14 +26,14 @@ Layout/EmptyLines:
 # SupportedStyles: empty_lines, empty_lines_except_namespace, empty_lines_special, no_empty_lines, beginning_only, ending_only
 Layout/EmptyLinesAroundClassBody:
   Exclude:
-    - 'lib/familia/redistype/types/list.rb'
-    - 'lib/familia/redistype/types/unsorted_set.rb'
+    - "lib/familia/datatype/types/list.rb"
+    - "lib/familia/datatype/types/unsorted_set.rb"
 
 # Offense count: 1
 # This cop supports safe autocorrection (--autocorrect).
 Layout/SpaceAfterComma:
   Exclude:
-    - 'lib/familia/redistype/types/hashkey.rb'
+    - "lib/familia/datatype/types/hashkey.rb"
 
 # Offense count: 4
 # This cop supports safe autocorrection (--autocorrect).
@@ -41,8 +41,8 @@ Layout/SpaceAfterComma:
 # NotImplementedExceptions: NotImplementedError
 Lint/UnusedMethodArgument:
   Exclude:
-    - 'lib/familia/base.rb'
-    - 'lib/redis_middleware.rb'
+    - "lib/familia/base.rb"
+    - "lib/redis_middleware.rb"
 
 # Offense count: 1
 # Configuration parameters: CountComments, CountAsOne, AllowedMethods, AllowedPatterns.
@@ -61,20 +61,20 @@ Metrics/PerceivedComplexity:
 # SupportedStyles: anonymous, explicit
 Naming/BlockForwarding:
   Exclude:
-    - 'lib/familia/redistype/types/list.rb'
-    - 'lib/familia/redistype/types/sorted_set.rb'
-    - 'lib/familia/redistype/types/unsorted_set.rb'
-    - 'lib/familia/refinements.rb'
+    - "lib/familia/datatype/types/list.rb"
+    - "lib/familia/datatype/types/sorted_set.rb"
+    - "lib/familia/datatype/types/unsorted_set.rb"
+    - "lib/familia/refinements.rb"
 
 # Offense count: 8
 # Configuration parameters: MinNameLength, AllowNamesEndingInNumbers, AllowedNames, ForbiddenNames.
 # AllowedNames: as, at, by, cc, db, id, if, in, io, ip, of, on, os, pp, to
 Naming/MethodParameterName:
   Exclude:
-    - 'lib/familia/core_ext.rb'
-    - 'lib/familia/horreum/class_methods.rb'
-    - 'lib/familia/redistype/types/sorted_set.rb'
-    - 'lib/familia/redistype/types/unsorted_set.rb'
+    - "lib/familia/core_ext.rb"
+    - "lib/familia/horreum/class_methods.rb"
+    - "lib/familia/datatype/types/sorted_set.rb"
+    - "lib/familia/datatype/types/unsorted_set.rb"
 
 # Offense count: 1
 # Configuration parameters: Mode, AllowedMethods, AllowedPatterns, AllowBangMethods, WaywardPredicates.
@@ -82,7 +82,7 @@ Naming/MethodParameterName:
 # WaywardPredicates: nonzero?
 Naming/PredicateMethod:
   Exclude:
-    - 'lib/familia/horreum/class_methods.rb'
+    - "lib/familia/horreum/class_methods.rb"
 
 # Offense count: 1
 # Configuration parameters: NamePrefix, ForbiddenPrefixes, AllowedMethods, MethodDefinitionMacros, UseSorbetSigs.
@@ -92,8 +92,8 @@ Naming/PredicateMethod:
 # MethodDefinitionMacros: define_method, define_singleton_method
 Naming/PredicatePrefix:
   Exclude:
-    - 'spec/**/*'
-    - 'lib/familia/horreum/class_methods.rb'
+    - "spec/**/*"
+    - "lib/familia/horreum/class_methods.rb"
 
 # Offense count: 54
 # This cop supports safe autocorrection (--autocorrect).
@@ -103,28 +103,28 @@ Naming/PredicatePrefix:
 # RedundantBlockArgumentNames: blk, block, proc
 Style/ArgumentsForwarding:
   Exclude:
-    - 'lib/familia/horreum/class_methods.rb'
-    - 'lib/familia/redistype/types/list.rb'
-    - 'lib/familia/redistype/types/sorted_set.rb'
-    - 'lib/familia/redistype/types/unsorted_set.rb'
-    - 'lib/familia/refinements.rb'
+    - "lib/familia/horreum/class_methods.rb"
+    - "lib/familia/datatype/types/list.rb"
+    - "lib/familia/datatype/types/sorted_set.rb"
+    - "lib/familia/datatype/types/unsorted_set.rb"
+    - "lib/familia/refinements.rb"
 
 # Offense count: 11
 # Configuration parameters: AllowedConstants.
 Style/Documentation:
   Exclude:
-    - 'spec/**/*'
-    - 'test/**/*'
-    - 'lib/familia/errors.rb'
-    - 'lib/familia/horreum/class_methods.rb'
-    - 'lib/familia/horreum/relations_management.rb'
-    - 'lib/familia/redistype/types/hashkey.rb'
-    - 'lib/familia/redistype/types/list.rb'
-    - 'lib/familia/redistype/types/sorted_set.rb'
-    - 'lib/familia/redistype/types/string.rb'
-    - 'lib/familia/redistype/types/unsorted_set.rb'
-    - 'lib/familia/tools.rb'
-    - 'lib/familia/version.rb'
+    - "spec/**/*"
+    - "test/**/*"
+    - "lib/familia/errors.rb"
+    - "lib/familia/horreum/class_methods.rb"
+    - "lib/familia/horreum/relations_management.rb"
+    - "lib/familia/datatype/types/hashkey.rb"
+    - "lib/familia/datatype/types/list.rb"
+    - "lib/familia/datatype/types/sorted_set.rb"
+    - "lib/familia/datatype/types/string.rb"
+    - "lib/familia/datatype/types/unsorted_set.rb"
+    - "lib/familia/tools.rb"
+    - "lib/familia/version.rb"
 
 # Offense count: 1
 # This cop supports safe autocorrection (--autocorrect).
@@ -132,7 +132,7 @@ Style/Documentation:
 # SupportedStyles: empty, nil, both
 Style/EmptyElse:
   Exclude:
-    - 'lib/familia/tools.rb'
+    - "lib/familia/tools.rb"
 
 # Offense count: 2
 # This cop supports safe autocorrection (--autocorrect).
@@ -147,14 +147,14 @@ Style/FormatStringToken:
 # SupportedStyles: always, always_true, never
 Style/FrozenStringLiteralComment:
   Exclude:
-    - '**/*.arb'
-    - 'lib/familia/horreum/relations_management.rb'
+    - "**/*.arb"
+    - "lib/familia/horreum/relations_management.rb"
 
 # Offense count: 1
 # This cop supports unsafe autocorrection (--autocorrect-all).
 Style/HashTransformValues:
   Exclude:
-    - 'lib/familia/redistype/types/hashkey.rb'
+    - "lib/familia/datatype/types/hashkey.rb"
 
 # Offense count: 1
 # This cop supports unsafe autocorrection (--autocorrect-all).
@@ -162,7 +162,7 @@ Style/HashTransformValues:
 # SupportedStyles: module_function, extend_self, forbidden
 Style/ModuleFunction:
   Exclude:
-    - 'lib/familia/tools.rb'
+    - "lib/familia/tools.rb"
 
 # Offense count: 1
 # This cop supports unsafe autocorrection (--autocorrect-all).
@@ -170,14 +170,14 @@ Style/ModuleFunction:
 # SupportedStyles: predicate, comparison
 Style/NumericPredicate:
   Exclude:
-    - 'spec/**/*'
-    - 'lib/familia/horreum/class_methods.rb'
+    - "spec/**/*"
+    - "lib/familia/horreum/class_methods.rb"
 
 # Offense count: 1
 # This cop supports unsafe autocorrection (--autocorrect-all).
 Style/RedundantInterpolation:
   Exclude:
-    - 'lib/familia/tools.rb'
+    - "lib/familia/tools.rb"
 
 # Offense count: 1
 # This cop supports safe autocorrection (--autocorrect).
@@ -185,7 +185,7 @@ Style/RedundantInterpolation:
 # SupportedStyles: implicit, explicit
 Style/RescueStandardError:
   Exclude:
-    - 'lib/familia/horreum.rb'
+    - "lib/familia/horreum.rb"
 
 # Offense count: 1
 # This cop supports unsafe autocorrection (--autocorrect-all).
@@ -193,22 +193,22 @@ Style/RescueStandardError:
 # AllowedMethods: present?, blank?, presence, try, try!
 Style/SafeNavigation:
   Exclude:
-    - 'lib/familia/connection.rb'
+    - "lib/familia/connection.rb"
 
 # Offense count: 4
 # Configuration parameters: ActiveSupportClassAttributeAllowed.
 ThreadSafety/ClassAndModuleAttributes:
   Exclude:
-    - 'lib/familia/base.rb'
-    - 'lib/familia/horreum.rb'
-    - 'lib/redis_middleware.rb'
+    - "lib/familia/base.rb"
+    - "lib/familia/horreum.rb"
+    - "lib/redis_middleware.rb"
 
 # Offense count: 29
 ThreadSafety/ClassInstanceVariable:
   Exclude:
-    - 'lib/familia/base.rb'
-    - 'lib/familia/horreum/class_methods.rb'
-    - 'lib/familia/version.rb'
+    - "lib/familia/base.rb"
+    - "lib/familia/horreum/class_methods.rb"
+    - "lib/familia/version.rb"
 
 # Offense count: 2
 # This cop supports unsafe autocorrection (--autocorrect-all).
@@ -216,4 +216,4 @@ ThreadSafety/ClassInstanceVariable:
 # SupportedStyles: literals, strict
 ThreadSafety/MutableClassInstanceVariable:
   Exclude:
-    - 'lib/familia/connection.rb'
+    - "lib/familia/connection.rb"

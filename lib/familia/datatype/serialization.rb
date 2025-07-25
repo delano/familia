@@ -1,6 +1,6 @@
-# lib/familia/redistype/serialization.rb
+# lib/familia/datatype/serialization.rb
 
-class Familia::RedisType
+class Familia::DataType
 
   module Serialization
 
@@ -115,9 +115,9 @@ class Familia::RedisType
     # @note If no class option is specified, the original value is
     #   returned unchanged.
     #
-    # NOTE: Currently only the RedisType class uses this method. Horreum
+    # NOTE: Currently only the DataType class uses this method. Horreum
     # fields are a newer addition and don't support the full range of
-    # deserialization options that RedisType supports. It uses to_redis
+    # deserialization options that DataType supports. It uses to_redis
     # for serialization since everything becomes a string in Redis.
     #
     def deserialize_value(val)

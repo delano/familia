@@ -1,8 +1,8 @@
-# lib/familia/redistype/commands.rb
+# lib/familia/datatype/commands.rb
 
-class Familia::RedisType
+class Familia::DataType
 
-  # Must be included in all RedisType classes to provide Redis
+  # Must be included in all DataType classes to provide Redis
   # commands. The class must have a rediskey method.
   module Commands
 

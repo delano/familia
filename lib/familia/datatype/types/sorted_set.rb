@@ -1,7 +1,7 @@
-# lib/familia/redistype/types/sorted_set.rb
+# lib/familia/datatype/types/sorted_set.rb
 
 module Familia
-  class SortedSet < RedisType
+  class SortedSet < DataType
     # Returns the number of elements in the sorted set
     # @return [Integer] number of elements
     def element_count
@@ -231,7 +231,7 @@ module Familia
       at(-1)
     end
 
-    Familia::RedisType.register self, :sorted_set
-    Familia::RedisType.register self, :zset
+    Familia::DataType.register self, :sorted_set
+    Familia::DataType.register self, :zset
   end
 end

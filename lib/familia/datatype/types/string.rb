@@ -1,7 +1,7 @@
-# lib/familia/redistype/types/string.rb
+# lib/familia/datatype/types/string.rb
 
 module Familia
-  class String < RedisType
+  class String < DataType
     def init; end
 
     # Returns the number of elements in the list
@@ -110,8 +110,8 @@ module Familia
       value.nil?
     end
 
-    Familia::RedisType.register self, :string
-    Familia::RedisType.register self, :counter
-    Familia::RedisType.register self, :lock
+    Familia::DataType.register self, :string
+    Familia::DataType.register self, :counter
+    Familia::DataType.register self, :lock
   end
 end

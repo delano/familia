@@ -185,8 +185,8 @@ module Familia
     prepend ConnectionPoolRedis
   end
 
-  # Inject into RedisType for proxy approach
-  class RedisType
+  # Inject into DataType for proxy approach
+  class DataType
     prepend ConnectionPoolRedis
   end
 end

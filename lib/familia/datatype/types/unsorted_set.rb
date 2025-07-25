@@ -1,7 +1,7 @@
-# lib/familia/redistype/types/unsorted_set.rb
+# lib/familia/datatype/types/unsorted_set.rb
 
 module Familia
-  class Set < RedisType
+  class Set < DataType
 
     # Returns the number of elements in the unsorted set
     # @return [Integer] number of elements
@@ -122,6 +122,6 @@ module Familia
     #  end
     # end
 
-    Familia::RedisType.register self, :set
+    Familia::DataType.register self, :set
   end
 end

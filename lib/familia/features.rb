@@ -28,7 +28,7 @@ module Familia
         # Extend the Familia::Base subclass (e.g. Customer) with the feature module
         include klass
 
-        # NOTE: We may also want to extend Familia::RedisType here so that we can
+        # NOTE: We may also want to extend Familia::DataType here so that we can
         # call safe_dump on relations fields (e.g. list, set, zset, hashkey). Or
         # maybe that only makes sense for hashk/object relations.
         #

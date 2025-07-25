@@ -30,14 +30,14 @@ module Familia
         # This method is the core of the metaprogramming logic
         #
         def setup_relations_accessors
-          Familia::RedisType.registered_types.each_pair do |kind, klass|
+          Familia::DataType.registered_types.each_pair do |kind, klass|
             Familia.ld "[registered_types] #{kind} => #{klass}"
 
             # Dynamically define instance-level relation methods
             #
             # Once defined, these methods can be used at the instance-level of a
             # Familia member to define *instance-level* relations to any of the
-            # RedisType types (e.g. set, list, hash, etc).
+            # DataType types (e.g. set, list, hash, etc).
             #
             define_method :"#{kind}" do |*args|
               name, opts = *args
@@ -61,7 +61,7 @@ module Familia
             #
             # Once defined, these methods can be used at the class-level of a
             # Familia member to define *class-level relations* to any of the
-            # RedisType types (e.g. class_set, class_list, class_hash, etc).
+            # DataType types (e.g. class_set, class_list, class_hash, etc).
             #
             define_method :"class_#{kind}" do |*args|
               name, opts = *args
@@ -73,9 +73,9 @@ module Familia
             end
             define_method :"class_#{kind}s" do
               names = class_redis_types.keys.select { |name| send(:"class_#{kind}?", name) }
-              # TODO: This returns instances of the RedisType class which
+              # TODO: This returns instances of the DataType class which
               # also contain the options. This is different from the instance
-              # RedisTypes defined above which returns the Struct of name, klass, and opts.
+              # DataTypes defined above which returns the Struct of name, klass, and opts.
               # names.collect! { |name| self.send name }
               # OR NOT:
               names.collect! { |name| class_redis_types[name] }

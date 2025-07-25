@@ -5,24 +5,24 @@ require 'time'
 require_relative '../../lib/familia'
 require_relative '../helpers/test_helpers'
 
-## Has all redistype relativess
-registered_types = Familia::RedisType.registered_types.keys
+## Has all datatype relativess
+registered_types = Familia::DataType.registered_types.keys
 registered_types.collect(&:to_s).sort
 #=> ["counter", "hash", "hashkey", "list", "lock", "set", "sorted_set", "string", "zset"]
 
-## Familia created class methods for redistype list class
+## Familia created class methods for datatype list class
 Familia::Horreum::ClassMethods.public_method_defined? :list?
 #=> true
 
-## Familia created class methods for redistype list class
+## Familia created class methods for datatype list class
 Familia::Horreum::ClassMethods.public_method_defined? :list
 #=> true
 
-## Familia created class methods for redistype list class
+## Familia created class methods for datatype list class
 Familia::Horreum::ClassMethods.public_method_defined? :lists
 #=> true
 
-## A Familia object knows its redistype relatives
+## A Familia object knows its datatype relatives
 Bone.redis_types.is_a?(Hash) && Bone.redis_types.has_key?(:owners)
 #=> true
 
@@ -34,7 +34,7 @@ Bone.lists.size
 Bone.list? :owners
 #=> true
 
-## A Familia object can get a specific redistype relatives def
+## A Familia object can get a specific datatype relatives def
 definition = Bone.list :owners
 definition.klass
 #=> Familia::List

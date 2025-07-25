@@ -364,7 +364,7 @@ module Familia
       end
 
       # Behold, the grand tale of two serialization sorcerers:
-      # Familia::Redistype and Familia::Horreum!
+      # Familia::DataType and Familia::Horreum!
       #
       # These twin wizards, though cut from the same magical cloth,
       # have their own unique spells for turning Ruby objects into
@@ -376,9 +376,9 @@ module Familia
       # - Secret rituals (aka custom serialization) are welcome
       #
       # Mystical Differences:
-      # - Redistype reads the future in opts[:class] tea leaves
+      # - DataType reads the future in opts[:class] tea leaves
       # - Horreum prefers to interrogate types more thoroughly
-      # - Redistype leaves a trail of debug breadcrumbs
+      # - DataType leaves a trail of debug breadcrumbs
       #
       # But wait! Enter the wise Familia.distinguisher,
       # a grand unifier of serialization magic!
@@ -387,7 +387,7 @@ module Familia
       # 1. Juggles a circus of data types from both realms
       # 2. Offers a 'strict_values' toggle for the type-obsessed
       # 3. Welcomes custom spells via dump_method
-      # 4. Sprinkles debug fairy dust à la Redistype
+      # 4. Sprinkles debug fairy dust à la DataType
       #
       # By channeling the Familia.distinguisher, we've created a
       # harmonious serialization symphony, flexible enough to dance

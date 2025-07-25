@@ -1,7 +1,7 @@
-# lib/familia/redistype/types/list.rb
+# lib/familia/datatype/types/list.rb
 
 module Familia
-  class List < RedisType
+  class List < DataType
 
     # Returns the number of elements in the list
     # @return [Integer] number of elements
@@ -157,6 +157,6 @@ module Familia
     #  end
     # end
 
-    Familia::RedisType.register self, :list
+    Familia::DataType.register self, :list
   end
 end

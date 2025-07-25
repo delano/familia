@@ -83,14 +83,14 @@ module Familia
       end
       alias remove remove_field # deprecated
 
-      def redistype
-        Familia.trace :REDISTYPE, redis, redisuri, caller(1..1) if Familia.debug?
+      def datatype
+        Familia.trace :DATATYPE, redis, redisuri, caller(1..1) if Familia.debug?
         redis.type rediskey(suffix)
       end
 
-      # Parity with RedisType#rename
+      # Parity with DataType#rename
       def rename(newkey)
-        Familia.trace :RENAME, redis, "#{rediskey} -> #{newkey}", caller(1..1) if Familia.debug?
+        Familia.trace :RENAME, redis, "#{storekey} -> #{newkey}", caller(1..1) if Familia.debug?
         redis.rename rediskey, newkey
       end
 
@@ -103,7 +103,7 @@ module Familia
         self.class.prefix
       end
 
-      # For parity with RedisType#hgetall
+      # For parity with DataType#hgetall
       def hgetall
         Familia.trace :HGETALL, redis, redisuri, caller(1..1) if Familia.debug?
         redis.hgetall rediskey(suffix)

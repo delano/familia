@@ -117,8 +117,8 @@ module Familia
     end
   end
 
-  # Inject into RedisType
-  class RedisType
+  # Inject into DataType
+  class DataType
     prepend TransactionalRedis
   end
 end

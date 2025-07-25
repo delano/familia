@@ -1,6 +1,6 @@
-# try/redis_types/redistype_base_try.rb
+# try/datatypes/datatype_base_try.rb
 
-# Test RedisType base functionality
+# Test DataType base functionality
 
 require_relative '../../lib/familia'
 require_relative '../helpers/test_helpers'
@@ -35,19 +35,19 @@ stripe_customer = @sample_obj.stripe_customer
 stripe_customer.class.name
 #=> "Familia::HashKey"
 
-## RedisType instances know their owner
+## DataType instances know their owner
 @sample_obj.timeline.parent == @sample_obj
 #=> true
 
-## RedisType instances know their field name
+## DataType instances know their field name
 @sample_obj.timeline.keystring
 #=> :timeline
 
-## RedisType has opts hash
+## DataType has opts hash
 @sample_obj.timeline.opts.class
 #=> Hash
 
-## RedisType responds to Familia's modified Redis commands
+## DataType responds to Familia's modified Redis commands
 @sample_obj.timeline
 #=/=> _.respond_to?(:zadd)
 #==> _.respond_to?(:add)
@@ -56,17 +56,17 @@ stripe_customer.class.name
 #=/=> _.respond_to?(:destroy!)
 
 
-## Can check if RedisType exists in Redis
+## Can check if DataType exists in Redis
 timeline = @sample_obj.timeline
 exists_before = timeline.exists?
 [exists_before.class, [true, false].include?(exists_before)]
 #=> [FalseClass, true]
 
-## RedisType has size/length methods
+## DataType has size/length methods
 @sample_obj.timeline.respond_to?(:size)
 #=> true
 
-## RedisType size returns integer
+## DataType size returns integer
 timeline = @sample_obj.timeline
 timeline.size
 #=:> Integer
@@ -79,19 +79,19 @@ stripe_customer
 #==> _.respond_to?(:store)
 #==> _.respond_to?(:[]=)
 
-## Can get RedisType default expiration
+## Can get DataType default expiration
 timeline = @sample_obj.timeline
 default_expiration = timeline.default_expiration
 [default_expiration.class, default_expiration >= -1]
 #=> [Integer, true]
 
-## RedisType has logical_database method
+## DataType has logical_database method
 timeline = @sample_obj.timeline
 db = timeline.logical_database
 db
 #=:> NilClass
 
-## RedisType has uri method
+## DataType has uri method
 timeline = @sample_obj.timeline
 uri = timeline.uri
 uri.class.name

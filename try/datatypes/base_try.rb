@@ -1,4 +1,4 @@
-# try/redis_types/base_try.rb
+# try/datatypes/base_try.rb
 
 
 require_relative '../../lib/familia'
@@ -40,7 +40,7 @@ p [@limiter1.counter.parent.default_expiration, @limiter2.counter.parent.default
 #=> 1302468600
 
 ## Redis Types can be stored to quantized numeric suffix. This
-## tryouts is disabled b/c `RedisType#rediskey` takes no args
+## tryouts is disabled b/c `DataType#rediskey` takes no args
 ## and relies on the `class Limiter` definition in test_helpers.rb
 ## for the `:quantize` option. The quantized suffix for the Limiter
 ## class is `'%H:%M'` so its redis keys will always look like that.
