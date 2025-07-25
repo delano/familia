@@ -24,7 +24,7 @@ module Familia
           db: self.class.db,
           key: rediskey,
           type: redistype,
-          ttl: ttl,
+          ttl: ttl,# where is this defined?
           realttl: realttl
         }
       end

@@ -328,6 +328,3 @@ require_relative 'horreum/connection'
 require_relative 'horreum/serialization'
 require_relative 'horreum/settings'
 require_relative 'horreum/utils'
-
-# Include Connection module for instance methods after it's loaded
-Familia::Horreum.include(Familia::Horreum::Connection)

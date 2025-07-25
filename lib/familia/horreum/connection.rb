@@ -3,6 +3,7 @@
 module Familia
   class Horreum
 
+    # Familia::Horreum::Connection
     #
     module Connection
       attr_reader :uri
@@ -74,5 +75,8 @@ module Familia
       end
 
     end
+
+    # Include Connection module for instance methods after it's loaded
+    include Familia::Horreum::Connection
   end
 end
