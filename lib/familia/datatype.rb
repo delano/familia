@@ -93,7 +93,7 @@ module Familia
     #
     # :redis => an instance of Redis.
     #
-    # :key => a hardcoded key to use instead of the deriving the from
+    # :dbkey => a hardcoded key to use instead of the deriving the from
     # the name and parent (e.g. a derived key: customer:custid:secret_counter).
     #
     # :suffix => the suffix to use for the key (e.g. 'scores' in customer:custid:scores).
@@ -164,7 +164,7 @@ module Familia
     def dbkey
       # Return the hardcoded key if it's set. This is useful for
       # support legacy keys that aren't derived in the same way.
-      return opts[:key] if opts[:key]
+      return opts[:dbkey] if opts[:dbkey]
 
       if parent_instance?
         # This is an instance-level datatype object so the parent instance's
