@@ -15,7 +15,7 @@ module Familia
       def redisuri(suffix = nil)
         u = Familia.redisuri(self.class.uri) # returns URI::Redis
         u.logical_database = logical_database if logical_database # override the logical_database if we have one
-        u.key = rediskey(suffix)
+        u.key = dbkey(suffix)
         u
       end
 
@@ -27,10 +27,10 @@ module Familia
       # Whether this is a Horreum or DataType object, the value is taken
       # from the `identifier` method).
       #
-      def rediskey(suffix = nil, ignored = nil)
+      def dbkey(suffix = nil, ignored = nil)
         raise Familia::NoIdentifier, "No identifier for #{self.class}" if identifier.to_s.empty?
         suffix ||= self.suffix # use the instance method to get the default suffix
-        self.class.rediskey identifier, suffix
+        self.class.dbkey identifier, suffix
       end
 
       def join(*args)

@@ -42,16 +42,16 @@ class BankAccount < Familia::Horreum
     # oriented `self.fieldname = value` syntax and having to manually
     # resort to functional programming.
     redis.multi do |multi|
-      multi.del(rediskey)
+      multi.del(dbkey)
       # Also remove from the class-level values, :display_domains, :owners
-      multi.zrem(V2::CustomDomain.values.rediskey, identifier)
-      multi.hdel(V2::CustomDomain.display_domains.rediskey, display_domain)
-      multi.hdel(V2::CustomDomain.owners.rediskey, display_domain)
-      multi.del(brand.rediskey)
-      multi.del(logo.rediskey)
-      multi.del(icon.rediskey)
+      multi.zrem(V2::CustomDomain.values.dbkey, identifier)
+      multi.hdel(V2::CustomDomain.display_domains.dbkey, display_domain)
+      multi.hdel(V2::CustomDomain.owners.dbkey, display_domain)
+      multi.del(brand.dbkey)
+      multi.del(logo.dbkey)
+      multi.del(icon.dbkey)
       unless customer.nil?
-        multi.zrem(customer.custom_domains.rediskey, display_domain)
+        multi.zrem(customer.custom_domains.dbkey, display_domain)
       end
     end
   end

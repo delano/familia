@@ -105,7 +105,7 @@ end
 #=> [750.0, 950.0]
 
 ## Test 3: Verify transaction record was saved
-@txn_key = @txn.rediskey
+@txn_key = @txn.dbkey
 @saved_txn = TransactionRecord.from_redis(@txn_key)
 @saved_txn.status
 #=> "completed"

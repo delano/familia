@@ -97,7 +97,7 @@ class Familia::DataType
         val
       rescue StandardError => e
         Familia.info val
-        Familia.info "Parse error for #{rediskey} (#{load_method}): #{e.message}"
+        Familia.info "Parse error for #{dbkey} (#{load_method}): #{e.message}"
         Familia.info e.backtrace
         nil
       end

@@ -71,7 +71,7 @@ module Familia
     attr_writer :dump_method, :load_method
 
     # +keystring+: If parent is set, this will be used as the suffix
-    # for rediskey. Otherwise this becomes the value of the key.
+    # for dbkey. Otherwise this becomes the value of the key.
     # If this is an Array, the elements will be joined.
     #
     # Options:
@@ -138,8 +138,8 @@ module Familia
     # This method determines the appropriate Redis key based on the context of the DataType object:
     #
     # 1. If a hardcoded key is set in the options, it returns that key.
-    # 2. For instance-level DataType objects, it uses the parent instance's rediskey method.
-    # 3. For class-level DataType objects, it uses the parent class's rediskey method.
+    # 2. For instance-level DataType objects, it uses the parent instance's dbkey method.
+    # 3. For class-level DataType objects, it uses the parent class's dbkey method.
     # 4. For standalone DataType objects, it uses the keystring as the full Redis key.
     #
     # For class-level DataType objects (parent_class? == true):
@@ -150,30 +150,30 @@ module Familia
     #   the global default 'object' suffix.
     #
     # @example Instance-level DataType
-    #   user_instance.some_datatype.rediskey  # => "user:123:some_datatype"
+    #   user_instance.some_datatype.dbkey  # => "user:123:some_datatype"
     #
     # @example Class-level DataType
-    #   User.some_datatype.rediskey  # => "user:some_datatype"
+    #   User.some_datatype.dbkey  # => "user:some_datatype"
     #
     # @example Standalone DataType
-    #   DataType.new("mykey").rediskey  # => "mykey"
+    #   DataType.new("mykey").dbkey  # => "mykey"
     #
     # @example Class-level DataType with explicit nil suffix
-    #   User.rediskey("123", nil)  # => "user:123"
+    #   User.dbkey("123", nil)  # => "user:123"
     #
-    def rediskey
+    def dbkey
       # Return the hardcoded key if it's set. This is useful for
       # support legacy keys that aren't derived in the same way.
       return opts[:key] if opts[:key]
 
       if parent_instance?
         # This is an instance-level datatype object so the parent instance's
-        # rediskey method is defined in Familia::Horreum::InstanceMethods.
-        parent.rediskey(keystring)
+        # dbkey method is defined in Familia::Horreum::InstanceMethods.
+        parent.dbkey(keystring)
       elsif parent_class?
-        # This is a class-level datatype object so the parent class' rediskey
+        # This is a class-level datatype object so the parent class' dbkey
         # method is defined in Familia::Horreum::ClassMethods.
-        parent.rediskey(keystring, nil)
+        parent.dbkey(keystring, nil)
       else
         # This is a standalone DataType object where it's keystring
         # is the full redis key.

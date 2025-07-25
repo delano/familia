@@ -137,7 +137,7 @@ parts
 #=> ["user", "123", "data"]
 
 ## Can create Redis key with default delimiter
-key = Familia.rediskey('v1', 'customer', 'email')
+key = Familia.dbkey('v1', 'customer', 'email')
 key
 #=> "v1:customer:email"
 

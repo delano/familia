@@ -156,8 +156,8 @@ module Familia
       # on the specifc index of this instance.
       #
       # i.e.
-      #     familia_object.rediskey              == v1:bone:INDEXVALUE:object
-      #     familia_object.related_object.rediskey == v1:bone:INDEXVALUE:name
+      #     familia_object.dbkey              == v1:bone:INDEXVALUE:object
+      #     familia_object.related_object.dbkey == v1:bone:INDEXVALUE:name
       #
       self.class.related_fields.each_pair do |name, datatype_definition|
         klass = datatype_definition.klass
@@ -165,11 +165,11 @@ module Familia
         Familia.ld "[#{self.class}] initialize_relatives #{name} => #{klass} #{opts.keys}"
 
         # As a subclass of Familia::Horreum, we add ourselves as the parent
-        # automatically. This is what determines the rediskey for DataType
+        # automatically. This is what determines the dbkey for DataType
         # instance and which redis connection.
         #
-        #   e.g. If the parent's rediskey is `customer:customer_id:object`
-        #     then the rediskey for this DataType instance will be
+        #   e.g. If the parent's dbkey is `customer:customer_id:object`
+        #     then the dbkey for this DataType instance will be
         #     `customer:customer_id:name`.
         #
         opts[:parent] = self # unless opts.key(:parent)
@@ -251,7 +251,7 @@ module Familia
     #   the object with.
     # @return [Array] The list of field names that were updated.
     def optimistic_refresh(**fields)
-      Familia.ld "[optimistic_refresh] #{self.class} #{rediskey} #{fields.keys}"
+      Familia.ld "[optimistic_refresh] #{self.class} #{dbkey} #{fields.keys}"
       initialize_with_keyword_args_from_redis(**fields)
     end
 

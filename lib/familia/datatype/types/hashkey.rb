@@ -5,7 +5,7 @@ module Familia
     # Returns the number of fields in the hash
     # @return [Integer] number of fields
     def field_count
-      redis.hlen rediskey
+      redis.hlen dbkey
     end
     alias size field_count
 
@@ -16,22 +16,22 @@ module Familia
     # +return+ [Integer] Returns 1 if the field is new and added, 0 if the
     #  field already existed and the value was updated.
     def []=(field, val)
-      ret = redis.hset rediskey, field.to_s, serialize_value(val)
+      ret = redis.hset dbkey, field.to_s, serialize_value(val)
       update_expiration
       ret
     rescue TypeError => e
       Familia.le "[hset]= #{e.message}"
-      Familia.ld "[hset]= #{rediskey} #{field}=#{val}" if Familia.debug
+      Familia.ld "[hset]= #{dbkey} #{field}=#{val}" if Familia.debug
       echo :hset, caller(1..1).first if Familia.debug # logs via echo to redis and back
       klass = val.class
-      msg = "Cannot store #{field} => #{val.inspect} (#{klass}) in #{rediskey}"
+      msg = "Cannot store #{field} => #{val.inspect} (#{klass}) in #{dbkey}"
       raise e.class, msg
     end
     alias put []=
     alias store []=
 
     def [](field)
-      deserialize_value redis.hget(rediskey, field.to_s)
+      deserialize_value redis.hget(dbkey, field.to_s)
     end
     alias get []
 
@@ -47,22 +47,22 @@ module Familia
     end
 
     def keys
-      redis.hkeys rediskey
+      redis.hkeys dbkey
     end
 
     def values
-      redis.hvals(rediskey).map { |v| deserialize_value v }
+      redis.hvals(dbkey).map { |v| deserialize_value v }
     end
 
     def hgetall
-      redis.hgetall(rediskey).each_with_object({}) do |(k,v), ret|
+      redis.hgetall(dbkey).each_with_object({}) do |(k,v), ret|
         ret[k] = deserialize_value v
       end
     end
     alias all hgetall
 
     def key?(field)
-      redis.hexists rediskey, field.to_s
+      redis.hexists dbkey, field.to_s
     end
     alias has_key? key?
     alias include? key?
@@ -72,12 +72,12 @@ module Familia
     # @param field [String] The field to remove
     # @return [Integer] The number of fields that were removed (0 or 1)
     def remove_field(field)
-      redis.hdel rediskey, field.to_s
+      redis.hdel dbkey, field.to_s
     end
     alias remove remove_field # deprecated
 
     def increment(field, by = 1)
-      redis.hincrby(rediskey, field.to_s, by).to_i
+      redis.hincrby(dbkey, field.to_s, by).to_i
     end
     alias incr increment
     alias incrby increment
@@ -93,7 +93,7 @@ module Familia
 
       data = hsh.inject([]) { |ret, pair| ret << [pair[0], serialize_value(pair[1])] }.flatten
 
-      ret = redis.hmset(rediskey, *data)
+      ret = redis.hmset(dbkey, *data)
       update_expiration
       ret
     end
@@ -101,7 +101,7 @@ module Familia
 
     def values_at *fields
       string_fields = fields.flatten.compact.map(&:to_s)
-      elements = redis.hmget(rediskey, *string_fields)
+      elements = redis.hmget(dbkey, *string_fields)
       deserialize_values(*elements)
     end
 
@@ -131,10 +131,10 @@ module Familia
     #   end
     def refresh!
       Familia.trace :REFRESH, redis, redisuri, caller(1..1) if Familia.debug?
-      raise Familia::KeyNotFoundError, rediskey unless redis.exists(rediskey)
+      raise Familia::KeyNotFoundError, dbkey unless redis.exists(dbkey)
 
       fields = hgetall
-      Familia.ld "[refresh!] #{self.class} #{rediskey} #{fields.keys}"
+      Familia.ld "[refresh!] #{self.class} #{dbkey} #{fields.keys}"
 
       # For HashKey, we update by merging the fresh data
       update(fields)

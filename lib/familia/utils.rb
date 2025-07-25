@@ -105,7 +105,7 @@ module Familia
     # Creates a Redis key from given values
     # @param val [Array] elements to join for the key
     # @return [String] Redis key
-    def rediskey(*val)
+    def dbkey(*val)
       join(*val)
     end
 

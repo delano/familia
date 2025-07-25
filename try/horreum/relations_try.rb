@@ -60,11 +60,11 @@ prefs = @test_user.preferences
 #=> ["Familia::List", "Familia::Set", "Familia::SortedSet", "Familia::HashKey"]
 
 ## Redis types use correct Redis keys
-@test_user.sessions.rediskey
+@test_user.sessions.dbkey
 #=> "relationstestuser:user123:sessions"
 
 ## Redis types use correct Redis keys
-@test_user.tags.rediskey
+@test_user.tags.dbkey
 #=> "relationstestuser:user123:tags"
 
 ## Can work with List Redis type

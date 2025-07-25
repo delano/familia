@@ -21,8 +21,8 @@ Customer.related_fields.keys.include?(:stripe_customer)
 @sample_obj.timeline
 #=:> Familia::SortedSet
 
-## Redis types have rediskey method
-@sample_obj.timeline.rediskey
+## Redis types have dbkey method
+@sample_obj.timeline.dbkey
 #=> "customer:customer123:timeline"
 
 ## Redis types are frozen after creation

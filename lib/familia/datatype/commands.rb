@@ -3,52 +3,52 @@
 class Familia::DataType
 
   # Must be included in all DataType classes to provide Redis
-  # commands. The class must have a rediskey method.
+  # commands. The class must have a dbkey method.
   module Commands
 
     def move(logical_database)
-      redis.move rediskey, logical_database
+      redis.move dbkey, logical_database
     end
 
     def rename(newkey)
-      redis.rename rediskey, newkey
+      redis.rename dbkey, newkey
     end
 
     def renamenx(newkey)
-      redis.renamenx rediskey, newkey
+      redis.renamenx dbkey, newkey
     end
 
     def type
-      redis.type rediskey
+      redis.type dbkey
     end
 
     # Deletes the entire Redis key
     # @return [Boolean] true if the key was deleted, false otherwise
     def delete!
       Familia.trace :DELETE!, redis, redisuri, caller(1..1) if Familia.debug?
-      ret = redis.del rediskey
+      ret = redis.del dbkey
       ret.positive?
     end
     alias clear delete!
 
     def exists?
-      redis.exists(rediskey) && !size.zero?
+      redis.exists(dbkey) && !size.zero?
     end
 
     def current_expiration
-      redis.ttl rediskey
+      redis.ttl dbkey
     end
 
     def expire(sec)
-      redis.expire rediskey, sec.to_i
+      redis.expire dbkey, sec.to_i
     end
 
     def expireat(unixtime)
-      redis.expireat rediskey, unixtime
+      redis.expireat dbkey, unixtime
     end
 
     def persist
-      redis.persist rediskey
+      redis.persist dbkey
     end
 
     def echo(meth, trace)

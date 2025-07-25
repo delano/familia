@@ -89,7 +89,7 @@ module Familia
         #
         ret = commit_fields(update_expiration: update_expiration)
 
-        Familia.ld "[save] #{self.class} #{rediskey} #{ret} (update_expiration: #{update_expiration})"
+        Familia.ld "[save] #{self.class} #{dbkey} #{ret} (update_expiration: #{update_expiration})"
 
         # Did Redis accept our offering?
         !ret.nil?
@@ -116,7 +116,7 @@ module Familia
         command_return_values = transaction do |conn|
           fields.each do |field, value|
             prepared_value = serialize_value(value)
-            conn.hset rediskey, field, prepared_value
+            conn.hset dbkey, field, prepared_value
             # Update instance variable to keep object in sync
             send("#{field}=", value) if respond_to?("#{field}=")
           end
@@ -202,7 +202,7 @@ module Familia
       #
       def commit_fields update_expiration: true
         prepared_value = to_h
-        Familia.ld "[commit_fields] Begin #{self.class} #{rediskey} #{prepared_value} (exp: #{update_expiration})"
+        Familia.ld "[commit_fields] Begin #{self.class} #{dbkey} #{prepared_value} (exp: #{update_expiration})"
 
         result = self.hmset(prepared_value)
 
@@ -285,9 +285,9 @@ module Familia
       #   object.refresh!
       def refresh!
         Familia.trace :REFRESH, redis, redisuri, caller(1..1) if Familia.debug?
-        raise Familia::KeyNotFoundError, rediskey unless redis.exists(rediskey)
+        raise Familia::KeyNotFoundError, dbkey unless redis.exists(dbkey)
         fields = hgetall
-        Familia.ld "[refresh!] #{self.class} #{rediskey} fields:#{fields.keys}"
+        Familia.ld "[refresh!] #{self.class} #{dbkey} fields:#{fields.keys}"
         optimistic_refresh(**fields)
       end
 

@@ -83,7 +83,7 @@ Familia.connect # Important, it registers RedisCommandCounter
 
 ## Baseline behavior shows immediate execution (coupled)
 redis_count_before = RedisCommandCounter.count
-@proxy.hset(@bone.rediskey, 'test_field', 'test_value')
+@proxy.hset(@bone.dbkey, 'test_field', 'test_value')
 redis_count_after = RedisCommandCounter.count
 redis_count_after > redis_count_before
 #=> true
@@ -92,7 +92,7 @@ redis_count_after > redis_count_before
 @proxy.call_log.clear
 Fiber[:atomic_context] = []
 redis_count_before = RedisCommandCounter.count
-result = @proxy.hset(@bone.rediskey, 'test_field2', 'test_value2')
+result = @proxy.hset(@bone.dbkey, 'test_field2', 'test_value2')
 redis_count_after = RedisCommandCounter.count
 [result, redis_count_after == redis_count_before, Fiber[:atomic_context].size > 0]
 #=> [:queued, true, true]
@@ -104,7 +104,7 @@ Fiber[:atomic_context].each do |cmd|
 end
 redis_count_after = RedisCommandCounter.count
 executed = redis_count_after > redis_count_before
-field_exists = @bone.redis.hexists(@bone.rediskey, 'test_field2')
+field_exists = @bone.redis.hexists(@bone.dbkey, 'test_field2')
 [executed, field_exists]
 #=> [true, true]
 

@@ -197,7 +197,7 @@ module Familia
       # @param filter [String] Redis key pattern to match (default: '*')
       # @return [Integer] Number of matching keys
       def matching_keys_count(filter = '*')
-        redis.keys(rediskey(filter)).compact.size
+        redis.keys(dbkey(filter)).compact.size
       end
       alias size matching_keys_count # For backwards compatibility
 
@@ -249,7 +249,7 @@ module Familia
       #
       def create *args, **kwargs
         fobj = new(*args, **kwargs)
-        raise Familia::Problem, "#{self} already exists: #{fobj.rediskey}" if fobj.exists?
+        raise Familia::Problem, "#{self} already exists: #{fobj.dbkey}" if fobj.exists?
 
         fobj.save
         fobj
@@ -261,7 +261,7 @@ module Familia
       end
 
       def rawmultiget(*ids)
-        ids.collect! { |objid| rediskey(objid) }
+        ids.collect! { |objid| dbkey(objid) }
         return [] if ids.compact.empty?
 
         Familia.trace :MULTIGET, redis, "#{ids.size}: #{ids}", caller(1..1) if Familia.debug?
@@ -318,7 +318,7 @@ module Familia
 
         new(**obj)
       end
-      alias from_rediskey find_by_key # deprecated
+      alias from_dbkey find_by_key # deprecated
 
       # Retrieves and instantiates an object from Redis using its identifier.
       #
@@ -343,7 +343,7 @@ module Familia
         suffix ||= self.suffix
         return nil if identifier.to_s.empty?
 
-        objkey = rediskey(identifier, suffix)
+        objkey = dbkey(identifier, suffix)
 
         Familia.ld "[.find_by_id] #{self} from key #{objkey})"
         Familia.trace :FIND_BY_ID, Familia.redis(uri), objkey, caller(1..1).first if Familia.debug?
@@ -369,7 +369,7 @@ module Familia
         suffix ||= self.suffix
         return false if identifier.to_s.empty?
 
-        objkey = rediskey identifier, suffix
+        objkey = dbkey identifier, suffix
 
         ret = redis.exists objkey
         Familia.trace :EXISTS, redis, "#{objkey} #{ret.inspect}", caller(1..1) if Familia.debug?
@@ -395,7 +395,7 @@ module Familia
         suffix ||= self.suffix
         return false if identifier.to_s.empty?
 
-        objkey = rediskey identifier, suffix
+        objkey = dbkey identifier, suffix
 
         ret = redis.del objkey
         Familia.trace :DESTROY!, redis, "#{objkey} #{ret.inspect}", caller(1..1) if Familia.debug?
@@ -408,14 +408,14 @@ module Familia
       # @return [Array<String>] An array of matching Redis keys.
       #
       # This method searches for all Redis keys that match the given suffix pattern.
-      # It uses the class's rediskey method to construct the search pattern.
+      # It uses the class's dbkey method to construct the search pattern.
       #
       # @example
       #   User.find  # Returns all keys matching user:*:object
       #   User.find('active')  # Returns all keys matching user:*:active
       #
       def find_keys(suffix = '*')
-        redis.keys(rediskey('*', suffix)) || []
+        redis.keys(dbkey('*', suffix)) || []
       end
 
       # +identifier+ can be a value or an Array of values used to create the index.
@@ -427,13 +427,13 @@ module Familia
       # as the default (via the class method self.suffix). It's an important
       # distinction b/c passing in an explicitly nil is how DataType objects
       # at the class level are created without the global default 'object'
-      # suffix. See DataType#rediskey "parent_class?" for more details.
-      def rediskey(identifier, suffix = self.suffix)
-        # Familia.ld "[.rediskey] #{identifier} for #{self} (suffix:#{suffix})"
+      # suffix. See DataType#dbkey "parent_class?" for more details.
+      def dbkey(identifier, suffix = self.suffix)
+        # Familia.ld "[.dbkey] #{identifier} for #{self} (suffix:#{suffix})"
         raise NoIdentifier, self if identifier.to_s.empty?
 
         identifier &&= identifier.to_s
-        Familia.rediskey(prefix, identifier, suffix)
+        Familia.dbkey(prefix, identifier, suffix)
       end
 
       def dump_method

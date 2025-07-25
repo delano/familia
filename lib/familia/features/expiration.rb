@@ -64,7 +64,7 @@ module Familia::Features
         self.class.related_fields.each do |name, definition|
           next if definition.opts[:default_expiration].nil?
           obj = send(name)
-          Familia.ld "[update_expiration] Updating expiration for #{name} (#{obj.rediskey}) to #{default_expiration}"
+          Familia.ld "[update_expiration] Updating expiration for #{name} (#{obj.dbkey}) to #{default_expiration}"
           obj.update_expiration(default_expiration: default_expiration)
         end
       end
@@ -82,10 +82,10 @@ module Familia::Features
       end
 
       if default_expiration.zero?
-        return Familia.ld "[update_expiration] No expiration for #{self.class} (#{rediskey})"
+        return Familia.ld "[update_expiration] No expiration for #{self.class} (#{dbkey})"
       end
 
-      Familia.ld "[update_expiration] Expires #{rediskey} in #{default_expiration} seconds"
+      Familia.ld "[update_expiration] Expires #{dbkey} in #{default_expiration} seconds"
 
       # Redis' EXPIRE command returns 1 if the timeout was set, 0 if key does
       # not exist or the timeout could not be set. Via redis-rb here, it's

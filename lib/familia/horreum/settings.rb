@@ -22,7 +22,7 @@ module Familia
         {
           uri: self.class.uri,
           logical_database: self.class.logical_database,
-          key: rediskey,
+          key: dbkey,
           type: datatype,
           default_expiration: default_expiration,# where is this defined?
           current_expiration: current_expiration

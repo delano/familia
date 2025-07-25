@@ -5,7 +5,7 @@ module Familia
     # Returns the number of elements in the sorted set
     # @return [Integer] number of elements
     def element_count
-      redis.zcard rediskey
+      redis.zcard dbkey
     end
     alias size element_count
 
@@ -46,13 +46,13 @@ module Familia
     end
 
     def add(score, val)
-      ret = redis.zadd rediskey, score, serialize_value(val)
+      ret = redis.zadd dbkey, score, serialize_value(val)
       update_expiration
       ret
     end
 
     def score(val)
-      ret = redis.zscore rediskey, serialize_value(val, strict_values: false)
+      ret = redis.zscore dbkey, serialize_value(val, strict_values: false)
       ret&.to_f
     end
     alias [] score
@@ -65,13 +65,13 @@ module Familia
 
     # rank of member +v+ when ordered lowest to highest (starts at 0)
     def rank(v)
-      ret = redis.zrank rediskey, serialize_value(v, strict_values: false)
+      ret = redis.zrank dbkey, serialize_value(v, strict_values: false)
       ret&.to_i
     end
 
     # rank of member +v+ when ordered highest to lowest (starts at 0)
     def revrank(v)
-      ret = redis.zrevrank rediskey, serialize_value(v, strict_values: false)
+      ret = redis.zrevrank dbkey, serialize_value(v, strict_values: false)
       ret&.to_i
     end
 
@@ -145,7 +145,7 @@ module Familia
       #
       #   sorted_sets.rb:374:in `zrevrange': wrong number of arguments (given 4, expected 3) (ArgumentError)
       #
-      redis.zrange(rediskey, sidx, eidx, **opts)
+      redis.zrange(dbkey, sidx, eidx, **opts)
     end
 
     def revrange(sidx, eidx, opts = {})
@@ -155,7 +155,7 @@ module Familia
     end
 
     def revrangeraw(sidx, eidx, opts = {})
-      redis.zrevrange(rediskey, sidx, eidx, **opts)
+      redis.zrevrange(dbkey, sidx, eidx, **opts)
     end
 
     # e.g. obj.metrics.rangebyscore (now-12.hours), now, :limit => [0, 10]
@@ -167,7 +167,7 @@ module Familia
 
     def rangebyscoreraw(sscore, escore, opts = {})
       echo :rangebyscoreraw, caller(1..1).first if Familia.debug
-      redis.zrangebyscore(rediskey, sscore, escore, **opts)
+      redis.zrangebyscore(dbkey, sscore, escore, **opts)
     end
 
     # e.g. obj.metrics.revrangebyscore (now-12.hours), now, :limit => [0, 10]
@@ -180,19 +180,19 @@ module Familia
     def revrangebyscoreraw(sscore, escore, opts = {})
       echo :revrangebyscoreraw, caller(1..1).first if Familia.debug
       opts[:with_scores] = true if opts[:withscores]
-      redis.zrevrangebyscore(rediskey, sscore, escore, opts)
+      redis.zrevrangebyscore(dbkey, sscore, escore, opts)
     end
 
     def remrangebyrank(srank, erank)
-      redis.zremrangebyrank rediskey, srank, erank
+      redis.zremrangebyrank dbkey, srank, erank
     end
 
     def remrangebyscore(sscore, escore)
-      redis.zremrangebyscore rediskey, sscore, escore
+      redis.zremrangebyscore dbkey, sscore, escore
     end
 
     def increment(val, by = 1)
-      redis.zincrby(rediskey, by, val).to_i
+      redis.zincrby(dbkey, by, val).to_i
     end
     alias incr increment
     alias incrby increment
@@ -213,7 +213,7 @@ module Familia
       # the identifier and not a serialized version of the object. So either
       # the value exists in the sorted set or it doesn't -- we don't need to
       # raise an error if it's not found.
-      redis.zrem rediskey, serialize_value(value, strict_values: false)
+      redis.zrem dbkey, serialize_value(value, strict_values: false)
     end
     alias remove remove_element # deprecated
 

@@ -105,8 +105,8 @@ Familia.debug = false
 
 ## transaction method works with block
 result = @customer.transaction do |conn|
-  conn.hset @customer.rediskey, 'temp_field', 'temp_value'
-  conn.hset @customer.rediskey, 'another_field', 'another_value'
+  conn.hset @customer.dbkey, 'temp_field', 'temp_value'
+  conn.hset @customer.dbkey, 'another_field', 'another_value'
 end
 result.size
 #=> 2

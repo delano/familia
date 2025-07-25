@@ -14,10 +14,10 @@ require_relative '../helpers/test_helpers'
 p [@a.object_id, @b.object_id]
 p [@a.owners.parent.class, @b.owners.parent.class]
 p [@a.owners.parent.object_id, @b.owners.parent.object_id]
-p [@a.owners.rediskey, @b.owners.rediskey]
+p [@a.owners.dbkey, @b.owners.dbkey]
 p [@a.token, @b.token]
 p [@a.name, @b.name]
-@a.owners.rediskey.eql?(@b.owners.rediskey)
+@a.owners.dbkey.eql?(@b.owners.dbkey)
 #=> false
 
 ## Redis Types are frozen
@@ -29,7 +29,7 @@ p [@a.name, @b.name]
 ##=> '20:50'
 
 ## Redis Types can be stored to quantized stamp suffix
-@limiter1.counter.rediskey
+@limiter1.counter.dbkey
 ##=> "v1:limiter:requests:counter:20:50"
 
 ## Limiter#qstamp as a number
@@ -40,11 +40,11 @@ p [@limiter1.counter.parent.default_expiration, @limiter2.counter.parent.default
 #=> 1302468600
 
 ## Redis Types can be stored to quantized numeric suffix. This
-## tryouts is disabled b/c `DataType#rediskey` takes no args
+## tryouts is disabled b/c `DataType#dbkey` takes no args
 ## and relies on the `class Limiter` definition in test_helpers.rb
 ## for the `:quantize` option. The quantized suffix for the Limiter
 ## class is `'%H:%M'` so its redis keys will always look like that.
-@limiter2.counter.rediskey
+@limiter2.counter.dbkey
 ##=> "v1:limiter:requests:counter:1302468600"
 
 ## Increment counter
