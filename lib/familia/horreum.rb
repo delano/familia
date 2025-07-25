@@ -6,8 +6,8 @@ module Familia
   #
   # Key features:
   # * Provides instance-level access to a single hash in Redis
-  # * Includes Familia for class/module level access to Redis types and operations
-  # * Uses 'hashkey' to define a Redis hash referred to as "object"
+  # * Includes Familia for class/module level access to Database types and operations
+  # * Uses 'hashkey' to define a Database hash referred to as "object"
   # * Applies a default expiry (5 years) to all keys
   #
   # Metaprogramming:
@@ -133,7 +133,7 @@ module Familia
       else
         Familia.ld "[Horreum] #{self.class} initialized with no arguments"
         # Default values are intentionally NOT set here to:
-        # - Maintain Redis memory efficiency (only store non-nil values)
+        # - Maintain Database memory efficiency (only store non-nil values)
         # - Avoid conflicts with nil-skipping serialization logic
         # - Preserve consistent exists? behavior (empty vs default-filled objects)
         # - Keep initialization lightweight for unused fields
@@ -145,7 +145,7 @@ module Familia
       init if respond_to?(:init)
     end
 
-    # Sets up related Redis objects for the instance
+    # Sets up related Database objects for the instance
     # This method is crucial for establishing Redis-based relationships
     #
     # This needs to be called in the initialize method.
@@ -220,7 +220,7 @@ module Familia
     def initialize_with_keyword_args(**fields)
       Familia.trace :INITIALIZE_KWARGS, redis, fields.keys, caller(1..1) if Familia.debug?
       self.class.fields.filter_map do |field|
-        # Redis will give us field names as strings back, but internally
+        # Database will give us field names as strings back, but internally
         # we use symbols. So we check for both.
         value = fields[field.to_sym] || fields[field.to_s]
         if value
@@ -232,7 +232,7 @@ module Familia
     private :initialize_with_keyword_args
 
     def initialize_with_keyword_args_from_redis(**fields)
-      # Deserialize Redis string values back to their original types
+      # Deserialize Database string values back to their original types
       deserialized_fields = fields.transform_values { |value| deserialize_value(value) }
       initialize_with_keyword_args(**deserialized_fields)
     end
@@ -241,7 +241,7 @@ module Familia
     # hash and refreshes the existing object.
     #
     # This method is part of horreum.rb rather than serialization.rb because it
-    # operates solely on the provided values and doesn't query Redis or other
+    # operates solely on the provided values and doesn't query Database or other
     # external sources. That's why it's called "optimistic" refresh: it assumes
     # the provided values are correct and updates the object accordingly.
     #
@@ -256,7 +256,7 @@ module Familia
     end
 
     # Determines the unique identifier for the instance
-    # This method is used to generate Redis keys for the object
+    # This method is used to generate dbkeys for the object
     def identifier
       definition = self.class.identifier # e.g.
       # When definition is a symbol or string, assume it's an instance method
@@ -284,17 +284,17 @@ module Familia
 
     attr_writer :redis
 
-    # Summon the mystical Redis connection from the depths of instance or class.
+    # Summon the mystical Database connection from the depths of instance or class.
     #
     # This method is like a magical divining rod, always pointing to the nearest
-    # source of Redis goodness. It first checks if we have a personal Redis
+    # source of Database goodness. It first checks if we have a personal Redis
     # connection (@redis), and if not, it borrows the class's connection.
     #
-    # @return [Redis] A shimmering Redis connection, ready for your bidding.
+    # @return [Redis] A shimmering Database connection, ready for your bidding.
     #
-    # @example Finding your Redis way
+    # @example Finding your Database way
     #   puts object.redis
-    #   # => #<Redis client v4.5.1 for redis://localhost:6379/0>
+    #   # => #<Redis client v5.4.1 for redis://localhost:6379/0>
     #
     def redis
       conn = Fiber[:familia_transaction] || @redis || self.class.redis
@@ -307,7 +307,7 @@ module Familia
     end
 
     # The principle is: **If Familia objects have `to_s`, then they should work
-    # everywhere strings are expected**, including as Redis hash field names.
+    # everywhere strings are expected**, including as Database hash field names.
     def to_s
       # Enable polymorphic string usage for Familia objects
       # This allows passing Familia objects directly where strings are expected

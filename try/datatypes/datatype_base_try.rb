@@ -9,27 +9,27 @@ Familia.debug = false
 
 @sample_obj = Customer.new(custid: 'customer123', email: 'test@example.com')
 
-## Customer has defined Redis types
+## Customer has defined Database types
 Customer.related_fields.keys.include?(:timeline)
 #=> true
 
-## Customer has defined Redis types
+## Customer has defined Database types
 Customer.related_fields.keys.include?(:stripe_customer)
 #=> true
 
-## Can access Redis type instances
+## Can access Database type instances
 @sample_obj.timeline
 #=:> Familia::SortedSet
 
-## Redis types have dbkey method
+## Database types have dbkey method
 @sample_obj.timeline.dbkey
 #=> "customer:customer123:timeline"
 
-## Redis types are frozen after creation
+## Database types are frozen after creation
 @sample_obj.timeline.frozen?
 #=> true
 
-## Can access hashkey Redis type
+## Can access hashkey Database type
 @sample_obj ||= Customer.new(custid: 'customer123', email: 'test@example.com')
 stripe_customer = @sample_obj.stripe_customer
 stripe_customer.class.name
@@ -47,7 +47,7 @@ stripe_customer.class.name
 @sample_obj.timeline.opts.class
 #=> Hash
 
-## DataType responds to Familia's modified Redis commands
+## DataType responds to Familia's modified Database commands
 @sample_obj.timeline
 #=/=> _.respond_to?(:zadd)
 #==> _.respond_to?(:add)
@@ -71,7 +71,7 @@ timeline = @sample_obj.timeline
 timeline.size
 #=:> Integer
 
-## Different Redis types have type-specific methods
+## Different Database types have type-specific methods
 stripe_customer = @sample_obj.stripe_customer
 stripe_customer
 #=/=> _.respond_to?(:hset)

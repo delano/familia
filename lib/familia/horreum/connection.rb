@@ -8,13 +8,13 @@ module Familia
     module Connection
       attr_reader :uri
 
-      # Returns the Redis connection for the class.
+      # Returns the Database connection for the class.
       #
-      # This method retrieves the Redis connection instance for the class. If no
+      # This method retrieves the Database connection instance for the class. If no
       # connection is set, it initializes a new connection using the provided URI
       # or database configuration.
       #
-      # @return [Redis] the Redis connection instance.
+      # @return [Redis] the Database connection instance.
       #
       def redis
         Fiber[:familia_transaction] || @redis || Familia.redis(uri || logical_database)
@@ -30,16 +30,16 @@ module Familia
       alias url uri
       alias url= uri=
 
-      # Perform a sacred Redis transaction ritual.
+      # Perform a sacred Database transaction ritual.
       #
-      # This method creates a protective circle around your Redis operations,
+      # This method creates a protective circle around your Database operations,
       # ensuring they all succeed or fail together. It's like a group hug for your
       # data operations, but with more ACID properties.
       #
-      # @yield [conn] A block where you can perform your Redis incantations.
-      # @yieldparam conn [Redis] A Redis connection in multi mode.
+      # @yield [conn] A block where you can perform your Database incantations.
+      # @yieldparam conn [Redis] A Database connection in multi mode.
       #
-      # @example Performing a Redis rain dance
+      # @example Performing a Database rain dance
       #   transaction do |conn|
       #     conn.set("weather", "rainy")
       #     conn.set("mood", "melancholic")

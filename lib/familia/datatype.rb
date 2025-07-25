@@ -5,12 +5,12 @@ require_relative 'datatype/serialization'
 
 module Familia
 
-  # DataType - Base class for Redis data type wrappers
+  # DataType - Base class for Database data type wrappers
   #
-  # This class provides common functionality for various Redis data types
+  # This class provides common functionality for various Database data types
   # such as String, List, Set, SortedSet, and HashKey.
   #
-  # @abstract Subclass and implement Redis data type specific methods
+  # @abstract Subclass and implement Database data type specific methods
   class DataType
     include Familia::Base
     extend Familia::Features
@@ -78,20 +78,20 @@ module Familia
     #
     # :class => A class that responds to Familia.load_method and
     # Familia.dump_method. These will be used when loading and
-    # saving data from/to redis to unmarshal/marshal the class.
+    # saving data from/to the database to unmarshal/marshal the class.
     #
     # :parent => The Familia object that this datatype object belongs
     # to. This can be a class that includes Familia or an instance.
     #
     # :default_expiration => the time to live in seconds. When not nil, this will
-    # set the redis expire for this key whenever #save is called.
+    # set the default expiration for this dbkey whenever #save is called.
     # You can also call it explicitly via #update_expiration.
     #
     # :default => the default value (String-only)
     #
-    # :logical_database => the redis database to use (ignored if :redis is used).
+    # :logical_database => the logical database index to use (ignored if :redis is used).
     #
-    # :redis => an instance of Redis.
+    # :redis => an instance of database client.
     #
     # :dbkey => a hardcoded key to use instead of the deriving the from
     # the name and parent (e.g. a derived key: customer:custid:secret_counter).
@@ -131,21 +131,21 @@ module Familia
       parent? ? parent.redis : Familia.redis(opts[:logical_database])
     end
 
-    # Produces the full Redis key for this object.
+    # Produces the full dbkey for this object.
     #
-    # @return [String] The full Redis key.
+    # @return [String] The full dbkey.
     #
-    # This method determines the appropriate Redis key based on the context of the DataType object:
+    # This method determines the appropriate dbkey based on the context of the DataType object:
     #
     # 1. If a hardcoded key is set in the options, it returns that key.
     # 2. For instance-level DataType objects, it uses the parent instance's dbkey method.
     # 3. For class-level DataType objects, it uses the parent class's dbkey method.
-    # 4. For standalone DataType objects, it uses the keystring as the full Redis key.
+    # 4. For standalone DataType objects, it uses the keystring as the full dbkey.
     #
     # For class-level DataType objects (parent_class? == true):
     # - The suffix is optional and used to differentiate between different types of objects.
     # - If no suffix is provided, the class's default suffix is used (via the self.suffix method).
-    # - If a nil suffix is explicitly passed, it won't appear in the resulting Redis key.
+    # - If a nil suffix is explicitly passed, it won't appear in the resulting dbkey.
     # - Passing nil as the suffix is how class-level DataType objects are created without
     #   the global default 'object' suffix.
     #

@@ -7,8 +7,8 @@
 require 'digest'
 require_relative '../../lib/familia'
 
-Familia.enable_redis_logging = true
-Familia.enable_redis_counter = true
+Familia.enable_database_logging = true
+Familia.enable_database_counter = true
 
 class Bone < Familia::Horreum
   identifier     [:token, :name]

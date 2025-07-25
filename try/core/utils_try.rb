@@ -136,7 +136,7 @@ parts = Familia.split('user:123:data')
 parts
 #=> ["user", "123", "data"]
 
-## Can create Redis key with default delimiter
+## Can create dbkey with default delimiter
 key = Familia.dbkey('v1', 'customer', 'email')
 key
 #=> "v1:customer:email"

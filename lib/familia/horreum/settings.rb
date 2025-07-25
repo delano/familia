@@ -4,7 +4,7 @@ module Familia
   # InstanceMethods - Module containing instance-level methods for Familia
   #
   # This module is included in classes that include Familia, providing
-  # instance-level functionality for Redis operations and object management.
+  # instance-level functionality for Database operations and object management.
   #
   class Horreum
 

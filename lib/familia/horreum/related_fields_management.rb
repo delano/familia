@@ -6,10 +6,10 @@ module Familia
     # RelatedFieldsManagement: Manages DataType fields and relations
     #
     # This module uses metaprogramming to dynamically create methods
-    # for managing different types of Redis objects (e.g., sets, lists, hashes).
+    # for managing different types of Database objects (e.g., sets, lists, hashes).
     #
     # Key metaprogramming features:
-    # * Dynamically defines methods for each Redis type (e.g., set, list, hashkey)
+    # * Dynamically defines methods for each Database type (e.g., set, list, hashkey)
     # * Creates both instance-level and class-level relation methods
     # * Provides query methods for checking relation types
     #

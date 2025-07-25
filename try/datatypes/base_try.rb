@@ -8,7 +8,7 @@ require_relative '../helpers/test_helpers'
 @limiter1 = Limiter.new :requests
 
 
-## Redis Types are unique per instance of a Familia class
+## Database Types are unique per instance of a Familia class
 @a = Bone.new 'atoken1', :name1
 @b = Bone.new 'atoken2', :name2
 p [@a.object_id, @b.object_id]
@@ -20,7 +20,7 @@ p [@a.name, @b.name]
 @a.owners.dbkey.eql?(@b.owners.dbkey)
 #=> false
 
-## Redis Types are frozen
+## Database Types are frozen
 @a.owners.frozen?
 #=> true
 
@@ -28,7 +28,7 @@ p [@a.name, @b.name]
 @limiter1.counter.qstamp(10.minutes, '%H:%M', 1302468980)
 ##=> '20:50'
 
-## Redis Types can be stored to quantized stamp suffix
+## Database Types can be stored to quantized stamp suffix
 @limiter1.counter.dbkey
 ##=> "v1:limiter:requests:counter:20:50"
 
@@ -39,7 +39,7 @@ p [@limiter1.counter.parent.default_expiration, @limiter2.counter.parent.default
 @limiter2.counter.qstamp(10.minutes, pattern: nil, time: 1302468980)
 #=> 1302468600
 
-## Redis Types can be stored to quantized numeric suffix. This
+## Database Types can be stored to quantized numeric suffix. This
 ## tryouts is disabled b/c `DataType#dbkey` takes no args
 ## and relies on the `class Limiter` definition in test_helpers.rb
 ## for the `:quantize` option. The quantized suffix for the Limiter
@@ -67,6 +67,6 @@ p [@limiter1.counter.parent.default_expiration, @limiter2.counter.parent.default
 #=> 3600.0
 
 ## Check current_expiration
-sleep 1 # Redis default_expirations are in seconds so we can't wait any less time than this (without mocking)
+sleep 1 # Database default_expirations are in seconds so we can't wait any less time than this (without mocking)
 @limiter1.counter.current_expiration
 #=> 3600-1

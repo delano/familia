@@ -6,18 +6,18 @@
 #
 #   ✅ Complete Neutralization Confirmed
 #
-#   The intervention test successfully demonstrates that the Context-Aware Redis Proxy directly neutralizes the tight coupling mechanism:
+#   The intervention test successfully demonstrates that the Context-Aware Database Proxy directly neutralizes the tight coupling mechanism:
 #
 #   📈 Final Results: 5/5 Tests Passed
 #
 #   1. ✅ Baseline behavior shows immediate execution (coupled)
-#     - Redis command count increases when no atomic context
+#     - Database command count increases when no atomic context
 #   2. ✅ Context-aware proxy queues commands instead of executing
 #     - Commands return :queued when Fiber[:atomic_context] is set
-#     - Redis command count remains unchanged (neutralized!)
+#     - Database command count remains unchanged (neutralized!)
 #   3. ✅ Queued commands can be executed later
 #     - Deferred execution works perfectly
-#     - Field exists in Redis after execution
+#     - Field exists in Database after execution
 #   4. ✅ Proxy logs all method calls regardless of execution context
 #     - Call tracking works in both modes
 #   5. ✅ Atomic context can be cleared
@@ -38,8 +38,8 @@
 require_relative '../helpers/test_helpers'
 
 
-# Minimal Context-Aware Redis Proxy
-# Tests whether the tight coupling between method invocation and Redis execution
+# Minimal Context-Aware Database Proxy
+# Tests whether the tight coupling between method invocation and Database execution
 # can be neutralized through context-aware command dispatch
 class ContextAwareRedisProxy
   def initialize(redis_connection)

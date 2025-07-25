@@ -228,7 +228,7 @@ end
 @error_account.balance
 #=> 100.0
 
-## Test 19: Connection pool with different Redis URIs
+## Test 19: Connection pool with different Database URIs
 # This would test multiple pools if we had different servers
 @default_uri = Familia.uri.to_s
 @default_uri.include?("127.0.0.1")
@@ -303,11 +303,11 @@ end
 # ✅ Backward compatibility maintained for existing code
 #
 # Key Benefits Achieved:
-# - Thread-safe Redis connections for multi-threaded environments
+# - Thread-safe Database connections for multi-threaded environments
 # - Efficient connection reuse and management
 # - Atomic transaction support with proper isolation
 # - Seamless integration with existing Familia patterns
 # - Configurable pool size and timeout settings
-# - Support for multiple Redis databases through single pools
+# - Support for multiple Database databases through single pools
 
 puts "Connection pool implementation test completed successfully!"

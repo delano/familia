@@ -4,12 +4,12 @@ require 'concurrent-ruby'
 
 # DatabaseLogger is RedisClient middleware.
 #
-# This middleware addresses the need for detailed Redis command logging, which
+# This middleware addresses the need for detailed Database command logging, which
 # was removed from the redis-rb gem due to performance concerns. However, in
-# many development and debugging scenarios, the ability to log Redis commands
+# many development and debugging scenarios, the ability to log Database commands
 # can be invaluable.
 #
-# @example Enable Redis command logging
+# @example Enable Database command logging
 #   DatabaseLogger.logger = Logger.new(STDOUT)
 #   RedisClient.register(DatabaseLogger)
 #
@@ -29,18 +29,18 @@ module DatabaseLogger
     attr_accessor :logger
   end
 
-  # Logs the Redis command and its execution time.
+  # Logs the Database command and its execution time.
   #
-  # This method is called for each Redis command when the middleware is active.
+  # This method is called for each Database command when the middleware is active.
   # It logs the command and its execution time only if a logger is set.
   #
-  # @param command [Array] The Redis command and its arguments.
+  # @param command [Array] The Database command and its arguments.
   # @param redis_config [Hash] The configuration options for the Redis
   #   connection.
-  # @return [Object] The result of the Redis command execution.
+  # @return [Object] The result of the Database command execution.
   #
   # @note The performance impact of this logging is negligible when no logger
-  #   is set, as it quickly returns control to the Redis client. When a logger
+  #   is set, as it quickly returns control to the Database client. When a logger
   #   is set, the minimal overhead is often offset by the valuable insights
   #   gained during development and debugging.
   def call(command, redis_config)
@@ -56,11 +56,11 @@ end
 
 # DatabaseCommandCounter is RedisClient middleware.
 #
-# This middleware counts the number of Redis commands executed. It can be
+# This middleware counts the number of Database commands executed. It can be
 # useful for performance monitoring and debugging, allowing you to track
-# the volume of Redis operations in your application.
+# the volume of Database operations in your application.
 #
-# @example Enable Redis command counting
+# @example Enable Database command counting
 #   DatabaseCommandCounter.reset
 #   RedisClient.register(DatabaseCommandCounter)
 #
@@ -82,8 +82,8 @@ module DatabaseCommandCounter
     # @return [Set] The commands that won't be counted.
     attr_reader :skip_commands
 
-    # Gets the current count of Redis commands executed.
-    # @return [Integer] The number of Redis commands executed.
+    # Gets the current count of Database commands executed.
+    # @return [Integer] The number of Database commands executed.
     def count
       @count.value
     end
@@ -106,14 +106,14 @@ module DatabaseCommandCounter
       skip_commands.include?(command.first.to_s.upcase)
     end
 
-    # Counts the number of Redis commands executed within a block.
+    # Counts the number of Database commands executed within a block.
     #
     # This method captures the command count before and after executing the
     # provided block, returning the difference. This is useful for measuring
-    # how many Redis commands are executed by a specific operation.
+    # how many Database commands are executed by a specific operation.
     #
     # @yield [] The block of code to execute while counting commands.
-    # @return [Integer] The number of Redis commands executed within the block.
+    # @return [Integer] The number of Database commands executed within the block.
     #
     # @example Count commands in a block
     #   commands_executed = DatabaseCommandCounter.count_commands do
@@ -133,15 +133,15 @@ module DatabaseCommandCounter
     DatabaseCommandCounter
   end
 
-  # Counts the Redis command and delegates its execution.
+  # Counts the Database command and delegates its execution.
   #
-  # This method is called for each Redis command when the middleware is active.
+  # This method is called for each Database command when the middleware is active.
   # It increments the command count (unless the command is in the skip list)
   # and then yields to execute the actual command.
   #
-  # @param command [Array] The Redis command and its arguments.
-  # @param redis_config [Hash] The configuration options for the Redis connection.
-  # @return [Object] The result of the Redis command execution.
+  # @param command [Array] The Database command and its arguments.
+  # @param redis_config [Hash] The configuration options for the Database connection.
+  # @return [Object] The result of the Database command execution.
   def call(command, redis_config)
     klass.increment unless klass.skip_command?(command)
     yield

@@ -38,7 +38,7 @@ test_obj = JsonTest.new 'a_unque_id'
 test_obj.save
 #=> true
 
-## Verify what's actually stored in Redis (raw)
+## Verify what's actually stored in Database (raw)
 test_obj = JsonTest.new
 test_obj.id = "json_test_1"
 test_obj.config = { theme: "dark", notifications: true, settings: { volume: 80 } }

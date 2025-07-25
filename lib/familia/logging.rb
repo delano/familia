@@ -126,7 +126,7 @@ module Familia
     #
     # @param label [Symbol] A label for the trace message (e.g., :EXPAND,
     #   :FROMREDIS, :LOAD, :EXISTS).
-    # @param redis_instance [Redis, Redis::Future, nil] The Redis instance or
+    # @param redis_instance [Redis, Redis::Future, nil] The Database instance or
     #   Future being used.
     # @param ident [String] An identifier or key related to the operation being
     #   traced.
@@ -140,14 +140,14 @@ module Familia
     # @return [nil]
     #
     # @note This method only executes if LoggerTraceRefinement::ENABLED is true.
-    # @note The redis_instance can be a Redis object, Redis::Future (used in
+    # @note The redis_instance can be a Database object, Redis::Future (used in
     #   pipelined and multi blocks), or nil (when the redis connection isn't
     #   relevant).
     #
     def trace(label, redis_instance, ident, context = nil)
       return unless LoggerTraceRefinement::ENABLED
 
-      # Usually redis_instance is a Redis object, but it could be
+      # Usually redis_instance is a Database object, but it could be
       # a Redis::Future which is what is used inside of pipelined
       # and multi blocks. In some contexts it's nil where the
       # redis connection isn't relevant.

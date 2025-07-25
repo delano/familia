@@ -105,7 +105,7 @@ module Familia
       deserialize_values(*elements)
     end
 
-    # The Great Redis Refresh-o-matic 3000 for HashKey!
+    # The Great Database Refresh-o-matic 3000 for HashKey!
     #
     # This method performs a complete refresh of the hash's state from Redis.
     # It's like giving your hash a memory transfusion - out with the old state,
@@ -117,7 +117,7 @@ module Familia
     # @return [void] Returns nothing, but your hash will be sparkling clean
     #   with all its fields synchronized with Redis.
     #
-    # @raise [Familia::KeyNotFoundError] If the Redis key for this hash no
+    # @raise [Familia::KeyNotFoundError] If the dbkey for this hash no
     #   longer exists. Time travelers beware!
     #
     # @example Basic usage
@@ -127,7 +127,7 @@ module Familia
     #   begin
     #     my_hash.refresh!
     #   rescue Familia::KeyNotFoundError
-    #     puts "Oops! Our hash seems to have vanished into the Redis void!"
+    #     puts "Oops! Our hash seems to have vanished into the Database void!"
     #   end
     def refresh!
       Familia.trace :REFRESH, redis, redisuri, caller(1..1) if Familia.debug?
@@ -148,7 +148,7 @@ module Familia
     #
     # @return [self] Returns the refreshed hash, ready for more adventures!
     #
-    # @raise [Familia::KeyNotFoundError] If the Redis key does not exist.
+    # @raise [Familia::KeyNotFoundError] If the dbkey does not exist.
     #   The hash must exist in Redis-land for this to work!
     #
     # @example Refresh and chain

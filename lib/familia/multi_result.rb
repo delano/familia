@@ -2,24 +2,24 @@
 
 # The magical MultiResult, keeper of Redis's deepest secrets!
 #
-# This quirky little class wraps up the outcome of a Redis "transaction"
-# (or as I like to call it, a "Redis dance party") with a bow made of
+# This quirky little class wraps up the outcome of a Database "transaction"
+# (or as I like to call it, a "Database dance party") with a bow made of
 # pure Ruby delight. It knows if your commands were successful and
 # keeps the results safe in its pocket dimension.
 #
 # @attr_reader success [Boolean] The golden ticket! True if all your
-#   Redis wishes came true in the transaction.
+#   Database wishes came true in the transaction.
 # @attr_reader results [Array<String>] A mystical array of return values,
-#   each one a whisper from the Redis gods.
+#   each one a whisper from the Database gods.
 #
 # @example Summoning a MultiResult from the void
 #   result = MultiResult.new(true, ["OK", "OK"])
 #
-# @example Divining the success of your Redis ritual
+# @example Divining the success of your Database ritual
 #   if result.successful?
-#     puts "Huzzah! The Redis spirits smile upon you!"
+#     puts "Huzzah! The Database spirits smile upon you!"
 #   else
-#     puts "Alas! The Redis gremlins have conspired against us!"
+#     puts "Alas! The Database gremlins have conspired against us!"
 #   end
 #
 # @example Peering into the raw essence of results
@@ -32,13 +32,13 @@ class MultiResult
   #   false otherwise
   attr_reader :success
 
-  # @return [Array<String>] The raw return values from the Redis commands
+  # @return [Array<String>] The raw return values from the Database commands
   attr_reader :results
 
   # Creates a new MultiResult instance.
   #
   # @param success [Boolean] Whether all commands succeeded
-  # @param results [Array<String>] The raw results from Redis commands
+  # @param results [Array<String>] The raw results from Database commands
   def initialize(success, results)
     @success = success
     @results = results
@@ -48,7 +48,7 @@ class MultiResult
   #
   # @return [Array] A tuple containing the success status and the raw results.
   #   The success status is a boolean indicating if all commands succeeded.
-  #   The raw results is an array of return values from the Redis commands.
+  #   The raw results is an array of return values from the Database commands.
   #
   # @example
   #   [true, ["OK", true, 1]]

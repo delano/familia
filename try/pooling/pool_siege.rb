@@ -1,7 +1,7 @@
 #!/usr/bin/env ruby
 # pool_siege.rb
 #
-# Simple Connection Pool Load Tester - Like siege, but for Redis connection pools
+# Simple Connection Pool Load Tester - Like siege, but for Database connection pools
 #
 # Usage:
 #   ruby pool_siege.rb -t 20 -p 5 -o 100    # 20 threads, 5 pool size, 100 ops each
@@ -350,7 +350,7 @@ class PoolSiege
       end
 
       if profile_data[:redis_operation_times].any?
-        f.puts "Redis Operation Time (ms):"
+        f.puts "Database Operation Time (ms):"
         f.puts "  Average: #{(profile_data[:redis_operation_times].sum / profile_data[:redis_operation_times].size).round(3)}"
         f.puts "  Min: #{profile_data[:redis_operation_times].min.round(3)}"
         f.puts "  Max: #{profile_data[:redis_operation_times].max.round(3)}"

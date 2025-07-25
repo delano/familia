@@ -13,7 +13,7 @@ require_relative 'familia/version'
 # Familia - A family warehouse for Redis
 #
 # Familia provides a way to organize and store Ruby objects in Redis.
-# It includes various modules and classes to facilitate object-Redis interactions.
+# It includes various modules and classes to facilitate object-Database interactions.
 #
 # @example Basic usage
 #   class Flower < Familia::Horreum
@@ -48,7 +48,7 @@ module Familia
     # @example
     #  Familia.configure do |config|
     #    config.debug = true
-    #    config.enable_redis_logging = true
+    #    config.enable_database_logging = true
     #  end
     #
     #

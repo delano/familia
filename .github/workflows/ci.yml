@@ -27,7 +27,7 @@ jobs:
     services:
       redis:
         image: valkey/valkey:8.1-bookworm
-        # Set health checks to wait until redis has started
+        # Set health checks to wait until database server has started
         options: >-
           --health-cmd "redis-cli ping"
           --health-interval 10s

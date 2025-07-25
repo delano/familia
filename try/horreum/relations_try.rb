@@ -1,5 +1,5 @@
 # try/horreum/relations_try.rb
-# Test Horreum Redis type relations functionality
+# Test Horreum Database type relations functionality
 
 require_relative '../../lib/familia'
 require_relative '../helpers/test_helpers'
@@ -37,21 +37,21 @@ end
 @test_product.productid = "prod456"
 @test_product.title = "Test Product"
 
-## Class knows about Redis type relationships
+## Class knows about Database type relationships
 RelationsTestUser.has_relations?
 #=> true
 
-## Class can list Redis type definitions
+## Class can list Database type definitions
 related_fields = RelationsTestUser.related_fields
 related_fields.keys.sort
 #=> [:preferences, :scores, :sessions, :tags]
 
-## Redis type definitions are accessible
+## Database type definitions are accessible
 sessions_def = RelationsTestUser.related_fields[:sessions]
 sessions_def.nil?
 #=> false
 
-## Can access different Redis type instances
+## Can access different Database type instances
 sessions = @test_user.sessions
 tags = @test_user.tags
 scores = @test_user.scores
@@ -59,34 +59,34 @@ prefs = @test_user.preferences
 [sessions.class.name, tags.class.name, scores.class.name, prefs.class.name]
 #=> ["Familia::List", "Familia::Set", "Familia::SortedSet", "Familia::HashKey"]
 
-## Redis types use correct Redis keys
+## Database types use correct dbkeys
 @test_user.sessions.dbkey
 #=> "relationstestuser:user123:sessions"
 
-## Redis types use correct Redis keys
+## Database types use correct dbkeys
 @test_user.tags.dbkey
 #=> "relationstestuser:user123:tags"
 
-## Can work with List Redis type
+## Can work with List Database type
 @test_user.sessions.clear
 @test_user.sessions.push("session1", "session2")
 @test_user.sessions.size
 #=> 2
 
-## Can work with Set Redis type
+## Can work with Set Database type
 @test_user.tags.clear
 @test_user.tags.add("ruby", "redis", "web")
 @test_user.tags.size
 #=> 3
 
-## Can work with SortedSet Redis type
+## Can work with SortedSet Database type
 @test_user.scores.clear
 @test_user.scores.add(100, "level1")
 @test_user.scores.add(200, "level2")
 @test_user.scores.size
 #=> 2
 
-## Can work with HashKey Redis type
+## Can work with HashKey Database type
 @test_user.preferences.clear
 @test_user.preferences.put("theme", "dark")
 @test_user.preferences.put("lang", "en")
@@ -103,21 +103,21 @@ prefs = @test_user.preferences
 @test_product.views.clear
 #=> true
 
-## Counter Redis type works
+## Counter Database type works
 @test_product.views.increment
 @test_product.views.incrementby(5)
 @test_product.views.value
 #=> "6"
 
-## Redis types maintain parent reference
+## Database types maintain parent reference
 @test_user.sessions.parent == @test_user
 #=> true
 
-## Redis types know their field name
+## Database types know their field name
 @test_user.tags.keystring
 #=> :tags
 
-## Can check if Redis types exist
+## Can check if Database types exist
 @test_user.scores.add(50, "test")
 before_exists = @test_user.scores.exists?
 @test_user.scores.clear
@@ -125,7 +125,7 @@ after_exists = @test_user.scores.exists?
 [before_exists, after_exists]
 #=> [true, false]
 
-## Can destroy individual Redis types
+## Can destroy individual Database types
 @test_user.preferences.put("temp", "value")
 @test_user.preferences.clear
 @test_user.preferences.exists?

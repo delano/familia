@@ -102,9 +102,9 @@ module Familia
       val.split(Familia.delim)
     end
 
-    # Creates a Redis key from given values
+    # Creates a dbkey from given values
     # @param val [Array] elements to join for the key
-    # @return [String] Redis key
+    # @return [String] dbkey
     def dbkey(*val)
       join(*val)
     end

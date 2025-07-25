@@ -79,7 +79,7 @@ class BankAccount < Familia::Horreum
 
         # Inside this block, `accnt.redis` returns the open multi connection.
         #
-        # Anything that calls redis commands, will be queues on the multi
+        # Anything that calls database commands, will be queues on the multi
         # connection, like attr.metadata = {...}. So neither the main object
         # key or the separate `metadata` string key will update unless both
         # succeed. This is PURPOSE1.

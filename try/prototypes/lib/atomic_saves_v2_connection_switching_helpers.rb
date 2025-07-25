@@ -4,7 +4,7 @@
 # Atomic Save V2 Proof of Concept - Connection Switching Approach
 #
 # This implementation demonstrates atomic saves across multiple Familia
-# objects by switching which Redis connection the `redis` method returns
+# objects by switching which Database connection the `redis` method returns
 # based on transaction context.
 #
 # Key Features:
@@ -12,7 +12,7 @@
 #    connection or MULTI connection based on Thread-local context
 # 2. **Thread Safety**: Uses Thread-local storage for transaction state
 # 3. **No method_missing**: Clean implementation via method overriding
-# 4. **Redis MULTI/EXEC**: Leverages Redis's native transaction support
+# 4. **Database MULTI/EXEC**: Leverages Redis's native transaction support
 #
 # Design Decision: TransactionalMethods Module REMOVED
 #
@@ -90,7 +90,7 @@ module Familia
         # Already in a transaction, just execute the block
         yield
       else
-        # Use Redis multi with block form
+        # Use Database multi with block form
         redis.multi do |multi|
           begin
             self.current_transaction = multi

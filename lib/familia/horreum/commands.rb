@@ -4,14 +4,14 @@ module Familia
   # InstanceMethods - Module containing instance-level methods for Familia
   #
   # This module is included in classes that include Familia, providing
-  # instance-level functionality for Redis operations and object management.
+  # instance-level functionality for Database operations and object management.
   #
   class Horreum
 
-    # Methods that call Redis commands (InstanceMethods)
+    # Methods that call Database commands (InstanceMethods)
     #
     # NOTE: There is no hgetall for Horreum. This is because Horreum
-    # is a single hash in Redis that we aren't meant to have be working
+    # is a single hash in Database that we aren't meant to have be working
     # on in memory for more than, making changes -> committing. To
     # emphasize this, instead of "refreshing" the object with hgetall,
     # just load the object again.
@@ -61,9 +61,9 @@ module Familia
         redis.expire dbkey, default_expiration.to_i
       end
 
-      # Retrieves the remaining time to live (TTL) for the object's Redis key.
+      # Retrieves the remaining time to live (TTL) for the object's dbkey.
       #
-      # This method accesses the ovjects Redis client to obtain the TTL of `dbkey`.
+      # This method accesses the ovjects Database client to obtain the TTL of `dbkey`.
       # If debugging is enabled, it logs the TTL retrieval operation using `Familia.trace`.
       #
       # @return [Integer] The TTL of the key in seconds. Returns -1 if the key does not exist
@@ -73,7 +73,7 @@ module Familia
         redis.ttl dbkey
       end
 
-      # Removes a field from the hash stored at the Redis key.
+      # Removes a field from the hash stored at the dbkey.
       #
       # @param field [String] The field to remove from the hash.
       # @return [Integer] The number of fields that were removed from the hash (0 or 1).
@@ -172,7 +172,7 @@ module Familia
       end
       alias has_key? key?
 
-      # Deletes the entire Redis key
+      # Deletes the entire dbkey
       # @return [Boolean] true if the key was deleted, false otherwise
       def delete!
         Familia.trace :DELETE!, redis, redisuri, caller(1..1) if Familia.debug?

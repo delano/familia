@@ -36,7 +36,7 @@ module Familia::Features
       @default_expiration || self.class.default_expiration
     end
 
-    # Sets an expiration time for the Redis data associated with this object.
+    # Sets an expiration time for the Database data associated with this object.
     #
     # This method allows setting a Time To Live (TTL) for the data in Redis,
     # after which it will be automatically removed.

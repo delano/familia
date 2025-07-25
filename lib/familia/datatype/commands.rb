@@ -22,7 +22,7 @@ class Familia::DataType
       redis.type dbkey
     end
 
-    # Deletes the entire Redis key
+    # Deletes the entire dbkey
     # @return [Boolean] true if the key was deleted, false otherwise
     def delete!
       Familia.trace :DELETE!, redis, redisuri, caller(1..1) if Familia.debug?

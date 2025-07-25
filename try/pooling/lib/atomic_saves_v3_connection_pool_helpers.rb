@@ -3,7 +3,7 @@
 ##
 # Atomic Save V3 Proof of Concept - Connection Pool Integration
 #
-# This implementation explores atomic saves with Redis connection pooling
+# This implementation explores atomic saves with Database connection pooling
 # for thread safety in multi-threaded environments (like Puma).
 #
 # Key Goals:
@@ -110,7 +110,7 @@ class TransactionRecord < Familia::Horreum
 end
 
 module Familia
-  # Connection pool for Redis connections
+  # Connection pool for Database connections
   @@connection_pool = ConnectionPool.new(size: 10, timeout: 5) do
     Redis.new(url: Familia.uri.to_s)
   end
