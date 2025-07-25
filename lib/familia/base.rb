@@ -18,6 +18,16 @@ module Familia
     @dump_method = :to_json
     @load_method = :from_json
 
+    # Returns a string representation of the object. Implementing classes
+    # are welcome to override this method to provide a more meaningful
+    # representation. Using this as a default via super is recommended.
+    #
+    # @return [String] A string representation of the object. Never nil.
+    #
+    def to_s
+      "#<#{self.class}:0x#{object_id.to_s(16)}>"
+    end
+
     class << self
       attr_reader :features
       attr_accessor :dump_method, :load_method
