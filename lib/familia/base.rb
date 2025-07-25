@@ -59,8 +59,8 @@ module Familia
     end
 
     def generate_id
-      @key ||= Familia.generate_id
-      @key
+      @identifier ||= Familia.generate_id
+      @identifier
     end
 
     def uuid

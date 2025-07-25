@@ -21,7 +21,7 @@ require 'json'
 
 # Test models
 class BankAccount < Familia::Horreum
-  identifier :account_number
+  identifier_field :account_number
   field :account_number
   field :balance
   field :holder_name
@@ -69,7 +69,7 @@ class BankAccount < Familia::Horreum
 end
 
 class TransactionRecord < Familia::Horreum
-  identifier :transaction_id
+  identifier_field :transaction_id
   field :transaction_id
   field :from_account
   field :to_account

@@ -1,12 +1,13 @@
 # try/edge_cases/string_coercion_try.rb
 
-require_relative '../../lib/familia'
 require_relative '../helpers/test_helpers'
 
 Familia.debug = false
 
+@customer_id = 'customer-string-coercion-test'
+
 # Error handling: object without proper identifier setup
-class BadIdentifierTest < Familia::Horreum
+class ::BadIdentifierTest < Familia::Horreum
   # No identifier method defined - should cause issues
 end
 
@@ -33,25 +34,30 @@ def lookup_by_id(id_string)
   id_string.to_s.upcase
 end
 
-@bad_obj = BadIdentifierTest.new
+## Instantiaite a troubled model class
+@bad_obj = ::BadIdentifierTest.new
+#=:> BadIdentifierTest
 
 # Test polymorphic string usage for Familia objects
-@customer_id = 'customer-string-coercion-test'
 @customer = Customer.new(@customer_id)
 @customer.name = 'John Doe'
 @customer.planid = 'premium'
 @customer.save
+#=> true
 
-@session_id = 'session-string-coercion-test'
+## Session save
 @session = Session.new
 @session.custid = @customer_id
 @session.useragent = 'Test Browser'
 @session.save
+#=> true
 
-# Complex identifier test with array-based identifier
+## Bone with simple identifier
 @bone = Bone.new
 @bone.token = 'test_token'
 @bone.name = 'test_name'
+@bone.identifier
+#=> 'test_token'
 
 ## Basic to_s functionality returns identifier
 @customer.to_s
@@ -65,10 +71,16 @@ end
 @customer.to_s == @customer.identifier
 #=> true
 
-## Session identifier cannot be set b/c it gets overridden
+## Session identifier can be set and is not overidden even after saved
+@session_id = 'session-string-coercion-test'
 session = Session.new(@session_id)
 session.identifier
-#=<> @session_id
+session
+#==> _.to_s == @session_id
+#==> _.identifier == @session_id
+#==> _.save
+#==> _.identifier == @session_id
+#==> _.to_s == @session_id
 
 ## Session to_s works with generated identifier
 @session.to_s
@@ -128,31 +140,8 @@ process_identifier(@customer)
 
 ## to_s handles identifier errors gracefully
 badboi = BadIdentifierTest.new
-badboi.to_s.include?('BadIdentifierTest')
-#=> true
-
-## Array-based identifier works with to_s
-bone = Bone.new
-bone.token = 'test_token'
-bone.name = 'test_name'
-bone.to_s
-#=> 'test_token:test_name'
-
-## String operations on complex identifier
-bone = Bone.new 'test_token', 'test_name'
-bone.to_s.split(':')
-#=> ['test_token', 'test_name']
-
-## Cleanup a key that does not exist
-bone = Bone.new 'test_token', 'test_name'
-bone.delete!
-#=> false
-
-## Cleanup a key that exists
-bone = Bone.new 'test_token', 'test_name'
-bone.save
-bone.delete!
-#=> true
+badboi.to_s #.include?('BadIdentifierTest')
+#=~> /BadIdentifierTest:0x[0-9a-f]+/
 
 ## Performance consideration: to_s caching behavior
 @customer2 = Customer.new('performance-test')

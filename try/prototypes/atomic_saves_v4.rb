@@ -3,7 +3,7 @@
 class BankAccount < Familia::Horreum
   class_sorted_set :relatable_object_ids
 
-  identifier :account_number
+  identifier_field :account_number
   field :account_number
   field :balance
   field :foreign_balance

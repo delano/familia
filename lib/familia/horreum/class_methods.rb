@@ -7,7 +7,7 @@ module Familia
     # Class-level instance variables
     # These are set up as nil initially and populated later
     @dbclient = nil # TODO
-    @identifier = nil
+    @identifier_field = nil
     @default_expiration = nil
     @logical_database = nil
     @uri = nil
@@ -33,18 +33,18 @@ module Familia
       include Familia::Settings
       include Familia::Horreum::RelatedFieldsManagement
 
-      # Sets or retrieves the unique identifier for the class.
+      # Sets or retrieves the unique identifier field for the class.
       #
-      # This method defines or returns the unique identifier used to generate the
-      # dbkey for the object. If a value is provided, it sets the identifier;
-      # otherwise, it returns the current identifier.
+      # This method defines or returns the field or method that contains the unique
+      # identifier used to generate the dbkey for the object. If a value is provided,
+      # it sets the identifier field; otherwise, it returns the current identifier field.
       #
-      # @param [Object] val the value to set as the identifier (optional).
-      # @return [Object] the current identifier.
+      # @param [Object] val the field name or method to set as the identifier field (optional).
+      # @return [Object] the current identifier field.
       #
-      def identifier(val = nil)
-        @identifier = val if val
-        @identifier
+      def identifier_field(val = nil)
+        @identifier_field = val if val
+        @identifier_field
       end
 
       # Defines a field for the class and creates accessor methods.

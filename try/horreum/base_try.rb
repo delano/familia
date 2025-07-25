@@ -10,6 +10,9 @@ Familia.debug = false
 @hashkey = Familia::HashKey.new 'tryouts-27'
 
 ## Customer passed as value is returned as string identifier, on assignment as string
+## TODO: Revisit these @identifier testcases b/c I think we don't want to be setting
+## the @identifier instance var anymore since identifer_field should only take field
+## names now (and might be removed altogether).
 @hashkey["test1"] = @customer.identifier
 #=> @identifier
 
@@ -70,31 +73,37 @@ Familia.trace :LOAD, @customer.dbclient, @customer.uri, caller if Familia.debug?
 #=> true
 
 ## All horrerum objects have a key field
-@customer.key
+@customer.identifier
 #=> @identifier
 
 ## Even ones that didn't define it
-@cd = CustomDomain.new "www.example.com", "@identifier"
-@cd.key
+class NoIdentifierClass < Familia::Horreum
+  field :name
+end
+@no_id = NoIdentifierClass.new name: "test"
+@no_id.identifier
 #=> nil
 
 ## We can call #identifier directly if we want to "lasy load" the unique identifier
+@cd = CustomDomain.new display_domain: "www.example.com", custid: "domain-test@example.com"
 @cd.identifier
 #=:> String
 #=/=> _.empty?
 #==> _.size > 16
 #=~>/\A[0-9a-z]+\z/
 
-## The #key field will still be nil
-@cd.key
-#=> nil
+## The identifier is now memoized (same value each time)
+@cd_first_call = @cd.identifier
+@cd_second_call = @cd.identifier
+@cd_first_call == @cd_second_call
+#=> true
 
 ## But once we save
 @cd.save
 #=> true
 
 ## The key has been set now that the instance has been saved
-@cd.key
+@cd.identifier
 #=:> String
 #=/=> _.empty?
 #==> _.size > 16

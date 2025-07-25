@@ -3,11 +3,11 @@
 require_relative '../../lib/familia'
 require_relative '../helpers/test_helpers'
 
-@a = Bone.new(token: 'atoken2', name: 'akey')
+@a = Bone.new(token: 'atoken2')
 
 ## Bone#dbkey
 @a.dbkey
-#=> 'bone:atoken2:akey:object'
+#=> 'bone:atoken2:object'
 
 ## Familia::String#value should give default value
 @a.value.value

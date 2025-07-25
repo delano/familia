@@ -10,7 +10,7 @@ Familia.debug = false
 # Define a test class with quantization feature
 class QuantizedTest < Familia::Horreum
   feature :quantization
-  identifier :id
+  identifier_field :id
   field :id
   field :data
   default_expiration 300 # 5 minutes for testing

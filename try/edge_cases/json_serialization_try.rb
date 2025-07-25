@@ -7,7 +7,7 @@ Familia.debug = false
 
 # Define a simple model with fields that should handle JSON data
 class JsonTest < Familia::Horreum
-  identifier :id
+  identifier_field :id
   field :id
   field :config      # This should be able to store Hash objects
   field :tags        # This should be able to store Array objects
@@ -46,7 +46,7 @@ test_obj.simple = "just a string"
 test_obj.tags = ["ruby", "valkey", "json", "familia"]
 test_obj.save
 test_obj.hgetall
-#=> {"id"=>"json_test_1", "config"=>"{\"theme\":\"dark\",\"notifications\":true,\"settings\":{\"volume\":80}}", "tags"=>"[\"ruby\",\"valkey\",\"json\",\"familia\"]", "simple"=>"just a string", "key"=>"json_test_1"}
+#=> {"id"=>"json_test_1", "config"=>"{\"theme\":\"dark\",\"notifications\":true,\"settings\":{\"volume\":80}}", "tags"=>"[\"ruby\",\"valkey\",\"json\",\"familia\"]", "simple"=>"just a string"}
 
 ## Test 4: Hash should be deserialized back to Hash
 test_obj = JsonTest.new 'any_id_will_do'

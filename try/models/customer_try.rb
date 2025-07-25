@@ -11,7 +11,7 @@ require_relative '../helpers/test_helpers'
 @customer.custid = "test@example.com"
 @customer.email = "test@example.com"
 @customer.role = "user"
-@customer.key = "abc123"
+# No longer need to set key field - identifier computed from custid
 @customer.planid = "basic"
 @customer.created = Time.now.to_i
 @customer.updated = Time.now.to_i

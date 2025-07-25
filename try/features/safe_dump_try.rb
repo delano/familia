@@ -10,7 +10,7 @@ Familia.debug = false
 # Define a test class with SafeDump feature
 class SafeDumpTest < Familia::Horreum
   feature :safe_dump
-  identifier :id
+  identifier_field :id
   field :id
   field :name
   field :email
@@ -107,7 +107,7 @@ dump[:has_email]
 ## Can define safe_dump_fields with set_safe_dump_fields
 class DynamicSafeDump < Familia::Horreum
   feature :safe_dump
-  identifier :id
+  identifier_field :id
   field :id
   field :data
 end
@@ -119,7 +119,7 @@ DynamicSafeDump.safe_dump_fields
 ## Class with no safe_dump_fields defined has empty array
 class EmptySafeDump < Familia::Horreum
   feature :safe_dump
-  identifier :id
+  identifier_field :id
   field :id
 end
 

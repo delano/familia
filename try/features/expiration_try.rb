@@ -13,7 +13,7 @@ class ParentExpiring < Familia::Horreum
 end
 
 class ChildExpiring < ParentExpiring
-  identifier :id
+  identifier_field :id
   field :id
   default_expiration 1000
 end
@@ -21,7 +21,7 @@ end
 # Define a test class with expiration feature
 class ExpiringTest < Familia::Horreum
   feature :expiration
-  identifier :id
+  identifier_field :id
   field :id
   field :data
   default_expiration 300 # 5 minutes
@@ -75,7 +75,7 @@ ChildExpiring.default_expiration
 ## Falls back to Familia.default_expiration when no class/parent default expiration
 class NoDefaultExpirationTest < Familia::Horreum
   feature :expiration
-  identifier :id
+  identifier_field :id
   field :id
 end
 NoDefaultExpirationTest.default_expiration
