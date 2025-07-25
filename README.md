@@ -1,8 +1,8 @@
 # Familia - 2.0.0
 
-**Organize and store Ruby objects in Redis. A powerful Ruby ORM (of sorts) for Redis.**
+**Organize and store Ruby objects in Valkey/Redis. A powerful Ruby ORM (of sorts) for Valkey/Redis.**
 
-Familia provides a flexible and feature-rich way to interact with Redis using Ruby objects. It's designed to make working with Redis as natural as working with Ruby classes, while offering advanced features for complex data management.
+Familia provides a flexible and feature-rich way to interact with Valkey using Ruby objects. It's designed to make working with Valkey as natural as working with Ruby classes, while offering advanced features for complex data management.
 
 ## Installation
 
@@ -18,7 +18,7 @@ Get it in one of the following ways:
 
 ### 1. Defining Horreum Classes
 
-Familia uses the concept of "Horreum" classes to represent Redis-backed objects:
+Familia uses the concept of "Horreum" classes to represent Valkey-compatible objects:
 
 ```ruby
 class Flower < Familia::Horreum
@@ -49,9 +49,9 @@ class User < Familia::Horreum
 end
 ```
 
-### 3. Redis Data Types
+### 3. Data Types
 
-Familia supports various Redis data types:
+Familia supports various Valkey-compatible data types:
 
 ```ruby
 class Product < Familia::Horreum
@@ -63,9 +63,9 @@ class Product < Familia::Horreum
 end
 ```
 
-### 4. Class-level Redis Types
+### 4. Class-level Valkey-compatible Types
 
-You can also define Redis types at the class level:
+You can also define Valkey-compatible types at the class level:
 
 ```ruby
 class Customer < Familia::Horreum
@@ -218,7 +218,7 @@ end
 
 ## Conclusion
 
-Familia provides a powerful and flexible way to work with Redis in Ruby applications. Its features like automatic expiration, safe dumping, and quantization make it suitable for a wide range of use cases, from simple key-value storage to complex time-series data management.
+Familia provides a powerful and flexible way to work with Valkey-compatible in Ruby applications. Its features like automatic expiration, safe dumping, and quantization make it suitable for a wide range of use cases, from simple key-value storage to complex time-series data management.
 
 For more information, visit:
 - [Github Repository](https://github.com/delano/familia)
