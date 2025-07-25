@@ -65,10 +65,12 @@ obj_stamp.class
 #=> Integer
 
 ## Different quantum values produce different buckets
-hour_stamp = QuantizedTest.qstamp(3600)
-day_stamp = QuantizedTest.qstamp(86400)
-hour_stamp != day_stamp
-#=> true
+test_time = Time.utc(2023, 6, 15, 14, 30, 0) # use a fixed time, mid-day (avoid ToD boundary)
+@hour_stamp = QuantizedTest.qstamp(3600, time: test_time)
+@day_stamp = QuantizedTest.qstamp(86400, time: test_time)
+#=> 1686787200
+#=<> @hour_stamp
+#==> @hour_stamp == 1686837600
 
 ## Pattern formatting works correctly
 time_str = QuantizedTest.qstamp(3600, pattern: '%Y-%m-%d %H:00:00')
