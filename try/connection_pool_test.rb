@@ -14,7 +14,7 @@ Familia.pool_timeout = 2
 
 # Test model for connection pool testing
 class PoolTestAccount < Familia::Horreum
-  identifier :account_id
+  identifier_field :account_id
   field :account_id
   field :balance
   field :holder_name
@@ -30,7 +30,7 @@ class PoolTestAccount < Familia::Horreum
 end
 
 class PoolTestSession < Familia::Horreum
-  identifier :session_id
+  identifier_field :session_id
   field :session_id
   field :user_id
   field :created_at

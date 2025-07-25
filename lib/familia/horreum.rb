@@ -86,17 +86,8 @@ module Familia
       Familia.ld "[Horreum] Initializing #{self.class}"
       initialize_relatives
 
-      # Automatically add a 'key' field if it's not already defined. This ensures
-      # that every object horreum class has a unique identifier field. Ideally
-      # this logic would live somewhere else b/c we only need to call it once
-      # per class definition. Here it gets called every time an instance is
-      # instantiated.
-      unless self.class.fields.include?(:key)
-        # Define the 'key' field for this class
-        # This approach allows flexibility in how identifiers are generated
-        # while ensuring each object has a consistent way to be referenced
-        self.class.field :key
-      end
+      # No longer auto-create a key field - the identifier method will
+      # directly use the field specified by identifier_field
 
       # Detect if first argument is a hash (legacy support)
       if args.size == 1 && args.first.is_a?(Hash) && kwargs.empty?
@@ -257,27 +248,22 @@ module Familia
 
     # Determines the unique identifier for the instance
     # This method is used to generate dbkeys for the object
+    # Returns nil for unsaved objects (following standard ORM patterns)
     def identifier
-      definition = self.class.identifier # e.g.
-      # When definition is a symbol or string, assume it's an instance method
-      # to call on the object to get the unique identifier. When it's a callable
-      # object, call it with the object as the argument. When it's an array,
-      # call each method in turn and join the results. When it's nil, raise
-      # an error
+      definition = self.class.identifier_field
+      return nil if definition.nil?
+
+      # Call the identifier field or proc (validation already done at class definition time)
       unique_id = case definition
                   when Symbol, String
                     send(definition)
                   when Proc
                     definition.call(self)
-                  when Array
-                    Familia.join(definition.map { |method| send(method) })
-                  else
-                    raise Problem, "Invalid identifier definition: #{definition.inspect}"
                   end
 
-      # If the unique_id is nil, raise an error
-      raise Problem, "Identifier is nil for #{self.class}" if unique_id.nil?
-      raise Problem, 'Identifier is empty' if unique_id.empty?
+      # Return nil for unpopulated identifiers (like unsaved ActiveRecord objects)
+      # Only raise errors when the identifier is actually needed for Redis operations
+      return nil if unique_id.nil? || unique_id.to_s.empty?
 
       unique_id
     end
@@ -312,11 +298,8 @@ module Familia
       # Enable polymorphic string usage for Familia objects
       # This allows passing Familia objects directly where strings are expected
       # without requiring explicit .identifier calls
+      return super if identifier.to_s.empty?
       identifier.to_s
-    rescue => e
-      # Fallback for cases where identifier might fail
-      Familia.ld "[#{self.class}#to_s] Failed to get identifier: #{e.message}"
-      "#<#{self.class}:0x#{object_id.to_s(16)}>"
     end
   end
 end

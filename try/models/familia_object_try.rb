@@ -5,27 +5,27 @@ require_relative '../helpers/test_helpers'
 
 Familia.debug = false
 
-@a = Bone.new 'atoken', 'akey'
+@a = Session.new 'atoken'
 
 ## Familia.prefix
-Bone.prefix
-#=> :bone
+Session.prefix
+#=> :session
 
 ## Familia#identifier
 @a.identifier
-#=> 'atoken:akey'
+#=> 'atoken'
 
 ## Familia.suffix
-Bone.suffix
+Session.suffix
 #=> :object
 
 ## Familia#dbkey
 @a.dbkey
-#=> 'bone:atoken:akey:object'
+#=> 'session:atoken:object'
 
 ## Familia#dbkey
 @a.dbkey
-#=> 'bone:atoken:akey:object'
+#=> 'session:atoken:object'
 
 ## Familia#save
 @cust = Customer.new :delano, "Delano Mandelbaum"
@@ -52,7 +52,7 @@ Customer.values.size
 #=> 0
 
 ## Familia#save with an object that expires
-obj = Session.new 'sessionid', :delano
+obj = Session.new 'sessionid'
 obj.save
 #=> true
 

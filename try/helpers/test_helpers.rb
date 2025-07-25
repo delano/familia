@@ -11,7 +11,7 @@ Familia.enable_database_logging = true
 Familia.enable_database_counter = true
 
 class Bone < Familia::Horreum
-  identifier     [:token, :name]
+  identifier_field :token
   field     :token
   field     :name
   list      :owners
@@ -66,13 +66,12 @@ class Customer < Familia::Horreum
 
   counter :secrets_created
 
-  identifier :custid
+  identifier_field :custid
 
   field :custid
   field :sessid
   field :email
   field :role
-  field :key
   field :name
   field :passphrase_encryption
   field :passphrase
@@ -102,18 +101,21 @@ class Session < Familia::Horreum
   logical_database 14 # don't use Onetime's default DB
   default_expiration 180.minutes
 
-  identifier :generate_id
+  identifier_field :sessid
 
   field :sessid
   field :shrimp
   field :custid
   field :useragent
-  field :key
   field :authenticated
   field :ipaddress
   field :created
   field :updated
 
+  def save
+    self.sessid ||= Familia.generate_id  # Only generates when persisting
+    super
+  end
 end
 @s = Session.new
 
@@ -123,8 +125,9 @@ class CustomDomain < Familia::Horreum
 
   class_sorted_set :values
 
-  identifier :generate_id
+  identifier_field :generate_id
 
+  field :domainid
   field :display_domain
   field :custid
   field :base_domain
@@ -132,7 +135,6 @@ class CustomDomain < Familia::Horreum
   field :trd
   field :tld
   field :sld
-  # No :key field (so we can test hte behaviour in Horreum#initialize)
   field :txt_validation_host
   field :txt_validation_value
   field :status
@@ -152,10 +154,9 @@ class Limiter < Familia::Horreum
   feature :expiration
   feature :quantization
 
+  identifier_field :name
   default_expiration 30.minutes
-  identifier :name
   field :name
-  # No :key field (so we can test hte behaviour in Horreum#initialize)
 
   string :counter, :default_expiration => 1.hour, :quantize => [10.minutes, '%H:%M', 1302468980]
 

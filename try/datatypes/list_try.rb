@@ -4,7 +4,7 @@
 require_relative '../../lib/familia'
 require_relative '../helpers/test_helpers'
 
-@a = Bone.new 'atoken', 'akey'
+@a = Bone.new 'atoken'
 
 ## Familia::List#push
 ret = @a.owners.push :value1

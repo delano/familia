@@ -21,16 +21,16 @@ Familia.debug = false
 @customer.to_h[:name]
 #=> "John Doe"
 
-## to_h includes the key field (using symbol keys)
-@customer.to_h[:key]
+## to_h includes the custid field (using symbol keys)
+@customer.to_h[:custid]
 #=> "tryouts-28@onetimesecret.com"
 
 ## to_a returns field array in definition order
 @customer.to_a.class
 #=> Array
 
-## to_a includes values in field order (name should be at index 5)
-@customer.to_a[5]
+## to_a includes values in field order (name should be at index 4)
+@customer.to_a[4]
 #=> "John Doe"
 
 ## batch_update can update multiple fields atomically, to_h

@@ -11,7 +11,7 @@ Familia.debug = false
 
 # Test the updated deserialize_value method
 class SymbolizeTest < Familia::Horreum
-  identifier :id
+  identifier_field :id
   field :id
   field :config
 end

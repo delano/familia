@@ -4,10 +4,10 @@ require_relative '../../lib/familia'
 require_relative '../helpers/test_helpers'
 
 
-@a = Bone.new 'atoken', 'akey'
+@a = Bone.new 'atoken'
 
 ## Familia::SortedSet#add
-@a = Bone.new 'atoken', 'akey'
+@a = Bone.new 'atoken'
 @a.metrics.add 2, :metric2
 @a.metrics.add 4, :metric4
 @a.metrics.add 0, :metric0

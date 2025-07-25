@@ -88,11 +88,6 @@ module Familia
         dbclient.type dbkey(suffix)
       end
 
-      # Parity with DataType#rename
-      def rename(newkey)
-        Familia.trace :RENAME, dbclient, "#{storekey} -> #{newkey}", caller(1..1) if Familia.debug?
-        dbclient.rename dbkey, newkey
-      end
 
       # Retrieves the prefix for the current instance by delegating to its class.
       #

@@ -8,7 +8,7 @@ Familia.debug = false
 
 class RelationsTestUser < Familia::Horreum
   prefix 'relationstestuser'
-  identifier :userid
+  identifier_field :userid
   field :userid
   field :name
   list :sessions
@@ -19,7 +19,7 @@ end
 
 class RelationsTestProduct < Familia::Horreum
   prefix 'relationstestproduct'
-  identifier :productid
+  identifier_field :productid
   field :productid
   field :title
   list :reviews

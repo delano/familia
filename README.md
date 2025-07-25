@@ -22,7 +22,7 @@ Familia uses the concept of "Horreum" classes to represent Valkey-compatible obj
 
 ```ruby
 class Flower < Familia::Horreum
-  identifier :token
+  identifier_field :token
   field :name
   list :owners
   set :tags
@@ -38,11 +38,11 @@ You can define identifiers in various ways:
 
 ```ruby
 class User < Familia::Horreum
-  identifier :email
+  identifier_field :email
   # or
-  identifier -> (user) { "user:#{user.email}" }
+  identifier_field -> (user) { "user:#{user.email}" }
   # or
-  identifier [:type, :email]
+  identifier_field [:type, :email]
 
   field :email
   field :type

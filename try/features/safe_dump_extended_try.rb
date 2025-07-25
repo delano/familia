@@ -57,7 +57,7 @@ Bone.respond_to?(:safe_dump_fields)
 #=> false
 
 ## Bone instances do not have safe_dump method
-@bone = Bone.new(name: "Rex", age: 3)
+@bone = Bone.new(token: "boneid1", name: "Rex")
 @bone.respond_to?(:safe_dump)
 #=> false
 

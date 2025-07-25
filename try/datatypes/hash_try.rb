@@ -3,7 +3,7 @@
 require_relative '../../lib/familia'
 require_relative '../helpers/test_helpers'
 
-@a = Bone.new 'atoken', 'akey'
+@a = Bone.new 'atoken'
 
 ## Familia::HashKey#has_key? knows when there's no key
 @a.props.has_key? 'fieldA'

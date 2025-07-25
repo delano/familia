@@ -6,7 +6,7 @@ require_relative '../helpers/test_helpers'
 Familia.debug = false
 
 ## Existing positional argument initialization still works
-@customer1 = Customer.new 'tryouts-29@test.com', '', '', '', '', 'John Doe'
+@customer1 = Customer.new 'tryouts-29@test.com', '', '', '', 'John Doe'
 [@customer1.custid, @customer1.name]
 #=> ["tryouts-29@test.com", "John Doe"]
 
@@ -40,8 +40,8 @@ Familia.debug = false
 [@customer6.custid, @customer6.name, @customer6.email]
 #=> ["save-test@test.com", "Save Test", "save@example.com"]
 
-## Keyword initialization sets key field correctly
-@customer6.key
+## Keyword initialization sets identifier field correctly
+@customer6.identifier
 #=> "save-test@test.com"
 
 ## Mixed valid and nil values in keyword args (nil values stay nil)
@@ -54,7 +54,7 @@ Familia.debug = false
 #=> "Jane Smith"
 
 ## to_a works correctly with keyword-initialized objects
-@customer2.to_a[5]  # name field should be at index 5
+@customer2.to_a[4]  # name field should be the fifth field defined in the class
 #=> "Jane Smith"
 
 ## Session has limited fields (only sessid defined)
@@ -78,7 +78,7 @@ Familia.debug = false
 #=> ["api.example.com", "domain-test@test.com"]
 
 ## CustomDomain still works with positional args
-@domain2 = CustomDomain.new('web.example.com', 'positional@test.com')
+@domain2 = CustomDomain.new('', 'web.example.com', 'positional@test.com')
 [@domain2.display_domain, @domain2.custid]
 #=> ["web.example.com", "positional@test.com"]
 

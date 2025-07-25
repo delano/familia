@@ -24,11 +24,12 @@ module Familia
     alias get value
 
     def to_s
-      value.to_s # value can return nil which to_s should not
+      return super if value.to_s.empty?
+      value.to_s
     end
 
     def to_i
-      value.to_i
+      value&.to_i || 0
     end
 
     def value=(val)
