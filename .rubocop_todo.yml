@@ -123,16 +123,12 @@ Style/Documentation:
     - "lib/familia/datatype/types/sorted_set.rb"
     - "lib/familia/datatype/types/string.rb"
     - "lib/familia/datatype/types/unsorted_set.rb"
-    - "lib/familia/tools.rb"
     - "lib/familia/version.rb"
 
 # Offense count: 1
 # This cop supports safe autocorrection (--autocorrect).
 # Configuration parameters: AutoCorrect, EnforcedStyle, AllowComments.
 # SupportedStyles: empty, nil, both
-Style/EmptyElse:
-  Exclude:
-    - "lib/familia/tools.rb"
 
 # Offense count: 2
 # This cop supports safe autocorrection (--autocorrect).
@@ -160,9 +156,6 @@ Style/HashTransformValues:
 # This cop supports unsafe autocorrection (--autocorrect-all).
 # Configuration parameters: EnforcedStyle, Autocorrect.
 # SupportedStyles: module_function, extend_self, forbidden
-Style/ModuleFunction:
-  Exclude:
-    - "lib/familia/tools.rb"
 
 # Offense count: 1
 # This cop supports unsafe autocorrection (--autocorrect-all).
@@ -175,9 +168,6 @@ Style/NumericPredicate:
 
 # Offense count: 1
 # This cop supports unsafe autocorrection (--autocorrect-all).
-Style/RedundantInterpolation:
-  Exclude:
-    - "lib/familia/tools.rb"
 
 # Offense count: 1
 # This cop supports safe autocorrection (--autocorrect).
