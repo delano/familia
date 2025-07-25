@@ -6,6 +6,7 @@ module Familia
 
   module Utils
 
+
     # Generates a 256-bit cryptographically secure hexadecimal identifier.
     #
     # @return [String] A 64-character hex string representing 256 bits of entropy.
@@ -27,7 +28,8 @@ module Familia
     #   generate_id(16) # => "568bdb582bc5042bf435d3f126cf71593981067463709c880c91df1ad9777a34"
     #
     def generate_id(base = 36)
-      generate_hex_id.to_i(16).to_s(base)
+      target_length = LENGTH_256_BIT[base]
+      generate_hex_id.to_i(16).to_s(base).rjust(target_length, '0')
     end
 
     # Generates a 64-bit cryptographically secure hexadecimal trace identifier.
@@ -51,7 +53,8 @@ module Familia
     #   generate_trace_id(16) # => "94cf9f8cfb0eb692"
     #
     def generate_trace_id(base = 36)
-      generate_hex_trace_id.to_i(16).to_s(base)
+      target_length = LENGTH_64_BIT[base]
+      generate_hex_trace_id.to_i(16).to_s(base).rjust(target_length, '0')
     end
 
     # Truncates a 256-bit hexadecimal ID to 128 bits and encodes it in a given base.
@@ -69,8 +72,9 @@ module Familia
     # @note This is useful for creating shorter, public-facing IDs from secure internal ones.
     # @security Truncation preserves the cryptographic properties of the most significant bits.
     def shorten_to_external_id(hex_id, base: 36)
+      target_length = LENGTH_128_BIT[base]
       truncated = hex_id.to_i(16) >> (256 - 128)  # Always 128 bits
-      truncated.to_s(base)
+      truncated.to_s(base).rjust(target_length, '0')
     end
 
     # Truncates a 256-bit hexadecimal ID to 64 bits and encodes it in a given base.
@@ -79,8 +83,9 @@ module Familia
     # @param base [Integer] The base for encoding the output string (2-36, default: 36).
     # @return [String] A 64-bit identifier, encoded in the specified base.
     def shorten_to_trace_id(hex_id, base: 36)
+      target_length = LENGTH_64_BIT[base]
       truncated = hex_id.to_i(16) >> (256 - 64)   # Always 64 bits
-      truncated.to_s(base)
+      truncated.to_s(base).rjust(target_length, '0')
     end
 
     # Joins array elements with Familia delimiter
@@ -224,5 +229,10 @@ module Familia
       end
     end
 
+    # Calculate minimum string length to represent N bits in given base
+    calc_length = ->(bits, base) { (bits * Math.log(2) / Math.log(base)).ceil }
+    LENGTH_256_BIT = [nil, nil] + (2..36).map { |b| calc_length.call(256, b) }
+    LENGTH_128_BIT = [nil, nil] + (2..36).map { |b| calc_length.call(128, b) }
+    LENGTH_64_BIT = [nil, nil] + (2..36).map { |b| calc_length.call(64, b) }
   end
 end
