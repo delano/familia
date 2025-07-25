@@ -6,11 +6,11 @@ module Familia
   @prefix = nil
   @suffix = :object
   @ttl = 0 # see update_expiration. Zero is skip. nil is an exception.
-  @db = nil
+  @logical_database = nil
 
   module Settings
 
-    attr_writer :delim, :suffix, :ttl, :db, :prefix
+    attr_writer :delim, :suffix, :ttl, :logical_database, :prefix
 
     def delim(val = nil)
       @delim = val if val
@@ -32,10 +32,10 @@ module Familia
       @ttl
     end
 
-    def db(v = nil)
-      Familia.trace :DB, redis, "#{@db} #{v}", caller(1..1) if Familia.debug?
-      @db = v unless v.nil?
-      @db
+    def logical_database(v = nil)
+      Familia.trace :DB, redis, "#{@logical_database} #{v}", caller(1..1) if Familia.debug?
+      @logical_database = v unless v.nil?
+      @logical_database
     end
 
     # We define this do-nothing method because it reads better

@@ -185,5 +185,5 @@ result
 Familia.delim(':')
 Familia.suffix(:object)
 Familia.ttl(0)
-Familia.db(nil)
+Familia.logical_database(nil)
 Familia.prefix(nil)

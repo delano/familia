@@ -31,7 +31,7 @@ class Blone < Familia::Horreum
 end
 
 class Customer < Familia::Horreum
-  db 15 # Use something other than the default DB
+  logical_database 15 # Use something other than the default DB
   ttl 5.years
 
   feature :safe_dump
@@ -99,7 +99,7 @@ end
 @c.custid = "d@example.com"
 
 class Session < Familia::Horreum
-  db 14 # don't use Onetime's default DB
+  logical_database 14 # don't use Onetime's default DB
   ttl 180.minutes
 
   identifier :generate_id

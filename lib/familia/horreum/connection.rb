@@ -17,7 +17,7 @@ module Familia
       # @return [Redis] the Redis connection instance.
       #
       def redis
-        Fiber[:familia_transaction] || @redis || Familia.redis(uri || db)
+        Fiber[:familia_transaction] || @redis || Familia.redis(uri || logical_database)
       end
 
       def connect(*)

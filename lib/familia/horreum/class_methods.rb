@@ -9,7 +9,7 @@ module Familia
     @redis = nil # TODO
     @identifier = nil
     @ttl = nil
-    @db = nil
+    @logical_database = nil
     @uri = nil
     @suffix = nil
     @prefix = nil
@@ -177,10 +177,10 @@ module Familia
         @has_relations ||= false
       end
 
-      def db(v = nil)
-        Familia.trace :DB, Familia.redis, "#{@db} #{v}", caller(1..1) if Familia.debug?
-        @db = v unless v.nil?
-        @db || parent&.db
+      def logical_database(v = nil)
+        Familia.trace :DB, Familia.redis, "#{@logical_database} #{v}", caller(1..1) if Familia.debug?
+        @logical_database = v unless v.nil?
+        @logical_database || parent&.logical_database
       end
 
       def all(suffix = nil)

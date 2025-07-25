@@ -85,9 +85,9 @@ ttl = timeline.ttl
 [ttl.class, ttl >= -1]
 #=> [Integer, true]
 
-## RedisType has db method
+## RedisType has logical_database method
 timeline = @sample_obj.timeline
-db = timeline.db
+db = timeline.logical_database
 db
 #=:> NilClass
 

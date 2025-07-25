@@ -102,12 +102,12 @@ exists = Customer.exists?("test@example.com")
 @customer.destroy!
 #=> false
 
-## Customer.db returns the correct database number
-Customer.db
+## Customer.logical_database returns the correct database number
+Customer.logical_database
 #=> 15
 
-## Customer.db returns the correct database number
-@customer.db
+## Customer.logical_database returns the correct database number
+@customer.logical_database
 #=> 15
 
 ## @customer.redis.connection returns the correct redis URI
@@ -115,7 +115,7 @@ Customer.db
 #=> {:host=>"127.0.0.1", :port=>6379, :db=>15, :id=>"redis://127.0.0.1:6379/15", :location=>"127.0.0.1:6379"}
 
 ## @customer.redis.uri returns the correct redis URI
-@customer.secrets_created.db
+@customer.secrets_created.logical_database
 #=> nil
 
 ## @customer.redis.uri returns the correct redis URI
@@ -130,11 +130,11 @@ Customer.uri
 RedisCommandCounter.count_commands { @customer.destroy! }
 #=> 1
 
-## Customer.db returns the correct database number
-Customer.instances.db
+## Customer.logical_database returns the correct database number
+Customer.instances.logical_database
 #=> nil
 
-## Customer.db returns the correct database number
+## Customer.logical_database returns the correct database number
 Customer.instances.uri.to_s
 #=> 'redis://127.0.0.1/15/'
 

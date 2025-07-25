@@ -299,7 +299,7 @@ module Familia
     #
     def redis
       conn = Fiber[:familia_transaction] || @redis || self.class.redis
-      # conn.select(self.class.db)
+      # conn.select(self.class.logical_database)
       conn
     end
 

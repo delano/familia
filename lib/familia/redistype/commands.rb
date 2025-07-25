@@ -6,8 +6,8 @@ class Familia::RedisType
   # commands. The class must have a rediskey method.
   module Commands
 
-    def move(db)
-      redis.move rediskey, db
+    def move(logical_database)
+      redis.move rediskey, logical_database
     end
 
     def rename(newkey)

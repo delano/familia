@@ -14,7 +14,7 @@ module Familia
 
       def redisuri(suffix = nil)
         u = Familia.redisuri(self.class.uri) # returns URI::Redis
-        u.db = db if db # override the db if we have one
+        u.logical_database = logical_database if logical_database # override the logical_database if we have one
         u.key = rediskey(suffix)
         u
       end

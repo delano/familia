@@ -35,12 +35,12 @@ Familia.ttl
 #=> 3600.0
 
 ## Familia has default database
-Familia.db
+Familia.logical_database
 #=> nil
 
 ## Can set database number
-Familia.db(2)
-Familia.db
+Familia.logical_database(2)
+Familia.logical_database
 #=> 2
 
 ## Familia has default prefix
@@ -72,5 +72,5 @@ Familia.delim
 Familia.delim(':')
 Familia.suffix(:object)
 Familia.ttl(0)
-Familia.db(nil)
+Familia.logical_database(nil)
 Familia.prefix(nil)

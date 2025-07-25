@@ -18,8 +18,8 @@ module Familia
     #
     module Commands
 
-      def move(db)
-        redis.move rediskey, db
+      def move(logical_database)
+        redis.move rediskey, logical_database
       end
 
       # Checks if the calling object's key exists in Redis.

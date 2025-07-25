@@ -16,8 +16,8 @@ module Familia
     extend Familia::Features
 
     @registered_types = {}
-    @valid_options = %i[class parent ttl default db key redis suffix prefix]
-    @db = nil
+    @valid_options = %i[class parent ttl default logical_database key redis suffix prefix]
+    @logical_database = nil
 
     feature :expiration
     feature :quantization
@@ -25,7 +25,7 @@ module Familia
     class << self
       attr_reader :registered_types, :valid_options, :has_relations
       attr_accessor :parent
-      attr_writer :db, :uri
+      attr_writer :logical_database, :uri
     end
 
     module ClassMethods
@@ -38,9 +38,9 @@ module Familia
         @registered_types[methname] = klass
       end
 
-      def db(val = nil)
-        @db = val unless val.nil?
-        @db || parent&.db
+      def logical_database(val = nil)
+        @logical_database = val unless val.nil?
+        @logical_database || parent&.logical_database
       end
 
       def uri(val = nil)
@@ -50,7 +50,7 @@ module Familia
 
       def inherited(obj)
         Familia.trace :REDISTYPE, nil, "#{obj} is my kinda type", caller(1..1) if Familia.debug?
-        obj.db = db
+        obj.logical_database = logical_database
         obj.ttl = ttl # method added via Features::Expiration
         obj.uri = uri
         obj.parent = self
@@ -89,7 +89,7 @@ module Familia
     #
     # :default => the default value (String-only)
     #
-    # :db => the redis database to use (ignored if :redis is used).
+    # :logical_database => the redis database to use (ignored if :redis is used).
     #
     # :redis => an instance of Redis.
     #
@@ -128,7 +128,7 @@ module Familia
       return Fiber[:familia_transaction] if Fiber[:familia_transaction]
       return @redis if @redis
 
-      parent? ? parent.redis : Familia.redis(opts[:db])
+      parent? ? parent.redis : Familia.redis(opts[:logical_database])
     end
 
     # Produces the full Redis key for this object.
@@ -201,8 +201,8 @@ module Familia
       @opts[:parent]
     end
 
-    def db
-      @opts[:db] || self.class.db
+    def logical_database
+      @opts[:logical_database] || self.class.logical_database
     end
 
     def uri
@@ -210,11 +210,11 @@ module Familia
       return @opts[:uri] if @opts[:uri]
 
       # If parent has a DB set, create a URI with that DB
-      if parent? && parent.respond_to?(:db) && parent.db
+      if parent? && parent.respond_to?(:logical_database) && parent.logical_database
         base_uri = self.class.uri || Familia.uri
         if base_uri
           uri_with_db = base_uri.dup
-          uri_with_db.db = parent.db
+          uri_with_db.db = parent.logical_database
           return uri_with_db
         end
       end

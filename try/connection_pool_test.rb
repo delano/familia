@@ -76,7 +76,7 @@ Familia.enable_connection_pool
 # Switch to DB 1 and create another account
 Familia.redis(1).select(1)
 @account_db1 = PoolTestAccount.new(balance: 750, holder_name: "Charlie")
-@account_db1.class.db = 1
+@account_db1.class.logical_database = 1
 @account_db1.save
 #=> true
 

@@ -21,7 +21,7 @@ module Familia
       def redisdetails
         {
           uri: self.class.uri,
-          db: self.class.db,
+          logical_database: self.class.logical_database,
           key: rediskey,
           type: redistype,
           ttl: ttl,# where is this defined?
@@ -29,12 +29,12 @@ module Familia
         }
       end
 
-      def db=(v)
-        @db = v.to_i
+      def logical_database=(v)
+        @logical_database = v.to_i
       end
 
-      def db
-        @db || self.class.db
+      def logical_database
+        @logical_database || self.class.logical_database
       end
 
       def suffix
