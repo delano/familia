@@ -33,8 +33,8 @@ module Familia::Features
         # the list of default values here, but @opts is for horreum instances
         # not at the class level. This method `qstamp` is part of the initial
         # definition for whatever horreum subclass we're in right now. That's
-        # why ttl works (e.g. `class Plop; feature :quantization; ttl 90; end`).
-        quantum ||= ttl || 10.minutes
+        # why default_expiration works (e.g. `class Plop; feature :quantization; default_expiration 90; end`).
+        quantum ||= default_expiration || 10.minutes
 
         # Validate quantum
         unless quantum.is_a?(Numeric) && quantum.positive?
@@ -52,7 +52,7 @@ module Familia::Features
     end
 
     def qstamp(quantum = nil, pattern: nil, time: nil)
-      self.class.qstamp(quantum || self.class.ttl, pattern: pattern, time: time)
+      self.class.qstamp(quantum || self.class.default_expiration, pattern: pattern, time: time)
     end
 
     extend ClassMethods

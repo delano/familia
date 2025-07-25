@@ -26,12 +26,12 @@ Familia.suffix
 #=> :data
 
 ## Familia has default TTL
-Familia.ttl
+Familia.default_expiration
 #=> 0
 
-## Can set TTL value
-Familia.ttl(3600)
-Familia.ttl
+## Can set default expiration value
+Familia.default_expiration(3600)
+Familia.default_expiration
 #=> 3600.0
 
 ## Familia has default database
@@ -57,9 +57,9 @@ Familia.default_suffix
 #=> :data
 
 ## Setting values with nil preserves current value
-current_ttl = Familia.ttl
-Familia.ttl(nil)
-Familia.ttl
+current_default_expiration = Familia.default_expiration
+Familia.default_expiration(nil)
+Familia.default_expiration
 #=> 3600.0
 
 ## Setting delim with nil preserves current value
@@ -71,6 +71,6 @@ Familia.delim
 # Cleanup - restore defaults
 Familia.delim(':')
 Familia.suffix(:object)
-Familia.ttl(0)
+Familia.default_expiration(0)
 Familia.logical_database(nil)
 Familia.prefix(nil)

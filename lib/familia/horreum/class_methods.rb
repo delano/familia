@@ -8,7 +8,7 @@ module Familia
     # These are set up as nil initially and populated later
     @redis = nil # TODO
     @identifier = nil
-    @ttl = nil
+    @default_expiration = nil
     @logical_database = nil
     @uri = nil
     @suffix = nil

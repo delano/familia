@@ -55,10 +55,10 @@ module Familia
       # automatically be deleted. Returns 1 if the timeout was set, 0 if key
       # does not exist or the timeout could not be set.
       #
-      def expire(ttl = nil)
-        ttl ||= self.class.ttl
-        Familia.trace :EXPIRE, redis, ttl, caller(1..1) if Familia.debug?
-        redis.expire rediskey, ttl.to_i
+      def expire(default_expiration = nil)
+        default_expiration ||= self.class.default_expiration
+        Familia.trace :EXPIRE, redis, default_expiration, caller(1..1) if Familia.debug?
+        redis.expire rediskey, default_expiration.to_i
       end
 
       # Retrieves the remaining time to live (TTL) for the object's Redis key.
@@ -68,8 +68,8 @@ module Familia
       #
       # @return [Integer] The TTL of the key in seconds. Returns -1 if the key does not exist
       #   or has no associated expire time.
-      def realttl
-        Familia.trace :REALTTL, redis, redisuri, caller(1..1) if Familia.debug?
+      def current_expiration
+        Familia.trace :CURRENT_EXPIRATION, redis, redisuri, caller(1..1) if Familia.debug?
         redis.ttl rediskey
       end
 

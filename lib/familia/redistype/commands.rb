@@ -35,7 +35,7 @@ class Familia::RedisType
       redis.exists(rediskey) && !size.zero?
     end
 
-    def realttl
+    def current_expiration
       redis.ttl rediskey
     end
 

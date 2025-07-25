@@ -13,7 +13,7 @@ class QuantizedTest < Familia::Horreum
   identifier :id
   field :id
   field :data
-  ttl 300 # 5 minutes for testing
+  default_expiration 300 # 5 minutes for testing
 end
 
 ## Class has qstamp method from feature

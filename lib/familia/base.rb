@@ -34,16 +34,16 @@ module Familia
     # with the :expiration feature's implementation.
     #
     # This is a no-op implementation that gets overridden by features like
-    # :expiration. It accepts an optional ttl parameter to maintain interface
+    # :expiration. It accepts an optional default_expiration parameter to maintain interface
     # compatibility with the overriding implementations.
     #
-    # @param ttl [Integer, nil] Time To Live in seconds (ignored in base implementation)
+    # @param default_expiration [Integer, nil] Time To Live in seconds (ignored in base implementation)
     # @return [nil] Always returns nil
     #
     # @note This is a no-op implementation. Classes that need expiration
     #       functionality should include the :expiration feature.
     #
-    def update_expiration(ttl: nil)
+    def update_expiration(default_expiration: nil)
       Familia.ld "[update_expiration] Feature not enabled for #{self.class}. Key: #{rediskey} (caller: #{caller(1..1)})"
       nil
     end

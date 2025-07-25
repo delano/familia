@@ -79,10 +79,10 @@ stripe_customer
 #==> _.respond_to?(:store)
 #==> _.respond_to?(:[]=)
 
-## Can get RedisType TTL
+## Can get RedisType default expiration
 timeline = @sample_obj.timeline
-ttl = timeline.ttl
-[ttl.class, ttl >= -1]
+default_expiration = timeline.default_expiration
+[default_expiration.class, default_expiration >= -1]
 #=> [Integer, true]
 
 ## RedisType has logical_database method

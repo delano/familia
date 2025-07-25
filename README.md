@@ -78,12 +78,12 @@ end
 
 ### 5. Automatic Expiration
 
-Use the expiration feature to set TTL for objects:
+Use the expiration feature to set default TTL for objects:
 
 ```ruby
 class Session < Familia::Horreum
   feature :expiration
-  ttl 180.minutes
+  default_expiration 180.minutes
 end
 ```
 
@@ -110,7 +110,7 @@ Use quantization for time-based metrics:
 ```ruby
 class DailyMetric < Familia::Horreum
   feature :quantization
-  string :counter, ttl: 1.day, quantize: [10.minutes, '%H:%M']
+  string :counter, default_expiration: 1.day, quantize: [10.minutes, '%H:%M']
 end
 ```
 

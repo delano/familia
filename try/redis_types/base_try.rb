@@ -34,8 +34,8 @@ p [@a.name, @b.name]
 
 ## Limiter#qstamp as a number
 @limiter2 = Limiter.new :requests
-p [@limiter1.ttl, @limiter2.ttl]
-p [@limiter1.counter.parent.ttl, @limiter2.counter.parent.ttl]
+p [@limiter1.default_expiration, @limiter2.default_expiration]
+p [@limiter1.counter.parent.default_expiration, @limiter2.counter.parent.default_expiration]
 @limiter2.counter.qstamp(10.minutes, pattern: nil, time: 1302468980)
 #=> 1302468600
 
@@ -52,21 +52,21 @@ p [@limiter1.counter.parent.ttl, @limiter2.counter.parent.ttl]
 @limiter1.counter.increment
 #=> 1
 
-## Check counter ttl
-@limiter1.counter.ttl
+## Check counter default_expiration
+@limiter1.counter.default_expiration
 #=> 3600.0
 
-## Check limiter ttl
-@limiter1.ttl
+## Check limiter default_expiration
+@limiter1.default_expiration
 #=> 1800.0
 
-## Check ttl for a different instance
+## Check default_expiration for a different instance
 ## (this exists to make sure options are cloned for each instance)
 @limiter3 = Limiter.new :requests
-@limiter3.counter.ttl
+@limiter3.counter.default_expiration
 #=> 3600.0
 
-## Check realttl
-sleep 1 # Redis ttls are in seconds so we can't wait any less time than this (without mocking)
-@limiter1.counter.realttl
+## Check current_expiration
+sleep 1 # Redis default_expirations are in seconds so we can't wait any less time than this (without mocking)
+@limiter1.counter.current_expiration
 #=> 3600-1

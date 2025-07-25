@@ -16,7 +16,7 @@ module Familia
     extend Familia::Features
 
     @registered_types = {}
-    @valid_options = %i[class parent ttl default logical_database key redis suffix prefix]
+    @valid_options = %i[class parent default_expiration default logical_database key redis suffix prefix]
     @logical_database = nil
 
     feature :expiration
@@ -51,7 +51,7 @@ module Familia
       def inherited(obj)
         Familia.trace :REDISTYPE, nil, "#{obj} is my kinda type", caller(1..1) if Familia.debug?
         obj.logical_database = logical_database
-        obj.ttl = ttl # method added via Features::Expiration
+        obj.default_expiration = default_expiration # method added via Features::Expiration
         obj.uri = uri
         obj.parent = self
         super(obj)
@@ -83,7 +83,7 @@ module Familia
     # :parent => The Familia object that this redistype object belongs
     # to. This can be a class that includes Familia or an instance.
     #
-    # :ttl => the time to live in seconds. When not nil, this will
+    # :default_expiration => the time to live in seconds. When not nil, this will
     # set the redis expire for this key whenever #save is called.
     # You can also call it explicitly via #update_expiration.
     #

@@ -5,12 +5,12 @@ module Familia
   @delim = ':'
   @prefix = nil
   @suffix = :object
-  @ttl = 0 # see update_expiration. Zero is skip. nil is an exception.
+  @default_expiration = 0 # see update_expiration. Zero is skip. nil is an exception.
   @logical_database = nil
 
   module Settings
 
-    attr_writer :delim, :suffix, :ttl, :logical_database, :prefix
+    attr_writer :delim, :suffix, :default_expiration, :logical_database, :prefix
 
     def delim(val = nil)
       @delim = val if val
@@ -27,9 +27,9 @@ module Familia
       @suffix
     end
 
-    def ttl(v = nil)
-      @ttl = v unless v.nil?
-      @ttl
+    def default_expiration(v = nil)
+      @default_expiration = v unless v.nil?
+      @default_expiration
     end
 
     def logical_database(v = nil)

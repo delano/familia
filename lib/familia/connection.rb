@@ -36,7 +36,7 @@ module Familia
     # Sets the default URI for Redis connections.
     #
     # NOTE: uri is not a property of the Settings module b/c it's not
-    # configured in class defintions like ttl or logical DB index.
+    # configured in class defintions like default_expiration or logical DB index.
     #
     # @param v [String, URI] The new default URI
     # @example

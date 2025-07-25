@@ -123,7 +123,7 @@ module Familia
         end
 
         # Update expiration if requested and supported
-        self.update_expiration(ttl: nil) if update_expiration && respond_to?(:update_expiration)
+        self.update_expiration(default_expiration: nil) if update_expiration && respond_to?(:update_expiration)
 
         # Return same MultiResult format as other methods
         summary_boolean = command_return_values.all? { |ret| %w[OK 0 1].include?(ret.to_s) }
@@ -209,7 +209,7 @@ module Familia
         # Only classes that have the expiration ferature enabled will
         # actually set an expiration time on their keys. Otherwise
         # this will be a no-op that simply logs the attempt.
-        self.update_expiration(ttl: nil) if update_expiration
+        self.update_expiration(default_expiration: nil) if update_expiration
 
         result
       end

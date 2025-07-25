@@ -32,7 +32,7 @@ end
 
 class Customer < Familia::Horreum
   logical_database 15 # Use something other than the default DB
-  ttl 5.years
+  default_expiration 5.years
 
   feature :safe_dump
   #feature :expiration
@@ -100,7 +100,7 @@ end
 
 class Session < Familia::Horreum
   logical_database 14 # don't use Onetime's default DB
-  ttl 180.minutes
+  default_expiration 180.minutes
 
   identifier :generate_id
 
@@ -152,12 +152,12 @@ class Limiter < Familia::Horreum
   feature :expiration
   feature :quantization
 
-  ttl 30.minutes
+  default_expiration 30.minutes
   identifier :name
   field :name
   # No :key field (so we can test hte behaviour in Horreum#initialize)
 
-  string :counter, :ttl => 1.hour, :quantize => [10.minutes, '%H:%M', 1302468980]
+  string :counter, :default_expiration => 1.hour, :quantize => [10.minutes, '%H:%M', 1302468980]
 
   def identifier
     @name

@@ -11,7 +11,7 @@ module Familia
       puts "Moving #{source_keys.size} keys from #{source_uri} to #{target_uri} (filter: #{filter})"
       source_keys.each_with_index do |key, idx|
         type = Familia.redis(source_uri).type key
-        ttl = Familia.redis(source_uri).ttl key
+        default_expiration = Familia.redis(source_uri).ttl key
         if source_uri.host == target_uri.host && source_uri.port == target_uri.port
           Familia.redis(source_uri).move key, target_uri.db
         else
@@ -27,7 +27,7 @@ module Familia
           end
           raise 'Not implemented'
         end
-        yield(idx, type, key, ttl) unless each_key.nil?
+        yield(idx, type, key, default_expiration) unless each_key.nil?
       end
     end
 
@@ -40,8 +40,8 @@ module Familia
       source_keys.each_with_index do |key, idx|
         Familia.trace :RENAME1, Familia.redis(source_uri), "#{key}", ''
         type = Familia.redis(source_uri).type key
-        ttl = Familia.redis(source_uri).ttl key
-        newkey = yield(idx, type, key, ttl) unless each_key.nil?
+        default_expiration = Familia.redis(source_uri).ttl key
+        newkey = yield(idx, type, key, default_expiration) unless each_key.nil?
         Familia.trace :RENAME2, Familia.redis(source_uri), "#{key} -> #{newkey}", caller(1..1).first
         Familia.redis(source_uri).renamenx key, newkey
       end

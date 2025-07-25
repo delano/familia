@@ -184,6 +184,6 @@ result
 # Cleanup - restore defaults, leave nothing but footprints
 Familia.delim(':')
 Familia.suffix(:object)
-Familia.ttl(0)
+Familia.default_expiration(0)
 Familia.logical_database(nil)
 Familia.prefix(nil)
