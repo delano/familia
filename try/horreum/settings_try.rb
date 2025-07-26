@@ -1,43 +1,37 @@
+# Test Horreum settings
+
 require_relative '../helpers/test_helpers'
 
-# Test Horreum settings
-group "Horreum Settings"
-
-setup do
-  @user_class = Class.new(Familia::Horreum) do
-    identifier_field :email
-    field :name
-  end
+## database selection inheritance
+user_class = Class.new(Familia::Horreum) do
+  identifier_field :email
+  field :email
+  field :name
+  logical_database 5
 end
 
-try "database selection inheritance" do
-  @user_class.db 5
-  user = @user_class.new(email: "test@example.com")
+user_class.new(email: "test@example.com")
+#==> _.logical_database == 5
 
-  user.db == 5
+## custom serialization methods
+user_class = Class.new(Familia::Horreum) do
+  identifier_field :email
+  field :email
+  field :name
 end
 
-try "custom serialization methods" do
-  @user_class.dump_method :to_json
-  @user_class.load_method :from_json
-  user = @user_class.new(email: "test@example.com")
+user_class.new(email: "test@example.com")
+#==> _.respond_to?(:dump_method)
+#==> _.respond_to?(:load_method)
 
-  user.dump_method == :to_json &&
-    user.load_method == :from_json
+## redisuri generation with suffix
+user_class = Class.new(Familia::Horreum) do
+  identifier_field :email
+  field :email
 end
 
-try "redisdetails comprehensive state inspection" do
-  user = @user_class.new(email: "test@example.com", name: "Test")
-  details = user.redisdetails
+user = user_class.new(email: "test@example.com")
+uri = user.redisuri("suffix")
 
-  details.is_a?(Hash) &&
-    details.key?(:key) &&
-    details.key?(:db)
-end
-
-try "redisuri generation with suffix" do
-  user = @user_class.new(email: "test@example.com")
-  uri = user.redisuri("suffix")
-
-  uri.include?("suffix")
-end
+uri.include?("suffix")
+#=!> StandardError

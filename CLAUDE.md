@@ -5,10 +5,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Development Commands
 
 ### Testing
-- **Run tests**: `bundle exec tryouts` (uses tryouts testing framework)
-- **Run specific test file**: `bundle exec tryouts try/specific_test_try.rb`
-- **Debug mode**: `FAMILIA_DEBUG=1 bundle exec tryouts`
-- **Trace mode**: `FAMILIA_TRACE=1 bundle exec tryouts` (detailed Redis operation logging)
+
+A couple rules when writing tests:
+1) Every tryouts file has three sections: setup, testcases, teardown.
+2) Every tryouts testcase also has three parts: description, code, expectations.
+3) Tryouts tests are meant to double as documentation examples; keep that in mind when considering syntax choices.
+4) There are multiple kinds of expectations: `#=>` is the default comparison, `#=:>` is a class comparison via `is_a?` or `kind_of?`, `#=!>` is an exception class which allows you to knowingly raise an exception without needing a begin/rescue.
+
+- **Run tests**: `bundle exec try` (uses tryouts testing framework)
+- **Run specific test file, verbose**: `bundle exec try -v try/specific_test_try.rb`
+- **Debug mode**: `FAMILIA_DEBUG=1 bundle exec try -D`
+- **Trace mode**: `FAMILIA_TRACE=1 bundle exec try -D` (detailed Redis operation logging)
 
 ### Development Setup
 - **Install dependencies**: `bundle install`
