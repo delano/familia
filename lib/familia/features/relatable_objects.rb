@@ -13,12 +13,15 @@ module V2
       err_klass = V2::Features::RelatableObjectError
 
       def self.included(base)
-        base.class_sorted_set :relatable_objids?
+        base.class_sorted_set :relatable_objids
         base.class_hashkey :owners
+
+        # NOTE: we do not automatically assign the objid field as the
+        # main identifier field. That's up to the implementing class.
         base.field :objid
         base.field :extid
         base.field :api_version
-        base.identifier_field :objid
+
         base.extend(ClassMethods)
 
         # prepend ensures our methods execute BEFORE field-generated accessors
@@ -39,7 +42,7 @@ module V2
         # eagerly generating them, only to be overridden by the storage layer.
         #
         def init
-          super if defined?(super)  # Only call if parent has init
+          super if defined?(super) # Only call if parent has init
 
           @api_version ||= 'v2'
         end
@@ -53,7 +56,7 @@ module V2
             self.objid   = generated_id
           end
         end
-        alias_method :relatable_objid, :objid
+        alias relatable_objid objid
 
         def extid
           @extid ||= begin # lazy loader
@@ -61,7 +64,7 @@ module V2
             self.extid   = generated_id
           end
         end
-        alias_method :external_identifier, :extid
+        alias external_identifier extid
 
         # Check if the given customer is the owner of this domain
         #
@@ -88,10 +91,11 @@ module V2
 
       module ClassMethods
         def relatable?(obj, &)
-          is_relatable = obj.is_a?(klass)
+          is_relatable = obj.is_a?(RelatableObject)
           err_klass = V2::Features::RelatableObjectError
           raise err_klass, 'Not relatable object' unless is_relatable
-          raise err_klass, 'No self-ownership' if cust.is_a?(self.class)
+          raise err_klass, 'No self-ownership' if obj.is_a?(self)
+
           block_given? ? yield : is_relatable
         end
 
@@ -110,14 +114,15 @@ module V2
           SecureRandom.uuid_v7
         end
 
+        # Guaranteed length of 54
         def generate_extid
-          OT::Utils.generate_id
+          format('ext_%s', Familia.generate_id)
         end
       end
+      extend ClassMethods
 
       # Self-register the kids for martial arts classes
-      Familia::Base.add_feature(V2::Features::RelatableObject, :relatable_object)
+      Familia::Base.add_feature self, :relatable_object
     end
-
   end
 end
