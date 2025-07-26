@@ -18,7 +18,7 @@ class Bone < Familia::Horreum
   set       :tags
   zset      :metrics
   hashkey   :props
-  string    :value, :default => "GREAT!"
+  string    :value, default: 'GREAT!'
 end
 
 class Blone < Familia::Horreum
@@ -27,7 +27,7 @@ class Blone < Familia::Horreum
   set       :tags
   zset      :metrics
   hashkey   :props
-  string    :value, :default => "GREAT!"
+  string    :value, default: 'GREAT!'
 end
 
 class Customer < Familia::Horreum
@@ -35,8 +35,8 @@ class Customer < Familia::Horreum
   default_expiration 5.years
 
   feature :safe_dump
-  #feature :expiration
-  #feature :api_version
+  # feature :expiration
+  # feature :api_version
 
   # NOTE: The SafeDump mixin caches the safe_dump_field_map so updating this list
   # with hot reloading in dev mode will not work. You will need to restart the
@@ -51,10 +51,10 @@ class Customer < Familia::Horreum
     # NOTE: The secrets_created incrementer is null until the first secret
     # is created. See CreateSecret for where the incrementer is called.
     #
-    {secrets_created: ->(cust) { cust.secrets_created.value || 0 } },
+    { secrets_created: ->(cust) { cust.secrets_created.value || 0 } },
 
     # We use the hash syntax here since `:active?` is not a valid symbol.
-    {active: ->(cust) { cust.active? } }
+    { active: ->(cust) { cust.active? } }
   ]
 
   class_sorted_set :values, key: 'onetime:customer'
@@ -95,7 +95,7 @@ class Customer < Familia::Horreum
   end
 end
 @c = Customer.new
-@c.custid = "d@example.com"
+@c.custid = 'd@example.com'
 
 class Session < Familia::Horreum
   logical_database 14 # don't use Onetime's default DB
@@ -113,14 +113,13 @@ class Session < Familia::Horreum
   field :updated
 
   def save
-    self.sessid ||= Familia.generate_id  # Only generates when persisting
+    self.sessid ||= Familia.generate_id # Only generates when persisting
     super
   end
 end
 @s = Session.new
 
 class CustomDomain < Familia::Horreum
-
   feature :expiration
 
   class_sorted_set :values
@@ -146,11 +145,10 @@ class CustomDomain < Familia::Horreum
 end
 
 @d = CustomDomain.new
-@d.display_domain = "example.com"
+@d.display_domain = 'example.com'
 @d.custid = @c.custid
 
 class Limiter < Familia::Horreum
-
   feature :expiration
   feature :quantization
 
@@ -158,7 +156,7 @@ class Limiter < Familia::Horreum
   default_expiration 30.minutes
   field :name
 
-  string :counter, :default_expiration => 1.hour, :quantize => [10.minutes, '%H:%M', 1302468980]
+  string :counter, default_expiration: 1.hour, quantize: [10.minutes, '%H:%M', 1_302_468_980]
 
   def identifier
     @name

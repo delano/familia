@@ -66,11 +66,13 @@ module Familia
     end
   end
 
+  require_relative 'familia/secure_identifier'
   require_relative 'familia/logging'
   require_relative 'familia/connection'
   require_relative 'familia/settings'
   require_relative 'familia/utils'
 
+  extend SecureIdentifier
   extend Logging
   extend Connection
   extend Settings

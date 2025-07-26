@@ -30,12 +30,12 @@ class RelationsTestProduct < Familia::Horreum
 end
 
 @test_user = RelationsTestUser.new
-@test_user.userid = "user123"
-@test_user.name = "Test User"
+@test_user.userid = 'user123'
+@test_user.name = 'Test User'
 
 @test_product = RelationsTestProduct.new
-@test_product.productid = "prod456"
-@test_product.title = "Test Product"
+@test_product.productid = 'prod456'
+@test_product.title = 'Test Product'
 
 ## Class knows about Database type relationships
 RelationsTestUser.has_relations?
@@ -69,27 +69,27 @@ prefs = @test_user.preferences
 
 ## Can work with List Database type
 @test_user.sessions.clear
-@test_user.sessions.push("session1", "session2")
+@test_user.sessions.push('session1', 'session2')
 @test_user.sessions.size
 #=> 2
 
 ## Can work with Set Database type
 @test_user.tags.clear
-@test_user.tags.add("ruby", "valkey", "web")
+@test_user.tags.add('ruby', 'valkey', 'web')
 @test_user.tags.size
 #=> 3
 
 ## Can work with SortedSet Database type
 @test_user.scores.clear
-@test_user.scores.add(100, "level1")
-@test_user.scores.add(200, "level2")
+@test_user.scores.add(100, 'level1')
+@test_user.scores.add(200, 'level2')
 @test_user.scores.size
 #=> 2
 
 ## Can work with HashKey Database type
 @test_user.preferences.clear
-@test_user.preferences.put("theme", "dark")
-@test_user.preferences.put("lang", "en")
+@test_user.preferences.put('theme', 'dark')
+@test_user.preferences.put('lang', 'en')
 @test_user.preferences.size
 #=> 2
 
@@ -118,7 +118,7 @@ prefs = @test_user.preferences
 #=> :tags
 
 ## Can check if Database types exist
-@test_user.scores.add(50, "test")
+@test_user.scores.add(50, 'test')
 before_exists = @test_user.scores.exists?
 @test_user.scores.clear
 after_exists = @test_user.scores.exists?
@@ -126,13 +126,13 @@ after_exists = @test_user.scores.exists?
 #=> [true, false]
 
 ## Can destroy individual Database types
-@test_user.preferences.put("temp", "value")
+@test_user.preferences.put('temp', 'value')
 @test_user.preferences.clear
 @test_user.preferences.exists?
 #=> false
 
 ## Parent object destruction does not clean up relations
-@test_user.sessions.add("cleanup_test")
+@test_user.sessions.add('cleanup_test')
 @test_user.destroy!
 @test_user.sessions.exists?
 #=> true
@@ -141,6 +141,5 @@ after_exists = @test_user.scores.exists?
 ## to access and clear the child field.
 @test_user.sessions.clear
 #=> true
-
 
 @test_product.destroy!

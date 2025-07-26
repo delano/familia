@@ -3,7 +3,6 @@
 require_relative '../../lib/familia'
 require_relative '../helpers/test_helpers'
 
-
 @a = Bone.new 'atoken'
 
 ## Familia::SortedSet#add
@@ -36,7 +35,7 @@ require_relative '../helpers/test_helpers'
 #=> ['metric1', 'metric2', 'metric3']
 
 ## Familia::SortedSet#rangebyscore with a limit
-@a.metrics.rangebyscore 1, 3, :limit => [0, 2]
+@a.metrics.rangebyscore 1, 3, limit: [0, 2]
 #=> ['metric1', 'metric2']
 
 ## Familia::SortedSet#increment

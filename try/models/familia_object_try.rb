@@ -28,7 +28,7 @@ Session.suffix
 #=> 'session:atoken:object'
 
 ## Familia#save
-@cust = Customer.new :delano, "Delano Mandelbaum"
+@cust = Customer.new :delano, 'Delano Mandelbaum'
 @cust.save
 #=> true
 
@@ -74,7 +74,7 @@ Customer.customers.delete!
 #=> true
 
 ## Familia class replace 1 of 4
-Customer.message.value = "msg1"
+Customer.message.value = 'msg1'
 #=> "msg1"
 
 ## Familia class replace 2 of 4
@@ -82,13 +82,12 @@ Customer.message.value
 #=> "msg1"
 
 ## Familia class replace 3 of 4
-Customer.message = "msg2"
+Customer.message = 'msg2'
 #=> "msg2"
 
 ## Familia class replace 4 of 4
 Customer.message.value
 #=> "msg2"
-
 
 # Teardown
 Customer.values.delete!

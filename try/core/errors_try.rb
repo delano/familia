@@ -13,7 +13,7 @@ Familia::Problem.new.class.superclass
 
 ## NoIdentifier error can be raised
 begin
-  raise Familia::NoIdentifier, "Missing identifier"
+  raise Familia::NoIdentifier, 'Missing identifier'
 rescue Familia::NoIdentifier => e
   e.class
 end
@@ -21,7 +21,7 @@ end
 
 ## NonUniqueKey error can be raised
 begin
-  raise Familia::NonUniqueKey, "Duplicate key"
+  raise Familia::NonUniqueKey, 'Duplicate key'
 rescue Familia::NonUniqueKey => e
   e.class
 end
@@ -29,7 +29,7 @@ end
 
 ## HighRiskFactor error stores value
 begin
-  raise Familia::HighRiskFactor.new("dangerous_value")
+  raise Familia::HighRiskFactor.new('dangerous_value')
 rescue Familia::HighRiskFactor => e
   e.value
 end
@@ -39,7 +39,7 @@ end
 begin
   raise Familia::HighRiskFactor.new(123)
 rescue Familia::HighRiskFactor => e
-  e.message.include?("High risk factor")
+  e.message.include?('High risk factor')
 end
 #=> true
 
@@ -57,13 +57,13 @@ test_uri = URI.parse('redis://localhost:6379')
 begin
   raise Familia::NotConnected.new(test_uri)
 rescue Familia::NotConnected => e
-  e.message.include?("No client for")
+  e.message.include?('No client for')
 end
-#> true
+# > true
 
 ## KeyNotFoundError stores key
 begin
-  raise Familia::KeyNotFoundError.new("missing:key")
+  raise Familia::KeyNotFoundError.new('missing:key')
 rescue Familia::KeyNotFoundError => e
   e.key
 end
@@ -71,14 +71,14 @@ end
 
 ## KeyNotFoundError has custom message
 begin
-  raise Familia::KeyNotFoundError.new("test:key")
+  raise Familia::KeyNotFoundError.new('test:key')
 rescue Familia::KeyNotFoundError => e
-  e.message.include?("Key not found in Redis")
+  e.message.include?('Key not found in Redis')
 end
 #=> true
 
 ## KeyNotFoundError has custom message again
-raise Familia::KeyNotFoundError.new("test:key")
+raise Familia::KeyNotFoundError.new('test:key')
 #=!> error.message.include?("Key not found in Redis")
 #=!> error.class == Familia::KeyNotFoundError
 

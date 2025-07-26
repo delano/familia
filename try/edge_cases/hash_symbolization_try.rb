@@ -16,9 +16,9 @@ class SymbolizeTest < Familia::Horreum
   field :config
 end
 
-@test_hash = { "name" => "John", "age" => 30, "nested" => { "theme" => "dark" } }
+@test_hash = { 'name' => 'John', 'age' => 30, 'nested' => { 'theme' => 'dark' } }
 @test_obj = SymbolizeTest.new
-@test_obj.id = "symbolize_test_1"
+@test_obj.id = 'symbolize_test_1'
 @test_obj.config = @test_hash
 @test_obj.save
 
@@ -55,18 +55,18 @@ end
 #=> ["name", "age", "nested"]
 
 ## Nested hash in string result also has string keys
-@string_result["nested"].keys
+@string_result['nested'].keys
 #=> ["theme"]
 
 ## Values are preserved correctly in both cases
 @symbol_result[:name]
 #=> "John"
 
-@string_result["name"]
+@string_result['name']
 #=> "John"
 
 ## Arrays are handled correctly too
-@test_obj.config = [{ "item" => "value" }, "string", 123]
+@test_obj.config = [{ 'item' => 'value' }, 'string', 123]
 @test_obj.save
 @array_json = @test_obj.hget('config')
 #=> "[{\"item\":\"value\"},\"string\",123]"

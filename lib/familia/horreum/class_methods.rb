@@ -217,9 +217,24 @@ module Familia
         @suffix || Familia.default_suffix
       end
 
+      # Sets or retrieves the prefix for generating Redis keys.
+      #
+      # @param a [String, Symbol, nil] the prefix to set (optional).
+      # @return [String, Symbol] the current prefix.
+      #
+      # The exception is only raised when both @prefix is nil/falsy AND name is nil,
+      # which typically occurs with anonymous classes that haven't had their prefix
+      # explicitly set.
+      #
       def prefix(a = nil)
         @prefix = a if a
-        @prefix || name.downcase.gsub('::', Familia.delim).to_sym
+        @prefix || begin
+          if name.nil?
+            raise Problem, 'Cannot generate prefix for anonymous class. ' \
+                           'Use `prefix` method to set explicitly.'
+          end
+          name.downcase.gsub('::', Familia.delim).to_sym
+        end
       end
 
       # Creates and persists a new instance of the class.
@@ -258,8 +273,8 @@ module Familia
       # @see #exists?
       # @see #save
       #
-      def create *args, **kwargs
-        fobj = new(*args, **kwargs)
+      def create(*, **)
+        fobj = new(*, **)
         raise Familia::Problem, "#{self} already exists: #{fobj.dbkey}" if fobj.exists?
 
         fobj.save
@@ -455,6 +470,5 @@ module Familia
         @load_method || :from_json # Familia.load_method
       end
     end
-
   end
 end

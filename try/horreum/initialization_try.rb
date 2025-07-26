@@ -21,7 +21,7 @@ Familia.debug = false
 #=> ["bob@test.com", "Bob Jones", "bob@example.com"]
 
 ## Legacy hash support (single hash argument)
-@customer4 = Customer.new({custid: 'legacy@test.com', name: 'Legacy User', role: 'admin'})
+@customer4 = Customer.new({ custid: 'legacy@test.com', name: 'Legacy User', role: 'admin' })
 [@customer4.custid, @customer4.name, @customer4.role]
 #=> ["legacy@test.com", "Legacy User", "admin"]
 
@@ -54,7 +54,7 @@ Familia.debug = false
 #=> "Jane Smith"
 
 ## to_a works correctly with keyword-initialized objects
-@customer2.to_a[4]  # name field should be the fifth field defined in the class
+@customer2.to_a[4] # name field should be the fifth field defined in the class
 #=> "Jane Smith"
 
 ## Session has limited fields (only sessid defined)
@@ -68,7 +68,7 @@ Familia.debug = false
 #=> "keyword-sess"
 
 ## Session with legacy hash
-@session3 = Session.new({sessid: 'hash-sess'})
+@session3 = Session.new({ sessid: 'hash-sess' })
 @session3.sessid
 #=> "hash-sess"
 
@@ -106,7 +106,7 @@ Familia.debug = false
 
 ## "Cleaning up" test objects that were never saved returns false.
 @customer1.save
-ret = [
+[
   @customer1, @customer2, @customer3, @customer4, @customer6, @customer7,
   @session1, @session2, @session3,
   @domain1, @domain2,

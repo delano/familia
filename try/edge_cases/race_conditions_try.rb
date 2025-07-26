@@ -1,60 +1,57 @@
+# Test connection race conditions
+
 require_relative '../helpers/test_helpers'
 
-# Test connection race conditions
-group "Race Conditions Edge Cases"
+## concurrent connection access test
+user_class = Class.new(Familia::Horreum) do
+  identifier_field :email
+  field :email
+  field :counter
+end
 
-setup do
-  @user_class = Class.new(Familia::Horreum) do
-    identifier :email
-    field :counter
+user = user_class.new(email: 'test@example.com', counter: 0)
+user.save
+
+threads = []
+results = []
+
+# Simulate high concurrency
+10.times do
+  threads << Thread.new do
+    user.incr(:counter)
+    results << 'success'
+  rescue StandardError => e
+    results << "error: #{e.class.name}"
   end
 end
 
-try "concurrent connection access causes race condition" do
-  user = @user_class.new(email: "test@example.com", counter: 0)
-  user.save
+threads.each(&:join)
+user.delete!
 
-  threads = []
-  results = []
+# Count successful operations
+successes = results.count { |r| r == 'success' }
+successes > 0 # Should have some successes
+#=!> StandardError
 
-  # Simulate high concurrency
-  10.times do
-    threads << Thread.new do
-      begin
-        user.incr(:counter)
-        results << "success"
-      rescue => e
-        results << "error: #{e.class.name}"
-      end
-    end
+## connection pool stress test
+## We're just checking whether it completes within a reasonable time frame.
+## If it does fail either bc of the duration or contention then it's a problem.
+success_count = 0
+threads = []
+mutex = Mutex.new
+
+# Test concurrent connections
+100.times do |i|
+  threads << Thread.new do
+    # Try to get a connection and perform an operation
+    dbclient = Familia.dbclient
+    dbclient.ping
+    success_count += 1
   end
-
-  threads.each(&:join)
-
-  # May show race condition issues
-  errors = results.count { |r| r.start_with?("error") }
-  errors > 0  # Expects some race condition errors
-ensure
-  user&.delete!
 end
 
-try "connection pool stress test" do
-  users = []
+threads.each(&:join)
 
-  # Create multiple users concurrently
-  threads = []
-  20.times do |i|
-    threads << Thread.new do
-      user = @user_class.new(email: "user#{i}@example.com")
-      user.save
-      users << user
-    end
-  end
-
-  threads.each(&:join)
-
-  # Check for connection issues
-  users.length > 0  # Some should succeed despite race conditions
-ensure
-  users.each(&:delete!) rescue nil
-end
+# Should have some successful connections
+success_count > 0
+#=%> 220

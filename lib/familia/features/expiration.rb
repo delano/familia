@@ -92,7 +92,6 @@ module Familia::Features
       # a bool.
       expire(default_expiration)
     end
-
     extend ClassMethods
 
     Familia::Base.add_feature self, :expiration

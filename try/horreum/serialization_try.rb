@@ -76,7 +76,7 @@ Familia.debug = false
 #=> ["Bob Jones", "jane@example.com"]
 
 ## serialize_value handles strings
-@customer.serialize_value("test string")
+@customer.serialize_value('test string')
 #=> "test string"
 
 ## serialize_value handles numbers
@@ -84,7 +84,7 @@ Familia.debug = false
 #=> "42"
 
 ## serialize_value handles hashes as JSON
-@customer.serialize_value({key: 'value', num: 123})
+@customer.serialize_value({ key: 'value', num: 123 })
 #=> "{\"key\":\"value\",\"num\":123}"
 
 ## serialize_value handles arrays as JSON
@@ -117,7 +117,7 @@ result.size
 #=> "temp_value"
 
 ## Empty batch_update still works
-result = @customer.batch_update()
+result = @customer.batch_update
 result.successful?
 #=> true
 

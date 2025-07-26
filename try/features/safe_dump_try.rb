@@ -19,8 +19,8 @@ class SafeDumpTest < Familia::Horreum
   @safe_dump_fields = [
     :id,
     :name,
-    { :display_name => ->(obj) { "#{obj.name} (#{obj.id})" } },
-    { :has_email => ->(obj) { !obj.email.nil? && !obj.email.empty? } }
+    { display_name: ->(obj) { "#{obj.name} (#{obj.id})" } },
+    { has_email: ->(obj) { !obj.email.nil? && !obj.email.empty? } }
   ]
 
   def active?
@@ -30,10 +30,10 @@ end
 
 # Setup test object
 @test_obj = SafeDumpTest.new
-@test_obj.id = "safe_test_1"
-@test_obj.name = "Test User"
-@test_obj.email = "test@example.com"
-@test_obj.secret_data = "sensitive_info"
+@test_obj.id = 'safe_test_1'
+@test_obj.name = 'Test User'
+@test_obj.email = 'test@example.com'
+@test_obj.secret_data = 'sensitive_info'
 
 ## Class has SafeDump methods
 SafeDumpTest.respond_to?(:safe_dump_fields)
@@ -99,7 +99,7 @@ dump[:has_email]
 #=> false
 
 ## Safe dump works with empty values
-@test_obj.email = ""
+@test_obj.email = ''
 dump = @test_obj.safe_dump
 dump[:has_email]
 #=> false
@@ -128,7 +128,7 @@ EmptySafeDump.safe_dump_fields
 
 ## Empty safe_dump returns empty hash
 @empty_obj = EmptySafeDump.new
-@empty_obj.id = "empty_test"
+@empty_obj.id = 'empty_test'
 @empty_obj.safe_dump
 #=> {}
 

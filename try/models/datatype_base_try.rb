@@ -55,7 +55,6 @@ stripe_customer.class.name
 #==> _.respond_to?(:exists?)
 #=/=> _.respond_to?(:destroy!)
 
-
 ## Can check if DataType exists in Redis
 timeline = @sample_obj.timeline
 exists_before = timeline.exists?

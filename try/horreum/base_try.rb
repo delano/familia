@@ -13,31 +13,31 @@ Familia.debug = false
 ## TODO: Revisit these @identifier testcases b/c I think we don't want to be setting
 ## the @identifier instance var anymore since identifer_field should only take field
 ## names now (and might be removed altogether).
-@hashkey["test1"] = @customer.identifier
+@hashkey['test1'] = @customer.identifier
 #=> @identifier
 
 ## Customer passed as value is returned as string identifier
-@hashkey["test1"]
+@hashkey['test1']
 #=> @identifier
 
 ## Trying to store a customer to a hash key implicitly converts it to string identifier
 ## we can't tell from the return value this way either. Here the store method return value
 ## is either 1 (if the key is new) or 0 (if the key already exists).
-@hashkey.store "test2", @customer
+@hashkey.store 'test2', @customer
 #=> 1
 
 ## Trying to store a customer to a hash key implicitly converts it to string identifier
 ## but we can't tell that from the return value. Here the hash syntax return value
 ## is the value that is being assigned.
-@hashkey["test2"] = @customer
+@hashkey['test2'] = @customer
 #=> @customer
 
 ## Trying store again with the same key returns 0
-@hashkey.store "test2", @customer
+@hashkey.store 'test2', @customer
 #=> 0
 
 ## Customer passed as value is returned as string identifier
-@hashkey["test2"]
+@hashkey['test2']
 #=> @identifier
 
 ## Remove the key
@@ -80,12 +80,12 @@ Familia.trace :LOAD, @customer.dbclient, @customer.uri, caller if Familia.debug?
 class NoIdentifierClass < Familia::Horreum
   field :name
 end
-@no_id = NoIdentifierClass.new name: "test"
+@no_id = NoIdentifierClass.new name: 'test'
 @no_id.identifier
 #=> nil
 
 ## We can call #identifier directly if we want to "lasy load" the unique identifier
-@cd = CustomDomain.new display_domain: "www.example.com", custid: "domain-test@example.com"
+@cd = CustomDomain.new display_domain: 'www.example.com', custid: 'domain-test@example.com'
 @cd.identifier
 #=:> String
 #=/=> _.empty?
@@ -111,7 +111,7 @@ end
 
 ## Array-based identifiers are no longer supported and raise clear errors at class definition time
 class ArrayIdentifierTest < Familia::Horreum
-  identifier_field [:token, :name]  # This should raise an error immediately
+  identifier_field %i[token name] # This should raise an error immediately
   field :token
   field :name
 end
