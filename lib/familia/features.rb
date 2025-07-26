@@ -47,6 +47,10 @@ module Familia
 
 end
 
-require_relative 'features/expiration'
-require_relative 'features/quantization'
-require_relative 'features/safe_dump'
+# Load all feature files from the features directory
+features_dir = File.join(__dir__, 'features')
+if Dir.exist?(features_dir)
+  Dir.glob(File.join(features_dir, '*.rb')).each do |feature_file|
+    require_relative feature_file
+  end
+end
