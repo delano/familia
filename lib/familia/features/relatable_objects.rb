@@ -82,10 +82,9 @@ module V2
 
         def owned?
           # We can only have an owner if we are relatable ourselves.
-          self.class.relatable?(self) do
-            # If our object identifier is present, we have an owner
-            self.class.owners.key?(objid)
-          end
+          return false unless self.is_a?(RelatableObject)
+          # If our object identifier is present, we have an owner
+          self.class.owners.key?(objid)
         end
       end
 
@@ -94,7 +93,7 @@ module V2
           is_relatable = obj.is_a?(RelatableObject)
           err_klass = V2::Features::RelatableObjectError
           raise err_klass, 'Not relatable object' unless is_relatable
-          raise err_klass, 'No self-ownership' if obj.is_a?(self)
+          raise err_klass, 'No self-ownership' if obj.class == self
 
           block_given? ? yield : is_relatable
         end

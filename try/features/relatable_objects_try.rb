@@ -126,16 +126,16 @@ extid2 = @related_obj.extid
 #=> 'v2'
 
 ## relatable_objid is alias for objid
-@relatable_obj.relatable_objid == @relatable_obj.objid
-#=> true
+[@relatable_obj.relatable_objid, @relatable_obj.objid]
+#==> _[0].eql?(_[1])
 
 ## external_identifier is alias for extid
-@relatable_obj.external_identifier == @relatable_obj.extid
-#=> true
+[@relatable_obj.external_identifier, @relatable_obj.extid]
+#==> _[0].eql?(_[1])
 
-## relatable? returns true for objects with feature
+## relatable? prevents self-ownership (same class)
 RelatableTest.relatable?(@relatable_obj)
-#=> true
+#=!> V2::Features::RelatableObjectError
 
 ## relatable? returns true for different relatable classes
 RelatableTest.relatable?(@related_obj)
@@ -145,10 +145,6 @@ RelatableTest.relatable?(@related_obj)
 RelatableTest.relatable?(@non_relatable)
 #=!> V2::Features::RelatableObjectError
 
-## NOTE: self-ownership check has bug in original code (line 97: 'cust' should be 'obj')
-## This test will fail due to the bug
-RelatableTest.relatable?(@relatable_obj)
-#=!> V2::Features::RelatableObjectError
 
 ## relatable? with block executes block for relatable objects
 result = nil
