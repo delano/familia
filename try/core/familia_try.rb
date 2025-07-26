@@ -12,8 +12,8 @@ Bone.related_fields.keys # consistent b/c hashes are ordered
 #=> [:owners, :tags, :metrics, :props, :value]
 
 ## Familia has a uri
-Familia.uri.class
-#=> URI::Redis
+Familia.uri
+#=:> URI::Generic
 
 ## Familia has a uri as a string
 Familia.uri.to_s

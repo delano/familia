@@ -2,7 +2,7 @@
 
 require 'json'
 require 'redis'
-require 'uri/redis'
+require 'uri/valkey'
 require 'connection_pool'
 
 require_relative 'familia/core_ext'

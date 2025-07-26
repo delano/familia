@@ -1,101 +1,69 @@
-# try/datatypes/datatype_base_try.rb
-
-# Test DataType base functionality
+# try/datatypes/base_try.rb
 
 require_relative '../../lib/familia'
 require_relative '../helpers/test_helpers'
 
-Familia.debug = false
+@limiter1 = Limiter.new :requests
 
-@sample_obj = Customer.new(custid: 'customer123', email: 'test@example.com')
+## Database Types are unique per instance of a Familia class
+@a = Bone.new 'atoken1', :name1
+@b = Bone.new 'atoken2', :name2
+p [@a.object_id, @b.object_id]
+p [@a.owners.parent.class, @b.owners.parent.class]
+p [@a.owners.parent.object_id, @b.owners.parent.object_id]
+p [@a.owners.dbkey, @b.owners.dbkey]
+p [@a.token, @b.token]
+p [@a.name, @b.name]
+@a.owners.dbkey.eql?(@b.owners.dbkey)
+#=> false
 
-## Customer has defined Database types
-Customer.related_fields.keys.include?(:timeline)
+## Database Types are frozen
+@a.owners.frozen?
 #=> true
 
-## Customer has defined Database types
-Customer.related_fields.keys.include?(:stripe_customer)
-#=> true
+## Limiter#qstamp
+@limiter1.counter.qstamp(10.minutes, '%H:%M', 1302468980)
+##=> '20:50'
 
-## Can access Database type instances
-@sample_obj.timeline
-#=:> Familia::SortedSet
+## Database Types can be stored to quantized stamp suffix
+@limiter1.counter.dbkey
+##=> "v1:limiter:requests:counter:20:50"
 
-## Database types have dbkey method
-@sample_obj.timeline.dbkey
-#=> "customer:customer123:timeline"
+## Limiter#qstamp as a number
+@limiter2 = Limiter.new :requests
+p [@limiter1.default_expiration, @limiter2.default_expiration]
+p [@limiter1.counter.parent.default_expiration, @limiter2.counter.parent.default_expiration]
+@limiter2.counter.qstamp(10.minutes, pattern: nil, time: 1302468980)
+#=> 1302468600
 
-## Database types are frozen after creation
-@sample_obj.timeline.frozen?
-#=> true
+## Database Types can be stored to quantized numeric suffix. This
+## tryouts is disabled b/c `DataType#dbkey` takes no args
+## and relies on the `class Limiter` definition in test_helpers.rb
+## for the `:quantize` option. The quantized suffix for the Limiter
+## class is `'%H:%M'` so its dbkeys will always look like that.
+@limiter2.counter.dbkey
+##=> "v1:limiter:requests:counter:1302468600"
 
-## Can access hashkey Database type
-@sample_obj ||= Customer.new(custid: 'customer123', email: 'test@example.com')
-stripe_customer = @sample_obj.stripe_customer
-stripe_customer.class.name
-#=> "Familia::HashKey"
+## Increment counter
+@limiter1.counter.delete!
+@limiter1.counter.increment
+#=> 1
 
-## DataType instances know their owner
-@sample_obj.timeline.parent == @sample_obj
-#=> true
+## Check counter default_expiration
+@limiter1.counter.default_expiration
+#=> 3600.0
 
-## DataType instances know their field name
-@sample_obj.timeline.keystring
-#=> :timeline
+## Check limiter default_expiration
+@limiter1.default_expiration
+#=> 1800.0
 
-## DataType has opts hash
-@sample_obj.timeline.opts.class
-#=> Hash
+## Check default_expiration for a different instance
+## (this exists to make sure options are cloned for each instance)
+@limiter3 = Limiter.new :requests
+@limiter3.counter.default_expiration
+#=> 3600.0
 
-## DataType responds to Familia's modified Database commands
-@sample_obj.timeline
-#=/=> _.respond_to?(:zadd)
-#==> _.respond_to?(:add)
-#==> _.respond_to?(:clear)
-#==> _.respond_to?(:exists?)
-#=/=> _.respond_to?(:destroy!)
-
-
-## Can check if DataType exists in Redis
-timeline = @sample_obj.timeline
-exists_before = timeline.exists?
-[exists_before.class, [true, false].include?(exists_before)]
-#=> [FalseClass, true]
-
-## DataType has size/length methods
-@sample_obj.timeline.respond_to?(:size)
-#=> true
-
-## DataType size returns integer
-timeline = @sample_obj.timeline
-timeline.size
-#=:> Integer
-
-## Different Database types have type-specific methods
-stripe_customer = @sample_obj.stripe_customer
-stripe_customer
-#=/=> _.respond_to?(:hset)
-#==> _.respond_to?(:put)
-#==> _.respond_to?(:store)
-#==> _.respond_to?(:[]=)
-
-## Can get DataType default expiration
-timeline = @sample_obj.timeline
-default_expiration = timeline.default_expiration
-[default_expiration.class, default_expiration >= -1]
-#=> [Integer, true]
-
-## DataType has logical_database method
-timeline = @sample_obj.timeline
-db = timeline.logical_database
-db
-#=:> NilClass
-
-## DataType has uri method
-timeline = @sample_obj.timeline
-uri = timeline.uri
-uri.class.name
-#=> "URI::Redis"
-
-# Cleanup
-@sample_obj.destroy!
+## Check current_expiration
+sleep 1 # Database default_expirations are in seconds so we can't wait any less time than this (without mocking)
+@limiter1.counter.current_expiration
+#=> 3600-1

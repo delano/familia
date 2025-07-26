@@ -102,7 +102,23 @@ module Familia
       return Thread.current[:familia_connection] if Thread.current.key?(:familia_connection)
 
       # Second priority: Connection provider
-      return connection_provider.call(uri) if connection_provider
+      if connection_provider
+        # Always pass normalized URI with database to provider
+        # Provider MUST return connection already on the correct database
+        parsed_uri = normalize_uri(uri)
+        connection = connection_provider.call(parsed_uri.to_s)
+
+        # In debug mode, verify the provider honored the contract
+        if Familia.debug? && connection.respond_to?(:client)
+          current_db = connection.client.db
+          expected_db = parsed_uri.db || 0
+          if current_db != expected_db
+            Familia.warn "Connection provider returned connection on DB #{current_db}, expected #{expected_db}"
+          end
+        end
+
+        return connection
+      end
 
       # Third priority: Fallback behavior or error
       raise Familia::NoConnectionAvailable, 'No connection available.' if connection_required
@@ -150,7 +166,8 @@ module Familia
     #   | Use case        | Data consistency| Bulk operations |
     #
     def transaction(&)
-      dbclient.multi do |conn|
+      block_result = nil
+      result = dbclient.multi do |conn|
         Fiber[:familia_transaction] = conn
         begin
           block_result = yield(conn) # rubocop:disable Lint/UselessAssignment
@@ -158,7 +175,8 @@ module Familia
           Fiber[:familia_transaction] = nil # cleanup reference
         end
       end
-      block_result
+      # Return the multi result which contains the transaction results
+      result
     end
     alias multi transaction
 
@@ -197,7 +215,8 @@ module Familia
     #   # Result: neither item1 nor item2 are set due to the error
     #
     def pipeline(&)
-      dbclient.pipeline do |conn|
+      block_result = nil
+      result = dbclient.pipelined do |conn|
         Fiber[:familia_pipeline] = conn
         begin
           block_result = yield(conn) # rubocop:disable Lint/UselessAssignment
@@ -205,7 +224,27 @@ module Familia
           Fiber[:familia_pipeline] = nil # cleanup reference
         end
       end
-      block_result
+      # Return the pipeline result which contains the command results
+      result
+    end
+
+    # Provides explicit access to a Database connection.
+    #
+    # This method is useful when you need direct access to a connection
+    # for operations not covered by other methods. The connection is
+    # properly managed and returned to the pool (if using connection_provider).
+    #
+    # @yield [Redis] A Database connection
+    # @return The result of the block
+    #
+    # @example Using with_connection for custom operations
+    #   Familia.with_connection do |conn|
+    #     conn.set("custom_key", "value")
+    #     conn.expire("custom_key", 3600)
+    #   end
+    #
+    def with_connection(&block)
+      yield dbclient
     end
 
     private
