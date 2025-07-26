@@ -35,7 +35,7 @@ def lookup_by_id(id_string)
 end
 
 ## Instantiaite a troubled model class
-@bad_obj = ::BadIdentifierTest.new
+@bad_obj = BadIdentifierTest.new
 #=:> BadIdentifierTest
 
 # Test polymorphic string usage for Familia objects
@@ -140,7 +140,7 @@ process_identifier(@customer)
 
 ## to_s handles identifier errors gracefully
 badboi = BadIdentifierTest.new
-badboi.to_s #.include?('BadIdentifierTest')
+badboi.to_s # .include?('BadIdentifierTest')
 #=~> /BadIdentifierTest:0x[0-9a-f]+/
 
 ## Performance consideration: to_s caching behavior

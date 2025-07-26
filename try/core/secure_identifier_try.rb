@@ -61,7 +61,6 @@ hex_trace_id = Familia.generate_hex_trace_id
 [hex_trace_id.class, hex_trace_id.length == 16, hex_trace_id.match?(/^[a-f0-9]+$/)]
 #=> [String, true, true]
 
-
 ##
 ## ID Shortening
 ##

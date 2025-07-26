@@ -6,11 +6,11 @@ require_relative '../helpers/test_helpers'
 # Setup
 @now = Time.now.to_i
 @customer = Customer.new
-@customer.custid = "test+customer_safedump@example.com"
-@customer.email = "test+customer_safedump@example.com"
-@customer.role = "user"
+@customer.custid = 'test+customer_safedump@example.com'
+@customer.email = 'test+customer_safedump@example.com'
+@customer.role = 'user'
 # No longer need to set key field - identifier computed from custid
-@customer.planid = "basic"
+@customer.planid = 'basic'
 @customer.created = @now
 @customer.updated = @now
 @customer.verified = true

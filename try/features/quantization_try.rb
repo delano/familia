@@ -67,7 +67,7 @@ obj_stamp.class
 ## Different quantum values produce different buckets
 test_time = Time.utc(2023, 6, 15, 14, 30, 0) # use a fixed time, mid-day (avoid ToD boundary)
 @hour_stamp = QuantizedTest.qstamp(3600, time: test_time)
-@day_stamp = QuantizedTest.qstamp(86400, time: test_time)
+@day_stamp = QuantizedTest.qstamp(86_400, time: test_time)
 #=> 1686787200
 #=<> @hour_stamp
 #==> @hour_stamp == 1686837600
@@ -86,5 +86,5 @@ custom_stamp
 #=> "2023061514"
 
 # Cleanup
-@test_obj.id = "quantized_test_obj" # Set identifier before cleanup
+@test_obj.id = 'quantized_test_obj' # Set identifier before cleanup
 @test_obj.destroy! if @test_obj

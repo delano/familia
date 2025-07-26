@@ -14,7 +14,7 @@ require_relative '../helpers/test_helpers'
 #=> 'GREAT!'
 
 ## Familia::String#value=
-@a.value.value = "DECENT!"
+@a.value.value = 'DECENT!'
 #=> 'DECENT!'
 
 ## Familia::String#to_s
@@ -61,6 +61,5 @@ require_relative '../helpers/test_helpers'
 ## Familia::String#value after append
 @ret.value
 #=> '1050bytes'
-
 
 @ret.delete!

@@ -1,6 +1,5 @@
 # try/datatypes/set_try.rb
 
-
 require_relative '../../lib/familia'
 require_relative '../helpers/test_helpers'
 
@@ -31,6 +30,5 @@ ret.class
 ## Familia::Set#member? knows when a value doesn't exist
 @a.tags.size
 #=> 3
-
 
 @a.tags.delete!

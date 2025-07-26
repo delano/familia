@@ -51,5 +51,4 @@ require_relative '../helpers/test_helpers'
 @a.props.values_at 'fieldA', 'counter', 'fieldC'
 #=> ['1', '40', '3']
 
-
 @a.props.delete!

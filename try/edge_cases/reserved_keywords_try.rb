@@ -1,17 +1,17 @@
 require_relative '../helpers/test_helpers'
 
 # Test reserved keyword handling
-group "Reserved Keywords Edge Cases"
+group 'Reserved Keywords Edge Cases'
 
 setup do
   @user_class = Class.new(Familia::Horreum) do
-    identifier :email
+    identifier_field :email
     # These should fail with reserved keywords
     begin
       field :ttl      # Reserved for expiration
       field :db       # Reserved for database
       field :redis    # Reserved for connection
-    rescue => e
+    rescue StandardError => e
       # Expected to fail
     end
 
@@ -22,22 +22,20 @@ setup do
   end
 end
 
-try "cannot use ttl as field name" do
-  begin
-    Class.new(Familia::Horreum) do
-      field :ttl
-    end
-    false  # Should not reach here
-  rescue => e
-    true   # Expected error
+try 'cannot use ttl as field name' do
+  Class.new(Familia::Horreum) do
+    field :ttl
   end
+  false  # Should not reach here
+rescue StandardError => e
+  true   # Expected error
 end
 
-try "workaround with prefixed names works" do
-  user = @user_class.new(email: "test@example.com")
+try 'workaround with prefixed names works' do
+  user = @user_class.new(email: 'test@example.com')
   user.secret_ttl = 3600
   user.user_db = 5
-  user.redis_config = {host: "localhost"}
+  user.redis_config = { host: 'localhost' }
   user.save
 
   user.secret_ttl == 3600 &&
@@ -47,8 +45,8 @@ ensure
   user&.delete!
 end
 
-try "reserved methods still work normally" do
-  user = @user_class.new(email: "test@example.com")
+try 'reserved methods still work normally' do
+  user = @user_class.new(email: 'test@example.com')
   user.save
 
   user.respond_to?(:ttl) &&

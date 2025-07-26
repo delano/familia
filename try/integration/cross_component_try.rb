@@ -5,11 +5,11 @@ group "Cross-Component Integration"
 
 setup do
   @user_class = Class.new(Familia::Horreum) do
-    identifier :email
+    identifier_field :email
     field :name
     feature :expiration
     feature :safe_dump
-    ttl 3600
+    default_expiration 3600
   end
 end
 

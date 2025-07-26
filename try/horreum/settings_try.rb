@@ -5,7 +5,7 @@ group "Horreum Settings"
 
 setup do
   @user_class = Class.new(Familia::Horreum) do
-    identifier :email
+    identifier_field :email
     field :name
   end
 end

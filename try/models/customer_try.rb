@@ -4,15 +4,14 @@
 require_relative '../../lib/familia'
 require_relative '../helpers/test_helpers'
 
-
 # Setup
 @now = Time.now.to_f
 @customer = Customer.new
-@customer.custid = "test@example.com"
-@customer.email = "test@example.com"
-@customer.role = "user"
+@customer.custid = 'test@example.com'
+@customer.email = 'test@example.com'
+@customer.role = 'user'
 # No longer need to set key field - identifier computed from custid
-@customer.planid = "basic"
+@customer.planid = 'basic'
 @customer.created = Time.now.to_i
 @customer.updated = Time.now.to_i
 
@@ -21,7 +20,7 @@ require_relative '../helpers/test_helpers'
 #=> true
 
 ## Customer can be retrieved by identifier
-retrieved_customer = Customer.find_by_id("test@example.com")
+retrieved_customer = Customer.find_by_id('test@example.com')
 retrieved_customer.custid
 #=> "test@example.com"
 
@@ -30,12 +29,12 @@ retrieved_customer.custid
 #=> "test@example.com"
 
 ## Customer role can be set and retrieved
-@customer.role = "admin"
+@customer.role = 'admin'
 @customer.role
 #=> "admin"
 
 ## Customer can update fields
-@customer.planid = "premium"
+@customer.planid = 'premium'
 @customer.save
 ident = @customer.identifier
 Customer.find_by_id(ident).planid
@@ -48,27 +47,26 @@ Customer.find_by_id(ident).planid
 #=> '1'
 
 ## Customer can add custom domain via add method
-@customer.custom_domains.add(@now, "example.org")
-@customer.custom_domains.members.include?("example.org")
+@customer.custom_domains.add(@now, 'example.org')
+@customer.custom_domains.members.include?('example.org')
 #=> true
 
 ## Customer can retrieve custom domain score via score method
-@customer.custom_domains.score("example.org")
+@customer.custom_domains.score('example.org')
 #=> @now
 
 ## Customer can add custom domain via []= method
-@customer.custom_domains["example2.org"] = @now
-@customer.custom_domains.members.include?("example2.org")
+@customer.custom_domains['example2.org'] = @now
+@customer.custom_domains.members.include?('example2.org')
 #=> true
 
 ## Customer can retrieve custom domain score via []
-@customer.custom_domains["example.org"]
+@customer.custom_domains['example.org']
 #=> @now
 
-
 ## Customer can store timeline
-@customer.timeline["last_login"] = @now
-@customer.timeline["last_login"].to_i.positive?
+@customer.timeline['last_login'] = @now
+@customer.timeline['last_login'].to_i.positive?
 #=> true
 
 ## Customer can be added to class-level sorted set
@@ -82,19 +80,19 @@ Customer.instances.member?(@customer)
 #=> false
 
 ## Customer can add a session
-@customer.sessions << "session123"
-@customer.sessions.members.include?("session123")
+@customer.sessions << 'session123'
+@customer.sessions.members.include?('session123')
 #=> true
 
 ## Customer can set and get password reset information
-@customer.password_reset["token"] = "reset123"
-@customer.password_reset["token"]
+@customer.password_reset['token'] = 'reset123'
+@customer.password_reset['token']
 #=> "reset123"
 
 ## Customer can be destroyed
 ret = @customer.destroy!
-cust = Customer.find_by_id("test@example.com")
-exists = Customer.exists?("test@example.com")
+cust = Customer.find_by_id('test@example.com')
+exists = Customer.exists?('test@example.com')
 [ret, cust.nil?, exists]
 #=> [true, true, false]
 
@@ -137,7 +135,6 @@ Customer.instances.logical_database
 ## Customer.logical_database returns the correct database number
 Customer.instances.uri.to_s
 #=> 'redis://127.0.0.1/15'
-
 
 # Teardown
 Customer.instances.delete!

@@ -5,7 +5,7 @@ group "Horreum Class Methods"
 
 setup do
   @user_class = Class.new(Familia::Horreum) do
-    identifier :email
+    identifier_field :email
     field :name
     field :age
   end

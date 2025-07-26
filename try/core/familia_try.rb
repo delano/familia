@@ -1,11 +1,7 @@
 # try/core/familia_try.rb
 
-
 require_relative '../../lib/familia'
 require_relative '../helpers/test_helpers'
-
-#Familia.apiversion = 'v1'
-
 
 ## Check for help class
 Bone.related_fields.keys # consistent b/c hashes are ordered

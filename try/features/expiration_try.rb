@@ -29,8 +29,8 @@ end
 
 # Setup test object
 @test_obj = ExpiringTest.new
-@test_obj.id = "expire_test_1"
-@test_obj.data = "test data"
+@test_obj.id = 'expire_test_1'
+@test_obj.data = 'test data'
 
 ## Class has default_expiration method from feature
 ExpiringTest.respond_to?(:default_expiration)
