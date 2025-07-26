@@ -12,7 +12,7 @@ class String
   #
   # @return [Float, nil] The time in seconds, or nil if the string is invalid
   def in_seconds
-    q, u = scan(/([\d.]+)([smh])?/).flatten
+    q, u = scan(/([\d.]+)([smhyd])?/).flatten
     q &&= q.to_f and u ||= 's'
     q&.in_seconds(u)
   end
@@ -125,7 +125,7 @@ class Numeric
     size = abs.to_f
     unit = 0
 
-    while size > 1024 && unit < units.length - 1
+    while size >= 1024 && unit < units.length - 1
       size /= 1024
       unit += 1
     end
