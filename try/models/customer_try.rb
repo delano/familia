@@ -136,7 +136,7 @@ Customer.instances.logical_database
 
 ## Customer.logical_database returns the correct database number
 Customer.instances.uri.to_s
-#=> 'redis://127.0.0.1/15/'
+#=> 'redis://127.0.0.1/15'
 
 
 # Teardown

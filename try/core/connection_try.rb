@@ -9,7 +9,7 @@ Familia.debug = false
 
 ## Familia has default URI
 Familia.uri
-#=:> URI::Redis
+#=:> URI::Generic
 
 ## Default URI points to localhost database server
 Familia.uri.to_s

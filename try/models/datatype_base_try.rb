@@ -93,9 +93,8 @@ db
 
 ## DataType has uri method
 timeline = @sample_obj.timeline
-uri = timeline.uri
-uri.class.name
-#=> "URI::Redis"
+timeline.uri
+#=:> URI::Generic
 
 # Cleanup
 @sample_obj.destroy!
