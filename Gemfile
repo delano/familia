@@ -6,7 +6,8 @@ gemspec
 
 group :test do
   if ENV['LOCAL_DEV']
-    gem 'tryouts', path: '../../d/tryouts'
+    gem 'tryouts', path: '../tryouts'
+    gem 'uri-valkey', path: '..//uri-valkey/gems', glob: 'uri-valkey.gemspec'
   else
     gem 'tryouts', '~> 3.1.1', require: false
   end
@@ -14,7 +15,6 @@ group :test do
   gem 'ruby-prof'
   gem 'stackprof'
 end
-
 
 group :development, :test do
   # byebug only works with MRI
@@ -25,4 +25,5 @@ group :development, :test do
   gem 'rubocop-performance', require: false
   gem 'rubocop-thread_safety', require: false
   gem 'yard', '~> 0.9', require: false
+  gem 'irb', '~> 1.15.2', require: false
 end
