@@ -1,15 +1,11 @@
 # try/core/secure_identifier_try.rb
 
+# Test Familia::SecureIdentifier methods
+
 require_relative '../../lib/familia'
 require_relative '../helpers/test_helpers'
 
 Familia.debug = false
-
-# Test Familia::SecureIdentifier methods
-
-##
-## ID Generation
-##
 
 ## Familia.generate_id
 Familia.respond_to?(:generate_id)
@@ -60,10 +56,6 @@ Familia.respond_to?(:generate_hex_trace_id)
 hex_trace_id = Familia.generate_hex_trace_id
 [hex_trace_id.class, hex_trace_id.length == 16, hex_trace_id.match?(/^[a-f0-9]+$/)]
 #=> [String, true, true]
-
-##
-## ID Shortening
-##
 
 ## Familia.shorten_to_external_id
 Familia.respond_to?(:shorten_to_external_id)

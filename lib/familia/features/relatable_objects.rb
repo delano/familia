@@ -100,7 +100,7 @@ module V2
 
           if Familia.debug?
             reference = caller(1..1).first
-            Familia.trace :FIND_BY_OBJID, Familia.redis(uri), objkey, reference
+            Familia.trace :FIND_BY_OBJID, Familia.dbclient(uri), objkey, reference
           end
 
           find_by_key objkey

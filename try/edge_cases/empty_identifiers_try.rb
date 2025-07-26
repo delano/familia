@@ -1,48 +1,55 @@
 # try/edge_cases/empty_identifiers_try.rb
 
+# Test empty identifier edge cases
+
 require_relative '../helpers/test_helpers'
 
-# Test empty identifier edge cases
-group 'Empty Identifier Edge Cases'
 
-setup do
-  @user_class = Class.new(Familia::Horreum) do
+## empty string identifier handling
+begin
+  user_class = Class.new(Familia::Horreum) do
     identifier_field :email
+    field :email
     field :name
   end
+  user = user_class.new(email: '', name: 'Test')
+  user.exists? # Test actual behavior with empty identifier
+rescue SystemStackError
+  'stack_overflow'  # Stack overflow occurred
+rescue StandardError => e
+  e.class.name  # Other error occurred
 end
+#=> "Familia::NoIdentifier"
 
-try 'empty string identifier causes stack overflow' do
-  user = @user_class.new(email: '', name: 'Test')
-
-  begin
-    user.exists? # This should cause infinite loop
-    false
-  rescue SystemStackError
-    true  # Expected stack overflow
-  rescue StandardError => e
-    false # Unexpected error
+## nil identifier handling
+begin
+  user_class = Class.new(Familia::Horreum) do
+    identifier_field :email
+    field :email
+    field :name
   end
+  user = user_class.new(email: nil, name: 'Test')
+  user.exists?
+rescue SystemStackError
+  'stack_overflow'
+rescue Familia::NoIdentifier => e
+  'no_identifier'
+rescue StandardError => e
+  e.class.name
 end
+#=> "no_identifier"
 
-try 'nil identifier causes stack overflow' do
-  user = @user_class.new(email: nil, name: 'Test')
-
-  begin
-    user.exists?
-    false
-  rescue SystemStackError, Familia::NoIdentifier
-    true  # Expected error
+## empty identifier validation check
+begin
+  user_class = Class.new(Familia::Horreum) do
+    identifier_field :email
+    field :email
+    field :name
   end
+  user = user_class.new(email: '', name: 'Test')
+  # Check if identifier is empty
+  user.identifier.to_s.empty?
+rescue StandardError => e
+  e.class.name
 end
-
-try 'validation workaround prevents stack overflow' do
-  user = @user_class.new(email: '', name: 'Test')
-
-  # Workaround: validate before operations
-  raise ArgumentError, 'Empty identifier' if user.identifier.to_s.empty?
-
-  false # Should not reach here
-rescue ArgumentError => e
-  e.message.include?('Empty identifier')
-end
+#=> true
