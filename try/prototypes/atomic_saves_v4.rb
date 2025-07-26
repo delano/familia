@@ -1,7 +1,7 @@
 # try/prototypes/atomic_saves_v4.rb
 
 class BankAccount < Familia::Horreum
-  class_sorted_set :relatable_object_ids
+  class_sorted_set :relatable_objids
 
   identifier_field :account_number
   field :account_number
@@ -89,7 +89,7 @@ class BankAccount < Familia::Horreum
         # does a class level method like `add` get its db connection from then?
         #
         # This is PURPOSE2, a major reason for implementing transactions. We want
-        # to prevent our relatable_object_ids index from being updated if the
+        # to prevent our relatable_objids index from being updated if the
         # account save fails.
         add accnt
 
@@ -99,7 +99,7 @@ class BankAccount < Familia::Horreum
     end
 
     def add(accnt)
-      relatable_object_ids.add Time.now.to_f, accnt.identifier
+      relatable_objids.add Time.now.to_f, accnt.identifier
     end
   end
 end

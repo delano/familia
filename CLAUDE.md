@@ -74,7 +74,7 @@ end
 ```
 
 **Identifier Resolution**: Multiple strategies for object identification:
-- Symbol: `identifier :email`
+- Symbol: `identifier_field :email`
 - Proc: `identifier ->(user) { "user:#{user.email}" }`
 - Array: `identifier [:type, :email]`
 

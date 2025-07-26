@@ -6,7 +6,7 @@ group "Performance Benchmarks"
 
 setup do
   @user_class = Class.new(Familia::Horreum) do
-    identifier :email
+    identifier_field :email
     field :name
     field :data
   end
