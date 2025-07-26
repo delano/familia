@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    familia (2.0.0.pre.pre)
+    familia (2.0.0.pre2)
       benchmark
       connection_pool
       csv
