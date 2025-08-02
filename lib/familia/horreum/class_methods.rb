@@ -139,6 +139,12 @@ module Familia
         #      end
         #
         define_method :"#{name}!" do |*args|
+
+          if method_defined?(:"#{name}!")
+            warn "Method #{name}! is already defined for #{self}"
+            return
+          end
+
           # Check if the correct number of arguments is provided (exactly one).
           raise ArgumentError, "wrong number of arguments (given #{args.size}, expected 0 or 1)" if args.size > 1
 
