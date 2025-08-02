@@ -139,6 +139,12 @@ module Familia
         #      end
         #
         define_method :"#{name}!" do |*args|
+
+          if method_defined?(:"#{name}!")
+            warn "Method #{name}! is already defined for #{self}"
+            return
+          end
+
           # Check if the correct number of arguments is provided (exactly one).
           raise ArgumentError, "wrong number of arguments (given #{args.size}, expected 0 or 1)" if args.size > 1
 
@@ -233,6 +239,20 @@ module Familia
       def prefix(a = nil)
         @prefix = a if a
         @prefix || name.downcase.gsub('::', Familia.delim).to_sym
+      end
+
+      # Converts the class name into a string that can be used to look up
+      # configuration values. This is particularly useful when mapping
+      # familia models with specific database numbers in the configuration.
+      #
+      # @example V2::Session.config_name => 'session'
+      #
+      # @return [String] The underscored class name as a string
+      def config_name
+        name.split('::').last
+            .gsub(/([A-Z]+)([A-Z][a-z])/, '\1_\2')
+            .gsub(/([a-z\d])([A-Z])/, '\1_\2')
+            .downcase
       end
 
       # Creates and persists a new instance of the class.
