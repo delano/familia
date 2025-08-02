@@ -5,15 +5,14 @@ require_relative './test_helpers'
 
 Familia.debug = false
 
-# Error handling: object without proper identifier setup
 class ::BadIdentifierTest < Familia::Horreum
+  # Error handling: object without proper identifier setup
   # No identifier method defined - should cause issues
 end
 
 @bad_obj = ::BadIdentifierTest.new
 
-# Test polymorphic string usage for Familia objects
-@customer_id = 'customer-string-coercion-test'
+@customer_id = 'customer-string-coercion-test' # Test polymorphic string usage for Familia objects
 @customer = Customer.new(@customer_id)
 @customer.name = 'John Doe'
 @customer.planid = 'premium'
@@ -25,8 +24,7 @@ end
 @session.useragent = 'Test Browser'
 @session.save
 
-## Complex identifier test with array-based identifier
-@bone = Bone.new
+@bone = Bone.new # Complex identifier test with array-based identifier
 @bone.token = 'test_token'
 @bone.name = 'test_name'
 

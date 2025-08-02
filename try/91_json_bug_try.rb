@@ -51,26 +51,26 @@ raw_data
 puts "Config after refresh:"
 puts @test_obj.config.inspect
 puts "Config class: "
-[@test_obj.config.class, @test_obj.config.inspect]
-#=> [Hash, "{:theme=>\"dark\", :notifications=>true, :settings=>{:volume=>80}}"]
+[@test_obj.config.class, @test_obj.config]
+#=> [Hash, {theme: "dark", notifications: true, settings: {volume: 80}}]
 
 ## Test 5: Array should be deserialized back to Array
 puts "Tags after refresh:"
 puts @test_obj.tags.inspect
 puts "Tags class: #{@test_obj.tags.class}"
 @test_obj.tags.inspect
-@test_obj.tags.class
+@test_obj.tags
 #=> ["ruby", "redis", "json", "familia"]
-#=> Array
+#=:> Array
 
 ## Test 6: Simple string should remain a string (this works correctly)
 puts "Simple after refresh:"
 puts @test_obj.simple.inspect
 puts "Simple class: #{@test_obj.simple.class}"
 @test_obj.simple.inspect
-@test_obj.simple.class
+@test_obj.simple
 #=> "just a string"
-#=> String
+#=:> String
 
 ## Demonstrate the asymmetry:
 puts "\n=== ASYMMETRY DEMONSTRATION ==="

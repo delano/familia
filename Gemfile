@@ -11,5 +11,5 @@ group :development, :test do
   gem 'rubocop', require: false
   gem 'rubocop-performance', require: false
   gem 'rubocop-thread_safety', require: false
-  gem 'tryouts', '~> 2.4', require: false
+  gem 'tryouts', '~> 3.2', require: false
 end
