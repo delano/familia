@@ -1,47 +1,38 @@
+# try/horreum/class_methods_try.rb
+
 # Test Horreum class methods
 
 require_relative '../helpers/test_helpers'
 
-## create factory method with existence checking
-begin
-  user_class = Class.new(Familia::Horreum) do
-    identifier_field :email
-    field :email
-    field :name
-    field :age
-  end
-
-  result = user_class.respond_to?(:create) && user_class.respond_to?(:exists?)
-  result
-rescue StandardError => e
-  false
+TestUser = Class.new(Familia::Horreum) do
+  identifier_field :email
+  field :email
+  field :name
+  field :age
 end
-#=> true
+
+module AnotherModuleName
+  AnotherTestUser = Class.new(Familia::Horreum) do
+  end
+end
+
+## create factory method with existence checking
+TestUser
+#==> _.respond_to?(:create)
+#==> _.respond_to?(:exists?)
 
 ## multiget method is available
-begin
-  user_class = Class.new(Familia::Horreum) do
-    identifier_field :email
-    field :email
-    field :name
-  end
-
-  user_class.respond_to?(:multiget)
-rescue StandardError => e
-  false
-end
-#=> true
+TestUser
+#==> _.respond_to?(:multiget)
 
 ## find_keys method is available
-begin
-  user_class = Class.new(Familia::Horreum) do
-    identifier_field :email
-    field :email
-    field :name
-  end
+TestUser
+#==> _.respond_to?(:find_keys)
 
-  user_class.respond_to?(:find_keys)
-rescue StandardError => e
-  false
-end
-#=> true
+## config name turns a top-level class into a symbol
+TestUser.config_name.to_sym
+#=> :test_user
+
+## config name turns the fully qualified class into a symbol, but just the right most class
+AnotherModuleName::AnotherTestUser.config_name.to_sym
+#=> :another_test_user
