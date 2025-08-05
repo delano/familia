@@ -67,11 +67,14 @@ module Familia
       # @param [Symbol, String] name the name of the field to define. If a method
       # with the same name already exists, an error is raised.
       #
-      def field(name, *)
+      def field(name,
+                as: name,
+                fast_method: :"#{name}!")
         fields << name
 
+
         define_regular_attribute(name)
-        define_fast_attribute(name)
+        define_fast_attribute(name, fast_method)
       end
 
       def suffix(a = nil, &blk)
@@ -172,10 +175,10 @@ module Familia
       # @raise [RuntimeError] if an exception occurs during the execution of the
       #   method.
       #
-      def define_fast_attribute(name = nil)
-        if method_defined?(:"#{name}!")
-          raise ArgumentError, "Method #{name} already defined for #{self}"
-        end
+      def define_fast_attribute(name, method_name = nil)
+        method_name ||= :"#{name}!"
+        raise ArgumentError, 'Must end with !' unless method_name.to_s.end_with?('!')
+        raise ArgumentError, "#{self}##{method_name} exists" if method_defined?(:"#{method_name}")
 
         # Fast attribute accessor method for the '#{name}' attribute.
         # This method provides immediate read and write access to the attribute
@@ -186,11 +189,11 @@ module Familia
         # When called with an argument, it immediately persists the new value to
         # Redis.
         #
-        # @overload #{name}!
+        # @overload #{method_name}
         #   Retrieves the current value of the attribute from Redis.
         #   @return [Object] the current value of the attribute.
         #
-        # @overload #{name}!(value)
+        # @overload #{method_name}(value)
         #   Sets and immediately persists the new value of the attribute to
         #   Redis.
         #   @param value [Object] the new value to set for the attribute.
@@ -206,11 +209,11 @@ module Familia
         #
         # @example
         #
-        #      def #{name}!(*args)
+        #      def field_name!(*args)
         #        # Method implementation
         #      end
         #
-        define_method :"#{name}!" do |*args|
+        define_method method_name do |*args|
           # Check if the correct number of arguments is provided (exactly one).
           raise ArgumentError, "wrong number of arguments (given #{args.size}, expected 0 or 1)" if args.size > 1
 
@@ -226,7 +229,7 @@ module Familia
 
             # Convert the provided value to a format suitable for Database storage.
             prepared = serialize_value(val)
-            Familia.ld "[.fast_attribute!] #{name} val: #{val.class} prepared: #{prepared.class}"
+            Familia.ld "[.define_fast_attribute] #{method_name} val: #{val.class} prepared: #{prepared.class}"
 
             # Use the existing accessor method to set the attribute value.
             send :"#{name}=", val
@@ -235,7 +238,7 @@ module Familia
             hset name, prepared
           rescue Familia::Problem => e
             # Raise a custom error message if an exception occurs during the execution of the method.
-            raise "#{name}! method failed: #{e.message}", e.backtrace
+            raise "#{method_name} method failed: #{e.message}", e.backtrace
           end
         end
       end

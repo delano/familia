@@ -102,7 +102,6 @@ module Familia
     # Connection precendence: uses the database connection of the parent or the
     # value of opts[:dbclient] or Familia.dbclient (in that order).
     def initialize(keystring, opts = {})
-      #Familia.ld " [initializing] #{self.class} #{opts}"
       @keystring = keystring
       @keystring = @keystring.join(Familia.delim) if @keystring.is_a?(Array)
 
