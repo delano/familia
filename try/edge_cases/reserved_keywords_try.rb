@@ -17,7 +17,7 @@ result
 #=!> StandardError
 
 ## prefixed field names work as expected
-TestClass2 = Class.new(Familia::Horreum) do
+ExampleTestClass = Class.new(Familia::Horreum) do
   identifier_field :email
   field :email
   field :secret_ttl
@@ -25,7 +25,7 @@ TestClass2 = Class.new(Familia::Horreum) do
   field :dbclient_config
 end
 
-user = TestClass2.new(email: 'test@example.com')
+user = ExampleTestClass.new(email: 'test@example.com')
 user.secret_ttl = 3600
 user.user_db = 5
 user.dbclient_config = { host: 'localhost' }
@@ -39,7 +39,7 @@ user.delete!
 result
 #=> true
 
-## reserved methods still work normally
+## Reserved methods still work normally
 TestClass3 = Class.new(Familia::Horreum) do
   # Note: Does not enable expiration feature
   identifier_field :email
@@ -55,20 +55,51 @@ user
 #==> _.respond_to?(:logical_database)
 #==> _.respond_to?(:dbclient)
 
-
-## Attempting to set default_expiration on an instance with expiration feature enabled
-TestClass4 = Class.new(Familia::Horreum) do
+## Attempting to pass default_expiration as a field value when instantiating,
+## when expiration feature is enabled. It doesn't actually change the default
+## expiration for the instance b/c "default_expiration" is not a regular field.
+TestClassWithExpirationEnabled1 = Class.new(Familia::Horreum) do
   feature :expiration
+  identifier_field :email
+  field :email
+end
+
+user = TestClassWithExpirationEnabled1.new(email: 'test@example.com', default_expiration: 3600)
+user.default_expiration
+#=> 0
+
+## Attempting to set default_expiration for an instance when
+## the feature is enabled should work
+TestClassWithExpirationEnabled2 = Class.new(Familia::Horreum) do
+  feature :expiration
+  identifier_field :email
+  field :email
+end
+
+user = TestClassWithExpirationEnabled2.new(email: 'test@example.com')
+user.default_expiration = 3601
+user.default_expiration
+#=> 3601
+
+## Attempting to pass default_expiration as a field value when instantiating,
+## when expiration feature is disabled and then trying to access that value
+## simply raises a NoMethodError error.
+TestClassWithExpirationDisabled = Class.new(Familia::Horreum) do
+  identifier_field :email
+  field :email
+end
+
+user = TestClassWithExpirationDisabled.new(email: 'test@example.com', default_expiration: 3600)
+user.default_expiration
+#=!> NoMethodError
+
+## Attempting to add a field with a reserved name should raise an error
+TestClassWithExpirationDisabled = Class.new(Familia::Horreum) do
   identifier_field :email
   field :email
   field :default_expiration
 end
-
-user = TestClass4.new(email: 'test@example.com', default_expiration: 3600)
-user.save
-user.delete!
-user
-#==> _.default_expiration == 3600
+##=!> NoMethodError
 
 ## prefixed field names work as expected
 TestClass5 = Class.new(Familia::Horreum) do
