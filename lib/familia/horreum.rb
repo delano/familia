@@ -216,7 +216,9 @@ module Familia
         # we use symbols. So we check for both.
         value = fields[field.to_sym] || fields[field.to_s]
         if value
-          send(:"#{field}=", value)
+          # Use the mapped method name, not the field name
+          method_name = self.class.field_method_map[field] || field
+          send(:"#{method_name}=", value)
           field.to_sym
         end
       end

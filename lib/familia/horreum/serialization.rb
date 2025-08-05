@@ -258,7 +258,7 @@ module Familia
       #   # => All fields are now nil, like a spell gone slightly too well.
       #
       def clear_fields!
-        self.class.fields.each { |field| send("#{field}=", nil) }
+        self.class.field_method_map.each_value { |method_name| send("#{method_name}=", nil) }
       end
 
       # The Great Database Refresh-o-matic 3000
