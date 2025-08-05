@@ -64,14 +64,14 @@ module Familia
       # instance methods similar to `attr_accessor`. It also generates a fast
       # writer method for immediate persistence to Redis.
       #
-      # @param [Symbol, String] name the name of the field to define.
+      # @param [Symbol, String] name the name of the field to define. If a method
+      # with the same name already exists, an error is raised.
       #
-      def field(name)
+      def field(name, *)
         fields << name
-        attr_accessor name
 
-        # Every field gets a fast attribute method for immediately persisting
-        fast_attribute! name
+        define_regular_attribute(name)
+        define_fast_attribute(name)
       end
 
       def suffix(a = nil, &blk)
@@ -150,27 +150,19 @@ module Familia
 
       private
 
+      def define_regular_attribute(name)
+        if method_defined?(name)
+          raise ArgumentError, "Method #{name} already defined for #{self}"
+        end
+
+        attr_accessor name
+      end
 
       # Defines a fast attribute method with a bang (!) suffix for a given
       # attribute name. Fast attribute methods are used to immediately read or
-      # write attribute values from/to Redis. Calling a fast attribute method
-      # has no effect on any of the object's other attributes and does not
-      # trigger a call to update the object's expiration time.
-      #
-      # The dynamically defined method performs the following:
-      # - Acts as both a reader and a writer method.
-      # - When called without arguments, retrieves the current value from Redis.
-      # - When called with an argument, persists the value to Database immediately.
-      # - Checks if the correct number of arguments is provided (zero or one).
-      # - Converts the provided value to a format suitable for Database storage.
-      # - Uses the existing accessor method to set the attribute value when
-      #   writing.
-      # - Persists the value to Database immediately using the hset command when
-      #   writing.
-      # - Includes custom error handling to raise an ArgumentError if the wrong
-      #   number of arguments is given.
-      # - Raises a custom error message if an exception occurs during the
-      #   execution of the method.
+      # write attribute values from/to the database. Calling a fast attribute
+      # method has no effect on any of the object's other attributes and does
+      # not trigger a call to update the object's expiration time.
       #
       # @param [Symbol, String] name the name of the attribute for which the
       #   fast method is defined.
@@ -180,7 +172,11 @@ module Familia
       # @raise [RuntimeError] if an exception occurs during the execution of the
       #   method.
       #
-      def fast_attribute!(name = nil)
+      def define_fast_attribute(name = nil)
+        if method_defined?(:"#{name}!")
+          raise ArgumentError, "Method #{name} already defined for #{self}"
+        end
+
         # Fast attribute accessor method for the '#{name}' attribute.
         # This method provides immediate read and write access to the attribute
         # in Redis.
