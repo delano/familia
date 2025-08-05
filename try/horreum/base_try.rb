@@ -55,7 +55,7 @@ Familia.debug = false
 ## Horreum object fields have a fast attribute method (1 of 2)
 Familia.trace :LOAD, @customer.dbclient, @customer.uri, caller if Familia.debug?
 @customer.name! 'Jane Doe'
-#=> 0
+#=> true
 
 ## Horreum object fields have a fast attribute method (2 of 2)
 @customer.refresh!
@@ -117,11 +117,11 @@ class ArrayIdentifierTest < Familia::Horreum
 end
 #=!> Familia::Problem
 
-## Redefining a field method after it was defined gives a warning
+## Redefining a field method after it can give a warning
 class FieldRedefine < Familia::Horreum
   identifier_field :email
   field :name
-  field :uniquefieldname
+  field :uniquefieldname, on_conflict: :warn
 
   def uniquefieldname
     true
@@ -131,8 +131,8 @@ end
 #=2> /WARNING/
 #=2> /uniquefieldname/
 
-## Defining a field with the same name as an existing method raises an exception
-class FieldRedefine < Familia::Horreum
+## Defining a field with the same name as an existing method can give a warning
+class FieldRedefine2 < Familia::Horreum
   identifier_field :email
   field :name
 
@@ -140,7 +140,34 @@ class FieldRedefine < Familia::Horreum
     true
   end
 
-  field :uniquefieldname
+  field :uniquefieldname, on_conflict: :warn
+end
+#=:> Familia::FieldDefinition
+#=2> /WARNING/
+#=2> /uniquefieldname/
+
+## Redefining a field method after it can raise an error
+class FieldRedefine3 < Familia::Horreum
+  identifier_field :email
+  field :name
+  field :uniquefieldname, on_conflict: :raise
+
+  def uniquefieldname
+    true
+  end
+end
+#=!> ArgumentError
+
+## Defining a field with the same name as an existing method can raise an error
+class FieldRedefine4 < Familia::Horreum
+  identifier_field :email
+  field :name
+
+  def uniquefieldname
+    true
+  end
+
+  field :uniquefieldname, on_conflict: :raise
 end
 #=!> ArgumentError
 
@@ -170,13 +197,13 @@ end
 ## Aliased field fast method works correctly
 @aliased.save
 @aliased.display_size! 100
-#=> 1
+#=> true
 
 ## Aliased field refresh works correctly
 @aliased.width = 50  # unsaved change
 @aliased.refresh!
 @aliased.width
-#=> 100
+#=> "100"
 
 ## Fast method with custom name
 class CustomFastMethodTest < Familia::Horreum
@@ -191,7 +218,7 @@ end
 ## Custom fast method works
 @custom_fast.save
 @custom_fast.score_now! 75
-#=> 0
+#=> true
 
 ## Field with :warn conflict handling allows redefinition with warning
 class WarnConflictTest < Familia::Horreum
