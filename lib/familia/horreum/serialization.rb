@@ -327,8 +327,8 @@ module Familia
       # @note Watch in awe as each field is lovingly prepared for its Database adventure!
       #
       def to_h
-        self.class.fields.inject({}) do |hsh, field|
-          val = send(field)
+        self.class.field_method_map.inject({}) do |hsh, (field, method_name)|
+          val = send(method_name)
           prepared = serialize_value(val)
           Familia.ld " [to_h] field: #{field} val: #{val.class} prepared: #{prepared&.class || '[nil]'}"
 
@@ -354,10 +354,10 @@ module Familia
       # before joining the parade.
       #
       def to_a
-        self.class.fields.map do |field|
-          val = send(field)
+        self.class.field_method_map.map do |field, method_name|
+          val = send(method_name)
           prepared = serialize_value(val)
-          Familia.ld " [to_a] field: #{field} val: #{val.class} prepared: #{prepared.class}"
+          Familia.ld " [to_a] field: #{field} method: #{method_name} val: #{val.class} prepared: #{prepared.class}"
           prepared
         end
       end
