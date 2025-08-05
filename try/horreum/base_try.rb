@@ -116,3 +116,17 @@ class ArrayIdentifierTest < Familia::Horreum
   field :name
 end
 #=!> Familia::Problem
+
+## Redefining a field method after it was defined gives a warning
+class FieldRedefine < Familia::Horreum
+  identifier_field :email
+  field :name
+  field :uniquefieldname
+
+  def uniquefieldname
+    true
+  end
+end
+#=> :uniquefieldname
+#=2> /WARNING/
+#=2> /uniquefieldname/

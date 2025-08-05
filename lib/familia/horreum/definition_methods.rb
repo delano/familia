@@ -72,9 +72,12 @@ module Familia
                 fast_method: :"#{name}!")
         fields << name
 
-
         define_regular_attribute(name)
         define_fast_attribute(name, fast_method)
+
+        # Track what methods we generate (see method_added)
+        @field_generated_methods ||= ::Set.new
+        @field_generated_methods << as << fast_method
       end
 
       def suffix(a = nil, &blk)
@@ -152,6 +155,24 @@ module Familia
       end
 
       private
+
+      # Hook to detect silent overwrites
+      def method_added(method_name)
+        super
+
+        return unless @field_generated_methods&.include?(method_name)
+
+        warn <<~WARNING
+
+          WARNING: Method >>> #{method_name} <<< was redefined after field definition.
+          Field functionality may be broken. Consider using a different name
+          with field(:field_name, as: :other_name)
+
+          Called from:
+          #{Familia.pretty_stack(limit: 3)}
+
+        WARNING
+      end
 
       def define_regular_attribute(name)
         if method_defined?(name)

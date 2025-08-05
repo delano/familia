@@ -180,14 +180,14 @@ module Familia
 
     # Formats a stack trace with pretty file paths for improved readability
     #
-    # @param limit [Integer] Maximum number of stack frames to include (default: 5)
+    # @param limit [Integer] Maximum number of stack frames to include (default: 3)
     # @return [String] Formatted stack trace with relative paths joined by newlines
     #
     # @example
     #   Utils.pretty_stack(limit: 10)
     #   # => "lib/models/user.rb:25:in `save'\n lib/controllers/app.rb:45:in `create'"
-    def pretty_stack(limit: 5)
-      caller.first(limit).map { |frame| pretty_path(frame) }.join("\n")
+    def pretty_stack(skip: 1, limit: 5)
+      caller(skip..(limit+1)).first(limit).map { |frame| pretty_path(frame) }.join("\n")
     end
 
   end
