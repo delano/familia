@@ -187,7 +187,7 @@ module Familia
     #   Utils.pretty_stack(limit: 10)
     #   # => "lib/models/user.rb:25:in `save'\n lib/controllers/app.rb:45:in `create'"
     def pretty_stack(skip: 1, limit: 5)
-      caller(skip..(limit+1)).first(limit).map { |frame| pretty_path(frame) }.join("\n")
+      caller(skip..(skip + limit + 1)).first(limit).map { |frame| pretty_path(frame) }.join("\n")
     end
 
   end
