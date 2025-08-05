@@ -258,7 +258,7 @@ module Familia
       #   # => All fields are now nil, like a spell gone slightly too well.
       #
       def clear_fields!
-        self.class.fields.each { |field| send("#{field}=", nil) }
+        self.class.field_method_map.each_value { |method_name| send("#{method_name}=", nil) }
       end
 
       # The Great Database Refresh-o-matic 3000
@@ -284,6 +284,7 @@ module Familia
       def refresh!
         Familia.trace :REFRESH, dbclient, uri, caller(1..1) if Familia.debug?
         raise Familia::KeyNotFoundError, dbkey unless dbclient.exists(dbkey)
+
         fields = hgetall
         Familia.ld "[refresh!] #{self.class} #{dbkey} fields:#{fields.keys}"
         optimistic_refresh(**fields)
@@ -326,8 +327,8 @@ module Familia
       # @note Watch in awe as each field is lovingly prepared for its Database adventure!
       #
       def to_h
-        self.class.fields.inject({}) do |hsh, field|
-          val = send(field)
+        self.class.field_method_map.inject({}) do |hsh, (field, method_name)|
+          val = send(method_name)
           prepared = serialize_value(val)
           Familia.ld " [to_h] field: #{field} val: #{val.class} prepared: #{prepared&.class || '[nil]'}"
 
@@ -353,10 +354,10 @@ module Familia
       # before joining the parade.
       #
       def to_a
-        self.class.fields.map do |field|
-          val = send(field)
+        self.class.field_method_map.map do |field, method_name|
+          val = send(method_name)
           prepared = serialize_value(val)
-          Familia.ld " [to_a] field: #{field} val: #{val.class} prepared: #{prepared.class}"
+          Familia.ld " [to_a] field: #{field} method: #{method_name} val: #{val.class} prepared: #{prepared.class}"
           prepared
         end
       end

@@ -62,7 +62,8 @@ module Familia
       # Extends ClassMethods to subclasses and tracks Familia members
       def inherited(member)
         Familia.trace :HORREUM, nil, "Welcome #{member} to the family", caller(1..1) if Familia.debug?
-        member.extend(ClassMethods)
+        member.extend(DefinitionMethods)
+        member.extend(ManagementMethods)
         member.extend(Connection)
         member.extend(Features)
 
@@ -215,7 +216,9 @@ module Familia
         # we use symbols. So we check for both.
         value = fields[field.to_sym] || fields[field.to_s]
         if value
-          send(:"#{field}=", value)
+          # Use the mapped method name, not the field name
+          method_name = self.class.field_method_map[field] || field
+          send(:"#{method_name}=", value)
           field.to_sym
         end
       end
@@ -304,8 +307,9 @@ module Familia
   end
 end
 
-require_relative 'horreum/class_methods'
-require_relative 'horreum/commands'
+require_relative 'horreum/definition_methods'
+require_relative 'horreum/management_methods'
+require_relative 'horreum/database_commands'
 require_relative 'horreum/connection'
 require_relative 'horreum/serialization'
 require_relative 'horreum/settings'

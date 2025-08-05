@@ -102,7 +102,6 @@ module Familia
     # Connection precendence: uses the database connection of the parent or the
     # value of opts[:dbclient] or Familia.dbclient (in that order).
     def initialize(keystring, opts = {})
-      #Familia.ld " [initializing] #{self.class} #{opts}"
       @keystring = keystring
       @keystring = @keystring.join(Familia.delim) if @keystring.is_a?(Array)
 
@@ -172,7 +171,7 @@ module Familia
         parent.dbkey(keystring)
       elsif parent_class?
         # This is a class-level datatype object so the parent class' dbkey
-        # method is defined in Familia::Horreum::ClassMethods.
+        # method is defined in Familia::Horreum::DefinitionMethods.
         parent.dbkey(keystring, nil)
       else
         # This is a standalone DataType object where it's keystring

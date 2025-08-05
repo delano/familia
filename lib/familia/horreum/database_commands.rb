@@ -1,4 +1,4 @@
-# lib/familia/horreum/commands.rb
+# lib/familia/horreum/database_commands.rb
 
 module Familia
   # InstanceMethods - Module containing instance-level methods for Familia
@@ -16,7 +16,7 @@ module Familia
     # emphasize this, instead of "refreshing" the object with hgetall,
     # just load the object again.
     #
-    module Commands
+    module DatabaseCommands
 
       def move(logical_database)
         dbclient.move dbkey, logical_database
@@ -86,16 +86,6 @@ module Familia
       def datatype
         Familia.trace :DATATYPE, dbclient, uri, caller(1..1) if Familia.debug?
         dbclient.type dbkey(suffix)
-      end
-
-
-      # Retrieves the prefix for the current instance by delegating to its class.
-      #
-      # @return [String] The prefix associated with the class of the current instance.
-      # @example
-      #   instance.prefix
-      def prefix
-        self.class.prefix
       end
 
       # For parity with DataType#hgetall
@@ -178,6 +168,6 @@ module Familia
 
     end
 
-    include Commands # these become Familia::Horreum instance methods
+    include DatabaseCommands # these become Familia::Horreum instance methods
   end
 end

@@ -30,7 +30,7 @@ end
 class PoolTestAccount < Familia::Horreum
   identifier_field :account_id
   field :account_id
-  field :balance
+  field :balance, on_conflict: :skip
   field :holder_name
 
   def init
@@ -83,7 +83,7 @@ class PoolTestAccountDB1 < Familia::Horreum
   self.logical_database = 1
   identifier_field :account_id
   field :account_id
-  field :balance
+  field :balance, on_conflict: :skip
   field :holder_name
 
   def init

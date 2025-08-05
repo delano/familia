@@ -1,5 +1,5 @@
 # lib/familia/horreum/settings.rb
-#
+
 module Familia
   # InstanceMethods - Module containing instance-level methods for Familia
   #
@@ -24,6 +24,15 @@ module Familia
 
       def logical_database
         @logical_database || self.class.logical_database
+      end
+
+      # Retrieves the prefix for the current instance by delegating to its class.
+      #
+      # @return [String] The prefix associated with the class of the current instance.
+      # @example
+      #   instance.prefix
+      def prefix
+        self.class.prefix
       end
 
       def suffix

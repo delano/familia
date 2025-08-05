@@ -55,7 +55,7 @@ Familia.debug = false
 ## Horreum object fields have a fast attribute method (1 of 2)
 Familia.trace :LOAD, @customer.dbclient, @customer.uri, caller if Familia.debug?
 @customer.name! 'Jane Doe'
-#=> 0
+#=> true
 
 ## Horreum object fields have a fast attribute method (2 of 2)
 @customer.refresh!
@@ -116,3 +116,160 @@ class ArrayIdentifierTest < Familia::Horreum
   field :name
 end
 #=!> Familia::Problem
+
+## Redefining a field method after it can give a warning
+class FieldRedefine < Familia::Horreum
+  identifier_field :email
+  field :name
+  field :uniquefieldname, on_conflict: :warn
+
+  def uniquefieldname
+    true
+  end
+end
+#=> :uniquefieldname
+#=2> /WARNING/
+#=2> /uniquefieldname/
+
+## Defining a field with the same name as an existing method can give a warning
+class FieldRedefine2 < Familia::Horreum
+  identifier_field :email
+  field :name
+
+  def uniquefieldname
+    true
+  end
+
+  field :uniquefieldname, on_conflict: :warn
+end
+#=:> Familia::FieldDefinition
+#=2> /WARNING/
+#=2> /uniquefieldname/
+
+## Redefining a field method after it can raise an error
+class FieldRedefine3 < Familia::Horreum
+  identifier_field :email
+  field :name
+  field :uniquefieldname, on_conflict: :raise
+
+  def uniquefieldname
+    true
+  end
+end
+#=!> ArgumentError
+
+## Defining a field with the same name as an existing method can raise an error
+class FieldRedefine4 < Familia::Horreum
+  identifier_field :email
+  field :name
+
+  def uniquefieldname
+    true
+  end
+
+  field :uniquefieldname, on_conflict: :raise
+end
+#=!> ArgumentError
+
+## Field aliasing works with 'as' parameter
+class AliasedFieldTest < Familia::Horreum
+  identifier_field :email
+  field :email
+  field :display_size, as: :width
+end
+@aliased = AliasedFieldTest.new email: 'test@example.com'
+@aliased.width = 42
+@aliased.width
+#=> 42
+
+## Aliased field getter method uses alias name
+@aliased.respond_to?(:width)
+#=> true
+
+## Aliased field setter method uses alias name
+@aliased.respond_to?(:width=)
+#=> true
+
+## Original field name is not accessible as method
+@aliased.respond_to?(:display_size)
+#=> false
+
+## Aliased field fast method works correctly
+@aliased.save
+@aliased.display_size! 100
+#=> true
+
+## Aliased field refresh works correctly
+@aliased.width = 50  # unsaved change
+@aliased.refresh!
+@aliased.width
+#=> "100"
+
+## Fast method with custom name
+class CustomFastMethodTest < Familia::Horreum
+  identifier_field :email
+  field :score, fast_method: :score_now!
+  field :email
+end
+@custom_fast = CustomFastMethodTest.new email: 'fast@example.com'
+@custom_fast.respond_to?(:score_now!)
+#=> true
+
+## Custom fast method works
+@custom_fast.save
+@custom_fast.score_now! 75
+#=> true
+
+## Field with :warn conflict handling allows redefinition with warning
+class WarnConflictTest < Familia::Horreum
+  identifier_field :email
+  field :email
+  field :test_method, on_conflict: :warn
+
+  def test_method
+    "original"
+  end
+
+end
+@warn_test = WarnConflictTest.new email: 'warn@example.com'
+@warn_test.test_method
+#=> "original"
+
+## Field with :skip conflict handling skips redefinition silently
+class SkipConflictTest < Familia::Horreum
+  identifier_field :email
+  field :email
+
+  def skip_method
+    "original"
+  end
+
+  field :skip_method, on_conflict: :skip
+end
+@skip_test = SkipConflictTest.new email: 'skip@example.com'
+@skip_test.skip_method
+#=> "original"
+
+## Combined aliasing and custom fast method
+class CombinedTest < Familia::Horreum
+  identifier_field :email
+  field :internal_count, as: :count, fast_method: :count_immediately!
+  field :email
+end
+@combined = CombinedTest.new email: 'combined1@example.com'
+@combined.count = 10
+@combined.count
+#=> 10
+
+## Combined test fast method works
+@combined.save
+@combined.count_immediately! 20
+@combined.count
+#=> 20
+
+## Combined test refresh works
+combined = CombinedTest.new email: 'combined2@example.com'
+combined.count = 5  # unsaved change
+combined.refresh!
+combined.count
+#=> 5
