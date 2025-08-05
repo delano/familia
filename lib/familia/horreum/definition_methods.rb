@@ -97,8 +97,8 @@ module Familia
       def field(name, as: name, fast_method: :"#{name}!", on_conflict: :raise)
         fields << name
 
-        define_regular_attribute(name, as, on_conflict)
-        define_fast_attribute(name, as, fast_method, on_conflict)
+        define_attr_accessor_methods(name, as, on_conflict)
+        define_fast_writer_method(name, as, fast_method, on_conflict)
 
         # Create field definition object
         field_def = FieldDefinition.new(
@@ -225,19 +225,19 @@ module Familia
 
           WARNING
         when :raise
-          raise ArgumentError, "Method name already defined for #{self}::#{method_name}"
+          raise ArgumentError, "Method >>> #{method_name} <<< already defined for #{self}"
         when :skip
           # Do nothing, skip silently
         end
       end
 
-      def define_regular_attribute(field_name, method_name, on_conflict)
+      def define_attr_accessor_methods(field_name, method_name, on_conflict)
         handle_method_conflict(method_name, on_conflict) do
           # Equivalent to `attr_reader :field_name`
           define_method method_name do
             instance_variable_get(:"@#{field_name}")
           end
-          # Equivalent to `attr_writer :field_name`
+          # Equivalent to `attr_writer :field_name=`
           define_method :"#{method_name}=" do |value|
             instance_variable_set(:"@#{field_name}", value)
           end
@@ -258,7 +258,7 @@ module Familia
       # @raise [RuntimeError] if an exception occurs during the execution of the
       #   method.
       #
-      def define_fast_attribute(field_name, method_name, fast_method_name, on_conflict)
+      def define_fast_writer_method(field_name, method_name, fast_method_name, on_conflict)
         raise ArgumentError, 'Must end with !' unless fast_method_name.to_s.end_with?('!')
 
         handle_method_conflict(fast_method_name, on_conflict) do
@@ -311,13 +311,14 @@ module Familia
 
               # Convert the provided value to a format suitable for Database storage.
               prepared = serialize_value(val)
-              Familia.ld "[.define_fast_attribute] #{fast_method_name} val: #{val.class} prepared: #{prepared.class}"
+              Familia.ld "[.define_fast_writer_method] #{fast_method_name} val: #{val.class} prepared: #{prepared.class}"
 
               # Use the existing accessor method to set the attribute value.
               send :"#{method_name}=", val
 
               # Persist the value to Database immediately using the hset command.
-              hset field_name, prepared
+              ret = hset field_name, prepared
+              ret.zero? || ret.positive?
             rescue Familia::Problem => e
               # Raise a custom error message if an exception occurs during the execution of the method.
               raise "#{fast_method_name} method failed: #{e.message}", e.backtrace
@@ -328,78 +329,93 @@ module Familia
 
       # Handles method name conflicts during dynamic method definition.
       #
-      # This is a utility method that encapsulates the logic for dealing with
-      # method name collisions when dynamically defining methods. The conflict
-      # resolution strategy is a concern of method definition rather than field
-      # definition, keeping the responsibilities properly separated.
+      # @param method_name [Symbol, String] the method to define
+      # @param strategy [Symbol] conflict resolution strategy:
+      #   - :raise     - raise error if method exists (default)
+      #   - :skip      - skip definition if method exists
+      #   - :warn      - warn but proceed (may overwrite)
+      #   - :overwrite - explicitly remove existing method first
       #
-      # @param method_name [Symbol, String] the name of the method being defined
-      # @param strategy [Symbol] the conflict resolution strategy to use
-      # @option strategy [Symbol] :raise (default) raise an error if method exists
-      # @option strategy [Symbol] :skip skip definition if method already exists
-      # @option strategy [Symbol] :warn proceed with definition (may overwrite silently)
-      # @option strategy [Symbol] :overwrite explicitly remove existing method first
+      # @yield the method definition to execute
       #
-      # @yield [] the block containing the method definition logic to execute
-      #   if the conflict resolution strategy allows it
-      #
-      # @return [void]
-      #
-      # @raise [ArgumentError] if an invalid strategy is provided
-      # @raise [ArgumentError] if method exists and strategy is :raise
-      #
-      # @example Basic usage with different strategies
-      #   # Raise error if method exists (default behavior)
-      #   handle_method_conflict(:my_method, :raise) do
+      # @example
+      #   handle_method_conflict(:my_method, :skip) do
       #     attr_accessor :my_method
       #   end
       #
-      #   # Skip definition if method already exists
-      #   handle_method_conflict(:existing_method, :skip) do
-      #     define_method :existing_method do
-      #       "new implementation"
-      #     end
-      #   end
-      #
-      #   # Force overwrite existing method
-      #   handle_method_conflict(:legacy_method, :overwrite) do
-      #     define_method :legacy_method do
-      #       "updated implementation"
-      #     end
-      #   end
-      #
-      # @example Usage in field definition context
-      #   def define_regular_attribute(method_name, on_conflict)
-      #     handle_method_conflict(method_name, on_conflict) do
-      #       attr_accessor method_name
-      #     end
-      #   end
-      #
-      # @note The :warn strategy proceeds with definition but may result in
-      #   silent method overwrites. Use with caution and consider pairing
-      #   with method_added hook for detection.
-      #
-      # @see #define_regular_attribute
-      # @see #define_fast_attribute
+      # @raise [ArgumentError] if strategy invalid or method exists with :raise
       #
       # @private
-      def handle_method_conflict(method_name, strategy)
+      def handle_method_conflict(method_name, strategy, &)
+        validate_strategy!(strategy)
+
+        if method_exists?(method_name)
+          handle_existing_method(method_name, strategy, &)
+        else
+          yield
+        end
+      end
+
+      private
+
+      VALID_STRATEGIES = %i[raise skip warn overwrite].freeze
+
+      def validate_strategy!(strategy)
+        unless VALID_STRATEGIES.include?(strategy)
+          raise ArgumentError, "Invalid conflict strategy: #{strategy}. " \
+                              "Valid strategies: #{VALID_STRATEGIES.join(', ')}"
+        end
+      end
+
+      def method_exists?(method_name)
+        method_defined?(method_name)
+      end
+
+      def handle_existing_method(method_name, strategy)
         case strategy
         when :raise
-          msg = "Method #{method_name} already defined for #{self}"
-          raise ArgumentError, msg if method_defined?(method_name)
-
-          yield
+          raise_method_exists_error(method_name)
         when :skip
-          yield unless method_defined?(method_name)
+          # Do nothing - skip the definition
         when :warn
+          warn_method_exists(method_name)
           yield
         when :overwrite
-          remove_method(method_name) if method_defined?(method_name)
+          remove_method(method_name)
           yield
-        else
-          raise ArgumentError, "Invalid conflict strategy: #{strategy}"
         end
+      end
+
+      def raise_method_exists_error(method_name)
+        location = format_method_location(method_name)
+        raise ArgumentError, "Method >>> #{method_name} <<< already defined for #{self}#{location}"
+      end
+
+      def warn_method_exists(method_name)
+        location = format_method_location(method_name)
+        caller_info = Familia.pretty_stack(skip: 5, limit: 3)
+
+        warn <<~WARNING
+
+          WARNING: Method '#{method_name}' is already defined.
+
+          Class: #{self}#{location}
+
+          Called from:
+          #{caller_info}
+
+        WARNING
+      end
+
+      def format_method_location(method_name)
+        method_obj = instance_method(method_name)
+        source_location = method_obj.source_location
+
+        return "" unless source_location
+
+        path = Familia.pretty_path(source_location[0])
+        line = source_location[1]
+        " (defined at #{path}:#{line})"
       end
     end
   end
