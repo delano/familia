@@ -1,6 +1,9 @@
 # lib/familia/utils.rb
 
 module Familia
+
+  # Family-related utility methods
+  #
   module Utils
 
     # Joins array elements with Familia delimiter
@@ -143,6 +146,48 @@ module Familia
           nil
         end
       end
+    end
+
+    # Converts an absolute file path to a path relative to the current working
+    # directory. This simplifies logging and error reporting by showing
+    # only the relevant parts of file paths instead of lengthy absolute paths.
+    #
+    # @param filepath [String, Pathname] The file path to convert
+    # @return [Pathname, String, nil] A relative path from current directory,
+    #   basename if path goes outside current directory, or nil if filepath is nil
+    #
+    # @example Using current directory as base
+    #   Utils.pretty_path("/home/dev/project/lib/config.rb") # => "lib/config.rb"
+    #
+    # @example Path outside current directory
+    #   Utils.pretty_path("/etc/hosts") # => "hosts"
+    #
+    # @example Nil input
+    #   Utils.pretty_path(nil) # => nil
+    #
+    # @see Pathname#relative_path_from Ruby standard library documentation
+    def pretty_path(filepath)
+      return nil if filepath.nil?
+
+      basepath = Dir.pwd
+      relative_path = Pathname.new(filepath).relative_path_from(basepath)
+      if relative_path.to_s.start_with?('..')
+        File.basename(filepath)
+      else
+        relative_path
+      end
+    end
+
+    # Formats a stack trace with pretty file paths for improved readability
+    #
+    # @param limit [Integer] Maximum number of stack frames to include (default: 5)
+    # @return [String] Formatted stack trace with relative paths joined by newlines
+    #
+    # @example
+    #   Utils.pretty_stack(limit: 10)
+    #   # => "lib/models/user.rb:25:in `save'\n lib/controllers/app.rb:45:in `create'"
+    def pretty_stack(limit: 5)
+      caller.first(limit).map { |frame| pretty_path(frame) }.join("\n")
     end
 
   end
