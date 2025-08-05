@@ -88,16 +88,6 @@ module Familia
         dbclient.type dbkey(suffix)
       end
 
-
-      # Retrieves the prefix for the current instance by delegating to its class.
-      #
-      # @return [String] The prefix associated with the class of the current instance.
-      # @example
-      #   instance.prefix
-      def prefix
-        self.class.prefix
-      end
-
       # For parity with DataType#hgetall
       def hgetall
         Familia.trace :HGETALL, dbclient, uri, caller(1..1) if Familia.debug?
