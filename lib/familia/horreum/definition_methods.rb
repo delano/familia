@@ -74,41 +74,6 @@ module Familia
         fast_attribute! name
       end
 
-      # Returns the list of field names defined for the class in the order
-      # that they were defined. i.e. `field :a; field :b; fields => [:a, :b]`.
-      def fields
-        @fields ||= []
-        @fields
-      end
-
-      def class_related_fields
-        @class_related_fields ||= {}
-        @class_related_fields
-      end
-
-      def related_fields
-        @related_fields ||= {}
-        @related_fields
-      end
-
-      def has_relations?
-        @has_relations ||= false
-      end
-
-      def logical_database(v = nil)
-        Familia.trace :DB, Familia.dbclient, "#{@logical_database} #{v}", caller(1..1) if Familia.debug?
-        @logical_database = v unless v.nil?
-        @logical_database || parent&.logical_database
-      end
-
-      # Returns the number of dbkeys matching the given filter pattern
-      # @param filter [String] dbkey pattern to match (default: '*')
-      # @return [Integer] Number of matching keys
-      def matching_keys_count(filter = '*')
-        dbclient.keys(dbkey(filter)).compact.size
-      end
-      alias size matching_keys_count # For backwards compatibility
-
       def suffix(a = nil, &blk)
         @suffix = a || blk if a || !blk.nil?
         @suffix || Familia.default_suffix
@@ -132,6 +97,33 @@ module Familia
           end
           name.downcase.gsub('::', Familia.delim).to_sym
         end
+      end
+
+      def logical_database(v = nil)
+        Familia.trace :DB, Familia.dbclient, "#{@logical_database} #{v}", caller(1..1) if Familia.debug?
+        @logical_database = v unless v.nil?
+        @logical_database || parent&.logical_database
+      end
+
+      # Returns the list of field names defined for the class in the order
+      # that they were defined. i.e. `field :a; field :b; fields => [:a, :b]`.
+      def fields
+        @fields ||= []
+        @fields
+      end
+
+      def class_related_fields
+        @class_related_fields ||= {}
+        @class_related_fields
+      end
+
+      def related_fields
+        @related_fields ||= {}
+        @related_fields
+      end
+
+      def has_relations?
+        @has_relations ||= false
       end
 
       # Converts the class name into a string that can be used to look up
