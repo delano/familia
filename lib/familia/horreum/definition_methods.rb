@@ -1,4 +1,4 @@
-# lib/familia/horreum/class_methods.rb
+# lib/familia/horreum/definition_methods.rb
 
 require_relative 'related_fields_management'
 
@@ -19,7 +19,7 @@ module Familia
     @dump_method = nil
     @load_method = nil
 
-    # ClassMethods: Provides class-level functionality for Horreum
+    # DefinitionMethods: Provides class-level functionality for Horreum
     #
     # This module is extended into classes that include Familia::Horreum,
     # providing methods for Database operations and object management.
@@ -29,7 +29,7 @@ module Familia
     # * Defines methods for managing fields, identifiers, and dbkeys
     # * Provides utility methods for working with Database objects
     #
-    module ClassMethods
+    module DefinitionMethods
       include Familia::Settings
       include Familia::Horreum::RelatedFieldsManagement
 

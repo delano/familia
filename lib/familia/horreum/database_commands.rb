@@ -1,4 +1,4 @@
-# lib/familia/horreum/commands.rb
+# lib/familia/horreum/database_commands.rb
 
 module Familia
   # InstanceMethods - Module containing instance-level methods for Familia
@@ -16,7 +16,7 @@ module Familia
     # emphasize this, instead of "refreshing" the object with hgetall,
     # just load the object again.
     #
-    module Commands
+    module DatabaseCommands
 
       def move(logical_database)
         dbclient.move dbkey, logical_database
@@ -178,6 +178,6 @@ module Familia
 
     end
 
-    include Commands # these become Familia::Horreum instance methods
+    include DatabaseCommands # these become Familia::Horreum instance methods
   end
 end

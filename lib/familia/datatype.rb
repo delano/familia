@@ -172,7 +172,7 @@ module Familia
         parent.dbkey(keystring)
       elsif parent_class?
         # This is a class-level datatype object so the parent class' dbkey
-        # method is defined in Familia::Horreum::ClassMethods.
+        # method is defined in Familia::Horreum::DefinitionMethods.
         parent.dbkey(keystring, nil)
       else
         # This is a standalone DataType object where it's keystring

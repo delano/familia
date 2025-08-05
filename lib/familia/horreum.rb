@@ -62,7 +62,8 @@ module Familia
       # Extends ClassMethods to subclasses and tracks Familia members
       def inherited(member)
         Familia.trace :HORREUM, nil, "Welcome #{member} to the family", caller(1..1) if Familia.debug?
-        member.extend(ClassMethods)
+        member.extend(DefinitionMethods)
+        member.extend(ManagementMethods)
         member.extend(Connection)
         member.extend(Features)
 
@@ -304,8 +305,9 @@ module Familia
   end
 end
 
-require_relative 'horreum/class_methods'
-require_relative 'horreum/commands'
+require_relative 'horreum/definition_methods'
+require_relative 'horreum/management_methods'
+require_relative 'horreum/database_commands'
 require_relative 'horreum/connection'
 require_relative 'horreum/serialization'
 require_relative 'horreum/settings'

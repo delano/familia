@@ -5,6 +5,7 @@
 .history
 .devcontainer
 .vscode
+.*.json
 *.env
 *.log
 *.md

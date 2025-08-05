@@ -11,15 +11,15 @@ registered_types.collect(&:to_s).sort
 #=> ["counter", "hash", "hashkey", "list", "lock", "set", "sorted_set", "string", "zset"]
 
 ## Familia created class methods for datatype list class
-Familia::Horreum::ClassMethods.public_method_defined? :list?
+Familia::Horreum::DefinitionMethods.public_method_defined? :list?
 #=> true
 
 ## Familia created class methods for datatype list class
-Familia::Horreum::ClassMethods.public_method_defined? :list
+Familia::Horreum::DefinitionMethods.public_method_defined? :list
 #=> true
 
 ## Familia created class methods for datatype list class
-Familia::Horreum::ClassMethods.public_method_defined? :lists
+Familia::Horreum::DefinitionMethods.public_method_defined? :lists
 #=> true
 
 ## A Familia object knows its datatype relatives
