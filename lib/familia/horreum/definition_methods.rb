@@ -97,6 +97,9 @@ module Familia
       def field(name, as: name, fast_method: :"#{name}!", on_conflict: :raise)
         fields << name
 
+        define_regular_attribute(name, as, on_conflict)
+        define_fast_attribute(name, as, fast_method, on_conflict)
+
         # Create field definition object
         field_def = FieldDefinition.new(
           field_name: name,
@@ -105,17 +108,9 @@ module Familia
           on_conflict: on_conflict
         )
 
-        # Track field definitions
+        # Track field definitions after defining field methods
         @field_definitions ||= {}
         @field_definitions[name] = field_def
-
-        # Flag that we're defining field methods to avoid method_added conflicts
-        @defining_field_methods = true
-
-        define_regular_attribute(name, as, on_conflict)
-        define_fast_attribute(name, as, fast_method, on_conflict)
-
-        @defining_field_methods = false
       end
 
       # Sets or retrieves the suffix for generating Redis keys.
@@ -212,9 +207,6 @@ module Familia
       # Hook to detect silent overwrites and handle conflicts
       def method_added(method_name)
         super
-
-        # Skip if we're currently defining field methods
-        return if @defining_field_methods
 
         # Find the field definition that generated this method
         field_def = field_definitions.values.find { |fd| fd.generated_methods.include?(method_name) }
