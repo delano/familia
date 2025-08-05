@@ -41,6 +41,8 @@ GEM
     parser (3.3.8.0)
       ast (~> 2.4.1)
       racc
+    pastel (0.8.0)
+      tty-color (~> 0.5)
     pp (0.6.2)
       prettyprint
     prettyprint (0.2.0)
@@ -107,9 +109,17 @@ GEM
     ruby-progressbar (1.13.0)
     stackprof (0.2.27)
     stringio (3.1.7)
-    tryouts (3.1.2)
+    tryouts (3.2.1)
+      irb
       minitest (~> 5.0)
+      pastel (~> 0.8)
+      prism (~> 1.0)
       rspec (~> 3.0)
+      tty-cursor (~> 0.7)
+      tty-screen (~> 0.8)
+    tty-color (0.6.0)
+    tty-cursor (0.7.1)
+    tty-screen (0.8.2)
     unicode-display_width (3.1.4)
       unicode-emoji (~> 4.0, >= 4.0.4)
     unicode-emoji (4.0.4)
@@ -132,7 +142,7 @@ DEPENDENCIES
   rubocop-thread_safety
   ruby-prof
   stackprof
-  tryouts (~> 3.1.2)
+  tryouts (~> 3.2.1)
   yard (~> 0.9)
 
 BUNDLED WITH
