@@ -3,6 +3,31 @@
 require_relative 'related_fields_management'
 
 module Familia
+  # Data class to hold field definition details
+  #
+  # This class encapsulates all the information about a field definition,
+  # including the field name, method names, and conflict resolution strategy.
+  #
+  class FieldDefinition
+    attr_reader :field_name, :method_name, :fast_method_name, :on_conflict
+
+    def initialize(field_name:, method_name:, fast_method_name:, on_conflict:)
+      @field_name = field_name
+      @method_name = method_name
+      @fast_method_name = fast_method_name
+      @on_conflict = on_conflict
+    end
+
+    # Returns all method names generated for this field
+    def generated_methods
+      [method_name, fast_method_name]
+    end
+
+    def to_s
+      "#<FieldDefinition field_name=#{field_name} method_name=#{method_name} fast_method_name=#{fast_method_name} on_conflict=#{on_conflict}>"
+    end
+  end
+
   class Horreum
     # Class-level instance variables
     # These are set up as nil initially and populated later
@@ -72,16 +97,25 @@ module Familia
       def field(name, as: name, fast_method: :"#{name}!", on_conflict: :raise)
         fields << name
 
-        # Track field -> method name mapping
-        @field_method_map ||= {}
-        @field_method_map[name] = as
+        # Create field definition object
+        field_def = FieldDefinition.new(
+          field_name: name,
+          method_name: as,
+          fast_method_name: fast_method,
+          on_conflict: on_conflict
+        )
+
+        # Track field definitions
+        @field_definitions ||= {}
+        @field_definitions[name] = field_def
+
+        # Flag that we're defining field methods to avoid method_added conflicts
+        @defining_field_methods = true
 
         define_regular_attribute(name, as, on_conflict)
         define_fast_attribute(name, as, fast_method, on_conflict)
 
-        # Track what methods we generate (see method_added)
-        @field_generated_methods ||= ::Set.new
-        @field_generated_methods << as << fast_method
+        @defining_field_methods = false
       end
 
       # Sets or retrieves the suffix for generating Redis keys.
@@ -164,28 +198,45 @@ module Familia
         @load_method || :from_json # Familia.load_method
       end
 
+      def field_definitions
+        @field_definitions ||= {}
+      end
+
+      # Returns a hash mapping field names to method names for backward compatibility
       def field_method_map
-        @field_method_map ||= {}
+        field_definitions.transform_values(&:method_name)
       end
 
       private
 
-      # Hook to detect silent overwrites
+      # Hook to detect silent overwrites and handle conflicts
       def method_added(method_name)
         super
 
-        return unless @field_generated_methods&.include?(method_name)
+        # Skip if we're currently defining field methods
+        return if @defining_field_methods
 
-        warn <<~WARNING
+        # Find the field definition that generated this method
+        field_def = field_definitions.values.find { |fd| fd.generated_methods.include?(method_name) }
+        return unless field_def
 
-          WARNING: Method >>> #{method_name} <<< was redefined after field definition.
-          Field functionality may be broken. Consider using a different name
-          with field(:field_name, as: :other_name)
+        case field_def.on_conflict
+        when :warn
+          warn <<~WARNING
 
-          Called from:
-          #{Familia.pretty_stack(limit: 3)}
+            WARNING: Method >>> #{method_name} <<< was redefined after field definition.
+            Field functionality may be broken. Consider using a different name
+            with field(:field_name, as: :other_name)
 
-        WARNING
+            Called from:
+            #{Familia.pretty_stack(limit: 3)}
+
+          WARNING
+        when :raise
+          raise ArgumentError, "Method name already defined for #{self}::#{method_name}"
+        when :skip
+          # Do nothing, skip silently
+        end
       end
 
       def define_regular_attribute(field_name, method_name, on_conflict)
