@@ -284,6 +284,7 @@ module Familia
       def refresh!
         Familia.trace :REFRESH, dbclient, uri, caller(1..1) if Familia.debug?
         raise Familia::KeyNotFoundError, dbkey unless dbclient.exists(dbkey)
+
         fields = hgetall
         Familia.ld "[refresh!] #{self.class} #{dbkey} fields:#{fields.keys}"
         optimistic_refresh(**fields)

@@ -64,22 +64,28 @@ module Familia
       # instance methods similar to `attr_accessor`. It also generates a fast
       # writer method for immediate persistence to Redis.
       #
-      # @param [Symbol, String] name the name of the field to define. If a method
-      # with the same name already exists, an error is raised.
+      # @param name [Symbol, String] the name of the field to define. If a method
+      #   with the same name already exists, an error is raised.
+      # @param as [Symbol, String] as the name to use for the accessor method (defaults to name).
+      # @param fast_method [Symbol] the name to use for the fast writer method (defaults to :"#{name}!").
       #
-      def field(name,
-                as: name,
-                fast_method: :"#{name}!")
+      def field(name, as: name, fast_method: :"#{name}!", on_conflict: :raise)
         fields << name
 
-        define_regular_attribute(name)
-        define_fast_attribute(name, fast_method)
+        define_regular_attribute(name, as, on_conflict)
+        define_fast_attribute(name, fast_method, on_conflict)
 
         # Track what methods we generate (see method_added)
         @field_generated_methods ||= ::Set.new
         @field_generated_methods << as << fast_method
       end
 
+      # Sets or retrieves the suffix for generating Redis keys.
+      #
+      # @param a [String, Symbol, nil] the suffix to set (optional).
+      # @param blk [Proc] a block that returns the suffix (optional).
+      # @return [String, Symbol] the current suffix or Familia.default_suffix if none is set.
+      #
       def suffix(a = nil, &blk)
         @suffix = a || blk if a || !blk.nil?
         @suffix || Familia.default_suffix
@@ -174,12 +180,18 @@ module Familia
         WARNING
       end
 
-      def define_regular_attribute(name)
-        if method_defined?(name)
-          raise ArgumentError, "Method #{name} already defined for #{self}"
-        end
+      def define_regular_attribute(field_name, method_name, on_conflict)
+        handle_method_conflict(method_name, on_conflict) do
+          # Equivalent to `attr_reader :field_name`
+          define_method method_name do
+            instance_variable_get(:"@#{field_name}")
+          end
+          # Equivalent to `attr_writer :field_name`
+          define_method :"#{method_name}=" do |value|
+            instance_variable_set(:"@#{field_name}", value)
+          end
 
-        attr_accessor name
+        end
       end
 
       # Defines a fast attribute method with a bang (!) suffix for a given
@@ -196,74 +208,149 @@ module Familia
       # @raise [RuntimeError] if an exception occurs during the execution of the
       #   method.
       #
-      def define_fast_attribute(name, method_name = nil)
-        method_name ||= :"#{name}!"
+      def define_fast_attribute(field_name, method_name, on_conflict)
         raise ArgumentError, 'Must end with !' unless method_name.to_s.end_with?('!')
-        raise ArgumentError, "#{self}##{method_name} exists" if method_defined?(:"#{method_name}")
 
-        # Fast attribute accessor method for the '#{name}' attribute.
-        # This method provides immediate read and write access to the attribute
-        # in Redis.
-        #
-        # When called without arguments, it retrieves the current value of the
-        # attribute from Redis.
-        # When called with an argument, it immediately persists the new value to
-        # Redis.
-        #
-        # @overload #{method_name}
-        #   Retrieves the current value of the attribute from Redis.
-        #   @return [Object] the current value of the attribute.
-        #
-        # @overload #{method_name}(value)
-        #   Sets and immediately persists the new value of the attribute to
-        #   Redis.
-        #   @param value [Object] the new value to set for the attribute.
-        #   @return [Object] the newly set value.
-        #
-        # @raise [ArgumentError] if more than one argument is provided.
-        # @raise [RuntimeError] if an exception occurs during the execution of
-        #   the method.
-        #
-        # @note This method bypasses any object-level caching and interacts
-        #   directly with Redis. It does not trigger updates to other attributes
-        #   or the object's expiration time.
-        #
-        # @example
-        #
-        #      def field_name!(*args)
-        #        # Method implementation
-        #      end
-        #
-        define_method method_name do |*args|
-          # Check if the correct number of arguments is provided (exactly one).
-          raise ArgumentError, "wrong number of arguments (given #{args.size}, expected 0 or 1)" if args.size > 1
+        handle_method_conflict(method_name, on_conflict) do
+          # Fast attribute accessor method for the '#{field_name}' attribute.
+          # This method provides immediate read and write access to the attribute
+          # in Redis.
+          #
+          # When called without arguments, it retrieves the current value of the
+          # attribute from Redis.
+          # When called with an argument, it immediately persists the new value to
+          # Redis.
+          #
+          # @overload #{method_name}
+          #   Retrieves the current value of the attribute from Redis.
+          #   @return [Object] the current value of the attribute.
+          #
+          # @overload #{method_name}(value)
+          #   Sets and immediately persists the new value of the attribute to
+          #   Redis.
+          #   @param value [Object] the new value to set for the attribute.
+          #   @return [Object] the newly set value.
+          #
+          # @raise [ArgumentError] if more than one argument is provided.
+          # @raise [RuntimeError] if an exception occurs during the execution of
+          #   the method.
+          #
+          # @note This method bypasses any object-level caching and interacts
+          #   directly with Redis. It does not trigger updates to other attributes
+          #   or the object's expiration time.
+          #
+          # @example
+          #
+          #      def field_name!(*args)
+          #        # Method implementation
+          #      end
+          #
+          define_method method_name do |*args|
+            # Check if the correct number of arguments is provided (exactly one).
+            raise ArgumentError, "wrong number of arguments (given #{args.size}, expected 0 or 1)" if args.size > 1
 
-          val = args.first
+            val = args.first
 
-          # If no value is provided to this fast attribute method, make a call
-          # to the db to return the current stored value of the hash field.
-          return hget name if val.nil?
+            # If no value is provided to this fast attribute method, make a call
+            # to the db to return the current stored value of the hash field.
+            return hget field_name if val.nil?
 
-          begin
-            # Trace the operation if debugging is enabled.
-            Familia.trace :FAST_WRITER, dbclient, "#{name}: #{val.inspect}", caller(1..1) if Familia.debug?
+            begin
+              # Trace the operation if debugging is enabled.
+              Familia.trace :FAST_WRITER, dbclient, "#{field_name}: #{val.inspect}", caller(1..1) if Familia.debug?
 
-            # Convert the provided value to a format suitable for Database storage.
-            prepared = serialize_value(val)
-            Familia.ld "[.define_fast_attribute] #{method_name} val: #{val.class} prepared: #{prepared.class}"
+              # Convert the provided value to a format suitable for Database storage.
+              prepared = serialize_value(val)
+              Familia.ld "[.define_fast_attribute] #{method_name} val: #{val.class} prepared: #{prepared.class}"
 
-            # Use the existing accessor method to set the attribute value.
-            send :"#{name}=", val
+              # Use the existing accessor method to set the attribute value.
+              send :"#{field_name}=", val
 
-            # Persist the value to Database immediately using the hset command.
-            hset name, prepared
-          rescue Familia::Problem => e
-            # Raise a custom error message if an exception occurs during the execution of the method.
-            raise "#{method_name} method failed: #{e.message}", e.backtrace
+              # Persist the value to Database immediately using the hset command.
+              hset name, prepared
+            rescue Familia::Problem => e
+              # Raise a custom error message if an exception occurs during the execution of the method.
+              raise "#{method_name} method failed: #{e.message}", e.backtrace
+            end
           end
         end
       end
 
+      # Handles method name conflicts during dynamic method definition.
+      #
+      # This is a utility method that encapsulates the logic for dealing with
+      # method name collisions when dynamically defining methods. The conflict
+      # resolution strategy is a concern of method definition rather than field
+      # definition, keeping the responsibilities properly separated.
+      #
+      # @param method_name [Symbol, String] the name of the method being defined
+      # @param strategy [Symbol] the conflict resolution strategy to use
+      # @option strategy [Symbol] :raise (default) raise an error if method exists
+      # @option strategy [Symbol] :skip skip definition if method already exists
+      # @option strategy [Symbol] :warn proceed with definition (may overwrite silently)
+      # @option strategy [Symbol] :overwrite explicitly remove existing method first
+      #
+      # @yield [] the block containing the method definition logic to execute
+      #   if the conflict resolution strategy allows it
+      #
+      # @return [void]
+      #
+      # @raise [ArgumentError] if an invalid strategy is provided
+      # @raise [ArgumentError] if method exists and strategy is :raise
+      #
+      # @example Basic usage with different strategies
+      #   # Raise error if method exists (default behavior)
+      #   handle_method_conflict(:my_method, :raise) do
+      #     attr_accessor :my_method
+      #   end
+      #
+      #   # Skip definition if method already exists
+      #   handle_method_conflict(:existing_method, :skip) do
+      #     define_method :existing_method do
+      #       "new implementation"
+      #     end
+      #   end
+      #
+      #   # Force overwrite existing method
+      #   handle_method_conflict(:legacy_method, :overwrite) do
+      #     define_method :legacy_method do
+      #       "updated implementation"
+      #     end
+      #   end
+      #
+      # @example Usage in field definition context
+      #   def define_regular_attribute(method_name, on_conflict)
+      #     handle_method_conflict(method_name, on_conflict) do
+      #       attr_accessor method_name
+      #     end
+      #   end
+      #
+      # @note The :warn strategy proceeds with definition but may result in
+      #   silent method overwrites. Use with caution and consider pairing
+      #   with method_added hook for detection.
+      #
+      # @see #define_regular_attribute
+      # @see #define_fast_attribute
+      #
+      # @private
+      def handle_method_conflict(method_name, strategy)
+        case strategy
+        when :raise
+          msg = "Method #{method_name} already defined for #{self}"
+          raise ArgumentError, msg if method_defined?(method_name)
+
+          yield
+        when :skip
+          yield unless method_defined?(method_name)
+        when :warn
+          yield
+        when :overwrite
+          remove_method(method_name) if method_defined?(method_name)
+          yield
+        else
+          raise ArgumentError, "Invalid conflict strategy: #{strategy}"
+        end
+      end
     end
   end
 end

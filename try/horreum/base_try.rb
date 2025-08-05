@@ -130,3 +130,16 @@ end
 #=> :uniquefieldname
 #=2> /WARNING/
 #=2> /uniquefieldname/
+
+## Defining a field with the same name as an existing method raises an exception
+class FieldRedefine < Familia::Horreum
+  identifier_field :email
+  field :name
+
+  def uniquefieldname
+    true
+  end
+
+  field :uniquefieldname
+end
+#=!> ArgumentError
