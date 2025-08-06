@@ -92,7 +92,7 @@ $ echo "FAMILIA_ENCRYPTION_KEY_V1=base64_encoded_key_here" >> .env
 ### Custom Field Names
 
 ```ruby
-encrypted_field :ssn, as: :social_security_number
+encrypted_field :favorite_snack, as: :top_secret_snack_preference
 ```
 
 ### Passphrase Protection
@@ -113,8 +113,8 @@ end
 ```ruby
 # Efficient bulk encryption
 customers = Customer.batch_create([
-  { email: 'user1@example.com', ssn: '111-11-1111' },
-  { email: 'user2@example.com', ssn: '222-22-2222' }
+  { email: 'user1@example.com', favorite_snack: 'chocolate chip cookies' },
+  { email: 'user2@example.com', favorite_snack: 'leftover pizza' }
 ])
 ```
 
@@ -151,11 +151,11 @@ end
 
 # In tests
 it "encrypts sensitive fields", :encryption do
-  user = User.create(ssn: "123-45-6789")
+  user = User.create(favorite_snack: "leftover pizza")
 
   # Verify encryption in Redis
-  raw_value = redis.hget(user.rediskey, "ssn")
-  expect(raw_value).not_to include("123-45-6789")
+  raw_value = redis.hget(user.rediskey, "favorite_snack")
+  expect(raw_value).not_to include("leftover pizza")
   expect(JSON.parse(raw_value)).to have_key("ciphertext")
 end
 ```

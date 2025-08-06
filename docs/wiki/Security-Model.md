@@ -38,50 +38,43 @@ Where Context = "ClassName:field_name:record_identifier"
   "algorithm": "xchacha20poly1305",
   "nonce": "base64_encoded_nonce",
   "ciphertext": "base64_encoded_ciphertext",
-  "key_version": "v1"
+  "key_version": "v1_2504"
 }
 ```
 
 ## Threat Model
 
-### Protected Against ✅
+### Protected Against
 
-#### 1. Database Compromise
-- **Threat**: Attacker gains access to Redis/Valkey
-- **Protection**: All sensitive fields encrypted with strong keys
-- **Impact**: Attacker sees only ciphertext
+#### Database Compromise
+- All sensitive fields encrypted with strong keys
+- Attackers see only ciphertext
 
-#### 2. Field Value Swapping
-- **Threat**: Attacker tries to swap encrypted values between fields
-- **Protection**: Field-specific key derivation prevents cross-field decryption
-- **Impact**: Swapped values fail to decrypt
+#### Field Value Swapping
+- Field-specific key derivation prevents cross-field decryption
+- Swapped values fail to decrypt
 
-#### 3. Replay Attacks
-- **Threat**: Attacker replays old encrypted values
-- **Protection**: Each encryption uses unique random nonce
-- **Impact**: Old values remain valid but are distinct encryptions
+#### Replay Attacks
+- Each encryption uses unique random nonce
+- Old values remain valid but are distinct encryptions
 
-#### 4. Tampering
-- **Threat**: Attacker modifies ciphertext
-- **Protection**: Authenticated encryption (Poly1305/GCM)
-- **Impact**: Modified ciphertext fails authentication
+#### Tampering
+- Authenticated encryption (Poly1305/GCM)
+- Modified ciphertext fails authentication
 
-### Not Protected Against ❌
+### Not Protected Against
 
-#### 1. Application Memory Compromise
-- **Threat**: Attacker gains memory access
-- **Risk**: Plaintext values exist in Ruby memory
-- **Mitigation**: Use libsodium for memory wiping, minimize plaintext lifetime
+#### Application Memory Compromise
+- Plaintext values exist in Ruby memory
+- Mitigation: Use libsodium for memory wiping, minimize plaintext lifetime
 
-#### 2. Master Key Compromise
-- **Threat**: Attacker obtains encryption keys
-- **Risk**: All encrypted data compromised
-- **Mitigation**: Secure key storage, regular rotation, hardware security modules
+#### Master Key Compromise
+- All encrypted data compromised if keys obtained
+- Mitigation: Secure key storage, regular rotation, hardware security modules
 
-#### 3. Side-Channel Attacks
-- **Threat**: Timing/power analysis attacks
-- **Risk**: Key recovery through side channels
-- **Mitigation**: Libsodium provides constant-time operations
+#### Side-Channel Attacks
+- Key recovery through timing/power analysis
+- Mitigation: Libsodium provides constant-time operations
 
 ## Additional Security Features
 
@@ -90,10 +83,10 @@ Where Context = "ClassName:field_name:record_identifier"
 For ultra-sensitive fields, add user passphrases:
 
 ```ruby
-encrypted_field :nuclear_codes
+encrypted_field :love_letter
 
 # Passphrase required for decryption
-vault.nuclear_codes(passphrase_value: user_passphrase)
+vault.love_letter(passphrase_value: user_passphrase)
 ```
 
 **How it works:**
@@ -130,7 +123,7 @@ class RedactedString < String
 end
 
 # In logs:
-logger.info "User SSN: #{user.ssn}"  # => "User SSN: [REDACTED]"
+logger.info "Love letter: #{user.love_letter}"  # => "Love letter: [REDACTED]"
 ```
 
 ## Security Checklist
@@ -139,60 +132,12 @@ logger.info "User SSN: #{user.ssn}"  # => "User SSN: [REDACTED]"
 
 - [ ] Never log plaintext sensitive fields
 - [ ] Use RedactedString for extra protection
-- [ ] Enable libsodium for production
+- [ ] Use libsodium for production when possible
 - [ ] Validate encryption at startup
 - [ ] Test encryption round-trips
 
 ### Operations
 
-- [ ] Secure key generation (256 bits minimum)
-- [ ] Environment variable or secret manager for keys
 - [ ] Regular key rotation schedule
 - [ ] Monitor decryption failures
-- [ ] Audit field access patterns
-
-### Key Storage Best Practices
-
-**Good:**
-- Environment variables (for simple deployments)
-- Secret management services (AWS Secrets Manager, Vault)
-- Hardware Security Modules (HSMs)
-
-**Bad:**
-- Hardcoded in source code
-- Configuration files in repository
-- Unencrypted files on disk
-
-## Compliance Considerations
-
-### GDPR/CCPA
-- Encrypted fields help meet "appropriate security" requirements
-- Supports data minimization (only decrypt when needed)
-- Enables secure data deletion (destroy keys)
-
-### PCI DSS
-- Meets encryption requirements for cardholder data
-- Provides key management capabilities
-- Supports audit logging
-
-### HIPAA
-- Appropriate for PHI encryption at rest
-- Supports access controls via passphrase protection
-- Enables audit trails
-
-## Security Warnings
-
-⚠️ **Ruby Memory Management**
-- Ruby doesn't guarantee memory clearing
-- GC may create copies of plaintext
-- Consider process isolation for highly sensitive data
-
-⚠️ **OpenSSL Fallback**
-- Less resistant to side-channel attacks
-- No automatic memory wiping
-- Strongly recommend libsodium for production
-
-⚠️ **Key Rotation Complexity**
-- Passphrase-protected fields need user interaction
-- Plan rotation strategy before deployment
-- Test rotation procedures regularly
+- [ ] Log field access patterns for auditing purposes

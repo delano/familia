@@ -3,10 +3,8 @@
 ## Quick Start
 
 Add encrypted field support to any Familia model in one line:
-
-```ruby
 class User < Familia::Horreum
-  encrypted_field :ssn  # That's it!
+  encrypted_field :diary_entry
 end
 ```
 
@@ -30,16 +28,16 @@ Use encrypted fields for:
 
 ```ruby
 class Customer < Familia::Horreum
-  field :email                # Regular field
-  encrypted_field :credit_card # Encrypted field
-  encrypted_field :ssn         # Another encrypted field
+  field :email                    # Regular field
+  encrypted_field :secret_recipe  # Encrypted field
+  encrypted_field :diary_entry    # Another encrypted field
 end
 
 # Usage is identical to regular fields
 customer = Customer.new(
   email: 'user@example.com',
-  credit_card: '4111-1111-1111-1111',
-  ssn: '123-45-6789'
+  secret_recipe: 'Add extra vanilla',
+  diary_entry: 'Today I learned Redis is fast'
 )
 
 customer.save
@@ -64,20 +62,3 @@ Familia.configure do |config|
   config.current_key_version = :v1
 end
 ```
-
-## Security Guarantees
-
-✅ **Protected Against:**
-- Database compromise (data encrypted at rest)
-- Field tampering (authenticated encryption)
-- Replay attacks (unique nonces per encryption)
-
-⚠️ **Not Protected Against:**
-- Application memory compromise
-- Master key compromise
-
-## Next Steps
-
-- [Implementation Guide](Implementation-Guide) - Detailed setup instructions
-- [Security Model](Security-Model) - Threat model and cryptographic details
-- [API Reference](API-Reference) - Complete method documentation

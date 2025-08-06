@@ -21,7 +21,7 @@ encrypted_field(name, **options)
 **Example:**
 ```ruby
 class User < Familia::Horreum
-  encrypted_field :ssn
+  encrypted_field :favorite_snack
   encrypted_field :api_key, as: :secret_key
 end
 ```
@@ -31,7 +31,7 @@ end
 Returns list of encrypted field names.
 
 ```ruby
-User.encrypted_fields  # => [:ssn, :api_key]
+User.encrypted_fields  # => [:favorite_snack, :api_key]
 ```
 
 ## Instance Methods
@@ -41,9 +41,9 @@ User.encrypted_fields  # => [:ssn, :api_key]
 Encrypted fields provide standard accessors:
 
 ```ruby
-user.ssn           # Get decrypted value
-user.ssn = value   # Set and encrypt value
-user.ssn!          # Fast write (still encrypted)
+user.favorite_snack           # Get decrypted value
+user.favorite_snack = value   # Set and encrypt value
+user.favorite_snack!          # Fast write (still encrypted)
 ```
 
 ### Passphrase-Protected Access
@@ -61,7 +61,7 @@ Encrypts plaintext with context-specific key.
 
 ```ruby
 Familia::Encryption.encrypt(plaintext,
-  context: "User:ssn:user123",
+  context: "User:favorite_snack:user123",
   additional_data: nil
 )
 ```
@@ -79,7 +79,7 @@ Decrypts ciphertext with context-specific key.
 
 ```ruby
 Familia::Encryption.decrypt(encrypted_json,
-  context: "User:ssn:user123",
+  context: "User:favorite_snack:user123",
   additional_data: nil
 )
 ```
@@ -175,7 +175,7 @@ Raised for encryption/decryption failures.
 
 ```ruby
 begin
-  user.decrypt_field(:ssn)
+  user.decrypt_field(:favorite_snack)
 rescue Familia::EncryptionError => e
   case e.message
   when /key version/
@@ -200,7 +200,7 @@ $ familia encryption:generate_key [--bits 256]
 ### Verify Encryption
 
 ```bash
-$ familia encryption:verify [--model User] [--field ssn]
+$ familia encryption:verify [--model User] [--field favorite_snack]
 # Verifies field encryption is working
 ```
 
@@ -234,12 +234,12 @@ end
 RSpec.describe User do
   include Familia::EncryptionTestHelpers
 
-  it "encrypts SSN field" do
+  it "encrypts favorite snack field" do
     with_test_encryption_keys do
-      user = User.create(ssn: "123-45-6789")
+      user = User.create(favorite_snack: "chocolate chip cookies")
 
-      assert_field_encrypted(user, :ssn)
-      assert_decryption_works(user, :ssn, "123-45-6789")
+      assert_field_encrypted(user, :favorite_snack)
+      assert_decryption_works(user, :favorite_snack, "chocolate chip cookies")
     end
   end
 end
@@ -264,15 +264,7 @@ end
 
 ```ruby
 # Efficient for bulk operations
-User.batch_decrypt(:ssn) do |users|
-  users.each { |u| process(u.ssn) }
+User.batch_decrypt(:favorite_snack) do |users|
+  users.each { |u| process(u.favorite_snack) }
 end
 ```
-
-## Version Compatibility
-
-| Familia Version | Feature Available | Libsodium Support |
-|----------------|-------------------|-------------------|
-| >= 2.0.0       | ✅                | Optional          |
-| >= 2.1.0       | ✅                | Recommended       |
-| >= 3.0.0       | ✅                | Required          |
