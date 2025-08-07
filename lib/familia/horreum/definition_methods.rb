@@ -18,7 +18,7 @@ module Familia
       @method_name = method_name
       @fast_method_name = fast_method_name
       @on_conflict = on_conflict
-      @category = category
+      @category = category || :field
     end
 
     # Returns all method names generated for this field
