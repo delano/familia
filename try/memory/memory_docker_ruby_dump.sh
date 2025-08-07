@@ -50,8 +50,7 @@ docker exec $CONTAINER_ID bash -c '
     fi
 
     dd if=/proc/$PID/mem bs=1 skip=$start_dec count=$size 2>/dev/null
-  done | strings | grep -i "secret\|api\|key\
-|token" | head -20
+  done | strings | grep -i "secret\|api\|key\|token" | head -20
 '
 
 # Example Output:
@@ -71,15 +70,11 @@ docker exec $CONTAINER_ID bash -c '
 #   SECRET
 #   SECRET
 #   SECRET=august6th2025
-#     done | strings | grep -i "secret\|api\|key\
+#     done | strings | grep -i "secret...
 #   SECRET=august6th2025
-#     done | strings | grep -i "secret\|api\|key\
-#   rep -i "secret\|api\|key\
-#   et\|api\|key|token"
-#   "secret\|api\|key|token"
-#   secret\|api\|key|token"
+#     done | strings | grep -i "secret...
 #   grep -i "secret\|api\|key|token"
-#     done | strings | grep -i "secret\|api\|key\
+#     done | strings | grep -i "secret...
 #   SECRET=august6th2025
 #
 #   $ docker kill abcd1234

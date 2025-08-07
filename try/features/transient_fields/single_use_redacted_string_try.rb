@@ -121,7 +121,7 @@ results
 #=> [11, "PASSWORD123", true]
 
 ## expose with empty string
-single_use_empty = SingleUseRedactedString.new(@empty_string)
+single_use_empty = SingleUseRedactedString.new(@empty_secret)
 result = nil
 single_use_empty.expose { |val| result = val.dup }
 result
