@@ -71,22 +71,22 @@ class RedactedString
     ObjectSpace.define_finalizer(self, self.class.finalizer_proc)
   end
 
-  # Primary API: expose the value in a block, then wipe it.
-  # Ensures cleanup even if exception occurs.
+  # Primary API: expose the value in a block.
+  # The value remains accessible for multiple reads.
+  # Call clear! explicitly when done with the value.
   #
   # Example:
   #   token.expose do |plain|
   #     HTTP.post('/api', headers: { 'X-Token' => plain })
   #   end
-  #   # `plain` is wiped after block
+  #   # Value is still accessible after block
+  #   token.clear! # Explicitly clear when done
   #
   def expose
     raise ArgumentError, 'Block required' unless block_given?
     raise SecurityError, 'Value already cleared' if cleared?
 
     yield @value
-  ensure
-    clear! # redacted strings are single use
   end
 
   # Wipe the internal buffer. Safe to call multiple times.
@@ -105,6 +105,14 @@ class RedactedString
     @value = nil
     @cleared = true
     freeze # one and done
+  end
+
+  # Get the actual value (for convenience in less sensitive contexts)
+  # Returns the wrapped value or nil if cleared
+  def value
+    raise SecurityError, 'Value already cleared' if cleared?
+
+    @value
   end
 
   # Always redact in logs, debugging, or string conversion

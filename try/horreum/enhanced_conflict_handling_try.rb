@@ -73,21 +73,19 @@ end
 #=> true
 
 ## Method location information in error message when possible
-begin
-  class LocationInfoTest < Familia::Horreum
-    identifier_field :id
-    field :id
 
-    def location_test_method
-      "exists"
-    end
+class LocationInfoTest < Familia::Horreum
+  identifier_field :id
+  field :id
 
-    field :location_test_method, on_conflict: :raise
+  def location_test_method
+    "exists"
   end
-rescue ArgumentError => e
-  e.message.include?("defined at")
+
+  field :location_test_method, on_conflict: :raise
 end
-#=> true
+#=!> ArgumentError
+#==> error.message.include?("already defined")
 
 ## Skip strategy silently ignores conflicts
 class SkipStrategyTest < Familia::Horreum

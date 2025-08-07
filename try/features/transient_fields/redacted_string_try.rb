@@ -84,13 +84,13 @@ redacted_for_expose.expose { |val| result = val.dup }
 result
 #=> "sk-1234567890abcdef"
 
-## expose method automatically clears after use
+## expose method does not automatically clear after use
 redacted_single_use = RedactedString.new(@password)
 redacted_single_use.expose { |val| val.length }
 redacted_single_use.cleared?
-#=> true
+#=> false
 
-## expose method clears even if exception occurs
+## expose method does not clear if exception occurs
 redacted_exception_test = RedactedString.new(@api_key)
 begin
   redacted_exception_test.expose { |val| raise "test error" }
@@ -98,7 +98,7 @@ rescue => e
   # Exception occurred, but string should still be cleared
 end
 redacted_exception_test.cleared?
-#=> true
+#=> false
 
 ## expose method on cleared string raises SecurityError
 cleared_redacted = RedactedString.new(@password)

@@ -1,15 +1,12 @@
 # try/features/transient_fields/refresh_reset_try.rb
 # Test that refresh! properly resets transient fields to nil
 
-require_relative '../../../lib/familia'
 require_relative '../../helpers/test_helpers'
 
 Familia.debug = false
 
-# Clear Database and re-seed with fresh connection
 Familia.dbclient.flushdb
 
-# Use the existing SecretService class that we know works
 class SecretService < Familia::Horreum
   identifier_field :name
 
@@ -21,22 +18,21 @@ class SecretService < Familia::Horreum
   transient_field :secret_token, as: :token
 end
 
-## Verify class has the expected fields
-SecretService.fields.sort
-#=> [:api_key, :endpoint_url, :name, :password, :secret_token]
-
-## Create service instance
 @service = SecretService.new
 @service.name = 'test-service'
-
-## Verify service was created successfully
-@service.nil?
-#=> false
-
 @service.endpoint_url = 'https://api.example.com'
 @service.api_key = 'sk-1234567890abcdef'
 @service.password = 'super-secret-password'
 @service.token = 'token-xyz789'
+
+
+## Verify class has the expected fields
+SecretService.fields.sort
+#=> [:api_key, :endpoint_url, :name, :password, :secret_token]
+
+## Verify service was created successfully
+@service.nil?
+#=> false
 
 ## Save persistent fields to database
 @service.save
@@ -47,8 +43,16 @@ SecretService.fields.sort
 #=> false
 
 ## Verify transient fields are RedactedString instances
-@service.api_key.class
-#=> RedactedString
+@service.api_key
+#=:> RedactedString
+
+## Verify transient fields will not expose the value like a string
+@service.api_key.to_s
+#=> '[REDACTED]'
+
+## Verify transient fields will expose the value when asked
+@service.api_key.value
+#=> 'sk-1234567890abcdef'
 
 ## Verify password field has value before refresh
 @service.password.nil?
@@ -68,7 +72,7 @@ SecretService.fields.sort
 
 ## Refresh! should reset transient fields to nil but keep persistent ones
 @service.refresh!
-#=> nil
+#=> [:name, :endpoint_url]
 
 ## After refresh!, transient fields should be nil
 @service.api_key.nil?
@@ -94,17 +98,19 @@ SecretService.fields.sort
 @service.api_key = 'new-api-key-after-refresh'
 @service.password = 'new-password-after-refresh'
 @service.token = 'new-token-after-refresh'
+#=> 'new-token-after-refresh'
 
 ## Verify transient fields have new values
 @service.api_key.nil?
 #=> false
 
 ## Verify they're still RedactedString instances
-@service.api_key.class
-#=> RedactedString
+@service.api_key
+#=:> RedactedString
 
 ## Another refresh! should reset them again
 @service.refresh!
+#=> [:name, :endpoint_url]
 
 ## Transient fields should be nil again
 @service.api_key.nil?
@@ -138,11 +144,11 @@ end
 @no_transient.name = 'No Transient Service'
 @no_transient.status = 'active'
 
-## Save and refresh should work normally without transient fields
+# Save and refresh should work normally without transient fields
 @no_transient.save
 @no_transient.refresh!
 
-## All fields should retain their values
+# All fields should retain their values
 @no_transient.id
 #=> "no-transient-test"
 
@@ -154,5 +160,5 @@ end
 @no_transient.status
 #=> "active"
 
-# Cleanup
+
 [@service, @no_transient].each(&:destroy!)

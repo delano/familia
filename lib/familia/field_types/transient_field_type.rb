@@ -49,6 +49,27 @@ module Familia
       end
     end
 
+    # Override getter to unwrap RedactedString values
+    #
+    # Returns the actual value from the RedactedString wrapper for
+    # convenient access, or nil if the value is nil or cleared.
+    #
+    # @param klass [Class] The class to define the method on
+    #
+    def define_getter(klass)
+      field_name = @name
+      method_name = @method_name
+
+      handle_method_conflict(klass, method_name) do
+        klass.define_method method_name do
+          wrapped = instance_variable_get(:"@#{field_name}")
+          return nil if wrapped.nil? || wrapped.cleared?
+
+          wrapped
+        end
+      end
+    end
+
     # Override fast writer to disable it for transient fields
     #
     # Transient fields should not have fast writers since they're not

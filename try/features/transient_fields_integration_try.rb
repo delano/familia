@@ -240,11 +240,11 @@ new_service.api_key
 #=> nil
 
 ## Persistent field definitions are correctly identified
-SecretService.field_types.values.select(&:persistent?).map(&:field_name).sort
+SecretService.field_types.values.select(&:persistent?).map(&:name).sort
 #=> [:endpoint_url, :name, :service_id]
 
 ## Transient field definitions are correctly identified
-transient_fields = SecretService.field_types.values.reject(&:persistent?).map(&:field_name).sort
+transient_fields = SecretService.field_types.values.reject(&:persistent?).map(&:name).sort
 transient_fields
 #=> [:api_key, :password, :secret_token]
 
