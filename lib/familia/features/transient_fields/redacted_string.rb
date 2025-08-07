@@ -13,6 +13,10 @@
 #              memory zeroing. GC, string sharing, and internal optimizations
 #              may leave copies in memory.
 #
+# ⚠️ INPUT SECURITY: The constructor calls .dup on the input, creating a copy,
+#                   but the original input value remains in memory uncontrolled.
+#                   The caller is responsible for securely clearing the original.
+#
 # Security Model:
 #   - The secret is *contained* from the moment it's wrapped.
 #   - Access is available via `.expose { }` for controlled use, or `.value` for direct access.
@@ -56,6 +60,7 @@
 #
 # Best Practices:
 #   - Wrap secrets *immediately* on input (e.g., from ENV, params, DB).
+#   - Clear original input after wrapping: `secret.clear!` or `secret = nil`
 #   - Use `.expose { }` for short-lived operations — never store plaintext.
 #   - Avoid passing RedactedString to logging, serialization, or debugging
 #     tools.
@@ -63,10 +68,18 @@
 #   - Do *not* subclass String — it leaks the underlying value in regex,
 #     case, etc.
 #
+# Example:
+#   password_input = params[:password]     # Original value in memory
+#   password = RedactedString.new(password_input)
+#   password_input.clear! if password_input.respond_to?(:clear!)
+#   # or: params[:password] = nil          # Clear reference (not guaranteed)
+#
 class RedactedString
   # Wrap a sensitive value. The input is *not* wiped — ensure it's not reused.
   def initialize(original_value)
-    @value = original_value.to_s.dup # force a copy
+    # WARNING: .dup only creates a shallow copy; the original may still exist
+    # elsewhere in memory.
+    @value = original_value.to_s.dup
     @cleared = false
     # Do NOT freeze — we need to mutate it in `#clear!`
     ObjectSpace.define_finalizer(self, self.class.finalizer_proc)

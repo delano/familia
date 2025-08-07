@@ -8,6 +8,13 @@ require_relative 'redacted_string'
 # its value after a single use via the expose method. Unlike RedactedString,
 # this provides automatic cleanup and enforces single-use semantics.
 #
+# ⚠️ IMPORTANT: Inherits all security limitations from RedactedString regarding
+#              Ruby's memory management and copy-on-write semantics.
+#
+# ⚠️ INPUT SECURITY: Like RedactedString, the constructor calls .dup on input,
+#                   creating a copy, but the original input remains in memory.
+#                   The caller is responsible for securely clearing the original.
+#
 # Key Differences from RedactedString:
 #   - Automatically clears after expose() (no manual clear! needed)
 #   - Blocks direct value() access (prevents accidental multi-use)
@@ -19,13 +26,12 @@ require_relative 'redacted_string'
 #   - Temporary authentication tokens
 #   - Encryption keys that should be immediately discarded
 #
-# ⚠️ Inherits all security limitations from RedactedString regarding
-#    Ruby's memory management and copy-on-write semantics.
-#
 # Example:
-#   otp = SingleUseRedactedString.new("123456")
+#   otp_input = params[:otp]               # Original value in memory
+#   otp = SingleUseRedactedString.new(otp_input)
+#   params[:otp] = nil                     # Clear reference (not guaranteed)
 #   otp.expose do |code|
-#     verify_otp(code)  # Use directly without copying
+#     verify_otp(code)                     # Use directly without copying
 #   end
 #   # Value is automatically cleared after block
 #   otp.cleared? #=> true
