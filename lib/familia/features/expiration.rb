@@ -14,14 +14,14 @@ module Familia
 
         attr_writer :default_expiration
 
-        def default_expiration(v = nil)
-          @default_expiration = v.to_f unless v.nil?
+        def default_expiration(num = nil)
+          @default_expiration = num.to_f unless num.nil?
           @default_expiration || parent&.default_expiration || Familia.default_expiration
         end
 
       end
 
-      def self.included base
+      def self.included(base)
         Familia.ld "[#{base}] Loaded #{self}"
         base.extend ClassMethods
 
@@ -32,8 +32,8 @@ module Familia
         end
       end
 
-      def default_expiration=(v)
-        @default_expiration = v.to_f
+      def default_expiration=(num)
+        @default_expiration = num.to_f
       end
 
       def default_expiration
@@ -99,7 +99,6 @@ module Familia
         # a bool.
         expire(default_expiration)
       end
-      extend ClassMethods
 
       Familia::Base.add_feature self, :expiration
     end

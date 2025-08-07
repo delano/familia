@@ -64,6 +64,6 @@ p [@limiter1.counter.parent.default_expiration, @limiter2.counter.parent.default
 #=> 3600.0
 
 ## Check current_expiration
-sleep 1 # Database default_expirations are in seconds so we can't wait any less time than this (without mocking)
+sleep 1 # NOTE: Mocking time would be foolish in life, but helpful here
 @limiter1.counter.current_expiration
 #=> 3600-1
