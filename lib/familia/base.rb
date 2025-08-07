@@ -14,7 +14,8 @@ module Familia
   # @see Familia::DataType
   #
   module Base
-    @features = nil
+    @features_available = nil
+    @feature_definitions = nil
     @dump_method = :to_json
     @load_method = :from_json
 
@@ -29,46 +30,33 @@ module Familia
     end
 
     class << self
-      attr_reader :features
+      attr_reader :features_available, :feature_definitions
       attr_accessor :dump_method, :load_method
 
-      def add_feature(klass, methname)
-        @features ||= {}
-        Familia.ld "[#{self}] Adding feature #{klass} as #{methname.inspect}"
+      def add_feature(klass, feature_name, depends_on: [])
+        @features_available ||= {}
+        Familia.ld "[#{self}] Adding feature #{klass} as #{feature_name.inspect}"
 
-        features[methname] = klass
+        # Create field definition object
+        feature_def = FeatureDefinition.new(
+          name: feature_name,
+          depends_on: depends_on,
+        )
+
+        # Track field definitions after defining field methods
+        @feature_definitions ||= {}
+        @feature_definitions[feature_name] = feature_def
+
+        features_available[feature_name] = klass
       end
     end
 
-    # Base implementation of update_expiration that maintains API compatibility
-    # with the :expiration feature's implementation.
-    #
-    # This is a no-op implementation that gets overridden by features like
-    # :expiration. It accepts an optional default_expiration parameter to maintain interface
-    # compatibility with the overriding implementations.
-    #
-    # @param default_expiration [Integer, nil] Time To Live in seconds
-    # @return [nil] Always returns nil
-    #
-    # @note This is a no-op implementation. Classes that need expiration
-    #       functionality should include the :expiration feature.
-    #
-    def update_expiration(default_expiration: nil)
-      Familia.ld <<~LOG
-        [update_expiration] Feature not enabled for #{self.class}.
-        Key: #{dbkey} Arg: #{default_expiration} (caller: #{caller(1..1)})
-      LOG
-      nil
-    end
-
     def generate_id
-      @identifier ||= Familia.generate_id
-      @identifier
+      @identifier ||= Familia.generate_id # rubocop:disable Naming/MemoizedInstanceVariableName
     end
 
     def uuid
       @uuid ||= SecureRandom.uuid
-      @uuid
     end
   end
 end

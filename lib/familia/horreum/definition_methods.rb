@@ -3,19 +3,22 @@
 require_relative 'related_fields_management'
 
 module Familia
+  VALID_STRATEGIES = %i[raise skip warn overwrite].freeze
+
   # Data class to hold field definition details
   #
   # This class encapsulates all the information about a field definition,
   # including the field name, method names, and conflict resolution strategy.
   #
   class FieldDefinition
-    attr_reader :field_name, :method_name, :fast_method_name, :on_conflict
+    attr_reader :field_name, :method_name, :fast_method_name, :on_conflict, :category
 
-    def initialize(field_name:, method_name:, fast_method_name:, on_conflict:)
+    def initialize(field_name:, method_name:, fast_method_name:, on_conflict:, category:)
       @field_name = field_name
       @method_name = method_name
       @fast_method_name = fast_method_name
       @on_conflict = on_conflict
+      @category = category || :field
     end
 
     # Returns all method names generated for this field
@@ -24,10 +27,31 @@ module Familia
     end
 
     def to_s
-      "#<FieldDefinition field_name=#{field_name} method_name=#{method_name} fast_method_name=#{fast_method_name} on_conflict=#{on_conflict}>"
+      attributes = format_attributes
+      "#<#{self.class.name} #{attributes.join(' ')}>"
+    end
+    alias inspect to_s
+
+    # Helper for serialization filtering
+    def persistent?
+      category != :transient
+    end
+
+    private
+
+    def format_attributes
+      [
+        "field_name=#{field_name}",
+        "method_name=#{method_name}",
+        "fast_method_name=#{fast_method_name}",
+        "on_conflict=#{on_conflict}",
+        "category=#{category}"
+      ]
     end
   end
 
+  # Familia::Horreum
+  #
   class Horreum
     # Class-level instance variables
     # These are set up as nil initially and populated later
@@ -91,21 +115,34 @@ module Familia
       #
       # @param name [Symbol, String] the name of the field to define. If a method
       #   with the same name already exists, an error is raised.
-      # @param as [Symbol, String] as the name to use for the accessor method (defaults to name).
-      # @param fast_method [Symbol] the name to use for the fast writer method (defaults to :"#{name}!").
+      # @param as [Symbol, String, false, nil] as the name to use for the accessor method (defaults to name).
+      #   If false or nil, no accessor methods are created.
+      # @param fast_method [Symbol, false, nil] the name to use for the fast writer method (defaults to :"#{name}!").
+      #   If false or nil, no fast writer method is created.
+      # @param on_conflict [Symbol] conflict resolution strategy when method already exists:
+      #   - :raise - raise error if method exists (default)
+      #   - :skip - skip definition if method exists
+      #   - :warn - warn but proceed (may overwrite)
+      #   - :ignore - proceed silently (may overwrite)
+      # @param category [Symbol, nil] field category for special handling:
+      #   - nil - regular field (default)
+      #   - :encrypted - field contains encrypted data
+      #   - :transient - field is not persisted
+      #   - Others, depending on features available
       #
-      def field(name, as: name, fast_method: :"#{name}!", on_conflict: :raise)
+      def field(name, as: name, fast_method: :"#{name}!", on_conflict: :raise, category: nil)
         fields << name
 
-        define_attr_accessor_methods(name, as, on_conflict)
-        define_fast_writer_method(name, as, fast_method, on_conflict)
+        define_attr_accessor_methods(name, as, on_conflict) if as
+        define_fast_writer_method(name, as, fast_method, on_conflict) if fast_method
 
         # Create field definition object
         field_def = FieldDefinition.new(
           field_name: name,
           method_name: as,
           fast_method_name: fast_method,
-          on_conflict: on_conflict
+          on_conflict: on_conflict,
+          category: category,
         )
 
         # Track field definitions after defining field methods
@@ -200,6 +237,13 @@ module Familia
       # Returns a hash mapping field names to method names for backward compatibility
       def field_method_map
         field_definitions.transform_values(&:method_name)
+      end
+
+      # Get fields for serialization (excludes transients)
+      def persistent_fields
+        fields.select do |field|
+          field_definitions[field].persistent?
+        end
       end
 
       private
@@ -356,15 +400,11 @@ module Familia
         end
       end
 
-      private
-
-      VALID_STRATEGIES = %i[raise skip warn overwrite].freeze
-
       def validate_strategy!(strategy)
-        unless VALID_STRATEGIES.include?(strategy)
-          raise ArgumentError, "Invalid conflict strategy: #{strategy}. " \
-                              "Valid strategies: #{VALID_STRATEGIES.join(', ')}"
-        end
+        return if VALID_STRATEGIES.include?(strategy)
+
+        raise ArgumentError, "Invalid conflict strategy: #{strategy}. " \
+                             "Valid strategies: #{VALID_STRATEGIES.join(', ')}"
       end
 
       def method_exists?(method_name)

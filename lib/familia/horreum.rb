@@ -134,7 +134,11 @@ module Familia
       # Implementing classes can define an init method to do any
       # additional initialization. Notice that this is called
       # after the fields are set.
-      init if respond_to?(:init)
+      init
+    end
+
+    def init(*args, **kwargs)
+      # Default no-op
     end
 
     # Sets up related Database objects for the instance
