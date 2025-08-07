@@ -30,7 +30,7 @@ module Familia
     end
 
     class << self
-      attr_reader :features_available
+      attr_reader :features_available, :feature_definitions
       attr_accessor :dump_method, :load_method
 
       def add_feature(klass, feature_name, depends_on: [])
@@ -44,8 +44,8 @@ module Familia
         )
 
         # Track field definitions after defining field methods
-        @field_definitions ||= {}
-        @field_definitions[name] = feature_def
+        @feature_definitions ||= {}
+        @feature_definitions[name] = feature_def
 
         features_available[feature_name] = klass
       end
