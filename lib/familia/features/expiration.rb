@@ -105,3 +105,32 @@ module Familia
 
   end
 end
+
+module Familia
+  # Add a default update_expiration method for all classes that include
+  # Familia::Base. Since expiration is a core feature, we can confidently
+  # call `horreum_instance.update_expiration` without defensive programming
+  # even when expiration is not enabled for the horreum_instance class.
+  module Base
+    # Base implementation of update_expiration that maintains API compatibility
+    # with the :expiration feature's implementation.
+    #
+    # This is a no-op implementation that gets overridden by features like
+    # :expiration. It accepts an optional default_expiration parameter to maintain interface
+    # compatibility with the overriding implementations.
+    #
+    # @param default_expiration [Integer, nil] Time To Live in seconds
+    # @return [nil] Always returns nil
+    #
+    # @note This is a no-op implementation. Classes that need expiration
+    #       functionality should include the :expiration feature.
+    #
+    def update_expiration(default_expiration: nil)
+      Familia.ld <<~LOG
+        [update_expiration] Feature not enabled for #{self.class}.
+        Key: #{dbkey} Arg: #{default_expiration} (caller: #{caller(1..1)})
+      LOG
+      nil
+    end
+  end
+end
