@@ -5,6 +5,7 @@
 # e.g. FAMILIA_TRACE=1 FAMILIA_DEBUG=1 bundle exec try
 
 require 'digest'
+
 require_relative '../../lib/familia'
 
 Familia.enable_database_logging = true

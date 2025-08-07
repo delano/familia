@@ -1,6 +1,5 @@
 # try/data_types/sorted_set_try.rb
 
-require_relative '../../lib/familia'
 require_relative '../helpers/test_helpers'
 
 @a = Bone.new 'atoken'

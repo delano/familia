@@ -4,7 +4,6 @@
 # bug in Tryouts 3.1 that prevents the setup instance vars from
 # being available to the testcases.
 
-require_relative '../../lib/familia'
 require_relative '../helpers/test_helpers'
 
 Familia.debug = false

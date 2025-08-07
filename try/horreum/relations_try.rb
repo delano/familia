@@ -1,7 +1,6 @@
 # try/horreum/relations_try.rb
 # Test Horreum Database type relations functionality
 
-require_relative '../../lib/familia'
 require_relative '../helpers/test_helpers'
 
 Familia.debug = false
