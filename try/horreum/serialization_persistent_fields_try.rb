@@ -11,7 +11,7 @@ class SerializationCategoryTest < Familia::Horreum
   field :id
   field :name                           # persistent by default
   field :email, category: :encrypted    # persistent, encrypted category
-  field :cache_data, category: :transient # should be excluded from serialization
+  field :tryouts_cache_data, category: :transient # should be excluded from serialization
   field :description, category: :persistent # explicitly persistent
   field :temp_settings, category: :transient # should be excluded
   field :metadata, category: :persistent # explicitly persistent
@@ -39,7 +39,7 @@ end
   id: 'serialize_test_1',
   name: 'Test User',
   email: 'test@example.com',
-  cache_data: 'temporary_cache_value',
+  tryouts_cache_data: 'temporary_cache_value',
   description: 'A test user description',
   temp_settings: { theme: 'dark', cache: true },
   metadata: { version: 1, last_login: '2025-01-01' }
@@ -76,7 +76,7 @@ end
 #=> true
 
 ## to_h excludes transient fields from serialization
-@hash_result.key?(:cache_data)
+@hash_result.key?(:tryouts_cache_data)
 #=> false
 
 ## to_h excludes all transient fields
@@ -106,20 +106,20 @@ SerializationCategoryTest.persistent_fields
 #=> "Test User"
 
 ## Transient field values are not persisted in redis
-@serialization_test.cache_data
-#=> "temporary_cache_value"
+@serialization_test.tryouts_cache_data
+#=> nil
 
-## When refreshed, transient fields retain their in-memory values
+## When refreshed, transient fields do not retain their in-memory values
 @serialization_test.refresh!
-@serialization_test.cache_data  # Should still be in memory but not from redis
-#=> "temporary_cache_value"
+@serialization_test.tryouts_cache_data  # Should still be in memory but not from redis
+#=> nil
 
 ## Field definitions are preserved during serialization
-SerializationCategoryTest.field_definitions[:cache_data].category
+SerializationCategoryTest.field_types[:tryouts_cache_data].category
 #=> :transient
 
 ## Persistent fields filtering works correctly
-SerializationCategoryTest.persistent_fields.include?(:cache_data)
+SerializationCategoryTest.persistent_fields.include?(:tryouts_cache_data)
 #=> false
 
 ## All persistent fields are included in persistent_fields

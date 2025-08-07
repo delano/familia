@@ -8,19 +8,6 @@ module Familia
     module Expiration
       @default_expiration = nil
 
-      # ClassMethods
-      #
-      module ClassMethods
-
-        attr_writer :default_expiration
-
-        def default_expiration(num = nil)
-          @default_expiration = num.to_f unless num.nil?
-          @default_expiration || parent&.default_expiration || Familia.default_expiration
-        end
-
-      end
-
       def self.included(base)
         Familia.ld "[#{base}] Loaded #{self}"
         base.extend ClassMethods
@@ -29,6 +16,17 @@ module Familia
         # sure we always have an array to work with.
         unless base.instance_variable_defined?(:@default_expiration)
           base.instance_variable_set(:@default_expiration, @default_expiration) # set above
+        end
+      end
+
+      # ClassMethods
+      #
+      module ClassMethods
+        attr_writer :default_expiration
+
+        def default_expiration(num = nil)
+          @default_expiration = num.to_f unless num.nil?
+          @default_expiration || parent&.default_expiration || Familia.default_expiration
         end
       end
 

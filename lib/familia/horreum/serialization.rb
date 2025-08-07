@@ -287,6 +287,12 @@ module Familia
 
         fields = hgetall
         Familia.ld "[refresh!] #{self.class} #{dbkey} fields:#{fields.keys}"
+
+        # Reset transient fields to nil for semantic clarity and ORM consistency
+        # Transient fields have no authoritative source, so they should return to
+        # their uninitialized state during refresh operations
+        reset_transient_fields!
+
         optimistic_refresh(**fields)
       end
 
@@ -328,8 +334,8 @@ module Familia
       #
       def to_h
         self.class.persistent_fields.each_with_object({}) do |field, hsh|
-          definition = self.class.field_definitions[field]
-          method_name = definition.method_name
+          field_type = self.class.field_types[field]
+          method_name = field_type.method_name
           val = send(method_name)
           prepared = serialize_value(val)
           Familia.ld " [to_h] field: #{field} val: #{val.class} prepared: #{prepared&.class || '[nil]'}"
@@ -356,8 +362,8 @@ module Familia
       #
       def to_a
         self.class.persistent_fields.collect do |field|
-          definition = self.class.field_definitions[field]
-          method_name = definition.method_name
+          field_type = self.class.field_types[field]
+          method_name = field_type.method_name
           val = send(method_name)
           prepared = serialize_value(val)
           Familia.ld " [to_a] field: #{field} method: #{method_name} val: #{val.class} prepared: #{prepared.class}"
@@ -440,6 +446,30 @@ module Familia
         end
 
         val
+      end
+
+      private
+
+      # Reset all transient fields to nil
+      #
+      # This method ensures that transient fields return to their uninitialized
+      # state during refresh operations. This provides semantic clarity (refresh
+      # means "reload from authoritative source"), ORM consistency with other
+      # frameworks, and prevents stale transient data accumulation.
+      #
+      # @return [void]
+      #
+      def reset_transient_fields!
+        return unless self.class.respond_to?(:transient_fields)
+
+        self.class.transient_fields.each do |field_name|
+          field_type = self.class.field_types[field_name]
+          next unless field_type&.method_name
+
+          # Set the transient field back to nil
+          send("#{field_type.method_name}=", nil)
+          Familia.ld "[reset_transient_fields!] Reset #{field_name} to nil"
+        end
       end
 
     end

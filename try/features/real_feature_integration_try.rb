@@ -19,7 +19,7 @@ class SafeDumpCategoryTest < Familia::Horreum
   field :id
   field :public_name, category: :persistent
   field :email, category: :encrypted
-  field :cache_data, category: :transient
+  field :tryouts_cache_data, category: :transient
 
   feature :safe_dump
 
@@ -71,7 +71,7 @@ end
   id: 'safe_test_1',
   public_name: 'Public Name',
   email: 'test@example.com',
-  cache_data: 'temporary'
+  tryouts_cache_data: 'temporary'
 )
 
 @combined_test = CombinedFeaturesTest.new(id: 'combined_1', name: 'Combined', temp_data: 'temp')
@@ -102,7 +102,7 @@ SafeDumpCategoryTest.features_enabled.include?(:safe_dump)
 #=> [:email, :id, :public_name]
 
 ## Safe dump respects safe_dump_fields configuration
-@safedump_result.key?(:cache_data)
+@safedump_result.key?(:tryouts_cache_data)
 #=> false
 
 ## Both features are enabled

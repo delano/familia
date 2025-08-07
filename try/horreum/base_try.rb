@@ -127,12 +127,11 @@ class FieldRedefine < Familia::Horreum
     true
   end
 end
-#=> :uniquefieldname
 #=2> /WARNING/
 #=2> /uniquefieldname/
 
 ## Defining a field with the same name as an existing method can give a warning
-class FieldRedefine2 < Familia::Horreum
+class ::FieldRedefine2 < Familia::Horreum
   identifier_field :email
   field :name
 
@@ -142,7 +141,6 @@ class FieldRedefine2 < Familia::Horreum
 
   field :uniquefieldname, on_conflict: :warn
 end
-#=:> Familia::FieldDefinition
 #=2> /WARNING/
 #=2> /uniquefieldname/
 

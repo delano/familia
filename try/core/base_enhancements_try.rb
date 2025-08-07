@@ -71,7 +71,7 @@ BaseUuidTest.instance_variable_get(:@fields)
 #=:> Array
 
 ## Field definitions are properly initialized
-BaseUuidTest.instance_variable_get(:@field_definitions)
+BaseUuidTest.instance_variable_get(:@field_types)
 #=:> Hash
 
 ## Feature system is properly integrated

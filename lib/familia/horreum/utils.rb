@@ -12,12 +12,13 @@ module Familia
     #
     module Utils
 
-      def uri(suffix = nil)
-        u = Familia.uri(self.class.uri) # returns URI::Redis
-        u.logical_database = logical_database if logical_database # override the logical_database if we have one
-        u.key = dbkey(suffix)
-        u
-      end
+      # def uri
+      #   base_uri = self.class.uri || Familia.uri
+      #   u = base_uri.dup # make a copy to modify safely
+      #   u.logical_database = logical_database if logical_database
+      #   u.key = dbkey
+      #   u
+      # end
 
       # +suffix+ is the value to be used at the end of the db key
       # (e.g. `customer:customer_id:scores` would have `scores` as the suffix
@@ -27,8 +28,9 @@ module Familia
       # Whether this is a Horreum or DataType object, the value is taken
       # from the `identifier` method).
       #
-      def dbkey(suffix = nil, ignored = nil)
+      def dbkey(suffix = nil, _ignored = nil)
         raise Familia::NoIdentifier, "No identifier for #{self.class}" if identifier.to_s.empty?
+
         suffix ||= self.suffix # use the instance method to get the default suffix
         self.class.dbkey identifier, suffix
       end
