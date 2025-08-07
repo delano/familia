@@ -39,19 +39,19 @@ SecretService.persistent_fields.sort
 #=> [:endpoint_url, :name, :service_id]
 
 ## Transient field definitions have correct category
-SecretService.field_definitions[:api_key].category
+SecretService.field_types[:api_key].category
 #=> :transient
 
 ## Password field definition has correct category
-SecretService.field_definitions[:password].category
+SecretService.field_types[:password].category
 #=> :transient
 
 ## Secret token field definition has correct category
-SecretService.field_definitions[:secret_token].category
+SecretService.field_types[:secret_token].category
 #=> :transient
 
 ## Regular field definition has correct category
-SecretService.field_definitions[:name].category
+SecretService.field_types[:name].category
 #=> :field
 
 ## Transient field stores RedactedString object for api_key
@@ -127,7 +127,7 @@ array_result.length
 
 ## Array contains values in persistent field order
 array_result = @service.to_a
-persistent_fields_values = SecretService.persistent_fields.map { |f| @service.send(SecretService.field_definitions[f].method_name) }
+persistent_fields_values = SecretService.persistent_fields.map { |f| @service.send(SecretService.field_types[f].method_name) }
 array_result == persistent_fields_values
 #=> true
 
@@ -240,11 +240,11 @@ new_service.api_key
 #=> nil
 
 ## Persistent field definitions are correctly identified
-SecretService.field_definitions.values.select(&:persistent?).map(&:field_name).sort
+SecretService.field_types.values.select(&:persistent?).map(&:field_name).sort
 #=> [:endpoint_url, :name, :service_id]
 
 ## Transient field definitions are correctly identified
-transient_fields = SecretService.field_definitions.values.reject(&:persistent?).map(&:field_name).sort
+transient_fields = SecretService.field_types.values.reject(&:persistent?).map(&:field_name).sort
 transient_fields
 #=> [:api_key, :password, :secret_token]
 

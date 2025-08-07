@@ -152,6 +152,10 @@ module Familia
       true
     end
 
+    def transient?
+      !persistent?
+    end
+
     # The category for this field type (used for filtering)
     #
     # @return [Symbol] the field category

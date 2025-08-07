@@ -19,6 +19,10 @@ class TestFieldType < Familia::FieldType
   def persistent?
     category != :transient
   end
+
+  def transient?
+    !persistent?
+  end
 end
 
 # Setup a test field type (replacing the old FieldDefinition)

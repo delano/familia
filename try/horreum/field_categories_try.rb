@@ -11,7 +11,7 @@ class FieldCategoryTest < Familia::Horreum
   field :id
   field :name                           # default category (:field)
   field :email, category: :encrypted    # encrypted category
-  field :cache_data, category: :transient # transient category
+  field :tryouts_cache_data, category: :transient # transient category
   field :description, category: :persistent # explicit persistent category
   field :settings, category: nil        # nil category (defaults to :field)
 end
@@ -42,29 +42,29 @@ class AllTransientTest < Familia::Horreum
   field :temp2, category: :transient
 end
 
-## Field definitions are stored correctly
+## Field types are stored correctly
 @test_obj = FieldCategoryTest.new(id: 'test123')
-FieldCategoryTest.field_definitions.size
+FieldCategoryTest.field_types.size
 #=> 6
 
 ## Default category field has correct category
-FieldCategoryTest.field_definitions[:name].category
+FieldCategoryTest.field_types[:name].category
 #=> :field
 
 ## Encrypted category field has correct category
-FieldCategoryTest.field_definitions[:email].category
+FieldCategoryTest.field_types[:email].category
 #=> :encrypted
 
 ## Transient category field has correct category
-FieldCategoryTest.field_definitions[:cache_data].category
+FieldCategoryTest.field_types[:tryouts_cache_data].category
 #=> :transient
 
 ## Explicit persistent category field has correct category
-FieldCategoryTest.field_definitions[:description].category
+FieldCategoryTest.field_types[:description].category
 #=> :persistent
 
 ## Nil category field defaults to :field
-FieldCategoryTest.field_definitions[:settings].category
+FieldCategoryTest.field_types[:settings].category
 #=> :field
 
 ## persistent_fields excludes transient fields
@@ -80,7 +80,7 @@ FieldCategoryTest.persistent_fields.include?(:name)
 #=> true
 
 ## persistent_fields excludes transient fields
-FieldCategoryTest.persistent_fields.include?(:cache_data)
+FieldCategoryTest.persistent_fields.include?(:tryouts_cache_data)
 #=> false
 
 ## Field definitions map provides backward compatibility
@@ -103,12 +103,12 @@ AliasedCategoryTest.persistent_fields.include?(:internal_temp)
 AliasedCategoryTest.persistent_fields.include?(:internal_perm)
 #=> true
 
-## Field definition stores original field name, not alias
-AliasedCategoryTest.field_definitions[:internal_temp].field_name
+## Field type stores original field name, not alias
+AliasedCategoryTest.field_types[:internal_temp].name
 #=> :internal_temp
 
-## Field definition stores alias as method name
-AliasedCategoryTest.field_definitions[:internal_temp].method_name
+## Field type stores alias as method name
+AliasedCategoryTest.field_types[:internal_temp].method_name
 #=> :temp
 
 ## persistent_fields with mostly transient fields

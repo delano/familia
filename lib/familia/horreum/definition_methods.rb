@@ -203,6 +203,13 @@ module Familia
         end
       end
 
+      # Get fields that are not persisted to the database (transients)
+      def transient_fields
+        fields.select do |field|
+          field_types[field]&.transient?
+        end
+      end
+
       # Register a field type instance with this class
       #
       # This method installs the field type's methods and registers it

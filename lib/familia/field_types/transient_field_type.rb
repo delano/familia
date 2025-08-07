@@ -70,6 +70,12 @@ module Familia
       false
     end
 
+    # A convenience method that wraps `persistent?`
+    #
+    def transient?
+      !persistent?
+    end
+
     # Category for transient fields
     #
     # @return [Symbol] :transient

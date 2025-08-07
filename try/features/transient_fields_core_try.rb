@@ -174,7 +174,7 @@ transient_fields = SecretService.field_types.values.reject(&:persistent?).map(&:
 transient_fields
 #=> [:api_key, :password, :secret_token]
 
-# Clean up any test objects
+# Clean up test objects
 @service = nil
 
 # Force garbage collection to trigger any finalizers
