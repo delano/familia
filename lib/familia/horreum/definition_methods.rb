@@ -91,7 +91,7 @@ module Familia
 
         # Create appropriate field type based on category
         field_type = if category == :transient
-          require_relative '../field_types/transient_field_type'
+          require_relative '../features/transient_fields/transient_field_type'
           TransientFieldType.new(name, as: as, fast_method: false, on_conflict: on_conflict)
         else
           # For regular fields and other categories, create custom field type with category override
@@ -232,7 +232,7 @@ module Familia
       # @param options [Hash] Field options
       #
       def transient_field(name, **options)
-        require_relative '../field_types/transient_field_type'
+        require_relative '../features/transient_fields/transient_field_type'
         field_type = TransientFieldType.new(name, **options.merge(fast_method: false))
         register_field_type(field_type)
       end

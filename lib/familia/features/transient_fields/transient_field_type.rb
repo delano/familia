@@ -1,7 +1,8 @@
-# lib/familia/field_types/transient_field_type.rb
+# lib/familia/features/transient_fields/transient_field_type.rb
 
-require_relative '../field_type'
-require_relative '../features/transient_fields/redacted_string'
+require 'familia/field_type'
+
+require_relative 'redacted_string'
 
 module Familia
   # TransientFieldType - Fields that are not persisted to database
