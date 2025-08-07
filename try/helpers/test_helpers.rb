@@ -162,3 +162,32 @@ class Limiter < Familia::Horreum
     @name
   end
 end
+
+# # In test:
+# using RedactedStringTestHelper
+
+# secret = RedactedString.new("test-key")
+# expect(secret.raw).to eq("test-key")
+#
+# Or with rack
+#
+# post '/vault' do
+#   passphrase = RedactedString.new(request.params['passphrase'])
+#   passphrase.expose do |plain|
+#     vault.unlock(plain)
+#   end
+#   # passphrase wiped
+# end
+#
+# NOTE: This will do nothing unless RedactedString is already requried
+unless defined?(RedactedString)
+  require_relative '../../lib/familia/features/transient_fields/redacted_string'
+end
+module RedactedStringTestHelper
+  refine RedactedString do
+    def raw
+      # Only available when refinement is used
+      @value
+    end
+  end
+end

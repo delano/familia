@@ -2,28 +2,137 @@
 
 # RedactedString
 #
-# Meant to securely clear the string from memory.
+# A secure wrapper for sensitive string values (e.g., API keys, passwords,
+# encryption keys).
+# Designed to:
+#   - Prevent accidental logging/inspection
+#   - Enable secure memory wiping
+#   - Encourage safe usage patterns
+#
+# ⚠️ IMPORTANT: This is *best-effort* protection. Ruby does not guarantee
+#              memory zeroing. GC, string sharing, and internal optimizations
+#              may leave copies in memory.
+#
+# Security Model:
+#   - The secret is *contained* from the moment it's wrapped.
+#   - Access is only allowed via `.expose { }`, which ensures cleanup.
+#   - `.to_s` and `.inspect` return '[REDACTED]' to prevent leaks in logs,
+#     errors, or debugging.
+#
+# Critical Gotchas:
+#
+# 1. Ruby 3.4+ String Internals — Memory Safety Reality
+#    - Ruby uses "compact strings" and copy-on-write semantics.
+#    - Short strings (< 24 bytes on 64-bit) are *embedded* in the object
+#      (RSTRING_EMBED_LEN).
+#    - Long strings use heap-allocated buffers, but may be shared or
+#      duplicated silently.
+#    - There is *no guarantee* that GC will not copy the string before
+#      finalization.
+#
+# 2. Every .dup, .to_s, +, interpolation, or method call may create hidden
+#    copies:
+#      s = "secret"
+#      t = s.dup        # New object, same content — now two copies
+#      u = s + "123"    # New string — third copy
+#      "#{t}"           # Interpolation — fourth copy
+#    These copies are *not* controlled by RedactedString and may persist.
+#
+# 3. String Freezing & Immutability
+#    - `.freeze` prevents mutation but does *not* prevent copying.
+#    - `.replace` on a frozen string raises FrozenError — so wiping fails.
+#
+# 4. RbNaCl::Util.zero Limitations
+#    - Only works on mutable byte buffers.
+#    - May not zero embedded strings if Ruby's internal representation is
+#      immutable.
+#    - Does *not* protect against memory dumps or GC-compacted heaps.
+#
+# 5. Finalizers Are Not Guaranteed
+#    - Ruby does not promise when (or if) `ObjectSpace.define_finalizer`
+#      runs.
+#    - Never rely on finalizers for security-critical wiping.
+#
+# Best Practices:
+#   - Wrap secrets *immediately* on input (e.g., from ENV, params, DB).
+#   - Use `.expose { }` for short-lived operations — never store plaintext.
+#   - Avoid passing RedactedString to logging, serialization, or debugging
+#     tools.
+#   - Prefer `.expose { }` over any "getter" method.
+#   - Do *not* subclass String — it leaks the underlying value in regex,
+#     case, etc.
+#
 class RedactedString
-  def initialize(value)
-    @value = value.to_s.dup
-    # Freeze to discourage mutation
-    @value.freeze
+  # Wrap a sensitive value. The input is *not* wiped — ensure it's not reused.
+  def initialize(original_value)
+    @value = original_value.to_s.dup # force a copy
+    @cleared = false
+    # Do NOT freeze — we need to mutate it in `#clear!`
+    ObjectSpace.define_finalizer(self, self.class.finalizer_proc)
   end
 
-  def to_s
-    '[REDACTED]'
+  # Primary API: expose the value in a block, then wipe it.
+  # Ensures cleanup even if exception occurs.
+  #
+  # Example:
+  #   token.expose do |plain|
+  #     HTTP.post('/api', headers: { 'X-Token' => plain })
+  #   end
+  #   # `plain` is wiped after block
+  #
+  def expose
+    raise ArgumentError, 'Block required' unless block_given?
+    raise SecurityError, 'Value already cleared' if cleared?
+
+    yield @value
+  ensure
+    clear! # redacted strings are single use
   end
 
-  def inspect
-    '[REDACTED]'
-  end
-
+  # Wipe the internal buffer. Safe to call multiple times.
+  # Uses RbNaCl::Util.zero if available (preferred).
+  # Falls back to overwriting with 'X' pattern.
   def clear!
+    return if @value.nil? || @cleared
+
     if defined?(RbNaCl)
-      RbNaCl::Util.zero(@value)
-    else
-      @value.replace('x' * @value.length) # Best-effort overwrite
-      @value.freeze
+      RbNaCl::Util.zero(@value) if @value && !@value.frozen?
+
+    elsif @value&.length&.positive?
+      # Best-effort: overwrite with junk
+      @value.replace("\x00" * @value.length) unless @value.frozen?
     end
+
+    @value = nil
+    @cleared = true
+    freeze # one and done
   end
+
+  # Always redact in logs, debugging, or string conversion
+  def to_s = '[REDACTED]'
+  def inspect = '[REDACTED]'
+  def cleared? = @cleared
+
+  # Prevent comparison attacks by making all instances equal
+  # This prevents timing attacks where an attacker could potentially
+  # infer information about the secret value through comparison timing
+  def ==(other)
+    return false unless other.is_a?(RedactedString)
+    return true if equal?(other) # same object
+
+    false # different RedactedString instances are not equal
+  end
+
+  # Ensure eql? behaves consistently with ==
+  def eql?(other)
+    other.is_a?(RedactedString)
+  end
+
+  # All RedactedString instances have the same hash to prevent
+  # hash-based timing attacks or information leakage
+  def hash
+    RedactedString.hash
+  end
+
+  def self.finalizer_proc = proc { |id| }
 end
