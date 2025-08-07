@@ -4,6 +4,11 @@ module Familia::Features
 
   module Quantization
 
+    def self.included base
+      Familia.ld "[#{base}] Loaded #{self}"
+      base.extend ClassMethods
+    end
+
     module ClassMethods
       # Generates a quantized timestamp based on the given parameters.
       #
@@ -44,11 +49,6 @@ module Familia::Features
         # Call Familia.qstamp with our processed parameters
         Familia.qstamp(quantum, pattern: pattern, time: time)
       end
-    end
-
-    def self.included base
-      Familia.ld "[#{base}] Loaded #{self}"
-      base.extend ClassMethods
     end
 
     def qstamp(quantum = nil, pattern: nil, time: nil)
