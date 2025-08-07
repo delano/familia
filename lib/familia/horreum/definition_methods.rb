@@ -131,23 +131,24 @@ module Familia
       #   - Others, depending on features available
       #
       def field(name, as: name, fast_method: :"#{name}!", on_conflict: :raise, category: nil)
-        fields << name
+        # Use field type system internally for consistency
+        require_relative '../field_type'
 
-        define_attr_accessor_methods(name, as, on_conflict) if as
-        define_fast_writer_method(name, as, fast_method, on_conflict) if fast_method
+        # Create appropriate field type based on category
+        field_type = if category == :transient
+          require_relative '../field_types/transient_field_type'
+          TransientFieldType.new(name, as: as, fast_method: false, on_conflict: on_conflict)
+        else
+          # For regular fields and other categories, create custom field type with category override
+          custom_field_type = Class.new(FieldType) do
+            define_method :category do
+              category || :field
+            end
+          end
+          custom_field_type.new(name, as: as, fast_method: fast_method, on_conflict: on_conflict)
+        end
 
-        # Create field definition object
-        field_def = FieldDefinition.new(
-          field_name: name,
-          method_name: as,
-          fast_method_name: fast_method,
-          on_conflict: on_conflict,
-          category: category,
-        )
-
-        # Track field definitions after defining field methods
-        @field_definitions ||= {}
-        @field_definitions[name] = field_def
+        register_field_type(field_type)
       end
 
       # Sets or retrieves the suffix for generating Redis keys.
@@ -230,20 +231,46 @@ module Familia
         @load_method || :from_json # Familia.load_method
       end
 
-      def field_definitions
-        @field_definitions ||= {}
+      # Storage for field type instances
+      def field_types
+        @field_types ||= {}
       end
 
       # Returns a hash mapping field names to method names for backward compatibility
       def field_method_map
-        field_definitions.transform_values(&:method_name)
+        field_types.transform_values(&:method_name)
       end
 
       # Get fields for serialization (excludes transients)
       def persistent_fields
         fields.select do |field|
-          field_definitions[field].persistent?
+          field_types[field]&.persistent?
         end
+      end
+
+      # Register a field type instance with this class
+      #
+      # This method installs the field type's methods and registers it
+      # for later reference. It maintains backward compatibility by
+      # creating FieldDefinition objects.
+      #
+      # @param field_type [FieldType] The field type to register
+      #
+      def register_field_type(field_type)
+        fields << field_type.name
+        field_types[field_type.name] = field_type
+        field_type.install(self)
+      end
+
+      # Create and register a transient field type
+      #
+      # @param name [Symbol] The field name
+      # @param options [Hash] Field options
+      #
+      def transient_field(name, **options)
+        require_relative '../field_types/transient_field_type'
+        field_type = TransientFieldType.new(name, **options.merge(fast_method: false))
+        register_field_type(field_type)
       end
 
       private
@@ -252,17 +279,17 @@ module Familia
       def method_added(method_name)
         super
 
-        # Find the field definition that generated this method
-        field_def = field_definitions.values.find { |fd| fd.generated_methods.include?(method_name) }
-        return unless field_def
+        # Find the field type that generated this method
+        field_type = field_types.values.find { |ft| ft.generated_methods.include?(method_name) }
+        return unless field_type
 
-        case field_def.on_conflict
+        case field_type.on_conflict
         when :warn
           warn <<~WARNING
 
             WARNING: Method >>> #{method_name} <<< was redefined after field definition.
             Field functionality may be broken. Consider using a different name
-            with field(:field_name, as: :other_name)
+            with field(:#{field_type.name}, as: :other_name)
 
             Called from:
             #{Familia.pretty_stack(limit: 3)}

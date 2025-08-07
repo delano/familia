@@ -32,27 +32,12 @@ module Familia
         #   end
         #
         def transient_field(name, as: name, **kwargs)
-          # Force specific options for transient fields
-          field name, as: as, fast_method: false, on_conflict: :raise, category: :transient, **kwargs
-
-          # Get the method name that was just created
-          method_name = as
-          original_setter = "#{method_name}="
-
-          # Save reference to the original setter before overriding
-          alias_method "#{original_setter}_original", original_setter
-
-          # Override the setter to wrap values in RedactedString
-          define_method original_setter do |value|
-            # Handle nil values by storing nil directly
-            if value.nil?
-              send("#{original_setter}_original", nil)
-            else
-              # Handle cases where value is already a RedactedString
-              wrapped_value = value.is_a?(RedactedString) ? value : RedactedString.new(value)
-              send("#{original_setter}_original", wrapped_value)
-            end
-          end
+          # Use the field type system - much cleaner than alias_method approach!
+          # We can now remove the transient_field method from this feature entirely
+          # since it's built into DefinitionMethods using TransientFieldType
+          require_relative '../field_types/transient_field_type'
+          field_type = TransientFieldType.new(name, as: as, **kwargs.merge(fast_method: false))
+          register_field_type(field_type)
         end
       end
 
