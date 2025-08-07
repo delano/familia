@@ -287,6 +287,12 @@ module Familia
 
         fields = hgetall
         Familia.ld "[refresh!] #{self.class} #{dbkey} fields:#{fields.keys}"
+
+        # Reset transient fields to nil for semantic clarity and ORM consistency
+        # Transient fields have no authoritative source, so they should return to
+        # their uninitialized state during refresh operations
+        reset_transient_fields!
+
         optimistic_refresh(**fields)
       end
 
@@ -440,6 +446,30 @@ module Familia
         end
 
         val
+      end
+
+      private
+
+      # Reset all transient fields to nil
+      #
+      # This method ensures that transient fields return to their uninitialized
+      # state during refresh operations. This provides semantic clarity (refresh
+      # means "reload from authoritative source"), ORM consistency with other
+      # frameworks, and prevents stale transient data accumulation.
+      #
+      # @return [void]
+      #
+      def reset_transient_fields!
+        return unless self.class.respond_to?(:transient_fields)
+
+        self.class.transient_fields.each do |field_name|
+          field_type = self.class.field_types[field_name]
+          next unless field_type&.method_name
+
+          # Set the transient field back to nil
+          send("#{field_type.method_name}=", nil)
+          Familia.ld "[reset_transient_fields!] Reset #{field_name} to nil"
+        end
       end
 
     end
