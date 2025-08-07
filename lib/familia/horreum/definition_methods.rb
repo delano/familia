@@ -10,15 +10,15 @@ module Familia
   # This class encapsulates all the information about a field definition,
   # including the field name, method names, and conflict resolution strategy.
   #
-  class FieldDefinition
-    attr_reader :field_name, :method_name, :fast_method_name, :on_conflict, :category
-
+  FieldDefinition = Data.define(:field_name, :method_name, :fast_method_name, :on_conflict, :category) do
     def initialize(field_name:, method_name:, fast_method_name:, on_conflict:, category:)
-      @field_name = field_name
-      @method_name = method_name
-      @fast_method_name = fast_method_name
-      @on_conflict = on_conflict
-      @category = category || :field
+      super(
+        field_name: field_name,
+        method_name: method_name,
+        fast_method_name: fast_method_name,
+        on_conflict: on_conflict,
+        category: category || :field
+      )
     end
 
     # Returns all method names generated for this field
