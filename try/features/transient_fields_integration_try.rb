@@ -247,7 +247,8 @@ transient_fields = SecretService.field_types.values.reject(&:persistent?).map(&:
 transient_fields
 #=> [:api_key, :password, :secret_token]
 
-## TEARDOWN
+
+# TEARDOWN
 
 # Clean up Database
 @service.destroy! if @service.exists?

@@ -295,7 +295,8 @@ end
 [auth_result[:success], temp_token.cleared?]
 #=> [true, true]
 
-## TEARDOWN
+
+# TEARDOWN
 
 # Clean up any remaining test objects
 @otp_code = nil

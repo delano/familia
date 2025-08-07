@@ -2,7 +2,6 @@
 
 require_relative '../../helpers/test_helpers''
 
-## SETUP
 
 # Create sample sensitive values for testing
 @api_key = "sk-1234567890abcdef"
@@ -235,7 +234,8 @@ symbol_input_test.expose { |val| result = val.dup }
 result
 #=> "secret"
 
-## TEARDOWN
+
+# TEARDOWN
 
 # Clean up any remaining test objects
 @api_key = nil
