@@ -30,9 +30,11 @@ module Familia
       attributes = format_attributes
       "#<#{self.class.name} #{attributes.join(' ')}>"
     end
+    alias inspect to_s
 
-    def inspect
-      to_s
+    # Helper for serialization filtering
+    def persistent?
+      category != :transient
     end
 
     private
@@ -235,6 +237,13 @@ module Familia
       # Returns a hash mapping field names to method names for backward compatibility
       def field_method_map
         field_definitions.transform_values(&:method_name)
+      end
+
+      # Get fields for serialization (excludes transients)
+      def persistent_fields
+        fields.select do |field|
+          field_definitions[field].persistent?
+        end
       end
 
       private
