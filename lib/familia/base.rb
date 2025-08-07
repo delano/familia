@@ -45,7 +45,7 @@ module Familia
 
         # Track field definitions after defining field methods
         @feature_definitions ||= {}
-        @feature_definitions[name] = feature_def
+        @feature_definitions[feature_name] = feature_def
 
         features_available[feature_name] = klass
       end
