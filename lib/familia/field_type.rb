@@ -44,6 +44,12 @@ module Familia
       @name = name.to_sym
       @method_name = as == false ? nil : as.to_sym
       @fast_method_name = fast_method == false ? nil : fast_method&.to_sym
+
+      # Validate fast method name format
+      if @fast_method_name && !@fast_method_name.to_s.end_with?('!')
+        raise ArgumentError, "Fast method name must end with '!' (got: #{@fast_method_name})"
+      end
+
       @on_conflict = on_conflict
       @options = options
     end
@@ -57,6 +63,15 @@ module Familia
     #
     def install(klass)
       if @method_name
+        # For skip strategy, check for any method conflicts first
+        if @on_conflict == :skip
+          has_getter_conflict = klass.method_defined?(@method_name) || klass.private_method_defined?(@method_name)
+          has_setter_conflict = klass.method_defined?(:"#{@method_name}=") || klass.private_method_defined?(:"#{@method_name}=")
+
+          # If either getter or setter conflicts, skip the whole field
+          return if has_getter_conflict || has_setter_conflict
+        end
+
         define_getter(klass)
         define_setter(klass)
       end
