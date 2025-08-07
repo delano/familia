@@ -113,8 +113,10 @@ module Familia
       #
       # @param name [Symbol, String] the name of the field to define. If a method
       #   with the same name already exists, an error is raised.
-      # @param as [Symbol, String] as the name to use for the accessor method (defaults to name).
-      # @param fast_method [Symbol] the name to use for the fast writer method (defaults to :"#{name}!").
+      # @param as [Symbol, String, false, nil] as the name to use for the accessor method (defaults to name).
+      #   If false or nil, no accessor methods are created.
+      # @param fast_method [Symbol, false, nil] the name to use for the fast writer method (defaults to :"#{name}!").
+      #   If false or nil, no fast writer method is created.
       # @param on_conflict [Symbol] conflict resolution strategy when method already exists:
       #   - :raise - raise error if method exists (default)
       #   - :skip - skip definition if method exists
@@ -129,8 +131,8 @@ module Familia
       def field(name, as: name, fast_method: :"#{name}!", on_conflict: :raise, category: nil)
         fields << name
 
-        define_attr_accessor_methods(name, as, on_conflict)
-        define_fast_writer_method(name, as, fast_method, on_conflict)
+        define_attr_accessor_methods(name, as, on_conflict) if as
+        define_fast_writer_method(name, as, fast_method, on_conflict) if fast_method
 
         # Create field definition object
         field_def = FieldDefinition.new(
