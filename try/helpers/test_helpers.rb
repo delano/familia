@@ -191,3 +191,15 @@ module RedactedStringTestHelper
     end
   end
 end
+
+unless defined?(SingleUseRedactedString)
+  require_relative '../../lib/familia/features/transient_fields/single_use_redacted_string'
+end
+module SingleUseRedactedStringTestHelper
+  refine SingleUseRedactedString do
+    def raw
+      # Only available when refinement is used
+      @value
+    end
+  end
+end

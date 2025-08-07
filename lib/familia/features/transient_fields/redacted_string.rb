@@ -15,7 +15,8 @@
 #
 # Security Model:
 #   - The secret is *contained* from the moment it's wrapped.
-#   - Access is only allowed via `.expose { }`, which ensures cleanup.
+#   - Access is available via `.expose { }` for controlled use, or `.value` for direct access.
+#   - Manual `.clear!` is required when done with the value (unlike SingleUseRedactedString).
 #   - `.to_s` and `.inspect` return '[REDACTED]' to prevent leaks in logs,
 #     errors, or debugging.
 #
@@ -72,12 +73,17 @@ class RedactedString
   end
 
   # Primary API: expose the value in a block.
-  # The value remains accessible for multiple reads.
+  # The value remains accessible for multiple reads until manually cleared.
   # Call clear! explicitly when done with the value.
+  #
+  # ⚠️ Security Warning: Avoid .dup, string interpolation, or other operations
+  #    that create uncontrolled copies of the sensitive value.
   #
   # Example:
   #   token.expose do |plain|
+  #     # Good: use directly without copying
   #     HTTP.post('/api', headers: { 'X-Token' => plain })
+  #     # Avoid: plain.dup, "prefix#{plain}", plain[0..-1], etc.
   #   end
   #   # Value is still accessible after block
   #   token.clear! # Explicitly clear when done
@@ -109,6 +115,9 @@ class RedactedString
 
   # Get the actual value (for convenience in less sensitive contexts)
   # Returns the wrapped value or nil if cleared
+  #
+  # ⚠️ Security Warning: Direct access bypasses the controlled exposure pattern.
+  #    Prefer .expose { } for better security practices.
   def value
     raise SecurityError, 'Value already cleared' if cleared?
 
