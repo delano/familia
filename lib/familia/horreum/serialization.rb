@@ -327,14 +327,15 @@ module Familia
       # @note Watch in awe as each field is lovingly prepared for its Database adventure!
       #
       def to_h
-        self.class.field_method_map.inject({}) do |hsh, (field, method_name)|
+        self.class.persistent_fields.each_with_object({}) do |field, hsh|
+          definition = self.class.field_definitions[field]
+          method_name = definition.method_name
           val = send(method_name)
           prepared = serialize_value(val)
           Familia.ld " [to_h] field: #{field} val: #{val.class} prepared: #{prepared&.class || '[nil]'}"
 
           # Only include non-nil values in the hash for Redis
           hsh[field] = prepared unless prepared.nil?
-          hsh
         end
       end
 
@@ -354,7 +355,9 @@ module Familia
       # before joining the parade.
       #
       def to_a
-        self.class.field_method_map.map do |field, method_name|
+        self.class.persistent_fields.collect do |field|
+          definition = self.class.field_definitions[field]
+          method_name = definition.method_name
           val = send(method_name)
           prepared = serialize_value(val)
           Familia.ld " [to_a] field: #{field} method: #{method_name} val: #{val.class} prepared: #{prepared.class}"
