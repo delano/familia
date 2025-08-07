@@ -37,6 +37,13 @@ module Familia
 
       klass = Familia::Base.features_available[feature_name]
 
+      # Validate dependencies
+      feature_def = Familia::Base.feature_definitions[feature_name]
+      if feature_def&.depends_on&.any?
+        missing = feature_def.depends_on - features_enabled
+        raise Familia::Problem, "#{feature_name} requires: #{missing.join(', ')}" if missing.any?
+      end
+
       # Extend the Familia::Base subclass (e.g. Customer) with the feature module
       include klass
 
