@@ -7,10 +7,12 @@ module Familia
   @suffix = :object
   @default_expiration = 0 # see update_expiration. Zero is skip. nil is an exception.
   @logical_database = nil
+  @encryption_keys = nil
+  @current_key_version = nil
 
   module Settings
 
-    attr_writer :delim, :suffix, :default_expiration, :logical_database, :prefix
+    attr_writer :delim, :suffix, :default_expiration, :logical_database, :prefix, :encryption_keys, :current_key_version
 
     def delim(val = nil)
       @delim = val if val
@@ -42,6 +44,20 @@ module Familia
     # than simply Familia.suffix in some contexts.
     def default_suffix
       suffix
+    end
+
+    def encryption_keys(val = nil)
+      @encryption_keys = val if val
+      @encryption_keys
+    end
+
+    def current_key_version(val = nil)
+      @current_key_version = val if val
+      @current_key_version
+    end
+
+    def config
+      self
     end
 
   end
