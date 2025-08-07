@@ -93,14 +93,13 @@ class RedactedString
   # Uses RbNaCl::Util.zero if available (preferred).
   # Falls back to overwriting with 'X' pattern.
   def clear!
-    return if @value.nil? || @cleared
+    return if @value.nil? || @value.frozen? || @cleared
 
     if defined?(RbNaCl)
-      RbNaCl::Util.zero(@value) if @value && !@value.frozen?
-
-    elsif @value&.length&.positive?
+      RbNaCl::Util.zero(@value)
+    elsif @value.length.positive?
       # Best-effort: overwrite with junk
-      @value.replace("\x00" * @value.length) unless @value.frozen?
+      @value.replace("\x00" * @value.length)
     end
 
     @value = nil
@@ -110,23 +109,16 @@ class RedactedString
 
   # Always redact in logs, debugging, or string conversion
   def to_s = '[REDACTED]'
-  def inspect = '[REDACTED]'
+  def inspect = to_s
   def cleared? = @cleared
 
-  # Prevent comparison attacks by making all instances equal
+  # Returns true when it's literally the same object, otherwsie false.
   # This prevents timing attacks where an attacker could potentially
   # infer information about the secret value through comparison timing
   def ==(other)
-    return false unless other.is_a?(RedactedString)
-    return true if equal?(other) # same object
-
-    false # different RedactedString instances are not equal
+    object_id.equal?(other.object_id) # same object
   end
-
-  # Ensure eql? behaves consistently with ==
-  def eql?(other)
-    other.is_a?(RedactedString)
-  end
+  alias eql? ==
 
   # All RedactedString instances have the same hash to prevent
   # hash-based timing attacks or information leakage
