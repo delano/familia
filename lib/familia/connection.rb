@@ -106,18 +106,19 @@ module Familia
         # Always pass normalized URI with database to provider
         # Provider MUST return connection already on the correct database
         parsed_uri = normalize_uri(uri)
-        connection = connection_provider.call(parsed_uri.to_s)
+        client = connection_provider.call(parsed_uri.to_s)
 
         # In debug mode, verify the provider honored the contract
-        if Familia.debug? && connection.respond_to?(:client)
-          current_db = connection.client.db
+        if Familia.debug? && client.respond_to?(:client)
+          current_db = client.connection[:db]
           expected_db = parsed_uri.db || 0
+          Familia.ld "Connection provider returned client on DB #{current_db}, expected #{expected_db}"
           if current_db != expected_db
-            Familia.warn "Connection provider returned connection on DB #{current_db}, expected #{expected_db}"
+            Familia.warn "Connection provider returned client on DB #{current_db}, expected #{expected_db}"
           end
         end
 
-        return connection
+        return client
       end
 
       # Third priority: Fallback behavior or error
