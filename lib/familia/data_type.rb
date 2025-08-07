@@ -1,7 +1,7 @@
-# lib/familia/datatype.rb
+# lib/familia/data_type.rb
 
-require_relative 'datatype/commands'
-require_relative 'datatype/serialization'
+require_relative 'data_type/commands'
+require_relative 'data_type/serialization'
 
 module Familia
 
@@ -234,9 +234,9 @@ module Familia
     include Serialization
   end
 
-  require_relative 'datatype/types/list'
-  require_relative 'datatype/types/unsorted_set'
-  require_relative 'datatype/types/sorted_set'
-  require_relative 'datatype/types/hashkey'
-  require_relative 'datatype/types/string'
+  require_relative 'data_type/types/list'
+  require_relative 'data_type/types/unsorted_set'
+  require_relative 'data_type/types/sorted_set'
+  require_relative 'data_type/types/hashkey'
+  require_relative 'data_type/types/string'
 end

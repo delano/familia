@@ -1,4 +1,4 @@
-# lib/familia/datatype/types/list.rb
+# lib/familia/data_type/types/list.rb
 
 module Familia
   class List < DataType

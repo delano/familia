@@ -1,4 +1,4 @@
-# try/datatypes/datatype_base_try.rb
+# try/data_types/data_type_base_try.rb
 
 # Test DataType base functionality
 

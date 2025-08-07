@@ -51,9 +51,9 @@ This project uses `tryouts` instead of RSpec/Minitest. Test files are located in
    - Supports multiple identifier strategies: symbols, procs, arrays
 
 2. **`Familia::DataType`** - Base class for Valkey data type wrappers
-   - Located in `lib/familia/datatype.rb`
+   - Located in `lib/familia/data_type.rb`
    - Provides String, List, Set, SortedSet, HashKey implementations
-   - Each type has its own class in `lib/familia/datatype/types/`
+   - Each type has its own class in `lib/familia/data_type/types/`
 
 3. **`Familia::Base`** - Common module for both Horreum and DataType
    - Located in `lib/familia/base.rb`
@@ -89,7 +89,7 @@ end
 
 - `lib/familia.rb` - Main entry point and module definition
 - `lib/familia/horreum/` - Horreum class implementation (class_methods, commands, serialization, etc.)
-- `lib/familia/datatype/` - Valkey/Redis type implementations and commands
+- `lib/familia/data_type/` - Valkey/Redis type implementations and commands
 - `lib/familia/features/` - Modular feature implementations
 - `try/` - Test files using tryouts framework
 - `try/test_helpers.rb` - Shared test utilities and sample classes

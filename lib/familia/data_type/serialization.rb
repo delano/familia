@@ -1,4 +1,4 @@
-# lib/familia/datatype/serialization.rb
+# lib/familia/data_type/serialization.rb
 
 class Familia::DataType
 

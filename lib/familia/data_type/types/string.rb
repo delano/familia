@@ -1,4 +1,4 @@
-# lib/familia/datatype/types/string.rb
+# lib/familia/data_type/types/string.rb
 
 module Familia
   class String < DataType

@@ -1,4 +1,4 @@
-# lib/familia/datatype/commands.rb
+# lib/familia/data_type/commands.rb
 
 class Familia::DataType
 

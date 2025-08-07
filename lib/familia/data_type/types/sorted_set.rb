@@ -1,4 +1,4 @@
-# lib/familia/datatype/types/sorted_set.rb
+# lib/familia/data_type/types/sorted_set.rb
 
 module Familia
   class SortedSet < DataType

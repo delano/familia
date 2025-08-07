@@ -1,4 +1,4 @@
-# try/datatypes/list_try.rb
+# try/data_types/list_try.rb
 
 require_relative '../../lib/familia'
 require_relative '../helpers/test_helpers'

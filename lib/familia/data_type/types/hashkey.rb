@@ -1,4 +1,4 @@
-# lib/familia/datatype/types/hashkey.rb
+# lib/familia/data_type/types/hashkey.rb
 
 module Familia
   class HashKey < DataType
