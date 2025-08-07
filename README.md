@@ -24,6 +24,8 @@ Familia uses the concept of "Horreum" classes to represent Valkey-compatible obj
 class Flower < Familia::Horreum
   identifier_field :token
   field :name
+  field :color
+  field :species
   list :owners
   set :tags
   zset :metrics
