@@ -62,9 +62,6 @@ module Familia
       end
 
       define_fast_writer(klass) if @fast_method_name
-
-      # Register this field type instance with the class
-      klass.field_types[@name] = self
     end
 
     # Define the getter method on the target class

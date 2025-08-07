@@ -5,51 +5,6 @@ require_relative 'related_fields_management'
 module Familia
   VALID_STRATEGIES = %i[raise skip warn overwrite].freeze
 
-  # Data class to hold field definition details
-  #
-  # This class encapsulates all the information about a field definition,
-  # including the field name, method names, and conflict resolution strategy.
-  #
-  FieldDefinition = Data.define(:field_name, :method_name, :fast_method_name, :on_conflict, :category) do
-    def initialize(field_name:, method_name:, fast_method_name:, on_conflict:, category:)
-      super(
-        field_name: field_name,
-        method_name: method_name,
-        fast_method_name: fast_method_name,
-        on_conflict: on_conflict,
-        category: category || :field
-      )
-    end
-
-    # Returns all method names generated for this field
-    def generated_methods
-      [method_name, fast_method_name]
-    end
-
-    def to_s
-      attributes = format_attributes
-      "#<#{self.class.name} #{attributes.join(' ')}>"
-    end
-    alias inspect to_s
-
-    # Helper for serialization filtering
-    def persistent?
-      category != :transient
-    end
-
-    private
-
-    def format_attributes
-      [
-        "field_name=#{field_name}",
-        "method_name=#{method_name}",
-        "fast_method_name=#{fast_method_name}",
-        "on_conflict=#{on_conflict}",
-        "category=#{category}"
-      ]
-    end
-  end
-
   # Familia::Horreum
   #
   class Horreum
@@ -258,8 +213,10 @@ module Familia
       #
       def register_field_type(field_type)
         fields << field_type.name
-        field_types[field_type.name] = field_type
         field_type.install(self)
+        # Complete the registration after installation. If we do this beforehand
+        # we can run into issues where it looks like it's already installed.
+        field_types[field_type.name] = field_type
       end
 
       # Create and register a transient field type

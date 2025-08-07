@@ -356,8 +356,8 @@ module Familia
       #
       def to_a
         self.class.persistent_fields.collect do |field|
-          definition = self.class.field_definitions[field]
-          method_name = definition.method_name
+          field_type = self.class.field_types[field]
+          method_name = field_type.method_name
           val = send(method_name)
           prepared = serialize_value(val)
           Familia.ld " [to_a] field: #{field} method: #{method_name} val: #{val.class} prepared: #{prepared.class}"

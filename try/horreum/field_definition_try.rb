@@ -5,73 +5,89 @@ require_relative '../helpers/test_helpers'
 
 Familia.debug = false
 
-# Setup a test field definition
-@field_def = Familia::FieldDefinition.new(
-  field_name: :email,
-  method_name: :email,
-  fast_method_name: :email!,
+# Create a custom field type for testing with category support
+class TestFieldType < Familia::FieldType
+  def initialize(name, category: :field, **kwargs)
+    super(name, **kwargs)
+    @category = category
+  end
+
+  def category
+    @category || :field
+  end
+
+  def persistent?
+    category != :transient
+  end
+end
+
+# Setup a test field type (replacing the old FieldDefinition)
+@field_type = TestFieldType.new(
+  :email,
+  as: :email,
+  fast_method: :email!,
   on_conflict: :raise,
   category: :encrypted
 )
 
-## FieldDefinition holds field name correctly
-@field_def.field_name
+## FieldType holds field name correctly
+@field_type.name
 #=> :email
 
-## FieldDefinition holds method name correctly
-@field_def.method_name
+## FieldType holds method name correctly
+@field_type.method_name
 #=> :email
 
-## FieldDefinition holds fast method name correctly
-@field_def.fast_method_name
+## FieldType holds fast method name correctly
+@field_type.fast_method_name
 #=> :email!
 
-## FieldDefinition holds conflict strategy correctly
-@field_def.on_conflict
+## FieldType holds conflict strategy correctly
+@field_type.on_conflict
 #=> :raise
 
-## FieldDefinition holds category correctly
-@field_def.category
+## FieldType holds category correctly
+@field_type.category
 #=> :encrypted
 
-## FieldDefinition returns generated methods list
-@field_def.generated_methods
+## FieldType returns generated methods list
+@field_type.generated_methods
 #=> [:email, :email!]
 
-## FieldDefinition with nil category defaults to :field
-@basic_field = Familia::FieldDefinition.new(
-  field_name: :name,
-  method_name: :name,
-  fast_method_name: :name!,
+## FieldType with nil category defaults to :field
+@basic_field = TestFieldType.new(
+  :name,
+  as: :name,
+  fast_method: :name!,
   on_conflict: :skip,
   category: nil
 )
 @basic_field.category
 #=> :field
 
-## FieldDefinition persistent? returns true for non-transient fields
-@field_def.persistent?
+## FieldType persistent? returns true for non-transient fields
+@field_type.persistent?
 #=> true
 
-## FieldDefinition persistent? returns false for transient fields
-@transient_field = Familia::FieldDefinition.new(
-  field_name: :temp_data,
-  method_name: :temp_data,
-  fast_method_name: :temp_data!,
+## FieldType persistent? returns false for transient fields
+@transient_field = TestFieldType.new(
+  :temp_data,
+  as: :temp_data,
+  fast_method: :temp_data!,
   on_conflict: :raise,
   category: :transient
 )
 @transient_field.persistent?
 #=> false
 
-## FieldDefinition to_s includes all attributes
-@field_def.to_s
-#=~>/#<Familia::FieldDefinition field_name=email method_name=email fast_method_name=email! on_conflict=raise category=encrypted>/
+## FieldType to_s includes all attributes
+@field_type.to_s
+#=~>/#<.*TestFieldType name=email method_name=email fast_method_name=email! on_conflict=raise category=encrypted>/
 
-## FieldDefinition inspect is same as to_s
-@field_def.inspect
-#=~>/#<Familia::FieldDefinition field_name=email method_name=email fast_method_name=email! on_conflict=raise category=encrypted>/
+## FieldType inspect is same as to_s
+@field_type.inspect
+#=~>/#<.*TestFieldType name=email method_name=email fast_method_name=email! on_conflict=raise category=encrypted>/
 
-@field_def = nil
+@field_type = nil
 @basic_field = nil
 @transient_field = nil
