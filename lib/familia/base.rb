@@ -14,7 +14,8 @@ module Familia
   # @see Familia::DataType
   #
   module Base
-    @features = nil
+    @features_available = nil
+    @feature_definitions = nil
     @dump_method = :to_json
     @load_method = :from_json
 
@@ -29,14 +30,24 @@ module Familia
     end
 
     class << self
-      attr_reader :features
+      attr_reader :features_available
       attr_accessor :dump_method, :load_method
 
-      def add_feature(klass, methname)
-        @features ||= {}
-        Familia.ld "[#{self}] Adding feature #{klass} as #{methname.inspect}"
+      def add_feature(klass, feature_name, depends_on: [])
+        @features_available ||= {}
+        Familia.ld "[#{self}] Adding feature #{klass} as #{feature_name.inspect}"
 
-        features[methname] = klass
+        # Create field definition object
+        feature_def = FeatureDefinition.new(
+          name: feature_name,
+          depends_on: depends_on,
+        )
+
+        # Track field definitions after defining field methods
+        @field_definitions ||= {}
+        @field_definitions[name] = feature_def
+
+        features_available[feature_name] = klass
       end
     end
 
@@ -62,13 +73,11 @@ module Familia
     end
 
     def generate_id
-      @identifier ||= Familia.generate_id
-      @identifier
+      @identifier ||= Familia.generate_id # rubocop:disable Naming/MemoizedInstanceVariableName
     end
 
     def uuid
       @uuid ||= SecureRandom.uuid
-      @uuid
     end
   end
 end
