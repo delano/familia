@@ -4,8 +4,6 @@ module Familia
   module Encryption
     # High-level encryption manager - replaces monolithic Encryption module
     class Manager
-      EncryptedData = Data.define(:algorithm, :nonce, :ciphertext, :auth_tag, :key_version)
-
       attr_reader :provider
 
       def initialize(algorithm: nil)
@@ -21,7 +19,7 @@ module Familia
 
         result = @provider.encrypt(plaintext, key, additional_data)
 
-        EncryptedData.new(
+        Familia::Encryption::EncryptedData.new(
           algorithm: @provider.algorithm,
           nonce: Base64.strict_encode64(result[:nonce]),
           ciphertext: Base64.strict_encode64(result[:ciphertext]),
@@ -35,7 +33,7 @@ module Familia
       def decrypt(encrypted_json, context:, additional_data: nil)
         return nil if encrypted_json.nil? || encrypted_json.empty?
 
-        data = EncryptedData.new(**JSON.parse(encrypted_json, symbolize_names: true))
+        data = Familia::Encryption::EncryptedData.new(**JSON.parse(encrypted_json, symbolize_names: true))
 
         # Get appropriate provider for this data
         provider = Registry.get(data.algorithm)

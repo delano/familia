@@ -17,9 +17,9 @@ module Familia
         end
 
         def encrypt(plaintext, key, additional_data = nil)
+          validate_key_length!(key)
           nonce = generate_nonce
-          aead_key = key[0..31]
-          box = RbNaCl::AEAD::XChaCha20Poly1305IETF.new(aead_key)
+          box = RbNaCl::AEAD::XChaCha20Poly1305IETF.new(key)
 
           aad = additional_data.to_s
           ciphertext_with_tag = box.encrypt(nonce, plaintext.to_s, aad)
@@ -32,8 +32,8 @@ module Familia
         end
 
         def decrypt(ciphertext, key, nonce, auth_tag, additional_data = nil)
-          aead_key = key[0..31]
-          box = RbNaCl::AEAD::XChaCha20Poly1305IETF.new(aead_key)
+          validate_key_length!(key)
+          box = RbNaCl::AEAD::XChaCha20Poly1305IETF.new(key)
 
           ciphertext_with_tag = ciphertext + auth_tag
           aad = additional_data.to_s
@@ -47,17 +47,38 @@ module Familia
           RbNaCl::Random.random_bytes(NONCE_SIZE)
         end
 
-        def derive_key(master_key, context)
+        # Derives a context-specific encryption key using BLAKE2b.
+        #
+        # The personalization parameter provides cryptographic domain separation,
+        # ensuring that derived keys are unique per application even when using
+        # identical master keys and contexts. This prevents key reuse across
+        # different applications or library versions.
+        #
+        # @param master_key [String] The master key (must be >= 32 bytes)
+        # @param context [String] Context string for key derivation
+        # @param personal [String, nil] Optional personalization override
+        # @return [String] 32-byte derived key
+        def derive_key(master_key, context, personal: nil)
+          validate_key_length!(master_key)
+          personal_string = (personal || Familia.config.encryption_personalization).ljust(16, "\0")
+
           RbNaCl::Hash.blake2b(
             context.force_encoding('BINARY'),
-            key: master_key[0..31],
+            key: master_key,
             digest_size: 32,
-            personal: 'FamiliaE'.ljust(16, "\0")
+            personal: personal_string
           )
         end
 
         def secure_wipe(key)
           RbNaCl::Util.zero(key) if key
+        end
+
+        private
+
+        def validate_key_length!(key)
+          raise EncryptionError, 'Key cannot be nil' if key.nil?
+          raise EncryptionError, 'Key must be at least 32 bytes' if key.bytesize < 32
         end
       end
     end

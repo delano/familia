@@ -17,6 +17,7 @@ module Familia
         end
 
         def encrypt(plaintext, key, additional_data = nil)
+          validate_key_length!(key)
           nonce = generate_nonce
           cipher = create_cipher(:encrypt)
           cipher.key = key
@@ -33,6 +34,7 @@ module Familia
         end
 
         def decrypt(ciphertext, key, nonce, auth_tag, additional_data = nil)
+          validate_key_length!(key)
           cipher = create_cipher(:decrypt)
           cipher.key = key
           cipher.iv = nonce
@@ -49,6 +51,7 @@ module Familia
         end
 
         def derive_key(master_key, context)
+          validate_key_length!(master_key)
           OpenSSL::KDF.hkdf(
             master_key,
             salt: 'FamiliaEncryption',
@@ -74,6 +77,11 @@ module Familia
 
         def create_cipher(mode)
           OpenSSL::Cipher.new('aes-256-gcm').tap { |c| c.public_send(mode) }
+        end
+
+        def validate_key_length!(key)
+          raise EncryptionError, 'Key cannot be nil' if key.nil?
+          raise EncryptionError, 'Key must be at least 32 bytes' if key.bytesize < 32
         end
       end
     end
