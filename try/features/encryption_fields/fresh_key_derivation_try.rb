@@ -108,5 +108,15 @@ nil_result = model.test_field
 [nil_result, Familia::Encryption.derivation_count.value]
 #=> [nil, 0]
 
+## Key version rotation increments derivation count
+Familia::Encryption.reset_derivation_count!
+model = FreshKeyDerivationTest.new(user_id: 'test-rotation')
+model.test_field = 'original'  # v1 encrypt
+Familia.config.current_key_version = :v2
+model.test_field = 'updated'   # v2 encrypt
+retrieved = model.test_field   # v2 decrypt
+Familia::Encryption.derivation_count.value
+#=> 3
+
 Familia.config.encryption_keys = nil
 Familia.config.current_key_version = nil
