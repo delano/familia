@@ -66,11 +66,11 @@ Thread.current[:familia_key_cache]
 @model2.field_a
 #=> 'value-a'
 
-## All values b
+## Field b retrieves correctly
 @model2.field_b
 #=> 'value-b'
 
-## All values c
+## Field c retrieves correctly
 @model2.field_c
 #=> 'value-c'
 
