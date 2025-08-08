@@ -22,5 +22,6 @@ vendor
 *.gem
 doc/
 .yardoc
+!docs/overview.md
 !docs/connection_pooling.md
 !docs/wiki/**/*.md
