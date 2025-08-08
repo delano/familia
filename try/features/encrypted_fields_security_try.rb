@@ -177,6 +177,7 @@ user = SecurityTestModel6.new(user_id: 'user1')
 user.password = 'key-isolation-test'
 encrypted_with_v1 = user.instance_variable_get(:@password)
 
+
 # Parse and change key version to non-existent version
 parsed = JSON.parse(encrypted_with_v1, symbolize_names: true)
 parsed[:key_version] = 'v999'
@@ -199,7 +200,7 @@ class SecurityTestModelNonce < Familia::Horreum
   encrypted_field :password
 end
 
-user = SecurityTestModel6.new(user_id: 'user1')
+user = SecurityTestModelNonce.new(user_id: 'user1')
 user.password = 'nonce-test'
 encrypted_with_nonce = user.instance_variable_get(:@password)
 
