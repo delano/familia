@@ -112,7 +112,7 @@ class RedactedString
   #
   # REALITY CHECK: This doesn't actually provide security in Ruby.
   # - Ruby may have already copied the string elsewhere in memory
-  # - Garbage collection behavior is unpredictable  
+  # - Garbage collection behavior is unpredictable
   # - The original input value is still in memory somewhere
   # - This is primarily for API consistency and preventing reuse
   def clear!

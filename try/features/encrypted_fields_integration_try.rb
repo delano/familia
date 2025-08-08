@@ -95,7 +95,7 @@ model = FullSecureModel3b.new(model_id: 'secure-125b')
 model.password = 'secret-password-123'
 # Internal storage should be encrypted
 encrypted_password = model.instance_variable_get(:@password)
-encrypted_password.is_a?(String) && encrypted_password.include?('"algorithm":"aes-256-gcm"')
+encrypted_password.is_a?(String) && encrypted_password.include?('"algorithm":"xchacha20poly1305"')
 #=> true
 
 ## Mixed data types work correctly with encrypted fields

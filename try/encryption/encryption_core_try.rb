@@ -28,7 +28,7 @@ Familia.config.current_key_version = :v2
 encrypted = Familia::Encryption.encrypt(plaintext, context: context)
 encrypted_data = JSON.parse(encrypted, symbolize_names: true)
 encrypted_data[:algorithm]
-#=> "aes-256-gcm"
+#=> "xchacha20poly1305"
 
 ## Encrypted data includes current key version
 test_keys = { v1: Base64.strict_encode64('a' * 32), v2: Base64.strict_encode64('b' * 32) }
