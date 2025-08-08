@@ -15,22 +15,12 @@ module Familia
         return nil if plaintext.to_s.empty?
 
         key = derive_key(context)
-        nonce = generate_nonce
 
-        cipher = create_cipher(:encrypt)
-        cipher.key = key
-        cipher.iv = nonce
-        cipher.auth_data = additional_data.to_s if additional_data # Ensure string
-
-        ciphertext = cipher.update(plaintext.to_s) + cipher.final
-
-        EncryptedData.new(
-          algorithm: 'aes-256-gcm',
-          nonce: Base64.strict_encode64(nonce),
-          ciphertext: Base64.strict_encode64(ciphertext),
-          auth_tag: Base64.strict_encode64(cipher.auth_tag),
-          key_version: current_key_version
-        ).to_h.to_json
+        if defined?(RbNaCl)
+          encrypt_with_rbnacl(plaintext, key, additional_data)
+        else
+          encrypt_with_openssl(plaintext, key, additional_data)
+        end
       ensure
         secure_wipe(key) if key
       end
@@ -41,22 +31,26 @@ module Familia
         data = EncryptedData.new(**JSON.parse(encrypted_json, symbolize_names: true))
 
         # Validate algorithm to prevent tampering
-        unless data.algorithm == 'aes-256-gcm'
+        unless %w[xchacha20poly1305 aes-256-gcm].include?(data.algorithm)
           raise EncryptionError, "Decryption failed - unsupported algorithm: #{data.algorithm}"
         end
 
         key = derive_key(context, version: data.key_version)
 
-        cipher = create_cipher(:decrypt)
-        cipher.key = key
-        cipher.iv = Base64.strict_decode64(data.nonce)
-        cipher.auth_tag = Base64.strict_decode64(data.auth_tag)
-        cipher.auth_data = additional_data.to_s if additional_data # Ensure string
-
-        Base64.strict_decode64(data.ciphertext)
-          .then { |ct| cipher.update(ct) + cipher.final }
+        case data.algorithm
+        when 'xchacha20poly1305'
+          if defined?(RbNaCl)
+            decrypt_with_rbnacl(data, key, additional_data)
+          else
+            raise EncryptionError, "RbNaCl required for XChaCha20-Poly1305 decryption"
+          end
+        when 'aes-256-gcm'
+          decrypt_with_openssl(data, key, additional_data)
+        end
       rescue JSON::ParserError => e
         raise EncryptionError, "Invalid encrypted data format"
+      rescue RbNaCl::CryptoError => e
+        raise EncryptionError, "Decryption failed - invalid key or corrupted data"
       rescue OpenSSL::Cipher::CipherError => e
         raise EncryptionError, "Decryption failed - invalid key or corrupted data"
       ensure
@@ -177,11 +171,83 @@ module Familia
         end
       end
 
+      def encrypt_with_rbnacl(plaintext, key, additional_data)
+        # XChaCha20-Poly1305 uses 24-byte nonces
+        nonce = RbNaCl::Random.random_bytes(24)
+
+        # Use first 32 bytes of derived key for XChaCha20
+        aead_key = key[0..31]
+        box = RbNaCl::AEAD::XChaCha20Poly1305IETF.new(aead_key)
+
+        # XChaCha20-Poly1305 returns ciphertext + auth_tag concatenated
+        aad = additional_data ? additional_data.to_s : ""
+        ciphertext_with_tag = box.encrypt(nonce, plaintext.to_s, aad)
+
+        # Split ciphertext and auth tag (last 16 bytes)
+        ciphertext = ciphertext_with_tag[0...-16]
+        auth_tag = ciphertext_with_tag[-16..-1]
+
+        EncryptedData.new(
+          algorithm: 'xchacha20poly1305',
+          nonce: Base64.strict_encode64(nonce),
+          ciphertext: Base64.strict_encode64(ciphertext),
+          auth_tag: Base64.strict_encode64(auth_tag),
+          key_version: current_key_version
+        ).to_h.to_json
+      end
+
+      def encrypt_with_openssl(plaintext, key, additional_data)
+        # AES-256-GCM uses 12-byte nonces
+        nonce = OpenSSL::Random.random_bytes(12)
+
+        cipher = create_cipher(:encrypt)
+        cipher.key = key
+        cipher.iv = nonce
+        cipher.auth_data = additional_data.to_s if additional_data
+
+        ciphertext = cipher.update(plaintext.to_s) + cipher.final
+
+        EncryptedData.new(
+          algorithm: 'aes-256-gcm',
+          nonce: Base64.strict_encode64(nonce),
+          ciphertext: Base64.strict_encode64(ciphertext),
+          auth_tag: Base64.strict_encode64(cipher.auth_tag),
+          key_version: current_key_version
+        ).to_h.to_json
+      end
+
+      def decrypt_with_rbnacl(data, key, additional_data)
+        nonce = Base64.strict_decode64(data.nonce)
+        ciphertext = Base64.strict_decode64(data.ciphertext)
+        auth_tag = Base64.strict_decode64(data.auth_tag)
+
+        # Use first 32 bytes of derived key for XChaCha20
+        aead_key = key[0..31]
+        box = RbNaCl::AEAD::XChaCha20Poly1305IETF.new(aead_key)
+
+        # RbNaCl expects ciphertext + auth_tag concatenated
+        ciphertext_with_tag = ciphertext + auth_tag
+        aad = additional_data ? additional_data.to_s : ""
+
+        box.decrypt(nonce, ciphertext_with_tag, aad)
+      end
+
+      def decrypt_with_openssl(data, key, additional_data)
+        cipher = create_cipher(:decrypt)
+        cipher.key = key
+        cipher.iv = Base64.strict_decode64(data.nonce)
+        cipher.auth_tag = Base64.strict_decode64(data.auth_tag)
+        cipher.auth_data = additional_data.to_s if additional_data
+
+        Base64.strict_decode64(data.ciphertext)
+          .then { |ct| cipher.update(ct) + cipher.final }
+      end
+
       def generate_nonce
         if defined?(RbNaCl)
-          RbNaCl::Random.random_bytes(12)
+          RbNaCl::Random.random_bytes(24)  # XChaCha20 uses 24-byte nonces
         else
-          OpenSSL::Random.random_bytes(12)
+          OpenSSL::Random.random_bytes(12)  # AES-GCM uses 12-byte nonces
         end
       end
 
