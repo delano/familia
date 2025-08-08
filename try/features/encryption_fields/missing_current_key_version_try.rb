@@ -18,5 +18,6 @@ end
 
 ## Attempt to encrypt will raise an encryption error
 model_student = NoCurrentKeyVersionTest.new(user_id: 'derivation-test')
-model.test_field = 'test-value'
+model_student.test_field = 'test-value'
 #=!> Familia::EncryptionError
+#=!> error.message.include?('Key version cannot be nil')
