@@ -63,6 +63,14 @@ module Familia
         secure_wipe(key) if key
       end
 
+      def derivation_count
+        @derivation_count ||= Concurrent::AtomicFixnum.new(0)
+      end
+
+      def reset_derivation_count!
+        derivation_count.value = 0
+      end
+
       # Validate configuration at startup
       def validate_configuration!
         raise EncryptionError, "No encryption keys configured" if encryption_keys.empty?
@@ -134,6 +142,8 @@ module Familia
       # DO NOT re-enable it without a thorough security review.
       #
       def derive_key(context, version: nil)
+        derivation_count.increment
+
         version ||= current_key_version
         master_key = get_master_key(version)
 
@@ -193,12 +203,6 @@ module Familia
         # Best effort - don't fail if wiping fails
         nil
       end
-
-      # Cache removed for security - each encryption/decryption
-      # gets fresh key derivation to prevent key material persistence
-      # def key_cache
-      #   Thread.current[:familia_key_cache] ||= {}
-      # end
 
       def get_master_key(version)
         raise EncryptionError, "Key version cannot be nil" if version.nil?
