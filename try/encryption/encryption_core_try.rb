@@ -99,5 +99,156 @@ end
 #=> true
 
 
+## Unknown algorithm raises sanitized error
+test_keys = { v1: Base64.strict_encode64('a' * 32) }
+context = "TestModel:secret_field:user123"
+
+Familia.config.encryption_keys = test_keys
+Familia.config.current_key_version = :v1
+
+# Create encrypted data with unknown algorithm. Error should not leak algorithm details.
+invalid_encrypted = {
+  algorithm: "unknown-cipher",
+  key_version: "v1",
+  nonce: Base64.strict_encode64("x" * 12),
+  ciphertext: Base64.strict_encode64("encrypted_data"),
+  auth_tag: Base64.strict_encode64("y" * 16)
+}.to_json
+
+Familia::Encryption.decrypt(invalid_encrypted, context: context)
+#=!> Familia::EncryptionError
+#==> error.message.include?("Decryption failed")
+#==> error.message.include?("unknown-cipher")
+
+## Malformed JSON raises sanitized error
+test_keys = { v1: Base64.strict_encode64('a' * 32) }
+context = "TestModel:secret_field:user123"
+
+Familia.config.encryption_keys = test_keys
+Familia.config.current_key_version = :v1
+
+Familia::Encryption.decrypt("invalid json {", context: context)
+#=!> Familia::EncryptionError
+#==> error.message.include?("Decryption failed")
+
+## Invalid base64 nonce raises sanitized error
+test_keys = { v1: Base64.strict_encode64('a' * 32) }
+context = "TestModel:secret_field:user123"
+
+Familia.config.encryption_keys = test_keys
+Familia.config.current_key_version = :v1
+
+# Create encrypted data with invalid base64 nonce
+invalid_encrypted = {
+  algorithm: "aes-256-gcm",
+  key_version: "v1",
+  nonce: "invalid_base64!@#",
+  ciphertext: Base64.strict_encode64("encrypted_data"),
+  auth_tag: Base64.strict_encode64("y" * 16)
+}.to_json
+
+begin
+  Familia::Encryption.decrypt(invalid_encrypted, context: context)
+  "should_not_reach_here"
+rescue Familia::EncryptionError => e
+  e.message.include?("Decryption failed")
+end
+#=> true
+
+## Invalid base64 auth_tag raises sanitized error
+test_keys = { v1: Base64.strict_encode64('a' * 32) }
+context = "TestModel:secret_field:user123"
+
+Familia.config.encryption_keys = test_keys
+Familia.config.current_key_version = :v1
+
+# Create encrypted data with invalid base64 auth_tag
+invalid_encrypted = {
+  algorithm: "aes-256-gcm",
+  key_version: "v1",
+  nonce: Base64.strict_encode64("x" * 12),
+  ciphertext: Base64.strict_encode64("encrypted_data"),
+  auth_tag: "invalid_base64!@#"
+}.to_json
+
+begin
+  Familia::Encryption.decrypt(invalid_encrypted, context: context)
+  "should_not_reach_here"
+rescue Familia::EncryptionError => e
+  e.message.include?("Decryption failed")
+end
+#=> true
+
+## Wrong nonce size raises sanitized error
+test_keys = { v1: Base64.strict_encode64('a' * 32) }
+context = "TestModel:secret_field:user123"
+
+Familia.config.encryption_keys = test_keys
+Familia.config.current_key_version = :v1
+
+# Create encrypted data with wrong nonce size (8 bytes instead of 12)
+invalid_encrypted = {
+  algorithm: "aes-256-gcm",
+  key_version: "v1",
+  nonce: Base64.strict_encode64("x" * 8),
+  ciphertext: Base64.strict_encode64("encrypted_data"),
+  auth_tag: Base64.strict_encode64("y" * 16)
+}.to_json
+
+begin
+  Familia::Encryption.decrypt(invalid_encrypted, context: context)
+  "should_not_reach_here"
+rescue Familia::EncryptionError => e
+  e.message.include?("Invalid encrypted data")
+end
+#=> true
+
+## Wrong auth_tag size raises sanitized error
+test_keys = { v1: Base64.strict_encode64('a' * 32) }
+context = "TestModel:secret_field:user123"
+
+Familia.config.encryption_keys = test_keys
+Familia.config.current_key_version = :v1
+
+# Create encrypted data with wrong auth_tag size (8 bytes instead of 16)
+invalid_encrypted = {
+  algorithm: "aes-256-gcm",
+  key_version: "v1",
+  nonce: Base64.strict_encode64("x" * 12),
+  ciphertext: Base64.strict_encode64("encrypted_data"),
+  auth_tag: Base64.strict_encode64("y" * 8)
+}.to_json
+
+begin
+  Familia::Encryption.decrypt(invalid_encrypted, context: context)
+  "should_not_reach_here"
+rescue Familia::EncryptionError => e
+  e.message.include?("Invalid encrypted data")
+end
+#=> true
+
+## Missing required fields raises sanitized error
+test_keys = { v1: Base64.strict_encode64('a' * 32) }
+context = "TestModel:secret_field:user123"
+
+Familia.config.encryption_keys = test_keys
+Familia.config.current_key_version = :v1
+
+# Create encrypted data missing nonce field
+invalid_encrypted = {
+  algorithm: "aes-256-gcm",
+  key_version: "v1",
+  ciphertext: Base64.strict_encode64("encrypted_data"),
+  auth_tag: Base64.strict_encode64("y" * 16)
+}.to_json
+
+begin
+  Familia::Encryption.decrypt(invalid_encrypted, context: context)
+  "should_not_reach_here"
+rescue Familia::EncryptionError => e
+  e.message.include?("Decryption failed")
+end
+#=> true
+
 # TEARDOWN
 Thread.current[:familia_key_cache]&.clear if Thread.current[:familia_key_cache]

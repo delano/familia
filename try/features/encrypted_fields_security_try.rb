@@ -301,13 +301,9 @@ user.password = 'json-structure-test'
 
 # Test invalid JSON structure
 user.instance_variable_set(:@password, '{"invalid": "json"')
-begin
-  user.password
-  "should_not_reach_here"
-rescue Familia::EncryptionError => e
-  e.message.include?("Invalid encrypted data format")
-end
-#=> true
+user.password
+#=!> Familia::EncryptionError
+#==> error.message.include?("Decryption failed")
 
 ## Algorithm field tampering detection
 test_keys = { v1: Base64.strict_encode64('a' * 32) }

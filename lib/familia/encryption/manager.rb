@@ -33,24 +33,35 @@ module Familia
       def decrypt(encrypted_json, context:, additional_data: nil)
         return nil if encrypted_json.nil? || encrypted_json.empty?
 
-        data = Familia::Encryption::EncryptedData.new(**JSON.parse(encrypted_json, symbolize_names: true))
+        begin
+          data = Familia::Encryption::EncryptedData.new(**JSON.parse(encrypted_json, symbolize_names: true))
 
-        # Get appropriate provider for this data
-        provider = Registry.get(data.algorithm)
-        key = derive_key(context, version: data.key_version)
+          # Validate algorithm support
+          provider = Registry.get(data.algorithm)
+          key = derive_key(context, version: data.key_version)
 
-        nonce = Base64.strict_decode64(data.nonce)
-        ciphertext = Base64.strict_decode64(data.ciphertext)
-        auth_tag = Base64.strict_decode64(data.auth_tag)
+          # Safely decode and validate sizes
+          nonce = decode_and_validate(data.nonce, provider.nonce_size, 'nonce')
+          ciphertext = Base64.strict_decode64(data.ciphertext)
+          auth_tag = decode_and_validate(data.auth_tag, provider.auth_tag_size, 'auth_tag')
 
-        provider.decrypt(ciphertext, key, nonce, auth_tag, additional_data)
-      rescue JSON::ParserError
-        raise EncryptionError, 'Invalid encrypted data format'
+          provider.decrypt(ciphertext, key, nonce, auth_tag, additional_data)
+        rescue EncryptionError
+          raise
+        rescue StandardError
+          raise EncryptionError, 'Decryption failed'
+        end
       ensure
         Familia::Encryption.secure_wipe(key) if key
       end
 
       private
+
+      def decode_and_validate(encoded, expected_size, component)
+        decoded = Base64.strict_decode64(encoded)
+        raise EncryptionError, 'Invalid encrypted data' unless decoded.bytesize == expected_size
+        decoded
+      end
 
       def derive_key(context, version: nil)
         # Increment counter to prove no caching is happening
