@@ -30,6 +30,10 @@ module Familia
           end
         end
 
+        def reset_default_provider!
+          @default_provider = nil
+        end
+
         def available_algorithms
           providers.keys
         end
