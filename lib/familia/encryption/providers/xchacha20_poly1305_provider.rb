@@ -16,7 +16,7 @@
 #
 # For production systems handling sensitive data, consider:
 # - Hardware Security Modules (HSMs)
-# - External key management services  
+# - External key management services
 # - Languages with manual memory management
 # - Cryptographic appliances with secure memory
 
@@ -87,7 +87,11 @@ module Familia
         # @return [String] 32-byte derived key
         def derive_key(master_key, context, personal: nil)
           validate_key_length!(master_key)
-          personal_string = (personal || Familia.config.encryption_personalization).ljust(16, "\0")
+          raw_personal = personal || Familia.config.encryption_personalization
+          if raw_personal.include?("\0")
+            raise EncryptionError, 'Personalization string must not contain null bytes'
+          end
+          personal_string = raw_personal.ljust(16, "\0")
 
           RbNaCl::Hash.blake2b(
             context.force_encoding('BINARY'),
