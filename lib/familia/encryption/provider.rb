@@ -29,8 +29,10 @@ module Familia
         raise NotImplementedError
       end
 
+      # Clear key from memory (best effort, no security guarantees)
+      # Ruby provides no reliable way to securely wipe memory
       def secure_wipe(key)
-        raise NotImplementedError
+        key&.clear if key.respond_to?(:clear)
       end
 
       # Check if this provider is available

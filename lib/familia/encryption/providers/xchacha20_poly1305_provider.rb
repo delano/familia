@@ -101,6 +101,7 @@ module Familia
           )
         end
 
+        # Clear key from memory (no security guarantees in Ruby)
         def secure_wipe(key)
           key&.clear
         end

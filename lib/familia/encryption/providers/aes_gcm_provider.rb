@@ -1,5 +1,25 @@
 # lib/familia/encryption/providers/aes_gcm_provider.rb
 
+# ⚠️  RUBY MEMORY SAFETY WARNING ⚠️
+#
+# This encryption provider, like all Ruby-based cryptographic implementations,
+# stores secrets (keys, plaintext, derived keys) as Ruby strings in memory.
+#
+# SECURITY IMPLICATIONS:
+# - Keys remain in memory after use (garbage collection timing is unpredictable)
+# - Ruby strings cannot be securely wiped from memory
+# - Memory dumps may contain cryptographic secrets
+# - Swap files may persist secrets to disk
+# - String operations create copies that persist in memory
+#
+# Ruby provides NO memory safety guarantees for cryptographic secrets.
+#
+# For production systems handling sensitive data, consider:
+# - Hardware Security Modules (HSMs)
+# - External key management services
+# - Languages with manual memory management
+# - Cryptographic appliances with secure memory
+
 module Familia
   module Encryption
     module Providers
@@ -61,16 +81,9 @@ module Familia
           )
         end
 
+        # Clear key from memory (no security guarantees in Ruby)
         def secure_wipe(key)
-          return unless key
-
-          if key.respond_to?(:clear)
-            key.clear # Ruby 2.5+
-          else
-            key.replace("\x00" * key.bytesize)
-          end
-        rescue StandardError
-          nil # Best effort
+          key&.clear
         end
 
         private

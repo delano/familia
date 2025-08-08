@@ -94,11 +94,9 @@ module Familia
         derivation_count.value = 0
       end
 
-      # Secure wipe method for test monitoring (delegates to providers)
+      # Clear key from memory (no security guarantees in Ruby)
       def secure_wipe(key)
-        Registry.setup! if Registry.providers.empty?
-        provider = Registry.default_provider
-        provider&.secure_wipe(key)
+        key&.clear
       end
 
       # Get info about current encryption setup
