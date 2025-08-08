@@ -2,7 +2,6 @@
 
 require 'time'
 
-require_relative '../../lib/familia'
 require_relative '../helpers/test_helpers'
 
 ## Has all datatype relativess

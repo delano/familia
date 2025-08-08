@@ -1,4 +1,4 @@
-# lib/familia/datatype/types/unsorted_set.rb
+# lib/familia/data_type/types/unsorted_set.rb
 
 module Familia
   class Set < DataType

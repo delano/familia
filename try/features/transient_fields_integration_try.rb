@@ -1,7 +1,6 @@
 # try/features/transient_fields_integration_try.rb
 
-require_relative '../../lib/familia'
-
+require_relative '../helpers/test_helpers'
 
 class SecretService < Familia::Horreum
   feature :transient_fields
@@ -248,7 +247,8 @@ transient_fields = SecretService.field_types.values.reject(&:persistent?).map(&:
 transient_fields
 #=> [:api_key, :password, :secret_token]
 
-## TEARDOWN
+
+# TEARDOWN
 
 # Clean up Database
 @service.destroy! if @service.exists?

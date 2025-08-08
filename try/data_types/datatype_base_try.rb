@@ -1,6 +1,5 @@
-# try/datatypes/base_try.rb
+# try/data_types/base_try.rb
 
-require_relative '../../lib/familia'
 require_relative '../helpers/test_helpers'
 
 @limiter1 = Limiter.new :requests

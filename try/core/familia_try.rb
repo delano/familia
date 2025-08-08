@@ -1,6 +1,5 @@
 # try/core/familia_try.rb
 
-require_relative '../../lib/familia'
 require_relative '../helpers/test_helpers'
 
 ## Check for help class

@@ -60,7 +60,7 @@ docker exec $CONTAINER_ID bash -c '
 #   $ docker run --rm -d -p 3000:3000 \
 #     -e SECRET=$SECRET \
 #     -e REDIS_URL=redis://host.docker.internal:6379/0 \
-#     ghcr.io/onetimesecret/onetimesecret-lite:latest
+#     ghcr.io/onetimesecret/devtimesecret-lite:latest
 #
 #     abcd1234
 #

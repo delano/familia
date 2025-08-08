@@ -1,6 +1,6 @@
 # try/features/transient_fields_core_try.rb
 
-require_relative '../../lib/familia'
+require_relative '../helpers/test_helpers'
 
 class SecretService < Familia::Horreum
   feature :transient_fields

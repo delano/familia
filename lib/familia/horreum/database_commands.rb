@@ -83,7 +83,7 @@ module Familia
       end
       alias remove remove_field # deprecated
 
-      def datatype
+      def data_type
         Familia.trace :DATATYPE, dbclient, uri, caller(1..1) if Familia.debug?
         dbclient.type dbkey(suffix)
       end

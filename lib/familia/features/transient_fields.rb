@@ -35,7 +35,7 @@ module Familia
           # Use the field type system - much cleaner than alias_method approach!
           # We can now remove the transient_field method from this feature entirely
           # since it's built into DefinitionMethods using TransientFieldType
-          require_relative '../field_types/transient_field_type'
+          require_relative 'transient_fields/transient_field_type'
           field_type = TransientFieldType.new(name, as: as, **kwargs.merge(fast_method: false))
           register_field_type(field_type)
         end

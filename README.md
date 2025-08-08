@@ -1,193 +1,70 @@
-# Familia - 2.0.0
+# Familia - 2.0
 
 **Organize and store Ruby objects in Valkey/Redis. A powerful Ruby ORM (of sorts) for Valkey/Redis.**
 
 Familia provides a flexible and feature-rich way to interact with Valkey using Ruby objects. It's designed to make working with Valkey as natural as working with Ruby classes, while offering advanced features for complex data management.
 
-## Installation
+## Quick Start
 
+### 1. Installation
 
-Get it in one of the following ways:
+```bash
+# Add to Gemfile
+gem 'familia', '>= 2.0.0'
 
-* In your Gemfile: `gem 'familia', '>= 1.1.0-rc1'`
-* Install it by hand: `gem install familia --pre`
-* Or for development: `git clone git@github.com:delano/familia.git`
-
-
-## Core Concepts and Features
-
-### 1. Defining Horreum Classes
-
-Familia uses the concept of "Horreum" classes to represent Valkey-compatible objects:
-
-```ruby
-class Flower < Familia::Horreum
-  identifier_field :token
-  field :name
-  field :color
-  field :species
-  list :owners
-  set :tags
-  zset :metrics
-  hashkey :props
-  string :counter
-end
+# Or install directly
+gem install familia
 ```
 
-### 2. Flexible Identifiers
+### 2. Configure Connection
 
-You can define identifiers in various ways:
+```ruby
+# config/initializers/familia.rb (Rails)
+# or at the top of your script
+
+require 'familia'
+
+# Basic configuration
+Familia.uri = 'redis://localhost:6379/0'
+
+# Or with authentication
+Familia.uri = 'redis://user:password@localhost:6379/0'
+```
+
+### 3. Create Your First Model
 
 ```ruby
 class User < Familia::Horreum
   identifier_field :email
-  # or
-  identifier_field -> (user) { "user:#{user.email}" }
-  # or
-  identifier_field [:type, :email]
-
   field :email
-  field :type
+  field :name
+  field :created_at
 end
 ```
 
-### 3. Data Types
-
-Familia supports various Valkey-compatible data types:
+### 4. Basic Operations
 
 ```ruby
-class Product < Familia::Horreum
-  string :name
-  list :categories
-  set :tags
-  zset :ratings
-  hashkey :attributes
-end
+# Create
+user = User.new(email: 'alice@example.com', name: 'Alice')
+user.save
+
+# Find
+user = User.load('alice@example.com')
+
+# Update
+user.name = 'Alice Smith'
+user.save
+
+# Check existence
+User.exists?('alice@example.com')  #=> true
 ```
 
-### 4. Class-level Valkey-compatible Types
+## Prerequisites
 
-You can also define Valkey-compatible types at the class level:
-
-```ruby
-class Customer < Familia::Horreum
-  class_sorted_set :values, key: 'project:customers'
-  class_hashkey :projects
-  class_list :customers, suffix: []
-  class_string :message
-end
-```
-
-### 5. Automatic Expiration
-
-Use the expiration feature to set default TTL for objects:
-
-```ruby
-class Session < Familia::Horreum
-  feature :expiration
-  default_expiration 180.minutes
-end
-```
-
-### 6. Safe Dumping for APIs
-
-Control which fields are exposed when serializing objects:
-
-```ruby
-class User < Familia::Horreum
-  feature :safe_dump
-
-  @safe_dump_fields = [
-    :id,
-    :username,
-    {full_name: ->(user) { "#{user.first_name} #{user.last_name}" }}
-  ]
-end
-```
-
-### 7. Quantization for Time-based Data
-
-Use quantization for time-based metrics:
-
-```ruby
-class DailyMetric < Familia::Horreum
-  feature :quantization
-  string :counter, default_expiration: 1.day, quantize: [10.minutes, '%H:%M']
-end
-```
-
-### 8. Custom Methods and Logic
-
-Add custom methods to your Horreum classes:
-
-```ruby
-class User < Familia::Horreum
-  def full_name
-    "#{first_name} #{last_name}"
-  end
-
-  def active?
-    status == 'active'
-  end
-end
-```
-
-### 9. Custom Methods and Logic
-
-You can add custom methods to your Horreum classes:
-
-```ruby
-class Customer < Familia::Horreum
-  def active?
-    verified && !reset_requested
-  end
-end
-```
-### 10. Open-ended Serialization
-
-```ruby
-class ComplexObject < Familia::Horreum
-  def serialize_value
-    custom_serialization_method
-  end
-
-  def self.deserialize_value(data)
-    custom_deserialization_method(data)
-  end
-end
-```
-
-### 11. Transactional Operations
-
-```ruby
-user.transaction do |conn|
-  conn.set("user:#{user.id}:status", "active")
-  conn.zadd("active_users", Time.now.to_i, user.id)
-end
-```
-
-### 12. Connection Management and Pooling
-
-Familia supports custom connection providers for advanced scenarios like connection pooling:
-
-```ruby
-# Using connection_pool gem for thread-safe pooling
-require 'connection_pool'
-
-# Create pools for each logical database
-pools = {
-  "redis://localhost:6379/0" => ConnectionPool.new(size: 10) { Redis.new(db: 0) },
-  "redis://localhost:6379/1" => ConnectionPool.new(size: 5) { Redis.new(db: 1) }
-}
-
-# Configure Familia to use the pools
-Familia.connection_provider = lambda do |uri|
-  pool = pools[uri] || pools["redis://localhost:6379/0"]
-  pool.with { |conn| conn }
-end
-```
-
-See the [Connection Pooling Guide](docs/connection_pooling.md) for detailed examples.
+- **Ruby**: 3.4+ (3.4+ recommended)
+- **Valkey/Redis**: 6.0+
+- **Gems**: `redis` (automatically installed)
 
 
 ## Usage Examples

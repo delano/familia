@@ -155,9 +155,9 @@ module Familia
       #     familia_object.dbkey              == v1:bone:INDEXVALUE:object
       #     familia_object.related_object.dbkey == v1:bone:INDEXVALUE:name
       #
-      self.class.related_fields.each_pair do |name, datatype_definition|
-        klass = datatype_definition.klass
-        opts = datatype_definition.opts
+      self.class.related_fields.each_pair do |name, data_type_definition|
+        klass = data_type_definition.klass
+        opts = data_type_definition.opts
         Familia.ld "[#{self.class}] initialize_relatives #{name} => #{klass} #{opts.keys}"
 
         # As a subclass of Familia::Horreum, we add ourselves as the parent

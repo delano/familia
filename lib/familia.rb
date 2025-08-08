@@ -81,5 +81,6 @@ end
 
 require_relative 'familia/base'
 require_relative 'familia/features'
-require_relative 'familia/datatype'
+require_relative 'familia/data_type'
 require_relative 'familia/horreum'
+require_relative 'familia/encryption'

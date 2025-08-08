@@ -1,6 +1,5 @@
 # try/models/familia_object_try.rb
 
-require_relative '../../lib/familia'
 require_relative '../helpers/test_helpers'
 
 Familia.debug = false
