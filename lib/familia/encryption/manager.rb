@@ -11,7 +11,7 @@ module Familia
       def initialize(algorithm: nil)
         Registry.setup! if Registry.providers.empty?
         @provider = algorithm ? Registry.get(algorithm) : Registry.default_provider
-        raise EncryptionError, "No encryption provider available" unless @provider
+        raise EncryptionError, 'No encryption provider available' unless @provider
       end
 
       def encrypt(plaintext, context:, additional_data: nil)
@@ -47,7 +47,7 @@ module Familia
 
         provider.decrypt(ciphertext, key, nonce, auth_tag, additional_data)
       rescue JSON::ParserError
-        raise EncryptionError, "Invalid encrypted data format"
+        raise EncryptionError, 'Invalid encrypted data format'
       ensure
         Familia::Encryption.secure_wipe(key) if key
       end
@@ -67,7 +67,7 @@ module Familia
       end
 
       def get_master_key(version)
-        raise EncryptionError, "Key version cannot be nil" if version.nil?
+        raise EncryptionError, 'Key version cannot be nil' if version.nil?
 
         key = encryption_keys[version] || encryption_keys[version.to_sym] || encryption_keys[version.to_s]
         raise EncryptionError, "No key for version: #{version}" unless key

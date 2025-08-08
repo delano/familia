@@ -40,8 +40,8 @@ module Familia
           cipher.auth_data = additional_data.to_s if additional_data
 
           cipher.update(ciphertext) + cipher.final
-        rescue OpenSSL::Cipher::CipherError => e
-          raise EncryptionError, "Decryption failed - invalid key or corrupted data"
+        rescue OpenSSL::Cipher::CipherError
+          raise EncryptionError, 'Decryption failed - invalid key or corrupted data'
         end
 
         def generate_nonce
@@ -62,11 +62,11 @@ module Familia
           return unless key
 
           if key.respond_to?(:clear)
-            key.clear  # Ruby 2.5+
+            key.clear # Ruby 2.5+
           else
             key.replace("\x00" * key.bytesize)
           end
-        rescue
+        rescue StandardError
           nil # Best effort
         end
 

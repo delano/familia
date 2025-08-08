@@ -57,6 +57,6 @@ class SingleUseRedactedString < RedactedString
   # to maintain the single-use guarantee.
   #
   def value
-    raise SecurityError, "Direct value access not allowed for single-use secrets. Use #expose with a block."
+    raise SecurityError, 'Direct value access not allowed for single-use secrets. Use #expose with a block.'
   end
 end

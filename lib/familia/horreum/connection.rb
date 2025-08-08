@@ -2,7 +2,6 @@
 
 module Familia
   class Horreum
-
     # Familia::Horreum::Connection
     #
     module Connection
@@ -47,33 +46,28 @@ module Familia
       #
       # @note This method works with the global Familia.transaction context when available
       #
-      def transaction
+      def transaction(&)
         # If we're already in a Familia.transaction context, just yield the multi connection
         if Fiber[:familia_transaction]
           yield(Fiber[:familia_transaction])
         else
           # Otherwise, create a local transaction
-          block_result = dbclient.multi do |conn|
-            yield(conn)
-          end
+          block_result = dbclient.multi(&)
         end
         block_result
       end
       alias multi transaction
 
-      def pipeline
+      def pipeline(&)
         # If we're already in a Familia.pipeline context, just yield the pipeline connection
         if Fiber[:familia_pipeline]
           yield(Fiber[:familia_pipeline])
         else
           # Otherwise, create a local transaction
-          block_result = dbclient.pipeline do |conn|
-            yield(conn)
-          end
+          block_result = dbclient.pipeline(&)
         end
         block_result
       end
-
     end
 
     # include for instance methods after it's loaded. Note that Horreum::Utils

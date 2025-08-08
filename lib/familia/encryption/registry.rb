@@ -11,12 +11,14 @@ module Familia
 
         def register(provider_class)
           return unless provider_class.available?
+
           providers[provider_class::ALGORITHM] = provider_class
         end
 
         def get(algorithm)
           provider_class = providers[algorithm]
           raise EncryptionError, "Decryption failed - unsupported algorithm: #{algorithm}" unless provider_class
+
           provider_class.new
         end
 

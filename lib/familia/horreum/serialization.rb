@@ -1,8 +1,6 @@
 # lib/familia/horreum/serialization.rb
 #
 module Familia
-
-
   # Familia::Horreum
   #
   class Horreum
@@ -26,7 +24,7 @@ module Familia
     #
     # May your Database returns be ever valid, and your data ever flowing!
     #
-    @valid_command_return_values = ["OK", true, 1, 0, nil].freeze
+    @valid_command_return_values = ['OK', true, 1, 0, nil].freeze
 
     class << self
       attr_reader :valid_command_return_values
@@ -59,7 +57,6 @@ module Familia
     # the Ruby roses, but watch out for the Database thorns!)
     #
     module Serialization
-
       # Save our precious data to Redis, with a sprinkle of timestamp magic!
       #
       # This method is like a conscientious historian, not only recording your
@@ -76,7 +73,7 @@ module Familia
       # @note This method will leave breadcrumbs (traces) if you're in debug mode.
       #   It's like Hansel and Gretel, but for data operations!
       #
-      def save update_expiration: true
+      def save(update_expiration: true)
         Familia.trace :SAVE, dbclient, uri, caller(1..1) if Familia.debug?
 
         # No longer need to sync computed identifier with a cache field
@@ -198,11 +195,11 @@ module Familia
       # @note The expiration update is only performed for classes that have
       #   the expiration feature enabled. For others, it's a no-op.
       #
-      def commit_fields update_expiration: true
+      def commit_fields(update_expiration: true)
         prepared_value = to_h
         Familia.ld "[commit_fields] Begin #{self.class} #{dbkey} #{prepared_value} (exp: #{update_expiration})"
 
-        result = self.hmset(prepared_value)
+        result = hmset(prepared_value)
 
         # Only classes that have the expiration ferature enabled will
         # actually set an expiration time on their keys. Otherwise
@@ -416,9 +413,7 @@ module Familia
         end
 
         # If both the distinguisher and dump_method return nil, log an error
-        if prepared.nil?
-          Familia.ld "[#{self.class}#serialize_value] nil returned for #{self.class}"
-        end
+        Familia.ld "[#{self.class}#serialize_value] nil returned for #{self.class}" if prepared.nil?
 
         prepared
       end
@@ -433,7 +428,7 @@ module Familia
       # @return [Object] The deserialized value (Hash, Array, or original string)
       #
       def deserialize_value(val, symbolize: true)
-        return val if val.nil? || val == ""
+        return val if val.nil? || val == ''
 
         # Try to parse as JSON first for complex types
         begin
@@ -471,7 +466,6 @@ module Familia
           Familia.ld "[reset_transient_fields!] Reset #{field_name} to nil"
         end
       end
-
     end
 
     include Serialization # these become Horreum instance methods

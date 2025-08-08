@@ -4,7 +4,6 @@ require_relative 'data_type/commands'
 require_relative 'data_type/serialization'
 
 module Familia
-
   # DataType - Base class for Database data type wrappers
   #
   # This class provides common functionality for various Database data types
@@ -54,7 +53,7 @@ module Familia
         obj.default_expiration = default_expiration # method added via Features::Expiration
         obj.uri = uri
         obj.parent = self
-        super(obj)
+        super
       end
 
       def valid_keys_only(opts)

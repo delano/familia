@@ -17,7 +17,6 @@ module Familia
   module Encryption
     EncryptedData = Data.define(:algorithm, :nonce, :ciphertext, :auth_tag, :key_version)
 
-
     # Smart facade with provider selection and field-specific encryption
     #
     # Usage in EncryptedFieldType can now be more flexible:
@@ -125,8 +124,8 @@ module Familia
       # Benchmark available providers
       def benchmark(iterations: 1000)
         require 'benchmark'
-        test_data = "x" * 1024  # 1KB test
-        context = "benchmark:test"
+        test_data = 'x' * 1024 # 1KB test
+        context = 'benchmark:test'
 
         results = {}
         Registry.providers.each do |algo, provider_class|
@@ -151,8 +150,8 @@ module Familia
       end
 
       def validate_configuration!
-        raise EncryptionError, "No encryption keys configured" if encryption_keys.empty?
-        raise EncryptionError, "No current key version set" unless current_key_version
+        raise EncryptionError, 'No encryption keys configured' if encryption_keys.empty?
+        raise EncryptionError, 'No current key version set' unless current_key_version
 
         current_key = encryption_keys[current_key_version]
         raise EncryptionError, "Current key version not found: #{current_key_version}" unless current_key
@@ -160,11 +159,11 @@ module Familia
         begin
           Base64.strict_decode64(current_key)
         rescue ArgumentError
-          raise EncryptionError, "Current encryption key is not valid Base64"
+          raise EncryptionError, 'Current encryption key is not valid Base64'
         end
 
         Registry.setup!
-        raise EncryptionError, "No encryption providers available" unless Registry.default_provider
+        raise EncryptionError, 'No encryption providers available' unless Registry.default_provider
       end
 
       private

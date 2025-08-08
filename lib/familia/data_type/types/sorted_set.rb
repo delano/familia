@@ -99,36 +99,36 @@ module Familia
       revrangeraw 0, count, opts
     end
 
-    def each(&blk)
-      members.each(&blk)
+    def each(&)
+      members.each(&)
     end
 
-    def each_with_index(&blk)
-      members.each_with_index(&blk)
+    def each_with_index(&)
+      members.each_with_index(&)
     end
 
-    def collect(&blk)
-      members.collect(&blk)
+    def collect(&)
+      members.collect(&)
     end
 
-    def select(&blk)
-      members.select(&blk)
+    def select(&)
+      members.select(&)
     end
 
-    def eachraw(&blk)
-      membersraw.each(&blk)
+    def eachraw(&)
+      membersraw.each(&)
     end
 
-    def eachraw_with_index(&blk)
-      membersraw.each_with_index(&blk)
+    def eachraw_with_index(&)
+      membersraw.each_with_index(&)
     end
 
-    def collectraw(&blk)
-      membersraw.collect(&blk)
+    def collectraw(&)
+      membersraw.collect(&)
     end
 
-    def selectraw(&blk)
-      membersraw.select(&blk)
+    def selectraw(&)
+      membersraw.select(&)
     end
 
     def range(sidx, eidx, opts = {})

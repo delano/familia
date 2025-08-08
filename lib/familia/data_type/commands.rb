@@ -1,11 +1,9 @@
 # lib/familia/data_type/commands.rb
 
 class Familia::DataType
-
   # Must be included in all DataType classes to provide Redis
   # commands. The class must have a dbkey method.
   module Commands
-
     def move(logical_database)
       dbclient.move dbkey, logical_database
     end
@@ -52,8 +50,7 @@ class Familia::DataType
     end
 
     def echo(meth, trace)
-      dbclient.echo "[#{self.class}\##{meth}] #{trace} (#{@opts[:class]}\#)"
+      dbclient.echo "[#{self.class}##{meth}] #{trace} (#{@opts[:class]}#)"
     end
-
   end
 end

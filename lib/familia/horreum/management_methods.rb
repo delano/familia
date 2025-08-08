@@ -4,7 +4,6 @@ require_relative 'related_fields_management'
 
 module Familia
   class Horreum
-
     # ManagementMethods: Provides class-level functionality for Horreum
     # records.
     #
@@ -17,7 +16,6 @@ module Familia
     #
     module ManagementMethods
       include Familia::Horreum::RelatedFieldsManagement
-
 
       # Creates and persists a new instance of the class.
       #
@@ -261,8 +259,6 @@ module Familia
         dbclient.keys(dbkey(filter)).compact.size
       end
       alias size matching_keys_count # For backwards compatibility
-
     end
-
   end
 end

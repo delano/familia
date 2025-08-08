@@ -39,8 +39,8 @@ module Familia
           aad = additional_data.to_s
 
           box.decrypt(nonce, ciphertext_with_tag, aad)
-        rescue RbNaCl::CryptoError => e
-          raise EncryptionError, "Decryption failed - invalid key or corrupted data"
+        rescue RbNaCl::CryptoError
+          raise EncryptionError, 'Decryption failed - invalid key or corrupted data'
         end
 
         def generate_nonce

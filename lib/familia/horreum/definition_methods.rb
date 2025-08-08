@@ -91,17 +91,17 @@ module Familia
 
         # Create appropriate field type based on category
         field_type = if category == :transient
-          require_relative '../features/transient_fields/transient_field_type'
-          TransientFieldType.new(name, as: as, fast_method: false, on_conflict: on_conflict)
-        else
-          # For regular fields and other categories, create custom field type with category override
-          custom_field_type = Class.new(FieldType) do
-            define_method :category do
-              category || :field
-            end
-          end
-          custom_field_type.new(name, as: as, fast_method: fast_method, on_conflict: on_conflict)
-        end
+                       require_relative '../features/transient_fields/transient_field_type'
+                       TransientFieldType.new(name, as: as, fast_method: false, on_conflict: on_conflict)
+                     else
+                       # For regular fields and other categories, create custom field type with category override
+                       custom_field_type = Class.new(FieldType) do
+                         define_method :category do
+                           category || :field
+                         end
+                       end
+                       custom_field_type.new(name, as: as, fast_method: fast_method, on_conflict: on_conflict)
+                     end
 
         register_field_type(field_type)
       end
@@ -231,9 +231,9 @@ module Familia
       # @param name [Symbol] The field name
       # @param options [Hash] Field options
       #
-      def transient_field(name, **options)
+      def transient_field(name, **)
         require_relative '../features/transient_fields/transient_field_type'
-        field_type = TransientFieldType.new(name, **options.merge(fast_method: false))
+        field_type = TransientFieldType.new(name, **, fast_method: false)
         register_field_type(field_type)
       end
 
@@ -442,7 +442,7 @@ module Familia
         method_obj = instance_method(method_name)
         source_location = method_obj.source_location
 
-        return "" unless source_location
+        return '' unless source_location
 
         path = Familia.pretty_path(source_location[0])
         line = source_location[1]

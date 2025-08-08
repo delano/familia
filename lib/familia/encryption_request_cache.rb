@@ -3,7 +3,7 @@
 # Request-scoped caching for encryption keys (if needed for performance)
 # This should ONLY be enabled if performance testing shows it's necessary
 #
-# Usage in Rails/Rack middleware:
+# Usage in Rack middleware:
 #   class ClearEncryptionCacheMiddleware
 #     def call(env)
 #       Familia::Encryption.clear_request_cache!

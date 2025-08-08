@@ -7,11 +7,9 @@ module Familia
   # instance-level functionality for Database operations and object management.
   #
   class Horreum
-
     # Utils - Module containing utility methods for Familia::Horreum (InstanceMethods)
     #
     module Utils
-
       # def uri
       #   base_uri = self.class.uri || Familia.uri
       #   u = base_uri.dup # make a copy to modify safely
@@ -38,7 +36,6 @@ module Familia
       def join(*args)
         Familia.join(args.map { |field| send(field) })
       end
-
     end
 
     include Utils # these become Horreum instance methods

@@ -14,10 +14,10 @@ module Familia
         # @param name [Symbol] Field name
         # @param aad_fields [Array<Symbol>] Optional fields to include in AAD
         # @param kwargs [Hash] Additional field options
-        def encrypted_field(name, aad_fields: [], **kwargs)
+        def encrypted_field(name, aad_fields: [], **)
           require_relative 'encrypted_fields/encrypted_field_type'
 
-          field_type = EncryptedFieldType.new(name, aad_fields: aad_fields, **kwargs)
+          field_type = EncryptedFieldType.new(name, aad_fields: aad_fields, **)
           register_field_type(field_type)
         end
       end

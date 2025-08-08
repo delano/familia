@@ -9,9 +9,6 @@ module V2
     # Provides the standard core object fields and methods.
     #
     module RelatableObject
-      klass = self
-      err_klass = V2::Features::RelatableObjectError
-
       def self.included(base)
         base.class_sorted_set :relatable_objids
         base.class_hashkey :owners
@@ -82,7 +79,8 @@ module V2
 
         def owned?
           # We can only have an owner if we are relatable ourselves.
-          return false unless self.is_a?(RelatableObject)
+          return false unless is_a?(RelatableObject)
+
           # If our object identifier is present, we have an owner
           self.class.owners.key?(objid)
         end
