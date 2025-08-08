@@ -1,5 +1,32 @@
 # lib/familia/encryption/providers/xchacha20_poly1305_provider.rb
 
+# ⚠️  RUBY MEMORY SAFETY WARNING ⚠️
+#
+# This encryption provider, like all Ruby-based cryptographic implementations,
+# stores secrets (keys, plaintext, derived keys) as Ruby strings in memory.
+#
+# SECURITY IMPLICATIONS:
+# - Keys remain in memory after use (garbage collection timing is unpredictable)
+# - Ruby strings cannot be securely wiped from memory
+# - Memory dumps may contain cryptographic secrets
+# - Swap files may persist secrets to disk
+# - String operations create copies that persist in memory
+#
+# Ruby provides NO memory safety guarantees for cryptographic secrets.
+#
+# For production systems handling sensitive data, consider:
+# - Hardware Security Modules (HSMs)
+# - External key management services  
+# - Languages with manual memory management
+# - Cryptographic appliances with secure memory
+
+begin
+  require 'rbnacl'
+rescue LoadError
+  # RbNaCl not available - provider will report as unavailable
+  # To add: gem 'rbnacl', '~> 7.1', '>= 7.1.1'
+end
+
 module Familia
   module Encryption
     module Providers
@@ -9,7 +36,7 @@ module Familia
         AUTH_TAG_SIZE = 16
 
         def self.available?
-          defined?(RbNaCl)
+          !!defined?(RbNaCl)
         end
 
         def self.priority
@@ -71,7 +98,7 @@ module Familia
         end
 
         def secure_wipe(key)
-          RbNaCl::Util.zero(key) if key
+          key&.clear
         end
 
         private
