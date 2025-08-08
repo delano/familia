@@ -4,7 +4,7 @@ require_relative '../helpers/test_helpers'
 
 Familia.debug = false
 
-@identifier = 'tryouts-28@onetimesecret.com'
+@identifier = 'tryouts-28@onetimesecret.dev'
 @customer = Customer.new @identifier
 
 ## Basic save functionality works
@@ -22,7 +22,7 @@ Familia.debug = false
 
 ## to_h includes the custid field (using symbol keys)
 @customer.to_h[:custid]
-#=> "tryouts-28@onetimesecret.com"
+#=> "tryouts-28@onetimesecret.dev"
 
 ## to_a returns field array in definition order
 @customer.to_a.class

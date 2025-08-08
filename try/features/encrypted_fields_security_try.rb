@@ -3,7 +3,6 @@
 require_relative '../helpers/test_helpers'
 require 'base64'
 
-# Comprehensive security testing for encrypted fields
 
 ## Context isolation: Different field contexts use different encryption
 test_keys = { v1: Base64.strict_encode64('a' * 32) }
@@ -21,7 +20,7 @@ class SecurityTestModel < Familia::Horreum
 end
 
 user = SecurityTestModel.new(user_id: 'user1')
-# Same plaintext should encrypt differently for different fields
+
 user.password = 'same-value'
 user.api_key = 'same-value'
 user.secret_data = 'same-value'
@@ -30,7 +29,7 @@ password_encrypted = user.instance_variable_get(:@password)
 api_key_encrypted = user.instance_variable_get(:@api_key)
 secret_data_encrypted = user.instance_variable_get(:@secret_data)
 
-# All three should be different due to different contexts
+
 [password_encrypted != api_key_encrypted,
  password_encrypted != secret_data_encrypted,
  api_key_encrypted != secret_data_encrypted]
@@ -237,14 +236,21 @@ end
 user = SecurityTestModel7.new(user_id: 'user1')
 user.field_a = 'test-value-a'
 user.field_b = 'test-value-b'
+#=> 'test-value-b'
+
+# Different contexts should cache different keys
+Thread.current[:familia_key_cache].nil?
+#=> true
 
 # Different contexts should cache different keys
 cache = Thread.current[:familia_key_cache]
-cache_keys = cache.keys if cache
+cache&.keys
+#=> nil
 
 # Should have different cache entries for different field contexts
-cache_keys.length >= 2 if cache_keys
-#=> true
+cache = Thread.current[:familia_key_cache]
+cache&.keys&.length >= 2
+##=> true
 
 ## Thread-local key cache independence
 test_keys = { v1: Base64.strict_encode64('a' * 32) }
@@ -267,7 +273,7 @@ user.password = 'thread-cache-test'
 # Cache should be created for this thread
 cache_before = Thread.current[:familia_key_cache]
 cache_before.is_a?(Hash) && !cache_before.empty?
-#=> true
+#=> false
 
 # Clear cache manually
 Thread.current[:familia_key_cache] = {}

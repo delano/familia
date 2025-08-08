@@ -2,9 +2,10 @@
 
 # Debug script to trace encryption cache behavior
 
-require 'bundler/setup'
-require_relative 'lib/familia'
 require 'base64'
+require 'bundler/setup'
+
+require_relative '../../helpers/test_helpers'
 
 # Setup test configuration
 test_keys = { v1: Base64.strict_encode64('a' * 32) }

@@ -2,9 +2,10 @@
 
 # Debug script to trace encryption method calls
 
-require 'bundler/setup'
-require_relative 'lib/familia'
 require 'base64'
+require 'bundler/setup'
+
+require_relative '../../helpers/test_helpers'
 
 # Monkey patch to add tracing
 module Familia

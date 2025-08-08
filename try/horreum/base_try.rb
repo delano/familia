@@ -4,7 +4,7 @@ require_relative '../helpers/test_helpers'
 
 Familia.debug = false
 
-@identifier = 'tryouts-27@onetimesecret.com'
+@identifier = 'tryouts-27@onetimesecret.dev'
 @customer = Customer.new @identifier
 @hashkey = Familia::HashKey.new 'tryouts-27'
 
