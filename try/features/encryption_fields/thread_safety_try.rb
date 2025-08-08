@@ -163,6 +163,37 @@ debug "Atomic counter test completed. Final count: #{Familia::Encryption.derivat
 Familia::Encryption.derivation_count.value
 #=> 20
 
+## Concurrent encryption operations maintain counter integrity
+class ThreadTest2 < Familia::Horreum
+  feature :encrypted_fields
+  identifier_field :id
+  field :id
+  encrypted_field :secret
+end
+
+Familia::Encryption.reset_derivation_count!
+errors = Concurrent::Array.new
+barrier = Concurrent::CyclicBarrier.new(10)
+
+threads = 10.times.map do |i|
+  Thread.new do
+    barrier.wait # Synchronize start
+    model = ThreadTest.new(id: "thread-#{i}")
+    begin
+      5.times { |j|
+        model.secret = "value-#{i}-#{j}"
+        model.secret # decrypt
+      }
+    rescue => e
+      errors << e
+    end
+  end
+end
+
+threads.each(&:join)
+errors.empty? && Familia::Encryption.derivation_count.value == 100
+#=> true
+
 # Cleanup
 Familia.config.encryption_keys = nil
 Familia.config.current_key_version = nil
