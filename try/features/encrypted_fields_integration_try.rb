@@ -121,6 +121,69 @@ model.metadata['last_login'] = Time.now.to_i.to_s
 [model.password, model.activity_log.size, model.metadata.has_key?('last_login')]
 #=> ['secure-pass', 1, true]
 
+## Provider-specific integration: XChaCha20Poly1305 encryption
+test_keys = { v1: Base64.strict_encode64('a' * 32) }
+Familia.config.encryption_keys = test_keys
+Familia.config.current_key_version = :v1
+
+class XChaChaIntegrationModel < Familia::Horreum
+  feature :encrypted_fields
+  identifier_field :model_id
+
+  field :model_id
+  encrypted_field :secret_data
+end
+
+xchacha_model = XChaChaIntegrationModel.new(model_id: 'xchacha-test')
+xchacha_model.secret_data = 'xchacha20poly1305 integration test'
+
+# Verify XChaCha20Poly1305 is used by default
+encrypted_data = xchacha_model.instance_variable_get(:@secret_data)
+parsed_data = JSON.parse(encrypted_data, symbolize_names: true)
+parsed_data[:algorithm]
+#=> "xchacha20poly1305"
+
+# Verify decryption works
+xchacha_model = XChaChaIntegrationModel.new(model_id: 'xchacha-test')
+xchacha_model.secret_data = 'xchacha20poly1305 integration test'
+xchacha_model.secret_data
+#=> "xchacha20poly1305 integration test"
+
+## Provider-specific integration: AES-GCM with forced algorithm
+test_keys = { v1: Base64.strict_encode64('a' * 32) }
+Familia.config.encryption_keys = test_keys
+Familia.config.current_key_version = :v1
+
+class AESIntegrationModel < Familia::Horreum
+  feature :encrypted_fields
+  identifier_field :model_id
+
+  field :model_id
+  encrypted_field :secret_data
+end
+
+aes_model = AESIntegrationModel.new(model_id: 'aes-test')
+
+# Manually encrypt with AES-GCM to test cross-algorithm compatibility
+aes_encrypted = Familia::Encryption.encrypt_with('aes-256-gcm', 'aes-gcm integration test',
+  context: 'AESIntegrationModel:aes-test:secret_data')
+aes_model.instance_variable_set(:@secret_data, aes_encrypted)
+
+# Verify AES-GCM algorithm is stored
+parsed_aes_data = JSON.parse(aes_encrypted, symbolize_names: true)
+parsed_aes_data[:algorithm]
+#=> "aes-256-gcm"
+
+# Verify cross-algorithm decryption works (default manager should handle AES-GCM)
+test_keys = { v1: Base64.strict_encode64('a' * 32) }
+Familia.config.encryption_keys = test_keys
+Familia.config.current_key_version = :v1
+aes_model = AESIntegrationModel.new(model_id: 'aes-test')
+aes_encrypted = Familia::Encryption.encrypt_with('aes-256-gcm', 'aes-gcm integration test',
+  context: 'AESIntegrationModel:aes-test:secret_data')
+aes_model.instance_variable_set(:@secret_data, aes_encrypted)
+aes_model.secret_data
+#=> "aes-gcm integration test"
+
 
 # TEARDOWN
-Thread.current[:familia_key_cache]&.clear if Thread.current[:familia_key_cache]

@@ -250,5 +250,79 @@ rescue Familia::EncryptionError => e
 end
 #=> true
 
+## Algorithm-specific encryption: XChaCha20Poly1305 round-trip
+test_keys = { v1: Base64.strict_encode64('a' * 32) }
+context = "TestModel:secret_field:user123"
+plaintext = "xchacha20poly1305 test data"
+
+Familia.config.encryption_keys = test_keys
+Familia.config.current_key_version = :v1
+encrypted_xchacha = Familia::Encryption.encrypt_with('xchacha20poly1305', plaintext, context: context)
+decrypted_xchacha = Familia::Encryption.decrypt(encrypted_xchacha, context: context)
+decrypted_xchacha
+#=> "xchacha20poly1305 test data"
+
+## Algorithm-specific encryption: AES-GCM round-trip
+test_keys = { v1: Base64.strict_encode64('a' * 32) }
+context = "TestModel:secret_field:user123"
+plaintext = "aes-256-gcm test data"
+
+Familia.config.encryption_keys = test_keys
+Familia.config.current_key_version = :v1
+encrypted_aes = Familia::Encryption.encrypt_with('aes-256-gcm', plaintext, context: context)
+decrypted_aes = Familia::Encryption.decrypt(encrypted_aes, context: context)
+decrypted_aes
+#=> "aes-256-gcm test data"
+
+## XChaCha20Poly1305 has correct algorithm in encrypted data
+test_keys = { v1: Base64.strict_encode64('a' * 32) }
+context = "TestModel:secret_field:user123"
+plaintext = "algorithm check"
+
+Familia.config.encryption_keys = test_keys
+Familia.config.current_key_version = :v1
+encrypted_xchacha = Familia::Encryption.encrypt_with('xchacha20poly1305', plaintext, context: context)
+encrypted_data_xchacha = JSON.parse(encrypted_xchacha, symbolize_names: true)
+encrypted_data_xchacha[:algorithm]
+#=> "xchacha20poly1305"
+
+## AES-GCM has correct algorithm in encrypted data
+test_keys = { v1: Base64.strict_encode64('a' * 32) }
+context = "TestModel:secret_field:user123"
+plaintext = "algorithm check"
+
+Familia.config.encryption_keys = test_keys
+Familia.config.current_key_version = :v1
+encrypted_aes = Familia::Encryption.encrypt_with('aes-256-gcm', plaintext, context: context)
+encrypted_data_aes = JSON.parse(encrypted_aes, symbolize_names: true)
+encrypted_data_aes[:algorithm]
+#=> "aes-256-gcm"
+
+## XChaCha20Poly1305 uses 24-byte nonces
+test_keys = { v1: Base64.strict_encode64('a' * 32) }
+context = "TestModel:secret_field:user123"
+plaintext = "nonce size test"
+
+Familia.config.encryption_keys = test_keys
+Familia.config.current_key_version = :v1
+encrypted_xchacha = Familia::Encryption.encrypt_with('xchacha20poly1305', plaintext, context: context)
+encrypted_data_xchacha = JSON.parse(encrypted_xchacha, symbolize_names: true)
+nonce_bytes_xchacha = Base64.strict_decode64(encrypted_data_xchacha[:nonce])
+nonce_bytes_xchacha.length
+#=> 24
+
+## AES-GCM uses 12-byte nonces
+test_keys = { v1: Base64.strict_encode64('a' * 32) }
+context = "TestModel:secret_field:user123"
+plaintext = "nonce size test"
+
+Familia.config.encryption_keys = test_keys
+Familia.config.current_key_version = :v1
+encrypted_aes = Familia::Encryption.encrypt_with('aes-256-gcm', plaintext, context: context)
+encrypted_data_aes = JSON.parse(encrypted_aes, symbolize_names: true)
+nonce_bytes_aes = Base64.strict_decode64(encrypted_data_aes[:nonce])
+nonce_bytes_aes.length
+#=> 12
+
 # TEARDOWN
 Thread.current[:familia_key_cache]&.clear if Thread.current[:familia_key_cache]
