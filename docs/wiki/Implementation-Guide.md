@@ -2,48 +2,88 @@
 
 ## Architecture Overview
 
-The encrypted fields feature extends Familia's existing field system with transformation hooks:
+The encrypted fields feature uses a modular provider system with field transformation hooks:
 
 ```
-User Input → Field Setter → Serialize Transform → Encryption → Redis
-Redis → Decryption → Deserialize Transform → Field Getter → User Output
+User Input → Field Setter → Provider Selection → Encryption → Redis/Valkey
+Redis/Valkey → Algorithm Detection → Decryption → Field Getter → User Output
+```
+
+### Provider Architecture
+
+```
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+│   Manager       │    │    Registry      │    │   Providers     │
+│                 │    │                  │    │                 │
+│ - encrypt()     │───→│ - get()          │───→│ XChaCha20Poly   │
+│ - decrypt()     │    │ - register()     │    │ AES-GCM         │
+│ - derive_key()  │    │ - priority       │    │ (Future: More)  │
+└─────────────────┘    └──────────────────┘    └─────────────────┘
 ```
 
 ## Core Components
 
-### 1. Transform Hooks
+### 1. Registry System
 
-Fields now support transform callbacks:
-
-```ruby
-FieldDefinition = Data.define(
-  :field_name,
-  :method_name,
-  :serialize_transform,    # Called before storage
-  :deserialize_transform   # Called after retrieval
-)
-```
-
-### 2. Encryption Module
-
-Handles the cryptographic operations:
+The Registry manages available encryption providers and selects the best one:
 
 ```ruby
-module Familia::Encryption
-  # Encrypts with field-specific derived key
-  def self.encrypt(plaintext, context:, additional_data: nil)
+module Familia::Encryption::Registry
+  # Auto-register available providers by priority
+  def self.setup!
 
-  # Decrypts and verifies authenticity
-  def self.decrypt(ciphertext, context:, additional_data: nil)
+  # Get provider instance by algorithm
+  def self.get(algorithm)
+
+  # Get highest-priority available provider
+  def self.default_provider
 end
 ```
 
-### 3. Key Derivation
+### 2. Manager Class
 
-Each field gets a unique encryption key:
+The Manager handles encryption/decryption operations with provider delegation:
+
+```ruby
+class Familia::Encryption::Manager
+  # Use specific algorithm or auto-select best
+  def initialize(algorithm: nil)
+
+  # Encrypt with context-specific key derivation
+  def encrypt(plaintext, context:, additional_data: nil)
+
+  # Decrypt with automatic algorithm detection
+  def decrypt(encrypted_json, context:, additional_data: nil)
+end
+```
+
+### 3. Provider Interface
+
+All providers implement a common interface:
+
+```ruby
+class Provider
+  ALGORITHM = 'algorithm-name'
+
+  def self.available?        # Check if dependencies are met
+  def self.priority          # Higher = preferred (XChaCha20: 100, AES: 50)
+
+  def encrypt(plaintext, key, additional_data)
+  def decrypt(ciphertext, key, nonce, auth_tag, additional_data)
+  def derive_key(master_key, context)
+  def generate_nonce
+end
+```
+
+### 4. Key Derivation
+
+Each field gets a unique encryption key using provider-specific methods:
 
 ```
-Master Key + Field Context → HKDF/BLAKE2b → Field-Specific Key
+Master Key + Field Context → Provider KDF → Field-Specific Key
+
+XChaCha20-Poly1305: BLAKE2b with personalization
+AES-256-GCM:        HKDF-SHA256
 ```
 
 ## Implementation Steps
@@ -79,13 +119,27 @@ Familia::Encryption.validate_configuration!
 ### Step 3: Generate Keys
 
 ```bash
-# Generate a secure key
-$ familia encryption:generate_key --bits 256
+# Generate a secure 256-bit key (32 bytes)
+$ openssl rand -base64 32
 # => base64_encoded_key_here
 
 # Add to environment
 $ echo "FAMILIA_ENCRYPTION_KEY_V1=base64_encoded_key_here" >> .env
 ```
+
+### Step 4: Install Optional Dependencies
+
+For best security and performance, install RbNaCl:
+
+```bash
+# Add to Gemfile
+gem 'rbnacl', '~> 7.1', '>= 7.1.1'
+
+# Install
+$ bundle install
+```
+
+Without RbNaCl, Familia falls back to OpenSSL AES-256-GCM (still secure but lower priority).
 
 ## Advanced Usage
 
@@ -118,24 +172,63 @@ customers = Customer.batch_create([
 ])
 ```
 
-## Performance Optimization
+## Provider-Specific Features
 
-### Request-Scoped Key Caching
+### XChaCha20-Poly1305 Provider (Recommended)
 
 ```ruby
-# Automatically enabled in web frameworks
-# Manual control for other contexts:
-Familia::Encryption.with_key_cache do
-  # All operations here share derived keys
-  Customer.find_each { |c| c.process }
-end
+# Enable with RbNaCl gem
+gem 'rbnacl', '~> 7.1'
+
+# Benefits:
+# - Extended nonce (192 bits vs 96 bits)
+# - Better resistance to nonce reuse
+# - BLAKE2b key derivation with personalization
+# - Priority: 100 (highest)
+```
+
+### AES-256-GCM Provider (Fallback)
+
+```ruby
+# Always available with OpenSSL
+# - 256-bit keys, 96-bit nonces
+# - HKDF-SHA256 key derivation
+# - Priority: 50
+# - Good compatibility, proven security
+```
+
+## Performance Optimization
+
+### Provider Benchmarking
+
+```ruby
+# Compare provider performance
+results = Familia::Encryption.benchmark(iterations: 1000)
+puts results
+# => {
+#   "xchacha20poly1305" => { time: 0.45, ops_per_sec: 4444, priority: 100 },
+#   "aes-256-gcm"       => { time: 0.52, ops_per_sec: 3846, priority: 50 }
+# }
+```
+
+### Key Derivation Monitoring
+
+```ruby
+# Monitor key derivations (should increment with each operation)
+puts Familia::Encryption.derivation_count.value
+# => 42
+
+# Reset counter for testing
+Familia::Encryption.reset_derivation_count!
 ```
 
 ### Memory Management
 
-With libsodium installed:
-- Keys are automatically wiped from memory
-- Plaintext values cleared after use
+**⚠️ Important**: Ruby provides no memory safety guarantees. See security warnings in provider files.
+
+- Keys are cleared from variables after use (best effort)
+- No protection against memory dumps or GC copying
+- Plaintext exists in Ruby strings during processing
 
 ## Testing
 
