@@ -69,6 +69,10 @@ module Familia
 
         # Use provided provider or fall back to instance provider
         provider ||= @provider
+
+        # Require explicit provider in decrypt context
+        raise EncryptionError, 'Provider required for key derivation' unless provider
+
         version ||= current_key_version
         master_key = get_master_key(version)
 
