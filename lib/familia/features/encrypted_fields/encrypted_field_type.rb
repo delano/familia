@@ -4,11 +4,12 @@ require_relative '../../field_type'
 
 module Familia
   class EncryptedFieldType < FieldType
-    attr_reader :aad_fields
+    attr_reader :aad_fields, :algorithm
 
-    def initialize(name, aad_fields: [], **options)
+    def initialize(name, aad_fields: [], algorithm: nil, **options)
       super(name, **options.merge(on_conflict: :raise))
       @aad_fields = Array(aad_fields).freeze
+      @algorithm = algorithm
     end
 
     def define_setter(klass)
@@ -64,7 +65,11 @@ module Familia
       context = build_context(record)
       additional_data = build_aad(record)
 
-      Familia::Encryption.encrypt(value, context: context, additional_data: additional_data)
+      if @algorithm
+        Familia::Encryption.encrypt_with(@algorithm, value, context: context, additional_data: additional_data)
+      else
+        Familia::Encryption.encrypt(value, context: context, additional_data: additional_data)
+      end
     end
 
     # Decrypt a value for the given record
