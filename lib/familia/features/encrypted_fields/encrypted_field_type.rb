@@ -1,6 +1,6 @@
 # lib/familia/field_types/encrypted_field_type.rb
 
-require 'familia/field_type'
+require_relative '../../field_type'
 
 module Familia
   class EncryptedFieldType < FieldType

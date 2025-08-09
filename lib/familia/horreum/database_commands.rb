@@ -7,7 +7,6 @@ module Familia
   # instance-level functionality for Database operations and object management.
   #
   class Horreum
-
     # Methods that call Database commands (InstanceMethods)
     #
     # NOTE: There is no hgetall for Horreum. This is because Horreum
@@ -17,7 +16,6 @@ module Familia
     # just load the object again.
     #
     module DatabaseCommands
-
       def move(logical_database)
         dbclient.move dbkey, logical_database
       end
@@ -41,6 +39,7 @@ module Familia
       def exists?(check_size: true)
         key_exists = self.class.dbclient.exists?(dbkey)
         return key_exists unless check_size
+
         key_exists && !size.zero?
       end
 
@@ -107,8 +106,8 @@ module Familia
         dbclient.hset dbkey, field, value
       end
 
-      def hmset(hsh={})
-        hsh ||= self.to_h
+      def hmset(hsh = {})
+        hsh ||= to_h
         Familia.trace :HMSET, dbclient, hsh, caller(1..1) if Familia.debug?
         dbclient.hmset dbkey(suffix), hsh
       end
@@ -165,7 +164,6 @@ module Familia
         ret.positive?
       end
       alias clear delete!
-
     end
 
     include DatabaseCommands # these become Familia::Horreum instance methods

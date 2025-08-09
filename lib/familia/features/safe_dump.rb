@@ -1,6 +1,5 @@
 # lib/familia/features/safe_dump.rb
 
-
 module Familia::Features
   # SafeDump is a mixin that allows models to define a list of fields that are
   # safe to dump. This is useful for serializing objects to JSON or other
@@ -54,20 +53,18 @@ module Familia::Features
     @safe_dump_fields = []
     @safe_dump_field_map = {}
 
-    def self.included base
+    def self.included(base)
       Familia.ld "[#{self}] Enabled in #{base}"
       base.extend ClassMethods
 
       # Optionally define safe_dump_fields in the class to make
       # sure we always have an array to work with.
-      unless base.instance_variable_defined?(:@safe_dump_fields)
-        base.instance_variable_set(:@safe_dump_fields, [])
-      end
+      base.instance_variable_set(:@safe_dump_fields, []) unless base.instance_variable_defined?(:@safe_dump_fields)
 
       # Ditto for the field map
-      unless base.instance_variable_defined?(:@safe_dump_field_map)
-        base.instance_variable_set(:@safe_dump_field_map, {})
-      end
+      return if base.instance_variable_defined?(:@safe_dump_field_map)
+
+      base.instance_variable_set(:@safe_dump_field_map, {})
     end
 
     module ClassMethods

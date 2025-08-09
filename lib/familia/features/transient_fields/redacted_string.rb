@@ -108,19 +108,18 @@ class RedactedString
     yield @value
   end
 
-  # Wipe the internal buffer. Safe to call multiple times.
-  # Uses RbNaCl::Util.zero if available (preferred).
-  # Falls back to overwriting with 'X' pattern.
+  # Clear the internal buffer. Safe to call multiple times.
+  #
+  # REALITY CHECK: This doesn't actually provide security in Ruby.
+  # - Ruby may have already copied the string elsewhere in memory
+  # - Garbage collection behavior is unpredictable
+  # - The original input value is still in memory somewhere
+  # - This is primarily for API consistency and preventing reuse
   def clear!
     return if @value.nil? || @value.frozen? || @cleared
 
-    if defined?(RbNaCl)
-      RbNaCl::Util.zero(@value)
-    elsif @value.length.positive?
-      # Best-effort: overwrite with junk
-      @value.replace("\x00" * @value.length)
-    end
-
+    # Simple clear - no security theater
+    @value.clear if @value.respond_to?(:clear)
     @value = nil
     @cleared = true
     freeze # one and done

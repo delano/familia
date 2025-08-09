@@ -6,14 +6,14 @@ require 'logger'
 module Familia
   @logger = Logger.new($stdout)
   @logger.progname = name
-  @logger.formatter = proc do |severity, datetime, progname, msg|
-    severity_letter = severity[0]  # Get the first letter of the severity
+  @logger.formatter = proc do |severity, datetime, _progname, msg|
+    severity_letter = severity[0] # Get the first letter of the severity
     pid = Process.pid
     thread_id = Thread.current.object_id
-    full_path, line = caller[4].split(":")[0..1]
+    full_path, line = caller(5..5).first.split(':')[0..1]
     parent_path = Pathname.new(full_path).ascend.find { |p| p.basename.to_s == 'familia' }
     relative_path = full_path.sub(parent_path.to_s, 'familia')
-    utc_datetime = datetime.utc.strftime("%m-%d %H:%M:%S.%6N")
+    utc_datetime = datetime.utc.strftime('%m-%d %H:%M:%S.%6N')
 
     # Get the severity letter from the thread local variable or use
     # the default. The thread local variable is set in the trace
@@ -115,6 +115,7 @@ module Familia
 
     def ld(*msg)
       return unless Familia.debug?
+
       @logger.debug(*msg)
     end
 
@@ -152,15 +153,15 @@ module Familia
       # and multi blocks. In some contexts it's nil where the
       # database connection isn't relevant.
       instance_id = if dbclient
-        case dbclient
-        when Redis
-          dbclient.id.respond_to?(:to_s) ? dbclient.id.to_s : dbclient.class.name
-        when Redis::Future
-          "Redis::Future"
-        else
-        dbclient.class.name
-        end
-      end
+                      case dbclient
+                      when Redis
+                        dbclient.id.respond_to?(:to_s) ? dbclient.id.to_s : dbclient.class.name
+                      when Redis::Future
+                        'Redis::Future'
+                      else
+                        dbclient.class.name
+                      end
+                    end
 
       codeline = if context
                    context = [context].flatten
@@ -170,7 +171,6 @@ module Familia
 
       @logger.trace format('[%s] %s -> %s <- at %s', label, instance_id, ident, codeline)
     end
-
   end
 end
 

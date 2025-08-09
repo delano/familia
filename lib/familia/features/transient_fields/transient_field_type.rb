@@ -78,7 +78,7 @@ module Familia
     #
     # @param klass [Class] The class to define the method on
     #
-    def define_fast_writer(klass)
+    def define_fast_writer(_klass)
       # No fast writer for transient fields since they're not persisted
       Familia.ld "[TransientFieldType] Skipping fast writer for transient field: #{@name}"
       nil
@@ -115,7 +115,7 @@ module Familia
     # @param record [Object] The record instance
     # @return [nil] Always nil since transient fields are not serialized
     #
-    def serialize(value, record = nil)
+    def serialize(_value, _record = nil)
       # Transient fields should never be serialized
       Familia.ld "[TransientFieldType] WARNING: serialize called on transient field #{@name}"
       nil
@@ -130,7 +130,7 @@ module Familia
     # @param record [Object] The record instance
     # @return [nil] Always nil since transient fields are not stored
     #
-    def deserialize(value, record = nil)
+    def deserialize(_value, _record = nil)
       # Transient fields should never be deserialized
       Familia.ld "[TransientFieldType] WARNING: deserialize called on transient field #{@name}"
       nil

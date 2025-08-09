@@ -188,7 +188,7 @@ module Familia
     # @param record [Object] The record instance (for context)
     # @return [Object] The serialized value
     #
-    def serialize(value, record = nil)
+    def serialize(value, _record = nil)
       value
     end
 
@@ -201,7 +201,7 @@ module Familia
     # @param record [Object] The record instance (for context)
     # @return [Object] The deserialized value
     #
-    def deserialize(value, record = nil)
+    def deserialize(value, _record = nil)
       value
     end
 
@@ -237,7 +237,7 @@ module Familia
     # @param method_name [Symbol] The method name to define
     # @yield Block that defines the method
     #
-    def handle_method_conflict(klass, method_name, &block)
+    def handle_method_conflict(klass, method_name)
       case @on_conflict
       when :skip
         return if klass.method_defined?(method_name) || klass.private_method_defined?(method_name)
@@ -264,7 +264,7 @@ module Familia
         raise ArgumentError, "Unknown conflict resolution strategy: #{@on_conflict}"
       end
 
-      block.call
+      yield
     end
   end
 end

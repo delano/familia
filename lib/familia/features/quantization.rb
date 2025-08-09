@@ -1,10 +1,8 @@
 # lib/familia/features/quantization.rb
 
 module Familia::Features
-
   module Quantization
-
-    def self.included base
+    def self.included(base)
       Familia.ld "[#{base}] Loaded #{self}"
       base.extend ClassMethods
     end
@@ -30,9 +28,7 @@ module Familia::Features
       #
       def qstamp(quantum = nil, pattern: nil, time: nil)
         # Handle default values and array input
-        if quantum.is_a?(Array)
-          quantum, pattern = quantum
-        end
+        quantum, pattern = quantum if quantum.is_a?(Array)
 
         # Previously we erronously included `@opts.fetch(:quantize, nil)` in
         # the list of default values here, but @opts is for horreum instances

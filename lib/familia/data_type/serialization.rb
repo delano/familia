@@ -1,9 +1,7 @@
 # lib/familia/data_type/serialization.rb
 
 class Familia::DataType
-
   module Serialization
-
     # Serializes a value for storage in Redis.
     #
     # @param val [Object] The value to be serialized.
@@ -33,7 +31,7 @@ class Familia::DataType
 
       if opts[:class]
         prepared = Familia.distinguisher(opts[:class], strict_values: strict_values)
-        Familia.ld "  from opts[class] <#{opts[:class]}>: #{prepared||'<nil>'}"
+        Familia.ld "  from opts[class] <#{opts[:class]}>: #{prepared || '<nil>'}"
       end
 
       if prepared.nil?
@@ -42,9 +40,12 @@ class Familia::DataType
         Familia.ld "  from <#{val.class}> => <#{prepared.class}>"
       end
 
-      Familia.trace :TOREDIS, dbclient, "#{val}<#{val.class}|#{opts[:class]}> => #{prepared}<#{prepared.class}>", caller(1..1) if Familia.debug?
+      if Familia.debug?
+        Familia.trace :TOREDIS, dbclient, "#{val}<#{val.class}|#{opts[:class]}> => #{prepared}<#{prepared.class}>",
+                      caller(1..1)
+      end
 
-      Familia.warn "[#{self.class}\#serialize_value] nil returned for #{opts[:class]}\##{name}" if prepared.nil?
+      Familia.warn "[#{self.class}#serialize_value] nil returned for #{opts[:class]}##{name}" if prepared.nil?
       prepared
     end
 
@@ -88,9 +89,7 @@ class Familia::DataType
         next if obj.nil?
 
         val = @opts[:class].send load_method, obj
-        if val.nil?
-          Familia.ld "[#{self.class}\#deserialize_values] nil returned for #{@opts[:class]}\##{name}"
-        end
+        Familia.ld "[#{self.class}#deserialize_values] nil returned for #{@opts[:class]}##{name}" if val.nil?
 
         val
       rescue StandardError => e
@@ -125,5 +124,4 @@ class Familia::DataType
       ret&.first # return the object or nil
     end
   end
-
 end

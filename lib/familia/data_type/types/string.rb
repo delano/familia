@@ -25,6 +25,7 @@ module Familia
 
     def to_s
       return super if value.to_s.empty?
+
       value.to_s
     end
 

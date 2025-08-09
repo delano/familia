@@ -55,7 +55,7 @@ module Familia
     end
 
     def hgetall
-      dbclient.hgetall(dbkey).each_with_object({}) do |(k,v), ret|
+      dbclient.hgetall(dbkey).each_with_object({}) do |(k, v), ret|
         ret[k] = deserialize_value v
       end
     end

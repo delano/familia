@@ -290,9 +290,8 @@ module Familia
     #   # => #<Redis client v5.4.1 for redis://localhost:6379/0>
     #
     def dbclient
-      conn = Fiber[:familia_transaction] || @dbclient || self.class.dbclient
+      Fiber[:familia_transaction] || @dbclient || self.class.dbclient
       # conn.select(self.class.logical_database)
-      conn
     end
 
     def generate_id
@@ -306,6 +305,7 @@ module Familia
       # This allows passing Familia objects directly where strings are expected
       # without requiring explicit .identifier calls
       return super if identifier.to_s.empty?
+
       identifier.to_s
     end
   end

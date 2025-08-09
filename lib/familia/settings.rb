@@ -1,7 +1,6 @@
 # lib/familia/settings.rb
 
 module Familia
-
   @delim = ':'
   @prefix = nil
   @suffix = :object
@@ -9,10 +8,11 @@ module Familia
   @logical_database = nil
   @encryption_keys = nil
   @current_key_version = nil
+  @encryption_personalization = 'FamilialMatters'
 
   module Settings
-
-    attr_writer :delim, :suffix, :default_expiration, :logical_database, :prefix, :encryption_keys, :current_key_version
+    attr_writer :delim, :suffix, :default_expiration, :logical_database, :prefix, :encryption_keys,
+                :current_key_version, :encryption_personalization
 
     def delim(val = nil)
       @delim = val if val
@@ -56,9 +56,29 @@ module Familia
       @current_key_version
     end
 
+    # Personalization string for BLAKE2b key derivation in XChaCha20Poly1305.
+    # This provides cryptographic domain separation, ensuring derived keys are
+    # unique per application even with identical master keys and contexts.
+    # Must be 16 bytes or less (automatically padded with null bytes).
+    #
+    # @example
+    #   Familia.configure do |config|
+    #     config.encryption_personalization = 'MyApp1.0'
+    #   end
+    #
+    # @param val [String, nil] The personalization string, or nil to get current value
+    # @return [String] Current personalization string
+    def encryption_personalization(val = nil)
+      if val
+        raise ArgumentError, 'Personalization string cannot exceed 16 bytes' if val.bytesize > 16
+
+        @encryption_personalization = val
+      end
+      @encryption_personalization
+    end
+
     def config
       self
     end
-
   end
 end

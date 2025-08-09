@@ -2,7 +2,6 @@
 
 module Familia
   module Features
-
     # Famnilia::Features::Expiration
     #
     module Expiration
@@ -14,9 +13,9 @@ module Familia
 
         # Optionally define default_expiration in the class to make
         # sure we always have an array to work with.
-        unless base.instance_variable_defined?(:@default_expiration)
-          base.instance_variable_set(:@default_expiration, @default_expiration) # set above
-        end
+        return if base.instance_variable_defined?(:@default_expiration)
+
+        base.instance_variable_set(:@default_expiration, @default_expiration) # set above
       end
 
       # ClassMethods
@@ -86,9 +85,7 @@ module Familia
 
         # If zero, simply skips setting an expiry for this key. If we were to set
         # 0 the database would drop the key immediately.
-        if default_expiration.zero?
-          return Familia.ld "[update_expiration] No expiration for #{self.class} (#{dbkey})"
-        end
+        return Familia.ld "[update_expiration] No expiration for #{self.class} (#{dbkey})" if default_expiration.zero?
 
         Familia.ld "[update_expiration] Expires #{dbkey} in #{default_expiration} seconds"
 
@@ -100,7 +97,6 @@ module Familia
 
       Familia::Base.add_feature self, :expiration
     end
-
   end
 end
 

@@ -2,7 +2,6 @@
 
 module Familia
   class List < DataType
-
     # Returns the number of elements in the list
     # @return [Integer] number of elements
     def element_count
@@ -91,36 +90,36 @@ module Familia
       rangeraw 0, count
     end
 
-    def each(&blk)
-      range.each(&blk)
+    def each(&)
+      range.each(&)
     end
 
-    def each_with_index(&blk)
-      range.each_with_index(&blk)
+    def each_with_index(&)
+      range.each_with_index(&)
     end
 
-    def eachraw(&blk)
-      rangeraw.each(&blk)
+    def eachraw(&)
+      rangeraw.each(&)
     end
 
-    def eachraw_with_index(&blk)
-      rangeraw.each_with_index(&blk)
+    def eachraw_with_index(&)
+      rangeraw.each_with_index(&)
     end
 
-    def collect(&blk)
-      range.collect(&blk)
+    def collect(&)
+      range.collect(&)
     end
 
-    def select(&blk)
-      range.select(&blk)
+    def select(&)
+      range.select(&)
     end
 
-    def collectraw(&blk)
-      rangeraw.collect(&blk)
+    def collectraw(&)
+      rangeraw.collect(&)
     end
 
-    def selectraw(&blk)
-      rangeraw.select(&blk)
+    def selectraw(&)
+      rangeraw.select(&)
     end
 
     def at(idx)

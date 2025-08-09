@@ -27,3 +27,7 @@ group :development, :test do
   gem 'yard', '~> 0.9', require: false
   gem 'irb', '~> 1.15.2', require: false
 end
+
+group :optional do
+  gem 'rbnacl', '~> 7.1', '>= 7.1.1'
+end

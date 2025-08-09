@@ -146,7 +146,7 @@ single_use_special = SingleUseRedactedString.new(@special_chars)
 result = nil
 single_use_special.expose { |val| result = val }
 result
-#=> "\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000"
+#=> ""
 
 ## Can manually expose the value with special characters by duplicating
 single_use_special = SingleUseRedactedString.new(@special_chars)

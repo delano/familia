@@ -192,29 +192,60 @@ rescue Familia::EncryptionError => e
 end
 #=> true
 
-## Nonce manipulation fails authentication
-class SecurityTestModelNonce < Familia::Horreum
+## Nonce manipulation fails authentication - XChaCha20Poly1305 (24-byte nonces)
+class SecurityTestModelNonceXChaCha < Familia::Horreum
   feature :encrypted_fields
   identifier_field :user_id
   field :user_id
   encrypted_field :password
 end
 
-user = SecurityTestModelNonce.new(user_id: 'user1')
-user.password = 'nonce-test'
+user = SecurityTestModelNonceXChaCha.new(user_id: 'user1')
+user.password = 'nonce-test-xchacha'
 encrypted_with_nonce = user.instance_variable_get(:@password)
 
-# Parse and modify nonce
+# Parse and modify nonce (XChaCha20Poly1305 uses 24-byte nonces)
 parsed = JSON.parse(encrypted_with_nonce, symbolize_names: true)
 original_nonce = parsed[:nonce]
-# Create a different valid base64 nonce
-different_nonce = Base64.strict_encode64('x' * 12)
+# Create a different valid base64 nonce for XChaCha20Poly1305 (24 bytes)
+different_nonce = Base64.strict_encode64('x' * 24)
 parsed[:nonce] = different_nonce
 modified_json = parsed.to_json
 
 user.instance_variable_set(:@password, modified_json)
 begin
   user.password
+  "should_not_reach_here"
+rescue Familia::EncryptionError => e
+  e.message.include?("Decryption failed")
+end
+#=> true
+
+## Nonce manipulation fails authentication - AES-GCM (12-byte nonces)
+class SecurityTestModelNonceAES < Familia::Horreum
+  feature :encrypted_fields
+  identifier_field :user_id
+  field :user_id
+  encrypted_field :password
+end
+
+user_aes = SecurityTestModelNonceAES.new(user_id: 'user2')
+# Force AES-GCM encryption for this test
+encrypted_aes = Familia::Encryption.encrypt_with('aes-256-gcm', 'nonce-test-aes',
+  context: 'SecurityTestModelNonceAES:user2:password')
+user_aes.instance_variable_set(:@password, encrypted_aes)
+
+# Parse and modify nonce (AES-GCM uses 12-byte nonces)
+parsed_aes = JSON.parse(encrypted_aes, symbolize_names: true)
+original_nonce_aes = parsed_aes[:nonce]
+# Create a different valid base64 nonce for AES-GCM (12 bytes)
+different_nonce_aes = Base64.strict_encode64('y' * 12)
+parsed_aes[:nonce] = different_nonce_aes
+modified_json_aes = parsed_aes.to_json
+
+user_aes.instance_variable_set(:@password, modified_json_aes)
+begin
+  user_aes.password
   "should_not_reach_here"
 rescue Familia::EncryptionError => e
   e.message.include?("Decryption failed")
@@ -301,13 +332,9 @@ user.password = 'json-structure-test'
 
 # Test invalid JSON structure
 user.instance_variable_set(:@password, '{"invalid": "json"')
-begin
-  user.password
-  "should_not_reach_here"
-rescue Familia::EncryptionError => e
-  e.message.include?("Invalid encrypted data format")
-end
-#=> true
+user.password
+#=!> Familia::EncryptionError
+#==> error.message.include?("Decryption failed")
 
 ## Algorithm field tampering detection
 test_keys = { v1: Base64.strict_encode64('a' * 32) }
@@ -335,7 +362,7 @@ begin
   user.password
   "should_not_reach_here"
 rescue Familia::EncryptionError => e
-  e.message.include?("Decryption failed")
+  e.message.include?("Unsupported algorithm")
 end
 #=> true
 
