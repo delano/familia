@@ -17,7 +17,7 @@ module Familia
 
         def get(algorithm)
           provider_class = providers[algorithm]
-          raise EncryptionError, "Decryption failed - unsupported algorithm: #{algorithm}" unless provider_class
+          raise EncryptionError, "Unsupported algorithm: #{algorithm}" unless provider_class
 
           provider_class.new
         end

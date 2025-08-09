@@ -362,7 +362,7 @@ begin
   user.password
   "should_not_reach_here"
 rescue Familia::EncryptionError => e
-  e.message.include?("Decryption failed")
+  e.message.include?("Unsupported algorithm")
 end
 #=> true
 

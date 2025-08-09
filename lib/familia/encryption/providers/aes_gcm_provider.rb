@@ -70,12 +70,13 @@ module Familia
           OpenSSL::Random.random_bytes(NONCE_SIZE)
         end
 
-        def derive_key(master_key, context)
+        def derive_key(master_key, context, personal: nil)
           validate_key_length!(master_key)
+          info = personal ? "#{context}:#{personal}" : context
           OpenSSL::KDF.hkdf(
             master_key,
             salt: 'FamiliaEncryption',
-            info: context,
+            info: info,
             length: 32,
             hash: 'SHA256'
           )

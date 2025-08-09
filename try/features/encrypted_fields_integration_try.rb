@@ -166,24 +166,13 @@ aes_model = AESIntegrationModel.new(model_id: 'aes-test')
 
 # Manually encrypt with AES-GCM to test cross-algorithm compatibility
 aes_encrypted = Familia::Encryption.encrypt_with('aes-256-gcm', 'aes-gcm integration test',
-  context: 'AESIntegrationModel:aes-test:secret_data')
+  context: 'AESIntegrationModel:secret_data:aes-test')
 aes_model.instance_variable_set(:@secret_data, aes_encrypted)
 
-# Verify AES-GCM algorithm is stored
+# Verify AES-GCM algorithm is stored and decryption works
 parsed_aes_data = JSON.parse(aes_encrypted, symbolize_names: true)
-parsed_aes_data[:algorithm]
-#=> "aes-256-gcm"
-
-# Verify cross-algorithm decryption works (default manager should handle AES-GCM)
-test_keys = { v1: Base64.strict_encode64('a' * 32) }
-Familia.config.encryption_keys = test_keys
-Familia.config.current_key_version = :v1
-aes_model = AESIntegrationModel.new(model_id: 'aes-test')
-aes_encrypted = Familia::Encryption.encrypt_with('aes-256-gcm', 'aes-gcm integration test',
-  context: 'AESIntegrationModel:aes-test:secret_data')
-aes_model.instance_variable_set(:@secret_data, aes_encrypted)
-aes_model.secret_data
-#=> "aes-gcm integration test"
+[parsed_aes_data[:algorithm], aes_model.secret_data]
+#=> ["aes-256-gcm", "aes-gcm integration test"]
 
 
 # TEARDOWN

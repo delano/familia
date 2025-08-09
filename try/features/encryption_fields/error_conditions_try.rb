@@ -78,7 +78,7 @@ Familia.config.encryption_keys = @test_keys
 
 @model.secret
 #=!> Familia::EncryptionError
-#==> error.message.include?('unsupported algorithm')
+#==> error.message.include?('Unsupported algorithm')
 
 ## Missing current key version causes validation error
 @original_version = Familia.config.current_key_version

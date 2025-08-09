@@ -117,7 +117,7 @@ invalid_encrypted = {
 
 Familia::Encryption.decrypt(invalid_encrypted, context: context)
 #=!> Familia::EncryptionError
-#==> error.message.include?("Decryption failed")
+#==> error.message.include?("Unsupported algorithm")
 #==> error.message.include?("unknown-cipher")
 
 ## Malformed JSON raises sanitized error
