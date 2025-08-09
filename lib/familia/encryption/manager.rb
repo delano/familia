@@ -38,7 +38,7 @@ module Familia
 
           # Validate algorithm support
           provider = Registry.get(data.algorithm)
-          key = derive_key(context, version: data.key_version)
+          key = derive_key_with_provider(provider, context, version: data.key_version)
 
           # Safely decode and validate sizes
           nonce = decode_and_validate(data.nonce, provider.nonce_size, 'nonce')
@@ -64,13 +64,17 @@ module Familia
       end
 
       def derive_key(context, version: nil)
+        derive_key_with_provider(@provider, context, version: version)
+      end
+
+      def derive_key_with_provider(provider, context, version: nil)
         # Increment counter to prove no caching is happening
         Familia::Encryption.derivation_count.increment
 
         version ||= current_key_version
         master_key = get_master_key(version)
 
-        @provider.derive_key(master_key, context)
+        provider.derive_key(master_key, context)
       ensure
         Familia::Encryption.secure_wipe(master_key) if master_key
       end
