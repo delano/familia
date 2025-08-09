@@ -55,9 +55,21 @@ vault.secret_data(passphrase_value: "user_passphrase")
 
 ## Familia::Encryption Module
 
+### manager
+
+Creates a manager instance with optional algorithm selection.
+
+```ruby
+# Use best available provider
+mgr = Familia::Encryption.manager
+
+# Use specific algorithm
+mgr = Familia::Encryption.manager(algorithm: 'xchacha20poly1305')
+```
+
 ### encrypt
 
-Encrypts plaintext with context-specific key.
+Encrypts plaintext using the default provider.
 
 ```ruby
 Familia::Encryption.encrypt(plaintext,
@@ -66,16 +78,20 @@ Familia::Encryption.encrypt(plaintext,
 )
 ```
 
-**Parameters:**
-- `plaintext` (String) - Data to encrypt
-- `context` (String) - Key derivation context
-- `additional_data` (String, nil) - Optional AAD for authentication
+### encrypt_with
 
-**Returns:** JSON string with encrypted data structure
+Encrypts plaintext with a specific algorithm.
+
+```ruby
+Familia::Encryption.encrypt_with('aes-256-gcm', plaintext,
+  context: "User:favorite_snack:user123",
+  additional_data: nil
+)
+```
 
 ### decrypt
 
-Decrypts ciphertext with context-specific key.
+Decrypts ciphertext (auto-detects algorithm from JSON).
 
 ```ruby
 Familia::Encryption.decrypt(encrypted_json,
@@ -84,12 +100,33 @@ Familia::Encryption.decrypt(encrypted_json,
 )
 ```
 
-**Parameters:**
-- `encrypted_json` (String) - JSON-encoded encrypted data
-- `context` (String) - Key derivation context
-- `additional_data` (String, nil) - Optional AAD for verification
+### status
 
-**Returns:** Decrypted plaintext string
+Returns current encryption configuration and available providers.
+
+```ruby
+Familia::Encryption.status
+# => {
+#   default_algorithm: "xchacha20poly1305",
+#   available_algorithms: ["xchacha20poly1305", "aes-256-gcm"],
+#   preferred_available: "Familia::Encryption::Providers::XChaCha20Poly1305Provider",
+#   using_hardware: false,
+#   key_versions: [:v1],
+#   current_version: :v1
+# }
+```
+
+### benchmark
+
+Benchmarks available providers.
+
+```ruby
+Familia::Encryption.benchmark(iterations: 1000)
+# => {
+#   "xchacha20poly1305" => { time: 0.45, ops_per_sec: 4444, priority: 100 },
+#   "aes-256-gcm" => { time: 0.52, ops_per_sec: 3846, priority: 50 }
+# }
+```
 
 ### validate_configuration!
 
@@ -100,16 +137,56 @@ Familia::Encryption.validate_configuration!
 # Raises Familia::EncryptionError if configuration invalid
 ```
 
-### with_key_cache
+### derivation_count / reset_derivation_count!
 
-Provides request-scoped key caching.
+Monitors key derivation operations (for testing and debugging).
 
 ```ruby
-Familia::Encryption.with_key_cache do
-  # Operations here share derived keys
-  users.each { |u| u.decrypt_fields }
-end
+# Check how many key derivations have occurred
+count = Familia::Encryption.derivation_count.value
+# => 42
+
+# Reset counter
+Familia::Encryption.reset_derivation_count!
 ```
+
+## Familia::Encryption::Manager
+
+Low-level manager class for direct provider control.
+
+### initialize
+
+```ruby
+# Use default provider
+manager = Familia::Encryption::Manager.new
+
+# Use specific algorithm
+manager = Familia::Encryption::Manager.new(algorithm: 'aes-256-gcm')
+```
+
+### encrypt / decrypt
+
+Same interface as module-level methods but tied to specific provider.
+
+## Familia::Encryption::Registry
+
+Provider management system.
+
+### setup!
+
+Registers all available providers.
+
+### get
+
+Returns provider instance by algorithm name.
+
+### default_provider
+
+Returns highest-priority available provider instance.
+
+### available_algorithms
+
+Returns array of available algorithm names.
 
 ## Configuration
 
