@@ -106,6 +106,19 @@ module Familia
         dbclient.hset dbkey, field, value
       end
 
+      # Sets field in the hash stored at key to value, only if field does not yet exist.
+      # If key does not exist, a new key holding a hash is created. If field already exists,
+      # this operation has no effect.
+      #
+      # @param field [String] The field to set in the hash
+      # @param value [String] The value to set for the field
+      # @return [Integer] 1 if the field is a new field in the hash and the value was set,
+      #   0 if the field already exists in the hash and no operation was performed
+      def hsetnx(field, value)
+        Familia.trace :HSETNX, dbclient, field, caller(1..1) if Familia.debug?
+        dbclient.hsetnx dbkey, field, value
+      end
+
       def hmset(hsh = {})
         hsh ||= to_h
         Familia.trace :HMSET, dbclient, hsh, caller(1..1) if Familia.debug?

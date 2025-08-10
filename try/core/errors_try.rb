@@ -72,14 +72,34 @@ end
 begin
   raise Familia::KeyNotFoundError.new('test:key')
 rescue Familia::KeyNotFoundError => e
-  e.message.include?('Key not found in Redis')
+  e.message.include?('Key not found')
 end
 #=> true
 
 ## KeyNotFoundError has custom message again
 raise Familia::KeyNotFoundError.new('test:key')
-#=!> error.message.include?("Key not found in Redis")
+#=!> error.message.include?("Key not found")
 #=!> error.class == Familia::KeyNotFoundError
+
+## RecordExistsError stores key
+begin
+  raise Familia::RecordExistsError.new('existing:key')
+rescue Familia::RecordExistsError => e
+  e.key
+end
+#=> "existing:key"
+
+## RecordExistsError has custom message
+begin
+  raise Familia::RecordExistsError.new('existing:key')
+rescue Familia::RecordExistsError => e
+  e.message.include?('Key already exists')
+end
+#=> true
+
+## RecordExistsError inherits from NonUniqueKey
+Familia::RecordExistsError.superclass
+#=> Familia::NonUniqueKey
 
 ## All error classes inherit from Problem
 [
@@ -87,6 +107,7 @@ raise Familia::KeyNotFoundError.new('test:key')
   Familia::NonUniqueKey,
   Familia::HighRiskFactor,
   Familia::NotConnected,
-  Familia::KeyNotFoundError
-].all? { |klass| klass.superclass == Familia::Problem }
+  Familia::KeyNotFoundError,
+  Familia::RecordExistsError
+].all? { |klass| klass.superclass == Familia::Problem || klass.superclass.superclass == Familia::Problem }
 ##=> true
