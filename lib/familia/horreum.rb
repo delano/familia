@@ -1,5 +1,13 @@
 # lib/familia/horreum.rb
 
+require_relative 'horreum/core/serialization'
+require_relative 'horreum/subclass/definition'
+require_relative 'horreum/subclass/management'
+require_relative 'horreum/core/database_commands'
+require_relative 'horreum/core/connection'
+require_relative 'horreum/core/utils'
+require_relative 'horreum/shared/settings'
+
 module Familia
   #
   # Horreum: A module for managing Redis-based object storage and relationships
@@ -23,6 +31,15 @@ module Familia
   #
   class Horreum
     include Familia::Base
+    include Familia::Horreum::Serialization
+    include Familia::Horreum::Settings
+    include Familia::Horreum::DatabaseCommands
+    include Familia::Horreum::Utils
+    # include for instance methods after it's loaded. Note that Horreum::Utils
+    # are also included and at one time also has a uri method. This connection
+    # module is also extended for the class level methods. It will require some
+    # disambiguation at some point.
+    include Familia::Horreum::Connection
 
     # Singleton Class Context
     #
@@ -62,13 +79,14 @@ module Familia
       # Extends ClassMethods to subclasses and tracks Familia members
       def inherited(member)
         Familia.trace :HORREUM, nil, "Welcome #{member} to the family", caller(1..1) if Familia.debug?
-        member.extend(DefinitionMethods)
-        member.extend(ManagementMethods)
-        member.extend(Connection)
-        member.extend(Features)
 
-        # Tracks all the classes/modules that include Familia. It's
-        # 10pm, do you know where you Familia members are?
+        # Class-level functionality extensions:
+        member.extend(DefinitionMethods)    # field(), identifier_field(), dbkey()
+        member.extend(ManagementMethods)    # create(), find(), destroy!()
+        member.extend(Connection)           # dbclient, connection management
+        member.extend(Features)             # feature() method for optional modules
+
+        # Track all classes that inherit from Horreum
         Familia.members << member
         super
       end
@@ -310,11 +328,3 @@ module Familia
     end
   end
 end
-
-require_relative 'horreum/definition_methods'
-require_relative 'horreum/management_methods'
-require_relative 'horreum/database_commands'
-require_relative 'horreum/connection'
-require_relative 'horreum/serialization'
-require_relative 'horreum/settings'
-require_relative 'horreum/utils'

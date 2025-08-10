@@ -2,19 +2,25 @@
 
 ## Cryptographic Design
 
+### Provider-Based Architecture
+
+Familia uses a modular provider system that automatically selects the best available encryption algorithm:
+
 ### Encryption Algorithms
 
-**Primary (with libsodium):**
-- Algorithm: XChaCha20-Poly1305
-- Key Size: 256 bits
-- Nonce Size: 192 bits
-- Authentication Tag: 128 bits
+**XChaCha20-Poly1305 Provider (Priority: 100)**
+- Requires: `rbnacl` gem (libsodium bindings)
+- Key Size: 256 bits (32 bytes)
+- Nonce Size: 192 bits (24 bytes) - extended nonce space
+- Authentication Tag: 128 bits (16 bytes)
+- Key Derivation: BLAKE2b with personalization string
 
-**Fallback (with OpenSSL):**
-- Algorithm: AES-256-GCM
-- Key Size: 256 bits
-- IV Size: 96 bits
-- Authentication Tag: 128 bits
+**AES-256-GCM Provider (Priority: 50)**
+- Requires: OpenSSL (always available)
+- Key Size: 256 bits (32 bytes)
+- Nonce Size: 96 bits (12 bytes) - standard GCM nonce
+- Authentication Tag: 128 bits (16 bytes)
+- Key Derivation: HKDF-SHA256
 
 ### Key Derivation
 
@@ -26,19 +32,40 @@ Field Key = KDF(Master Key, Context)
 Where Context = "ClassName:field_name:record_identifier"
 ```
 
-**KDF Functions:**
-- Libsodium: BLAKE2b with personalization
-- OpenSSL: HKDF-SHA256
+**Provider-Specific KDF:**
+- **XChaCha20-Poly1305**: BLAKE2b with customizable personalization string
+- **AES-256-GCM**: HKDF-SHA256 with salt and info parameters
+
+The personalization string provides cryptographic domain separation:
+```ruby
+Familia.configure do |config|
+  config.encryption_personalization = 'MyApp-2024'  # Default: 'Familia'
+end
+```
 
 ### Ciphertext Format
 
+The encrypted data is stored as JSON with algorithm-specific fields:
+
+**XChaCha20-Poly1305:**
 ```json
 {
-  "library": "libsodium",
   "algorithm": "xchacha20poly1305",
-  "nonce": "base64_encoded_nonce",
-  "ciphertext": "base64_encoded_ciphertext",
-  "key_version": "v1_2504"
+  "nonce": "base64_24_byte_nonce",
+  "ciphertext": "base64_encrypted_data",
+  "auth_tag": "base64_16_byte_tag",
+  "key_version": "v1"
+}
+```
+
+**AES-256-GCM:**
+```json
+{
+  "algorithm": "aes-256-gcm",
+  "nonce": "base64_12_byte_iv",
+  "ciphertext": "base64_encrypted_data",
+  "auth_tag": "base64_16_byte_tag",
+  "key_version": "v1"
 }
 ```
 
@@ -97,15 +124,28 @@ vault.love_letter(passphrase_value: user_passphrase)
 
 ### Memory Safety
 
-**With libsodium:**
-- Automatic zeroing of sensitive memory
-- Constant-time comparisons
-- Protected memory pages when available
+**⚠️ Critical Ruby Memory Limitations:**
 
-**Without libsodium:**
-- Warning logged about reduced security
-- Ruby GC may retain plaintext copies
-- Timing attacks theoretically possible
+Ruby provides **NO** memory safety guarantees for cryptographic secrets. This affects ALL providers:
+
+- **No secure memory wiping**: Ruby cannot guarantee memory zeroing
+- **GC copying**: Garbage collector may copy secrets before cleanup
+- **String operations**: Every `.dup`, `+`, or interpolation creates uncontrolled copies
+- **Memory dumps**: Secrets may persist in swap files or core dumps
+- **Finalizer uncertainty**: `ObjectSpace.define_finalizer` timing is unpredictable
+
+**Provider-Specific Mitigations:**
+
+Both providers attempt best-effort memory clearing:
+- Call `.clear` on sensitive strings after use
+- Set variables to `nil` when done
+- Use finalizers for cleanup (no guarantees)
+
+**Recommendation**: For production systems with high-security requirements, consider:
+- Hardware Security Modules (HSMs)
+- External key management services
+- Languages with manual memory management (C, Rust)
+- Cryptographic appliances with secure enclaves
 
 ### RedactedString
 

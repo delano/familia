@@ -37,7 +37,5 @@ module Familia
         Familia.join(args.map { |field| send(field) })
       end
     end
-
-    include Utils # these become Horreum instance methods
   end
 end

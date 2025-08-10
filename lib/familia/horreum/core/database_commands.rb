@@ -165,7 +165,5 @@ module Familia
       end
       alias clear delete!
     end
-
-    include DatabaseCommands # these become Familia::Horreum instance methods
   end
 end
