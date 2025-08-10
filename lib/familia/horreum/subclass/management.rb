@@ -1,4 +1,4 @@
-# lib/familia/horreum/management_methods.rb
+# lib/familia/horreum/subclass/management.rb
 
 require_relative 'related_fields_management'
 

@@ -1,12 +1,12 @@
 # lib/familia/horreum.rb
 
-require_relative 'horreum/serialization'
-require_relative 'horreum/definition_methods'
-require_relative 'horreum/management_methods'
-require_relative 'horreum/database_commands'
-require_relative 'horreum/connection'
-require_relative 'horreum/settings'
-require_relative 'horreum/utils'
+require_relative 'horreum/core/serialization'
+require_relative 'horreum/subclass/definition'
+require_relative 'horreum/subclass/management'
+require_relative 'horreum/core/database_commands'
+require_relative 'horreum/core/connection'
+require_relative 'horreum/core/utils'
+require_relative 'horreum/shared/settings'
 
 module Familia
   #
