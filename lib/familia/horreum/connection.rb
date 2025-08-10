@@ -2,8 +2,8 @@
 
 module Familia
   class Horreum
-    # Familia::Horreum::Connection
-    #
+    # Connection: Valkey connection management for Horreum instances
+    # Provides both instance and class-level connection methods
     module Connection
       attr_reader :uri
 

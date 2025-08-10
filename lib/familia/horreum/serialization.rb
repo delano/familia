@@ -30,31 +30,8 @@ module Familia
       attr_reader :valid_command_return_values
     end
 
-    # Serialization: Where Objects Go to Become Strings (and Vice Versa)!
-    #
-    # This module is chock-full of methods that'll make your head spin (in a
-    # good way)! We've got loaders, dumpers, and refreshers galore. It's like
-    # a laundromat for your data, but instead of quarters, it runs on Database commands.
-    #
-    # A Note on Our Refreshing Refreshers:
-    # In the wild world of Ruby, '!' usually means "Watch out! I'm dangerous!"
-    # But here in Familia-land, we march to the beat of a different drummer.
-    # Our refresh! method is the real deal, doing all the heavy lifting.
-    # The non-bang refresh? Oh, it's just as rowdy, but it plays nice with
-    # method chaining. It's like the polite twin who still knows how to party.
-    #
-    # Remember: In Familia, refreshing isn't just a chore, it's a chance to
-    # dance with data! Whether you bang(!) or not, you're still invited to
-    # the Database disco.
-    #
-    # (P.S. If you're reading these docs, lol sorry. I asked Claude 3.5 to
-    # write in the style of _why the lucky stiff today and got this uncanny
-    # valley response. I hope you enjoy reading it as much as I did writing
-    # the prompt for it. - @delano).
-    #
-    # (Ahem! What I meant to say was that if you're reading this, congratulations!
-    # You've stumbled upon the secret garden of documentation. Feel free to smell
-    # the Ruby roses, but watch out for the Database thorns!)
+    # Serialization: Object persistence and retrieval from Redis
+    # Handles conversion between Ruby objects and Redis hash storage
     #
     module Serialization
       # Save our precious data to Redis, with a sprinkle of timestamp magic!

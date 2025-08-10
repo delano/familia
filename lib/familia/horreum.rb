@@ -31,11 +31,10 @@ module Familia
   #
   class Horreum
     include Familia::Base
-    include Horreum::Serialization
-    include Horreum::Connection
-    include Horreum::Settings
-    include Horreum::DatabaseCommands
-    include Horreum::Utils
+    include Familia::Horreum::Serialization
+    include Familia::Horreum::Settings
+    include Familia::Horreum::DatabaseCommands
+    include Familia::Horreum::Utils
     # include for instance methods after it's loaded. Note that Horreum::Utils
     # are also included and at one time also has a uri method. This connection
     # module is also extended for the class level methods. It will require some
@@ -80,13 +79,14 @@ module Familia
       # Extends ClassMethods to subclasses and tracks Familia members
       def inherited(member)
         Familia.trace :HORREUM, nil, "Welcome #{member} to the family", caller(1..1) if Familia.debug?
-        member.extend(DefinitionMethods)
-        member.extend(ManagementMethods)
-        member.extend(Connection)
-        member.extend(Features)
 
-        # Tracks all the classes/modules that include Familia. It's
-        # 10pm, do you know where you Familia members are?
+        # Class-level functionality extensions:
+        member.extend(DefinitionMethods)    # field(), identifier_field(), dbkey()
+        member.extend(ManagementMethods)    # create(), find(), destroy!()
+        member.extend(Connection)           # dbclient, connection management
+        member.extend(Features)             # feature() method for optional modules
+
+        # Track all classes that inherit from Horreum
         Familia.members << member
         super
       end

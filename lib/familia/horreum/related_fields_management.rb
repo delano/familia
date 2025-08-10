@@ -29,7 +29,12 @@ module Familia
 
       module RelatedFieldsAccessors
         # Sets up all DataType related methods
-        # This method is the core of the metaprogramming logic
+        # This method generates the following for each registered DataType:
+        #
+        # Instance methods: set(), list(), hashkey(), sorted_set(), etc.
+        # Query methods: set?(), list?(), hashkey?(), sorted_set?(), etc.
+        # Collection methods: sets(), lists(), hashkeys(), sorted_sets(), etc.
+        # Class methods: class_set(), class_list(), etc.
         #
         def setup_related_fields_accessors
           Familia::DataType.registered_types.each_pair do |kind, klass|
