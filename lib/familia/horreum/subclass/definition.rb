@@ -95,7 +95,7 @@ module Familia
       #   - Others, depending on features available
       #
       def field(name, as: name, fast_method: :"#{name}!", on_conflict: :raise, category: nil)
-        # Use field type system internally for consistency
+        # Use field type system for consistency
         require_relative '../../field_type'
 
         # Create appropriate field type based on category

@@ -488,7 +488,7 @@ class Model < Familia::Horreum
   feature :expiration
 
   def has_ttl_support?
-    self.class.feature(:expiration).include?(:expiration)
+    self.class.features_enabled.include?(:expiration)
   end
 
   def available_features

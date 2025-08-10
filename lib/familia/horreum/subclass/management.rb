@@ -236,7 +236,6 @@ module Familia
       # suffix. See DataType#dbkey "parent_class?" for more details.
       #
       def dbkey(identifier, suffix = self.suffix)
-        # Familia.ld "[.dbkey] #{identifier} for #{self} (suffix:#{suffix})"
         if identifier.to_s.empty?
           raise NoIdentifier, "#{self} requires non-empty identifier, got: #{identifier.inspect}"
         end
