@@ -15,7 +15,7 @@ module Familia
     #
     # Usage:
     #   Include this module in classes that need DataType management
-    #   Call setup_relations_accessors to initialize the feature
+    #   Call setup_related_fields_accessors to initialize the feature
     #
     module RelatedFieldsManagement
       # A practical flag to indicate that a Horreum member has relations,
@@ -23,15 +23,15 @@ module Familia
       @has_relations = nil
 
       def self.included(base)
-        base.extend(ClassMethods)
-        base.setup_relations_accessors
+        base.extend(RelatedFieldsAccessors)
+        base.setup_related_fields_accessors
       end
 
-      module ClassMethods
+      module RelatedFieldsAccessors
         # Sets up all DataType related methods
         # This method is the core of the metaprogramming logic
         #
-        def setup_relations_accessors
+        def setup_related_fields_accessors
           Familia::DataType.registered_types.each_pair do |kind, klass|
             Familia.ld "[registered_types] #{kind} => #{klass}"
 
@@ -86,7 +86,7 @@ module Familia
           end
         end
       end
-      # End of ClassMethods module
+      # End of RelatedFieldsAccessors module
 
       # Creates an instance-level relation
       def attach_instance_related_field(name, klass, opts)
