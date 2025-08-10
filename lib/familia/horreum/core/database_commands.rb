@@ -37,7 +37,7 @@ module Familia
       # @note The default behavior maintains backward compatibility by treating empty hashes
       #   as non-existent. Use `check_size: false` for pure key existence checking.
       def exists?(check_size: true)
-        key_exists = self.class.dbclient.exists?(dbkey)
+        key_exists = self.class.exists?(dbkey)
         return key_exists unless check_size
 
         key_exists && !size.zero?

@@ -172,8 +172,8 @@ module Familia
       #   User.exists?(123)  # Returns true if user:123:object exists in Redis
       #
       def exists?(identifier, suffix = nil)
+        raise NoIdentifier, "Empty identifier" if identifier.to_s.empty?
         suffix ||= self.suffix
-        return false if identifier.to_s.empty?
 
         objkey = dbkey identifier, suffix
 

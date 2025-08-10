@@ -77,6 +77,68 @@ module Familia
         !ret.nil?
       end
 
+      # Saves the object to Valkey storage only if it doesn't already exist.
+      #
+      # Conditionally persists the object to Valkey storage by first checking if the
+      # identifier field already exists. If the object already exists in storage,
+      # raises an error. Otherwise, proceeds with a normal save operation including
+      # automatic timestamping.
+      #
+      # This method provides atomic conditional creation to prevent duplicate objects
+      # from being saved when uniqueness is required based on the identifier field.
+      #
+      # @param update_expiration [Boolean] Whether to update the key's expiration
+      #   time after saving. Defaults to true.
+      #
+      # @return [Boolean] true if the save operation was successful
+      #
+      # @raise [Familia::RecordExistsError] If an object with the same identifier
+      #   already exists in Valkey storage
+      #
+      # @example Save a new user only if it doesn't exist
+      #   user = User.new(id: 123, name: "John")
+      #   user.save_if_not_exists
+      #   # => true (saved successfully)
+      #
+      # @example Attempting to save an existing object
+      #   existing_user = User.new(id: 123, name: "Jane")
+      #   existing_user.save_if_not_exists
+      #   # => raises Familia::RecordExistsError
+      #
+      # @example Save without updating expiration
+      #   user.save_if_not_exists(update_expiration: false)
+      #   # => true
+      #
+      # @note This method uses HSETNX to atomically check and set the identifier
+      #   field, ensuring race-condition-free conditional creation.
+      #
+      # @see #save The underlying save method called when the object doesn't exist
+      #
+      # Check if save_if_not_exists is implemented correctly. It should:
+      #
+      # Check if record exists
+      # If exists, raise Familia::RecordExistsError
+      # If not exists, save
+      def save_if_not_exists(update_expiration: true)
+        identifier_field = self.class.identifier_field
+
+        Familia.ld "[save_if_not_exists]: #{self.class} #{identifier_field}=#{identifier}"
+        Familia.trace :SAVE_IF_NOT_EXISTS, dbclient, uri, caller(1..1) if Familia.debug?
+
+        dbclient.watch(dbkey) do
+          if dbclient.exists(dbkey).positive?
+            dbclient.unwatch
+            raise Familia::RecordExistsError, "Record exists"
+          end
+
+          result = dbclient.multi do |multi|
+            multi.hmset(dbkey, to_h)
+          end
+
+          result != nil  # transaction succeeded
+        end
+      end
+
       # Commits object fields to the DB storage.
       #
       # Persists the current state of all object fields to the DB using HMSET.
@@ -111,7 +173,7 @@ module Familia
         # Only classes that have the expiration ferature enabled will
         # actually set an expiration time on their keys. Otherwise
         # this will be a no-op that simply logs the attempt.
-        self.update_expiration(default_expiration: nil) if update_expiration
+        update_expiration(default_expiration: nil) if update_expiration
 
         result
       end
