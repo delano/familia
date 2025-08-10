@@ -29,14 +29,9 @@ ciphertext = model.instance_variable_get(:@api_key)
 # Change AAD field after encryption
 model.email = 'attacker@evil.com'
 model.instance_variable_set(:@api_key, ciphertext)
-
-begin
-  model.api_key
-  false
-rescue Familia::EncryptionError
-  true
-end
-#=> true
+model.api_key
+#=!> Familia::EncryptionError
+#==> error.message.include?('Decryption failed')
 
 ## Without saving, AAD is not enforced (returns nil)
 unsaved_model = AADProtectedModel.new(id: 'aad-2', email: 'test@example.com')
