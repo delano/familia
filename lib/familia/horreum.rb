@@ -1,5 +1,13 @@
 # lib/familia/horreum.rb
 
+require_relative 'horreum/serialization'
+require_relative 'horreum/definition_methods'
+require_relative 'horreum/management_methods'
+require_relative 'horreum/database_commands'
+require_relative 'horreum/connection'
+require_relative 'horreum/settings'
+require_relative 'horreum/utils'
+
 module Familia
   #
   # Horreum: A module for managing Redis-based object storage and relationships
@@ -23,6 +31,16 @@ module Familia
   #
   class Horreum
     include Familia::Base
+    include Horreum::Serialization
+    include Horreum::Connection
+    include Horreum::Settings
+    include Horreum::DatabaseCommands
+    include Horreum::Utils
+    # include for instance methods after it's loaded. Note that Horreum::Utils
+    # are also included and at one time also has a uri method. This connection
+    # module is also extended for the class level methods. It will require some
+    # disambiguation at some point.
+    include Familia::Horreum::Connection
 
     # Singleton Class Context
     #
@@ -310,11 +328,3 @@ module Familia
     end
   end
 end
-
-require_relative 'horreum/definition_methods'
-require_relative 'horreum/management_methods'
-require_relative 'horreum/database_commands'
-require_relative 'horreum/connection'
-require_relative 'horreum/serialization'
-require_relative 'horreum/settings'
-require_relative 'horreum/utils'

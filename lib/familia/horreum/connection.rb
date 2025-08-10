@@ -69,11 +69,5 @@ module Familia
         block_result
       end
     end
-
-    # include for instance methods after it's loaded. Note that Horreum::Utils
-    # are also included and at one time also has a uri method. This connection
-    # module is also extended for the class level methods. It will require some
-    # disambiguation at some point.
-    include Familia::Horreum::Connection
   end
 end

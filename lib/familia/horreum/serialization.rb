@@ -468,6 +468,5 @@ module Familia
       end
     end
 
-    include Serialization # these become Horreum instance methods
   end
 end
