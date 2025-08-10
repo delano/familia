@@ -20,6 +20,8 @@ class Bone < Familia::Horreum
   zset      :metrics
   hashkey   :props
   string    :value, default: 'GREAT!'
+  counter   :counter, default: 0
+  lock      :lock
 end
 
 class Blone < Familia::Horreum

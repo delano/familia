@@ -108,12 +108,19 @@ module Familia
       ret
     end
 
+    def del
+      ret = dbclient.del dbkey
+      ret.positive?
+    end
+
     def nil?
       value.nil?
     end
 
     Familia::DataType.register self, :string
-    Familia::DataType.register self, :counter
-    Familia::DataType.register self, :lock
   end
 end
+
+# Both subclass String
+require_relative 'lock'
+require_relative 'counter'

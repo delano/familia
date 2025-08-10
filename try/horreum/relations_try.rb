@@ -106,7 +106,7 @@ prefs = @test_user.preferences
 @test_product.views.increment
 @test_product.views.incrementby(5)
 @test_product.views.value
-#=> "6"
+#=> 6
 
 ## Database types maintain parent reference
 @test_user.sessions.parent == @test_user

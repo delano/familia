@@ -4,7 +4,7 @@ require_relative '../helpers/test_helpers'
 
 ## Check for help class
 Bone.related_fields.keys # consistent b/c hashes are ordered
-#=> [:owners, :tags, :metrics, :props, :value]
+#=> [:owners, :tags, :metrics, :props, :value, :counter, :lock]
 
 ## Familia has a uri
 Familia.uri

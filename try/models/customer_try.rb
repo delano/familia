@@ -43,7 +43,7 @@ Customer.find_by_id(ident).planid
 @customer.secrets_created.delete!
 @customer.secrets_created.increment
 @customer.secrets_created.value
-#=> '1'
+#=> 1
 
 ## Customer can add custom domain via add method
 @customer.custom_domains.add(@now, 'example.org')
