@@ -55,9 +55,24 @@ module Familia
       #
       def create(*, **)
         fobj = new(*, **)
-        raise Familia::Problem, "#{self} already exists: #{fobj.dbkey}" if fobj.exists?
 
-        fobj.save
+        result = dbclient.watch(fobj.dbkey) do
+          if fobj.exists?
+            dbclient.unwatch
+            raise Familia::RecordExistsError, fobj.dbkey
+          end
+
+          dbclient.multi do |multi|
+            multi.hmset(fobj.dbkey, fobj.to_h)
+          end
+        end
+
+        # Check if transaction succeeded (result is an Array)
+        unless result.is_a?(Array)
+          # Transaction was aborted (key was modified during watch)
+          raise Familia::RecordExistsError, fobj.dbkey
+        end
+
         fobj
       end
 
@@ -172,8 +187,8 @@ module Familia
       #   User.exists?(123)  # Returns true if user:123:object exists in Redis
       #
       def exists?(identifier, suffix = nil)
+        raise NoIdentifier, "Empty identifier" if identifier.to_s.empty?
         suffix ||= self.suffix
-        return false if identifier.to_s.empty?
 
         objkey = dbkey identifier, suffix
 

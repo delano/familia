@@ -45,7 +45,7 @@ require_relative '../helpers/test_helpers'
 @customer.secrets_created.increment
 @safe_dump = @customer.safe_dump
 @safe_dump[:secrets_created]
-#=> "1"
+#=> 1
 
 ## Safe dump includes correct active status when verified and not reset requested
 @safe_dump[:active]

@@ -12,6 +12,35 @@ Familia.debug = false
 @customer.save
 #=> true
 
+## save_if_not_exists saves new customer successfully
+Familia.dbclient.set('debug:starting_save_if_not_exists_tests', Time.now.to_s)
+@test_id = "#{Time.now.to_i}-#{rand(1000)}"
+@new_customer = Customer.new "new-customer-#{@test_id}@test.com"
+@new_customer.name = 'New Customer'
+@new_customer.save_if_not_exists
+#=> true
+
+## save_if_not_exists raises error when customer already exists
+@duplicate_customer = Customer.new "new-customer-#{@test_id}@test.com"
+@duplicate_customer.name = 'Duplicate Customer'
+@duplicate_customer.save_if_not_exists
+#=!> Familia::RecordExistsError
+#==> error.message.include?("Key already exists")
+
+## save_if_not_exists with update_expiration: false works
+@another_new_customer = Customer.new "another-new-#{@test_id}@test.com"
+@another_new_customer.name = 'Another New'
+@another_new_customer.save_if_not_exists(update_expiration: false)
+#=> true
+
+## End of save_if_not_exists tests
+Familia.dbclient.set('debug:ending_save_if_not_exists_tests', Time.now.to_s)
+
+## save_if_not_exists persists data correctly
+@another_new_customer.refresh!
+@another_new_customer.name
+#=> "Another New"
+
 ## to_h returns field hash with all Customer fields
 @customer.to_h.class
 #=> Hash
@@ -158,3 +187,9 @@ result.successful?
 @fresh_customer.refresh!
 [@fresh_customer.role, @fresh_customer.planid]
 #=> ["admin", "premium"]
+
+# Cleanup test data
+[@customer, @new_customer, @another_new_customer, @fresh_customer].each do |obj|
+  next unless obj&.identifier && !obj.identifier.to_s.empty?
+  obj.destroy! if obj.exists?
+end
