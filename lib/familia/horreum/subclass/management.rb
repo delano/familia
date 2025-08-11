@@ -55,18 +55,7 @@ module Familia
       #
       def create(*, **)
         fobj = new(*, **)
-
-        dbclient.watch(fobj.dbkey) do
-          if fobj.exists?
-            dbclient.unwatch
-            raise Familia::Problem, "#{self} already exists: #{fobj.dbkey}"
-          end
-
-          Familia.transaction do |_multi|
-            fobj.save
-          end
-        end
-
+        fobj.save_if_not_exists
         fobj
       end
 
