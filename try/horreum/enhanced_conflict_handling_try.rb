@@ -10,7 +10,7 @@ Familia::VALID_STRATEGIES.include?(:raise)
 
 ## Valid strategies include all expected options
 Familia::VALID_STRATEGIES
-#=> [:raise, :skip, :warn, :overwrite]
+#=> [:raise, :skip, :ignore, :warn, :overwrite]
 
 ## Overwrite strategy removes existing method and defines new one
 class OverwriteStrategyTest < Familia::Horreum
