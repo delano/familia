@@ -4,13 +4,18 @@ module Familia
   class Lock < String
     def initialize(*args)
       super
-      @opts[:default] ||= nil
+      @opts[:default] = nil
     end
 
+    # Acquire a lock with optional TTL
+    # @param token [String] Unique token to identify lock holder (auto-generated if nil)
+    # @param ttl [Integer, nil] Time-to-live in seconds. nil = no expiration, <=0 rejected
+    # @return [String, false] Returns token if acquired successfully, false otherwise
     def acquire(token = SecureRandom.uuid, ttl: 10)
-      success = setnx(token)
-      expire(ttl) if success && ttl > 0
-      success ? token : false
+      return false unless setnx(token)
+      return del && false if ttl&.<=(0)
+      return del && false if ttl&.positive? && !expire(ttl)
+      token
     end
 
     def release(token)

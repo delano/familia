@@ -97,6 +97,37 @@ sleep 2
 @lock.locked?
 #=> false
 
+## Acquire with zero TTL should return false
+@lock2 = Familia::Lock.new 'test:lock2'
+@lock2.acquire('zero-ttl', ttl: 0)
+#=> false
+
+## Lock should not be held after zero TTL rejection
+@lock2.locked?
+#=> false
+
+## Acquire with negative TTL should return false
+@lock2.acquire('neg-ttl', ttl: -5)
+#=> false
+
+## Lock should not be held after negative TTL rejection
+@lock2.locked?
+#=> false
+
+## Acquire with nil TTL should work (no expiration)
+@nil_ttl_token = @lock2.acquire('no-expiry', ttl: nil)
+@nil_ttl_token
+#=> 'no-expiry'
+
+## Lock with nil TTL should be held
+@lock2.locked?
+#=> true
+
+## Lock with nil TTL should not have expiration
+@lock2.current_expiration
+#=> -1
+
 ## Cleanup
 @a.lock.delete!
 @lock.delete!
+@lock2.delete!
