@@ -3,21 +3,100 @@
 require_relative '../helpers/test_helpers'
 require 'base64'
 
+# Define all test classes up front to avoid tryouts retry conflicts
+
+class SecurityTestModel < Familia::Horreum
+  feature :encrypted_fields
+  identifier_field :user_id
+  field :user_id
+  encrypted_field :password      # No AAD
+  encrypted_field :api_key       # No AAD
+  encrypted_field :secret_data   # No AAD
+end
+
+class SecurityTestModel2 < Familia::Horreum
+  feature :encrypted_fields
+  identifier_field :user_id
+  field :user_id
+  field :email
+  encrypted_field :api_key, aad_fields: [:email]
+end
+
+class SecurityTestModel3 < Familia::Horreum
+  feature :encrypted_fields
+  identifier_field :user_id
+  field :user_id
+  encrypted_field :password
+end
+
+class SecurityTestModel4 < Familia::Horreum
+  feature :encrypted_fields
+  identifier_field :user_id
+  field :user_id
+  encrypted_field :password
+end
+
+class SecurityTestModel5 < Familia::Horreum
+  feature :encrypted_fields
+  identifier_field :user_id
+  field :user_id
+  encrypted_field :password
+end
+
+class SecurityTestModel6 < Familia::Horreum
+  feature :encrypted_fields
+  identifier_field :user_id
+  field :user_id
+  encrypted_field :password
+end
+
+class SecurityTestModelNonceXChaCha < Familia::Horreum
+  feature :encrypted_fields
+  identifier_field :user_id
+  field :user_id
+  encrypted_field :password
+end
+
+class SecurityTestModelNonceAES < Familia::Horreum
+  feature :encrypted_fields
+  identifier_field :user_id
+  field :user_id
+  encrypted_field :password
+end
+
+class SecurityTestModel7 < Familia::Horreum
+  feature :encrypted_fields
+  identifier_field :user_id
+  field :user_id
+  encrypted_field :password
+end
+
+class SecurityTestModel8 < Familia::Horreum
+  feature :encrypted_fields
+  identifier_field :user_id
+  field :user_id
+  encrypted_field :password
+end
+
+class JsonTamperTestModel < Familia::Horreum
+  feature :encrypted_fields
+  identifier_field :userid
+  field :userid
+  encrypted_field :secret_data
+end
+
+class SecurityTestModel10 < Familia::Horreum
+  feature :encrypted_fields
+  identifier_field :user_id
+  field :user_id
+  encrypted_field :password
+end
 
 ## Context isolation: Different field contexts use different encryption
 test_keys = { v1: Base64.strict_encode64('a' * 32) }
 Familia.config.encryption_keys = test_keys
 Familia.config.current_key_version = :v1
 
-class SecurityTestModel < Familia::Horreum
-  feature :encrypted_fields
-  identifier_field :user_id
-
-  field :user_id
-  encrypted_field :password      # No AAD
-  encrypted_field :api_key       # No AAD
-  encrypted_field :secret_data   # No AAD
-end
 
 user = SecurityTestModel.new(user_id: 'user1')
 
@@ -39,14 +118,6 @@ test_keys = { v1: Base64.strict_encode64('a' * 32) }
 Familia.config.encryption_keys = test_keys
 Familia.config.current_key_version = :v1
 
-class SecurityTestModel2 < Familia::Horreum
-  feature :encrypted_fields
-  identifier_field :user_id
-
-  field :user_id
-  field :email
-  encrypted_field :api_key, aad_fields: [:email]
-end
 
 user1 = SecurityTestModel2.new(user_id: 'user1', email: 'user1@example.com')
 user2 = SecurityTestModel2.new(user_id: 'user2', email: 'user2@example.com')
@@ -87,7 +158,7 @@ tampered_json = parsed.to_json
 
 user.instance_variable_set(:@password, tampered_json)
 begin
-  user.password
+  user.password.reveal { |plain| plain }
   "should_not_reach_here"
 rescue Familia::EncryptionError => e
   e.message.include?("Decryption failed")
@@ -120,7 +191,7 @@ tampered_json = parsed.to_json
 
 user.instance_variable_set(:@password, tampered_json)
 begin
-  user.password
+  user.password.reveal { |plain| plain }
   "should_not_reach_here"
 rescue Familia::EncryptionError => e
   e.message.include?("Decryption failed")
@@ -153,7 +224,7 @@ tampered_json = parsed.to_json
 
 user.instance_variable_set(:@password, tampered_json)
 begin
-  user.password
+  user.password.reveal { |plain| plain }
   "should_not_reach_here"
 rescue Familia::EncryptionError => e
   e.message.include?("Decryption failed")
@@ -184,7 +255,7 @@ modified_json = parsed.to_json
 
 user.instance_variable_set(:@password, modified_json)
 begin
-  user.password
+  user.password.reveal { |plain| plain }
   "should_not_reach_here"
 rescue Familia::EncryptionError => e
   e.message.include?("No key for version")
@@ -213,7 +284,7 @@ modified_json = parsed.to_json
 
 user.instance_variable_set(:@password, modified_json)
 begin
-  user.password
+  user.password.reveal { |plain| plain }
   "should_not_reach_here"
 rescue Familia::EncryptionError => e
   e.message.include?("Decryption failed")
@@ -235,7 +306,7 @@ encrypted_aes = Familia::Encryption.encrypt_with('aes-256-gcm', 'nonce-test-aes'
 user_aes.instance_variable_set(:@password, encrypted_aes)
 
 # Parse and modify nonce (AES-GCM uses 12-byte nonces)
-parsed_aes = JSON.parse(encrypted_aes.encrypted_value, symbolize_names: true)
+parsed_aes = JSON.parse(encrypted_aes, symbolize_names: true)
 original_nonce_aes = parsed_aes[:nonce]
 # Create a different valid base64 nonce for AES-GCM (12 bytes)
 different_nonce_aes = Base64.strict_encode64('y' * 12)
@@ -244,7 +315,7 @@ modified_json_aes = parsed_aes.to_json
 
 user_aes.instance_variable_set(:@password, modified_json_aes)
 begin
-  user_aes.password
+  user_aes.password.reveal { |plain| plain }
   "should_not_reach_here"
 rescue Familia::EncryptionError => e
   e.message.include?("Decryption failed")
@@ -319,19 +390,19 @@ test_keys = { v1: Base64.strict_encode64('a' * 32) }
 Familia.config.encryption_keys = test_keys
 Familia.config.current_key_version = :v1
 
-class SecurityTestModel9 < Familia::Horreum
+class JsonTamperTestModel < Familia::Horreum
   feature :encrypted_fields
-  identifier_field :user_id
-  field :user_id
-  encrypted_field :password
+  identifier_field :userid
+  field :userid
+  encrypted_field :secret_data
 end
 
-user = SecurityTestModel9.new(user_id: 'user1')
-user.password = 'json-structure-test'
+user = JsonTamperTestModel.new(userid: 'user1')
+user.secret_data = 'json-structure-test'
 
 # Test invalid JSON structure
-user.instance_variable_set(:@password, '{"invalid": "json"')
-user.password
+user.instance_variable_set(:@secret_data, '{"invalid": "json"')
+user.secret_data
 #=!> Familia::EncryptionError
 #==> error.message.include?("Decryption failed")
 
