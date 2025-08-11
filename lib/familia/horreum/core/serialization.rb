@@ -135,7 +135,7 @@ module Familia
             multi.hmset(dbkey, to_h)
           end
 
-          result != nil  # transaction succeeded
+          result.is_a?(Array)  # transaction succeeded
         end
       end
 

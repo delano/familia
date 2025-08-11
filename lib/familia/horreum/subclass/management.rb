@@ -67,8 +67,8 @@ module Familia
           end
         end
 
-        # Check if transaction succeeded (result is not nil)
-        if result.nil?
+        # Check if transaction succeeded (result is an Array)
+        unless result.is_a?(Array)
           # Transaction was aborted (key was modified during watch)
           raise Familia::RecordExistsError, fobj.dbkey
         end

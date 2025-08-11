@@ -12,7 +12,9 @@ module Familia
     # @param ttl [Integer, nil] Time-to-live in seconds. nil = no expiration, <=0 rejected
     # @return [String, false] Returns token if acquired successfully, false otherwise
     def acquire(token = SecureRandom.uuid, ttl: 10)
-      return false unless setnx(token)
+      success = setnx(token)
+      # Handle both integer (1/0) and boolean (true/false) return values
+      return false unless success == 1 || success == true
       return del && false if ttl&.<=(0)
       return del && false if ttl&.positive? && !expire(ttl)
       token

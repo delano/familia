@@ -16,7 +16,8 @@ module Familia
       current = to_i
       return false if current >= threshold
 
-      incrementby(amount).positive?
+      incrementby(amount)
+      true
     end
 
     def atomic_increment_and_get(amount = 1)
