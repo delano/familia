@@ -141,7 +141,7 @@ class RedactedString
   def inspect = to_s
   def cleared? = @cleared
 
-  # Returns true when it's literally the same object, otherwsie false.
+  # Returns true when it's literally the same object, otherwise false.
   # This prevents timing attacks where an attacker could potentially
   # infer information about the secret value through comparison timing
   def ==(other)

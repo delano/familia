@@ -6,7 +6,7 @@ module Familia
       # Class methods for parsing and validation
       def self.valid?(json_string)
         return true if json_string.nil?  # Allow nil values
-        return false unless json_string.is_a?(String)
+        return false unless json_string.kind_of?(::String)
 
         begin
           parsed = JSON.parse(json_string, symbolize_names: true)
@@ -26,7 +26,7 @@ module Familia
       def self.validate!(json_string)
         return nil if json_string.nil?
 
-        unless json_string.is_a?(String)
+        unless json_string.kind_of?(::String)
           raise EncryptionError, "Expected JSON string, got #{json_string.class}"
         end
 
@@ -58,6 +58,9 @@ module Familia
       def decryptable?
         return false unless algorithm && nonce && ciphertext && auth_tag && key_version
 
+        # Ensure Registry is set up before checking algorithms
+        Registry.setup! if Registry.providers.empty?
+
         # Check if algorithm is supported
         return false unless Registry.providers.key?(algorithm)
 
@@ -77,6 +80,9 @@ module Familia
         unless algorithm
           raise EncryptionError, "Missing algorithm field"
         end
+
+        # Ensure Registry is set up before checking algorithms
+        Registry.setup! if Registry.providers.empty?
 
         unless Registry.providers.key?(algorithm)
           raise EncryptionError, "Unsupported algorithm: #{algorithm}"
