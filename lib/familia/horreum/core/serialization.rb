@@ -128,7 +128,7 @@ module Familia
         dbclient.watch(dbkey) do
           if dbclient.exists(dbkey).positive?
             dbclient.unwatch
-            raise Familia::RecordExistsError, "Record exists"
+            raise Familia::RecordExistsError, dbkey
           end
 
           result = dbclient.multi do |multi|
