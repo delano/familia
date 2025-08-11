@@ -3,7 +3,7 @@
 module Familia::Features
   module Quantization
     def self.included(base)
-      Familia.ld "[#{base}] Loaded #{self}"
+      Familia.trace :included, base, self, caller(1..1) if Familia.debug?
       base.extend ClassMethods
     end
 

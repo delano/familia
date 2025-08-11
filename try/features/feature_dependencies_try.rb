@@ -7,7 +7,7 @@ Familia.debug = false
 # Create test features with dependencies for testing
 module TestFeatureA
   def self.included(base)
-    Familia.ld "[#{base}] Loaded #{self}"
+    Familia.trace :included, base, self, caller(1..1) if Familia.debug?
     base.extend ClassMethods
   end
 
@@ -24,7 +24,7 @@ end
 
 module TestFeatureB
   def self.included(base)
-    Familia.ld "[#{base}] Loaded #{self}"
+    Familia.trace :INCLUDED, base, self, caller(1..1) if Familia.debug?
     base.extend ClassMethods
   end
 
@@ -41,7 +41,7 @@ end
 
 module TestFeatureCWithDeps
   def self.included(base)
-    Familia.ld "[#{base}] Loaded #{self}"
+    Familia.trace :feature_load, base, self, caller(1..1) if Familia.debug?
     base.extend ClassMethods
   end
 

@@ -35,7 +35,7 @@ module Familia
 
       def add_feature(klass, feature_name, depends_on: [])
         @features_available ||= {}
-        Familia.ld "[#{self}] Adding feature #{klass} as #{feature_name.inspect}"
+        Familia.trace :ADD_FEATURE, klass, feature_name, caller(1..1) if Familia.debug?
 
         # Create field definition object
         feature_def = FeatureDefinition.new(
