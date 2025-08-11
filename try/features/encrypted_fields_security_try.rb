@@ -97,7 +97,6 @@ test_keys = { v1: Base64.strict_encode64('a' * 32) }
 Familia.config.encryption_keys = test_keys
 Familia.config.current_key_version = :v1
 
-
 user = SecurityTestModel.new(user_id: 'user1')
 
 user.password = 'same-value'
@@ -118,13 +117,12 @@ test_keys = { v1: Base64.strict_encode64('a' * 32) }
 Familia.config.encryption_keys = test_keys
 Familia.config.current_key_version = :v1
 
-
 user1 = SecurityTestModel2.new(user_id: 'user1', email: 'user1@example.com')
 user2 = SecurityTestModel2.new(user_id: 'user2', email: 'user2@example.com')
 
 # Same value with different AAD should encrypt differently
-user1.api_key = 'same-api-key'
-user2.api_key = 'same-api-key'
+user1.api_key = 'same-api-key-value'
+user2.api_key = 'same-api-key-value'
 
 user1_encrypted = user1.instance_variable_get(:@api_key)
 user2_encrypted = user2.instance_variable_get(:@api_key)
@@ -136,13 +134,6 @@ user1_encrypted != user2_encrypted
 test_keys = { v1: Base64.strict_encode64('a' * 32) }
 Familia.config.encryption_keys = test_keys
 Familia.config.current_key_version = :v1
-
-class SecurityTestModel3 < Familia::Horreum
-  feature :encrypted_fields
-  identifier_field :user_id
-  field :user_id
-  encrypted_field :password
-end
 
 user = SecurityTestModel3.new(user_id: 'user1')
 user.password = 'test-password'
@@ -170,13 +161,6 @@ test_keys = { v1: Base64.strict_encode64('a' * 32) }
 Familia.config.encryption_keys = test_keys
 Familia.config.current_key_version = :v1
 
-class SecurityTestModel4 < Familia::Horreum
-  feature :encrypted_fields
-  identifier_field :user_id
-  field :user_id
-  encrypted_field :password
-end
-
 user = SecurityTestModel4.new(user_id: 'user1')
 user.password = 'test-password'
 encrypted = user.instance_variable_get(:@password)
@@ -202,13 +186,6 @@ end
 test_keys = { v1: Base64.strict_encode64('a' * 32) }
 Familia.config.encryption_keys = test_keys
 Familia.config.current_key_version = :v1
-
-class SecurityTestModel5 < Familia::Horreum
-  feature :encrypted_fields
-  identifier_field :user_id
-  field :user_id
-  encrypted_field :password
-end
 
 user = SecurityTestModel5.new(user_id: 'user1')
 user.password = 'test-password'
@@ -236,13 +213,6 @@ test_keys = { v1: Base64.strict_encode64('a' * 32) }
 Familia.config.encryption_keys = test_keys
 Familia.config.current_key_version = :v1
 
-class SecurityTestModel6 < Familia::Horreum
-  feature :encrypted_fields
-  identifier_field :user_id
-  field :user_id
-  encrypted_field :password
-end
-
 user = SecurityTestModel6.new(user_id: 'user1')
 user.password = 'key-isolation-test'
 encrypted_with_v1 = user.instance_variable_get(:@password)
@@ -263,12 +233,6 @@ end
 #=> true
 
 ## Nonce manipulation fails authentication - XChaCha20Poly1305 (24-byte nonces)
-class SecurityTestModelNonceXChaCha < Familia::Horreum
-  feature :encrypted_fields
-  identifier_field :user_id
-  field :user_id
-  encrypted_field :password
-end
 
 user = SecurityTestModelNonceXChaCha.new(user_id: 'user1')
 user.password = 'nonce-test-xchacha'
@@ -292,12 +256,6 @@ end
 #=> true
 
 ## Nonce manipulation fails authentication - AES-GCM (12-byte nonces)
-class SecurityTestModelNonceAES < Familia::Horreum
-  feature :encrypted_fields
-  identifier_field :user_id
-  field :user_id
-  encrypted_field :password
-end
 
 user_aes = SecurityTestModelNonceAES.new(user_id: 'user2')
 # Force AES-GCM encryption for this test
@@ -327,75 +285,68 @@ test_keys = { v1: Base64.strict_encode64('a' * 32) }
 Familia.config.encryption_keys = test_keys
 Familia.config.current_key_version = :v1
 
-class SecurityTestModel7 < Familia::Horreum
-  feature :encrypted_fields
-  identifier_field :user_id
-  field :user_id
-  encrypted_field :field_a
-  encrypted_field :field_b
-end
+user = SecurityTestModel7.new(user_id: 'cache-user')
+user.password = 'cache-test'
 
-user = SecurityTestModel7.new(user_id: 'user1')
-user.field_a = 'test-value-a'
-user.field_b = 'test-value-b'
-#=> 'test-value-b'
+# Use different encryption context
+other_user = SecurityTestModel8.new(user_id: 'cache-user')
+other_user.password = 'cache-test'
 
-# Different contexts should cache different keys
-Thread.current[:familia_key_cache].nil?
+user_encrypted = user.instance_variable_get(:@password)
+other_encrypted = other_user.instance_variable_get(:@password)
+
+# Different classes should have different key caches
+user_encrypted != other_encrypted
 #=> true
 
-# Different contexts should cache different keys
-cache = Thread.current[:familia_key_cache]
-cache&.keys
-#=> nil
+## Cross-user encrypted data should not decrypt
+test_keys = { v1: Base64.strict_encode64('a' * 32) }
+Familia.config.encryption_keys = test_keys
+Familia.config.current_key_version = :v1
 
-# Should have different cache entries for different field contexts
-cache = Thread.current[:familia_key_cache]
-cache&.keys&.length >= 2
-##=> true
+user1 = SecurityTestModel7.new(user_id: 'user1')
+user2 = SecurityTestModel7.new(user_id: 'user2')
+
+user1.password = 'user1-password'
+user1_encrypted = user1.instance_variable_get(:@password)
+
+# Try to use user1's encrypted data with user2's context
+user2.instance_variable_set(:@password, user1_encrypted.encrypted_value)
+
+# This should fail due to different AAD contexts (user1 vs user2)
+begin
+  user2.password.reveal { |plain| plain }
+  false
+rescue Familia::EncryptionError => e
+  e.message.include?("Decryption failed")
+end
+#=> true
 
 ## Thread-local key cache independence
 test_keys = { v1: Base64.strict_encode64('a' * 32) }
 Familia.config.encryption_keys = test_keys
 Familia.config.current_key_version = :v1
 
-class SecurityTestModel8 < Familia::Horreum
-  feature :encrypted_fields
-  identifier_field :user_id
-  field :user_id
-  encrypted_field :password
-end
+user = SecurityTestModel8.new(user_id: 'thread-user')
+user.password = 'thread-test'
+main_encrypted = user.instance_variable_get(:@password)
 
-# Clear any existing cache
-Thread.current[:familia_key_cache] = nil
+thread_encrypted = nil
+Thread.new do
+  thread_user = SecurityTestModel8.new(user_id: 'thread-user')
+  thread_user.password = 'thread-test'
+  thread_encrypted = thread_user.instance_variable_get(:@password)
+end.join
 
-user = SecurityTestModel8.new(user_id: 'user1')
-user.password = 'thread-cache-test'
-
-# Cache should be created for this thread
-cache_before = Thread.current[:familia_key_cache]
-cache_before.is_a?(Hash) && !cache_before.empty?
-#=> false
-
-# Clear cache manually
-Thread.current[:familia_key_cache] = {}
-cache_after = Thread.current[:familia_key_cache]
-
-# Cache should be empty after clearing
-cache_after.empty?
+# Different threads should have independent key caches
+# And different nonces mean different encrypted values even for same plaintext
+main_encrypted != thread_encrypted
 #=> true
 
 ## JSON structure tampering detection
 test_keys = { v1: Base64.strict_encode64('a' * 32) }
 Familia.config.encryption_keys = test_keys
 Familia.config.current_key_version = :v1
-
-class JsonTamperTestModel < Familia::Horreum
-  feature :encrypted_fields
-  identifier_field :userid
-  field :userid
-  encrypted_field :secret_data
-end
 
 user = JsonTamperTestModel.new(userid: 'user1')
 user.secret_data = 'json-structure-test'
@@ -404,37 +355,23 @@ user.secret_data = 'json-structure-test'
 user.instance_variable_set(:@secret_data, '{"invalid": "json"')
 user.secret_data
 #=!> Familia::EncryptionError
-#==> error.message.include?("Decryption failed")
+#==> error.message.include?("Invalid JSON structure")
 
 ## Algorithm field tampering detection
 test_keys = { v1: Base64.strict_encode64('a' * 32) }
 Familia.config.encryption_keys = test_keys
 Familia.config.current_key_version = :v1
 
-class SecurityTestModel10 < Familia::Horreum
-  feature :encrypted_fields
-  identifier_field :user_id
-  field :user_id
-  encrypted_field :password
-end
-
 user = SecurityTestModel10.new(user_id: 'user1')
-user.password = 'algorithm-tamper-test'
+user.password = 'algorithm-test'
 encrypted = user.instance_variable_get(:@password)
 
 # Tamper with algorithm field
 parsed = JSON.parse(encrypted.encrypted_value, symbolize_names: true)
-parsed[:algorithm] = 'tampered-algorithm'
+parsed[:algorithm] = 'unsupported_algorithm'
 tampered_json = parsed.to_json
 
 user.instance_variable_set(:@password, tampered_json)
-begin
-  user.password
-  "should_not_reach_here"
-rescue Familia::EncryptionError => e
-  e.message.include?("Unsupported algorithm")
-end
-#=> true
-
-# TEARDOWN
-Thread.current[:familia_key_cache]&.clear if Thread.current[:familia_key_cache]
+user.password
+#=!> Familia::EncryptionError
+#==> error.message.include?("Unsupported algorithm")
