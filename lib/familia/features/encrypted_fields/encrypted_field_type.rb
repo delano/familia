@@ -56,6 +56,16 @@ module Familia
           # Return nil directly if that's what was set
           return nil if concealed.nil?
 
+          # If we have a raw string (from direct instance variable manipulation),
+          # wrap it in ConcealedString which will trigger validation
+          if concealed.kind_of?(::String) && !concealed.is_a?(ConcealedString)
+            # This happens when someone directly sets the instance variable
+            # (e.g., during tampering tests). Wrapping in ConcealedString
+            # will trigger validate_decryptable! and catch invalid algorithms
+            concealed = ConcealedString.new(concealed, self, field_type)
+            instance_variable_set(:"@#{field_name}", concealed)
+          end
+
           # Context validation: detect cross-context attacks
           # Only validate if we have a proper ConcealedString instance
           if concealed.is_a?(ConcealedString) && !concealed.belongs_to_context?(self, field_name)
