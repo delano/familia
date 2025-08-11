@@ -108,7 +108,6 @@ class ConcealedString
       @field_type.instance_variable_get(:@name) == expected_field_name
   end
 
-
   # Clear the encrypted data from memory
   #
   # Safe to call multiple times. This provides best-effort memory
@@ -132,25 +131,6 @@ class ConcealedString
     @cleared
   end
 
-  # UNIVERSAL SERIALIZATION SAFETY
-  #
-  # All serialization and inspection methods return '[CONCEALED]'
-  # to prevent accidental plaintext leakage through any current
-  # or future serialization pathway.
-  #
-
-  def to_s
-    '[CONCEALED]'
-  end
-
-  def inspect
-    '[CONCEALED]'
-  end
-
-  def to_str
-    '[CONCEALED]'
-  end
-
   # JSON serialization safety
   def to_json(*args)
     '"[CONCEALED]"'
@@ -169,37 +149,17 @@ class ConcealedString
     ['[CONCEALED]']
   end
 
-  # String conversion safety
-  def to_i
-    0
-  end
-
-  def to_f
-    0.0
-  end
-
-  # Prevent accidental equality checks that might leak timing info
+  # Returns true when it's literally the same object, otherwise false.
+  # This prevents timing attacks where an attacker could potentially
+  # infer information about the secret value through comparison timing
   def ==(other)
-    object_id.equal?(other.object_id)
+    object_id.equal?(other.object_id) # same object
   end
   alias eql? ==
 
   # Consistent hash to prevent timing attacks
   def hash
     ConcealedString.hash
-  end
-
-  # Prevent string operations that might leak data
-  def +(other)
-    '[CONCEALED]'
-  end
-
-  def <<(other)
-    self
-  end
-
-  def concat(other)
-    self
   end
 
   # Pattern matching safety (Ruby 3.0+)
@@ -209,35 +169,6 @@ class ConcealedString
 
   def deconstruct_keys(keys)
     { concealed: true }
-  end
-
-  # Enumeration safety
-  def each
-    yield '[CONCEALED]' if block_given?
-    self
-  end
-
-  def map
-    yield '[CONCEALED]' if block_given?
-    ['[CONCEALED]']
-  end
-
-  # Size/length operations
-  def size
-    11  # Length of '[CONCEALED]'
-  end
-  alias length size
-
-  def empty?
-    false
-  end
-
-  def blank?
-    false
-  end
-
-  def present?
-    true
   end
 
   # Access the encrypted data for database storage
@@ -251,114 +182,28 @@ class ConcealedString
     @encrypted_data
   end
 
-  # String methods that should be safe
-  def match(pattern)
-    nil
-  end
-
-  def match?(pattern)
-    false
-  end
-
-  def scan(pattern)
-    []
-  end
-
-  def split(pattern = nil)
-    ['[CONCEALED]']
-  end
-
-  def gsub(pattern, replacement = nil)
+  # Core safety methods
+  def to_s
     '[CONCEALED]'
   end
 
-  def gsub!(pattern, replacement = nil)
-    self
-  end
-
-  def sub(pattern, replacement = nil)
+  def inspect
     '[CONCEALED]'
   end
 
-  def sub!(pattern, replacement = nil)
-    self
+  def to_json(*args)
+    '"[CONCEALED]"'
   end
 
-  # Case operations
-  def upcase
+  def as_json(*args)
     '[CONCEALED]'
-  end
-
-  def upcase!
-    self
-  end
-
-  def downcase
-    '[CONCEALED]'
-  end
-
-  def downcase!
-    self
-  end
-
-  def capitalize
-    '[CONCEALED]'
-  end
-
-  def capitalize!
-    self
-  end
-
-  def swapcase
-    '[CONCEALED]'
-  end
-
-  def swapcase!
-    self
-  end
-
-  # Whitespace operations
-  def strip
-    '[CONCEALED]'
-  end
-
-  def strip!
-    self
-  end
-
-  def lstrip
-    '[CONCEALED]'
-  end
-
-  def lstrip!
-    self
-  end
-
-  def rstrip
-    '[CONCEALED]'
-  end
-
-  def rstrip!
-    self
-  end
-
-  def chomp(separator = $/)
-    '[CONCEALED]'
-  end
-
-  def chomp!(separator = $/)
-    self
-  end
-
-  def chop
-    '[CONCEALED]'
-  end
-
-  def chop!
-    self
   end
 
   private
+
+  def to_str
+    raise NoMethodError, "ConcealedString cannot be coerced to String"
+  end
 
   # Check if a string looks like encrypted JSON data
   def encrypted_json?(data)
