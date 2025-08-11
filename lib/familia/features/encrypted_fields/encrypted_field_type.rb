@@ -121,15 +121,7 @@ module Familia
 
     # Check if a string looks like encrypted JSON data
     def encrypted_json?(data)
-      return false unless data.is_a?(String)
-
-      begin
-        # Encrypted data should be JSON containing algorithm, nonce, etc.
-        parsed = JSON.parse(data)
-        parsed.is_a?(Hash) && parsed.key?('algorithm')
-      rescue JSON::ParserError
-        false
-      end
+      Familia::Encryption::EncryptedData.valid?(data)
     end
 
     private

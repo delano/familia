@@ -49,9 +49,15 @@ class ConcealedString
     @field_type = field_type
     @cleared = false
 
-    # Ensure we don't accidentally store plaintext
-    if @encrypted_data && !encrypted_json?(@encrypted_data)
-      raise ArgumentError, "ConcealedString requires encrypted JSON data, got: #{@encrypted_data.class}"
+    # Parse and validate the encrypted data structure
+    if @encrypted_data
+      begin
+        @encrypted_data_obj = Familia::Encryption::EncryptedData.from_json(@encrypted_data)
+        # Validate that the encrypted data is decryptable (algorithm supported, etc.)
+        @encrypted_data_obj.validate_decryptable!
+      rescue Familia::EncryptionError => e
+        raise Familia::EncryptionError, e.message
+      end
     end
 
     ObjectSpace.define_finalizer(self, self.class.finalizer_proc(@encrypted_data))
@@ -356,15 +362,7 @@ class ConcealedString
 
   # Check if a string looks like encrypted JSON data
   def encrypted_json?(data)
-    return true if data.nil?  # Allow nil values
-
-    begin
-      # Encrypted data should be JSON containing algorithm, nonce, etc.
-      parsed = JSON.parse(data)
-      parsed.is_a?(Hash) && parsed.key?('algorithm')
-    rescue JSON::ParserError
-      false
-    end
+    Familia::Encryption::EncryptedData.valid?(data)
   end
 
   # Finalizer to attempt memory cleanup
