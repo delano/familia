@@ -60,18 +60,18 @@ end
 ## to_h excludes transient fields
 @hash_result = @serialization_test.to_h
 @hash_result.keys.sort
-#=> [:description, :email, :id, :metadata, :name]
+#=> ["description", "email", "id", "metadata", "name"]
 
 ## to_h includes all persistent fields
-@hash_result.key?(:name)
+@hash_result.key?("name")
 #=> true
 
 ## to_h includes encrypted persistent fields
-@hash_result.key?(:email)
+@hash_result.key?("email")
 #=> true
 
 ## to_h includes explicitly persistent fields
-@hash_result.key?(:description)
+@hash_result.key?("description")
 #=> true
 
 ## to_h excludes transient fields from serialization
@@ -83,7 +83,7 @@ end
 #=> false
 
 ## to_h serializes complex values correctly
-@hash_result[:metadata]
+@hash_result["metadata"]
 #=:> String
 
 ## to_a excludes transient fields
@@ -127,7 +127,7 @@ SerializationCategoryTest.persistent_fields.include?(:email)
 
 ## to_h with only id field when all others are transient
 @all_transient.to_h
-#=> { id: "transient_test_1" }
+#=> {"id" => "transient_test_1"}
 
 ## to_a with only id field when all others are transient
 @all_transient.to_a
@@ -136,7 +136,7 @@ SerializationCategoryTest.persistent_fields.include?(:email)
 ## Aliased fields serialization uses original field names
 @aliased_hash = @aliased_test.to_h
 @aliased_hash.keys.sort
-#=> [:id, :internal_name, :user_data]
+#=> ["id", "internal_name", "user_data"]
 
 ## Aliased transient fields are excluded
 @aliased_hash.key?(:temp_cache)
@@ -144,7 +144,7 @@ SerializationCategoryTest.persistent_fields.include?(:email)
 
 ## Serialization works with accessor methods through aliases
 @aliased_test.display_name = 'Updated Name'
-@aliased_test.to_h[:internal_name]
+@aliased_test.to_h["internal_name"]
 #=> "Updated Name"
 
 ## Clear fields respects field method map

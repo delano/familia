@@ -45,12 +45,12 @@ Familia.dbclient.set('debug:ending_save_if_not_exists_tests', Time.now.to_s)
 @customer.to_h.class
 #=> Hash
 
-## to_h includes the fields we set (using symbol keys)
-@customer.to_h[:name]
+## to_h includes the fields we set (using string keys)
+@customer.to_h["name"]
 #=> "John Doe"
 
-## to_h includes the custid field (using symbol keys)
-@customer.to_h[:custid]
+## to_h includes the custid field (using string keys)
+@customer.to_h["custid"]
 #=> "tryouts-28@onetimesecret.dev"
 
 ## to_a returns field array in definition order
