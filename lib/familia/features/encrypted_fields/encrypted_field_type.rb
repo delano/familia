@@ -22,6 +22,9 @@ module Familia
         klass.define_method :"#{method_name}=" do |value|
           if value.nil?
             instance_variable_set(:"@#{field_name}", nil)
+          elsif value.is_a?(String) && value.empty?
+            # Handle empty strings - treat as nil for encrypted fields
+            instance_variable_set(:"@#{field_name}", nil)
           elsif value.is_a?(ConcealedString)
             # Already concealed, store as-is
             instance_variable_set(:"@#{field_name}", value)
@@ -48,7 +51,18 @@ module Familia
         klass.define_method method_name do
           # Return ConcealedString directly - no auto-decryption!
           # Caller must use .reveal { } for plaintext access
-          instance_variable_get(:"@#{field_name}")
+          concealed = instance_variable_get(:"@#{field_name}")
+
+          # Return nil directly if that's what was set
+          return nil if concealed.nil?
+
+          # Context validation: detect cross-context attacks
+          # Only validate if we have a proper ConcealedString instance
+          if concealed.is_a?(ConcealedString) && !concealed.belongs_to_context?(self, field_name)
+            raise Familia::EncryptionError, "Context isolation violation: encrypted field '#{field_name}' does not belong to #{self.class.name}:#{self.identifier}"
+          end
+
+          concealed
         end
       end
     end
@@ -131,19 +145,15 @@ module Familia
     # containing record context. This prevents attackers from moving encrypted
     # values between different records or field contexts, even with database access.
     #
-    # ## Persistence-Dependent Behavior
+    # ## Consistent AAD Behavior
     #
-    # AAD is only generated for records that exist in the database (`record.exists?`).
-    # This creates an important behavioral distinction:
+    # AAD is now consistently generated based on the record's identifier, regardless
+    # of persistence state. This ensures that encrypted values remain decryptable
+    # after save/load cycles while still providing security benefits.
     #
-    # **Before Save (record.exists? == false):**
-    # - AAD = nil
-    # - Encryption context = "ClassName:fieldname:identifier" only
-    # - Values can be encrypted/decrypted freely in memory
-    #
-    # **After Save (record.exists? == true):**
+    # **All Records (both new and persisted):**
     # - AAD = record.identifier (no aad_fields) or SHA256(identifier:field1:field2:...)
-    # - Full cryptographic binding to database state
+    # - Consistent cryptographic binding to record identity
     # - Moving encrypted values between records/contexts will fail decryption
     #
     # ## Security Implications
@@ -153,8 +163,8 @@ module Familia
     # 1. **Field Value Swapping**: With aad_fields specified, encrypted values
     #    become bound to other field values. Changing owner_id breaks decryption.
     #
-    # 2. **Cross-Record Migration**: Even without aad_fields, encrypted values
-    #    are bound to their specific record identifier after persistence.
+    # 2. **Cross-Record Migration**: Encrypted values are bound to their specific
+    #    record identifier, preventing cross-record value movement.
     #
     # 3. **Temporal Consistency**: Re-encrypting the same plaintext after
     #    field changes produces different ciphertext due to AAD changes.
@@ -170,18 +180,33 @@ module Familia
     # ```
     #
     # @param record [Familia::Horreum] The record instance containing this field
-    # @return [String, nil] AAD string for encryption, or nil for unsaved records
+    # @return [String, nil] AAD string for encryption, or nil if no identifier
     #
     def build_aad(record)
-      return nil unless record.exists?
+      # AAD provides consistent context-aware binding, regardless of persistence state
+      # This ensures save/load cycles work while maintaining context isolation
+      identifier = record.identifier
+      return nil if identifier.nil? || identifier.to_s.empty?
+
+      # Include class and field name in AAD for context isolation
+      # This prevents cross-class and cross-field value migration
+      base_components = [record.class.name, @name, identifier]
 
       if @aad_fields.empty?
-        # When no AAD fields specified, just use identifier
-        record.identifier
+        # When no AAD fields specified, use class:field:identifier
+        base_components.join(':')
       else
-        # Include specified field values in AAD
-        values = @aad_fields.map { |field| record.send(field) }
-        Digest::SHA256.hexdigest([record.identifier, *values].compact.join(':'))
+        # For unsaved records, don't enforce AAD fields since they can change
+        # For saved records, include field values for tamper protection
+        if record.exists?
+          # Include specified field values in AAD for persisted records
+          values = @aad_fields.map { |field| record.send(field) }
+          all_components = [*base_components, *values].compact
+          Digest::SHA256.hexdigest(all_components.join(':'))
+        else
+          # For unsaved records, only use class:field:identifier for context isolation
+          base_components.join(':')
+        end
       end
     end
   end
