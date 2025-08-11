@@ -92,7 +92,7 @@ already_redacted = RedactedString.new('already_wrapped')
 ## Serialization to_h only includes persistent fields
 hash_result = @service.to_h
 hash_result.keys.sort
-#=> [:endpoint_url, :name]
+#=> ["endpoint_url", "name"]
 
 ## Serialization to_h excludes api_key transient field
 hash_result = @service.to_h
