@@ -84,6 +84,25 @@ class ConcealedString
     yield plaintext
   end
 
+  # Validate that this ConcealedString belongs to the given record context
+  #
+  # This prevents cross-context attacks where encrypted data is moved between
+  # different records or field contexts. While moving ConcealedString objects
+  # manually is not a normal use case, this provides defense in depth.
+  #
+  # @param expected_record [Familia::Horreum] The record that should own this data
+  # @param expected_field_name [Symbol] The field name that should own this data
+  # @return [Boolean] true if contexts match, false otherwise
+  #
+  def belongs_to_context?(expected_record, expected_field_name)
+    return false if @record.nil? || @field_type.nil?
+
+    @record.class.name == expected_record.class.name &&
+      @record.identifier == expected_record.identifier &&
+      @field_type.instance_variable_get(:@name) == expected_field_name
+  end
+
+
   # Clear the encrypted data from memory
   #
   # Safe to call multiple times. This provides best-effort memory
