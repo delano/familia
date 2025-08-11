@@ -1,13 +1,15 @@
 # lib/familia/field_types/encrypted_field_type.rb
 
 require_relative '../../field_type'
+require_relative 'concealed_string'
 
 module Familia
   class EncryptedFieldType < FieldType
     attr_reader :aad_fields
 
     def initialize(name, aad_fields: [], **options)
-      super(name, **options.merge(on_conflict: :raise))
+      # Encrypted fields are not loggable by default for security
+      super(name, **options.merge(on_conflict: :raise, loggable: false))
       @aad_fields = Array(aad_fields).freeze
     end
 
@@ -18,8 +20,17 @@ module Familia
 
       handle_method_conflict(klass, :"#{method_name}=") do
         klass.define_method :"#{method_name}=" do |value|
-          encrypted = value.nil? ? nil : field_type.encrypt_value(self, value)
-          instance_variable_set(:"@#{field_name}", encrypted)
+          if value.nil?
+            instance_variable_set(:"@#{field_name}", nil)
+          elsif value.is_a?(ConcealedString)
+            # Already concealed, store as-is
+            instance_variable_set(:"@#{field_name}", value)
+          else
+            # Encrypt plaintext and wrap in ConcealedString
+            encrypted = field_type.encrypt_value(self, value)
+            concealed = ConcealedString.new(encrypted, self, field_type)
+            instance_variable_set(:"@#{field_name}", concealed)
+          end
         end
       end
     end
@@ -31,8 +42,9 @@ module Familia
 
       handle_method_conflict(klass, method_name) do
         klass.define_method method_name do
-          encrypted = instance_variable_get(:"@#{field_name}")
-          encrypted.nil? ? nil : field_type.decrypt_value(self, encrypted)
+          # Return ConcealedString directly - no auto-decryption!
+          # Caller must use .reveal { } for plaintext access
+          instance_variable_get(:"@#{field_name}")
         end
       end
     end
@@ -50,10 +62,16 @@ module Familia
         klass.define_method fast_method_name do |val|
           raise ArgumentError, "#{fast_method_name} requires a value" if val.nil?
 
-          encrypted = field_type.encrypt_value(self, val)
+          # Set via the setter method to get proper ConcealedString wrapping
           send(:"#{method_name}=", val) if method_name
 
-          ret = hset(field_name, encrypted)
+          # Get the ConcealedString and extract encrypted data for storage
+          concealed = instance_variable_get(:"@#{field_name}")
+          encrypted_data = concealed&.encrypted_value
+
+          return false if encrypted_data.nil?
+
+          ret = hset(field_name, encrypted_data)
           ret.zero? || ret.positive?
         end
       end

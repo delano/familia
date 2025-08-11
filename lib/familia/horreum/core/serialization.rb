@@ -128,7 +128,7 @@ module Familia
         dbclient.watch(dbkey) do
           if dbclient.exists(dbkey).positive?
             dbclient.unwatch
-            raise Familia::RecordExistsError, "Record exists"
+            raise Familia::RecordExistsError, "#{self.class.name} already exists: #{dbkey}"
           end
 
           result = dbclient.multi do |multi|
@@ -364,6 +364,10 @@ module Familia
       def to_h
         self.class.persistent_fields.each_with_object({}) do |field, hsh|
           field_type = self.class.field_types[field]
+
+          # Security: Skip non-loggable fields (e.g., encrypted fields)
+          next unless field_type.loggable
+
           method_name = field_type.method_name
           val = send(method_name)
           prepared = serialize_value(val)
@@ -391,8 +395,12 @@ module Familia
       #   methods to maintain data consistency across operations.
       #
       def to_a
-        self.class.persistent_fields.collect do |field|
+        self.class.persistent_fields.filter_map do |field|
           field_type = self.class.field_types[field]
+
+          # Security: Skip non-loggable fields (e.g., encrypted fields)
+          next unless field_type.loggable
+
           method_name = field_type.method_name
           val = send(method_name)
           prepared = serialize_value(val)
@@ -429,6 +437,11 @@ module Familia
       # @see Familia.distinguisher The primary serialization mechanism
       #
       def serialize_value(val)
+        # Security: Handle ConcealedString safely - extract encrypted data for storage
+        if val.respond_to?(:encrypted_value)
+          return val.encrypted_value
+        end
+
         prepared = Familia.distinguisher(val, strict_values: false)
 
         # If the distinguisher returns nil, try using the dump_method but only
