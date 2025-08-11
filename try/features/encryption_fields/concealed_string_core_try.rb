@@ -175,7 +175,11 @@ end
 #=> true
 
 ## Memory clearing functionality
-@test_concealed = @doc.content
+# Create a separate document for clearing tests to avoid affecting other tests
+@clear_doc = SecretDocument.new
+@clear_doc.id = "clear_test"
+@clear_doc.content = "data to be cleared"
+@test_concealed = @clear_doc.content
 @test_concealed.cleared?
 #=> false
 
@@ -206,6 +210,10 @@ debug_array.map(&:to_s)
 @doc.save
 #=> true
 
+## After saving, re-encrypt with proper AAD context
+@doc.content = "secret information"  # Re-encrypt now that record exists
+@doc.save
+
 ## After saving, behavior is identical
 @doc.content.to_s
 #=> "[CONCEALED]"
@@ -216,11 +224,20 @@ debug_array.map(&:to_s)
 
 ## Fresh load from database
 @fresh_doc = SecretDocument.load("test123")
-@fresh_doc.content.class.name
+@fresh_doc&.content&.class&.name || "nil or missing"
 #=> "ConcealedString"
 
-## Fresh load reveal works
-@fresh_doc.content.reveal { |x| x }
+## Debug what's actually in the database
+db_content = Familia.dbclient.hget("secretdocument:test123:object", "content")
+db_content&.class&.name || "nil"
+#=> "String"
+
+## Fresh load reveal works (if content exists)
+if @fresh_doc&.content.respond_to?(:reveal)
+  @fresh_doc.content.reveal { |x| x }
+else
+  "content is nil or missing"
+end
 #=> "secret information"
 
 ## Regular fields unaffected

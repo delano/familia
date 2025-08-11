@@ -25,6 +25,10 @@ module Familia
           elsif value.is_a?(ConcealedString)
             # Already concealed, store as-is
             instance_variable_set(:"@#{field_name}", value)
+          elsif field_type.encrypted_json?(value)
+            # Already encrypted JSON from database - wrap in ConcealedString without re-encrypting
+            concealed = ConcealedString.new(value, self, field_type)
+            instance_variable_set(:"@#{field_name}", concealed)
           else
             # Encrypt plaintext and wrap in ConcealedString
             encrypted = field_type.encrypt_value(self, value)
@@ -99,6 +103,19 @@ module Familia
 
     def category
       :encrypted
+    end
+
+    # Check if a string looks like encrypted JSON data
+    def encrypted_json?(data)
+      return false unless data.is_a?(String)
+
+      begin
+        # Encrypted data should be JSON containing algorithm, nonce, etc.
+        parsed = JSON.parse(data)
+        parsed.is_a?(Hash) && parsed.key?('algorithm')
+      rescue JSON::ParserError
+        false
+      end
     end
 
     private
