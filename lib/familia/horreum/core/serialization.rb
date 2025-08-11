@@ -372,7 +372,8 @@ module Familia
           Familia.ld " [to_h] field: #{field} val: #{val.class} prepared: #{prepared&.class || '[nil]'}"
 
           # Only include non-nil values in the hash for Valkey
-          hsh[field] = prepared unless prepared.nil?
+          # Use string key for database compatibility
+          hsh[field.to_s] = prepared unless prepared.nil?
         end
       end
 
@@ -397,7 +398,8 @@ module Familia
           Familia.ld " [to_h_for_storage] field: #{field} val: #{val.class} prepared: #{prepared&.class || '[nil]'}"
 
           # Only include non-nil values in the hash for Valkey
-          hsh[field] = prepared unless prepared.nil?
+          # Use string key for database compatibility
+          hsh[field.to_s] = prepared unless prepared.nil?
         end
       end
 

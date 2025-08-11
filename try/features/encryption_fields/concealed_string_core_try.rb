@@ -11,7 +11,7 @@ Familia.config.encryption_keys = test_keys
 Familia.config.current_key_version = :v1
 
 # Test class with encrypted fields
-class SecretDocument < Familia::Horreum
+class TestSecretDocument < Familia::Horreum
   feature :encrypted_fields
   identifier_field :id
   field :id
@@ -19,6 +19,9 @@ class SecretDocument < Familia::Horreum
   encrypted_field :content        # This will use ConcealedString
   encrypted_field :api_key        # Another encrypted field
 end
+
+# Assign it to the global namespace for proper naming
+Object.const_set(:SecretDocument, TestSecretDocument)
 
 # Clean test environment
 Familia.dbclient.flushdb
@@ -206,13 +209,20 @@ debug_array = [@doc.title, @doc.content, @doc.api_key]
 debug_array.map(&:to_s)
 #=> ["Public Title", "[CONCEALED]", "[CONCEALED]"]
 
-## Database persistence
-@doc.save
+## Database persistence - debug serialization
+@storage_hash = @doc.to_h_for_storage
+@storage_hash.keys
+#=> ["id", "title", "content", "api_key"]
+
+@save_result1 = @doc.save
+@save_result1
 #=> true
 
 ## After saving, re-encrypt with proper AAD context
 @doc.content = "secret information"  # Re-encrypt now that record exists
-@doc.save
+@save_result2 = @doc.save
+@save_result2
+#=> true
 
 ## After saving, behavior is identical
 @doc.content.to_s
@@ -228,13 +238,25 @@ debug_array.map(&:to_s)
 #=> "ConcealedString"
 
 ## Debug what's actually in the database
+@all_keys = Familia.dbclient.keys("*")
+@all_keys
+#=> ["secretdocument:test123:object"]
+
+@db_hash = Familia.dbclient.hgetall("secretdocument:test123:object")
+@db_hash.keys
+#=> ["id", "title", "content", "api_key"]
+
 db_content = Familia.dbclient.hget("secretdocument:test123:object", "content")
 db_content&.class&.name || "nil"
 #=> "String"
 
 ## Fresh load reveal works (if content exists)
 if @fresh_doc&.content.respond_to?(:reveal)
-  @fresh_doc.content.reveal { |x| x }
+  begin
+    @fresh_doc.content.reveal { |x| x }
+  rescue => e
+    "DECRYPTION ERROR: #{e.class}: #{e.message}"
+  end
 else
   "content is nil or missing"
 end
