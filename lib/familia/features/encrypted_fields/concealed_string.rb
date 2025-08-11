@@ -131,12 +131,44 @@ class ConcealedString
     @cleared
   end
 
-  # JSON serialization safety
-  def to_json(*args)
-    '"[CONCEALED]"'
+  def empty?
+    @encrypted_data.to_s.empty?
   end
 
-  def as_json(*args)
+  # Returns true when it's literally the same object, otherwise false.
+  # This prevents timing attacks where an attacker could potentially
+  # infer information about the secret value through comparison timing
+  def ==(other)
+    object_id.equal?(other.object_id) # same object
+  end
+  alias eql? ==
+
+  # Access the encrypted data for database storage
+  #
+  # This method is used internally by the field type system
+  # for persisting the encrypted data to the database.
+  #
+  # @return [String, nil] The encrypted JSON data
+  #
+  def encrypted_value
+    @encrypted_data
+  end
+
+  # Prevent accidental exposure through string conversion and serialization
+  #
+  # Ruby has two string conversion methods with different purposes:
+  # - to_s: explicit conversion (obj.to_s, string interpolation "#{obj}")
+  # - to_str: implicit coercion (File.read(obj), "prefix" + obj)
+  #
+  # We implement to_s for safe logging/debugging but deliberately omit to_str
+  # to prevent encrypted data from being used where strings are expected.
+  #
+  def to_s
+    '[CONCEALED]'
+  end
+
+  # Safe representation for debugging and console output
+  def inspect
     '[CONCEALED]'
   end
 
@@ -148,14 +180,6 @@ class ConcealedString
   def to_a
     ['[CONCEALED]']
   end
-
-  # Returns true when it's literally the same object, otherwise false.
-  # This prevents timing attacks where an attacker could potentially
-  # infer information about the secret value through comparison timing
-  def ==(other)
-    object_id.equal?(other.object_id) # same object
-  end
-  alias eql? ==
 
   # Consistent hash to prevent timing attacks
   def hash
@@ -171,39 +195,17 @@ class ConcealedString
     { concealed: true }
   end
 
-  # Access the encrypted data for database storage
-  #
-  # This method is used internally by the field type system
-  # for persisting the encrypted data to the database.
-  #
-  # @return [String, nil] The encrypted JSON data
-  #
-  def encrypted_value
-    @encrypted_data
-  end
-
-  # Core safety methods
-  def to_s
-    '[CONCEALED]'
-  end
-
-  def inspect
-    '[CONCEALED]'
-  end
-
+  # Prevent exposure in JSON serialization
   def to_json(*args)
     '"[CONCEALED]"'
   end
 
+  # Prevent exposure in Rails serialization (as_json -> to_json)
   def as_json(*args)
     '[CONCEALED]'
   end
 
   private
-
-  def to_str
-    raise NoMethodError, "ConcealedString cannot be coerced to String"
-  end
 
   # Check if a string looks like encrypted JSON data
   def encrypted_json?(data)

@@ -4,7 +4,7 @@ require_relative 'related_fields_management'
 require_relative '../shared/settings'
 
 module Familia
-  VALID_STRATEGIES = %i[raise skip warn overwrite].freeze
+  VALID_STRATEGIES = %i[raise skip ignore warn overwrite].freeze
 
   # Familia::Horreum
   #
@@ -270,7 +270,7 @@ module Familia
           WARNING
         when :raise
           raise ArgumentError, "Method >>> #{method_name} <<< already defined for #{self}"
-        when :skip
+        when :skip, :ignore
           # Do nothing, skip silently
         end
       end

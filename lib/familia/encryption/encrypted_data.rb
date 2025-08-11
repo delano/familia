@@ -15,10 +15,10 @@ module Familia
           # Check for required fields
           required_fields = [:algorithm, :nonce, :ciphertext, :auth_tag, :key_version]
           result = required_fields.all? { |field| parsed.key?(field) }
-          puts "DEBUG valid? result: #{result}, parsed: #{parsed}, required: #{required_fields}" if ENV['FAMILIA_DEBUG']
+          Familia.ld "[valid?] result: #{result}, parsed: #{parsed}, required: #{required_fields}"
           result
         rescue JSON::ParserError => e
-          puts "DEBUG valid? JSON error: #{e.message}" if ENV['FAMILIA_DEBUG']
+          Familia.ld "[valid?] JSON error: #{e.message}"
           false
         end
       end
