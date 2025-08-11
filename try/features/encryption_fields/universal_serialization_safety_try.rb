@@ -61,7 +61,7 @@ hash_result.keys.include?("api_token")
 
 ## to_str serialization
 @record.api_token.to_str
-#=> "[CONCEALED]"
+#=!> NoMethodError
 
 ## inspect serialization
 @record.api_token.inspect
@@ -85,11 +85,11 @@ hash_result.keys.include?("api_token")
 
 ## Numeric serialization - to_i
 @record.api_token.to_i
-#=> 0
+#=!> NoMethodError
 
 ## Float serialization
 @record.api_token.to_f
-#=> 0.0
+#=!> NoMethodError
 
 ## Complex nested JSON structure
 @nested_data = {

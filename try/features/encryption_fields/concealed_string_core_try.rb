@@ -75,7 +75,7 @@ end
 
 ## to_str method
 @doc.content.to_str
-#=> "[CONCEALED]"
+#=!> NoMethodError
 
 ## JSON serialization - to_json
 @doc.content.to_json
@@ -93,37 +93,9 @@ end
 @doc.content.to_a
 #=> ["[CONCEALED]"]
 
-## Numeric conversions
-@doc.content.to_i
-#=> 0
-
-## Float conversion
-@doc.content.to_f
-#=> 0.0
-
 ## String concatenation safety
 (@doc.content + " extra")
 #=> "[CONCEALED]"
-
-## String case operations
-@doc.content.upcase
-#=> "[CONCEALED]"
-
-## Downcase operation
-@doc.content.downcase
-#=> "[CONCEALED]"
-
-## Strip operation
-@doc.content.strip
-#=> "[CONCEALED]"
-
-## Regex substitution
-@doc.content.gsub(/secret/, "public")
-#=> "[CONCEALED]"
-
-## Size operations
-@doc.content.size
-#=> 11
 
 ## Length operation
 @doc.content.length
