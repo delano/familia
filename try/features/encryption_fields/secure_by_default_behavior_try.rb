@@ -154,16 +154,16 @@ revealed_fresh
 #=> 11
 
 ## Encrypted field substring is from concealed text
-@user.password_hash[0..3]
-#=> "[CO"
+@user.password_hash.to_s[0..3]
+#=> "[CON"
 
 ## Logging patterns are safe
-log_message = "User #{@user.username} with password #{@user.password_hash}"
-log_message.include?("bcrypt")
+@log_message = "User #{@user.username} with password #{@user.password_hash}"
+@log_message.include?("bcrypt")
 #=> false
 
 ## Log message shows concealed value
-log_message
+@log_message
 #=> "User john_doe with password [CONCEALED]"
 
 ## Exception messages are safe
@@ -180,38 +180,38 @@ transformed
 #=> "[CONCEALED]"
 
 ## Concatenation is safe from plaintext leakage
-combined = "Password: " + @user.password_hash + " (encrypted)"
-combined.include?("bcrypt")
+@combined = "Password: " + @user.password_hash + " (encrypted)"
+@combined.include?("bcrypt")
 #=> false
 
 ## Combined string shows concealed value
-combined
+@combined
 #=> "Password: [CONCEALED] (encrypted)"
 
 ## JSON serialization is safe
-user_json = {
+@user_json = {
   id: @user.id,
   username: @user.username,
   password: @user.password_hash
 }.to_json
 
-user_json.include?("bcrypt")
+@user_json.include?("bcrypt")
 #=> false
 
 ## JSON contains concealed marker
-user_json.include?("[CONCEALED]")
+@user_json.include?("[CONCEALED]")
 #=> true
 
 ## Bulk field operations are secure
-encrypted_fields = [:password_hash, :api_secret, :recovery_key]
-field_values = encrypted_fields.map { |field| @user.send(field) }
+@encrypted_fields = [:password_hash, :api_secret, :recovery_key]
+@field_values = @encrypted_fields.map { |field| @user.send(field) }
 
-field_values.all? { |val| val.class.name == "ConcealedString" }
+@field_values.all? { |val| val.class.name == "ConcealedString" }
 #=> true
 
 ## All serialize safely
-safe_strings = field_values.map(&:to_s)
-safe_strings.all? { |str| str == "[CONCEALED]" }
+@safe_strings = @field_values.map(&:to_s)
+@safe_strings.all? { |str| str == "[CONCEALED]" }
 #=> true
 
 ## Conditional operations are safe
@@ -259,8 +259,8 @@ old_value
 #=> nil
 
 ## Nil encrypted fields are NilClass
-@user.recovery_key.class
-#=:> NilClass
+@user.recovery_key.class.name
+#=> "NilClass"
 
 ## Setting back to value returns to ConcealedString
 @user.recovery_key = "new-recovery-key"
@@ -281,29 +281,29 @@ api_response = {
   }
 }
 
-response_json = api_response.to_json
-response_json.include?("bcrypt")
+@response_json = api_response.to_json
+@response_json.include?("bcrypt")
 #=> false
 
 ## API response doesn't leak secrets
-response_json.include?("sk-1234567890abcdef")
+@response_json.include?("sk-1234567890abcdef")
 #=> false
 
 ## API response contains concealed markers
-response_json.include?("[CONCEALED]")
+@response_json.include?("[CONCEALED]")
 #=> true
 
 ## Debug logging safety
-debug_values = @user.instance_variables.map do |var|
+@debug_values = @user.instance_variables.map do |var|
   "#{var}=#{@user.instance_variable_get(var)}"
 end
 
-debug_string = debug_values.join(", ")
-debug_string.include?("bcrypt")
+@debug_string = @debug_values.join(", ")
+@debug_string.include?("bcrypt")
 #=> false
 
 ## Debug output contains concealed markers
-debug_string.include?("[CONCEALED]")
+@debug_string.include?("[CONCEALED]")
 #=> true
 
 # Teardown
