@@ -27,7 +27,7 @@ module Familia
   #   end
   #
   class FieldType
-    attr_reader :name, :options, :method_name, :fast_method_name, :on_conflict
+    attr_reader :name, :options, :method_name, :fast_method_name, :on_conflict, :loggable
 
     # Initialize a new field type
     #
@@ -38,9 +38,11 @@ module Familia
     #   (defaults to "#{name}!"). If false, no fast method is created
     # @param on_conflict [Symbol] Conflict resolution strategy when method
     #   already exists (:raise, :skip, :warn, :overwrite)
+    # @param loggable [Boolean] Whether this field should be included in
+    #   serialization and logging operations (default: true)
     # @param options [Hash] Additional options for the field type
     #
-    def initialize(name, as: name, fast_method: :"#{name}!", on_conflict: :raise, **options)
+    def initialize(name, as: name, fast_method: :"#{name}!", on_conflict: :raise, loggable: true, **options)
       @name = name.to_sym
       @method_name = as == false ? nil : as.to_sym
       @fast_method_name = fast_method == false ? nil : fast_method&.to_sym
@@ -51,6 +53,7 @@ module Familia
       end
 
       @on_conflict = on_conflict
+      @loggable = loggable
       @options = options
     end
 
