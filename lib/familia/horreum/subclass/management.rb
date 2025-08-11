@@ -55,24 +55,7 @@ module Familia
       #
       def create(*, **)
         fobj = new(*, **)
-
-        result = dbclient.watch(fobj.dbkey) do
-          if fobj.exists?
-            dbclient.unwatch
-            raise Familia::RecordExistsError, fobj.dbkey
-          end
-
-          dbclient.multi do |multi|
-            multi.hmset(fobj.dbkey, fobj.to_h)
-          end
-        end
-
-        # Check if transaction succeeded (result is an Array)
-        unless result.is_a?(Array)
-          # Transaction was aborted (key was modified during watch)
-          raise Familia::RecordExistsError, fobj.dbkey
-        end
-
+        fobj.save_if_not_exists
         fobj
       end
 
