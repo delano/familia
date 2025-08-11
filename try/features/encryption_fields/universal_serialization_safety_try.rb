@@ -92,7 +92,7 @@ hash_result.keys.include?("api_token")
 #=> 0.0
 
 ## Complex nested JSON structure
-nested_data = {
+@nested_data = {
   record: @record,
   fields: {
     public: [@record.title, @record.description],
@@ -100,36 +100,36 @@ nested_data = {
   }
 }
 
-serialized = nested_data.to_json
-serialized.include?("token-abc123456789")
+@serialized = @nested_data.to_json
+@serialized.include?("token-abc123456789")
 #=> false
 
 ## Nested JSON contains concealed markers
-nested_data.to_json.include?("[CONCEALED]")
+@nested_data.to_json.include?("[CONCEALED]")
 #=> true
 
 ## Array of mixed field types safety
-mixed_array = [
+@mixed_array = [
   @record.title,
   @record.api_token,
   @record.description,
   @record.secret_notes
 ]
 
-mixed_array.to_json.include?("token-abc123456789")
+@mixed_array.to_json.include?("token-abc123456789")
 #=> false
 
 ## Mixed array preserves public data
-mixed_array.to_json.include?("Public Record")
+@mixed_array.to_json.include?("Public Record")
 #=> true
 
 ## String interpolation safety
-debug_message = "Record #{@record.id}: token=#{@record.api_token}"
-debug_message.include?("token-abc123456789")
+@debug_message = "Record #{@record.id}: token=#{@record.api_token}"
+@debug_message.include?("token-abc123456789")
 #=> false
 
 ## Interpolation shows concealed values
-debug_message.include?("[CONCEALED]")
+@debug_message.include?("[CONCEALED]")
 #=> true
 
 ## Hash merge operations safety
@@ -162,12 +162,12 @@ end
 #=> false
 
 ## String formatting safety
-formatted = "Token: %s" % [@record.api_token]
-formatted.include?("token-abc123456789")
+@formatted = "Token: %s" % [@record.api_token]
+@formatted.include?("token-abc123456789")
 #=> false
 
 ## Formatted string shows concealed
-formatted.include?("[CONCEALED]")
+@formatted.include?("[CONCEALED]")
 #=> true
 
 # Teardown
