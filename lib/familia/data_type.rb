@@ -32,7 +32,7 @@ module Familia
       # +methname+ is the term used for the class and instance methods
       # that are created for the given +klass+ (e.g. set, list, etc)
       def register(klass, methname)
-        Familia.ld "[#{self}] Registering #{klass} as #{methname.inspect}"
+        Familia.trace :REGISTER, nil, "[#{self}] Registering #{klass} as #{methname.inspect}", caller(1..1) if Familia.debug?
 
         @registered_types[methname] = klass
       end
@@ -115,7 +115,7 @@ module Familia
         # this point. This would result in a Familia::Problem being raised. So
         # to be on the safe-side here until we have a better understanding of
         # the issue, we'll just log the class name for each key-value pair.
-        Familia.ld " [setting] #{k} #{v.class}"
+        Familia.trace :SETTING, nil, " [setting] #{k} #{v.class}", caller(1..1) if Familia.debug?
         send(:"#{k}=", v) if respond_to? :"#{k}="
       end
 
