@@ -97,23 +97,37 @@ module Familia
           raise EncryptionError, "Missing required fields: #{missing.join(', ')}"
         end
 
-        # Validate Base64 encoding
+        # Get the provider for size validation
+        provider = Registry.providers[algorithm]
+
+        # Validate Base64 encoding and sizes
         begin
-          Base64.strict_decode64(nonce)
+          decoded_nonce = Base64.strict_decode64(nonce)
+          if decoded_nonce.bytesize != provider.nonce_size
+            raise EncryptionError, "Invalid nonce size: expected #{provider.nonce_size}, got #{decoded_nonce.bytesize}"
+          end
         rescue ArgumentError
           raise EncryptionError, "Invalid Base64 encoding in nonce field"
         end
 
         begin
-          Base64.strict_decode64(ciphertext)
+          Base64.strict_decode64(ciphertext)  # ciphertext can be variable size
         rescue ArgumentError
           raise EncryptionError, "Invalid Base64 encoding in ciphertext field"
         end
 
         begin
-          Base64.strict_decode64(auth_tag)
+          decoded_auth_tag = Base64.strict_decode64(auth_tag)
+          if decoded_auth_tag.bytesize != provider.auth_tag_size
+            raise EncryptionError, "Invalid auth_tag size: expected #{provider.auth_tag_size}, got #{decoded_auth_tag.bytesize}"
+          end
         rescue ArgumentError
           raise EncryptionError, "Invalid Base64 encoding in auth_tag field"
+        end
+
+        # Validate that the key version exists
+        unless Familia.config.encryption_keys&.key?(key_version.to_sym)
+          raise EncryptionError, "No key for version: #{key_version}"
         end
 
         self
