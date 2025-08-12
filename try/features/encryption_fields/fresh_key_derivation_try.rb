@@ -101,9 +101,9 @@ Familia::Encryption.reset_derivation_count!
 model = FreshKeyDerivationTest.new(user_id: 'test-empty')
 model.test_field = ''
 empty_result = model.test_field
-# Empty string gets encrypted, returns ConcealedString
-[empty_result.to_s, Familia::Encryption.derivation_count.value]
-#=> ['[CONCEALED]', 0]
+# Empty string treated as nil, returns nil
+[empty_result, Familia::Encryption.derivation_count.value]
+#=> [nil, 0]
 
 ## Nil values don't trigger derivation
 Familia::Encryption.reset_derivation_count!

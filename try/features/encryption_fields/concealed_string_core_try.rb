@@ -73,7 +73,7 @@ end
 @doc.content.inspect
 #=> "[CONCEALED]"
 
-## to_str method
+## to_str method should not exist for security (implicit string conversion)
 @doc.content.to_str
 #=!> NoMethodError
 

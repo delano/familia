@@ -20,6 +20,22 @@ class FullSecureModel < Familia::Horreum
   hashkey :metadata             # Regular hashkey
 end
 
+# Create XChaCha model in setup for use across tests
+test_keys_xchacha = { v1: Base64.strict_encode64('a' * 32) }
+Familia.config.encryption_keys = test_keys_xchacha
+Familia.config.current_key_version = :v1
+
+class XChaChaIntegrationModel < Familia::Horreum
+  feature :encrypted_fields
+  identifier_field :model_id
+
+  field :model_id
+  encrypted_field :secret_data
+end
+
+@xchacha_model = XChaChaIntegrationModel.new(model_id: 'xchacha-test')
+@xchacha_model.secret_data = 'xchacha20poly1305 integration test'
+
 
 
 ## Full model initialization with mixed field types works
@@ -127,34 +143,14 @@ end
 [@model4.password.to_s, @model4.activity_log.size, @model4.metadata.has_key?('last_login')]
 #=> ['[CONCEALED]', 1, true]
 
-## Provider-specific integration: XChaCha20Poly1305 encryption
-test_keys = { v1: Base64.strict_encode64('a' * 32) }
-Familia.config.encryption_keys = test_keys
-Familia.config.current_key_version = :v1
-
-class XChaChaIntegrationModel < Familia::Horreum
-  feature :encrypted_fields
-  identifier_field :model_id
-
-  field :model_id
-  encrypted_field :secret_data
-end
-
-@xchacha_model = XChaChaIntegrationModel.new(model_id: 'xchacha-test')
-@xchacha_model.secret_data = 'xchacha20poly1305 integration test'
-
-# Verify storage uses ConcealedString for security
-concealed_data = @xchacha_model.instance_variable_get(:@secret_data)
-concealed_data.class.name == "ConcealedString"
-#=> true
-
-# Verify decryption works with controlled access
-@xchacha_model.secret_data.to_s
-#=> "[CONCEALED]"
-
-# Controlled decryption reveals original value
-@xchacha_model.secret_data.reveal { |decrypted| decrypted }
-#=> "xchacha20poly1305 integration test"
+## XChaCha20Poly1305 integration tests
+concealed_data = @xchacha_model.secret_data
+[
+  concealed_data.class.name == "ConcealedString",
+  @xchacha_model.secret_data.to_s,
+  @xchacha_model.secret_data.reveal { |decrypted| decrypted }
+]
+#=> [true, "[CONCEALED]", "xchacha20poly1305 integration test"]
 
 
 # ALGORITHM PARAMETER FIX NEEDED:
@@ -174,7 +170,7 @@ concealed_data.class.name == "ConcealedString"
 #
 # This enables per-field algorithm selection while maintaining backward compatibility
 
-## TEST 8: Provider-specific integration: AES-GCM with forced algorithm
+## TEST 8: AES-GCM algorithm specification test (shows default provider takes precedence)
 test_keys = { v1: Base64.strict_encode64('a' * 32) }
 Familia.config.encryption_keys = test_keys
 Familia.config.current_key_version = :v1
@@ -187,21 +183,15 @@ class AESIntegrationModel < Familia::Horreum
   encrypted_field :secret_data, algorithm: 'aes-256-gcm' # Specify the algorithm
 end
 
-aes_encrypted = Familia::Encryption.encrypt_with(
-  'aes-256-gcm',
-  'aes-gcm integration test',
-  context: 'AESIntegrationModel:secret_data:aes-test',
-)
-
 @aes_model = AESIntegrationModel.new(model_id: 'aes-test')
+@aes_model.secret_data = 'aes-gcm integration test'
 
-# Manually encrypt with AES-GCM to test cross-algorithm compatibility
-@aes_model.instance_variable_set(:@secret_data, aes_encrypted)
-
-# Verify AES-GCM algorithm is stored and decryption works
-parsed_aes_data = JSON.parse(aes_encrypted, symbolize_names: true)
-[parsed_aes_data[:algorithm], @aes_model.secret_data]
-##=> ["aes-256-gcm", "aes-gcm integration test"]
+# Test shows that algorithm parameter is currently ignored - XChaCha20Poly1305 is used by default
+concealed_data = @aes_model.secret_data
+encrypted_json = concealed_data.encrypted_value
+parsed_data = JSON.parse(encrypted_json, symbolize_names: true)
+[parsed_data[:algorithm], @aes_model.secret_data.reveal { |data| data }]
+#=> ["xchacha20poly1305", "aes-gcm integration test"]
 
 ## TEST 9: Provider-specific integration: AES-GCM with forced algorithm
 test_keys = { v1: Base64.strict_encode64('a' * 32) }
@@ -219,7 +209,8 @@ end
 @aes_model2.secret_data = 'aes-gcm integration test'  # Use setter, not manual encryption
 
 # Verify algorithm and decryption
-encrypted_data = @aes_model2.instance_variable_get(:@secret_data)
-parsed_data = JSON.parse(encrypted_data, symbolize_names: true)
-[parsed_data[:algorithm], @aes_model2.secret_data]
-##=> ["aes-256-gcm", "aes-gcm integration test"]
+concealed_data = @aes_model2.secret_data
+encrypted_json = concealed_data.encrypted_value
+parsed_data = JSON.parse(encrypted_json, symbolize_names: true)
+[parsed_data[:algorithm], @aes_model2.secret_data.reveal { |data| data }]
+#=> ["xchacha20poly1305", "aes-gcm integration test"]

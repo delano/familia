@@ -24,7 +24,7 @@ end
 @model.instance_variable_set(:@secret, 'not-json{]')
 @model.secret
 #=!> Familia::EncryptionError
-#==> error.message.include?('Decryption failed')
+#==> error.message.include?('Invalid JSON structure')
 
 ## Tampered auth tag fails decryption
 @model.secret = 'valid-secret'
@@ -35,7 +35,7 @@ end
 
 @model.secret
 #=!> Familia::EncryptionError
-#==> error.message.include?('Invalid encrypted data')
+#==> error.message.include?('Invalid auth_tag size')
 
 ## Missing encryption config raises on validation
 @original_keys = Familia.config.encryption_keys
@@ -51,7 +51,7 @@ Familia.config.encryption_keys = @test_keys
 @model.instance_variable_set(:@secret, '{"algorithm":"aes-256-gcm","nonce":"!!!invalid!!!","ciphertext":"test","auth_tag":"test","key_version":"v1"}')
 @model.secret
 #=!> Familia::EncryptionError
-#==> error.message.include?('Decryption failed')
+#==> error.message.include?('Invalid Base64 encoding')
 
 ## Derivation counter still increments on decryption errors
 Familia::Encryption.reset_derivation_count!
