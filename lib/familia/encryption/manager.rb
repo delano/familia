@@ -33,23 +33,28 @@ module Familia
       def decrypt(encrypted_json, context:, additional_data: nil)
         return nil if encrypted_json.nil? || encrypted_json.empty?
 
+        # Increment counter immediately to track all decryption attempts, even failed ones
+        Familia::Encryption.derivation_count.increment
+
         begin
           data = Familia::Encryption::EncryptedData.new(**JSON.parse(encrypted_json, symbolize_names: true))
 
           # Validate algorithm support
           provider = Registry.get(data.algorithm)
-          key = derive_key(context, version: data.key_version, provider: provider)
+          key = derive_key_without_increment(context, version: data.key_version, provider: provider)
 
           # Safely decode and validate sizes
           nonce = decode_and_validate(data.nonce, provider.nonce_size, 'nonce')
-          ciphertext = Base64.strict_decode64(data.ciphertext)
+          ciphertext = decode_and_validate_ciphertext(data.ciphertext)
           auth_tag = decode_and_validate(data.auth_tag, provider.auth_tag_size, 'auth_tag')
 
           provider.decrypt(ciphertext, key, nonce, auth_tag, additional_data)
         rescue EncryptionError
           raise
-        rescue StandardError
-          raise EncryptionError, 'Decryption failed'
+        rescue JSON::ParserError => e
+          raise EncryptionError, "Invalid JSON structure: #{e.message}"
+        rescue StandardError => e
+          raise EncryptionError, "Decryption failed: #{e.message}"
         end
       ensure
         Familia::Encryption.secure_wipe(key) if key
@@ -61,12 +66,24 @@ module Familia
         decoded = Base64.strict_decode64(encoded)
         raise EncryptionError, 'Invalid encrypted data' unless decoded.bytesize == expected_size
         decoded
+      rescue ArgumentError => e
+        raise EncryptionError, "Invalid Base64 encoding in #{component} field"
+      end
+
+      def decode_and_validate_ciphertext(encoded)
+        Base64.strict_decode64(encoded)
+      rescue ArgumentError => e
+        raise EncryptionError, "Invalid Base64 encoding in ciphertext field"
       end
 
       def derive_key(context, version: nil, provider: nil)
         # Increment counter to prove no caching is happening
         Familia::Encryption.derivation_count.increment
 
+        derive_key_without_increment(context, version: version, provider: provider)
+      end
+
+      def derive_key_without_increment(context, version: nil, provider: nil)
         # Use provided provider or fall back to instance provider
         provider ||= @provider
 
