@@ -106,6 +106,26 @@ module Familia
           key&.clear
         end
 
+        def self.nonce_size
+          NONCE_SIZE
+        end
+
+        def self.auth_tag_size
+          AUTH_TAG_SIZE
+        end
+
+        def nonce_size
+          NONCE_SIZE
+        end
+
+        def auth_tag_size
+          AUTH_TAG_SIZE
+        end
+
+        def algorithm
+          ALGORITHM
+        end
+
         private
 
         def validate_key_length!(key)

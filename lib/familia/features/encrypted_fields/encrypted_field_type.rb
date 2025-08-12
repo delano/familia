@@ -22,7 +22,7 @@ module Familia
         klass.define_method :"#{method_name}=" do |value|
           if value.nil?
             instance_variable_set(:"@#{field_name}", nil)
-          elsif value.is_a?(String) && value.empty?
+          elsif value.is_a?(::String) && value.empty?
             # Handle empty strings - treat as nil for encrypted fields
             instance_variable_set(:"@#{field_name}", nil)
           elsif value.is_a?(ConcealedString)
@@ -62,8 +62,14 @@ module Familia
             # This happens when someone directly sets the instance variable
             # (e.g., during tampering tests). Wrapping in ConcealedString
             # will trigger validate_decryptable! and catch invalid algorithms
-            concealed = ConcealedString.new(concealed, self, field_type)
-            instance_variable_set(:"@#{field_name}", concealed)
+            begin
+              concealed = ConcealedString.new(concealed, self, field_type)
+              instance_variable_set(:"@#{field_name}", concealed)
+            rescue Familia::EncryptionError => e
+              # Increment derivation counter for failed validation attempts (similar to decrypt failures)
+              Familia::Encryption.derivation_count.increment
+              raise e
+            end
           end
 
           # Context validation: detect cross-context attacks
