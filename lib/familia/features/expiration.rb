@@ -8,7 +8,7 @@ module Familia
       @default_expiration = nil
 
       def self.included(base)
-        Familia.ld "[#{base}] Loaded #{self}"
+        Familia.trace :LOADED!, nil, self, caller(1..1) if Familia.debug?
         base.extend ClassMethods
 
         # Optionally define default_expiration in the class to make

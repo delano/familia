@@ -68,10 +68,10 @@ end
 @results.size
 #=> 50
 
-## Each thread did 5 write + 5 read = 10 derivations
-# Total: 10 threads * 10 derivations = 100
+## Each thread did 5 write operations = 5 derivations
+# Total: 10 threads * 5 derivations = 50 (reading returns ConcealedString without decryption)
 Familia::Encryption.derivation_count.value
-#=> 100
+#=> 50
 
 ## Key rotation operations work safely under concurrent access
 debug "Starting key rotation test with 4 threads..."
@@ -181,8 +181,8 @@ threads = 10.times.map do |i|
     model = ThreadTest.new(id: "thread-#{i}")
     begin
       5.times { |j|
-        model.secret = "value-#{i}-#{j}"
-        model.secret # decrypt
+        model.secret = "value-#{i}-#{j}"  # encrypt (derivation)
+        model.secret # returns ConcealedString (no derivation)
       }
     rescue => e
       errors << e
@@ -191,7 +191,7 @@ threads = 10.times.map do |i|
 end
 
 threads.each(&:join)
-errors.empty? && Familia::Encryption.derivation_count.value == 100
+errors.empty? && Familia::Encryption.derivation_count.value == 50
 #=> true
 
 # Cleanup

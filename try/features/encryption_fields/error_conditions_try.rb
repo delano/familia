@@ -24,18 +24,18 @@ end
 @model.instance_variable_set(:@secret, 'not-json{]')
 @model.secret
 #=!> Familia::EncryptionError
-#==> error.message.include?('Decryption failed')
+#==> error.message.include?('Invalid JSON structure')
 
 ## Tampered auth tag fails decryption
 @model.secret = 'valid-secret'
-@valid_cipher = @model.instance_variable_get(:@secret)
+@valid_cipher = @model.secret.encrypted_value
 @tampered = JSON.parse(@valid_cipher)
 @tampered['auth_tag'] = Base64.strict_encode64('tampered' * 4)
 @model.instance_variable_set(:@secret, @tampered.to_json)
 
 @model.secret
 #=!> Familia::EncryptionError
-#==> error.message.include?('Invalid encrypted data')
+#==> error.message.include?('Invalid auth_tag size')
 
 ## Missing encryption config raises on validation
 @original_keys = Familia.config.encryption_keys
@@ -51,7 +51,7 @@ Familia.config.encryption_keys = @test_keys
 @model.instance_variable_set(:@secret, '{"algorithm":"aes-256-gcm","nonce":"!!!invalid!!!","ciphertext":"test","auth_tag":"test","key_version":"v1"}')
 @model.secret
 #=!> Familia::EncryptionError
-#==> error.message.include?('Decryption failed')
+#==> error.message.include?('Invalid Base64 encoding')
 
 ## Derivation counter still increments on decryption errors
 Familia::Encryption.reset_derivation_count!
@@ -72,7 +72,7 @@ Familia::Encryption.derivation_count.value
 # Ensure keys are available for this test
 Familia.config.encryption_keys = @test_keys
 @model.secret = 'test-data'
-@cipher_data = JSON.parse(@model.instance_variable_get(:@secret))
+@cipher_data = JSON.parse(@model.secret.encrypted_value)
 @cipher_data['algorithm'] = 'unsupported-algorithm'
 @model.instance_variable_set(:@secret, @cipher_data.to_json)
 
@@ -93,7 +93,7 @@ Familia.config.current_key_version = @original_version
 Familia.config.encryption_keys = @test_keys
 Familia.config.current_key_version = :v1
 @model.secret = 'test-data'
-@cipher_with_bad_version = JSON.parse(@model.instance_variable_get(:@secret))
+@cipher_with_bad_version = JSON.parse(@model.secret.encrypted_value)
 @cipher_with_bad_version['key_version'] = 'nonexistent'
 @model.instance_variable_set(:@secret, @cipher_with_bad_version.to_json)
 @model.secret

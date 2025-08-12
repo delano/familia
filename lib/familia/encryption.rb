@@ -10,12 +10,12 @@ require_relative 'encryption/providers/xchacha20_poly1305_provider'
 require_relative 'encryption/providers/aes_gcm_provider'
 require_relative 'encryption/registry'
 require_relative 'encryption/manager'
+require_relative 'encryption/encrypted_data'
 
 module Familia
   class EncryptionError < StandardError; end
 
   module Encryption
-    EncryptedData = Data.define(:algorithm, :nonce, :ciphertext, :auth_tag, :key_version)
 
     # Smart facade with provider selection and field-specific encryption
     #

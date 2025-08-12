@@ -206,3 +206,26 @@ module SingleUseRedactedStringTestHelper
     end
   end
 end
+
+# ConcealedString test helper for accessing encrypted values in tests
+unless defined?(ConcealedString)
+  require_relative '../../lib/familia/features/encrypted_fields/concealed_string'
+end
+module ConcealedStringTestHelper
+  refine ConcealedString do
+    # TEST-ONLY: Direct access to decrypted value
+    #
+    # This method bypasses the reveal block pattern and directly returns
+    # the decrypted plaintext. It should ONLY be used in test environments
+    # through refinements to keep this dangerous method out of production.
+    #
+    # @return [String] The decrypted plaintext value
+    #
+    def reveal_for_testing
+      raise SecurityError, 'Encrypted data already cleared' if cleared?
+      raise SecurityError, 'No encrypted data to reveal' if @encrypted_data.nil?
+
+      @field_type.decrypt_value(@record, @encrypted_data)
+    end
+  end
+end

@@ -132,7 +132,7 @@ module Familia
           end
 
           result = dbclient.multi do |multi|
-            multi.hmset(dbkey, to_h)
+            multi.hmset(dbkey, to_h_for_storage)
           end
 
           result.is_a?(Array)  # transaction succeeded
@@ -165,7 +165,7 @@ module Familia
       #   and current state before committing to the DB.
       #
       def commit_fields(update_expiration: true)
-        prepared_value = to_h
+        prepared_value = to_h_for_storage
         Familia.ld "[commit_fields] Begin #{self.class} #{dbkey} #{prepared_value} (exp: #{update_expiration})"
 
         result = hmset(prepared_value)
@@ -341,36 +341,65 @@ module Familia
         self
       end
 
-      # Converts the object's persistent fields to a hash.
+      # Converts the object's persistent fields to a hash for external use.
       #
-      # Serializes all persistent field values for Valkey storage, including only
-      # non-nil values in the resulting hash. Each value is processed through
-      # the serialization pipeline to ensure Valkey compatibility.
+      # Serializes persistent field values for external consumption (APIs, logs),
+      # excluding non-loggable fields like encrypted fields for security.
+      # Only non-nil values are included in the resulting hash.
       #
       # @return [Hash] Hash with field names as keys and serialized values
-      #   ready for Valkey storage
+      #   safe for external exposure
       #
-      # @example Converting an object to hash format
+      # @example Converting an object to hash format for API response
       #   user = User.new(name: "John", email: "john@example.com", age: 30)
       #   user.to_h
       #   # => {"name"=>"John", "email"=>"john@example.com", "age"=>"30"}
+      #   # encrypted fields are excluded for security
       #
-      # @note Only fields with non-nil values are included in the hash to
-      #   optimize Valkey storage efficiency
-      #
-      # @note Values are serialized using the same process as other persistence
-      #   methods to maintain data consistency across operations
+      # @note Only loggable fields are included for security
+      # @note Only fields with non-nil values are included
       #
       def to_h
         self.class.persistent_fields.each_with_object({}) do |field, hsh|
           field_type = self.class.field_types[field]
+
+          # Security: Skip non-loggable fields (e.g., encrypted fields)
+          next unless field_type.loggable
+
           method_name = field_type.method_name
           val = send(method_name)
           prepared = serialize_value(val)
           Familia.ld " [to_h] field: #{field} val: #{val.class} prepared: #{prepared&.class || '[nil]'}"
 
           # Only include non-nil values in the hash for Valkey
-          hsh[field] = prepared unless prepared.nil?
+          # Use string key for database compatibility
+          hsh[field.to_s] = prepared unless prepared.nil?
+        end
+      end
+
+      # Converts the object's persistent fields to a hash for database storage.
+      #
+      # Serializes ALL persistent field values for database storage, including
+      # encrypted fields. This is used internally by commit_fields and other
+      # persistence operations.
+      #
+      # @return [Hash] Hash with field names as keys and serialized values
+      #   ready for database storage
+      #
+      # @note Includes ALL persistent fields, including encrypted fields
+      # @note Only fields with non-nil values are included for storage efficiency
+      #
+      def to_h_for_storage
+        self.class.persistent_fields.each_with_object({}) do |field, hsh|
+          field_type = self.class.field_types[field]
+          method_name = field_type.method_name
+          val = send(method_name)
+          prepared = serialize_value(val)
+          Familia.ld " [to_h_for_storage] field: #{field} val: #{val.class} prepared: #{prepared&.class || '[nil]'}"
+
+          # Only include non-nil values in the hash for Valkey
+          # Use string key for database compatibility
+          hsh[field.to_s] = prepared unless prepared.nil?
         end
       end
 
@@ -391,8 +420,12 @@ module Familia
       #   methods to maintain data consistency across operations.
       #
       def to_a
-        self.class.persistent_fields.collect do |field|
+        self.class.persistent_fields.filter_map do |field|
           field_type = self.class.field_types[field]
+
+          # Security: Skip non-loggable fields (e.g., encrypted fields)
+          next unless field_type.loggable
+
           method_name = field_type.method_name
           val = send(method_name)
           prepared = serialize_value(val)
@@ -429,6 +462,11 @@ module Familia
       # @see Familia.distinguisher The primary serialization mechanism
       #
       def serialize_value(val)
+        # Security: Handle ConcealedString safely - extract encrypted data for storage
+        if val.respond_to?(:encrypted_value)
+          return val.encrypted_value
+        end
+
         prepared = Familia.distinguisher(val, strict_values: false)
 
         # If the distinguisher returns nil, try using the dump_method but only
