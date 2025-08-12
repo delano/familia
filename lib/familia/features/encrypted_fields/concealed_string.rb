@@ -57,6 +57,8 @@ class ConcealedString
         @encrypted_data_obj.validate_decryptable!
       rescue Familia::EncryptionError => e
         raise Familia::EncryptionError, e.message
+      rescue StandardError => e
+        raise Familia::EncryptionError, "Invalid encrypted data: #{e.message}"
       end
     end
 
@@ -165,6 +167,74 @@ class ConcealedString
   #
   def to_s
     '[CONCEALED]'
+  end
+
+
+  # String methods that should return safe concealed values
+  def upcase
+    '[CONCEALED]'
+  end
+
+  def downcase
+    '[CONCEALED]'
+  end
+
+  def length
+    11  # Fixed concealed length to match '[CONCEALED]' length
+  end
+
+  def size
+    length
+  end
+
+  def present?
+    true  # Always return true since encrypted data exists
+  end
+
+  def blank?
+    false  # Never blank if encrypted data exists
+  end
+
+  # String concatenation operations return concealed result
+  def +(other)
+    '[CONCEALED]'
+  end
+
+  def concat(other)
+    '[CONCEALED]'
+  end
+
+  # Handle coercion for concatenation like "string" + concealed
+  def coerce(other)
+    if other.is_a?(String)
+      ['[CONCEALED]', '[CONCEALED]']
+    else
+      [other, '[CONCEALED]']
+    end
+  end
+
+  # String pattern matching methods
+  def strip
+    '[CONCEALED]'
+  end
+
+  def gsub(*args)
+    '[CONCEALED]'
+  end
+
+  def include?(substring)
+    false  # Never reveal substring presence
+  end
+
+  # Enumerable methods for safety
+  def map
+    yield '[CONCEALED]' if block_given?
+    ['[CONCEALED]']
+  end
+
+  def each
+    yield '[CONCEALED]' if block_given?
+    self
   end
 
   # Safe representation for debugging and console output
