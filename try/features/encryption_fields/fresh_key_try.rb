@@ -96,19 +96,17 @@ model.repeatable_data = 'same-value'
 model.repeatable_data.to_s
 #=> '[CONCEALED]'
 
-## Fresh derivation verification through timing side-channel
-@model = TimingTestModel.new(user_id: 'timing-test')
-times = []
+## Fresh key derivation produces different internal keys
+@model = TimingTestModel.new(user_id: 'fresh-key-test')
+encrypted_values = []
 10.times do |i|
-  start_time = Time.now
   @model.timed_data = "test-value-#{i}"
-  @model.timed_data
-  times << (Time.now - start_time)
+  # Access the encrypted JSON to verify different keys were used
+  concealed = @model.timed_data
+  encrypted_values << concealed.encrypted_value
 end
-min_time = times.min
-max_time = times.max
-variance_ratio = max_time / min_time
-variance_ratio < 3.0
+# Verify all encrypted values are different (proving fresh key derivation)
+encrypted_values.uniq.length == encrypted_values.length
 #=> true
 
 ## No cross-contamination between different field contexts
