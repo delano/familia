@@ -129,7 +129,7 @@ Familia.config.current_key_version = :v1
 
 Familia::Encryption.decrypt("invalid json {", context: context)
 #=!> Familia::EncryptionError
-#==> error.message.include?("Decryption failed")
+#==> error.message.include?("Invalid JSON structure")
 
 ## Invalid base64 nonce raises sanitized error
 test_keys = { v1: Base64.strict_encode64('a' * 32) }
@@ -151,7 +151,7 @@ begin
   Familia::Encryption.decrypt(invalid_encrypted, context: context)
   "should_not_reach_here"
 rescue Familia::EncryptionError => e
-  e.message.include?("Decryption failed")
+  e.message.include?("Invalid Base64 encoding")
 end
 #=> true
 
@@ -175,7 +175,7 @@ begin
   Familia::Encryption.decrypt(invalid_encrypted, context: context)
   "should_not_reach_here"
 rescue Familia::EncryptionError => e
-  e.message.include?("Decryption failed")
+  e.message.include?("Invalid Base64 encoding")
 end
 #=> true
 

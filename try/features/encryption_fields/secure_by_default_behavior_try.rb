@@ -179,14 +179,14 @@ transformed = @user.password_hash.downcase.strip.gsub(/secret/, "public")
 transformed
 #=> "[CONCEALED]"
 
-## Concatenation is safe from plaintext leakage
-@combined = "Password: " + @user.password_hash + " (encrypted)"
-@combined.include?("bcrypt")
-#=> false
-
-## Combined string shows concealed value
-@combined
-#=> "Password: [CONCEALED] (encrypted)"
+## Concatenation fails safely without to_str method (prevents accidental implicit conversion)
+begin
+  @combined = "Password: " + @user.password_hash + " (encrypted)"
+  "concatenation_should_fail"
+rescue TypeError => e
+  e.message.include?("no implicit conversion")
+end
+#=> true
 
 ## JSON serialization is safe
 @user_json = {

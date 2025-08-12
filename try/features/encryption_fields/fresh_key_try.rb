@@ -157,9 +157,9 @@ model.instance_variable_get(:@optional_data)
 model = NilTestModel.new(user_id: 'nil-test-2')
 model.optional_data = ''
 internal_empty = model.instance_variable_get(:@optional_data)
-# With ConcealedString, empty string creates encrypted object, not nil
+# Empty strings now treated as nil for consistency
 internal_empty.nil?
-#=> false
+#=> true
 
 ## Consistent behavior across Ruby restart simulation
 model = PersistenceTestModel.new(user_id: 'persistence-test')
