@@ -1,383 +1,465 @@
+# frozen_string_literal: true
+
+require 'securerandom'
+require_relative 'relationships/score_encoding'
+require_relative 'relationships/redis_operations'
+require_relative 'relationships/tracking'
+require_relative 'relationships/indexing'
+require_relative 'relationships/membership'
+require_relative 'relationships/cascading'
+require_relative 'relationships/querying'
+
 module Familia
   module Features
-    # Relationships provides a declarative relationship vocabulary for Familia that builds
-    # on the existing RelatableObjects feature. Instead of SQL-inspired `belongs_to`/`has_many`
-    # semantics, it provides Redis-native operations that map directly to Redis primitives
-    # and make data model intentions explicit.
+    # Unified Relationships feature for Familia v2
     #
-    # The vocabulary consists of three main relationship types:
-    # - tracked_in: Object appears in a sorted set with score metadata
-    # - indexed_by: Object is findable by a specific field via hash lookups
-    # - member_of: Object belongs to another object's collection
+    # This feature merges the functionality of relatable_objects and relationships
+    # into a single, Redis-native implementation that embraces the "where does this appear?"
+    # philosophy rather than "who owns this?".
     #
-    # Example:
+    # Key improvements in v2:
+    # - Multi-presence: Objects can exist in multiple collections simultaneously
+    # - Score encoding: Metadata embedded in Redis scores for efficiency
+    # - Collision-free: Method names include collection names to prevent conflicts
+    # - Redis-native: All operations use Redis commands, no Ruby iteration
+    # - Atomic operations: Multi-collection updates happen atomically
     #
-    #   class CustomDomain < Familia::Horreum
+    # Breaking changes from v1:
+    # - Single feature: Use `feature :relationships` instead of separate features
+    # - Simplified identifier: Use `identifier :field` instead of `identifier_field :field`
+    # - No ownership concept: Remove `owned_by`, use multi-presence instead
+    # - Method naming: Generated methods include collection names for uniqueness
+    # - Score encoding: Scores can carry metadata like permissions
+    #
+    # @example Basic usage
+    #   class Domain < Familia::Horreum
     #     feature :relationships
     #
-    #     # Domain appears in global values sorted set
-    #     tracked_in :values, type: :sorted_set, score: :created_at, cascade: :delete
+    #     identifier :domain_id
+    #     field :domain_id
+    #     field :display_name
+    #     field :created_at
+    #     field :permission_level
     #
-    #     # Domain can be found by display_domain field
-    #     indexed_by :display_domain, in: :display_domains, finder: true
+    #     # Multi-presence tracking with score encoding
+    #     tracked_in Customer, :domains,
+    #                score: -> { permission_encode(created_at, permission_level) }
+    #     tracked_in Team, :domains, score: :added_at
+    #     tracked_in Organization, :all_domains, score: :created_at
     #
-    #     # Domain is a member of a customer's domains collection
-    #     member_of Customer, :custom_domains, key: :display_domain
+    #     # O(1) lookups with Redis hashes
+    #     indexed_by :display_name, in: Customer, index_name: :domain_index
+    #     indexed_by :display_name, in: :global, index_name: :global_domain_index
+    #
+    #     # Context-aware membership (no method collisions)
+    #     member_of Customer, :domains
+    #     member_of Team, :domains
+    #     member_of Organization, :domains
     #   end
     #
+    # @example Generated methods (collision-free)
+    #   # Tracking methods
+    #   Customer.domains                    # => Familia::SortedSet
+    #   Customer.add_domain(domain, score)  # Add to customer's domains
+    #   domain.in_customer_domains?(customer) # Check membership
+    #
+    #   # Indexing methods
+    #   Customer.find_by_display_name(name) # O(1) lookup
+    #   Domain.find_by_display_name_globally(name) # Global lookup
+    #
+    #   # Membership methods (collision-free naming)
+    #   domain.add_to_customer_domains(customer)  # Specific collection
+    #   domain.add_to_team_domains(team)          # Different collection
+    #   domain.in_customer_domains?(customer)     # Check specific membership
+    #
+    # @example Score encoding for permissions
+    #   # Encode permission in score
+    #   score = domain.permission_encode(Time.now, :write)
+    #   # => 1704067200.200 (timestamp + permission level)
+    #
+    #   # Decode permission from score
+    #   decoded = domain.permission_decode(score)
+    #   # => { timestamp: 1704067200, permission_level: 200, permission: :write }
+    #
+    #   # Query with permission filtering
+    #   Customer.domains_with_permission(:read)
+    #
+    # @example Multi-collection operations
+    #   # Atomic updates across multiple collections
+    #   domain.update_multiple_presence([
+    #     { key: "customer:123:domains", score: current_score },
+    #     { key: "team:456:domains", score: permission_encode(Time.now, :read) }
+    #   ], :add, domain.identifier)
+    #
+    #   # Set operations on collections
+    #   accessible = Domain.union_collections([
+    #     { owner: customer, collection: :domains },
+    #     { owner: team, collection: :domains }
+    #   ], min_permission: :read)
     module Relationships
-      class RelationshipError < Familia::Problem; end
-
+      # Feature initialization
       def self.included(base)
-        Familia.trace :LOADED, self, base, caller(1..1) if Familia.debug?
+        puts "[DEBUG] Relationships included in #{base}"
         base.extend ClassMethods
         base.include InstanceMethods
+
+        # Include all relationship submodules and their class methods
+        base.include ScoreEncoding
+        base.include RedisOperations
+
+        puts '[DEBUG] Including Tracking module'
+        base.include Tracking
+        puts '[DEBUG] Extending with Tracking::ClassMethods'
+        base.extend Tracking::ClassMethods
+        puts "[DEBUG] Base now responds to tracked_in: #{base.respond_to?(:tracked_in)}"
+
+        base.include Indexing
+        base.extend Indexing::ClassMethods
+
+        base.include Membership
+        base.extend Membership::ClassMethods
+
+        base.include Cascading
+        base.extend Cascading::ClassMethods
+
+        base.include Querying
+        base.extend Querying::ClassMethods
       end
 
-      # Instance methods for Relationship functionality
-      module InstanceMethods
-        # Initialize relationships and ensure proper inheritance chain
-        def init
-          super if defined?(super) # Only call if parent has init
+      # Error classes
+      class RelationshipError < StandardError; end
+      class InvalidIdentifierError < RelationshipError; end
+      class InvalidScoreError < RelationshipError; end
+      class CascadeError < RelationshipError; end
+
+      module ClassMethods
+        # Define the identifier for this class (replaces identifier_field)
+        # This is a compatibility wrapper around the existing identifier_field method
+        #
+        # @param field [Symbol] The field to use as identifier
+        # @return [Symbol] The identifier field
+        #
+        # @example
+        #   identifier :domain_id
+        def identifier(field = nil)
+          return identifier_field(field) if field
+
+          identifier_field
         end
 
-        # Override save to maintain relationships automatically
+        # Generate a secure temporary identifier
+        def generate_identifier
+          SecureRandom.hex(8)
+        end
+
+        # Get all relationship configurations for this class
+        def relationship_configs
+          configs = {}
+
+          configs[:tracking] = tracking_relationships if respond_to?(:tracking_relationships)
+          configs[:indexing] = indexing_relationships if respond_to?(:indexing_relationships)
+          configs[:membership] = membership_relationships if respond_to?(:membership_relationships)
+
+          configs
+        end
+
+        # Validate relationship configurations
+        def validate_relationships!
+          errors = []
+
+          # Check for method name collisions
+          method_names = []
+
+          if respond_to?(:tracking_relationships)
+            tracking_relationships.each do |config|
+              context_name = config[:context_class_name].downcase
+              collection_name = config[:collection_name]
+
+              method_names << "in_#{context_name}_#{collection_name}?"
+              method_names << "add_to_#{context_name}_#{collection_name}"
+              method_names << "remove_from_#{context_name}_#{collection_name}"
+            end
+          end
+
+          if respond_to?(:membership_relationships)
+            membership_relationships.each do |config|
+              owner_name = config[:owner_class_name].downcase
+              collection_name = config[:collection_name]
+
+              method_names << "in_#{owner_name}_#{collection_name}?"
+              method_names << "add_to_#{owner_name}_#{collection_name}"
+              method_names << "remove_from_#{owner_name}_#{collection_name}"
+            end
+          end
+
+          # Check for duplicates
+          duplicates = method_names.group_by(&:itself).select { |_, v| v.size > 1 }.keys
+          errors << "Method name collisions detected: #{duplicates.join(', ')}" if duplicates.any?
+
+          # Validate identifier field exists
+          id_field = identifier
+          unless instance_methods.include?(id_field) || method_defined?(id_field)
+            errors << "Identifier field '#{id_field}' is not defined"
+          end
+
+          raise RelationshipError, "Relationship validation failed: #{errors.join('; ')}" if errors.any?
+
+          true
+        end
+
+        # Create a new instance with relationships initialized
+        def create_with_relationships(attributes = {})
+          instance = new(attributes)
+          instance.initialize_relationships
+          instance
+        end
+
+        # Class method wrapper for create_temp_key
+        def create_temp_key(base_name, ttl = 300)
+          timestamp = Time.now.to_i
+          random_suffix = SecureRandom.hex(3)
+          temp_key = "temp:#{base_name}:#{timestamp}:#{random_suffix}"
+
+          # Set immediate expiry to ensure cleanup even if operation fails
+          if respond_to?(:dbclient)
+            dbclient.expire(temp_key, ttl)
+          else
+            Familia.dbclient.expire(temp_key, ttl)
+          end
+
+          temp_key
+        end
+
+        # Include core score encoding methods at class level
+        include ScoreEncoding
+
+        private
+
+        # Simple constantize method to convert string to constant
+        def constantize_class_name(class_name)
+          class_name.split('::').reduce(Object) { |mod, name| mod.const_get(name) }
+        rescue NameError
+          # If the class doesn't exist, return nil
+          nil
+        end
+      end
+
+      module InstanceMethods
+        # Get the identifier value for this instance
+        # Uses the existing Horreum identifier infrastructure
+        def identifier
+          id_field = self.class.identifier_field
+          send(id_field) if respond_to?(id_field)
+        end
+
+        # Set the identifier value for this instance
+        def identifier=(value)
+          id_field = self.class.identifier_field
+          send("#{id_field}=", value) if respond_to?("#{id_field}=")
+        end
+
+        # Initialize relationships (called after object creation)
+        def initialize_relationships
+          # This can be overridden by subclasses to set up initial relationships
+        end
+
+        # Override save to update relationships
         def save(update_expiration: true)
           result = super
-          maintain_relationships(:save) if result
+
+          if result && respond_to?(:update_all_indexes)
+            # Update all indexes with current field values
+            update_all_indexes
+
+            # NOTE: Tracking and membership updates are typically done explicitly
+            # since we need to know which specific collections this object should be in
+          end
+
           result
         end
 
-        # Override destroy! to maintain relationships automatically
+        # Override destroy to handle cascade operations
         def destroy!
-          maintain_relationships(:destroy)
+          # Execute cascade operations before destroying the object
+          execute_cascade_operations if respond_to?(:execute_cascade_operations)
+
           super
         end
 
-        private
+        # Get comprehensive relationship status for this object
+        def relationship_status
+          status = {
+            identifier: identifier,
+            tracking_memberships: [],
+            membership_collections: [],
+            index_memberships: []
+          }
 
-        def maintain_relationships(operation)
-          self.class.relationships.each do |rel|
-            rel.maintain(self, operation)
-          end
-        end
-      end
-
-      # Class methods for Relationship functionality
-      module ClassMethods
-        # Get all defined relationships
-        def relationships
-          @relationships ||= []
-        end
-
-        # tracked_in: Object appears in a sorted set (ZADD/ZREM operations) with score metadata
-        #
-        # @param collection [Symbol] Name of the collection
-        # @param type [Symbol] Type of Redis data structure (:sorted_set, :set, :list)
-        # @param score [Symbol, Proc] Score value or method for sorted sets
-        # @param cascade [Symbol] Cascade behavior (:delete, :nullify, :restrict)
-        #
-        # @example
-        #   tracked_in :values, type: :sorted_set, score: :created_at, cascade: :delete
-        #   tracked_in Customer, :domains, score: -> { permission_encode(created_at, permission_level) }
-        #
-        def tracked_in(collection, type: :sorted_set, score: nil, cascade: nil)
-          rel = TrackedInRelationship.new(
-            collection: collection,
-            type: type,
-            score: score,
-            cascade: cascade
-          )
-          relationships << rel
-
-          # Generate class methods for collection management
-          rel.generate_class_methods(self)
-        end
-
-        # indexed_by: Object is findable by a specific field (hash lookups)
-        #
-        # @param field [Symbol] Field name to index
-        # @param in [Symbol] Name of the index hash
-        # @param finder [Boolean] Whether to generate finder method
-        #
-        # @example
-        #   indexed_by :display_domain, in: :display_domains, finder: true
-        #   # Generates: CustomDomain.from_display_domain(value)
-        #
-        def indexed_by(field, in: nil, finder: false)
-          index_name = binding.local_variable_get(:in) || :"#{field}_index"
-
-          rel = IndexedByRelationship.new(
-            field: field,
-            index_name: index_name,
-            finder: finder
-          )
-          relationships << rel
-
-          # Generate finder method if requested
-          rel.generate_finder_method(self) if finder
-
-          # Ensure we have the index hash
-          class_hashkey index_name unless respond_to?(index_name)
-        end
-
-        # member_of: Object belongs to another object's collection
-        #
-        # @param owner_class [Class] The class that owns this object
-        # @param collection [Symbol] Name of the collection on the owner
-        # @param key [Symbol] Field to use as the collection value (defaults to identifier)
-        #
-        # @example
-        #   member_of Customer, :custom_domains, key: :display_domain
-        #
-        def member_of(owner_class, collection, key: nil)
-          rel = MemberOfRelationship.new(
-            owner_class: owner_class,
-            collection: collection,
-            key: key || :identifier
-          )
-          relationships << rel
-
-          # Generate instance methods for membership management
-          rel.generate_instance_methods(self)
-        end
-      end
-
-      # Base class for relationship metadata
-      class RelationshipMetadata
-        attr_reader :options
-
-        def initialize(**options)
-          @options = options
-        end
-
-        def maintain(object, operation)
-          case operation
-          when :save
-            handle_save(object)
-          when :destroy
-            handle_destroy(object)
-          end
-        end
-
-        protected
-
-        def handle_save(object)
-          # Override in subclasses
-        end
-
-        def handle_destroy(object)
-          # Override in subclasses
-        end
-      end
-
-      # Relationship for tracked_in declarations
-      class TrackedInRelationship < RelationshipMetadata
-        def collection
-          @options[:collection]
-        end
-
-        def type
-          @options[:type]
-        end
-
-        def score
-          @options[:score]
-        end
-
-        def cascade
-          @options[:cascade]
-        end
-
-        def generate_class_methods(klass)
-          collection_name = collection
-          rel_type = type
-          score
-          relationship = self
-
-          # Ensure we have the appropriate data structure
-          case rel_type
-          when :sorted_set
-            klass.class_sorted_set collection_name unless klass.respond_to?(collection_name)
-          when :set
-            klass.class_set collection_name unless klass.respond_to?(collection_name)
-          when :list
-            klass.class_list collection_name unless klass.respond_to?(collection_name)
+          # Get tracking memberships
+          if respond_to?(:tracking_collections_membership)
+            status[:tracking_memberships] = tracking_collections_membership
           end
 
-          # Generate add method
-          klass.define_singleton_method :"add_to_#{collection_name}" do |object|
-            case rel_type
-            when :sorted_set
-              score_value = relationship.send(:calculate_score, object)
-              send(collection_name).add(score_value, object.identifier)
-            when :set
-              send(collection_name).add(object.identifier)
-            when :list
-              send(collection_name).push(object.identifier)
+          # Get membership collections
+          status[:membership_collections] = membership_collections if respond_to?(:membership_collections)
+
+          # Get index memberships
+          status[:index_memberships] = indexing_memberships if respond_to?(:indexing_memberships)
+
+          status
+        end
+
+        # Comprehensive cleanup - remove from all relationships
+        def cleanup_all_relationships!
+          # Remove from tracking collections
+          remove_from_all_tracking_collections if respond_to?(:remove_from_all_tracking_collections)
+
+          # Remove from membership collections
+          remove_from_all_memberships if respond_to?(:remove_from_all_memberships)
+
+          # Remove from indexes
+          remove_from_all_indexes if respond_to?(:remove_from_all_indexes)
+        end
+
+        # Dry run for relationship cleanup (preview what would be affected)
+        def cleanup_preview
+          preview = {
+            tracking_collections: [],
+            membership_collections: [],
+            index_entries: []
+          }
+
+          if respond_to?(:cascade_dry_run)
+            cascade_preview = cascade_dry_run
+            preview.merge!(cascade_preview)
+          end
+
+          preview
+        end
+
+        # Validate that this object's relationships are consistent
+        def validate_relationships!
+          errors = []
+
+          # Validate identifier exists
+          errors << 'Object identifier is nil' unless identifier
+
+          # Validate tracking memberships
+          if respond_to?(:tracking_collections_membership)
+            tracking_collections_membership.each do |membership|
+              score = membership[:score]
+              errors << "Invalid score in tracking membership: #{membership}" if score && !score.is_a?(Numeric)
             end
           end
 
-          # Generate remove method
-          klass.define_singleton_method :"remove_from_#{collection_name}" do |object|
-            case rel_type
-            when :sorted_set
-              send(collection_name).remove(object.identifier)
-            when :set
-              send(collection_name).remove(object.identifier)
-            when :list
-              send(collection_name).remove(object.identifier)
-            end
-          end
+          raise RelationshipError, "Relationship validation failed for #{self}: #{errors.join('; ')}" if errors.any?
 
-          # For sorted sets, add score update method
-          return unless rel_type == :sorted_set
-
-          klass.define_singleton_method :"update_score_in_#{collection_name}" do |object, new_score|
-            send(collection_name).add(new_score, object.identifier)
-          end
+          true
         end
 
-        protected
+        # Refresh relationship data from Redis (useful after external changes)
+        def refresh_relationships!
+          # Clear any cached relationship data
+          @relationship_status = nil
+          @tracking_memberships = nil
+          @membership_collections = nil
+          @index_memberships = nil
 
-        def handle_save(object)
-          # Add to collection when object is saved
-          object.class.send(:"add_to_#{collection}", object)
+          # Reload fresh data
+          relationship_status
         end
 
-        def handle_destroy(object)
-          case cascade
-          when :delete
-            object.class.send(:"remove_from_#{collection}", object)
-          when :restrict
-            if object.class.send(collection).member?(object.identifier)
-              raise RelationshipError, "Cannot delete: object still referenced in #{collection}"
+        # Create a snapshot of current relationship state (for debugging)
+        def relationship_snapshot
+          {
+            timestamp: Time.now,
+            identifier: identifier,
+            class: self.class.name,
+            status: relationship_status,
+            redis_keys: find_related_redis_keys
+          }
+        end
+
+        # Direct Redis access for instance methods
+        def redis
+          self.class.dbclient
+        end
+
+        # Instance method wrapper for create_temp_key
+        def create_temp_key(base_name, ttl = 300)
+          timestamp = Time.now.to_i
+          random_suffix = SecureRandom.hex(3)
+          temp_key = "temp:#{base_name}:#{timestamp}:#{random_suffix}"
+
+          # Set immediate expiry to ensure cleanup even if operation fails
+          redis.expire(temp_key, ttl)
+
+          temp_key
+        end
+
+        # Instance method wrapper for cleanup_temp_keys
+        def cleanup_temp_keys(pattern = 'temp:*', batch_size = 100)
+          cursor = 0
+
+          loop do
+            cursor, keys = redis.scan(cursor, match: pattern, count: batch_size)
+
+            if keys.any?
+              # Check TTL and remove keys that should have expired
+              keys.each_slice(batch_size) do |key_batch|
+                redis.pipelined do |pipeline|
+                  key_batch.each do |key|
+                    ttl = redis.ttl(key)
+                    pipeline.del(key) if ttl == -1 # Key exists but has no TTL
+                  end
+                end
+              end
             end
-            # :nullify - do nothing, keep in collection
+
+            break if cursor == 0
           end
         end
 
         private
 
-        def calculate_score(object)
-          case score
-          when Symbol
-            object.send(score)
-          when Proc
-            object.instance_eval(&score)
-          when Numeric
-            score
-          else
-            Time.now.to_f
-          end
-        end
-      end
+        # Find all Redis keys related to this object
+        def find_related_redis_keys
+          related_keys = []
+          id = identifier
+          return related_keys unless id
 
-      # Relationship for indexed_by declarations
-      class IndexedByRelationship < RelationshipMetadata
-        def field
-          @options[:field]
-        end
+          # Scan for keys that might contain this object
+          patterns = [
+            '*:*:*',  # General pattern for relationship keys
+            "*#{id}*" # Keys containing the identifier
+          ]
 
-        def index_name
-          @options[:index_name]
-        end
+          patterns.each do |pattern|
+            redis.scan_each(match: pattern, count: 100) do |key|
+              # Check if this key actually contains our object
+              key_type = redis.type(key)
 
-        def finder
-          @options[:finder]
-        end
-
-        def generate_finder_method(klass)
-          field_name = field
-          index_name = self.index_name
-
-          klass.define_singleton_method :"from_#{field_name}" do |value|
-            identifier = send(index_name).get(value)
-            return nil unless identifier
-
-            begin
-              from_identifier(identifier)
-            rescue Familia::Problem
-              nil
-            end
-          end
-        end
-
-        protected
-
-        def handle_save(object)
-          # Update index when object is saved
-          field_value = object.send(field)
-          return if field_value.nil?
-
-          object.class.send(index_name)[field_value] = object.identifier
-        end
-
-        def handle_destroy(object)
-          # Remove from index when object is destroyed
-          field_value = object.send(field)
-          return if field_value.nil?
-
-          object.class.send(index_name).remove_field(field_value)
-        end
-      end
-
-      # Relationship for member_of declarations
-      class MemberOfRelationship < RelationshipMetadata
-        def owner_class
-          @options[:owner_class]
-        end
-
-        def collection
-          @options[:collection]
-        end
-
-        def key
-          @options[:key]
-        end
-
-        def generate_instance_methods(klass)
-          # Extract just the class name without namespace, convert to lowercase
-          owner_class_name = owner_class.name.split('::').last.downcase
-          collection_name = collection
-          key_field = key
-
-          # Generate add_to_owner method
-          klass.define_method :"add_to_#{owner_class_name}" do |owner|
-            key_value = send(key_field)
-            collection_obj = owner.send(collection_name)
-
-            # Handle different collection types
-            case collection_obj.class.name
-            when 'Familia::SortedSet'
-              # For sorted sets, use current timestamp as score
-              collection_obj.add(Time.now.to_f, key_value)
-            when 'Familia::Set'
-              collection_obj.add(key_value)
-            when 'Familia::List'
-              collection_obj.push(key_value)
-            else
-              # Default to add method
-              collection_obj.add(key_value)
+              case key_type
+              when 'zset'
+                related_keys << key if redis.zscore(key, id)
+              when 'set'
+                related_keys << key if redis.sismember(key, id)
+              when 'list'
+                related_keys << key if redis.lpos(key, id)
+              when 'hash'
+                # For hash keys, check if any field values match our identifier
+                hash_values = redis.hvals(key)
+                related_keys << key if hash_values.include?(id.to_s)
+              end
             end
           end
 
-          # Generate remove_from_owner method
-          klass.define_method :"remove_from_#{owner_class_name}" do |owner|
-            key_value = send(key_field)
-            owner.send(collection_name).remove(key_value)
-          end
-        end
-
-        protected
-
-        def handle_destroy(object)
-          # Remove from all owner collections - this would require
-          # additional tracking or explicit cleanup
+          related_keys.uniq
         end
       end
 
-      Familia::Base.add_feature self, :relationships, depends_on: [:relatable_objects]
-    end
-  end
+      # Register the feature with Familia
+      Familia::Base.add_feature Relationships, :relationships
+    end # module Relationships
+  end # module Features
 end

@@ -2,9 +2,8 @@
 
 require_relative '../helpers/test_helpers'
 
-# Test classes for relationship functionality
+# Test classes for Familia v2 relationship functionality
 class TestCustomer < Familia::Horreum
-  feature :relatable_objects
   feature :relationships
 
   identifier_field :custid
@@ -15,7 +14,6 @@ class TestCustomer < Familia::Horreum
 end
 
 class TestDomain < Familia::Horreum
-  feature :relatable_objects
   feature :relationships
 
   identifier_field :domain_id
@@ -24,244 +22,331 @@ class TestDomain < Familia::Horreum
   field :created_at
   field :permission_level
 
-  # Global registry of all domains
-  tracked_in :values, type: :sorted_set, score: :created_at, cascade: :delete
+  # Multi-presence tracking with score encoding
+  tracked_in TestCustomer, :domains, score: -> { permission_encode(created_at, permission_level || :read) }
+  tracked_in :global, :all_domains, score: :created_at
 
-  # Fast lookup indexes
-  indexed_by :display_domain, in: :display_domains, finder: true
-  indexed_by :domain_id, in: :domain_id_index, finder: true
+  # O(1) lookups with Redis hashes
+  indexed_by :display_domain, :domain_index, context: TestCustomer, finder: true
+  indexed_by :domain_id, :global_domain_index, context: :global, finder: true
 
-  # Membership in customer's collection
-  member_of TestCustomer, :custom_domains, key: :display_domain
+  # Context-aware membership (collision-free naming)
+  member_of TestCustomer, :domains
+end
+
+class TestTeam < Familia::Horreum
+  feature :relationships
+
+  identifier_field :team_id
+  field :team_id
+  field :name
+
+  sorted_set :domains
 end
 
 class TestTag < Familia::Horreum
-  feature :relatable_objects
   feature :relationships
 
   identifier_field :name
   field :name
   field :created_at
 
-  # Simple set membership
-  tracked_in :all_tags, type: :set, cascade: :delete
+  # Global tracking
+  tracked_in :global, :all_tags, score: :created_at
 end
 
 # Setup
 @customer = TestCustomer.new(custid: 'test_cust_123', name: 'Test Customer')
+@team = TestTeam.new(team_id: 'team_456', name: 'Test Team')
 @domain = TestDomain.new(
-  domain_id: 'dom_456',
+  domain_id: 'dom_789',
   display_domain: 'example.com',
   created_at: Time.now.to_i,
-  permission_level: 'admin'
+  permission_level: :write
 )
 @tag = TestTag.new(name: 'important', created_at: Time.now.to_i)
 
 # =============================================
-# 1. DSL Method Availability Tests
+# 1. V2 Feature Integration Tests
 # =============================================
 
-## Class responds to tracked_in DSL method
-TestDomain.respond_to?(:tracked_in)
+## Single feature includes all relationship functionality
+TestDomain.included_modules.map(&:name).include?('Familia::Features::Relationships')
 #=> true
 
-## Class responds to indexed_by DSL method
-TestDomain.respond_to?(:indexed_by)
+## Score encoding functionality is available
+@domain.respond_to?(:encode_score)
 #=> true
 
-## Class responds to member_of DSL method
-TestDomain.respond_to?(:member_of)
+## Permission encoding functionality is available
+@domain.respond_to?(:permission_encode)
 #=> true
 
-## Class maintains relationships metadata
-TestDomain.relationships.size
-#=> 4
-
-## First relationship is TrackedInRelationship
-TestDomain.relationships[0].class.name
-#=> "Familia::Features::Relationships::TrackedInRelationship"
-
-## Second relationship is IndexedByRelationship
-TestDomain.relationships[1].class.name
-#=> "Familia::Features::Relationships::IndexedByRelationship"
-
-## Class creates required data structures for tracked_in
-TestDomain.respond_to?(:values)
+## Redis operations functionality is available
+@domain.respond_to?(:atomic_operation)
 #=> true
 
-## Values is a SortedSet
-TestDomain.values.class.name
+## Identifier method works (wraps identifier_field)
+TestDomain.identifier_field
+#=> :domain_id
+
+## Identifier instance method works
+@domain.identifier
+#=> 'dom_789'
+
+# =============================================
+# 2. Score Encoding Tests
+# =============================================
+
+## Permission encoding creates proper score
+@score = @domain.permission_encode(Time.now, :write)
+@score.to_s.match?(/\d+\.\d+/)
+#=> true
+
+## Permission decoding extracts correct permission
+decoded = @domain.permission_decode(@score)
+decoded[:permission]
+#=> :write
+
+## Score encoding preserves timestamp ordering
+@early_score = @domain.encode_score(Time.now - 3600, 100)  # 1 hour ago
+@late_score = @domain.encode_score(Time.now, 100)
+@late_score > @early_score
+#=> true
+
+# =============================================
+# 3. Tracking Relationships (tracked_in)
+# =============================================
+
+## Save operation manages tracking relationships
+@customer.save
+@domain.save
+
+## Customer has domains collection (generated method)
+@customer.respond_to?(:domains)
+#=> true
+
+## Customer.domains returns SortedSet
+@customer.domains.class.name
 #=> "Familia::SortedSet"
 
-## Class creates required data structures for indexed_by
-TestDomain.respond_to?(:display_domains)
+## Customer can add domains (generated method)
+@customer.respond_to?(:add_domain)
 #=> true
 
-## Display domains is a HashKey
-TestDomain.display_domains.class.name
-#=> "Familia::HashKey"
+## Customer can remove domains (generated method)
+@customer.respond_to?(:remove_domain)
+#=> true
+
+## Domain can check membership in customer domains (collision-free naming)
+@domain.respond_to?(:in_testcustomer_domains?)
+#=> true
+
+## Domain can add itself to customer domains (collision-free naming)
+@domain.respond_to?(:add_to_testcustomer_domains)
+#=> true
+
+## Domain can remove itself from customer domains (collision-free naming)
+@domain.respond_to?(:remove_from_testcustomer_domains)
+#=> true
+
+## Add domain to customer collection
+@domain.add_to_testcustomer_domains(@customer)
+@domain.in_testcustomer_domains?(@customer)
+#=> true
+
+## Score is properly encoded with permission
+score = @domain.score_in_testcustomer_domains(@customer)
+decoded = @domain.permission_decode(score)
+decoded[:permission]
+#=> :write
 
 # =============================================
-# 2. Generated Methods Tests
+# 4. Indexing Relationships (indexed_by)
 # =============================================
 
-## tracked_in generates add_to_collection method
-TestDomain.respond_to?(:add_to_values)
+## Customer has generated finder method for domain index
+@customer.respond_to?(:find_by_display_domain)
 #=> true
 
-## tracked_in generates remove_from_collection method
-TestDomain.respond_to?(:remove_from_values)
+## Domain can add itself to customer's domain index
+@domain.respond_to?(:add_to_testcustomer_domain_index)
 #=> true
 
-## tracked_in generates update_score method for sorted sets
-TestDomain.respond_to?(:update_score_in_values)
+## Adding to index works
+@domain.add_to_testcustomer_domain_index(@customer)
+found = @customer.find_by_display_domain('example.com')
+found&.domain_id
+#=> 'dom_789'
+
+## Global indexing works
+TestDomain.respond_to?(:find_by_domain_id_globally)
 #=> true
 
-## indexed_by with finder:true generates finder method
-TestDomain.respond_to?(:from_display_domain)
-#=> true
-
-## indexed_by with finder:true generates second finder method
-TestDomain.respond_to?(:from_domain_id)
-#=> true
-
-## member_of generates instance methods on owned object
-@domain.respond_to?(:add_to_testcustomer)
-#=> true
-
-## member_of generates remove method on owned object
-@domain.respond_to?(:remove_from_testcustomer)
-#=> true
-
-# =============================================
-# 3. Lifecycle Hook Tests
-# =============================================
-
-## Object has relationships maintenance methods
-@domain.respond_to?(:maintain_relationships, true)
-#=> true
-
-## Save operation adds to tracked collections
-@domain.save
-TestDomain.values.member?(@domain.identifier)
-#=> true
-
-## Save operation updates indexes
-TestDomain.display_domains.get('example.com')
-#=> 'dom_456'
-
-## Save operation updates domain_id index
-TestDomain.domain_id_index.get('dom_456')
-#=> 'dom_456'
-
-## Set membership works for simple sets
-@tag.save
-TestTag.all_tags.member?(@tag.identifier)
-#=> true
-
-# =============================================
-# 4. Finder Method Tests
-# =============================================
-
-## Generated finder works for valid values
-found_domain = TestDomain.from_display_domain('example.com')
-found_domain.domain_id
-#=> 'dom_456'
-
-## Generated finder returns nil for invalid values
-TestDomain.from_display_domain('nonexistent.com')
-#=> nil
-
-## Generated finder works for domain_id
-found_by_id = TestDomain.from_domain_id('dom_456')
-found_by_id.display_domain
+## Add to global index
+@domain.add_to_global_global_domain_index
+found_global = TestDomain.find_by_domain_id_globally('dom_789')
+found_global&.display_domain
 #=> 'example.com'
 
 # =============================================
-# 5. Collection Management Tests
+# 5. Membership Relationships (member_of)
 # =============================================
 
-## Manual add to collection works
-@customer.save
-TestDomain.add_to_values(@domain)
-TestDomain.values.member?(@domain.identifier)
+## Member_of generates collision-free methods with collection names
+@domain.respond_to?(:add_to_testcustomer_domains)
 #=> true
 
-## Manual remove from collection works
-TestDomain.remove_from_values(@domain)
-TestDomain.values.member?(@domain.identifier)
-#=> false
-
-## Re-add for further tests
-TestDomain.add_to_values(@domain)
-
-## Score update works for sorted sets
-TestDomain.update_score_in_values(@domain, 999)
-TestDomain.values.score(@domain.identifier)
-#=> 999.0
-
-# =============================================
-# 6. Member Relationship Tests
-# =============================================
-
-## Add to customer collection works
-@domain.add_to_testcustomer(@customer)
-@customer.custom_domains.member?(@domain.display_domain)
+## Member_of supports multiple collections without conflicts
+TestDomain.member_of TestTeam, :domains  # Add second member_of
+@domain.respond_to?(:add_to_testteam_domains)
 #=> true
 
-## Remove from customer collection works
-@domain.remove_from_testcustomer(@customer)
-@customer.custom_domains.member?(@domain.display_domain)
-#=> false
-
-# =============================================
-# 7. Cascade Deletion Tests
-# =============================================
-
-## Objects are in collections before destruction
-@domain.save
-@tag.save
-[TestDomain.values.member?(@domain.identifier), TestTag.all_tags.member?(@tag.identifier)]
+## Both customer and team domain methods exist without collision
+[@domain.respond_to?(:add_to_testcustomer_domains), @domain.respond_to?(:add_to_testteam_domains)]
 #=> [true, true]
 
-## Cascade delete removes from collections
-@domain.destroy!
-TestDomain.values.member?(@domain.identifier)
-#=> false
-
-## Cascade delete removes from indexes
-TestDomain.display_domains.get('example.com')
-#=> nil
-
-## Cascade delete works for sets too
-@tag.destroy!
-TestTag.all_tags.member?(@tag.identifier)
-#=> false
+## Adding to different collections works independently
+@team.save
+@domain.add_to_testteam_domains(@team)
+[@domain.in_testcustomer_domains?(@customer), @domain.in_testteam_domains?(@team)]
+#=> [true, true]
 
 # =============================================
-# 8. Error Handling Tests
+# 6. Multi-Presence Support
 # =============================================
 
-## RelationshipError is available
-Familia::Features::Relationships::RelationshipError.ancestors.include?(Familia::Problem)
+## Object can exist in multiple collections simultaneously
+membership_collections = @domain.membership_collections
+membership_collections.length >= 2
+#=> true
+
+## Relationship status shows comprehensive membership info
+status = @domain.relationship_status
+status[:membership_collections].length >= 2
+#=> true
+
+## Object can be removed from specific collections without affecting others
+@domain.remove_from_testcustomer_domains(@customer)
+[@domain.in_testcustomer_domains?(@customer), @domain.in_testteam_domains?(@team)]
+#=> [false, true]
+
+# =============================================
+# 7. Redis-Native Operations
+# =============================================
+
+## Atomic operations work for multi-collection updates
+@domain.update_multiple_presence([
+  { key: "testcustomer:#{@customer.custid}:domains", score: @domain.current_score },
+  { key: "testteam:#{@team.team_id}:domains", score: @domain.current_score }
+], :add, @domain.identifier)
+
+## Both collections now contain the domain
+[@domain.in_testcustomer_domains?(@customer), @domain.in_testteam_domains?(@team)]
+#=> [true, true]
+
+# =============================================
+# 8. Set Operations and Querying
+# =============================================
+
+## Union operations work across collections
+accessible_domains = TestDomain.union_collections([
+  { owner: @customer, collection: :domains },
+  { owner: @team, collection: :domains }
+], ttl: 300)
+accessible_domains.class.name
+#=> "Familia::SortedSet"
+
+## Union contains our domain
+accessible_domains.member?(@domain.identifier)
+#=> true
+
+## Permission filtering works in queries
+write_domains = TestDomain.query_collections([
+  { owner: @customer, collection: :domains },
+  { owner: @team, collection: :domains }
+], { min_permission: :write }, 300)
+write_domains.member?(@domain.identifier)
 #=> true
 
 # =============================================
-# 9. Permission Encoding Helper Tests (Future)
+# 9. Cascade Operations
 # =============================================
 
-## Permission levels constant exists
-TestDomain.new.respond_to?(:permission_encode, true) || "not implemented yet"
-#=:> String
+## Cascade dry run shows impact without executing
+preview = @domain.cascade_dry_run
+preview[:affected_keys].length > 0
+#=> true
+
+## Object cleanup removes from all relationships
+@domain.cleanup_all_relationships!
+[@domain.in_testcustomer_domains?(@customer), @domain.in_testteam_domains?(@team)]
+#=> [false, false]
+
+## Indexes are also cleaned up
+@customer.find_by_display_domain('example.com')
+#=> nil
+
+# =============================================
+# 10. Global Tag Tracking Test
+# =============================================
+
+## Tag can be tracked globally
+@tag.save
+@tag.add_to_global_all_tags
+TestTag.respond_to?(:global_all_tags)
+#=> true
+
+## Global collection contains the tag
+global_tags = TestTag.global_all_tags
+global_tags.member?(@tag.identifier)
+#=> true
+
+# =============================================
+# 11. Validation and Error Handling
+# =============================================
+
+## Relationship validation works
+TestDomain.validate_relationships!
+#=> true
+
+## Individual object validation works
+@domain.validate_relationships!
+#=> true
+
+## RelationshipError class exists
+Familia::Features::Relationships::RelationshipError.ancestors.include?(StandardError)
+#=> true
+
+# =============================================
+# 12. Performance and Efficiency Features
+# =============================================
+
+## Temporary keys are created with TTL
+temp_key = @domain.create_temp_key("test_operation", 60)
+temp_key.start_with?("temp:")
+#=> true
+
+## Batch operations are available
+@domain.respond_to?(:batch_zadd)
+#=> true
+
+## Score range queries work with permissions
+range = @domain.score_range(Time.now - 3600, Time.now, min_permission: :read)
+range.is_a?(Array) && range.length == 2
+#=> true
 
 # Cleanup
 @customer.destroy! if @customer&.exists?
+@team.destroy! if @team&.exists?
 @domain.destroy! if @domain&.exists?
 @tag.destroy! if @tag&.exists?
 
 # Clear any remaining test data
-TestDomain.values.clear rescue nil
-TestDomain.display_domains.clear rescue nil
-TestDomain.domain_id_index.clear rescue nil
-TestTag.all_tags.clear rescue nil
-TestCustomer.custom_domains.clear rescue nil
+[@customer, @team].each do |owner|
+  next unless owner
+  owner.domains.clear rescue nil
+end
+
+TestDomain.global_all_domains.clear rescue nil
+TestTag.global_all_tags.clear rescue nil
