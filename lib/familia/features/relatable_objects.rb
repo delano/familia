@@ -1,19 +1,113 @@
-# apps/api/v2/models/features/relatable_object.rb
+# lib/familia/features/relatable_objects.rb
 
-module V2
+module Familia
   module Features
     class RelatableObjectError < Familia::Problem; end
 
-    # RelatableObject
+    # RelatableObjects is a feature that provides a standardized system for managing
+    # object relationships and ownership in Familia applications. It enables objects
+    # to have unique identifiers, external references, and ownership relationships
+    # while maintaining API versioning and secure object management.
     #
-    # Provides the standard core object fields and methods.
+    # This feature introduces a dual-identifier system:
+    # - Object ID (objid): Internal UUID v7 for system use
+    # - External ID (extid): External-facing identifier for API consumers
     #
-    module RelatableObject
+    # Objects can own other objects through a centralized ownership registry with
+    # validation to prevent self-ownership and enforce type checking.
+    #
+    # Example:
+    #
+    #   class Customer < Familia::Horreum
+    #     feature :relatable_objects
+    #     
+    #     field :name, :email, :plan
+    #   end
+    #
+    #   class Domain < Familia::Horreum
+    #     feature :relatable_objects
+    #     
+    #     field :name, :dns_zone
+    #   end
+    #
+    #   # Create objects with automatic ID generation
+    #   customer = Customer.new(name: "Acme Corp", email: "admin@acme.com")
+    #   domain = Domain.new(name: "acme.com")
+    #
+    #   # IDs are lazily generated on first access
+    #   customer.objid   # => "018c3f8e-7b2a-7f4a-9d8e-1a2b3c4d5e6f" (UUID v7)
+    #   customer.extid   # => "ext_3c4d5e6f7g8h9i0j1k2l3m4n5o6p7q8r9s0t1u2v3w4x5y6z" (54 chars)
+    #
+    #   # Establish ownership (implementation-specific)
+    #   Customer.owners.set(domain.objid, customer.objid)
+    #
+    #   # Check ownership relationships
+    #   domain.owner?(customer)  # => true
+    #   domain.owned?           # => true
+    #   customer.owner?(domain) # => false
+    #
+    # Automatic ID Generation:
+    #
+    # Both identifiers are generated lazily when first accessed:
+    # - objid: UUID v7 with timestamp ordering for better database performance
+    # - extid: 54-character external identifier with "ext_" prefix
+    #
+    # Alternative accessor methods are provided for clarity:
+    #   customer.relatable_objid       # Same as objid  
+    #   customer.external_identifier   # Same as extid
+    #
+    # API Version Tracking:
+    #
+    # Each object automatically tracks its API version for evolution support:
+    #   customer.api_version  # => "v2" (automatically set)
+    #
+    # Object Relationship Management:
+    #
+    # The ownership system uses Redis hash structures to track relationships:
+    # - owners: Maps owned object IDs to owner object IDs
+    # - Prevents self-ownership and enforces type validation
+    # - Supports complex ownership hierarchies
+    #
+    # Security Considerations:
+    #
+    # - External IDs should be used in all public APIs
+    # - Internal objids should never be exposed to end users
+    # - Ownership validation prevents unauthorized access
+    # - Type checking ensures relationship integrity
+    #
+    # Integration with Multi-Tenant Applications:
+    #
+    #   class Organization < Familia::Horreum
+    #     feature :relatable_objects
+    #     field :name, :plan, :domain
+    #   end
+    #
+    #   class User < Familia::Horreum
+    #     feature :relatable_objects
+    #     field :email, :name, :role
+    #   end
+    #
+    #   # Establish organizational ownership
+    #   org = Organization.create(name: "Acme Corp")
+    #   user = User.create(email: "john@acme.com", name: "John Doe")
+    #   Organization.owners.set(user.objid, org.objid)
+    #
+    #   # Query relationships
+    #   user.owned?  # => true
+    #   user.owner?(org)  # => false (user doesn't own org)
+    #   org.owner?(user)  # => true (org owns user)
+    #
+    module RelatableObjects
       def self.included(base)
+        Familia.trace :LOADED, self, base, caller(1..1) if Familia.debug?
+        base.extend ClassMethods
+
+        # Set up class-level data structures for relationship tracking
         base.class_sorted_set :relatable_objids
         base.class_hashkey :owners
 
-        # NOTE: we do not automatically assign the objid field as the
+        # Define core relatable object fields
+        # NOTE: We do not automatically assign the objid field as the
         # main identifier field. That's up to the implementing class.
         base.field :objid
         base.field :extid
@@ -115,11 +209,53 @@ module V2
         def generate_extid
           format('ext_%s', Familia.generate_id)
         end
-      end
-      extend ClassMethods
 
-      # Self-register the kids for martial arts classes
-      Familia::Base.add_feature self, :relatable_object
+        # Set ownership relationship between objects
+        #
+        # Establishes that the owner object owns the owned object by storing
+        # the relationship in the owners hash.
+        #
+        # @param owned_object [RelatableObjects] The object to be owned
+        # @param owner_object [RelatableObjects] The object that will own
+        # @return [Boolean] Success of the operation
+        #
+        # @example Set customer as domain owner
+        #   Customer.set_ownership(domain, customer)
+        #
+        def set_ownership(owned_object, owner_object)
+          relatable?(owned_object)
+          relatable?(owner_object)
+
+          owners.set(owned_object.objid, owner_object.objid)
+        end
+
+        # Remove ownership relationship
+        #
+        # @param owned_object [RelatableObjects] The owned object
+        # @return [Boolean] Success of the operation
+        #
+        def remove_ownership(owned_object)
+          relatable?(owned_object)
+          owners.delete(owned_object.objid)
+        end
+
+        # Get all objects owned by the given owner
+        #
+        # @param owner_object [RelatableObjects] The owner object
+        # @return [Array<String>] Array of owned object IDs
+        #
+        def owned_by(owner_object)
+          relatable?(owner_object)
+
+          owned_objids = owners.keys.select do |owned_objid|
+            owners.get(owned_objid) == owner_object.objid
+          end
+
+          owned_objids.map { |objid| find_by_objid(objid) }.compact
+        end
+      end
+
+      Familia::Base.add_feature self, :relatable_objects
     end
   end
 end
