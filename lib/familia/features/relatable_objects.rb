@@ -20,13 +20,13 @@ module Familia
     #
     #   class Customer < Familia::Horreum
     #     feature :relatable_objects
-    #     
+    #
     #     field :name, :email, :plan
     #   end
     #
     #   class Domain < Familia::Horreum
     #     feature :relatable_objects
-    #     
+    #
     #     field :name, :dns_zone
     #   end
     #
@@ -53,7 +53,7 @@ module Familia
     # - extid: 54-character external identifier with "ext_" prefix
     #
     # Alternative accessor methods are provided for clarity:
-    #   customer.relatable_objid       # Same as objid  
+    #   customer.relatable_objid       # Same as objid
     #   customer.external_identifier   # Same as extid
     #
     # API Version Tracking:
@@ -113,8 +113,6 @@ module Familia
         base.field :extid
         base.field :api_version
 
-        base.extend(ClassMethods)
-
         # prepend ensures our methods execute BEFORE field-generated accessors
         # include would place them AFTER, but they'd never execute because
         # attr_reader doesn't call super - it just returns the instance variable
@@ -127,7 +125,10 @@ module Familia
         base.prepend(InstanceMethods)
       end
 
+      # Instance methods for RelatableObject functionality
       module InstanceMethods
+        # Initialize API version and ensure proper inheritance chain
+        #
         # We lazily generate the object ID and external ID when they are first
         # accessed so that we can instantiate and load existing objects, without
         # eagerly generating them, only to be overridden by the storage layer.
@@ -138,29 +139,62 @@ module Familia
           @api_version ||= 'v2'
         end
 
+        # Get or generate the internal object identifier
+        #
+        # The objid is a UUID v7 that provides timestamp-based ordering for better
+        # database performance. It's generated lazily on first access to avoid
+        # conflicts when loading existing objects from storage.
+        #
+        # @return [String] UUID v7 string
+        #
+        # @example
+        #   customer.objid  # => "018c3f8e-7b2a-7f4a-9d8e-1a2b3c4d5e6f"
+        #
         def objid
           @objid ||= begin # lazy loader
             generated_id = self.class.generate_objid
             # Using the attr_writer method ensures any future Familia
             # enhancements to the setter are properly invoked (as opposed
             # to directly assigning @objid).
-            self.objid   = generated_id
+            self.objid = generated_id
           end
         end
         alias relatable_objid objid
 
+        # Get or generate the external identifier
+        #
+        # The extid is a 54-character identifier suitable for external APIs.
+        # It's prefixed with "ext_" and generated lazily to avoid conflicts
+        # with existing objects loaded from storage.
+        #
+        # @return [String] 54-character external identifier
+        #
+        # @example
+        #   customer.extid  # => "ext_3c4d5e6f7g8h9i0j1k2l3m4n5o6p7q8r9s0t1u2v3w4x5y6z"
+        #
         def extid
           @extid ||= begin # lazy loader
             generated_id = self.class.generate_extid
-            self.extid   = generated_id
+            self.extid = generated_id
           end
         end
         alias external_identifier extid
 
-        # Check if the given customer is the owner of this domain
+        # Check if the given object is the owner of this object
         #
-        # @param cust [V2::Customer, String] The customer object or customer ID to check
-        # @return [Boolean] true if the customer is the owner, false otherwise
+        # This method validates that the related object is relatable and then
+        # checks the ownership registry to determine if the given object owns
+        # this object.
+        #
+        # @param related_object [RelatableObjects] The object to check for ownership
+        # @return [Boolean] true if the related object is the owner, false otherwise
+        #
+        # @example Check if customer owns domain
+        #   domain.owner?(customer)  # => true/false
+        #
+        # @raise [RelatableObjectError] If related_object is not relatable
+        # @raise [RelatableObjectError] If attempting to check self-ownership
+        #
         def owner?(related_object)
           self.class.relatable?(related_object) do
             # Check the hash (our objid => related_object's objid)
@@ -171,25 +205,73 @@ module Familia
           end
         end
 
+        # Check if this object is owned by another object
+        #
+        # Returns true if this object has an entry in the ownership registry,
+        # indicating it's owned by another relatable object.
+        #
+        # @return [Boolean] true if object is owned, false otherwise
+        #
+        # @example Check if object is owned
+        #   domain.owned?  # => true if domain has an owner
+        #
         def owned?
           # We can only have an owner if we are relatable ourselves.
-          return false unless is_a?(RelatableObject)
+          return false unless is_a?(RelatableObjects)
 
-          # If our object identifier is present, we have an owner
+          # If our object identifier is present in owners hash, we have an owner
           self.class.owners.key?(objid)
+        end
+
+        # Get the owner of this object
+        #
+        # @param owner_class [Class] The expected class of the owner
+        # @return [RelatableObjects, nil] The owner object or nil if not owned
+        #
+        # @example Get the owner
+        #   owner = domain.get_owner(Customer)
+        #
+        def get_owner(owner_class)
+          return nil unless owned?
+
+          owner_objid = self.class.owners.get(objid)
+          return nil if owner_objid.nil? || owner_objid.empty?
+
+          owner_class.find_by_objid(owner_objid)
         end
       end
 
+      # Class methods for RelatableObject functionality
       module ClassMethods
+        # Validate that an object is relatable and optionally execute a block
+        #
+        # This method performs type checking to ensure the object includes the
+        # RelatableObjects feature and prevents self-ownership scenarios.
+        #
+        # @param obj [Object] The object to validate
+        # @yield Optional block to execute if validation passes
+        # @return [Boolean] true if object is relatable
+        #
+        # @raise [RelatableObjectError] If object is not relatable
+        # @raise [RelatableObjectError] If attempting self-ownership
+        #
         def relatable?(obj, &)
-          is_relatable = obj.is_a?(RelatableObject)
-          err_klass = V2::Features::RelatableObjectError
+          is_relatable = obj.is_a?(RelatableObjects)
+          err_klass = Familia::Features::RelatableObjectError
           raise err_klass, 'Not relatable object' unless is_relatable
-          raise err_klass, 'No self-ownership' if obj.class == self
+          raise err_klass, 'No self-ownership' if obj.instance_of?(self)
 
           block_given? ? yield : is_relatable
         end
 
+        # Find an object by its internal object identifier
+        #
+        # @param objid [String] The internal object identifier
+        # @return [RelatableObjects, nil] The found object or nil
+        #
+        # @example Find customer by objid
+        #   customer = Customer.find_by_objid("018c3f8e-7b2a-7f4a-9d8e-1a2b3c4d5e6f")
+        #
         def find_by_objid(objid)
           return nil if objid.to_s.empty?
 
@@ -201,11 +283,51 @@ module Familia
           find_by_key objkey
         end
 
+        # Find an object by its external identifier
+        #
+        # This method requires implementing a mapping system between external
+        # IDs and internal object IDs in your application.
+        #
+        # @param extid [String] The external identifier
+        # @return [RelatableObjects, nil] The found object or nil
+        #
+        # @example Find customer by external ID
+        #   customer = Customer.find_by_extid("ext_3c4d5e6f7g8h9i0j1k2l3m4n5o6p7q8r")
+        #
+        def find_by_extid(extid)
+          # This is a placeholder - implement based on your external ID mapping strategy
+          # You might maintain a separate Redis hash: extid -> objid
+          raise NotImplementedError, 'Implement external ID to object ID mapping'
+        end
+
+        # Generate a new internal object identifier
+        #
+        # Uses UUID v7 which provides timestamp-based ordering for better
+        # database performance compared to random UUIDs.
+        #
+        # @return [String] A new UUID v7 string
+        #
+        # @example Override for custom ID generation
+        #   def self.generate_objid
+        #     "custom_#{SecureRandom.uuid_v7}"
+        #   end
+        #
         def generate_objid
           SecureRandom.uuid_v7
         end
 
-        # Guaranteed length of 54
+        # Generate a new external identifier
+        #
+        # Creates a 54-character external identifier with "ext_" prefix.
+        # The format is deterministic to ensure consistent length.
+        #
+        # @return [String] A 54-character external identifier
+        #
+        # @example Override for custom external ID format
+        #   def self.generate_extid
+        #     "ext_#{Time.now.to_i}_#{SecureRandom.hex(8)}"
+        #   end
+        #
         def generate_extid
           format('ext_%s', Familia.generate_id)
         end
