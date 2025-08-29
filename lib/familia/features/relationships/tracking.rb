@@ -109,6 +109,9 @@ module Familia
                           item.current_score
                         end
 
+              # Ensure score is never nil
+              score = item.current_score if score.nil?
+
               collection.add(item.identifier, score)
             end
 
@@ -141,6 +144,9 @@ module Familia
                           item.current_score
                         end
 
+              # Ensure score is never nil
+              score = item.current_score if score.nil?
+
               collection.add(item.identifier, score)
             end
 
@@ -163,6 +169,8 @@ module Familia
                         else
                           item.current_score
                         end
+                # Ensure score is never nil
+                score = item.current_score if score.nil?
                 { member: item.identifier, score: score }
               end
 
@@ -198,6 +206,9 @@ module Familia
               collection_key = "#{context_class_name.downcase}:#{context_instance.identifier}:#{collection_name}"
 
               score ||= calculate_tracking_score(context_class_name, collection_name)
+
+              # Ensure score is never nil
+              score = current_score if score.nil?
 
               dbclient.zadd(collection_key, score, identifier)
             end
@@ -259,7 +270,15 @@ module Familia
               end
             when Proc
               # Execute proc in context of this instance
-              instance_exec(&score_calculator)
+              result = instance_exec(&score_calculator)
+              # Ensure we get a numeric result
+              if result.nil?
+                current_score
+              elsif result.respond_to?(:to_f)
+                result.to_f
+              else
+                current_score
+              end
             when Numeric
               score_calculator.to_f
             else

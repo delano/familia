@@ -37,7 +37,72 @@ module Familia
             }
 
             # Generate instance methods with collision-free naming
-            generate_membership_instance_methods(owner_class_name, collection_name, score, type)
+            owner_class_name_lower = owner_class_name.downcase
+
+            # Method to add this object to the owner's collection
+            # e.g., domain.add_to_customer_domains(customer)
+            define_method("add_to_#{owner_class_name_lower}_#{collection_name}") do |owner_instance, score = nil|
+              collection_key = "#{owner_class_name_lower}:#{owner_instance.identifier}:#{collection_name}"
+
+              case type
+              when :sorted_set
+                score ||= calculate_membership_score(owner_class, collection_name)
+                dbclient.zadd(collection_key, score, identifier)
+              when :set
+                dbclient.sadd(collection_key, identifier)
+              when :list
+                dbclient.lpush(collection_key, identifier)
+              end
+            end
+
+            # Method to remove this object from the owner's collection
+            # e.g., domain.remove_from_customer_domains(customer)
+            define_method("remove_from_#{owner_class_name_lower}_#{collection_name}") do |owner_instance|
+              collection_key = "#{owner_class_name_lower}:#{owner_instance.identifier}:#{collection_name}"
+
+              case type
+              when :sorted_set
+                dbclient.zrem(collection_key, identifier)
+              when :set
+                dbclient.srem(collection_key, identifier)
+              when :list
+                dbclient.lrem(collection_key, 0, identifier)
+              end
+            end
+
+            # Method to check if this object is in the owner's collection
+            # e.g., domain.in_customer_domains?(customer)
+            define_method("in_#{owner_class_name_lower}_#{collection_name}?") do |owner_instance|
+              collection_key = "#{owner_class_name_lower}:#{owner_instance.identifier}:#{collection_name}"
+
+              case type
+              when :sorted_set
+                !dbclient.zscore(collection_key, identifier).nil?
+              when :set
+                dbclient.sismember(collection_key, identifier)
+              when :list
+                dbclient.lpos(collection_key, identifier) != nil
+              end
+            end
+
+            # Method to get score in the owner's collection (for sorted sets)
+            # e.g., domain.score_in_customer_domains(customer)
+            if type == :sorted_set
+              define_method("score_in_#{owner_class_name_lower}_#{collection_name}") do |owner_instance|
+                collection_key = "#{owner_class_name_lower}:#{owner_instance.identifier}:#{collection_name}"
+                dbclient.zscore(collection_key, identifier)
+              end
+            end
+
+            # Method to get position in the owner's collection (for lists)
+            # e.g., domain.position_in_customer_domain_list(customer)
+            if type == :list
+              define_method("position_in_#{owner_class_name_lower}_#{collection_name}") do |owner_instance|
+                collection_key = "#{owner_class_name_lower}:#{owner_instance.identifier}:#{collection_name}"
+                position = dbclient.lpos(collection_key, identifier)
+                position
+              end
+            end
           end
 
           # Get all membership relationships for this class
@@ -58,7 +123,12 @@ module Familia
 
               case type
               when :sorted_set
-                score ||= calculate_membership_score(owner_class_name.constantize, collection_name)
+                # Find the owner class from the stored config
+                membership_config = self.class.membership_relationships.find do |config|
+                  config[:owner_class_name] == owner_class_name && config[:collection_name] == collection_name
+                end
+                owner_class = membership_config[:owner_class] if membership_config
+                score ||= calculate_membership_score(owner_class, collection_name)
                 dbclient.zadd(collection_key, score, identifier)
               when :set
                 dbclient.sadd(collection_key, identifier)
@@ -178,7 +248,7 @@ module Familia
                 if is_member
                   # Try to instantiate the owner object
                   begin
-                    owner_class_name owners << owner_class.new(identifier: owner_id)
+                    owners << owner_class.new(identifier: owner_id)
                   rescue NameError
                     # Owner class not available, just store the ID
                     owners << { class: owner_class_name, id: owner_id }
@@ -200,8 +270,12 @@ module Familia
 
                   case type
                   when :sorted_set
-                    calculated_score = score || calculate_membership_score(owner_class_name.constantize,
-                                                                           collection_name)
+                    # Find the owner class from the stored config
+                    membership_config = self.class.membership_relationships.find do |config|
+                      config[:owner_class_name] == owner_class_name && config[:collection_name] == collection_name
+                    end
+                    owner_class = membership_config[:owner_class] if membership_config
+                    calculated_score = score || calculate_membership_score(owner_class, collection_name)
                     pipeline.zadd(collection_key, calculated_score, identifier)
                   when :set
                     pipeline.sadd(collection_key, identifier)
@@ -269,7 +343,15 @@ module Familia
               end
             when Proc
               # Execute proc in context of this instance
-              instance_exec(&score_calculator)
+              result = instance_exec(&score_calculator)
+              # Ensure we get a numeric result
+              if result.nil?
+                current_score
+              elsif result.respond_to?(:to_f)
+                result.to_f
+              else
+                current_score
+              end
             when Numeric
               score_calculator.to_f
             else
