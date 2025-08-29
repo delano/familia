@@ -6,19 +6,38 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### Testing
 
-Tryouts framework rules:
-1) **Structure**: 3 sections - setup (optional), testcases, teardown (optional)
-2) **Test cases**: Use `##` for descriptions, Ruby code, then `#=>` expectations
-3) **Variables**: Instance variables (`@var`) persist across all sections
-4) **Expectations**: `#=>` (value), `#==>` (boolean), `#=:>` (type), `#=!>` (exception)
-5) **Comments**: Use single `#` prefix, DO NOT label sections
-6) **Philosophy**: Plain realistic code, avoid mocks/test DSL
-7) **Result**: Last expression in each test case is the result
+**Tryouts framework rules:**
+1. **Structure**: Each file has 3 sections - setup (optional), testcases, teardown (optional); each testcase has 3 required parts: description, code, expectations.
+2. **Test cases**: Use `##` line prefix for test descriptions, Ruby code, then `#=>` expectations
+3. **Variables**: Instance variables (`@var`) persist across sections; local variables do not.
+4. **Expectations**: Multiple expectation types available (`#=>`, `#==>`, `#=:>`, `#=!>`, etc.); each testcase can have multiple expectations.
+5. **Comments**: Use single `#` prefix, but DO NOT label file sections
+6. **Philosophy**: Plain realistic code, avoid mocks/test DSL
+7. **Result**: Last expression in each test case is the result
 
-- **Run tests**: `bundle exec try` (uses tryouts testing framework)
-- **Run specific test file, verbose**: `bundle exec try -v try/specific_test_try.rb`
-- **Debug mode**: `FAMILIA_DEBUG=1 bundle exec try -D`
-- **Trace mode**: `FAMILIA_TRACE=1 bundle exec try -D` (detailed Redis operation logging)
+**Running tests:**
+- **Basic**: `bundle exec try` (auto-discovers `*_try.rb` and `*.try.rb` files)
+- **All options**: `bundle exec try --help` (complete CLI reference with agent-specific notes)
+
+**Agent-optimized workflow:**
+- **Default agent mode**: `bundle exec try --agent` (structured, token-efficient output for LLMs)
+- **Focus modes**: `bundle exec try --agent --agent-focus summary` (options: `summary|first-failure|critical`)
+  - `summary`: Overview of test results only
+  - `first-failure`: Stop at first failure with details
+  - `critical`: Only show critical issues and summary
+
+**Framework integration:**
+- **RSpec**: `bundle exec try --rspec` (generates RSpec-compatible output)
+- **Minitest**: `bundle exec try --minitest` (generates Minitest-compatible output)
+
+**Debugging options:**
+- **Stack traces**: `bundle exec try -s` (stack traces without debug logging)
+- **Debug mode**: `bundle exec try -D` (additional logging including stack traces)
+- **Verbose failures**: `bundle exec try -vf` (detailed failure output)
+- **Fresh context**: `bundle exec try --fresh-context` (isolate test cases)
+
+*Note: Use `--agent` mode for optimal token efficiency when analyzing test results programmatically.*
+
 
 ### Development Setup
 - **Install dependencies**: `bundle install`
