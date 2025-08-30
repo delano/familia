@@ -315,7 +315,9 @@ module Familia
       #
       def expired?(threshold = 0)
         current_ttl = ttl
-        current_ttl >= 0 && current_ttl <= threshold
+        return false if current_ttl == -1 # no expiration set
+        return true  if current_ttl == -2 # key does not exist
+        current_ttl <= threshold
       end
 
       # Extend the expiration time by the specified duration
