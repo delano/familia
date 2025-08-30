@@ -325,6 +325,10 @@ module Familia
           # Create empty result set
           def empty_result_set
             temp_key = create_temp_key("empty_#{name.downcase}", 60)
+            # Create an actual empty zset
+            dbclient.zadd(temp_key, 0, "__nil__")
+            dbclient.zrem(temp_key, "__nil__")
+            dbclient.expire(temp_key, 60)
             Familia::SortedSet.new(rediskey: temp_key, db: logical_database)
           end
         end
