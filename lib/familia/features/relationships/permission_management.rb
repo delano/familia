@@ -170,6 +170,88 @@ module Familia
             define_method :clear_all_permissions do
               send(field_name).clear
             end
+
+            # === Two-Stage Filtering Methods ===
+
+            # Stage 1: Redis pre-filtering via zset membership
+            define_method :accessible_items do |collection_key|
+              redis.zrange(collection_key, 0, -1, with_scores: true)
+            end
+
+            # Stage 2: Broad categorical filtering on small sets
+            define_method :items_by_permission do |collection_key, category = :readable|
+              items_with_scores = accessible_items(collection_key)
+
+              # Operating on ~20-100 items, not millions
+              filtered = items_with_scores.select do |(member, score)|
+                ScoreEncoding.has_category?(score, category)
+              end
+
+              filtered.map(&:first)  # Return just the members
+            end
+
+            # Bulk permission check for UI rendering
+            define_method :permission_matrix do |collection_key|
+              items_with_scores = accessible_items(collection_key)
+
+              {
+                total: items_with_scores.size,
+                viewable: items_with_scores.count { |(_, s)| ScoreEncoding.has_category?(s, :readable) },
+                editable: items_with_scores.count { |(_, s)| ScoreEncoding.has_category?(s, :content_editor) },
+                administrative: items_with_scores.count { |(_, s)| ScoreEncoding.has_category?(s, :administrator) }
+              }
+            end
+
+            # Efficient "can perform any administrative action?" check
+            define_method :has_admin_access? do |user, collection_key|
+              score = redis.zscore(collection_key, identifier)
+              return false unless score
+
+              ScoreEncoding.has_category?(score, :administrator)
+            end
+
+            # === Categorical Permission Methods ===
+
+            # Check permission category for user
+            #
+            # @param user [Object] User object to check category for
+            # @param category [Symbol] Category to check (:readable, :content_editor, etc.)
+            # @return [Boolean] True if user meets the category requirements
+            # @example Check if user has content editor permissions
+            #   document.has_category?(user, :content_editor)  #=> true
+            define_method :has_category? do |user, category|
+              user_key = user.respond_to?(:identifier) ? user.identifier : user.to_s
+              bits = send(field_name)[user_key].to_i
+              ScoreEncoding.meets_category?(bits, category)
+            end
+
+            # Get permission tier for user
+            #
+            # @param user [Object] User object to get tier for
+            # @return [Symbol] Permission tier (:administrator, :content_editor, :viewer, :none)
+            # @example Get user's permission tier
+            #   document.permission_tier_for(user)  #=> :content_editor
+            define_method :permission_tier_for do |user|
+              user_key = user.respond_to?(:identifier) ? user.identifier : user.to_s
+              bits = send(field_name)[user_key].to_i
+
+              # Create a temporary score to use ScoreEncoding.permission_tier
+              temp_score = ScoreEncoding.encode_score(Time.now, bits)
+              ScoreEncoding.permission_tier(temp_score)
+            end
+
+            # Get users by permission category
+            #
+            # @param category [Symbol] Category to filter by
+            # @return [Array<String>] Array of user keys with the specified category
+            # @example Get all content editors
+            #   document.users_by_category(:content_editor)  #=> ["user123", "user456"]
+            define_method :users_by_category do |category|
+              permissions_hash = send(field_name).hgetall
+              permissions_hash.select do |user_key, bits|
+                ScoreEncoding.meets_category?(bits.to_i, category)
+              end.keys
+            end
           end
         end
       end

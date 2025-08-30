@@ -8,6 +8,7 @@ require_relative 'relationships/indexing'
 require_relative 'relationships/membership'
 require_relative 'relationships/cascading'
 require_relative 'relationships/querying'
+require_relative 'relationships/permission_management'
 
 module Familia
   module Features
