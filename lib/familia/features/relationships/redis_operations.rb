@@ -196,7 +196,7 @@ module Familia
             # Ensure minimum score includes required permission level
             if start_score.is_a?(Numeric)
               decoded = decode_score(start_score)
-              start_score = encode_score(decoded[:timestamp], permission_value) if decoded[:metadata] < permission_value
+              start_score = encode_score(decoded[:timestamp], permission_value) if decoded[:permissions] < permission_value
             else
               start_score = encode_score(0, permission_value)
             end
@@ -214,7 +214,7 @@ module Familia
             permission_value = ScoreEncoding.permission_level_value(min_permission)
             results = results.select do |_member, score|
               decoded = decode_score(score)
-              decoded[:metadata] >= permission_value
+              decoded[:permissions] >= permission_value
             end
           end
 
