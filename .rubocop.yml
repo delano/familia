@@ -80,3 +80,6 @@ Naming/AsciiIdentifiers:
 
 Style/FrozenStringLiteralComment:
   Enabled: false
+
+Naming/MemoizedInstanceVariableName:
+  Enabled: false

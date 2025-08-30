@@ -122,6 +122,9 @@ class EmptySafeDump < Familia::Horreum
   field :id
 end
 
+# Relationships test content - creating new test file
+# This is a placeholder - the actual test should be in relationships_try.rb
+
 EmptySafeDump.safe_dump_fields
 #=> []
 

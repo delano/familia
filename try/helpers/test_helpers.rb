@@ -127,7 +127,7 @@ class CustomDomain < Familia::Horreum
 
   class_sorted_set :values
 
-  identifier_field :generate_id
+  identifier_field :display_domain
 
   field :domainid
   field :display_domain

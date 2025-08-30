@@ -104,6 +104,42 @@ client.auth_token.expose { |token| make_api_call(token) }
 client.auth_token.clear!  # Explicit cleanup
 ```
 
+#### Relationships
+```ruby
+class Customer < Familia::Horreum
+  feature :relationships
+
+  identifier_field :custid
+  field :custid, :name, :email
+
+  # Define relationship collections
+  tracked_in :active_users, type: :sorted_set
+  indexed_by :email_lookup, field: :email
+  set :domains
+end
+
+class Domain < Familia::Horreum
+  feature :relationships
+
+  identifier_field :domain_id
+  field :domain_id, :name
+
+  # Declare membership in customer collections
+  member_of Customer, :domains, type: :set
+end
+
+# Usage
+customer = Customer.new(custid: "cust123", name: "Acme Corp")
+domain = Domain.new(domain_id: "dom456", name: "acme.com")
+
+# Establish bidirectional relationships
+domain.add_to_customer_domains(customer.custid)
+customer.domains.add(domain.identifier)
+
+# Query relationships
+domain.in_customer_domains?(customer.custid)  # => true
+```
+
 #### Quantization
 ```ruby
 class Metric < Familia::Horreum

@@ -60,13 +60,14 @@ module Familia
     end
 
   end
-
 end
 
 # Load all feature files from the features directory
 features_dir = File.join(__dir__, 'features')
+Familia.ld "[DEBUG] Loading features from #{features_dir}"
 if Dir.exist?(features_dir)
   Dir.glob(File.join(features_dir, '*.rb')).each do |feature_file|
+    Familia.ld "[DEBUG] Loading feature #{feature_file}"
     require_relative feature_file
   end
 end
