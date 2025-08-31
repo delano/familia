@@ -60,22 +60,9 @@ module Familia
           owner:          0b11111111   # All permissions
         }.freeze
 
-        # Legacy permission level mapping for backward compatibility
-        PERMISSION_LEVELS = {
-          none:      0,
-          read:      1,
-          append:    2,
-          write:     4,
-          edit:      8,
-          configure: 16,
-          delete:    32,
-          transfer:  64,
-          admin:     128,
-          unknown:   0
-        }.freeze
 
         class << self
-          # Get permission level value for a permission symbol
+          # Get permission bit flag value for a permission symbol
           #
           # @param permission [Symbol] Permission symbol to get value for
           # @return [Integer] Bit flag value for the permission
@@ -92,29 +79,19 @@ module Familia
             encode_score(timestamp, permission)
           end
 
-          # Decode score into legacy permission format
+          # Decode score into permission information
           #
           # @param score [Float] The encoded score
-          # @return [Hash] Hash with legacy permission format
+          # @return [Hash] Hash with timestamp, permissions bits, and permission list
           def permission_decode(score)
             decoded = decode_score(score)
             {
               timestamp: decoded[:timestamp],
-              permission_level: decoded[:permissions],
-              permission: first_permission_symbol(decoded[:permissions])
+              permissions: decoded[:permissions],
+              permission_list: decoded[:permission_list]
             }
           end
 
-          # Helper: Get the first matching permission symbol from a bitmask
-          #
-          # @param permissions [Integer] Bitmask of permissions
-          # @return [Symbol, nil] The first matching permission symbol, or nil if none
-          def first_permission_symbol(permissions)
-            PERMISSION_FLAGS.each do |sym, bit|
-              return sym if permissions.anybits?(bit) && bit != 0
-            end
-            nil
-          end
 
           # Encode a timestamp and permissions into a Redis score
           #
