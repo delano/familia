@@ -19,7 +19,7 @@ module Familia
           # Union of multiple collections (accessible items across multiple sources)
           #
           # @param collections [Array<Hash>] Collection configurations
-          # @param min_permission [Symbol] Minimum permission level
+          # @param min_permission [Symbol] Minimum required permission
           # @param ttl [Integer] TTL for result set in seconds
           # @return [Familia::SortedSet] Temporary sorted set with results
           #
@@ -49,7 +49,7 @@ module Familia
           # Intersection of multiple collections (items present in ALL collections)
           #
           # @param collections [Array<Hash>] Collection configurations
-          # @param min_permission [Symbol] Minimum permission level
+          # @param min_permission [Symbol] Minimum required permission
           # @param ttl [Integer] TTL for result set in seconds
           # @return [Familia::SortedSet] Temporary sorted set with results
           def intersection_collections(collections, min_permission: nil, ttl: 300, aggregate: :sum)
@@ -73,7 +73,7 @@ module Familia
           #
           # @param base_collection [Hash] Base collection configuration
           # @param exclude_collections [Array<Hash>] Collections to exclude
-          # @param min_permission [Symbol] Minimum permission level
+          # @param min_permission [Symbol] Minimum required permission
           # @param ttl [Integer] TTL for result set in seconds
           # @return [Familia::SortedSet] Temporary sorted set with results
           def difference_collections(base_collection, exclude_collections = [], min_permission: nil, ttl: 300)
@@ -274,41 +274,84 @@ module Familia
             collections.map { |collection| build_collection_key(collection) }
           end
 
-          # Filter collections by permission level
+          # Filter collections by permission requirements using bitwise operations
           def filter_keys_by_permission(keys, min_permission, temp_prefix)
             return keys unless min_permission
 
-            permission_value = ScoreEncoding.permission_level_value(min_permission)
+            begin
+              required_bits = ScoreEncoding.permission_level_value(min_permission)
+            rescue ArgumentError
+              # Invalid permission symbol - return empty array (no access)
+              return []
+            end
             filtered_keys = []
 
             keys.each_with_index do |key, index|
               filtered_key = "#{temp_prefix}_filtered_#{index}"
 
-              # Copy elements with sufficient permission
-              min_score = encode_score(0, permission_value)
+              # Copy all elements first
               dbclient.zunionstore(filtered_key, [key])
-              dbclient.zremrangebyscore(filtered_key, '-inf', "(#{min_score}")
 
-              if dbclient.zcard(filtered_key).positive?
-                filtered_keys << filtered_key
+              # Get all members with their scores for bitwise filtering
+              members_with_scores = dbclient.zrange(filtered_key, 0, -1, with_scores: true)
+              dbclient.del(filtered_key) # Clear temp key
+
+              # Filter members that have required permission bits
+              valid_members = []
+              members_with_scores.each_slice(2) do |member, score|
+                decoded = decode_score(score)
+                permission_bits = decoded[:permissions]
+
+                # Check if this member has the required permission bits
+                if (permission_bits & required_bits) == required_bits
+                  valid_members << [score, member]
+                end
+              end
+
+              # Recreate filtered collection if we have valid members
+              if valid_members.any?
+                dbclient.zadd(filtered_key, valid_members)
                 dbclient.expire(filtered_key, 300) # Temporary key cleanup
-              else
-                dbclient.del(filtered_key)
+                filtered_keys << filtered_key
               end
             end
 
             filtered_keys
           end
 
-          # Filter single key by permission
+          # Filter single key by permission using bitwise operations
           def filter_key_by_permission(key, min_permission, temp_key)
             return key unless min_permission
 
-            permission_value = ScoreEncoding.permission_level_value(min_permission)
-            min_score = encode_score(0, permission_value)
+            begin
+              required_bits = ScoreEncoding.permission_level_value(min_permission)
+            rescue ArgumentError
+              # Invalid permission symbol - return empty temp key (no access)
+              dbclient.del(temp_key) if dbclient.exists(temp_key) == 1
+              return temp_key
+            end
 
-            dbclient.zunionstore(temp_key, [key])
-            dbclient.zremrangebyscore(temp_key, '-inf', "(#{min_score}")
+            # Get all members with their scores for bitwise filtering
+            members_with_scores = dbclient.zrange(key, 0, -1, with_scores: true)
+
+            # Filter members that have required permission bits
+            valid_members = []
+            members_with_scores.each_slice(2) do |member, score|
+              decoded = decode_score(score)
+              permission_bits = decoded[:permissions]
+
+              # Check if this member has the required permission bits
+              if (permission_bits & required_bits) == required_bits
+                valid_members << [score, member]
+              end
+            end
+
+            # Create filtered collection
+            if valid_members.any?
+              dbclient.zadd(temp_key, valid_members)
+            else
+              dbclient.zadd(temp_key, []) # Create empty sorted set
+            end
             dbclient.expire(temp_key, 300)
 
             temp_key
@@ -341,7 +384,7 @@ module Familia
         module InstanceMethods
           # Find all collections this object appears in with specific permissions
           #
-          # @param min_permission [Symbol] Minimum permission level
+          # @param min_permission [Symbol] Minimum required permission
           # @return [Array<Hash>] Collections this object is a member of
           def accessible_collections(min_permission: nil)
             collections = []
@@ -359,11 +402,11 @@ module Familia
             collections
           end
 
-          # Get permission level in a specific collection
+          # Get permission bits in a specific collection
           #
           # @param owner [Object] Collection owner
           # @param collection_name [Symbol] Collection name
-          # @return [Symbol, nil] Permission level or nil if not a member
+          # @return [Integer, nil] Permission bits or nil if not a member
           def permission_in_collection(owner, collection_name)
             collection_key = "#{owner.class.name.downcase}:#{owner.identifier}:#{collection_name}"
             score = dbclient.zscore(collection_key, identifier)
@@ -371,23 +414,29 @@ module Familia
             return nil unless score
 
             decoded = permission_decode(score)
-            decoded[:permission]
+            decoded[:permissions]
           end
 
           # Check if this object has specific permission in a collection
           #
           # @param owner [Object] Collection owner
           # @param collection_name [Symbol] Collection name
-          # @param required_permission [Symbol] Required permission level
+          # @param required_permission [Symbol] Required permission
           # @return [Boolean] True if object has required permission
           def permission_in_collection?(owner, collection_name, required_permission)
-            current_permission = permission_in_collection(owner, collection_name)
-            return false unless current_permission
+            current_bits = permission_in_collection(owner, collection_name)
+            return false if current_bits.nil? # Not in collection
 
-            current_level = ScoreEncoding::PERMISSION_LEVELS[current_permission] || 0
-            required_level = ScoreEncoding::PERMISSION_LEVELS[required_permission] || 0
+            begin
+              required_bits = ScoreEncoding.permission_level_value(required_permission)
+            rescue ArgumentError
+              # Invalid permission symbol - deny access
+              return false
+            end
 
-            current_level >= required_level
+            # Check if current permissions include the required permission using bitwise AND
+            # Note: 0 bits means exists in collection but no permissions
+            (current_bits & required_bits) == required_bits
           end
 
           # Find similar objects based on shared collection membership
@@ -445,12 +494,20 @@ module Familia
                 score = dbclient.zscore(key, identifier)
                 next unless score
 
+                # Decode permission once for reuse
+                decoded = permission_decode(score)
+                actual_bits = decoded[:permissions]
+
                 # Check permission if required
                 if min_permission
-                  decoded = permission_decode(score)
-                  required_level = ScoreEncoding::PERMISSION_LEVELS[min_permission] || 0
-                  actual_level = ScoreEncoding::PERMISSION_LEVELS[decoded[:permission]] || 0
-                  next if actual_level < required_level
+                  begin
+                    required_bits = ScoreEncoding.permission_level_value(min_permission)
+                    # Skip if required permission bits are not present
+                    next if (actual_bits & required_bits) != required_bits
+                  rescue ArgumentError
+                    # Invalid permission symbol - skip this collection
+                    next
+                  end
                 end
 
                 context_id = key.split(':')[1]
@@ -461,7 +518,8 @@ module Familia
                   collection_name: collection_name,
                   key: key,
                   score: score,
-                  permission: permission_decode(score)[:permission]
+                  permission_bits: actual_bits,
+                  permissions: decoded[:permission_list]
                 }
               end
             end
@@ -526,18 +584,30 @@ module Familia
 
             return nil unless is_member
 
-            # Check permission for sorted sets
-            if min_permission && type == :sorted_set && score
+            # Decode score once if we have one (for permission check and result)
+            decoded = nil
+            if score
               decoded = permission_decode(score)
-              required_level = ScoreEncoding::PERMISSION_LEVELS[min_permission] || 0
-              actual_level = ScoreEncoding::PERMISSION_LEVELS[decoded[:permission]] || 0
-              return nil if actual_level < required_level
+
+              # Check permission for sorted sets
+              if min_permission && type == :sorted_set
+                begin
+                  required_bits = ScoreEncoding.permission_level_value(min_permission)
+                  actual_bits = decoded[:permissions]
+                  # Return nil if required permission bits are not present
+                  return nil if (actual_bits & required_bits) != required_bits
+                rescue ArgumentError
+                  # Invalid permission symbol - deny access
+                  return nil
+                end
+              end
             end
 
             collection_info = {}
-            if score
+            if score && decoded
               collection_info[:score] = score
-              collection_info[:permission] = permission_decode(score)[:permission]
+              collection_info[:permission_bits] = decoded[:permissions]
+              collection_info[:permissions] = decoded[:permission_list]
             end
 
             collection_info

@@ -82,9 +82,13 @@ Familia::Features::Relationships::ScoreEncoding::PERMISSION_CATEGORIES[:owner]
 Familia::Features::Relationships::ScoreEncoding.permission_level_value(:read)
 #=> 1
 
-## Get permission level value for unknown permission returns 0
-Familia::Features::Relationships::ScoreEncoding.permission_level_value(:unknown)
-#=> 0
+## Get permission level value for unknown permission raises ArgumentError
+begin
+  Familia::Features::Relationships::ScoreEncoding.permission_level_value(:unknown)
+rescue ArgumentError => e
+  e.message
+end
+#=> "Unknown permission: :unknown"
 
 ## Get permission level value for admin permission
 Familia::Features::Relationships::ScoreEncoding.permission_level_value(:admin)
@@ -440,11 +444,11 @@ end
 
 # Legacy Compatibility
 
-## Legacy permission_encode method works
-@legacy_score = Familia::Features::Relationships::ScoreEncoding.permission_encode(Time.now, :write)
-@decoded = Familia::Features::Relationships::ScoreEncoding.permission_decode(@legacy_score)
-@decoded[:permission]
-#=> :write
+## Permission encoding and decoding with bit flags
+@write_score = Familia::Features::Relationships::ScoreEncoding.permission_encode(Time.now, :write)
+@decoded = Familia::Features::Relationships::ScoreEncoding.permission_decode(@write_score)
+@decoded[:permission_list].include?(:write)
+#=> true
 
 # Performance Characteristics Validation
 

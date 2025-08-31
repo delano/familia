@@ -40,11 +40,11 @@ module Familia
     #     field :domain_id
     #     field :display_name
     #     field :created_at
-    #     field :permission_level
+    #     field :permission_bits
     #
     #     # Multi-presence tracking with score encoding
     #     tracked_in Customer, :domains,
-    #                score: -> { permission_encode(created_at, permission_level) }
+    #                score: -> { permission_encode(created_at, permission_bits) }
     #     tracked_in Team, :domains, score: :added_at
     #     tracked_in Organization, :all_domains, score: :created_at
     #
@@ -76,11 +76,11 @@ module Familia
     # @example Score encoding for permissions
     #   # Encode permission in score
     #   score = domain.permission_encode(Time.now, :write)
-    #   # => 1704067200.200 (timestamp + permission level)
+    #   # => 1704067200.004 (timestamp + permission bits)
     #
     #   # Decode permission from score
     #   decoded = domain.permission_decode(score)
-    #   # => { timestamp: 1704067200, permission_level: 200, permission: :write }
+    #   # => { timestamp: 1704067200, permissions: 4, permission_list: [:write] }
     #
     #   # Query with permission filtering
     #   Customer.domains_with_permission(:read)

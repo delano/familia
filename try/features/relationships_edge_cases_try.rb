@@ -72,8 +72,8 @@ decoded_zero[:permissions]
 ## Permission encoding handles unknown permission levels
 unknown_perm_score = @domain1.permission_encode(Time.now, :unknown_permission)
 decoded_unknown = @domain1.permission_decode(unknown_perm_score)
-decoded_unknown[:permission]
-#=> nil
+decoded_unknown[:permission_list]
+#=> []
 
 ## Score encoding preserves precision for small timestamps
 small_time = Time.at(1000000)
@@ -92,8 +92,8 @@ decoded_large[:permissions]
 ## Permission encoding maps correctly
 read_score = @domain1.permission_encode(Time.now, :read)
 decoded_read = @domain1.permission_decode(read_score)
-decoded_read[:permission]
-#=> :read
+decoded_read[:permission_list].include?(:read)
+#=> true
 
 ## Score encoding handles edge case timestamps
 epoch_score = @domain1.encode_score(Time.at(0), 42)
