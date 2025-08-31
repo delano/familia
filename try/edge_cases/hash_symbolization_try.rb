@@ -61,6 +61,7 @@ end
 @symbol_result[:name]
 #=> "John"
 
+## String keys also work correctly
 @string_result['name']
 #=> "John"
 

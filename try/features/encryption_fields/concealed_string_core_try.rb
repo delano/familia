@@ -186,6 +186,7 @@ debug_array.map(&:to_s)
 @storage_hash.keys
 #=> ["id", "title", "content", "api_key"]
 
+## Save document with encrypted fields
 @save_result1 = @doc.save
 @save_result1
 #=> true
@@ -214,10 +215,12 @@ debug_array.map(&:to_s)
 @all_keys
 #=> ["secretdocument:test123:object"]
 
+## Check database storage - should be encrypted
 @db_hash = Familia.dbclient.hgetall("secretdocument:test123:object")
 @db_hash.keys
 #=> ["id", "title", "content", "api_key"]
 
+## Database storage contains encrypted string
 db_content = Familia.dbclient.hget("secretdocument:test123:object", "content")
 db_content&.class&.name || "nil"
 #=> "String"

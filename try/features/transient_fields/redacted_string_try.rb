@@ -21,9 +21,11 @@ redacted.class
 RedactedString.new("string").class
 #=> RedactedString
 
+## Numeric input conversion
 RedactedString.new(123).class  # to_s conversion
 #=> RedactedString
 
+## Nil input handling
 RedactedString.new(nil).class  # nil handling
 #=> RedactedString
 

@@ -6,6 +6,7 @@ require_relative '../helpers/test_helpers'
 TestClass = Class.new(Familia::Horreum) do
   identifier_field :email
   field :email
+  field :ttl  # This should cause an error
   field :default_expiration
 end
 

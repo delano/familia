@@ -113,7 +113,7 @@ GEM
     ruby-progressbar (1.13.0)
     stackprof (0.2.27)
     stringio (3.1.7)
-    tryouts (3.3.2)
+    tryouts (3.5.1)
       concurrent-ruby (~> 1.0)
       irb
       minitest (~> 5.0)
@@ -148,7 +148,7 @@ DEPENDENCIES
   rubocop-thread_safety
   ruby-prof
   stackprof
-  tryouts (~> 3.3.2)
+  tryouts (~> 3.5.1)
   yard (~> 0.9)
 
 BUNDLED WITH

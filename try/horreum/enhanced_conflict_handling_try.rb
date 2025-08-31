@@ -117,6 +117,8 @@ class WarnStrategyTest < Familia::Horreum
   field :warn_method, on_conflict: :warn
 end
 #=2> /WARNING/
+
+## Test warn conflict strategy
 @warn_test = WarnStrategyTest.new(id: 'warn1')
 @warn_test.warn_method = "new_value"
 @warn_test.warn_method

@@ -40,7 +40,9 @@ Familia.config.current_key_version = :v2
 encrypted = Familia::Encryption.encrypt(plaintext, context: context)
 encrypted_data = JSON.parse(encrypted, symbolize_names: true)
 encrypted_data[:key_version]
-#=> "v2"## Nonce is unique - same plaintext encrypts to different ciphertext
+#=> "v2"
+
+## Nonce is unique - same plaintext encrypts to different ciphertext
 test_keys = { v1: Base64.strict_encode64('a' * 32), v2: Base64.strict_encode64('b' * 32) }
 context = "TestModel:secret_field:user123"
 plaintext = "sensitive data here"
