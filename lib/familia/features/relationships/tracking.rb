@@ -112,7 +112,7 @@ module Familia
               # Ensure score is never nil
               score = item.current_score if score.nil?
 
-              collection.add(item.identifier, score)
+              collection.add(score, item.identifier)
             end
 
             # Generate global remove method
@@ -147,7 +147,7 @@ module Familia
               # Ensure score is never nil
               score = item.current_score if score.nil?
 
-              collection.add(item.identifier, score)
+              collection.add(score, item.identifier)
             end
 
             # Generate remove method (e.g., Customer#remove_domain)

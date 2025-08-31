@@ -1,5 +1,3 @@
-# try/features/relationships_performance_minimal_try.rb
-#
 # Minimal performance testing focusing on core Familia functionality
 
 require_relative '../helpers/test_helpers'
@@ -25,15 +23,12 @@ class MinimalDomain < Familia::Horreum
   class_hashkey :domain_lookup
 end
 
-# =============================================
-# 1. Basic Performance Tests
-# =============================================
+# Basic performance tests
 
 ## Create test objects
 @customer = MinimalCustomer.new(custid: 'minimal_customer', name: 'Minimal Test')
 @customer.save
 
-# Create domains for testing
 @domains = 20.times.map do |i|
   MinimalDomain.new(
     domain_id: "minimal_domain_#{i}",
@@ -41,21 +36,22 @@ end
     priority_score: i * 10
   )
 end
+@customer.nil?
+#=> false
 
 ## Measure bulk save performance
 save_time = Benchmark.realtime do
   @domains.each do |domain|
     domain.save
     # Use numeric scores for sorted sets
-    MinimalDomain.all_domains.add(domain.identifier, domain.priority_score)
+    MinimalDomain.all_domains.add(domain.priority_score.to_f, domain.identifier)
     MinimalDomain.active_domains.add(domain.identifier)
     MinimalDomain.domain_history.push(domain.identifier)
     MinimalDomain.domain_lookup[domain.display_domain] = domain.identifier
   end
 end
 
-# Should complete quickly
-save_time < 2.0
+save_time&.to_f < 2.0 # Should complete quickly
 #=> true
 
 ## Verify collections work
@@ -76,12 +72,8 @@ MinimalDomain.domain_lookup[@domains.first.display_domain]
 
 ## Test sorted set scoring
 score = MinimalDomain.all_domains.score(@domains.first.identifier)
-score == @domains.first.priority_score
+score == @domains.first.priority_score.to_f
 #=> true
-
-# =============================================
-# 2. Basic Cleanup Tests
-# =============================================
 
 ## Test removal from collections
 cleanup_time = Benchmark.realtime do
@@ -89,7 +81,7 @@ cleanup_time = Benchmark.realtime do
     domain.destroy!
     MinimalDomain.all_domains.remove(domain.identifier)
     MinimalDomain.active_domains.remove(domain.identifier)
-    MinimalDomain.domain_lookup.hdel(domain.display_domain)
+    MinimalDomain.domain_lookup.remove_field(domain.display_domain)
   end
 end
 
@@ -105,38 +97,30 @@ MinimalDomain.all_domains.size
 MinimalDomain.domain_lookup.size
 #=> 10
 
-# =============================================
-# 3. Performance Edge Cases
-# =============================================
-
 ## Test with larger dataset
-large_domains = 100.times.map do |i|
+@large_domains = 100.times.map do |i|
   MinimalDomain.new(domain_id: "large_#{i}", priority_score: i)
 end
 
 large_time = Benchmark.realtime do
-  large_domains.each do |domain|
+  @large_domains.each do |domain|
     domain.save
-    MinimalDomain.all_domains.add(domain.identifier, domain.priority_score)
+    MinimalDomain.all_domains.add(domain.priority_score.to_f, domain.identifier)
   end
 end
 
 # Should handle larger datasets
-large_time < 5.0
+large_time&.to_f < 5.0
 #=> true
 
 ## Verify large dataset
 MinimalDomain.all_domains.size >= 110  # 10 remaining + 100 new
 #=> true
 
-# =============================================
-# Cleanup
-# =============================================
-
-# Clean up all test data
+## Clean up all test data
 [@customer].each { |obj| obj.destroy! if obj&.exists? }
 @domains[10..19].each { |domain| domain.destroy! if domain&.exists? }
-large_domains.each { |domain| domain.destroy! if domain&.exists? }
+@large_domains.each { |domain| domain.destroy! if domain&.exists? }
 
 # Clear collections
 MinimalDomain.all_domains.clear rescue nil

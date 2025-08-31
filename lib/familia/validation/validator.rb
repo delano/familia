@@ -158,13 +158,23 @@ module Familia
         PerformanceAnalyzer.new(command_sequence).analyze
       end
 
+      # Capture and return Redis commands without validation
+      def capture_redis_commands(&block)
+        CommandRecorder.start_recording
+        register_middleware_if_needed
+        block.call if block_given?
+        CommandRecorder.stop_recording
+      end
+
       private
 
       def register_middleware
         return if @middleware_registered
 
-        # Register our command recording middleware
-        RedisClient.register(CommandRecorder::Middleware) if defined?(RedisClient)
+        # Register our command recording middleware using the same pattern as connection.rb
+        if defined?(RedisClient)
+          RedisClient.register(CommandRecorder::Middleware)
+        end
         @middleware_registered = true
       end
 

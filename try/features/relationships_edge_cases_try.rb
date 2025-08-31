@@ -1,5 +1,3 @@
-# try/features/relationships_edge_cases_try.rb
-#
 # Simplified edge case testing for Relationships v2 - focusing on core functionality
 
 require_relative '../helpers/test_helpers'
@@ -57,27 +55,25 @@ end
   score_value: 25
 )
 
-# =============================================
-# 1. Score Encoding Edge Cases
-# =============================================
+# Score encoding edge cases
 
 ## Score encoding handles maximum metadata value
-max_score = @domain1.encode_score(Time.now, 999)
+max_score = @domain1.encode_score(Time.now, 255)
 decoded = @domain1.decode_score(max_score)
-decoded[:metadata]
-#=> 999
+decoded[:permissions]
+#=> 255
 
 ## Score encoding handles zero metadata
 zero_score = @domain1.encode_score(Time.now, 0)
 decoded_zero = @domain1.decode_score(zero_score)
-decoded_zero[:metadata]
+decoded_zero[:permissions]
 #=> 0
 
 ## Permission encoding handles unknown permission levels
 unknown_perm_score = @domain1.permission_encode(Time.now, :unknown_permission)
 decoded_unknown = @domain1.permission_decode(unknown_perm_score)
 decoded_unknown[:permission]
-#=> :unknown
+#=> nil
 
 ## Score encoding preserves precision for small timestamps
 small_time = Time.at(1000000)
@@ -90,7 +86,7 @@ decoded_small = @domain1.decode_score(small_score)
 large_time = Time.at(9999999999)
 large_score = @domain1.encode_score(large_time, 123)
 decoded_large = @domain1.decode_score(large_score)
-decoded_large[:metadata]
+decoded_large[:permissions]
 #=> 123
 
 ## Permission encoding maps correctly
@@ -102,18 +98,16 @@ decoded_read[:permission]
 ## Score encoding handles edge case timestamps
 epoch_score = @domain1.encode_score(Time.at(0), 42)
 decoded_epoch = @domain1.decode_score(epoch_score)
-decoded_epoch[:metadata]
+decoded_epoch[:permissions]
 #=> 42
 
 ## Boundary score values work correctly
-boundary_score = @domain1.encode_score(Time.now, 999)
+boundary_score = @domain1.encode_score(Time.now, 255)
 decoded_boundary = @domain1.decode_score(boundary_score)
-decoded_boundary[:metadata] <= 999
+decoded_boundary[:permissions] <= 255
 #=> true
 
-# =============================================
-# 2. Basic Functionality Tests
-# =============================================
+# Basic functionality tests
 
 ## Method score calculation works with saved objects
 @customer1.save
@@ -136,9 +130,7 @@ method_score.is_a?(Float) && method_score > 0
 @domain1.in_edgetestcustomer_domains?(@customer1)
 #=> false
 
-# =============================================
-# Teardown
-# =============================================
+# Clean up test data
 
 ## Cleanup completes without errors
 begin

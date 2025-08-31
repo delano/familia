@@ -132,6 +132,7 @@ WorkingDomain.active_domains.size >= 55  # Should have removed 5
 # =============================================
 
 # Clean up all test data
+## Clean up domain objects
 @domains[5..9].each { |domain| domain.destroy! if domain&.exists? }
 
 # Clear collections

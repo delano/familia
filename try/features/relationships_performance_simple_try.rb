@@ -142,6 +142,7 @@ SimplePerfDomain.domain_lookup.size
 # =============================================
 
 # Clean up test data
+## Clean up customer objects
 [@customer].each { |obj| obj.destroy! if obj&.exists? }
 @domains[10..19].each { |domain| domain.destroy! if domain&.exists? }
 

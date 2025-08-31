@@ -1,7 +1,9 @@
-# try/validation/atomic_operations_try.rb
+# Validation testing for atomic operations and transaction boundaries
 
 require_relative '../helpers/test_helpers'
 require_relative '../../lib/familia/validation'
+
+extend Familia::Validation::TestHelpers
 
 # Test models for atomic validation
 class AtomicTestAccount < Familia::Horreum
@@ -54,13 +56,15 @@ end
 extend Familia::Validation::TestHelpers
 setup_validation_test
 
-# Clean up any existing test data
+## Clean up any existing test data
 cleanup_keys = Familia.dbclient.keys("atomictestaccount:*")
 cleanup_keys.concat(Familia.dbclient.keys("atomictestcounter:*"))
 Familia.dbclient.del(*cleanup_keys) if cleanup_keys.any?
+true
+#=> true
 
 ## Transaction expectations validate MULTI/EXEC boundaries
-validator = Validator.new
+validator = Familia::Validation::Validator.new
 result = validator.validate do |expect|
   expect.transaction do |tx|
     tx.hset("atomictestaccount:acc1:object", "balance", "900")
@@ -79,7 +83,7 @@ result.valid?
 #=> true
 
 ## Non-atomic operations should fail strict atomicity validation
-validator = Validator.new(strict_atomicity: true)
+validator = Familia::Validation::Validator.new(strict_atomicity: true)
 result = validator.validate do |expect|
   expect.transaction do |tx|
     tx.hset("atomictestaccount:acc3:object", "balance", "800")
@@ -132,77 +136,77 @@ result
 
 ## Transaction validation detects missing MULTI command
 commands = []
-commands << CommandRecorder::RecordedCommand.new(
+commands << Familia::Validation::CommandRecorder::RecordedCommand.new(
   command: "HSET", args: ["key", "field", "value"],
   result: "OK", timestamp: Time.now, duration_us: 100
 )
-commands << CommandRecorder::RecordedCommand.new(
+commands << Familia::Validation::CommandRecorder::RecordedCommand.new(
   command: "EXEC", args: [],
   result: ["OK"], timestamp: Time.now, duration_us: 50
 )
 
-sequence = CommandRecorder::CommandSequence.new
+sequence = Familia::Validation::CommandRecorder::CommandSequence.new
 commands.each { |cmd| sequence.add_command(cmd) }
 
-atomicity_validator = AtomicityValidator.new(sequence)
+atomicity_validator = Familia::Validation::AtomicityValidator.new(sequence)
 result = atomicity_validator.validate
 result.valid?
 #=> false
 
 ## Transaction validation detects missing EXEC command
 commands = []
-commands << CommandRecorder::RecordedCommand.new(
+commands << Familia::Validation::CommandRecorder::RecordedCommand.new(
   command: "MULTI", args: [],
   result: "OK", timestamp: Time.now, duration_us: 100
 )
-commands << CommandRecorder::RecordedCommand.new(
+commands << Familia::Validation::CommandRecorder::RecordedCommand.new(
   command: "HSET", args: ["key", "field", "value"],
   result: "QUEUED", timestamp: Time.now, duration_us: 50
 )
 
-sequence = CommandRecorder::CommandSequence.new
+sequence = Familia::Validation::CommandRecorder::CommandSequence.new
 commands.each { |cmd| sequence.add_command(cmd) }
 
-atomicity_validator = AtomicityValidator.new(sequence)
+atomicity_validator = Familia::Validation::AtomicityValidator.new(sequence)
 result = atomicity_validator.validate
 result.valid?
 #=> false
 
 ## Proper transaction structure passes validation
 commands = []
-commands << CommandRecorder::RecordedCommand.new(
+commands << Familia::Validation::CommandRecorder::RecordedCommand.new(
   command: "MULTI", args: [],
   result: "OK", timestamp: Time.now, duration_us: 100,
   context: { transaction: false }
 )
-commands << CommandRecorder::RecordedCommand.new(
+commands << Familia::Validation::CommandRecorder::RecordedCommand.new(
   command: "HSET", args: ["key", "field", "value"],
   result: "QUEUED", timestamp: Time.now, duration_us: 50,
   context: { transaction: true }
 )
-commands << CommandRecorder::RecordedCommand.new(
+commands << Familia::Validation::CommandRecorder::RecordedCommand.new(
   command: "INCR", args: ["counter"],
   result: "QUEUED", timestamp: Time.now, duration_us: 30,
   context: { transaction: true }
 )
-commands << CommandRecorder::RecordedCommand.new(
+commands << Familia::Validation::CommandRecorder::RecordedCommand.new(
   command: "EXEC", args: [],
   result: [1, 1], timestamp: Time.now, duration_us: 200,
   context: { transaction: false }
 )
 
-sequence = CommandRecorder::CommandSequence.new
+sequence = Familia::Validation::CommandRecorder::CommandSequence.new
 sequence.start_transaction
 commands.each { |cmd| sequence.add_command(cmd) }
 sequence.end_transaction
 
-atomicity_validator = AtomicityValidator.new(sequence)
+atomicity_validator = Familia::Validation::AtomicityValidator.new(sequence)
 result = atomicity_validator.validate
 result.valid?
 #=> true
 
 ## batch_update operations should be atomic
-validator = Validator.new
+validator = Familia::Validation::Validator.new
 result = validator.validate do |expect|
   expect.transaction do |tx|
     tx.hset("atomictestaccount:batch1:object", "balance", "1500")
@@ -221,46 +225,46 @@ result.valid?
 ## Nested transaction detection works
 commands = []
 # Invalid nested transaction
-commands << CommandRecorder::RecordedCommand.new(
+commands << Familia::Validation::CommandRecorder::RecordedCommand.new(
   command: "MULTI", args: [], result: "OK",
   timestamp: Time.now, duration_us: 100
 )
-commands << CommandRecorder::RecordedCommand.new(
+commands << Familia::Validation::CommandRecorder::RecordedCommand.new(
   command: "MULTI", args: [], result: "ERR",
   timestamp: Time.now, duration_us: 50
 )
 
-sequence = CommandRecorder::CommandSequence.new
+sequence = Familia::Validation::CommandRecorder::CommandSequence.new
 commands.each { |cmd| sequence.add_command(cmd) }
 
-atomicity_validator = AtomicityValidator.new(sequence)
+atomicity_validator = Familia::Validation::AtomicityValidator.new(sequence)
 result = atomicity_validator.validate
 result.valid?
 #=> false
 
 ## Empty transaction detection
 commands = []
-commands << CommandRecorder::RecordedCommand.new(
+commands << Familia::Validation::CommandRecorder::RecordedCommand.new(
   command: "MULTI", args: [], result: "OK",
   timestamp: Time.now, duration_us: 100
 )
-commands << CommandRecorder::RecordedCommand.new(
+commands << Familia::Validation::CommandRecorder::RecordedCommand.new(
   command: "EXEC", args: [], result: [],
   timestamp: Time.now, duration_us: 50
 )
 
-sequence = CommandRecorder::CommandSequence.new
+sequence = Familia::Validation::CommandRecorder::CommandSequence.new
 sequence.start_transaction
 commands.each { |cmd| sequence.add_command(cmd) }
 sequence.end_transaction
 
-result = AtomicityValidator.new(sequence).validate
+result = Familia::Validation::AtomicityValidator.new(sequence).validate
 # Should be valid but with warning about empty transaction
 result.valid? && result.warning_messages.any?
 #=> true
 
 ## Real Familia transaction usage validates correctly
-validator = Validator.new
+validator = Familia::Validation::Validator.new
 result = validator.validate do |expect|
   expect.transaction do |tx|
     tx.hset("atomictestcounter:familia_tx:object", "value", "10")
@@ -278,7 +282,7 @@ result.valid?
 #=> true
 
 ## Multiple transactions in sequence validate correctly
-validator = Validator.new
+validator = Familia::Validation::Validator.new
 result = validator.validate do |expect|
   expect.transaction do |tx|
     tx.hset("atomictestcounter:multi_tx_1:object", "value", "5")
@@ -305,10 +309,12 @@ end
 result.valid?
 #=> true
 
-# Cleanup
+## Cleanup test environment
 teardown_validation_test
 
-# Clean up test data
+## Clean up test data
 cleanup_keys = Familia.dbclient.keys("atomictestaccount:*")
 cleanup_keys.concat(Familia.dbclient.keys("atomictestcounter:*"))
 Familia.dbclient.del(*cleanup_keys) if cleanup_keys.any?
+true
+#=> true

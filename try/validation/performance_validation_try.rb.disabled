@@ -1,7 +1,12 @@
-# try/validation/performance_validation_try.rb
+# Validation testing for performance analysis and optimization detection
 
 require_relative '../helpers/test_helpers'
 require_relative '../../lib/familia/validation'
+
+extend Familia::Validation::TestHelpers
+
+# Initialize validation framework
+setup_validation_test
 
 # Test models for performance validation
 class PerformanceTestUser < Familia::Horreum
@@ -41,18 +46,20 @@ end
 extend Familia::Validation::TestHelpers
 setup_validation_test
 
-# Clean up existing test data
+## Clean up existing test data
 cleanup_keys = Familia.dbclient.keys("performancetest*")
 Familia.dbclient.del(*cleanup_keys) if cleanup_keys.any?
+true
+#=> true
 
 ## Performance analysis captures timing information
-validator = Validator.new(performance_tracking: true)
+validator = Familia::Validation::Validator.new(performance_tracking: true)
 commands = validator.capture_redis_commands do
   user = PerformanceTestUser.new(user_id: "perf1", name: "Performance Test", email: "perf@test.com")
   user.save
-  user.activities.lpush("activity1", "activity2", "activity3")
-  user.tags.sadd("tag1", "tag2")
-  user.scores.zadd(100, "score1")
+  user.activities.unshift("activity1", "activity2", "activity3")
+  user.tags.add("tag1", "tag2")
+  user.scores.add(100, "score1")
 end
 
 analysis = validator.analyze_performance(commands)
@@ -60,13 +67,13 @@ analysis[:total_commands] > 0 && analysis[:total_duration_ms] >= 0
 #=> true
 
 ## Performance analysis detects command type breakdown
-validator = Validator.new(performance_tracking: true)
+validator = Familia::Validation::Validator.new(performance_tracking: true)
 commands = validator.capture_redis_commands do
   user = PerformanceTestUser.new(user_id: "perf2", name: "Test User")
   user.save  # Hash operations
-  user.activities.lpush("item")  # List operation
-  user.tags.sadd("tag")  # Set operation
-  user.scores.zadd(50, "score")  # Sorted set operation
+  user.activities.unshift("item")  # List operation
+  user.tags.add("tag")  # Set operation
+  user.scores.add(50, "score")  # Sorted set operation
 end
 
 analysis = validator.analyze_performance(commands)
@@ -105,7 +112,7 @@ begin
     end
   end
   false  # Should not reach here
-rescue ValidationError
+rescue Familia::Validation::ValidationError
   true   # Expected - N+1 pattern detected
 end
 #=> true
@@ -115,19 +122,19 @@ assert_efficient_commands do
   # Single user operation - no N+1 pattern
   user = PerformanceTestUser.new(user_id: "efficient1", name: "Efficient User")
   user.save
-  user.activities.lpush("single_activity")
+  user.activities.unshift("single_activity")
 end
 #=> true
 
 ## Performance metrics include slowest commands
-validator = Validator.new(performance_tracking: true)
+validator = Familia::Validation::Validator.new(performance_tracking: true)
 commands = validator.capture_redis_commands do
   # Create operations of varying complexity
   user = PerformanceTestUser.new(user_id: "slow_test", name: "Slow Test")
   user.save
 
   # Multiple list operations (potentially slower)
-  (1..10).each { |i| user.activities.lpush("item#{i}") }
+  (1..10).each { |i| user.activities.unshift("item#{i}") }
 end
 
 analysis = validator.analyze_performance(commands)
@@ -135,7 +142,7 @@ analysis[:slowest_commands].length > 0
 #=> true
 
 ## Transaction efficiency is calculated correctly
-validator = Validator.new(performance_tracking: true)
+validator = Familia::Validation::Validator.new(performance_tracking: true)
 commands = validator.capture_redis_commands do
   user = PerformanceTestUser.new(user_id: "tx_test", name: "Transaction Test")
   user.save
@@ -154,13 +161,13 @@ efficiency[:score] > 0 && efficiency[:details].include?("transaction")
 #=> true
 
 ## Empty command sequence analysis handles gracefully
-empty_commands = CommandRecorder::CommandSequence.new
-analysis = PerformanceAnalyzer.new(empty_commands).analyze
+empty_commands = Familia::Validation::CommandRecorder::CommandSequence.new
+analysis = Familia::Validation::PerformanceAnalyzer.new(empty_commands).analyze
 analysis[:total_commands] == 0 && analysis[:efficiency_score] >= 0
 #=> true
 
 ## Performance analysis identifies potential batching opportunities
-validator = Validator.new(performance_tracking: true)
+validator = Familia::Validation::Validator.new(performance_tracking: true)
 commands = validator.capture_redis_commands do
   # Multiple similar operations that could be batched
   user = PerformanceTestUser.new(user_id: "batch_test")
@@ -178,11 +185,11 @@ n_plus_one_patterns.any? { |pattern| pattern[:command] == "HSET" }
 #=> true
 
 ## Command sequence metadata is accurate
-validator = Validator.new
+validator = Familia::Validation::Validator.new
 commands = validator.capture_redis_commands do
   user = PerformanceTestUser.new(user_id: "meta_test", name: "Metadata Test")
   user.save
-  user.activities.lpush("test_activity")
+  user.activities.unshift("test_activity")
 
   Familia.transaction do |conn|
     conn.hset(user.dbkey, "status", "verified")
@@ -191,14 +198,14 @@ commands = validator.capture_redis_commands do
 end
 
 [
-  commands.command_count > 0,
-  commands.transaction_count == 1,
-  commands.transaction_blocks.first.command_count == 2
+  commands&.command_count.to_i > 0,
+  commands&.transaction_count.to_i == 1,
+  commands&.transaction_blocks&.first&.command_count.to_i == 2
 ]
 #=> [true, true, true]
 
 ## Recorded commands contain proper context information
-validator = Validator.new
+validator = Familia::Validation::Validator.new
 commands = validator.capture_redis_commands do
   user = PerformanceTestUser.new(user_id: "context_test")
   user.save
@@ -220,16 +227,16 @@ begin
     # This will likely exceed 1ms
     user = PerformanceTestUser.new(user_id: "timeout_test", name: "Timeout Test")
     user.save
-    (1..10).each { |i| user.activities.lpush("item#{i}") }
+    (1..10).each { |i| user.activities.unshift("item#{i}") }
   end
   false  # Should not reach here
-rescue ValidationError => e
+rescue Familia::Validation::ValidationError => e
   e.message.include?("took") && e.message.include?("expected less than")
 end
 #=> true
 
 ## Efficiency score calculation includes multiple factors
-validator = Validator.new(performance_tracking: true)
+validator = Familia::Validation::Validator.new(performance_tracking: true)
 
 # Inefficient pattern - lots of individual operations
 commands_inefficient = validator.capture_redis_commands do
@@ -261,18 +268,18 @@ analysis_efficient[:efficiency_score] > analysis_inefficient[:efficiency_score]
 #=> true
 
 ## Command duration tracking works
-validator = Validator.new
+validator = Familia::Validation::Validator.new
 commands = validator.capture_redis_commands do
   user = PerformanceTestUser.new(user_id: "duration_test", name: "Duration Test")
   user.save
 end
 
-first_command = commands.commands.first
-first_command.duration_us >= 0 && first_command.timestamp.is_a?(Time)
+first_command = commands&.commands&.first
+first_command&.duration_us.to_i >= 0 && first_command&.timestamp.is_a?(Time)
 #=> true
 
 ## Transaction boundaries are properly detected in complex scenarios
-validator = Validator.new
+validator = Familia::Validation::Validator.new
 commands = validator.capture_redis_commands do
   user1 = PerformanceTestUser.new(user_id: "complex1", name: "Complex 1")
   user2 = PerformanceTestUser.new(user_id: "complex2", name: "Complex 2")
@@ -289,27 +296,29 @@ commands = validator.capture_redis_commands do
   end
 
   # More non-atomic operations
-  user1.activities.lpush("logged_in")
-  user2.activities.lpush("logged_in")
+  user1.activities.unshift("logged_in")
+  user2.activities.unshift("logged_in")
 end
 
 atomic_commands = commands.commands.select(&:atomic_command?)
 non_atomic_commands = commands.commands.reject(&:atomic_command?)
 
 [
-  commands.transaction_count == 1,
-  commands.transaction_blocks.first.command_count == 3,
-  atomic_commands.length == 3,
-  non_atomic_commands.length > 3
+  commands&.transaction_count.to_i == 1,
+  commands&.transaction_blocks&.first&.command_count.to_i == 3,
+  atomic_commands&.length.to_i == 3,
+  non_atomic_commands&.length.to_i > 3
 ]
 #=> [true, true, true, true]
 
-# Cleanup
+## Cleanup test environment
 teardown_validation_test
 
-# Clean up test data
+## Clean up test data
 cleanup_keys = Familia.dbclient.keys("performancetest*")
 cleanup_keys.concat(Familia.dbclient.keys("test:key*"))
 cleanup_keys.concat(Familia.dbclient.keys("meta_counter"))
 cleanup_keys.concat(Familia.dbclient.keys("active_user_count"))
 Familia.dbclient.del(*cleanup_keys) if cleanup_keys.any?
+true
+#=> true

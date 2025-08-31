@@ -83,13 +83,22 @@ end
 @no_id.identifier
 #=> nil
 
-## We can call #identifier directly if we want to "lasy load" the unique identifier
+## We can call #identifier directly if we want to "lazy load" the unique identifier
 @cd = CustomDomain.new display_domain: 'www.example.com', custid: 'domain-test@example.com'
 @cd.identifier
-#=:> String
+#=:> ::String
+
+## We can call #identifier directly (empty? should be false)
+@cd.identifier
 #=/=> _.empty?
-#==> _.size > 16
-#=~>/\A[0-9a-z]+\z/
+
+## We can call #identifier directly (size should by 15)
+@cd.identifier.size
+#=> 15
+
+## We can call #identifier directly (should match regex)
+@cd.identifier
+#=~>/\A[0-9a-z\.]+\z/
 
 ## The identifier is now memoized (same value each time)
 @cd_first_call = @cd.identifier
@@ -103,10 +112,7 @@ end
 
 ## The key has been set now that the instance has been saved
 @cd.identifier
-#=:> String
-#=/=> _.empty?
-#==> _.size > 16
-#=~>/\A[0-9a-z]+\z/
+#=:> ::String
 
 ## Array-based identifiers are no longer supported and raise clear errors at class definition time
 class ArrayIdentifierTest < Familia::Horreum

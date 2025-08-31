@@ -396,6 +396,7 @@ index_size == 25  # Should have 25 remaining after deleting 25
 # =============================================
 
 # Clean up performance test data
+## Clean up customer objects
 [@customer].each { |obj| obj.destroy! if obj&.exists? }
 @domains[25..49].each { |domain| domain.destroy! if domain&.exists? }
 

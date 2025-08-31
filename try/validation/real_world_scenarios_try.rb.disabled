@@ -1,4 +1,4 @@
-# try/validation/real_world_scenarios_try.rb
+# Real-world validation scenarios testing complex application workflows
 
 require_relative '../helpers/test_helpers'
 require_relative '../../lib/familia/validation'
@@ -119,11 +119,13 @@ end
 extend Familia::Validation::TestHelpers
 setup_validation_test
 
-# Clean up existing test data
+## Clean up existing test data
 cleanup_keys = Familia.dbclient.keys("user:*")
 cleanup_keys.concat(Familia.dbclient.keys("blogpost:*"))
 cleanup_keys.concat(Familia.dbclient.keys("session:*"))
 Familia.dbclient.del(*cleanup_keys) if cleanup_keys.any?
+true
+#=> true
 
 ## Real-world user creation scenario validates correctly
 assert_atomic_operation do |expect|
@@ -227,7 +229,7 @@ end
 #=> true
 
 ## Performance analysis on real-world operations shows efficiency
-validator = Validator.new(performance_tracking: true)
+validator = Familia::Validation::Validator.new(performance_tracking: true)
 commands = validator.capture_redis_commands do
   # Simulate real application load
   users = []
@@ -279,18 +281,20 @@ assert_list_operation(user, :activity_log, :lpush, "test_activity") do
 end
 #=> true
 
+## Test set operation validation
 assert_set_operation(user, :permissions, :sadd, "admin") do
   # This should execute: SADD user:data_test:permissions admin
 end
 #=> true
 
+## Test sorted set operation validation
 assert_sorted_set_operation(user, :scores, :zadd, 100, "test_score") do
   # This should execute: ZADD user:data_test:scores 100 test_score
 end
 #=> true
 
 ## Mixed atomic and non-atomic operations are properly categorized
-validator = Validator.new(strict_atomicity: true)
+validator = Familia::Validation::Validator.new(strict_atomicity: true)
 commands = validator.capture_redis_commands do
   user = User.new(user_id: "mixed_test", username: "mixed")
 
@@ -301,7 +305,7 @@ commands = validator.capture_redis_commands do
   user.batch_update(status: "active", last_login: Time.now.to_i.to_s)
 
   # Non-atomic operation
-  user.activity_log.lpush("status_updated")
+  user.activity_log.unshift("status_updated")
 end
 
 atomic_count = commands.commands.count(&:atomic_command?)
@@ -311,7 +315,7 @@ non_atomic_count = commands.commands.count { |cmd| !cmd.atomic_command? }
 #=> [true, true]
 
 ## Edge case: Empty transaction is detected but doesn't fail validation
-validator = Validator.new
+validator = Familia::Validation::Validator.new
 result = validator.validate do |expect|
   expect.transaction do |tx|
     # Empty transaction expectation
@@ -327,7 +331,7 @@ result.valid? && result.warning_messages.any?
 #=> true
 
 ## Error scenarios are properly handled and reported
-validator = Validator.new
+validator = Familia::Validation::Validator.new
 result = validator.validate do |expect|
   expect.hset("wrong:key", "field", "value")  # Wrong expectation
 
@@ -344,7 +348,7 @@ end
 #=> [true, true, true]
 
 ## Flexible matching works for dynamic scenarios
-validator = Validator.new
+validator = Familia::Validation::Validator.new
 result = validator.validate do |expect|
   expect.strict_order(false)
         .allow_extra_commands(true)
@@ -366,7 +370,7 @@ result.valid?
 commands = capture_redis_commands do
   user = User.new(user_id: "debug_test", username: "debugger")
   user.save
-  user.permissions.sadd("debug")
+  user.permissions.add("debug")
 end
 
 # These should not raise errors and should provide useful output
@@ -374,11 +378,13 @@ debug_commands = commands.commands.map(&:to_s)
 debug_commands.length > 0 && debug_commands.all? { |cmd| cmd.is_a?(String) }
 #=> true
 
-# Cleanup
+## Cleanup test environment
 teardown_validation_test
 
-# Clean up test data
+## Clean up test data
 cleanup_keys = Familia.dbclient.keys("user:*")
 cleanup_keys.concat(Familia.dbclient.keys("blogpost:*"))
 cleanup_keys.concat(Familia.dbclient.keys("session:*"))
 Familia.dbclient.del(*cleanup_keys) if cleanup_keys.any?
+true
+#=> true

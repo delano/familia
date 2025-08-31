@@ -101,10 +101,12 @@ module Familia
             time_part = score.to_i
             permission_bits = ((score - time_part) * METADATA_PRECISION).round
 
+            permission_list = decode_permission_flags(permission_bits)
             {
               timestamp: time_part,
               permissions: permission_bits,
-              permission_list: decode_permission_flags(permission_bits)
+              permission_list: permission_list,
+              permission: permission_list.length == 1 ? permission_list.first : nil
             }
           end
 
@@ -277,6 +279,10 @@ module Familia
         def score_range(start_time = nil, end_time = nil, min_permissions: nil)
           ScoreEncoding.score_range(start_time, end_time, min_permissions: min_permissions)
         end
+
+        # Aliases for backward compatibility with tests
+        alias_method :permission_encode, :encode_score
+        alias_method :permission_decode, :decode_score
       end
     end
   end
