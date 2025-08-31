@@ -1,0 +1,320 @@
+# Validation testing for atomic operations and transaction boundaries
+
+require_relative '../helpers/test_helpers'
+require_relative '../../lib/familia/validation'
+
+extend Familia::Validation::TestHelpers
+
+# Test models for atomic validation
+class AtomicTestAccount < Familia::Horreum
+  identifier_field :account_id
+  field :account_id
+  field :balance
+  field :status
+
+  def transfer_to(target_account, amount)
+    # This should be atomic - but let's test both atomic and non-atomic versions
+    new_balance = balance.to_i - amount.to_i
+    target_new_balance = target_account.balance.to_i + amount.to_i
+
+    # Non-atomic version (should fail validation)
+    self.balance = new_balance.to_s
+    target_account.balance = target_new_balance.to_s
+    save
+    target_account.save
+  end
+
+  def atomic_transfer_to(target_account, amount)
+    # Proper atomic version using transaction
+    new_balance = balance.to_i - amount.to_i
+    target_new_balance = target_account.balance.to_i + amount.to_i
+
+    transaction do |conn|
+      conn.hset(dbkey, 'balance', new_balance.to_s)
+      conn.hset(target_account.dbkey, 'balance', target_new_balance.to_s)
+    end
+
+    # Update local state
+    self.balance = new_balance.to_s
+    target_account.balance = target_new_balance.to_s
+  end
+end
+
+class AtomicTestCounter < Familia::Horreum
+  identifier_field :name
+  field :name
+  field :value
+
+  def increment_by(amount)
+    transaction do |conn|
+      conn.hincrby(dbkey, 'value', amount)
+    end
+    self.value = (value.to_i + amount).to_s
+  end
+end
+
+extend Familia::Validation::TestHelpers
+setup_validation_test
+
+## Clean up any existing test data
+cleanup_keys = Familia.dbclient.keys("atomictestaccount:*")
+cleanup_keys.concat(Familia.dbclient.keys("atomictestcounter:*"))
+Familia.dbclient.del(*cleanup_keys) if cleanup_keys.any?
+true
+#=> true
+
+## Transaction expectations validate MULTI/EXEC boundaries
+validator = Familia::Validation::Validator.new
+result = validator.validate do |expect|
+  expect.transaction do |tx|
+    tx.hset("atomictestaccount:acc1:object", "balance", "900")
+      .hset("atomictestaccount:acc2:object", "balance", "1100")
+  end
+
+  # Execute atomic transfer
+  acc1 = AtomicTestAccount.new(account_id: "acc1", balance: "1000")
+  acc2 = AtomicTestAccount.new(account_id: "acc2", balance: "1000")
+  acc1.save
+  acc2.save
+
+  acc1.atomic_transfer_to(acc2, 100)
+end
+result.valid?
+#=> true
+
+## Non-atomic operations should fail strict atomicity validation
+validator = Familia::Validation::Validator.new(strict_atomicity: true)
+result = validator.validate do |expect|
+  expect.transaction do |tx|
+    tx.hset("atomictestaccount:acc3:object", "balance", "800")
+      .hset("atomictestaccount:acc4:object", "balance", "1200")
+  end
+
+  # This will NOT use transaction, so should fail
+  acc3 = AtomicTestAccount.new(account_id: "acc3", balance: "1000")
+  acc4 = AtomicTestAccount.new(account_id: "acc4", balance: "1000")
+  acc3.save
+  acc4.save
+
+  acc3.transfer_to(acc4, 200)  # Non-atomic version
+end
+result.valid?
+#=> false
+
+## assert_atomic_operation helper works correctly
+account_a = AtomicTestAccount.new(account_id: "acc5", balance: "2000")
+account_b = AtomicTestAccount.new(account_id: "acc6", balance: "500")
+account_a.save
+account_b.save
+
+assert_atomic_operation do |expect|
+  expect.transaction do |tx|
+    tx.hset("atomictestaccount:acc5:object", "balance", "1500")
+      .hset("atomictestaccount:acc6:object", "balance", "1000")
+  end
+
+  account_a.atomic_transfer_to(account_b, 500)
+end
+#=> true
+
+## assert_transaction_used helper works
+result = assert_transaction_used do
+  counter = AtomicTestCounter.new(name: "test_counter", value: "0")
+  counter.save
+  counter.increment_by(5)
+end
+result
+#=> true
+
+## assert_no_transaction_used helper works
+result = assert_no_transaction_used do
+  simple_account = AtomicTestAccount.new(account_id: "simple", balance: "100")
+  simple_account.save  # Just a save, no transaction needed
+end
+result
+#=> true
+
+## Transaction validation detects missing MULTI command
+commands = []
+commands << Familia::Validation::CommandRecorder::RecordedCommand.new(
+  command: "HSET", args: ["key", "field", "value"],
+  result: "OK", timestamp: Time.now, duration_us: 100
+)
+commands << Familia::Validation::CommandRecorder::RecordedCommand.new(
+  command: "EXEC", args: [],
+  result: ["OK"], timestamp: Time.now, duration_us: 50
+)
+
+sequence = Familia::Validation::CommandRecorder::CommandSequence.new
+commands.each { |cmd| sequence.add_command(cmd) }
+
+atomicity_validator = Familia::Validation::AtomicityValidator.new(sequence)
+result = atomicity_validator.validate
+result.valid?
+#=> false
+
+## Transaction validation detects missing EXEC command
+commands = []
+commands << Familia::Validation::CommandRecorder::RecordedCommand.new(
+  command: "MULTI", args: [],
+  result: "OK", timestamp: Time.now, duration_us: 100
+)
+commands << Familia::Validation::CommandRecorder::RecordedCommand.new(
+  command: "HSET", args: ["key", "field", "value"],
+  result: "QUEUED", timestamp: Time.now, duration_us: 50
+)
+
+sequence = Familia::Validation::CommandRecorder::CommandSequence.new
+commands.each { |cmd| sequence.add_command(cmd) }
+
+atomicity_validator = Familia::Validation::AtomicityValidator.new(sequence)
+result = atomicity_validator.validate
+result.valid?
+#=> false
+
+## Proper transaction structure passes validation
+commands = []
+commands << Familia::Validation::CommandRecorder::RecordedCommand.new(
+  command: "MULTI", args: [],
+  result: "OK", timestamp: Time.now, duration_us: 100,
+  context: { transaction: false }
+)
+commands << Familia::Validation::CommandRecorder::RecordedCommand.new(
+  command: "HSET", args: ["key", "field", "value"],
+  result: "QUEUED", timestamp: Time.now, duration_us: 50,
+  context: { transaction: true }
+)
+commands << Familia::Validation::CommandRecorder::RecordedCommand.new(
+  command: "INCR", args: ["counter"],
+  result: "QUEUED", timestamp: Time.now, duration_us: 30,
+  context: { transaction: true }
+)
+commands << Familia::Validation::CommandRecorder::RecordedCommand.new(
+  command: "EXEC", args: [],
+  result: [1, 1], timestamp: Time.now, duration_us: 200,
+  context: { transaction: false }
+)
+
+sequence = Familia::Validation::CommandRecorder::CommandSequence.new
+sequence.start_transaction
+commands.each { |cmd| sequence.add_command(cmd) }
+sequence.end_transaction
+
+atomicity_validator = Familia::Validation::AtomicityValidator.new(sequence)
+result = atomicity_validator.validate
+result.valid?
+#=> true
+
+## batch_update operations should be atomic
+validator = Familia::Validation::Validator.new
+result = validator.validate do |expect|
+  expect.transaction do |tx|
+    tx.hset("atomictestaccount:batch1:object", "balance", "1500")
+      .hset("atomictestaccount:batch1:object", "status", "active")
+  end
+
+  account = AtomicTestAccount.new(account_id: "batch1", balance: "1000", status: "pending")
+  account.save
+
+  # batch_update should use transaction internally
+  account.batch_update(balance: "1500", status: "active")
+end
+result.valid?
+#=> true
+
+## Nested transaction detection works
+commands = []
+# Invalid nested transaction
+commands << Familia::Validation::CommandRecorder::RecordedCommand.new(
+  command: "MULTI", args: [], result: "OK",
+  timestamp: Time.now, duration_us: 100
+)
+commands << Familia::Validation::CommandRecorder::RecordedCommand.new(
+  command: "MULTI", args: [], result: "ERR",
+  timestamp: Time.now, duration_us: 50
+)
+
+sequence = Familia::Validation::CommandRecorder::CommandSequence.new
+commands.each { |cmd| sequence.add_command(cmd) }
+
+atomicity_validator = Familia::Validation::AtomicityValidator.new(sequence)
+result = atomicity_validator.validate
+result.valid?
+#=> false
+
+## Empty transaction detection
+commands = []
+commands << Familia::Validation::CommandRecorder::RecordedCommand.new(
+  command: "MULTI", args: [], result: "OK",
+  timestamp: Time.now, duration_us: 100
+)
+commands << Familia::Validation::CommandRecorder::RecordedCommand.new(
+  command: "EXEC", args: [], result: [],
+  timestamp: Time.now, duration_us: 50
+)
+
+sequence = Familia::Validation::CommandRecorder::CommandSequence.new
+sequence.start_transaction
+commands.each { |cmd| sequence.add_command(cmd) }
+sequence.end_transaction
+
+result = Familia::Validation::AtomicityValidator.new(sequence).validate
+# Should be valid but with warning about empty transaction
+result.valid? && result.warning_messages.any?
+#=> true
+
+## Real Familia transaction usage validates correctly
+validator = Familia::Validation::Validator.new
+result = validator.validate do |expect|
+  expect.transaction do |tx|
+    tx.hset("atomictestcounter:familia_tx:object", "value", "10")
+  end
+
+  counter = AtomicTestCounter.new(name: "familia_tx", value: "5")
+  counter.save
+
+  # Use Familia.transaction directly
+  Familia.transaction do |conn|
+    conn.hset(counter.dbkey, "value", "10")
+  end
+end
+result.valid?
+#=> true
+
+## Multiple transactions in sequence validate correctly
+validator = Familia::Validation::Validator.new
+result = validator.validate do |expect|
+  expect.transaction do |tx|
+    tx.hset("atomictestcounter:multi_tx_1:object", "value", "5")
+  end
+
+  expect.transaction do |tx|
+    tx.hset("atomictestcounter:multi_tx_2:object", "value", "10")
+  end
+
+  counter1 = AtomicTestCounter.new(name: "multi_tx_1", value: "0")
+  counter2 = AtomicTestCounter.new(name: "multi_tx_2", value: "0")
+  counter1.save
+  counter2.save
+
+  # Two separate transactions
+  Familia.transaction do |conn|
+    conn.hset(counter1.dbkey, "value", "5")
+  end
+
+  Familia.transaction do |conn|
+    conn.hset(counter2.dbkey, "value", "10")
+  end
+end
+result.valid?
+#=> true
+
+## Cleanup test environment
+teardown_validation_test
+
+## Clean up test data
+cleanup_keys = Familia.dbclient.keys("atomictestaccount:*")
+cleanup_keys.concat(Familia.dbclient.keys("atomictestcounter:*"))
+Familia.dbclient.del(*cleanup_keys) if cleanup_keys.any?
+true
+#=> true

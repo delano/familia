@@ -39,6 +39,7 @@ end
 #=:> BadIdentifierTest
 
 # Test polymorphic string usage for Familia objects
+## Customer creation with string coercion
 @customer = Customer.new(@customer_id)
 @customer.name = 'John Doe'
 @customer.planid = 'premium'
@@ -86,6 +87,7 @@ session
 @session.to_s
 #=<> @session_id
 
+## Test lookup by ID functionality
 lookup_by_id(@customer)
 #=> @customer_id.upcase
 

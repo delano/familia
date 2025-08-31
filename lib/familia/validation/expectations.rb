@@ -256,8 +256,8 @@ module Familia
         next unless method.to_s.match?(/^[a-z]/)
 
         define_method(method) do |*args|
-          CommandExpectations.new.send(method, *args)
-          add_expectation(CommandExpectation.new(method.to_s, args))
+          # Ensure command name is normalized to uppercase for matching
+          add_expectation(CommandExpectation.new(method.to_s.upcase, args))
         end
       end
 
@@ -301,7 +301,17 @@ module Familia
     # Pipeline expectation block (similar to transaction but for pipelines)
     class PipelineExpectation < TransactionExpectation
       def validate_pipeline(pipeline_block)
-        validate_flexible_order(pipeline_block.commands)
+        expected_count = @expected_commands.length
+        actual_count = pipeline_block.command_count
+
+        return false if @options[:exact_match] && expected_count != actual_count
+        return false if expected_count > actual_count
+
+        if @options[:strict_order]
+          validate_strict_order(pipeline_block.commands)
+        else
+          validate_flexible_order(pipeline_block.commands)
+        end
       end
     end
 

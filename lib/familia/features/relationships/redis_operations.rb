@@ -19,9 +19,9 @@ module Familia
         #     tx.hset("domain_index", domain_name, domain_id)
         #   end
         def atomic_operation(redis = nil)
-          redis ||= self.class.dbclient
+          redis ||= redis_connection
 
-          dbclient.multi do |tx|
+          redis.multi do |tx|
             yield tx if block_given?
           end
         end
@@ -79,8 +79,7 @@ module Familia
         def set_operation(operation, destination, source_keys, weights: nil, aggregate: :sum, ttl: nil)
           return 0 if source_keys.empty?
 
-          redis = self.class.dbclient
-          0
+          redis = redis_connection
 
           atomic_operation(redis) do |tx|
             case operation
@@ -97,15 +96,12 @@ module Familia
                 tx.zinterstore(destination, source_keys, aggregate: aggregate)
               end
             when :difference
-              # Redis doesn't have ZDIFFSTORE until Redis 6.2, so we simulate it
-              # First copy the first set, then remove elements from other sets
               first_key = source_keys.first
-              other_keys = source_keys[1..]
+              other_keys = source_keys[1..] || []
 
               tx.zunionstore(destination, [first_key])
               other_keys.each do |key|
-                # Get members of this set and remove them from destination
-                members = dbclient.zrange(key, 0, -1)
+                members = redis.zrange(key, 0, -1)
                 tx.zrem(destination, members) if members.any?
               end
             end
@@ -113,8 +109,7 @@ module Familia
             tx.expire(destination, ttl) if ttl
           end
 
-          # Get final count (this is approximate for the transaction)
-          dbclient.zcard(destination)
+          redis.zcard(destination)
         end
 
         # Create temporary Redis key with automatic cleanup
@@ -151,22 +146,20 @@ module Familia
         def batch_zadd(redis_key, items, mode: :normal)
           return 0 if items.empty?
 
-          self.class.dbclient
-
-          # Convert to format expected by Redis ZADD
+          redis = redis_connection
           zadd_args = items.flat_map { |item| [item[:score], item[:member]] }
 
           case mode
           when :nx
-            dbclient.zadd(redis_key, zadd_args, nx: true)
+            redis.zadd(redis_key, zadd_args, nx: true)
           when :xx
-            dbclient.zadd(redis_key, zadd_args, xx: true)
+            redis.zadd(redis_key, zadd_args, xx: true)
           when :lt
-            dbclient.zadd(redis_key, zadd_args, lt: true)
+            redis.zadd(redis_key, zadd_args, lt: true)
           when :gt
-            dbclient.zadd(redis_key, zadd_args, gt: true)
+            redis.zadd(redis_key, zadd_args, gt: true)
           else
-            dbclient.zadd(redis_key, zadd_args)
+            redis.zadd(redis_key, zadd_args)
           end
         end
 

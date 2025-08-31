@@ -57,6 +57,7 @@ module User1TestAccess
 end
 #=> 'shared-secret'
 
+## Test user2 isolation
 @user2_decrypted = nil
 module User2TestAccess
   using ConcealedStringTestHelper

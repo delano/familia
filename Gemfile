@@ -9,7 +9,7 @@ group :test do
     gem 'tryouts', path: '../tryouts'
     gem 'uri-valkey', path: '..//uri-valkey/gems', glob: 'uri-valkey.gemspec'
   else
-    gem 'tryouts', '~> 3.4.0', require: false
+    gem 'tryouts', '~> 3.5.1', require: false
   end
   gem 'concurrent-ruby', '~> 1.3.5', require: false
   gem 'ruby-prof'
