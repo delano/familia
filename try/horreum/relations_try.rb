@@ -37,7 +37,7 @@ end
 @test_product.title = 'Test Product'
 
 ## Class knows about Database type relationships
-RelationsTestUser.has_relations?
+RelationsTestUser.relations?
 #=> true
 
 ## Class can list Database type definitions

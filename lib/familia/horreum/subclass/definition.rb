@@ -169,7 +169,7 @@ module Familia
         @related_fields
       end
 
-      def has_relations?
+      def relations?
         @has_relations ||= false
       end
 

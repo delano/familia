@@ -523,10 +523,6 @@ end
 class Model < Familia::Horreum
   feature :expiration
 
-  def has_ttl_support?
-    self.class.features_enabled.include?(:expiration)
-  end
-
   def available_features
     self.class.features_enabled
   end
@@ -534,7 +530,6 @@ end
 
 model = Model.new
 model.available_features  # => [:expiration]
-model.has_ttl_support?    # => true
 ```
 
 ## Testing Features
