@@ -105,7 +105,7 @@ class ConcealedString
   def belongs_to_context?(expected_record, expected_field_name)
     return false if @record.nil? || @field_type.nil?
 
-    @record.class.name == expected_record.class.name &&
+    @record.instance_of?(expected_record.class) &&
       @record.identifier == expected_record.identifier &&
       @field_type.instance_variable_get(:@name) == expected_field_name
   end
@@ -169,7 +169,6 @@ class ConcealedString
     '[CONCEALED]'
   end
 
-
   # String methods that should return safe concealed values
   def upcase
     '[CONCEALED]'
@@ -180,7 +179,7 @@ class ConcealedString
   end
 
   def length
-    11  # Fixed concealed length to match '[CONCEALED]' length
+    11 # Fixed concealed length to match '[CONCEALED]' length
   end
 
   def size
@@ -188,19 +187,19 @@ class ConcealedString
   end
 
   def present?
-    true  # Always return true since encrypted data exists
+    true # Always return true since encrypted data exists
   end
 
   def blank?
-    false  # Never blank if encrypted data exists
+    false # Never blank if encrypted data exists
   end
 
   # String concatenation operations return concealed result
-  def +(other)
+  def +(_other)
     '[CONCEALED]'
   end
 
-  def concat(other)
+  def concat(_other)
     '[CONCEALED]'
   end
 
@@ -218,12 +217,12 @@ class ConcealedString
     '[CONCEALED]'
   end
 
-  def gsub(*args)
+  def gsub(*)
     '[CONCEALED]'
   end
 
-  def include?(substring)
-    false  # Never reveal substring presence
+  def include?(_substring)
+    false # Never reveal substring presence
   end
 
   # Enumerable methods for safety
@@ -261,18 +260,27 @@ class ConcealedString
     ['[CONCEALED]']
   end
 
-  def deconstruct_keys(keys)
+  def deconstruct_keys(*)
     { concealed: true }
   end
 
   # Prevent exposure in JSON serialization
-  def to_json(*args)
+  def to_json(*)
     '"[CONCEALED]"'
   end
 
   # Prevent exposure in Rails serialization (as_json -> to_json)
-  def as_json(*args)
+  def as_json(*)
     '[CONCEALED]'
+  end
+
+  # Finalizer to attempt memory cleanup
+  def self.finalizer_proc(encrypted_data)
+    proc do
+      # Best effort cleanup - Ruby doesn't guarantee memory security
+      # Only clear if not frozen to avoid FrozenError
+      encrypted_data.clear if encrypted_data.respond_to?(:clear) && !encrypted_data.frozen?
+    end
   end
 
   private
@@ -282,14 +290,4 @@ class ConcealedString
     Familia::Encryption::EncryptedData.valid?(data)
   end
 
-  # Finalizer to attempt memory cleanup
-  def self.finalizer_proc(encrypted_data)
-    proc do |id|
-      # Best effort cleanup - Ruby doesn't guarantee memory security
-      # Only clear if not frozen to avoid FrozenError
-      if encrypted_data&.respond_to?(:clear) && !encrypted_data.frozen?
-        encrypted_data.clear
-      end
-    end
-  end
 end
