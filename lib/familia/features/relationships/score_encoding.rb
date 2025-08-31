@@ -101,8 +101,19 @@ module Familia
             {
               timestamp: decoded[:timestamp],
               permission_level: decoded[:permissions],
-              permission: decoded[:permission_list].first
+              permission: first_permission_symbol(decoded[:permissions])
             }
+          end
+
+          # Helper: Get the first matching permission symbol from a bitmask
+          #
+          # @param permissions [Integer] Bitmask of permissions
+          # @return [Symbol, nil] The first matching permission symbol, or nil if none
+          def first_permission_symbol(permissions)
+            PERMISSION_FLAGS.each do |sym, bit|
+              return sym if (permissions & bit) != 0 && bit != 0
+            end
+            nil
           end
 
           # Encode a timestamp and permissions into a Redis score
