@@ -6,11 +6,14 @@ module Familia
       # Querying module for advanced Redis set operations on relationship collections
       # Provides union, intersection, difference operations with permission filtering
       module Querying
+
         # Class-level querying capabilities
         def self.included(base)
           base.extend ClassMethods
         end
 
+        # Querying::ClassMethods
+        #
         module ClassMethods
           # Union of multiple collections (accessible items across multiple sources)
           #
@@ -376,7 +379,7 @@ module Familia
           # @param collection_name [Symbol] Collection name
           # @param required_permission [Symbol] Required permission level
           # @return [Boolean] True if object has required permission
-          def has_permission_in_collection?(owner, collection_name, required_permission)
+          def permission_in_collection?(owner, collection_name, required_permission)
             current_permission = permission_in_collection(owner, collection_name)
             return false unless current_permission
 
@@ -389,9 +392,8 @@ module Familia
           # Find similar objects based on shared collection membership
           #
           # @param min_shared_collections [Integer] Minimum shared collections
-          # @param ttl [Integer] TTL for temporary keys
           # @return [Array<Hash>] Similar objects with similarity scores
-          def find_similar_objects(min_shared_collections: 1, ttl: 300)
+          def find_similar_objects(min_shared_collections: 1)
             my_collections = accessible_collections
             return [] if my_collections.empty?
 
@@ -416,13 +418,14 @@ module Familia
             end
 
             # Filter by minimum shared collections and calculate similarity
-            similar_objects.values
-                           .select { |obj| obj[:shared_collections] >= min_shared_collections }
-                           .map do |obj|
+            results = similar_objects.values
+                                     .select { |obj| obj[:shared_collections] >= min_shared_collections }
+
+            results.each do |obj|
               obj[:similarity] = obj[:shared_collections].to_f / my_collections.length
-              obj
             end
-              .sort_by { |obj| -obj[:similarity] }
+
+            results.sort_by { |obj| -obj[:similarity] }
           end
 
           private
@@ -470,56 +473,73 @@ module Familia
             collections = []
 
             self.class.membership_relationships.each do |config|
-              owner_class_name = config[:owner_class_name]
-              collection_name = config[:collection_name]
-              type = config[:type]
-
-              pattern = "#{owner_class_name.downcase}:*:#{collection_name}"
-
-              dbclient.scan_each(match: pattern) do |key|
-                is_member = false
-                score = nil
-
-                case type
-                when :sorted_set
-                  score = dbclient.zscore(key, identifier)
-                  is_member = !score.nil?
-                when :set
-                  is_member = dbclient.sismember(key, identifier)
-                when :list
-                  is_member = dbclient.lpos(key, identifier) != nil
-                end
-
-                next unless is_member
-
-                # Check permission for sorted sets
-                if min_permission && type == :sorted_set && score
-                  decoded = permission_decode(score)
-                  required_level = ScoreEncoding::PERMISSION_LEVELS[min_permission] || 0
-                  actual_level = ScoreEncoding::PERMISSION_LEVELS[decoded[:permission]] || 0
-                  next if actual_level < required_level
-                end
-
-                owner_id = key.split(':')[1]
-                collection_info = {
-                  type: :membership,
-                  owner_class: owner_class_name,
-                  owner_id: owner_id,
-                  collection_name: collection_name,
-                  collection_type: type,
-                  key: key
-                }
-
-                if score
-                  collection_info[:score] = score
-                  collection_info[:permission] = permission_decode(score)[:permission]
-                end
-
-                collections << collection_info
-              end
+              collections.concat(process_membership_relationship(config, min_permission))
             end
 
             collections
+          end
+
+          # Process a single membership relationship configuration
+          def process_membership_relationship(config, min_permission)
+            collections = []
+            owner_class_name = config[:owner_class_name]
+            collection_name = config[:collection_name]
+            type = config[:type]
+
+            pattern = "#{owner_class_name.downcase}:*:#{collection_name}"
+
+            dbclient.scan_each(match: pattern) do |key|
+              collection_info = process_membership_key(key, type, min_permission)
+              next unless collection_info
+
+              owner_id = key.split(':')[1]
+              collection_info.merge!(
+                type: :membership,
+                owner_class: owner_class_name,
+                owner_id: owner_id,
+                collection_name: collection_name,
+                collection_type: type,
+                key: key
+              )
+
+              collections << collection_info
+            end
+
+            collections
+          end
+
+          # Process membership for a specific key
+          def process_membership_key(key, type, min_permission)
+            is_member = false
+            score = nil
+
+            case type
+            when :sorted_set
+              score = dbclient.zscore(key, identifier)
+              is_member = !score.nil?
+            when :set
+              is_member = dbclient.sismember(key, identifier)
+            when :list
+              is_member = !dbclient.lpos(key, identifier).nil?
+            end
+
+            return nil unless is_member
+
+            # Check permission for sorted sets
+            if min_permission && type == :sorted_set && score
+              decoded = permission_decode(score)
+              required_level = ScoreEncoding::PERMISSION_LEVELS[min_permission] || 0
+              actual_level = ScoreEncoding::PERMISSION_LEVELS[decoded[:permission]] || 0
+              return nil if actual_level < required_level
+            end
+
+            collection_info = {}
+            if score
+              collection_info[:score] = score
+              collection_info[:permission] = permission_decode(score)[:permission]
+            end
+
+            collection_info
           end
         end
 
