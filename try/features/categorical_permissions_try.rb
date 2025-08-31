@@ -461,9 +461,10 @@ end
 
 @large_collection = "test:large_collection"
 
+@sorted_set = Familia::SortedSet.new(nil, dbkey: @large_collection, logical_database: @perf_test_customer.class.logical_database)
 100.times do |i|
   score = Familia::Features::Relationships::ScoreEncoding.encode_score(Time.now.to_i + i, rand(1..255))
-  @perf_test_customer.dbclient.zadd(@large_collection, score, "item_#{i}")
+  @sorted_set.add(score, "item_#{i}")
 end
 #=> 100
 
@@ -507,4 +508,4 @@ end
 @edge_case_doc&.destroy!
 @perf_test_customer&.destroy!
 @perf_test_doc&.destroy!
-@perf_test_customer&.dbclient&.del(@large_collection)
+@sorted_set&.clear
