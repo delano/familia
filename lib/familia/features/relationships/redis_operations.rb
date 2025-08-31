@@ -202,12 +202,13 @@ module Familia
 
           results = dbclient.zrangebyscore(redis_key, start_score, end_score, **options)
 
-          # Filter results by permission if needed (double-check for precision issues)
+          # Filter results by permission if needed using correct bitwise operations
           if min_permission && with_scores
-            permission_value = ScoreEncoding.permission_level_value(min_permission)
+            permission_mask = ScoreEncoding.permission_level_value(min_permission)
             results = results.select do |_member, score|
               decoded = decode_score(score)
-              decoded[:permissions] >= permission_value
+              # Use bitwise AND to check if permission mask is satisfied
+              (decoded[:permissions] & permission_mask) == permission_mask
             end
           end
 

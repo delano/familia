@@ -310,7 +310,7 @@ module Familia
             return [] unless mask
 
             scores.select do |score|
-              permission_bits = ((score % 1) * 1000).round
+              permission_bits = ((score % 1) * METADATA_PRECISION).round
               (permission_bits & mask) > 0
             end
           end
@@ -357,7 +357,7 @@ module Familia
             when :privileged
               permission_bits > 1  # More than just read
             when :administrator
-              (permission_bits & 0b11110000) > 0  # Any admin bit
+              (permission_bits & PERMISSION_CATEGORIES[:administrator]) > 0
             else
               (permission_bits & mask) > 0
             end

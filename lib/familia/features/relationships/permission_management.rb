@@ -203,6 +203,8 @@ module Familia
             end
 
             # Efficient "can perform any administrative action?" check
+            # Note: Currently checks if this object has admin privileges in the collection.
+            # The user parameter is reserved for future user-specific permission checking.
             define_method :has_admin_access? do |user, collection_key|
               score = self.class.dbclient.zscore(collection_key, identifier)
               return false unless score
