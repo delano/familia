@@ -175,7 +175,7 @@ module Familia
 
             # Stage 1: Redis pre-filtering via zset membership
             define_method :accessible_items do |collection_key|
-              redis.zrange(collection_key, 0, -1, with_scores: true)
+              dbclient.zrange(collection_key, 0, -1, with_scores: true)
             end
 
             # Stage 2: Broad categorical filtering on small sets
@@ -204,7 +204,7 @@ module Familia
 
             # Efficient "can perform any administrative action?" check
             define_method :has_admin_access? do |user, collection_key|
-              score = redis.zscore(collection_key, identifier)
+              score = dbclient.zscore(collection_key, identifier)
               return false unless score
 
               ScoreEncoding.has_category?(score, :administrator)

@@ -38,6 +38,11 @@ class CategoricalTestDocument < Familia::Horreum
   def permission_bits=(bits)
     @permission_bits = bits
   end
+
+  # Instance method to encode scores using ScoreEncoding
+  def encode_score(timestamp, permissions = 0)
+    Familia::Features::Relationships::ScoreEncoding.encode_score(timestamp, permissions)
+  end
 end
 
 # Basic Categorical Constants Validation
@@ -45,6 +50,7 @@ end
 
 @customer = CategoricalTestCustomer.new(custid: 'cat_test_customer')
 @customer.name = 'Test Customer'
+@customer.save
 
 ## ScoreEncoding categorical constants are defined
 Familia::Features::Relationships::ScoreEncoding::PERMISSION_CATEGORIES.keys.sort
@@ -87,8 +93,8 @@ Familia::Features::Relationships::ScoreEncoding.permission_level_value(:admin)
 # Score Encoding with Categorical Permissions
 
 ## Encode score with read permission
-@@read_score = Familia::Features::Relationships::ScoreEncoding.encode_score(1704067200, :read)
-@@read_score.to_s.match(/1704067200\.001/)
+@read_score = Familia::Features::Relationships::ScoreEncoding.encode_score(1704067200, :read)
+@read_score.to_s.match(/1704067200\.001/)
 #=> #<MatchData "1704067200.001">
 
 ## Encode score with multiple permissions
@@ -98,8 +104,8 @@ expected_bits = 1 + 4 + 32  # read + write + delete = 37
 #=> #<MatchData "1704067200.037">
 
 ## Encode score with admin permission
-@@admin_score = Familia::Features::Relationships::ScoreEncoding.encode_score(1704067200, :admin)
-@@admin_score.to_s.match(/1704067200\.128/)
+@admin_score = Familia::Features::Relationships::ScoreEncoding.encode_score(1704067200, :admin)
+@admin_score.to_s.match(/1704067200\.128/)
 #=> #<MatchData "1704067200.128">
 
 # Categorical Permission Detection
@@ -177,10 +183,10 @@ Familia::Features::Relationships::ScoreEncoding.meets_category?(128, :administra
 @doc3.save
 
 # Add documents to customer collection
-@customer.documents.add(@doc1.identifier, @doc1.encode_score(Time.now, @doc1.permission_bits))
-@customer.documents.add(@doc2.identifier, @doc2.encode_score(Time.now, @doc2.permission_bits))
-@customer.documents.add(@doc3.identifier, @doc3.encode_score(Time.now, @doc3.permission_bits))
-#=> 'unknown'
+@customer.documents.add(@doc1.encode_score(Time.now, @doc1.permission_bits), @doc1.identifier)
+@customer.documents.add(@doc2.encode_score(Time.now, @doc2.permission_bits), @doc2.identifier)
+@customer.documents.add(@doc3.encode_score(Time.now, @doc3.permission_bits), @doc3.identifier)
+#=> true
 
 ## Grant permissions to user
 @doc1.grant('user123', :read, :write)
