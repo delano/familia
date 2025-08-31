@@ -440,11 +440,11 @@ end
 
 # Legacy Compatibility
 
-## Legacy permission_encode method works
-@legacy_score = Familia::Features::Relationships::ScoreEncoding.permission_encode(Time.now, :write)
-@decoded = Familia::Features::Relationships::ScoreEncoding.permission_decode(@legacy_score)
-@decoded[:permission]
-#=> :write
+## Permission encoding and decoding with bit flags
+@write_score = Familia::Features::Relationships::ScoreEncoding.permission_encode(Time.now, :write)
+@decoded = Familia::Features::Relationships::ScoreEncoding.permission_decode(@write_score)
+@decoded[:permission_list].include?(:write)
+#=> true
 
 # Performance Characteristics Validation
 

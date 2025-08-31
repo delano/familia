@@ -94,8 +94,8 @@ TestDomain.identifier_field
 
 ## Permission decoding extracts correct permission
 decoded = @domain.permission_decode(@score)
-decoded[:permission]
-#=> :write
+decoded[:permission_list].include?(:write)
+#=> true
 
 ## Score encoding preserves timestamp ordering
 @early_score = @domain.encode_score(Time.now - 3600, 100)  # 1 hour ago
