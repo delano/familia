@@ -23,6 +23,8 @@ module Familia
           base.extend(ClassMethods)
         end
 
+        # Relationships::ClassMethods
+        #
         module ClassMethods
           # Enable permission tracking for this class
           #
@@ -183,8 +185,8 @@ module Familia
               items_with_scores = accessible_items(collection_key)
 
               # Operating on ~20-100 items, not millions
-              filtered = items_with_scores.select do |(member, score)|
-                ScoreEncoding.has_category?(score, category)
+              filtered = items_with_scores.select do |(_member, score)|
+                ScoreEncoding.category?(score, category)
               end
 
               filtered.map(&:first)  # Return just the members
@@ -196,20 +198,20 @@ module Familia
 
               {
                 total: items_with_scores.size,
-                viewable: items_with_scores.count { |(_, s)| ScoreEncoding.has_category?(s, :readable) },
-                editable: items_with_scores.count { |(_, s)| ScoreEncoding.has_category?(s, :content_editor) },
-                administrative: items_with_scores.count { |(_, s)| ScoreEncoding.has_category?(s, :administrator) }
+                viewable: items_with_scores.count { |(_, s)| ScoreEncoding.category?(s, :readable) },
+                editable: items_with_scores.count { |(_, s)| ScoreEncoding.category?(s, :content_editor) },
+                administrative: items_with_scores.count { |(_, s)| ScoreEncoding.category?(s, :administrator) }
               }
             end
 
             # Efficient "can perform any administrative action?" check
             # Note: Currently checks if this object has admin privileges in the collection.
             # The user parameter is reserved for future user-specific permission checking.
-            define_method :has_admin_access? do |user, collection_key|
+            define_method :admin_access? do |_user, collection_key|
               score = self.class.dbclient.zscore(collection_key, identifier)
               return false unless score
 
-              ScoreEncoding.has_category?(score, :administrator)
+              ScoreEncoding.category?(score, :administrator)
             end
 
             # === Categorical Permission Methods ===
@@ -220,8 +222,8 @@ module Familia
             # @param category [Symbol] Category to check (:readable, :content_editor, etc.)
             # @return [Boolean] True if user meets the category requirements
             # @example Check if user has content editor permissions
-            #   document.has_category?(user, :content_editor)  #=> true
-            define_method :has_category? do |user, category|
+            #   document.category?(user, :content_editor)  #=> true
+            define_method :category? do |user, category|
               user_key = user.respond_to?(:identifier) ? user.identifier : user.to_s
               bits = send(field_name)[user_key].to_i
               ScoreEncoding.meets_category?(bits, category)
@@ -250,7 +252,7 @@ module Familia
             #   document.users_by_category(:content_editor)  #=> ["user123", "user456"]
             define_method :users_by_category do |category|
               permissions_hash = send(field_name).hgetall
-              permissions_hash.select do |user_key, bits|
+              permissions_hash.select do |_user_key, bits|
                 ScoreEncoding.meets_category?(bits.to_i, category)
               end.keys
             end
