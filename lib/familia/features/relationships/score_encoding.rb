@@ -168,9 +168,9 @@ module Familia
           # @return [Boolean] True if all permissions are present
           #
           # @example
-          #   has_permission?(1704067200.005, :read)  # score has read(1) + write(4)
+          #   permission?(1704067200.005, :read)  # score has read(1) + write(4)
           #   #=> true
-          def has_permission?(score, *permissions)
+          def permission?(score, *permissions)
             decoded = decode_score(score)
             permission_bits = decoded[:permissions]
 
@@ -282,7 +282,7 @@ module Familia
           # @param bits [Integer] Permission bits to decode
           # @return [Array<Symbol>] Array of permission symbols
           def decode_permission_flags(bits)
-            PERMISSION_FLAGS.select { |name, flag| (bits & flag) > 0 }.keys
+            PERMISSION_FLAGS.select { |_name, flag| (bits & flag) > 0 }.keys
           end
 
           # Check broad permission categories
@@ -290,7 +290,7 @@ module Familia
           # @param score [Float] The encoded score
           # @param category [Symbol] Category to check (:readable, :content_editor, :administrator, etc.)
           # @return [Boolean] True if score meets the category requirements
-          def has_category?(score, category)
+          def category?(score, category)
             decoded = decode_score(score)
             permission_bits = decoded[:permissions]
 
@@ -353,13 +353,13 @@ module Familia
 
             case category
             when :readable
-              permission_bits > 0  # Any permission implies read
+              permission_bits.positive?  # Any permission implies read
             when :privileged
-              permission_bits > 1  # More than just read
+              permission_bits > 1 # More than just read
             when :administrator
-              (permission_bits & PERMISSION_CATEGORIES[:administrator]) > 0
+              permission_bits.anybits?(PERMISSION_CATEGORIES[:administrator])
             else
-              (permission_bits & mask) > 0
+              permission_bits.anybits?(mask)
             end
           end
 
@@ -388,7 +388,8 @@ module Familia
           # @return [Integer] Validated permission bits
           # @raise [ArgumentError] If bits are outside 0-255 range
           def validate_permission_bits(bits)
-            raise ArgumentError, "Permission bits must be 0-255" unless (0..255).cover?(bits)
+            raise ArgumentError, 'Permission bits must be 0-255' unless (0..255).cover?(bits)
+
             bits
           end
         end
@@ -402,8 +403,8 @@ module Familia
           ScoreEncoding.decode_score(score)
         end
 
-        def has_permission?(score, *permissions)
-          ScoreEncoding.has_permission?(score, *permissions)
+        def permission?(score, *permissions)
+          ScoreEncoding.permission?(score, *permissions)
         end
 
         def add_permissions(score, *permissions)
