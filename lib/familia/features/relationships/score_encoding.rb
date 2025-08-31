@@ -48,7 +48,7 @@ module Familia
           viewer:     PERMISSION_FLAGS[:read],
           editor:     PERMISSION_FLAGS[:read] | PERMISSION_FLAGS[:write] | PERMISSION_FLAGS[:edit],
           moderator:  PERMISSION_FLAGS[:read] | PERMISSION_FLAGS[:write] | PERMISSION_FLAGS[:edit] | PERMISSION_FLAGS[:delete],
-          admin:      0b11111111  # All permissions
+          admin:      0b11111111 # All permissions
         }.freeze
 
         # Categorical masks for efficient broad queries
@@ -111,7 +111,7 @@ module Familia
           # @return [Symbol, nil] The first matching permission symbol, or nil if none
           def first_permission_symbol(permissions)
             PERMISSION_FLAGS.each do |sym, bit|
-              return sym if (permissions & bit) != 0 && bit != 0
+              return sym if permissions.anybits?(bit) && bit != 0
             end
             nil
           end
@@ -187,7 +187,7 @@ module Familia
 
             permissions.all? do |perm|
               flag = PERMISSION_FLAGS[perm]
-              flag && (permission_bits & flag) > 0
+              flag && permission_bits.anybits?(flag)
             end
           end
 
@@ -242,7 +242,13 @@ module Familia
           #   #=> [0.001, 0.005]
           def permission_range(min_permissions = [], max_permissions = nil)
             min_bits = Array(min_permissions).reduce(0) { |acc, p| acc | (PERMISSION_FLAGS[p] || 0) }
-            max_bits = max_permissions ? Array(max_permissions).reduce(0) { |acc, p| acc | (PERMISSION_FLAGS[p] || 0) } : 255
+            max_bits = if max_permissions
+                         Array(max_permissions).reduce(0) do |acc, p|
+                           acc | (PERMISSION_FLAGS[p] || 0)
+                         end
+                       else
+                         255
+                       end
 
             [min_bits / METADATA_PRECISION, max_bits / METADATA_PRECISION]
           end
@@ -269,7 +275,13 @@ module Familia
           #   score_range(nil, nil, min_permissions: [:read])
           #   #=> [0.001, "+inf"]
           def score_range(start_time = nil, end_time = nil, min_permissions: nil)
-            min_bits = min_permissions ? Array(min_permissions).reduce(0) { |acc, p| acc | (PERMISSION_FLAGS[p] || 0) } : 0
+            min_bits = if min_permissions
+                         Array(min_permissions).reduce(0) do |acc, p|
+                           acc | (PERMISSION_FLAGS[p] || 0)
+                         end
+                       else
+                         0
+                       end
 
             min_score = if start_time
                           encode_score(start_time, min_bits)
@@ -280,7 +292,7 @@ module Familia
                         end
 
             max_score = if end_time
-                          encode_score(end_time, 255)  # Use max valid permission bits
+                          encode_score(end_time, 255) # Use max valid permission bits
                         else
                           '+inf'
                         end
@@ -293,7 +305,7 @@ module Familia
           # @param bits [Integer] Permission bits to decode
           # @return [Array<Symbol>] Array of permission symbols
           def decode_permission_flags(bits)
-            PERMISSION_FLAGS.select { |_name, flag| (bits & flag) > 0 }.keys
+            PERMISSION_FLAGS.select { |_name, flag| bits.anybits?(flag) }.keys
           end
 
           # Check broad permission categories
@@ -308,7 +320,7 @@ module Familia
             mask = PERMISSION_CATEGORIES[category]
             return false unless mask
 
-            (permission_bits & mask) > 0
+            permission_bits.anybits?(mask)
           end
 
           # Filter collection by permission category
@@ -322,7 +334,7 @@ module Familia
 
             scores.select do |score|
               permission_bits = ((score % 1) * METADATA_PRECISION).round
-              (permission_bits & mask) > 0
+              permission_bits.anybits?(mask)
             end
           end
 
@@ -334,11 +346,11 @@ module Familia
             decoded = decode_score(score)
             bits = decoded[:permissions]
 
-            if (bits & PERMISSION_CATEGORIES[:administrator]) > 0
+            if bits.anybits?(PERMISSION_CATEGORIES[:administrator])
               :administrator
-            elsif (bits & PERMISSION_CATEGORIES[:content_editor]) > 0
+            elsif bits.anybits?(PERMISSION_CATEGORIES[:content_editor])
               :content_editor
-            elsif (bits & PERMISSION_CATEGORIES[:readable]) > 0
+            elsif bits.anybits?(PERMISSION_CATEGORIES[:readable])
               :viewer
             else
               :none
@@ -364,7 +376,7 @@ module Familia
 
             case category
             when :readable
-              permission_bits.positive?  # Any permission implies read
+              permission_bits.positive? # Any permission implies read
             when :privileged
               permission_bits > 1 # More than just read
             when :administrator
@@ -381,7 +393,7 @@ module Familia
           # @param end_time [Time, nil] Optional end time filter
           # @return [Array<String>] Min and max range strings for Redis queries
           def category_score_range(category, start_time = nil, end_time = nil)
-            mask = PERMISSION_CATEGORIES[category] || 0
+            PERMISSION_CATEGORIES[category] || 0
 
             # Any permission matching the category mask
             min_score = start_time ? start_time.to_i : 0

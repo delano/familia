@@ -74,7 +74,7 @@ module Familia
                 acc & ~(ScoreEncoding::PERMISSION_FLAGS[perm] || 0)
               end
 
-              if new_bits == 0
+              if new_bits.zero?
                 send(field_name).remove_field(user_key)
               else
                 send(field_name)[user_key] = new_bits
@@ -95,7 +95,7 @@ module Familia
 
               permissions.all? do |perm|
                 flag = ScoreEncoding::PERMISSION_FLAGS[perm]
-                flag && (bits & flag) > 0
+                flag && bits.anybits?(flag)
               end
             end
 
@@ -189,7 +189,7 @@ module Familia
                 ScoreEncoding.category?(score, category)
               end
 
-              filtered.map(&:first)  # Return just the members
+              filtered.map(&:first) # Return just the members
             end
 
             # Bulk permission check for UI rendering

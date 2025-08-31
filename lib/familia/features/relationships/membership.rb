@@ -213,7 +213,7 @@ module Familia
                 dbclient.multi do |tx|
                   tx.lrem(collection_key, 1, identifier)
 
-                  if new_position == 0
+                  if new_position.zero?
                     tx.lpush(collection_key, identifier)
                   elsif new_position == -1
                     tx.rpush(collection_key, identifier)

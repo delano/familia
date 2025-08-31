@@ -91,7 +91,7 @@ module Familia
               object_ids = dbclient.hmget(index_key, *field_values.map(&:to_s))
 
               # Filter out nil values and instantiate objects
-              found_objects = object_ids.compact.map do |object_id|
+              found_objects = object_ids.compact.filter_map do |object_id|
                 # Find the indexed class and instantiate the object
                 indexed_class = nil
                 self.class.const_get(:INDEXED_CLASSES, false)&.each do |klass|
@@ -102,7 +102,7 @@ module Familia
                 end
 
                 indexed_class&.new(identifier: object_id)
-              end.compact
+              end
 
               found_objects
             end

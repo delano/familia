@@ -417,7 +417,7 @@ module Familia
               end
             end
 
-            break if cursor == 0
+            break if cursor.zero?
           end
         end
 
@@ -461,6 +461,6 @@ module Familia
 
       # Register the feature with Familia
       Familia::Base.add_feature Relationships, :relationships
-    end # module Relationships
-  end # module Features
+    end
+  end
 end

@@ -17,7 +17,7 @@ module Familia
             word = word.to_s
             # Basic English pluralization rules (simplified)
             if word.end_with?('ies')
-              word[0..-4] + 'y'
+              "#{word[0..-4]}y"
             elsif word.end_with?('es') && word.length > 3
               word[0..-3]
             elsif word.end_with?('s') && word.length > 1
@@ -317,7 +317,7 @@ module Familia
             loop do
               cursor, keys = redis_conn.scan(cursor, match: pattern, count: 1000)
               matching_keys.concat(keys)
-              break if cursor == 0
+              break if cursor.zero?
             end
 
             # Filter keys that might contain this object and remove it

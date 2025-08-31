@@ -6,7 +6,6 @@ module Familia
       # Querying module for advanced Redis set operations on relationship collections
       # Provides union, intersection, difference operations with permission filtering
       module Querying
-
         # Class-level querying capabilities
         def self.included(base)
           base.extend ClassMethods
@@ -194,7 +193,7 @@ module Familia
                 # Keep only the requested range
                 dbclient.zremrangebyrank(temp_key, offset + limit, -1)
               end
-              dbclient.zremrangebyrank(temp_key, 0, offset - 1) if offset > 0
+              dbclient.zremrangebyrank(temp_key, 0, offset - 1) if offset.positive?
             end
 
             dbclient.expire(temp_key, ttl)
@@ -225,7 +224,7 @@ module Familia
               stats[:collection_sizes][collection_name] = size
               stats[:total_members] += size
 
-              next unless size > 0
+              next unless size.positive?
 
               # Get score range
               min_score = dbclient.zrange(key, 0, 0, with_scores: true).first&.last
@@ -244,7 +243,7 @@ module Familia
             end
 
             stats[:total_unique_members] = all_members.size
-            stats[:overlap_ratio] = if stats[:total_members] > 0
+            stats[:overlap_ratio] = if stats[:total_members].positive?
                                       (stats[:total_members] - stats[:total_unique_members]).to_f / stats[:total_members]
                                     else
                                       0
@@ -288,7 +287,7 @@ module Familia
               dbclient.zunionstore(filtered_key, [key])
               dbclient.zremrangebyscore(filtered_key, '-inf', "(#{min_score}")
 
-              if dbclient.zcard(filtered_key) > 0
+              if dbclient.zcard(filtered_key).positive?
                 filtered_keys << filtered_key
                 dbclient.expire(filtered_key, 300) # Temporary key cleanup
               else
@@ -329,8 +328,8 @@ module Familia
           def empty_result_set
             temp_key = create_temp_key("empty_#{name.downcase}", 60)
             # Create an actual empty zset
-            dbclient.zadd(temp_key, 0, "__nil__")
-            dbclient.zrem(temp_key, "__nil__")
+            dbclient.zadd(temp_key, 0, '__nil__')
+            dbclient.zrem(temp_key, '__nil__')
             dbclient.expire(temp_key, 60)
             Familia::SortedSet.new(nil, dbkey: temp_key, logical_database: logical_database)
           end

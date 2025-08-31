@@ -189,14 +189,17 @@ module Familia
             # Ensure minimum score includes required permission level
             if start_score.is_a?(Numeric)
               decoded = decode_score(start_score)
-              start_score = encode_score(decoded[:timestamp], permission_value) if decoded[:permissions] < permission_value
+              if decoded[:permissions] < permission_value
+                start_score = encode_score(decoded[:timestamp],
+                                           permission_value)
+              end
             else
               start_score = encode_score(0, permission_value)
             end
           end
 
           options = {
-            limit: (count > 0 ? [offset, count] : nil),
+            limit: (count.positive? ? [offset, count] : nil),
             with_scores: with_scores
           }.compact
 
@@ -208,7 +211,7 @@ module Familia
             results = results.select do |_member, score|
               decoded = decode_score(score)
               # Use bitwise AND to check if permission mask is satisfied
-              (decoded[:permissions] & permission_mask) == permission_mask
+              decoded[:permissions].allbits?(permission_mask)
             end
           end
 
@@ -241,7 +244,7 @@ module Familia
               end
             end
 
-            break if cursor == 0
+            break if cursor.zero?
           end
         end
 
