@@ -1,4 +1,4 @@
-# frozen_string_literal: true
+# lib/familia/features/relationships/membership.rb
 
 module Familia
   module Features
