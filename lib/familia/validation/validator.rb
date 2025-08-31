@@ -85,7 +85,7 @@ module Familia
         end
 
         if @options[:strict_atomicity]
-          validate_atomicity(result, command_sequence)
+          apply_atomicity_validation(result, command_sequence)
         end
 
         result
@@ -198,7 +198,7 @@ module Familia
         result.define_singleton_method(:command_efficiency) { @performance_metrics[:efficiency_score] }
       end
 
-      def validate_atomicity(result, command_sequence)
+      def apply_atomicity_validation(result, command_sequence)
         atomicity_validator = AtomicityValidator.new(command_sequence, @options)
         atomicity_result = atomicity_validator.validate
 

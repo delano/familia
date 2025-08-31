@@ -9,6 +9,8 @@ module Familia
         # Class-level querying capabilities
         def self.included(base)
           base.extend ClassMethods
+          base.include InstanceMethods
+          super
         end
 
         # Querying::ClassMethods
@@ -542,11 +544,6 @@ module Familia
           end
         end
 
-        # Include instance methods when this module is included
-        def self.included(base)
-          base.include InstanceMethods
-          super
-        end
       end
     end
   end

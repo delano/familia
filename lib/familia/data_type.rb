@@ -68,7 +68,7 @@ module Familia
     end
     extend ClassMethods
 
-    attr_reader :keystring, :parent, :opts
+    attr_reader :keystring, :opts
     attr_writer :dump_method, :load_method
 
     # +keystring+: If parent is set, this will be used as the suffix
@@ -200,6 +200,7 @@ module Familia
     def parent
       @opts[:parent]
     end
+
 
     def logical_database
       @opts[:logical_database] || self.class.logical_database

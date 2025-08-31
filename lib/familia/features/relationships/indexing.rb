@@ -9,6 +9,8 @@ module Familia
         # Class-level indexing configurations
         def self.included(base)
           base.extend ClassMethods
+          base.include InstanceMethods
+          super
         end
 
         module ClassMethods
@@ -362,11 +364,6 @@ module Familia
           end
         end
 
-        # Include instance methods when this module is included
-        def self.included(base)
-          base.include InstanceMethods
-          super
-        end
       end
     end
   end
