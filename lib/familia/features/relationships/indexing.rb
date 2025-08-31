@@ -1,4 +1,4 @@
-# frozen_string_literal: true
+# lib/familia/features/relationships/indexing.rb
 
 module Familia
   module Features
@@ -9,6 +9,8 @@ module Familia
         # Class-level indexing configurations
         def self.included(base)
           base.extend ClassMethods
+          base.include InstanceMethods
+          super
         end
 
         module ClassMethods
@@ -91,7 +93,7 @@ module Familia
               object_ids = dbclient.hmget(index_key, *field_values.map(&:to_s))
 
               # Filter out nil values and instantiate objects
-              found_objects = object_ids.compact.map do |object_id|
+              found_objects = object_ids.compact.filter_map do |object_id|
                 # Find the indexed class and instantiate the object
                 indexed_class = nil
                 self.class.const_get(:INDEXED_CLASSES, false)&.each do |klass|
@@ -102,7 +104,7 @@ module Familia
                 end
 
                 indexed_class&.new(identifier: object_id)
-              end.compact
+              end
 
               found_objects
             end
@@ -110,7 +112,7 @@ module Familia
             # Generate method to get the index hash directly
             actual_context_class.define_method(index_name) do
               index_key = "#{self.class.name.downcase}:#{identifier}:#{index_name}"
-              Familia::HashKey.new(rediskey: index_key, db: self.class.logical_database)
+              Familia::HashKey.new(nil, dbkey: index_key, logical_database: self.class.logical_database)
             end
 
             # Generate method to rebuild the index
@@ -152,7 +154,7 @@ module Familia
             # Generate method to get the global index hash directly
             define_method("global_#{index_name}") do
               index_key = "global:#{index_name}"
-              Familia::HashKey.new(rediskey: index_key, db: logical_database)
+              Familia::HashKey.new(nil, dbkey: index_key, logical_database: logical_database)
             end
 
             # Generate method to rebuild the global index
@@ -362,11 +364,6 @@ module Familia
           end
         end
 
-        # Include instance methods when this module is included
-        def self.included(base)
-          base.include InstanceMethods
-          super
-        end
       end
     end
   end

@@ -27,6 +27,8 @@ module Familia
       attr_writer :logical_database, :uri
     end
 
+    # DataType::ClassMethods
+    #
     module ClassMethods
       # To be called inside every class that inherits DataType
       # +methname+ is the term used for the class and instance methods
@@ -57,16 +59,16 @@ module Familia
       end
 
       def valid_keys_only(opts)
-        opts.select { |k, _| DataType.valid_options.include? k }
+        opts.slice(*DataType.valid_options)
       end
 
-      def has_relations?
-        @has_relations ||= false
+      def relations?
+        @has_relations ||= false # rubocop:disable ThreadSafety/ClassInstanceVariable
       end
     end
     extend ClassMethods
 
-    attr_reader :keystring, :parent, :opts
+    attr_reader :keystring, :opts
     attr_writer :dump_method, :load_method
 
     # +keystring+: If parent is set, this will be used as the suffix
@@ -198,6 +200,7 @@ module Familia
     def parent
       @opts[:parent]
     end
+
 
     def logical_database
       @opts[:logical_database] || self.class.logical_database

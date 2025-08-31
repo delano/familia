@@ -1,4 +1,4 @@
-# frozen_string_literal: true
+# lib/familia/features/relationships/membership.rb
 
 module Familia
   module Features
@@ -9,6 +9,8 @@ module Familia
         # Class-level membership configurations
         def self.included(base)
           base.extend ClassMethods
+          base.include InstanceMethods
+          super
         end
 
         module ClassMethods
@@ -96,12 +98,12 @@ module Familia
 
             # Method to get position in the owner's collection (for lists)
             # e.g., domain.position_in_customer_domain_list(customer)
-            if type == :list
-              define_method("position_in_#{owner_class_name_lower}_#{collection_name}") do |owner_instance|
-                collection_key = "#{owner_class_name_lower}:#{owner_instance.identifier}:#{collection_name}"
-                position = dbclient.lpos(collection_key, identifier)
-                position
-              end
+            return unless type == :list
+
+            define_method("position_in_#{owner_class_name_lower}_#{collection_name}") do |owner_instance|
+              collection_key = "#{owner_class_name_lower}:#{owner_instance.identifier}:#{collection_name}"
+              position = dbclient.lpos(collection_key, identifier)
+              position
             end
           end
 
@@ -213,7 +215,7 @@ module Familia
                 dbclient.multi do |tx|
                   tx.lrem(collection_key, 1, identifier)
 
-                  if new_position == 0
+                  if new_position.zero?
                     tx.lpush(collection_key, identifier)
                   elsif new_position == -1
                     tx.rpush(collection_key, identifier)
@@ -322,41 +324,48 @@ module Familia
               config[:owner_class] == owner_class && config[:collection_name] == collection_name
             end
 
-            return current_score unless membership_config
+            return default_score unless membership_config
 
             score_calculator = membership_config[:score]
 
+            # Extract the score calculation logic to reduce complexity
+            calculated_score = extract_score_from_calculator(score_calculator)
+            calculated_score || default_score
+          end
+
+          private
+
+          def extract_score_from_calculator(score_calculator)
             case score_calculator
             when Symbol
-              # Field name or method name
-              if respond_to?(score_calculator)
-                value = send(score_calculator)
-                if value.respond_to?(:to_f)
-                  value.to_f
-                elsif value.respond_to?(:to_i)
-                  encode_score(value, 0)
-                else
-                  current_score
-                end
-              else
-                current_score
-              end
+              extract_score_from_symbol(score_calculator)
             when Proc
-              # Execute proc in context of this instance
-              result = instance_exec(&score_calculator)
-              # Ensure we get a numeric result
-              if result.nil?
-                current_score
-              elsif result.respond_to?(:to_f)
-                result.to_f
-              else
-                current_score
-              end
+              extract_score_from_proc(score_calculator)
             when Numeric
               score_calculator.to_f
-            else
-              current_score
             end
+          end
+
+          def extract_score_from_symbol(symbol)
+            return nil unless respond_to?(symbol)
+
+            value = send(symbol)
+            if value.respond_to?(:to_f)
+              value.to_f
+            elsif value.respond_to?(:to_i)
+              encode_score(value, 0)
+            end
+          end
+
+          def extract_score_from_proc(proc)
+            result = instance_exec(&proc)
+            return nil if result.nil?
+
+            result.respond_to?(:to_f) ? result.to_f : nil
+          end
+
+          def default_score
+            respond_to?(:current_score) ? current_score : Time.now.to_f
           end
 
           # Update membership in all collections atomically
@@ -488,11 +497,6 @@ module Familia
           end
         end
 
-        # Include instance methods when this module is included
-        def self.included(base)
-          base.include InstanceMethods
-          super
-        end
       end
     end
   end

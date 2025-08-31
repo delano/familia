@@ -1,4 +1,4 @@
-# frozen_string_literal: true
+# lib/familia/features/relationships/redis_operations.rb
 
 module Familia
   module Features
@@ -189,25 +189,29 @@ module Familia
             # Ensure minimum score includes required permission level
             if start_score.is_a?(Numeric)
               decoded = decode_score(start_score)
-              start_score = encode_score(decoded[:timestamp], permission_value) if decoded[:metadata] < permission_value
+              if decoded[:permissions] < permission_value
+                start_score = encode_score(decoded[:timestamp],
+                                           permission_value)
+              end
             else
               start_score = encode_score(0, permission_value)
             end
           end
 
           options = {
-            limit: (count > 0 ? [offset, count] : nil),
+            limit: (count.positive? ? [offset, count] : nil),
             with_scores: with_scores
           }.compact
 
           results = dbclient.zrangebyscore(redis_key, start_score, end_score, **options)
 
-          # Filter results by permission if needed (double-check for precision issues)
+          # Filter results by permission if needed using correct bitwise operations
           if min_permission && with_scores
-            permission_value = ScoreEncoding.permission_level_value(min_permission)
+            permission_mask = ScoreEncoding.permission_level_value(min_permission)
             results = results.select do |_member, score|
               decoded = decode_score(score)
-              decoded[:metadata] >= permission_value
+              # Use bitwise AND to check if permission mask is satisfied
+              decoded[:permissions].allbits?(permission_mask)
             end
           end
 
@@ -240,7 +244,7 @@ module Familia
               end
             end
 
-            break if cursor == 0
+            break if cursor.zero?
           end
         end
 

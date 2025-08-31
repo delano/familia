@@ -1,4 +1,4 @@
-# frozen_string_literal: true
+# lib/familia/features/relationships/tracking.rb
 
 module Familia
   module Features
@@ -9,6 +9,8 @@ module Familia
         # Class-level tracking configurations
         def self.included(base)
           base.extend ClassMethods
+          base.include InstanceMethods
+          super
         end
 
         module ClassMethods
@@ -17,7 +19,7 @@ module Familia
             word = word.to_s
             # Basic English pluralization rules (simplified)
             if word.end_with?('ies')
-              word[0..-4] + 'y'
+              "#{word[0..-4]}y"
             elsif word.end_with?('es') && word.length > 3
               word[0..-3]
             elsif word.end_with?('s') && word.length > 1
@@ -95,7 +97,7 @@ module Familia
             # Generate global collection getter method
             target_class.define_singleton_method("global_#{collection_name}") do
               collection_key = "global:#{collection_name}"
-              Familia::SortedSet.new(rediskey: collection_key, db: logical_database)
+              Familia::SortedSet.new(nil, dbkey: collection_key, logical_database: logical_database)
             end
 
             # Generate global add method (e.g., Domain.add_to_global_all_domains)
@@ -130,7 +132,7 @@ module Familia
             # Generate collection getter method
             actual_context_class.define_method(collection_name) do
               collection_key = "#{self.class.name.downcase}:#{identifier}:#{collection_name}"
-              Familia::SortedSet.new(rediskey: collection_key, db: self.class.logical_database)
+              Familia::SortedSet.new(nil, dbkey: collection_key, logical_database: self.class.logical_database)
             end
 
             # Generate add method (e.g., Customer#add_domain)
@@ -317,7 +319,7 @@ module Familia
             loop do
               cursor, keys = redis_conn.scan(cursor, match: pattern, count: 1000)
               matching_keys.concat(keys)
-              break if cursor == 0
+              break if cursor.zero?
             end
 
             # Filter keys that might contain this object and remove it
@@ -371,11 +373,6 @@ module Familia
           end
         end
 
-        # Include instance methods when this module is included
-        def self.included(base)
-          base.include InstanceMethods
-          super
-        end
       end
     end
   end

@@ -1,4 +1,4 @@
-# frozen_string_literal: true
+# lib/familia/features/relationships/querying.rb
 
 module Familia
   module Features
@@ -9,8 +9,12 @@ module Familia
         # Class-level querying capabilities
         def self.included(base)
           base.extend ClassMethods
+          base.include InstanceMethods
+          super
         end
 
+        # Querying::ClassMethods
+        #
         module ClassMethods
           # Union of multiple collections (accessible items across multiple sources)
           #
@@ -39,7 +43,7 @@ module Familia
             dbclient.zunionstore(temp_key, source_keys, aggregate: aggregate)
             dbclient.expire(temp_key, ttl)
 
-            Familia::SortedSet.new(rediskey: temp_key, db: logical_database)
+            Familia::SortedSet.new(nil, dbkey: temp_key, logical_database: logical_database)
           end
 
           # Intersection of multiple collections (items present in ALL collections)
@@ -62,7 +66,7 @@ module Familia
             dbclient.zinterstore(temp_key, source_keys, aggregate: aggregate)
             dbclient.expire(temp_key, ttl)
 
-            Familia::SortedSet.new(rediskey: temp_key, db: logical_database)
+            Familia::SortedSet.new(nil, dbkey: temp_key, logical_database: logical_database)
           end
 
           # Difference of collections (items in first collection but not in others)
@@ -95,7 +99,7 @@ module Familia
 
             dbclient.expire(temp_key, ttl)
 
-            Familia::SortedSet.new(rediskey: temp_key, db: logical_database)
+            Familia::SortedSet.new(nil, dbkey: temp_key, logical_database: logical_database)
           end
 
           # Find collections with shared members
@@ -191,12 +195,12 @@ module Familia
                 # Keep only the requested range
                 dbclient.zremrangebyrank(temp_key, offset + limit, -1)
               end
-              dbclient.zremrangebyrank(temp_key, 0, offset - 1) if offset > 0
+              dbclient.zremrangebyrank(temp_key, 0, offset - 1) if offset.positive?
             end
 
             dbclient.expire(temp_key, ttl)
 
-            Familia::SortedSet.new(rediskey: temp_key, db: logical_database)
+            Familia::SortedSet.new(nil, dbkey: temp_key, logical_database: logical_database)
           end
 
           # Get collection statistics
@@ -222,7 +226,7 @@ module Familia
               stats[:collection_sizes][collection_name] = size
               stats[:total_members] += size
 
-              next unless size > 0
+              next unless size.positive?
 
               # Get score range
               min_score = dbclient.zrange(key, 0, 0, with_scores: true).first&.last
@@ -241,7 +245,7 @@ module Familia
             end
 
             stats[:total_unique_members] = all_members.size
-            stats[:overlap_ratio] = if stats[:total_members] > 0
+            stats[:overlap_ratio] = if stats[:total_members].positive?
                                       (stats[:total_members] - stats[:total_unique_members]).to_f / stats[:total_members]
                                     else
                                       0
@@ -285,7 +289,7 @@ module Familia
               dbclient.zunionstore(filtered_key, [key])
               dbclient.zremrangebyscore(filtered_key, '-inf', "(#{min_score}")
 
-              if dbclient.zcard(filtered_key) > 0
+              if dbclient.zcard(filtered_key).positive?
                 filtered_keys << filtered_key
                 dbclient.expire(filtered_key, 300) # Temporary key cleanup
               else
@@ -326,10 +330,10 @@ module Familia
           def empty_result_set
             temp_key = create_temp_key("empty_#{name.downcase}", 60)
             # Create an actual empty zset
-            dbclient.zadd(temp_key, 0, "__nil__")
-            dbclient.zrem(temp_key, "__nil__")
+            dbclient.zadd(temp_key, 0, '__nil__')
+            dbclient.zrem(temp_key, '__nil__')
             dbclient.expire(temp_key, 60)
-            Familia::SortedSet.new(rediskey: temp_key, db: logical_database)
+            Familia::SortedSet.new(nil, dbkey: temp_key, logical_database: logical_database)
           end
         end
 
@@ -376,7 +380,7 @@ module Familia
           # @param collection_name [Symbol] Collection name
           # @param required_permission [Symbol] Required permission level
           # @return [Boolean] True if object has required permission
-          def has_permission_in_collection?(owner, collection_name, required_permission)
+          def permission_in_collection?(owner, collection_name, required_permission)
             current_permission = permission_in_collection(owner, collection_name)
             return false unless current_permission
 
@@ -389,9 +393,8 @@ module Familia
           # Find similar objects based on shared collection membership
           #
           # @param min_shared_collections [Integer] Minimum shared collections
-          # @param ttl [Integer] TTL for temporary keys
           # @return [Array<Hash>] Similar objects with similarity scores
-          def find_similar_objects(min_shared_collections: 1, ttl: 300)
+          def find_similar_objects(min_shared_collections: 1)
             my_collections = accessible_collections
             return [] if my_collections.empty?
 
@@ -416,13 +419,14 @@ module Familia
             end
 
             # Filter by minimum shared collections and calculate similarity
-            similar_objects.values
-                           .select { |obj| obj[:shared_collections] >= min_shared_collections }
-                           .map do |obj|
+            results = similar_objects.values
+                                     .select { |obj| obj[:shared_collections] >= min_shared_collections }
+
+            results.each do |obj|
               obj[:similarity] = obj[:shared_collections].to_f / my_collections.length
-              obj
             end
-              .sort_by { |obj| -obj[:similarity] }
+
+            results.sort_by { |obj| -obj[:similarity] }
           end
 
           private
@@ -470,64 +474,76 @@ module Familia
             collections = []
 
             self.class.membership_relationships.each do |config|
-              owner_class_name = config[:owner_class_name]
-              collection_name = config[:collection_name]
-              type = config[:type]
-
-              pattern = "#{owner_class_name.downcase}:*:#{collection_name}"
-
-              dbclient.scan_each(match: pattern) do |key|
-                is_member = false
-                score = nil
-
-                case type
-                when :sorted_set
-                  score = dbclient.zscore(key, identifier)
-                  is_member = !score.nil?
-                when :set
-                  is_member = dbclient.sismember(key, identifier)
-                when :list
-                  is_member = dbclient.lpos(key, identifier) != nil
-                end
-
-                next unless is_member
-
-                # Check permission for sorted sets
-                if min_permission && type == :sorted_set && score
-                  decoded = permission_decode(score)
-                  required_level = ScoreEncoding::PERMISSION_LEVELS[min_permission] || 0
-                  actual_level = ScoreEncoding::PERMISSION_LEVELS[decoded[:permission]] || 0
-                  next if actual_level < required_level
-                end
-
-                owner_id = key.split(':')[1]
-                collection_info = {
-                  type: :membership,
-                  owner_class: owner_class_name,
-                  owner_id: owner_id,
-                  collection_name: collection_name,
-                  collection_type: type,
-                  key: key
-                }
-
-                if score
-                  collection_info[:score] = score
-                  collection_info[:permission] = permission_decode(score)[:permission]
-                end
-
-                collections << collection_info
-              end
+              collections.concat(process_membership_relationship(config, min_permission))
             end
 
             collections
           end
+
+          # Process a single membership relationship configuration
+          def process_membership_relationship(config, min_permission)
+            collections = []
+            owner_class_name = config[:owner_class_name]
+            collection_name = config[:collection_name]
+            type = config[:type]
+
+            pattern = "#{owner_class_name.downcase}:*:#{collection_name}"
+
+            dbclient.scan_each(match: pattern) do |key|
+              collection_info = process_membership_key(key, type, min_permission)
+              next unless collection_info
+
+              owner_id = key.split(':')[1]
+              collection_info.merge!(
+                type: :membership,
+                owner_class: owner_class_name,
+                owner_id: owner_id,
+                collection_name: collection_name,
+                collection_type: type,
+                key: key
+              )
+
+              collections << collection_info
+            end
+
+            collections
+          end
+
+          # Process membership for a specific key
+          def process_membership_key(key, type, min_permission)
+            is_member = false
+            score = nil
+
+            case type
+            when :sorted_set
+              score = dbclient.zscore(key, identifier)
+              is_member = !score.nil?
+            when :set
+              is_member = dbclient.sismember(key, identifier)
+            when :list
+              is_member = !dbclient.lpos(key, identifier).nil?
+            end
+
+            return nil unless is_member
+
+            # Check permission for sorted sets
+            if min_permission && type == :sorted_set && score
+              decoded = permission_decode(score)
+              required_level = ScoreEncoding::PERMISSION_LEVELS[min_permission] || 0
+              actual_level = ScoreEncoding::PERMISSION_LEVELS[decoded[:permission]] || 0
+              return nil if actual_level < required_level
+            end
+
+            collection_info = {}
+            if score
+              collection_info[:score] = score
+              collection_info[:permission] = permission_decode(score)[:permission]
+            end
+
+            collection_info
+          end
         end
 
-        # Include instance methods when this module is included
-        def self.included(base)
-          base.include InstanceMethods
-          super
-        end
       end
     end
   end

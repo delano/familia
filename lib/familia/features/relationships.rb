@@ -1,4 +1,4 @@
-# frozen_string_literal: true
+# lib/familia/features/relationships.rb
 
 require 'securerandom'
 require_relative 'relationships/score_encoding'
@@ -8,6 +8,7 @@ require_relative 'relationships/indexing'
 require_relative 'relationships/membership'
 require_relative 'relationships/cascading'
 require_relative 'relationships/querying'
+require_relative 'relationships/permission_management'
 
 module Familia
   module Features
@@ -416,7 +417,7 @@ module Familia
               end
             end
 
-            break if cursor == 0
+            break if cursor.zero?
           end
         end
 
@@ -460,6 +461,6 @@ module Familia
 
       # Register the feature with Familia
       Familia::Base.add_feature Relationships, :relationships
-    end # module Relationships
-  end # module Features
+    end
+  end
 end

@@ -1,4 +1,4 @@
-# frozen_string_literal: true
+# lib/familia/features/relationships/score_encoding.rb
 
 module Familia
   module Features
@@ -48,10 +48,74 @@ module Familia
           viewer:     PERMISSION_FLAGS[:read],
           editor:     PERMISSION_FLAGS[:read] | PERMISSION_FLAGS[:write] | PERMISSION_FLAGS[:edit],
           moderator:  PERMISSION_FLAGS[:read] | PERMISSION_FLAGS[:write] | PERMISSION_FLAGS[:edit] | PERMISSION_FLAGS[:delete],
-          admin:      0b11111111  # All permissions
+          admin:      0b11111111 # All permissions
+        }.freeze
+
+        # Categorical masks for efficient broad queries
+        PERMISSION_CATEGORIES = {
+          readable:       0b00000001,  # Has basic access
+          content_editor: 0b00001110,  # Can modify content (append|write|edit)
+          administrator:  0b11110000,  # Has any admin powers
+          privileged:     0b11111110,  # Has beyond read-only
+          owner:          0b11111111   # All permissions
+        }.freeze
+
+        # Legacy permission level mapping for backward compatibility
+        PERMISSION_LEVELS = {
+          none:      0,
+          read:      1,
+          append:    2,
+          write:     4,
+          edit:      8,
+          configure: 16,
+          delete:    32,
+          transfer:  64,
+          admin:     128,
+          unknown:   0
         }.freeze
 
         class << self
+          # Get permission level value for a permission symbol
+          #
+          # @param permission [Symbol] Permission symbol to get value for
+          # @return [Integer] Bit flag value for the permission
+          def permission_level_value(permission)
+            PERMISSION_FLAGS[permission] || 0
+          end
+
+          # Encode timestamp and permission (alias for encode_score)
+          #
+          # @param timestamp [Time, Integer] The timestamp to encode
+          # @param permission [Symbol, Integer, Array] Permission(s) to encode
+          # @return [Float] Encoded score suitable for Redis sorted sets
+          def permission_encode(timestamp, permission)
+            encode_score(timestamp, permission)
+          end
+
+          # Decode score into legacy permission format
+          #
+          # @param score [Float] The encoded score
+          # @return [Hash] Hash with legacy permission format
+          def permission_decode(score)
+            decoded = decode_score(score)
+            {
+              timestamp: decoded[:timestamp],
+              permission_level: decoded[:permissions],
+              permission: first_permission_symbol(decoded[:permissions])
+            }
+          end
+
+          # Helper: Get the first matching permission symbol from a bitmask
+          #
+          # @param permissions [Integer] Bitmask of permissions
+          # @return [Symbol, nil] The first matching permission symbol, or nil if none
+          def first_permission_symbol(permissions)
+            PERMISSION_FLAGS.each do |sym, bit|
+              return sym if permissions.anybits?(bit) && bit != 0
+            end
+            nil
+          end
+
           # Encode a timestamp and permissions into a Redis score
           #
           # @param timestamp [Time, Integer] The timestamp to encode
@@ -101,12 +165,10 @@ module Familia
             time_part = score.to_i
             permission_bits = ((score - time_part) * METADATA_PRECISION).round
 
-            permission_list = decode_permission_flags(permission_bits)
             {
               timestamp: time_part,
               permissions: permission_bits,
-              permission_list: permission_list,
-              permission: permission_list.length == 1 ? permission_list.first : nil
+              permission_list: decode_permission_flags(permission_bits)
             }
           end
 
@@ -117,15 +179,15 @@ module Familia
           # @return [Boolean] True if all permissions are present
           #
           # @example
-          #   has_permission?(1704067200.005, :read)  # score has read(1) + write(4)
+          #   permission?(1704067200.005, :read)  # score has read(1) + write(4)
           #   #=> true
-          def has_permission?(score, *permissions)
+          def permission?(score, *permissions)
             decoded = decode_score(score)
             permission_bits = decoded[:permissions]
 
             permissions.all? do |perm|
               flag = PERMISSION_FLAGS[perm]
-              flag && (permission_bits & flag) > 0
+              flag && permission_bits.anybits?(flag)
             end
           end
 
@@ -180,7 +242,13 @@ module Familia
           #   #=> [0.001, 0.005]
           def permission_range(min_permissions = [], max_permissions = nil)
             min_bits = Array(min_permissions).reduce(0) { |acc, p| acc | (PERMISSION_FLAGS[p] || 0) }
-            max_bits = max_permissions ? Array(max_permissions).reduce(0) { |acc, p| acc | (PERMISSION_FLAGS[p] || 0) } : 255
+            max_bits = if max_permissions
+                         Array(max_permissions).reduce(0) do |acc, p|
+                           acc | (PERMISSION_FLAGS[p] || 0)
+                         end
+                       else
+                         255
+                       end
 
             [min_bits / METADATA_PRECISION, max_bits / METADATA_PRECISION]
           end
@@ -207,7 +275,13 @@ module Familia
           #   score_range(nil, nil, min_permissions: [:read])
           #   #=> [0.001, "+inf"]
           def score_range(start_time = nil, end_time = nil, min_permissions: nil)
-            min_bits = min_permissions ? Array(min_permissions).reduce(0) { |acc, p| acc | (PERMISSION_FLAGS[p] || 0) } : 0
+            min_bits = if min_permissions
+                         Array(min_permissions).reduce(0) do |acc, p|
+                           acc | (PERMISSION_FLAGS[p] || 0)
+                         end
+                       else
+                         0
+                       end
 
             min_score = if start_time
                           encode_score(start_time, min_bits)
@@ -218,7 +292,7 @@ module Familia
                         end
 
             max_score = if end_time
-                          encode_score(end_time, 255)  # Use max valid permission bits
+                          encode_score(end_time, 255) # Use max valid permission bits
                         else
                           '+inf'
                         end
@@ -231,7 +305,102 @@ module Familia
           # @param bits [Integer] Permission bits to decode
           # @return [Array<Symbol>] Array of permission symbols
           def decode_permission_flags(bits)
-            PERMISSION_FLAGS.select { |name, flag| (bits & flag) > 0 }.keys
+            PERMISSION_FLAGS.select { |_name, flag| bits.anybits?(flag) }.keys
+          end
+
+          # Check broad permission categories
+          #
+          # @param score [Float] The encoded score
+          # @param category [Symbol] Category to check (:readable, :content_editor, :administrator, etc.)
+          # @return [Boolean] True if score meets the category requirements
+          def category?(score, category)
+            decoded = decode_score(score)
+            permission_bits = decoded[:permissions]
+
+            mask = PERMISSION_CATEGORIES[category]
+            return false unless mask
+
+            permission_bits.anybits?(mask)
+          end
+
+          # Filter collection by permission category
+          #
+          # @param scores [Array<Float>] Array of scores to filter
+          # @param category [Symbol] Category to filter by
+          # @return [Array<Float>] Scores matching the category
+          def filter_by_category(scores, category)
+            mask = PERMISSION_CATEGORIES[category]
+            return [] unless mask
+
+            scores.select do |score|
+              permission_bits = ((score % 1) * METADATA_PRECISION).round
+              permission_bits.anybits?(mask)
+            end
+          end
+
+          # Get permission tier for score
+          #
+          # @param score [Float] The encoded score
+          # @return [Symbol] Permission tier (:administrator, :content_editor, :viewer, :none)
+          def permission_tier(score)
+            decoded = decode_score(score)
+            bits = decoded[:permissions]
+
+            if bits.anybits?(PERMISSION_CATEGORIES[:administrator])
+              :administrator
+            elsif bits.anybits?(PERMISSION_CATEGORIES[:content_editor])
+              :content_editor
+            elsif bits.anybits?(PERMISSION_CATEGORIES[:readable])
+              :viewer
+            else
+              :none
+            end
+          end
+
+          # Efficient bulk categorization
+          #
+          # @param scores [Array<Float>] Array of scores to categorize
+          # @return [Hash] Hash mapping tiers to arrays of scores
+          def categorize_scores(scores)
+            scores.group_by { |score| permission_tier(score) }
+          end
+
+          # Check if permissions meet minimum category
+          #
+          # @param permission_bits [Integer] Permission bits to check
+          # @param category [Symbol] Category to check against
+          # @return [Boolean] True if permissions meet the category requirements
+          def meets_category?(permission_bits, category)
+            mask = PERMISSION_CATEGORIES[category]
+            return false unless mask
+
+            case category
+            when :readable
+              permission_bits.positive? # Any permission implies read
+            when :privileged
+              permission_bits > 1 # More than just read
+            when :administrator
+              permission_bits.anybits?(PERMISSION_CATEGORIES[:administrator])
+            else
+              permission_bits.anybits?(mask)
+            end
+          end
+
+          # Range queries for categorical filtering
+          #
+          # @param category [Symbol] Category to create range for
+          # @param start_time [Time, nil] Optional start time filter
+          # @param end_time [Time, nil] Optional end time filter
+          # @return [Array<String>] Min and max range strings for Redis queries
+          def category_score_range(category, start_time = nil, end_time = nil)
+            PERMISSION_CATEGORIES[category] || 0
+
+            # Any permission matching the category mask
+            min_score = start_time ? start_time.to_i : 0
+            max_score = end_time ? end_time.to_i : Time.now.to_i
+
+            # Return range that includes any matching permissions
+            ["#{min_score}.000", "#{max_score}.999"]
           end
 
           private
@@ -242,7 +411,8 @@ module Familia
           # @return [Integer] Validated permission bits
           # @raise [ArgumentError] If bits are outside 0-255 range
           def validate_permission_bits(bits)
-            raise ArgumentError, "Permission bits must be 0-255" unless (0..255).cover?(bits)
+            raise ArgumentError, 'Permission bits must be 0-255' unless (0..255).cover?(bits)
+
             bits
           end
         end
@@ -256,8 +426,8 @@ module Familia
           ScoreEncoding.decode_score(score)
         end
 
-        def has_permission?(score, *permissions)
-          ScoreEncoding.has_permission?(score, *permissions)
+        def permission?(score, *permissions)
+          ScoreEncoding.permission?(score, *permissions)
         end
 
         def add_permissions(score, *permissions)
@@ -280,9 +450,14 @@ module Familia
           ScoreEncoding.score_range(start_time, end_time, min_permissions: min_permissions)
         end
 
-        # Aliases for backward compatibility with tests
-        alias_method :permission_encode, :encode_score
-        alias_method :permission_decode, :decode_score
+        # Legacy method aliases for backward compatibility
+        def permission_encode(timestamp, permission)
+          ScoreEncoding.permission_encode(timestamp, permission)
+        end
+
+        def permission_decode(score)
+          ScoreEncoding.permission_decode(score)
+        end
       end
     end
   end

@@ -241,7 +241,7 @@ module Familia
         default_expiration ||= self.default_expiration
 
         # Handle cascading expiration to related data structures
-        if self.class.has_relations?
+        if self.class.relations?
           Familia.ld "[update_expiration] #{self.class} has relations: #{self.class.related_fields.keys}"
           self.class.related_fields.each do |name, definition|
             # Skip relations that don't have their own expiration settings

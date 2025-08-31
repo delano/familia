@@ -1,4 +1,4 @@
-# frozen_string_literal: true
+# lib/familia/features/relationships/cascading.rb
 
 module Familia
   module Features
@@ -16,6 +16,8 @@ module Familia
         # Class-level cascade configurations
         def self.included(base)
           base.extend ClassMethods
+          base.include InstanceMethods
+          super
         end
 
         module ClassMethods
@@ -77,7 +79,7 @@ module Familia
             remove_operations = []
             cascade_operations = []
 
-            strategies.each do |_key, strategy_info|
+            strategies.each_value do |strategy_info|
               case strategy_info[:strategy]
               when :remove
                 remove_operations << strategy_info
@@ -98,7 +100,7 @@ module Familia
           # Remove this object from all collections without cascading
           def remove_from_all_collections
             strategies = self.class.cascade_strategies
-            remove_operations = strategies.values.select { |s| s[:strategy] != :ignore }
+            remove_operations = strategies.values.reject { |s| s[:strategy] == :ignore }
             execute_remove_operations(remove_operations)
           end
 
@@ -430,11 +432,6 @@ module Familia
           end
         end
 
-        # Include instance methods when this module is included
-        def self.included(base)
-          base.include InstanceMethods
-          super
-        end
       end
     end
   end

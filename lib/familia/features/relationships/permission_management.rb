@@ -1,4 +1,4 @@
-# frozen_string_literal: true
+# lib/familia/features/relationships/permission_management.rb
 
 module Familia
   module Features
@@ -23,6 +23,8 @@ module Familia
           base.extend(ClassMethods)
         end
 
+        # Relationships::ClassMethods
+        #
         module ClassMethods
           # Enable permission tracking for this class
           #
@@ -72,7 +74,7 @@ module Familia
                 acc & ~(ScoreEncoding::PERMISSION_FLAGS[perm] || 0)
               end
 
-              if new_bits == 0
+              if new_bits.zero?
                 send(field_name).remove_field(user_key)
               else
                 send(field_name)[user_key] = new_bits
@@ -93,7 +95,7 @@ module Familia
 
               permissions.all? do |perm|
                 flag = ScoreEncoding::PERMISSION_FLAGS[perm]
-                flag && (bits & flag) > 0
+                flag && bits.anybits?(flag)
               end
             end
 
@@ -169,6 +171,90 @@ module Familia
             #   document.clear_all_permissions
             define_method :clear_all_permissions do
               send(field_name).clear
+            end
+
+            # === Two-Stage Filtering Methods ===
+
+            # Stage 1: Redis pre-filtering via zset membership
+            define_method :accessible_items do |collection_key|
+              self.class.dbclient.zrange(collection_key, 0, -1, with_scores: true)
+            end
+
+            # Stage 2: Broad categorical filtering on small sets
+            define_method :items_by_permission do |collection_key, category = :readable|
+              items_with_scores = accessible_items(collection_key)
+
+              # Operating on ~20-100 items, not millions
+              filtered = items_with_scores.select do |(_member, score)|
+                ScoreEncoding.category?(score, category)
+              end
+
+              filtered.map(&:first) # Return just the members
+            end
+
+            # Bulk permission check for UI rendering
+            define_method :permission_matrix do |collection_key|
+              items_with_scores = accessible_items(collection_key)
+
+              {
+                total: items_with_scores.size,
+                viewable: items_with_scores.count { |(_, s)| ScoreEncoding.category?(s, :readable) },
+                editable: items_with_scores.count { |(_, s)| ScoreEncoding.category?(s, :content_editor) },
+                administrative: items_with_scores.count { |(_, s)| ScoreEncoding.category?(s, :administrator) }
+              }
+            end
+
+            # Efficient "can perform any administrative action?" check
+            # Note: Currently checks if this object has admin privileges in the collection.
+            # The user parameter is reserved for future user-specific permission checking.
+            define_method :admin_access? do |_user, collection_key|
+              score = self.class.dbclient.zscore(collection_key, identifier)
+              return false unless score
+
+              ScoreEncoding.category?(score, :administrator)
+            end
+
+            # === Categorical Permission Methods ===
+
+            # Check permission category for user
+            #
+            # @param user [Object] User object to check category for
+            # @param category [Symbol] Category to check (:readable, :content_editor, etc.)
+            # @return [Boolean] True if user meets the category requirements
+            # @example Check if user has content editor permissions
+            #   document.category?(user, :content_editor)  #=> true
+            define_method :category? do |user, category|
+              user_key = user.respond_to?(:identifier) ? user.identifier : user.to_s
+              bits = send(field_name)[user_key].to_i
+              ScoreEncoding.meets_category?(bits, category)
+            end
+
+            # Get permission tier for user
+            #
+            # @param user [Object] User object to get tier for
+            # @return [Symbol] Permission tier (:administrator, :content_editor, :viewer, :none)
+            # @example Get user's permission tier
+            #   document.permission_tier_for(user)  #=> :content_editor
+            define_method :permission_tier_for do |user|
+              user_key = user.respond_to?(:identifier) ? user.identifier : user.to_s
+              bits = send(field_name)[user_key].to_i
+
+              # Create a temporary score to use ScoreEncoding.permission_tier
+              temp_score = ScoreEncoding.encode_score(Time.now, bits)
+              ScoreEncoding.permission_tier(temp_score)
+            end
+
+            # Get users by permission category
+            #
+            # @param category [Symbol] Category to filter by
+            # @return [Array<String>] Array of user keys with the specified category
+            # @example Get all content editors
+            #   document.users_by_category(:content_editor)  #=> ["user123", "user456"]
+            define_method :users_by_category do |category|
+              permissions_hash = send(field_name).hgetall
+              permissions_hash.select do |_user_key, bits|
+                ScoreEncoding.meets_category?(bits.to_i, category)
+              end.keys
             end
           end
         end
