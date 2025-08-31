@@ -111,24 +111,24 @@ expected_bits = 1 + 4 + 32  # read + write + delete = 37
 # Categorical Permission Detection
 
 ## Check if score has readable category
-Familia::Features::Relationships::ScoreEncoding.has_category?(@read_score, :readable)
+Familia::Features::Relationships::ScoreEncoding.category?(@read_score, :readable)
 #=> true
 
 ## Check if score has content_editor category (needs append, write, or edit)
 @write_score = Familia::Features::Relationships::ScoreEncoding.encode_score(1704067200, [:read, :write])
-Familia::Features::Relationships::ScoreEncoding.has_category?(@write_score, :content_editor)
+Familia::Features::Relationships::ScoreEncoding.category?(@write_score, :content_editor)
 #=> true
 
 ## Check if read-only score lacks content_editor category
-Familia::Features::Relationships::ScoreEncoding.has_category?(@read_score, :content_editor)
+Familia::Features::Relationships::ScoreEncoding.category?(@read_score, :content_editor)
 #=> false
 
 ## Check if admin score has administrator category
-Familia::Features::Relationships::ScoreEncoding.has_category?(@admin_score, :administrator)
+Familia::Features::Relationships::ScoreEncoding.category?(@admin_score, :administrator)
 #=> true
 
 ## Check if read score lacks administrator category
-Familia::Features::Relationships::ScoreEncoding.has_category?(@read_score, :administrator)
+Familia::Features::Relationships::ScoreEncoding.category?(@read_score, :administrator)
 #=> false
 
 # Permission Tier Detection
@@ -202,15 +202,15 @@ Familia::Features::Relationships::ScoreEncoding.meets_category?(128, :administra
 #=> false
 
 ## Check categorical permissions
-@doc1.has_category?('user123', :readable)
+@doc1.category?('user123', :readable)
 #=> true
 
 ## User has content editor category permissions
-@doc1.has_category?('user123', :content_editor)
+@doc1.category?('user123', :content_editor)
 #=> true
 
 ## User lacks administrator category permissions
-@doc1.has_category?('user123', :administrator)
+@doc1.category?('user123', :administrator)
 #=> false
 
 ## Get permission tier for user
@@ -312,7 +312,7 @@ Familia::Features::Relationships::ScoreEncoding.meets_category?(128, :administra
 @admin_test_customer.documents.add(@admin_doc.encode_score(Time.now, @admin_doc.permission_bits), @admin_doc.identifier)
 
 @admin_collection_key = @admin_test_customer.documents.dbkey
-@admin_doc.has_admin_access?('admin_user', @admin_collection_key)
+@admin_doc.admin_access?('admin_user', @admin_collection_key)
 #=> true
 
 # Permission Management Methods
