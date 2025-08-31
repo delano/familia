@@ -82,9 +82,13 @@ Familia::Features::Relationships::ScoreEncoding::PERMISSION_CATEGORIES[:owner]
 Familia::Features::Relationships::ScoreEncoding.permission_level_value(:read)
 #=> 1
 
-## Get permission level value for unknown permission returns 0
-Familia::Features::Relationships::ScoreEncoding.permission_level_value(:unknown)
-#=> 0
+## Get permission level value for unknown permission raises ArgumentError
+begin
+  Familia::Features::Relationships::ScoreEncoding.permission_level_value(:unknown)
+rescue ArgumentError => e
+  e.message
+end
+#=> "Unknown permission: :unknown"
 
 ## Get permission level value for admin permission
 Familia::Features::Relationships::ScoreEncoding.permission_level_value(:admin)

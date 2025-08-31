@@ -66,8 +66,9 @@ module Familia
           #
           # @param permission [Symbol] Permission symbol to get value for
           # @return [Integer] Bit flag value for the permission
+          # @raise [ArgumentError] If permission is unknown
           def permission_level_value(permission)
-            PERMISSION_FLAGS[permission] || 0
+            PERMISSION_FLAGS[permission] || raise(ArgumentError, "Unknown permission: #{permission.inspect}")
           end
 
           # Encode timestamp and permission (alias for encode_score)

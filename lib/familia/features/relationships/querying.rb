@@ -278,7 +278,12 @@ module Familia
           def filter_keys_by_permission(keys, min_permission, temp_prefix)
             return keys unless min_permission
 
-            required_bits = ScoreEncoding.permission_level_value(min_permission)
+            begin
+              required_bits = ScoreEncoding.permission_level_value(min_permission)
+            rescue ArgumentError
+              # Invalid permission symbol - return empty array (no access)
+              return []
+            end
             filtered_keys = []
 
             keys.each_with_index do |key, index|
@@ -318,7 +323,13 @@ module Familia
           def filter_key_by_permission(key, min_permission, temp_key)
             return key unless min_permission
 
-            required_bits = ScoreEncoding.permission_level_value(min_permission)
+            begin
+              required_bits = ScoreEncoding.permission_level_value(min_permission)
+            rescue ArgumentError
+              # Invalid permission symbol - return empty temp key (no access)
+              dbclient.del(temp_key) if dbclient.exists(temp_key) == 1
+              return temp_key
+            end
 
             # Get all members with their scores for bitwise filtering
             members_with_scores = dbclient.zrange(key, 0, -1, with_scores: true)
@@ -416,7 +427,12 @@ module Familia
             current_bits = permission_in_collection(owner, collection_name)
             return false if current_bits.nil? # Not in collection
 
-            required_bits = ScoreEncoding.permission_level_value(required_permission)
+            begin
+              required_bits = ScoreEncoding.permission_level_value(required_permission)
+            rescue ArgumentError
+              # Invalid permission symbol - deny access
+              return false
+            end
 
             # Check if current permissions include the required permission using bitwise AND
             # Note: 0 bits means exists in collection but no permissions
@@ -484,9 +500,14 @@ module Familia
 
                 # Check permission if required
                 if min_permission
-                  required_bits = ScoreEncoding.permission_level_value(min_permission)
-                  # Skip if required permission bits are not present
-                  next if (actual_bits & required_bits) != required_bits
+                  begin
+                    required_bits = ScoreEncoding.permission_level_value(min_permission)
+                    # Skip if required permission bits are not present
+                    next if (actual_bits & required_bits) != required_bits
+                  rescue ArgumentError
+                    # Invalid permission symbol - skip this collection
+                    next
+                  end
                 end
 
                 context_id = key.split(':')[1]
@@ -570,10 +591,15 @@ module Familia
 
               # Check permission for sorted sets
               if min_permission && type == :sorted_set
-                required_bits = ScoreEncoding.permission_level_value(min_permission)
-                actual_bits = decoded[:permissions]
-                # Return nil if required permission bits are not present
-                return nil if (actual_bits & required_bits) != required_bits
+                begin
+                  required_bits = ScoreEncoding.permission_level_value(min_permission)
+                  actual_bits = decoded[:permissions]
+                  # Return nil if required permission bits are not present
+                  return nil if (actual_bits & required_bits) != required_bits
+                rescue ArgumentError
+                  # Invalid permission symbol - deny access
+                  return nil
+                end
               end
             end
 
