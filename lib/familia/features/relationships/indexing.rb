@@ -110,7 +110,7 @@ module Familia
             # Generate method to get the index hash directly
             actual_context_class.define_method(index_name) do
               index_key = "#{self.class.name.downcase}:#{identifier}:#{index_name}"
-              Familia::HashKey.new(rediskey: index_key, db: self.class.logical_database)
+              Familia::HashKey.new(nil, dbkey: index_key, logical_database: self.class.logical_database)
             end
 
             # Generate method to rebuild the index
@@ -152,7 +152,7 @@ module Familia
             # Generate method to get the global index hash directly
             define_method("global_#{index_name}") do
               index_key = "global:#{index_name}"
-              Familia::HashKey.new(rediskey: index_key, db: logical_database)
+              Familia::HashKey.new(nil, dbkey: index_key, logical_database: logical_database)
             end
 
             # Generate method to rebuild the global index

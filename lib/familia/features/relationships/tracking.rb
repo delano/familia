@@ -95,7 +95,7 @@ module Familia
             # Generate global collection getter method
             target_class.define_singleton_method("global_#{collection_name}") do
               collection_key = "global:#{collection_name}"
-              Familia::SortedSet.new(rediskey: collection_key, db: logical_database)
+              Familia::SortedSet.new(nil, dbkey: collection_key, logical_database: logical_database)
             end
 
             # Generate global add method (e.g., Domain.add_to_global_all_domains)
@@ -130,7 +130,7 @@ module Familia
             # Generate collection getter method
             actual_context_class.define_method(collection_name) do
               collection_key = "#{self.class.name.downcase}:#{identifier}:#{collection_name}"
-              Familia::SortedSet.new(rediskey: collection_key, db: self.class.logical_database)
+              Familia::SortedSet.new(nil, dbkey: collection_key, logical_database: self.class.logical_database)
             end
 
             # Generate add method (e.g., Customer#add_domain)

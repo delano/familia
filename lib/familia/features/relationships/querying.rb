@@ -39,7 +39,7 @@ module Familia
             dbclient.zunionstore(temp_key, source_keys, aggregate: aggregate)
             dbclient.expire(temp_key, ttl)
 
-            Familia::SortedSet.new(rediskey: temp_key, db: logical_database)
+            Familia::SortedSet.new(nil, dbkey: temp_key, logical_database: logical_database)
           end
 
           # Intersection of multiple collections (items present in ALL collections)
@@ -62,7 +62,7 @@ module Familia
             dbclient.zinterstore(temp_key, source_keys, aggregate: aggregate)
             dbclient.expire(temp_key, ttl)
 
-            Familia::SortedSet.new(rediskey: temp_key, db: logical_database)
+            Familia::SortedSet.new(nil, dbkey: temp_key, logical_database: logical_database)
           end
 
           # Difference of collections (items in first collection but not in others)
@@ -95,7 +95,7 @@ module Familia
 
             dbclient.expire(temp_key, ttl)
 
-            Familia::SortedSet.new(rediskey: temp_key, db: logical_database)
+            Familia::SortedSet.new(nil, dbkey: temp_key, logical_database: logical_database)
           end
 
           # Find collections with shared members
@@ -196,7 +196,7 @@ module Familia
 
             dbclient.expire(temp_key, ttl)
 
-            Familia::SortedSet.new(rediskey: temp_key, db: logical_database)
+            Familia::SortedSet.new(nil, dbkey: temp_key, logical_database: logical_database)
           end
 
           # Get collection statistics
@@ -329,7 +329,7 @@ module Familia
             dbclient.zadd(temp_key, 0, "__nil__")
             dbclient.zrem(temp_key, "__nil__")
             dbclient.expire(temp_key, 60)
-            Familia::SortedSet.new(rediskey: temp_key, db: logical_database)
+            Familia::SortedSet.new(nil, dbkey: temp_key, logical_database: logical_database)
           end
         end
 
