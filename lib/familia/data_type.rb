@@ -68,7 +68,7 @@ module Familia
     end
     extend ClassMethods
 
-    attr_reader :keystring, :opts
+    attr_reader :keystring, :parent, :opts
     attr_writer :dump_method, :load_method
 
     # +keystring+: If parent is set, this will be used as the suffix
@@ -195,10 +195,6 @@ module Familia
 
     def parent?
       parent_class? || parent_instance?
-    end
-
-    def parent
-      @opts[:parent]
     end
 
 
