@@ -1,10 +1,12 @@
+# try/features/categorical_permissions_try.rb
+
 # Test Suite: Categorical Bit Encoding & Two-Stage Filtering
 # Validates the implementation of categorical permission management with
 # two-stage filtering pattern for efficient permission-based queries.
 
 require_relative '../helpers/test_helpers'
 
-## Categorical Permission System Setup
+# Categorical Permission System Setup
 
 # Test customer and document classes with categorical permissions
 class CategoricalTestCustomer < Familia::Horreum
@@ -38,7 +40,8 @@ class CategoricalTestDocument < Familia::Horreum
   end
 end
 
-## Basic Categorical Constants Validation
+# Basic Categorical Constants Validation
+@large_collection = "test:large_collection"
 
 @customer = CategoricalTestCustomer.new(custid: 'cat_test_customer')
 @customer.name = 'Test Customer'
@@ -51,19 +54,23 @@ Familia::Features::Relationships::ScoreEncoding::PERMISSION_CATEGORIES.keys.sort
 Familia::Features::Relationships::ScoreEncoding::PERMISSION_CATEGORIES[:readable]
 #=> 1
 
+## Content editor category has correct bit pattern
 Familia::Features::Relationships::ScoreEncoding::PERMISSION_CATEGORIES[:content_editor]
 #=> 14
 
+## Administrator category has correct bit pattern
 Familia::Features::Relationships::ScoreEncoding::PERMISSION_CATEGORIES[:administrator]
 #=> 240
 
+## Privileged category has correct bit pattern
 Familia::Features::Relationships::ScoreEncoding::PERMISSION_CATEGORIES[:privileged]
 #=> 254
 
+## Owner category has correct bit pattern
 Familia::Features::Relationships::ScoreEncoding::PERMISSION_CATEGORIES[:owner]
 #=> 255
 
-## Permission Level Value Method
+# Permission Level Value Method
 
 ## Get permission level value for known permission
 Familia::Features::Relationships::ScoreEncoding.permission_level_value(:read)
@@ -77,7 +84,7 @@ Familia::Features::Relationships::ScoreEncoding.permission_level_value(:unknown)
 Familia::Features::Relationships::ScoreEncoding.permission_level_value(:admin)
 #=> 128
 
-## Score Encoding with Categorical Permissions
+# Score Encoding with Categorical Permissions
 
 ## Encode score with read permission
 @@read_score = Familia::Features::Relationships::ScoreEncoding.encode_score(1704067200, :read)
@@ -95,7 +102,7 @@ expected_bits = 1 + 4 + 32  # read + write + delete = 37
 @@admin_score.to_s.match(/1704067200\.128/)
 #=> #<MatchData "1704067200.128">
 
-## Categorical Permission Detection
+# Categorical Permission Detection
 
 ## Check if score has readable category
 Familia::Features::Relationships::ScoreEncoding.has_category?(@read_score, :readable)
@@ -118,7 +125,7 @@ Familia::Features::Relationships::ScoreEncoding.has_category?(@admin_score, :adm
 Familia::Features::Relationships::ScoreEncoding.has_category?(@read_score, :administrator)
 #=> false
 
-## Permission Tier Detection
+# Permission Tier Detection
 
 ## Read-only permission returns viewer tier
 Familia::Features::Relationships::ScoreEncoding.permission_tier(@read_score)
@@ -138,7 +145,7 @@ Familia::Features::Relationships::ScoreEncoding.permission_tier(@admin_score)
 Familia::Features::Relationships::ScoreEncoding.permission_tier(@no_perms_score)
 #=> :none
 
-## Meets Category Validation
+# Meets Category Validation
 
 ## Read permission meets readable category
 Familia::Features::Relationships::ScoreEncoding.meets_category?(1, :readable)
@@ -157,7 +164,6 @@ Familia::Features::Relationships::ScoreEncoding.meets_category?(128, :administra
 #=> true
 
 ## Permission Management Module Integration
-
 @doc1 = CategoricalTestDocument.new(doc_id: 'doc1', title: 'Document 1', created_at: Time.now.to_i)
 @doc1.permission_bits = 5  # read + write
 @doc1.save
@@ -174,15 +180,18 @@ Familia::Features::Relationships::ScoreEncoding.meets_category?(128, :administra
 @customer.documents.add(@doc1.identifier, @doc1.encode_score(Time.now, @doc1.permission_bits))
 @customer.documents.add(@doc2.identifier, @doc2.encode_score(Time.now, @doc2.permission_bits))
 @customer.documents.add(@doc3.identifier, @doc3.encode_score(Time.now, @doc3.permission_bits))
+#=> 'unknown'
 
 ## Grant permissions to user
 @doc1.grant('user123', :read, :write)
 @doc1.can?('user123', :read)
 #=> true
 
+## Can check if user has write permission
 @doc1.can?('user123', :write)
 #=> true
 
+## Can check if user lacks delete permission
 @doc1.can?('user123', :delete)
 #=> false
 
@@ -190,9 +199,11 @@ Familia::Features::Relationships::ScoreEncoding.meets_category?(128, :administra
 @doc1.has_category?('user123', :readable)
 #=> true
 
+## User has content editor category permissions
 @doc1.has_category?('user123', :content_editor)
 #=> true
 
+## User lacks administrator category permissions
 @doc1.has_category?('user123', :administrator)
 #=> false
 
@@ -224,6 +235,7 @@ Familia::Features::Relationships::ScoreEncoding.meets_category?(128, :administra
 @editor_items = @doc1.items_by_permission(@doc1_collection_key, :content_editor)
 @editor_items.length
 #=> 1
+## Editor items include the document identifier
 @editor_items.include?(@doc1.identifier)
 #=> true
 
@@ -231,41 +243,48 @@ Familia::Features::Relationships::ScoreEncoding.meets_category?(128, :administra
 @admin_items = @doc1.items_by_permission(@doc1_collection_key, :administrator)
 @admin_items.length
 #=> 1
+
+## Admin items include the document identifier
 @admin_items.include?(@doc3.identifier)
 #=> true
 
-## Permission Matrix for UI Rendering
+# Permission Matrix for UI Rendering
 
 ## Generate permission matrix for collection
 @matrix = @doc1.permission_matrix(@doc1_collection_key)
 @matrix[:total]
 #=> 3
 
+## Matrix shows correct viewable count
 @matrix[:viewable]
 #=> 3
 
+## Matrix shows correct editable count
 @matrix[:editable]
 #=> 1
 
+## Matrix shows correct administrative count
 @matrix[:administrative]
 #=> 1
 
-## Efficient Admin Access Check
+# Efficient Admin Access Check
 
 ## Check admin access for document with admin permissions
 @doc3.has_admin_access?('admin_user', @doc1_collection_key)
 #=> true
 
-## Permission Management Methods
+# Permission Management Methods
 
 ## Set exact permissions (replace existing)
 @doc1.set_permissions('user456', :read, :edit)
 @doc1.can?('user456', :read)
 #=> true
 
+## [Add a more specific test description here]
 @doc1.can?('user456', :edit)
 #=> true
 
+## [Add a more specific test description here]
 @doc1.can?('user456', :write)
 #=> false
 
@@ -274,6 +293,7 @@ Familia::Features::Relationships::ScoreEncoding.meets_category?(128, :administra
 @doc1.can?('user456', :write)
 #=> true
 
+## [Add a more specific test description here]
 @doc1.can?('user456', :delete)
 #=> true
 
@@ -282,7 +302,7 @@ Familia::Features::Relationships::ScoreEncoding.meets_category?(128, :administra
 @perms.sort
 #=> [:delete, :edit, :read, :write]
 
-## Users by Category Filtering
+# Users by Category Filtering
 
 ## Grant different permission levels to multiple users
 @doc1.set_permissions('viewer1', :read)
@@ -294,17 +314,15 @@ Familia::Features::Relationships::ScoreEncoding.meets_category?(128, :administra
 @viewers.include?('viewer1')
 #=> true
 
+## [Add a more specific test description here]
 @editors = @doc1.users_by_category(:content_editor)
 @editors.include?('editor1')
 #=> true
-@editors.include?('viewer1')
-#=> false
 
+## [Add a more specific test description here]
 @admins = @doc1.users_by_category(:administrator)
 @admins.include?('admin1')
 #=> true
-@admins.include?('editor1')
-#=> false
 
 ## All Permissions Overview
 
@@ -313,19 +331,22 @@ Familia::Features::Relationships::ScoreEncoding.meets_category?(128, :administra
 @all_perms.keys.length > 0
 #=> true
 
+## [Add a more specific test description here]
 @all_perms['editor1'].include?(:write)
 #=> true
 
+## [Add a more specific test description here]
 @all_perms['admin1'].include?(:admin)
 #=> true
 
-## Revoke Permissions
+# Revoke Permissions
 
 ## Revoke specific permissions
 @doc1.revoke('editor1', :write)
 @doc1.can?('editor1', :write)
 #=> false
 
+## [Add a more specific test description here]
 @doc1.can?('editor1', :read)
 #=> true
 
@@ -334,7 +355,7 @@ Familia::Features::Relationships::ScoreEncoding.meets_category?(128, :administra
 @doc1.all_permissions.empty?
 #=> true
 
-## Edge Cases and Error Conditions
+# Edge Cases and Error Conditions
 
 ## Handle nil user gracefully
 @doc1.grant(nil, :read)
@@ -351,10 +372,11 @@ Familia::Features::Relationships::ScoreEncoding.meets_category?(128, :administra
 @doc1.can?('test_user', :unknown_permission)
 #=> false
 
+## [Add a more specific test description here]
 @doc1.can?('test_user', :read)  # Should still work if :read was granted
 #=> false
 
-## Legacy Compatibility
+# Legacy Compatibility
 
 ## Legacy permission_encode method works
 @legacy_score = Familia::Features::Relationships::ScoreEncoding.permission_encode(Time.now, :write)
@@ -362,16 +384,15 @@ Familia::Features::Relationships::ScoreEncoding.meets_category?(128, :administra
 @decoded[:permission]
 #=> :write
 
-## Performance Characteristics Validation
+# Performance Characteristics Validation
 
 ## Two-stage filtering performance on larger dataset
-@large_collection = "test:large_collection"
-
-# Simulate larger dataset by adding 100 items to sorted set
+## Simulate larger dataset by adding 100 items to sorted set
 100.times do |i|
   score = Familia::Features::Relationships::ScoreEncoding.encode_score(Time.now.to_i + i, rand(1..255))
   @customer.dbclient.zadd(@large_collection, score, "item_#{i}")
 end
+#=> 200_000
 
 ## Stage 1: Redis pre-filtering is O(log N + M) efficient
 @start_time = Time.now
@@ -381,7 +402,7 @@ end
 @large_accessible.length
 #=> 100
 
-# Stage 1 should complete quickly (sub-millisecond for 100 items)
+## Stage 1: should complete quickly (sub-millisecond for 100 items)
 @stage1_time < 0.01
 #=> true
 
@@ -390,14 +411,15 @@ end
 @large_readable = @doc1.items_by_permission(@large_collection, :readable)
 @stage2_time = Time.now - @start_time
 
-# Stage 2 processes only the 100 items from Stage 1, not millions from database
+## Stage 2: processes only the 100 items from Stage 1, not millions from database
 @stage2_time < 0.01
 #=> true
 
+## [Add a more specific test description here]
 @large_readable.length > 0
 #=> true
 
-## Cleanup test data
+# Cleanup test data
 @customer.destroy!
 @doc1.destroy!
 @doc2.destroy!

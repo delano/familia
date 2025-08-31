@@ -1,4 +1,4 @@
-# frozen_string_literal: true
+# lib/familia/features/relationships/score_encoding.rb
 
 module Familia
   module Features
@@ -101,7 +101,7 @@ module Familia
             {
               timestamp: decoded[:timestamp],
               permission_level: decoded[:permissions],
-              permission: decoded[:permission_list].first || :unknown
+              permission: decoded[:permission_list].first
             }
           end
 
