@@ -517,21 +517,6 @@ class ConfigurableModel < Familia::Horreum
 end
 ```
 
-### Runtime Feature Checking
-
-```ruby
-class Model < Familia::Horreum
-  feature :expiration
-
-  def available_features
-    self.class.features_enabled
-  end
-end
-
-model = Model.new
-model.available_features  # => [:expiration]
-```
-
 ## Testing Features
 
 ### Feature Testing
