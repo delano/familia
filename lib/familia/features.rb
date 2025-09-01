@@ -1,13 +1,11 @@
 # lib/familia/features.rb
 
 module Familia
-
   FeatureDefinition = Data.define(:name, :depends_on)
 
   # Familia::Features
   #
   module Features
-
     @features_enabled = nil
     @feature_options = nil
     attr_reader :features_enabled
@@ -19,6 +17,7 @@ module Familia
     def feature_options(feature_name = nil)
       @feature_options ||= {}
       return @feature_options if feature_name.nil?
+
       @feature_options[feature_name.to_sym] || {}
     end
 
@@ -39,23 +38,24 @@ module Familia
         return
       end
 
-      if Familia.debug?
-        Familia.trace :FEATURE, nil, "#{self} includes #{feature_name.inspect}", caller(1..1)
-      end
+      Familia.trace :FEATURE, nil, "#{self} includes #{feature_name.inspect}", caller(1..1) if Familia.debug?
 
       # Auto-activate dependencies with cycle detection
       feature_def = Familia::Base.feature_definitions[feature_name]
       if feature_def&.depends_on&.any?
         @_activating_features ||= []
         if @_activating_features.include?(feature_name)
-          raise Familia::Problem, "Cyclic feature dependency detected: #{(@_activating_features + [feature_name]).join(' -> ')}"
+          raise Familia::Problem,
+                "Cyclic feature dependency detected: #{(@_activating_features + [feature_name]).join(' -> ')}"
         end
+
         @_activating_features << feature_name
         begin
           missing = feature_def.depends_on - features_enabled
           missing.each do |dependency|
             if Familia.debug?
-              Familia.trace :DEPENDENCY, nil, "#{self} auto-activating dependency #{dependency} for #{feature_name}", caller(1..1)
+              Familia.trace :DEPENDENCY, nil, "#{self} auto-activating dependency #{dependency} for #{feature_name}",
+                            caller(1..1)
             end
             feature(dependency) # Recursive call to activate dependency
           end
@@ -89,7 +89,6 @@ module Familia
       # We'd need to extend the DataType instances for each Horreum subclass. That
       # avoids it getting included multiple times per DataType
     end
-
   end
 end
 

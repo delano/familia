@@ -13,7 +13,7 @@ module Familia
         base.instance_eval do
           @feature_options ||= {}
           @feature_options[:external_identifiers] ||= {}
-          @feature_options[:external_identifiers][:prefix] ||= "ext"
+          @feature_options[:external_identifiers][:prefix] ||= 'ext'
         end
 
         # Register the extid field using our custom field type
@@ -24,12 +24,15 @@ module Familia
 
       module ClassMethods
         def generate_extid(objid = nil)
-          raise Familia::Problem, "ExternalIdentifiers requires ObjectIdentifiers feature" unless features_enabled.include?(:object_identifiers)
+          unless features_enabled.include?(:object_identifiers)
+            raise Familia::Problem,
+                  'ExternalIdentifiers requires ObjectIdentifiers feature'
+          end
           return nil if objid.to_s.empty?
 
-          objid_hex = objid.to_s.gsub('-', '')
+          objid_hex = objid.to_s.delete('-')
           external_part = Familia.shorten_to_external_id(objid_hex, base: 36)
-          prefix = feature_options(:external_identifiers)[:prefix] || "ext"
+          prefix = feature_options(:external_identifiers)[:prefix] || 'ext'
           "#{prefix}_#{external_part}"
         end
 
@@ -62,14 +65,14 @@ module Familia
         return nil if current_objid.nil? || current_objid.to_s.empty?
 
         # Convert objid to hex string for processing
-        objid_hex = current_objid.gsub('-', '') # Remove UUID hyphens if present
+        objid_hex = current_objid.delete('-') # Remove UUID hyphens if present
 
         # Generate deterministic external ID using SecureIdentifier
         external_part = Familia.shorten_to_external_id(objid_hex, base: 36)
 
         # Get prefix from feature options, default to "ext"
         options = self.class.feature_options(:external_identifiers)
-        prefix = options[:prefix] || "ext"
+        prefix = options[:prefix] || 'ext'
 
         "#{prefix}_#{external_part}"
       end

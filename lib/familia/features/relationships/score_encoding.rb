@@ -40,7 +40,7 @@ module Familia
           configure: 0b00010000,  # 16  - Change settings
           delete:    0b00100000,  # 32  - Remove items
           transfer:  0b01000000,  # 64  - Change ownership
-          admin:     0b10000000   # 128 - Full control
+          admin:     0b10000000,  # 128 - Full control
         }.freeze
 
         # Predefined permission combinations
@@ -59,7 +59,6 @@ module Familia
           privileged:     0b11111110,  # Has beyond read-only
           owner:          0b11111111   # All permissions
         }.freeze
-
 
         class << self
           # Get permission bit flag value for a permission symbol
@@ -92,7 +91,6 @@ module Familia
               permission_list: decoded[:permission_list]
             }
           end
-
 
           # Encode a timestamp and permissions into a Redis score
           #

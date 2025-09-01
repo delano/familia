@@ -121,11 +121,12 @@ module Familia
           when Proc
             generator.call
           else
-            if generator.respond_to?(:call)
-              generator.call
-            else
+            unless generator.respond_to?(:call)
               raise Familia::Problem, "Invalid object identifier generator: #{generator.inspect}"
             end
+
+            generator.call
+
           end
         end
 
@@ -184,11 +185,11 @@ module Familia
         # We don't need to store it per-instance since it's consistent for the class.
         # The actual generation happens lazily in the getter when needed.
 
-        if Familia.debug?
-          options = self.class.feature_options(:object_identifiers)
-          generator = options[:generator] || DEFAULT_GENERATOR
-          Familia.trace :OBJID_INIT, dbclient, "Generator strategy: #{generator}", caller(1..1)
-        end
+        return unless Familia.debug?
+
+        options = self.class.feature_options(:object_identifiers)
+        generator = options[:generator] || DEFAULT_GENERATOR
+        Familia.trace :OBJID_INIT, dbclient, "Generator strategy: #{generator}", caller(1..1)
       end
 
       Familia::Base.add_feature self, :object_identifiers, depends_on: []

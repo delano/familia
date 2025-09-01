@@ -496,7 +496,6 @@ module Familia
             true
           end
         end
-
       end
     end
   end

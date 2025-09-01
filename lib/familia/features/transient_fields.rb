@@ -182,9 +182,7 @@ module Familia
       def clear_transient_fields!
         self.class.transient_fields.each do |field_name|
           field_value = instance_variable_get("@#{field_name}")
-          if field_value.respond_to?(:clear!)
-            field_value.clear!
-          end
+          field_value.clear! if field_value.respond_to?(:clear!)
         end
       end
 
@@ -213,13 +211,13 @@ module Familia
       def transient_fields_summary
         self.class.transient_fields.each_with_object({}) do |field_name, summary|
           field_value = instance_variable_get("@#{field_name}")
-          if field_value.nil?
-            summary[field_name] = nil
-          elsif field_value.respond_to?(:cleared?) && field_value.cleared?
-            summary[field_name] = "[CLEARED]"
-          else
-            summary[field_name] = "[REDACTED]"
-          end
+          summary[field_name] = if field_value.nil?
+                                  nil
+                                elsif field_value.respond_to?(:cleared?) && field_value.cleared?
+                                  '[CLEARED]'
+                                else
+                                  '[REDACTED]'
+                                end
         end
       end
 

@@ -431,7 +431,6 @@ module Familia
             affected_keys
           end
         end
-
       end
     end
   end

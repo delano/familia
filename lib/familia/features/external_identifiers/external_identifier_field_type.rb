@@ -54,12 +54,10 @@ module Familia
 
               # Generate external identifier from objid if available
               generated_extid = generate_external_identifier
-              if generated_extid
-                instance_variable_set(:"@#{field_name}", generated_extid)
-                generated_extid
-              else
-                nil
-              end
+              return unless generated_extid
+
+              instance_variable_set(:"@#{field_name}", generated_extid)
+              generated_extid
             end
           end
         end
