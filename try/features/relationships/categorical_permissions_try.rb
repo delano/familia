@@ -4,7 +4,7 @@
 # Validates the implementation of categorical permission management with
 # two-stage filtering pattern for efficient permission-based queries.
 
-require_relative '../helpers/test_helpers'
+require_relative '../../helpers/test_helpers'
 
 # Categorical Permission System Setup
 

@@ -2,7 +2,5 @@
 
 module Familia
   # Version information for the Familia
-  unless defined?(Familia::VERSION)
-    VERSION = '2.0.0.pre7'
-  end
+  VERSION = '2.0.0.pre8'.freeze unless defined?(Familia::VERSION)
 end

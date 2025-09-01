@@ -2,7 +2,7 @@
 #
 # Performance and integration testing for the Relationships feature
 
-require_relative '../helpers/test_helpers'
+require_relative '../../helpers/test_helpers'
 require 'benchmark'
 
 # Test classes for performance testing

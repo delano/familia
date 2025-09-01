@@ -3,7 +3,7 @@
 # Security tests for the no-cache encryption strategy
 # These tests verify that we maintain security properties by NOT caching derived keys
 
-require_relative '../helpers/test_helpers'
+require_relative '../../helpers/test_helpers'
 
 test_keys = {
   v1: Base64.strict_encode64('a' * 32),

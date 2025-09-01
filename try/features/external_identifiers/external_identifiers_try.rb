@@ -1,6 +1,6 @@
 # try/features/external_identifiers_try.rb
 
-require_relative '../helpers/test_helpers'
+require_relative '../../helpers/test_helpers'
 
 Familia.debug = false
 
