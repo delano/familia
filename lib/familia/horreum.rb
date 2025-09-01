@@ -1,5 +1,10 @@
 # lib/familia/horreum.rb
 
+require_relative 'horreum/subclass/definition'
+require_relative 'horreum/subclass/management'
+require_relative 'horreum/shared/settings'
+require_relative 'horreum/core'
+
 module Familia
   #
   # Horreum: A module for managing Redis-based object storage and relationships
@@ -23,6 +28,8 @@ module Familia
   #
   class Horreum
     include Familia::Base
+    include Familia::Horreum::Core
+    include Familia::Horreum::Settings
 
     # Singleton Class Context
     #
@@ -62,13 +69,14 @@ module Familia
       # Extends ClassMethods to subclasses and tracks Familia members
       def inherited(member)
         Familia.trace :HORREUM, nil, "Welcome #{member} to the family", caller(1..1) if Familia.debug?
-        member.extend(DefinitionMethods)
-        member.extend(ManagementMethods)
-        member.extend(Connection)
-        member.extend(Features)
 
-        # Tracks all the classes/modules that include Familia. It's
-        # 10pm, do you know where you Familia members are?
+        # Class-level functionality extensions:
+        member.extend(Familia::Horreum::DefinitionMethods)    # field(), identifier_field(), dbkey()
+        member.extend(Familia::Horreum::ManagementMethods)    # create(), find(), destroy!()
+        member.extend(Familia::Horreum::Connection)           # dbclient, connection management
+        member.extend(Familia::Features)             # feature() method for optional modules
+
+        # Track all classes that inherit from Horreum
         Familia.members << member
         super
       end
@@ -84,7 +92,7 @@ module Familia
     #   Session.new({sessid: "abc123", custid: "user456"}) # legacy hash (robust)
     #
     def initialize(*args, **kwargs)
-      Familia.ld "[Horreum] Initializing #{self.class}"
+      Familia.trace :INITIALIZE, dbclient, "Initializing #{self.class}", caller(1..1) if Familia.debug?
       initialize_relatives
 
       # No longer auto-create a key field - the identifier method will
@@ -123,7 +131,7 @@ module Familia
       elsif args.any?
         initialize_with_positional_args(*args)
       else
-        Familia.ld "[Horreum] #{self.class} initialized with no arguments"
+      Familia.trace :INITIALIZE, dbclient, "#{self.class} initialized with no arguments", caller(1..1) if Familia.debug?
         # Default values are intentionally NOT set here to:
         # - Maintain Database memory efficiency (only store non-nil values)
         # - Avoid conflicts with nil-skipping serialization logic
@@ -158,7 +166,7 @@ module Familia
       self.class.related_fields.each_pair do |name, data_type_definition|
         klass = data_type_definition.klass
         opts = data_type_definition.opts
-        Familia.ld "[#{self.class}] initialize_relatives #{name} => #{klass} #{opts.keys}"
+        Familia.trace :INITIALIZE_RELATIVES, dbclient, "#{name} => #{klass} #{opts.keys}", caller(1..1) if Familia.debug?
 
         # As a subclass of Familia::Horreum, we add ourselves as the parent
         # automatically. This is what determines the dbkey for DataType
@@ -310,11 +318,3 @@ module Familia
     end
   end
 end
-
-require_relative 'horreum/definition_methods'
-require_relative 'horreum/management_methods'
-require_relative 'horreum/database_commands'
-require_relative 'horreum/connection'
-require_relative 'horreum/serialization'
-require_relative 'horreum/settings'
-require_relative 'horreum/utils'

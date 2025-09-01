@@ -49,7 +49,7 @@ Familia.debug = false
 #=> ["mixed@test.com", "Mixed Test", nil, "user"]
 
 ## to_h works correctly with keyword-initialized objects
-@customer2.to_h[:name]
+@customer2.to_h["name"]
 #=> "Jane Smith"
 
 ## to_a works correctly with keyword-initialized objects

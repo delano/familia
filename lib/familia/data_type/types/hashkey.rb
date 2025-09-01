@@ -61,6 +61,24 @@ module Familia
     end
     alias all hgetall
 
+    # Sets field in the hash stored at key to value, only if field does not yet exist.
+    # If field already exists, this operation has no effect.
+    # @param field [String] The field name
+    # @param val [Object] The value to set
+    # @return [Integer] 1 if field is a new field and value was set, 0 if field already exists
+    def hsetnx(field, val)
+      ret = dbclient.hsetnx dbkey, field.to_s, serialize_value(val)
+      update_expiration if ret == 1
+      ret
+    rescue TypeError => e
+      Familia.le "[hsetnx] #{e.message}"
+      Familia.ld "[hsetnx] #{dbkey} #{field}=#{val}" if Familia.debug
+      echo :hsetnx, caller(1..1).first if Familia.debug # logs via echo to the db and back
+      klass = val.class
+      msg = "Cannot store #{field} => #{val.inspect} (#{klass}) in #{dbkey}"
+      raise e.class, msg
+    end
+
     def key?(field)
       dbclient.hexists dbkey, field.to_s
     end

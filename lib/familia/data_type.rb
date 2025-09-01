@@ -27,12 +27,14 @@ module Familia
       attr_writer :logical_database, :uri
     end
 
+    # DataType::ClassMethods
+    #
     module ClassMethods
       # To be called inside every class that inherits DataType
       # +methname+ is the term used for the class and instance methods
       # that are created for the given +klass+ (e.g. set, list, etc)
       def register(klass, methname)
-        Familia.ld "[#{self}] Registering #{klass} as #{methname.inspect}"
+        Familia.trace :REGISTER, nil, "[#{self}] Registering #{klass} as #{methname.inspect}", caller(1..1) if Familia.debug?
 
         @registered_types[methname] = klass
       end
@@ -57,16 +59,16 @@ module Familia
       end
 
       def valid_keys_only(opts)
-        opts.select { |k, _| DataType.valid_options.include? k }
+        opts.slice(*DataType.valid_options)
       end
 
-      def has_relations?
-        @has_relations ||= false
+      def relations?
+        @has_relations ||= false # rubocop:disable ThreadSafety/ClassInstanceVariable
       end
     end
     extend ClassMethods
 
-    attr_reader :keystring, :parent, :opts
+    attr_reader :keystring, :opts
     attr_writer :dump_method, :load_method
 
     # +keystring+: If parent is set, this will be used as the suffix
@@ -115,7 +117,7 @@ module Familia
         # this point. This would result in a Familia::Problem being raised. So
         # to be on the safe-side here until we have a better understanding of
         # the issue, we'll just log the class name for each key-value pair.
-        Familia.ld " [setting] #{k} #{v.class}"
+        Familia.trace :SETTING, nil, " [setting] #{k} #{v.class}", caller(1..1) if Familia.debug?
         send(:"#{k}=", v) if respond_to? :"#{k}="
       end
 
@@ -198,6 +200,7 @@ module Familia
     def parent
       @opts[:parent]
     end
+
 
     def logical_database
       @opts[:logical_database] || self.class.logical_database

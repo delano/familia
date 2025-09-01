@@ -46,7 +46,5 @@ module Familia
         @load_method || self.class.load_method
       end
     end
-
-    include Settings # these become Horreum instance methods
   end
 end

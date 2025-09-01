@@ -171,7 +171,7 @@ module Familia
       result = dbclient.multi do |conn|
         Fiber[:familia_transaction] = conn
         begin
-          block_result = yield(conn) # rubocop:disable Lint/UselessAssignment
+          block_result = yield(conn)
         ensure
           Fiber[:familia_transaction] = nil # cleanup reference
         end
@@ -220,7 +220,7 @@ module Familia
       result = dbclient.pipelined do |conn|
         Fiber[:familia_pipeline] = conn
         begin
-          block_result = yield(conn) # rubocop:disable Lint/UselessAssignment
+          block_result = yield(conn)
         ensure
           Fiber[:familia_pipeline] = nil # cleanup reference
         end
@@ -244,7 +244,7 @@ module Familia
     #     conn.expire("custom_key", 3600)
     #   end
     #
-    def with_connection(&block)
+    def with_connection(&)
       yield dbclient
     end
 

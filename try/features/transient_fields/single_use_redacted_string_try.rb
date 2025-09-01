@@ -23,9 +23,11 @@ single_use_inheritance.is_a?(RedactedString)
 SingleUseRedactedString.new("string").class
 #=> SingleUseRedactedString
 
+## Numeric input conversion
 SingleUseRedactedString.new(123).class  # to_s conversion
 #=> SingleUseRedactedString
 
+## Nil input handling
 SingleUseRedactedString.new(nil).class  # nil handling
 #=> SingleUseRedactedString
 

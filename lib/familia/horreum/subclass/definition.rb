@@ -1,29 +1,38 @@
-# lib/familia/horreum/definition_methods.rb
+# lib/familia/horreum/subclass/definition.rb
 
 require_relative 'related_fields_management'
+require_relative '../shared/settings'
 
 module Familia
-  VALID_STRATEGIES = %i[raise skip warn overwrite].freeze
+  VALID_STRATEGIES = %i[raise skip ignore warn overwrite].freeze
 
   # Familia::Horreum
   #
   class Horreum
     # Class-level instance variables
     # These are set up as nil initially and populated later
-    @dbclient = nil # TODO
-    @identifier_field = nil
-    @default_expiration = nil
+    #
+    # Connection and database settings
+    @dbclient = nil
     @logical_database = nil
     @uri = nil
-    @suffix = nil
+
+    # Database Key generation settings
     @prefix = nil
-    @fields = nil # []
-    @class_related_fields = nil # {}
-    @related_fields = nil # {}
+    @identifier_field = nil
+    @suffix = nil
+
+    # Fields and relationships
+    @fields = nil
+    @class_related_fields = nil
+    @related_fields = nil
+    @default_expiration = nil
+
+    # Serialization settings
     @dump_method = nil
     @load_method = nil
 
-    # DefinitionMethods: Provides class-level functionality for Horreum
+    # DefinitionMethods: Provides class-level functionality for Horreum subclasses
     #
     # This module is extended into classes that include Familia::Horreum,
     # providing methods for Database operations and object management.
@@ -35,7 +44,7 @@ module Familia
     #
     module DefinitionMethods
       include Familia::Settings
-      include Familia::Horreum::RelatedFieldsManagement
+      include Familia::Horreum::RelatedFieldsManagement # Provides DataType field methods
 
       # Sets or retrieves the unique identifier field for the class.
       #
@@ -86,12 +95,12 @@ module Familia
       #   - Others, depending on features available
       #
       def field(name, as: name, fast_method: :"#{name}!", on_conflict: :raise, category: nil)
-        # Use field type system internally for consistency
-        require_relative '../field_type'
+        # Use field type system for consistency
+        require_relative '../../field_type'
 
         # Create appropriate field type based on category
         field_type = if category == :transient
-                       require_relative '../features/transient_fields/transient_field_type'
+                       require_relative '../../features/transient_fields/transient_field_type'
                        TransientFieldType.new(name, as: as, fast_method: false, on_conflict: on_conflict)
                      else
                        # For regular fields and other categories, create custom field type with category override
@@ -160,7 +169,7 @@ module Familia
         @related_fields
       end
 
-      def has_relations?
+      def relations?
         @has_relations ||= false
       end
 
@@ -232,7 +241,7 @@ module Familia
       # @param options [Hash] Field options
       #
       def transient_field(name, **)
-        require_relative '../features/transient_fields/transient_field_type'
+        require_relative '../../features/transient_fields/transient_field_type'
         field_type = TransientFieldType.new(name, **, fast_method: false)
         register_field_type(field_type)
       end
@@ -261,7 +270,7 @@ module Familia
           WARNING
         when :raise
           raise ArgumentError, "Method >>> #{method_name} <<< already defined for #{self}"
-        when :skip
+        when :skip, :ignore
           # Do nothing, skip silently
         end
       end
@@ -279,19 +288,26 @@ module Familia
         end
       end
 
-      # Defines a fast attribute method with a bang (!) suffix for a given
-      # attribute name. Fast attribute methods are used to immediately read or
-      # write attribute values from/to the database. Calling a fast attribute
-      # method has no effect on any of the object's other attributes and does
-      # not trigger a call to update the object's expiration time.
+      # Fast attribute accessor method for immediate DB persistence.
       #
-      # @param [Symbol, String] name the name of the attribute for which the
-      #   fast method is defined.
-      # @return [Object] the current value of the attribute when called without
-      #   arguments.
-      # @raise [ArgumentError] if more than one argument is provided.
-      # @raise [RuntimeError] if an exception occurs during the execution of the
-      #   method.
+      # @param field_name [Symbol, String] the name of the horreum model attribute
+      # @param method_name [Symbol, String] the name of the regular accessor method
+      # @param fast_method_name [Symbol, String] the name of the fast method (must end with '!')
+      # @param on_conflict [Symbol] conflict resolution strategy for method name conflicts
+      #
+      # @return [void]
+      #
+      # @raise [ArgumentError] if fast_method_name doesn't end with '!'
+      #
+      # @note Generated method behavior:
+      #   - Without args: Retrieves current value from Redis
+      #   - With value: Sets and immediately persists to Redis
+      #   - Returns boolean indicating success for writes
+      #   - Bypasses object-level caching and expiration updates
+      #
+      # @example
+      #   # Creates a method like: username!(value = nil)
+      #   define_fast_writer_method(:username, :username, :username!, :raise)
       #
       def define_fast_writer_method(field_name, method_name, fast_method_name, on_conflict)
         raise ArgumentError, 'Must end with !' unless fast_method_name.to_s.end_with?('!')

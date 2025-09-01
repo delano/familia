@@ -1,4 +1,4 @@
-# lib/familia/horreum/management_methods.rb
+# lib/familia/horreum/subclass/management.rb
 
 require_relative 'related_fields_management'
 
@@ -15,7 +15,7 @@ module Familia
     # * Provides utility methods for working with Database objects
     #
     module ManagementMethods
-      include Familia::Horreum::RelatedFieldsManagement
+      include Familia::Horreum::RelatedFieldsManagement # Provides DataType query methods
 
       # Creates and persists a new instance of the class.
       #
@@ -55,9 +55,7 @@ module Familia
       #
       def create(*, **)
         fobj = new(*, **)
-        raise Familia::Problem, "#{self} already exists: #{fobj.dbkey}" if fobj.exists?
-
-        fobj.save
+        fobj.save_if_not_exists
         fobj
       end
 
@@ -172,8 +170,8 @@ module Familia
       #   User.exists?(123)  # Returns true if user:123:object exists in Redis
       #
       def exists?(identifier, suffix = nil)
+        raise NoIdentifier, "Empty identifier" if identifier.to_s.empty?
         suffix ||= self.suffix
-        return false if identifier.to_s.empty?
 
         objkey = dbkey identifier, suffix
 
@@ -234,9 +232,11 @@ module Familia
       # distinction b/c passing in an explicitly nil is how DataType objects
       # at the class level are created without the global default 'object'
       # suffix. See DataType#dbkey "parent_class?" for more details.
+      #
       def dbkey(identifier, suffix = self.suffix)
-        # Familia.ld "[.dbkey] #{identifier} for #{self} (suffix:#{suffix})"
-        raise NoIdentifier, self if identifier.to_s.empty?
+        if identifier.to_s.empty?
+          raise NoIdentifier, "#{self} requires non-empty identifier, got: #{identifier.inspect}"
+        end
 
         identifier &&= identifier.to_s
         Familia.dbkey(prefix, identifier, suffix)
@@ -255,6 +255,7 @@ module Familia
       # Returns the number of dbkeys matching the given filter pattern
       # @param filter [String] dbkey pattern to match (default: '*')
       # @return [Integer] Number of matching keys
+      #
       def matching_keys_count(filter = '*')
         dbclient.keys(dbkey(filter)).compact.size
       end

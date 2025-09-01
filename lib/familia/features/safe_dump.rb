@@ -54,7 +54,7 @@ module Familia::Features
     @safe_dump_field_map = {}
 
     def self.included(base)
-      Familia.ld "[#{self}] Enabled in #{base}"
+      Familia.trace :LOADED, self, base, caller(1..1) if Familia.debug?
       base.extend ClassMethods
 
       # Optionally define safe_dump_fields in the class to make

@@ -1,0 +1,535 @@
+# lib/familia/horreum/serialization.rb
+#
+module Familia
+  # Familia::Horreum
+  #
+  # Core persistence class for object-relational mapping with Valkey/Redis.
+  # Provides serialization, field management, and database interaction capabilities.
+  #
+  class Horreum
+    # Valid return values from database commands
+    #
+    # Defines the set of acceptable response values that indicate successful
+    # command execution in Valkey operations. These values are used to validate
+    # database responses and determine operation success.
+    #
+    # @return [Array<String, Boolean, Integer, nil>] Frozen array of valid return values:
+    #   - "OK" - Standard success response for most commands
+    #   - true - Boolean success indicator
+    #   - 1 - Numeric success indicator (operation performed)
+    #   - 0 - Numeric indicator (operation attempted, no change needed)
+    #   - nil - Valid response for certain operations
+    #
+    # @example Validating a command response
+    #   response = redis.set("key", "value")
+    #   valid = @valid_command_return_values.include?(response)
+    #   # => true if response is "OK"
+    #
+    @valid_command_return_values = ['OK', true, 1, 0, nil].freeze
+
+    class << self
+      attr_reader :valid_command_return_values
+    end
+
+    # Serialization: Object persistence and retrieval from the DB
+    # Handles conversion between Ruby objects and Valkey hash storage
+    #
+    module Serialization
+      # Persists the object to Valkey storage with automatic timestamping.
+      #
+      # Saves the current object state to Valkey storage, automatically setting
+      # created and updated timestamps if the object supports them. The method
+      # commits all persistent fields and optionally updates the key's expiration.
+      #
+      # @param update_expiration [Boolean] Whether to update the key's expiration
+      #   time after saving. Defaults to true.
+      #
+      # @return [Boolean] true if the save operation was successful, false otherwise.
+      #
+      # @example Save an object to Valkey
+      #   user = User.new(name: "John", email: "john@example.com")
+      #   user.save
+      #   # => true
+      #
+      # @example Save without updating expiration
+      #   user.save(update_expiration: false)
+      #   # => true
+      #
+      # @note When Familia.debug? is enabled, this method will trace the save
+      #   operation for debugging purposes.
+      #
+      # @see #commit_fields The underlying method that performs the field persistence
+      #
+      def save(update_expiration: true)
+        Familia.trace :SAVE, dbclient, uri, caller(1..1) if Familia.debug?
+
+        # No longer need to sync computed identifier with a cache field
+        self.created ||= Familia.now.to_i if respond_to?(:created)
+        self.updated = Familia.now.to_i if respond_to?(:updated)
+
+        # Commit our tale to the Database chronicles
+        #
+        ret = commit_fields(update_expiration: update_expiration)
+
+        Familia.ld "[save] #{self.class} #{dbkey} #{ret} (update_expiration: #{update_expiration})"
+
+        # Did Database accept our offering?
+        !ret.nil?
+      end
+
+      # Saves the object to Valkey storage only if it doesn't already exist.
+      #
+      # Conditionally persists the object to Valkey storage by first checking if the
+      # identifier field already exists. If the object already exists in storage,
+      # raises an error. Otherwise, proceeds with a normal save operation including
+      # automatic timestamping.
+      #
+      # This method provides atomic conditional creation to prevent duplicate objects
+      # from being saved when uniqueness is required based on the identifier field.
+      #
+      # @param update_expiration [Boolean] Whether to update the key's expiration
+      #   time after saving. Defaults to true.
+      #
+      # @return [Boolean] true if the save operation was successful
+      #
+      # @raise [Familia::RecordExistsError] If an object with the same identifier
+      #   already exists in Valkey storage
+      #
+      # @example Save a new user only if it doesn't exist
+      #   user = User.new(id: 123, name: "John")
+      #   user.save_if_not_exists
+      #   # => true (saved successfully)
+      #
+      # @example Attempting to save an existing object
+      #   existing_user = User.new(id: 123, name: "Jane")
+      #   existing_user.save_if_not_exists
+      #   # => raises Familia::RecordExistsError
+      #
+      # @example Save without updating expiration
+      #   user.save_if_not_exists(update_expiration: false)
+      #   # => true
+      #
+      # @note This method uses HSETNX to atomically check and set the identifier
+      #   field, ensuring race-condition-free conditional creation.
+      #
+      # @see #save The underlying save method called when the object doesn't exist
+      #
+      # Check if save_if_not_exists is implemented correctly. It should:
+      #
+      # Check if record exists
+      # If exists, raise Familia::RecordExistsError
+      # If not exists, save
+      def save_if_not_exists(update_expiration: true)
+        identifier_field = self.class.identifier_field
+
+        Familia.ld "[save_if_not_exists]: #{self.class} #{identifier_field}=#{identifier}"
+        Familia.trace :SAVE_IF_NOT_EXISTS, dbclient, uri, caller(1..1) if Familia.debug?
+
+        dbclient.watch(dbkey) do
+          if dbclient.exists(dbkey).positive?
+            dbclient.unwatch
+            raise Familia::RecordExistsError, dbkey
+          end
+
+          result = dbclient.multi do |multi|
+            multi.hmset(dbkey, to_h_for_storage)
+          end
+
+          result.is_a?(Array)  # transaction succeeded
+        end
+      end
+
+      # Commits object fields to the DB storage.
+      #
+      # Persists the current state of all object fields to the DB using HMSET.
+      # Optionally updates the key's expiration time if the feature is enabled
+      # for the object's class.
+      #
+      # @param update_expiration [Boolean] Whether to update the expiration time
+      #   of the Valkey key. Defaults to true.
+      #
+      # @return [Object] The result of the HMSET operation from the DB.
+      #
+      # @example Basic usage
+      #   user.name = "John"
+      #   user.email = "john@example.com"
+      #   result = user.commit_fields
+      #
+      # @example Without updating expiration
+      #   result = user.commit_fields(update_expiration: false)
+      #
+      # @note The expiration update is only performed for classes that have
+      #   the expiration feature enabled. For others, it's a no-op.
+      #
+      # @note This method performs debug logging of the object's class, dbkey,
+      #   and current state before committing to the DB.
+      #
+      def commit_fields(update_expiration: true)
+        prepared_value = to_h_for_storage
+        Familia.ld "[commit_fields] Begin #{self.class} #{dbkey} #{prepared_value} (exp: #{update_expiration})"
+
+        result = hmset(prepared_value)
+
+        # Only classes that have the expiration ferature enabled will
+        # actually set an expiration time on their keys. Otherwise
+        # this will be a no-op that simply logs the attempt.
+        update_expiration(default_expiration: nil) if update_expiration
+
+        result
+      end
+
+      # Updates multiple fields atomically in a Database transaction.
+      #
+      # @param fields [Hash] Field names and values to update. Special key :update_expiration
+      #   controls whether to update key expiration (default: true)
+      # @return [MultiResult] Transaction result
+      #
+      # @example Update multiple fields without affecting expiration
+      #   metadata.batch_update(viewed: 1, updated: Time.now.to_i, update_expiration: false)
+      #
+      # @example Update fields with expiration refresh
+      #   user.batch_update(name: "John", email: "john@example.com")
+      #
+      def batch_update(**kwargs)
+        update_expiration = kwargs.delete(:update_expiration) { true }
+        fields = kwargs
+
+        Familia.trace :BATCH_UPDATE, dbclient, fields.keys, caller(1..1) if Familia.debug?
+
+        command_return_values = transaction do |conn|
+          fields.each do |field, value|
+            prepared_value = serialize_value(value)
+            conn.hset dbkey, field, prepared_value
+            # Update instance variable to keep object in sync
+            send("#{field}=", value) if respond_to?("#{field}=")
+          end
+        end
+
+        # Update expiration if requested and supported
+        self.update_expiration(default_expiration: nil) if update_expiration && respond_to?(:update_expiration)
+
+        # Return same MultiResult format as other methods
+        summary_boolean = command_return_values.all? { |ret| %w[OK 0 1].include?(ret.to_s) }
+        MultiResult.new(summary_boolean, command_return_values)
+      end
+
+      # Updates the object by applying multiple field values.
+      #
+      # Sets multiple attributes on the object instance using their corresponding
+      # setter methods. Only fields that have defined setter methods will be updated.
+      #
+      # @param fields [Hash] Hash of field names (as keys) and their values to apply
+      #   to the object instance.
+      #
+      # @return [self] Returns the updated object instance for method chaining.
+      #
+      # @example Update multiple fields on an object
+      #   user.apply_fields(name: "John", email: "john@example.com", age: 30)
+      #   # => #<User:0x007f8a1c8b0a28 @name="John", @email="john@example.com", @age=30>
+      #
+      def apply_fields(**fields)
+        fields.each do |field, value|
+          # Apply the field value if the setter method exists
+          send("#{field}=", value) if respond_to?("#{field}=")
+        end
+        self
+      end
+
+      # Permanently removes this object from the DB storage.
+      #
+      # Deletes the object's Valkey key and all associated data. This operation
+      # is irreversible and will permanently destroy all stored information
+      # for this object instance.
+      #
+      # @return [void]
+      #
+      # @example Remove a user object from storage
+      #   user = User.new(id: 123)
+      #   user.destroy!
+      #   # Object is now permanently removed from the DB
+      #
+      # @note This method provides high-level object lifecycle management.
+      #   It operates at the object level for ORM-style operations, while
+      #   `delete!` operates directly on database keys. Use `destroy!` when
+      #   removing complete objects from the system.
+      #
+      # @note When debugging is enabled, this method will trace the deletion
+      #   operation for diagnostic purposes.
+      #
+      # @see #delete! The underlying method that performs the key deletion
+      #
+      def destroy!
+        Familia.trace :DESTROY, dbclient, uri, caller(1..1) if Familia.debug?
+        delete!
+      end
+
+      # Clears all fields by setting them to nil.
+      #
+      # Resets all object fields to nil values, effectively clearing the object's
+      # state. This operation affects all fields defined on the object's class,
+      # setting each one to nil through their corresponding setter methods.
+      #
+      # @return [void]
+      #
+      # @example Clear all fields on an object
+      #   user.name = "John"
+      #   user.email = "john@example.com"
+      #   user.clear_fields!
+      #   # => user.name and user.email are now nil
+      #
+      # @note This operation does not persist the changes to the DB. Call save
+      #   after clear_fields! if you want to persist the cleared state.
+      #
+      def clear_fields!
+        self.class.field_method_map.each_value { |method_name| send("#{method_name}=", nil) }
+      end
+
+      # Refreshes the object state from the DB storage.
+      #
+      # Reloads all persistent field values from the DB, overwriting any unsaved
+      # changes in the current object instance. This operation synchronizes the
+      # object with its stored state in the database.
+      #
+      # @return [void]
+      #
+      # @raise [Familia::KeyNotFoundError] If the Valkey key does not exist
+      #
+      # @example Refresh object from the DB
+      #   user.name = "Changed Name"  # unsaved change
+      #   user.refresh!
+      #   # => user.name is now the value from the DB storage
+      #
+      # @note This method discards any unsaved changes to the object. Use with
+      #   caution when the object has been modified but not yet persisted.
+      #
+      # @note Transient fields are reset to nil during refresh since they have
+      #   no authoritative source in Valkey storage.
+      #
+      def refresh!
+        Familia.trace :REFRESH, dbclient, uri, caller(1..1) if Familia.debug?
+        raise Familia::KeyNotFoundError, dbkey unless dbclient.exists(dbkey)
+
+        fields = hgetall
+        Familia.ld "[refresh!] #{self.class} #{dbkey} fields:#{fields.keys}"
+
+        # Reset transient fields to nil for semantic clarity and ORM consistency
+        # Transient fields have no authoritative source, so they should return to
+        # their uninitialized state during refresh operations
+        reset_transient_fields!
+
+        optimistic_refresh(**fields)
+      end
+
+      # Refreshes object state from the DB and returns self for method chaining.
+      #
+      # Loads the current state of the object from the DB storage, updating all
+      # field values to match their persisted state. This method provides a
+      # chainable interface to the refresh! operation.
+      #
+      # @return [self] The refreshed object instance, enabling method chaining
+      #
+      # @raise [Familia::KeyNotFoundError] If the Valkey key does not exist
+      #
+      # @example Refresh and chain operations
+      #   user.refresh.save
+      #   user.refresh.apply_fields(status: 'active')
+      #
+      # @see #refresh! The underlying refresh operation
+      #
+      def refresh
+        refresh!
+        self
+      end
+
+      # Converts the object's persistent fields to a hash for external use.
+      #
+      # Serializes persistent field values for external consumption (APIs, logs),
+      # excluding non-loggable fields like encrypted fields for security.
+      # Only non-nil values are included in the resulting hash.
+      #
+      # @return [Hash] Hash with field names as keys and serialized values
+      #   safe for external exposure
+      #
+      # @example Converting an object to hash format for API response
+      #   user = User.new(name: "John", email: "john@example.com", age: 30)
+      #   user.to_h
+      #   # => {"name"=>"John", "email"=>"john@example.com", "age"=>"30"}
+      #   # encrypted fields are excluded for security
+      #
+      # @note Only loggable fields are included for security
+      # @note Only fields with non-nil values are included
+      #
+      def to_h
+        self.class.persistent_fields.each_with_object({}) do |field, hsh|
+          field_type = self.class.field_types[field]
+
+          # Security: Skip non-loggable fields (e.g., encrypted fields)
+          next unless field_type.loggable
+
+          method_name = field_type.method_name
+          val = send(method_name)
+          prepared = serialize_value(val)
+          Familia.ld " [to_h] field: #{field} val: #{val.class} prepared: #{prepared&.class || '[nil]'}"
+
+          # Only include non-nil values in the hash for Valkey
+          # Use string key for database compatibility
+          hsh[field.to_s] = prepared unless prepared.nil?
+        end
+      end
+
+      # Converts the object's persistent fields to a hash for database storage.
+      #
+      # Serializes ALL persistent field values for database storage, including
+      # encrypted fields. This is used internally by commit_fields and other
+      # persistence operations.
+      #
+      # @return [Hash] Hash with field names as keys and serialized values
+      #   ready for database storage
+      #
+      # @note Includes ALL persistent fields, including encrypted fields
+      # @note Only fields with non-nil values are included for storage efficiency
+      #
+      def to_h_for_storage
+        self.class.persistent_fields.each_with_object({}) do |field, hsh|
+          field_type = self.class.field_types[field]
+          method_name = field_type.method_name
+          val = send(method_name)
+          prepared = serialize_value(val)
+          Familia.ld " [to_h_for_storage] field: #{field} val: #{val.class} prepared: #{prepared&.class || '[nil]'}"
+
+          # Only include non-nil values in the hash for Valkey
+          # Use string key for database compatibility
+          hsh[field.to_s] = prepared unless prepared.nil?
+        end
+      end
+
+      # Converts the object's persistent fields to an array.
+      #
+      # Serializes all persistent field values in field definition order,
+      # preparing them for Valkey storage. Each value is processed through
+      # the serialization pipeline to ensure Valkey compatibility.
+      #
+      # @return [Array] Array of serialized field values in field order
+      #
+      # @example Converting an object to array format
+      #   user = User.new(name: "John", email: "john@example.com", age: 30)
+      #   user.to_a
+      #   # => ["John", "john@example.com", "30"]
+      #
+      # @note Values are serialized using the same process as other persistence
+      #   methods to maintain data consistency across operations.
+      #
+      def to_a
+        self.class.persistent_fields.filter_map do |field|
+          field_type = self.class.field_types[field]
+
+          # Security: Skip non-loggable fields (e.g., encrypted fields)
+          next unless field_type.loggable
+
+          method_name = field_type.method_name
+          val = send(method_name)
+          prepared = serialize_value(val)
+          Familia.ld " [to_a] field: #{field} method: #{method_name} val: #{val.class} prepared: #{prepared.class}"
+          prepared
+        end
+      end
+
+      # Serializes a Ruby object for Valkey storage.
+      #
+      # Converts Ruby objects into the DB-compatible string representations using
+      # the Familia distinguisher for type coercion. Falls back to JSON serialization
+      # for complex types (Hash, Array) when the primary distinguisher returns nil.
+      #
+      # The serialization process:
+      # 1. Attempts conversion using Familia.distinguisher with relaxed type checking
+      # 2. For Hash/Array types that return nil, tries custom dump_method or JSON.dump
+      # 3. Logs warnings when serialization fails completely
+      #
+      # @param val [Object] The Ruby object to serialize for Valkey storage
+      #
+      # @return [String, nil] The serialized value ready for Valkey storage, or nil
+      #   if serialization failed
+      #
+      # @example Serializing different data types
+      #   serialize_value("hello")        # => "hello"
+      #   serialize_value(42)             # => "42"
+      #   serialize_value({name: "John"}) # => '{"name":"John"}'
+      #   serialize_value([1, 2, 3])      # => "[1,2,3]"
+      #
+      # @note This method integrates with Familia's type system and supports
+      #   custom serialization methods when available on the object
+      #
+      # @see Familia.distinguisher The primary serialization mechanism
+      #
+      def serialize_value(val)
+        # Security: Handle ConcealedString safely - extract encrypted data for storage
+        if val.respond_to?(:encrypted_value)
+          return val.encrypted_value
+        end
+
+        prepared = Familia.distinguisher(val, strict_values: false)
+
+        # If the distinguisher returns nil, try using the dump_method but only
+        # use JSON serialization for complex types that need it.
+        if prepared.nil? && (val.is_a?(Hash) || val.is_a?(Array))
+          prepared = val.respond_to?(dump_method) ? val.send(dump_method) : JSON.dump(val)
+        end
+
+        # If both the distinguisher and dump_method return nil, log an error
+        Familia.ld "[#{self.class}#serialize_value] nil returned for #{self.class}" if prepared.nil?
+
+        prepared
+      end
+
+      # Converts a Database string value back to its original Ruby type
+      #
+      # This method attempts to deserialize JSON strings back to their original
+      # Hash or Array types. Simple string values are returned as-is.
+      #
+      # @param val [String] The string value from Database to deserialize
+      # @param symbolize_keys [Boolean] Whether to symbolize hash keys (default: true for compatibility)
+      # @return [Object] The deserialized value (Hash, Array, or original string)
+      #
+      def deserialize_value(val, symbolize: true)
+        return val if val.nil? || val == ''
+
+        # Try to parse as JSON first for complex types
+        begin
+          parsed = JSON.parse(val, symbolize_names: symbolize)
+          # Only return parsed value if it's a complex type (Hash/Array)
+          # Simple values should remain as strings
+          return parsed if parsed.is_a?(Hash) || parsed.is_a?(Array)
+        rescue JSON::ParserError
+          # Not valid JSON, return as-is
+        end
+
+        val
+      end
+
+      private
+
+      # Reset all transient fields to nil
+      #
+      # This method ensures that transient fields return to their uninitialized
+      # state during refresh operations. This provides semantic clarity (refresh
+      # means "reload from authoritative source"), ORM consistency with other
+      # frameworks, and prevents stale transient data accumulation.
+      #
+      # @return [void]
+      #
+      def reset_transient_fields!
+        return unless self.class.respond_to?(:transient_fields)
+
+        self.class.transient_fields.each do |field_name|
+          field_type = self.class.field_types[field_name]
+          next unless field_type&.method_name
+
+          # Set the transient field back to nil
+          send("#{field_type.method_name}=", nil)
+          Familia.ld "[reset_transient_fields!] Reset #{field_name} to nil"
+        end
+      end
+    end
+
+  end
+end

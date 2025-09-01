@@ -73,9 +73,9 @@ module Familia
   require_relative 'familia/utils'
 
   extend SecureIdentifier
-  extend Logging
   extend Connection
   extend Settings
+  extend Logging
   extend Utils
 end
 

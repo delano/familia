@@ -1,14 +1,19 @@
 .DS_Store
 .bundle
 .byebug*
+.ruby-lsp
 .prompts
 .history
 .devcontainer
 .vscode
+.serena
+.claude
+.yardoc
 .*.json
 *.env
 *.log
 *.md
+.mcp.json
 !README.md
 !CLAUDE.md
 *.txt
@@ -21,7 +26,6 @@ tmp
 vendor
 *.gem
 doc/
-.yardoc
 !docs/overview.md
 !docs/connection_pooling.md
 !docs/wiki/**/*.md

@@ -9,7 +9,7 @@ group :test do
     gem 'tryouts', path: '../tryouts'
     gem 'uri-valkey', path: '..//uri-valkey/gems', glob: 'uri-valkey.gemspec'
   else
-    gem 'tryouts', '~> 3.2.2', require: false
+    gem 'tryouts', '~> 3.5.1', require: false
   end
   gem 'concurrent-ruby', '~> 1.3.5', require: false
   gem 'ruby-prof'
@@ -19,13 +19,13 @@ end
 group :development, :test do
   # byebug only works with MRI
   gem 'byebug', '~> 11.0', require: false if RUBY_ENGINE == 'ruby'
+  gem 'irb', '~> 1.15.2', require: false
   gem 'kramdown', require: false # Required for YARD markdown processing
   gem 'pry-byebug', '~> 3.10.1', require: false if RUBY_ENGINE == 'ruby'
   gem 'rubocop', require: false
   gem 'rubocop-performance', require: false
   gem 'rubocop-thread_safety', require: false
   gem 'yard', '~> 0.9', require: false
-  gem 'irb', '~> 1.15.2', require: false
 end
 
 group :optional do

@@ -35,7 +35,9 @@ Thread.current[:familia_key_cache]
 
 ## Reading the value also doesn't create cache
 @retrieved = @model.sensitive_data
-@retrieved
+@retrieved.reveal do |decrypted_value|
+  decrypted_value
+end
 #=> 'secret-value'
 
 ## repaired test
@@ -63,15 +65,21 @@ Thread.current[:familia_key_cache]
 #=> nil
 
 ## All values can be retrieved correctly
-@model2.field_a
+@model2.field_a.reveal do |decrypted_value|
+  decrypted_value
+end
 #=> 'value-a'
 
 ## Field b retrieves correctly
-@model2.field_b
+@model2.field_b.reveal do |decrypted_value|
+  decrypted_value
+end
 #=> 'value-b'
 
 ## Field c retrieves correctly
-@model2.field_c
+@model2.field_c.reveal do |decrypted_value|
+  decrypted_value
+end
 #=> 'value-c'
 
 ## Still no cache
@@ -130,7 +138,9 @@ end
     @results << {
       thread_id: i,
       cache_is_nil: cache_state.nil?,
-      value_correct: model.thread_secret == "thread-secret-#{i}"
+      value_correct: model.thread_secret.reveal do |decrypted_value|
+        decrypted_value == "thread-secret-#{i}"
+      end
     }
   end
 end
@@ -144,7 +154,7 @@ end
 #=> true
 
 ## All threads should have correct values
-@results.all? { |r| r[:value_correct] }
+@results.all? {|r| r[:value_correct] }
 #=> true
 
 ## Performance: Key derivation happens every time
@@ -162,7 +172,9 @@ end
 
 ## Multiple reads all trigger fresh key derivation
 @read_results = 100.times.map do
-  value = @model5.perf_field
+  value = @model5.perf_field.reveal do |decrypted_value|
+    decrypted_value
+  end
   value == 'initial-value'
 end
 
@@ -192,7 +204,9 @@ Thread.current[:familia_key_cache]
 #=> nil
 
 ## Value is correctly encrypted/decrypted with v2
-@model6.rotated_field
+@model6.rotated_field.reveal do |decrypted_value|
+  decrypted_value
+end
 #=> 'encrypted-with-v2'
 
 ## Reset to v1 for other tests

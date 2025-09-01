@@ -47,12 +47,24 @@ end
 @cipher1 != @cipher2
 #=> true
 
-## Same plaintext decrypts correctly for both users
-@user1.secret
+## Same plaintext decrypts correctly for both users - access via refinement
+@user1_decrypted = nil
+module User1TestAccess
+  using ConcealedStringTestHelper
+  user1 = IsolationUser.new(user_id: 'alice')
+  user1.secret = 'shared-secret'
+  user1.secret.reveal_for_testing
+end
 #=> 'shared-secret'
 
-## Same plaintext decrypts correctly for both users
-@user2.secret
+## Test user2 isolation
+@user2_decrypted = nil
+module User2TestAccess
+  using ConcealedStringTestHelper
+  user2 = IsolationUser.new(user_id: 'bob')
+  user2.secret = 'shared-secret'
+  user2.secret.reveal_for_testing
+end
 #=> 'shared-secret'
 
 ## Different model classes have isolated encryption contexts
@@ -68,12 +80,22 @@ end
 @cipher_a != @cipher_b
 #=> true
 
-## Model A can decrypt its own data
-@model_a.api_key
+## Model A can decrypt its own data - access via refinement
+module ModelATestAccess
+  using ConcealedStringTestHelper
+  model_a = ModelA.new(id: 'same-id')
+  model_a.api_key = 'secret-key'
+  model_a.api_key.reveal_for_testing
+end
 #=> 'secret-key'
 
-## Model B can decrypt its own data
-@model_b.api_key
+## Model B can decrypt its own data - access via refinement
+module ModelBTestAccess
+  using ConcealedStringTestHelper
+  model_b = ModelB.new(id: 'same-id')
+  model_b.api_key = 'secret-key'
+  model_b.api_key.reveal_for_testing
+end
 #=> 'secret-key'
 
 ## Cross-model decryption fails due to context mismatch
