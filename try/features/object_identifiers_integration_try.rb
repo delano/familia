@@ -119,8 +119,8 @@ opts.key?(:object_identifiers) && opts.key?(:external_identifiers)
 
 ## Default configurations are applied correctly
 IntegrationTest.feature_options(:object_identifiers)[:generator] == :uuid_v7 &&
-IntegrationTest.feature_options(:external_identifiers)[:prefix] == "ext"
-#==> true
+IntegrationTest.feature_options(:external_identifiers)[:prefix]
+#=> "ext"
 
 ## Custom configurations are applied correctly
 CustomIntegrationTest.feature_options(:object_identifiers)[:generator] == :hex &&

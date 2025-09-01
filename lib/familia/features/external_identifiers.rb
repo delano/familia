@@ -23,13 +23,14 @@ module Familia
       end
 
       module ClassMethods
-        def generate_extid
-          # This generates a deterministic external ID from any given objid
-          # Used internally by the field type
+        def generate_extid(objid = nil)
           raise Familia::Problem, "ExternalIdentifiers requires ObjectIdentifiers feature" unless features_enabled.include?(:object_identifiers)
+          return nil if objid.to_s.empty?
 
-          # Note: This is called with an objid parameter by the instance method
-          # The actual implementation is in the instance method
+          objid_hex = objid.to_s.gsub('-', '')
+          external_part = Familia.shorten_to_external_id(objid_hex, base: 36)
+          prefix = feature_options(:external_identifiers)[:prefix] || "ext"
+          "#{prefix}_#{external_part}"
         end
 
         # Find an object by its external identifier

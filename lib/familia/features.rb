@@ -43,15 +43,24 @@ module Familia
         Familia.trace :FEATURE, nil, "#{self} includes #{feature_name.inspect}", caller(1..1)
       end
 
-      # Auto-activate dependencies
+      # Auto-activate dependencies with cycle detection
       feature_def = Familia::Base.feature_definitions[feature_name]
       if feature_def&.depends_on&.any?
-        missing = feature_def.depends_on - features_enabled
-        missing.each do |dependency|
-          if Familia.debug?
-            Familia.trace :DEPENDENCY, nil, "#{self} auto-activating dependency #{dependency} for #{feature_name}", caller(1..1)
+        @_activating_features ||= []
+        if @_activating_features.include?(feature_name)
+          raise Familia::Problem, "Cyclic feature dependency detected: #{(@_activating_features + [feature_name]).join(' -> ')}"
+        end
+        @_activating_features << feature_name
+        begin
+          missing = feature_def.depends_on - features_enabled
+          missing.each do |dependency|
+            if Familia.debug?
+              Familia.trace :DEPENDENCY, nil, "#{self} auto-activating dependency #{dependency} for #{feature_name}", caller(1..1)
+            end
+            feature(dependency) # Recursive call to activate dependency
           end
-          feature(dependency) # Recursive call to activate dependency
+        ensure
+          @_activating_features.delete(feature_name)
         end
       end
 
@@ -61,7 +70,7 @@ module Familia
       # Store feature options if any were provided
       if options.any?
         @feature_options ||= {}
-        @feature_options[feature_name] = options
+        @feature_options[feature_name] = (@feature_options[feature_name] || {}).merge(options)
       end
 
       klass = Familia::Base.features_available[feature_name]
