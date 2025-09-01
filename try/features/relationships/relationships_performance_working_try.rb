@@ -2,7 +2,7 @@
 #
 # Working performance test focusing on basic functionality
 
-require_relative '../helpers/test_helpers'
+require_relative '../../helpers/test_helpers'
 require 'benchmark'
 
 # Simple test class using only basic Familia features

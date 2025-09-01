@@ -1,6 +1,6 @@
 # try/features/object_identifiers_integration_try.rb
 
-require_relative '../helpers/test_helpers'
+require_relative '../../helpers/test_helpers'
 
 Familia.debug = false
 

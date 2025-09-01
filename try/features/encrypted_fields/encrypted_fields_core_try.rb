@@ -1,6 +1,6 @@
 # try/features/encrypted_fields_core_try.rb
 
-require_relative '../helpers/test_helpers'
+require_relative '../../helpers/test_helpers'
 require 'base64'
 
 

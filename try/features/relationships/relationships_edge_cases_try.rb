@@ -1,6 +1,6 @@
 # Simplified edge case testing for Relationships v2 - focusing on core functionality
 
-require_relative '../helpers/test_helpers'
+require_relative '../../helpers/test_helpers'
 
 # Test classes for edge case testing
 class EdgeTestCustomer < Familia::Horreum

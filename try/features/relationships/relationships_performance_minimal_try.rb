@@ -1,6 +1,6 @@
 # Minimal performance testing focusing on core Familia functionality
 
-require_relative '../helpers/test_helpers'
+require_relative '../../helpers/test_helpers'
 require 'benchmark'
 
 # Simple test classes without relationships feature
