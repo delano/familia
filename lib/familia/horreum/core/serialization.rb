@@ -135,7 +135,7 @@ module Familia
             multi.hmset(dbkey, to_h_for_storage)
           end
 
-          result.is_a?(Array)  # transaction succeeded
+          result.is_a?(Array) # transaction succeeded
         end
       end
 
@@ -463,9 +463,7 @@ module Familia
       #
       def serialize_value(val)
         # Security: Handle ConcealedString safely - extract encrypted data for storage
-        if val.respond_to?(:encrypted_value)
-          return val.encrypted_value
-        end
+        return val.encrypted_value if val.respond_to?(:encrypted_value)
 
         prepared = Familia.distinguisher(val, strict_values: false)
 
@@ -530,6 +528,5 @@ module Familia
         end
       end
     end
-
   end
 end

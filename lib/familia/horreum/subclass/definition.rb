@@ -235,6 +235,40 @@ module Familia
         field_types[field_type.name] = field_type
       end
 
+      # Get feature options for a specific feature or all features
+      #
+      # @param feature_name [Symbol, nil] The feature name to get options for
+      # @return [Hash] The options hash for the feature, or empty hash if none
+      #
+      def feature_options(feature_name = nil)
+        @feature_options ||= {}
+        return @feature_options if feature_name.nil?
+
+        @feature_options[feature_name.to_sym] || {}
+      end
+
+      # Add feature options for a specific feature
+      #
+      # This method provides a clean way for features to set their default options
+      # without worrying about initialization state. Similar to register_field_type
+      # for field types.
+      #
+      # @param feature_name [Symbol] The feature name
+      # @param options [Hash] The options to add/merge
+      # @return [Hash] The updated options for the feature
+      #
+      def add_feature_options(feature_name, **options)
+  @feature_options ||= {}
+  @feature_options[feature_name.to_sym] ||= {}
+
+  # Only set defaults for options that don't already exist
+  options.each do |key, value|
+    @feature_options[feature_name.to_sym][key] ||= value
+  end
+
+  @feature_options[feature_name.to_sym]
+end
+
       # Create and register a transient field type
       #
       # @param name [Symbol] The field name

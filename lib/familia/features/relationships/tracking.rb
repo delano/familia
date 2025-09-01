@@ -372,7 +372,6 @@ module Familia
             memberships
           end
         end
-
       end
     end
   end

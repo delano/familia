@@ -363,7 +363,6 @@ module Familia
             dbclient.hexists(index_key, field_value.to_s)
           end
         end
-
       end
     end
   end

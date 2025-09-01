@@ -1,17 +1,15 @@
 # lib/familia/features.rb
 
 module Familia
-
   FeatureDefinition = Data.define(:name, :depends_on)
 
   # Familia::Features
   #
   module Features
-
     @features_enabled = nil
     attr_reader :features_enabled
 
-    def feature(feature_name = nil)
+    def feature(feature_name = nil, **options)
       @features_enabled ||= []
 
       return features_enabled if feature_name.nil?
@@ -28,21 +26,27 @@ module Familia
         return
       end
 
-      if Familia.debug?
-        Familia.trace :FEATURE, nil, "#{self} includes #{feature_name.inspect}", caller(1..1)
+      Familia.trace :FEATURE, nil, "#{self} includes #{feature_name.inspect}", caller(1..1) if Familia.debug?
+
+      # Check dependencies and raise error if missing
+      feature_def = Familia::Base.feature_definitions[feature_name]
+      if feature_def&.depends_on&.any?
+        missing = feature_def.depends_on - features_enabled
+        if missing.any?
+          raise Familia::Problem,
+                "Feature #{feature_name} requires missing dependencies: #{missing.join(', ')}"
+        end
       end
 
       # Add it to the list available features_enabled for Familia::Base classes.
       features_enabled << feature_name
 
-      klass = Familia::Base.features_available[feature_name]
-
-      # Validate dependencies
-      feature_def = Familia::Base.feature_definitions[feature_name]
-      if feature_def&.depends_on&.any?
-        missing = feature_def.depends_on - features_enabled
-        raise Familia::Problem, "#{feature_name} requires: #{missing.join(', ')}" if missing.any?
+      # Store feature options if any were provided using the new pattern
+      if options.any?
+        add_feature_options(feature_name, **options)
       end
+
+      klass = Familia::Base.features_available[feature_name]
 
       # Extend the Familia::Base subclass (e.g. Customer) with the feature module
       include klass
@@ -58,7 +62,6 @@ module Familia
       # We'd need to extend the DataType instances for each Horreum subclass. That
       # avoids it getting included multiple times per DataType
     end
-
   end
 end
 

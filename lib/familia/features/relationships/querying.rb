@@ -303,17 +303,15 @@ module Familia
                 permission_bits = decoded[:permissions]
 
                 # Check if this member has the required permission bits
-                if (permission_bits & required_bits) == required_bits
-                  valid_members << [score, member]
-                end
+                valid_members << [score, member] if (permission_bits & required_bits) == required_bits
               end
 
               # Recreate filtered collection if we have valid members
-              if valid_members.any?
-                dbclient.zadd(filtered_key, valid_members)
-                dbclient.expire(filtered_key, 300) # Temporary key cleanup
-                filtered_keys << filtered_key
-              end
+              next unless valid_members.any?
+
+              dbclient.zadd(filtered_key, valid_members)
+              dbclient.expire(filtered_key, 300) # Temporary key cleanup
+              filtered_keys << filtered_key
             end
 
             filtered_keys
@@ -341,9 +339,7 @@ module Familia
               permission_bits = decoded[:permissions]
 
               # Check if this member has the required permission bits
-              if (permission_bits & required_bits) == required_bits
-                valid_members << [score, member]
-              end
+              valid_members << [score, member] if (permission_bits & required_bits) == required_bits
             end
 
             # Create filtered collection
@@ -613,7 +609,6 @@ module Familia
             collection_info
           end
         end
-
       end
     end
   end
