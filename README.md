@@ -118,6 +118,41 @@ user.transaction do |conn|
 end
 ```
 
+## Organizing Complex Models
+
+For large applications, you can organize model complexity using custom features:
+
+### Self-Registering Features
+
+```ruby
+# app/features/customer_management.rb
+module MyApp::Features::CustomerManagement
+  Familia::Base.add_feature(self, :customer_management)
+
+  def self.included(base)
+    base.extend(ClassMethods)
+  end
+
+  module ClassMethods
+    def create_with_validation(attrs)
+      # Complex creation logic
+    end
+  end
+
+  def complex_business_method
+    # Instance methods
+  end
+end
+
+# models/customer.rb
+class Customer < Familia::Horreum
+  field :email, :name
+  feature :customer_management  # Clean model definition
+end
+```
+
+This keeps complex models organized while maintaining Familia's clean, declarative style.
+
 ## Conclusion
 
 Familia provides a powerful and flexible way to work with Valkey-compatible in Ruby applications. Its features like automatic expiration, safe dumping, and quantization make it suitable for a wide range of use cases, from simple key-value storage to complex time-series data management.
