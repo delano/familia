@@ -8,6 +8,7 @@ Familia.debug = false
 
 # Class using both features with defaults
 class IntegrationTest < Familia::Horreum
+  feature :object_identifiers
   feature :external_identifiers  # This depends on :object_identifiers
   identifier_field :id
   field :id
@@ -26,6 +27,7 @@ end
 
 # Class testing full lifecycle with Redis persistence
 class PersistenceTest < Familia::Horreum
+  feature :object_identifiers
   feature :external_identifiers
   identifier_field :id
   field :id
@@ -234,13 +236,13 @@ found_by_objid = IntegrationTest.find_by_objid(search_obj.objid)
 found_by_objid
 #=> nil
 
-## find_by_extid returns nil (stub implementation)
-search_obj = IntegrationTest.new
-search_obj.id = 'search_test'
-search_obj.save
-found_by_extid = IntegrationTest.find_by_extid(search_obj.extid)
-found_by_extid
-#=> nil
+## find_by_extid works with real implementation
+@search_obj = IntegrationTest.new
+@search_obj.id = 'search_test'
+@search_obj.save
+found_by_extid = IntegrationTest.find_by_extid(@search_obj.extid)
+found_by_extid&.id
+#=> "search_test"
 
 ## Both IDs remain stable across multiple accesses
 stability_obj = IntegrationTest.new
@@ -282,3 +284,6 @@ obj.respond_to?(:exists?)
 obj = IntegrationTest.new
 obj.respond_to?(:delete!)
 #==> true
+
+# Cleanup test objects
+@search_obj.destroy! rescue nil

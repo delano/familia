@@ -4,17 +4,19 @@ require_relative 'external_identifiers/external_identifier_field_type'
 
 module Familia
   module Features
+
+    # Familia::Features::ExternalIdentifiers
+    #
     module ExternalIdentifiers
       def self.included(base)
         Familia.trace :LOADED, self, base, caller(1..1) if Familia.debug?
         base.extend ClassMethods
 
-        # Ensure default prefix is set in feature options if not already present
-        base.instance_eval do
-          @feature_options ||= {}
-          @feature_options[:external_identifiers] ||= {}
-          @feature_options[:external_identifiers][:prefix] ||= 'ext'
-        end
+        # Ensure default prefix is set in feature options
+        base.add_feature_options(:external_identifiers, prefix: 'ext')
+
+        # Add class-level mapping for extid -> id lookups
+        base.class_hashkey :extid_lookup
 
         # Register the extid field using our custom field type
         base.register_field_type(
@@ -22,6 +24,8 @@ module Familia
         )
       end
 
+      # ExternalIdentifiers::ClassMethods
+      #
       module ClassMethods
         def generate_extid(objid = nil)
           unless features_enabled.include?(:object_identifiers)
@@ -49,10 +53,15 @@ module Familia
             Familia.trace :FIND_BY_EXTID, Familia.dbclient, extid, reference
           end
 
-          # This is a simple stub implementation - would need more sophisticated
-          # search logic in a real application
-          find_by_id(extid)
+          # Look up the primary ID from the external ID mapping
+          primary_id = extid_lookup[extid]
+          return nil if primary_id.nil?
+
+          # Find the object by its primary ID
+          find_by_id(primary_id)
         rescue Familia::NotFound
+          # If the object was deleted but mapping wasn't cleaned up
+          extid_lookup.del(extid)
           nil
         end
       end
@@ -84,6 +93,16 @@ module Familia
       def init
         super if defined?(super)
         # External IDs are generated from objid, so no additional setup needed
+      end
+
+      def destroy!
+        # Clean up extid mapping when object is destroyed
+        current_extid = instance_variable_get(:@extid)
+        if current_extid
+          self.class.extid_lookup.del(current_extid)
+        end
+
+        super if defined?(super)
       end
 
       Familia::Base.add_feature self, :external_identifiers, depends_on: [:object_identifiers]

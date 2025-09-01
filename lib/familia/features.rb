@@ -7,19 +7,7 @@ module Familia
   #
   module Features
     @features_enabled = nil
-    @feature_options = nil
     attr_reader :features_enabled
-
-    # Access feature options for a specific feature
-    #
-    # @param feature_name [Symbol] The feature name to get options for
-    # @return [Hash] The options hash for the feature, or empty hash if none
-    def feature_options(feature_name = nil)
-      @feature_options ||= {}
-      return @feature_options if feature_name.nil?
-
-      @feature_options[feature_name.to_sym] || {}
-    end
 
     def feature(feature_name = nil, **options)
       @features_enabled ||= []
@@ -40,37 +28,22 @@ module Familia
 
       Familia.trace :FEATURE, nil, "#{self} includes #{feature_name.inspect}", caller(1..1) if Familia.debug?
 
-      # Auto-activate dependencies with cycle detection
+      # Check dependencies and raise error if missing
       feature_def = Familia::Base.feature_definitions[feature_name]
       if feature_def&.depends_on&.any?
-        @_activating_features ||= []
-        if @_activating_features.include?(feature_name)
+        missing = feature_def.depends_on - features_enabled
+        if missing.any?
           raise Familia::Problem,
-                "Cyclic feature dependency detected: #{(@_activating_features + [feature_name]).join(' -> ')}"
-        end
-
-        @_activating_features << feature_name
-        begin
-          missing = feature_def.depends_on - features_enabled
-          missing.each do |dependency|
-            if Familia.debug?
-              Familia.trace :DEPENDENCY, nil, "#{self} auto-activating dependency #{dependency} for #{feature_name}",
-                            caller(1..1)
-            end
-            feature(dependency) # Recursive call to activate dependency
-          end
-        ensure
-          @_activating_features.delete(feature_name)
+                "Feature #{feature_name} requires missing dependencies: #{missing.join(', ')}"
         end
       end
 
       # Add it to the list available features_enabled for Familia::Base classes.
       features_enabled << feature_name
 
-      # Store feature options if any were provided
+      # Store feature options if any were provided using the new pattern
       if options.any?
-        @feature_options ||= {}
-        @feature_options[feature_name] = (@feature_options[feature_name] || {}).merge(options)
+        add_feature_options(feature_name, **options)
       end
 
       klass = Familia::Base.features_available[feature_name]

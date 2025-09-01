@@ -89,12 +89,8 @@ module Familia
         Familia.trace :LOADED, self, base, caller(1..1) if Familia.debug?
         base.extend ClassMethods
 
-        # Ensure default generator is set in feature options if not already present
-        base.instance_eval do
-          @feature_options ||= {}
-          @feature_options[:object_identifiers] ||= {}
-          @feature_options[:object_identifiers][:generator] ||= DEFAULT_GENERATOR
-        end
+        # Ensure default generator is set in feature options
+        base.add_feature_options(:object_identifiers, generator: DEFAULT_GENERATOR)
 
         # Register the objid field using our custom field type
         base.register_field_type(

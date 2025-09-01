@@ -8,6 +8,7 @@ Familia.debug = false
 
 # Basic class using external identifiers
 class ExternalIdTest < Familia::Horreum
+  feature :object_identifiers
   feature :external_identifiers
   identifier_field :id
   field :id
@@ -16,6 +17,7 @@ end
 
 # Class with custom prefix
 class CustomPrefixTest < Familia::Horreum
+  feature :object_identifiers
   feature :external_identifiers, prefix: 'cust'
   identifier_field :id
   field :id
@@ -24,6 +26,7 @@ end
 
 # Class testing data integrity preservation
 class ExternalDataIntegrityTest < Familia::Horreum
+  feature :object_identifiers
   feature :external_identifiers
   identifier_field :id
   field :id
@@ -180,3 +183,21 @@ extid_suffix.match(/\A[0-9a-z]+\z/)
 ## External ID generation after complex initialization
 @complex_obj.extid
 #=*> nil
+
+## find_by_extid works with saved objects
+@test_obj = ExternalIdTest.new(id: 'findable_test', name: 'Test Object')
+@test_obj.save
+found_obj = ExternalIdTest.find_by_extid(@test_obj.extid)
+found_obj&.id
+#=> "findable_test"
+
+## find_by_extid returns nil for nonexistent extids
+ExternalIdTest.find_by_extid('nonexistent_extid')
+#=> nil
+
+## extid_lookup mapping is maintained
+ExternalIdTest.extid_lookup[@test_obj.extid]
+#=> "findable_test"
+
+# Cleanup test objects
+@test_obj.destroy! rescue nil

@@ -57,6 +57,12 @@ module Familia
               return unless generated_extid
 
               instance_variable_set(:"@#{field_name}", generated_extid)
+
+              # Update mapping if we have an identifier
+              if respond_to?(:identifier) && identifier
+                self.class.extid_lookup[generated_extid] = identifier
+              end
+
               generated_extid
             end
           end
@@ -76,7 +82,19 @@ module Familia
 
           handle_method_conflict(klass, :"#{method_name}=") do
             klass.define_method :"#{method_name}=" do |value|
+              # Remove old mapping if extid is changing
+              old_value = instance_variable_get(:"@#{field_name}")
+              if old_value && old_value != value && respond_to?(:identifier)
+                self.class.extid_lookup.del(old_value)
+              end
+
+              # Set the new value
               instance_variable_set(:"@#{field_name}", value)
+
+              # Update mapping if we have both extid and identifier
+              if value && respond_to?(:identifier) && identifier
+                self.class.extid_lookup[value] = identifier
+              end
             end
           end
         end
