@@ -30,7 +30,7 @@ Generated class methods:
 
 For scoped tracking (with class prefix):
 tracked_in :global, :active_users, score: :last_seen
-Generates: Customer.add_to_active_users(customer) and Customer.global_active_users
+Generates: Customer.add_to_active_users(customer) and Customer.active_users
 
 indexed_by Relationships
 
@@ -181,7 +181,7 @@ end
 
 # Usage examples:
 # Global lookup (system-wide unique)
-ApiKey.global_key_lookup.get("sha256:abc123...")
+ApiKey.key_lookup.get("sha256:abc123...")
 
 # Scoped lookup (unique per customer)
 customer = Customer.new(custid: "cust_456")

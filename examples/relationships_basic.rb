@@ -28,11 +28,11 @@ class Customer < Familia::Horreum
   sorted_set :activity   # Activity feed with timestamps
 
   # Create indexes for fast lookups (using new class_ prefix for global)
-  class_indexed_by :email, :email_lookup
-  class_indexed_by :plan, :plan_lookup
+  class_indexed_by :email, :email_lookup # i.e. Customer.email_lookup
+  class_indexed_by :plan, :plan_lookup # i.e. Customer.plan_lookup
 
-  # Track in global collections (using new class_ prefix for global)
-  class_tracked_in :all_customers, score: :created_at
+  # Track in class-level collections (using new class_ prefix for global)
+  class_tracked_in :all_customers, score: :created_at # i.e. Customer.all_customers
 
   def created_at
     Time.now.to_i
@@ -108,13 +108,15 @@ puts
 puts '=== 2. Establishing Relationships ==='
 
 # Add objects to indexed lookups (use instance methods for indexing)
-customer.add_to_global_email_lookup
-customer.add_to_global_plan_lookup
+# TODO: The customer should be automatically added to these lookups when
+# the record is created with Customer.create (e.g. via Customer.add).
+customer.add_to_class_email_lookup
+customer.add_to_class_plan_lookup
 puts '✓ Added customer to email and plan indexes'
 
-# Add customer to global tracking
+# Add customer to class-level tracking
 Customer.add_to_all_customers(customer)
-puts '✓ Added customer to global customer tracking'
+puts '✓ Added customer to class-level customer tracking'
 
 # Establish member_of relationships (bidirectional)
 domain1.add_to_customer_domains(customer)
@@ -137,17 +139,17 @@ puts
 
 puts '=== 3. Querying Relationships ==='
 
-# Test indexed lookups using global index methods
+# Test indexed lookups using class-level index methods
 # NOTE: Index lookup methods may not be fully implemented yet
 begin
-  found_customer_id = Customer.global_email_lookup.get(customer.email)
+  found_customer_id = Customer.email_lookup.get(customer.email)
   puts "Email lookup for #{customer.email}: #{found_customer_id}"
 rescue NoMethodError => e
   puts "Index lookup not yet available: #{e.message.split(' for ').first}"
 end
 
 begin
-  enterprise_customer_id = Customer.global_plan_lookup.get('enterprise')
+  enterprise_customer_id = Customer.plan_lookup.get('enterprise')
   puts "Enterprise customer found: #{enterprise_customer_id}"
 rescue NoMethodError => e
   puts "Index lookup not yet available: #{e.message.split(' for ').first}"
@@ -165,11 +167,11 @@ puts "  Domain IDs: #{customer.domains.members}"
 puts "  Project IDs: #{customer.projects.members}"
 
 # Test tracked_in collections
-all_customers_count = Customer.global_all_customers.size
-puts "\nGlobal tracking:"
+all_customers_count = Customer.all_customers.size
+puts "\nClass-level tracking:"
 puts "  Total customers in system: #{all_customers_count}"
 
-active_domains_count = Domain.global_active_domains.size
+active_domains_count = Domain.active_domains.size
 puts "  Active domains in system: #{active_domains_count}"
 puts
 
@@ -177,11 +179,11 @@ puts '=== 4. Range Queries ==='
 
 # Get recent customers (last 24 hours)
 yesterday = (Time.now - (24 * 3600)).to_i # 24 hours ago
-recent_customers = Customer.global_all_customers.rangebyscore(yesterday, '+inf')
+recent_customers = Customer.all_customers.rangebyscore(yesterday, '+inf')
 puts "Recent customers (last 24h): #{recent_customers.size}"
 
 # Get all active domains by score
-active_domain_scores = Domain.global_active_domains.rangebyscore(1, '+inf', with_scores: true)
+active_domain_scores = Domain.active_domains.rangebyscore(1, '+inf', with_scores: true)
 puts 'Active domains with timestamps:'
 active_domain_scores.each do |domain_id, timestamp|
   puts "  #{domain_id}: active since #{Time.at(timestamp.to_i)}"
@@ -202,8 +204,8 @@ additional_customers = []
   additional_customers << cust
 
   # Add to indexes and tracking
-  cust.add_to_global_email_lookup
-  cust.add_to_global_plan_lookup
+  cust.add_to_class_email_lookup
+  cust.add_to_class_plan_lookup
   Customer.add_to_all_customers(cust)
 end
 
@@ -211,9 +213,9 @@ puts "✓ Created and indexed #{additional_customers.size} additional customers"
 
 # Query by plan (wrapped in error handling)
 begin
-  basic_customer_id = Customer.global_plan_lookup.get('basic')
-  premium_customer_id = Customer.global_plan_lookup.get('premium')
-  enterprise_customer_id = Customer.global_plan_lookup.get('enterprise')
+  basic_customer_id = Customer.plan_lookup.get('basic')
+  premium_customer_id = Customer.plan_lookup.get('premium')
+  enterprise_customer_id = Customer.plan_lookup.get('enterprise')
 
   puts "\nCustomer distribution by plan:"
   puts "  Basic: #{basic_customer_id ? 1 : 0} customers"
@@ -230,18 +232,21 @@ puts '=== 6. Relationship Cleanup ==='
 puts 'Cleaning up relationships...'
 
 # Remove from member_of relationships
+# TODO: Look into why we are making two calls here instead of just one? Why
+# doesn;t the call to remove_from_customer_domains remove it from customer.domains
+# (or vice versa).
 domain1.remove_from_customer_domains(customer)
 customer.domains.remove(domain1.identifier)
 puts "✓ Removed #{domain1.name} from customer domains"
 
 # Remove from tracking collections
-Domain.global_active_domains.remove(domain2.identifier)
+Domain.active_domains.remove(domain2.identifier)
 puts "✓ Removed #{domain2.name} from active domains"
 
 # Verify cleanup
 puts "\nAfter cleanup:"
 puts "  Customer domains: #{customer.domains.size}"
-puts "  Active domains: #{Domain.global_active_domains.size}"
+puts "  Active domains: #{Domain.active_domains.size}"
 puts
 
 puts '=== 7. Advanced Usage - Permission Encoding ==='

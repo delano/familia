@@ -75,9 +75,9 @@ User.add_to_activity_log(user)             # Uses created_at timestamp
 User.add_to_performance_metrics(user)      # Uses proc result (170)
 
 # Query collections
-User.global_leaderboard.score('user123')           # => 85.0
-User.global_activity_log.rangebyscore('-inf', '+inf')  # All users by time
-User.global_performance_metrics.rank('user123')    # User's rank by performance
+User.leaderboard.score('user123')           # => 85.0
+User.activity_log.rangebyscore('-inf', '+inf')  # All users by time
+User.performance_metrics.rank('user123')    # User's rank by performance
 ```
 
 ### Score Encoding System
@@ -205,15 +205,15 @@ user.add_to_global_email_index
 user.add_to_global_username_index
 
 # Fast O(1) lookups (class methods)
-user_id = User.global_email_index.get('john@example.com')    # => user.identifier
-user_id = User.global_username_index.get('johndoe')         # => user.identifier
+user_id = User.email_index.get('john@example.com')    # => user.identifier
+user_id = User.username_index.get('johndoe')         # => user.identifier
 
 # Batch operations
 users = [user1, user2, user3]
 users.each { |u| u.add_to_global_email_index }
 
 # Check if indexed
-User.global_email_index.exists?('john@example.com')  # => true
+User.email_index.exists?('john@example.com')  # => true
 
 # Usage for Scoped Context
 organization = Organization.new(org_id: 'acme_corp')
@@ -250,7 +250,7 @@ product = Product.new(sku: 'ELEC001', category: 'laptops', brand: 'apple')
 
 # Global indexing (system-wide unique SKUs)
 product.add_to_global_sku_index
-Product.global_sku_index.get('ELEC001')  # => product.identifier
+Product.sku_index.get('ELEC001')  # => product.identifier
 
 # Scoped indexing (categories unique per brand)
 brand = Brand.new(brand_id: 'apple', name: 'Apple Inc.')
@@ -270,7 +270,7 @@ The `context` parameter is a **required** architectural decision that determines
 
 **Global Context** (`context: :global`):
 - **Instance methods**: `object.add_to_global_index_name`, `object.remove_from_global_index_name`
-- **Class methods**: `Class.global_index_name` (returns hash), `Class.find_by_field_globally`
+- **Class methods**: `Class.index_name` (returns hash), `Class.find_by_field`
 
 **Class Context** (`context: Customer`):
 - **Instance methods**: `object.add_to_customer_index_name(customer)`, `object.remove_from_customer_index_name(customer)`
@@ -530,7 +530,7 @@ class AnalyticsService
     since = (Time.now - days.days).to_f.floor
 
     # Get all users active in time period
-    active_users = User.global_activity.range_by_score(since, '+inf')
+    active_users = User.activity.range_by_score(since, '+inf')
 
     # Analyze permission levels
     permission_breakdown = Document.authorized_users
@@ -540,7 +540,7 @@ class AnalyticsService
     {
       total_active_users: active_users.size,
       permission_breakdown: permission_breakdown.transform_values(&:size),
-      top_contributors: User.global_activity.range(0, 9, with_scores: true)
+      top_contributors: User.activity.range(0, 9, with_scores: true)
     }
   end
 

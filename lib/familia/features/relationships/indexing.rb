@@ -17,19 +17,19 @@ module Familia
           # Define an indexed_by relationship for fast lookups
           #
           # @param field [Symbol] The field to index on
-          # @param context [Class, Symbol] The context class that owns the index
           # @param index_name [Symbol] Name of the index hash
+          # @param parent [Class, Symbol] The parent class that owns the index
           # @param finder [Boolean] Whether to generate finder methods
           #
           # @example Basic indexing
-          #   indexed_by :display_name, context: Customer, index_name: :domain_index
+          #   indexed_by :display_name, parent: Customer, index_name: :domain_index
           #
           # @example Global indexing
-          #   indexed_by :domain_id, context: :global, index_name: :domain_lookup
+          #   indexed_by :domain_id, parent: :global, index_name: :domain_lookup
           def indexed_by(field, index_name, parent:, finder: true)
             # Validate that we're not using :global parent (use class_indexed_by instead)
             if parent == :global
-              raise ArgumentError, "Use class_indexed_by for global indexes instead of indexed_by with parent: :global"
+              raise ArgumentError, "Use class_indexed_by for class-level indexes instead of indexed_by with parent: :global"
             end
 
             context_class = parent
@@ -74,10 +74,10 @@ module Familia
               finder: finder
             }
 
-            # Generate global finder methods if requested
-            generate_global_finder_methods(field, index_name) if finder
+            # Generate class-level finder methods if requested
+            generate_class_finder_methods(field, index_name) if finder
 
-            # Generate instance methods for maintaining the global index
+            # Generate instance methods for maintaining the class-level index
             generate_indexing_instance_methods('global', field, index_name)
           end
 
@@ -155,11 +155,11 @@ module Familia
             end
           end
 
-          # Generate global finder methods (when context is :global)
-          def generate_global_finder_methods(field, index_name)
-            # Generate global finder method (e.g., Domain.find_by_display_name_globally)
-            define_method("find_by_#{field}_globally") do |field_value|
-              index_key = "global:#{index_name}"
+          # Generate class-level finder methods
+          def generate_class_finder_methods(field, index_name)
+            # Generate class-level finder method (e.g., Domain.find_by_display_name)
+            define_singleton_method("find_by_#{field}") do |field_value|
+              index_key = "global:#{index_name}" # TODO: Should be "classname:index_name
               object_id = dbclient.hget(index_key, field_value.to_s)
 
               return nil unless object_id
@@ -167,25 +167,25 @@ module Familia
               new(identifier: object_id)
             end
 
-            # Generate global bulk finder method
-            define_method("find_all_by_#{field}_globally") do |field_values|
+            # Generate class-level bulk finder method
+            define_method("find_all_by_#{field}") do |field_values|
               return [] if field_values.empty?
 
-              index_key = "global:#{index_name}"
+              index_key = "global:#{index_name}" # TODO: Should be "classname:index_name
               object_ids = dbclient.hmget(index_key, *field_values.map(&:to_s))
 
               # Filter out nil values and instantiate objects
               object_ids.compact.map { |object_id| new(identifier: object_id) }
             end
 
-            # Generate method to get the global index hash directly
-            define_method("global_#{index_name}") do
-              index_key = "global:#{index_name}"
+            # Generate method to get the class-level index hash directly
+            define_method("#{index_name}") do
+              index_key = "global:#{index_name}"  # TODO: Should be "classname:index_name
               Familia::HashKey.new(nil, dbkey: index_key, logical_database: logical_database)
             end
 
-            # Generate method to rebuild the global index
-            define_method("rebuild_global_#{index_name}") do
+            # Generate method to rebuild the class-level index
+            define_method("rebuild_#{index_name}") do
               index_key = "global:#{index_name}"
 
               # Clear existing index
@@ -203,8 +203,8 @@ module Familia
             # e.g., domain.add_to_customer_domain_index(customer)
             if context_class_name == 'global'
               # Global index methods
-              define_method("add_to_global_#{index_name}") do
-                index_key = "global:#{index_name}"
+              define_method("add_to_#{index_name}") do
+                index_key = "global:#{index_name}" # TODO: Should be "classname:index_name
                 field_value = send(field)
 
                 return unless field_value
@@ -212,8 +212,8 @@ module Familia
                 dbclient.hset(index_key, field_value.to_s, identifier)
               end
 
-              define_method("remove_from_global_#{index_name}") do
-                index_key = "global:#{index_name}"
+              define_method("remove_from_#{index_name}") do
+                index_key = "global:#{index_name}" # TODO: Should be "classname:index_name
                 field_value = send(field)
 
                 return unless field_value
@@ -221,8 +221,8 @@ module Familia
                 dbclient.hdel(index_key, field_value.to_s)
               end
 
-              define_method("update_in_global_#{index_name}") do |old_field_value = nil|
-                index_key = "global:#{index_name}"
+              define_method("update_in_#{index_name}") do |old_field_value = nil|
+                index_key = "global:#{index_name}" # TODO: Should be "classname:index_name
                 new_field_value = send(field)
 
                 dbclient.multi do |tx|
@@ -272,7 +272,7 @@ module Familia
 
         # Instance methods for indexed objects
         module InstanceMethods
-          # Update all indexes that this object participates in
+          # Update both the instance and class indexes
           def update_all_indexes(old_values = {})
             return unless self.class.respond_to?(:indexing_relationships)
 
@@ -284,7 +284,7 @@ module Familia
               old_field_value = old_values[field]
 
               if context_class_name == 'global'
-                send("update_in_global_#{index_name}", old_field_value)
+                send("update_in_#{index_name}", old_field_value)
               else
                 # For non-global indexes, we'd need to know which context instances
                 # this object should be indexed in. This is a simplified approach.
@@ -293,8 +293,8 @@ module Familia
             end
           end
 
-          # Remove from all indexes (used during destroy)
-          def remove_from_all_indexes
+          # Remove from indexes for this model instance and class
+          def remove_from_all_indexes # TODO: possible more clear to be named `remove_from_both_indexes`?
             return unless self.class.respond_to?(:indexing_relationships)
 
             self.class.indexing_relationships.each do |config|
@@ -303,7 +303,7 @@ module Familia
               index_name = config[:index_name]
 
               if context_class_name == 'global'
-                send("remove_from_global_#{index_name}")
+                send("remove_from_#{index_name}") # e.g. Customer.remove_from_index_name
               else
                 # For non-global indexes, we'd need to find all context instances
                 # that have this object indexed. This is expensive but necessary for cleanup.
@@ -336,10 +336,10 @@ module Familia
               next unless field_value
 
               if context_class_name == 'global'
-                index_key = "global:#{index_name}"
+                index_key = "global:#{index_name}" # TODO: Should be "classname:index_name
                 if dbclient.hexists(index_key, field_value.to_s)
                   memberships << {
-                    context_class: 'global',
+                    context_class: 'global', # TODO: Should be the class / classname
                     index_name: index_name,
                     field: field,
                     field_value: field_value,
@@ -381,7 +381,7 @@ module Familia
             return false unless field_value
 
             if config[:context_class_name] == 'global'
-              index_key = "global:#{index_name}"
+              index_key = "global:#{index_name}" # TODO: Should be "classname:index_name
             else
               context_class_name = config[:context_class_name]
               index_key = "#{context_class_name.downcase}:#{context_instance.identifier}:#{index_name}"

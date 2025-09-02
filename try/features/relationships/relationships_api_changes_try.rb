@@ -115,29 +115,29 @@ ApiTestUser.respond_to?(:global_active_users)
 ## Global tracking collections are SortedSet instances
 @user.save
 ApiTestUser.add_to_all_users(@user)
-ApiTestUser.global_all_users.class.name
+ApiTestUser.all_users.class.name
 #=> "Familia::SortedSet"
 
 ## Objects can be added to global tracking collections
 ApiTestUser.add_to_all_users(@user)
-ApiTestUser.global_all_users.member?(@user.identifier)
+ApiTestUser.all_users.member?(@user.identifier)
 #=> true
 
 ## Score calculation works for simple field scores
-score = ApiTestUser.global_all_users.score(@user.identifier)
+score = ApiTestUser.all_users.score(@user.identifier)
 score.is_a?(Float) && score > 0
 #=> true
 
 ## Score calculation works for lambda scores with active user
 ApiTestUser.add_to_active_users(@user)
-active_score = ApiTestUser.global_active_users.score(@user.identifier)
+active_score = ApiTestUser.active_users.score(@user.identifier)
 active_score > 0
 #=> true
 
 ## Score calculation works for lambda scores with inactive user
 @inactive_user.save
 ApiTestUser.add_to_active_users(@inactive_user)
-inactive_score = ApiTestUser.global_active_users.score(@inactive_user.identifier)
+inactive_score = ApiTestUser.active_users.score(@inactive_user.identifier)
 inactive_score == 0
 #=> true
 
@@ -146,15 +146,15 @@ inactive_score == 0
 # =============================================
 
 ## class_indexed_by with finder: true generates finder methods
-@user.respond_to?(:find_by_email_globally)
+@user.respond_to?(:find_by_email)
 #=> true
 
 ## class_indexed_by with finder: true generates bulk finder methods
-@user.respond_to?(:find_all_by_email_globally)
+@user.respond_to?(:find_all_by_email)
 #=> true
 
 ## class_indexed_by with finder: false does not generate finder methods
-@user.respond_to?(:find_by_username_globally)
+@user.respond_to?(:find_by_username)
 #=> false
 
 ## class_indexed_by generates global index access methods
@@ -180,11 +180,11 @@ inactive_score == 0
 ## Global indexing adds objects to index
 @user.add_to_global_email_lookup
 # Note: Finder methods have implementation issues, testing index storage directly
-@user.global_email_lookup.class.name == "Familia::HashKey"
+@user.email_lookup.class.name == "Familia::HashKey"
 #=> true
 
 ## Global index can be accessed
-@user.global_email_lookup.get(@user.email) == @user.user_id
+@user.email_lookup.get(@user.email) == @user.user_id
 #=> true
 
 # =============================================
@@ -283,7 +283,7 @@ membership_meta[:context_class] == ApiTestUser
 ## Global tracking and indexing work together
 ApiTestUser.add_to_all_users(@user)
 @user.add_to_global_email_lookup
-ApiTestUser.global_all_users.member?(@user.identifier) && @user.global_email_lookup.get(@user.email) == @user.user_id
+ApiTestUser.all_users.member?(@user.identifier) && @user.email_lookup.get(@user.email) == @user.user_id
 #=> true
 
 ## Parent-based relationships work with tracking
@@ -295,7 +295,7 @@ ApiTestUser.global_all_users.member?(@user.identifier) && @user.global_email_loo
 ## Score-based tracking maintains proper ordering
 ApiTestUser.add_to_all_users(@user)
 ApiTestUser.add_to_all_users(@inactive_user)
-all_users = ApiTestUser.global_all_users
+all_users = ApiTestUser.all_users
 all_users.size >= 2
 #=> true
 
@@ -307,18 +307,18 @@ all_users.size >= 2
 user_with_nil_email = ApiTestUser.new(user_id: 'no_email', email: nil)
 user_with_nil_email.add_to_global_email_lookup
 # Nil email should not be added to index
-user_with_nil_email.global_email_lookup.get('') == nil
+user_with_nil_email.email_lookup.get('') == nil
 #=> true
 
 ## Update methods handle field value changes
 old_email = @user.email
 @user.update_in_global_email_lookup(old_email)
-@user.global_email_lookup.get(@user.email) == @user.user_id
+@user.email_lookup.get(@user.email) == @user.user_id
 #=> true
 
 ## Removal methods clean up indexes properly
 @user.remove_from_global_email_lookup
-@user.global_email_lookup.get(@user.email) == nil
+@user.email_lookup.get(@user.email) == nil
 #=> true
 
 # =============================================

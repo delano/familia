@@ -27,7 +27,7 @@ end
 Generated class methods:
 - Customer.add_to_all_customers(customer) - Add customer to global tracking
 - Customer.remove_from_all_customers(customer) - Remove customer from global tracking
-- Customer.global_all_customers - Access the sorted set collection directly
+- Customer.all_customers - Access the sorted set collection directly
 
 **Scoped Tracking (tracked_in with class context)**
 When you declare:
@@ -48,7 +48,7 @@ end
 
 Generated methods:
 - **Instance methods**: `customer.add_to_global_email_lookup`, `customer.remove_from_global_email_lookup`
-- **Class methods**: `Customer.global_email_lookup` (returns hash), `Customer.find_by_email_globally(email)`
+- **Class methods**: `Customer.email_lookup` (returns hash), `Customer.find_by_email(email)`
 
 Redis key pattern: `global:email_lookup`
 
@@ -92,7 +92,7 @@ Customer.all_customers.range(0, -1)        # Direct collection access
 
 # For indexed_by relationships:
 customer.add_to_global_email_lookup                        # Instance method
-Customer.global_email_lookup.get("user@example.com")       # O(1) lookup
+Customer.email_lookup.get("user@example.com")       # O(1) lookup
 
 Method Naming Conventions
 
@@ -126,7 +126,7 @@ end
 
 # Usage:
 user.add_to_global_email_lookup
-found_user_id = User.global_email_lookup.get("john@example.com")
+found_user_id = User.email_lookup.get("john@example.com")
 ```
 
 **Redis keys generated**: `global:email_lookup`, `global:username_lookup`
@@ -182,7 +182,7 @@ end
 
 # Usage examples:
 # Global lookup (system-wide unique)
-ApiKey.global_key_lookup.get("sha256:abc123...")
+ApiKey.key_lookup.get("sha256:abc123...")
 
 # Scoped lookup (unique per customer)
 customer = Customer.new(custid: "cust_456")

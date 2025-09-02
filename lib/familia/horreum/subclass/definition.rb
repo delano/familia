@@ -177,6 +177,8 @@ module Familia
       # configuration values. This is particularly useful when mapping
       # familia models with specific database numbers in the configuration.
       #
+      # Familia::Horreum::DefinitionMethods#config_name
+      #
       # @example V2::Session.config_name => 'session'
       #
       # @return [String] The underscored class name as a string
