@@ -1,6 +1,7 @@
-# try/features/relationships_try.rb
+# try/features/relationships/relationships_try.rb
 #
 # Simplified Familia v2 relationship functionality tests - focusing on core working features
+#
 
 require_relative '../../helpers/test_helpers'
 
@@ -26,7 +27,7 @@ class TestDomain < Familia::Horreum
 
   # Basic tracking with simplified score
   tracked_in TestCustomer, :domains, score: :created_at
-  tracked_in :global, :all_domains, score: :created_at
+  class_tracked_in :all_domains, score: :created_at
 
   # Note: Indexing features removed for stability
 
@@ -42,7 +43,7 @@ class TestTag < Familia::Horreum
   field :created_at
 
   # Global tracking
-  tracked_in :global, :all_tags, score: :created_at
+  class_tracked_in :all_tags, score: :created_at
 end
 
 # Setup

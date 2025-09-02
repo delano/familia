@@ -28,8 +28,8 @@ class Customer < Familia::Horreum
   field :custid, :name, :email
 
   # Define relationship collections
-  tracked_in :global, :active_users, score: :created_at
-  indexed_by :email, :email_lookup, context: :global
+  class_tracked_in :active_users, score: :created_at
+  class_indexed_by :email, :email_lookup
 end
 
 class Domain < Familia::Horreum
@@ -57,13 +57,13 @@ class User < Familia::Horreum
   field :user_id, :name, :score_value
 
   # Simple sorted set tracking
-  tracked_in :global, :leaderboard, score: :score_value
+  class_tracked_in :leaderboard, score: :score_value
 
   # Time-based tracking with automatic timestamps
-  tracked_in :global, :activity_log, score: :created_at
+  class_tracked_in :activity_log, score: :created_at
 
   # Proc-based scoring for complex calculations
-  tracked_in :global, :performance_metrics, score: -> { (score_value || 0) * 2 }
+  class_tracked_in :performance_metrics, score: -> { (score_value || 0) * 2 }
 end
 
 # Usage
@@ -92,7 +92,7 @@ class Document < Familia::Horreum
   field :doc_id, :title, :content
 
   # Permission-based tracking with 8-bit encoding
-  tracked_in :global, :authorized_users, score: :encode_permissions
+  class_tracked_in :authorized_users, score: :encode_permissions
 
   private
 
@@ -190,11 +190,11 @@ class User < Familia::Horreum
   field :email, :username, :department
 
   # Global indexes for system-wide unique lookups
-  indexed_by :email, :email_index, context: :global
-  indexed_by :username, :username_index, context: :global
+  class_indexed_by :email, :email_index
+  class_indexed_by :username, :username_index
 
   # Scoped indexes for values unique within a context
-  indexed_by :department, :department_index, context: Organization
+  indexed_by :department, :department_index, parent: Organization
 end
 
 # Usage for Global Context
@@ -231,10 +231,10 @@ class Product < Familia::Horreum
   field :sku, :category, :brand
 
   # Global context: SKUs must be unique system-wide
-  indexed_by :sku, :sku_index, context: :global
+  class_indexed_by :sku, :sku_index
 
   # Class context: Categories are unique per brand
-  indexed_by :category, :category_index, context: Brand
+  indexed_by :category, :category_index, parent: Brand
 end
 
 class Brand < Familia::Horreum
@@ -283,8 +283,8 @@ The `context` parameter is a **required** architectural decision that determines
 indexed_by :email_lookup, field: :email
 
 # ✅ New correct syntax
-indexed_by :email, :email_lookup, context: :global      # Global scope
-indexed_by :email, :customer_lookup, context: Customer  # Scoped per customer
+class_indexed_by :email, :email_lookup                  # Global scope
+indexed_by :email, :customer_lookup, parent: Customer   # Scoped per customer
 ```
 
 ## Member Of Relationships
@@ -489,8 +489,8 @@ class User < Familia::Horreum
 
   # Multi-tenant membership
   member_of Organization, :members, type: :set
-  tracked_in :global, :global_activity, score: :created_at
-  indexed_by :email, :email_lookup, context: :global
+  class_tracked_in :global_activity, score: :created_at
+  class_indexed_by :email, :email_lookup
 end
 
 class Project < Familia::Horreum
@@ -500,7 +500,7 @@ class Project < Familia::Horreum
   field :project_id, :name, :status
 
   member_of Organization, :projects, type: :set
-  tracked_in :global, :status_timeline,
+  class_tracked_in :status_timeline,
     score: ->(proj) { "#{Time.now.to_i}.#{proj.status.hash}" }
 end
 

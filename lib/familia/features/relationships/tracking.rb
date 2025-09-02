@@ -34,6 +34,32 @@ module Familia
             word.to_s.split('_').map(&:capitalize).join
           end
 
+          # Define a global/class-level tracked collection
+          #
+          # @param collection_name [Symbol] Name of the global collection
+          # @param score [Symbol, Proc, nil] How to calculate the score
+          # @param on_destroy [Symbol] What to do when object is destroyed (:remove, :ignore)
+          #
+          # @example Global tracking (following class_ prefix convention)
+          #   class_tracked_in :all_customers, score: :created_at
+          #   class_tracked_in :active_users, score: -> { status == 'active' ? Time.now.to_i : 0 }
+          def class_tracked_in(collection_name, score: nil, on_destroy: :remove)
+            # Store metadata for this tracking relationship
+            tracking_relationships << {
+              context_class: :global,
+              context_class_name: 'Global',
+              collection_name: collection_name,
+              score: score,
+              on_destroy: on_destroy
+            }
+
+            # Generate global class methods
+            generate_global_class_methods(self, collection_name)
+
+            # Generate instance methods on this class for global context
+            generate_tracking_instance_methods('Global', collection_name, score)
+          end
+
           # Define a tracked_in relationship
           #
           # @param context_class [Class, Symbol] The class that owns the collection
@@ -49,10 +75,13 @@ module Familia
           #   tracked_in Team, :domains, score: :added_at
           #   tracked_in Organization, :all_domains, score: :created_at
           def tracked_in(context_class, collection_name, score: nil, on_destroy: :remove)
-            # Handle special :global context
+            # Validate that we're not using :global context (use class_tracked_in instead)
             if context_class == :global
-              context_class_name = 'Global'
-            elsif context_class.is_a?(Class)
+              raise ArgumentError, "Use class_tracked_in for global collections instead of tracked_in :global"
+            end
+
+            # Handle class context
+            if context_class.is_a?(Class)
               class_name = context_class.name
               context_class_name = if class_name.include?('::')
                                      # Extract the last part after the last ::
@@ -60,7 +89,6 @@ module Familia
                                    else
                                      class_name
                                    end
-            # Extract just the class name, handling anonymous classes
             else
               context_class_name = camelize_word(context_class)
             end
@@ -74,12 +102,8 @@ module Familia
               on_destroy: on_destroy
             }
 
-            # Generate class methods on the context class (skip for global)
-            if context_class == :global
-              generate_global_class_methods(self, collection_name)
-            else
-              generate_context_class_methods(context_class, collection_name)
-            end
+            # Generate context class methods
+            generate_context_class_methods(context_class, collection_name)
 
             # Generate instance methods on this class
             generate_tracking_instance_methods(context_class_name, collection_name, score)

@@ -26,12 +26,17 @@ module Familia
           #
           # @example Global indexing
           #   indexed_by :domain_id, context: :global, index_name: :domain_lookup
-          def indexed_by(field, index_name, context:, finder: true)
-            context_class = context == :global ? :global : context
-            context_class_name = if context_class == :global
-                                   'global'
+          def indexed_by(field, index_name, parent:, finder: true)
+            # Validate that we're not using :global parent (use class_indexed_by instead)
+            if parent == :global
+              raise ArgumentError, "Use class_indexed_by for global indexes instead of indexed_by with parent: :global"
+            end
+
+            context_class = parent
+            context_class_name = if context_class.is_a?(Class)
+                                   context_class.name
                                  else
-                                   (context_class.is_a?(Class) ? context_class.name : context_class.to_s.camelize)
+                                   context_class.to_s.camelize
                                  end
 
             # Store metadata for this indexing relationship
@@ -44,14 +49,36 @@ module Familia
             }
 
             # Generate finder methods on the context class
-            if finder && context_class != :global
-              generate_context_finder_methods(context_class, field, index_name)
-            elsif finder && context_class == :global
-              generate_global_finder_methods(field, index_name)
-            end
+            generate_context_finder_methods(context_class, field, index_name) if finder
 
             # Generate instance methods for maintaining the index
             generate_indexing_instance_methods(context_class_name, field, index_name)
+          end
+
+          # Define a global/class-level indexed lookup
+          #
+          # @param field [Symbol] The field to index on
+          # @param index_name [Symbol] Name of the index hash
+          # @param finder [Boolean] Whether to generate finder methods
+          #
+          # @example Global indexing (following class_ prefix convention)
+          #   class_indexed_by :email, :email_lookup
+          #   class_indexed_by :username, :username_lookup, finder: false
+          def class_indexed_by(field, index_name, finder: true)
+            # Store metadata for this indexing relationship
+            indexing_relationships << {
+              field: field,
+              context_class: :global,
+              context_class_name: 'global',
+              index_name: index_name,
+              finder: finder
+            }
+
+            # Generate global finder methods if requested
+            generate_global_finder_methods(field, index_name) if finder
+
+            # Generate instance methods for maintaining the global index
+            generate_indexing_instance_methods('global', field, index_name)
           end
 
           # Get all indexing relationships for this class

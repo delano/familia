@@ -27,12 +27,12 @@ class Customer < Familia::Horreum
   list :projects         # Ordered list of project IDs
   sorted_set :activity   # Activity feed with timestamps
 
-  # Create indexes for fast lookups
-  indexed_by :email, :email_lookup, context: :global
-  indexed_by :plan, :plan_lookup, context: :global
+  # Create indexes for fast lookups (using new class_ prefix for global)
+  class_indexed_by :email, :email_lookup
+  class_indexed_by :plan, :plan_lookup
 
-  # Track in global collections
-  tracked_in :global, :all_customers, score: :created_at
+  # Track in global collections (using new class_ prefix for global)
+  class_tracked_in :all_customers, score: :created_at
 
   def created_at
     Time.now.to_i
@@ -52,8 +52,8 @@ class Domain < Familia::Horreum
   # Declare membership in customer collections
   member_of Customer, :domains, type: :set
 
-  # Track domains by status
-  tracked_in :global, :active_domains,
+  # Track domains by status (using new class_ prefix for global)
+  class_tracked_in :active_domains,
     score: -> { status == 'active' ? Time.now.to_i : 0 }
 end
 

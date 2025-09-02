@@ -18,29 +18,31 @@ The method names follow the pattern: {action}_to_{lowercase_class_name}_{collect
 
 tracked_in Relationships
 
+**Global Tracking (New class_ prefix convention)**
 When you declare:
 class Customer < Familia::Horreum
-  tracked_in :all_customers, type: :sorted_set, score: :created_at
+  class_tracked_in :all_customers, score: :created_at
 end
 
 Generated class methods:
 - Customer.add_to_all_customers(customer) - Add customer to global tracking
 - Customer.remove_from_all_customers(customer) - Remove customer from global tracking
-- Customer.all_customers - Access the sorted set collection directly
+- Customer.global_all_customers - Access the sorted set collection directly
 
-For scoped tracking (with class prefix):
-tracked_in :global, :active_users, score: :last_seen
-Generates: Customer.add_to_active_users(customer) and Customer.global_active_users
+**Scoped Tracking (tracked_in with class context)**
+When you declare:
+tracked_in Team, :active_users, score: :last_seen
+Generates: Team instance methods for managing the active_users collection
 
 indexed_by Relationships
 
-The `indexed_by` method creates Redis hash-based indexes for O(1) field lookups. The `context` parameter determines index ownership and scope.
+The `indexed_by` method creates Redis hash-based indexes for O(1) field lookups.
 
-**Global Context (Shared Index)**
+**Global Context (New class_ prefix convention)**
 When you declare:
 ```ruby
 class Customer < Familia::Horreum
-  indexed_by :email, :email_lookup, context: :global
+  class_indexed_by :email, :email_lookup
 end
 ```
 
@@ -50,11 +52,11 @@ Generated methods:
 
 Redis key pattern: `global:email_lookup`
 
-**Class Context (Per-Instance Index)**
+**Parent Context (Per-Instance Index)**
 When you declare:
 ```ruby
 class Domain < Familia::Horreum
-  indexed_by :name, :domain_index, context: Customer
+  indexed_by :name, :domain_index, parent: Customer
 end
 ```
 
@@ -65,9 +67,9 @@ Generated class methods on Customer:
 Redis key pattern: `customer:123:domain_index` (per customer instance)
 
 **When to Use Each Context**
-- **Global context (`:global`)**: Use for system-wide lookups where the field value should be unique across all instances
+- **Global context (`class_indexed_by`)**: Use for system-wide lookups where the field value should be unique across all instances
   - Examples: email addresses, usernames, API keys
-- **Class context (e.g., `Customer`)**: Use for scoped lookups where the field value is unique within a specific parent object
+- **Parent context (`parent:` parameter)**: Use for scoped lookups where the field value is unique within a specific parent object
   - Examples: domain names per customer, project names per team
 
 Example from the Codebase
@@ -108,7 +110,7 @@ across related objects.
 The `context` parameter in `indexed_by` is a fundamental architectural decision that determines index scope and ownership. Here are practical patterns for when to use each approach:
 
 ### Global Context Pattern
-Use `context: :global` when field values should be unique system-wide:
+Use `class_indexed_by` when field values should be unique system-wide:
 
 ```ruby
 class User < Familia::Horreum
@@ -118,8 +120,8 @@ class User < Familia::Horreum
   field :user_id, :email, :username
 
   # System-wide unique email lookup
-  indexed_by :email, :email_lookup, context: :global
-  indexed_by :username, :username_lookup, context: :global
+  class_indexed_by :email, :email_lookup
+  class_indexed_by :username, :username_lookup
 end
 
 # Usage:
@@ -129,8 +131,8 @@ found_user_id = User.global_email_lookup.get("john@example.com")
 
 **Redis keys generated**: `global:email_lookup`, `global:username_lookup`
 
-### Class Context Pattern
-Use `context: SomeClass` when field values are unique within a specific parent context:
+### Parent Context Pattern
+Use `parent: SomeClass` when field values are unique within a specific parent context:
 
 ```ruby
 class Customer < Familia::Horreum
@@ -148,8 +150,8 @@ class Domain < Familia::Horreum
   field :domain_id, :name, :subdomain
 
   # Domains are unique per customer (customer can't have duplicate domain names)
-  indexed_by :name, :domain_index, context: Customer
-  indexed_by :subdomain, :subdomain_index, context: Customer
+  indexed_by :name, :domain_index, parent: Customer
+  indexed_by :subdomain, :subdomain_index, parent: Customer
 end
 
 # Usage:
@@ -171,11 +173,11 @@ class ApiKey < Familia::Horreum
   field :key_id, :key_hash, :name, :scope
 
   # API key hashes must be globally unique
-  indexed_by :key_hash, :global_key_lookup, context: :global
+  class_indexed_by :key_hash, :global_key_lookup
 
   # But key names can be reused across different customers
-  indexed_by :name, :customer_key_lookup, context: Customer
-  indexed_by :scope, :scope_lookup, context: Customer
+  indexed_by :name, :customer_key_lookup, parent: Customer
+  indexed_by :scope, :scope_lookup, parent: Customer
 end
 
 # Usage examples:
@@ -189,21 +191,25 @@ customer.find_all_by_scope(["read", "write"])
 ```
 
 ### Migration Guide
-If you have existing code with incorrect syntax, here's how to fix it:
+If you have existing code with old syntax, here's how to update it:
 
 ```ruby
-# ❌ Old incorrect syntax
+# ❌ Old syntax
 indexed_by :email_lookup, field: :email
-
-# ✅ New correct syntax - Global scope
 indexed_by :email, :email_lookup, context: :global
+tracked_in :global, :all_users, score: :created_at
 
-# ✅ New correct syntax - Class scope
-indexed_by :email, :customer_email_lookup, context: Customer
+# ✅ New syntax - Global scope
+class_indexed_by :email, :email_lookup
+class_tracked_in :all_users, score: :created_at
+
+# ✅ New syntax - Parent scope
+indexed_by :email, :customer_email_lookup, parent: Customer
+tracked_in Customer, :user_activity, score: :last_seen
 ```
 
-**Key Differences**:
-1. Parameter order: `indexed_by(field, index_name, context:)`
-2. The `field:` named parameter is now positional
-3. The `context:` parameter is required and determines scope
-4. Index name comes second (allows same field to have multiple indexes)
+**Key Changes**:
+1. Global relationships use `class_` prefix: `class_tracked_in`, `class_indexed_by`
+2. Scoped relationships use `parent:` instead of `context:`
+3. No more `:global` symbol - use class_ prefix methods instead
+4. Consistent with Horreum's established class_ prefix convention
