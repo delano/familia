@@ -7,6 +7,7 @@ require_relative '../lib/familia'
 
 # Configure Familia for the example
 # Note: Individual models can specify logical_database if needed
+Familia.redis.flushdb
 
 puts '=== Familia Relationships Basic Example ==='
 puts
@@ -118,15 +119,10 @@ puts '✓ Added customer to email and plan indexes'
 Customer.add_to_all_customers(customer)
 puts '✓ Added customer to class-level customer tracking'
 
-# Establish member_of relationships (bidirectional)
+# Establish member_of relationships (now a single call)
 domain1.add_to_customer_domains(customer)
-customer.domains.add(domain1.identifier)
-
 domain2.add_to_customer_domains(customer)
-customer.domains.add(domain2.identifier)
-
 project.add_to_customer_projects(customer)
-customer.projects.add(project.identifier)
 
 puts '✓ Established domain ownership relationships'
 puts '✓ Established project ownership relationships'
@@ -184,8 +180,8 @@ puts "Recent customers (last 24h): #{recent_customers.size}"
 # Get all active domains by score
 active_domain_scores = Domain.active_domains.rangebyscore(1, '+inf', with_scores: true)
 puts 'Active domains with timestamps:'
-active_domain_scores.each do |domain_id, timestamp|
-  puts "  #{domain_id}: active since #{Time.at(timestamp.to_i)}"
+active_domain_scores.each_slice(2) do |domain_id, timestamp|
+  puts "  #{domain_id}: active since #{Time.at(timestamp.to_i)} #{timestamp.inspect}"
 end
 puts
 
@@ -231,11 +227,7 @@ puts '=== 6. Relationship Cleanup ==='
 puts 'Cleaning up relationships...'
 
 # Remove from member_of relationships
-# TODO: Look into why we are making two calls here instead of just one? Why
-# doesn;t the call to remove_from_customer_domains remove it from customer.domains
-# (or vice versa).
 domain1.remove_from_customer_domains(customer)
-customer.domains.remove(domain1.identifier)
 puts "✓ Removed #{domain1.name} from customer domains"
 
 # Remove from tracking collections
