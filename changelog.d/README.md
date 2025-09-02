@@ -1,64 +1,63 @@
-# changelog.d/README.md
-
----
-
 # Changelog Fragments
 
 This directory contains changelog fragments managed by [Scriv](https://scriv.readthedocs.io/).
 
-## How to Add Changelog Entries
+## Our Approach
 
-### Quick Start
+Changelogs are for humans and agents, not just machines. We follow the core principles of [Keep a Changelog](https://keepachangelog.com) to ensure our release notes are clear, consistent, and trustworthy.
 
-1. **Create a new fragment:**
-   ```bash
-   scriv create --edit
-   ```
+To achieve this, we use a fragment-based workflow with `scriv`. Instead of a single, large `CHANGELOG.md` file that can cause merge conflicts, each developer includes a small changelog fragment with their pull request. At release time, these fragments are collected and aggregated into the main changelog.
 
-2. **Fill in relevant sections** in the generated fragment file:
-   ```markdown
-   ### Added
-   - New batch_indexed_by method for bulk index creation
+This approach provides several benefits:
+- **Reduces Merge Conflicts:** Developers can work in parallel without conflicting over a central changelog file.
+- **Improves Developer Experience:** Creating a small, focused fragment is a simple and repeatable task during development.
+- **Ensures Consistency:** Automation helps maintain a consistent structure for all changelog entries.
+- **Builds Trust:** A clear and well-maintained changelog communicates respect for our users and collaborators.
 
-   ### Fixed
-   - Fixed race condition in connection pooling
-   ```
+## How to Add a Changelog Entry
 
-3. **Commit with your code:**
-   ```bash
-   git add changelog.d/fragments/your_fragment.md
-   git commit -m "Add batch_indexed_by method"
-   ```
+1.  **Create a New Fragment:**
+    ```bash
+    scriv create
+    ```
+    This will create a new file in the `changelog.d/fragments/` directory.
 
-### Categories
+2.  **Edit the Fragment File:**
+    Open the newly created file and add your entry under the relevant category. See the guidelines below for writing good entries.
 
-Use these categories based on [Keep a Changelog](https://keepachangelog.com):
-
-- **Added** - New features or capabilities
-- **Changed** - Changes to existing functionality
-- **Deprecated** - Soon-to-be removed features
-- **Removed** - Now removed features
-- **Fixed** - Bug fixes
-- **Security** - Security-related improvements
-- **Documentation** - Documentation improvements
-
-### Release Process
-
-At release time, fragments are collected into `CHANGELOG.md`:
-
-```bash
-scriv collect --version 2.0.0-pre8
-```
-
-This aggregates all fragments, updates the changelog, and removes the collected fragments.
+3.  **Commit with Your Code:**
+    ```bash
+    git add changelog.d/fragments/your_fragment_name.md
+    git commit
+    ```
 
 ## Fragment Guidelines
 
-- **One fragment per feature/fix** - Keep changes focused
-- **User-facing language** - Describe impact, not implementation
-- **Be specific** - "Fixed connection pool race condition" vs "Fixed bug"
-- **Include context** - Reference issue numbers when applicable
+-   **One Fragment Per Change:** Keep each fragment focused on a single feature, fix, or improvement.
+-   **Documenting AI Assistance:** If a change involved significant AI assistance, place it in its own fragment. This ensures the `### AI Assistance` section clearly corresponds to the single change described in that fragment.
+-   **Write for a Human Audience:** Describe the *impact* of the change, not just the implementation details.
+    -   **Good:** "Improved the performance and stability of Redis connections under high load."
+    -   **Bad:** "Refactored the `RedisManager` to use a connection pool."
+-   **Be Specific:** Avoid generic messages like "fixed a bug." Clearly state what was fixed.
+-   **Include Context:** Reference issue or pull request numbers to provide a link to the discussion and implementation details. `scriv` will automatically create links for them.
+    -   **Example:** `- Fixed a bug where users could not reset their passwords. (Closes #123)`
 
-## References
+### Categories
 
-- @see https://github.com/delano/familia/issues/84
+Use these categories from [Keep a Changelog](https://keepachangelog.com):
+
+-   **Added**: New features or capabilities.
+-   **Changed**: Changes to existing functionality.
+-   **Deprecated**: Soon-to-be removed features.
+-   **Removed**: Now removed features.
+-   **Fixed**: Bug fixes.
+-   **Security**: Security-related improvements.
+-   **Documentation**: Documentation improvements.
+
+## Release Process
+
+At release time, an authorized maintainer will collect all fragments into the main `CHANGELOG.md` file:
+
+```bash
+scriv collect --version 1.2.3
+```
