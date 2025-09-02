@@ -66,3 +66,16 @@ jobs:
 
       - name: Run the tryouts
         run: bundle exec try -vf
+
+      - name: Validate examples
+        continue-on-error: true
+        run: |
+          echo "=== Validating example syntax ==="
+          find examples/ -name "*.rb" -exec ruby -c {} \;
+
+          echo "=== Running executable examples ==="
+          cd examples
+          for example in *.rb; do
+            echo "Running $example..."
+            ruby "$example" || echo "Warning: $example failed to run"
+          done
