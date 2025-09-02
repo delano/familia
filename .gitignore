@@ -12,20 +12,21 @@
 .*.json
 *.env
 *.log
-*.md
-.mcp.json
-!README.md
-!CLAUDE.md
 *.txt
-!LICENSE.txt
 .ruby-version
 appendonlydir
-etc/config
 log
 tmp
 vendor
 *.gem
 doc/
-!docs/overview.md
-!docs/connection_pooling.md
-!docs/wiki/**/*.md
+
+# Ignore WIP or temp dev files with uppercase names
+[A-Z]*.rb
+[A-Z]*.md
+
+# Exclusions
+!README.md
+!CHANGELOG.md
+!CLAUDE.md
+!LICENSE.txt
