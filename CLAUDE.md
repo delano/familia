@@ -83,17 +83,15 @@ scriv collect --version 2.0.0-pre8
 - **Documentation** - Documentation improvements
 
 ### Known Issues & Quirks
-- **Reserved Keywords**: Cannot use `ttl`, `db`, `redis` as field names - use prefixed alternatives
+- **Reserved Keywords**: Cannot use `ttl`, `db`, `valkey`, `redis` as field names - use prefixed alternatives
 - **Empty Identifiers**: Cause stack overflow in key generation - validate before operations
 - **Connection Pool Race Conditions**: Thread safety issues under high concurrency
-- **Manual Key Sync**: `key` field doesn't auto-sync with identifier changes
-- **RedisType Redis Parameter**: `:redis` parameter silently ignored (missing setter)
 
 ### Debugging
-- **Database command logging**: `tail plop.log` - Real-time Database command monitoring
+- **Database command logging**: You can request real-time Database command monitoring from the user
   - Shows all Database operations with timestamps, database numbers, and full commands
   - Updates live as tests run or code executes
-  - Essential for debugging Familia ORM Database interactions
+  - Essential for debugging Familia ORM Database interactions, multi/exec, pipelining, logical_database issues
 
 ### Testing Framework
 This project uses `tryouts` instead of RSpec/Minitest. Test files are located in the `try/` directory and follow the pattern `*_try.rb`.
