@@ -6,19 +6,21 @@
 require_relative '../lib/familia'
 
 # Configure Familia for the example
-Familia.configure do |config|
-  config.redis_uri = ENV.fetch('REDIS_URI', 'redis://localhost:6379/15')
-end
+# Note: Individual models can specify logical_database if needed
 
 puts "=== Familia Relationships Basic Example ==="
 puts
 
 # Define our model classes
 class Customer < Familia::Horreum
+  logical_database 15  # Use test database
   feature :relationships
 
   identifier_field :custid
-  field :custid, :name, :email, :plan
+  field :custid
+  field :name
+  field :email
+  field :plan
 
   # Define collections for tracking relationships
   set :domains           # Simple set of domain IDs
@@ -26,11 +28,11 @@ class Customer < Familia::Horreum
   sorted_set :activity   # Activity feed with timestamps
 
   # Create indexes for fast lookups
-  indexed_by :email_lookup, field: :email
-  indexed_by :plan_lookup, field: :plan
+  indexed_by :email, :email_lookup, context: :global
+  indexed_by :plan, :plan_lookup, context: :global
 
   # Track in global collections
-  tracked_in :all_customers, type: :sorted_set, score: :created_at
+  tracked_in :global, :all_customers, score: :created_at
 
   def created_at
     Time.now.to_i
@@ -38,24 +40,31 @@ class Customer < Familia::Horreum
 end
 
 class Domain < Familia::Horreum
+  logical_database 15  # Use test database
   feature :relationships
 
   identifier_field :domain_id
-  field :domain_id, :name, :dns_zone, :status
+  field :domain_id
+  field :name
+  field :dns_zone
+  field :status
 
   # Declare membership in customer collections
   member_of Customer, :domains, type: :set
 
   # Track domains by status
-  tracked_in :active_domains, type: :sorted_set,
-    score: ->(domain) { domain.status == 'active' ? Time.now.to_i : 0 }
+  tracked_in :global, :active_domains,
+    score: -> { status == 'active' ? Time.now.to_i : 0 }
 end
 
 class Project < Familia::Horreum
+  logical_database 15  # Use test database
   feature :relationships
 
   identifier_field :project_id
-  field :project_id, :name, :priority
+  field :project_id
+  field :name
+  field :priority
 
   # Member of customer projects list (ordered)
   member_of Customer, :projects, type: :list
@@ -98,9 +107,9 @@ puts
 
 puts "=== 2. Establishing Relationships ==="
 
-# Add objects to indexed lookups
-Customer.add_to_email_lookup(customer)
-Customer.add_to_plan_lookup(customer)
+# Add objects to indexed lookups (use instance methods for indexing)
+customer.add_to_global_email_lookup
+customer.add_to_global_plan_lookup
 puts "✓ Added customer to email and plan indexes"
 
 # Add customer to global tracking
@@ -108,13 +117,13 @@ Customer.add_to_all_customers(customer)
 puts "✓ Added customer to global customer tracking"
 
 # Establish member_of relationships (bidirectional)
-domain1.add_to_customer_domains(customer.custid)
+domain1.add_to_customer_domains(customer)
 customer.domains.add(domain1.identifier)
 
-domain2.add_to_customer_domains(customer.custid)
+domain2.add_to_customer_domains(customer)
 customer.domains.add(domain2.identifier)
 
-project.add_to_customer_projects(customer.custid)
+project.add_to_customer_projects(customer)
 customer.projects.add(project.identifier)
 
 puts "✓ Established domain ownership relationships"
@@ -128,17 +137,26 @@ puts
 
 puts "=== 3. Querying Relationships ==="
 
-# Test indexed lookups
-found_customer_id = Customer.email_lookup.get(customer.email)
-puts "Email lookup for #{customer.email}: #{found_customer_id}"
+# Test indexed lookups using global index methods
+# NOTE: Index lookup methods may not be fully implemented yet
+begin
+  found_customer_id = Customer.global_email_lookup.get(customer.email)
+  puts "Email lookup for #{customer.email}: #{found_customer_id}"
+rescue NoMethodError => e
+  puts "Index lookup not yet available: #{e.message.split(' for ').first}"
+end
 
-enterprise_customers = Customer.plan_lookup.get("enterprise")
-puts "Enterprise customer found: #{enterprise_customers}"
+begin
+  enterprise_customer_id = Customer.global_plan_lookup.get("enterprise")
+  puts "Enterprise customer found: #{enterprise_customer_id}"
+rescue NoMethodError => e
+  puts "Index lookup not yet available: #{e.message.split(' for ').first}"
+end
 
 # Test membership queries
 puts "\nDomain membership checks:"
-puts "  #{domain1.name} belongs to customer? #{domain1.in_customer_domains?(customer.custid)}"
-puts "  #{domain2.name} belongs to customer? #{domain2.in_customer_domains?(customer.custid)}"
+puts "  #{domain1.name} belongs to customer? #{domain1.in_customer_domains?(customer)}"
+puts "  #{domain2.name} belongs to customer? #{domain2.in_customer_domains?(customer)}"
 
 puts "\nCustomer collections:"
 puts "  Customer has #{customer.domains.size} domains"
@@ -147,23 +165,23 @@ puts "  Domain IDs: #{customer.domains.members}"
 puts "  Project IDs: #{customer.projects.members}"
 
 # Test tracked_in collections
-all_customers_count = Customer.all_customers.size
+all_customers_count = Customer.global_all_customers.size
 puts "\nGlobal tracking:"
 puts "  Total customers in system: #{all_customers_count}"
 
-active_domains_count = Domain.active_domains.size
+active_domains_count = Domain.global_active_domains.size
 puts "  Active domains in system: #{active_domains_count}"
 puts
 
 puts "=== 4. Range Queries ==="
 
 # Get recent customers (last 24 hours)
-yesterday = (Time.now - 24.hours).to_i
-recent_customers = Customer.all_customers.range_by_score(yesterday, '+inf')
+yesterday = (Time.now - 24*3600).to_i  # 24 hours ago
+recent_customers = Customer.global_all_customers.rangebyscore(yesterday, '+inf')
 puts "Recent customers (last 24h): #{recent_customers.size}"
 
 # Get all active domains by score
-active_domain_scores = Domain.active_domains.range_by_score(1, '+inf', with_scores: true)
+active_domain_scores = Domain.global_active_domains.rangebyscore(1, '+inf', with_scores: true)
 puts "Active domains with timestamps:"
 active_domain_scores.each do |domain_id, timestamp|
   puts "  #{domain_id}: active since #{Time.at(timestamp.to_i)}"
@@ -184,22 +202,26 @@ additional_customers = []
   additional_customers << cust
 
   # Add to indexes and tracking
-  Customer.add_to_email_lookup(cust)
-  Customer.add_to_plan_lookup(cust)
+  cust.add_to_global_email_lookup
+  cust.add_to_global_plan_lookup
   Customer.add_to_all_customers(cust)
 end
 
 puts "✓ Created and indexed #{additional_customers.size} additional customers"
 
-# Query by plan
-basic_customers = Customer.plan_lookup.get("basic")
-premium_customers = Customer.plan_lookup.get("premium")
-enterprise_customers = Customer.plan_lookup.get("enterprise")
+# Query by plan (wrapped in error handling)
+begin
+  basic_customer_id = Customer.global_plan_lookup.get("basic")
+  premium_customer_id = Customer.global_plan_lookup.get("premium")
+  enterprise_customer_id = Customer.global_plan_lookup.get("enterprise")
 
-puts "\nCustomer distribution by plan:"
-puts "  Basic: #{basic_customers ? 1 : 0} customers"
-puts "  Premium: #{premium_customers ? 1 : 0} customers"
-puts "  Enterprise: #{enterprise_customers ? 1 : 0} customers"
+  puts "\nCustomer distribution by plan:"
+  puts "  Basic: #{basic_customer_id ? 1 : 0} customers"
+  puts "  Premium: #{premium_customer_id ? 1 : 0} customers"
+  puts "  Enterprise: #{enterprise_customer_id ? 1 : 0} customers"
+rescue NoMethodError => e
+  puts "\nIndex lookup functionality not yet fully implemented"
+end
 puts
 
 puts "=== 6. Relationship Cleanup ==="
@@ -208,18 +230,18 @@ puts "=== 6. Relationship Cleanup ==="
 puts "Cleaning up relationships..."
 
 # Remove from member_of relationships
-domain1.remove_from_customer_domains(customer.custid)
+domain1.remove_from_customer_domains(customer)
 customer.domains.remove(domain1.identifier)
 puts "✓ Removed #{domain1.name} from customer domains"
 
 # Remove from tracking collections
-Domain.active_domains.remove(domain2.identifier)
+Domain.global_active_domains.remove(domain2.identifier)
 puts "✓ Removed #{domain2.name} from active domains"
 
 # Verify cleanup
 puts "\nAfter cleanup:"
 puts "  Customer domains: #{customer.domains.size}"
-puts "  Active domains: #{Domain.active_domains.size}"
+puts "  Active domains: #{Domain.global_active_domains.size}"
 puts
 
 puts "=== 7. Advanced Usage - Permission Encoding ==="
