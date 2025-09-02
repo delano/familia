@@ -22,7 +22,6 @@ vendor
 doc/
 
 # Ignore WIP or temp dev files with uppercase names
-[A-Z]*.rb
 [A-Z]*.md
 
 # Exclusions
