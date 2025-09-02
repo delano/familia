@@ -22,6 +22,9 @@ This approach provides several benefits:
     ```
     This will create a new file in the `changelog.d/fragments/` directory.
 
+    **Alternative:** Use `scriv create --edit` to create and immediately open in your editor.
+    **Important:** You must add content and save before exiting, or scriv will abort with "Empty fragment, aborting..."
+
 2.  **Edit the Fragment File:**
     Open the newly created file and add your entry under the relevant category. See the guidelines below for writing good entries.
 
