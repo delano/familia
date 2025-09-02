@@ -1,3 +1,11 @@
+# CHANGELOG.md
+
+All notable changes to Familia are documented here.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+<!-- scriv-end-here -->
 
 <a id='changelog-2.0.0-pre9'></a>
 # [2.0.0-pre9] - 2025-09-02 00:35:28.974817
@@ -20,14 +28,7 @@
 - Updated relationships method documentation with new method signatures
 - Updated basic relationships example to demonstrate new API patterns
 - Added tryouts test coverage in try/features/relationships/relationships_api_changes_try.rb
-<!-- scriv-end-here -->
 
-# CHANGELOG.md
-
-All notable changes to Familia are documented here.
-
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 <a id='changelog-2.0.0-pre8'></a>
 ## [2.0.0-pre8] - 2025-09-01
