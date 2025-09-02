@@ -27,16 +27,15 @@ module Familia
           # @example Global indexing
           #   indexed_by :domain_id, parent: :global, index_name: :domain_lookup
           def indexed_by(field, index_name, parent:, finder: true)
-            # Validate that we're not using :global parent (use class_indexed_by instead)
-            if parent == :global
-              raise ArgumentError, "Use class_indexed_by for class-level indexes instead of indexed_by with parent: :global"
-            end
-
             context_class = parent
             context_class_name = if context_class.is_a?(Class)
-                                   context_class.name
+                                   # Extract just the class name without module prefixes or object representations
+                                   class_name = context_class.name
+                                   class_name = class_name.split('::').last if class_name
+                                   class_name || context_class.to_s.split('::').last
                                  else
-                                   context_class.to_s.camelize
+                                   # For symbol parent like :global, convert to string
+                                   context_class.to_s
                                  end
 
             # Store metadata for this indexing relationship
@@ -48,8 +47,10 @@ module Familia
               finder: finder
             }
 
-            # Generate finder methods on the context class
-            generate_context_finder_methods(context_class, field, index_name) if finder
+            # Generate finder methods on the context class (skip for :global)
+            if finder && context_class != :global
+              generate_context_finder_methods(context_class, field, index_name)
+            end
 
             # Generate instance methods for maintaining the index
             generate_indexing_instance_methods(context_class_name, field, index_name)
@@ -108,7 +109,7 @@ module Familia
 
               return nil unless object_id
 
-              indexed_class.new(identifier: object_id)
+              indexed_class.new(object_id)
             end
 
             # Generate bulk finder method (e.g., Customer.find_all_by_display_name)
@@ -119,7 +120,7 @@ module Familia
               object_ids = dbclient.hmget(index_key, *field_values.map(&:to_s))
 
               # Filter out nil values and instantiate objects
-              object_ids.compact.map { |object_id| indexed_class.new(identifier: object_id) }
+              object_ids.compact.map { |object_id| indexed_class.new(object_id) }
             end
 
             # Generate method to get the index hash directly
@@ -150,7 +151,7 @@ module Familia
 
               return nil unless object_id
 
-              new(identifier: object_id)
+              new(object_id)
             end
 
             # Generate class-level bulk finder method
@@ -161,7 +162,7 @@ module Familia
               object_ids = dbclient.hmget(index_key, *field_values.map(&:to_s))
 
               # Filter out nil values and instantiate objects
-              object_ids.compact.map { |object_id| self.new(identifier: object_id) }
+              object_ids.compact.map { |object_id| self.new(object_id) }
             end
 
             # Generate method to get the class-level index hash directly

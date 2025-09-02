@@ -226,16 +226,12 @@ rescue ArgumentError => e
 end
 #=> true
 
-## indexed_by with parent: :global raises ArgumentError
-begin
-  Class.new(Familia::Horreum) do
-    feature :relationships
-    indexed_by :test_field, :test_index, parent: :global
-  end
-  false
-rescue ArgumentError => e
-  e.message.include?("Use class_indexed_by for global indexes")
+## indexed_by with parent: :global now works (no ArgumentError)
+test_class = Class.new(Familia::Horreum) do
+  feature :relationships
+  indexed_by :test_field, :test_index, parent: :global
 end
+test_class.respond_to?(:indexing_relationships)
 #=> true
 
 # =============================================
