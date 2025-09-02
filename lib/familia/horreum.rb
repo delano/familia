@@ -104,39 +104,30 @@ module Familia
         args = []
       end
 
-      # Initialize object with arguments using one of three strategies:
+      # Initialize object with arguments using one of four strategies:
       #
-      # 1. **Keyword Arguments** (Recommended): Order-independent field assignment
+      # 1. **Identifier** (Recommended for lookups): A single argument is treated as the identifier.
+      #    Example: Customer.new("cust_123")
+      #    - Robust and convenient for creating objects from an ID.
+      #
+      # 2. **Keyword Arguments** (Recommended for creation): Order-independent field assignment
       #    Example: Customer.new(name: "John", email: "john@example.com")
-      #    - Robust against field reordering
-      #    - Self-documenting
-      #    - Only sets provided fields
       #
-      # 2. **Positional Arguments** (Legacy): Field assignment by definition order
-      #    Example: Customer.new("john@example.com", "password123")
-      #    - Brittle: breaks if field order changes
-      #    - Compact syntax
-      #    - Maps to fields in class definition order
+      # 3. **Positional Arguments** (Legacy): Field assignment by definition order
+      #    Example: Customer.new("cust_123", "John", "john@example.com")
       #
-      # 3. **No Arguments**: Object created with all fields as nil
-      #    - Minimal memory footprint in Redis
-      #    - Fields set on-demand via accessors or save()
-      #    - Avoids default value conflicts with nil-skipping serialization
+      # 4. **No Arguments**: Object created with all fields as nil
       #
-      # Note: We iterate over self.class.fields (not kwargs) to ensure only
-      # defined fields are set, preventing typos from creating undefined attributes.
-      #
-      if kwargs.any?
+      if args.size == 1 && kwargs.empty?
+        id_field = self.class.identifier_field
+        send(:"#{id_field}=", args.first)
+      elsif kwargs.any?
         initialize_with_keyword_args(**kwargs)
       elsif args.any?
         initialize_with_positional_args(*args)
       else
-      Familia.trace :INITIALIZE, dbclient, "#{self.class} initialized with no arguments", caller(1..1) if Familia.debug?
-        # Default values are intentionally NOT set here to:
-        # - Maintain Database memory efficiency (only store non-nil values)
-        # - Avoid conflicts with nil-skipping serialization logic
-        # - Preserve consistent exists? behavior (empty vs default-filled objects)
-        # - Keep initialization lightweight for unused fields
+        Familia.trace :INITIALIZE, dbclient, "#{self.class} initialized with no arguments", caller(1..1) if Familia.debug?
+        # Default values are intentionally NOT set here
       end
 
       # Implementing classes can define an init method to do any

@@ -49,8 +49,8 @@ module Familia
     #     tracked_in Organization, :all_domains, score: :created_at
     #
     #     # O(1) lookups with Redis hashes
-    #     indexed_by :display_name, in: Customer, index_name: :domain_index
-    #     indexed_by :display_name, in: :global, index_name: :global_domain_index
+    #     indexed_by :display_name, :domain_index, context: Customer
+    #     indexed_by :display_name, :global_domain_index, context: :global
     #
     #     # Context-aware membership (no method collisions)
     #     member_of Customer, :domains
@@ -66,7 +66,7 @@ module Familia
     #
     #   # Indexing methods
     #   Customer.find_by_display_name(name) # O(1) lookup
-    #   Domain.find_by_display_name_globally(name) # Global lookup
+    #   Domain.find_by_display_name(name) # Global lookup
     #
     #   # Membership methods (collision-free naming)
     #   domain.add_to_customer_domains(customer)  # Specific collection

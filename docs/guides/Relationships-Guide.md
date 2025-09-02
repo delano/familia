@@ -28,8 +28,8 @@ class Customer < Familia::Horreum
   field :custid, :name, :email
 
   # Define relationship collections
-  tracked_in :active_users, type: :sorted_set
-  indexed_by :email_lookup, type: :hash
+  class_tracked_in :active_users, score: :created_at
+  class_indexed_by :email, :email_lookup
 end
 
 class Domain < Familia::Horreum
@@ -57,27 +57,26 @@ class User < Familia::Horreum
   field :user_id, :name, :score_value
 
   # Simple sorted set tracking
-  tracked_in :leaderboard, type: :sorted_set, score: :score_value
+  class_tracked_in :leaderboard, score: :score_value
 
   # Time-based tracking with automatic timestamps
-  tracked_in :activity_log, type: :sorted_set
+  class_tracked_in :activity_log, score: :created_at
 
   # Proc-based scoring for complex calculations
-  tracked_in :performance_metrics, type: :sorted_set,
-    score: ->(user) { (user.score_value || 0) * 2 }
+  class_tracked_in :performance_metrics, score: -> { (score_value || 0) * 2 }
 end
 
 # Usage
 user = User.new(user_id: 'user123', score_value: 85)
 
 # Add to collections
-User.add_to_leaderboard(user)      # Uses score_value (85)
-User.add_to_activity_log(user)     # Uses current timestamp
-User.add_to_performance_metrics(user) # Uses proc result (170)
+User.add_to_leaderboard(user)              # Uses score_value (85)
+User.add_to_activity_log(user)             # Uses created_at timestamp
+User.add_to_performance_metrics(user)      # Uses proc result (170)
 
 # Query collections
 User.leaderboard.score('user123')           # => 85.0
-User.activity_log.range_by_score('-inf', '+inf')  # All users by time
+User.activity_log.rangebyscore('-inf', '+inf')  # All users by time
 User.performance_metrics.rank('user123')    # User's rank by performance
 ```
 
@@ -93,8 +92,7 @@ class Document < Familia::Horreum
   field :doc_id, :title, :content
 
   # Permission-based tracking with 8-bit encoding
-  tracked_in :authorized_users, type: :sorted_set,
-    score: :encode_permissions
+  class_tracked_in :authorized_users, score: :encode_permissions
 
   private
 
@@ -183,7 +181,7 @@ end
 
 ### Hash-Based Lookups
 
-The `indexed_by` relationship creates O(1) hash-based indexes for field values:
+The `indexed_by` relationship creates O(1) hash-based indexes for field values. The `context` parameter determines index ownership and scope:
 
 ```ruby
 class User < Familia::Horreum
@@ -191,55 +189,102 @@ class User < Familia::Horreum
 
   field :email, :username, :department
 
-  # Create indexes for fast lookups
-  indexed_by :email_index, field: :email
-  indexed_by :username_index, field: :username
-  indexed_by :department_index, field: :department
+  # Global indexes for system-wide unique lookups
+  class_indexed_by :email, :email_index
+  class_indexed_by :username, :username_index
+
+  # Scoped indexes for values unique within a context
+  indexed_by :department, :department_index, parent: Organization
 end
 
-# Usage
+# Usage for Global Context
 user = User.new(email: 'john@example.com', username: 'johndoe')
-User.add_to_email_index(user)
-User.add_to_username_index(user)
 
-# Fast O(1) lookups
+# Add to global indexes (instance methods)
+user.add_to_global_email_index
+user.add_to_global_username_index
+
+# Fast O(1) lookups (class methods)
 user_id = User.email_index.get('john@example.com')    # => user.identifier
 user_id = User.username_index.get('johndoe')         # => user.identifier
 
 # Batch operations
 users = [user1, user2, user3]
-users.each { |u| User.add_to_email_index(u) }
+users.each { |u| u.add_to_global_email_index }
 
 # Check if indexed
 User.email_index.exists?('john@example.com')  # => true
+
+# Usage for Scoped Context
+organization = Organization.new(org_id: 'acme_corp')
+organization.find_by_department('engineering')        # Find user by department within this org
 ```
 
-### Multi-Field Indexing
+### Context Parameter Usage Patterns
+
+Understanding when to use global vs class context:
 
 ```ruby
 class Product < Familia::Horreum
   feature :relationships
 
-  field :category, :brand, :status
+  field :sku, :category, :brand
 
-  # Composite indexing for complex queries
-  indexed_by :category_brand_index, field: ->(product) {
-    "#{product.category}:#{product.brand}"
-  }
+  # Global context: SKUs must be unique system-wide
+  class_indexed_by :sku, :sku_index
 
-  indexed_by :active_products, field: ->(product) {
-    product.status == 'active' ? product.identifier : nil
-  }
+  # Class context: Categories are unique per brand
+  indexed_by :category, :category_index, parent: Brand
 end
 
-# Usage
-product = Product.new(category: 'electronics', brand: 'apple', status: 'active')
-Product.add_to_category_brand_index(product)
-Product.add_to_active_products(product)
+class Brand < Familia::Horreum
+  feature :relationships
 
-# Query by composite key
-Product.category_brand_index.get('electronics:apple')  # => product.identifier
-Product.active_products.exists?(product.identifier)    # => true
+  identifier_field :brand_id
+  field :brand_id, :name
+  sorted_set :products
+end
+
+# Usage patterns:
+product = Product.new(sku: 'ELEC001', category: 'laptops', brand: 'apple')
+
+# Global indexing (system-wide unique SKUs)
+product.add_to_global_sku_index
+Product.sku_index.get('ELEC001')  # => product.identifier
+
+# Scoped indexing (categories unique per brand)
+brand = Brand.new(brand_id: 'apple', name: 'Apple Inc.')
+brand.find_by_category('laptops')         # Find products in this brand's laptop category
+```
+
+### Context Parameter Reference
+
+The `context` parameter is a **required** architectural decision that determines index scope:
+
+| Context Type | Usage | Redis Key Pattern | When to Use |
+|--------------|--------|------------------|-------------|
+| `:global` | `context: :global` | `global:index_name` | Field values unique system-wide (emails, usernames, API keys) |
+| Class | `context: SomeClass` | `someclass:123:index_name` | Field values unique within parent object scope (project names per team) |
+
+#### Generated Methods
+
+**Global Context** (`context: :global`):
+- **Instance methods**: `object.add_to_global_index_name`, `object.remove_from_global_index_name`
+- **Class methods**: `Class.index_name` (returns hash), `Class.find_by_field`
+
+**Class Context** (`context: Customer`):
+- **Instance methods**: `object.add_to_customer_index_name(customer)`, `object.remove_from_customer_index_name(customer)`
+- **Class methods on context**: `customer.find_by_field(value)`, `customer.find_all_by_field(values)`
+
+#### Migration from Incorrect Syntax
+
+```ruby
+# ❌ Old incorrect syntax (will cause ArgumentError)
+indexed_by :email_lookup, field: :email
+
+# ✅ New correct syntax
+class_indexed_by :email, :email_lookup                  # Global scope
+indexed_by :email, :customer_lookup, parent: Customer   # Scoped per customer
 ```
 
 ## Member Of Relationships
@@ -444,8 +489,8 @@ class User < Familia::Horreum
 
   # Multi-tenant membership
   member_of Organization, :members, type: :set
-  tracked_in :global_activity, type: :sorted_set
-  indexed_by :email_lookup, field: :email
+  class_tracked_in :global_activity, score: :created_at
+  class_indexed_by :email, :email_lookup
 end
 
 class Project < Familia::Horreum
@@ -455,7 +500,7 @@ class Project < Familia::Horreum
   field :project_id, :name, :status
 
   member_of Organization, :projects, type: :set
-  tracked_in :status_timeline, type: :sorted_set,
+  class_tracked_in :status_timeline,
     score: ->(proj) { "#{Time.now.to_i}.#{proj.status.hash}" }
 end
 
@@ -485,7 +530,7 @@ class AnalyticsService
     since = (Time.now - days.days).to_f.floor
 
     # Get all users active in time period
-    active_users = User.global_activity.range_by_score(since, '+inf')
+    active_users = User.activity.range_by_score(since, '+inf')
 
     # Analyze permission levels
     permission_breakdown = Document.authorized_users
@@ -495,7 +540,7 @@ class AnalyticsService
     {
       total_active_users: active_users.size,
       permission_breakdown: permission_breakdown.transform_values(&:size),
-      top_contributors: User.global_activity.range(0, 9, with_scores: true)
+      top_contributors: User.activity.range(0, 9, with_scores: true)
     }
   end
 

@@ -44,32 +44,15 @@ module Familia
             # Method to add this object to the owner's collection
             # e.g., domain.add_to_customer_domains(customer)
             define_method("add_to_#{owner_class_name_lower}_#{collection_name}") do |owner_instance, score = nil|
-              collection_key = "#{owner_class_name_lower}:#{owner_instance.identifier}:#{collection_name}"
-
-              case type
-              when :sorted_set
-                score ||= calculate_membership_score(owner_class, collection_name)
-                dbclient.zadd(collection_key, score, identifier)
-              when :set
-                dbclient.sadd(collection_key, identifier)
-              when :list
-                dbclient.lpush(collection_key, identifier)
-              end
+              collection = owner_instance.send(collection_name)
+              collection.add(identifier, score: score)
             end
 
             # Method to remove this object from the owner's collection
             # e.g., domain.remove_from_customer_domains(customer)
             define_method("remove_from_#{owner_class_name_lower}_#{collection_name}") do |owner_instance|
-              collection_key = "#{owner_class_name_lower}:#{owner_instance.identifier}:#{collection_name}"
-
-              case type
-              when :sorted_set
-                dbclient.zrem(collection_key, identifier)
-              when :set
-                dbclient.srem(collection_key, identifier)
-              when :list
-                dbclient.lrem(collection_key, 0, identifier)
-              end
+              collection = owner_instance.send(collection_name)
+              collection.remove(identifier)
             end
 
             # Method to check if this object is in the owner's collection
@@ -77,6 +60,9 @@ module Familia
             define_method("in_#{owner_class_name_lower}_#{collection_name}?") do |owner_instance|
               collection_key = "#{owner_class_name_lower}:#{owner_instance.identifier}:#{collection_name}"
 
+              # TODO: We should be able to reduce this to a single method call on the DataType class
+              # instance, like we do for remove above (why: each the HashKey, SortedSet, UnsortedSet,
+              # and List classes have a `remove` method that implements the correct behaviour).
               case type
               when :sorted_set
                 !dbclient.zscore(collection_key, identifier).nil?
@@ -123,6 +109,9 @@ module Familia
             define_method("add_to_#{owner_class_name_lower}_#{collection_name}") do |owner_instance, score = nil|
               collection_key = "#{owner_class_name_lower}:#{owner_instance.identifier}:#{collection_name}"
 
+              # TODO: We should be able to reduce this to a single method call on the DataType class
+              # instance, like we do for remove above (why: each the HashKey, SortedSet, UnsortedSet,
+              # and List classes have a `remove` method that implements the correct behaviour).
               case type
               when :sorted_set
                 # Find the owner class from the stored config
@@ -144,6 +133,9 @@ module Familia
             define_method("remove_from_#{owner_class_name_lower}_#{collection_name}") do |owner_instance|
               collection_key = "#{owner_class_name_lower}:#{owner_instance.identifier}:#{collection_name}"
 
+              # TODO: We should be able to reduce this to a single method call on the DataType class
+              # instance, like we do for remove above (why: each the HashKey, SortedSet, UnsortedSet,
+              # and List classes have a `remove` method that implements the correct behaviour).
               case type
               when :sorted_set
                 dbclient.zrem(collection_key, identifier)
@@ -159,6 +151,9 @@ module Familia
             define_method("in_#{owner_class_name_lower}_#{collection_name}?") do |owner_instance|
               collection_key = "#{owner_class_name_lower}:#{owner_instance.identifier}:#{collection_name}"
 
+              # TODO: We should be able to reduce this to a single method call on the DataType class
+              # instance, like we do for remove above (why: each the HashKey, SortedSet, UnsortedSet,
+              # and List classes have a `remove` method that implements the correct behaviour).
               case type
               when :sorted_set
                 dbclient.zscore(collection_key, identifier) != nil

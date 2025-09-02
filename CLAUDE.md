@@ -44,18 +44,30 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Generate documentation**: `bundle exec yard`
 - **Code linting**: `bundle exec rubocop`
 
+### Changelog Management
+
+Add changelog fragment with each user-facing or documented change (optional but encouraged)
+
+- When a commit contains a user-visible change (feature, bugfix, docs, behaviour change), create a Scriv fragment in `changelog.d/fragments/` at the same time as the code change.
+  - Quick commands:
+    - `scriv create --edit`
+    - `git add changelog.d/fragments/your_fragment.md`
+    - `git commit -m 'Short subject ≤50 chars'`
+    - Release workflow:
+      - `scriv collect --version 2.0.0-pre8` -- collects all fragments into CHANGELOG.md
+  - Keep fragments bite-sized: one fragment per logical change.
+  - Use the fragment categories: Added, Changed, Deprecated, Removed, Fixed, Security, Documentation.
+
 ### Known Issues & Quirks
-- **Reserved Keywords**: Cannot use `ttl`, `db`, `redis` as field names - use prefixed alternatives
+- **Reserved Keywords**: Cannot use `ttl`, `db`, `valkey`, `redis` as field names - use prefixed alternatives
 - **Empty Identifiers**: Cause stack overflow in key generation - validate before operations
 - **Connection Pool Race Conditions**: Thread safety issues under high concurrency
-- **Manual Key Sync**: `key` field doesn't auto-sync with identifier changes
-- **RedisType Redis Parameter**: `:redis` parameter silently ignored (missing setter)
 
 ### Debugging
-- **Database command logging**: `tail plop.log` - Real-time Database command monitoring
+- **Database command logging**: You can request real-time Database command monitoring from the user
   - Shows all Database operations with timestamps, database numbers, and full commands
   - Updates live as tests run or code executes
-  - Essential for debugging Familia ORM Database interactions
+  - Essential for debugging Familia ORM Database interactions, multi/exec, pipelining, logical_database issues
 
 ### Testing Framework
 This project uses `tryouts` instead of RSpec/Minitest. Test files are located in the `try/` directory and follow the pattern `*_try.rb`.

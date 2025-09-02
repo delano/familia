@@ -58,7 +58,7 @@ begin
 rescue Familia::NotConnected => e
   e.message.include?('No client for')
 end
-# > true
+#=> true
 
 ## KeyNotFoundError stores key
 begin

@@ -34,6 +34,25 @@ AllCops:
     - "try/*.rb"
     - "vendor/**/*"
 
+#
+# Trailing commas
+Style/TrailingCommaInHashLiteral:
+  EnforcedStyleForMultiline: comma
+  Enabled: true
+
+Style/TrailingCommaInArrayLiteral:
+  EnforcedStyleForMultiline: comma
+  Enabled: true
+
+Style/TrailingCommaInArguments:
+  Enabled: true
+
+Style/TrailingCommaInBlockArgs:
+  Enabled: true
+
+Lint/TrailingCommaInAttributeDeclaration:
+  Enabled: true
+
 Gemspec/DeprecatedAttributeAssignment:
   Enabled: true
 

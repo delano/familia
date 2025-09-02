@@ -153,9 +153,19 @@ end
 
 This keeps complex models organized while maintaining Familia's clean, declarative style.
 
-## Conclusion
+## AI Development Assistance
 
-Familia provides a powerful and flexible way to work with Valkey-compatible in Ruby applications. Its features like automatic expiration, safe dumping, and quantization make it suitable for a wide range of use cases, from simple key-value storage to complex time-series data management.
+This version of Familia was developed with assistance from AI tools. The following tools provided significant help with architecture design, code generation, and documentation:
+
+- **Google Gemini** - Refactoring, code generation, and documentation.
+- **Claude Sonnet 4, Opus 4.1** - Architecture design, code generation, and documentation
+- **Claude Desktop & Claude Code (Max plan)** - Interactive development sessions and debugging
+- **GitHub Copilot** - Code completion and refactoring assistance
+- **Qodo Merge Pro** - Code review and quality improvements
+
+I remain responsible for all design decisions and the final code. I believe in being transparent about development tools, especially as AI becomes more integrated into our workflows as developers.
+
+## Epilogue
 
 For more information, visit:
 - [Github Repository](https://github.com/delano/familia)

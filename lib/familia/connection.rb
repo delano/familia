@@ -57,7 +57,6 @@ module Familia
     #   Familia.connect('redis://localhost:6379')
     def connect(uri = nil)
       parsed_uri = normalize_uri(uri)
-      serverid = parsed_uri.serverid
 
       if Familia.enable_database_logging
         DatabaseLogger.logger = Familia.logger
@@ -70,14 +69,7 @@ module Familia
         RedisClient.register(DatabaseCommandCounter)
       end
 
-      dbclient = Redis.new(parsed_uri.conf)
-
-      if @database_clients.key?(serverid)
-        msg = "Overriding existing connection for #{serverid}"
-        Familia.warn(msg)
-      end
-
-      @database_clients[serverid] = dbclient
+      Redis.new(parsed_uri.conf)
     end
 
     def reconnect(uri = nil)
@@ -86,6 +78,7 @@ module Familia
 
       # Close the existing connection if it exists
       @database_clients[serverid].close if @database_clients.key?(serverid)
+      @database_clients.delete(serverid)
 
       connect(parsed_uri)
     end
@@ -126,19 +119,9 @@ module Familia
 
       # Legacy behavior: create connection
       parsed_uri = normalize_uri(uri)
+      serverid = parsed_uri.serverid
 
-      # Only cache when no specific URI/DB is requested to avoid DB conflicts
-      if uri.nil?
-        @dbclient ||= connect(parsed_uri)
-        @dbclient.select(parsed_uri.db) if parsed_uri.db
-        @dbclient
-      else
-        # When a specific DB is requested, create a new connection
-        # to avoid conflicts with cached connections
-        connection = connect(parsed_uri)
-        connection.select(parsed_uri.db) if parsed_uri.db
-        connection
-      end
+      @database_clients[serverid] ||= connect(parsed_uri)
     end
 
     # Executes Database commands atomically within a transaction (MULTI/EXEC).
