@@ -1,3 +1,7 @@
+# changelog.d/README.md
+
+---
+
 # Changelog Fragments
 
 This directory contains changelog fragments managed by [Scriv](https://scriv.readthedocs.io/).
