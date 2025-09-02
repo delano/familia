@@ -1,13 +1,9 @@
-
-# Changelog
+# CHANGELOG.md
 
 All notable changes to Familia are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-
-<!-- scriv-insert-here -->
-
 
 <a id='changelog-2.0.0-pre8'></a>
 ## [2.0.0-pre8] - 2025-09-01
@@ -29,22 +25,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Field-level encryption with transparent access patterns
-- Multiple encryption providers:
-  - XChaCha20-Poly1305 (preferred, requires rbnacl)
-  - AES-256-GCM (fallback, OpenSSL-based)
-- Field-specific key derivation for cryptographic domain separation
-- Configurable key versioning supporting key rotation
-- Non-persistent field storage for sensitive runtime data
-- RedactedString wrapper preventing accidental logging/serialization
-- Memory-safe handling of sensitive data in Ruby objects
-- API-safe serialization excluding transient fields
-
-- New `save_if_not_exists` method for conditional persistence
-- Atomic persistence operations with transaction support
-- Enhanced error handling for persistence failures
-- Improved data consistency guarantees
-
 - Comprehensive relationships system with three relationship types:
   - `tracked_in` - Multi-presence tracking with score encoding
   - `indexed_by` - O(1) hash-based lookups
@@ -57,13 +37,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Permission-aware queries filtering by access levels
 - Relationship validation framework ensuring data integrity
 
-- Complete API redesign for clarity and modern Ruby conventions
-- Valkey compatibility alongside traditional Redis support
-- Ruby 3.4+ modernization with fiber and thread safety improvements
-- Connection pooling foundation with provider pattern architecture
-- YARD documentation workflow with automated GitHub Pages deployment
-- Comprehensive wiki system with structured documentation
-- Developer-focused guides for implementation and usage
+### Changed
+
+- Performance optimizations for large-scale relationship operations
+
+### Security
+
+- GitHub Actions security hardening with matrix optimization
+
+
+<a id='changelog-2.0.0-pre6'></a>
+## [2.0.0-pre6] - 2025-08-15
+
+### Added
+
+- New `save_if_not_exists` method for conditional persistence
+- Atomic persistence operations with transaction support
+- Enhanced error handling for persistence failures
+- Improved data consistency guarantees
 
 ### Changed
 
@@ -71,18 +62,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Multi-database support with intelligent pool management
 - Thread-safe connection handling for concurrent applications
 - Configurable pool sizing and timeout management
-
 - Modular class structure with cleaner separation of concerns
 - Enhanced feature system with dependency management
 - Improved inheritance patterns for better code organization
 - Streamlined base class functionality
 
-- Performance optimizations for large-scale relationship operations
-
 ### Fixed
 
 - Critical security fixes in Ruby workflow vulnerabilities
 - Systematic dependency resolution via multi-constraint optimization
+
+
+<a id='changelog-2.0.0-pre5'></a>
+## [2.0.0-pre5] - 2025-08-05
+
+### Added
+
+- Field-level encryption with transparent access patterns
+- Multiple encryption providers:
+  - XChaCha20-Poly1305 (preferred, requires rbnacl)
+  - AES-256-GCM (fallback, OpenSSL-based)
+- Field-specific key derivation for cryptographic domain separation
+- Configurable key versioning supporting key rotation
+- Non-persistent field storage for sensitive runtime data
+- RedactedString wrapper preventing accidental logging/serialization
+- Memory-safe handling of sensitive data in Ruby objects
+- API-safe serialization excluding transient fields
 
 ### Security
 
@@ -91,4 +96,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Improved key management patterns and best practices
 - Security test suite expansion with comprehensive coverage
 
-- GitHub Actions security hardening with matrix optimization
+
+<a id='changelog-2.0.0-pre'></a>
+## [2.0.0-pre] - 2025-07-25
+
+### Added
+
+- Complete API redesign for clarity and modern Ruby conventions
+- Valkey compatibility alongside traditional Redis support
+- Ruby 3.4+ modernization with fiber and thread safety improvements
+- Connection pooling foundation with provider pattern architecture
+
+### Changed
+
+- `Familia::Base` replaced by `Familia::Horreum` as the primary base class
+- Connection configuration moved from simple string to block-based setup
+- Feature activation changed from `include` to `feature` declarations
+- Method naming updated for consistency (`delete` → `destroy`, `exists` → `exists?`, `dump` → `serialize`)
+
+### Documentation
+
+- YARD documentation workflow with automated GitHub Pages deployment
+- Comprehensive migration guide for v1.x to v2.0.0-pre transition
