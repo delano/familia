@@ -88,20 +88,20 @@ end
 # 1. New API: class_tracked_in Method Tests
 # =============================================
 
-## class_tracked_in generates global collection class methods
-ApiTestUser.respond_to?(:global_all_users)
+## class_tracked_in generates class-level collection class methods
+ApiTestUser.respond_to?(:all_users)
 #=> true
 
-## class_tracked_in generates global collection access methods
-ApiTestUser.respond_to?(:global_active_users)
+## class_tracked_in generates class-level collection access methods
+ApiTestUser.respond_to?(:active_users)
 #=> true
 
-## class_tracked_in generates instance methods for global tracking
-@user.respond_to?(:add_to_global_all_users)
+## class_tracked_in generates class methods for adding items
+ApiTestUser.respond_to?(:add_to_all_users)
 #=> true
 
-## class_tracked_in generates removal methods
-@user.respond_to?(:remove_from_global_all_users)
+## class_tracked_in generates class methods for removing items
+ApiTestUser.respond_to?(:remove_from_all_users)
 #=> true
 
 ## class_tracked_in generates membership check methods
@@ -146,45 +146,45 @@ inactive_score == 0
 # =============================================
 
 ## class_indexed_by with finder: true generates finder methods
-@user.respond_to?(:find_by_email)
+ApiTestUser.respond_to?(:find_by_email)
 #=> true
 
 ## class_indexed_by with finder: true generates bulk finder methods
-@user.respond_to?(:find_all_by_email)
+ApiTestUser.respond_to?(:find_all_by_email)
 #=> true
 
 ## class_indexed_by with finder: false does not generate finder methods
-@user.respond_to?(:find_by_username)
+ApiTestUser.respond_to?(:find_by_username)
 #=> false
 
-## class_indexed_by generates global index access methods
-@user.respond_to?(:global_email_lookup)
+## class_indexed_by generates class-level index access methods
+ApiTestUser.respond_to?(:email_lookup)
 #=> true
 
-## class_indexed_by generates global index rebuild methods
-@user.respond_to?(:rebuild_global_email_lookup)
+## class_indexed_by generates class-level index rebuild methods
+ApiTestUser.respond_to?(:rebuild_email_lookup)
 #=> true
 
-## class_indexed_by generates instance methods for global indexing
-@user.respond_to?(:add_to_global_email_lookup)
+## class_indexed_by generates instance methods for class indexing
+@user.respond_to?(:add_to_class_email_lookup)
 #=> true
 
 ## class_indexed_by generates removal methods
-@user.respond_to?(:remove_from_global_email_lookup)
+@user.respond_to?(:remove_from_class_email_lookup)
 #=> true
 
 ## class_indexed_by generates update methods
-@user.respond_to?(:update_in_global_email_lookup)
+@user.respond_to?(:update_in_class_email_lookup)
 #=> true
 
-## Global indexing adds objects to index
-@user.add_to_global_email_lookup
-# Note: Finder methods have implementation issues, testing index storage directly
-@user.email_lookup.class.name == "Familia::HashKey"
+## Class indexing adds objects to index
+@user.add_to_class_email_lookup
+# Class-level index can be accessed via class method
+ApiTestUser.email_lookup.class.name == "Familia::HashKey"
 #=> true
 
-## Global index can be accessed
-@user.email_lookup.get(@user.email) == @user.user_id
+## Class index can be accessed
+ApiTestUser.email_lookup.get(@user.email) == @user.user_id
 #=> true
 
 # =============================================
@@ -242,14 +242,14 @@ end
 # 5. API Consistency Tests
 # =============================================
 
-## All relationship methods follow consistent naming patterns
-global_methods = ApiTestUser.methods.grep(/global_/)
-global_methods.all? { |m| m.to_s.start_with?('global_') }
+## Class relationship methods follow consistent naming patterns
+class_methods = ApiTestUser.methods.grep(/email_lookup|username_lookup/)
+class_methods.length > 0
 #=> true
 
-## Instance methods follow consistent collision-free naming
-instance_methods = @user.methods.grep(/global_/)
-instance_methods.all? { |m| m.to_s.include?('global') }
+## Instance methods follow consistent class_ prefix naming
+instance_methods = @user.methods.grep(/class_/)
+instance_methods.all? { |m| m.to_s.include?('class_') }
 #=> true
 
 ## Parent-based methods use lowercased class names
@@ -280,10 +280,10 @@ membership_meta[:context_class] == ApiTestUser
 # 7. Functional Integration Tests
 # =============================================
 
-## Global tracking and indexing work together
+## Class tracking and indexing work together
 ApiTestUser.add_to_all_users(@user)
-@user.add_to_global_email_lookup
-ApiTestUser.all_users.member?(@user.identifier) && @user.email_lookup.get(@user.email) == @user.user_id
+@user.add_to_class_email_lookup
+ApiTestUser.all_users.member?(@user.identifier) && ApiTestUser.email_lookup.get(@user.email) == @user.user_id
 #=> true
 
 ## Parent-based relationships work with tracking
@@ -305,20 +305,20 @@ all_users.size >= 2
 
 ## Methods handle nil field values gracefully
 user_with_nil_email = ApiTestUser.new(user_id: 'no_email', email: nil)
-user_with_nil_email.add_to_global_email_lookup
+user_with_nil_email.add_to_class_email_lookup
 # Nil email should not be added to index
-user_with_nil_email.email_lookup.get('') == nil
+ApiTestUser.email_lookup.get('') == nil
 #=> true
 
 ## Update methods handle field value changes
 old_email = @user.email
-@user.update_in_global_email_lookup(old_email)
-@user.email_lookup.get(@user.email) == @user.user_id
+@user.update_in_class_email_lookup(old_email)
+ApiTestUser.email_lookup.get(@user.email) == @user.user_id
 #=> true
 
 ## Removal methods clean up indexes properly
-@user.remove_from_global_email_lookup
-@user.email_lookup.get(@user.email) == nil
+@user.remove_from_class_email_lookup
+ApiTestUser.email_lookup.get(@user.email) == nil
 #=> true
 
 # =============================================

@@ -139,18 +139,17 @@ puts
 
 puts '=== 3. Querying Relationships ==='
 
-# Test indexed lookups using class-level index methods
-# NOTE: Index lookup methods may not be fully implemented yet
+# Test indexed lookups using class-level finder methods
 begin
-  found_customer_id = Customer.email_lookup.get(customer.email)
-  puts "Email lookup for #{customer.email}: #{found_customer_id}"
+  found_customer = Customer.find_by_email(customer.email)
+  puts "Email lookup for #{customer.email}: #{found_customer ? found_customer.custid : 'not found'}"
 rescue NoMethodError => e
   puts "Index lookup not yet available: #{e.message.split(' for ').first}"
 end
 
 begin
-  enterprise_customer_id = Customer.plan_lookup.get('enterprise')
-  puts "Enterprise customer found: #{enterprise_customer_id}"
+  enterprise_customer = Customer.find_by_plan('enterprise')
+  puts "Enterprise customer found: #{enterprise_customer ? enterprise_customer.custid : 'not found'}"
 rescue NoMethodError => e
   puts "Index lookup not yet available: #{e.message.split(' for ').first}"
 end
@@ -213,14 +212,14 @@ puts "✓ Created and indexed #{additional_customers.size} additional customers"
 
 # Query by plan (wrapped in error handling)
 begin
-  basic_customer_id = Customer.plan_lookup.get('basic')
-  premium_customer_id = Customer.plan_lookup.get('premium')
-  enterprise_customer_id = Customer.plan_lookup.get('enterprise')
+  basic_customer = Customer.find_by_plan('basic')
+  premium_customer = Customer.find_by_plan('premium')
+  enterprise_customer = Customer.find_by_plan('enterprise')
 
   puts "\nCustomer distribution by plan:"
-  puts "  Basic: #{basic_customer_id ? 1 : 0} customers"
-  puts "  Premium: #{premium_customer_id ? 1 : 0} customers"
-  puts "  Enterprise: #{enterprise_customer_id ? 1 : 0} customers"
+  puts "  Basic: #{basic_customer ? 1 : 0} customers"
+  puts "  Premium: #{premium_customer ? 1 : 0} customers"
+  puts "  Enterprise: #{enterprise_customer ? 1 : 0} customers"
 rescue NoMethodError
   puts "\nIndex lookup functionality not yet fully implemented"
 end

@@ -116,17 +116,17 @@ module Familia
 
           private
 
-          # Generate global collection methods (e.g., Domain.global_all_domains)
+          # Generate class-level collection methods (e.g., Domain.all_domains)
           def generate_global_class_methods(target_class, collection_name)
-            # Generate global collection getter method
-            target_class.define_singleton_method("global_#{collection_name}") do
-              collection_key = "global:#{collection_name}"
+            # Generate class-level collection getter method
+            target_class.define_singleton_method("#{collection_name}") do
+              collection_key = "#{self.name.downcase}:#{collection_name}"
               Familia::SortedSet.new(nil, dbkey: collection_key, logical_database: logical_database)
             end
 
-            # Generate global add method (e.g., Domain.add_to_global_all_domains)
+            # Generate class-level add method (e.g., Domain.add_to_all_domains)
             target_class.define_singleton_method("add_to_#{collection_name}") do |item, score = nil|
-              collection = send("global_#{collection_name}")
+              collection = send("#{collection_name}")
 
               # Calculate score if not provided
               score ||= if item.respond_to?(:calculate_tracking_score)
@@ -141,9 +141,9 @@ module Familia
               collection.add(score, item.identifier)
             end
 
-            # Generate global remove method
+            # Generate class-level remove method
             target_class.define_singleton_method("remove_from_#{collection_name}") do |item|
-              collection = send("global_#{collection_name}")
+              collection = send("#{collection_name}")
               collection.delete(item.identifier)
             end
           end
