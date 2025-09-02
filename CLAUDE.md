@@ -44,6 +44,44 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Generate documentation**: `bundle exec yard`
 - **Code linting**: `bundle exec rubocop`
 
+### Changelog Management
+
+**Scriv-based changelog workflow** using fragment files:
+
+**Adding changelog entries:**
+```bash
+# Create new fragment during development
+scriv create --edit
+
+# Edit fragment to document changes:
+### Added
+- New batch_indexed_by method for bulk index creation
+
+### Fixed
+- Fixed race condition in connection pooling
+
+# Commit with code changes
+git add changelog.d/fragments/your_fragment.md
+git commit -m "Add batch_indexed_by method"
+```
+
+**Release workflow:**
+```bash
+# Collect all fragments into CHANGELOG.md
+scriv collect --version 2.0.0-pre8
+
+# This aggregates fragments, updates changelog, removes collected fragments
+```
+
+**Fragment categories** (use as needed):
+- **Added** - New features or capabilities
+- **Changed** - Changes to existing functionality
+- **Deprecated** - Soon-to-be removed features
+- **Removed** - Now removed features
+- **Fixed** - Bug fixes
+- **Security** - Security-related improvements
+- **Documentation** - Documentation improvements
+
 ### Known Issues & Quirks
 - **Reserved Keywords**: Cannot use `ttl`, `db`, `redis` as field names - use prefixed alternatives
 - **Empty Identifiers**: Cause stack overflow in key generation - validate before operations
