@@ -8,12 +8,12 @@ require_relative '../lib/familia'
 # Configure Familia for the example
 # Note: Individual models can specify logical_database if needed
 
-puts "=== Familia Relationships Basic Example ==="
+puts '=== Familia Relationships Basic Example ==='
 puts
 
 # Define our model classes
 class Customer < Familia::Horreum
-  logical_database 15  # Use test database
+  logical_database 15 # Use test database
   feature :relationships
 
   identifier_field :custid
@@ -40,7 +40,7 @@ class Customer < Familia::Horreum
 end
 
 class Domain < Familia::Horreum
-  logical_database 15  # Use test database
+  logical_database 15 # Use test database
   feature :relationships
 
   identifier_field :domain_id
@@ -54,11 +54,11 @@ class Domain < Familia::Horreum
 
   # Track domains by status (using new class_ prefix for global)
   class_tracked_in :active_domains,
-    score: -> { status == 'active' ? Time.now.to_i : 0 }
+                   score: -> { status == 'active' ? Time.now.to_i : 0 }
 end
 
 class Project < Familia::Horreum
-  logical_database 15  # Use test database
+  logical_database 15 # Use test database
   feature :relationships
 
   identifier_field :project_id
@@ -70,34 +70,34 @@ class Project < Familia::Horreum
   member_of Customer, :projects, type: :list
 end
 
-puts "=== 1. Basic Object Creation ==="
+puts '=== 1. Basic Object Creation ==='
 
 # Create some sample objects
 customer = Customer.new(
   custid: "cust_#{SecureRandom.hex(4)}",
-  name: "Acme Corporation",
-  email: "admin@acme.com",
-  plan: "enterprise"
+  name: 'Acme Corporation',
+  email: 'admin@acme.com',
+  plan: 'enterprise'
 )
 
 domain1 = Domain.new(
   domain_id: "dom_#{SecureRandom.hex(4)}",
-  name: "acme.com",
-  dns_zone: "acme.com.",
-  status: "active"
+  name: 'acme.com',
+  dns_zone: 'acme.com.',
+  status: 'active'
 )
 
 domain2 = Domain.new(
   domain_id: "dom_#{SecureRandom.hex(4)}",
-  name: "staging.acme.com",
-  dns_zone: "staging.acme.com.",
-  status: "active"
+  name: 'staging.acme.com',
+  dns_zone: 'staging.acme.com.',
+  status: 'active'
 )
 
 project = Project.new(
   project_id: "proj_#{SecureRandom.hex(4)}",
-  name: "Website Redesign",
-  priority: "high"
+  name: 'Website Redesign',
+  priority: 'high'
 )
 
 puts "✓ Created customer: #{customer.name} (#{customer.custid})"
@@ -105,16 +105,16 @@ puts "✓ Created domains: #{domain1.name}, #{domain2.name}"
 puts "✓ Created project: #{project.name}"
 puts
 
-puts "=== 2. Establishing Relationships ==="
+puts '=== 2. Establishing Relationships ==='
 
 # Add objects to indexed lookups (use instance methods for indexing)
 customer.add_to_global_email_lookup
 customer.add_to_global_plan_lookup
-puts "✓ Added customer to email and plan indexes"
+puts '✓ Added customer to email and plan indexes'
 
 # Add customer to global tracking
 Customer.add_to_all_customers(customer)
-puts "✓ Added customer to global customer tracking"
+puts '✓ Added customer to global customer tracking'
 
 # Establish member_of relationships (bidirectional)
 domain1.add_to_customer_domains(customer)
@@ -126,16 +126,16 @@ customer.domains.add(domain2.identifier)
 project.add_to_customer_projects(customer)
 customer.projects.add(project.identifier)
 
-puts "✓ Established domain ownership relationships"
-puts "✓ Established project ownership relationships"
+puts '✓ Established domain ownership relationships'
+puts '✓ Established project ownership relationships'
 
 # Track domains in status collections
 Domain.add_to_active_domains(domain1)
 Domain.add_to_active_domains(domain2)
-puts "✓ Added domains to active tracking"
+puts '✓ Added domains to active tracking'
 puts
 
-puts "=== 3. Querying Relationships ==="
+puts '=== 3. Querying Relationships ==='
 
 # Test indexed lookups using global index methods
 # NOTE: Index lookup methods may not be fully implemented yet
@@ -147,7 +147,7 @@ rescue NoMethodError => e
 end
 
 begin
-  enterprise_customer_id = Customer.global_plan_lookup.get("enterprise")
+  enterprise_customer_id = Customer.global_plan_lookup.get('enterprise')
   puts "Enterprise customer found: #{enterprise_customer_id}"
 rescue NoMethodError => e
   puts "Index lookup not yet available: #{e.message.split(' for ').first}"
@@ -173,22 +173,22 @@ active_domains_count = Domain.global_active_domains.size
 puts "  Active domains in system: #{active_domains_count}"
 puts
 
-puts "=== 4. Range Queries ==="
+puts '=== 4. Range Queries ==='
 
 # Get recent customers (last 24 hours)
-yesterday = (Time.now - 24*3600).to_i  # 24 hours ago
+yesterday = (Time.now - (24 * 3600)).to_i # 24 hours ago
 recent_customers = Customer.global_all_customers.rangebyscore(yesterday, '+inf')
 puts "Recent customers (last 24h): #{recent_customers.size}"
 
 # Get all active domains by score
 active_domain_scores = Domain.global_active_domains.rangebyscore(1, '+inf', with_scores: true)
-puts "Active domains with timestamps:"
+puts 'Active domains with timestamps:'
 active_domain_scores.each do |domain_id, timestamp|
   puts "  #{domain_id}: active since #{Time.at(timestamp.to_i)}"
 end
 puts
 
-puts "=== 5. Batch Operations ==="
+puts '=== 5. Batch Operations ==='
 
 # Create additional test data
 additional_customers = []
@@ -197,7 +197,7 @@ additional_customers = []
     custid: "batch_cust_#{i}",
     name: "Customer #{i}",
     email: "customer#{i}@example.com",
-    plan: i.even? ? "basic" : "premium"
+    plan: i.even? ? 'basic' : 'premium'
   )
   additional_customers << cust
 
@@ -211,23 +211,23 @@ puts "✓ Created and indexed #{additional_customers.size} additional customers"
 
 # Query by plan (wrapped in error handling)
 begin
-  basic_customer_id = Customer.global_plan_lookup.get("basic")
-  premium_customer_id = Customer.global_plan_lookup.get("premium")
-  enterprise_customer_id = Customer.global_plan_lookup.get("enterprise")
+  basic_customer_id = Customer.global_plan_lookup.get('basic')
+  premium_customer_id = Customer.global_plan_lookup.get('premium')
+  enterprise_customer_id = Customer.global_plan_lookup.get('enterprise')
 
   puts "\nCustomer distribution by plan:"
   puts "  Basic: #{basic_customer_id ? 1 : 0} customers"
   puts "  Premium: #{premium_customer_id ? 1 : 0} customers"
   puts "  Enterprise: #{enterprise_customer_id ? 1 : 0} customers"
-rescue NoMethodError => e
+rescue NoMethodError
   puts "\nIndex lookup functionality not yet fully implemented"
 end
 puts
 
-puts "=== 6. Relationship Cleanup ==="
+puts '=== 6. Relationship Cleanup ==='
 
 # Remove relationships
-puts "Cleaning up relationships..."
+puts 'Cleaning up relationships...'
 
 # Remove from member_of relationships
 domain1.remove_from_customer_domains(customer)
@@ -244,7 +244,7 @@ puts "  Customer domains: #{customer.domains.size}"
 puts "  Active domains: #{Domain.global_active_domains.size}"
 puts
 
-puts "=== 7. Advanced Usage - Permission Encoding ==="
+puts '=== 7. Advanced Usage - Permission Encoding ==='
 
 # Demonstrate basic score encoding for permissions
 class DocumentAccess
@@ -268,28 +268,28 @@ end
 
 # Example permission encoding
 now = Time.now.to_i
-read_write_permissions = DocumentAccess::READ | DocumentAccess::WRITE  # 3
-admin_permissions = DocumentAccess::ADMIN  # 8
+read_write_permissions = DocumentAccess::READ | DocumentAccess::WRITE # 3
+DocumentAccess::ADMIN # 8
 
 encoded_score = DocumentAccess.encode_permissions(now, read_write_permissions)
 timestamp, permissions = DocumentAccess.decode_permissions(encoded_score)
 
-puts "Permission encoding example:"
+puts 'Permission encoding example:'
 puts "  Original: timestamp=#{now}, permissions=#{read_write_permissions}"
 puts "  Encoded score: #{encoded_score}"
 puts "  Decoded: timestamp=#{timestamp}, permissions=#{permissions}"
-puts "  Has read access: #{(permissions & DocumentAccess::READ) != 0}"
-puts "  Has write access: #{(permissions & DocumentAccess::WRITE) != 0}"
-puts "  Has delete access: #{(permissions & DocumentAccess::DELETE) != 0}"
+puts "  Has read access: #{permissions.anybits?(DocumentAccess::READ)}"
+puts "  Has write access: #{permissions.anybits?(DocumentAccess::WRITE)}"
+puts "  Has delete access: #{permissions.anybits?(DocumentAccess::DELETE)}"
 puts
 
-puts "=== Example Complete! ==="
+puts '=== Example Complete! ==='
 puts
-puts "Key takeaways:"
-puts "• tracked_in: Use for activity feeds, leaderboards, time-series data"
-puts "• indexed_by: Use for fast O(1) lookups by field values"
-puts "• member_of: Use for bidirectional ownership/membership"
-puts "• Score encoding: Combine timestamps with metadata for rich queries"
-puts "• Batch operations: Use Redis pipelines for efficiency"
+puts 'Key takeaways:'
+puts '• tracked_in: Use for activity feeds, leaderboards, time-series data'
+puts '• indexed_by: Use for fast O(1) lookups by field values'
+puts '• member_of: Use for bidirectional ownership/membership'
+puts '• Score encoding: Combine timestamps with metadata for rich queries'
+puts '• Batch operations: Use Redis pipelines for efficiency'
 puts
-puts "See docs/wiki/Relationships-Guide.md for comprehensive documentation"
+puts 'See docs/wiki/Relationships-Guide.md for comprehensive documentation'
