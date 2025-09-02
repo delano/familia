@@ -181,11 +181,11 @@ score.is_a?(Float) && score > 0
 
 ## Tag can be tracked globally
 @tag.save
-@tag.respond_to?(:add_to_global_all_tags)
+@tag.respond_to?(:add_to_class_all_tags)
 #=> true
 
 ## Global tags collection exists
-TestTag.respond_to?(:global_all_tags)
+TestTag.respond_to?(:all_tags)
 #=> true
 
 # =============================================

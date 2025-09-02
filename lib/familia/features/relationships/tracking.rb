@@ -34,30 +34,33 @@ module Familia
             word.to_s.split('_').map(&:capitalize).join
           end
 
-          # Define a global/class-level tracked collection
+          # Define a class-level tracked collection
           #
-          # @param collection_name [Symbol] Name of the global collection
+          # @param collection_name [Symbol] Name of the class-level collection
           # @param score [Symbol, Proc, nil] How to calculate the score
           # @param on_destroy [Symbol] What to do when object is destroyed (:remove, :ignore)
           #
-          # @example Global tracking (following class_ prefix convention)
+          # @example Class-level tracking (using class_ prefix convention)
           #   class_tracked_in :all_customers, score: :created_at
           #   class_tracked_in :active_users, score: -> { status == 'active' ? Time.now.to_i : 0 }
           def class_tracked_in(collection_name, score: nil, on_destroy: :remove)
+
+            klass_name = (name || self.to_s).downcase
+
             # Store metadata for this tracking relationship
             tracking_relationships << {
-              context_class: :global,
-              context_class_name: 'Global',
+              context_class: klass_name,
+              context_class_name: name || self.to_s,
               collection_name: collection_name,
               score: score,
               on_destroy: on_destroy
             }
 
-            # Generate global class methods
-            generate_global_class_methods(self, collection_name)
+            # Generate class-level collection methods
+            generate_tracking_class_methods(self, collection_name)
 
-            # Generate instance methods on this class for global context
-            generate_tracking_instance_methods('Global', collection_name, score)
+            # Generate instance methods for class-level tracking
+            generate_tracking_instance_methods('class', collection_name, score)
           end
 
           # Define a tracked_in relationship
@@ -75,10 +78,6 @@ module Familia
           #   tracked_in Team, :domains, score: :added_at
           #   tracked_in Organization, :all_domains, score: :created_at
           def tracked_in(context_class, collection_name, score: nil, on_destroy: :remove)
-            # Validate that we're not using :global context (use class_tracked_in instead)
-            if context_class == :global
-              raise ArgumentError, "Use class_tracked_in for global collections instead of tracked_in :global"
-            end
 
             # Handle class context
             if context_class.is_a?(Class)
@@ -116,21 +115,21 @@ module Familia
 
           private
 
-          # Generate class-level collection methods (e.g., Domain.all_domains)
-          def generate_global_class_methods(target_class, collection_name)
+          # Generate class-level collection methods (e.g., User.all_users)
+          def generate_tracking_class_methods(target_class, collection_name)
             # Generate class-level collection getter method
             target_class.define_singleton_method("#{collection_name}") do
               collection_key = "#{self.name.downcase}:#{collection_name}"
               Familia::SortedSet.new(nil, dbkey: collection_key, logical_database: logical_database)
             end
 
-            # Generate class-level add method (e.g., Domain.add_to_all_domains)
+            # Generate class-level add method (e.g., User.add_to_all_users)
             target_class.define_singleton_method("add_to_#{collection_name}") do |item, score = nil|
               collection = send("#{collection_name}")
 
               # Calculate score if not provided
               score ||= if item.respond_to?(:calculate_tracking_score)
-                          item.calculate_tracking_score(:global, collection_name)
+                          item.calculate_tracking_score('class', collection_name)
                         else
                           item.current_score
                         end
@@ -325,6 +324,23 @@ module Familia
               # This is a simplified version - in practice, you'd need to know
               # which specific instances this object should be tracked in
               # For now, we'll skip the automatic update and rely on explicit calls
+            end
+          end
+
+          # Add to class-level tracking collections automatically
+          def add_to_class_tracking_collections
+            return unless self.class.respond_to?(:tracking_relationships)
+
+            self.class.tracking_relationships.each do |config|
+              context_class_name = config[:context_class_name]
+              context_class = config[:context_class]
+              collection_name = config[:collection_name]
+
+              # Only auto-add to class-level collections (where context_class matches self.class)
+              if context_class_name.downcase == self.class.name.downcase
+                # Call the class method to add this object
+                self.class.send("add_to_#{collection_name}", self)
+              end
             end
           end
 

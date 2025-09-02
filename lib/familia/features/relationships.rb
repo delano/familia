@@ -264,15 +264,22 @@ module Familia
           # This can be overridden by subclasses to set up initial relationships
         end
 
-        # Override save to update relationships
+        # Override save to update relationships automatically
         def save(update_expiration: true)
           result = super
 
-          if result && respond_to?(:update_all_indexes)
-            # Update all indexes with current field values
-            update_all_indexes
+          if result
+            # Automatically update all indexes when object is saved
+            if respond_to?(:update_all_indexes)
+              update_all_indexes
+            end
 
-            # NOTE: Tracking and membership updates are typically done explicitly
+            # Auto-add to class-level tracking collections
+            if respond_to?(:add_to_class_tracking_collections)
+              add_to_class_tracking_collections
+            end
+
+            # NOTE: Relationship-specific membership and tracking updates are done explicitly
             # since we need to know which specific collections this object should be in
           end
 
