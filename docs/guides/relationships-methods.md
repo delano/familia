@@ -44,10 +44,9 @@ class Customer < Familia::Horreum
 end
 ```
 
-Generated class methods:
-- Customer.add_to_email_lookup(customer) - Add customer to global email index
-- Customer.remove_from_email_lookup(customer) - Remove customer from global email index
-- Customer.email_lookup - Access the global hash index directly (supports .get(email))
+Generated methods:
+- **Instance methods**: `customer.add_to_global_email_lookup`, `customer.remove_from_global_email_lookup`
+- **Class methods**: `Customer.global_email_lookup` (returns hash), `Customer.find_by_email_globally(email)`
 
 Redis key pattern: `global:email_lookup`
 
@@ -90,8 +89,8 @@ Customer.add_to_all_customers(customer)    # Class method
 Customer.all_customers.range(0, -1)        # Direct collection access
 
 # For indexed_by relationships:
-Customer.add_to_email_lookup(customer)           # Class method
-Customer.email_lookup.get("user@example.com")   # O(1) lookup
+customer.add_to_global_email_lookup                        # Instance method
+Customer.global_email_lookup.get("user@example.com")       # O(1) lookup
 
 Method Naming Conventions
 
@@ -124,8 +123,8 @@ class User < Familia::Horreum
 end
 
 # Usage:
-User.add_to_email_lookup(user)
-found_user_id = User.email_lookup.get("john@example.com")
+user.add_to_global_email_lookup
+found_user_id = User.global_email_lookup.get("john@example.com")
 ```
 
 **Redis keys generated**: `global:email_lookup`, `global:username_lookup`
