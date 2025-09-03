@@ -41,11 +41,7 @@ jobs:
 
       - name: Build YARD documentation
         run: |
-          bundle exec yard doc \
-            --output-dir ./doc \
-            --readme README.md \
-            --files 'docs/guides/*.md,docs/migration/*.md,examples/*.rb,CHANGELOG.md' \
-            --title "Familia Documentation"
+          bundle exec yard doc --output-dir ./doc
           # Ensure doc directory exists and create .nojekyll file to prevent GitHub Pages Jekyll processing
           mkdir -p ./doc
           touch ./doc/.nojekyll
