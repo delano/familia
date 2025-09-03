@@ -46,17 +46,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### Changelog Management
 
-Add changelog fragment with each user-facing or documented change (optional but encouraged)
-
-- When a commit contains a user-visible change (feature, bugfix, docs, behaviour change), create a Scriv fragment in `changelog.d/fragments/` at the same time as the code change.
-  - Quick commands:
-    - `scriv create --edit`
-    - `git add changelog.d/fragments/your_fragment.md`
-    - `git commit -m 'Short subject ≤50 chars'`
-    - Release workflow:
-      - `scriv collect --version 2.0.0-pre8` -- collects all fragments into CHANGELOG.md
-  - Keep fragments bite-sized: one fragment per logical change.
-  - Use the fragment categories: Added, Changed, Deprecated, Removed, Fixed, Security, Documentation.
+Add changelog fragment with each user-facing or documented change (optional but encouraged). See:
+@changelog.d/README.md
 
 ### Known Issues & Quirks
 - **Reserved Keywords**: Cannot use `ttl`, `db`, `valkey`, `redis` as field names - use prefixed alternatives

@@ -27,8 +27,12 @@ class Customer < Familia::Horreum
   identifier_field :custid
   field :custid, :name, :email
 
-  # Define relationship collections
-  class_tracked_in :active_users, score: :created_at
+  # Collections for relationships
+  set :domains           # Simple set of domain IDs
+  sorted_set :activity   # Activity feed with timestamps
+
+  # Class-level relationship collections (automatically managed)
+  class_tracked_in :all_customers, score: :created_at
   class_indexed_by :email, :email_lookup
 end
 
@@ -39,7 +43,7 @@ class Domain < Familia::Horreum
   field :domain_id, :name, :dns_zone
 
   # Define bidirectional membership
-  member_of Customer, :domains, type: :set
+  member_of Customer, :domains
 end
 ```
 
@@ -509,17 +513,21 @@ org = Organization.new(org_id: 'org123', name: 'Acme Corp')
 user = User.new(user_id: 'user456', email: 'john@acme.com')
 project = Project.new(project_id: 'proj789', name: 'Website')
 
-# Establish relationships
-user.add_to_organization_members(org.org_id)
-project.add_to_organization_projects(org.org_id)
+# Establish relationships with clean syntax
+org.members << user    # Clean Ruby-like syntax
+org.projects << project
+
+# Save objects to trigger automatic indexing
+user.save    # Automatically added to class-level indexes
+project.save # Automatically added to class-level tracking
 
 # Query organization structure
 org.members.size      # Number of organization members
 org.projects.members  # All project IDs in organization
 
-# Global indexes
-User.add_to_email_lookup(user)
+# Automatic class-level indexing (no manual calls needed)
 user_id = User.email_lookup.get('john@acme.com')  # Fast email lookup
+found_user = User.find_by_email('john@acme.com')  # Convenience method
 ```
 
 ### Analytics and Reporting

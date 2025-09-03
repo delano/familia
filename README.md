@@ -118,6 +118,56 @@ user.transaction do |conn|
 end
 ```
 
+### Object Relationships
+
+Familia includes a powerful relationships system for managing object associations:
+
+```ruby
+class Customer < Familia::Horreum
+  feature :relationships
+
+  identifier_field :custid
+  field :custid, :name, :email
+  set :domains  # Collection for related objects
+
+  # Automatic indexing and tracking
+  class_indexed_by :email, :email_lookup
+  class_tracked_in :all_customers, score: :created_at
+end
+
+class Domain < Familia::Horreum
+  feature :relationships
+
+  identifier_field :domain_id
+  field :domain_id, :name, :status
+
+  # Bidirectional membership
+  member_of Customer, :domains
+end
+
+# Clean, Ruby-like syntax
+customer = Customer.new(custid: "cust123", email: "admin@acme.com")
+customer.save  # Automatically indexed and tracked
+
+domain = Domain.new(domain_id: "dom456", name: "acme.com")
+customer.domains << domain  # Clean collection syntax
+
+# Fast O(1) lookups
+found_customer = Customer.find_by_email("admin@acme.com")
+```
+
+## Advanced Features
+
+### Relationships and Associations
+
+Familia provides three types of relationships with automatic management:
+
+- **`member_of`** - Bidirectional membership with clean `<<` operator support
+- **`indexed_by`** - O(1) hash-based field lookups (class-level or relationship-scoped)
+- **`tracked_in`** - Scored collections for rankings, time-series, and analytics
+
+All relationships support automatic indexing and tracking - objects are automatically added to class-level collections when saved, with no manual management required.
+
 ## Organizing Complex Models
 
 For large applications, you can organize model complexity using custom features:

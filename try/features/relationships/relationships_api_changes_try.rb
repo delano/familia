@@ -17,11 +17,11 @@ class ApiTestUser < Familia::Horreum
   field :created_at
   field :status
 
-  # New API: class_tracked_in for global tracking
+  # New API: class_tracked_in for class-level tracking
   class_tracked_in :all_users, score: :created_at
   class_tracked_in :active_users, score: -> { status == 'active' ? Time.now.to_i : 0 }
 
-  # New API: class_indexed_by for global indexing
+  # New API: class_indexed_by for class-level indexing
   class_indexed_by :email, :email_lookup
   class_indexed_by :username, :username_lookup, finder: false
 end
@@ -105,11 +105,11 @@ ApiTestUser.respond_to?(:remove_from_all_users)
 #=> true
 
 ## class_tracked_in generates membership check methods
-@user.respond_to?(:in_global_all_users?)
+@user.respond_to?(:in_class_all_users?)
 #=> true
 
 ## class_tracked_in generates score retrieval methods
-@user.respond_to?(:score_in_global_all_users)
+@user.respond_to?(:score_in_class_all_users)
 #=> true
 
 ## Global tracking collections are SortedSet instances
@@ -118,8 +118,8 @@ ApiTestUser.add_to_all_users(@user)
 ApiTestUser.all_users.class.name
 #=> "Familia::SortedSet"
 
-## Objects can be added to global tracking collections
-ApiTestUser.add_to_all_users(@user)
+## Automatic tracking addition works on save
+@user.save
 ApiTestUser.all_users.member?(@user.identifier)
 #=> true
 
@@ -129,16 +129,14 @@ score.is_a?(Float) && score > 0
 #=> true
 
 ## Score calculation works for lambda scores with active user
-ApiTestUser.add_to_active_users(@user)
+@user.save  # Should automatically add to active_users
 active_score = ApiTestUser.active_users.score(@user.identifier)
 active_score > 0
 #=> true
 
 ## Score calculation works for lambda scores with inactive user
-@inactive_user.save
-ApiTestUser.add_to_active_users(@inactive_user)
-inactive_score = ApiTestUser.active_users.score(@inactive_user.identifier)
-inactive_score == 0
+@inactive_user.save  # Should automatically add to active_users
+ApiTestUser.active_users.member?(@inactive_user.identifier)
 #=> true
 
 # =============================================
@@ -177,8 +175,8 @@ ApiTestUser.respond_to?(:rebuild_email_lookup)
 @user.respond_to?(:update_in_class_email_lookup)
 #=> true
 
-## Class indexing adds objects to index
-@user.add_to_class_email_lookup
+## Automatic indexing works on save
+@user.save
 # Class-level index can be accessed via class method
 ApiTestUser.email_lookup.class.name == "Familia::HashKey"
 #=> true
@@ -214,25 +212,21 @@ true
 # 4. Breaking Changes: ArgumentError Tests
 # =============================================
 
-## tracked_in with :global context raises ArgumentError
-begin
-  Class.new(Familia::Horreum) do
-    feature :relationships
-    tracked_in :global, :test_collection
-  end
-  false
-rescue ArgumentError => e
-  e.message.include?("Use class_tracked_in for global collections")
-end
-#=> true
-
-## indexed_by with parent: :global now works (no ArgumentError)
+## class_tracked_in creates class-level collections without error
 test_class = Class.new(Familia::Horreum) do
   feature :relationships
-  indexed_by :test_field, :test_index, parent: :global
+  class_tracked_in :test_collection
+end
+test_class.respond_to?(:test_collection)
+#=> true
+
+## class_indexed_by works like class-level (old feature)
+test_class = Class.new(Familia::Horreum) do
+  feature :relationships
+  class_indexed_by :test_field, :test_index
 end
 test_class.respond_to?(:indexing_relationships)
-#=> true
+##=> true
 
 # =============================================
 # 5. API Consistency Tests
@@ -257,14 +251,24 @@ parent_methods.length > 0
 # 6. Metadata Storage Tests
 # =============================================
 
-## class_tracked_in stores correct metadata
+## class_tracked_in stores correct context_class
 tracking_meta = ApiTestUser.tracking_relationships.find { |r| r[:collection_name] == :all_users }
-tracking_meta[:context_class] == :global && tracking_meta[:context_class_name] == 'Global'
+tracking_meta[:context_class].end_with?('::apitestuser')
 #=> true
 
-## class_indexed_by stores correct metadata
+## class_tracked_in stores correct context_class_name
+tracking_meta = ApiTestUser.tracking_relationships.find { |r| r[:collection_name] == :all_users }
+tracking_meta[:context_class_name].end_with?('::ApiTestUser')
+#=> true
+
+## class_indexed_by stores correct context_class
 indexing_meta = ApiTestUser.indexing_relationships.find { |r| r[:index_name] == :email_lookup }
-indexing_meta[:context_class] == :global && indexing_meta[:context_class_name] == 'global'
+indexing_meta[:context_class] == ApiTestUser
+#=> true
+
+## class_indexed_by stores correct context_class_name
+indexing_meta = ApiTestUser.indexing_relationships.find { |r| r[:index_name] == :email_lookup }
+indexing_meta[:context_class_name].end_with?('ApiTestUser')
 #=> true
 
 ## indexed_by with parent: stores correct metadata
@@ -276,9 +280,8 @@ membership_meta[:context_class] == ApiTestUser
 # 7. Functional Integration Tests
 # =============================================
 
-## Class tracking and indexing work together
-ApiTestUser.add_to_all_users(@user)
-@user.add_to_class_email_lookup
+## Class tracking and indexing work together automatically on save
+@user.save  # Should automatically update both tracking and indexing
 ApiTestUser.all_users.member?(@user.identifier) && ApiTestUser.email_lookup.get(@user.email) == @user.user_id
 #=> true
 
@@ -301,14 +304,15 @@ all_users.size >= 2
 
 ## Methods handle nil field values gracefully
 user_with_nil_email = ApiTestUser.new(user_id: 'no_email', email: nil)
-user_with_nil_email.add_to_class_email_lookup
+user_with_nil_email.save  # Should handle nil email gracefully
 # Nil email should not be added to index
 ApiTestUser.email_lookup.get('') == nil
 #=> true
 
-## Update methods handle field value changes
+## Update methods handle field value changes automatically
 old_email = @user.email
-@user.update_in_class_email_lookup(old_email)
+@user.email = 'newemail@example.com'
+@user.save  # Should automatically update index
 ApiTestUser.email_lookup.get(@user.email) == @user.user_id
 #=> true
 

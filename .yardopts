@@ -4,6 +4,27 @@
 --markup-provider kramdown
 --protected
 --no-private
+--embed-mixin ClassMethods
+--embed-mixin Features
+--tag feature:"Feature"
+--tag since:"Since Version"
+--tag example:"Example Usage"
+--tag note:"Note"
+--tag warning:"Warning"
+--tag deprecated:"Deprecated"
+--hide-tag nodoc
+--exclude lib/familia/version.rb
 lib/**/*.rb
 -
-- LICENSE.txt
+CHANGELOG.md
+LICENSE.txt
+docs/guides/Home.md
+docs/guides/Getting-Started.md
+docs/guides/Feature-System-Guide.md
+docs/guides/Relationships-Guide.md
+docs/guides/relationships-methods.md
+docs/guides/Encrypted-Fields-Overview.md
+docs/guides/Connection-Pooling-Guide.md
+docs/reference/api-technical.md
+docs/migration/*.md
+examples/*.rb
