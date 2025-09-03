@@ -138,7 +138,7 @@ module Familia
       module ClassMethods
         def generate_extid(objid = nil)
           unless features_enabled.include?(:object_identifier)
-            raise Familia::Problem,
+            raise ExternalIdentifierError,
                   'ExternalIdentifier requires ObjectIdentifier feature'
           end
           return nil if objid.to_s.empty?
@@ -177,7 +177,7 @@ module Familia
 
       # Generate external identifier deterministically from objid
       def generate_external_identifier
-        raise FieldTypeError, 'missing objid field' unless respond_to?(:objid)
+        raise ExternalIdentifierError, 'missing objid field' unless respond_to?(:objid)
 
         current_objid = objid
         return nil if current_objid.nil? || current_objid.to_s.empty?
