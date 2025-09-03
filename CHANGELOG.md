@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!--scriv-insert-here-->
 
+<a id='changelog-2.0.0-pre10'></a>
+## [2.0.0-pre10] - 2025-09-02 18:07:56.439890
+
+### Added
+
+- The `Familia::Horreum` initializer now supports creating an object directly from its identifier by passing a single argument (e.g., `Customer.new(customer_id)`). This provides a more convenient and intuitive way to instantiate objects from lookups.
+
+- Automatic indexing and class-level tracking on `save()` operations, eliminating the need for manual index updates.
+- Enhanced collection syntax supports the Ruby-idiomatic `<<` operator for more natural relationship management.
+
+### Changed
+
+- The `member_of` relationship is now bidirectional. A single call to `member.add_to_owner_collection(owner)` is sufficient to establish the relationship, removing the need for a second, redundant call on the owner object. This fixes bugs where members could be added to collections twice.
+
+- **BREAKING**: Refactored Familia Relationships API to remove "global" terminology and simplify method generation. (Closes #86)
+- Split `generate_indexing_instance_methods` into focused `generate_direct_index_methods` and `generate_relationship_index_methods` for better separation between direct class-level and relationship-based indexing.
+- Simplified method generation by removing complex global vs parent conditionals.
+- All indexes are now stored at the class level for consistency.
+
+### Fixed
+
+- Fixed a bug in the `class_indexed_by` feature where finder methods (e.g., `find_by_email`) would fail to correctly instantiate objects from the index, returning partially-formed objects.
+
+- Refactored connection handling to properly cache and reuse Redis connections. This eliminates repetitive "Overriding existing connection" warnings and improves performance.
+
+- Method generation now works consistently for both `class_indexed_by` and `indexed_by` with a `parent:`.
+- Resolved metadata storage issues for dynamically created classes.
+- Improved error handling for nil class names in tracking relationships.
+
+### Documentation
+
+- Updated the `examples/relationships_basic.rb` script to reflect the improved, bidirectional `member_of` API and to ensure a clean database state for each run.
+
+### AI Assistance
+
+- This refactoring was implemented with Claude Code assistance, including comprehensive test updates and API modernization.
+
 <a id='changelog-2.0.0-pre9'></a>
 # [2.0.0-pre9] - 2025-09-02 00:35:28.974817
 
