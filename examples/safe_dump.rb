@@ -12,7 +12,7 @@ require 'familia'
 # Configure connection
 Familia.uri = 'redis://localhost:6379/15'
 
-puts "=== SafeDump Feature Examples ==="
+puts '=== SafeDump Feature Examples ==='
 puts
 
 # Example 1: Basic SafeDump with simple fields
@@ -23,8 +23,8 @@ class User < Familia::Horreum
   field :email
   field :first_name
   field :last_name
-  field :password_hash    # Sensitive - not included in safe dump
-  field :ssn             # Sensitive - not included in safe dump
+  field :password_hash # Sensitive - not included in safe dump
+  field :ssn # Sensitive - not included in safe dump
   field :created_at
 
   # Define safe dump fields using the new DSL
@@ -34,7 +34,7 @@ class User < Familia::Horreum
   safe_dump_field :created_at
 end
 
-puts "Example 1: Basic SafeDump"
+puts 'Example 1: Basic SafeDump'
 user = User.new(
   email: 'alice@example.com',
   first_name: 'Alice',
@@ -46,7 +46,7 @@ user = User.new(
 
 puts "Full object data: #{user.to_h}"
 puts "Safe dump: #{user.safe_dump}"
-puts "Notice: password_hash and ssn are excluded"
+puts 'Notice: password_hash and ssn are excluded'
 puts
 
 # Example 2: SafeDump with computed fields using callables
@@ -69,12 +69,12 @@ class Product < Familia::Horreum
   safe_dump_field :created_at
 
   # Computed fields using callables
-  safe_dump_field :price, ->(product) { "$#{'%.2f' % (product.price_cents.to_i / 100.0)}" }
+  safe_dump_field :price, ->(product) { "$#{format('%.2f', product.price_cents.to_i / 100.0)}" }
   safe_dump_field :in_stock, ->(product) { product.inventory_count.to_i > 0 }
   safe_dump_field :display_name, ->(product) { "#{product.name} (#{product.sku})" }
 end
 
-puts "Example 2: SafeDump with computed fields"
+puts 'Example 2: SafeDump with computed fields'
 product = Product.new(
   sku: 'WIDGET-001',
   name: 'Super Widget',
@@ -87,7 +87,7 @@ product = Product.new(
 
 puts "Full object data: #{product.to_h}"
 puts "Safe dump: #{product.safe_dump}"
-puts "Notice: price converted to dollars, in_stock computed, cost_cents hidden"
+puts 'Notice: price converted to dollars, in_stock computed, cost_cents hidden'
 puts
 
 # Example 3: SafeDump with multiple field definition styles
@@ -115,7 +115,7 @@ class Order < Familia::Horreum
 
   # Computed fields using hash syntax
   safe_dump_fields(
-    { total: ->(order) { "$#{'%.2f' % (order.total_cents.to_i / 100.0)}" } },
+    { total: ->(order) { "$#{format('%.2f', order.total_cents.to_i / 100.0)}" } },
     { payment_type: ->(order) { order.payment_method&.split('_')&.first&.capitalize } }
   )
 
@@ -126,27 +126,27 @@ class Order < Familia::Horreum
     local, domain = email.split('@', 2)
     return email unless domain
 
-    obscured_local = local[0] + '*' * ([local.length - 2, 0].max) + local[-1]
+    obscured_local = local[0] + ('*' * [local.length - 2, 0].max) + local[-1]
     "#{obscured_local}@#{domain}"
   end
 end
 
-puts "Example 3: Multiple definition styles"
+puts 'Example 3: Multiple definition styles'
 order = Order.new(
   order_id: 'ORD-2024-001',
   customer_email: 'customer@example.com',
   status: 'shipped',
-  total_cents: 2499,  # $24.99
+  total_cents: 2499, # $24.99
   payment_method: 'credit_card',
-  credit_card_number: '4111-1111-1111-1111',  # Never expose this!
+  credit_card_number: '4111-1111-1111-1111', # Never expose this!
   processing_notes: 'Rush order - expedite shipping',
-  created_at: Time.now.to_i - 86400,  # Yesterday
-  shipped_at: Time.now.to_i - 3600    # 1 hour ago
+  created_at: Time.now.to_i - 86_400, # Yesterday
+  shipped_at: Time.now.to_i - 3600 # 1 hour ago
 )
 
 puts "Full object data: #{order.to_h}"
 puts "Safe dump: #{order.safe_dump}"
-puts "Notice: credit card and internal notes excluded, computed fields included"
+puts 'Notice: credit card and internal notes excluded, computed fields included'
 puts
 
 # Example 4: SafeDump with nested objects
@@ -185,22 +185,22 @@ class Customer < Familia::Horreum
   safe_dump_field :phone
 
   # Nested object handling - load and safe_dump related addresses
-  safe_dump_field :billing_address, ->(customer) do
+  safe_dump_field :billing_address, lambda { |customer|
     addr_id = customer.billing_address_id
     addr_id ? Address.load(addr_id)&.safe_dump : nil
-  end
+  }
 
-  safe_dump_field :shipping_address, ->(customer) do
+  safe_dump_field :shipping_address, lambda { |customer|
     addr_id = customer.shipping_address_id
     addr_id ? Address.load(addr_id)&.safe_dump : nil
-  end
+  }
 
-  safe_dump_field :account_balance, ->(customer) do
-    "$#{'%.2f' % (customer.account_balance_cents.to_i / 100.0)}"
-  end
+  safe_dump_field :account_balance, lambda { |customer|
+    "$#{format('%.2f', customer.account_balance_cents.to_i / 100.0)}"
+  }
 end
 
-puts "Example 4: SafeDump with nested objects"
+puts 'Example 4: SafeDump with nested objects'
 
 # Create addresses first
 billing = Address.new(
@@ -230,31 +230,33 @@ customer = Customer.new(
   phone: '555-1234',
   billing_address_id: 'addr_1',
   shipping_address_id: 'addr_2',
-  account_balance_cents: 15000,  # $150.00
-  credit_limit_cents: 100000,    # $1000.00 - sensitive!
+  account_balance_cents: 15_000,  # $150.00
+  credit_limit_cents: 100_000,    # $1000.00 - sensitive!
   internal_notes: 'VIP customer - handle with care'
 )
 
-puts "Customer safe dump:"
+puts 'Customer safe dump:'
 puts JSON.pretty_generate(customer.safe_dump)
-puts "Notice: Nested addresses included, sensitive credit limit excluded"
+puts 'Notice: Nested addresses included, sensitive credit limit excluded'
 puts
 
 # Example 5: Introspection methods
-puts "Example 5: SafeDump introspection"
+puts 'Example 5: SafeDump introspection'
 puts "User safe dump field names: #{User.safe_dump_field_names}"
 puts "Product safe dump field names: #{Product.safe_dump_field_names}"
 puts "Order safe dump field names: #{Order.safe_dump_field_names}"
 puts
 
 puts "User safe dump field map keys: #{User.safe_dump_field_map.keys}"
-puts "All Product safe dump fields are callable: #{Product.safe_dump_field_map.values.all? { |v| v.respond_to?(:call) }}"
+puts "All Product safe dump fields are callable: #{Product.safe_dump_field_map.values.all? do |v|
+  v.respond_to?(:call)
+end}"
 puts
 
 # Example 6: Legacy compatibility methods
-puts "Example 6: Legacy compatibility"
+puts 'Example 6: Legacy compatibility'
 puts "Using legacy safe_dump_fields getter: #{User.safe_dump_fields}"
-puts "Setting fields with set_safe_dump_fields:"
+puts 'Setting fields with set_safe_dump_fields:'
 
 class LegacyModel < Familia::Horreum
   feature :safe_dump
@@ -269,13 +271,11 @@ puts "LegacyModel fields after set_safe_dump_fields: #{LegacyModel.safe_dump_fie
 
 # Clean up
 puts
-puts "=== Cleaning up test data ==="
+puts '=== Cleaning up test data ==='
 [User, Product, Order, Address, Customer, LegacyModel].each do |klass|
-  begin
-    klass.redis.del(klass.redis.keys("#{klass.name.downcase}:*"))
-  rescue => e
-    puts "Error cleaning #{klass}: #{e.message}"
-  end
+  klass.redis.del(klass.redis.keys("#{klass.name.downcase}:*"))
+rescue StandardError => e
+  puts "Error cleaning #{klass}: #{e.message}"
 end
 
-puts "SafeDump examples completed!"
+puts 'SafeDump examples completed!'

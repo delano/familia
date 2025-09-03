@@ -49,7 +49,7 @@ class Domain < Familia::Horreum
   field :status
 
   # Declare membership in customer collections
-  member_of Customer, :domains #, type: :set
+  member_of Customer, :domains # , type: :set
 
   # Track domains by status (using class_ prefix for class-level)
   class_tracked_in :active_domains,
@@ -107,7 +107,7 @@ puts
 puts '=== 2. Establishing Relationships ==='
 
 # Save objects to automatically update indexes and class-level tracking
-customer.save  # Automatically adds to email_lookup, plan_lookup, and all_customers
+customer.save # Automatically adds to email_lookup, plan_lookup, and all_customers
 puts '✓ Customer automatically added to indexes and tracking on save'
 
 # Establish member_of relationships using clean << operator syntax
@@ -172,7 +172,6 @@ active_domain_scores.each_slice(2) do |domain_id, timestamp|
   puts "  #{domain_id}: active since #{Time.at(timestamp.to_i)} #{timestamp.inspect}"
 end
 puts
-
 
 puts '=== 6. Relationship Cleanup ==='
 

@@ -50,21 +50,21 @@ class TransferService
   end
 end
 
-puts "🧪 Redis Command Validation Framework Demo"
-puts "=" * 50
+puts '🧪 Redis Command Validation Framework Demo'
+puts '=' * 50
 
 # Clean up any existing test data
-cleanup_keys = Familia.dbclient.keys("account:*")
+cleanup_keys = Familia.dbclient.keys('account:*')
 Familia.dbclient.del(*cleanup_keys) if cleanup_keys.any?
 
 # Example 1: Basic Command Recording
 puts "\n1. Basic Command Recording"
-puts "-" * 30
+puts '-' * 30
 
 CommandRecorder = Familia::Validation::CommandRecorder
 CommandRecorder.start_recording
 
-account = Account.new(account_id: "acc001", balance: "1000", status: "active")
+account = Account.new(account_id: 'acc001', balance: '1000', status: 'active')
 account.save
 
 commands = CommandRecorder.stop_recording
@@ -73,12 +73,12 @@ commands.commands.each { |cmd| puts "  #{cmd}" }
 
 # Example 2: Transaction Detection
 puts "\n2. Transaction Detection"
-puts "-" * 30
+puts '-' * 30
 
 CommandRecorder.start_recording
 
-acc1 = Account.new(account_id: "acc002", balance: "2000")
-acc2 = Account.new(account_id: "acc003", balance: "500")
+acc1 = Account.new(account_id: 'acc002', balance: '2000')
+acc2 = Account.new(account_id: 'acc003', balance: '500')
 acc1.save
 acc2.save
 
@@ -96,7 +96,7 @@ end
 
 # Example 3: Validation with Expectations DSL
 puts "\n3. Command Validation with Expectations"
-puts "-" * 30
+puts '-' * 30
 
 begin
   validator = Familia::Validation::Validator.new
@@ -104,15 +104,15 @@ begin
   # This should pass - we expect the exact Redis commands
   result = validator.validate do |expect|
     expect.transaction do |tx|
-      tx.hset("account:acc004:object", "balance", "1500")
-        .hset("account:acc005:object", "balance", "1000")
-        .hset("account:acc004:object", "last_updated", Familia::Validation::ArgumentMatcher.new(:any_string))
-        .hset("account:acc005:object", "last_updated", Familia::Validation::ArgumentMatcher.new(:any_string))
+      tx.hset('account:acc004:object', 'balance', '1500')
+        .hset('account:acc005:object', 'balance', '1000')
+        .hset('account:acc004:object', 'last_updated', Familia::Validation::ArgumentMatcher.new(:any_string))
+        .hset('account:acc005:object', 'last_updated', Familia::Validation::ArgumentMatcher.new(:any_string))
     end
 
     # Execute the operation
-    acc4 = Account.new(account_id: "acc004", balance: "2000")
-    acc5 = Account.new(account_id: "acc005", balance: "500")
+    acc4 = Account.new(account_id: 'acc004', balance: '2000')
+    acc5 = Account.new(account_id: 'acc005', balance: '500')
     acc4.save
     acc5.save
 
@@ -121,51 +121,49 @@ begin
 
   puts "Validation result: #{result.valid? ? 'PASS ✅' : 'FAIL ❌'}"
   puts "Summary: #{result.summary}"
-
-rescue => e
+rescue StandardError => e
   puts "Validation demo encountered error: #{e.message}"
-  puts "This is expected as the framework needs Redis middleware integration"
+  puts 'This is expected as the framework needs Redis middleware integration'
 end
 
 # Example 4: Performance Analysis
 puts "\n4. Performance Analysis"
-puts "-" * 30
+puts '-' * 30
 
 begin
   commands = Familia::Validation.capture_commands do
     # Create multiple accounts
     accounts = []
     (1..5).each do |i|
-      account = Account.new(account_id: "perf#{i}", balance: "1000")
+      account = Account.new(account_id: "perf#{i}", balance: '1000')
       account.save
       accounts << account
     end
 
     # Perform operations
-    accounts[0].balance = "1100"
+    accounts[0].balance = '1100'
     accounts[0].save
   end
 
   analyzer = Familia::Validation::PerformanceAnalyzer.new(commands)
   analysis = analyzer.analyze
 
-  puts "Performance Analysis:"
+  puts 'Performance Analysis:'
   puts "  Total Commands: #{analysis[:total_commands]}"
   puts "  Command Types: #{analysis[:command_type_breakdown].keys.join(', ')}"
   puts "  Efficiency Score: #{analysis[:efficiency_score]}/100"
-
-rescue => e
+rescue StandardError => e
   puts "Performance analysis encountered error: #{e.message}"
 end
 
 # Example 5: Atomicity Validation
 puts "\n5. Atomicity Validation"
-puts "-" * 30
+puts '-' * 30
 
 begin
   # Test atomic vs non-atomic operations
-  acc6 = Account.new(account_id: "acc006", balance: "3000")
-  acc7 = Account.new(account_id: "acc007", balance: "1000")
+  acc6 = Account.new(account_id: 'acc006', balance: '3000')
+  acc7 = Account.new(account_id: 'acc007', balance: '1000')
   acc6.save
   acc7.save
 
@@ -180,13 +178,12 @@ begin
   result = atomicity_validator.validate
 
   puts "Atomicity validation: #{result.valid? ? 'PASS ✅' : 'FAIL ❌'}"
-
-rescue => e
+rescue StandardError => e
   puts "Atomicity validation encountered error: #{e.message}"
 end
 
 puts "\n6. Framework Architecture Overview"
-puts "-" * 30
+puts '-' * 30
 puts "
 The Redis Command Validation Framework provides:
 
@@ -224,8 +221,8 @@ Key Benefits:
 "
 
 # Cleanup
-cleanup_keys = Familia.dbclient.keys("account:*")
+cleanup_keys = Familia.dbclient.keys('account:*')
 Familia.dbclient.del(*cleanup_keys) if cleanup_keys.any?
 
 puts "\n🎉 Demo complete! The validation framework is ready for use."
-puts "    See try/validation/ for comprehensive test examples."
+puts '    See try/validation/ for comprehensive test examples.'
