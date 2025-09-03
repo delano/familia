@@ -1,10 +1,27 @@
-# lib/familia/features/external_identifiers/external_identifier_field_type.rb
-
-require 'familia/field_type'
+# lib/familia/features/external_identifier.rb
 
 module Familia
   module Features
-    module ExternalIdentifiers
+    # Familia::Features::ExternalIdentifier
+    #
+    module ExternalIdentifier
+      def self.included(base)
+        Familia.trace :LOADED, self, base, caller(1..1) if Familia.debug?
+        base.extend ClassMethods
+
+        # Ensure default prefix is set in feature options
+        base.add_feature_options(:external_identifier, prefix: 'ext')
+
+        # Add class-level mapping for extid -> id lookups
+        base.class_hashkey :extid_lookup
+
+        # Register the extid field using our custom field type
+        base.register_field_type(ExternalIdentifierFieldType.new(:extid, as: :extid, fast_method: false))
+      end
+
+      # Error classes
+      class ExternalIdentifierError < FieldTypeError; end
+
       # ExternalIdentifierFieldType - Fields that generate deterministic external identifiers
       #
       # External identifier fields generate shorter, public-facing identifiers that are
@@ -20,8 +37,8 @@ module Familia
       #
       # @example Using external identifier fields
       #   class User < Familia::Horreum
-      #     feature :object_identifiers
-      #     feature :external_identifiers
+      #     feature :object_identifier
+      #     feature :external_identifier
       #     field :email
       #   end
       #
@@ -33,7 +50,7 @@ module Familia
       #   user2 = User.new(objid: user.objid, email: 'user@example.com')
       #   user2.extid  # => "ext_abc123def456ghi789" (identical to user.extid)
       #
-      class ExternalIdentifierFieldType < FieldType
+      class ExternalIdentifierFieldType < Familia::FieldType
         # Override getter to provide lazy generation from objid
         #
         # Generates the external identifier deterministically from the object's
@@ -115,6 +132,99 @@ module Familia
           :external_identifier
         end
       end
+
+      # ExternalIdentifier::ClassMethods
+      #
+      module ClassMethods
+        def generate_extid(objid = nil)
+          unless features_enabled.include?(:object_identifier)
+            raise Familia::Problem,
+                  'ExternalIdentifier requires ObjectIdentifier feature'
+          end
+          return nil if objid.to_s.empty?
+
+          objid_hex = objid.to_s.delete('-')
+          external_part = Familia.shorten_to_external_id(objid_hex, base: 36)
+          prefix = feature_options(:external_identifier)[:prefix] || 'ext'
+          "#{prefix}_#{external_part}"
+        end
+
+        # Find an object by its external identifier
+        #
+        # @param extid [String] The external identifier to search for
+        # @return [Object, nil] The object if found, nil otherwise
+        #
+        def find_by_extid(extid)
+          return nil if extid.to_s.empty?
+
+          if Familia.debug?
+            reference = caller(1..1).first
+            Familia.trace :FIND_BY_EXTID, Familia.dbclient, extid, reference
+          end
+
+          # Look up the primary ID from the external ID mapping
+          primary_id = extid_lookup[extid]
+          return nil if primary_id.nil?
+
+          # Find the object by its primary ID
+          find_by_id(primary_id)
+        rescue Familia::NotFound
+          # If the object was deleted but mapping wasn't cleaned up
+          extid_lookup.del(extid)
+          nil
+        end
+      end
+
+      # Generate external identifier deterministically from objid
+      def generate_external_identifier
+        raise FieldTypeError, 'missing objid field' unless respond_to?(:objid)
+
+        current_objid = objid
+        return nil if current_objid.nil? || current_objid.to_s.empty?
+
+        # Convert objid to hex string for processing
+        objid_hex = current_objid.delete('-') # Remove UUID hyphens if present
+
+        # Generate deterministic external ID using SecureIdentifier
+        external_part = Familia.shorten_to_external_id(objid_hex, base: 36)
+
+        # Get prefix from feature options, default to "ext"
+        options = self.class.feature_options(:external_identifier)
+        prefix = options[:prefix] || 'ext'
+
+        "#{prefix}_#{external_part}"
+      end
+
+      # Full-length alias for extid for clarity when needed
+      #
+      # @return [String] The external identifier
+      #
+      def external_identifier
+        extid
+      end
+
+      # Full-length alias setter for extid
+      #
+      # @param value [String] The external identifier to set
+      #
+      def external_identifier=(value)
+        self.extid = value
+      end
+
+      def init
+        super if defined?(super)
+        # External IDs are generated from objid, so no additional setup needed
+      end
+
+      def destroy!
+        # Clean up extid mapping when object is destroyed
+        current_extid = instance_variable_get(:@extid)
+        self.class.extid_lookup.del(current_extid) if current_extid
+
+        super if defined?(super)
+      end
+
+      Familia::Base.add_feature self, :external_identifier, depends_on: [:object_identifier]
     end
   end
 end

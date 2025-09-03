@@ -1,8 +1,8 @@
-# lib/familia/features/object_identifiers.rb
+# lib/familia/features/object_identifier.rb
 
 module Familia
   module Features
-    # ObjectIdentifiers is a feature that provides unique object identifier management
+    # ObjectIdentifier is a feature that provides unique object identifier management
     # with configurable generation strategies. Object identifiers are crucial for
     # distinguishing objects in distributed systems and providing stable references.
     #
@@ -23,7 +23,7 @@ module Familia
     #
     #   # Default UUID v7 generation
     #   class User < Familia::Horreum
-    #     feature :object_identifiers
+    #     feature :object_identifier
     #     field :email
     #   end
     #
@@ -32,7 +32,7 @@ module Familia
     #
     #   # UUID v4 for legacy compatibility
     #   class LegacyUser < Familia::Horreum
-    #     feature :object_identifiers, generator: :uuid_v4
+    #     feature :object_identifier, generator: :uuid_v4
     #     field :email
     #   end
     #
@@ -41,7 +41,7 @@ module Familia
     #
     #   # High-entropy hex for security-sensitive applications
     #   class SecureDocument < Familia::Horreum
-    #     feature :object_identifiers, generator: :hex
+    #     feature :object_identifier, generator: :hex
     #     field :title
     #   end
     #
@@ -50,7 +50,7 @@ module Familia
     #
     #   # Custom generation strategy
     #   class TimestampedItem < Familia::Horreum
-    #     feature :object_identifiers, generator: -> { "item_#{Time.now.to_i}_#{SecureRandom.hex(4)}" }
+    #     feature :object_identifier, generator: -> { "item_#{Time.now.to_i}_#{SecureRandom.hex(4)}" }
     #     field :data
     #   end
     #
@@ -80,7 +80,7 @@ module Familia
     # - Hex generator provides maximum entropy (256 bits) for security-critical use cases
     # - Custom generators allow domain-specific security requirements
     #
-    module ObjectIdentifiers
+    module ObjectIdentifier
       DEFAULT_GENERATOR = :uuid_v7
 
       def self.included(base)
@@ -88,15 +88,40 @@ module Familia
         base.extend ClassMethods
 
         # Ensure default generator is set in feature options
-        base.add_feature_options(:object_identifiers, generator: DEFAULT_GENERATOR)
+        base.add_feature_options(:object_identifier, generator: DEFAULT_GENERATOR)
 
         # Register the objid field using a simple custom field type
         base.register_field_type(ObjectIdentifierFieldType.new(:objid, as: :objid, fast_method: false))
       end
 
-      # Simplified ObjectIdentifierFieldType - inline instead of separate file
+      # ObjectIdentifierFieldType - Fields that generate unique object identifiers
+      #
+      # Object identifier fields automatically generate unique identifiers when first
+      # accessed if not already set. The generation strategy is configurable via
+      # feature options. These fields preserve any values set during initialization
+      # to ensure data integrity when loading existing objects from Redis.
+      #
+      # @example Using object identifier fields
+      #   class User < Familia::Horreum
+      #     feature :object_identifier, generator: :uuid_v7
+      #   end
+      #
+      #   user = User.new
+      #   user.objid  # Generates UUID v7 on first access
+      #
+      #   # Loading existing object preserves ID
+      #   user2 = User.new(objid: "existing-uuid")
+      #   user2.objid  # Returns "existing-uuid", not regenerated
+      #
       class ObjectIdentifierFieldType < Familia::FieldType
         # Override getter to provide lazy generation with configured strategy
+        #
+        # Generates the identifier using the configured strategy if not already set.
+        # This preserves any values set during initialization while providing
+        # automatic generation for new objects.
+        #
+        # @param klass [Class] The class to define the method on
+        #
         def define_getter(klass)
           field_name = @name
           method_name = @method_name
@@ -116,6 +141,13 @@ module Familia
         end
 
         # Override setter to preserve values during initialization
+        #
+        # This ensures that values passed during object initialization
+        # (e.g., when loading from Redis) are preserved and not overwritten
+        # by the lazy generation logic.
+        #
+        # @param klass [Class] The class to define the method on
+        #
         def define_setter(klass)
           field_name = @name
           method_name = @method_name
@@ -128,11 +160,17 @@ module Familia
         end
 
         # Object identifier fields are persisted to database
+        #
+        # @return [Boolean] true - object identifiers are always persisted
+        #
         def persistent?
           true
         end
 
         # Category for object identifier fields
+        #
+        # @return [Symbol] :object_identifier
+        #
         def category
           :object_identifier
         end
@@ -144,7 +182,7 @@ module Familia
         # @return [String] A new unique identifier
         #
         def generate_objid
-          options = feature_options(:object_identifiers)
+          options = feature_options(:object_identifier)
           generator = options[:generator] || DEFAULT_GENERATOR
 
           case generator
@@ -200,12 +238,20 @@ module Familia
         self.class.generate_objid
       end
 
-      # Alias for objid for consistency with naming conventions
+      # Full-length alias for objid for clarity when needed
       #
       # @return [String] The object identifier
       #
       def object_identifier
         objid
+      end
+
+      # Full-length alias setter for objid
+      #
+      # @param value [String] The object identifier to set
+      #
+      def object_identifier=(value)
+        self.objid = value
       end
 
       # Initialize object identifier configuration
@@ -223,12 +269,12 @@ module Familia
 
         return unless Familia.debug?
 
-        options = self.class.feature_options(:object_identifiers)
+        options = self.class.feature_options(:object_identifier)
         generator = options[:generator] || DEFAULT_GENERATOR
         Familia.trace :OBJID_INIT, dbclient, "Generator strategy: #{generator}", caller(1..1)
       end
 
-      Familia::Base.add_feature self, :object_identifiers, depends_on: []
+      Familia::Base.add_feature self, :object_identifier, depends_on: []
     end
   end
 end

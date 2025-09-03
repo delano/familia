@@ -8,7 +8,7 @@ Familia.debug = false
 
 # Basic class using default UUID v7 generator
 class BasicObjectTest < Familia::Horreum
-  feature :object_identifiers
+  feature :object_identifier
   identifier_field :id
   field :id
   field :name
@@ -16,7 +16,7 @@ end
 
 # Class using UUID v4 generator
 class UuidV4Test < Familia::Horreum
-  feature :object_identifiers, generator: :uuid_v4
+  feature :object_identifier, generator: :uuid_v4
   identifier_field :id
   field :id
   field :name
@@ -24,7 +24,7 @@ end
 
 # Class using hex generator
 class HexTest < Familia::Horreum
-  feature :object_identifiers, generator: :hex
+  feature :object_identifier, generator: :hex
   identifier_field :id
   field :id
   field :name
@@ -32,7 +32,7 @@ end
 
 # Class using custom proc generator
 class CustomProcTest < Familia::Horreum
-  feature :object_identifiers, generator: -> { "custom_#{SecureRandom.hex(4)}" }
+  feature :object_identifier, generator: -> { "custom_#{SecureRandom.hex(4)}" }
   identifier_field :id
   field :id
   field :name
@@ -40,7 +40,7 @@ end
 
 # Class testing data integrity preservation
 class DataIntegrityTest < Familia::Horreum
-  feature :object_identifiers
+  feature :object_identifier
   identifier_field :id
   field :id
   field :name
@@ -50,7 +50,7 @@ end
 @existing_obj = DataIntegrityTest.new(id: 'test_id', objid: 'preset_id_123', name: 'Preset Object')
 
 ## Feature is available on class
-BasicObjectTest.features_enabled.include?(:object_identifiers)
+BasicObjectTest.features_enabled.include?(:object_identifier)
 #==> true
 
 ## Class has objid field defined
@@ -162,22 +162,22 @@ basic_obj.objid.include?('-') && !hex_obj.objid.include?('-')
 
 ## objid field type is ObjectIdentifierFieldType
 BasicObjectTest.field_types[:objid]
-#=:> Familia::Features::ObjectIdentifiers::ObjectIdentifierFieldType
+#=:> Familia::Features::ObjectIdentifier::ObjectIdentifierFieldType
 
 ## Generator configuration is accessible through feature options
-BasicObjectTest.feature_options(:object_identifiers)[:generator]
+BasicObjectTest.feature_options(:object_identifier)[:generator]
 #=> :uuid_v7
 
 ## UUID v4 class has correct generator configured
-UuidV4Test.feature_options(:object_identifiers)[:generator]
+UuidV4Test.feature_options(:object_identifier)[:generator]
 #=> :uuid_v4
 
 ## Hex class has correct generator configured
-HexTest.feature_options(:object_identifiers)[:generator]
+HexTest.feature_options(:object_identifier)[:generator]
 #=> :hex
 
 ## Custom proc class has proc generator
-CustomProcTest.feature_options(:object_identifiers)[:generator]
+CustomProcTest.feature_options(:object_identifier)[:generator]
 #=:> Proc
 
 ## Empty initialization preserves nil objid for lazy generation

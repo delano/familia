@@ -8,8 +8,8 @@ Familia.debug = false
 
 # Basic class using external identifiers
 class ExternalIdTest < Familia::Horreum
-  feature :object_identifiers
-  feature :external_identifiers
+  feature :object_identifier
+  feature :external_identifier
   identifier_field :id
   field :id
   field :name
@@ -17,8 +17,8 @@ end
 
 # Class with custom prefix
 class CustomPrefixTest < Familia::Horreum
-  feature :object_identifiers
-  feature :external_identifiers, prefix: 'cust'
+  feature :object_identifier
+  feature :external_identifier, prefix: 'cust'
   identifier_field :id
   field :id
   field :name
@@ -26,8 +26,8 @@ end
 
 # Class testing data integrity preservation
 class ExternalDataIntegrityTest < Familia::Horreum
-  feature :object_identifiers
-  feature :external_identifiers
+  feature :object_identifier
+  feature :external_identifier
   identifier_field :id
   field :id
   field :name
@@ -41,11 +41,11 @@ end
 @complex_obj = ExternalIdTest.new(id: 'complex_ext', name: 'Complex External')
 
 ## Feature depends on object_identifiers
-ExternalIdTest.features_enabled.include?(:object_identifiers)
+ExternalIdTest.features_enabled.include?(:object_identifier)
 #==> true
 
 ## External identifiers feature is included
-ExternalIdTest.features_enabled.include?(:external_identifiers)
+ExternalIdTest.features_enabled.include?(:external_identifier)
 #==> true
 
 ## Class has extid field defined
@@ -155,14 +155,14 @@ obj1.extid != obj2.extid
 
 ## extid field type is ExternalIdentifierFieldType
 ExternalIdTest.field_types[:extid]
-#=:> Familia::Features::ExternalIdentifiers::ExternalIdentifierFieldType
+#=:> Familia::Features::ExternalIdentifier::ExternalIdentifierFieldType
 
 ## Feature options contain correct prefix
-ExternalIdTest.feature_options(:external_identifiers)[:prefix]
+ExternalIdTest.feature_options(:external_identifier)[:prefix]
 #=> "ext"
 
 ## Custom prefix feature options
-CustomPrefixTest.feature_options(:external_identifiers)[:prefix]
+CustomPrefixTest.feature_options(:external_identifier)[:prefix]
 #=> "cust"
 
 ## External ID is shorter than UUID objid

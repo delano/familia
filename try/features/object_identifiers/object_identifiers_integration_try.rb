@@ -8,8 +8,8 @@ Familia.debug = false
 
 # Class using both features with defaults
 class IntegrationTest < Familia::Horreum
-  feature :object_identifiers
-  feature :external_identifiers  # This depends on :object_identifiers
+  feature :object_identifier
+  feature :external_identifier  # This depends on :object_identifier
   identifier_field :id
   field :id
   field :name
@@ -18,8 +18,8 @@ end
 
 # Class with custom configurations for both features
 class CustomIntegrationTest < Familia::Horreum
-  feature :object_identifiers, generator: :hex
-  feature :external_identifiers, prefix: 'custom'
+  feature :object_identifier, generator: :hex
+  feature :external_identifier, prefix: 'custom'
   identifier_field :id
   field :id
   field :name
@@ -27,8 +27,8 @@ end
 
 # Class testing full lifecycle with Redis persistence
 class PersistenceTest < Familia::Horreum
-  feature :object_identifiers
-  feature :external_identifiers
+  feature :object_identifier
+  feature :external_identifier
   identifier_field :id
   field :id
   field :name
@@ -40,11 +40,11 @@ end
 @custom_obj = CustomIntegrationTest.new(id: 'custom_1', name: 'Custom Test')
 
 ## Object identifiers feature is automatically included
-IntegrationTest.features_enabled.include?(:object_identifiers)
+IntegrationTest.features_enabled.include?(:object_identifier)
 #==> true
 
 ## External identifiers feature is included
-IntegrationTest.features_enabled.include?(:external_identifiers)
+IntegrationTest.features_enabled.include?(:external_identifier)
 #==> true
 
 ## Object responds to objid accessor
@@ -145,41 +145,41 @@ lazy_obj2.instance_variable_get(:@objid)
 #=*> nil
 
 ## Check field types objid
-IntegrationTest.field_types[:objid].is_a?(Familia::Features::ObjectIdentifiers::ObjectIdentifierFieldType)
+IntegrationTest.field_types[:objid].is_a?(Familia::Features::ObjectIdentifier::ObjectIdentifierFieldType)
 #==> true
 
 ## ObjectIdentifier fields have correct types in field registry
-IntegrationTest.field_types[:objid].class.ancestors.include?(Familia::Features::ObjectIdentifiers::ObjectIdentifierFieldType)
+IntegrationTest.field_types[:objid].class.ancestors.include?(Familia::Features::ObjectIdentifier::ObjectIdentifierFieldType)
 #==> true
 
 ## ExternalIdentifier fields have correct types in field registry
-IntegrationTest.field_types[:extid].class.ancestors.include?(Familia::Features::ExternalIdentifiers::ExternalIdentifierFieldType)
+IntegrationTest.field_types[:extid].class.ancestors.include?(Familia::Features::ExternalIdentifier::ExternalIdentifierFieldType)
 #==> true
 
 ## Object identifiers options are preserved
 opts = IntegrationTest.feature_options
-opts.key?(:object_identifiers)
+opts.key?(:object_identifier)
 #==> true
 
 ## External identifiers options are preserved
 opts = IntegrationTest.feature_options
-opts.key?(:external_identifiers)
+opts.key?(:external_identifier)
 #==> true
 
 ## Generator default configuration is applied correctly
-IntegrationTest.feature_options(:object_identifiers)[:generator]
+IntegrationTest.feature_options(:object_identifier)[:generator]
 #=> :uuid_v7
 
 ## Prefix default configuration is applied correctly
-IntegrationTest.feature_options(:external_identifiers)[:prefix]
+IntegrationTest.feature_options(:external_identifier)[:prefix]
 #=> "ext"
 
 ## Custom generator configuration is applied correctly
-CustomIntegrationTest.feature_options(:object_identifiers)[:generator]
+CustomIntegrationTest.feature_options(:object_identifier)[:generator]
 #=> :hex
 
 ## Custom prefix configuration is applied correctly
-CustomIntegrationTest.feature_options(:external_identifiers)[:prefix]
+CustomIntegrationTest.feature_options(:external_identifier)[:prefix]
 #=> "custom"
 
 ## objid is URL-safe (UUID format)
@@ -267,7 +267,7 @@ first_extid == second_extid
 
 ## Feature dependency is enforced (external_identifiers requires object_identifiers)
 # This is automatically handled by the feature system
-IntegrationTest.features_enabled.include?(:object_identifiers)
+IntegrationTest.features_enabled.include?(:object_identifier)
 #==> true
 
 ## Objects work with existing Horreum save pattern

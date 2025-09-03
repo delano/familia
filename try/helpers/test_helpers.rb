@@ -34,8 +34,8 @@ class Blone < Familia::Horreum
 end
 
 class Bourne < Familia::Horreum
-  feature :object_identifiers
-  feature :external_identifiers
+  feature :object_identifier
+  feature :external_identifier
 end
 
 class Customer < Familia::Horreum
