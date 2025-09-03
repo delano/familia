@@ -30,9 +30,13 @@ module Familia
     #
     module Autoloader
       def self.included(_base)
-        # Get the file path of the module that's including us
-        # We need to look at the caller to find where the include happened
-        including_file = caller_locations(1, 1)[0].path
+        # Get the file path of the module that's including us.
+        # `caller_locations(1, 1).first` gives us the location where `include` was called.
+        # This is a robust way to find the file path, especially for anonymous modules.
+        calling_location = caller_locations(1, 1)&.first
+        return unless calling_location
+
+        including_file = calling_location.path
 
         # Find the features directory relative to the including file
         features_dir = File.join(File.dirname(including_file), 'features')
