@@ -62,5 +62,5 @@ Use these categories from [Keep a Changelog](https://keepachangelog.com):
 At release time, an authorized maintainer will collect all fragments into the main `CHANGELOG.md` file:
 
 ```bash
-scriv collect --version 1.2.3
+scriv collect --version 2.0.0
 ```

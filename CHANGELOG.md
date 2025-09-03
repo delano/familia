@@ -2,10 +2,10 @@
 
 All notable changes to Familia are documented here.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-<!-- scriv-end-here -->
+<!--scriv-insert-here-->
 
 <a id='changelog-2.0.0-pre9'></a>
 # [2.0.0-pre9] - 2025-09-02 00:35:28.974817
@@ -143,3 +143,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - YARD documentation workflow with automated GitHub Pages deployment
 - Comprehensive migration guide for v1.x to v2.0.0-pre transition
+
+<!-- scriv-end-here -->
