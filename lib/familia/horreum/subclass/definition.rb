@@ -237,10 +237,36 @@ module Familia
         field_types[field_type.name] = field_type
       end
 
-      # Get feature options for a specific feature or all features
+      # Retrieves feature options for the current class.
       #
-      # @param feature_name [Symbol, nil] The feature name to get options for
-      # @return [Hash] The options hash for the feature, or empty hash if none
+      # Feature options are stored **per-class** in instance variables, ensuring
+      # complete isolation between different Familia::Horreum subclasses. Each
+      # class maintains its own @feature_options hash that does not interfere
+      # with other classes' configurations.
+      #
+      # @param feature_name [Symbol, String, nil] the name of the feature to get options for.
+      #   If nil, returns the entire feature options hash for this class.
+      # @return [Hash] the feature options hash, either for a specific feature or all features
+      #
+      # @example Getting options for a specific feature
+      #   class MyModel < Familia::Horreum
+      #     feature :object_identifier, generator: :uuid_v4
+      #   end
+      #
+      #   MyModel.feature_options(:object_identifier) #=> {generator: :uuid_v4}
+      #   MyModel.feature_options                     #=> {object_identifier: {generator: :uuid_v4}}
+      #
+      # @example Per-class isolation
+      #   class UserModel < Familia::Horreum
+      #     feature :object_identifier, generator: :uuid_v4
+      #   end
+      #
+      #   class SessionModel < Familia::Horreum
+      #     feature :object_identifier, generator: :hex
+      #   end
+      #
+      #   UserModel.feature_options(:object_identifier)    #=> {generator: :uuid_v4}
+      #   SessionModel.feature_options(:object_identifier) #=> {generator: :hex}
       #
       def feature_options(feature_name = nil)
         @feature_options ||= {}
@@ -255,9 +281,27 @@ module Familia
       # without worrying about initialization state. Similar to register_field_type
       # for field types.
       #
+      # Feature options are stored at the **class level** using instance variables,
+      # ensuring complete isolation between different Familia::Horreum subclasses.
+      # Each class maintains its own @feature_options hash.
+      #
       # @param feature_name [Symbol] The feature name
       # @param options [Hash] The options to add/merge
       # @return [Hash] The updated options for the feature
+      #
+      # @note This method only sets defaults for options that don't already exist,
+      #   using the ||= operator to prevent overwrites.
+      #
+      # @example Per-class storage behavior
+      #   class ModelA < Familia::Horreum
+      #     # This stores options in ModelA's @feature_options
+      #     add_feature_options(:my_feature, key: 'value_a')
+      #   end
+      #
+      #   class ModelB < Familia::Horreum
+      #     # This stores options in ModelB's @feature_options (separate from ModelA)
+      #     add_feature_options(:my_feature, key: 'value_b')
+      #   end
       #
       def add_feature_options(feature_name, **options)
   @feature_options ||= {}
