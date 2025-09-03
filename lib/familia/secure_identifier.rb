@@ -87,6 +87,11 @@ module Familia
     def shorten_to_external_id(hex_id, base: 36)
       target_length = SecureIdentifier.min_length_for_bits(128, base)
 
+      # Validate hex string format
+      unless hex_id.match?(/\A[0-9a-fA-F]+\z/)
+        raise ArgumentError, "Invalid hexadecimal string: #{hex_id}"
+      end
+
       # Calculate actual bit length from hex string
       hex_bits = hex_id.length * 4  # 1 hex char = 4 bits
 
