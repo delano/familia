@@ -208,7 +208,7 @@ module Familia
         #
         # @return [String] A new unique identifier
         #
-        def generate_objid
+        def generate_object_identifier
           options = feature_options(:object_identifier)
           generator = options[:generator] || DEFAULT_GENERATOR
 
@@ -262,7 +262,7 @@ module Familia
       # @private
       #
       def generate_object_identifier
-        self.class.generate_objid
+        self.class.generate_object_identifier
       end
 
       # Full-length alias for objid for clarity when needed

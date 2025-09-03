@@ -22,9 +22,9 @@ module Familia
       # Error classes
       class ExternalIdentifierError < FieldTypeError; end
 
-      # ExternalIdentifierFieldType - Fields that generate deterministic external identifiers
+      # ExternalIdentifierFieldType - Fields that derive deterministic external identifiers
       #
-      # External identifier fields generate shorter, public-facing identifiers that are
+      # External identifier fields derive shorter, public-facing identifiers that are
       # deterministically derived from object identifiers. These IDs are safe for use
       # in URLs, APIs, and other external contexts where shorter IDs are preferred.
       #
@@ -53,9 +53,9 @@ module Familia
       class ExternalIdentifierFieldType < Familia::FieldType
         # Override getter to provide lazy generation from objid
         #
-        # Generates the external identifier deterministically from the object's
+        # Derives the external identifier deterministically from the object's
         # objid. This ensures consistency - the same objid will always produce
-        # the same extid. Only generates when objid is available.
+        # the same extid. Only derives when objid is available.
         #
         # @param klass [Class] The class to define the method on
         #
@@ -69,18 +69,18 @@ module Familia
               existing_value = instance_variable_get(:"@#{field_name}")
               return existing_value unless existing_value.nil?
 
-              # Generate external identifier from objid if available
-              generated_extid = generate_external_identifier
-              return unless generated_extid
+              # Derive external identifier from objid if available
+              derived_extid = derive_external_identifier
+              return unless derived_extid
 
-              instance_variable_set(:"@#{field_name}", generated_extid)
+              instance_variable_set(:"@#{field_name}", derived_extid)
 
               # Update mapping if we have an identifier
               if respond_to?(:identifier) && identifier
-                self.class.extid_lookup[generated_extid] = identifier
+                self.class.extid_lookup[derived_extid] = identifier
               end
 
-              generated_extid
+              derived_extid
             end
           end
         end
@@ -136,18 +136,6 @@ module Familia
       # ExternalIdentifier::ClassMethods
       #
       module ClassMethods
-        def generate_extid(objid = nil)
-          unless features_enabled.include?(:object_identifier)
-            raise ExternalIdentifierError,
-                  'ExternalIdentifier requires ObjectIdentifier feature'
-          end
-          return nil if objid.to_s.empty?
-
-          objid_hex = objid.to_s.delete('-')
-          external_part = Familia.shorten_to_external_id(objid_hex, base: 36)
-          prefix = feature_options(:external_identifier)[:prefix] || 'ext'
-          "#{prefix}_#{external_part}"
-        end
 
         # Find an object by its external identifier
         #
@@ -175,8 +163,8 @@ module Familia
         end
       end
 
-      # Generate external identifier deterministically from objid
-      def generate_external_identifier
+      # Derive external identifier deterministically from objid
+      def derive_external_identifier
         raise ExternalIdentifierError, 'missing objid field' unless respond_to?(:objid)
 
         current_objid = objid
@@ -188,7 +176,7 @@ module Familia
         # Convert objid to standardized hex format for processing
         normalized_hex = normalize_objid_to_hex(current_objid)
 
-        # Generate deterministic external ID using SecureIdentifier
+        # Derive deterministic external ID using SecureIdentifier
         external_part = Familia.shorten_to_external_id(normalized_hex, base: 36)
 
         # Get prefix from feature options, default to "ext"
@@ -214,11 +202,6 @@ module Familia
         self.extid = value
       end
 
-      def init
-        super if defined?(super)
-        # External IDs are generated from objid, so no additional setup needed
-      end
-
       def destroy!
         # Clean up extid mapping when object is destroyed
         current_extid = instance_variable_get(:@extid)
@@ -231,7 +214,7 @@ module Familia
 
       # Validate that objid comes from a known secure ObjectIdentifier generator
       #
-      # This ensures we only generate external identifiers from objid values that
+      # This ensures we only derive external identifiers from objid values that
       # have known provenance and security properties. External identifiers derived
       # from objid values of unknown origin cannot provide security guarantees.
       #
@@ -243,8 +226,8 @@ module Familia
 
         if generator_used.nil?
           raise ExternalIdentifierError,
-                'Cannot generate external identifier: objid provenance unknown. ' \
-                'External identifiers can only be generated from objid values created ' \
+                'Cannot derive external identifier: objid provenance unknown. ' \
+                'External identifiers can only be derived from objid values created ' \
                 'by the ObjectIdentifier feature to ensure security guarantees.'
         end
 
