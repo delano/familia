@@ -1,4 +1,4 @@
-# lib/familia/encryption_request_cache.rb
+# lib/familia/encryption/request_cache.rb
 #
 # Request-scoped caching for encryption keys (if needed for performance)
 # This should ONLY be enabled if performance testing shows it's necessary
