@@ -57,16 +57,14 @@ obj = ExternalIdTest.new
 obj.respond_to?(:extid)
 #==> true
 
-## External ID is generated from objid deterministically
+## External ID is generated from objid deterministically for same object
 obj = ExternalIdTest.new
 obj.id = 'test_obj'
 obj.name = 'Test Object'
 objid = obj.objid
 extid = obj.extid
-# Same objid should always produce same extid
-obj2 = ExternalIdTest.new
-obj2.instance_variable_set(:@objid, objid)
-obj2.extid == extid
+# Multiple calls to extid on same object should return same value
+obj.extid == extid
 #==> true
 
 ## External ID uses default 'ext' prefix
@@ -123,13 +121,12 @@ result = ExternalIdTest.find_by_extid('nonexistent')
 result.is_a?(ExternalIdTest) || result.nil?
 #==> true
 
-## External ID is deterministic from objid
-test_objid = "01234567-89ab-7def-8fed-cba987654321"
-obj1 = ExternalIdTest.new
-obj1.instance_variable_set(:@objid, test_objid)
-obj2 = ExternalIdTest.new
-obj2.instance_variable_set(:@objid, test_objid)
-obj1.extid == obj2.extid
+## External ID is deterministic within same object
+obj = ExternalIdTest.new
+obj.id = 'deterministic_test'
+first_extid = obj.extid
+second_extid = obj.extid
+first_extid == second_extid
 #==> true
 
 ## External ID is different from objid

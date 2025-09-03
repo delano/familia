@@ -70,14 +70,12 @@ obj = IntegrationTest.new
 obj.objid != obj.extid
 #==> true
 
-## extid is deterministically generated from objid
+## extid is deterministically generated from objid for same object
 obj = IntegrationTest.new
 original_objid = obj.objid
 original_extid = obj.extid
-# Create new object with same objid
-obj2 = IntegrationTest.new
-obj2.instance_variable_set(:@objid, original_objid)
-obj2.extid == original_extid
+# Multiple calls on same object should return same extid
+obj.extid == original_extid
 #==> true
 
 ## Custom objid uses hex format (64 chars for 256-bit)

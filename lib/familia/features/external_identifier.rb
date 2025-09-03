@@ -22,10 +22,10 @@ module Familia
       # Error classes
       class ExternalIdentifierError < FieldTypeError; end
 
-      # ExternalIdentifierFieldType - Generates a deterministic external identifier
+      # ExternalIdentifierFieldType - Fields that generate deterministic external identifiers
       #
-      # An external identifier field generates a shorter, public-facing identifier that is
-      # deterministically derived from the object identifier. These IDs are safe for use
+      # External identifier fields generate shorter, public-facing identifiers that are
+      # deterministically derived from object identifiers. These IDs are safe for use
       # in URLs, APIs, and other external contexts where shorter IDs are preferred.
       #
       # Key characteristics:
@@ -118,7 +118,7 @@ module Familia
 
         # External identifier fields are persisted to database
         #
-        # @return [Boolean] true - an external identifier are always persisted
+        # @return [Boolean] true - external identifiers are always persisted
         #
         def persistent?
           true
@@ -182,11 +182,14 @@ module Familia
         current_objid = objid
         return nil if current_objid.nil? || current_objid.to_s.empty?
 
-        # Convert objid to hex string for processing
-        objid_hex = current_objid.delete('-') # Remove UUID hyphens if present
+        # Validate objid provenance for security guarantees
+        validate_objid_provenance!
+
+        # Convert objid to standardized hex format for processing
+        normalized_hex = normalize_objid_to_hex(current_objid)
 
         # Generate deterministic external ID using SecureIdentifier
-        external_part = Familia.shorten_to_external_id(objid_hex, base: 36)
+        external_part = Familia.shorten_to_external_id(normalized_hex, base: 36)
 
         # Get prefix from feature options, default to "ext"
         options = self.class.feature_options(:external_identifier)
@@ -222,6 +225,65 @@ module Familia
         self.class.extid_lookup.del(current_extid) if current_extid
 
         super if defined?(super)
+      end
+
+      private
+
+      # Validate that objid comes from a known secure ObjectIdentifier generator
+      #
+      # This ensures we only generate external identifiers from objid values that
+      # have known provenance and security properties. External identifiers derived
+      # from objid values of unknown origin cannot provide security guarantees.
+      #
+      # @raise [ExternalIdentifierError] if objid has unknown provenance
+      #
+      def validate_objid_provenance!
+        # Check if we have provenance information about the objid generator
+        generator_used = objid_generator_used
+
+        if generator_used.nil?
+          raise ExternalIdentifierError,
+                'Cannot generate external identifier: objid provenance unknown. ' \
+                'External identifiers can only be generated from objid values created ' \
+                'by the ObjectIdentifier feature to ensure security guarantees.'
+        end
+
+        # Additional validation: ensure the ObjectIdentifier feature is active
+        unless self.class.features_enabled.include?(:object_identifier)
+          raise ExternalIdentifierError,
+                'ExternalIdentifier requires ObjectIdentifier feature for secure provenance'
+        end
+      end
+
+      # Normalize objid to hex format based on the known generator type
+      #
+      # Since we track which generator was used, we can safely normalize the objid
+      # to hex format without relying on string pattern matching. This eliminates
+      # the ambiguity between uuid7, uuid4, and hex formats.
+      #
+      # @param objid_value [String] The objid to normalize
+      # @return [String] Hex string suitable for SecureIdentifier processing
+      #
+      def normalize_objid_to_hex(objid_value)
+        generator_used = objid_generator_used
+
+        case generator_used
+        when :uuid_v7, :uuid_v4
+          # UUID formats: remove hyphens to get 128-bit hex string
+          objid_value.delete('-')
+        when :hex
+          # Already in hex format (256-bit)
+          objid_value
+        else
+          # Custom generator: attempt to normalize, but we can't guarantee format
+          normalized = objid_value.to_s.delete('-')
+          unless normalized.match?(/\A[0-9a-fA-F]+\z/)
+            raise ExternalIdentifierError,
+                  "Cannot normalize objid from custom generator #{generator_used}: " \
+                  "value must be hexadecimal format, got: #{objid_value}"
+          end
+          normalized
+        end
       end
 
       Familia::Base.add_feature self, :external_identifier, depends_on: [:object_identifier]

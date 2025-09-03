@@ -101,6 +101,12 @@ module Familia
       # feature options. These fields preserve any values set during initialization
       # to ensure data integrity when loading existing objects from Redis.
       #
+      # The field type tracks the generator used for each objid to provide provenance
+      # information for security-sensitive operations like external identifier generation.
+      # This ensures that downstream features can validate the source and format of
+      # object identifiers without relying on string pattern matching, which cannot
+      # reliably distinguish between uuid7, uuid4, or hex formats in all cases.
+      #
       # @example Using object identifier fields
       #   class User < Familia::Horreum
       #     feature :object_identifier, generator: :uuid_v7
@@ -108,10 +114,12 @@ module Familia
       #
       #   user = User.new
       #   user.objid  # Generates UUID v7 on first access
+      #   user.objid_generator_used  # => :uuid_v7
       #
-      #   # Loading existing object preserves ID
+      #   # Loading existing object preserves ID but cannot determine original generator
       #   user2 = User.new(objid: "existing-uuid")
       #   user2.objid  # Returns "existing-uuid", not regenerated
+      #   user2.objid_generator_used  # => nil (unknown provenance)
       #
       class ObjectIdentifierFieldType < Familia::FieldType
         # Override getter to provide lazy generation with configured strategy
@@ -135,7 +143,20 @@ module Familia
               # Generate new identifier using configured strategy
               generated_id = generate_object_identifier
               instance_variable_set(:"@#{field_name}", generated_id)
+
+              # Track which generator was used for provenance
+              options = self.class.feature_options(:object_identifier)
+              generator = options[:generator] || DEFAULT_GENERATOR
+              instance_variable_set(:"@#{field_name}_generator_used", generator)
+
               generated_id
+            end
+          end
+
+          # Define getter for generator provenance tracking
+          handle_method_conflict(klass, :"#{method_name}_generator_used") do
+            klass.define_method :"#{method_name}_generator_used" do
+              instance_variable_get(:"@#{field_name}_generator_used")
             end
           end
         end
@@ -155,6 +176,12 @@ module Familia
           handle_method_conflict(klass, :"#{method_name}=") do
             klass.define_method :"#{method_name}=" do |value|
               instance_variable_set(:"@#{field_name}", value)
+
+              # When setting objid from external source (e.g., loading from Redis),
+              # we cannot determine the original generator, so we clear the provenance
+              # tracking to indicate unknown origin. This prevents false assumptions
+              # about the security properties of externally-provided identifiers.
+              instance_variable_set(:"@#{field_name}_generator_used", nil)
             end
           end
         end
