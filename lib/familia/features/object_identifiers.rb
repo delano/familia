@@ -1,7 +1,5 @@
 # lib/familia/features/object_identifiers.rb
 
-require_relative 'object_identifiers/object_identifier_field_type'
-
 module Familia
   module Features
     # ObjectIdentifiers is a feature that provides unique object identifier management
@@ -92,10 +90,52 @@ module Familia
         # Ensure default generator is set in feature options
         base.add_feature_options(:object_identifiers, generator: DEFAULT_GENERATOR)
 
-        # Register the objid field using our custom field type
-        base.register_field_type(
-          ObjectIdentifiers::ObjectIdentifierFieldType.new(:objid, as: :objid, fast_method: false)
-        )
+        # Register the objid field using a simple custom field type
+        base.register_field_type(ObjectIdentifierFieldType.new(:objid, as: :objid, fast_method: false))
+      end
+
+      # Simplified ObjectIdentifierFieldType - inline instead of separate file
+      class ObjectIdentifierFieldType < Familia::FieldType
+        # Override getter to provide lazy generation with configured strategy
+        def define_getter(klass)
+          field_name = @name
+          method_name = @method_name
+
+          handle_method_conflict(klass, method_name) do
+            klass.define_method method_name do
+              # Check if we already have a value (from initialization or previous generation)
+              existing_value = instance_variable_get(:"@#{field_name}")
+              return existing_value unless existing_value.nil?
+
+              # Generate new identifier using configured strategy
+              generated_id = generate_object_identifier
+              instance_variable_set(:"@#{field_name}", generated_id)
+              generated_id
+            end
+          end
+        end
+
+        # Override setter to preserve values during initialization
+        def define_setter(klass)
+          field_name = @name
+          method_name = @method_name
+
+          handle_method_conflict(klass, :"#{method_name}=") do
+            klass.define_method :"#{method_name}=" do |value|
+              instance_variable_set(:"@#{field_name}", value)
+            end
+          end
+        end
+
+        # Object identifier fields are persisted to database
+        def persistent?
+          true
+        end
+
+        # Category for object identifier fields
+        def category
+          :object_identifier
+        end
       end
 
       module ClassMethods
