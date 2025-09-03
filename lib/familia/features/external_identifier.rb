@@ -136,7 +136,6 @@ module Familia
       # ExternalIdentifier::ClassMethods
       #
       module ClassMethods
-
         # Find an object by its external identifier
         #
         # @param extid [String] The external identifier to search for
@@ -163,7 +162,22 @@ module Familia
         end
       end
 
-      # Derive external identifier deterministically from objid
+      # Derives a deterministic, public-facing external identifier from the object's
+      # internal `objid`.
+      #
+      # This method uses the `objid`'s high-quality randomness to seed a
+      # pseudorandom number generator (PRNG). The PRNG then acts as a complex,
+      # deterministic function to produce a new identifier that has no discernible
+      # mathematical correlation to the `objid`. This is a security measure to
+      # prevent leaking information (like timestamps from UUIDv7) from the internal
+      # identifier to the public one.
+      #
+      # The resulting identifier is always deterministic: the same `objid` will
+      # always produce the same `extid`, which is crucial for lookups.
+      #
+      # @return [String, nil] A prefixed, base36-encoded external identifier, or nil
+      #   if the `objid` is not present.
+      # @raise [ExternalIdentifierError] if the `objid` provenance is unknown.
       def derive_external_identifier
         raise ExternalIdentifierError, 'missing objid field' unless respond_to?(:objid)
 
@@ -173,11 +187,32 @@ module Familia
         # Validate objid provenance for security guarantees
         validate_objid_provenance!
 
-        # Convert objid to standardized hex format for processing
+        # Normalize the objid to a consistent hex representation first.
         normalized_hex = normalize_objid_to_hex(current_objid)
 
-        # Derive deterministic external ID using SecureIdentifier
-        external_part = Familia.shorten_to_external_id(normalized_hex, base: 36)
+        # Use the objid's randomness to create a deterministic, yet secure,
+        # external identifier. We do not use SecureRandom here because the output
+        # must be deterministic.
+        #
+        # The process is as follows:
+        # 1. The objid (a high-entropy value) is hashed to create a uniform seed.
+        # 2. The seed initializes a standard PRNG (Random.new).
+        # 3. The PRNG acts as a deterministic function to generate a sequence of
+        #    bytes that appears random, obscuring the original objid.
+
+        # 1. Create a high-quality, uniform seed from the objid's entropy.
+        seed = Digest::SHA256.digest(normalized_hex)
+
+        # 2. Initialize a PRNG with the seed. The same seed will always produce
+        #    the same sequence of "random" numbers.
+        prng = Random.new(seed.unpack1('Q>'))
+
+        # 3. Generate 16 bytes (128 bits) of deterministic output.
+        random_bytes = prng.bytes(16)
+
+        # Encode as a base36 string for a compact, URL-safe identifier.
+        # 128 bits is approximately 25 characters in base36.
+        external_part = random_bytes.unpack1('H*').to_i(16).to_s(36).rjust(25, '0')
 
         # Get prefix from feature options, default to "ext"
         options = self.class.feature_options(:external_identifier)

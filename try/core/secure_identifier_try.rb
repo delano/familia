@@ -56,22 +56,6 @@ hex_trace_id = Familia.generate_hex_trace_id
 [hex_trace_id.class, hex_trace_id.length == 16, hex_trace_id.match?(/^[a-f0-9]+$/)]
 #=> [String, true, true]
 
-## Familia.shorten_to_external_id
-Familia.respond_to?(:shorten_to_external_id)
-#=> true
-
-## Can shorten hex ID to external ID (128 bits)
-hex_id = Familia.generate_hex_id
-external_id = Familia.shorten_to_external_id(hex_id)
-[external_id.class, external_id.length < hex_id.length]
-#=> [String, true]
-
-## Can shorten hex ID to external ID with custom base (hex)
-hex_id = Familia.generate_hex_id
-hex_external_id = Familia.shorten_to_external_id(hex_id, base: 16)
-[hex_external_id.class, hex_external_id.length == 32]
-#=> [String, true]
-
 ## Familia.shorten_to_trace_id
 Familia.respond_to?(:shorten_to_trace_id)
 #=> true
@@ -88,10 +72,55 @@ hex_trace_id = Familia.shorten_to_trace_id(hex_id, base: 16)
 [hex_trace_id.class, hex_trace_id.length == 16]
 #=> [String, true]
 
+## Familia.truncate_hex
+Familia.respond_to?(:truncate_hex)
+#=> true
+
+## Can truncate hex ID to 128 bits by default
+hex_id = Familia.generate_hex_id
+truncated_id = Familia.truncate_hex(hex_id)
+[truncated_id.class, truncated_id.length < hex_id.length]
+#=> [String, true]
+
+## Can truncate hex ID to a custom bit length (64 bits)
+hex_id = Familia.generate_hex_id
+truncated_64 = Familia.truncate_hex(hex_id, bits: 64)
+[truncated_64.class, truncated_64.length < hex_id.length]
+#=> [String, true]
+
+## Can truncate with a custom base (hex)
+hex_id = Familia.generate_hex_id
+hex_truncated = Familia.truncate_hex(hex_id, bits: 128, base: 16)
+[hex_truncated.class, hex_truncated.length == 32]
+#=> [String, true]
+
+## Truncated IDs are deterministic
+hex_id = Familia.generate_hex_id
+id1 = Familia.truncate_hex(hex_id)
+id2 = Familia.truncate_hex(hex_id)
+id1 == id2
+#=> true
+
+## Raises error for invalid hex
+begin
+  Familia.truncate_hex("not-a-hex-string")
+rescue ArgumentError => e
+  e.message
+end
+#=> "Invalid hexadecimal string: not-a-hex-string"
+
+## Raises error if input bits are less than output bits
+begin
+  Familia.truncate_hex("abc", bits: 64)
+rescue ArgumentError => e
+  e.message
+end
+#=> "Input bits (12) cannot be less than desired output bits (64)."
+
 ## Shortened IDs are deterministic
 hex_id = Familia.generate_hex_id
-id1 = Familia.shorten_to_external_id(hex_id)
-id2 = Familia.shorten_to_external_id(hex_id)
+id1 = Familia.shorten_to_trace_id(hex_id)
+id2 = Familia.shorten_to_trace_id(hex_id)
 id1 == id2
 #=> true
 
