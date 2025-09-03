@@ -12,8 +12,6 @@ Familia.enable_database_logging = true
 Familia.enable_database_counter = true
 
 class Bone < Familia::Horreum
-  feature :object_identifiers
-  feature :external_identifiers
   identifier_field :token
   field     :token
   field     :name
@@ -33,6 +31,11 @@ class Blone < Familia::Horreum
   zset      :metrics
   hashkey   :props
   string    :value, default: 'GREAT!'
+end
+
+class Bourne < Familia::Horreum
+  feature :object_identifiers
+  feature :external_identifiers
 end
 
 class Customer < Familia::Horreum
