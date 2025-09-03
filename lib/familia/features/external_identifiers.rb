@@ -4,7 +4,6 @@ require_relative 'external_identifiers/external_identifier_field_type'
 
 module Familia
   module Features
-
     # Familia::Features::ExternalIdentifiers
     #
     module ExternalIdentifiers
@@ -23,6 +22,9 @@ module Familia
           ExternalIdentifiers::ExternalIdentifierFieldType.new(:extid, as: :extid, fast_method: false)
         )
       end
+
+      # Error classes
+      class ExternalIdentifierError < FieldTypeError; end
 
       # ExternalIdentifiers::ClassMethods
       #
@@ -68,7 +70,7 @@ module Familia
 
       # Generate external identifier deterministically from objid
       def generate_external_identifier
-        return nil unless respond_to?(:objid)
+        raise FieldTypeError, 'missing objid field' unless respond_to?(:objid)
 
         current_objid = objid
         return nil if current_objid.nil? || current_objid.to_s.empty?
@@ -98,9 +100,7 @@ module Familia
       def destroy!
         # Clean up extid mapping when object is destroyed
         current_extid = instance_variable_get(:@extid)
-        if current_extid
-          self.class.extid_lookup.del(current_extid)
-        end
+        self.class.extid_lookup.del(current_extid) if current_extid
 
         super if defined?(super)
       end
