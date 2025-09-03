@@ -1,6 +1,11 @@
 # lib/familia/features/safe_dump.rb
 
 # rubocop:disable ThreadSafety/ClassInstanceVariable
+#
+#   Class instance variables are used here for feature configuration
+#   (e.g., @dump_method, @load_method). These are set once and not mutated
+#   at runtime, so thread safety is not a concern for this feature.
+#
 module Familia::Features
   # SafeDump is a mixin that allows models to define a list of fields that are
   # safe to dump. This is useful for serializing objects to JSON or other
