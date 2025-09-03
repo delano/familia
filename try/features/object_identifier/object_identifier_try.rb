@@ -1,10 +1,10 @@
-# try/features/object_identifiers_try.rb
+# try/features/object_identifier/object_identifier_try.rb
 
 require_relative '../../helpers/test_helpers'
 
 Familia.debug = false
 
-# Test ObjectIdentifiers feature functionality
+# Test ObjectIdentifier feature functionality
 
 # Basic class using default UUID v7 generator
 class BasicObjectTest < Familia::Horreum

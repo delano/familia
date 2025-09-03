@@ -59,7 +59,7 @@ module Familia
     #
     # Data Integrity Guarantees:
     #
-    # The feature preserves object identifiers passed during initialization,
+    # The feature preserves the object identifier passed during initialization,
     # ensuring that existing objects loaded from Redis maintain their IDs:
     #
     #   # Loading existing object from Redis preserves ID
@@ -94,7 +94,7 @@ module Familia
         base.register_field_type(ObjectIdentifierFieldType.new(:objid, as: :objid, fast_method: false))
       end
 
-      # ObjectIdentifierFieldType - Fields that generate unique object identifiers
+      # ObjectIdentifierFieldType - Generate a unique object identifier
       #
       # Object identifier fields automatically generate unique identifiers when first
       # accessed if not already set. The generation strategy is configurable via
@@ -161,7 +161,7 @@ module Familia
 
         # Object identifier fields are persisted to database
         #
-        # @return [Boolean] true - object identifiers are always persisted
+        # @return [Boolean] true - An object identifier is always persisted
         #
         def persistent?
           true

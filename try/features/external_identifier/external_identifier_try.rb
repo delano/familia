@@ -1,12 +1,12 @@
-# try/features/external_identifiers_try.rb
+# try/features/external_identifier/external_identifier_try.rb
 
 require_relative '../../helpers/test_helpers'
 
 Familia.debug = false
 
-# Test ExternalIdentifiers feature functionality
+# Test ExternalIdentifier feature functionality
 
-# Basic class using external identifiers
+# Basic class using external_identifier
 class ExternalIdTest < Familia::Horreum
   feature :object_identifier
   feature :external_identifier
@@ -40,11 +40,11 @@ end
 @lazy_obj = ExternalIdTest.new
 @complex_obj = ExternalIdTest.new(id: 'complex_ext', name: 'Complex External')
 
-## Feature depends on object_identifiers
+## Feature depends on object_identifier
 ExternalIdTest.features_enabled.include?(:object_identifier)
 #==> true
 
-## External identifiers feature is included
+## External identifier feature is included
 ExternalIdTest.features_enabled.include?(:external_identifier)
 #==> true
 

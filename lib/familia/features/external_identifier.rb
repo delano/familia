@@ -22,10 +22,10 @@ module Familia
       # Error classes
       class ExternalIdentifierError < FieldTypeError; end
 
-      # ExternalIdentifierFieldType - Fields that generate deterministic external identifiers
+      # ExternalIdentifierFieldType - Generates a deterministic external identifier
       #
-      # External identifier fields generate shorter, public-facing identifiers that are
-      # deterministically derived from object identifiers. These IDs are safe for use
+      # An external identifier field generates a shorter, public-facing identifier that is
+      # deterministically derived from the object identifier. These IDs are safe for use
       # in URLs, APIs, and other external contexts where shorter IDs are preferred.
       #
       # Key characteristics:
@@ -118,7 +118,7 @@ module Familia
 
         # External identifier fields are persisted to database
         #
-        # @return [Boolean] true - external identifiers are always persisted
+        # @return [Boolean] true - an external identifier are always persisted
         #
         def persistent?
           true

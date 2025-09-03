@@ -1,10 +1,10 @@
-# try/features/object_identifiers_integration_try.rb
+# try/features/object_identifier/object_identifier_integration_try.rb
 
 require_relative '../../helpers/test_helpers'
 
 Familia.debug = false
 
-# Integration test for ObjectIdentifiers and ExternalIdentifiers features together
+# Integration test for ObjectIdentifier and ExternalIdentifiers features together
 
 # Class using both features with defaults
 class IntegrationTest < Familia::Horreum
@@ -39,11 +39,11 @@ end
 @integration_obj = IntegrationTest.new(id: 'integration_1', name: 'Integration Test', email: 'test@example.com')
 @custom_obj = CustomIntegrationTest.new(id: 'custom_1', name: 'Custom Test')
 
-## Object identifiers feature is automatically included
+## Object identifier feature is automatically included
 IntegrationTest.features_enabled.include?(:object_identifier)
 #==> true
 
-## External identifiers feature is included
+## External identifier feature is included
 IntegrationTest.features_enabled.include?(:external_identifier)
 #==> true
 
@@ -156,12 +156,12 @@ IntegrationTest.field_types[:objid].class.ancestors.include?(Familia::Features::
 IntegrationTest.field_types[:extid].class.ancestors.include?(Familia::Features::ExternalIdentifier::ExternalIdentifierFieldType)
 #==> true
 
-## Object identifiers options are preserved
+## Object identifier options are preserved
 opts = IntegrationTest.feature_options
 opts.key?(:object_identifier)
 #==> true
 
-## External identifiers options are preserved
+## External identifiersoptions are preserved
 opts = IntegrationTest.feature_options
 opts.key?(:external_identifier)
 #==> true
@@ -265,7 +265,7 @@ second_extid = stability_obj.extid
 first_extid == second_extid
 #==> true
 
-## Feature dependency is enforced (external_identifiers requires object_identifiers)
+## Feature dependency is enforced (external_identifier requires object_identifier)
 # This is automatically handled by the feature system
 IntegrationTest.features_enabled.include?(:object_identifier)
 #==> true

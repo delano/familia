@@ -21,8 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - External identifier now raises an `ExternalIdentifierError` if the model does not have an objid field. Previously: returned nil. In practice this should never happen, since the external_identifier feature declares its dependency on object_identifier.
 - Moved lib/familia/encryption_request_cache.rb to lib/familia/encryption/request_cache.rb for consistency.
-- **Simplified ObjectIdentifiers Feature Implementation**: Consolidated the ObjectIdentifiers feature from two files (~190 lines) to a single file (~140 lines) by moving the ObjectIdentifierFieldType class inline. This reduces complexity while maintaining all existing functionality including lazy generation, data integrity preservation, and multiple generator strategies.
-- **Renamed Identifier Features to Singular Form**: Renamed `object_identifiers` → `object_identifier` and `external_identifiers` → `external_identifier` for more accurate naming. Added full-length aliases (`object_identifier`/`external_identifier`) alongside the short forms (`objid`/`extid`) for clarity when needed.
+- **Simplified ObjectIdentifier Feature Implementation**: Consolidated the ObjectIdentifier feature from two files (~190 lines) to a single file (~140 lines) by moving the ObjectIdentifierFieldType class inline. This reduces complexity while maintaining all existing functionality including lazy generation, data integrity preservation, and multiple generator strategies.
+- **Renamed Identifier Features to Singular Form**: Renamed `object_identifier` → `object_identifier` and `external_identifier` → `external_identifier` for more accurate naming. Added full-length aliases (`object_identifier`/`external_identifier`) alongside the short forms (`objid`/`extid`) for clarity when needed.
 - **Simplified ExternalIdentifier Feature Implementation**: Consolidated the ExternalIdentifier feature from two files (~240 lines) to a single file (~120 lines) by moving the ExternalIdentifierFieldType class inline, following the same pattern as ObjectIdentifier.
 
 ### Fixed
