@@ -33,8 +33,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Improved input validation in `shorten_to_external_id` method by replacing insecure character count checking with proper bit length calculation and explicit validation. Invalid inputs now raise clear error messages instead of being silently processed incorrectly.
 
-<!-- scriv-end-here -->
-
 <a id='changelog-2.0.0-pre10'></a>
 ## [2.0.0-pre10] - 2025-09-02 18:07:56.439890
 
@@ -109,6 +107,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Set up Scriv configuration and directory structure
 - Created README for changelog fragment workflow
 
+<!-- scriv-end-here -->
 
 <a id='changelog-2.0.0-pre7'></a>
 ## [2.0.0-pre7] - 2025-08-31
