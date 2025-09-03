@@ -1,5 +1,6 @@
 # lib/familia/features/safe_dump.rb
 
+# rubocop:disable ThreadSafety/ClassInstanceVariable
 module Familia::Features
   # SafeDump is a mixin that allows models to define a list of fields that are
   # safe to dump. This is useful for serializing objects to JSON or other
@@ -38,13 +39,16 @@ module Familia::Features
     @load_method = :from_json
 
     def self.included(base)
-      Familia.trace :LOADED, self, base, caller(1..1) if Familia.debug?
+      Familia.trace(:LOADED, self, base, caller(1..1)) if Familia.debug?
       base.extend ClassMethods
 
       # Initialize the safe dump field map
       base.instance_variable_set(:@safe_dump_field_map, {})
     end
 
+    # SafeDump::ClassMethods
+    #
+    # These methods become available on the model class
     module ClassMethods
       # Define a single safe dump field
       # @param field_name [Symbol] The name of the field
@@ -53,27 +57,22 @@ module Familia::Features
         @safe_dump_field_map ||= {}
 
         field_name = field_name.to_sym
+        field_value = callable || lambda { |obj|
+          if obj.respond_to?(:[]) && obj[field_name]
+            obj[field_name] # Familia::DataType classes
+          elsif obj.respond_to?(field_name)
+            obj.send(field_name) # Regular method calls
+          end
+        }
 
-        if callable
-          @safe_dump_field_map[field_name] = callable
-        else
-          @safe_dump_field_map[field_name] = lambda { |obj|
-            if obj.respond_to?(:[]) && obj[field_name]
-              obj[field_name] # Familia::DataType classes
-            elsif obj.respond_to?(field_name)
-              obj.send(field_name) # Regular method calls
-            end
-          }
-        end
+        @safe_dump_field_map[field_name] = field_value
       end
 
       # Define multiple safe dump fields at once
       # @param fields [Array] Mixed array of symbols and hashes
       def safe_dump_fields(*fields)
         # If no arguments, return field names (getter behavior)
-        if fields.empty?
-          return safe_dump_field_names
-        end
+        return safe_dump_field_names if fields.empty?
 
         # Otherwise, define fields (setter behavior)
         fields.each do |field|
@@ -145,5 +144,5 @@ module Familia::Features
 
     Familia::Base.add_feature self, :safe_dump
   end
-  # end SafeDump
 end
+# rubocop:enable ThreadSafety/ClassInstanceVariable

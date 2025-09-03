@@ -29,7 +29,7 @@ module Familia
     #   - etc.
     #
     module Autoloader
-      def self.included(base)
+      def self.included(_base)
         # Get the file path of the module that's including us
         # We need to look at the caller to find where the include happened
         including_file = caller_locations(1, 1)[0].path
