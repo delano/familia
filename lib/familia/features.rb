@@ -14,9 +14,10 @@ module Familia
 
       return features_enabled if feature_name.nil?
 
-      # If there's a value provied check that it's a valid feature
+      # If there's a value provided check that it's a valid feature
       feature_name = feature_name.to_sym
-      unless Familia::Base.features_available.key?(feature_name)
+      feature_class = Familia::Base.find_feature(feature_name, self)
+      unless feature_class
         raise Familia::Problem, "Unsupported feature: #{feature_name}"
       end
 
@@ -46,10 +47,8 @@ module Familia
         add_feature_options(feature_name, **options)
       end
 
-      klass = Familia::Base.features_available[feature_name]
-
       # Extend the Familia::Base subclass (e.g. Customer) with the feature module
-      include klass
+      include feature_class
 
       # NOTE: Do we want to extend Familia::DataType here? That would make it
       # possible to call safe_dump on relations fields (e.g. list, zset, hashkey).
