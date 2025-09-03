@@ -86,7 +86,16 @@ module Familia
     # @security Truncation preserves the cryptographic properties of the most significant bits.
     def shorten_to_external_id(hex_id, base: 36)
       target_length = SecureIdentifier.min_length_for_bits(128, base)
-      truncated = hex_id.to_i(16) >> (256 - 128) # Always 128 bits
+
+      # Handle both 256-bit hex IDs (64 chars) and 128-bit UUIDs (32 chars)
+      if hex_id.length == 64
+        # 256-bit input: truncate to 128 bits by taking the most significant bits
+        truncated = hex_id.to_i(16) >> (256 - 128)
+      else
+        # 128-bit input (UUID): use as-is
+        truncated = hex_id.to_i(16)
+      end
+
       truncated.to_s(base).rjust(target_length, '0')
     end
 

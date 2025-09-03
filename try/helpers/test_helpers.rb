@@ -12,6 +12,8 @@ Familia.enable_database_logging = true
 Familia.enable_database_counter = true
 
 class Bone < Familia::Horreum
+  feature :object_identifiers
+  feature :external_identifiers
   identifier_field :token
   field     :token
   field     :name
