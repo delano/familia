@@ -15,12 +15,11 @@ class SafeDumpTest < Familia::Horreum
   field :email
   field :secret_data
 
-  @safe_dump_fields = [
-    :id,
-    :name,
-    { display_name: ->(obj) { "#{obj.name} (#{obj.id})" } },
-    { has_email: ->(obj) { !obj.email.nil? && !obj.email.empty? } }
-  ]
+  # Use new DSL instead of @safe_dump_fields
+  safe_dump_field :id
+  safe_dump_field :name
+  safe_dump_field :display_name, ->(obj) { "#{obj.name} (#{obj.id})" }
+  safe_dump_field :has_email, ->(obj) { !obj.email.nil? && !obj.email.empty? }
 
   def active?
     true
@@ -47,9 +46,9 @@ SafeDumpTest.respond_to?(:safe_dump_field_map)
 #=> true
 
 ## safe_dump_fields returns field names only
-fields = SafeDumpTest.safe_dump_fields
-fields
-#=> [:id, :name, :display_name, :has_email]
+fields = SafeDumpTest.safe_dump_field_names
+fields.sort
+#=> [:display_name, :has_email, :id, :name]
 
 ## safe_dump_field_map returns callable map
 field_map = SafeDumpTest.safe_dump_field_map

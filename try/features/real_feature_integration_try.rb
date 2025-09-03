@@ -22,11 +22,10 @@ class SafeDumpCategoryTest < Familia::Horreum
 
   feature :safe_dump
 
-  @safe_dump_fields = [
-    :id,
-    :public_name,
-    :email
-  ]
+  # Use new SafeDump DSL
+  safe_dump_field :id
+  safe_dump_field :public_name
+  safe_dump_field :email
 end
 
 # Combined features work together
@@ -39,7 +38,9 @@ class CombinedFeaturesTest < Familia::Horreum
   feature :expiration
   feature :safe_dump
 
-  @safe_dump_fields = [:id, :name]
+  # Use new SafeDump DSL
+  safe_dump_field :id
+  safe_dump_field :name
 end
 
 # Test that individual features can be queried

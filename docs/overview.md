@@ -118,17 +118,16 @@ This is ideal for temporary data like authentication tokens or cache entries.
 
 ### Safe Dumping for APIs
 
-Control which fields are exposed when serializing objects:
+Control which fields are exposed when serializing objects using the clean DSL:
 
 ```ruby
 class User < Familia::Horreum
   feature :safe_dump
 
-  @safe_dump_fields = [
-    :id,
-    :email,
-    {full_name: ->(user) { "#{user.first_name} #{user.last_name}" }}
-  ]
+  # Use clean DSL methods instead of @safe_dump_fields
+  safe_dump_field :id
+  safe_dump_field :email
+  safe_dump_field :full_name, ->(user) { "#{user.first_name} #{user.last_name}" }
 
   field :id, :email, :first_name, :last_name, :password_hash
 end
@@ -137,7 +136,7 @@ user.safe_dump
 #=> {id: "123", email: "alice@example.com", full_name: "Alice Smith"}
 ```
 
-Prevents accidental exposure of sensitive data in API responses.
+The new DSL prevents accidental exposure of sensitive data and makes field definitions easier to organize in feature modules.
 
 ### Time-based Quantization
 
