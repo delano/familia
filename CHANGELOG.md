@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 <!--scriv-insert-here-->
 
 <a id='changelog-2.0.0.pre11'></a>
-## [2.0.0.pre11] - 2025-09-03 01:40:07.318100
+## 2.0.0.pre11 - 2025-09-03
 
 ### Added
 
@@ -34,7 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Improved input validation in `shorten_to_external_id` method by replacing insecure character count checking with proper bit length calculation and explicit validation. Invalid inputs now raise clear error messages instead of being silently processed incorrectly.
 
 <a id='changelog-2.0.0-pre10'></a>
-## [2.0.0-pre10] - 2025-09-02 18:07:56.439890
+## 2.0.0-pre10 - 2025-09-02
 
 ### Added
 
@@ -71,7 +71,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - This refactoring was implemented with Claude Code assistance, including comprehensive test updates and API modernization.
 
 <a id='changelog-2.0.0-pre9'></a>
-## [2.0.0-pre9] - 2025-09-02 00:35:28.974817
+## 2.0.0-pre9 - 2025-09-02
 
 ### Added
 
@@ -94,7 +94,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 <a id='changelog-2.0.0-pre8'></a>
-## [2.0.0-pre8] - 2025-09-01
+## 2.0.0-pre8 - 2025-09-01
 
 ### Added
 
@@ -110,7 +110,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 <!-- scriv-end-here -->
 
 <a id='changelog-2.0.0-pre7'></a>
-## [2.0.0-pre7] - 2025-08-31
+## 2.0.0-pre7 - 2025-08-31
 
 ### Added
 
@@ -136,7 +136,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 <a id='changelog-2.0.0-pre6'></a>
-## [2.0.0-pre6] - 2025-08-15
+## 2.0.0-pre6 - 2025-08-15
 
 ### Added
 
@@ -163,7 +163,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 <a id='changelog-2.0.0-pre5'></a>
-## [2.0.0-pre5] - 2025-08-05
+## 2.0.0-pre5 - 2025-08-05
 
 ### Added
 
@@ -187,7 +187,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 <a id='changelog-2.0.0-pre'></a>
-## [2.0.0-pre] - 2025-07-25
+## 2.0.0-pre - 2025-07-25
 
 ### Added
 
