@@ -51,10 +51,19 @@ module Familia
     #
     # @param base [Integer] The base for encoding the output string.
     # @return [String] A verifiable, signed identifier.
-    def self.generate_verifiable_id(base = 36)
+    def self.generate_verifiable_id(base_or_scope = nil, scope: nil, base: 36)
+      # Handle backward compatibility with positional base argument
+      if base_or_scope.is_a?(Integer)
+        base = base_or_scope
+        # scope remains as passed in keyword argument
+      elsif base_or_scope.is_a?(String) || base_or_scope.nil?
+        scope = base_or_scope if scope.nil?
+        # base remains as passed in keyword argument or default
+      end
+
       # Re-use generate_hex_id from the SecureIdentifier module.
       random_hex = generate_hex_id
-      tag_hex = generate_tag(random_hex)
+      tag_hex = generate_tag(random_hex, scope: scope)
 
       combined_hex = random_hex + tag_hex
 
@@ -70,7 +79,16 @@ module Familia
     # @param verifiable_id [String] The identifier string to check.
     # @param base [Integer] The base of the input string.
     # @return [Boolean] True if the identifier is authentic, false otherwise.
-    def self.verified_identifier?(verifiable_id, base = 36)
+    def self.verified_identifier?(verifiable_id, base_or_scope = nil, scope: nil, base: 36)
+      # Handle backward compatibility with positional base argument
+      if base_or_scope.is_a?(Integer)
+        base = base_or_scope
+        # scope remains as passed in keyword argument
+      elsif base_or_scope.is_a?(String) || base_or_scope.nil?
+        scope = base_or_scope if scope.nil?
+        # base remains as passed in keyword argument or default
+      end
+
       return false unless plausible_identifier?(verifiable_id, base)
 
       expected_hex_length = (RANDOM_HEX_LENGTH + TAG_HEX_LENGTH)
@@ -79,7 +97,7 @@ module Familia
       random_part = combined_hex[0...RANDOM_HEX_LENGTH]
       tag_part = combined_hex[RANDOM_HEX_LENGTH..]
 
-      expected_tag = generate_tag(random_part)
+      expected_tag = generate_tag(random_part, scope: scope)
       OpenSSL.secure_compare(expected_tag, tag_part)
     end
 
@@ -114,9 +132,28 @@ module Familia
 
       # Generates the HMAC tag for a given message.
       # @private
-      def generate_tag(message)
+      def generate_tag(message, scope: nil)
+        # Include scope in HMAC calculation for domain separation if provided.
+        # The scope parameter enables creating cryptographically isolated identifier
+        # namespaces (e.g., per-domain, per-tenant, per-application) while maintaining
+        # all security properties of the base system.
+        #
+        # Security considerations for scope values:
+        # - Any string content is cryptographically safe (HMAC handles arbitrary input)
+        # - No length restrictions (short scopes like "a" or long scopes work equally well)
+        # - UTF-8 encoding is handled consistently
+        # - Empty string "" vs nil produce different identifiers (intentional for security)
+        # - Different scope values guarantee different identifier spaces
+        #
+        # Examples of scope usage:
+        # - Customer isolation: scope: "tenant:#{tenant_id}"
+        # - Environment separation: scope: "production" vs scope: "staging"
+        # - Domain scoping: scope: "example.com"
+        # - Application scoping: scope: "#{app_name}:#{version}"
+        hmac_input = scope ? "#{message}:scope:#{scope}" : message
+
         digest = OpenSSL::Digest.new('sha256')
-        hmac = OpenSSL::HMAC.hexdigest(digest, SECRET_KEY, message)
+        hmac = OpenSSL::HMAC.hexdigest(digest, SECRET_KEY, hmac_input)
         # Truncate to the desired length for the tag.
         hmac[0...TAG_HEX_LENGTH]
       end
