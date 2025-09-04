@@ -76,9 +76,7 @@ module Familia
               instance_variable_set(:"@#{field_name}", derived_extid)
 
               # Update mapping if we have an identifier
-              if respond_to?(:identifier) && identifier
-                self.class.extid_lookup[derived_extid] = identifier
-              end
+              self.class.extid_lookup[derived_extid] = identifier if respond_to?(:identifier) && identifier
 
               derived_extid
             end
@@ -101,17 +99,15 @@ module Familia
             klass.define_method :"#{method_name}=" do |value|
               # Remove old mapping if extid is changing
               old_value = instance_variable_get(:"@#{field_name}")
-              if old_value && old_value != value && respond_to?(:identifier)
-                self.class.extid_lookup.del(old_value)
-              end
+              self.class.extid_lookup.del(old_value) if old_value && old_value != value && respond_to?(:identifier)
 
               # Set the new value
               instance_variable_set(:"@#{field_name}", value)
 
               # Update mapping if we have both extid and identifier
-              if value && respond_to?(:identifier) && identifier
-                self.class.extid_lookup[value] = identifier
-              end
+              return unless value && respond_to?(:identifier) && identifier
+
+              self.class.extid_lookup[value] = identifier
             end
           end
         end
@@ -179,7 +175,7 @@ module Familia
       #   if the `objid` is not present.
       # @raise [ExternalIdentifierError] if the `objid` provenance is unknown.
       def derive_external_identifier
-        raise ExternalIdentifierError, 'missing objid field' unless respond_to?(:objid)
+        raise ExternalIdentifierError, 'Missing objid field' unless respond_to?(:objid)
 
         current_objid = objid
         return nil if current_objid.nil? || current_objid.to_s.empty?
@@ -260,17 +256,19 @@ module Familia
         generator_used = objid_generator_used
 
         if generator_used.nil?
-          raise ExternalIdentifierError,
-                'Cannot derive external identifier: objid provenance unknown. ' \
-                'External identifiers can only be derived from objid values created ' \
-                'by the ObjectIdentifier feature to ensure security guarantees.'
+          error_msg = <<~MSG.strip
+            Cannot derive external identifier: objid provenance unknown.
+            External identifiers can only be derived from objid values created
+            by the ObjectIdentifier feature to ensure security guarantees.
+          MSG
+          raise ExternalIdentifierError, error_msg
         end
 
         # Additional validation: ensure the ObjectIdentifier feature is active
-        unless self.class.features_enabled.include?(:object_identifier)
-          raise ExternalIdentifierError,
-                'ExternalIdentifier requires ObjectIdentifier feature for secure provenance'
-        end
+        return if self.class.features_enabled.include?(:object_identifier)
+
+        raise ExternalIdentifierError,
+              'ExternalIdentifier requires ObjectIdentifier feature for secure provenance.'
       end
 
       # Normalize objid to hex format based on the known generator type
@@ -296,9 +294,11 @@ module Familia
           # Custom generator: attempt to normalize, but we can't guarantee format
           normalized = objid_value.to_s.delete('-')
           unless normalized.match?(/\A[0-9a-fA-F]+\z/)
-            raise ExternalIdentifierError,
-                  "Cannot normalize objid from custom generator #{generator_used}: " \
-                  "value must be hexadecimal format, got: #{objid_value}"
+            error_msg = <<~MSG.strip
+              Cannot normalize objid from custom generator #{generator_used}:
+              value must be in hexadecimal format, got: #{objid_value}
+            MSG
+            raise ExternalIdentifierError, error_msg
           end
           normalized
         end
