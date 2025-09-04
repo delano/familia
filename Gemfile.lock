@@ -2,10 +2,10 @@ PATH
   remote: .
   specs:
     familia (2.0.0.pre12)
-      benchmark
-      connection_pool
-      csv
-      logger
+      benchmark (~> 0.4)
+      connection_pool (~> 2.5)
+      csv (~> 3.3)
+      logger (~> 1.7)
       redis (>= 4.8.1, < 6.0)
       stringio (~> 3.1.1)
       uri-valkey (~> 1.4)
