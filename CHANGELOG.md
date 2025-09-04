@@ -71,21 +71,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - This refactoring was implemented with Claude Code assistance, including comprehensive test updates and API modernization.
 
 <a id='changelog-2.0.0-pre9'></a>
-# [2.0.0-pre9] - 2025-09-02 00:35:28.974817
+## [2.0.0-pre9] - 2025-09-02 00:35:28.974817
 
-## Added
+### Added
 
 - Added `class_tracked_in` method for global tracking relationships following Horreum's established `class_` prefix convention
 - Added `class_indexed_by` method for global index relationships with consistent API design
 
-## Changed
+### Changed
 
 - **BREAKING**: `tracked_in :global, collection` syntax now raises ArgumentError - use `class_tracked_in collection` instead
 - **BREAKING**: `indexed_by field, index, context: :global` syntax replaced with `class_indexed_by field, index`
 - **BREAKING**: `indexed_by field, index, context: SomeClass` syntax replaced with `indexed_by field, index, parent: SomeClass`
 - Relationships API now provides consistent parameter naming across all relationship types
 
-## Documentation
+### Documentation
 
 - Updated Relationships Guide with new API syntax and migration examples
 - Updated relationships method documentation with new method signatures
@@ -96,7 +96,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 <a id='changelog-2.0.0-pre8'></a>
 ## [2.0.0-pre8] - 2025-09-01
 
-#### Added
+### Added
 
 - Implemented Scriv-based changelog system for sustainable documentation
 - Added fragment-based workflow for tracking changes
