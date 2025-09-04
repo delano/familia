@@ -273,4 +273,4 @@ end
 
 - [Security Model](Security-Model) - Understand the cryptographic design
 - [Key Management](Key-Management) - Rotation and best practices
-- [Migration Guide](Migration-Guide) - Upgrade existing fields
+- [Migrating Guide](Migrating-Guide) - Upgrade existing fields

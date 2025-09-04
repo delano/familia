@@ -23,7 +23,7 @@ Welcome to the comprehensive documentation for Familia v2.0. This wiki covers al
 
 ### 🚀 Operations (As Needed)
 
-9. **[Migration Guide](Migration-Guide.md)** - Upgrading existing fields _(coming soon)_
+9. **[Migrating Guide](Migrating-Guide.md)** - Upgrading existing fields _(coming soon)_
 10. **[Key Management](Key-Management.md)** - Rotation and best practices _(coming soon)_
 
 ## 🚀 Quick Start Examples

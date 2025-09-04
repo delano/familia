@@ -234,7 +234,7 @@ customer.find_by_name("production-api-key")
 customer.find_all_by_scope(["read", "write"])
 ```
 
-### Migration Guide
+### Migrating Guide
 If you have existing code with old syntax, here's how to update it:
 
 ```ruby

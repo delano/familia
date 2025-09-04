@@ -98,3 +98,74 @@ Familia::VerifiableIdentifier.plausible_identifier?(invalid_char_id)
 ## Fails plausibility check for nil input
 Familia::VerifiableIdentifier.plausible_identifier?(nil)
 #=> false
+
+# --- Scoped Identifier Generation and Verification ---
+
+## Scoped identifier generation produces different results than unscoped
+scoped_id = Familia::VerifiableIdentifier.generate_verifiable_id(scope: "example.com")
+unscoped_id = Familia::VerifiableIdentifier.generate_verifiable_id
+scoped_id != unscoped_id
+#=> true
+
+## Scoped identifiers verify successfully with correct scope
+scoped_id = Familia::VerifiableIdentifier.generate_verifiable_id(scope: "example.com")
+Familia::VerifiableIdentifier.verified_identifier?(scoped_id, scope: "example.com")
+#=> true
+
+## Scoped identifiers fail verification with wrong scope
+scoped_id = Familia::VerifiableIdentifier.generate_verifiable_id(scope: "example.com")
+Familia::VerifiableIdentifier.verified_identifier?(scoped_id, scope: "different.com")
+#=> false
+
+## Scoped identifiers fail verification without scope parameter
+scoped_id = Familia::VerifiableIdentifier.generate_verifiable_id(scope: "example.com")
+Familia::VerifiableIdentifier.verified_identifier?(scoped_id)
+#=> false
+
+## Unscoped identifiers fail verification with scope parameter
+unscoped_id = Familia::VerifiableIdentifier.generate_verifiable_id
+Familia::VerifiableIdentifier.verified_identifier?(unscoped_id, scope: "example.com")
+#=> false
+
+## Empty string scope produces different identifier than nil scope
+id_nil = Familia::VerifiableIdentifier.generate_verifiable_id(scope: nil)
+id_empty = Familia::VerifiableIdentifier.generate_verifiable_id(scope: "")
+id_nil != id_empty
+#=> true
+
+## Empty string scope verifies correctly
+id_empty = Familia::VerifiableIdentifier.generate_verifiable_id(scope: "")
+Familia::VerifiableIdentifier.verified_identifier?(id_empty, scope: "")
+#=> true
+
+## Short scope values work correctly
+id_short = Familia::VerifiableIdentifier.generate_verifiable_id(scope: "a")
+Familia::VerifiableIdentifier.verified_identifier?(id_short, scope: "a")
+#=> true
+
+## Long scope values work correctly
+long_scope = "x" * 1000
+id_long = Familia::VerifiableIdentifier.generate_verifiable_id(scope: long_scope)
+Familia::VerifiableIdentifier.verified_identifier?(id_long, scope: long_scope)
+#=> true
+
+## Unicode scope values work correctly
+unicode_scope = "测试🔒🔑"
+id_unicode = Familia::VerifiableIdentifier.generate_verifiable_id(scope: unicode_scope)
+Familia::VerifiableIdentifier.verified_identifier?(id_unicode, scope: unicode_scope)
+#=> true
+
+## Scoped identifiers work with different bases
+id_hex = Familia::VerifiableIdentifier.generate_verifiable_id(scope: "test", base: 16)
+Familia::VerifiableIdentifier.verified_identifier?(id_hex, scope: "test", base: 16)
+#=> true
+
+## Backward compatibility: existing method signatures still work
+id = Familia::VerifiableIdentifier.generate_verifiable_id(36)
+Familia::VerifiableIdentifier.verified_identifier?(id, 36)
+#=> true
+
+## Mixed parameter styles work correctly
+id = Familia::VerifiableIdentifier.generate_verifiable_id(scope: "test", base: 16)
+Familia::VerifiableIdentifier.verified_identifier?(id, scope: "test", base: 16)
+#=> true

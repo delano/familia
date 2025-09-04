@@ -10,9 +10,9 @@ This directory contains original documentation files that have been migrated to 
 ### FAMILIA_UPDATE.md
 **Original Purpose:** Version summary table and detailed release notes for v2.0.0-pre series
 
-**Migration Destinations:**
+**Migrating Destinations:**
 - **Changelog entries** → Extracted to Scriv fragments, aggregated into `CHANGELOG.md`
-- **Migration guides** → Reorganized into `docs/migration/v2.0.0-pre*.md`
+- **Migrating guides** → Reorganized into `docs/migrating/v2.0.0-pre*.md`
 - **Feature descriptions** → Cross-referenced with existing feature guides in `docs/guides/`
 
 ### FAMILIA_RELATIONSHIPS.md
@@ -33,25 +33,21 @@ This directory contains original documentation files that have been migrated to 
 
 ```
 docs/
-├── migration/           # Version-specific migration guides
-│   ├── v2.0.0-pre.md   # Foundation migration
-│   ├── v2.0.0-pre5.md  # Security features
-│   ├── v2.0.0-pre6.md  # Architecture improvements
-│   └── v2.0.0-pre7.md  # Relationships system
-├── guides/              # Feature guides (moved from wiki/)
-│   ├── relationships-methods.md  # From FAMILIA_RELATIONSHIPS.md
+├── migrating/              # Version-specific migrating guides
+│   ├── v2.0.0-pre.md
+│   ├── v2.0.0-pre5.md      # Security features
+│   ├── v2.0.0-pre6.md      # Architecture improvements
+│   └── v2.0.0-pre7.md      # Relationships system
+│
+├── guides/                 # Feature-specific guides (moved from wiki/)
+│   ├── relationships.md    # From FAMILIA_RELATIONSHIPS.md
 │   └── [other guides...]
-├── reference/           # Technical reference
-│   └── api-technical.md # From FAMILIA_TECHNICAL.md
-└── archive/            # This directory
+│
+├── reference/              # Technical reference
+│   └── api-technical.md
+│
+└── archive/                # This directory
 ```
-
-## Why These Files Were Archived
-
-1. **Sustainability** - The original files accumulated overlapping content without clear organization
-2. **Maintainability** - Scriv fragment system prevents documentation bloat
-3. **Clarity** - Separation of changelog, guides, and reference improves findability
-4. **Workflow** - Fragment-based workflow scales better with development
 
 ## Finding Migrated Content
 
