@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!--scriv-insert-here-->
 
+<a id='changelog-2.0.0.pre11'></a>
+## [2.0.0.pre11] - 2025-09-03 01:40:07.318100
+
+### Added
+
+- **Enhanced Feature System**: Introduced a hierarchical feature system with ancestry chain traversal for model-specific feature registration. This enables better organization, standardized naming, and automatic loading of project-specific features via the new `Familia::Features::Autoloader` module.
+- **Improved SafeDump DSL**: Replaced the internal `@safe_dump_fields` implementation with a cleaner, more robust DSL using `safe_dump_field` and `safe_dump_fields` methods.
+- Added `generate_short_id` and `shorten_securely` utility methods for creating short, secure identifiers, adapted from `OT::Utils::SecureNumbers`.
+- For a detailed guide on migrating to the new feature system, see `docs/migration/v2.0.0-pre11.md`.
+
+### Changed
+
+- External identifier now raises an `ExternalIdentifierError` if the model does not have an objid field. Previously: returned nil. In practice this should never happen, since the external_identifier feature declares its dependency on object_identifier.
+- Moved lib/familia/encryption_request_cache.rb to lib/familia/encryption/request_cache.rb for consistency.
+- **Simplified ObjectIdentifier Feature Implementation**: Consolidated the ObjectIdentifier feature from two files (~190 lines) to a single file (~140 lines) by moving the ObjectIdentifierFieldType class inline. This reduces complexity while maintaining all existing functionality including lazy generation, data integrity preservation, and multiple generator strategies.
+- **Renamed Identifier Features to Singular Form**: Renamed `object_identifier` → `object_identifier` and `external_identifier` → `external_identifier` for more accurate naming. Added full-length aliases (`object_identifier`/`external_identifier`) alongside the short forms (`objid`/`extid`) for clarity when needed.
+- **Simplified ExternalIdentifier Feature Implementation**: Consolidated the ExternalIdentifier feature from two files (~240 lines) to a single file (~120 lines) by moving the ExternalIdentifierFieldType class inline, following the same pattern as ObjectIdentifier.
+
+### Fixed
+
+- Fixed external identifier generation returning all zeros for UUID-based objids. The `shorten_to_external_id` method now correctly handles both 256-bit secure identifiers and 128-bit UUIDs by detecting input length and applying appropriate bit truncation only when needed.
+
+### Security
+
+- Improved input validation in `shorten_to_external_id` method by replacing insecure character count checking with proper bit length calculation and explicit validation. Invalid inputs now raise clear error messages instead of being silently processed incorrectly.
+
 <a id='changelog-2.0.0-pre10'></a>
 ## [2.0.0-pre10] - 2025-09-02 18:07:56.439890
 
@@ -81,6 +107,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Set up Scriv configuration and directory structure
 - Created README for changelog fragment workflow
 
+<!-- scriv-end-here -->
 
 <a id='changelog-2.0.0-pre7'></a>
 ## [2.0.0-pre7] - 2025-08-31

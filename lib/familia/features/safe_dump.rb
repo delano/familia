@@ -1,12 +1,18 @@
 # lib/familia/features/safe_dump.rb
 
+# rubocop:disable ThreadSafety/ClassInstanceVariable
+#
+#   Class instance variables are used here for feature configuration
+#   (e.g., @dump_method, @load_method). These are set once and not mutated
+#   at runtime, so thread safety is not a concern for this feature.
+#
 module Familia::Features
   # SafeDump is a mixin that allows models to define a list of fields that are
   # safe to dump. This is useful for serializing objects to JSON or other
   # formats where you want to ensure that only certain fields are exposed.
   #
-  # To use SafeDump, include it in your model and define a list of fields that
-  # are safe to dump. The fields can be either symbols or hashes. If a field is
+  # To use SafeDump, include it in your model and use the DSL methods to define
+  # safe dump fields. The fields can be either symbols or hashes. If a field is
   # a symbol, the method with the same name will be called on the object to
   # retrieve the value. If the field is a hash, the key is the field name and
   # the value is a lambda that will be called with the object as an argument.
@@ -19,97 +25,85 @@ module Familia::Features
   #
   #   feature :safe_dump
   #
-  #   @safe_dump_fields = [
-  #     :objid,
-  #     :updated,
-  #     :created,
-  #     { :active => ->(obj) { obj.active? } }
-  #   ]
+  #   safe_dump_field :objid
+  #   safe_dump_field :updated
+  #   safe_dump_field :created
+  #   safe_dump_field :active, ->(obj) { obj.active? }
+  #
+  # Alternatively, you can define multiple fields at once:
+  #
+  #   safe_dump_fields :objid, :updated, :created,
+  #                    { active: ->(obj) { obj.active? } }
   #
   # Internally, all fields are normalized to the hash syntax and stored in
   # @safe_dump_field_map. `SafeDump.safe_dump_fields` returns only the list
-  # of symbols in the order they were defined. From the example above, it would
-  # return `[:objid, :updated, :created, :active]`.
-  #
-  # Standalone Usage:
-  #
-  # You can also use SafeDump by including it in your model and defining the
-  # safe dump fields using the class instance variable `@safe_dump_fields`.
-  #
-  # Example:
-  #
-  #   class MyModel
-  #     include Familia::Features::SafeDump
-  #
-  #     @safe_dump_fields = [
-  #       :id, :name, { active: ->(obj) { obj.active? } }
-  #     ]
-  #   end
+  # of symbols in the order they were defined.
   #
   module SafeDump
     @dump_method = :to_json
     @load_method = :from_json
 
-    @safe_dump_fields = []
-    @safe_dump_field_map = {}
-
     def self.included(base)
-      Familia.trace :LOADED, self, base, caller(1..1) if Familia.debug?
+      Familia.trace(:LOADED, self, base, caller(1..1)) if Familia.debug?
       base.extend ClassMethods
 
-      # Optionally define safe_dump_fields in the class to make
-      # sure we always have an array to work with.
-      base.instance_variable_set(:@safe_dump_fields, []) unless base.instance_variable_defined?(:@safe_dump_fields)
-
-      # Ditto for the field map
-      return if base.instance_variable_defined?(:@safe_dump_field_map)
-
+      # Initialize the safe dump field map
       base.instance_variable_set(:@safe_dump_field_map, {})
     end
 
+    # SafeDump::ClassMethods
+    #
+    # These methods become available on the model class
     module ClassMethods
-      def set_safe_dump_fields(*fields)
-        @safe_dump_fields = fields
-      end
+      # Define a single safe dump field
+      # @param field_name [Symbol] The name of the field
+      # @param callable [Proc, nil] Optional callable to transform the value
+      def safe_dump_field(field_name, callable = nil)
+        @safe_dump_field_map ||= {}
 
-      # `SafeDump.safe_dump_fields` returns only the list
-      # of symbols in the order they were defined.
-      def safe_dump_fields
-        @safe_dump_fields.map do |field|
-          field.is_a?(Symbol) ? field : field.keys.first
-        end
-      end
-
-      # `SafeDump.safe_dump_field_map` returns the field map
-      # that is used to dump the fields. The keys are the
-      # field names and the values are callables that will
-      # expect to receive the instance object as an argument.
-      #
-      # The map is cached on the first call to this method.
-      #
-      def safe_dump_field_map
-        return @safe_dump_field_map if @safe_dump_field_map.any?
-
-        # Operate directly on the @safe_dump_fields array to
-        # build the map. This way we'll get the elements defined
-        # in the hash syntax (i.e. since the safe_dump_fields getter
-        # method returns only the symbols).
-        @safe_dump_field_map = @safe_dump_fields.each_with_object({}) do |el, map|
-          if el.is_a?(Symbol)
-            field_name = el
-            callable = lambda { |obj|
-              if obj.respond_to?(:[]) && obj[field_name]
-                obj[field_name] # Familia::DataType classes
-              elsif obj.respond_to?(field_name)
-                obj.send(field_name) # Onetime::Models::RedisHash classes via method_missing 😩
-              end
-            }
-          else
-            field_name = el.keys.first
-            callable = el.values.first
+        field_name = field_name.to_sym
+        field_value = callable || lambda { |obj|
+          if obj.respond_to?(:[]) && obj[field_name]
+            obj[field_name] # Familia::DataType classes
+          elsif obj.respond_to?(field_name)
+            obj.send(field_name) # Regular method calls
           end
-          map[field_name] = callable
+        }
+
+        @safe_dump_field_map[field_name] = field_value
+      end
+
+      # Define multiple safe dump fields at once
+      # @param fields [Array] Mixed array of symbols and hashes
+      def safe_dump_fields(*fields)
+        # If no arguments, return field names (getter behavior)
+        return safe_dump_field_names if fields.empty?
+
+        # Otherwise, define fields (setter behavior)
+        fields.each do |field|
+          if field.is_a?(Symbol)
+            safe_dump_field(field)
+          elsif field.is_a?(Hash)
+            field.each do |name, callable|
+              safe_dump_field(name, callable)
+            end
+          end
         end
+      end
+
+      # Returns an array of safe dump field names in the order they were defined
+      def safe_dump_field_names
+        (@safe_dump_field_map || {}).keys
+      end
+
+      # Returns the field map used for dumping
+      def safe_dump_field_map
+        @safe_dump_field_map || {}
+      end
+
+      # Legacy method for setting safe dump fields (for backward compatibility)
+      def set_safe_dump_fields(*fields)
+        safe_dump_fields(*fields)
       end
     end
 
@@ -155,5 +149,5 @@ module Familia::Features
 
     Familia::Base.add_feature self, :safe_dump
   end
-  # end SafeDump
 end
+# rubocop:enable ThreadSafety/ClassInstanceVariable

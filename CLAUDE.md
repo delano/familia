@@ -32,9 +32,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Debugging options:**
 - **Stack traces**: `bundle exec try -s` (stack traces without debug logging)
+- **Verbose failures**: `bundle exec try -vfs` (detailed failure output)
 - **Debug mode**: `bundle exec try -D` (additional logging including stack traces)
-- **Verbose failures**: `bundle exec try -vf` (detailed failure output)
-- **Fresh context**: `bundle exec try --fresh-context` (isolate test cases)
+- **Shared context**: `bundle exec try --shared-context` (DEFAULT - reuse shared context across setup, testcases, and teardown)
+- **Fresh context**: `bundle exec try --no-shared-context` (isolate test cases, no shared variables)
 
 *Note: Use `--agent` mode for optimal token efficiency when analyzing test results programmatically.*
 
@@ -59,9 +60,6 @@ Add changelog fragment with each user-facing or documented change (optional but 
   - Shows all Database operations with timestamps, database numbers, and full commands
   - Updates live as tests run or code executes
   - Essential for debugging Familia ORM Database interactions, multi/exec, pipelining, logical_database issues
-
-### Testing Framework
-This project uses `tryouts` instead of RSpec/Minitest. Test files are located in the `try/` directory and follow the pattern `*_try.rb`.
 
 ## Architecture Overview
 
@@ -88,7 +86,7 @@ This project uses `tryouts` instead of RSpec/Minitest. Test files are located in
 Familia uses a modular feature system where features are mixed into classes:
 - **Expiration** (`lib/familia/features/expiration.rb`) - TTL management with cascading
 - **SafeDump** (`lib/familia/features/safe_dump.rb`) - API-safe object serialization
-- **Quantization** (`lib/familia/features/quantization.rb`) - Time-based data bucketing
+- **Relationships** (`lib/familia/features/relationships.rb`) - CRUD operations for related objects
 
 #### Key Architectural Patterns
 
@@ -110,15 +108,6 @@ end
 - Proc: `identifier ->(user) { "user:#{user.email}" }`
 - Array: `identifier [:type, :email]`
 
-### Directory Structure
-
-- `lib/familia.rb` - Main entry point and module definition
-- `lib/familia/horreum/` - Horreum class implementation (class_methods, commands, serialization, etc.)
-- `lib/familia/data_type/` - Valkey/Redis type implementations and commands
-- `lib/familia/features/` - Modular feature implementations
-- `try/` - Test files using tryouts framework
-- `try/test_helpers.rb` - Shared test utilities and sample classes
-
 ### Database Connection Management
 - Connection handling in `lib/familia/connection.rb`
 - Settings management in `lib/familia/settings.rb`
@@ -128,46 +117,7 @@ end
 ### Important Implementation Notes
 
 **Field Initialization**: Objects can be initialized with positional args (brittle) or keyword args (robust). Keyword args are recommended.
-
 **Serialization**: Uses JSON by default but supports custom `serialize_value`/`deserialize_value` methods.
-
 **Database Key Generation**: Automatic key generation using class name, identifier, and field/type names (aka dbkey). Pattern: `classname:identifier:fieldname`
-
 **Memory Efficiency**: Only non-nil values are stored in keystore database to optimize memory usage.
-
 **Thread Safety**: Data types are frozen after instantiation to ensure immutability.
-
-## Common Patterns
-
-### Defining a Horreum Class
-```ruby
-class Customer < Familia::Horreum
-  feature :safe_dump
-  feature :expiration
-
-  identifier_field :custid
-  default_expiration 5.years
-
-  field :custid
-  field :email
-  list :sessions
-  hashkey :settings
-end
-```
-
-### Using Features
-```ruby
-# Safe dump for API responses
-customer.safe_dump  # Returns only whitelisted fields
-
-# Expiration management
-customer.update_expiration(default_expiration: 1.hour)
-```
-
-### Transaction Support
-```ruby
-customer.transaction do |conn|
-  conn.set("key1", "value1")
-  conn.zadd("key2", score, member)
-end
-```

@@ -5,18 +5,108 @@ module Familia
 
   # Familia::Features
   #
+  # This module provides the feature system for Familia classes. Features are
+  # modular capabilities that can be mixed into classes with configurable options.
+  # Features provide a powerful way to:
+  #
+  # - **Add new methods**: Both class and instance methods can be added
+  # - **Override existing methods**: Extend or replace default behavior
+  # - **Add new fields**: Define additional data storage capabilities
+  # - **Manage complexity**: Large, complex model classes can use features to
+  #   organize functionality into focused, reusable modules
+  #
+  # ## Feature Options Storage
+  #
+  # Feature options are stored **per-class** using class-level instance variables.
+  # This means each Familia::Horreum subclass maintains its own isolated set of
+  # feature options. When you enable a feature with options in different models,
+  # each model stores its own separate configuration without interference.
+  #
+  # ## Project Organization with Autoloader
+  #
+  # For large projects, use {Familia::Features::Autoloader} to automatically load
+  # project-specific features from a dedicated directory structure. This helps
+  # organize complex models by separating features into individual files.
+  #
+  # @example Different models with different feature options
+  #   class UserModel < Familia::Horreum
+  #     feature :object_identifier, generator: :uuid_v4
+  #   end
+  #
+  #   class SessionModel < Familia::Horreum
+  #     feature :object_identifier, generator: :hex
+  #   end
+  #
+  #   UserModel.feature_options(:object_identifier)    #=> {generator: :uuid_v4}
+  #   SessionModel.feature_options(:object_identifier) #=> {generator: :hex}
+  #
+  # @example Using features for complexity management
+  #   class ComplexModel < Familia::Horreum
+  #     # Organize functionality using features
+  #     feature :expiration           # TTL management
+  #     feature :safe_dump           # API-safe serialization
+  #     feature :relationships       # CRUD operations for related objects
+  #     feature :custom_validation   # Project-specific validation logic
+  #     feature :audit_trail         # Change tracking
+  #   end
+  #
+  # @example Project-specific features with autoloader
+  #   # In your model file: app/models/customer.rb
+  #   class Customer < Familia::Horreum
+  #     module Features
+  #       include Familia::Features::Autoloader
+  #       # Automatically loads all .rb files from app/models/customer/features/
+  #     end
+  #   end
+  #
+  # @see Familia::Features::Autoloader For automatic feature loading
+  #
   module Features
     @features_enabled = nil
     attr_reader :features_enabled
 
+    # Enables a feature for the current class with optional configuration.
+    #
+    # Features are modular capabilities that can be mixed into Familia::Horreum
+    # classes. Each feature can be configured with options that are stored
+    # **per-class**, ensuring complete isolation between different models.
+    #
+    # @param feature_name [Symbol, String, nil] the name of the feature to enable.
+    #   If nil, returns the list of currently enabled features.
+    # @param options [Hash] configuration options for the feature. These are
+    #   stored per-class and do not interfere with other models' configurations.
+    # @return [Array, nil] the list of enabled features if feature_name is nil,
+    #   otherwise nil
+    #
+    # @example Enable feature without options
+    #   class User < Familia::Horreum
+    #     feature :expiration
+    #   end
+    #
+    # @example Enable feature with options (per-class storage)
+    #   class User < Familia::Horreum
+    #     feature :object_identifier, generator: :uuid_v4
+    #   end
+    #
+    #   class Session < Familia::Horreum
+    #     feature :object_identifier, generator: :hex  # Different options
+    #   end
+    #
+    #   # Each class maintains separate options:
+    #   User.feature_options(:object_identifier)    #=> {generator: :uuid_v4}
+    #   Session.feature_options(:object_identifier) #=> {generator: :hex}
+    #
+    # @raise [Familia::Problem] if the feature is not supported
+    #
     def feature(feature_name = nil, **options)
       @features_enabled ||= []
 
       return features_enabled if feature_name.nil?
 
-      # If there's a value provied check that it's a valid feature
+      # If there's a value provided check that it's a valid feature
       feature_name = feature_name.to_sym
-      unless Familia::Base.features_available.key?(feature_name)
+      feature_class = Familia::Base.find_feature(feature_name, self)
+      unless feature_class
         raise Familia::Problem, "Unsupported feature: #{feature_name}"
       end
 
@@ -46,10 +136,8 @@ module Familia
         add_feature_options(feature_name, **options)
       end
 
-      klass = Familia::Base.features_available[feature_name]
-
       # Extend the Familia::Base subclass (e.g. Customer) with the feature module
-      include klass
+      include feature_class
 
       # NOTE: Do we want to extend Familia::DataType here? That would make it
       # possible to call safe_dump on relations fields (e.g. list, zset, hashkey).

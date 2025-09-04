@@ -33,6 +33,11 @@ class Blone < Familia::Horreum
   string    :value, default: 'GREAT!'
 end
 
+class Bourne < Familia::Horreum
+  feature :object_identifier
+  feature :external_identifier
+end
+
 class Customer < Familia::Horreum
   logical_database 15 # Use something other than the default DB
   default_expiration 5.years
@@ -41,24 +46,19 @@ class Customer < Familia::Horreum
   # feature :expiration
   # feature :api_version
 
-  # NOTE: The SafeDump mixin caches the safe_dump_field_map so updating this list
-  # with hot reloading in dev mode will not work. You will need to restart the
-  # server to see the changes.
-  @safe_dump_fields = [
-    :custid,
-    :role,
-    :verified,
-    :updated,
-    :created,
+  # Use new SafeDump DSL instead of @safe_dump_fields
+  safe_dump_field :custid
+  safe_dump_field :role
+  safe_dump_field :verified
+  safe_dump_field :updated
+  safe_dump_field :created
 
-    # NOTE: The secrets_created incrementer is null until the first secret
-    # is created. See CreateSecret for where the incrementer is called.
-    #
-    { secrets_created: ->(cust) { cust.secrets_created.value || 0 } },
+  # NOTE: The secrets_created incrementer is null until the first secret
+  # is created. See CreateSecret for where the incrementer is called.
+  safe_dump_field :secrets_created, ->(cust) { cust.secrets_created.value || 0 }
 
-    # We use the hash syntax here since `:active?` is not a valid symbol.
-    { active: ->(cust) { cust.active? } }
-  ]
+  # We use a callable here since `:active?` is not a valid method symbol.
+  safe_dump_field :active, ->(cust) { cust.active? }
 
   class_sorted_set :values, key: 'onetime:customer'
   class_hashkey :domains

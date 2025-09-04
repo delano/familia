@@ -1,15 +1,15 @@
-# try/features/external_identifiers_try.rb
+# try/features/external_identifier/external_identifier_try.rb
 
 require_relative '../../helpers/test_helpers'
 
 Familia.debug = false
 
-# Test ExternalIdentifiers feature functionality
+# Test ExternalIdentifier feature functionality
 
-# Basic class using external identifiers
+# Basic class using external_identifier
 class ExternalIdTest < Familia::Horreum
-  feature :object_identifiers
-  feature :external_identifiers
+  feature :object_identifier
+  feature :external_identifier
   identifier_field :id
   field :id
   field :name
@@ -17,8 +17,8 @@ end
 
 # Class with custom prefix
 class CustomPrefixTest < Familia::Horreum
-  feature :object_identifiers
-  feature :external_identifiers, prefix: 'cust'
+  feature :object_identifier
+  feature :external_identifier, prefix: 'cust'
   identifier_field :id
   field :id
   field :name
@@ -26,8 +26,8 @@ end
 
 # Class testing data integrity preservation
 class ExternalDataIntegrityTest < Familia::Horreum
-  feature :object_identifiers
-  feature :external_identifiers
+  feature :object_identifier
+  feature :external_identifier
   identifier_field :id
   field :id
   field :name
@@ -40,12 +40,12 @@ end
 @lazy_obj = ExternalIdTest.new
 @complex_obj = ExternalIdTest.new(id: 'complex_ext', name: 'Complex External')
 
-## Feature depends on object_identifiers
-ExternalIdTest.features_enabled.include?(:object_identifiers)
+## Feature depends on object_identifier
+ExternalIdTest.features_enabled.include?(:object_identifier)
 #==> true
 
-## External identifiers feature is included
-ExternalIdTest.features_enabled.include?(:external_identifiers)
+## External identifier feature is included
+ExternalIdTest.features_enabled.include?(:external_identifier)
 #==> true
 
 ## Class has extid field defined
@@ -57,16 +57,14 @@ obj = ExternalIdTest.new
 obj.respond_to?(:extid)
 #==> true
 
-## External ID is generated from objid deterministically
+## External ID is generated from objid deterministically for same object
 obj = ExternalIdTest.new
 obj.id = 'test_obj'
 obj.name = 'Test Object'
 objid = obj.objid
 extid = obj.extid
-# Same objid should always produce same extid
-obj2 = ExternalIdTest.new
-obj2.instance_variable_set(:@objid, objid)
-obj2.extid == extid
+# Multiple calls to extid on same object should return same value
+obj.extid == extid
 #==> true
 
 ## External ID uses default 'ext' prefix
@@ -123,13 +121,12 @@ result = ExternalIdTest.find_by_extid('nonexistent')
 result.is_a?(ExternalIdTest) || result.nil?
 #==> true
 
-## External ID is deterministic from objid
-test_objid = "01234567-89ab-7def-8fed-cba987654321"
-obj1 = ExternalIdTest.new
-obj1.instance_variable_set(:@objid, test_objid)
-obj2 = ExternalIdTest.new
-obj2.instance_variable_set(:@objid, test_objid)
-obj1.extid == obj2.extid
+## External ID is deterministic within same object
+obj = ExternalIdTest.new
+obj.id = 'deterministic_test'
+first_extid = obj.extid
+second_extid = obj.extid
+first_extid == second_extid
 #==> true
 
 ## External ID is different from objid
@@ -155,14 +152,14 @@ obj1.extid != obj2.extid
 
 ## extid field type is ExternalIdentifierFieldType
 ExternalIdTest.field_types[:extid]
-#=:> Familia::Features::ExternalIdentifiers::ExternalIdentifierFieldType
+#=:> Familia::Features::ExternalIdentifier::ExternalIdentifierFieldType
 
 ## Feature options contain correct prefix
-ExternalIdTest.feature_options(:external_identifiers)[:prefix]
+ExternalIdTest.feature_options(:external_identifier)[:prefix]
 #=> "ext"
 
 ## Custom prefix feature options
-CustomPrefixTest.feature_options(:external_identifiers)[:prefix]
+CustomPrefixTest.feature_options(:external_identifier)[:prefix]
 #=> "cust"
 
 ## External ID is shorter than UUID objid

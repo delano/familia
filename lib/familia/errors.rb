@@ -5,6 +5,8 @@ module Familia
   class NoIdentifier < Problem; end
   class NonUniqueKey < Problem; end
 
+  class FieldTypeError < Problem; end
+
   class HighRiskFactor < Problem
     attr_reader :value
 

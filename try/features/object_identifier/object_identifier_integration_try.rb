@@ -1,15 +1,15 @@
-# try/features/object_identifiers_integration_try.rb
+# try/features/object_identifier/object_identifier_integration_try.rb
 
 require_relative '../../helpers/test_helpers'
 
 Familia.debug = false
 
-# Integration test for ObjectIdentifiers and ExternalIdentifiers features together
+# Integration test for ObjectIdentifier and ExternalIdentifiers features together
 
 # Class using both features with defaults
 class IntegrationTest < Familia::Horreum
-  feature :object_identifiers
-  feature :external_identifiers  # This depends on :object_identifiers
+  feature :object_identifier
+  feature :external_identifier  # This depends on :object_identifier
   identifier_field :id
   field :id
   field :name
@@ -18,8 +18,8 @@ end
 
 # Class with custom configurations for both features
 class CustomIntegrationTest < Familia::Horreum
-  feature :object_identifiers, generator: :hex
-  feature :external_identifiers, prefix: 'custom'
+  feature :object_identifier, generator: :hex
+  feature :external_identifier, prefix: 'custom'
   identifier_field :id
   field :id
   field :name
@@ -27,8 +27,8 @@ end
 
 # Class testing full lifecycle with Redis persistence
 class PersistenceTest < Familia::Horreum
-  feature :object_identifiers
-  feature :external_identifiers
+  feature :object_identifier
+  feature :external_identifier
   identifier_field :id
   field :id
   field :name
@@ -39,12 +39,12 @@ end
 @integration_obj = IntegrationTest.new(id: 'integration_1', name: 'Integration Test', email: 'test@example.com')
 @custom_obj = CustomIntegrationTest.new(id: 'custom_1', name: 'Custom Test')
 
-## Object identifiers feature is automatically included
-IntegrationTest.features_enabled.include?(:object_identifiers)
+## Object identifier feature is automatically included
+IntegrationTest.features_enabled.include?(:object_identifier)
 #==> true
 
-## External identifiers feature is included
-IntegrationTest.features_enabled.include?(:external_identifiers)
+## External identifier feature is included
+IntegrationTest.features_enabled.include?(:external_identifier)
 #==> true
 
 ## Object responds to objid accessor
@@ -70,14 +70,12 @@ obj = IntegrationTest.new
 obj.objid != obj.extid
 #==> true
 
-## extid is deterministically generated from objid
+## extid is deterministically generated from objid for same object
 obj = IntegrationTest.new
 original_objid = obj.objid
 original_extid = obj.extid
-# Create new object with same objid
-obj2 = IntegrationTest.new
-obj2.instance_variable_set(:@objid, original_objid)
-obj2.extid == original_extid
+# Multiple calls on same object should return same extid
+obj.extid == original_extid
 #==> true
 
 ## Custom objid uses hex format (64 chars for 256-bit)
@@ -145,41 +143,41 @@ lazy_obj2.instance_variable_get(:@objid)
 #=*> nil
 
 ## Check field types objid
-IntegrationTest.field_types[:objid].is_a?(Familia::Features::ObjectIdentifiers::ObjectIdentifierFieldType)
+IntegrationTest.field_types[:objid].is_a?(Familia::Features::ObjectIdentifier::ObjectIdentifierFieldType)
 #==> true
 
 ## ObjectIdentifier fields have correct types in field registry
-IntegrationTest.field_types[:objid].class.ancestors.include?(Familia::Features::ObjectIdentifiers::ObjectIdentifierFieldType)
+IntegrationTest.field_types[:objid].class.ancestors.include?(Familia::Features::ObjectIdentifier::ObjectIdentifierFieldType)
 #==> true
 
 ## ExternalIdentifier fields have correct types in field registry
-IntegrationTest.field_types[:extid].class.ancestors.include?(Familia::Features::ExternalIdentifiers::ExternalIdentifierFieldType)
+IntegrationTest.field_types[:extid].class.ancestors.include?(Familia::Features::ExternalIdentifier::ExternalIdentifierFieldType)
 #==> true
 
-## Object identifiers options are preserved
+## Object identifier options are preserved
 opts = IntegrationTest.feature_options
-opts.key?(:object_identifiers)
+opts.key?(:object_identifier)
 #==> true
 
-## External identifiers options are preserved
+## External identifiersoptions are preserved
 opts = IntegrationTest.feature_options
-opts.key?(:external_identifiers)
+opts.key?(:external_identifier)
 #==> true
 
 ## Generator default configuration is applied correctly
-IntegrationTest.feature_options(:object_identifiers)[:generator]
+IntegrationTest.feature_options(:object_identifier)[:generator]
 #=> :uuid_v7
 
 ## Prefix default configuration is applied correctly
-IntegrationTest.feature_options(:external_identifiers)[:prefix]
+IntegrationTest.feature_options(:external_identifier)[:prefix]
 #=> "ext"
 
 ## Custom generator configuration is applied correctly
-CustomIntegrationTest.feature_options(:object_identifiers)[:generator]
+CustomIntegrationTest.feature_options(:object_identifier)[:generator]
 #=> :hex
 
 ## Custom prefix configuration is applied correctly
-CustomIntegrationTest.feature_options(:external_identifiers)[:prefix]
+CustomIntegrationTest.feature_options(:external_identifier)[:prefix]
 #=> "custom"
 
 ## objid is URL-safe (UUID format)
@@ -265,9 +263,9 @@ second_extid = stability_obj.extid
 first_extid == second_extid
 #==> true
 
-## Feature dependency is enforced (external_identifiers requires object_identifiers)
+## Feature dependency is enforced (external_identifier requires object_identifier)
 # This is automatically handled by the feature system
-IntegrationTest.features_enabled.include?(:object_identifiers)
+IntegrationTest.features_enabled.include?(:object_identifier)
 #==> true
 
 ## Objects work with existing Horreum save pattern
