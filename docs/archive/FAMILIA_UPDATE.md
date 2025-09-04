@@ -179,7 +179,7 @@ end
 
 ---
 
-## Migration Guide Summary
+## Migrating Guide Summary
 
 ### From v1.x to v2.0.0-pre
 1. **Update connection configuration** to use new pooling system
