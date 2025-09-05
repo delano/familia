@@ -1,0 +1,443 @@
+CHANGELOG.md
+============
+
+All notable changes to Familia are documented here.
+
+The format is based on `Keep a
+Changelog <https://keepachangelog.com/en/1.1.0/>`__, and this project
+adheres to `Semantic
+Versioning <https://semver.org/spec/v2.0.0.html>`__.
+
+.. raw:: html
+
+   <!--scriv-insert-here-->
+
+2.0.0.pre12 — 2025-09-04
+========================
+
+Added
+~~~~~
+
+-  Added the ``Familia::VerifiableIdentifier`` module to create and
+   verify identifiers with an embedded HMAC signature. This allows an
+   application to stateless-ly confirm that an identifier was generated
+   by itself, preventing forged IDs from malicious sources.
+
+-  **Scoped VerifiableIdentifier**: Added ``scope`` parameter to
+   ``generate_verifiable_id()`` and ``verified_identifier?()`` methods,
+   enabling cryptographically isolated identifier namespaces for
+   multi-tenant, multi-domain, or multi-environment applications while
+   maintaining full backward compatibility with existing code.
+
+Changed
+~~~~~~~
+
+-  ObjectIdentifier feature now tracks which generator (uuid_v7,
+   uuid_v4, hex, or custom) was used for each objid to provide
+   provenance information for security-sensitive operations.
+
+-  Updated external identifier derivation to normalize objid format
+   based on the known generator type, eliminating format ambiguity
+   between UUID and hex formats.
+
+-  Refactored identifier generation methods for clarity and consistency.
+   Method ``generate_objid`` is now ``generate_object_identifier``, and
+   ``generate_external_identifier`` is now
+   ``derive_external_identifier`` to reflect its deterministic nature.
+
+Removed
+~~~~~~~
+
+-  Removed the ``generate_extid`` class method, which was less secure
+   than the instance-level derivation logic.
+
+Security
+~~~~~~~~
+
+-  Hardened external identifier derivation with provenance validation.
+   ExternalIdentifier now validates that objid values come from the
+   ObjectIdentifier feature before deriving external identifiers,
+   preventing derivation from potentially malicious or unvalidated objid
+   values while maintaining deterministic behavior for legitimate use
+   cases.
+
+-  Improved the security of external identifiers (``extid``) by using
+   the internal object identifier (``objid``) as a seed for a new random
+   value, rather than deriving the ``extid`` directly. This prevents
+   potential information leakage from the internal ``objid``.
+
+Documentation
+~~~~~~~~~~~~~
+
+-  Added detailed YARD documentation for ``VerifiableIdentifier``,
+   explaining how to securely generate and manage the required
+   ``VERIFIABLE_ID_HMAC_SECRET`` key.
+
+AI Assistance
+~~~~~~~~~~~~~
+
+-  Security analysis of external identifier derivation and hardened
+   design approach was discussed and developed with AI assistance,
+   including provenance tracking, validation logic, format
+   normalization, and comprehensive test updates.
+
+-  Implementation of scoped verifiable identifiers was developed with AI
+   assistance to ensure cryptographic security properties and
+   comprehensive test coverage.
+
+2.0.0.pre11 - 2025-09-03
+======================
+
+.. _added-1:
+
+Added
+~~~~~
+
+-  **Enhanced Feature System**: Introduced a hierarchical feature system
+   with ancestry chain traversal for model-specific feature
+   registration. This enables better organization, standardized naming,
+   and automatic loading of project-specific features via the new
+   ``Familia::Features::Autoloader`` module.
+-  **Improved SafeDump DSL**: Replaced the internal
+   ``@safe_dump_fields`` implementation with a cleaner, more robust DSL
+   using ``safe_dump_field`` and ``safe_dump_fields`` methods.
+-  Added ``generate_short_id`` and ``shorten_securely`` utility methods
+   for creating short, secure identifiers, adapted from
+   ``OT::Utils::SecureNumbers``.
+-  For a detailed guide on migrating to the new feature system, see
+   ``docs/migration/v2.0.0-pre11.md``.
+
+.. _changed-1:
+
+Changed
+~~~~~~~
+
+-  External identifier now raises an ``ExternalIdentifierError`` if the
+   model does not have an objid field. Previously: returned nil. In
+   practice this should never happen, since the external_identifier
+   feature declares its dependency on object_identifier.
+-  Moved lib/familia/encryption_request_cache.rb to
+   lib/familia/encryption/request_cache.rb for consistency.
+-  **Simplified ObjectIdentifier Feature Implementation**: Consolidated
+   the ObjectIdentifier feature from two files (~190 lines) to a single
+   file (~140 lines) by moving the ObjectIdentifierFieldType class
+   inline. This reduces complexity while maintaining all existing
+   functionality including lazy generation, data integrity preservation,
+   and multiple generator strategies.
+-  **Renamed Identifier Features to Singular Form**: Renamed
+   ``object_identifier`` → ``object_identifier`` and
+   ``external_identifier`` → ``external_identifier`` for more accurate
+   naming. Added full-length aliases
+   (``object_identifier``/``external_identifier``) alongside the short
+   forms (``objid``/``extid``) for clarity when needed.
+-  **Simplified ExternalIdentifier Feature Implementation**:
+   Consolidated the ExternalIdentifier feature from two files (~240
+   lines) to a single file (~120 lines) by moving the
+   ExternalIdentifierFieldType class inline, following the same pattern
+   as ObjectIdentifier.
+
+Fixed
+~~~~~
+
+-  Fixed external identifier generation returning all zeros for
+   UUID-based objids. The ``shorten_to_external_id`` method now
+   correctly handles both 256-bit secure identifiers and 128-bit UUIDs
+   by detecting input length and applying appropriate bit truncation
+   only when needed.
+
+.. _security-1:
+
+Security
+~~~~~~~~
+
+-  Improved input validation in ``shorten_to_external_id`` method by
+   replacing insecure character count checking with proper bit length
+   calculation and explicit validation. Invalid inputs now raise clear
+   error messages instead of being silently processed incorrectly.
+
+2.0.0-pre10 - 2025-09-02
+======================
+
+.. _added-2:
+
+Added
+~~~~~
+
+-  The ``Familia::Horreum`` initializer now supports creating an object
+   directly from its identifier by passing a single argument (e.g.,
+   ``Customer.new(customer_id)``). This provides a more convenient and
+   intuitive way to instantiate objects from lookups.
+
+-  Automatic indexing and class-level tracking on ``save()`` operations,
+   eliminating the need for manual index updates.
+
+-  Enhanced collection syntax supports the Ruby-idiomatic ``<<``
+   operator for more natural relationship management.
+
+.. _changed-2:
+
+Changed
+~~~~~~~
+
+-  The ``member_of`` relationship is now bidirectional. A single call to
+   ``member.add_to_owner_collection(owner)`` is sufficient to establish
+   the relationship, removing the need for a second, redundant call on
+   the owner object. This fixes bugs where members could be added to
+   collections twice.
+
+-  **BREAKING**: Refactored Familia Relationships API to remove “global”
+   terminology and simplify method generation. (Closes #86)
+
+-  Split ``generate_indexing_instance_methods`` into focused
+   ``generate_direct_index_methods`` and
+   ``generate_relationship_index_methods`` for better separation between
+   direct class-level and relationship-based indexing.
+
+-  Simplified method generation by removing complex global vs parent
+   conditionals.
+
+-  All indexes are now stored at the class level for consistency.
+
+.. _fixed-1:
+
+Fixed
+~~~~~
+
+-  Fixed a bug in the ``class_indexed_by`` feature where finder methods
+   (e.g., ``find_by_email``) would fail to correctly instantiate objects
+   from the index, returning partially-formed objects.
+
+-  Refactored connection handling to properly cache and reuse Redis
+   connections. This eliminates repetitive “Overriding existing
+   connection” warnings and improves performance.
+
+-  Method generation now works consistently for both
+   ``class_indexed_by`` and ``indexed_by`` with a ``parent:``.
+
+-  Resolved metadata storage issues for dynamically created classes.
+
+-  Improved error handling for nil class names in tracking
+   relationships.
+
+.. _documentation-1:
+
+Documentation
+~~~~~~~~~~~~~
+
+-  Updated the ``examples/relationships_basic.rb`` script to reflect the
+   improved, bidirectional ``member_of`` API and to ensure a clean
+   database state for each run.
+
+.. _ai-assistance-1:
+
+AI Assistance
+~~~~~~~~~~~~~
+
+-  This refactoring was implemented with Claude Code assistance,
+   including comprehensive test updates and API modernization.
+
+2.0.0-pre9 - 2025-09-02
+======================
+
+.. _added-3:
+
+Added
+~~~~~
+
+-  Added ``class_tracked_in`` method for global tracking relationships
+   following Horreum’s established ``class_`` prefix convention
+-  Added ``class_indexed_by`` method for global index relationships with
+   consistent API design
+
+.. _changed-3:
+
+Changed
+~~~~~~~
+
+-  **BREAKING**: ``tracked_in :global, collection`` syntax now raises
+   ArgumentError - use ``class_tracked_in collection`` instead
+-  **BREAKING**: ``indexed_by field, index, context: :global`` syntax
+   replaced with ``class_indexed_by field, index``
+-  **BREAKING**: ``indexed_by field, index, context: SomeClass`` syntax
+   replaced with ``indexed_by field, index, parent: SomeClass``
+-  Relationships API now provides consistent parameter naming across all
+   relationship types
+
+.. _documentation-2:
+
+Documentation
+~~~~~~~~~~~~~
+
+-  Updated Relationships Guide with new API syntax and migration
+   examples
+-  Updated relationships method documentation with new method signatures
+-  Updated basic relationships example to demonstrate new API patterns
+-  Added tryouts test coverage in
+   try/features/relationships/relationships_api_changes_try.rb
+
+2.0.0-pre8 - 2025-09-01
+======================
+
+.. _added-4:
+
+Added
+~~~~~
+
+-  Implemented Scriv-based changelog system for sustainable
+   documentation
+-  Added fragment-based workflow for tracking changes
+-  Created structured changelog templates and configuration
+
+.. _documentation-3:
+
+Documentation
+~~~~~~~~~~~~~
+
+-  Set up Scriv configuration and directory structure
+-  Created README for changelog fragment workflow
+
+.. raw:: html
+
+   <!-- scriv-end-here -->
+
+2.0.0-pre7 - 2025-08-31
+======================
+
+.. _added-5:
+
+Added
+~~~~~
+
+-  Comprehensive relationships system with three relationship types:
+
+   -  ``tracked_in`` - Multi-presence tracking with score encoding
+   -  ``indexed_by`` - O(1) hash-based lookups
+   -  ``member_of`` - Bidirectional membership with collision-free
+      naming
+
+-  Categorical permission system with bit-encoded permissions
+-  Time-based permission scoring for temporal access control
+-  Permission tier hierarchies with inheritance patterns
+-  Scalable permission management for large object collections
+-  Score-based sorting with custom scoring functions
+-  Permission-aware queries filtering by access levels
+-  Relationship validation framework ensuring data integrity
+
+.. _changed-4:
+
+Changed
+~~~~~~~
+
+-  Performance optimizations for large-scale relationship operations
+
+.. _security-2:
+
+Security
+~~~~~~~~
+
+-  GitHub Actions security hardening with matrix optimization
+
+2.0.0-pre6 - 2025-08-15
+======================
+
+.. _added-6:
+
+Added
+~~~~~
+
+-  New ``save_if_not_exists`` method for conditional persistence
+-  Atomic persistence operations with transaction support
+-  Enhanced error handling for persistence failures
+-  Improved data consistency guarantees
+
+.. _changed-5:
+
+Changed
+~~~~~~~
+
+-  Connection provider pattern for flexible pooling strategies
+-  Multi-database support with intelligent pool management
+-  Thread-safe connection handling for concurrent applications
+-  Configurable pool sizing and timeout management
+-  Modular class structure with cleaner separation of concerns
+-  Enhanced feature system with dependency management
+-  Improved inheritance patterns for better code organization
+-  Streamlined base class functionality
+
+.. _fixed-2:
+
+Fixed
+~~~~~
+
+-  Critical security fixes in Ruby workflow vulnerabilities
+-  Systematic dependency resolution via multi-constraint optimization
+
+2.0.0-pre5 - 2025-08-05
+======================
+
+.. _added-7:
+
+Added
+~~~~~
+
+-  Field-level encryption with transparent access patterns
+-  Multiple encryption providers:
+
+   -  XChaCha20-Poly1305 (preferred, requires rbnacl)
+   -  AES-256-GCM (fallback, OpenSSL-based)
+
+-  Field-specific key derivation for cryptographic domain separation
+-  Configurable key versioning supporting key rotation
+-  Non-persistent field storage for sensitive runtime data
+-  RedactedString wrapper preventing accidental logging/serialization
+-  Memory-safe handling of sensitive data in Ruby objects
+-  API-safe serialization excluding transient fields
+
+.. _security-3:
+
+Security
+~~~~~~~~
+
+-  Encryption field security hardening with additional validation
+-  Enhanced memory protection for sensitive data handling
+-  Improved key management patterns and best practices
+-  Security test suite expansion with comprehensive coverage
+
+2.0.0-pre - 2025-07-25
+======================
+
+.. _added-8:
+
+Added
+~~~~~
+
+-  Complete API redesign for clarity and modern Ruby conventions
+-  Valkey compatibility alongside traditional Redis support
+-  Ruby 3.4+ modernization with fiber and thread safety improvements
+-  Connection pooling foundation with provider pattern architecture
+
+.. _changed-6:
+
+Changed
+~~~~~~~
+
+-  ``Familia::Base`` replaced by ``Familia::Horreum`` as the primary
+   base class
+-  Connection configuration moved from simple string to block-based
+   setup
+-  Feature activation changed from ``include`` to ``feature``
+   declarations
+-  Method naming updated for consistency (``delete`` → ``destroy``,
+   ``exists`` → ``exists?``, ``dump`` → ``serialize``)
+
+.. _documentation-4:
+
+Documentation
+~~~~~~~~~~~~~
+
+-  YARD documentation workflow with automated GitHub Pages deployment
+-  Comprehensive migrating guide for v1.x to v2.0.0-pre transition
+
+.. raw:: html
+
+   <!-- scriv-end-here -->
