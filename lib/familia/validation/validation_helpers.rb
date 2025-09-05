@@ -1,4 +1,4 @@
-# lib/familia/validation/test_helpers.rb
+# lib/familia/validation/validation_helpers.rb
 
 module Familia
   module Validation
@@ -7,7 +7,7 @@ module Familia
     # and automatic setup/cleanup for command validation tests.
     #
     # @example Basic usage in a try file
-    #   require_relative '../validation/test_helpers'
+    #   require_relative '../validation/validation_helpers'
     #   extend Familia::Validation::TestHelpers
     #
     #   ## User save should execute expected Redis commands

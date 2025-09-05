@@ -51,7 +51,7 @@
 require_relative 'validation/command_recorder'
 require_relative 'validation/expectations'
 require_relative 'validation/validator'
-require_relative 'validation/test_helpers'
+require_relative 'validation/validation_helpers'
 
 module Familia
   module Validation
