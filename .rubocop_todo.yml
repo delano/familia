@@ -64,7 +64,7 @@ Naming/BlockForwarding:
     - "lib/familia/data_type/types/list.rb"
     - "lib/familia/data_type/types/sorted_set.rb"
     - "lib/familia/data_type/types/unsorted_set.rb"
-    - "lib/familia/refinements.rb"
+    - "lib/familia/refinements/logger_trace.rb"
 
 # Offense count: 8
 # Configuration parameters: MinNameLength, AllowNamesEndingInNumbers, AllowedNames, ForbiddenNames.
@@ -107,7 +107,7 @@ Style/ArgumentsForwarding:
     - "lib/familia/data_type/types/list.rb"
     - "lib/familia/data_type/types/sorted_set.rb"
     - "lib/familia/data_type/types/unsorted_set.rb"
-    - "lib/familia/refinements.rb"
+    - "lib/familia/refinements/logger_trace.rb"
 
 # Offense count: 11
 # Configuration parameters: AllowedConstants.
