@@ -46,7 +46,8 @@ class ::TestModelWithSafeDump
   safe_dump_field :id
   safe_dump_field :name
   safe_dump_field :status, ->(obj) { obj.active? ? 'active' : 'inactive' }
-  safe_dump_fields :email, { computed_field: ->(obj) { "#{obj.name}-computed" } }
+  safe_dump_field :email
+  safe_dump_field :computed_field, ->(obj) { "#{obj.name}-computed" }
 end
 
 # Test field definitions in feature modules
