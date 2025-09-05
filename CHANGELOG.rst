@@ -1,5 +1,5 @@
-CHANGELOG.md
-============
+CHANGELOG.rst
+=============
 
 All notable changes to Familia are documented here.
 

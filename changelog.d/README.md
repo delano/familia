@@ -17,11 +17,11 @@ This approach provides several benefits:
 
 ## Relevant paths
 
-* `changelog.d/` - (e.g. changelog.d/YYYYMMDD_HHmmss_username_branch.md)
+* `changelog.d/` - (e.g. changelog.d/YYYYMMDD_HHmmss_username_branch.rst)
 * `docs/migrating/` - (e.g. docs/migrating/v2.0.0-pre.md)
-* `CHANGELOG.md` - The full changelog for all releases, in reverse chronological order. Careful: LARGE DOCUMENT. Limit reading to the first 50 lines.
+* `CHANGELOG.rst` - The full changelog for all releases, in reverse chronological order. Careful: LARGE DOCUMENT. Limit reading to the first 50 lines.
 
-* `setup.cfg` - Scriv tool settings
+* `changelog.d/scriv.ini` - Scriv tool settings
 
 ## How to Add a Changelog Entry
 
@@ -44,7 +44,7 @@ Compare the headers of your draft content with the headers of the previous migra
 
 4.  **Commit with Your Code:**
 ```bash
-git add changelog.d/YYYYMMDD_HHmmss_username_branch.md [docs/migrating/v2.0.0-pre.md]
+git add changelog.d/YYYYMMDD_HHmmss_username_branch.rst [docs/migrating/v2.0.0-pre.md]
 git commit
 ```
 
@@ -74,4 +74,4 @@ Use these categories:
 
 ## Release Process
 
-At release time, scriv will collect all fragments into the main `CHANGELOG.md` file with th command `scriv collect`. The version is taken automatically from `lib/familia/version.rb`.
+At release time, scriv will collect all fragments into the main `CHANGELOG.rst` file with th command `scriv collect`. The version is taken automatically from `lib/familia/version.rb`.
