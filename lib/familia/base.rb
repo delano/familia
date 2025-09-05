@@ -14,6 +14,9 @@ module Familia
   # @see Familia::DataType
   #
   module Base
+
+    using Familia::Refinements::TimeUtils
+
     @features_available = nil
     @feature_definitions = nil
     @dump_method = :to_json
@@ -24,6 +27,8 @@ module Familia
       base.extend(ClassMethods)
     end
 
+    # Familia::Base::ClassMethods
+    #
     module ClassMethods
       attr_reader :features_available, :feature_definitions
       attr_accessor :dump_method, :load_method

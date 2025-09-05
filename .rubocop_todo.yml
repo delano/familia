@@ -71,7 +71,6 @@ Naming/BlockForwarding:
 # AllowedNames: as, at, by, cc, db, id, if, in, io, ip, of, on, os, pp, to
 Naming/MethodParameterName:
   Exclude:
-    - "lib/familia/core_ext.rb"
     - "lib/familia/horreum/class_methods.rb"
     - "lib/familia/data_type/types/sorted_set.rb"
     - "lib/familia/data_type/types/unsorted_set.rb"

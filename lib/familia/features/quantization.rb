@@ -245,11 +245,16 @@ module Familia
     #   NoDefault.qstamp()  # Uses 10.minutes as fallback quantum
     #
     module Quantization
+
+      using Familia::Refinements::TimeUtils
+
       def self.included(base)
         Familia.trace :LOADED, self, base, caller(1..1) if Familia.debug?
         base.extend ClassMethods
       end
 
+      # Familia::Quantization::ClassMethods
+      #
       module ClassMethods
         # Generates a quantized timestamp based on the given parameters
         #

@@ -31,6 +31,8 @@ module Familia
     include Familia::Horreum::Core
     include Familia::Horreum::Settings
 
+    using Familia::Refinements::TimeUtils
+
     # Singleton Class Context
     #
     # The code within this block operates on the singleton class (also known as
