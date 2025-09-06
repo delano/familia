@@ -1,8 +1,8 @@
-# examples/autoloader/customer.rb
+# examples/autoloader/mega_customer.rb
 
 require_relative '../../lib/familia'
 
-class Customer < Familia::Horreum
+class MegaCustomer < Familia::Horreum
   include Familia::Features::Autoloader
 
   field :custid
@@ -13,4 +13,6 @@ class Customer < Familia::Horreum
   field :display_name
   field :created_at
   field :updated_at
+
+  # feature :deprecated_fields
 end

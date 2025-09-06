@@ -1,7 +1,7 @@
-# examples/autoloader/customer/features.rb
+# examples/autoloader/mega_customer/features.rb
 
-module Customer::Features
-  module CustomerDeprecatedFields
-    field :name
+module MegaCustomer::Features
+  module DeprecatedFields
+    # field :name
   end
 end
