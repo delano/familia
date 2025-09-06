@@ -29,44 +29,52 @@ module Familia
     #   - etc.
     #
     module Autoloader
-      def self.included(base)
-        unless base.respond_to?(:config_name) # very loose guard for familia::base
-          raise AutoloadError.new("Module #{base.name} does not respond to :config_name")
-        end
 
+      using Familia::Refinements::SnakeCase
+
+      def self.included(base)
         # Get the file path of the module that's including us.
         # `caller_locations(1, 1).first` gives us the location where `include` was called.
         # This is a robust way to find the file path, especially for anonymous modules.
         calling_location = caller_locations(1, 1)&.first
         return unless calling_location
 
-        model_name = base.config_name # reduced to a single URL-safe, underscore-separated word
-        including_file = calling_location.path
-        including_file_dir = File.dirname(including_file)
-
         # Define the locations that we autoload from relative to
         # the directory of the including file.
-        autoload_globs = define_autoload_globs(including_file_dir, model_name)
+        autoload_globs = define_autoload_globs(calling_location, base)
 
-        Familia.ld "[DEBUG2] Autoloader: Looking for features in #{autoload_globs}"
+        Familia.trace :autoloader, nil, "Looking in #{autoload_globs}", caller(1..1) if Familia.debug?
 
         autoload_globs.each do |autoload_glob|
           # Will only load features if one or more file match. And won't raise
           # an error if the glob doesn't match any.
           filepaths = Dir.glob(autoload_glob)
-          Familia.ld "[DEBUG] Autoloader: Found #{filepaths.size} with #{autoload_glob}"
+
+          Familia.trace :autoloader, nil, "Found #{filepaths.size} files with #{autoload_glob}", caller(1..1) if Familia.debug?
+
           filepaths.each do |project_module|
             final_path = File.expand_path(project_module)
-            Familia.ld "[DEBUG] Autoloader: Loading #{final_path}"
+            Familia.ld "[DEBUG] Autoloader: loading #{final_path}"
             require final_path
           end
         end
 
       end
 
-      def self.define_autoload_globs(base_dir, model_name)
+      def self.define_autoload_globs(location, base)
+        # A very loose guard for friends of the family
+        raise AutoloadError.new("Module #{base} does not respond to :name") unless base.respond_to?(:name)
+
+        # Guard for calling location path
+        raise AutoloadError.new("Location does not respond to :path") unless location.respond_to?(:path)
+
+        # Reduced the class to a single URL-safe, underscore-separated word
+        model_name = base.name.snake_case
+
+        including_filepath = location.path
+        base_dir = File.dirname(including_filepath)
         [
-          File.join(base_dir, model_name, '*.rb'),
+          File.join(base_dir, model_name, 'features.rb'),
           File.join(base_dir, 'features', '*.rb'),
           File.join(base_dir, model_name, 'feature_*.rb'),
           File.join(base_dir, model_name, 'features', '*.rb'),
