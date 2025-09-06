@@ -14,5 +14,6 @@ class MegaCustomer < Familia::Horreum
   field :created_at
   field :updated_at
 
+  feature :safe_dump
   # feature :deprecated_fields
 end

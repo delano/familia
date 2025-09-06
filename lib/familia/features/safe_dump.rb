@@ -1,5 +1,6 @@
 # lib/familia/features/safe_dump.rb
 
+
 # rubocop:disable ThreadSafety/ClassInstanceVariable
 #
 #   Class instance variables are used here for feature configuration
@@ -49,6 +50,16 @@ module Familia::Features
 
       # Initialize the safe dump field map
       base.instance_variable_set(:@safe_dump_field_map, {})
+
+      Familia.ld "[SafeDump] Autoloading for #{base}"
+
+      # Find the user's model file location by looking for a non-lib file in the call stack
+      user_location = caller_locations.find { |loc| !loc.path.include?('lib/familia/') }
+
+      if user_location
+        # Trigger feature-specific autoloading directly with the correct location
+        Familia::Features::Autoloader::Loader.trigger_feature_autoload(user_location, base, 'safe_dump')
+      end
     end
 
     # SafeDump::ClassMethods
@@ -151,3 +162,5 @@ module Familia::Features
   end
 end
 # rubocop:enable ThreadSafety/ClassInstanceVariable
+
+require_relative 'safe_dump/autoloader'
