@@ -29,28 +29,48 @@ module Familia
     #   - etc.
     #
     module Autoloader
-      def self.included(_base)
+      def self.included(base)
+        unless base.respond_to?(:config_name) # very loose guard for familia::base
+          raise AutoloadError.new("Module #{base.name} does not respond to :config_name")
+        end
+
         # Get the file path of the module that's including us.
         # `caller_locations(1, 1).first` gives us the location where `include` was called.
         # This is a robust way to find the file path, especially for anonymous modules.
         calling_location = caller_locations(1, 1)&.first
         return unless calling_location
 
+        model_name = base.config_name # reduced to a single URL-safe, underscore-separated word
         including_file = calling_location.path
+        including_file_dir = File.dirname(including_file)
 
-        # Find the features directory relative to the including file
-        features_dir = File.join(File.dirname(including_file), 'features')
+        # Define the locations that we autoload from relative to
+        # the directory of the including file.
+        autoload_globs = define_autoload_globs(including_file_dir, model_name)
 
-        Familia.ld "[DEBUG] Autoloader: Looking for features in #{features_dir}"
+        Familia.ld "[DEBUG2] Autoloader: Looking for features in #{autoload_globs}"
 
-        if Dir.exist?(features_dir)
-          Dir.glob(File.join(features_dir, '*.rb')).each do |feature_file|
-            Familia.ld "[DEBUG] Autoloader: Loading feature #{feature_file}"
-            require feature_file
+        autoload_globs.each do |autoload_glob|
+          # Will only load features if one or more file match. And won't raise
+          # an error if the glob doesn't match any.
+          filepaths = Dir.glob(autoload_glob)
+          Familia.ld "[DEBUG] Autoloader: Found #{filepaths.size} with #{autoload_glob}"
+          filepaths.each do |project_module|
+            final_path = File.expand_path(project_module)
+            Familia.ld "[DEBUG] Autoloader: Loading #{final_path}"
+            require final_path
           end
-        else
-          Familia.ld "[DEBUG] Autoloader: No features directory found at #{features_dir}"
         end
+
+      end
+
+      def self.define_autoload_globs(base_dir, model_name)
+        [
+          File.join(base_dir, model_name, '*.rb'),
+          File.join(base_dir, 'features', '*.rb'),
+          File.join(base_dir, model_name, 'feature_*.rb'),
+          File.join(base_dir, model_name, 'features', '*.rb'),
+        ]
       end
     end
   end

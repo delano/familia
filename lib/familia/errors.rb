@@ -6,6 +6,7 @@ module Familia
   class NonUniqueKey < Problem; end
 
   class FieldTypeError < Problem; end
+  class AutoloadError < Problem; end
 
   class HighRiskFactor < Problem
     attr_reader :value
