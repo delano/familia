@@ -47,7 +47,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### Changelog Management
 
-Add changelog fragment with each user-facing or documented change (optional but encouraged). See:
+Add changelog fragment with each user-facing or documented change (optional but encouraged). Fragments use RST format. See:
 @changelog.d/README.md
 
 ### Known Issues & Quirks

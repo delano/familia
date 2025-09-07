@@ -149,6 +149,8 @@ module Familia
     module Expiration
       @default_expiration = nil
 
+      using Familia::Refinements::TimeUtils
+
       def self.included(base)
         Familia.trace :LOADED, self, base, caller(1..1) if Familia.debug?
         base.extend ClassMethods
@@ -160,6 +162,8 @@ module Familia
         base.instance_variable_set(:@default_expiration, @default_expiration)
       end
 
+      # Familia::Expiration::ClassMethods
+      #
       module ClassMethods
         # Set the default expiration time for instances of this class
         #

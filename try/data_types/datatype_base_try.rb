@@ -21,7 +21,7 @@ p [@a.name, @b.name]
 #=> true
 
 ## Limiter#qstamp
-@limiter1.counter.qstamp(10.minutes, '%H:%M', 1_302_468_980)
+RefinedContext.eval_in_refined_context("@limiter1.counter.qstamp(10.minutes, '%H:%M', 1_302_468_980)")
 ##=> '20:50'
 
 ## Database Types can be stored to quantized stamp suffix
@@ -32,7 +32,8 @@ p [@a.name, @b.name]
 @limiter2 = Limiter.new :requests
 p [@limiter1.default_expiration, @limiter2.default_expiration]
 p [@limiter1.counter.parent.default_expiration, @limiter2.counter.parent.default_expiration]
-@limiter2.counter.qstamp(10.minutes, pattern: nil, time: 1_302_468_980)
+RefinedContext.instance_variable_set(:@limiter2, @limiter2)
+RefinedContext.eval_in_refined_context("@limiter2.counter.qstamp(10.minutes, pattern: nil, time: 1_302_468_980)")
 #=> 1302468600
 
 ## Database Types can be stored to quantized numeric suffix. This

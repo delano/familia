@@ -64,14 +64,13 @@ Naming/BlockForwarding:
     - "lib/familia/data_type/types/list.rb"
     - "lib/familia/data_type/types/sorted_set.rb"
     - "lib/familia/data_type/types/unsorted_set.rb"
-    - "lib/familia/refinements.rb"
+    - "lib/familia/refinements/logger_trace.rb"
 
 # Offense count: 8
 # Configuration parameters: MinNameLength, AllowNamesEndingInNumbers, AllowedNames, ForbiddenNames.
 # AllowedNames: as, at, by, cc, db, id, if, in, io, ip, of, on, os, pp, to
 Naming/MethodParameterName:
   Exclude:
-    - "lib/familia/core_ext.rb"
     - "lib/familia/horreum/class_methods.rb"
     - "lib/familia/data_type/types/sorted_set.rb"
     - "lib/familia/data_type/types/unsorted_set.rb"
@@ -107,7 +106,7 @@ Style/ArgumentsForwarding:
     - "lib/familia/data_type/types/list.rb"
     - "lib/familia/data_type/types/sorted_set.rb"
     - "lib/familia/data_type/types/unsorted_set.rb"
-    - "lib/familia/refinements.rb"
+    - "lib/familia/refinements/logger_trace.rb"
 
 # Offense count: 11
 # Configuration parameters: AllowedConstants.

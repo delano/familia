@@ -1,5 +1,8 @@
 # lib/familia/features.rb
 
+# Load the Autoloader first, then use it to load all other features
+require_relative 'autoloader'
+
 module Familia
   FeatureDefinition = Data.define(:name, :depends_on)
 
@@ -22,9 +25,9 @@ module Familia
   # feature options. When you enable a feature with options in different models,
   # each model stores its own separate configuration without interference.
   #
-  # ## Project Organization with Autoloader
+  # ## Project Organization with Autoloadable
   #
-  # For large projects, use {Familia::Features::Autoloader} to automatically load
+  # For large projects, use {Familia::Features::Autoloadable} to automatically load
   # project-specific features from a dedicated directory structure. This helps
   # organize complex models by separating features into individual files.
   #
@@ -54,14 +57,16 @@ module Familia
   #   # In your model file: app/models/customer.rb
   #   class Customer < Familia::Horreum
   #     module Features
-  #       include Familia::Features::Autoloader
+  #       include Familia::Features::Autoloadable
   #       # Automatically loads all .rb files from app/models/customer/features/
   #     end
   #   end
   #
-  # @see Familia::Features::Autoloader For automatic feature loading
+  # @see Familia::Features::Autoloadable For automatic feature loading
   #
   module Features
+    include Familia::Autoloader
+
     @features_enabled = nil
     attr_reader :features_enabled
 
@@ -131,13 +136,22 @@ module Familia
       # Add it to the list available features_enabled for Familia::Base classes.
       features_enabled << feature_name
 
-      # Store feature options if any were provided using the new pattern
-      if options.any?
+      # Always capture and store the calling location for every feature
+      calling_location = caller_locations(1, 1)&.first
+      options[:calling_location] = calling_location&.path
+
+      # Add feature options if the class supports them (Horreum classes)
+      if respond_to?(:add_feature_options)
         add_feature_options(feature_name, **options)
       end
 
       # Extend the Familia::Base subclass (e.g. Customer) with the feature module
       include feature_class
+
+      # Trigger post-inclusion autoloading for features that support it
+      if feature_class.respond_to?(:post_inclusion_autoload)
+        feature_class.post_inclusion_autoload(self, feature_name, options)
+      end
 
       # NOTE: Do we want to extend Familia::DataType here? That would make it
       # possible to call safe_dump on relations fields (e.g. list, zset, hashkey).
@@ -150,15 +164,5 @@ module Familia
       # We'd need to extend the DataType instances for each Horreum subclass. That
       # avoids it getting included multiple times per DataType
     end
-  end
-end
-
-# Load all feature files from the features directory
-features_dir = File.join(__dir__, 'features')
-Familia.ld "[DEBUG] Loading features from #{features_dir}"
-if Dir.exist?(features_dir)
-  Dir.glob(File.join(features_dir, '*.rb')).each do |feature_file|
-    Familia.ld "[DEBUG] Loading feature #{feature_file}"
-    require_relative feature_file
   end
 end
