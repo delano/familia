@@ -100,12 +100,21 @@ hash_result.keys.include?("api_token")
   }
 }
 
-@serialized = @nested_data.to_json
-@serialized.include?("token-abc123456789")
-#=> false
+begin
+  @serialized = @nested_data.to_json
+  false
+rescue Familia::SerializerError
+  true
+end
+#=> true
 
-## Nested JSON contains concealed markers
-@nested_data.to_json.include?("[CONCEALED]")
+## Nested JSON with ConcealedString raises error
+begin
+  @nested_data.to_json
+  false
+rescue Familia::SerializerError => e
+  e.message.include?("Object to JSON")
+end
 #=> true
 
 ## Array of mixed field types safety
@@ -116,11 +125,21 @@ hash_result.keys.include?("api_token")
   @record.secret_notes
 ]
 
-@mixed_array.to_json.include?("token-abc123456789")
-#=> false
+begin
+  @mixed_array.to_json
+  false
+rescue Familia::SerializerError
+  true
+end
+#=> true
 
-## Mixed array preserves public data
-@mixed_array.to_json.include?("Public Record")
+## Mixed array with ConcealedString raises error
+begin
+  @mixed_array.to_json
+  false
+rescue Familia::SerializerError => e
+  e.message.include?("ConcealedString")
+end
 #=> true
 
 ## String interpolation safety

@@ -497,7 +497,7 @@ module Familia
           # Only return parsed value if it's a complex type (Hash/Array)
           # Simple values should remain as strings
           return parsed if parsed.is_a?(Hash) || parsed.is_a?(Array)
-        rescue Familia::JsonSerializer::ParseError
+        rescue Familia::SerializerError
           # Not valid JSON, return as-is
         end
 

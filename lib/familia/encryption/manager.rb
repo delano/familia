@@ -53,7 +53,7 @@ module Familia
           provider.decrypt(ciphertext, key, nonce, auth_tag, additional_data)
         rescue EncryptionError
           raise
-        rescue Familia::JsonSerializer::ParseError => e
+        rescue Familia::SerializerError => e
           raise EncryptionError, "Invalid JSON structure: #{e.message}"
         rescue StandardError => e
           raise EncryptionError, "Decryption failed: #{e.message}"
