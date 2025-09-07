@@ -12,12 +12,16 @@ module Familia
       PER_HOUR        = 3600.0
       PER_DAY         = 86_400.0
       PER_WEEK        = 604_800.0
-      PER_YEAR        = 31_536_000.0 # 365 days
+      PER_YEAR        = 31_556_952.0 # 365.2425 days (Gregorian year)
+      PER_MONTH       = PER_YEAR / 12.0 # 30.437 days (consistent with Gregorian year)
 
       UNIT_METHODS = {
         'y' => :years,
         'year' => :years,
         'years' => :years,
+        'mo' => :months,
+        'month' => :months,
+        'months' => :months,
         'w' => :weeks,
         'week' => :weeks,
         'weeks' => :weeks,
@@ -47,6 +51,7 @@ module Familia
         def hours        = seconds * PER_HOUR
         def days         = seconds * PER_DAY
         def weeks        = seconds * PER_WEEK
+        def months       = seconds * PER_MONTH
         def years        = seconds * PER_YEAR
 
         # Aliases with singular forms
@@ -57,6 +62,7 @@ module Familia
         alias_method :hour,        :hours
         alias_method :day,         :days
         alias_method :week,        :weeks
+        alias_method :month,       :months
         alias_method :year,        :years
 
         # Fun aliases
@@ -65,6 +71,7 @@ module Familia
 
         # Seconds -> other time units
         def in_years        = seconds / PER_YEAR
+        def in_months       = seconds / PER_MONTH
         def in_weeks        = seconds / PER_WEEK
         def in_days         = seconds / PER_DAY
         def in_hours        = seconds / PER_HOUR
@@ -98,6 +105,7 @@ module Familia
           when :hours then self * PER_HOUR
           when :days then self * PER_DAY
           when :weeks then self * PER_WEEK
+          when :months then self * PER_MONTH
           when :years then self * PER_YEAR
           else self
           end
@@ -164,6 +172,8 @@ module Familia
           when :hours then age_seconds / PER_HOUR
           when :minutes then age_seconds / PER_MINUTE
           when :weeks then age_seconds / PER_WEEK
+          when :months then age_seconds / PER_MONTH
+          when :years then age_seconds / PER_YEAR
           else age_seconds
           end
         end

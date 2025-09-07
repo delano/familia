@@ -37,7 +37,7 @@ RefinedContext.instance_eval_in_refined_context("'1d'.in_seconds")
 
 ## String time parsing - years
 RefinedContext.eval_in_refined_context("'1y'.in_seconds")
-#=> 31536000.0
+#=> 31556952.0
 
 ## Time::Units - second
 RefinedContext.instance_eval_in_refined_context("1.second")
