@@ -470,7 +470,7 @@ module Familia
         # If the distinguisher returns nil, try using the dump_method but only
         # use JSON serialization for complex types that need it.
         if prepared.nil? && (val.is_a?(Hash) || val.is_a?(Array))
-          prepared = val.respond_to?(dump_method) ? val.send(dump_method) : JSON.dump(val)
+          prepared = val.respond_to?(dump_method) ? val.send(dump_method) : Familia::JsonSerializer.dump(val)
         end
 
         # If both the distinguisher and dump_method return nil, log an error
@@ -493,11 +493,11 @@ module Familia
 
         # Try to parse as JSON first for complex types
         begin
-          parsed = JSON.parse(val, symbolize_names: symbolize)
+          parsed = Familia::JsonSerializer.parse(val, symbolize_names: symbolize)
           # Only return parsed value if it's a complex type (Hash/Array)
           # Simple values should remain as strings
           return parsed if parsed.is_a?(Hash) || parsed.is_a?(Array)
-        rescue JSON::ParserError
+        rescue Familia::JsonSerializer::ParseError
           # Not valid JSON, return as-is
         end
 

@@ -9,7 +9,7 @@ module Familia
         return false unless json_string.kind_of?(::String)
 
         begin
-          parsed = JSON.parse(json_string, symbolize_names: true)
+          parsed = Familia::JsonSerializer.parse(json_string, symbolize_names: true)
           return false unless parsed.is_a?(Hash)
 
           # Check for required fields
@@ -17,7 +17,7 @@ module Familia
           result = required_fields.all? { |field| parsed.key?(field) }
           Familia.ld "[valid?] result: #{result}, parsed: #{parsed}, required: #{required_fields}"
           result
-        rescue JSON::ParserError => e
+        rescue Familia::JsonSerializer::ParseError => e
           Familia.ld "[valid?] JSON error: #{e.message}"
           false
         end
@@ -31,8 +31,8 @@ module Familia
         end
 
         begin
-          parsed = JSON.parse(json_string, symbolize_names: true)
-        rescue JSON::ParserError => e
+          parsed = Familia::JsonSerializer.parse(json_string, symbolize_names: true)
+        rescue Familia::JsonSerializer::ParseError => e
           raise EncryptionError, "Invalid JSON structure: #{e.message}"
         end
 

@@ -19,13 +19,15 @@ module Familia
 
         result = @provider.encrypt(plaintext, key, additional_data)
 
-        Familia::Encryption::EncryptedData.new(
+        encrypted_data = Familia::Encryption::EncryptedData.new(
           algorithm: @provider.algorithm,
           nonce: Base64.strict_encode64(result[:nonce]),
           ciphertext: Base64.strict_encode64(result[:ciphertext]),
           auth_tag: Base64.strict_encode64(result[:auth_tag]),
           key_version: current_key_version
-        ).to_h.to_json
+        ).to_h
+
+        Familia::JsonSerializer.dump(encrypted_data)
       ensure
         Familia::Encryption.secure_wipe(key) if key
       end
@@ -37,7 +39,7 @@ module Familia
         Familia::Encryption.derivation_count.increment
 
         begin
-          data = Familia::Encryption::EncryptedData.new(**JSON.parse(encrypted_json, symbolize_names: true))
+          data = Familia::Encryption::EncryptedData.new(**Familia::JsonSerializer.parse(encrypted_json, symbolize_names: true))
 
           # Validate algorithm support
           provider = Registry.get(data.algorithm)
@@ -51,7 +53,7 @@ module Familia
           provider.decrypt(ciphertext, key, nonce, auth_tag, additional_data)
         rescue EncryptionError
           raise
-        rescue JSON::ParserError => e
+        rescue Familia::JsonSerializer::ParseError => e
           raise EncryptionError, "Invalid JSON structure: #{e.message}"
         rescue StandardError => e
           raise EncryptionError, "Decryption failed: #{e.message}"
