@@ -12,6 +12,8 @@ Familia.enable_database_logging = true
 Familia.enable_database_counter = true
 
 class Bone < Familia::Horreum
+  using Familia::Refinements::TimeUtils
+
   identifier_field :token
   field     :token
   field     :name
@@ -39,6 +41,9 @@ class Bourne < Familia::Horreum
 end
 
 class Customer < Familia::Horreum
+
+  using Familia::Refinements::TimeUtils
+
   logical_database 15 # Use something other than the default DB
   default_expiration 5.years
 
@@ -101,6 +106,8 @@ end
 @c.custid = 'd@example.com'
 
 class Session < Familia::Horreum
+  using Familia::Refinements::TimeUtils
+
   logical_database 14 # don't use Onetime's default DB
   default_expiration 180.minutes
 
@@ -123,6 +130,8 @@ end
 @s = Session.new
 
 class CustomDomain < Familia::Horreum
+  using Familia::Refinements::TimeUtils
+
   feature :expiration
 
   class_sorted_set :values
@@ -152,6 +161,8 @@ end
 @d.custid = @c.custid
 
 class Limiter < Familia::Horreum
+  using Familia::Refinements::TimeUtils
+
   feature :expiration
   feature :quantization
 
@@ -227,5 +238,18 @@ module ConcealedStringTestHelper
 
       @field_type.decrypt_value(@record, @encrypted_data)
     end
+  end
+end
+
+# Helper module for testing refinements in tryouts
+module RefinedContext
+  using Familia::Refinements::TimeUtils
+
+  def self.eval_in_refined_context(code)
+    eval(code)
+  end
+
+  def self.instance_eval_in_refined_context(code)
+    instance_eval(code)
   end
 end

@@ -101,7 +101,7 @@ SafeDumpCategoryTest.features_enabled.include?(:safe_dump)
 @safedump_result.keys.sort
 #=> [:email, :id, :public_name]
 
-## Safe dump respects safe_dump_fields configuration
+## Safe dump respects safe_dump_field configuration
 @safedump_result.key?(:tryouts_cache_data)
 #=> false
 

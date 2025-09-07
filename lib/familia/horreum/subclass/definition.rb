@@ -46,6 +46,8 @@ module Familia
       include Familia::Settings
       include Familia::Horreum::RelatedFieldsManagement # Provides DataType field methods
 
+      using Familia::Refinements::SnakeCase
+
       # Sets or retrieves the unique identifier field for the class.
       #
       # This method defines or returns the field or method that contains the unique
@@ -183,10 +185,7 @@ module Familia
       #
       # @return [String] The underscored class name as a string
       def config_name
-        name.split('::').last
-            .gsub(/([A-Z]+)([A-Z][a-z])/, '\1_\2')
-            .gsub(/([a-z\d])([A-Z])/, '\1_\2')
-            .downcase
+        name.snake_case
       end
 
       def dump_method

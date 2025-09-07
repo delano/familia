@@ -3,6 +3,8 @@
 require_relative 'data_type/commands'
 require_relative 'data_type/serialization'
 
+# Familia
+#
 module Familia
   # DataType - Base class for Database data type wrappers
   #
@@ -13,6 +15,8 @@ module Familia
   class DataType
     include Familia::Base
     extend Familia::Features
+
+    using Familia::Refinements::TimeUtils
 
     @registered_types = {}
     @valid_options = %i[class parent default_expiration default logical_database dbkey dbclient suffix prefix]

@@ -2,7 +2,9 @@
 
 require_relative '../helpers/test_helpers'
 
-TestUser = Class.new(Familia::Horreum) do
+class TestUser < Familia::Horreum
+  using Familia::Refinements::SnakeCase
+
   identifier_field :email
   field :email
   field :name

@@ -1,5 +1,5 @@
-CHANGELOG.md
-============
+CHANGELOG.rst
+=============
 
 All notable changes to Familia are documented here.
 
@@ -97,7 +97,7 @@ Added
    with ancestry chain traversal for model-specific feature
    registration. This enables better organization, standardized naming,
    and automatic loading of project-specific features via the new
-   ``Familia::Features::Autoloader`` module.
+   ``Familia::Autoloader`` module.
 -  **Improved SafeDump DSL**: Replaced the internal
    ``@safe_dump_fields`` implementation with a cleaner, more robust DSL
    using ``safe_dump_field`` and ``safe_dump_fields`` methods.

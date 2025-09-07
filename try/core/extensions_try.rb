@@ -1,59 +1,76 @@
 require_relative '../helpers/test_helpers'
 
+module RefinedContext
+  using Familia::Refinements::TimeUtils
+
+  # This helper evaluates code within the refined context using eval.
+  # This works because eval executes the code as if it were written
+  # at this location, making the refinements available.
+  def self.eval_in_refined_context(code)
+    eval(code)
+  end
+
+  # This helper also evaluates code in the refined context using instance_eval.
+  # This provides an alternative approach for testing refinements.
+  def self.instance_eval_in_refined_context(code)
+    instance_eval(code)
+  end
+end
+
 # Test core extensions
 
 ## String time parsing - seconds
-'60s'.in_seconds
-#=> 60
+RefinedContext.eval_in_refined_context("'60s'.in_seconds")
+#=> 60.0
 
 ## String time parsing - minutes
-'5m'.in_seconds
-#=> 300
+RefinedContext.instance_eval_in_refined_context("'5m'.in_seconds")
+#=> 300.0
 
 ## String time parsing - hours
-'2h'.in_seconds
-#=> 7200
+RefinedContext.eval_in_refined_context("'2h'.in_seconds")
+#=> 7200.0
 
 ## String time parsing - days
-'1d'.in_seconds
-#=> 86_400
+RefinedContext.instance_eval_in_refined_context("'1d'.in_seconds")
+#=> 86_400.0
 
-## String time parsing - days
-'1y'.in_seconds
-#=> 31536000
+## String time parsing - years
+RefinedContext.eval_in_refined_context("'1y'.in_seconds")
+#=> 31536000.0
 
 ## Time::Units - second
-1.second
+RefinedContext.instance_eval_in_refined_context("1.second")
 #=> 1
 
 ## Time::Units - minute
-1.minute
+RefinedContext.eval_in_refined_context("1.minute")
 #=> 60
 
 ## Time::Units - hour
-1.hour
+RefinedContext.instance_eval_in_refined_context("1.hour")
 #=> 3600
 
 ## Time::Units - day
-1.day
+RefinedContext.eval_in_refined_context("1.day")
 #=> 86_400
 
 ## Time::Units - week
-1.week
+RefinedContext.instance_eval_in_refined_context("1.week")
 #=> 604_800
 
 ## Numeric extension to_ms
-1000.to_ms
-#=> 1000 * 1000
+RefinedContext.eval_in_refined_context("1000.to_ms")
+#=> 1000000.0
 
 ## Numeric extension to_bytes - single byte
-1.to_bytes
+RefinedContext.instance_eval_in_refined_context("1.to_bytes")
 #=> '1.00 B'
 
 ## Numeric extension to_bytes - kilobytes
-1024.to_bytes
+RefinedContext.eval_in_refined_context("1024.to_bytes")
 #=> '1.00 KiB'
 
 ## Numeric extension to_bytes - megabytes
-(1024 * 1024).to_bytes
+RefinedContext.instance_eval_in_refined_context("(1024 * 1024).to_bytes")
 #=> '1.00 MiB'

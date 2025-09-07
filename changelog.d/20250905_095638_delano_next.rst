@@ -1,0 +1,54 @@
+.. A new scriv changelog fragment.
+..
+.. Uncomment the section that is right (remove the leading dots).
+.. For top level release notes, leave all the headers commented out.
+..
+.. Added
+.. -----
+..
+.. - A bullet item for the Added category.
+..
+
+Changed
+-------
+
+- Refactored time and numeric extensions from global monkey patches to proper Ruby refinements for better encapsulation and reduced global namespace pollution
+- Updated all internal classes to use refinements via ``using Familia::Refinements::TimeUtils`` statements
+- Added centralized ``RefinedContext`` module in test helpers to support refinement testing in tryouts files
+
+.. Deprecated
+.. ----------
+..
+.. - A bullet item for the Deprecated category.
+..
+
+.. Removed
+.. -------
+..
+.. - A bullet item for the Removed category.
+..
+
+Fixed
+-----
+
+- Fixed byte conversion logic in ``to_bytes`` method to correctly handle exact 1024-byte boundaries (``size >= 1024`` instead of ``size > 1024``)
+- Resolved refinement testing issues in tryouts by implementing ``eval``-based code execution within refined contexts
+
+.. Security
+.. --------
+..
+.. - A bullet item for the Security category.
+..
+
+.. Documentation
+.. -------------
+..
+.. - A bullet item for the Documentation category.
+..
+
+AI Assistance
+-------------
+
+- Provided comprehensive analysis of Ruby refinement scoping issues and designed the eval-based testing solution
+- Assisted with refactoring global extensions to proper refinements while maintaining backward compatibility
+- Helped debug and fix the byte conversion boundary condition bug

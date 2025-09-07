@@ -17,7 +17,7 @@ module Familia
 
     # Get the severity letter from the thread local variable or use
     # the default. The thread local variable is set in the trace
-    # method in the LoggerTraceRefinement module. The name of the
+    # method in the Familia::Refinements::LoggerTrace module. The name of the
     # variable `severity_letter` is arbitrary and could be anything.
     severity_letter = Thread.current[:severity_letter] || severity_letter
 
@@ -36,7 +36,7 @@ module Familia
   # == Methods:
   # trace::
   #   Logs a message at the TRACE level. This method is only available if the
-  #   LoggerTraceRefinement is used.
+  #   Familia::Refinements::LoggerTrace is used.
   #
   # debug::
   #   Logs a message at the DEBUG level. This is used for low-level system information
@@ -59,14 +59,14 @@ module Familia
   #   that will presumably lead the application to abort.
   #
   # == Usage:
-  # To use the Logging module, you need to include the LoggerTraceRefinement module
+  # To use the Logging module, you need to include the Familia::Refinements::LoggerTrace module
   # and use the `using` keyword to enable the refinement. This will add the TRACE
   # log level and the trace method to the Logger class.
   #
   # Example:
   #   require 'logger'
   #
-  #   module LoggerTraceRefinement
+  #   module Familia::Refinements::LoggerTrace
   #     refine Logger do
   #       TRACE = 0
   #
@@ -76,7 +76,7 @@ module Familia
   #     end
   #   end
   #
-  #   using LoggerTraceRefinement
+  #   using Familia::Refinements::LoggerTrace
   #
   #   logger = Logger.new(STDOUT)
   #   logger.trace("This is a trace message")
@@ -86,13 +86,13 @@ module Familia
   #   logger.error("This is an error message")
   #   logger.fatal("This is a fatal message")
   #
-  # In this example, the LoggerTraceRefinement module is defined with a refinement
+  # In this example, the Familia::Refinements::LoggerTrace module is defined with a refinement
   # for the Logger class. The TRACE constant and trace method are added to the Logger
   # class within the refinement. The `using` keyword is used to apply the refinement
   # in the scope where it's needed.
   #
   # == Conditions:
-  # The trace method and TRACE log level are only available if the LoggerTraceRefinement
+  # The trace method and TRACE log level are only available if the Familia::Refinements::LoggerTrace
   # module is used with the `using` keyword. Without this, the Logger class will not
   # have the trace method or the TRACE log level.
   #
@@ -103,7 +103,9 @@ module Familia
     attr_reader :logger
 
     # Gives our logger the ability to use our trace method.
-    using LoggerTraceRefinement if LoggerTraceRefinement::ENABLED
+    if Familia::Refinements::LoggerTrace::ENABLED
+      using Familia::Refinements::LoggerTrace
+    end
 
     def info(*msg)
       @logger.info(*msg)
@@ -140,13 +142,13 @@ module Familia
     #
     # @return [nil]
     #
-    # @note This method only executes if LoggerTraceRefinement::ENABLED is true.
+    # @note This method only executes if Familia::Refinements::LoggerTrace::ENABLED is true.
     # @note The dbclient can be a Database object, Redis::Future (used in
     #   pipelined and multi blocks), or nil (when the database connection isn't
     #   relevant).
     #
     def trace(label, dbclient, ident, context = nil)
-      return unless LoggerTraceRefinement::ENABLED
+      return unless Familia::Refinements::LoggerTrace::ENABLED
 
       # Usually dbclient is a Database object, but it could be
       # a Redis::Future which is what is used inside of pipelined
