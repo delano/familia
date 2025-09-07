@@ -37,6 +37,8 @@
 #   user.to_json                            # Safe - contains [CONCEALED]
 #
 class ConcealedString
+  REDACTED = '[CONCEALED]'.freeze
+
   # Create a concealed string wrapper
   #
   # @param encrypted_data [String] The encrypted JSON data
@@ -266,7 +268,7 @@ class ConcealedString
 
   # Prevent exposure in JSON serialization
   def to_json(*)
-    '"[CONCEALED]"'
+    REDACTED.to_json
   end
 
   # Prevent exposure in Rails serialization (as_json -> to_json)

@@ -13,7 +13,6 @@ module Familia
   #   parsed = Familia::JsonSerializer.parse(json, symbolize_names: true)
   #
   module JsonSerializer
-    class ParseError < StandardError; end
 
     class << self
       # Parse JSON string into Ruby objects
@@ -22,19 +21,19 @@ module Familia
       # @param opts [Hash] parsing options
       # @option opts [Boolean] :symbolize_names convert hash keys to symbols
       # @return [Object] parsed Ruby object
-      # @raise [ParseError] if JSON is malformed
+      # @raise [SerializerError] if JSON is malformed
       def parse(source, opts = {})
         return nil if source.nil? || source == ''
 
         symbolize_names = opts[:symbolize_names] || opts['symbolize_names']
 
         if symbolize_names
-          Oj.load(source, mode: :compat, symbol_keys: true)
+          Oj.load(source, mode: :strict, symbol_keys: true)
         else
-          Oj.load(source, mode: :compat)
+          Oj.load(source, mode: :strict)
         end
       rescue Oj::ParseError, EncodingError => e
-        raise ParseError, e.message
+        raise SerializerError, e.message
       end
 
       # Serialize Ruby object to JSON string
@@ -42,7 +41,9 @@ module Familia
       # @param obj [Object] Ruby object to serialize
       # @return [String] JSON string
       def dump(obj, *args)
-        Oj.dump(obj, mode: :compat)
+        Oj.dump(obj, mode: :strict)
+      rescue TypeError => e
+        raise SerializerError, e.message
       end
 
       # Alias for dump for JSON gem compatibility
@@ -50,7 +51,7 @@ module Familia
       # @param obj [Object] Ruby object to serialize
       # @return [String] JSON string
       def generate(obj, *args)
-        Oj.dump(obj, mode: :compat)
+        Oj.dump(obj, mode: :strict)
       end
 
       # Serialize Ruby object to pretty-formatted JSON string
@@ -58,7 +59,7 @@ module Familia
       # @param obj [Object] Ruby object to serialize
       # @return [String] pretty-formatted JSON string
       def pretty_generate(obj, *args)
-        Oj.dump(obj, mode: :compat, indent: 2)
+        Oj.dump(obj, mode: :strict, indent: 2)
       end
     end
   end
