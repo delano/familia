@@ -41,6 +41,8 @@ module Familia::Features
   # of symbols in the order they were defined.
   #
   module SafeDump
+    using Familia::Refinements::SnakeCase
+
     @dump_method = :to_json
     @load_method = :from_json
 
@@ -51,14 +53,41 @@ module Familia::Features
       # Initialize the safe dump field map
       base.instance_variable_set(:@safe_dump_field_map, {})
 
-      Familia.ld "[SafeDump] Autoloading for #{base}"
+      # Trigger autoloading for SafeDump-specific files
+      autoload_safe_dump_files(base)
+    end
 
-      # Find the user's model file location by looking for a non-lib file in the call stack
-      user_location = caller_locations.find { |loc| !loc.path.include?('lib/familia/') }
+    def self.autoload_safe_dump_files(base)
+      feature_name = 'safe_dump'
 
-      if user_location
-        # Trigger feature-specific autoloading directly with the correct location
-        Familia::Features::Autoloader::Loader.trigger_feature_autoload(user_location, base, 'safe_dump')
+      # Get the stored calling location from feature options
+      return unless base.respond_to?(:feature_options)
+
+      options = base.feature_options(feature_name.to_sym)
+      calling_location = options[:calling_location]
+
+      # Skip if no calling location
+      return unless calling_location
+
+      # Autoload feature-specific files
+      base_dir = File.dirname(calling_location)
+      model_name = base.name.snake_case
+
+      # Define search patterns for feature-specific files
+      patterns = [
+        File.join(base_dir, model_name, "#{feature_name}_*.rb"),
+        File.join(base_dir, model_name, 'features', "#{feature_name}_*.rb"),
+        File.join(base_dir, 'features', "#{feature_name}_*.rb"),
+      ]
+
+      Familia.trace :autoloadable, nil, "SafeDump patterns: #{patterns}", caller(1..1) if Familia.debug?
+      Familia.ld "[SafeDump] Searching: #{patterns}"
+
+      patterns.each do |pattern|
+        Dir.glob(pattern).each do |file|
+          Familia.ld "[SafeDump] Loading #{file}"
+          require File.expand_path(file)
+        end
       end
     end
 
@@ -162,5 +191,3 @@ module Familia::Features
   end
 end
 # rubocop:enable ThreadSafety/ClassInstanceVariable
-
-require_relative 'safe_dump/autoloader'

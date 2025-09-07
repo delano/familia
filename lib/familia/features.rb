@@ -131,8 +131,12 @@ module Familia
       # Add it to the list available features_enabled for Familia::Base classes.
       features_enabled << feature_name
 
-      # Store feature options if any were provided using the new pattern
-      if options.any?
+      # Always capture and store the calling location for every feature
+      calling_location = caller_locations(1, 1)&.first
+      options[:calling_location] = calling_location&.path
+
+      # Add feature options if the class supports them (Horreum classes)
+      if respond_to?(:add_feature_options)
         add_feature_options(feature_name, **options)
       end
 

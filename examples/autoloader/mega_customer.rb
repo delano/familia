@@ -3,8 +3,6 @@
 require_relative '../../lib/familia'
 
 class MegaCustomer < Familia::Horreum
-  include Familia::Features::Autoloader
-
   field :custid
   field :username
   field :email
