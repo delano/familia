@@ -1,5 +1,8 @@
 # lib/familia/features.rb
 
+# Load the Autoloader first, then use it to load all other features
+require_relative 'features/autoloader'
+
 module Familia
   FeatureDefinition = Data.define(:name, :depends_on)
 
@@ -22,9 +25,9 @@ module Familia
   # feature options. When you enable a feature with options in different models,
   # each model stores its own separate configuration without interference.
   #
-  # ## Project Organization with Autoloader
+  # ## Project Organization with Autoloadable
   #
-  # For large projects, use {Familia::Features::Autoloader} to automatically load
+  # For large projects, use {Familia::Features::Autoloadable} to automatically load
   # project-specific features from a dedicated directory structure. This helps
   # organize complex models by separating features into individual files.
   #
@@ -54,14 +57,16 @@ module Familia
   #   # In your model file: app/models/customer.rb
   #   class Customer < Familia::Horreum
   #     module Features
-  #       include Familia::Features::Autoloader
+  #       include Familia::Features::Autoloadable
   #       # Automatically loads all .rb files from app/models/customer/features/
   #     end
   #   end
   #
-  # @see Familia::Features::Autoloader For automatic feature loading
+  # @see Familia::Features::Autoloadable For automatic feature loading
   #
   module Features
+    include Familia::Features::Autoloader
+
     @features_enabled = nil
     attr_reader :features_enabled
 
@@ -154,15 +159,5 @@ module Familia
       # We'd need to extend the DataType instances for each Horreum subclass. That
       # avoids it getting included multiple times per DataType
     end
-  end
-end
-
-# Load all feature files from the features directory
-features_dir = File.join(__dir__, 'features')
-Familia.ld "[DEBUG] Loading features from #{features_dir}"
-if Dir.exist?(features_dir)
-  Dir.glob(File.join(features_dir, '*.rb')).each do |feature_file|
-    Familia.trace :FEATURE, nil, "Loading feature #{feature_file}", caller(1..1) if Familia.debug?
-    require_relative feature_file
   end
 end

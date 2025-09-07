@@ -41,6 +41,7 @@ module Familia::Features
   # of symbols in the order they were defined.
   #
   module SafeDump
+    include Familia::Features::Autoloadable
     using Familia::Refinements::SnakeCase
 
     @dump_method = :to_json
@@ -53,42 +54,8 @@ module Familia::Features
       # Initialize the safe dump field map
       base.instance_variable_set(:@safe_dump_field_map, {})
 
-      # Trigger autoloading for SafeDump-specific files
-      autoload_safe_dump_files(base)
-    end
-
-    def self.autoload_safe_dump_files(base)
-      feature_name = 'safe_dump'
-
-      # Get the stored calling location from feature options
-      return unless base.respond_to?(:feature_options)
-
-      options = base.feature_options(feature_name.to_sym)
-      calling_location = options[:calling_location]
-
-      # Skip if no calling location
-      return unless calling_location
-
-      # Autoload feature-specific files
-      base_dir = File.dirname(calling_location)
-      model_name = base.name.snake_case
-
-      # Define search patterns for feature-specific files
-      patterns = [
-        File.join(base_dir, model_name, "#{feature_name}_*.rb"),
-        File.join(base_dir, model_name, 'features', "#{feature_name}_*.rb"),
-        File.join(base_dir, 'features', "#{feature_name}_*.rb"),
-      ]
-
-      Familia.trace :autoloadable, nil, "SafeDump patterns: #{patterns}", caller(1..1) if Familia.debug?
-      Familia.ld "[SafeDump] Searching: #{patterns}"
-
-      patterns.each do |pattern|
-        Dir.glob(pattern).each do |file|
-          Familia.ld "[SafeDump] Loading #{file}"
-          require File.expand_path(file)
-        end
-      end
+      # The Autoloadable module will handle autoloading after setup is complete
+      super if defined?(super)
     end
 
     # SafeDump::ClassMethods
