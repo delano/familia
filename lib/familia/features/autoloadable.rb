@@ -30,6 +30,7 @@ module Familia
         #
         # @param base [Class] the user class including this feature
         def included(base)
+          # Call parent included method if it exists (defensive programming for mixed-in contexts)
           super if defined?(super)
 
           # No autoloading here - it's deferred to post_inclusion_autoload
@@ -51,8 +52,8 @@ module Familia
           source_location = nil
 
           # Check for named classes that can be looked up via const_source_location
-          # Use ::String to avoid Familia::String namespace collision
-          if base.name && base.name.is_a?(::String) && !base.name.empty?
+          # Class#name always returns String or nil, so type check is redundant
+          if base.name && !base.name.empty?
             begin
               location_info = Module.const_source_location(base.name)
               source_location = location_info&.first
@@ -89,7 +90,9 @@ module Familia
         # @param feature_name [String] snake_case name of the feature
         def autoload_feature_files(location_path, base, feature_name)
           base_dir = File.dirname(location_path)
-          model_name = base.name.snake_case
+
+          # Handle anonymous classes gracefully
+          model_name = base.name ? base.name.snake_case : "anonymous_#{base.object_id}"
 
           # Look for feature-specific files in conventional locations
           patterns = [

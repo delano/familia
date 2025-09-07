@@ -48,8 +48,8 @@ module Familia::Features
     @load_method = :from_json
 
     def self.included(base)
-      # The Autoloadable module will handle autoloading after setup is complete
-      super if defined?(super)
+      # Call the Autoloadable module's included method for post-inclusion setup
+      super
 
       Familia.trace(:LOADED, self, base, caller(1..1)) if Familia.debug?
       base.extend ClassMethods
