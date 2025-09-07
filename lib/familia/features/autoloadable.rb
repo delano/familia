@@ -14,47 +14,64 @@ module Familia
 
       # Sets up a feature module with autoloading capabilities.
       #
-      # Extends the feature module with ClassMethods and adds calling_location tracking
-      # to detect where the feature gets included in user classes.
+      # Extends the feature module with ClassMethods to handle post-inclusion autoloading.
       #
       # @param feature_module [Module] the feature module being enhanced
       def self.included(feature_module)
         feature_module.extend(ClassMethods)
-
-        # Add calling_location tracking to the feature module
-        feature_module.instance_variable_set(:@calling_location, nil)
-
-        feature_module.define_singleton_method(:calling_location) do
-          @calling_location
-        end
-
-        feature_module.define_singleton_method(:calling_location=) do |location|
-          @calling_location = location
-        end
       end
 
       # Methods added to feature modules that include Autoloadable.
       module ClassMethods
         # Triggered when the feature is included in a user class.
         #
-        # Detects the calling location, derives the feature name, and autoloads
-        # feature-specific files based on conventional directory patterns.
+        # Sets up for post-inclusion autoloading. The actual autoloading
+        # is deferred until after feature setup completes.
         #
         # @param base [Class] the user class including this feature
         def included(base)
           super if defined?(super)
 
-          # Store the calling location when the feature is included in a user class
-          # Skip the first location which is the feature inclusion itself
-          user_location = caller_locations.find { |loc| !loc.path.include?('lib/familia/') }
-          self.calling_location = user_location&.path if user_location
+          # No autoloading here - it's deferred to post_inclusion_autoload
+          # to ensure the feature is fully set up before extension files are loaded
+        end
 
-          # Derive feature name from the module name
-          feature_name = name.split('::').last.snake_case
+        # Called by the feature system after the feature is fully included.
+        #
+        # Uses const_source_location to determine where the base class is defined,
+        # then autoloads feature-specific extension files from that location.
+        #
+        # @param base [Class] the class that included this feature
+        # @param feature_name [Symbol] the name of the feature
+        # @param options [Hash] feature options (unused but kept for compatibility)
+        def post_inclusion_autoload(base, feature_name, options)
+          Familia.trace :FEATURE, nil, "[Autoloadable] post_inclusion_autoload called for #{feature_name} on #{base.name || base}", caller(1..1) if Familia.debug?
 
-          # Autoload feature-specific files
-          if calling_location
-            autoload_feature_files(calling_location, base, feature_name)
+          # Get the source location via Ruby's built-in introspection
+          source_location = nil
+
+          # Check for named classes that can be looked up via const_source_location
+          # Use ::String to avoid Familia::String namespace collision
+          if base.name && base.name.is_a?(::String) && !base.name.empty?
+            begin
+              location_info = Module.const_source_location(base.name)
+              source_location = location_info&.first
+              Familia.trace :FEATURE, nil, "[Autoloadable] Source location for #{base.name}: #{source_location}", caller(1..1) if Familia.debug?
+            rescue NameError => e
+              # Handle cases where the class name is not a valid constant name
+              # This can happen in test environments with dynamically created classes
+              Familia.trace :FEATURE, nil, "[Autoloadable] Cannot resolve source location for #{base.name}: #{e.message}", caller(1..1) if Familia.debug?
+            end
+          else
+            Familia.trace :FEATURE, nil, "[Autoloadable] Skipping source location detection - base.name=#{base.name.inspect}", caller(1..1) if Familia.debug?
+          end
+
+          # Autoload feature-specific files if we have a valid source location
+          if source_location && !source_location.include?('-e') # Skip eval/irb contexts
+            Familia.trace :FEATURE, nil, "[Autoloadable] Calling autoload_feature_files with #{source_location}", caller(1..1) if Familia.debug?
+            autoload_feature_files(source_location, base, feature_name.to_s.snake_case)
+          else
+            Familia.trace :FEATURE, nil, "[Autoloadable] Skipping autoload - no valid source location", caller(1..1) if Familia.debug?
           end
         end
 

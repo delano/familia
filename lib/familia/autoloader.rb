@@ -12,20 +12,20 @@ module Familia
     # @param exclude [Array<String>] basenames to exclude from loading
     # @param log_prefix [String] prefix for debug logging messages
     def self.autoload_files(patterns, exclude: [], log_prefix: 'Autoloader')
-        patterns = Array(patterns)
+      patterns = Array(patterns)
 
-        patterns.each do |pattern|
-          Dir.glob(pattern).each do |file_path|
-            basename = File.basename(file_path)
+      patterns.each do |pattern|
+        Dir.glob(pattern).each do |file_path|
+          basename = File.basename(file_path)
 
-            # Skip excluded files
-            next if exclude.include?(basename)
+          # Skip excluded files
+          next if exclude.include?(basename)
 
-            Familia.trace :FEATURE, nil, "[#{log_prefix}] Loading #{file_path}", caller(1..1) if Familia.debug?
-            require File.expand_path(file_path)
-          end
+          Familia.trace :FEATURE, nil, "[#{log_prefix}] Loading #{file_path}", caller(1..1) if Familia.debug?
+          require File.expand_path(file_path)
         end
       end
+    end
 
     # Autoloads feature files when this module is included.
     #
@@ -49,5 +49,5 @@ module Familia
         log_prefix: 'Autoloader'
       )
     end
-    end
+  end
 end

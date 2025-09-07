@@ -148,6 +148,11 @@ module Familia
       # Extend the Familia::Base subclass (e.g. Customer) with the feature module
       include feature_class
 
+      # Trigger post-inclusion autoloading for features that support it
+      if feature_class.respond_to?(:post_inclusion_autoload)
+        feature_class.post_inclusion_autoload(self, feature_name, options)
+      end
+
       # NOTE: Do we want to extend Familia::DataType here? That would make it
       # possible to call safe_dump on relations fields (e.g. list, zset, hashkey).
       #

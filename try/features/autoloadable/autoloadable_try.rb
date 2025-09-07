@@ -22,11 +22,7 @@ TestAutoloadableFeature.ancestors.include?(Familia::Features::Autoloadable)
 #=> true
 
 ## Test that Autoloadable extends feature modules with ClassMethods
-TestAutoloadableFeature.respond_to?(:calling_location)
-#=> true
-
-## Test that calling_location is initially nil
-TestAutoloadableFeature.calling_location.nil?
+TestAutoloadableFeature.respond_to?(:post_inclusion_autoload)
 #=> true
 
 ## Test that including autoloadable feature in Horreum class works
@@ -34,17 +30,10 @@ TestModelForAutoloadable.include(TestAutoloadableFeature)
 TestModelForAutoloadable.ancestors.include?(TestAutoloadableFeature)
 #=> true
 
-## Test that calling_location is set when feature is included
-TestAutoloadableFeature.calling_location.nil?
-#=> false
-
-## Test that calling_location is a string path
-TestAutoloadableFeature.calling_location.is_a?(String)
-#=> true
-
-## Test that calling_location points to this test file
-TestAutoloadableFeature.calling_location.end_with?('autoloadable_try.rb')
-#=> true
+## Test that post_inclusion_autoload can be called with test class
+TestAutoloadableFeature.post_inclusion_autoload(TestModelForAutoloadable, :test_autoloadable_feature, {})
+"success"
+#=> "success"
 
 ## Test that feature methods are available on the model
 @test_instance = TestModelForAutoloadable.new(name: 'test')
@@ -67,6 +56,6 @@ TestDataTypeAutoloadable.ancestors.include?(Familia::Features::Autoloadable)
 Familia::Features::SafeDump.ancestors.include?(Familia::Features::Autoloadable)
 #=> true
 
-## Test that SafeDump has calling_location tracking capability
-Familia::Features::SafeDump.respond_to?(:calling_location)
+## Test that SafeDump has post_inclusion_autoload capability
+Familia::Features::SafeDump.respond_to?(:post_inclusion_autoload)
 #=> true

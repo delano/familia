@@ -48,14 +48,14 @@ module Familia::Features
     @load_method = :from_json
 
     def self.included(base)
+      # The Autoloadable module will handle autoloading after setup is complete
+      super if defined?(super)
+
       Familia.trace(:LOADED, self, base, caller(1..1)) if Familia.debug?
       base.extend ClassMethods
 
       # Initialize the safe dump field map
       base.instance_variable_set(:@safe_dump_field_map, {})
-
-      # The Autoloadable module will handle autoloading after setup is complete
-      super if defined?(super)
     end
 
     # SafeDump::ClassMethods

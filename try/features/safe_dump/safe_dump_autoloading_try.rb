@@ -41,8 +41,8 @@ RUBY
 Familia::Features::SafeDump.ancestors.include?(Familia::Features::Autoloadable)
 #=> true
 
-## Test that SafeDump has calling_location tracking
-Familia::Features::SafeDump.respond_to?(:calling_location)
+## Test that SafeDump has post_inclusion_autoload capability
+Familia::Features::SafeDump.respond_to?(:post_inclusion_autoload)
 #=> true
 
 ## Test SafeDump autoloading by loading model file
@@ -69,12 +69,12 @@ end
 @model_instance.extension_loaded?
 #=> true
 
-## Test that SafeDump calling_location was set during feature inclusion
-Familia::Features::SafeDump.calling_location.nil?
-#=> false
+## Test that model was created successfully
+@model_instance.class.name
+#=> "TestSafeDumpModel"
 
-## Test that calling_location points to our model file
-Familia::Features::SafeDump.calling_location.end_with?('test_safe_dump_model.rb')
+## Test that feature_options were set up correctly
+TestSafeDumpModel.respond_to?(:feature_options)
 #=> true
 
 ## Test that safe_dump fields were loaded from extension file
@@ -98,13 +98,13 @@ TestSafeDumpModel.safe_dump_field_names.sort
 @dump_result.key?(:secret)
 #=> false
 
-## Test that feature_options contains calling location
+## Test that feature_options can be retrieved
 @options = TestSafeDumpModel.feature_options(:safe_dump)
-@options.key?(:calling_location)
+@options.is_a?(Hash)
 #=> true
 
-## Test calling location in feature options points to model file
-@options[:calling_location].end_with?('test_safe_dump_model.rb')
+## Test safe_dump feature is recognized
+TestSafeDumpModel.features_enabled.include?(:safe_dump)
 #=> true
 
 # Cleanup test files and directories
