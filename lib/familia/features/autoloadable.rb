@@ -4,9 +4,20 @@ require_relative '../refinements/snake_case'
 
 module Familia
   module Features
+    # Enables automatic loading of feature-specific files when a feature is included in a user class.
+    #
+    # When included in a feature module, adds ClassMethods that detect when the feature is
+    # included in user classes, derives the feature name, and autoloads files matching
+    # conventional patterns in the user class's directory structure.
     module Autoloadable
       using Familia::Refinements::SnakeCase
 
+      # Sets up a feature module with autoloading capabilities.
+      #
+      # Extends the feature module with ClassMethods and adds calling_location tracking
+      # to detect where the feature gets included in user classes.
+      #
+      # @param feature_module [Module] the feature module being enhanced
       def self.included(feature_module)
         feature_module.extend(ClassMethods)
 
@@ -22,7 +33,14 @@ module Familia
         end
       end
 
+      # Methods added to feature modules that include Autoloadable.
       module ClassMethods
+        # Triggered when the feature is included in a user class.
+        #
+        # Detects the calling location, derives the feature name, and autoloads
+        # feature-specific files based on conventional directory patterns.
+        #
+        # @param base [Class] the user class including this feature
         def included(base)
           super if defined?(super)
 
@@ -42,6 +60,16 @@ module Familia
 
         private
 
+        # Autoloads feature-specific files from conventional directory patterns.
+        #
+        # Searches for files matching patterns like:
+        # - model_name/feature_name_*.rb
+        # - model_name/features/feature_name_*.rb
+        # - features/feature_name_*.rb
+        #
+        # @param location_path [String] path where the user class is defined
+        # @param base [Class] the user class including the feature
+        # @param feature_name [String] snake_case name of the feature
         def autoload_feature_files(location_path, base, feature_name)
           base_dir = File.dirname(location_path)
           model_name = base.name.snake_case
@@ -53,12 +81,11 @@ module Familia
             File.join(base_dir, 'features', "#{feature_name}_*.rb"),
           ]
 
-          patterns.each do |pattern|
-            Dir.glob(pattern).each do |file|
-              Familia.ld "[Autoloadable] Loading #{file} for #{feature_name}"
-              require File.expand_path(file)
-            end
-          end
+          # Use Autoloader's shared method for consistent file loading
+          Familia::Autoloader.autoload_files(
+            patterns,
+            log_prefix: "Autoloadable(#{feature_name})"
+          )
         end
       end
     end

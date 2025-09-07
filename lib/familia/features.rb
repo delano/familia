@@ -1,7 +1,7 @@
 # lib/familia/features.rb
 
 # Load the Autoloader first, then use it to load all other features
-require_relative 'features/autoloader'
+require_relative 'autoloader'
 
 module Familia
   FeatureDefinition = Data.define(:name, :depends_on)
@@ -65,7 +65,7 @@ module Familia
   # @see Familia::Features::Autoloadable For automatic feature loading
   #
   module Features
-    include Familia::Features::Autoloader
+    include Familia::Autoloader
 
     @features_enabled = nil
     attr_reader :features_enabled
