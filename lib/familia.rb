@@ -64,19 +64,58 @@ module Familia
       @debug == true
     end
 
+    # Adds a member class to the list of tracked members
+    #
+    # @param member [Module, Class] The class to add
+    def add_member(member)
+      @members << member
+    end
+
     # Unloads a member class by removing its constant
     #
-    # @param member [String, Symbol] The class name to unload
+    # @param member [Module, Class, String, Symbol] The class or class name to unload
     def unload_member(member)
-      Familia.ld "[#{member}] Unloading..."
-      Object.send(:remove_const, member)
+      case member
+      when String, Symbol
+        member_name = member.to_s
+        # Find the actual class object in members for removal
+        class_member = @members.find { |m| m.respond_to?(:name) && m.name == member_name }
+      else
+        member_name = member.name
+        class_member = member
+      end
+
+      # For namespaced constants like Nested::CustomClass, we need to:
+      # 1. Find the actual parent module (Nested, not Object)
+      # 2. Use only the simple name (CustomClass, not Nested::CustomClass)
+      name_parts = member_name.split('::')
+      simple_name = name_parts.last
+
+      if name_parts.length > 1
+        # Navigate to the actual parent module
+        parent_module = name_parts[0..-2].reduce(Object) { |mod, part| mod.const_get(part) }
+      else
+        parent_module = Object
+      end
+
+      Familia.ld "[#{member_name}] Unloading '#{simple_name}' from #{parent_module}"
+
+      # Only remove the constant if it exists
+      if parent_module.const_defined?(simple_name.to_sym, false)
+        parent_module.send(:remove_const, simple_name.to_sym)
+      end
+
+      # Remove from members list (remove the class object, not string)
+      @members.delete(class_member) if class_member
     end
 
     # Unloads all tracked member classes
     #
     # Iterates through all members and calls unload_member for each one
     def unload!
-      @members.each { |member| unload_member(member) }
+      # Create a copy to avoid modifying array during iteration
+      members_to_unload = @members.dup
+      members_to_unload.each { |member| unload_member(member) }
     end
   end
 
