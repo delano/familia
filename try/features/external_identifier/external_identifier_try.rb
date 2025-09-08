@@ -198,3 +198,29 @@ ExternalIdTest.extid_lookup[@test_obj.extid]
 
 # Cleanup test objects
 @test_obj.destroy! rescue nil
+
+## Test 1: Changing extid value (should work after bug fix)
+bug_test_obj = ExternalIdTest.new(id: 'bug_test', name: 'Bug Test Object')
+bug_test_obj.save
+bug_test_obj.extid = 'new_extid_value'
+bug_test_obj.extid
+#=> "new_extid_value"
+
+## Test 2: find_by_extid with deleted object (should work after bug fix)
+delete_test_obj = ExternalIdTest.new(id: 'delete_test', name: 'Delete Test')
+delete_test_obj.save
+test_extid = delete_test_obj.extid
+# Delete the object directly from Redis to simulate cleanup scenario
+ExternalIdTest.dbclient.del(delete_test_obj.dbkey)
+# Now try to find by extid - this should clean up mapping and return nil
+ExternalIdTest.find_by_extid(test_extid)
+#=> nil
+
+## Test 3: destroy! method (should work after bug fix)
+destroy_test_obj = ExternalIdTest.new(id: 'destroy_test', name: 'Destroy Test')
+destroy_test_obj.save
+destroy_extid = destroy_test_obj.extid
+destroy_test_obj.destroy!
+# Verify mapping was cleaned up
+ExternalIdTest.extid_lookup.key?(destroy_extid)
+#=> false
