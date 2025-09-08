@@ -20,7 +20,7 @@ Versioning <https://semver.org/spec/v2.0.0.html>`__.
 Added
 -----
 
-- **Feature-specific autoloading**: Features can now automatically discover and load extension files from your project directories. When you include a feature like ``safe_dump``, Familia searches for configuration files using conventional patterns like ``{model_name}/{feature_name}_*.rb``, enabling clean separation between core model definitions and feature-specific configurations.
+- **Feature Autoloading System**: Features can now automatically discover and load extension files from your project directories. When you include a feature like ``safe_dump``, Familia searches for configuration files using conventional patterns like ``{model_name}/{feature_name}_*.rb``, enabling clean separation between core model definitions and feature-specific configurations. See ``docs/migrating/v2.0.0-pre13.md`` for migration details.
 
 - **Consolidated autoloader architecture**: Introduced ``Familia::Autoloader`` as a shared utility for consistent file loading patterns across the framework, supporting both general-purpose and feature-specific autoloading scenarios.
 
