@@ -8,6 +8,8 @@ module Familia
   class FieldTypeError < Problem; end
   class AutoloadError < Problem; end
 
+  class SerializerError < Problem; end
+
   class HighRiskFactor < Problem
     attr_reader :value
 

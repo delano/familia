@@ -1,9 +1,11 @@
 # lib/familia.rb
 
-require 'json'
+require 'oj'
 require 'redis'
 require 'uri/valkey'
 require 'connection_pool'
+
+# OJ configuration is handled internally by Familia::JsonSerializer
 
 require_relative 'familia/refinements'
 require_relative 'familia/errors'
@@ -70,6 +72,7 @@ module Familia
   require_relative 'familia/connection'
   require_relative 'familia/settings'
   require_relative 'familia/utils'
+  require_relative 'familia/json_serializer'
 
   extend SecureIdentifier
   extend Connection
@@ -84,3 +87,13 @@ require_relative 'familia/features'
 require_relative 'familia/data_type'
 require_relative 'familia/horreum'
 require_relative 'familia/encryption'
+
+# Ensure JSON constant is available for backward compatibility with existing code
+# This approach is safer than monkey-patching core classes globally
+begin
+  require 'json'
+rescue LoadError
+  # If json gem is not available, define a minimal JSON constant
+  # that delegates to Familia::JsonSerializer for compatibility
+  JSON = Familia::JsonSerializer
+end

@@ -188,18 +188,30 @@ rescue TypeError => e
 end
 #=> true
 
-## JSON serialization is safe
-@user_json = {
-  id: @user.id,
-  username: @user.username,
-  password: @user.password_hash
-}.to_json
+## JSON serialization prevents leakage by raising error
+begin
+  user_json = {
+    id: @user.id,
+    username: @user.username,
+    password: @user.password_hash
+  }.to_json
+  false
+rescue Familia::SerializerError
+  true
+end
+#=> true
 
-@user_json.include?("bcrypt")
-#=> false
-
-## JSON contains concealed marker
-@user_json.include?("[CONCEALED]")
+## JSON serialization with ConcealedString raises error
+begin
+  user_json = {
+    id: @user.id,
+    username: @user.username,
+    password: @user.password_hash
+  }.to_json
+  false
+rescue Familia::SerializerError => e
+  e.message.include?("ConcealedString")
+end
 #=> true
 
 ## Bulk field operations are secure
@@ -281,16 +293,46 @@ api_response = {
   }
 }
 
-@response_json = api_response.to_json
-@response_json.include?("bcrypt")
-#=> false
+begin
+  @response_json = api_response.to_json
+  false
+rescue Familia::SerializerError
+  true
+end
+#=> true
 
 ## API response doesn't leak secrets
-@response_json.include?("sk-1234567890abcdef")
-#=> false
+api_response = {
+  user_id: @user.id,
+  credentials: {
+    password: @user.password_hash,
+    api_key: @user.api_secret
+  }
+}
+
+begin
+  @response_json = api_response.to_json
+  false
+rescue Familia::SerializerError
+  true
+end
+#=> true
 
 ## API response contains concealed markers
-@response_json.include?("[CONCEALED]")
+api_response = {
+  user_id: @user.id,
+  credentials: {
+    password: @user.password_hash,
+    api_key: @user.api_secret
+  }
+}
+
+begin
+  @response_json = api_response.to_json
+  false
+rescue Familia::SerializerError => e
+  e.message.include?("ConcealedString")
+end
 #=> true
 
 ## Debug logging safety

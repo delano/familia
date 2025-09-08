@@ -1,7 +1,7 @@
 # lib/familia/encryption.rb
 
 require 'base64'
-require 'json'
+require 'oj'
 require 'openssl'
 
 # Provider system components

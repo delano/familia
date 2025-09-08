@@ -37,6 +37,8 @@
 #   user.to_json                            # Safe - contains [CONCEALED]
 #
 class ConcealedString
+  REDACTED = '[CONCEALED]'.freeze
+
   # Create a concealed string wrapper
   #
   # @param encrypted_data [String] The encrypted JSON data
@@ -264,9 +266,9 @@ class ConcealedString
     { concealed: true }
   end
 
-  # Prevent exposure in JSON serialization
+  # Prevent exposure in JSON serialization - fail closed for security
   def to_json(*)
-    '"[CONCEALED]"'
+    raise Familia::SerializerError, "ConcealedString cannot be serialized to JSON"
   end
 
   # Prevent exposure in Rails serialization (as_json -> to_json)
