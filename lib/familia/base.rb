@@ -15,7 +15,7 @@ module Familia
   #
   module Base
 
-    using Familia::Refinements::TimeUtils
+    using Familia::Refinements::TimeLiterals
 
     @features_available = nil
     @feature_definitions = nil

@@ -29,7 +29,7 @@ module Familia
   class FieldType
     attr_reader :name, :options, :method_name, :fast_method_name, :on_conflict, :loggable
 
-    using Familia::Refinements::TimeUtils
+    using Familia::Refinements::TimeLiterals
 
     # Initialize a new field type
     #

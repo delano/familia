@@ -12,6 +12,28 @@ Versioning <https://semver.org/spec/v2.0.0.html>`__.
 
    <!--scriv-insert-here-->
 
+.. _changelog-2.0.0.pre14:
+
+2.0.0.pre14 — 2025-09-08
+========================
+
+Changed
+-------
+
+- **BREAKING CHANGE**: Renamed ``Familia::Refinements::TimeUtils`` to ``Familia::Refinements::TimeLiterals`` to better reflect the module's primary purpose of enabling numeric and string values to be treated as time unit literals (e.g., ``5.minutes``, ``"30m".in_seconds``). Functionality remains the same - only the module name has changed. Users must update their refinement usage from ``using Familia::Refinements::TimeUtils`` to ``using Familia::Refinements::TimeLiterals``.
+
+Fixed
+-----
+
+- Fixed ExternalIdentifier HashKey method calls by replacing incorrect ``.del()`` calls with ``.remove_field()`` in three critical locations: extid setter (cleanup old mapping when changing value), find_by_extid (cleanup orphaned mapping when object not found), and destroy! (cleanup mapping when object is destroyed). Added comprehensive test coverage for all scenarios to prevent regression. PR #100
+
+AI Assistance
+-------------
+
+- Claude Code helped rename TimeUtils to TimeLiterals throughout the codebase, including module name, file path, all usage references, and updating existing documentation.
+- Gemini 2.5 Flash wrote the inline docs for TimeLiterals based on a discussion re: naming rationale.
+- Claude Code fixed the ExternalIdentifier HashKey method bug, replacing incorrect ``.del()`` calls with proper ``.remove_field()`` calls, and implemented test coverage for the affected scenarios.
+
 .. _changelog-2.0.0.pre13:
 
 2.0.0.pre13 — 2025-09-07
@@ -20,13 +42,13 @@ Versioning <https://semver.org/spec/v2.0.0.html>`__.
 Added
 -----
 
-- **Feature-specific autoloading**: Features can now automatically discover and load extension files from your project directories. When you include a feature like ``safe_dump``, Familia searches for configuration files using conventional patterns like ``{model_name}/{feature_name}_*.rb``, enabling clean separation between core model definitions and feature-specific configurations.
+- **Feature Autoloading System**: Features can now automatically discover and load extension files from your project directories. When you include a feature like ``safe_dump``, Familia searches for configuration files using conventional patterns like ``{model_name}/{feature_name}_*.rb``, enabling clean separation between core model definitions and feature-specific configurations. See ``docs/migrating/v2.0.0-pre13.md`` for migration details.
 
 - **Consolidated autoloader architecture**: Introduced ``Familia::Autoloader`` as a shared utility for consistent file loading patterns across the framework, supporting both general-purpose and feature-specific autoloading scenarios.
 
 - Added ``PER_MONTH`` constant (2,629,746 seconds = 30.437 days) derived from Gregorian year for consistent month calculations.
 - Added ``months``, ``month``, and ``in_months`` conversion methods to Numeric refinement.
-- Added month unit mappings (``'mo'``, ``'month'``, ``'months'``) to TimeUtils ``UNIT_METHODS`` hash.
+- Added month unit mappings (``'mo'``, ``'month'``, ``'months'``) to TimeLiterals ``UNIT_METHODS`` hash.
 
 - **Error Handling**: Added ``NotSupportedError`` for invalid serialization mode combinations in encryption subsystem. PR #97
 
@@ -34,7 +56,7 @@ Changed
 -------
 
 - Refactored time and numeric extensions from global monkey patches to proper Ruby refinements for better encapsulation and reduced global namespace pollution
-- Updated all internal classes to use refinements via ``using Familia::Refinements::TimeUtils`` statements
+- Updated all internal classes to use refinements via ``using Familia::Refinements::TimeLiterals`` statements
 - Added centralized ``RefinedContext`` module in test helpers to support refinement testing in tryouts files
 
 - Updated ``PER_YEAR`` constant to use Gregorian year (31,556,952 seconds = 365.2425 days) for calendar consistency.
@@ -49,7 +71,7 @@ Fixed
 - Fixed byte conversion logic in ``to_bytes`` method to correctly handle exact 1024-byte boundaries (``size >= 1024`` instead of ``size > 1024``)
 - Resolved refinement testing issues in tryouts by implementing ``eval``-based code execution within refined contexts
 
-- Fixed TimeUtils refinement ``months_old`` and ``years_old`` methods returning incorrect values (raw seconds instead of months/years). The underlying ``age_in`` method now properly handles ``:months`` and ``:years`` units. Issue #94.
+- Fixed TimeLiterals refinement ``months_old`` and ``years_old`` methods returning incorrect values (raw seconds instead of months/years). The underlying ``age_in`` method now properly handles ``:months`` and ``:years`` units. Issue #94.
 - Fixed calendar consistency issue where ``12.months != 1.year`` by updating ``PER_YEAR`` to use Gregorian year (365.2425 days) and defining ``PER_MONTH`` as ``PER_YEAR / 12``.
 
 Security
@@ -72,7 +94,7 @@ AI Assistance
 
 - Significant AI assistance in architectural design and implementation of the feature-specific autoloading system, including pattern matching logic, Ruby introspection methods, and comprehensive debugging of edge cases and thread safety considerations.
 
-- Claude Code assisted with implementing the fix for broken ``months_old`` and ``years_old`` methods in the TimeUtils refinement, including analysis, implementation, testing, and documentation.
+- Claude Code assisted with implementing the fix for broken ``months_old`` and ``years_old`` methods in the TimeLiterals refinement, including analysis, implementation, testing, and documentation.
 
 - Performance optimization research and OJ gem integration strategy, including compatibility analysis and testing approach for seamless stdlib JSON replacement. PR #97
 

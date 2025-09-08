@@ -273,7 +273,7 @@ puts "LegacyModel fields after set_safe_dump_fields: #{LegacyModel.safe_dump_fie
 puts
 puts '=== Cleaning up test data ==='
 [User, Product, Order, Address, Customer, LegacyModel].each do |klass|
-  klass.redis.del(klass.redis.keys("#{klass.name.downcase}:*"))
+  klass.dbclient.del(klass.dbclient.keys("#{klass.name.downcase}:*"))
 rescue StandardError => e
   puts "Error cleaning #{klass}: #{e.message}"
 end

@@ -170,7 +170,26 @@ All relationships support automatic indexing and tracking - objects are automati
 
 ## Organizing Complex Models
 
-For large applications, you can organize model complexity using custom features:
+For large applications, you can organize model complexity using custom features and the Feature Autoloading System:
+
+### Feature Autoloading System
+
+Familia automatically discovers and loads feature-specific configuration files, enabling clean separation between core model definitions and feature configurations:
+
+```ruby
+# app/models/user.rb - Clean model definition
+class User < Familia::Horreum
+  field :name, :email, :password
+  feature :safe_dump  # Configuration auto-loaded
+end
+
+# app/models/user/safe_dump_extensions.rb - Automatically discovered
+class User
+  safe_dump_fields :name, :email  # password excluded for security
+end
+```
+
+Extension files follow the pattern: `{model_name}/{feature_name}_*.rb`
 
 ### Self-Registering Features
 
@@ -201,7 +220,7 @@ class Customer < Familia::Horreum
 end
 ```
 
-This keeps complex models organized while maintaining Familia's clean, declarative style.
+These approaches keep complex models organized while maintaining Familia's clean, declarative style. For detailed migration information, see the [migration guides](docs/migrating/).
 
 ## AI Development Assistance
 

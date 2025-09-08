@@ -4,10 +4,10 @@ Familia provides a comprehensive time utilities refinement that adds convenient 
 
 ## Overview
 
-The `Familia::Refinements::TimeUtils` module extends Ruby's built-in classes with intuitive time manipulation methods:
+The `Familia::Refinements::TimeLiterals` module extends Ruby's built-in classes with intuitive time manipulation methods:
 
 ```ruby
-using Familia::Refinements::TimeUtils
+using Familia::Refinements::TimeLiterals
 
 2.hours        #=> 7200 (seconds)
 "30m".in_seconds  #=> 1800
@@ -40,7 +40,7 @@ This prevents subtle bugs where `12.months` and `1.year` would differ by ~5.8 ho
 ### Converting Numbers to Time Units
 
 ```ruby
-using Familia::Refinements::TimeUtils
+using Familia::Refinements::TimeLiterals
 
 # Singular and plural forms work identically
 1.second   #=> 1
@@ -140,7 +140,7 @@ timestamp.within?(1.hour)       #=> false
 ### Cache Expiration
 
 ```ruby
-using Familia::Refinements::TimeUtils
+using Familia::Refinements::TimeLiterals
 
 class CacheEntry < Familia::Horreum
   field :data
