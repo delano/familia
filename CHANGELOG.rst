@@ -12,6 +12,70 @@ Versioning <https://semver.org/spec/v2.0.0.html>`__.
 
    <!--scriv-insert-here-->
 
+.. _changelog-2.0.0.pre13:
+
+2.0.0.pre13 — 2025-09-07
+========================
+
+Added
+-----
+
+- **Feature-specific autoloading**: Features can now automatically discover and load extension files from your project directories. When you include a feature like ``safe_dump``, Familia searches for configuration files using conventional patterns like ``{model_name}/{feature_name}_*.rb``, enabling clean separation between core model definitions and feature-specific configurations.
+
+- **Consolidated autoloader architecture**: Introduced ``Familia::Autoloader`` as a shared utility for consistent file loading patterns across the framework, supporting both general-purpose and feature-specific autoloading scenarios.
+
+- Added ``PER_MONTH`` constant (2,629,746 seconds = 30.437 days) derived from Gregorian year for consistent month calculations.
+- Added ``months``, ``month``, and ``in_months`` conversion methods to Numeric refinement.
+- Added month unit mappings (``'mo'``, ``'month'``, ``'months'``) to TimeUtils ``UNIT_METHODS`` hash.
+
+- **Error Handling**: Added ``NotSupportedError`` for invalid serialization mode combinations in encryption subsystem. PR #97
+
+Changed
+-------
+
+- Refactored time and numeric extensions from global monkey patches to proper Ruby refinements for better encapsulation and reduced global namespace pollution
+- Updated all internal classes to use refinements via ``using Familia::Refinements::TimeUtils`` statements
+- Added centralized ``RefinedContext`` module in test helpers to support refinement testing in tryouts files
+
+- Updated ``PER_YEAR`` constant to use Gregorian year (31,556,952 seconds = 365.2425 days) for calendar consistency.
+
+- **Performance**: Replaced stdlib JSON with OJ gem for 2-5x faster JSON operations and reduced memory allocation. All existing code remains compatible through mimic_JSON mode. PR #97
+
+- **Encryption**: Enhanced serialization safety for encrypted fields with improved ConcealedString handling across different JSON processing modes. Strengthened protection against accidental data exposure during serialization. PR #97
+
+Fixed
+-----
+
+- Fixed byte conversion logic in ``to_bytes`` method to correctly handle exact 1024-byte boundaries (``size >= 1024`` instead of ``size > 1024``)
+- Resolved refinement testing issues in tryouts by implementing ``eval``-based code execution within refined contexts
+
+- Fixed TimeUtils refinement ``months_old`` and ``years_old`` methods returning incorrect values (raw seconds instead of months/years). The underlying ``age_in`` method now properly handles ``:months`` and ``:years`` units. Issue #94.
+- Fixed calendar consistency issue where ``12.months != 1.year`` by updating ``PER_YEAR`` to use Gregorian year (365.2425 days) and defining ``PER_MONTH`` as ``PER_YEAR / 12``.
+
+Security
+--------
+
+- **Encryption**: Improved concealed value protection during JSON serialization, ensuring encrypted data remains properly protected across all OJ serialization modes. PR #97
+
+Documentation
+-------------
+
+- **Feature System Autoloading Guide**: Added comprehensive guide at ``docs/guides/Feature-System-Autoloading.md`` explaining the new autoloading system, including file naming conventions, directory patterns, and usage examples.
+- **Enhanced API documentation**: Added detailed YARD documentation for autoloading modules and methods.
+
+AI Assistance
+-------------
+
+- Provided comprehensive analysis of Ruby refinement scoping issues and designed the eval-based testing solution
+- Assisted with refactoring global extensions to proper refinements while maintaining backward compatibility
+- Helped debug and fix the byte conversion boundary condition bug
+
+- Significant AI assistance in architectural design and implementation of the feature-specific autoloading system, including pattern matching logic, Ruby introspection methods, and comprehensive debugging of edge cases and thread safety considerations.
+
+- Claude Code assisted with implementing the fix for broken ``months_old`` and ``years_old`` methods in the TimeUtils refinement, including analysis, implementation, testing, and documentation.
+
+- Performance optimization research and OJ gem integration strategy, including compatibility analysis and testing approach for seamless stdlib JSON replacement. PR #97
+
 2.0.0.pre12 — 2025-09-04
 ========================
 
