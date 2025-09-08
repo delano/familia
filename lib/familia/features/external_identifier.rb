@@ -99,7 +99,7 @@ module Familia
             klass.define_method :"#{method_name}=" do |value|
               # Remove old mapping if extid is changing
               old_value = instance_variable_get(:"@#{field_name}")
-              self.class.extid_lookup.remove_field(old_value) if old_value && old_value != value && respond_to?(:identifier)
+              self.class.extid_lookup.remove_field(old_value) if old_value && old_value != value
 
               # Set the new value
               instance_variable_set(:"@#{field_name}", value)

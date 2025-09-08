@@ -8,7 +8,7 @@ module Familia
     # This module provides a set of refinements for `Numeric` and `String` to
     # enable readable and expressive time duration and timestamp manipulation.
     #
-    # The name "TimeLiterals" reflects its core purpose: to allow us totreat
+    # The name "TimeLiterals" reflects its core purpose: to allow us to treat
     # numeric values directly as "literals" of time units (e.g., `5.minutes`,
     # `1.day`). It extends this concept to include conversions between these
     # literal time quantities, parsing string representations of time
