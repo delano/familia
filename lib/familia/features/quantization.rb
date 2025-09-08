@@ -398,6 +398,7 @@ module Familia
 
       extend ClassMethods
 
+      Familia::Base.add_feature self, :quantization
     end
   end
 end

@@ -77,8 +77,8 @@ BaseUuidTest.instance_variable_get(:@field_types)
 BaseUuidTest.respond_to?(:feature)
 #=> true
 
-## Feature namespace resolution is available
-Familia::Features.respond_to?(:const_defined?)
+## Feature registration methods are available
+Familia::Base.respond_to?(:add_feature)
 #=> true
 
 ## Valid identifiers work correctly

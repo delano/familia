@@ -431,6 +431,7 @@ module Familia
         end
       end
 
+      Familia::Base.add_feature self, :encrypted_fields
     end
   end
 end

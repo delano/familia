@@ -56,47 +56,25 @@ module TestFeatureCWithDeps
   end
 end
 
-# Create test features in proper namespaces for new system
-# Rename the original modules to avoid conflict
-TestFeatureAImpl = TestFeatureA
-TestFeatureBImpl = TestFeatureB
-TestFeatureCImpl = TestFeatureCWithDeps
+# Register test features manually
+Familia::Base.add_feature TestFeatureA, :test_feature_a
+Familia::Base.add_feature TestFeatureB, :test_feature_b
+Familia::Base.add_feature TestFeatureCWithDeps, :test_feature_c, depends_on: [:test_feature_a, :test_feature_b]
 
-module Familia
-  module Features
-    module TestFeatureA
-      include TestFeatureAImpl
-    end
-
-    module TestFeatureB
-      include TestFeatureBImpl
-    end
-
-    module TestFeatureC
-      include TestFeatureCImpl
-
-      FEATURE_DEFINITION = Familia::FeatureDefinition.new(
-        name: :test_feature_c,
-        depends_on: [:test_feature_a, :test_feature_b]
-      )
-    end
-  end
-end
-
-## Feature definitions are available in feature modules
-Familia::Features::TestFeatureC.const_defined?(:FEATURE_DEFINITION)
+## Feature definitions are created correctly
+Familia::Base.feature_definitions.key?(:test_feature_a)
 #=> true
 
 ## Feature definitions store dependencies correctly
-Familia::Features::TestFeatureC::FEATURE_DEFINITION.depends_on
+Familia::Base.feature_definitions[:test_feature_c].depends_on
 #=> [:test_feature_a, :test_feature_b]
 
-## Features without dependencies don't have FEATURE_DEFINITION constants
-Familia::Features::TestFeatureA.const_defined?(:FEATURE_DEFINITION)
-#=> false
+## Features without dependencies have empty depends_on array
+Familia::Base.feature_definitions[:test_feature_a].depends_on
+#=> []
 
 ## Feature definitions store name correctly
-Familia::Features::TestFeatureC::FEATURE_DEFINITION.name
+Familia::Base.feature_definitions[:test_feature_c].name
 #=> :test_feature_c
 
 ## Successfully enable feature without dependencies
