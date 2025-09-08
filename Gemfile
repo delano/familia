@@ -5,12 +5,7 @@ source 'https://rubygems.org'
 gemspec
 
 group :test do
-  if ENV['LOCAL_DEV']
-    gem 'tryouts', path: '../tryouts'
-    gem 'uri-valkey', path: '..//uri-valkey/gems', glob: 'uri-valkey.gemspec'
-  else
-    gem 'tryouts', '~> 3.5.2', require: false
-  end
+  gem 'tryouts', '~> 3.6.0', require: false
   gem 'concurrent-ruby', '~> 1.3.5', require: false
   gem 'ruby-prof'
   gem 'stackprof'
