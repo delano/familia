@@ -76,8 +76,9 @@ end
 
 @combined_test = CombinedFeaturesTest.new(id: 'combined_1', name: 'Combined', temp_data: 'temp')
 
-## Expiration feature is properly registered
-Familia::Base.features_available.key?(:expiration)
+## Expiration feature can be resolved via namespace
+# The new system uses namespace-based resolution instead of registry
+Familia::Features.const_defined?(:Expiration)
 #=> true
 
 ## Feature enabled correctly

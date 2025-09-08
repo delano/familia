@@ -221,7 +221,6 @@ module Familia
         end
       end
 
-      Familia::Base.add_feature self, :transient_fields, depends_on: nil
     end
   end
 end

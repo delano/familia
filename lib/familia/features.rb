@@ -110,9 +110,9 @@ module Familia
 
       # If there's a value provided check that it's a valid feature
       feature_name = feature_name.to_sym
-      feature_class = Familia::Base.find_feature(feature_name, self)
+      feature_class = find_feature_module(feature_name)
       unless feature_class
-        raise Familia::Problem, "Unsupported feature: #{feature_name}"
+        raise Familia::Problem, "Unsupported feature: #{feature_class}"
       end
 
       # If the feature is already available, do nothing but log about it
@@ -124,7 +124,7 @@ module Familia
       Familia.trace :FEATURE, nil, "#{self} includes #{feature_name.inspect}", caller(1..1) if Familia.debug?
 
       # Check dependencies and raise error if missing
-      feature_def = Familia::Base.feature_definitions[feature_name]
+      feature_def = feature_class.const_get(:FEATURE_DEFINITION) if feature_class.const_defined?(:FEATURE_DEFINITION)
       if feature_def&.depends_on&.any?
         missing = feature_def.depends_on - features_enabled
         if missing.any?
@@ -163,6 +163,46 @@ module Familia
       #
       # We'd need to extend the DataType instances for each Horreum subclass. That
       # avoids it getting included multiple times per DataType
+    end
+
+    private
+
+    # Find a feature module using namespace-based resolution.
+    #
+    # This method looks for feature modules in the following order:
+    # 1. Model-specific feature: ModelClass::Features::FeatureName
+    # 2. Built-in feature: Familia::Features::FeatureName
+    #
+    # @param feature_name [Symbol] the snake_case name of the feature
+    # @return [Module, nil] the feature module or nil if not found
+    #
+    def find_feature_module(feature_name)
+      # Convert snake_case to CamelCase (e.g., safe_dump -> SafeDump)
+      const_name = feature_name.to_s.split('_').map(&:capitalize).join
+
+      Familia.trace :FEATURE, nil, "Looking for feature #{feature_name} as #{const_name}", caller(1..1) if Familia.debug?
+
+      # First, try to find a model-specific feature
+      # e.g., Customer::Features::SafeDump
+      if self.class.name && self.class.const_defined?(:Features, false)
+        features_module = self.class.const_get(:Features)
+        if features_module.const_defined?(const_name, false)
+          feature_class = features_module.const_get(const_name)
+          Familia.trace :FEATURE, nil, "Found model-specific feature: #{feature_class}", caller(1..1) if Familia.debug?
+          return feature_class
+        end
+      end
+
+      # Fallback to built-in features
+      # e.g., Familia::Features::SafeDump
+      if Familia::Features.const_defined?(const_name, false)
+        feature_class = Familia::Features.const_get(const_name)
+        Familia.trace :FEATURE, nil, "Found built-in feature: #{feature_class}", caller(1..1) if Familia.debug?
+        return feature_class
+      end
+
+      Familia.trace :FEATURE, nil, "Feature not found: #{feature_name} (#{const_name})", caller(1..1) if Familia.debug?
+      nil
     end
   end
 end

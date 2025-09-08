@@ -354,7 +354,6 @@ module Familia
         redis.persist(dbkey)
       end
 
-      Familia::Base.add_feature self, :expiration
     end
   end
 end

@@ -301,7 +301,6 @@ module Familia
         Familia.trace :OBJID_INIT, dbclient, "Generator strategy: #{generator}", caller(1..1)
       end
 
-      Familia::Base.add_feature self, :object_identifier, depends_on: []
     end
   end
 end

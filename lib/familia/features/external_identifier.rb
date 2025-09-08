@@ -304,7 +304,10 @@ module Familia
         end
       end
 
-      Familia::Base.add_feature self, :external_identifier, depends_on: [:object_identifier]
+      FEATURE_DEFINITION = Familia::FeatureDefinition.new(
+        name: :external_identifier,
+        depends_on: [:object_identifier]
+      )
     end
   end
 end

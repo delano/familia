@@ -154,7 +154,6 @@ module Familia::Features
 
     extend ClassMethods
 
-    Familia::Base.add_feature self, :safe_dump
   end
 end
 # rubocop:enable ThreadSafety/ClassInstanceVariable

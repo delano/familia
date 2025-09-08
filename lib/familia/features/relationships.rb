@@ -466,8 +466,6 @@ module Familia
         end
       end
 
-      # Register the feature with Familia
-      Familia::Base.add_feature Relationships, :relationships
     end
   end
 end

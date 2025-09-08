@@ -71,22 +71,21 @@ class ::TestFieldClass
   include TestFieldFeature
 end
 
-## Test model-specific feature registration
-# Register feature on TestClass
-TestClass.add_feature TestFeature, :test_feature
-#=> TestFeature
+## Test namespace-based feature resolution
+# Features are now resolved via namespaces, not registry
+# This tests that the system can find built-in features
 
-## TestClass should have the feature available
-TestClass.features_available[:test_feature]
-#=> TestFeature
+## SafeDump feature can be resolved via namespace
+Familia::Features.const_defined?(:SafeDump)
+#=> true
 
-## TestSubClass should inherit the feature from TestClass via ancestry chain
-TestSubClass.find_feature(:test_feature)
-#=> TestFeature
-
-## Familia::Base should also be able to find features in the chain
-Familia::Base.find_feature(:test_feature, TestSubClass)
-#=> TestFeature
+## Feature enabling works with namespace resolution
+class TestHorreumClass < Familia::Horreum
+  field :name
+  feature :safe_dump
+end
+TestHorreumClass.features_enabled
+#=> [:safe_dump]
 
 ## Check that fields were registered correctly
 TestModelWithSafeDump.safe_dump_field_names.sort
