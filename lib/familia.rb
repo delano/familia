@@ -5,14 +5,7 @@ require 'redis'
 require 'uri/valkey'
 require 'connection_pool'
 
-# Configure OJ defaults for Familia
-Oj.default_options = {
-  mode: :compat,           # Compatibility mode respects to_json methods
-  symbol_keys: false,      # Default to string keys
-  bigdecimal_as_decimal: false,
-  create_additions: false, # Don't allow arbitrary class creation
-  second_precision: 6      # Match JSON gem precision
-}
+# OJ configuration is handled internally by Familia::JsonSerializer
 
 require_relative 'familia/refinements'
 require_relative 'familia/errors'
@@ -95,57 +88,12 @@ require_relative 'familia/data_type'
 require_relative 'familia/horreum'
 require_relative 'familia/encryption'
 
-# Backwards compatibility for tests and examples that use JSON directly
-# This allows existing code to continue working while we use Familia::JsonSerializer internally
-unless defined?(JSON)
+# Ensure JSON constant is available for backward compatibility with existing code
+# This approach is safer than monkey-patching core classes globally
+begin
+  require 'json'
+rescue LoadError
+  # If json gem is not available, define a minimal JSON constant
+  # that delegates to Familia::JsonSerializer for compatibility
   JSON = Familia::JsonSerializer
-
-  # Add to_json methods to core classes for compatibility
-  class Object
-    def to_json(*args)
-      Familia::JsonSerializer.dump(self)
-    end
-  end
-
-  class Hash
-    def to_json(*args)
-      Familia::JsonSerializer.dump(self)
-    end
-  end
-
-  class Array
-    def to_json(*args)
-      Familia::JsonSerializer.dump(self)
-    end
-  end
-
-  class String
-    def to_json(*args)
-      Familia::JsonSerializer.dump(self)
-    end
-  end
-
-  class Numeric
-    def to_json(*args)
-      Familia::JsonSerializer.dump(self)
-    end
-  end
-
-  class TrueClass
-    def to_json(*args)
-      Familia::JsonSerializer.dump(self)
-    end
-  end
-
-  class FalseClass
-    def to_json(*args)
-      Familia::JsonSerializer.dump(self)
-    end
-  end
-
-  class NilClass
-    def to_json(*args)
-      Familia::JsonSerializer.dump(self)
-    end
-  end
 end

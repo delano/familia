@@ -32,7 +32,7 @@ module Familia
         else
           Oj.load(source, mode: :strict)
         end
-      rescue Oj::ParseError, EncodingError => e
+      rescue Oj::ParseError, Oj::Error, EncodingError => e
         raise SerializerError, e.message
       end
 
@@ -40,9 +40,9 @@ module Familia
       #
       # @param obj [Object] Ruby object to serialize
       # @return [String] JSON string
-      def dump(obj, *args)
+      def dump(obj)
         Oj.dump(obj, mode: :strict)
-      rescue TypeError => e
+      rescue Oj::Error, TypeError, EncodingError => e
         raise SerializerError, e.message
       end
 
@@ -50,16 +50,20 @@ module Familia
       #
       # @param obj [Object] Ruby object to serialize
       # @return [String] JSON string
-      def generate(obj, *args)
+      def generate(obj)
         Oj.dump(obj, mode: :strict)
+      rescue Oj::Error, TypeError, EncodingError => e
+        raise SerializerError, e.message
       end
 
       # Serialize Ruby object to pretty-formatted JSON string
       #
       # @param obj [Object] Ruby object to serialize
       # @return [String] pretty-formatted JSON string
-      def pretty_generate(obj, *args)
+      def pretty_generate(obj)
         Oj.dump(obj, mode: :strict, indent: 2)
+      rescue Oj::Error, TypeError, EncodingError => e
+        raise SerializerError, e.message
       end
     end
   end

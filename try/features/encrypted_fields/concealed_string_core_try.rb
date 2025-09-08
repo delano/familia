@@ -77,9 +77,14 @@ end
 @doc.content.to_str
 #=!> NoMethodError
 
-## JSON serialization - to_json
-@doc.content.to_json
-#=> "\"[CONCEALED]\""
+## JSON serialization - to_json (fails for security)
+begin
+  @doc.content.to_json
+  raise "Should have raised SerializerError"
+rescue Familia::SerializerError => e
+  e.class
+end
+#=> Familia::SerializerError
 
 ## JSON serialization - as_json
 @doc.content.as_json

@@ -67,9 +67,14 @@ hash_result.keys.include?("api_token")
 @record.api_token.inspect
 #=> "[CONCEALED]"
 
-## JSON serialization - to_json
-@record.api_token.to_json
-#=> "\"[CONCEALED]\""
+## JSON serialization - to_json (fails for security)
+begin
+  @record.api_token.to_json
+  raise "Should have raised SerializerError"
+rescue Familia::SerializerError => e
+  e.class
+end
+#=> Familia::SerializerError
 
 ## JSON serialization - as_json
 @record.api_token.as_json
@@ -113,7 +118,7 @@ begin
   @nested_data.to_json
   false
 rescue Familia::SerializerError => e
-  e.message.include?("Object to JSON")
+  e.message.include?("ConcealedString cannot be serialized")
 end
 #=> true
 

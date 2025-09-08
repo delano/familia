@@ -266,9 +266,9 @@ class ConcealedString
     { concealed: true }
   end
 
-  # Prevent exposure in JSON serialization
+  # Prevent exposure in JSON serialization - fail closed for security
   def to_json(*)
-    REDACTED.to_json
+    raise Familia::SerializerError, "ConcealedString cannot be serialized to JSON"
   end
 
   # Prevent exposure in Rails serialization (as_json -> to_json)
