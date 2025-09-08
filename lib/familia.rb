@@ -68,7 +68,8 @@ module Familia
     #
     # @param member [String, Symbol] The class name to unload
     def unload_member(member)
-      Object.remove_const(member)
+      Familia.ld "[#{member}] Unloading..."
+      Object.send(:remove_const, member)
     end
 
     # Unloads all tracked member classes
