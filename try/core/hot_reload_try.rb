@@ -26,18 +26,14 @@ end
 
 ## Load a test class and add it to Familia.members for tracking
 load @test_file
-Familia.instance_variable_get(:@members) << @test_class_name
+Familia.add_member(TestReloadableClass)
 TestReloadableClass.new(name: "test", value: "initial").class.name
 #=> "TestReloadableClass"
 
 ## unload_member removes a specific class constant
 Familia.unload_member(@test_class_name)
-begin
-  TestReloadableClass
-rescue NameError => e
-  e.class.name
-end
-#=> "NameError"
+TestReloadableClass
+#=!> NameError
 
 ## Reload the class after unloading
 load @test_file
@@ -45,14 +41,14 @@ TestReloadableClass.new(name: "test", value: "reloaded").class.name
 #=> "TestReloadableClass"
 
 ## Set up member tracking for batch unloading test
-Familia.instance_variable_set(:@members, ['TestReloadableClassA', 'TestReloadableClassB'])
-Familia.instance_variable_get(:@members)
-#=> ["TestReloadableClassA", "TestReloadableClassB"]
+Familia.instance_variable_set(:@members, [TestReloadableClassA, TestReloadableClassB])
+Familia.members
+#=> [TestReloadableClassA, TestReloadableClassB]
 
 ## unload! removes all tracked member classes
 Familia.unload!
-Familia.instance_variable_get(:@members)
-#=> ["TestReloadableClassA", "TestReloadableClassB"]
+Familia.members
+#=> []
 
 ## Verify both classes were unloaded
 errors = []

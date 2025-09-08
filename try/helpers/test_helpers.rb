@@ -41,7 +41,6 @@ class Bourne < Familia::Horreum
 end
 
 class Customer < Familia::Horreum
-
   using Familia::Refinements::TimeUtils
 
   logical_database 15 # Use something other than the default DB
@@ -177,7 +176,26 @@ class Limiter < Familia::Horreum
   end
 end
 
-# # In test:
+module Nested
+  class CustomClass < Familia::Horreum
+    using Familia::Refinements::TimeUtils
+
+    feature :expiration
+    feature :quantization
+
+    identifier_field :name
+    default_expiration 30.minutes
+    field :name
+
+    string :counter, default_expiration: 1.hour, quantize: [10.minutes, '%H:%M', 1_302_468_980]
+
+    def identifier
+      @name
+    end
+  end
+end
+
+# In test:
 # using RedactedStringTestHelper
 
 # secret = RedactedString.new("test-key")
@@ -194,9 +212,7 @@ end
 # end
 #
 # NOTE: This will do nothing unless RedactedString is already requried
-unless defined?(RedactedString)
-  require_relative '../../lib/familia/features/transient_fields/redacted_string'
-end
+require_relative '../../lib/familia/features/transient_fields/redacted_string' unless defined?(RedactedString)
 module RedactedStringTestHelper
   refine RedactedString do
     def raw
@@ -209,6 +225,7 @@ end
 unless defined?(SingleUseRedactedString)
   require_relative '../../lib/familia/features/transient_fields/single_use_redacted_string'
 end
+
 module SingleUseRedactedStringTestHelper
   refine SingleUseRedactedString do
     def raw
@@ -219,9 +236,7 @@ module SingleUseRedactedStringTestHelper
 end
 
 # ConcealedString test helper for accessing encrypted values in tests
-unless defined?(ConcealedString)
-  require_relative '../../lib/familia/features/encrypted_fields/concealed_string'
-end
+require_relative '../../lib/familia/features/encrypted_fields/concealed_string' unless defined?(ConcealedString)
 module ConcealedStringTestHelper
   refine ConcealedString do
     # TEST-ONLY: Direct access to decrypted value
