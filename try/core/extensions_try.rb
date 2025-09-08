@@ -1,7 +1,7 @@
 require_relative '../helpers/test_helpers'
 
 module RefinedContext
-  using Familia::Refinements::TimeUtils
+  using Familia::Refinements::TimeLiterals
 
   # This helper evaluates code within the refined context using eval.
   # This works because eval executes the code as if it were written

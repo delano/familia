@@ -6,7 +6,7 @@ module Familia
   #
   module Utils
 
-    using Familia::Refinements::TimeUtils
+    using Familia::Refinements::TimeLiterals
 
     # Joins array elements with Familia delimiter
     # @param val [Array] elements to join

@@ -1,10 +1,41 @@
-# lib/familia/refinements/time_utils.rb
+# lib/familia/refinements/time_literals.rb
 
 module Familia
   module Refinements
 
-    # Familia::Refinements::TimeUtils
-    module TimeUtils
+    # Familia::Refinements::TimeLiterals
+    #
+    # This module provides a set of refinements for `Numeric` and `String` to
+    # enable readable and expressive time duration and timestamp manipulation.
+    #
+    # The name "TimeLiterals" reflects its core purpose: to allow us totreat
+    # numeric values directly as "literals" of time units (e.g., `5.minutes`,
+    # `1.day`). It extends this concept to include conversions between these
+    # literal time quantities, parsing string representations of time
+    # durations, and performing common timestamp-based calculations
+    # in an intuitive manner.
+    #
+    # @example Expressing durations
+    #   5.minutes.ago           #=> A Time object 5 minutes in the past
+    #   1.day.from_now          #=> A Time object 1 day in the future
+    #   (2.5).hours             #=> 9000.0 (seconds)
+    #
+    # @example Converting between units
+    #   3600.in_hours           #=> 1.0
+    #   86400.in_days           #=> 1.0
+    #
+    # @example Parsing string durations
+    #   "30m".in_seconds        #=> 1800.0
+    #   "2.5h".in_seconds       #=> 9000.0
+    #
+    # @example Timestamp calculations
+    #   timestamp = 2.days.ago.to_i
+    #   timestamp.days_old      #=> ~2.0
+    #   timestamp.older_than?(1.day) #=> true
+    #
+    # @note `to_bytes` also lives here until we find it a better home!
+    #
+    module TimeLiterals
       # Time unit constants
       PER_MICROSECOND = 0.000001
       PER_MILLISECOND = 0.001
@@ -65,7 +96,7 @@ module Familia
         alias_method :month,       :months
         alias_method :year,        :years
 
-        # Fun aliases
+        # Shortest aliases
         alias_method :ms, :milliseconds
         alias_method :μs, :microseconds
 

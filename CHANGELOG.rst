@@ -26,7 +26,7 @@ Added
 
 - Added ``PER_MONTH`` constant (2,629,746 seconds = 30.437 days) derived from Gregorian year for consistent month calculations.
 - Added ``months``, ``month``, and ``in_months`` conversion methods to Numeric refinement.
-- Added month unit mappings (``'mo'``, ``'month'``, ``'months'``) to TimeUtils ``UNIT_METHODS`` hash.
+- Added month unit mappings (``'mo'``, ``'month'``, ``'months'``) to TimeLiterals ``UNIT_METHODS`` hash.
 
 - **Error Handling**: Added ``NotSupportedError`` for invalid serialization mode combinations in encryption subsystem. PR #97
 
@@ -34,7 +34,7 @@ Changed
 -------
 
 - Refactored time and numeric extensions from global monkey patches to proper Ruby refinements for better encapsulation and reduced global namespace pollution
-- Updated all internal classes to use refinements via ``using Familia::Refinements::TimeUtils`` statements
+- Updated all internal classes to use refinements via ``using Familia::Refinements::TimeLiterals`` statements
 - Added centralized ``RefinedContext`` module in test helpers to support refinement testing in tryouts files
 
 - Updated ``PER_YEAR`` constant to use Gregorian year (31,556,952 seconds = 365.2425 days) for calendar consistency.
@@ -49,7 +49,7 @@ Fixed
 - Fixed byte conversion logic in ``to_bytes`` method to correctly handle exact 1024-byte boundaries (``size >= 1024`` instead of ``size > 1024``)
 - Resolved refinement testing issues in tryouts by implementing ``eval``-based code execution within refined contexts
 
-- Fixed TimeUtils refinement ``months_old`` and ``years_old`` methods returning incorrect values (raw seconds instead of months/years). The underlying ``age_in`` method now properly handles ``:months`` and ``:years`` units. Issue #94.
+- Fixed TimeLiterals refinement ``months_old`` and ``years_old`` methods returning incorrect values (raw seconds instead of months/years). The underlying ``age_in`` method now properly handles ``:months`` and ``:years`` units. Issue #94.
 - Fixed calendar consistency issue where ``12.months != 1.year`` by updating ``PER_YEAR`` to use Gregorian year (365.2425 days) and defining ``PER_MONTH`` as ``PER_YEAR / 12``.
 
 Security
@@ -72,7 +72,7 @@ AI Assistance
 
 - Significant AI assistance in architectural design and implementation of the feature-specific autoloading system, including pattern matching logic, Ruby introspection methods, and comprehensive debugging of edge cases and thread safety considerations.
 
-- Claude Code assisted with implementing the fix for broken ``months_old`` and ``years_old`` methods in the TimeUtils refinement, including analysis, implementation, testing, and documentation.
+- Claude Code assisted with implementing the fix for broken ``months_old`` and ``years_old`` methods in the TimeLiterals refinement, including analysis, implementation, testing, and documentation.
 
 - Performance optimization research and OJ gem integration strategy, including compatibility analysis and testing approach for seamless stdlib JSON replacement. PR #97
 

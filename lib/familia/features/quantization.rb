@@ -246,7 +246,7 @@ module Familia
     #
     module Quantization
 
-      using Familia::Refinements::TimeUtils
+      using Familia::Refinements::TimeLiterals
 
       def self.included(base)
         Familia.trace :LOADED, self, base, caller(1..1) if Familia.debug?

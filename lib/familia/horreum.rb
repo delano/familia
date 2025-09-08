@@ -31,7 +31,7 @@ module Familia
     include Familia::Horreum::Core
     include Familia::Horreum::Settings
 
-    using Familia::Refinements::TimeUtils
+    using Familia::Refinements::TimeLiterals
 
     # Singleton Class Context
     #
