@@ -63,6 +63,20 @@ module Familia
     def debug?
       @debug == true
     end
+
+    # Unloads a member class by removing its constant
+    #
+    # @param member [String, Symbol] The class name to unload
+    def unload_member(member)
+      Object.remove_const(member)
+    end
+
+    # Unloads all tracked member classes
+    #
+    # Iterates through all members and calls unload_member for each one
+    def unload!
+      @members.each { |member| unload_member(member) }
+    end
   end
 
   require_relative 'familia/secure_identifier'
