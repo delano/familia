@@ -5,6 +5,9 @@ module Familia
     # Familia::Features::ExternalIdentifier
     #
     module ExternalIdentifier
+
+      Familia::Base.add_feature self, :external_identifier, depends_on: [:object_identifier]
+
       def self.included(base)
         Familia.trace :LOADED, self, base, caller(1..1) if Familia.debug?
         base.extend ClassMethods
@@ -304,7 +307,6 @@ module Familia
         end
       end
 
-      Familia::Base.add_feature self, :external_identifier, depends_on: [:object_identifier]
     end
   end
 end

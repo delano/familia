@@ -81,6 +81,8 @@ module Familia
     # - Custom generators allow domain-specific security requirements
     #
     module ObjectIdentifier
+      Familia::Base.add_feature self, :object_identifier, depends_on: []
+
       DEFAULT_GENERATOR = :uuid_v7
 
       def self.included(base)
@@ -301,7 +303,6 @@ module Familia
         Familia.trace :OBJID_INIT, dbclient, "Generator strategy: #{generator}", caller(1..1)
       end
 
-      Familia::Base.add_feature self, :object_identifier, depends_on: []
     end
   end
 end

@@ -98,6 +98,10 @@ module Familia
     #     { owner: team, collection: :domains }
     #   ], min_permission: :read)
     module Relationships
+
+      # Register the feature with Familia
+      Familia::Base.add_feature Relationships, :relationships
+
       # Feature initialization
       def self.included(base)
         Familia.ld "[#{base}] Relationships included"
@@ -463,8 +467,6 @@ module Familia
         end
       end
 
-      # Register the feature with Familia
-      Familia::Base.add_feature Relationships, :relationships
     end
   end
 end

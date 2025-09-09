@@ -41,6 +41,9 @@ module Familia::Features
   # of symbols in the order they were defined.
   #
   module SafeDump
+
+    Familia::Base.add_feature self, :safe_dump
+
     using Familia::Refinements::SnakeCase
 
     @dump_method = :to_json
@@ -150,8 +153,6 @@ module Familia::Features
     end
 
     extend ClassMethods
-
-    Familia::Base.add_feature self, :safe_dump
   end
 end
 # rubocop:enable ThreadSafety/ClassInstanceVariable

@@ -246,6 +246,8 @@ module Familia
     #
     module Quantization
 
+      Familia::Base.add_feature self, :quantization
+
       using Familia::Refinements::TimeLiterals
 
       def self.included(base)
@@ -397,8 +399,6 @@ module Familia
       end
 
       extend ClassMethods
-
-      Familia::Base.add_feature self, :quantization
     end
   end
 end
