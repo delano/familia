@@ -48,7 +48,7 @@ module Familia::Features
         Familia.ld "[#{log_prefix}] Autoloader loading features from #{pattern}"
         Dir.glob(pattern).each do |file_path|
           basename = File.basename(file_path)
-          puts "[#{log_prefix}] FOUND FILE  #{file_path}"
+
           # Skip excluded files
           next if exclude.include?(basename)
 

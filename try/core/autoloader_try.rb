@@ -102,7 +102,7 @@ $pattern1_loaded && $pattern2_loaded
   include Familia::Features::Autoloader
 end
 
-# The Features module already includes Autoloader, so test indirectly
+## The Features module already includes Autoloader, so test indirectly
 Familia::Features.ancestors.include?(Familia::Features::Autoloader)
 #=> true
 
