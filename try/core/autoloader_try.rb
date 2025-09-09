@@ -30,16 +30,16 @@ File.write(@excluded_file, <<~RUBY)
   $autoloader_file_loaded = true
 RUBY
 
-## Test that Familia::Autoloader exists and is a module
-Familia::Autoloader.is_a?(Module)
+## Test that Familia::Features::Autoloader exists and is a module
+Familia::Features::Autoloader.is_a?(Module)
 #=> true
 
 ## Test that autoload_files class method exists
-Familia::Autoloader.respond_to?(:autoload_files)
+Familia::Features::Autoloader.respond_to?(:autoload_files)
 #=> true
 
 ## Test that included class method exists
-Familia::Autoloader.respond_to?(:included)
+Familia::Features::Autoloader.respond_to?(:included)
 #=> true
 
 ## Test autoload_files with single pattern
@@ -47,7 +47,7 @@ $test_feature1_loaded = false
 $test_feature2_loaded = false
 $autoloader_file_loaded = false
 
-Familia::Autoloader.autoload_files(File.join(@features_dir, '*.rb'))
+Familia::Features::Autoloader.autoload_files(File.join(@features_dir, '*.rb'))
 $test_feature1_loaded && $test_feature2_loaded
 #=> true
 
@@ -64,7 +64,7 @@ File.write(@exclude_file, '$exclude_me_loaded = true')
 $include_me_loaded = false
 $exclude_me_loaded = false
 
-Familia::Autoloader.autoload_files(
+Familia::Features::Autoloader.autoload_files(
   File.join(@exclude_features_dir, '*.rb'),
   exclude: ['autoloader.rb']
 )
@@ -88,7 +88,7 @@ File.write(@pattern_file2, '$pattern2_loaded = true')
 $pattern1_loaded = false
 $pattern2_loaded = false
 
-Familia::Autoloader.autoload_files([
+Familia::Features::Autoloader.autoload_files([
   File.join(@pattern_dir1, '*.rb'),
   File.join(@pattern_dir2, '*.rb')
 ])
@@ -99,11 +99,11 @@ $pattern1_loaded && $pattern2_loaded
 ## Test that included method loads features from features directory
 # Create a mock module that includes Autoloader
 @mock_features_module = Module.new do
-  include Familia::Autoloader
+  include Familia::Features::Autoloader
 end
 
-# The Features module already includes Autoloader, so test indirectly
-Familia::Features.ancestors.include?(Familia::Autoloader)
+## The Features module already includes Autoloader, so test indirectly
+Familia::Features.ancestors.include?(Familia::Features::Autoloader)
 #=> true
 
 # Cleanup test files and directories

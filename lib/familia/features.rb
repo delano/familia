@@ -1,7 +1,7 @@
 # lib/familia/features.rb
 
 # Load the Autoloader first, then use it to load all other features
-require_relative 'autoloader'
+require_relative 'features/autoloader'
 
 module Familia
   FeatureDefinition = Data.define(:name, :depends_on)
@@ -25,11 +25,20 @@ module Familia
   # feature options. When you enable a feature with options in different models,
   # each model stores its own separate configuration without interference.
   #
-  # ## Project Organization with Autoloadable
+  # ## Project Organization with Autoloader
   #
-  # For large projects, use {Familia::Features::Autoloadable} to automatically load
+  # For large projects, use {Familia::Features::Autoloader} to automatically load
   # project-specific features from a dedicated directory structure. This helps
   # organize complex models by separating features into individual files.
+  #
+  # ### Class Reopening (Deprecated)
+  #
+  # Direct class reopening still works but generates deprecation warnings:
+  #
+  #   # app/models/customer/safe_dump_extensions.rb
+  #   class Customer
+  #     safe_dump_fields :name, :email  # Works but not recommended
+  #   end
   #
   # @example Different models with different feature options
   #   class UserModel < Familia::Horreum
@@ -57,15 +66,15 @@ module Familia
   #   # In your model file: app/models/customer.rb
   #   class Customer < Familia::Horreum
   #     module Features
-  #       include Familia::Features::Autoloadable
+  #       include Familia::Features::Autoloader
   #       # Automatically loads all .rb files from app/models/customer/features/
   #     end
   #   end
   #
-  # @see Familia::Features::Autoloadable For automatic feature loading
+  # @see Familia::Features::Autoloader For automatic feature loading
   #
   module Features
-    include Familia::Autoloader
+    include Familia::Features::Autoloader
 
     @features_enabled = nil
     attr_reader :features_enabled
@@ -110,8 +119,8 @@ module Familia
 
       # If there's a value provided check that it's a valid feature
       feature_name = feature_name.to_sym
-      feature_class = Familia::Base.find_feature(feature_name, self)
-      unless feature_class
+      feature_module = Familia::Base.find_feature(feature_name, self)
+      unless feature_module
         raise Familia::Problem, "Unsupported feature: #{feature_name}"
       end
 
@@ -146,12 +155,7 @@ module Familia
       end
 
       # Extend the Familia::Base subclass (e.g. Customer) with the feature module
-      include feature_class
-
-      # Trigger post-inclusion autoloading for features that support it
-      if feature_class.respond_to?(:post_inclusion_autoload)
-        feature_class.post_inclusion_autoload(self, feature_name, options)
-      end
+      include feature_module
 
       # NOTE: Do we want to extend Familia::DataType here? That would make it
       # possible to call safe_dump on relations fields (e.g. list, zset, hashkey).

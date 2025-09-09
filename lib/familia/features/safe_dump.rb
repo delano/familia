@@ -41,15 +41,15 @@ module Familia::Features
   # of symbols in the order they were defined.
   #
   module SafeDump
-    include Familia::Features::Autoloadable
+
+    Familia::Base.add_feature self, :safe_dump
+
     using Familia::Refinements::SnakeCase
 
     @dump_method = :to_json
     @load_method = :from_json
 
     def self.included(base)
-      # Call the Autoloadable module's included method for post-inclusion setup
-      super
 
       Familia.trace(:LOADED, self, base, caller(1..1)) if Familia.debug?
       base.extend ClassMethods
@@ -153,8 +153,6 @@ module Familia::Features
     end
 
     extend ClassMethods
-
-    Familia::Base.add_feature self, :safe_dump
   end
 end
 # rubocop:enable ThreadSafety/ClassInstanceVariable

@@ -255,6 +255,8 @@ module Familia
     # - Insider threats with application access
     #
     module EncryptedFields
+      Familia::Base.add_feature self, :encrypted_fields
+
       def self.included(base)
         Familia.trace :LOADED, self, base, caller(1..1) if Familia.debug?
         base.extend ClassMethods
@@ -430,8 +432,6 @@ module Familia
           end
         end
       end
-
-      Familia::Base.add_feature self, :encrypted_fields
     end
   end
 end

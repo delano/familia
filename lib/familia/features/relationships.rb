@@ -98,9 +98,13 @@ module Familia
     #     { owner: team, collection: :domains }
     #   ], min_permission: :read)
     module Relationships
+
+      # Register the feature with Familia
+      Familia::Base.add_feature Relationships, :relationships
+
       # Feature initialization
       def self.included(base)
-        puts "[DEBUG] Relationships included in #{base}"
+        Familia.ld "[#{base}] Relationships included"
         base.extend ClassMethods
         base.include InstanceMethods
 
@@ -108,11 +112,8 @@ module Familia
         base.include ScoreEncoding
         base.include RedisOperations
 
-        puts '[DEBUG] Including Tracking module'
         base.include Tracking
-        puts '[DEBUG] Extending with Tracking::ClassMethods'
         base.extend Tracking::ClassMethods
-        puts "[DEBUG] Base now responds to tracked_in: #{base.respond_to?(:tracked_in)}"
 
         base.include Indexing
         base.extend Indexing::ClassMethods
@@ -466,8 +467,6 @@ module Familia
         end
       end
 
-      # Register the feature with Familia
-      Familia::Base.add_feature Relationships, :relationships
     end
   end
 end
