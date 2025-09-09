@@ -37,43 +37,22 @@ module Familia
           # to ensure the feature is fully set up before extension files are loaded
         end
 
-        # Called by the feature system after the feature is fully included.
+        # Autoloads feature-specific files after a feature module is included.
+        # The files are expected to live next to the file that defines +base+.
         #
-        # Uses const_source_location to determine where the base class is defined,
-        # then autoloads feature-specific extension files from that location.
-        #
-        # @param base [Class] the class that included this feature
-        # @param feature_name [Symbol] the name of the feature
-        # @param options [Hash] feature options (unused but kept for compatibility)
-        def post_inclusion_autoload(base, feature_name, options)
-          Familia.trace :FEATURE, nil, "[Autoloadable] post_inclusion_autoload called for #{feature_name} on #{base.name || base}", caller(1..1) if Familia.debug?
+        # @param base [Class] the class that just included the feature
+        # @param feature_name [Symbol] the feature that was included
+        # @param _options [Hash] ignored, kept for signature compatibility
+        def post_inclusion_autoload(base, feature_name, _options = {})
+          return unless base.name && !base.name.empty?
 
-          # Get the source location via Ruby's built-in introspection
-          source_location = nil
+          file, = Module.const_source_location(base.name)
 
-          # Check for named classes that can be looked up via const_source_location
-          # Class#name always returns String or nil, so type check is redundant
-          if base.name && !base.name.empty?
-            begin
-              location_info = Module.const_source_location(base.name)
-              source_location = location_info&.first
-              Familia.trace :FEATURE, nil, "[Autoloadable] Source location for #{base.name}: #{source_location}", caller(1..1) if Familia.debug?
-            rescue NameError => e
-              # Handle cases where the class name is not a valid constant name
-              # This can happen in test environments with dynamically created classes
-              Familia.trace :FEATURE, nil, "[Autoloadable] Cannot resolve source location for #{base.name}: #{e.message}", caller(1..1) if Familia.debug?
-            end
-          else
-            Familia.trace :FEATURE, nil, "[Autoloadable] Skipping source location detection - base.name=#{base.name.inspect}", caller(1..1) if Familia.debug?
-          end
+        # A cheap way to detect code that was not loaded from a real file on
+        # disk (e.g. `ruby -e "puts 1"`, via IRB, or through eval).
+          return if file.nil? || file.include?('-e') # skip eval/irb
 
-          # Autoload feature-specific files if we have a valid source location
-          if source_location && !source_location.include?('-e') # Skip eval/irb contexts
-            Familia.trace :FEATURE, nil, "[Autoloadable] Calling autoload_feature_files with #{source_location}", caller(1..1) if Familia.debug?
-            autoload_feature_files(source_location, base, feature_name.to_s.snake_case)
-          else
-            Familia.trace :FEATURE, nil, "[Autoloadable] Skipping autoload - no valid source location", caller(1..1) if Familia.debug?
-          end
+          autoload_feature_files(file, base, feature_name.to_s.snake_case)
         end
 
         private
