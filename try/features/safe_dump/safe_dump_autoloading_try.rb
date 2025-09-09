@@ -37,10 +37,6 @@ File.write(@extension_file, <<~RUBY)
   end
 RUBY
 
-## Test that SafeDump includes Autoloadable
-Familia::Features::SafeDump.ancestors.include?(Familia::Features::Autoloadable)
-#=> true
-
 ## Test that SafeDump has post_inclusion_autoload capability
 Familia::Features::SafeDump.respond_to?(:post_inclusion_autoload)
 #=> true

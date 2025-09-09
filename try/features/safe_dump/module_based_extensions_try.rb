@@ -42,10 +42,6 @@ File.write(@extension_file, <<~RUBY)
   end
 RUBY
 
-## Test that SafeDump includes Autoloadable
-Familia::Features::SafeDump.ancestors.include?(Familia::Features::Autoloadable)
-#=> true
-
 ## Test module-based autoloading by loading model file
 @model_instance = nil
 

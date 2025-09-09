@@ -25,23 +25,11 @@ module Familia
   # feature options. When you enable a feature with options in different models,
   # each model stores its own separate configuration without interference.
   #
-  # ## Project Organization with Autoloadable
+  # ## Project Organization with Autoloader
   #
-  # For large projects, use {Familia::Features::Autoloadable} to automatically load
+  # For large projects, use {Familia::Autoloader} to automatically load
   # project-specific features from a dedicated directory structure. This helps
   # organize complex models by separating features into individual files.
-  #
-  # ### Module-Based Extensions (Recommended)
-  #
-  # Create extension modules that are automatically included:
-  #
-  #   # app/models/customer/safe_dump_extensions.rb
-  #   module Customer::SafeDumpExtensions
-  #     def self.included(base)
-  #       base.safe_dump_fields :name, :email, :billing_address
-  #       base.safe_dump_field :display_name, ->(c) { "#{c.name} <#{c.email}>" }
-  #     end
-  #   end
   #
   # ### Class Reopening (Deprecated)
   #
@@ -78,12 +66,12 @@ module Familia
   #   # In your model file: app/models/customer.rb
   #   class Customer < Familia::Horreum
   #     module Features
-  #       include Familia::Features::Autoloadable
+  #       include Familia::Autoloader
   #       # Automatically loads all .rb files from app/models/customer/features/
   #     end
   #   end
   #
-  # @see Familia::Features::Autoloadable For automatic feature loading
+  # @see Familia::Autoloader For automatic feature loading
   #
   module Features
     include Familia::Autoloader

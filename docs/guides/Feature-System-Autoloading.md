@@ -44,7 +44,7 @@ end
 
 The `post_inclusion_autoload` system works in **two phases**:
 
-### Phase 1: Feature System Hook
+### Feature System Hook
 
 In `lib/familia/features.rb`, after including the feature module:
 
@@ -60,29 +60,6 @@ def feature(feature_name, **options)
   end
 end
 ```
-
-### Phase 2: Autoloadable Implementation
-
-The `post_inclusion_autoload` method in `lib/familia/features/autoloadable.rb`:
-
-1. **Gets the source location** of the user's class file using Ruby's introspection:
-   ```ruby
-   location_info = Module.const_source_location(base.name)
-   source_location = location_info&.first  # e.g., "/path/to/models/user.rb"
-   ```
-
-2. **Calculates extension file paths** based on conventions:
-   ```ruby
-   base_dir = File.dirname(location_path)  # "/path/to/models"
-   model_name = base.name.snake_case       # "user"
-
-   # Look for files like:
-   patterns = [
-     "/path/to/models/user/safe_dump_*.rb",
-     "/path/to/models/user/features/safe_dump_*.rb",
-     "/path/to/models/features/safe_dump_*.rb"
-   ]
-   ```
 
 3. **Loads any matching files** found in those locations
 
@@ -199,17 +176,10 @@ The `post_inclusion_autoload` system provides a clean, automatic, and safe way t
 
 ## Implementation Details
 
-### Autoloadable Module
+### Autoloader
 
-Features that support autoloading include the `Familia::Features::Autoloadable` module:
+Looks for features files in models/features.rb, models/features/, models/model_name/features.rb, models/model_name/features/
 
-```ruby
-module Familia::Features::SafeDump
-  include Familia::Features::Autoloadable  # ← Enables autoloading
-
-  # Feature implementation...
-end
-```
 
 ### Anonymous Class Handling
 
