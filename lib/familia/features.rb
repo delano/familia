@@ -31,6 +31,27 @@ module Familia
   # project-specific features from a dedicated directory structure. This helps
   # organize complex models by separating features into individual files.
   #
+  # ### Module-Based Extensions (Recommended)
+  #
+  # Create extension modules that are automatically included:
+  #
+  #   # app/models/customer/safe_dump_extensions.rb
+  #   module Customer::SafeDumpExtensions
+  #     def self.included(base)
+  #       base.safe_dump_fields :name, :email, :billing_address
+  #       base.safe_dump_field :display_name, ->(c) { "#{c.name} <#{c.email}>" }
+  #     end
+  #   end
+  #
+  # ### Class Reopening (Deprecated)
+  #
+  # Direct class reopening still works but generates deprecation warnings:
+  #
+  #   # app/models/customer/safe_dump_extensions.rb
+  #   class Customer
+  #     safe_dump_fields :name, :email  # Works but not recommended
+  #   end
+  #
   # @example Different models with different feature options
   #   class UserModel < Familia::Horreum
   #     feature :object_identifier, generator: :uuid_v4
@@ -110,8 +131,8 @@ module Familia
 
       # If there's a value provided check that it's a valid feature
       feature_name = feature_name.to_sym
-      feature_class = Familia::Base.find_feature(feature_name, self)
-      unless feature_class
+      feature_module = Familia::Base.find_feature(feature_name, self)
+      unless feature_module
         raise Familia::Problem, "Unsupported feature: #{feature_name}"
       end
 
@@ -146,11 +167,11 @@ module Familia
       end
 
       # Extend the Familia::Base subclass (e.g. Customer) with the feature module
-      include feature_class
+      include feature_module
 
       # Trigger post-inclusion autoloading for features that support it
-      if feature_class.respond_to?(:post_inclusion_autoload)
-        feature_class.post_inclusion_autoload(self, feature_name, options)
+      if feature_module.respond_to?(:post_inclusion_autoload)
+        feature_module.post_inclusion_autoload(self, feature_name, options)
       end
 
       # NOTE: Do we want to extend Familia::DataType here? That would make it
