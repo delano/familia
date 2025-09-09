@@ -44,7 +44,7 @@ Added
 
 - **Feature Autoloading System**: Features can now automatically discover and load extension files from your project directories. When you include a feature like ``safe_dump``, Familia searches for configuration files using conventional patterns like ``{model_name}/{feature_name}_*.rb``, enabling clean separation between core model definitions and feature-specific configurations. See ``docs/migrating/v2.0.0-pre13.md`` for migration details.
 
-- **Consolidated autoloader architecture**: Introduced ``Familia::Autoloader`` as a shared utility for consistent file loading patterns across the framework, supporting both general-purpose and feature-specific autoloading scenarios.
+- **Consolidated autoloader architecture**: Introduced ``Familia::Features::Autoloader`` as a shared utility for consistent file loading patterns across the framework, supporting both general-purpose and feature-specific autoloading scenarios.
 
 - Added ``PER_MONTH`` constant (2,629,746 seconds = 30.437 days) derived from Gregorian year for consistent month calculations.
 - Added ``months``, ``month``, and ``in_months`` conversion methods to Numeric refinement.
@@ -183,7 +183,7 @@ Added
    with ancestry chain traversal for model-specific feature
    registration. This enables better organization, standardized naming,
    and automatic loading of project-specific features via the new
-   ``Familia::Autoloader`` module.
+   ``Familia::Features::Autoloader`` module.
 -  **Improved SafeDump DSL**: Replaced the internal
    ``@safe_dump_fields`` implementation with a cleaner, more robust DSL
    using ``safe_dump_field`` and ``safe_dump_fields`` methods.

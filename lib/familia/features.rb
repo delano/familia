@@ -1,7 +1,7 @@
 # lib/familia/features.rb
 
 # Load the Autoloader first, then use it to load all other features
-require_relative 'autoloader'
+require_relative 'features/autoloader'
 
 module Familia
   FeatureDefinition = Data.define(:name, :depends_on)
@@ -27,7 +27,7 @@ module Familia
   #
   # ## Project Organization with Autoloader
   #
-  # For large projects, use {Familia::Autoloader} to automatically load
+  # For large projects, use {Familia::Features::Autoloader} to automatically load
   # project-specific features from a dedicated directory structure. This helps
   # organize complex models by separating features into individual files.
   #
@@ -66,15 +66,15 @@ module Familia
   #   # In your model file: app/models/customer.rb
   #   class Customer < Familia::Horreum
   #     module Features
-  #       include Familia::Autoloader
+  #       include Familia::Features::Autoloader
   #       # Automatically loads all .rb files from app/models/customer/features/
   #     end
   #   end
   #
-  # @see Familia::Autoloader For automatic feature loading
+  # @see Familia::Features::Autoloader For automatic feature loading
   #
   module Features
-    include Familia::Autoloader
+    include Familia::Features::Autoloader
 
     @features_enabled = nil
     attr_reader :features_enabled
