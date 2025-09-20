@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       reason:
-        description: 'Reason for manual documentation build'
+        description: "Reason for manual documentation build"
         required: false
-        default: 'Manual documentation update'
+        default: "Manual documentation update"
 
 permissions:
   contents: read
@@ -33,7 +33,7 @@ jobs:
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
-          ruby-version: '3.4'
+          ruby-version: "3.4"
           bundler-cache: true
 
       - name: Install dependencies

@@ -64,7 +64,7 @@ end
 ```ruby
 # Configure connection provider for multi-database pooling
 Familia.connection_provider = lambda do |uri|
-  parsed = URI.parse(uri)
+  parsed = URI.parse(uri) # => URI::Redis
   pool_key = "#{parsed.host}:#{parsed.port}/#{parsed.db || 0}"
 
   @pools[pool_key] ||= ConnectionPool.new(size: 10) do

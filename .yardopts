@@ -1,9 +1,11 @@
 --readme README.md
 --title "Familia Ruby Library Documentation"
---markup markdown
---markup-provider kramdown
 --protected
 --no-private
+--charset utf-8
+--markup markdown
+--markup-provider kramdown
+--output-dir doc
 --embed-mixin ClassMethods
 --embed-mixin Features
 --tag feature:"Feature"
@@ -36,6 +38,5 @@ docs/guides/time-utilities.md
 docs/guides/transient-fields-guide.md
 docs/reference/api-technical.md
 docs/migration/*.md
-docs/connection-pooling-guide.md
 docs/overview.md
 examples/*.rb
