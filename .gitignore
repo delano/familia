@@ -19,7 +19,7 @@ log
 tmp
 vendor
 *.gem
-doc/
+public/
 
 # Ignore WIP or temp dev files with uppercase names
 [A-Z]*.md

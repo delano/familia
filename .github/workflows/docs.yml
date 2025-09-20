@@ -1,3 +1,5 @@
+# .github/workflows/docs.yml
+---
 name: Build and Publish YARD Documentation
 
 on:
@@ -41,15 +43,25 @@ jobs:
 
       - name: Build YARD documentation
         run: |
-          bundle exec yard doc --output-dir ./doc
-          # Ensure doc directory exists and create .nojekyll file to prevent GitHub Pages Jekyll processing
-          mkdir -p ./doc
-          touch ./doc/.nojekyll
+          # Generate docs with maximum volume
+          bundle exec yard doc --debug --backtrace 2>&1 | tee yard_debug.log
+
+          # Display the last 10 lines of the log file
+          tail -n 10 yard_debug.log
+
+          # Search for specific error messages in the log file
+          grep -A 5 -B 5 "Exception occurred" yard_debug.log
+          grep -A 5 -B 5 "Cannot resolve link" yard_debug.log
+
+          # Ensure public directory exists and create .nojekyll file to
+          # prevent GitHub Pages Jekyll processing
+          mkdir -p ./public
+          touch ./public/.nojekyll
 
       - name: Upload documentation artifacts
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ./doc
+          path: ./public
 
   deploy:
     environment:

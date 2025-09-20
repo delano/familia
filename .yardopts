@@ -2,11 +2,13 @@
 --title "Familia Ruby Library Documentation"
 --protected
 --no-private
+--verbose
 --charset utf-8
 --markup markdown
 --markup-provider kramdown
---output-dir doc
+--output-dir public
 --embed-mixin ClassMethods
+--embed-mixin InstanceMethods
 --embed-mixin Features
 --tag feature:"Feature"
 --tag since:"Since Version"
