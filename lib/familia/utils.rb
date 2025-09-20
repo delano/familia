@@ -51,8 +51,7 @@ module Familia
     # @param time [Integer, Float, Time, nil] A specific time to quantize (default: current time).
     # @return [Integer, String] A unix timestamp or formatted timestamp string.
     #
-    # @example
-    #   Familia.qstamp  # Returns an integer timestamp rounded to the nearest 10 minutes
+    # @example Familia.qstamp  # Returns an integer timestamp rounded to the nearest 10 minutes
     #   Familia.qstamp(1.hour)  # Uses 1 hour quantum
     #   Familia.qstamp(10.minutes, pattern: '%H:%M')  # Returns a formatted string like "12:30"
     #   Familia.qstamp(10.minutes, time: 1302468980)  # Quantizes the given Unix timestamp

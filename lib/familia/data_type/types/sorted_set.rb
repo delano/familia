@@ -24,8 +24,7 @@ module Familia
     # @return [Integer] Returns 1 if the element is new and added, 0 if the
     #   element already existed and the score was updated.
     #
-    # @example
-    #   sorted_set << "new_element"
+    # @example sorted_set << "new_element"
     #
     # @note This is a non-standard operation for sorted sets as it doesn't allow
     #   specifying a custom score. Use `add` or `[]=` for more control.
