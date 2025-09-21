@@ -160,7 +160,7 @@ module Familia
       # NOTE: Do we want to extend Familia::DataType here? That would make it
       # possible to call safe_dump on relations fields (e.g. list, zset, hashkey).
       #
-      # The challenge is that DataType classes (List, Set, etc.) are shared across
+      # The challenge is that DataType classes (List, UnsortedSet, etc.) are shared across
       # all Horreum models. If Customer extends DataType with safe_dump, then
       # Session's lists would also have it. Not ideal. If that's all we wanted
       # then we can do that by looping through every DataType class here.

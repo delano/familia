@@ -131,7 +131,7 @@ module Familia
               send(field_name)[user_key] = new_bits
             end
 
-            # Set exact permissions for a user (replaces existing)
+            # UnsortedSet exact permissions for a user (replaces existing)
             #
             # @param user [Object] User or user identifier
             # @param permissions [Array<Symbol>] Permissions to set

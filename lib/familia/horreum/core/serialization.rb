@@ -180,7 +180,7 @@ module Familia
 
       # Updates multiple fields atomically in a Database transaction.
       #
-      # @param fields [Hash] Field names and values to update. Special key :update_expiration
+      # @param kwargs [Hash] Field names and values to update. Special key :update_expiration
       #   controls whether to update key expiration (default: true)
       # @return [MultiResult] Transaction result
       #
@@ -485,7 +485,7 @@ module Familia
       # Hash or Array types. Simple string values are returned as-is.
       #
       # @param val [String] The string value from Database to deserialize
-      # @param symbolize_keys [Boolean] Whether to symbolize hash keys (default: true for compatibility)
+      # @param symbolize [Boolean] Whether to symbolize hash keys (default: true for compatibility)
       # @return [Object] The deserialized value (Hash, Array, or original string)
       #
       def deserialize_value(val, symbolize: true)
@@ -522,7 +522,7 @@ module Familia
           field_type = self.class.field_types[field_name]
           next unless field_type&.method_name
 
-          # Set the transient field back to nil
+          # UnsortedSet the transient field back to nil
           send("#{field_type.method_name}=", nil)
           Familia.ld "[reset_transient_fields!] Reset #{field_name} to nil"
         end

@@ -76,7 +76,7 @@ module Familia
     # Transient fields should not have fast writers since they're not
     # persisted to the database.
     #
-    # @param klass [Class] The class to define the method on
+    # @param _klass [Class] The class to define the method on
     #
     def define_fast_writer(_klass)
       # No fast writer for transient fields since they're not persisted

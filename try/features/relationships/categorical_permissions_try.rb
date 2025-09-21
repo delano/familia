@@ -321,7 +321,7 @@ Familia::Features::Relationships::ScoreEncoding.meets_category?(128, :administra
 
 # Permission Management Methods
 
-## Set exact permissions (replace existing)
+## UnsortedSet exact permissions (replace existing)
 # Re-establish test data for this section
 @perm_test_doc = CategoricalTestDocument.new(doc_id: 'perm_doc', title: 'Permission Document', created_at: Time.now.to_i)
 @perm_test_doc.permission_bits = 5  # read + write

@@ -126,7 +126,7 @@ module Familia
           random_suffix = SecureRandom.hex(3)
           temp_key = "temp:#{base_name}:#{timestamp}:#{random_suffix}"
 
-          # Set immediate expiry to ensure cleanup even if operation fails
+          # UnsortedSet immediate expiry to ensure cleanup even if operation fails
           redis_connection.expire(temp_key, ttl)
 
           temp_key

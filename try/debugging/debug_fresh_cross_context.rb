@@ -45,7 +45,7 @@ puts "cipher_b encrypted: #{cipher_b.encrypted_value}"
 # Now try cross-context access
 puts "\n=== Cross-context test ==="
 model_a.instance_variable_set(:@api_key, cipher_b)
-puts "Set cipher_b into model_a"
+puts "UnsortedSet cipher_b into model_a"
 
 begin
   result = model_a.api_key

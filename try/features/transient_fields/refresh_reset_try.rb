@@ -94,7 +94,7 @@ SecretService.fields.sort
 @service.endpoint_url
 #=> "https://api.example.com"
 
-## Set transient fields again after refresh
+## UnsortedSet transient fields again after refresh
 @service.api_key = 'new-api-key-after-refresh'
 @service.password = 'new-password-after-refresh'
 @service.token = 'new-token-after-refresh'

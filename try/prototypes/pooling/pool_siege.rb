@@ -157,7 +157,7 @@ class PoolSiege
       end
     end.parse!(args)
 
-    # Set defaults
+    # UnsortedSet defaults
     options[:threads] ||= 10
     options[:pool_size] ||= 5
     options[:operations] ||= 100 unless options[:duration]

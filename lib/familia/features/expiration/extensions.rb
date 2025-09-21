@@ -51,7 +51,7 @@ module Familia
 
     # Base implementation of expired? that returns false
     #
-    # @param threshold [Numeric] Ignored in base implementation
+    # @param _threshold [Numeric] Ignored in base implementation
     # @return [Boolean] Always returns false for the base implementation
     #
     def expired?(_threshold = 0)

@@ -38,9 +38,8 @@ module Familia
     # NOTE: uri is not a property of the Settings module b/c it's not
     # configured in class defintions like default_expiration or logical DB index.
     #
-    # @param v [String, URI] The new default URI
-    # @example
-    #   Familia.uri = 'redis://localhost:6379'
+    # @param uri [String, URI] The new default URI
+    # @example Familia.uri = 'redis://localhost:6379'
     def uri=(uri)
       @uri = normalize_uri(uri)
     end
@@ -53,8 +52,7 @@ module Familia
     #   If nil, uses the default URI from `@database_clients` or `Familia.uri`.
     # @return [Redis] The connected Database client.
     # @raise [ArgumentError] If no URI is specified.
-    # @example
-    #   Familia.connect('redis://localhost:6379')
+    # @example Familia.connect('redis://localhost:6379')
     def connect(uri = nil)
       parsed_uri = normalize_uri(uri)
 
@@ -87,8 +85,7 @@ module Familia
     # Handles DB selection automatically based on the URI.
     #
     # @return [Redis] The Database client for the specified URI
-    # @example
-    #   Familia.dbclient('redis://localhost:6379/1')
+    # @example Familia.dbclient('redis://localhost:6379/1')
     #   Familia.dbclient(2)  # Use DB 2 with default server
     def dbclient(uri = nil)
       # First priority: Thread-local connection (middleware pattern)

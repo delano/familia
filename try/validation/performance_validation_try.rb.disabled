@@ -72,7 +72,7 @@ commands = validator.capture_redis_commands do
   user = PerformanceTestUser.new(user_id: "perf2", name: "Test User")
   user.save  # Hash operations
   user.activities.unshift("item")  # List operation
-  user.tags.add("tag")  # Set operation
+  user.tags.add("tag")  # UnsortedSet operation
   user.scores.add(50, "score")  # Sorted set operation
 end
 

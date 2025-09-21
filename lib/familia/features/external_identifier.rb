@@ -44,11 +44,9 @@ module Familia
       #     feature :external_identifier
       #     field :email
       #   end
-      #
       #   user = User.new(email: 'user@example.com')
       #   user.objid  # => "01234567-89ab-7def-8000-123456789abc"
       #   user.extid  # => "ext_abc123def456ghi789" (deterministic from objid)
-      #
       #   # Same objid always produces same extid
       #   user2 = User.new(objid: user.objid, email: 'user@example.com')
       #   user2.extid  # => "ext_abc123def456ghi789" (identical to user.extid)
@@ -104,7 +102,7 @@ module Familia
               old_value = instance_variable_get(:"@#{field_name}")
               self.class.extid_lookup.remove_field(old_value) if old_value && old_value != value
 
-              # Set the new value
+              # UnsortedSet the new value
               instance_variable_set(:"@#{field_name}", value)
 
               # Update mapping if we have both extid and identifier

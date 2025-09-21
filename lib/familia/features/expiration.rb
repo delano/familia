@@ -9,7 +9,7 @@ module Familia
     # data cleanup and supports cascading expiration across related objects.
     #
     # This feature allows you to:
-    # - Set default expiration times at the class level
+    # - UnsortedSet default expiration times at the class level
     # - Update expiration times for individual objects
     # - Cascade expiration settings to related data structures
     # - Query remaining TTL for objects
@@ -35,7 +35,7 @@ module Familia
     #   session.update_expiration(30.minutes)
     #   session.ttl  # => 1799
     #
-    #   # Set custom expiration for new objects
+    #   # UnsortedSet custom expiration for new objects
     #   session.update_expiration(default_expiration: 2.hours)
     #
     # Class-Level Configuration:
@@ -169,9 +169,9 @@ module Familia
       # Familia::Expiration::ClassMethods
       #
       module ClassMethods
-        # Set the default expiration time for instances of this class
+        # UnsortedSet the default expiration time for instances of this class
         #
-        # @param expiration [Numeric] Time in seconds (can be fractional)
+        # @param default_expiration [Numeric] Time in seconds (can be fractional)
         #
         attr_writer :default_expiration
 
@@ -184,7 +184,7 @@ module Familia
         # @param num [Numeric, nil] Expiration time in seconds
         # @return [Float] The default expiration in seconds
         #
-        # @example Set default expiration
+        # @example UnsortedSet default expiration
         #   class MyModel < Familia::Horreum
         #     feature :expiration
         #     default_expiration 1.hour
@@ -199,7 +199,7 @@ module Familia
         end
       end
 
-      # Set the default expiration time for this instance
+      # UnsortedSet the default expiration time for this instance
       #
       # @param num [Numeric] Expiration time in seconds
       #

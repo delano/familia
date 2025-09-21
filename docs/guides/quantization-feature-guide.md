@@ -300,7 +300,7 @@ class ApplicationMetrics
   include Familia::Horreum
   feature :quantization
 
-  # Set up different quantum intervals for different metrics
+  # UnsortedSet up different quantum intervals for different metrics
   QUANTUM_CONFIGS = {
     real_time: 1.minute,    # High frequency metrics
     standard: 5.minutes,    # Regular analytics
@@ -325,7 +325,7 @@ class MetricsCollector
       # Increment counter
       Familia.dbclient.incr(key)
 
-      # Set expiration based on quantum type
+      # UnsortedSet expiration based on quantum type
       ttl = case quantum_type
             when :real_time then 2.hours
             when :standard then 1.day
@@ -534,7 +534,7 @@ class CompactTimeSeriesStorage < Familia::Horreum
     data_key = "#{series_id}:data"
     Familia.dbclient.zadd(data_key, bucket_timestamp, value)
 
-    # Set TTL based on quantum (longer quantum = longer retention)
+    # UnsortedSet TTL based on quantum (longer quantum = longer retention)
     ttl = calculate_retention_period
     Familia.dbclient.expire(data_key, ttl)
   end

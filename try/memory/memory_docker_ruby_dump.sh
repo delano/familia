@@ -5,7 +5,7 @@
 #
 # See example output at end.
 
-# Set CONTAINER_ID to $CONTAINER_ID or the first argument
+# UnsortedSet CONTAINER_ID to $CONTAINER_ID or the first argument
 CONTAINER_ID=${CONTAINER_ID:-$1}
 
 if [ -z "$CONTAINER_ID" ]; then

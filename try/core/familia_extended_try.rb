@@ -7,7 +7,7 @@ require_relative '../helpers/test_helpers'
 ## Has all datatype relativess
 registered_types = Familia::DataType.registered_types.keys
 registered_types.collect(&:to_s).sort
-#=> ["counter", "hash", "hashkey", "list", "lock", "set", "sorted_set", "string", "zset"]
+#=> ["counter", "hash", "hashkey", "list", "lock", "set", "sorted_set", "string", "unsorted_set", "zset"]
 
 ## Familia created class methods for datatype list class
 Familia::Horreum::DefinitionMethods.public_method_defined? :list?

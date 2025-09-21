@@ -54,13 +54,13 @@ class UserService
         conn.hset(user.dbkey, field.to_s, value.to_s)
       end
 
-      # Set default permissions
+      # UnsortedSet default permissions
       conn.sadd("#{user.dbkey.sub(':object', ':permissions')}", "read")
 
       # Initialize empty activity log
       conn.lpush("#{user.dbkey.sub(':object', ':activity_log')}", "account_created")
 
-      # Set default score
+      # UnsortedSet default score
       conn.zadd("#{user.dbkey.sub(':object', ':scores')}", 0, "reputation")
     end
 

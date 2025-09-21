@@ -37,10 +37,10 @@
 #
 # 2. Every .dup, .to_s, +, interpolation, or method call may create hidden
 #    copies:
-#      s = "secret"
-#      t = s.dup        # New object, same content — now two copies
-#      u = s + "123"    # New string — third copy
-#      "#{t}"           # Interpolation — fourth copy
+#      `s = "secret"`
+#      `t = s.dup`        # New object, same content — now two copies
+#      `u = s + "123"`    # New string — third copy
+#      `"#{t}"`           # Interpolation — fourth copy
 #    These copies are *not* controlled by RedactedString and may persist.
 #
 # 3. String Freezing & Immutability

@@ -37,7 +37,7 @@ Base class for Redis data type implementations.
 **Registered Types:**
 - `String` - Redis strings
 - `List` - Redis lists
-- `Set` - Redis sets
+- `UnsortedSet` - Redis sets
 - `SortedSet` - Redis sorted sets
 - `HashKey` - Redis hashes
 - `Counter` - Atomic counters
@@ -82,7 +82,7 @@ end
 
 session = Session.new(user_id: 123, token: "abc123")
 session.save
-session.expire_in(1.hour)  # Set custom expiration
+session.expire_in(1.hour)  # UnsortedSet custom expiration
 session.ttl                # Check remaining time
 ```
 
@@ -382,7 +382,7 @@ login_activities = ActivityTracker.activity_by_type.range_by_score(
 
 ## Data Type Usage Patterns
 
-### Advanced Sorted Set Operations
+### Advanced Sorted UnsortedSet Operations
 Leverage Redis sorted sets for rankings, time series, and scored data.
 
 ```ruby

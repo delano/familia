@@ -213,12 +213,12 @@ module Familia
 
       module ClassMethods
         def enable_audit_for(*field_names)
-          @audited_fields ||= Set.new
+          @audited_fields ||= ::Set.new
           @audited_fields.merge(field_names.map(&:to_sym))
         end
 
         def audited_fields
-          @audited_fields || Set.new
+          @audited_fields || ::Set.new
         end
       end
 

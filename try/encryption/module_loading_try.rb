@@ -13,12 +13,12 @@ require_relative '../helpers/test_helpers'
 defined?(Familia::Encryption)
 #=> "constant"
 
-## Set and check configuration directly in test
+## UnsortedSet and check configuration directly in test
 Familia.encryption_keys = { v1: Base64.strict_encode64('a' * 32) }
 Familia.encryption_keys.is_a?(Hash)
 #=> true
 
-## Set and check current key version directly in test
+## UnsortedSet and check current key version directly in test
 Familia.current_key_version = :v1
 Familia.current_key_version
 #=> :v1

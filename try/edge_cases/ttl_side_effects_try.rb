@@ -16,7 +16,7 @@ begin
   session = session_class.new(session_id: 'test123', name: 'Session')
   session.save
 
-  # Set shorter TTL
+  # UnsortedSet shorter TTL
   session.expire(60)
   original_ttl = session.realttl
 

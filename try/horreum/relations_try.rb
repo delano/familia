@@ -56,7 +56,7 @@ tags = @test_user.tags
 scores = @test_user.scores
 prefs = @test_user.preferences
 [sessions.class.name, tags.class.name, scores.class.name, prefs.class.name]
-#=> ["Familia::List", "Familia::Set", "Familia::SortedSet", "Familia::HashKey"]
+#=> ["Familia::List", "Familia::UnsortedSet", "Familia::SortedSet", "Familia::HashKey"]
 
 ## Database types use correct dbkeys
 @test_user.sessions.dbkey
@@ -72,7 +72,7 @@ prefs = @test_user.preferences
 @test_user.sessions.size
 #=> 2
 
-## Can work with Set Database type
+## Can work with UnsortedSet Database type
 @test_user.tags.clear
 @test_user.tags.add('ruby', 'valkey', 'web')
 @test_user.tags.size

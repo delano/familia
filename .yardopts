@@ -1,30 +1,45 @@
 --readme README.md
 --title "Familia Ruby Library Documentation"
---markup markdown
---markup-provider kramdown
 --protected
 --no-private
+--verbose
+--charset utf-8
+--markup markdown
+--markup-provider kramdown
+--output-dir public
 --embed-mixin ClassMethods
+--embed-mixin InstanceMethods
 --embed-mixin Features
 --tag feature:"Feature"
 --tag since:"Since Version"
---tag example:"Example Usage"
 --tag note:"Note"
 --tag warning:"Warning"
 --tag deprecated:"Deprecated"
+--tag abstract:"Abstract"
+--tag security:"Security"
 --hide-tag nodoc
 --exclude lib/familia/version.rb
 lib/**/*.rb
 -
-CHANGELOG.md
+README.md
+CHANGELOG.rst
 LICENSE.txt
-docs/guides/Home.md
-docs/guides/Getting-Started.md
-docs/guides/Feature-System-Guide.md
-docs/guides/Relationships-Guide.md
+docs/guides/home.md
+docs/guides/api-reference.md
+docs/guides/connection-pooling-guide.md
+docs/guides/encrypted-fields-overview.md
+docs/guides/expiration-feature-guide.md
+docs/guides/feature-system-guide.md
+docs/guides/features-system-developer-guide.md
+docs/guides/field-system-guide.md
+docs/guides/implementation-guide.md
+docs/guides/quantization-feature-guide.md
+docs/guides/relationships-guide.md
 docs/guides/relationships-methods.md
-docs/guides/Encrypted-Fields-Overview.md
-docs/guides/Connection-Pooling-Guide.md
+docs/guides/security-model.md
+docs/guides/time-utilities.md
+docs/guides/transient-fields-guide.md
 docs/reference/api-technical.md
 docs/migration/*.md
+docs/overview.md
 examples/*.rb

@@ -216,7 +216,7 @@ module Familia
               score_ranges: {}
             }
 
-            all_members = Set.new
+            all_members = ::Set.new
 
             collections.each do |collection|
               key = build_collection_key(collection)

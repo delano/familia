@@ -61,8 +61,7 @@ module Familia
     # unique per application even with identical master keys and contexts.
     # Must be 16 bytes or less (automatically padded with null bytes).
     #
-    # @example
-    #   Familia.configure do |config|
+    # @example Familia.configure do |config|
     #     config.encryption_personalization = 'MyApp1.0'
     #   end
     #

@@ -136,8 +136,7 @@ module Familia
     # @param context [Array<String>, String, nil] The calling context, typically
     #   obtained from `caller` or `caller.first`. Default is nil.
     #
-    # @example
-    #   Familia.trace :LOAD, Familia.dbclient(uri), objkey, caller(1..1) if
+    # @example Familia.trace :LOAD, Familia.dbclient(uri), objkey, caller(1..1) if
     #   Familia.debug?
     #
     # @return [nil]

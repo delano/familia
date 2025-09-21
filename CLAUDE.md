@@ -75,7 +75,7 @@ Add changelog fragment with each user-facing or documented change (optional but 
 
 2. **`Familia::DataType`** - Base class for Valkey data type wrappers
    - Located in `lib/familia/data_type.rb`
-   - Provides String, List, Set, SortedSet, HashKey implementations
+   - Provides String, List, UnsortedSet, SortedSet, HashKey implementations
    - Each type has its own class in `lib/familia/data_type/types/`
 
 3. **`Familia::Base`** - Common module for both Horreum and DataType

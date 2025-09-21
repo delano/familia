@@ -13,7 +13,7 @@ FAMILIA_TRACE = ENV.fetch('FAMILIA_TRACE', 'false').downcase
 # '1', 'true', or 'yes' (case-insensitive).
 #
 # @example Enabling trace logging
-#   # Set environment variable
+#   # UnsortedSet environment variable
 #   ENV['FAMILIA_TRACE'] = 'true'
 #
 #   # In your Ruby code
