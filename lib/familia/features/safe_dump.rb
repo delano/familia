@@ -39,7 +39,7 @@ module Familia
     #
     #
     # Internally, all fields are normalized to the hash syntax and stored in
-    # `@safe_dump_field_map`. `SafeDump.safe_dump_fields` returns only the list
+    # `@safe_dump_field_map`. SafeDump.safe_dump_fields returns only the list
     # of symbols in the order they were defined.
     #
     module SafeDump

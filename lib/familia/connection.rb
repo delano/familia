@@ -38,7 +38,7 @@ module Familia
     # NOTE: uri is not a property of the Settings module b/c it's not
     # configured in class defintions like default_expiration or logical DB index.
     #
-    # @param v [String, URI] The new default URI
+    # @param uri [String, URI] The new default URI
     # @example Familia.uri = 'redis://localhost:6379'
     def uri=(uri)
       @uri = normalize_uri(uri)

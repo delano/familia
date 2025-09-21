@@ -44,11 +44,9 @@ module Familia
       #     feature :external_identifier
       #     field :email
       #   end
-      #
       #   user = User.new(email: 'user@example.com')
       #   user.objid  # => "01234567-89ab-7def-8000-123456789abc"
       #   user.extid  # => "ext_abc123def456ghi789" (deterministic from objid)
-      #
       #   # Same objid always produces same extid
       #   user2 = User.new(objid: user.objid, email: 'user@example.com')
       #   user2.extid  # => "ext_abc123def456ghi789" (identical to user.extid)

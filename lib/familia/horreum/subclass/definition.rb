@@ -317,7 +317,7 @@ end
       # Create and register a transient field type
       #
       # @param name [Symbol] The field name
-      # @param options [Hash] Field options
+      # @param kwargs [Hash] Field options (passed as keyword arguments)
       #
       def transient_field(name, **)
         require_relative '../../features/transient_fields/transient_field_type'

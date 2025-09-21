@@ -49,12 +49,14 @@ module Familia
       # @note The behavior of this method depends on the implementation of #new,
       #   #exists?, and #save in the class and its superclasses.
       #
+      # @param args [Array] Arguments passed to the constructor
+      # @param kwargs [Hash] Keyword arguments passed to the constructor
       # @see #new
       # @see #exists?
       # @see #save
       #
-      def create(*, **)
-        fobj = new(*, **)
+      def create(*args, **kwargs)
+        fobj = new(*args, **kwargs)
         fobj.save_if_not_exists
         fobj
       end

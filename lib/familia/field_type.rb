@@ -190,7 +190,7 @@ module Familia
     # The default implementation passes values through unchanged.
     #
     # @param value [Object] The value to serialize
-    # @param record [Object] The record instance (for context)
+    # @param _record [Object] The record instance (for context)
     # @return [Object] The serialized value
     #
     def serialize(value, _record = nil)
@@ -203,7 +203,7 @@ module Familia
     # The default implementation passes values through unchanged.
     #
     # @param value [Object] The value to deserialize
-    # @param record [Object] The record instance (for context)
+    # @param _record [Object] The record instance (for context)
     # @return [Object] The deserialized value
     #
     def deserialize(value, _record = nil)
