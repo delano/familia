@@ -171,7 +171,7 @@ module Familia
       module ClassMethods
         # UnsortedSet the default expiration time for instances of this class
         #
-        # @param default_expiration [Numeric] Time in seconds (can be fractional)
+        # @param value [Numeric] Time in seconds (can be fractional)
         #
         attr_writer :default_expiration
 
