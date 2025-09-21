@@ -51,7 +51,7 @@ class PoolTestSession < Familia::Horreum
 
   def init
     @session_id ||= SecureRandom.hex(8)
-    @created_at ||= Time.now.to_i
+    @created_at ||= Familia.now.to_i
   end
 end
 

@@ -19,7 +19,7 @@ class ApiTestUser < Familia::Horreum
 
   # New API: class_tracked_in for class-level tracking
   class_tracked_in :all_users, score: :created_at
-  class_tracked_in :active_users, score: -> { status == 'active' ? Time.now.to_i : 0 }
+  class_tracked_in :active_users, score: -> { status == 'active' ? Familia.now.to_i : 0 }
 
   # New API: class_indexed_by for class-level indexing
   class_indexed_by :email, :email_lookup
@@ -58,7 +58,7 @@ end
   user_id: 'user_123',
   email: 'test@example.com',
   username: 'testuser',
-  created_at: Time.now.to_i,
+  created_at: Familia.now.to_i,
   status: 'active'
 )
 
@@ -66,14 +66,14 @@ end
   user_id: 'user_456',
   email: 'inactive@example.com',
   username: 'inactiveuser',
-  created_at: Time.now.to_i - 3600,
+  created_at: Familia.now.to_i - 3600,
   status: 'inactive'
 )
 
 @project = ApiTestProject.new(
   project_id: 'proj_789',
   name: 'Test Project',
-  created_at: Time.now.to_i
+  created_at: Familia.now.to_i
 )
 
 @membership = ApiTestMembership.new(
@@ -81,7 +81,7 @@ end
   user_id: @user.user_id,
   project_id: @project.project_id,
   role: 'admin',
-  created_at: Time.now.to_i
+  created_at: Familia.now.to_i
 )
 
 # =============================================

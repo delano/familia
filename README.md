@@ -114,7 +114,7 @@ Flower.multiget("rrose", "tulip", "daisy")
 ```ruby
 user.transaction do |conn|
   conn.set("user:#{user.id}:status", "active")
-  conn.zadd("active_users", Time.now.to_i, user.id)
+  conn.zadd("active_users", Familia.now.to_i, user.id)
 end
 ```
 

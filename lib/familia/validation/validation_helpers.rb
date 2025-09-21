@@ -154,13 +154,13 @@ module Familia
 
       # Performance assertion - assert operations complete within time limit
       def assert_performance_within(max_duration_ms, &block)
-        start_time = Time.now
+        start_time = Familia.now
         CommandRecorder.start_recording
 
         result = block.call if block_given?
 
         commands = CommandRecorder.stop_recording
-        actual_duration_ms = (Time.now - start_time) * 1000
+        actual_duration_ms = (Familia.now - start_time) * 1000
 
         if actual_duration_ms > max_duration_ms
           error_msg = "Operation took #{actual_duration_ms.round(2)}ms, " \

@@ -53,7 +53,7 @@ class Domain < Familia::Horreum
 
   # Track domains by status (using class_ prefix for class-level)
   class_tracked_in :active_domains,
-                   score: -> { status == 'active' ? Time.now.to_i : 0 }
+                   score: -> { status == 'active' ? Familia.now.to_i : 0 }
 end
 
 class Project < Familia::Horreum
@@ -161,7 +161,7 @@ puts
 puts '=== 4. Range Queries ==='
 
 # Get recent customers (last 24 hours)
-yesterday = (Time.now - (24 * 3600)).to_i # 24 hours ago
+yesterday = (Familia.now - (24 * 3600)).to_i # 24 hours ago
 recent_customers = Customer.values.rangebyscore(yesterday, '+inf')
 puts "Recent customers (last 24h): #{recent_customers.size}"
 

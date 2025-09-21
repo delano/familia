@@ -172,7 +172,7 @@ end
 
 # Usage
 UserActivity.record_activity('user_123', 'page_view')
-hourly_buckets = UserActivity.activity_for_hour(Time.now)
+hourly_buckets = UserActivity.activity_for_hour(Familia.now)
 ```
 
 ### Time-Series Data Storage
@@ -217,14 +217,14 @@ end
 
 # Usage - Record CPU usage every minute
 TimeSeriesMetric.record_metric('cpu_usage', 75.5, 1.minute)
-TimeSeriesMetric.record_metric('cpu_usage', 82.1, 1.minute, Time.now + 1.minute)
+TimeSeriesMetric.record_metric('cpu_usage', 82.1, 1.minute, Familia.now + 1.minute)
 
 # Retrieve data for last hour
 series_data = TimeSeriesMetric.get_series(
   'cpu_usage',
   1.minute,
-  Time.now - 1.hour,
-  Time.now
+  Familia.now - 1.hour,
+  Familia.now
 )
 ```
 
@@ -252,7 +252,7 @@ class LogAggregator < Familia::Horreum
     )
 
     aggregator.count += 1
-    aggregator.last_seen = Time.now.to_i
+    aggregator.last_seen = Familia.now.to_i
 
     # Keep sample messages (up to 10)
     sample_key = "sample_#{aggregator.count}"
@@ -265,8 +265,8 @@ class LogAggregator < Familia::Horreum
   end
 
   def self.error_summary(time_range = 1.hour)
-    start_time = Time.now - time_range
-    end_time = Time.now
+    start_time = Familia.now - time_range
+    end_time = Familia.now
 
     # Find all error buckets in time range
     buckets = []
@@ -352,7 +352,7 @@ class QuantizedDataProcessor
     process_bucket(current_bucket)
 
     # Also process previous bucket in case of delayed data
-    previous_bucket = AnalyticsEvent.qstamp(5.minutes, time: Time.now - 5.minutes)
+    previous_bucket = AnalyticsEvent.qstamp(5.minutes, time: Familia.now - 5.minutes)
     process_bucket(previous_bucket)
   end
 
@@ -463,13 +463,13 @@ class GlobalMetrics < Familia::Horreum
 
   def self.utc_hourly_key(time = nil)
     # Always quantize in UTC for global consistency
-    utc_time = time&.utc || Time.now.utc
+    utc_time = time&.utc || Familia.now
     qstamp(1.hour, pattern: '%Y%m%d%H', time: utc_time)
   end
 
   def self.local_daily_key(timezone, time = nil)
     # Quantize in local timezone for regional reports
-    local_time = time || Time.now
+    local_time = time || Familia.now
     local_time = local_time.in_time_zone(timezone) if local_time.respond_to?(:in_time_zone)
     qstamp(1.day, pattern: '%Y%m%d', time: local_time)
   end
@@ -696,8 +696,8 @@ end
 class QuantizationMonitor
   def self.analyze_bucket_distribution(metric_name, quantum, time_range = 24.hours)
     buckets = {}
-    current_time = Time.now - time_range
-    end_time = Time.now
+    current_time = Familia.now - time_range
+    end_time = Familia.now
 
     while current_time <= end_time
       bucket = AnalyticsEvent.qstamp(quantum, time: current_time)

@@ -151,7 +151,7 @@ module Familia
           #     { owner: team, collection: :domains }
           #   ], {
           #     min_permission: :write,
-          #     score_range: [1.week.ago.to_i, Time.now.to_i],
+          #     score_range: [1.week.ago.to_i, Familia.now.to_i],
           #     limit: 50,
           #     operation: :union
           #   })

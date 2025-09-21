@@ -13,8 +13,8 @@ Familia.debug = false
 #=> true
 
 ## save_if_not_exists saves new customer successfully
-Familia.dbclient.set('debug:starting_save_if_not_exists_tests', Time.now.to_s)
-@test_id = "#{Time.now.to_i}-#{rand(1000)}"
+Familia.dbclient.set('debug:starting_save_if_not_exists_tests', Familia.now.to_s)
+@test_id = "#{Familia.now.to_i}-#{rand(1000)}"
 @new_customer = Customer.new "new-customer-#{@test_id}@test.com"
 @new_customer.name = 'New Customer'
 @new_customer.save_if_not_exists
@@ -34,7 +34,7 @@ Familia.dbclient.set('debug:starting_save_if_not_exists_tests', Time.now.to_s)
 #=> true
 
 ## End of save_if_not_exists tests
-Familia.dbclient.set('debug:ending_save_if_not_exists_tests', Time.now.to_s)
+Familia.dbclient.set('debug:ending_save_if_not_exists_tests', Familia.now.to_s)
 
 ## save_if_not_exists persists data correctly
 @another_new_customer.refresh!

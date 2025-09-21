@@ -182,7 +182,7 @@ Execute multiple Valkey commands atomically:
 ```ruby
 user.transaction do |conn|
   conn.set("user:#{user.id}:status", "active")
-  conn.zadd("active_users", Time.now.to_i, user.id)
+  conn.zadd("active_users", Familia.now.to_i, user.id)
 end
 ```
 
@@ -282,7 +282,7 @@ users = User.multiget('alice@example.com', 'bob@example.com')
 # Batch operations
 User.transaction do |conn|
   conn.set('user:alice:status', 'active')
-  conn.zadd('active_users', Time.now.to_i, 'alice')
+  conn.zadd('active_users', Familia.now.to_i, 'alice')
 end
 ```
 

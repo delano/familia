@@ -38,10 +38,10 @@ module Familia
     end
 
     # Returns current time in UTC as a float
-    # @param name [Time] time object (default: current time)
+    # @param current_time [Time] time object (default: current time)
     # @return [Float] time in seconds since epoch
-    def now(name = Time.now)
-      name.utc.to_f
+    def now(current_time = Time.now)
+      current_time.utc.to_f
     end
 
     # A quantized timestamp
@@ -55,7 +55,7 @@ module Familia
     #   Familia.qstamp(1.hour)  # Uses 1 hour quantum
     #   Familia.qstamp(10.minutes, pattern: '%H:%M')  # Returns a formatted string like "12:30"
     #   Familia.qstamp(10.minutes, time: 1302468980)  # Quantizes the given Unix timestamp
-    #   Familia.qstamp(10.minutes, time: Time.now)  # Quantizes the given Time object
+    #   Familia.qstamp(10.minutes, time: Familia.now)  # Quantizes the given Time object
     #   Familia.qstamp(10.minutes, pattern: '%H:%M', time: 1302468980)  # Formats a specific time
     #
     def qstamp(quantum = 10.minutes, pattern: nil, time: nil)

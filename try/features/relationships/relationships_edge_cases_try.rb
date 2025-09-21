@@ -58,19 +58,19 @@ end
 # Score encoding edge cases
 
 ## Score encoding handles maximum metadata value
-max_score = @domain1.encode_score(Time.now, 255)
+max_score = @domain1.encode_score(Familia.now, 255)
 decoded = @domain1.decode_score(max_score)
 decoded[:permissions]
 #=> 255
 
 ## Score encoding handles zero metadata
-zero_score = @domain1.encode_score(Time.now, 0)
+zero_score = @domain1.encode_score(Familia.now, 0)
 decoded_zero = @domain1.decode_score(zero_score)
 decoded_zero[:permissions]
 #=> 0
 
 ## Permission encoding handles unknown permission levels
-unknown_perm_score = @domain1.permission_encode(Time.now, :unknown_permission)
+unknown_perm_score = @domain1.permission_encode(Familia.now, :unknown_permission)
 decoded_unknown = @domain1.permission_decode(unknown_perm_score)
 decoded_unknown[:permission_list]
 #=> []
@@ -90,7 +90,7 @@ decoded_large[:permissions]
 #=> 123
 
 ## Permission encoding maps correctly
-read_score = @domain1.permission_encode(Time.now, :read)
+read_score = @domain1.permission_encode(Familia.now, :read)
 decoded_read = @domain1.permission_decode(read_score)
 decoded_read[:permission_list].include?(:read)
 #=> true
@@ -102,7 +102,7 @@ decoded_epoch[:permissions]
 #=> 42
 
 ## Boundary score values work correctly
-boundary_score = @domain1.encode_score(Time.now, 255)
+boundary_score = @domain1.encode_score(Familia.now, 255)
 decoded_boundary = @domain1.decode_score(boundary_score)
 decoded_boundary[:permissions] <= 255
 #=> true

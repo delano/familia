@@ -138,7 +138,7 @@ end
 @model4 = FullSecureModel4.new(model_id: 'secure-126')
 @model4.password = 'secure-pass'
 @model4.activity_log << 'User logged in'
-@model4.metadata['last_login'] = Time.now.to_i.to_s
+@model4.metadata['last_login'] = Familia.now.to_i.to_s
 
 [@model4.password.to_s, @model4.activity_log.size, @model4.metadata.has_key?('last_login')]
 #=> ['[CONCEALED]', 1, true]

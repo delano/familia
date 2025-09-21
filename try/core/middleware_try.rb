@@ -19,9 +19,9 @@ class MockRedis
   private
 
   def log_command(cmd, *args)
-    start_time = Time.now
+    start_time = Familia.now
     result = yield
-    duration = Time.now - start_time
+    duration = Familia.now - start_time
     @logged_commands << { command: cmd, args: args, duration: duration }
     result
   end

@@ -73,7 +73,7 @@ end
 # =============================================
 
 ## Create test objects for performance testing
-@customer = PerfCustomer.new(custid: 'perf_customer', name: 'Performance Test', created_at: Time.now.to_i)
+@customer = PerfCustomer.new(custid: 'perf_customer', name: 'Performance Test', created_at: Familia.now.to_i)
 @customer.save
 
 # Create multiple domains for bulk operations
@@ -81,7 +81,7 @@ end
   PerfDomain.new(
     domain_id: "perf_domain_#{i}",
     display_domain: "perf#{i}.example.com",
-    created_at: Time.now.to_i + i,
+    created_at: Familia.now.to_i + i,
     priority_score: rand(100),
     customer_id: @customer.custid
   )
@@ -203,7 +203,7 @@ operation_threads = 3.times.map do |i|
       domain = PerfDomain.new(
         domain_id: "thread_test_#{i}",
         display_domain: "thread#{i}.test.com",
-        created_at: Time.now.to_i + i,
+        created_at: Familia.now.to_i + i,
         priority_score: i * 10
       )
       domain.save
@@ -244,7 +244,7 @@ thread_results.all? { |result| result == [true, true] }
 # =============================================
 
 ## Integration with safe_dump (if available)
-integration_model = IntegrationTestModel.new(id: 'integration_test', data: 'test_data', created_at: Time.now.to_i)
+integration_model = IntegrationTestModel.new(id: 'integration_test', data: 'test_data', created_at: Familia.now.to_i)
 
 if integration_model.respond_to?(:safe_dump)
   integration_model.save
@@ -260,7 +260,7 @@ end
 #=:> String
 
 ## Integration with expiration (if available)
-integration_model2 = IntegrationTestModel.new(id: 'integration_test2', data: 'test_data2', created_at: Time.now.to_i)
+integration_model2 = IntegrationTestModel.new(id: 'integration_test2', data: 'test_data2', created_at: Familia.now.to_i)
 if integration_model2.respond_to?(:default_expiration)
   # Test that expiration works with relationship collections
   if integration_model2.class.respond_to?(:all_items)
@@ -315,7 +315,7 @@ stress_time < 0.1
 test_domain = PerfDomain.new(
   domain_id: 'atomic_test',
   display_domain: 'atomic.test.com',
-  created_at: Time.now.to_i,
+  created_at: Familia.now.to_i,
   priority_score: 50
 )
 

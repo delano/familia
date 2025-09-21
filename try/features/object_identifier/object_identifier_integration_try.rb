@@ -90,7 +90,7 @@ obj.extid == original_extid
 persistence_obj = PersistenceTest.new
 persistence_obj.id = 'persistence_test'
 persistence_obj.name = 'Persistence Test Object'
-persistence_obj.created_at = Time.now.to_i
+persistence_obj.created_at = Familia.now.to_i
 original_objid = persistence_obj.objid
 original_extid = persistence_obj.extid
 persistence_obj.save
@@ -102,7 +102,7 @@ loaded_obj = PersistenceTest.new(id: 'persistence_test')
 persistence_obj = PersistenceTest.new
 persistence_obj.id = 'persistence_test'
 persistence_obj.name = 'Persistence Test Object'
-persistence_obj.created_at = Time.now.to_i
+persistence_obj.created_at = Familia.now.to_i
 original_objid = persistence_obj.objid
 persistence_obj.save
 loaded_obj = PersistenceTest.new(id: 'persistence_test')
@@ -113,7 +113,7 @@ loaded_obj.objid == original_objid
 persistence_obj = PersistenceTest.new
 persistence_obj.id = 'persistence_test'
 persistence_obj.name = 'Persistence Test Object'
-persistence_obj.created_at = Time.now.to_i
+persistence_obj.created_at = Familia.now.to_i
 original_extid = persistence_obj.extid
 persistence_obj.save
 loaded_obj = PersistenceTest.new(id: 'persistence_test')

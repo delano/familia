@@ -52,51 +52,51 @@ result.round(0)
 #=> 31556952.0
 
 ## Numeric#age_in - calculate age in months from timestamp (approximately 1 month ago)
-timestamp = Time.now.to_f - Familia::Refinements::TimeLiterals::PER_MONTH
+timestamp = Familia.now - Familia::Refinements::TimeLiterals::PER_MONTH
 result = RefinedContext.eval_in_refined_context("#{timestamp}.age_in(:months)")
 (result - 1.0).abs < 0.01
 #=> true
 
 ## Numeric#age_in - calculate age in years from timestamp (approximately 1 year ago)
-timestamp = Time.now.to_f - Familia::Refinements::TimeLiterals::PER_YEAR
+timestamp = Familia.now - Familia::Refinements::TimeLiterals::PER_YEAR
 result = RefinedContext.instance_eval_in_refined_context("#{timestamp}.age_in(:years)")
 (result - 1.0).abs < 0.01
 #=> true
 
 ## Numeric#months_old - convenience method for age_in(:months)
-timestamp = Time.now.to_f - Familia::Refinements::TimeLiterals::PER_MONTH
+timestamp = Familia.now - Familia::Refinements::TimeLiterals::PER_MONTH
 result = RefinedContext.eval_in_refined_context("#{timestamp}.months_old")
 (result - 1.0).abs < 0.01
 #=> true
 
 ## Numeric#years_old - convenience method for age_in(:years)
-timestamp = Time.now.to_f - Familia::Refinements::TimeLiterals::PER_YEAR
+timestamp = Familia.now - Familia::Refinements::TimeLiterals::PER_YEAR
 result = RefinedContext.instance_eval_in_refined_context("#{timestamp}.years_old")
 (result - 1.0).abs < 0.01
 #=> true
 
 ## Numeric#months_old - should NOT return seconds (the original bug)
-timestamp = Time.now.to_f - Familia::Refinements::TimeLiterals::PER_MONTH
+timestamp = Familia.now - Familia::Refinements::TimeLiterals::PER_MONTH
 result = RefinedContext.eval_in_refined_context("#{timestamp}.months_old")
 result.between?(0.9, 1.1)  # Should be ~1 month, not millions of seconds
 #=> true
 
 ## Numeric#years_old - should NOT return seconds (the original bug)
-timestamp = Time.now.to_f - Familia::Refinements::TimeLiterals::PER_YEAR
+timestamp = Familia.now - Familia::Refinements::TimeLiterals::PER_YEAR
 result = RefinedContext.instance_eval_in_refined_context("#{timestamp}.years_old")
 result.between?(0.9, 1.1)  # Should be ~1 year, not millions of seconds
 #=> true
 
 ## age_in with from_time parameter - months
-past_time = Time.now - (2 * Familia::Refinements::TimeLiterals::PER_MONTH)  # 2 months ago
-from_time = Time.now - Familia::Refinements::TimeLiterals::PER_MONTH  # 1 month ago
+past_time = Familia.now - (2 * Familia::Refinements::TimeLiterals::PER_MONTH)  # 2 months ago
+from_time = Familia.now - Familia::Refinements::TimeLiterals::PER_MONTH  # 1 month ago
 result = RefinedContext.eval_in_refined_context("#{past_time.to_f}.age_in(:months, #{from_time.to_f})")
 (result - 1.0).abs < 0.01
 #=> true
 
 ## age_in with from_time parameter - years
-past_time = Time.now - (2 * Familia::Refinements::TimeLiterals::PER_YEAR)  # 2 years ago
-from_time = Time.now - Familia::Refinements::TimeLiterals::PER_YEAR  # 1 year ago
+past_time = Familia.now - (2 * Familia::Refinements::TimeLiterals::PER_YEAR)  # 2 years ago
+from_time = Familia.now - Familia::Refinements::TimeLiterals::PER_YEAR  # 1 year ago
 result = RefinedContext.instance_eval_in_refined_context("#{past_time.to_f}.age_in(:years, #{from_time.to_f})")
 (result - 1.0).abs < 0.01
 #=> true

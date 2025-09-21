@@ -51,10 +51,10 @@ end
 @domain = TestDomain.new(
   domain_id: 'dom_789',
   display_domain: 'example.com',
-  created_at: Time.now.to_i,
+  created_at: Familia.now.to_i,
   permission_level: :write
 )
-@tag = TestTag.new(name: 'important', created_at: Time.now.to_i)
+@tag = TestTag.new(name: 'important', created_at: Familia.now.to_i)
 
 # =============================================
 # 1. V2 Feature Integration Tests
@@ -89,7 +89,7 @@ TestDomain.identifier_field
 # =============================================
 
 ## Permission encoding creates proper score
-@score = @domain.permission_encode(Time.now, :write)
+@score = @domain.permission_encode(Familia.now, :write)
 @score.to_s.match?(/\d+\.\d+/)
 #=> true
 
@@ -99,8 +99,8 @@ decoded[:permission_list].include?(:write)
 #=> true
 
 ## Score encoding preserves timestamp ordering
-@early_score = @domain.encode_score(Time.now - 3600, 100)  # 1 hour ago
-@late_score = @domain.encode_score(Time.now, 100)
+@early_score = @domain.encode_score(Familia.now - 3600, 100)  # 1 hour ago
+@late_score = @domain.encode_score(Familia.now, 100)
 @late_score > @early_score
 #=> true
 

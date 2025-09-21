@@ -31,7 +31,7 @@ module Familia
     #   specifying a custom score. Use `add` or `[]=` for more control.
     #
     def <<(val)
-      add(Time.now.to_i, val)
+      add(Familia.now.to_i, val)
     end
 
     # NOTE: The argument order is the reverse of #add. We do this to

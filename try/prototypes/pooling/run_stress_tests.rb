@@ -29,7 +29,7 @@ class StressTestRunner
   def initialize(options = {})
     @options = {
       config_set: :moderate,
-      output_dir: "stress_test_results_#{Time.now.strftime('%Y%m%d_%H%M%S')}",
+      output_dir: "stress_test_results_#{Familia.now.strftime('%Y%m%d_%H%M%S')}",
       threading_models: [:traditional, :thread_pool, :fiber],
       operation_mixes: [:balanced, :read_heavy, :write_heavy],
       generate_visualizations: true,
@@ -67,7 +67,7 @@ class StressTestRunner
     puts "Total tests to run: #{total_tests}"
     puts ""
 
-    start_time = Time.now
+    start_time = Familia.now
 
     @config_set[:scenarios].each do |scenario|
       puts "\n--- Testing Scenario: #{scenario} ---"
@@ -105,7 +105,7 @@ class StressTestRunner
       end
     end
 
-    duration = Time.now - start_time
+    duration = Familia.now - start_time
     puts "\n" + "=" * 80
     puts "ALL TESTS COMPLETED"
     puts "Total duration: #{format_duration(duration)}"
@@ -206,7 +206,7 @@ class StressTestRunner
   end
 
   def save_test_results(config, metrics, model_info)
-    timestamp = Time.now.strftime('%Y%m%d_%H%M%S_%L')
+    timestamp = Familia.now.strftime('%Y%m%d_%H%M%S_%L')
     test_id = "#{config[:threading_model]}_#{config[:scenario]}_#{timestamp}"
 
     # Export detailed CSV files
@@ -217,7 +217,7 @@ class StressTestRunner
 
     # Save test configuration and results
     test_data = {
-      timestamp: Time.now,
+      timestamp: Familia.now,
       config: config,
       model_info: model_info,
       summary: metrics.respond_to?(:detailed_summary) ? metrics.detailed_summary : metrics.summary
@@ -267,7 +267,7 @@ class StressTestRunner
     <<~README
     # Connection Pool Stress Test Results
 
-    Generated: #{Time.now}
+    Generated: #{Familia.now}
     Configuration: #{@options[:config_set]}
 
     ## Directory Structure
@@ -305,7 +305,7 @@ class StressTestRunner
     summary = <<~SUMMARY
     # Executive Summary - Connection Pool Stress Testing
 
-    **Generated**: #{Time.now}
+    **Generated**: #{Familia.now}
     **Test Configuration**: #{@options[:config_set]}
 
     ## Key Findings

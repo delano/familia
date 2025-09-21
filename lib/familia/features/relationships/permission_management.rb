@@ -50,7 +50,7 @@ module Familia
 
               # Get current score from any sorted set this object belongs to
               # For simplicity, we'll create a new timestamp-based score
-              current_time = Time.now
+              current_time = Familia.now
               new_score = ScoreEncoding.encode_score(current_time, permissions)
 
               # Store permission bits in hash for quick lookup
@@ -240,7 +240,7 @@ module Familia
               bits = send(field_name)[user_key].to_i
 
               # Create a temporary score to use ScoreEncoding.permission_tier
-              temp_score = ScoreEncoding.encode_score(Time.now, bits)
+              temp_score = ScoreEncoding.encode_score(Familia.now, bits)
               ScoreEncoding.permission_tier(temp_score)
             end
 

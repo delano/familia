@@ -50,7 +50,7 @@ module Familia
     #
     #   # Custom generation strategy
     #   class TimestampedItem < Familia::Horreum
-    #     feature :object_identifier, generator: -> { "item_#{Time.now.to_i}_#{SecureRandom.hex(4)}" }
+    #     feature :object_identifier, generator: -> { "item_#{Familia.now.to_i}_#{SecureRandom.hex(4)}" }
     #     field :data
     #   end
     #

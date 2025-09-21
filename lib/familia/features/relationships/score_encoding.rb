@@ -99,15 +99,15 @@ module Familia
           # @return [Float] Encoded score suitable for Redis sorted sets
           #
           # @example Basic encoding with bit flag
-          #   encode_score(Time.now, 5)  # read(1) + write(4) = 5
+          #   encode_score(Familia.now, 5)  # read(1) + write(4) = 5
           #   #=> 1704067200.005
           #
           # @example Permission symbol encoding
-          #   encode_score(Time.now, :read)
+          #   encode_score(Familia.now, :read)
           #   #=> 1704067200.001
           #
           # @example Multiple permissions
-          #   encode_score(Time.now, [:read, :write, :delete])
+          #   encode_score(Familia.now, [:read, :write, :delete])
           #   #=> 1704067200.037
           def encode_score(timestamp, permissions = 0)
             time_part = timestamp.respond_to?(:to_i) ? timestamp.to_i : timestamp
@@ -233,7 +233,7 @@ module Familia
           #
           # @return [Float] Current time as Redis score
           def current_score
-            encode_score(Time.now, 0)
+            encode_score(Familia.now, 0)
           end
 
           # Create score range for Redis operations based on time bounds
@@ -244,7 +244,7 @@ module Familia
           # @return [Array] Array suitable for Redis ZRANGEBYSCORE operations
           #
           # @example Time range
-          #   score_range(1.hour.ago, Time.now)
+          #   score_range(1.hour.ago, Familia.now)
           #   #=> [1704063600.0, 1704067200.255]
           #
           # @example Permission filter
@@ -373,7 +373,7 @@ module Familia
 
             # Any permission matching the category mask
             min_score = start_time ? start_time.to_i : 0
-            max_score = end_time ? end_time.to_i : Time.now.to_i
+            max_score = end_time ? end_time.to_i : Familia.now.to_i
 
             # Return range that includes any matching permissions
             ["#{min_score}.000", "#{max_score}.999"]

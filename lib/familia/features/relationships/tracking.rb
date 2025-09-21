@@ -44,7 +44,7 @@ module Familia
           #
           # @example Class-level tracking (using class_ prefix convention)
           #   class_tracked_in :all_customers, score: :created_at
-          #   class_tracked_in :active_users, score: -> { status == 'active' ? Time.now.to_i : 0 }
+          #   class_tracked_in :active_users, score: -> { status == 'active' ? Familia.now.to_i : 0 }
           def class_tracked_in(collection_name, score: nil, on_destroy: :remove)
             klass_name = (name || to_s).downcase
 

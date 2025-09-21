@@ -260,7 +260,7 @@ class MetricsCollector
       duration: duration,
       success: success,
       wait_time: wait_time,
-      timestamp: Time.now.to_f
+      timestamp: Familia.now
     }
 
     if @use_concurrent
@@ -277,7 +277,7 @@ class MetricsCollector
       error: error.class.name,
       message: error.message,
       context: context,
-      timestamp: Time.now.to_f
+      timestamp: Familia.now
     }
 
     if @use_concurrent
@@ -301,7 +301,7 @@ class MetricsCollector
       utilization: utilization,
       utilization_alt: utilization_alt,
       in_use: in_use,
-      timestamp: Time.now.to_f
+      timestamp: Familia.now
     }
 
     if @use_concurrent
@@ -582,17 +582,17 @@ class ConnectionPoolStressTest
           @config[:operations_per_thread].times do |op_index|
             account = get_account_for_operation(i, op_index)
             begin
-              start = Time.now
-              wait_start = Time.now
+              start = Familia.now
+              wait_start = Familia.now
 
               Familia.atomic do
-                wait_time = Time.now - wait_start
+                wait_time = Familia.now - wait_start
                 account.complex_operation
-                @metrics.record_operation(:transaction, Time.now - start, true, wait_time)
+                @metrics.record_operation(:transaction, Familia.now - start, true, wait_time)
               end
             rescue => e
               @metrics.record_error(e, { thread: i })
-              @metrics.record_operation(:transaction, Time.now - start, false)
+              @metrics.record_operation(:transaction, Familia.now - start, false)
             end
           end
         rescue => e
@@ -629,12 +629,12 @@ class ConnectionPoolStressTest
     puts "Running rapid fire test with #{@config[:thread_count]} threads"
 
     if @config[:duration]
-      end_time = Time.now + @config[:duration]
+      end_time = Familia.now + @config[:duration]
 
       @config[:thread_count].times do |i|
         threads << Thread.new do
           op_index = 0
-          while Time.now < end_time
+          while Familia.now < end_time
             account = get_account_for_operation(i, op_index)
             operation = select_operation
             execute_operation(account, operation)
@@ -691,7 +691,7 @@ class ConnectionPoolStressTest
 
         @config[:operations_per_thread].times do
           begin
-            start = Time.now
+            start = Familia.now
 
             Familia.atomic do
               # Simulate long-running transaction
@@ -706,10 +706,10 @@ class ConnectionPoolStressTest
               account2.save
             end
 
-            @metrics.record_operation(:long_transaction, Time.now - start, true)
+            @metrics.record_operation(:long_transaction, Familia.now - start, true)
           rescue => e
             @metrics.record_error(e, { thread: i })
-            @metrics.record_operation(:long_transaction, Time.now - start, false)
+            @metrics.record_operation(:long_transaction, Familia.now - start, false)
           end
         end
       end
@@ -731,7 +731,7 @@ class ConnectionPoolStressTest
 
         @config[:operations_per_thread].times do
           begin
-            start = Time.now
+            start = Familia.now
 
             Familia.atomic do
               account.deposit(50)
@@ -747,10 +747,10 @@ class ConnectionPoolStressTest
               account.save
             end
 
-            @metrics.record_operation(:nested_transaction, Time.now - start, true)
+            @metrics.record_operation(:nested_transaction, Familia.now - start, true)
           rescue => e
             @metrics.record_error(e, { thread: i })
-            @metrics.record_operation(:nested_transaction, Time.now - start, false)
+            @metrics.record_operation(:nested_transaction, Familia.now - start, false)
           end
         end
       end
@@ -773,7 +773,7 @@ class ConnectionPoolStressTest
 
         @config[:operations_per_thread].times do |op_num|
           begin
-            start = Time.now
+            start = Familia.now
 
             if rand < error_rate
               # Inject an error
@@ -784,10 +784,10 @@ class ConnectionPoolStressTest
               account.complex_operation
             end
 
-            @metrics.record_operation(:with_errors, Time.now - start, true)
+            @metrics.record_operation(:with_errors, Familia.now - start, true)
           rescue => e
             @metrics.record_error(e, { thread: i, operation: op_num })
-            @metrics.record_operation(:with_errors, Time.now - start, false)
+            @metrics.record_operation(:with_errors, Familia.now - start, false)
           end
         end
       end
@@ -811,12 +811,12 @@ class ConnectionPoolStressTest
 
   def run_duration_based_test(mix)
     threads = []
-    end_time = Time.now + @config[:duration]
+    end_time = Familia.now + @config[:duration]
 
     @config[:thread_count].times do |i|
       threads << Thread.new do
         op_index = 0
-        while Time.now < end_time
+        while Familia.now < end_time
           account = get_account_for_operation(i, op_index)
           operation = select_operation_from_mix(mix)
           execute_operation(account, operation)
@@ -898,18 +898,18 @@ class ConnectionPoolStressTest
 
   def execute_operation(account, operation)
     begin
-      start = Time.now
+      start = Familia.now
 
       case operation
       when :read
         account.refresh!
         _ = account.balance
-        @metrics.record_operation(:read, Time.now - start, true)
+        @metrics.record_operation(:read, Familia.now - start, true)
       when :write
         current = account.balance || 0
         account.balance = current + rand(-10..10)
         account.save
-        @metrics.record_operation(:write, Time.now - start, true)
+        @metrics.record_operation(:write, Familia.now - start, true)
       when :transaction
         Familia.atomic do
           account.refresh!
@@ -917,12 +917,12 @@ class ConnectionPoolStressTest
           account.balance = current + rand(-10..10)
           account.save
         end
-        @metrics.record_operation(:transaction, Time.now - start, true)
+        @metrics.record_operation(:transaction, Familia.now - start, true)
       end
     rescue => e
       puts "Operation error: #{e.message} (#{e.class})" if ENV['FAMILIA_DEBUG']
       @metrics.record_error(e, { operation: operation })
-      @metrics.record_operation(operation, Time.now - start, false)
+      @metrics.record_operation(operation, Familia.now - start, false)
     end
   end
 

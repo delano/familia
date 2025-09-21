@@ -247,7 +247,7 @@ module Familia
               index_key = "#{parent_key}:#{index_name}:#{field_value}"
 
               # Use SortedSet with timestamp score for insertion order
-              dbclient.zadd(index_key, Time.now.to_f, identifier)
+              dbclient.zadd(index_key, Familia.now, identifier)
             end
 
             method_name = "remove_from_#{context_class_name.downcase}_#{index_name}"
@@ -286,7 +286,7 @@ module Familia
                 # Add to new index if present
                 if new_field_value
                   new_index_key = "#{parent_key}:#{index_name}:#{new_field_value}"
-                  tx.zadd(new_index_key, Time.now.to_f, identifier)
+                  tx.zadd(new_index_key, Familia.now, identifier)
                 end
               end
             end

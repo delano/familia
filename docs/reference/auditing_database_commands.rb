@@ -31,8 +31,8 @@ class TransferService
     Familia.transaction do |conn|
       conn.hset(from_account.dbkey, 'balance', from_balance.to_s)
       conn.hset(to_account.dbkey, 'balance', to_balance.to_s)
-      conn.hset(from_account.dbkey, 'last_updated', Time.now.to_i.to_s)
-      conn.hset(to_account.dbkey, 'last_updated', Time.now.to_i.to_s)
+      conn.hset(from_account.dbkey, 'last_updated', Familia.now.to_i.to_s)
+      conn.hset(to_account.dbkey, 'last_updated', Familia.now.to_i.to_s)
     end
 
     # Update local state

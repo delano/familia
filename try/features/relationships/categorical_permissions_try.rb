@@ -174,22 +174,22 @@ Familia::Features::Relationships::ScoreEncoding.meets_category?(128, :administra
 #=> true
 
 ## Permission Management Module Integration
-@doc1 = CategoricalTestDocument.new(doc_id: 'doc1', title: 'Document 1', created_at: Time.now.to_i)
+@doc1 = CategoricalTestDocument.new(doc_id: 'doc1', title: 'Document 1', created_at: Familia.now.to_i)
 @doc1.permission_bits = 5  # read + write
 @doc1.save
 
-@doc2 = CategoricalTestDocument.new(doc_id: 'doc2', title: 'Document 2', created_at: Time.now.to_i)
+@doc2 = CategoricalTestDocument.new(doc_id: 'doc2', title: 'Document 2', created_at: Familia.now.to_i)
 @doc2.permission_bits = 1  # read only
 @doc2.save
 
-@doc3 = CategoricalTestDocument.new(doc_id: 'doc3', title: 'Document 3', created_at: Time.now.to_i)
+@doc3 = CategoricalTestDocument.new(doc_id: 'doc3', title: 'Document 3', created_at: Familia.now.to_i)
 @doc3.permission_bits = 128  # admin
 @doc3.save
 
 # Add documents to customer collection
-@customer.documents.add(@doc1.encode_score(Time.now, @doc1.permission_bits), @doc1.identifier)
-@customer.documents.add(@doc2.encode_score(Time.now, @doc2.permission_bits), @doc2.identifier)
-@customer.documents.add(@doc3.encode_score(Time.now, @doc3.permission_bits), @doc3.identifier)
+@customer.documents.add(@doc1.encode_score(Familia.now, @doc1.permission_bits), @doc1.identifier)
+@customer.documents.add(@doc2.encode_score(Familia.now, @doc2.permission_bits), @doc2.identifier)
+@customer.documents.add(@doc3.encode_score(Familia.now, @doc3.permission_bits), @doc3.identifier)
 #=> true
 
 ## Grant permissions to user
@@ -227,22 +227,22 @@ Familia::Features::Relationships::ScoreEncoding.meets_category?(128, :administra
 @test_customer.name = 'Filter Test Customer'
 @test_customer.save
 
-@filter_doc1 = CategoricalTestDocument.new(doc_id: 'filter_doc1', title: 'Filter Document 1', created_at: Time.now.to_i)
+@filter_doc1 = CategoricalTestDocument.new(doc_id: 'filter_doc1', title: 'Filter Document 1', created_at: Familia.now.to_i)
 @filter_doc1.permission_bits = 5  # read + write
 @filter_doc1.save
 
-@filter_doc2 = CategoricalTestDocument.new(doc_id: 'filter_doc2', title: 'Filter Document 2', created_at: Time.now.to_i)
+@filter_doc2 = CategoricalTestDocument.new(doc_id: 'filter_doc2', title: 'Filter Document 2', created_at: Familia.now.to_i)
 @filter_doc2.permission_bits = 1  # read only
 @filter_doc2.save
 
-@filter_doc3 = CategoricalTestDocument.new(doc_id: 'filter_doc3', title: 'Filter Document 3', created_at: Time.now.to_i)
+@filter_doc3 = CategoricalTestDocument.new(doc_id: 'filter_doc3', title: 'Filter Document 3', created_at: Familia.now.to_i)
 @filter_doc3.permission_bits = 255  # admin with all permissions including readable
 @filter_doc3.save
 
 # Add documents to customer collection
-@test_customer.documents.add(@filter_doc1.encode_score(Time.now, @filter_doc1.permission_bits), @filter_doc1.identifier)
-@test_customer.documents.add(@filter_doc2.encode_score(Time.now, @filter_doc2.permission_bits), @filter_doc2.identifier)
-@test_customer.documents.add(@filter_doc3.encode_score(Time.now, @filter_doc3.permission_bits), @filter_doc3.identifier)
+@test_customer.documents.add(@filter_doc1.encode_score(Familia.now, @filter_doc1.permission_bits), @filter_doc1.identifier)
+@test_customer.documents.add(@filter_doc2.encode_score(Familia.now, @filter_doc2.permission_bits), @filter_doc2.identifier)
+@test_customer.documents.add(@filter_doc3.encode_score(Familia.now, @filter_doc3.permission_bits), @filter_doc3.identifier)
 
 @filter_collection_key = @test_customer.documents.dbkey
 
@@ -307,13 +307,13 @@ Familia::Features::Relationships::ScoreEncoding.meets_category?(128, :administra
 @admin_test_customer.name = 'Admin Test Customer'
 @admin_test_customer.save
 
-@admin_doc = CategoricalTestDocument.new(doc_id: 'admin_doc', title: 'Admin Document', created_at: Time.now.to_i)
+@admin_doc = CategoricalTestDocument.new(doc_id: 'admin_doc', title: 'Admin Document', created_at: Familia.now.to_i)
 @admin_doc.permission_bits = 255  # admin with all permissions
 @admin_doc.save
 
 # Grant admin access to the user and add doc to collection for proper test setup
 @admin_doc.grant('admin_user', :admin)
-@admin_test_customer.documents.add(@admin_doc.encode_score(Time.now, @admin_doc.permission_bits), @admin_doc.identifier)
+@admin_test_customer.documents.add(@admin_doc.encode_score(Familia.now, @admin_doc.permission_bits), @admin_doc.identifier)
 
 @admin_collection_key = @admin_test_customer.documents.dbkey
 @admin_doc.admin_access?('admin_user', @admin_collection_key)
@@ -323,7 +323,7 @@ Familia::Features::Relationships::ScoreEncoding.meets_category?(128, :administra
 
 ## UnsortedSet exact permissions (replace existing)
 # Re-establish test data for this section
-@perm_test_doc = CategoricalTestDocument.new(doc_id: 'perm_doc', title: 'Permission Document', created_at: Time.now.to_i)
+@perm_test_doc = CategoricalTestDocument.new(doc_id: 'perm_doc', title: 'Permission Document', created_at: Familia.now.to_i)
 @perm_test_doc.permission_bits = 5  # read + write
 @perm_test_doc.save
 
@@ -357,7 +357,7 @@ Familia::Features::Relationships::ScoreEncoding.meets_category?(128, :administra
 
 ## Test comprehensive user permission management
 # Re-establish test data for this section
-@category_test_doc = CategoricalTestDocument.new(doc_id: 'category_doc', title: 'Category Document', created_at: Time.now.to_i)
+@category_test_doc = CategoricalTestDocument.new(doc_id: 'category_doc', title: 'Category Document', created_at: Familia.now.to_i)
 @category_test_doc.permission_bits = 5  # read + write
 @category_test_doc.save
 
@@ -420,7 +420,7 @@ end
 
 ## Handle nil user gracefully
 # Re-establish test data for this section
-@edge_case_doc = CategoricalTestDocument.new(doc_id: 'edge_doc', title: 'Edge Case Document', created_at: Time.now.to_i)
+@edge_case_doc = CategoricalTestDocument.new(doc_id: 'edge_doc', title: 'Edge Case Document', created_at: Familia.now.to_i)
 @edge_case_doc.permission_bits = 5  # read + write
 @edge_case_doc.save
 
@@ -445,7 +445,7 @@ end
 # Legacy Compatibility
 
 ## Permission encoding and decoding with bit flags
-@write_score = Familia::Features::Relationships::ScoreEncoding.permission_encode(Time.now, :write)
+@write_score = Familia::Features::Relationships::ScoreEncoding.permission_encode(Familia.now, :write)
 @decoded = Familia::Features::Relationships::ScoreEncoding.permission_decode(@write_score)
 @decoded[:permission_list].include?(:write)
 #=> true
@@ -459,7 +459,7 @@ end
 @perf_test_customer.name = 'Performance Test Customer'
 @perf_test_customer.save
 
-@perf_test_doc = CategoricalTestDocument.new(doc_id: 'perf_doc', title: 'Performance Document', created_at: Time.now.to_i)
+@perf_test_doc = CategoricalTestDocument.new(doc_id: 'perf_doc', title: 'Performance Document', created_at: Familia.now.to_i)
 @perf_test_doc.permission_bits = 5  # read + write
 @perf_test_doc.save
 
@@ -467,15 +467,15 @@ end
 
 @sorted_set = Familia::SortedSet.new(nil, dbkey: @large_collection, logical_database: @perf_test_customer.class.logical_database)
 100.times do |i|
-  score = Familia::Features::Relationships::ScoreEncoding.encode_score(Time.now.to_i + i, rand(1..255))
+  score = Familia::Features::Relationships::ScoreEncoding.encode_score(Familia.now.to_i + i, rand(1..255))
   @sorted_set.add(score, "item_#{i}")
 end
 #=> 100
 
 ## Stage 1: Redis pre-filtering is O(log N + M) efficient
-@start_time = Time.now
+@start_time = Familia.now
 @large_accessible = @perf_test_doc.accessible_items(@large_collection)
-@stage1_time = Time.now - @start_time
+@stage1_time = Familia.now - @start_time
 
 @large_accessible.length
 #=> 100
@@ -485,9 +485,9 @@ end
 #=> true
 
 ## Stage 2: Categorical filtering operates on pre-filtered small set
-@start_time = Time.now
+@start_time = Familia.now
 @large_readable = @perf_test_doc.items_by_permission(@large_collection, :readable)
-@stage2_time = Time.now - @start_time
+@stage2_time = Familia.now - @start_time
 
 # Test both timing and results in same test case
 @stage2_passes_timing = @stage2_time < 0.01

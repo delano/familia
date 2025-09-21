@@ -99,7 +99,7 @@ class BankAccount < Familia::Horreum
     end
 
     def add(accnt)
-      relatable_objids.add Time.now.to_f, accnt.identifier
+      relatable_objids.add Familia.now, accnt.identifier
     end
   end
 end

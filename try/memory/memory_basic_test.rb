@@ -8,7 +8,7 @@ require_relative '../helpers/test_helpers'
 class MemorySecurityTester
   def self.test_redacted_string
     results = {
-      timestamp: Time.now,
+      timestamp: Familia.now,
       tests: []
     }
 

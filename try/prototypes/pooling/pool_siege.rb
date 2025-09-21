@@ -26,7 +26,7 @@ class PoolSiege
     if @options[:profile]
       run_with_profiling
     else
-      start_time = Time.now
+      start_time = Familia.now
 
       if @options[:quiet]
         run_silent_test
@@ -34,7 +34,7 @@ class PoolSiege
         run_with_progress
       end
 
-      end_time = Time.now
+      end_time = Familia.now
       print_final_results(end_time - start_time)
     end
   end
@@ -310,16 +310,16 @@ class PoolSiege
     end
 
     # Run the test
-    start_time = Time.now
+    start_time = Familia.now
     run_silent_test
-    end_time = Time.now
+    end_time = Familia.now
     total_time = end_time - start_time
 
     # Restore original method
     Familia.define_singleton_method(:atomic, original_atomic)
 
     # Generate report
-    timestamp = Time.now.strftime("%Y%m%d_%H%M%S")
+    timestamp = Familia.now.strftime("%Y%m%d_%H%M%S")
     scenario_name = @options[:scenario].to_s
     report_file = "pool_siege_#{scenario_name}_#{timestamp}_profile.txt"
 
@@ -439,8 +439,8 @@ class ProgressTracker
     @total_ops = total_ops
     @completed = 0
     @successful = 0
-    @start_time = Time.now
-    @last_update = Time.now
+    @start_time = Familia.now
+    @last_update = Familia.now
   end
 
   def update(success)
@@ -465,7 +465,7 @@ class ProgressTracker
   private
 
   def should_update?
-    now = Time.now
+    now = Familia.now
     return false if (now - @last_update) < 0.5 # Update at most every 500ms
     @last_update = now
     true
@@ -474,7 +474,7 @@ class ProgressTracker
   def show_ops_progress
     percent = (@completed.to_f / @total_ops * 100).round(1)
     success_rate = (@successful.to_f / @completed * 100).round(1) if @completed > 0
-    elapsed = Time.now - @start_time
+    elapsed = Familia.now - @start_time
     rate = (@completed / elapsed).round(1) if elapsed > 0
 
     bar_width = 20
@@ -489,7 +489,7 @@ class ProgressTracker
   end
 
   def show_time_progress
-    elapsed = Time.now - @start_time
+    elapsed = Familia.now - @start_time
     success_rate = (@successful.to_f / @completed * 100).round(1) if @completed > 0
     rate = (@completed / elapsed).round(1) if elapsed > 0
 

@@ -75,7 +75,7 @@ module Familia
     #
     # @example Score encoding for permissions
     #   # Encode permission in score
-    #   score = domain.permission_encode(Time.now, :write)
+    #   score = domain.permission_encode(Familia.now, :write)
     #   # => 1704067200.004 (timestamp + permission bits)
     #
     #   # Decode permission from score
@@ -89,7 +89,7 @@ module Familia
     #   # Atomic updates across multiple collections
     #   domain.update_multiple_presence([
     #     { key: "customer:123:domains", score: current_score },
-    #     { key: "team:456:domains", score: permission_encode(Time.now, :read) }
+    #     { key: "team:456:domains", score: permission_encode(Familia.now, :read) }
     #   ], :add, domain.identifier)
     #
     #   # UnsortedSet operations on collections
@@ -217,7 +217,7 @@ module Familia
 
         # Class method wrapper for create_temp_key
         def create_temp_key(base_name, ttl = 300)
-          timestamp = Time.now.to_i
+          timestamp = Familia.now.to_i
           random_suffix = SecureRandom.hex(3)
           temp_key = "temp:#{base_name}:#{timestamp}:#{random_suffix}"
 
@@ -376,7 +376,7 @@ module Familia
         # Create a snapshot of current relationship state (for debugging)
         def relationship_snapshot
           {
-            timestamp: Time.now,
+            timestamp: Familia.now,
             identifier: identifier,
             class: self.class.name,
             status: relationship_status,
@@ -391,7 +391,7 @@ module Familia
 
         # Instance method wrapper for create_temp_key
         def create_temp_key(base_name, ttl = 300)
-          timestamp = Time.now.to_i
+          timestamp = Familia.now.to_i
           random_suffix = SecureRandom.hex(3)
           temp_key = "temp:#{base_name}:#{timestamp}:#{random_suffix}"
 
