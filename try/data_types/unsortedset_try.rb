@@ -1,4 +1,4 @@
-# try/data_types/set_try.rb
+# try/data_types/unsortedset_try.rb
 
 require_relative '../helpers/test_helpers'
 
