@@ -46,7 +46,7 @@ class StressTestVisualizer
   def generate_report
     report = []
     report << "# Connection Pool Stress Test Results"
-    report << "\nGenerated: #{Time.now}"
+    report << "\nGenerated: #{Familia.now}"
     report << "\n"
 
     # Summary section

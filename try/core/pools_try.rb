@@ -51,9 +51,27 @@ class PoolTestSession < Familia::Horreum
 
   def init
     @session_id ||= SecureRandom.hex(8)
-    @created_at ||= Time.now.to_i
+    @created_at ||= Familia.now.to_i
   end
 end
+
+class PoolTestAccountDB1 < Familia::Horreum
+  logical_database 1
+  identifier_field :account_id
+  field :account_id
+  field :balance, on_conflict: :skip
+  field :holder_name
+
+  def init
+    @account_id ||= SecureRandom.hex(6)
+    @balance = @balance.to_f if @balance
+  end
+
+  def balance
+    @balance&.to_f
+  end
+end
+
 
 ## Clean up before tests
 PoolTestAccount.dbclient.flushdb
@@ -79,23 +97,6 @@ Familia.connection_provider.is_a?(Proc)
 #=> true
 
 ## Test 5: Account in DB 1 via class configuration
-class PoolTestAccountDB1 < Familia::Horreum
-  self.logical_database = 1
-  identifier_field :account_id
-  field :account_id
-  field :balance, on_conflict: :skip
-  field :holder_name
-
-  def init
-    @account_id ||= SecureRandom.hex(6)
-    @balance = @balance.to_f if @balance
-  end
-
-  def balance
-    @balance&.to_f
-  end
-end
-
 @account_db1 = PoolTestAccountDB1.new(balance: 750, holder_name: "Charlie")
 @account_db1.save
 #=> true
@@ -269,5 +270,10 @@ Familia.connection_provider = original_provider
 # Verify URIs contain database information
 @captured_uris.any? { |uri| uri.include?('redis://') }
 #=> true
+
+## Check PoolTestAccountDB1 config name
+PoolTestAccountDB1.config_name
+#=> 'pool_test_account_db1'
+
 
 puts "Connection pool tests completed successfully!"

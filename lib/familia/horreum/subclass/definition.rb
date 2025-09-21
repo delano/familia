@@ -144,7 +144,7 @@ module Familia
             raise Problem, 'Cannot generate prefix for anonymous class. ' \
                            'Use `prefix` method to set explicitly.'
           end
-          name.downcase.gsub('::', Familia.delim).to_sym
+          config_name.to_sym
         end
       end
 
@@ -303,16 +303,16 @@ module Familia
       #   end
       #
       def add_feature_options(feature_name, **options)
-  @feature_options ||= {}
-  @feature_options[feature_name.to_sym] ||= {}
+        @feature_options ||= {}
+        @feature_options[feature_name.to_sym] ||= {}
 
-  # Only set defaults for options that don't already exist
-  options.each do |key, value|
-    @feature_options[feature_name.to_sym][key] ||= value
-  end
+        # Only set defaults for options that don't already exist
+        options.each do |key, value|
+          @feature_options[feature_name.to_sym][key] ||= value
+        end
 
-  @feature_options[feature_name.to_sym]
-end
+        @feature_options[feature_name.to_sym]
+      end
 
       # Create and register a transient field type
       #

@@ -22,9 +22,9 @@ module Familia
         puts "   Plaintext length: #{plaintext&.length} chars"
         puts "   AAD: #{additional_data ? 'present' : 'none'}"
 
-        start_time = Time.now
+        start_time = Familia.now
         result = orig_encrypt(plaintext, context: context, additional_data: additional_data)
-        elapsed = ((Time.now - start_time) * 1000).round(2)
+        elapsed = ((Familia.now - start_time) * 1000).round(2)
 
         puts "   Result length: #{result ? result.length : 'nil'} chars"
         puts "   Elapsed: #{elapsed}ms"
@@ -38,17 +38,17 @@ module Familia
         puts "   Encrypted length: #{encrypted_json&.length} chars"
         puts "   AAD: #{additional_data ? 'present' : 'none'}"
 
-        start_time = Time.now
+        start_time = Familia.now
         begin
           result = orig_decrypt(encrypted_json, context: context, additional_data: additional_data)
-          elapsed = ((Time.now - start_time) * 1000).round(2)
+          elapsed = ((Familia.now - start_time) * 1000).round(2)
 
           puts "   Result length: #{result ? result.length : 'nil'} chars"
           puts "   Elapsed: #{elapsed}ms"
           puts
           result
         rescue => e
-          elapsed = ((Time.now - start_time) * 1000).round(2)
+          elapsed = ((Familia.now - start_time) * 1000).round(2)
           puts "   ERROR: #{e.class}: #{e.message}"
           puts "   Elapsed: #{elapsed}ms"
           puts
@@ -71,9 +71,9 @@ module Familia
         puts "   Cache key: #{cache_key}"
         puts "   Cache before: #{cache.keys.inspect}"
 
-        start_time = Time.now
+        start_time = Familia.now
         result = orig_derive_key_with_provider(provider, context, version: version)
-        elapsed = ((Time.now - start_time) * 1000).round(2)
+        elapsed = ((Familia.now - start_time) * 1000).round(2)
 
         cache_after = Thread.current[:familia_key_cache] || {}
         puts "   Cache after: #{cache_after.keys.inspect}"

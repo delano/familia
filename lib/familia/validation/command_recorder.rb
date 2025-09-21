@@ -171,7 +171,7 @@ module Familia
 
         def initialize(context = {})
           @context = context
-          @started_at = Time.now
+          @started_at = Familia.now
           @start_index = nil
           @end_index = nil
           @commands = []
@@ -204,7 +204,7 @@ module Familia
 
         def initialize(context = {})
           @context = context
-          @started_at = Time.now
+          @started_at = Familia.now
           @commands = []
         end
 
@@ -267,7 +267,7 @@ module Familia
         case recorded_cmd.command
         when 'MULTI'
           sequence.start_transaction(enhanced_context)
-          @transaction_stack.value.push(Time.now)
+          @transaction_stack.value.push(Familia.now)
         when 'EXEC', 'DISCARD'
           sequence.end_transaction if sequence.current_transaction
           @transaction_stack.value.pop
@@ -309,7 +309,7 @@ module Familia
         def self.call(command, config)
           return yield unless CommandRecorder.recording?
 
-          timestamp = Time.now
+          timestamp = Familia.now
           start_time = Process.clock_gettime(Process::CLOCK_MONOTONIC, :microsecond)
 
           result = yield

@@ -104,7 +104,6 @@ module Familia
     # (HashiCorp Vault, AWS Secrets Manager) or languages with secure memory handling.
     #
     module TransientFields
-
       Familia::Base.add_feature self, :transient_fields, depends_on: nil
 
       def self.included(base)
@@ -223,7 +222,6 @@ module Familia
                                 end
         end
       end
-
     end
   end
 end

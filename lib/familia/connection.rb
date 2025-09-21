@@ -148,7 +148,7 @@ module Familia
     #
     def transaction(&)
       block_result = nil
-      result = dbclient.multi do |conn|
+      dbclient.multi do |conn|
         Fiber[:familia_transaction] = conn
         begin
           block_result = yield(conn)
@@ -157,7 +157,6 @@ module Familia
         end
       end
       # Return the multi result which contains the transaction results
-      result
     end
     alias multi transaction
 
@@ -197,7 +196,7 @@ module Familia
     #
     def pipeline(&)
       block_result = nil
-      result = dbclient.pipelined do |conn|
+      dbclient.pipelined do |conn|
         Fiber[:familia_pipeline] = conn
         begin
           block_result = yield(conn)
@@ -206,7 +205,6 @@ module Familia
         end
       end
       # Return the pipeline result which contains the command results
-      result
     end
 
     # Provides explicit access to a Database connection.

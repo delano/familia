@@ -49,7 +49,7 @@ class Document < Familia::Horreum
     permissions = [:read] if permissions.empty?
 
     # Create time-based score with permissions encoded
-    timestamp = updated_at || Time.now
+    timestamp = updated_at || Familia.now
     score = Familia::Features::Relationships::ScoreEncoding.encode_score(timestamp, permissions)
 
     # Add to user's document list
@@ -62,7 +62,7 @@ class Document < Familia::Horreum
     grant(user, *permissions)
 
     # Log the permission grant
-    log_entry = "#{Time.now.iso8601}: Granted #{permissions.join(', ')} to #{user.email}"
+    log_entry = "#{Familia.now.iso8601}: Granted #{permissions.join(', ')} to #{user.email}"
     audit_log.push(log_entry)
   end
 
@@ -72,7 +72,7 @@ class Document < Familia::Horreum
     collaborators.zrem(user.user_id)
     revoke(user, :read, :write, :edit, :delete, :configure, :transfer, :admin)
 
-    log_entry = "#{Time.now.iso8601}: Revoked all access from #{user.email}"
+    log_entry = "#{Familia.now.iso8601}: Revoked all access from #{user.email}"
     audit_log.push(log_entry)
   end
 
@@ -85,8 +85,8 @@ class Document < Familia::Horreum
 
   # Advanced: Get document access history for analytics
   def access_analytics(days_back = 30)
-    start_time = Time.now - (days_back * 24 * 60 * 60)
-    end_time = Time.now
+    start_time = Familia.now - (days_back * 24 * 60 * 60)
+    end_time = Familia.now
 
     # Use score range to get recent access
     range = Familia::Features::Relationships::ScoreEncoding.score_range(
@@ -121,13 +121,13 @@ class DocumentService
 
   def self.create_document(owner, title, content, doc_type = 'private')
     doc = Document.new(
-      doc_id: "doc_#{Time.now.to_i}_#{rand(1000)}",
+      doc_id: "doc_#{Familia.now.to_i}_#{rand(1000)}",
       title: title,
       content: content,
       owner_id: owner.user_id,
       document_type: doc_type,
-      created_at: Time.now,
-      updated_at: Time.now
+      created_at: Familia.now,
+      updated_at: Familia.now
     )
 
     # Owner gets full admin access
@@ -216,7 +216,7 @@ if __FILE__ == $0
 
   # Demonstrate bit encoding efficiency
   puts "\n⚡ Bit Encoding Efficiency:"
-  score = Familia::Features::Relationships::ScoreEncoding.encode_score(Time.now, %i[read write edit delete])
+  score = Familia::Features::Relationships::ScoreEncoding.encode_score(Familia.now, %i[read write edit delete])
   decoded = Familia::Features::Relationships::ScoreEncoding.decode_score(score)
   puts "Encoded score: #{score}"
   puts "Decoded permissions: #{decoded[:permission_list].join(', ')}"

@@ -36,7 +36,7 @@ module Familia
         # @example Update presence in multiple collections
         #   update_multiple_presence([
         #     { key: "customer:123:domains", score: current_score },
-        #     { key: "team:456:domains", score: permission_encode(Time.now, :read) },
+        #     { key: "team:456:domains", score: permission_encode(Familia.now, :read) },
         #     { key: "org:789:all_domains", score: current_score }
         #   ], :add, domain.identifier)
         def update_multiple_presence(collections, action, identifier, default_score = nil)
@@ -122,7 +122,7 @@ module Familia
         #   temp_key = create_temp_key("user_accessible_domains", 600)
         #   #=> "temp:user_accessible_domains:1704067200:abc123"
         def create_temp_key(base_name, ttl = 300)
-          timestamp = Time.now.to_i
+          timestamp = Familia.now.to_i
           random_suffix = SecureRandom.hex(3)
           temp_key = "temp:#{base_name}:#{timestamp}:#{random_suffix}"
 
@@ -140,8 +140,8 @@ module Familia
         #
         # @example Batch add domains with scores
         #   batch_zadd("customer:domains", [
-        #     { member: "domain1", score: encode_score(Time.now, permission: :read) },
-        #     { member: "domain2", score: encode_score(Time.now, permission: :write) }
+        #     { member: "domain1", score: encode_score(Familia.now, permission: :read) },
+        #     { member: "domain2", score: encode_score(Familia.now, permission: :write) }
         #   ])
         def batch_zadd(redis_key, items, mode: :normal)
           return 0 if items.empty?
@@ -177,7 +177,7 @@ module Familia
         # @example Query domains with read permission or higher
         #   query_by_score("customer:domains",
         #                  encode_score(1.hour.ago, 0),
-        #                  encode_score(Time.now, MAX_METADATA),
+        #                  encode_score(Familia.now, MAX_METADATA),
         #                  min_permission: :read)
         def query_by_score(redis_key, start_score = '-inf', end_score = '+inf',
                            offset: 0, count: -1, with_scores: false, min_permission: nil)
@@ -200,7 +200,7 @@ module Familia
 
           options = {
             limit: (count.positive? ? [offset, count] : nil),
-            with_scores: with_scores
+            with_scores: with_scores,
           }.compact
 
           results = dbclient.zrangebyscore(redis_key, start_score, end_score, **options)

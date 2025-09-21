@@ -106,7 +106,7 @@ module Familia
     #       activity.save
     #     end
     #
-    #     def self.activity_for_hour(time = Time.now)
+    #     def self.activity_for_hour(time = Familia.now)
     #       bucket_id = "activity:#{qstamp(1.hour, time: time, pattern: '%Y%m%d%H')}"
     #       find(bucket_id)
     #     end
@@ -175,13 +175,13 @@ module Familia
     #
     #     def self.utc_hourly_key(metric_name)
     #       # Always use UTC for consistent global buckets
-    #       timestamp = qstamp(1.hour, time: Time.now.utc, pattern: '%Y%m%d%H')
+    #       timestamp = qstamp(1.hour, time: Familia.now, pattern: '%Y%m%d%H')
     #       "global:#{metric_name}:#{timestamp}"
     #     end
     #
     #     def self.local_daily_key(metric_name, timezone = 'America/New_York')
     #       # Use local timezone for region-specific buckets
-    #       local_time = Time.now.in_time_zone(timezone)
+    #       local_time = Familia.now.in_time_zone(timezone)
     #       timestamp = qstamp(1.day, time: local_time, pattern: '%Y%m%d')
     #       "#{timezone.gsub('/', '_')}:#{metric_name}:#{timestamp}"
     #     end
@@ -194,7 +194,7 @@ module Familia
     #
     #     # Cache quantized timestamps to avoid repeated calculations
     #     def self.cached_qstamp(quantum, pattern: nil, time: nil)
-    #       cache_key = "qstamp:#{quantum}:#{pattern}:#{(time || Time.now).to_i / quantum}"
+    #       cache_key = "qstamp:#{quantum}:#{pattern}:#{(time || Familia.now).to_i / quantum}"
     #       Rails.cache.fetch(cache_key, expires_in: quantum) do
     #         qstamp(quantum, pattern: pattern, time: time)
     #       end
@@ -245,7 +245,6 @@ module Familia
     #   NoDefault.qstamp()  # Uses 10.minutes as fallback quantum
     #
     module Quantization
-
       Familia::Base.add_feature self, :quantization
 
       using Familia::Refinements::TimeLiterals
@@ -286,9 +285,7 @@ module Familia
         #
         def qstamp(quantum = nil, pattern: nil, time: nil)
           # Handle array input format: [quantum, pattern]
-          if quantum.is_a?(Array)
-            quantum, pattern = quantum
-          end
+          quantum, pattern = quantum if quantum.is_a?(Array)
 
           # Use default quantum if none specified
           # Priority: provided quantum > class default_expiration > 10.minutes fallback
@@ -323,11 +320,11 @@ module Familia
           end_bucket = qstamp(quantum, time: end_time)
 
           while current <= end_bucket
-            if pattern
-              timestamps << Time.at(current).strftime(pattern)
-            else
-              timestamps << current
-            end
+            timestamps << if pattern
+                            Time.at(current).strftime(pattern)
+                          else
+                            current
+                          end
             current += quantum
           end
 

@@ -102,7 +102,7 @@ class Document < Familia::Horreum
 
   def encode_permissions
     # Combine timestamp with permission bits
-    timestamp = Time.now.to_f.floor
+    timestamp = Familia.now.floor
     permissions = calculate_user_permissions # Returns 0-255
     "#{timestamp}.#{permissions}".to_f
   end
@@ -172,7 +172,7 @@ class DocumentAnalytics
   end
 
   def admin_users_last_week
-    week_ago = (Time.now - 7.days).to_f.floor
+    week_ago = (Familia.now - 7.days).to_f.floor
     admin_permissions = 128
     min_score = "#{week_ago}.#{admin_permissions}".to_f
 
@@ -198,7 +198,7 @@ class User < Familia::Horreum
   class_indexed_by :username, :username_index
 
   # Scoped indexes for values unique within a context
-  indexed_by :department, :department_index, parent: Organization
+  indexed_by :department, :department_index, context: Organization
 end
 
 # Usage for Global Context
@@ -238,7 +238,7 @@ class Product < Familia::Horreum
   class_indexed_by :sku, :sku_index
 
   # Class context: Categories are unique per brand
-  indexed_by :category, :category_index, parent: Brand
+  indexed_by :category, :category_index, context: Brand
 end
 
 class Brand < Familia::Horreum
@@ -267,8 +267,8 @@ The `context` parameter is a **required** architectural decision that determines
 
 | Context Type | Usage | Redis Key Pattern | When to Use |
 |--------------|--------|------------------|-------------|
-| `:global` | `context: :global` | `global:index_name` | Field values unique system-wide (emails, usernames, API keys) |
-| Class | `context: SomeClass` | `someclass:123:index_name` | Field values unique within parent object scope (project names per team) |
+| `:global` | `context: :global` | `class_name:index_name` | Field values unique system-wide (emails, usernames, API keys) |
+| Class | `context: SomeClass` | `someclass:instance_id:index_name:field_value` | Field values unique within parent object scope (project names per team) |
 
 #### Generated Methods
 
@@ -278,7 +278,7 @@ The `context` parameter is a **required** architectural decision that determines
 
 **Class Context** (`context: Customer`):
 - **Instance methods**: `object.add_to_customer_index_name(customer)`, `object.remove_from_customer_index_name(customer)`
-- **Class methods on context**: `customer.find_by_field(value)`, `customer.find_all_by_field(values)`
+- **Instance methods on context**: `customer.find_by_field(value)`, `customer.find_all_by_field(values)`
 
 #### Migration from Incorrect Syntax
 
@@ -288,7 +288,7 @@ indexed_by :email_lookup, field: :email
 
 # ✅ New correct syntax
 class_indexed_by :email, :email_lookup                  # Global scope
-indexed_by :email, :customer_lookup, parent: Customer   # Scoped per customer
+indexed_by :email, :customer_lookup, context: Customer   # Scoped per customer
 ```
 
 ## Member Of Relationships
@@ -394,7 +394,7 @@ doc = Document.new(doc_id: 'doc123', title: 'Requirements')
 # Add to different organizational contexts
 doc.add_to_customer_documents(customer.custid)
 doc.add_to_project_documents(project.project_id)
-doc.add_to_team_shared_docs(team.team_id, score: Time.now.to_i)
+doc.add_to_team_shared_docs(team.team_id, score: Familia.now.to_i)
 
 # Query membership across contexts
 doc.in_customer_documents?(customer.custid)     # => true
@@ -450,7 +450,7 @@ class OptimizedQueries
 
   # Efficient range queries with permissions
   def recent_editors_with_write_access(hours = 24)
-    since = (Time.now - hours.hours).to_f.floor
+    since = (Familia.now - hours.hours).to_f.floor
     write_permission = 4
     min_score = "#{since}.#{write_permission}".to_f
 
@@ -505,7 +505,7 @@ class Project < Familia::Horreum
 
   member_of Organization, :projects, type: :set
   class_tracked_in :status_timeline,
-    score: ->(proj) { "#{Time.now.to_i}.#{proj.status.hash}" }
+    score: ->(proj) { "#{Familia.now.to_i}.#{proj.status.hash}" }
 end
 
 # Usage
@@ -535,7 +535,7 @@ found_user = User.find_by_email('john@acme.com')  # Convenience method
 ```ruby
 class AnalyticsService
   def user_engagement_report(days = 30)
-    since = (Time.now - days.days).to_f.floor
+    since = (Familia.now - days.days).to_f.floor
 
     # Get all users active in time period
     active_users = User.activity.range_by_score(since, '+inf')
@@ -607,7 +607,7 @@ RSpec.describe "Relationships Feature" do
       timestamp, permissions = decode_score_with_permissions(encoded)
 
       expect(permissions).to eq(15)
-      expect(timestamp).to be_within(1).of(Time.now.to_i)
+      expect(timestamp).to be_within(1).of(Familia.now.to_i)
     end
   end
 

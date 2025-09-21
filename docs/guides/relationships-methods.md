@@ -76,24 +76,24 @@ end
 
 Redis key pattern: `customer:email_lookup`
 
-### Relationship-Scoped Indexing (indexed_by with parent:)
+### Relationship-Scoped Indexing (indexed_by with context:)
 When you declare:
 ```ruby
 class Domain < Familia::Horreum
-  indexed_by :name, :domain_index, parent: Customer
+  indexed_by :name, :domain_index, context: Customer
 end
 ```
 
-**Generated class methods on Customer:**
-- `Customer#find_by_name(domain_name)` - Find domain by name within this customer
-- `Customer#find_all_by_name(domain_names)` - Find multiple domains by names
+**Generated instance methods on Customer:**
+- `customer.find_by_name(domain_name)` - Find domain by name within this customer
+- `customer.find_all_by_name(domain_names)` - Find multiple domains by names
 
-Redis key pattern: `domain:domain_index` (all stored at class level for consistency)
+Redis key pattern: `customer:customer_id:domain_index:field_value` (parent-scoped with field value)
 
 ### When to Use Each Context
 - **Class-level context (`class_indexed_by`)**: Use for system-wide lookups where the field value should be unique across all instances
   - Examples: email addresses, usernames, API keys
-- **Relationship context (`parent:` parameter)**: Use for relationship-scoped lookups where the field value is unique within a specific context
+- **Relationship context (`context:` parameter)**: Use for relationship-scoped lookups where the field value is unique within a specific context
   - Examples: domain names per customer, project names per team
 
 ## Complete Example
@@ -139,7 +139,7 @@ The relationship system uses consistent naming patterns:
 - **member_of**: `{add_to|remove_from|in}_#{parent_class.downcase}_#{collection_name}`
 - **class_tracked_in**: `{add_to|remove_from}_#{collection_name}` (class methods)
 - **class_indexed_by**: `{add_to|remove_from}_class_#{index_name}` (instance methods)
-- **indexed_by with parent**: `{add_to|remove_from}_#{parent_class.downcase}_#{index_name}` (instance methods)
+- **indexed_by with context**: `{add_to|remove_from}_#{context_class.downcase}_#{index_name}` (instance methods)
 
 ## Key Benefits
 
@@ -175,8 +175,8 @@ found_user_id = User.email_lookup.get("john@example.com")
 
 **Redis keys generated**: `global:email_lookup`, `global:username_lookup`
 
-### Parent Context Pattern
-Use `parent: SomeClass` when field values are unique within a specific parent context:
+### Context-Scoped Pattern
+Use `context: SomeClass` when field values are unique within a specific context:
 
 ```ruby
 class Customer < Familia::Horreum
@@ -194,8 +194,8 @@ class Domain < Familia::Horreum
   field :domain_id, :name, :subdomain
 
   # Domains are unique per customer (customer can't have duplicate domain names)
-  indexed_by :name, :domain_index, parent: Customer
-  indexed_by :subdomain, :subdomain_index, parent: Customer
+  indexed_by :name, :domain_index, context: Customer
+  indexed_by :subdomain, :subdomain_index, context: Customer
 end
 
 # Usage:
@@ -204,7 +204,7 @@ customer.find_by_name("example.com")           # Find domain within this custome
 customer.find_all_by_subdomain(["www", "api"]) # Find multiple subdomains
 ```
 
-**Redis keys generated**: `customer:cust_123:domain_index`, `customer:cust_123:subdomain_index`
+**Redis keys generated**: `customer:cust_123:domain_index:example.com`, `customer:cust_123:subdomain_index:www`
 
 ### Mixed Pattern Example
 A real-world example showing both patterns:
@@ -220,8 +220,8 @@ class ApiKey < Familia::Horreum
   class_indexed_by :key_hash, :global_key_lookup
 
   # But key names can be reused across different customers
-  indexed_by :name, :customer_key_lookup, parent: Customer
-  indexed_by :scope, :scope_lookup, parent: Customer
+  indexed_by :name, :customer_key_lookup, context: Customer
+  indexed_by :scope, :scope_lookup, context: Customer
 end
 
 # Usage examples:
@@ -248,13 +248,13 @@ class_indexed_by :email, :email_lookup
 class_tracked_in :all_users, score: :created_at
 
 # ✅ New syntax - Relationship scope
-indexed_by :email, :customer_email_lookup, parent: Customer
+indexed_by :email, :customer_email_lookup, context: Customer
 tracked_in Customer, :user_activity, score: :last_seen
 ```
 
 **Key Changes**:
 1. **Class-level relationships**: Use `class_` prefix (`class_tracked_in`, `class_indexed_by`)
-2. **Relationship-scoped**: Use `parent:` parameter instead of `:global` symbol
+2. **Relationship-scoped**: Use `context:` parameter instead of `:global` symbol
 3. **Automatic management**: Objects automatically added to class-level collections on save
 4. **Clean syntax**: Collections support `<<` operator for Ruby-like relationship building
 5. **Simplified storage**: All indexes stored at class level (parent is conceptual only)

@@ -53,8 +53,8 @@ module Familia
       # @see #exists?
       # @see #save
       #
-      def create(*args, **kwargs)
-        fobj = new(*args, **kwargs)
+      def create(*, **)
+        fobj = new(*, **)
         fobj.save_if_not_exists
         fobj
       end
@@ -170,7 +170,8 @@ module Familia
       #   User.exists?(123)  # Returns true if user:123:object exists in Redis
       #
       def exists?(identifier, suffix = nil)
-        raise NoIdentifier, "Empty identifier" if identifier.to_s.empty?
+        raise NoIdentifier, 'Empty identifier' if identifier.to_s.empty?
+
         suffix ||= self.suffix
 
         objkey = dbkey identifier, suffix
@@ -259,7 +260,8 @@ module Familia
       def matching_keys_count(filter = '*')
         dbclient.keys(dbkey(filter)).compact.size
       end
-      alias size matching_keys_count # For backwards compatibility
+      alias size matching_keys_count
+      alias length matching_keys_count
     end
   end
 end

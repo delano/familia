@@ -776,11 +776,11 @@ module Familia::Features::DebugLogging
 
     base.define_singleton_method(:feature) do |name|
       Familia.ld "[DEBUG] Loading feature #{name} on #{self}"
-      start_time = Time.now
+      start_time = Familia.now
 
       result = original_feature_method.call(name)
 
-      load_time = (Time.now - start_time) * 1000
+      load_time = (Familia.now - start_time) * 1000
       Familia.ld "[DEBUG] Feature #{name} loaded in #{load_time.round(2)}ms"
 
       result
@@ -792,11 +792,11 @@ module Familia::Features::DebugLogging
       return block.call unless Familia.debug?
 
       Familia.ld "[DEBUG] Calling #{method_name} on #{self}"
-      start_time = Time.now
+      start_time = Familia.now
 
       result = block.call
 
-      duration = (Time.now - start_time) * 1000
+      duration = (Familia.now - start_time) * 1000
       Familia.ld "[DEBUG] #{method_name} completed in #{duration.round(2)}ms"
 
       result

@@ -75,7 +75,7 @@ module Familia
     #
     # @example Score encoding for permissions
     #   # Encode permission in score
-    #   score = domain.permission_encode(Time.now, :write)
+    #   score = domain.permission_encode(Familia.now, :write)
     #   # => 1704067200.004 (timestamp + permission bits)
     #
     #   # Decode permission from score
@@ -89,7 +89,7 @@ module Familia
     #   # Atomic updates across multiple collections
     #   domain.update_multiple_presence([
     #     { key: "customer:123:domains", score: current_score },
-    #     { key: "team:456:domains", score: permission_encode(Time.now, :read) }
+    #     { key: "team:456:domains", score: permission_encode(Familia.now, :read) }
     #   ], :add, domain.identifier)
     #
     #   # UnsortedSet operations on collections
@@ -98,7 +98,6 @@ module Familia
     #     { owner: team, collection: :domains }
     #   ], min_permission: :read)
     module Relationships
-
       # Register the feature with Familia
       Familia::Base.add_feature Relationships, :relationships
 
@@ -218,7 +217,7 @@ module Familia
 
         # Class method wrapper for create_temp_key
         def create_temp_key(base_name, ttl = 300)
-          timestamp = Time.now.to_i
+          timestamp = Familia.now.to_i
           random_suffix = SecureRandom.hex(3)
           temp_key = "temp:#{base_name}:#{timestamp}:#{random_suffix}"
 
@@ -271,14 +270,10 @@ module Familia
 
           if result
             # Automatically update all indexes when object is saved
-            if respond_to?(:update_all_indexes)
-              update_all_indexes
-            end
+            update_all_indexes if respond_to?(:update_all_indexes)
 
             # Auto-add to class-level tracking collections
-            if respond_to?(:add_to_class_tracking_collections)
-              add_to_class_tracking_collections
-            end
+            add_to_class_tracking_collections if respond_to?(:add_to_class_tracking_collections)
 
             # NOTE: Relationship-specific membership and tracking updates are done explicitly
             # since we need to know which specific collections this object should be in
@@ -301,7 +296,7 @@ module Familia
             identifier: identifier,
             tracking_memberships: [],
             membership_collections: [],
-            index_memberships: []
+            index_memberships: [],
           }
 
           # Get tracking memberships
@@ -335,7 +330,7 @@ module Familia
           preview = {
             tracking_collections: [],
             membership_collections: [],
-            index_entries: []
+            index_entries: [],
           }
 
           if respond_to?(:cascade_dry_run)
@@ -381,11 +376,11 @@ module Familia
         # Create a snapshot of current relationship state (for debugging)
         def relationship_snapshot
           {
-            timestamp: Time.now,
+            timestamp: Familia.now,
             identifier: identifier,
             class: self.class.name,
             status: relationship_status,
-            redis_keys: find_related_redis_keys
+            redis_keys: find_related_redis_keys,
           }
         end
 
@@ -396,7 +391,7 @@ module Familia
 
         # Instance method wrapper for create_temp_key
         def create_temp_key(base_name, ttl = 300)
-          timestamp = Time.now.to_i
+          timestamp = Familia.now.to_i
           random_suffix = SecureRandom.hex(3)
           temp_key = "temp:#{base_name}:#{timestamp}:#{random_suffix}"
 
@@ -439,8 +434,8 @@ module Familia
 
           # Scan for keys that might contain this object
           patterns = [
-            '*:*:*',  # General pattern for relationship keys
-            "*#{id}*" # Keys containing the identifier
+            '*:*:*', # General pattern for relationship keys
+            "*#{id}*", # Keys containing the identifier
           ]
 
           patterns.each do |pattern|
@@ -466,7 +461,6 @@ module Familia
           related_keys.uniq
         end
       end
-
     end
   end
 end

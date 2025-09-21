@@ -74,7 +74,7 @@ class UserService
     # Should be atomic - update last login + create session
     Familia.transaction do |conn|
       # Update user last login
-      conn.hset(user.dbkey, "last_login", Time.now.to_i.to_s)
+      conn.hset(user.dbkey, "last_login", Familia.now.to_i.to_s)
 
       # Create session
       session_data.each do |field, value|
@@ -82,7 +82,7 @@ class UserService
       end
 
       # Log activity
-      conn.lpush("#{user.dbkey.sub(':object', ':activity_log')}", "logged_in:#{Time.now.to_i}")
+      conn.lpush("#{user.dbkey.sub(':object', ':activity_log')}", "logged_in:#{Familia.now.to_i}")
     end
 
     { user: user, session: session }
@@ -102,7 +102,7 @@ class BlogService
         conn.hset(post.dbkey, field.to_s, value.to_s)
       end
       conn.hset(post.dbkey, "author_id", author_id)
-      conn.hset(post.dbkey, "published_at", Time.now.to_i.to_s)
+      conn.hset(post.dbkey, "published_at", Familia.now.to_i.to_s)
       conn.hset(post.dbkey, "status", "published")
 
       # Update author score
@@ -302,7 +302,7 @@ commands = validator.capture_redis_commands do
   user.save
 
   # Atomic operation
-  user.batch_update(status: "active", last_login: Time.now.to_i.to_s)
+  user.batch_update(status: "active", last_login: Familia.now.to_i.to_s)
 
   # Non-atomic operation
   user.activity_log.unshift("status_updated")
@@ -356,7 +356,7 @@ result = validator.validate do |expect|
         .match_pattern(/SADD user:dynamic\d+:permissions/)
 
   # Execute with dynamic ID
-  dynamic_id = "dynamic#{Time.now.to_i}"
+  dynamic_id = "dynamic#{Familia.now.to_i}"
   user = UserService.create_user_with_profile({
     user_id: dynamic_id,
     username: "dynamic_user"

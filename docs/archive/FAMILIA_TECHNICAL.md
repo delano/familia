@@ -202,7 +202,7 @@ class Domain < Familia::Horreum
 
   # Conditional tracking with lambda scoring
   tracked_in :active_domains, type: :sorted_set,
-    score: ->(domain) { domain.status == 'active' ? Time.now.to_i : 0 }
+    score: ->(domain) { domain.status == 'active' ? Familia.now.to_i : 0 }
 end
 ```
 
@@ -228,7 +228,7 @@ found_id = Customer.email_lookup.get(customer.email)  # O(1) lookup
 # Global tracking
 Customer.add_to_all_customers(customer)
 recent = Customer.all_customers.range_by_score(
-  (Time.now - 24.hours).to_i, '+inf'
+  (Familia.now - 24.hours).to_i, '+inf'
 )
 ```
 
@@ -331,7 +331,7 @@ end
 # Usage example
 user_id = "user123"
 doc_id = "doc456"
-timestamp = Time.now.to_i
+timestamp = Familia.now.to_i
 
 # Grant read + write permissions
 permissions = Document::READ | Document::WRITE  # 3
@@ -367,14 +367,14 @@ class ActivityTracker < Familia::Horreum
 end
 
 # Query recent activities (last hour)
-hour_ago = (Time.now - 1.hour).to_i
+hour_ago = (Familia.now - 1.hour).to_i
 recent_activities = ActivityTracker.user_activities.range_by_score(
   hour_ago, '+inf', limit: [0, 50]
 )
 
 # Get activities by type in time range
 login_activities = ActivityTracker.activity_by_type.range_by_score(
-  "login:#{hour_ago}".hash, "login:#{Time.now.to_i}".hash
+  "login:#{hour_ago}".hash, "login:#{Familia.now.to_i}".hash
 )
 ```
 
@@ -447,7 +447,7 @@ task_data = JSON.parse(next_task) if next_task
 feed = ActivityFeed.new(user_id: "user123")
 
 # Add activity (keep last 100)
-feed.activities.unshift("User logged in at #{Time.now}")
+feed.activities.unshift("User logged in at #{Familia.now}")
 feed.activities.trim(0, 99)  # Keep only last 100 items
 
 # Get recent activities
@@ -739,7 +739,7 @@ module TestHelpers
     User.new({
       email: "test@example.com",
       name: "Test User",
-      created_at: Time.now.to_i
+      created_at: Familia.now.to_i
     }.merge(attrs))
   end
 end

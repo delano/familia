@@ -205,7 +205,7 @@ class Domain < Familia::Horreum
 
   # Class-level conditional tracking with lambda scoring
   class_tracked_in :active_domains,
-                   score: -> { status == 'active' ? Time.now.to_i : 0 }
+                   score: -> { status == 'active' ? Familia.now.to_i : 0 }
 end
 ```
 
@@ -235,7 +235,7 @@ customer_domain = customer.find_by_name("acme.com")  # Find within customer
 
 # Class-level tracking queries
 recent_customers = Customer.all_customers.range_by_score(
-  (Time.now - 24.hours).to_i, '+inf'
+  (Familia.now - 24.hours).to_i, '+inf'
 )
 active_domains = Domain.active_domains.members
 ```
@@ -346,7 +346,7 @@ end
 # Usage example
 user_id = "user123"
 doc_id = "doc456"
-timestamp = Time.now.to_i
+timestamp = Familia.now.to_i
 
 # Grant read + write permissions
 permissions = Document::READ | Document::WRITE  # 3
@@ -384,19 +384,19 @@ activity = ActivityTracker.new(
   activity_id: 'act123',
   user_id: 'user456',
   activity_type: 'login',
-  created_at: Time.now.to_i
+  created_at: Familia.now.to_i
 )
 activity.save  # Automatically added to both tracking collections
 
 # Query recent activities (last hour)
-hour_ago = (Time.now - 1.hour).to_i
+hour_ago = (Familia.now - 1.hour).to_i
 recent_activities = ActivityTracker.user_activities.range_by_score(
   hour_ago, '+inf', limit: [0, 50]
 )
 
 # Get activities by type in time range
 login_activities = ActivityTracker.activity_by_type.range_by_score(
-  "login:#{hour_ago}".hash, "login:#{Time.now.to_i}".hash
+  "login:#{hour_ago}".hash, "login:#{Familia.now.to_i}".hash
 )
 ```
 
@@ -469,7 +469,7 @@ task_data = JSON.parse(next_task) if next_task
 feed = ActivityFeed.new(user_id: "user123")
 
 # Add activity (keep last 100)
-feed.activities.unshift("User logged in at #{Time.now}")
+feed.activities.unshift("User logged in at #{Familia.now}")
 feed.activities.trim(0, 99)  # Keep only last 100 items
 
 # Get recent activities
@@ -761,7 +761,7 @@ module TestHelpers
     User.new({
       email: "test@example.com",
       name: "Test User",
-      created_at: Time.now.to_i
+      created_at: Familia.now.to_i
     }.merge(attrs))
   end
 end

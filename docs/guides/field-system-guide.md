@@ -376,10 +376,10 @@ profile = UserProfile.new(user_id: 'user_123')
 profile.save
 
 # Regular setter: updates instance variable only
-profile.last_login_at = Time.now  # Not yet in database
+profile.last_login_at = Familia.now  # Not yet in database
 
 # Fast method: immediate database write
-profile.last_login_at!(Time.now)  # Written to database immediately
+profile.last_login_at!(Familia.now)  # Written to database immediately
 
 # Reading from database
 profile.last_login_at   # => reads from instance variable
@@ -417,7 +417,7 @@ class AuditedFieldType < Familia::FieldType
             field: field_name,
             old_value: old_value,
             new_value: value,
-            changed_at: Time.now.to_f,
+            changed_at: Familia.now,
             changed_by: Thread.current[:current_user]&.id
           }
 
@@ -705,22 +705,22 @@ RSpec.describe TimestampFieldType do
     instance.created_at = "2023-06-15 14:30:00"
     expect(instance.created_at).to be_a(Time)
 
-    instance.created_at = Time.now
+    instance.created_at = Familia.now
     expect(instance.created_at).to be_a(Time)
 
-    instance.created_at = Time.now.to_i
+    instance.created_at = Familia.now.to_i
     expect(instance.created_at).to be_a(Time)
   end
 
   it "serializes to integer" do
-    time_value = Time.now
+    time_value = Familia.now
     serialized = field_type.serialize(time_value)
     expect(serialized).to be_a(Integer)
     expect(serialized).to eq(time_value.to_i)
   end
 
   it "deserializes from integer" do
-    timestamp = Time.now.to_i
+    timestamp = Familia.now.to_i
     deserialized = field_type.deserialize(timestamp)
     expect(deserialized).to be_a(Time)
     expect(deserialized.to_i).to eq(timestamp)

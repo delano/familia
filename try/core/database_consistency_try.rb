@@ -28,7 +28,7 @@ end
 @test_id_counter = 0
 def next_test_id
   @test_id_counter += 1
-  "consistency-#{Time.now.to_i}-#{@test_id_counter}"
+  "consistency-#{Familia.now.to_i}-#{@test_id_counter}"
 end
 
 # =============================================

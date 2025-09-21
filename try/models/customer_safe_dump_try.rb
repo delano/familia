@@ -3,7 +3,7 @@
 require_relative '../helpers/test_helpers'
 
 # Setup
-@now = Time.now.to_i
+@now = Familia.now.to_i
 @customer = Customer.new
 @customer.custid = 'test+customer_safedump@example.com'
 @customer.email = 'test+customer_safedump@example.com'

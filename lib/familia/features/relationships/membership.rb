@@ -25,7 +25,7 @@ module Familia
           #   member_of Customer, :domains
           #
           # @example Membership with scoring
-          #   member_of Team, :projects, score: -> { permission_encode(Time.now, permission_level) }
+          #   member_of Team, :projects, score: -> { permission_encode(Familia.now, permission_level) }
           def member_of(owner_class, collection_name, score: nil, type: :sorted_set)
             owner_class_name = owner_class.is_a?(Class) ? owner_class.name : owner_class.to_s.camelize
 
@@ -35,7 +35,7 @@ module Familia
               owner_class_name: owner_class_name,
               collection_name: collection_name,
               score: score,
-              type: type
+              type: type,
             }
 
             # Generate instance methods with collision-free naming
@@ -360,7 +360,7 @@ module Familia
           end
 
           def default_score
-            respond_to?(:current_score) ? current_score : Time.now.to_f
+            respond_to?(:current_score) ? current_score : Familia.now
           end
 
           # Update membership in all collections atomically
@@ -438,7 +438,7 @@ module Familia
                     owner_id: owner_id,
                     collection_name: collection_name,
                     type: type,
-                    key: key
+                    key: key,
                   }.merge(is_member)
                 end
               end

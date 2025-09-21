@@ -50,7 +50,7 @@ module Familia
     #
     #   # Custom generation strategy
     #   class TimestampedItem < Familia::Horreum
-    #     feature :object_identifier, generator: -> { "item_#{Time.now.to_i}_#{SecureRandom.hex(4)}" }
+    #     feature :object_identifier, generator: -> { "item_#{Familia.now.to_i}_#{SecureRandom.hex(4)}" }
     #     field :data
     #   end
     #
@@ -302,7 +302,6 @@ module Familia
         generator = options[:generator] || DEFAULT_GENERATOR
         Familia.trace :OBJID_INIT, dbclient, "Generator strategy: #{generator}", caller(1..1)
       end
-
     end
   end
 end

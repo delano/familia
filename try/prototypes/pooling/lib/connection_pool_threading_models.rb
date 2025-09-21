@@ -227,24 +227,24 @@ module ThreadingModels
       end
 
       def perform_operation(operation, account)
-        start = Time.now
+        start = Familia.now
 
         case operation[:type]
         when :read
           account.refresh!
-          { success: true, duration: Time.now - start }
+          { success: true, duration: Familia.now - start }
         when :write
           account.balance += operation[:amount] || 0
           account.save
-          { success: true, duration: Time.now - start }
+          { success: true, duration: Familia.now - start }
         when :transaction
           Familia.atomic do
             account.complex_operation
           end
-          { success: true, duration: Time.now - start }
+          { success: true, duration: Familia.now - start }
         end
       rescue => e
-        { success: false, error: e, duration: Time.now - start }
+        { success: false, error: e, duration: Familia.now - start }
       end
     end
 
@@ -334,7 +334,7 @@ class EnhancedConnectionPoolStressTest < ConnectionPoolStressTest
 
     puts "\n=== Running with #{model_name} model ==="
 
-    start_time = Time.now
+    start_time = Familia.now
 
     result = model.run do |account, thread_id, op_num|
       operation = select_operation_from_mix(
@@ -343,7 +343,7 @@ class EnhancedConnectionPoolStressTest < ConnectionPoolStressTest
       execute_operation(account, operation)
     end
 
-    duration = Time.now - start_time
+    duration = Familia.now - start_time
 
     result.merge(
       total_duration: duration,

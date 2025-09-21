@@ -1,15 +1,19 @@
 # lib/familia/settings.rb
 
+# Familia
+#
 module Familia
-  @delim = ':'
+  @delim = ':'.freeze
   @prefix = nil
   @suffix = :object
   @default_expiration = 0 # see update_expiration. Zero is skip. nil is an exception.
   @logical_database = nil
   @encryption_keys = nil
   @current_key_version = nil
-  @encryption_personalization = 'FamilialMatters'
+  @encryption_personalization = 'FamilialMatters'.freeze
 
+  # Familia::Settings
+  #
   module Settings
     attr_writer :delim, :suffix, :default_expiration, :logical_database, :prefix, :encryption_keys,
                 :current_key_version, :encryption_personalization

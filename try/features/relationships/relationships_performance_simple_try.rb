@@ -46,7 +46,7 @@ end
   SimplePerfDomain.new(
     domain_id: "simple_perf_domain_#{i}",
     display_domain: "simple#{i}.example.com",
-    created_at: Time.now.to_i + i,
+    created_at: Familia.now.to_i + i,
     priority_score: rand(100)
   )
 end
@@ -58,7 +58,7 @@ save_time = Benchmark.realtime do
     # Manually add to collections for testing (ensure numeric score)
     # Convert created_at to float, handling nil case
     score = if domain.created_at.nil?
-              Time.now.to_f
+              Familia.now
             elsif domain.created_at.is_a?(Time)
               domain.created_at.to_f
             else

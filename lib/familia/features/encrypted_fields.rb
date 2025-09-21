@@ -289,13 +289,13 @@ module Familia
         #     encrypted_field :content, aad_fields: [:doc_id, :owner_id]
         #   end
         #
-        def encrypted_field(name, aad_fields: [], **kwargs)
+        def encrypted_field(name, aad_fields: [], **)
           @encrypted_fields ||= []
           @encrypted_fields << name unless @encrypted_fields.include?(name)
 
           require_relative 'encrypted_fields/encrypted_field_type'
 
-          field_type = EncryptedFieldType.new(name, aad_fields: aad_fields, **kwargs)
+          field_type = EncryptedFieldType.new(name, aad_fields: aad_fields, **)
           register_field_type(field_type)
         end
 
@@ -326,7 +326,7 @@ module Familia
             algorithm: provider.algorithm_name,
             key_size: provider.key_size,
             nonce_size: provider.nonce_size,
-            tag_size: provider.tag_size
+            tag_size: provider.tag_size,
           }
         end
       end
@@ -359,9 +359,7 @@ module Familia
       def clear_encrypted_fields!
         self.class.encrypted_fields.each do |field_name|
           field_value = instance_variable_get("@#{field_name}")
-          if field_value.respond_to?(:clear!)
-            field_value.clear!
-          end
+          field_value.clear! if field_value.respond_to?(:clear!)
         end
       end
 
@@ -421,15 +419,15 @@ module Familia
         self.class.encrypted_fields.each_with_object({}) do |field_name, status|
           field_value = instance_variable_get("@#{field_name}")
 
-          if field_value.nil?
-            status[field_name] = { encrypted: false, value: nil }
-          elsif field_value.respond_to?(:cleared?) && field_value.cleared?
-            status[field_name] = { encrypted: true, cleared: true }
-          elsif field_value.respond_to?(:concealed?) && field_value.concealed?
-            status[field_name] = { encrypted: true, algorithm: "unknown", cleared: false }
-          else
-            status[field_name] = { encrypted: false, value: "[CONCEALED]" }
-          end
+          status[field_name] = if field_value.nil?
+                                 { encrypted: false, value: nil }
+                               elsif field_value.respond_to?(:cleared?) && field_value.cleared?
+                                 { encrypted: true, cleared: true }
+                               elsif field_value.respond_to?(:concealed?) && field_value.concealed?
+                                 { encrypted: true, algorithm: 'unknown', cleared: false }
+                               else
+                                 { encrypted: false, value: '[CONCEALED]' }
+                               end
         end
       end
     end

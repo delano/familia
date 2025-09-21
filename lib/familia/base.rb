@@ -1,6 +1,5 @@
 # lib/familia/base.rb
 
-#
 module Familia
   # A common module for Familia::DataType and Familia::Horreum to include.
   #
@@ -14,7 +13,6 @@ module Familia
   # @see Familia::DataType
   #
   module Base
-
     using Familia::Refinements::TimeLiterals
 
     @features_available = nil
@@ -40,7 +38,7 @@ module Familia
         # Create field definition object
         feature_def = FeatureDefinition.new(
           name: feature_name,
-          depends_on: depends_on,
+          depends_on: depends_on
         )
 
         # Track field definitions after defining field methods
@@ -78,7 +76,7 @@ module Familia
         # Create field definition object
         feature_def = FeatureDefinition.new(
           name: feature_name,
-          depends_on: depends_on,
+          depends_on: depends_on
         )
 
         # Track field definitions after defining field methods
@@ -99,9 +97,7 @@ module Familia
           next unless ancestor.respond_to?(:features_available)
           next unless ancestor.features_available
 
-          if ancestor.features_available.key?(feature_name)
-            return ancestor.features_available[feature_name]
-          end
+          return ancestor.features_available[feature_name] if ancestor.features_available.key?(feature_name)
         end
 
         nil
@@ -109,7 +105,7 @@ module Familia
     end
 
     def generate_id
-      @identifier ||= Familia.generate_id # rubocop:disable Naming/MemoizedInstanceVariableName
+      @identifier ||= Familia.generate_id
     end
 
     def uuid

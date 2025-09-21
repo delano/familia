@@ -19,7 +19,7 @@ class ApiTestUser < Familia::Horreum
 
   # New API: class_tracked_in for class-level tracking
   class_tracked_in :all_users, score: :created_at
-  class_tracked_in :active_users, score: -> { status == 'active' ? Time.now.to_i : 0 }
+  class_tracked_in :active_users, score: -> { status == 'active' ? Familia.now.to_i : 0 }
 
   # New API: class_indexed_by for class-level indexing
   class_indexed_by :email, :email_lookup
@@ -45,9 +45,9 @@ class ApiTestMembership < Familia::Horreum
   field :role
   field :created_at
 
-  # New API: using parent: instead of context:
-  indexed_by :user_id, :user_memberships, parent: ApiTestUser
-  indexed_by :project_id, :project_memberships, parent: ApiTestProject
+  # New API: using context: parameter
+  indexed_by :user_id, :user_memberships, context: ApiTestUser
+  indexed_by :project_id, :project_memberships, context: ApiTestProject
 
   # Tracking with parent class
   tracked_in ApiTestProject, :memberships, score: :created_at
@@ -58,7 +58,7 @@ end
   user_id: 'user_123',
   email: 'test@example.com',
   username: 'testuser',
-  created_at: Time.now.to_i,
+  created_at: Familia.now.to_i,
   status: 'active'
 )
 
@@ -66,14 +66,14 @@ end
   user_id: 'user_456',
   email: 'inactive@example.com',
   username: 'inactiveuser',
-  created_at: Time.now.to_i - 3600,
+  created_at: Familia.now.to_i - 3600,
   status: 'inactive'
 )
 
 @project = ApiTestProject.new(
   project_id: 'proj_789',
   name: 'Test Project',
-  created_at: Time.now.to_i
+  created_at: Familia.now.to_i
 )
 
 @membership = ApiTestMembership.new(
@@ -81,7 +81,7 @@ end
   user_id: @user.user_id,
   project_id: @project.project_id,
   role: 'admin',
-  created_at: Time.now.to_i
+  created_at: Familia.now.to_i
 )
 
 # =============================================
@@ -189,16 +189,16 @@ ApiTestUser.email_lookup.get(@user.email) == @user.user_id
 # 3. New API: parent: Parameter Tests
 # =============================================
 
-## indexed_by with parent: generates context-specific methods
-@membership.respond_to?(:add_to_apitestuser_user_memberships)
+## indexed_by with context: generates context-specific methods
+@membership.respond_to?(:add_to_api_test_user_user_memberships)
 #=> true
 
-## indexed_by with parent: generates removal methods
-@membership.respond_to?(:remove_from_apitestuser_user_memberships)
+## indexed_by with context: generates removal methods
+@membership.respond_to?(:remove_from_api_test_user_user_memberships)
 #=> true
 
-## indexed_by with parent: generates update methods
-@membership.respond_to?(:update_in_apitestuser_user_memberships)
+## indexed_by with context: generates update methods
+@membership.respond_to?(:update_in_api_test_user_user_memberships)
 #=> true
 
 ## Parent class gets finder methods for indexed relationships
@@ -242,9 +242,9 @@ instance_methods = @user.methods.grep(/class_/)
 instance_methods.all? { |m| m.to_s.include?('class_') }
 #=> true
 
-## Parent-based methods use lowercased class names
-parent_methods = @membership.methods.grep(/apitestuser/)
-parent_methods.length > 0
+## Context-based methods use snake_case class names
+context_methods = @membership.methods.grep(/api_test_user/)
+context_methods.length > 0
 #=> true
 
 # =============================================
@@ -271,7 +271,7 @@ indexing_meta = ApiTestUser.indexing_relationships.find { |r| r[:index_name] == 
 indexing_meta[:context_class_name].end_with?('ApiTestUser')
 #=> true
 
-## indexed_by with parent: stores correct metadata
+## indexed_by with context: stores correct metadata
 membership_meta = ApiTestMembership.indexing_relationships.find { |r| r[:index_name] == :user_memberships }
 membership_meta[:context_class] == ApiTestUser
 #=> true

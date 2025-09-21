@@ -32,7 +32,6 @@ require_relative 'familia/version'
 # @see https://github.com/delano/familia
 #
 module Familia
-
   @debug = ENV['FAMILIA_DEBUG'].to_s.downcase.match?(/^(true|1)$/i).freeze
   @members = []
 

@@ -41,7 +41,7 @@ user = User.new(
   last_name: 'Smith',
   password_hash: 'secret123',
   ssn: '123-45-6789',
-  created_at: Time.now.to_i
+  created_at: Familia.now.to_i
 )
 
 puts "Full object data: #{user.to_h}"
@@ -82,7 +82,7 @@ product = Product.new(
   cost_cents: 800,       # $8.00 - sensitive, not exposed
   inventory_count: 25,
   category: 'widgets',
-  created_at: Time.now.to_i
+  created_at: Familia.now.to_i
 )
 
 puts "Full object data: #{product.to_h}"
@@ -140,8 +140,8 @@ order = Order.new(
   payment_method: 'credit_card',
   credit_card_number: '4111-1111-1111-1111', # Never expose this!
   processing_notes: 'Rush order - expedite shipping',
-  created_at: Time.now.to_i - 86_400, # Yesterday
-  shipped_at: Time.now.to_i - 3600 # 1 hour ago
+  created_at: Familia.now.to_i - 86_400, # Yesterday
+  shipped_at: Familia.now.to_i - 3600 # 1 hour ago
 )
 
 puts "Full object data: #{order.to_h}"

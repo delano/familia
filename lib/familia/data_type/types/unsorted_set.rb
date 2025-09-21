@@ -11,6 +11,7 @@ module Familia
       dbclient.scard dbkey
     end
     alias size element_count
+    alias length element_count
 
     def empty?
       element_count.zero?

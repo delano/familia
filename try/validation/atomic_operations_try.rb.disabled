@@ -138,11 +138,11 @@ result
 commands = []
 commands << Familia::Validation::CommandRecorder::RecordedCommand.new(
   command: "HSET", args: ["key", "field", "value"],
-  result: "OK", timestamp: Time.now, duration_us: 100
+  result: "OK", timestamp: Familia.now, duration_us: 100
 )
 commands << Familia::Validation::CommandRecorder::RecordedCommand.new(
   command: "EXEC", args: [],
-  result: ["OK"], timestamp: Time.now, duration_us: 50
+  result: ["OK"], timestamp: Familia.now, duration_us: 50
 )
 
 sequence = Familia::Validation::CommandRecorder::CommandSequence.new
@@ -157,11 +157,11 @@ result.valid?
 commands = []
 commands << Familia::Validation::CommandRecorder::RecordedCommand.new(
   command: "MULTI", args: [],
-  result: "OK", timestamp: Time.now, duration_us: 100
+  result: "OK", timestamp: Familia.now, duration_us: 100
 )
 commands << Familia::Validation::CommandRecorder::RecordedCommand.new(
   command: "HSET", args: ["key", "field", "value"],
-  result: "QUEUED", timestamp: Time.now, duration_us: 50
+  result: "QUEUED", timestamp: Familia.now, duration_us: 50
 )
 
 sequence = Familia::Validation::CommandRecorder::CommandSequence.new
@@ -176,22 +176,22 @@ result.valid?
 commands = []
 commands << Familia::Validation::CommandRecorder::RecordedCommand.new(
   command: "MULTI", args: [],
-  result: "OK", timestamp: Time.now, duration_us: 100,
+  result: "OK", timestamp: Familia.now, duration_us: 100,
   context: { transaction: false }
 )
 commands << Familia::Validation::CommandRecorder::RecordedCommand.new(
   command: "HSET", args: ["key", "field", "value"],
-  result: "QUEUED", timestamp: Time.now, duration_us: 50,
+  result: "QUEUED", timestamp: Familia.now, duration_us: 50,
   context: { transaction: true }
 )
 commands << Familia::Validation::CommandRecorder::RecordedCommand.new(
   command: "INCR", args: ["counter"],
-  result: "QUEUED", timestamp: Time.now, duration_us: 30,
+  result: "QUEUED", timestamp: Familia.now, duration_us: 30,
   context: { transaction: true }
 )
 commands << Familia::Validation::CommandRecorder::RecordedCommand.new(
   command: "EXEC", args: [],
-  result: [1, 1], timestamp: Time.now, duration_us: 200,
+  result: [1, 1], timestamp: Familia.now, duration_us: 200,
   context: { transaction: false }
 )
 
@@ -227,11 +227,11 @@ commands = []
 # Invalid nested transaction
 commands << Familia::Validation::CommandRecorder::RecordedCommand.new(
   command: "MULTI", args: [], result: "OK",
-  timestamp: Time.now, duration_us: 100
+  timestamp: Familia.now, duration_us: 100
 )
 commands << Familia::Validation::CommandRecorder::RecordedCommand.new(
   command: "MULTI", args: [], result: "ERR",
-  timestamp: Time.now, duration_us: 50
+  timestamp: Familia.now, duration_us: 50
 )
 
 sequence = Familia::Validation::CommandRecorder::CommandSequence.new
@@ -246,11 +246,11 @@ result.valid?
 commands = []
 commands << Familia::Validation::CommandRecorder::RecordedCommand.new(
   command: "MULTI", args: [], result: "OK",
-  timestamp: Time.now, duration_us: 100
+  timestamp: Familia.now, duration_us: 100
 )
 commands << Familia::Validation::CommandRecorder::RecordedCommand.new(
   command: "EXEC", args: [], result: [],
-  timestamp: Time.now, duration_us: 50
+  timestamp: Familia.now, duration_us: 50
 )
 
 sequence = Familia::Validation::CommandRecorder::CommandSequence.new

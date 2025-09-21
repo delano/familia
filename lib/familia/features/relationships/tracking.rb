@@ -13,6 +13,8 @@ module Familia
           super
         end
 
+        # Tracking::ClassMethods
+        #
         module ClassMethods
           # Simple singularize method (basic implementation)
           def singularize_word(word)
@@ -42,18 +44,17 @@ module Familia
           #
           # @example Class-level tracking (using class_ prefix convention)
           #   class_tracked_in :all_customers, score: :created_at
-          #   class_tracked_in :active_users, score: -> { status == 'active' ? Time.now.to_i : 0 }
+          #   class_tracked_in :active_users, score: -> { status == 'active' ? Familia.now.to_i : 0 }
           def class_tracked_in(collection_name, score: nil, on_destroy: :remove)
-
-            klass_name = (name || self.to_s).downcase
+            klass_name = (name || to_s).downcase
 
             # Store metadata for this tracking relationship
             tracking_relationships << {
               context_class: klass_name,
-              context_class_name: name || self.to_s,
+              context_class_name: name || to_s,
               collection_name: collection_name,
               score: score,
-              on_destroy: on_destroy
+              on_destroy: on_destroy,
             }
 
             # Generate class-level collection methods
@@ -78,7 +79,6 @@ module Familia
           #   tracked_in Team, :domains, score: :added_at
           #   tracked_in Organization, :all_domains, score: :created_at
           def tracked_in(context_class, collection_name, score: nil, on_destroy: :remove)
-
             # Handle class context
             if context_class.is_a?(Class)
               class_name = context_class.name
@@ -98,7 +98,7 @@ module Familia
               context_class_name: context_class_name,
               collection_name: collection_name,
               score: score,
-              on_destroy: on_destroy
+              on_destroy: on_destroy,
             }
 
             # Generate context class methods
@@ -118,14 +118,14 @@ module Familia
           # Generate class-level collection methods (e.g., User.all_users)
           def generate_tracking_class_methods(target_class, collection_name)
             # Generate class-level collection getter method
-            target_class.define_singleton_method("#{collection_name}") do
-              collection_key = "#{self.name.downcase}:#{collection_name}"
+            target_class.define_singleton_method(collection_name.to_s) do
+              collection_key = "#{name.downcase}:#{collection_name}"
               Familia::SortedSet.new(nil, dbkey: collection_key, logical_database: logical_database)
             end
 
             # Generate class-level add method (e.g., User.add_to_all_users)
             target_class.define_singleton_method("add_to_#{collection_name}") do |item, score = nil|
-              collection = send("#{collection_name}")
+              collection = send(collection_name.to_s)
 
               # Calculate score if not provided
               score ||= if item.respond_to?(:calculate_tracking_score)
@@ -142,7 +142,7 @@ module Familia
 
             # Generate class-level remove method
             target_class.define_singleton_method("remove_from_#{collection_name}") do |item|
-              collection = send("#{collection_name}")
+              collection = send(collection_name.to_s)
               collection.delete(item.identifier)
             end
           end
@@ -222,7 +222,7 @@ module Familia
             # e.g., domain.in_customer_domains?(customer)
             define_method("in_#{context_class_name.downcase}_#{collection_name}?") do |context_instance|
               collection_key = "#{context_class_name.downcase}:#{context_instance.identifier}:#{collection_name}"
-              dbclient.zscore(collection_key, identifier) != nil
+              !dbclient.zscore(collection_key, identifier).nil?
             end
 
             # Method to add this object to a specific collection
@@ -333,7 +333,7 @@ module Familia
 
             self.class.tracking_relationships.each do |config|
               context_class_name = config[:context_class_name]
-              context_class = config[:context_class]
+              config[:context_class]
               collection_name = config[:collection_name]
 
               # Only auto-add to class-level collections (where context_class matches self.class)
@@ -403,7 +403,7 @@ module Familia
                     context_id: context_id,
                     collection_name: collection_name,
                     score: score,
-                    decoded_score: decode_score(score)
+                    decoded_score: decode_score(score),
                   }
                 end
               end

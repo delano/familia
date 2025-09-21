@@ -83,7 +83,7 @@ class TransactionRecord < Familia::Horreum
     @to_account = to
     @amount = amount.to_f
     @status = "pending"
-    @created_at = Time.now.to_i
+    @created_at = Familia.now.to_i
   end
 
   def amount

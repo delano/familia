@@ -53,7 +53,7 @@ class Domain < Familia::Horreum
 
   # Track domains by status (using class_ prefix for class-level)
   class_tracked_in :active_domains,
-                   score: -> { status == 'active' ? Time.now.to_i : 0 }
+                   score: -> { status == 'active' ? Familia.now.to_i : 0 }
 end
 
 class Project < Familia::Horreum
@@ -161,7 +161,7 @@ puts
 puts '=== 4. Range Queries ==='
 
 # Get recent customers (last 24 hours)
-yesterday = (Time.now - (24 * 3600)).to_i # 24 hours ago
+yesterday = (Familia.now - (24 * 3600)).to_i # 24 hours ago
 recent_customers = Customer.values.rangebyscore(yesterday, '+inf')
 puts "Recent customers (last 24h): #{recent_customers.size}"
 
@@ -198,7 +198,7 @@ puts 'Key takeaways:'
 puts '• class_tracked_in: Automatic class-level collections updated on save'
 puts '• class_indexed_by: Automatic class-level indexes updated on save'
 puts '• member_of: Use << operator for clean Ruby-like collection syntax'
-puts '• indexed_by with parent:: Use for relationship-scoped indexes'
+puts '• indexed_by with context:: Use for relationship-scoped indexes'
 puts '• Save operations: Automatically update indexes and class-level tracking'
 puts '• << operator: Works naturally with all collection types (sets, lists, sorted sets)'
 puts

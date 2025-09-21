@@ -8,6 +8,7 @@ module Familia
       dbclient.hlen dbkey
     end
     alias size field_count
+    alias length field_count
 
     def empty?
       field_count.zero?

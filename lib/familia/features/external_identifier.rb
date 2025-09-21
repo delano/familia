@@ -5,7 +5,6 @@ module Familia
     # Familia::Features::ExternalIdentifier
     #
     module ExternalIdentifier
-
       Familia::Base.add_feature self, :external_identifier, depends_on: [:object_identifier]
 
       def self.included(base)
@@ -304,7 +303,6 @@ module Familia
           normalized
         end
       end
-
     end
   end
 end

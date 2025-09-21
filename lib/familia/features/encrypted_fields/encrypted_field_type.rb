@@ -58,7 +58,7 @@ module Familia
 
           # If we have a raw string (from direct instance variable manipulation),
           # wrap it in ConcealedString which will trigger validation
-          if concealed.kind_of?(::String) && !concealed.is_a?(ConcealedString)
+          if concealed.is_a?(::String) && !concealed.is_a?(ConcealedString)
             # This happens when someone directly sets the instance variable
             # (e.g., during tampering tests). Wrapping in ConcealedString
             # will trigger validate_decryptable! and catch invalid algorithms
@@ -75,7 +75,8 @@ module Familia
           # Context validation: detect cross-context attacks
           # Only validate if we have a proper ConcealedString instance
           if concealed.is_a?(ConcealedString) && !concealed.belongs_to_context?(self, field_name)
-            raise Familia::EncryptionError, "Context isolation violation: encrypted field '#{field_name}' does not belong to #{self.class.name}:#{self.identifier}"
+            raise Familia::EncryptionError,
+                  "Context isolation violation: encrypted field '#{field_name}' does not belong to #{self.class.name}:#{identifier}"
           end
 
           concealed
@@ -203,18 +204,16 @@ module Familia
       if @aad_fields.empty?
         # When no AAD fields specified, use class:field:identifier
         base_components.join(':')
-      else
+      elsif record.exists?
         # For unsaved records, don't enforce AAD fields since they can change
         # For saved records, include field values for tamper protection
-        if record.exists?
-          # Include specified field values in AAD for persisted records
-          values = @aad_fields.map { |field| record.send(field) }
-          all_components = [*base_components, *values].compact
-          Digest::SHA256.hexdigest(all_components.join(':'))
-        else
-          # For unsaved records, only use class:field:identifier for context isolation
-          base_components.join(':')
-        end
+        values = @aad_fields.map { |field| record.send(field) }
+        all_components = [*base_components, *values].compact
+        Digest::SHA256.hexdigest(all_components.join(':'))
+      # Include specified field values in AAD for persisted records
+      else
+        # For unsaved records, only use class:field:identifier for context isolation
+        base_components.join(':')
       end
     end
   end

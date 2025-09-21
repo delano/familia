@@ -17,8 +17,8 @@ Customer.safe_dump_fields
 @cust.custid = 'test@example.com'
 @cust.role = 'user'
 @cust.verified = true
-@cust.created = Time.now.to_i
-@cust.updated = Time.now.to_i
+@cust.created = Familia.now.to_i
+@cust.updated = Familia.now.to_i
 @safe_dump = @cust.safe_dump
 @safe_dump.keys.sort
 #=> [:active, :created, :custid, :role, :secrets_created, :updated, :verified]

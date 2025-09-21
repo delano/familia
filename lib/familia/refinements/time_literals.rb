@@ -113,8 +113,8 @@ module Familia
         def in_seconds      = seconds
 
         # Time manipulation
-        def ago         = Time.now.utc - seconds
-        def from_now    = Time.now.utc + seconds
+        def ago         = Familia.now - seconds
+        def from_now    = Familia.now + seconds
         def before(time) = time - seconds
         def after(time)  = time + seconds
         def in_time = Time.at(seconds).utc
@@ -188,7 +188,7 @@ module Familia
         # Calculates age of timestamp in specified unit from reference time
         #
         # @param unit [String, Symbol] Time unit ('days', 'hours', 'minutes', 'weeks')
-        # @param from_time [Time, nil] Reference time (defaults to Time.now.utc)
+        # @param from_time [Time, nil] Reference time (defaults to Familia.now)
         # @return [Float] Age in specified unit
         # @example
         #   timestamp = 2.days.ago.to_i
@@ -196,7 +196,7 @@ module Familia
         #   timestamp.age_in('hours')       #=> ~48.0
         #   timestamp.age_in(:days, 1.day.ago) #=> ~1.0
         def age_in(unit, from_time = nil)
-          from_time ||= Time.now.utc
+          from_time ||= Familia.now
           age_seconds = from_time.to_f - to_f
           case UNIT_METHODS.fetch(unit.to_s.downcase, nil)
           when :days then age_seconds / PER_DAY
@@ -211,7 +211,7 @@ module Familia
 
         # Convenience methods for `age_in(unit)` calls.
         #
-        # @param from_time [Time, nil] Reference time (defaults to Time.now.utc)
+        # @param from_time [Time, nil] Reference time (defaults to Familia.now)
         # @return [Float] Age in days
         # @example
         #   timestamp.days_old    #=> 2.5
@@ -230,17 +230,17 @@ module Familia
         #   is within the same second. Use within? to check this case.
         #
         # @example
-        #   Time.now.older_than?(1.second)    #=> false
+        #   Familia.now.older_than?(1.second)    #=> false
         def older_than?(duration)
-          self < (Time.now.utc.to_f - duration)
+          self < (Familia.now - duration)
         end
 
         # Checks if timestamp is newer than specified duration in the future
         #
         # @example
-        #   Time.now.newer_than?(1.second)    #=> false
+        #   Familia.now.newer_than?(1.second)    #=> false
         def newer_than?(duration)
-          self > (Time.now.utc.to_f + duration)
+          self > (Familia.now + duration)
         end
 
         # Checks if timestamp is within specified duration of now (past or future)
@@ -252,7 +252,7 @@ module Familia
         #   30.minutes.from_now.to_i.within?(1.hour) #=> true
         #   2.hours.ago.to_i.within?(1.hour)        #=> false
         def within?(duration)
-          (self - Time.now.utc.to_f).abs <= duration
+          (self - Familia.now).abs <= duration
         end
       end
 

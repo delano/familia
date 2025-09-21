@@ -26,7 +26,7 @@ module ConnectionPoolMetrics
           thread_id: thread_id,
           wait_time: wait_time,
           acquired: acquired,
-          timestamp: Time.now.to_f
+          timestamp: Familia.now
         }
       end
     end
@@ -37,7 +37,7 @@ module ConnectionPoolMetrics
           thread_id: thread_id,
           state: state, # :waiting, :running, :completed, :failed
           context: context,
-          timestamp: Time.now.to_f
+          timestamp: Familia.now
         }
       end
     end
@@ -47,7 +47,7 @@ module ConnectionPoolMetrics
         @metrics[:pool_exhaustion_events] << {
           wait_time: wait_time,
           threads_waiting: thread_count_waiting,
-          timestamp: Time.now.to_f
+          timestamp: Familia.now
         }
       end
     end
@@ -99,7 +99,7 @@ module ConnectionPoolMetrics
     end
 
     def export_detailed_csv(filename_prefix = "stress_test")
-      timestamp = Time.now.strftime("%Y%m%d_%H%M%S")
+      timestamp = Familia.now.strftime("%Y%m%d_%H%M%S")
 
       # Export operations
       CSV.open("#{filename_prefix}_operations_#{timestamp}.csv", "w") do |csv|
@@ -274,7 +274,7 @@ module ConnectionPoolMetrics
 
     def add_result(config, metrics_summary, model_info = {})
       @results << {
-        timestamp: Time.now,
+        timestamp: Familia.now,
         config: config,
         summary: metrics_summary,
         model: model_info
