@@ -16,7 +16,7 @@ end
 # Clean up any existing test data
 cleanup_keys = []
 begin
-  existing_test_keys = Familia.dbclient.keys('createtestmodel:*')
+  existing_test_keys = Familia.dbclient.keys('create_test_model:*')
   cleanup_keys.concat(existing_test_keys)
   Familia.dbclient.del(*existing_test_keys) if existing_test_keys.any?
 rescue => e
@@ -26,16 +26,18 @@ end
 @test_id_counter = 0
 def next_test_id
   @test_id_counter += 1
-  "create-test-#{Familia.now.to_i}-#{@test_id_counter}"
+  identifier = "create-test-#{Familia.now.to_i}-#{@test_id_counter}"
+  identifier
 end
+
+@first_test_id = next_test_id
 
 # =============================================
 # 1. Basic create method functionality
 # =============================================
 
 ## create method successfully creates new object
-@test_id = next_test_id
-@created_obj = CreateTestModel.create(id: @test_id, name: 'Created Object', value: 'test_value')
+@created_obj = CreateTestModel.create(id: @first_test_id, name: 'Created Object', value: 'test_value')
 [@created_obj.class, @created_obj.exists?, @created_obj.name]
 #=> [CreateTestModel, true, 'Created Object']
 
@@ -53,27 +55,17 @@ end
 # =============================================
 
 ## create method raises RecordExistsError for duplicate
-begin
-  CreateTestModel.create(id: @test_id, name: 'Duplicate Attempt')
-  false  # Should not reach here
-rescue => e
-  e.class
-end
-#=> Familia::RecordExistsError
+CreateTestModel.create(id: @first_test_id, name: 'Duplicate Attempt')
+#=!> Familia::RecordExistsError
 
 ## RecordExistsError includes the dbkey in the message
-begin
-  CreateTestModel.create(id: @test_id, name: 'Another Duplicate')
-  false  # Should not reach here
-rescue Familia::RecordExistsError => e
-  expected_dbkey = "createtestmodel:#{@test_id}:object"
-  e.message.include?(expected_dbkey)
-end
-#=> true
+CreateTestModel.create(id: @first_test_id, name: 'Another Duplicate')
+#=!> Familia::RecordExistsError
+#==> !!error.message.match(/create_test_model:#{@first_test_id}:object/)
 
 ## RecordExistsError message follows consistent format
 begin
-  CreateTestModel.create(id: @test_id, name: 'Yet Another Duplicate')
+  CreateTestModel.create(id: @first_test_id, name: 'Yet Another Duplicate')
   false  # Should not reach here
 rescue Familia::RecordExistsError => e
   e.message.start_with?('Key already exists:')
@@ -140,12 +132,12 @@ end
 #=> true
 
 ## create failure doesn't leave partial data
-before_failed_create = Familia.dbclient.keys("createtestmodel:#{@concurrent_id}:*").length
+before_failed_create = Familia.dbclient.keys("create_test_model:#{@concurrent_id}:*").length
 begin
   CreateTestModel.create(id: @concurrent_id, name: 'Should Fail')
 rescue Familia::RecordExistsError
   # Should not create any additional keys
-  after_failed_create = Familia.dbclient.keys("createtestmodel:#{@concurrent_id}:*").length
+  after_failed_create = Familia.dbclient.keys("create_test_model:#{@concurrent_id}:*").length
   after_failed_create == before_failed_create
 end
 #=> true
@@ -236,5 +228,5 @@ instance_sees_exists = @class_created.exists?
 # =============================================
 
 # Clean up all test data
-test_keys = Familia.dbclient.keys('createtestmodel:*')
+test_keys = Familia.dbclient.keys('create_test_model:*')
 Familia.dbclient.del(*test_keys) if test_keys.any?
