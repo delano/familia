@@ -522,7 +522,7 @@ module Familia
           field_type = self.class.field_types[field_name]
           next unless field_type&.method_name
 
-          # Set the transient field back to nil
+          # UnsortedSet the transient field back to nil
           send("#{field_type.method_name}=", nil)
           Familia.ld "[reset_transient_fields!] Reset #{field_name} to nil"
         end

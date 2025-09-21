@@ -14,7 +14,7 @@ class Customer
   transient_field :temp_data
 end
 
-# Set some values
+# UnsortedSet some values
 service.name = 'Test Customer'
 service.temp_data = 'secret-info'
 

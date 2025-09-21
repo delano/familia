@@ -90,7 +90,7 @@ end
 provider = @provider_class.new
 master_key = 'a' * 32
 context = 'TestModel:field:user123'
-# Set config with null byte
+# UnsortedSet config with null byte
 original_personal = Familia.config.encryption_personalization
 Familia.config.encryption_personalization = "bad\0config"
 begin

@@ -75,11 +75,11 @@ module DatabaseCommandCounter
   # a configuration where there's a connection to each logical db, there's only
   # one when the connection is made. When using a provider of via thread local
   # it could theoretically double the number of statements executed.
-  @skip_commands = Set.new(['SELECT']).freeze
+  @skip_commands = ::Set.new(['SELECT']).freeze
 
   class << self
     # Gets the set of commands to skip counting.
-    # @return [Set] The commands that won't be counted.
+    # @return [UnsortedSet] The commands that won't be counted.
     attr_reader :skip_commands
 
     # Gets the current count of Database commands executed.

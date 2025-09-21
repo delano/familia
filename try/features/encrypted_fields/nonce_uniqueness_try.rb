@@ -20,7 +20,7 @@ end
 
 ## Multiple encryptions produce unique nonces (concealed behavior)
 model = NonceTest.new(id: 'nonce-test')
-concealed_values = Set.new
+concealed_values = ::Set.new
 
 10.times do
   model.secret = 'same-value'

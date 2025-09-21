@@ -85,5 +85,5 @@ custom_stamp
 #=> "2023061514"
 
 # Cleanup
-@test_obj.id = 'quantized_test_obj' # Set identifier before cleanup
+@test_obj.id = 'quantized_test_obj' # UnsortedSet identifier before cleanup
 @test_obj.destroy! if @test_obj

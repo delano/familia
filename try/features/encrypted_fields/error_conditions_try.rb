@@ -58,7 +58,7 @@ Familia::Encryption.reset_derivation_count!
 # Ensure keys are available for this test
 Familia.config.encryption_keys = @test_keys
 @error_model = ErrorTest.new(id: 'err-counter')
-# Set valid JSON but with invalid base64 data to trigger decrypt failure after parsing
+# UnsortedSet valid JSON but with invalid base64 data to trigger decrypt failure after parsing
 @error_model.instance_variable_set(:@secret, '{"algorithm":"aes-256-gcm","nonce":"dGVzdA==","ciphertext":"invalid-base64!!!","auth_tag":"dGVzdA==","key_version":"v1"}')
 begin
   @error_model.secret

@@ -1,7 +1,7 @@
 # lib/familia/data_type/types/unsorted_set.rb
 
 module Familia
-  class Set < DataType
+  class UnsortedSet < DataType
     # Returns the number of elements in the unsorted set
     # @return [Integer] number of elements
     def element_count
@@ -122,5 +122,6 @@ module Familia
     # end
 
     Familia::DataType.register self, :set
+    Familia::DataType.register self, :unsorted_set
   end
 end

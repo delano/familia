@@ -153,7 +153,7 @@ module Familia
     #
     # Configuration:
     #
-    #   # Set master encryption key (required)
+    #   # UnsortedSet master encryption key (required)
     #   Familia.configure do |config|
     #     config.encryption_key = ENV['FAMILIA_ENCRYPTION_KEY']
     #     config.encryption_personalization = 'MyApp-2024'  # Optional customization

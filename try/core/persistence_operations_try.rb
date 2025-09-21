@@ -95,11 +95,11 @@ second_save = @idempotent_obj.save
 
 ## Save with partial field data
 @partial_obj = PersistenceTestModel.new(id: next_test_id)
-@partial_obj.name = 'Only Name Set'
+@partial_obj.name = 'Only Name UnsortedSet'
 # value field is nil/unset
 result = @partial_obj.save
 [result, @partial_obj.exists?, @partial_obj.name]
-#=> [true, true, 'Only Name Set']
+#=> [true, true, 'Only Name UnsortedSet']
 
 # =============================================
 # 3. save_if_not_exists Method Coverage

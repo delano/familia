@@ -92,7 +92,7 @@ module Familia
     #     { key: "team:456:domains", score: permission_encode(Time.now, :read) }
     #   ], :add, domain.identifier)
     #
-    #   # Set operations on collections
+    #   # UnsortedSet operations on collections
     #   accessible = Domain.union_collections([
     #     { owner: customer, collection: :domains },
     #     { owner: team, collection: :domains }
@@ -222,7 +222,7 @@ module Familia
           random_suffix = SecureRandom.hex(3)
           temp_key = "temp:#{base_name}:#{timestamp}:#{random_suffix}"
 
-          # Set immediate expiry to ensure cleanup even if operation fails
+          # UnsortedSet immediate expiry to ensure cleanup even if operation fails
           if respond_to?(:dbclient)
             dbclient.expire(temp_key, ttl)
           else
@@ -254,7 +254,7 @@ module Familia
           send(id_field) if respond_to?(id_field)
         end
 
-        # Set the identifier value for this instance
+        # UnsortedSet the identifier value for this instance
         def identifier=(value)
           id_field = self.class.identifier_field
           send("#{id_field}=", value) if respond_to?("#{id_field}=")
@@ -400,7 +400,7 @@ module Familia
           random_suffix = SecureRandom.hex(3)
           temp_key = "temp:#{base_name}:#{timestamp}:#{random_suffix}"
 
-          # Set immediate expiry to ensure cleanup even if operation fails
+          # UnsortedSet immediate expiry to ensure cleanup even if operation fails
           redis.expire(temp_key, ttl)
 
           temp_key

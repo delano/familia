@@ -138,7 +138,7 @@ Ruby provides **NO** memory safety guarantees for cryptographic secrets. This af
 
 Both providers attempt best-effort memory clearing:
 - Call `.clear` on sensitive strings after use
-- Set variables to `nil` when done
+- UnsortedSet variables to `nil` when done
 - Use finalizers for cleanup (no guarantees)
 
 **Recommendation**: For production systems with high-security requirements, consider:

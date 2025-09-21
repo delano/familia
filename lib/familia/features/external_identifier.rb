@@ -104,7 +104,7 @@ module Familia
               old_value = instance_variable_get(:"@#{field_name}")
               self.class.extid_lookup.remove_field(old_value) if old_value && old_value != value
 
-              # Set the new value
+              # UnsortedSet the new value
               instance_variable_set(:"@#{field_name}", value)
 
               # Update mapping if we have both extid and identifier

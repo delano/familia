@@ -96,7 +96,7 @@ module Familia
         klass.define_method fast_method_name do |val|
           raise ArgumentError, "#{fast_method_name} requires a value" if val.nil?
 
-          # Set via the setter method to get proper ConcealedString wrapping
+          # UnsortedSet via the setter method to get proper ConcealedString wrapping
           send(:"#{method_name}=", val) if method_name
 
           # Get the ConcealedString and extract encrypted data for storage

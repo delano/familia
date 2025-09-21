@@ -20,7 +20,7 @@ require_relative '../helpers/test_helpers'
 @test_keys[:v1].nil?
 #=> false
 
-## Set config and check immediately in same test
+## UnsortedSet config and check immediately in same test
 Familia.config.encryption_keys = @test_keys
 Familia.config.current_key_version = :v1
 result = Familia::Encryption.encrypt('test', context: 'test')
