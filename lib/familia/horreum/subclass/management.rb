@@ -259,7 +259,8 @@ module Familia
       def matching_keys_count(filter = '*')
         dbclient.keys(dbkey(filter)).compact.size
       end
-      alias size matching_keys_count # For backwards compatibility
+      alias size matching_keys_count
+      alias length matching_keys_count
     end
   end
 end

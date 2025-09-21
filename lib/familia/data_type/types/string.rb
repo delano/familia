@@ -10,6 +10,7 @@ module Familia
       to_s.size
     end
     alias size char_count
+    alias length char_count
 
     def empty?
       char_count.zero?

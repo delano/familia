@@ -8,6 +8,7 @@ module Familia
       dbclient.llen dbkey
     end
     alias size element_count
+    alias length element_count
 
     def empty?
       element_count.zero?

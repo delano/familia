@@ -49,6 +49,7 @@ module Familia
         dbclient.hlen dbkey
       end
       alias size field_count
+      alias length field_count
 
       # Sets a timeout on key. After the timeout has expired, the key will
       # automatically be deleted. Returns 1 if the timeout was set, 0 if key
