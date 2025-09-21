@@ -95,8 +95,8 @@ class RedactedString
   # Example:
   #   token.expose do |plain|
   #     # Good: use directly without copying
-  #     HTTP.post('/api', headers: { 'X-Token' => plain })
-  #     # Avoid: plain.dup, "prefix#{plain}", plain[0..-1], etc.
+  #     `HTTP.post('/api', headers: { 'X-Token' => plain })`
+  #     # Avoid: `plain.dup`, `"prefix#{plain}"`, `plain[0..-1]`, etc.
   #   end
   #   # Value is still accessible after block
   #   token.clear! # Explicitly clear when done

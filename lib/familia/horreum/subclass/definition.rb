@@ -83,7 +83,7 @@ module Familia
       #   with the same name already exists, an error is raised.
       # @param as [Symbol, String, false, nil] as the name to use for the accessor method (defaults to name).
       #   If false or nil, no accessor methods are created.
-      # @param fast_method [Symbol, false, nil] the name to use for the fast writer method (defaults to :"#{name}!").
+      # @param fast_method [Symbol, false, nil] the name to use for the fast writer method (defaults to :`"#{name}!"`).
       #   If false or nil, no fast writer method is created.
       # @param on_conflict [Symbol] conflict resolution strategy when method already exists:
       #   - :raise - raise error if method exists (default)
