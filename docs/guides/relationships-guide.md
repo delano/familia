@@ -198,7 +198,7 @@ class User < Familia::Horreum
   class_indexed_by :username, :username_index
 
   # Scoped indexes for values unique within a context
-  indexed_by :department, :department_index, parent: Organization
+  indexed_by :department, :department_index, context: Organization
 end
 
 # Usage for Global Context
@@ -238,7 +238,7 @@ class Product < Familia::Horreum
   class_indexed_by :sku, :sku_index
 
   # Class context: Categories are unique per brand
-  indexed_by :category, :category_index, parent: Brand
+  indexed_by :category, :category_index, context: Brand
 end
 
 class Brand < Familia::Horreum
@@ -267,8 +267,8 @@ The `context` parameter is a **required** architectural decision that determines
 
 | Context Type | Usage | Redis Key Pattern | When to Use |
 |--------------|--------|------------------|-------------|
-| `:global` | `context: :global` | `global:index_name` | Field values unique system-wide (emails, usernames, API keys) |
-| Class | `context: SomeClass` | `someclass:123:index_name` | Field values unique within parent object scope (project names per team) |
+| `:global` | `context: :global` | `class_name:index_name` | Field values unique system-wide (emails, usernames, API keys) |
+| Class | `context: SomeClass` | `someclass:instance_id:index_name:field_value` | Field values unique within parent object scope (project names per team) |
 
 #### Generated Methods
 
@@ -278,7 +278,7 @@ The `context` parameter is a **required** architectural decision that determines
 
 **Class Context** (`context: Customer`):
 - **Instance methods**: `object.add_to_customer_index_name(customer)`, `object.remove_from_customer_index_name(customer)`
-- **Class methods on context**: `customer.find_by_field(value)`, `customer.find_all_by_field(values)`
+- **Instance methods on context**: `customer.find_by_field(value)`, `customer.find_all_by_field(values)`
 
 #### Migration from Incorrect Syntax
 
@@ -288,7 +288,7 @@ indexed_by :email_lookup, field: :email
 
 # ✅ New correct syntax
 class_indexed_by :email, :email_lookup                  # Global scope
-indexed_by :email, :customer_lookup, parent: Customer   # Scoped per customer
+indexed_by :email, :customer_lookup, context: Customer   # Scoped per customer
 ```
 
 ## Member Of Relationships

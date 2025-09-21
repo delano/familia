@@ -198,7 +198,7 @@ puts 'Key takeaways:'
 puts '• class_tracked_in: Automatic class-level collections updated on save'
 puts '• class_indexed_by: Automatic class-level indexes updated on save'
 puts '• member_of: Use << operator for clean Ruby-like collection syntax'
-puts '• indexed_by with parent:: Use for relationship-scoped indexes'
+puts '• indexed_by with context:: Use for relationship-scoped indexes'
 puts '• Save operations: Automatically update indexes and class-level tracking'
 puts '• << operator: Works naturally with all collection types (sets, lists, sorted sets)'
 puts
