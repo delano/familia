@@ -111,8 +111,8 @@ module Familia
     # This method should not be called since transient fields are not
     # persisted, but we provide it for completeness.
     #
-    # @param value [Object] The value to serialize
-    # @param record [Object] The record instance
+    # @param _value [Object] The value to serialize
+    # @param _record [Object] The record instance
     # @return [nil] Always nil since transient fields are not serialized
     #
     def serialize(_value, _record = nil)
@@ -126,8 +126,8 @@ module Familia
     # This method should not be called since transient fields are not
     # persisted, but we provide it for completeness.
     #
-    # @param value [Object] The value to deserialize
-    # @param record [Object] The record instance
+    # @param _value [Object] The value to deserialize
+    # @param _record [Object] The record instance
     # @return [nil] Always nil since transient fields are not stored
     #
     def deserialize(_value, _record = nil)

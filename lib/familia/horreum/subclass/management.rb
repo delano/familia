@@ -19,9 +19,9 @@ module Familia
 
       # Creates and persists a new instance of the class.
       #
-      # @param *args [Array] Variable number of positional arguments to be passed
+      # @param args [Array] Variable number of positional arguments to be passed
       #   to the constructor.
-      # @param **kwargs [Hash] Keyword arguments to be passed to the constructor.
+      # @param kwargs [Hash] Keyword arguments to be passed to the constructor.
       # @return [Object] The newly created and persisted instance.
       # @raise [Familia::Problem] If an instance with the same identifier already
       #   exists.
@@ -49,8 +49,6 @@ module Familia
       # @note The behavior of this method depends on the implementation of #new,
       #   #exists?, and #save in the class and its superclasses.
       #
-      # @param args [Array] Arguments passed to the constructor
-      # @param kwargs [Hash] Keyword arguments passed to the constructor
       # @see #new
       # @see #exists?
       # @see #save
