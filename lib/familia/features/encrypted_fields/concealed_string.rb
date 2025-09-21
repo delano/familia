@@ -161,8 +161,8 @@ class ConcealedString
   # Prevent accidental exposure through string conversion and serialization
   #
   # Ruby has two string conversion methods with different purposes:
-  # - to_s: explicit conversion (obj.to_s, string interpolation "#{obj}")
-  # - to_str: implicit coercion (File.read(obj), "prefix" + obj)
+  # - to_s: explicit conversion (`obj.to_s`, string interpolation `"#{obj}"`)
+  # - to_str: implicit coercion (`File.read(obj)`, `"prefix" + obj`)
   #
   # We implement to_s for safe logging/debugging but deliberately omit to_str
   # to prevent encrypted data from being used where strings are expected.

@@ -135,7 +135,7 @@ module Familia
         # Batch add multiple items to a sorted set
         #
         # @param redis_key [String] Redis sorted set key
-        # @param items [Array<Hash>] Array of {member: String, score: Float} hashes
+        # @param items [Array<Hash>] Array of `{member: String, score: Float}` hashes
         # @param mode [Symbol] Add mode (:normal, :nx, :xx, :lt, :gt)
         #
         # @example Batch add domains with scores
