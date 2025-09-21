@@ -13,6 +13,8 @@ module Familia
           super
         end
 
+        # Indexing::ClassMethods
+        #
         module ClassMethods
           # Define an indexed_by relationship for fast lookups
           #
@@ -44,7 +46,7 @@ module Familia
               context_class: context_class,
               context_class_name: context_class_name,
               index_name: index_name,
-              finder: finder
+              finder: finder,
             }
 
             # Generate finder methods on the context class
@@ -65,6 +67,7 @@ module Familia
           # @example Class-level indexing (using class_ prefix convention)
           #   class_indexed_by :email, :email_lookup
           #   class_indexed_by :username, :username_lookup, finder: false
+          #
           def class_indexed_by(field, index_name, finder: true)
             # Store metadata for this indexing relationship
             indexing_relationships << {
@@ -72,7 +75,7 @@ module Familia
               context_class: self,
               context_class_name: name,
               index_name: index_name,
-              finder: finder
+              finder: finder,
             }
 
             # Generate class-level finder methods if requested
@@ -84,7 +87,7 @@ module Familia
 
           # Get all indexing relationships for this class
           def indexing_relationships
-            @indexing_relationships ||= []
+            @indexing_relationships ||= [] # rubocop:disable ThreadSafety/ClassInstanceVariable
           end
 
           private
