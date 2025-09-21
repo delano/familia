@@ -107,7 +107,7 @@ module Familia
 
             # Generate finder method (e.g., Customer.find_by_display_name)
             actual_context_class.define_singleton_method("find_by_#{field}") do |field_value|
-              index_key = "#{self.name.downcase}:#{index_name}"
+              index_key = "#{config_name}:#{index_name}"
               object_id = dbclient.hget(index_key, field_value.to_s)
 
               return nil unless object_id
@@ -119,7 +119,7 @@ module Familia
             actual_context_class.define_singleton_method("find_all_by_#{field}") do |field_values|
               return [] if field_values.empty?
 
-              index_key = "#{self.name.downcase}:#{index_name}"
+              index_key = "#{config_name}:#{index_name}"
               object_ids = dbclient.hmget(index_key, *field_values.map(&:to_s))
 
               # Filter out nil values and instantiate objects
@@ -128,13 +128,13 @@ module Familia
 
             # Generate method to get the index hash directly
             actual_context_class.define_singleton_method(index_name) do
-              index_key = "#{self.name.downcase}:#{index_name}"
+              index_key = "#{config_name}:#{index_name}"
               Familia::HashKey.new(nil, dbkey: index_key, logical_database: logical_database)
             end
 
             # Generate method to rebuild the index
             actual_context_class.define_singleton_method("rebuild_#{index_name}") do
-              index_key = "#{self.name.downcase}:#{index_name}"
+              index_key = "#{config_name}:#{index_name}"
 
               # Clear existing index
               dbclient.del(index_key)
@@ -149,7 +149,7 @@ module Familia
           def generate_class_finder_methods(field, index_name)
             # Generate class-level finder method (e.g., Domain.find_by_display_name)
             define_singleton_method("find_by_#{field}") do |field_value|
-              index_key = "#{self.name.downcase}:#{index_name}"
+              index_key = "#{config_name}:#{index_name}"
               object_id = dbclient.hget(index_key, field_value.to_s)
 
               return nil unless object_id
@@ -161,22 +161,21 @@ module Familia
             define_singleton_method("find_all_by_#{field}") do |field_values|
               return [] if field_values.empty?
 
-              index_key = "#{self.name.downcase}:#{index_name}"
+              index_key = "#{config_name}:#{index_name}"
               object_ids = dbclient.hmget(index_key, *field_values.map(&:to_s))
-
               # Filter out nil values and instantiate objects
-              object_ids.compact.map { |object_id| self.new(object_id) }
+              object_ids.compact.map { |object_id| new(object_id) }
             end
 
             # Generate method to get the class-level index hash directly
-            define_singleton_method("#{index_name}") do
-              index_key = "#{self.name.downcase}:#{index_name}"
+            define_singleton_method(index_name.to_s) do
+              index_key = "#{config_name}:#{index_name}"
               Familia::HashKey.new(nil, dbkey: index_key, logical_database: logical_database)
             end
 
             # Generate method to rebuild the class-level index
             define_singleton_method("rebuild_#{index_name}") do
-              index_key = "#{self.name.downcase}:#{index_name}"
+              index_key = "#{config_name}:#{index_name}"
 
               # Clear existing index
               dbclient.del(index_key)
@@ -191,7 +190,7 @@ module Familia
           def generate_direct_index_methods(field, index_name)
             # Class-level index methods
             define_method("add_to_class_#{index_name}") do
-              index_key = "#{self.class.name.downcase}:#{index_name}"
+              index_key = "#{self.class.config_name}:#{index_name}"
               field_value = send(field)
 
               return unless field_value
@@ -200,7 +199,7 @@ module Familia
             end
 
             define_method("remove_from_class_#{index_name}") do
-              index_key = "#{self.class.name.downcase}:#{index_name}"
+              index_key = "#{self.class.config_name}:#{index_name}"
               field_value = send(field)
 
               return unless field_value
@@ -209,7 +208,7 @@ module Familia
             end
 
             define_method("update_in_class_#{index_name}") do |old_field_value = nil|
-              index_key = "#{self.class.name.downcase}:#{index_name}"
+              index_key = "#{self.class.config_name}:#{index_name}"
               new_field_value = send(field)
 
               dbclient.multi do |tx|
@@ -225,8 +224,12 @@ module Familia
           # Generate instance methods for relationship indexing (indexed_by with parent:)
           def generate_relationship_index_methods(context_class_name, field, index_name)
             # All indexes are stored at class level - parent is only conceptual
-            define_method("add_to_#{context_class_name.downcase}_#{index_name}") do |context_instance = nil|
-              index_key = "#{self.class.name.downcase}:#{index_name}"
+
+            method_name = "add_to_#{context_class_name.downcase}_#{index_name}"
+            Familia.ld("[generate_relationship_index_methods] #{name} method #{method_name}")
+
+            define_method(method_name) do |_context_instance = nil|
+              index_key = "#{self.class.config_name}:#{index_name}"
               field_value = send(field)
 
               return unless field_value
@@ -234,8 +237,11 @@ module Familia
               dbclient.hset(index_key, field_value.to_s, identifier)
             end
 
-            define_method("remove_from_#{context_class_name.downcase}_#{index_name}") do |context_instance = nil|
-              index_key = "#{self.class.name.downcase}:#{index_name}"
+            method_name = "remove_from_#{context_class_name.downcase}_#{index_name}"
+            Familia.ld("[generate_relationship_index_methods] #{name} method #{method_name}")
+
+            define_method(method_name) do |_context_instance = nil|
+              index_key = "#{self.class.config_name}:#{index_name}"
               field_value = send(field)
 
               return unless field_value
@@ -243,8 +249,11 @@ module Familia
               dbclient.hdel(index_key, field_value.to_s)
             end
 
-            define_method("update_in_#{context_class_name.downcase}_#{index_name}") do |context_instance = nil, old_field_value = nil|
-              index_key = "#{self.class.name.downcase}:#{index_name}"
+            method_name = "update_in_#{context_class_name.downcase}_#{index_name}"
+            Familia.ld("[generate_relationship_index_methods] #{name} method #{method_name}")
+
+            define_method(method_name) do |_context_instance = nil, old_field_value = nil|
+              index_key = "#{self.class.config_name}:#{index_name}"
               new_field_value = send(field)
 
               dbclient.multi do |tx|
@@ -319,17 +328,17 @@ module Familia
               next unless field_value
 
               # All indexes are stored at class level
-              index_key = "#{self.class.name.downcase}:#{index_name}"
-              if dbclient.hexists(index_key, field_value.to_s)
-                memberships << {
-                  context_class: context_class == self.class ? 'class' : config[:context_class_name].downcase,
-                  index_name: index_name,
-                  field: field,
-                  field_value: field_value,
-                  index_key: index_key,
-                  type: context_class == self.class ? 'class_indexed_by' : 'indexed_by'
-                }
-              end
+              index_key = "#{self.class.config_name}:#{index_name}"
+              next unless dbclient.hexists(index_key, field_value.to_s)
+
+              memberships << {
+                context_class: context_class == self.class ? 'class' : config[:context_class_name].downcase,
+                index_name: index_name,
+                field: field,
+                field_value: field_value,
+                index_key: index_key,
+                type: context_class == self.class ? 'class_indexed_by' : 'indexed_by',
+              }
             end
 
             memberships
@@ -347,7 +356,7 @@ module Familia
             return false unless field_value
 
             # For the cleaned-up API, all indexes are class-level
-            index_key = "#{self.class.name.downcase}:#{index_name}"
+            index_key = "#{self.class.config_name}:#{index_name}"
             dbclient.hexists(index_key, field_value.to_s)
           end
         end
