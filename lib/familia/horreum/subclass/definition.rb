@@ -144,7 +144,7 @@ module Familia
             raise Problem, 'Cannot generate prefix for anonymous class. ' \
                            'Use `prefix` method to set explicitly.'
           end
-          name.downcase.gsub('::', Familia.delim).to_sym
+          config_name.to_sym
         end
       end
 

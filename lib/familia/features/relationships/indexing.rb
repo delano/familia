@@ -6,6 +6,8 @@ module Familia
       # Indexing module for indexed_by relationships using Redis hashes
       # Provides O(1) lookups for finding objects by field values
       module Indexing
+        using Familia::Refinements::SnakeCase
+
         # Class-level indexing configurations
         def self.included(base)
           base.extend ClassMethods
@@ -31,10 +33,8 @@ module Familia
           def indexed_by(field, index_name, parent:, finder: true)
             context_class = parent
             context_class_name = if context_class.is_a?(Class)
-                                   # Extract just the class name without module prefixes or object representations
-                                   class_name = context_class.name
-                                   class_name = class_name.split('::').last if class_name
-                                   class_name || context_class.to_s.split('::').last
+                                   # Extract just the class name without module prefixes or object ids
+                                   context_class.name.snake_case
                                  else
                                    # For symbol parent, convert to string
                                    context_class.to_s
