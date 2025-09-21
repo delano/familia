@@ -50,8 +50,8 @@ jobs:
           tail -n 10 yard_debug.log
 
           # Search for specific error messages in the log file
-          grep -A 5 -B 5 "Exception occurred" yard_debug.log
-          grep -A 5 -B 5 "Cannot resolve link" yard_debug.log
+          grep -A 5 -B 5 "Exception occurred" yard_debug.log || echo "No exceptions found (good!)"
+          grep -A 5 -B 5 "Cannot resolve link" yard_debug.log || echo "No unresolved links found (good!)"
 
           # Ensure public directory exists and create .nojekyll file to
           # prevent GitHub Pages Jekyll processing
