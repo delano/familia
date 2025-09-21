@@ -10,7 +10,7 @@ module Familia
         STRATEGIES = {
           remove: :remove_from_collections,
           ignore: :ignore_collections,
-          cascade: :cascade_destroy_dependents
+          cascade: :cascade_destroy_dependents,
         }.freeze
 
         # Class-level cascade configurations
@@ -20,6 +20,8 @@ module Familia
           super
         end
 
+        # Cascading::ClassMethods
+        #
         module ClassMethods
           # Get cascade strategies for all relationships
           def cascade_strategies
@@ -32,7 +34,7 @@ module Familia
                 strategies[key] = {
                   type: :tracking,
                   strategy: config[:on_destroy] || :remove,
-                  config: config
+                  config: config,
                 }
               end
             end
@@ -44,7 +46,7 @@ module Familia
                 strategies[key] = {
                   type: :membership,
                   strategy: config[:on_destroy] || :remove,
-                  config: config
+                  config: config,
                 }
               end
             end
@@ -60,7 +62,7 @@ module Familia
                 strategies[key] = {
                   type: :indexing,
                   strategy: :remove, # Indexes should always be cleaned up
-                  config: config
+                  config: config,
                 }
               end
             end
@@ -111,7 +113,7 @@ module Familia
               removals: 0,
               cascades: 0,
               affected_collections: [],
-              cascade_targets: []
+              cascade_targets: [],
             }
 
             strategies.each do |key, strategy_info|
@@ -302,7 +304,7 @@ module Familia
                     type: :context,
                     class: context_class_name,
                     id: context_id,
-                    collection: collection_name
+                    collection: collection_name,
                   }
                 end
               end
@@ -330,7 +332,7 @@ module Familia
                     type: :owner,
                     class: owner_class_name,
                     id: owner_id,
-                    collection: collection_name
+                    collection: collection_name,
                   }
                 end
               end
@@ -346,7 +348,7 @@ module Familia
             preview = {
               removals: [],
               cascades: [],
-              affected_keys: []
+              affected_keys: [],
             }
 
             strategies.each do |key, strategy_info|
@@ -356,7 +358,7 @@ module Familia
                 preview[:removals] << {
                   relationship: key,
                   keys: affected_keys,
-                  count: affected_keys.length
+                  count: affected_keys.length,
                 }
                 preview[:affected_keys].concat(affected_keys)
 
@@ -365,7 +367,7 @@ module Familia
                 preview[:cascades] << {
                   relationship: key,
                   targets: cascade_targets,
-                  count: cascade_targets.length
+                  count: cascade_targets.length,
                 }
               end
             end

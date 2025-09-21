@@ -245,7 +245,6 @@ module Familia
     #   NoDefault.qstamp()  # Uses 10.minutes as fallback quantum
     #
     module Quantization
-
       Familia::Base.add_feature self, :quantization
 
       using Familia::Refinements::TimeLiterals
@@ -286,9 +285,7 @@ module Familia
         #
         def qstamp(quantum = nil, pattern: nil, time: nil)
           # Handle array input format: [quantum, pattern]
-          if quantum.is_a?(Array)
-            quantum, pattern = quantum
-          end
+          quantum, pattern = quantum if quantum.is_a?(Array)
 
           # Use default quantum if none specified
           # Priority: provided quantum > class default_expiration > 10.minutes fallback
@@ -323,11 +320,11 @@ module Familia
           end_bucket = qstamp(quantum, time: end_time)
 
           while current <= end_bucket
-            if pattern
-              timestamps << Time.at(current).strftime(pattern)
-            else
-              timestamps << current
-            end
+            timestamps << if pattern
+                            Time.at(current).strftime(pattern)
+                          else
+                            current
+                          end
             current += quantum
           end
 

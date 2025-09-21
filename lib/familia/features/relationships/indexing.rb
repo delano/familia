@@ -34,9 +34,7 @@ module Familia
             context_class = context
 
             # Handle special :global context for class-level indexing
-            if context == :global
-              return class_indexed_by(field, index_name, finder: finder)
-            end
+            return class_indexed_by(field, index_name, finder: finder) if context == :global
 
             context_class_name = if context_class.is_a?(Class)
                                    # Store the actual class name for consistency
@@ -63,9 +61,7 @@ module Familia
             }
 
             # Generate finder methods on the context class
-            if finder && context_class.is_a?(Class)
-              generate_context_finder_methods(context_class, field, index_name)
-            end
+            generate_context_finder_methods(context_class, field, index_name) if finder && context_class.is_a?(Class)
 
             # Generate instance methods for relationship indexing
             generate_relationship_index_methods(context_class_snake, field, index_name)
@@ -392,7 +388,7 @@ module Familia
                   field_value: field_value,
                   index_key: 'context_dependent',
                   type: 'indexed_by',
-                  note: 'Requires context instance for verification'
+                  note: 'Requires context instance for verification',
                 }
               end
             end

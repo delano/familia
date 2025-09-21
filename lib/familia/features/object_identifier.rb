@@ -302,7 +302,6 @@ module Familia
         generator = options[:generator] || DEFAULT_GENERATOR
         Familia.trace :OBJID_INIT, dbclient, "Generator strategy: #{generator}", caller(1..1)
       end
-
     end
   end
 end

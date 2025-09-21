@@ -200,7 +200,7 @@ module Familia
                 total: items_with_scores.size,
                 viewable: items_with_scores.count { |(_, s)| ScoreEncoding.category?(s, :readable) },
                 editable: items_with_scores.count { |(_, s)| ScoreEncoding.category?(s, :content_editor) },
-                administrative: items_with_scores.count { |(_, s)| ScoreEncoding.category?(s, :administrator) }
+                administrative: items_with_scores.count { |(_, s)| ScoreEncoding.category?(s, :administrator) },
               }
             end
 

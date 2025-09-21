@@ -98,7 +98,6 @@ module Familia
     #     { owner: team, collection: :domains }
     #   ], min_permission: :read)
     module Relationships
-
       # Register the feature with Familia
       Familia::Base.add_feature Relationships, :relationships
 
@@ -271,14 +270,10 @@ module Familia
 
           if result
             # Automatically update all indexes when object is saved
-            if respond_to?(:update_all_indexes)
-              update_all_indexes
-            end
+            update_all_indexes if respond_to?(:update_all_indexes)
 
             # Auto-add to class-level tracking collections
-            if respond_to?(:add_to_class_tracking_collections)
-              add_to_class_tracking_collections
-            end
+            add_to_class_tracking_collections if respond_to?(:add_to_class_tracking_collections)
 
             # NOTE: Relationship-specific membership and tracking updates are done explicitly
             # since we need to know which specific collections this object should be in
@@ -301,7 +296,7 @@ module Familia
             identifier: identifier,
             tracking_memberships: [],
             membership_collections: [],
-            index_memberships: []
+            index_memberships: [],
           }
 
           # Get tracking memberships
@@ -335,7 +330,7 @@ module Familia
           preview = {
             tracking_collections: [],
             membership_collections: [],
-            index_entries: []
+            index_entries: [],
           }
 
           if respond_to?(:cascade_dry_run)
@@ -385,7 +380,7 @@ module Familia
             identifier: identifier,
             class: self.class.name,
             status: relationship_status,
-            redis_keys: find_related_redis_keys
+            redis_keys: find_related_redis_keys,
           }
         end
 
@@ -439,8 +434,8 @@ module Familia
 
           # Scan for keys that might contain this object
           patterns = [
-            '*:*:*',  # General pattern for relationship keys
-            "*#{id}*" # Keys containing the identifier
+            '*:*:*', # General pattern for relationship keys
+            "*#{id}*", # Keys containing the identifier
           ]
 
           patterns.each do |pattern|
@@ -466,7 +461,6 @@ module Familia
           related_keys.uniq
         end
       end
-
     end
   end
 end

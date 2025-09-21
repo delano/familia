@@ -35,7 +35,7 @@ module Familia
               owner_class_name: owner_class_name,
               collection_name: collection_name,
               score: score,
-              type: type
+              type: type,
             }
 
             # Generate instance methods with collision-free naming
@@ -438,7 +438,7 @@ module Familia
                     owner_id: owner_id,
                     collection_name: collection_name,
                     type: type,
-                    key: key
+                    key: key,
                   }.merge(is_member)
                 end
               end

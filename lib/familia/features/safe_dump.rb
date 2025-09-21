@@ -1,6 +1,5 @@
 # lib/familia/features/safe_dump.rb
 
-
 # rubocop:disable ThreadSafety/ClassInstanceVariable
 #
 #   Class instance variables are used here for feature configuration
@@ -43,7 +42,6 @@ module Familia
     # of symbols in the order they were defined.
     #
     module SafeDump
-
       Familia::Base.add_feature self, :safe_dump
 
       using Familia::Refinements::SnakeCase
@@ -52,7 +50,6 @@ module Familia
       @load_method = :from_json
 
       def self.included(base)
-
         Familia.trace(:LOADED, self, base, caller(1..1)) if Familia.debug?
         base.extend ClassMethods
 

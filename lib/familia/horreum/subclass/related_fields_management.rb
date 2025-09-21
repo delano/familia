@@ -27,6 +27,8 @@ module Familia
         base.setup_related_fields_accessors
       end
 
+      # RelatedFieldsManagement::RelatedFieldsAccessors
+      #
       module RelatedFieldsAccessors
         # Sets up all DataType related methods
         # This method generates the following for each registered DataType:

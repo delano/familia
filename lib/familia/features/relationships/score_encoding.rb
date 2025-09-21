@@ -48,7 +48,7 @@ module Familia
           viewer:     PERMISSION_FLAGS[:read],
           editor:     PERMISSION_FLAGS[:read] | PERMISSION_FLAGS[:write] | PERMISSION_FLAGS[:edit],
           moderator:  PERMISSION_FLAGS[:read] | PERMISSION_FLAGS[:write] | PERMISSION_FLAGS[:edit] | PERMISSION_FLAGS[:delete],
-          admin:      0b11111111 # All permissions
+          admin:      0b11111111, # All permissions
         }.freeze
 
         # Categorical masks for efficient broad queries
@@ -57,7 +57,7 @@ module Familia
           content_editor: 0b00001110,  # Can modify content (append|write|edit)
           administrator:  0b11110000,  # Has any admin powers
           privileged:     0b11111110,  # Has beyond read-only
-          owner:          0b11111111   # All permissions
+          owner:          0b11111111, # All permissions
         }.freeze
 
         class << self
@@ -88,7 +88,7 @@ module Familia
             {
               timestamp: decoded[:timestamp],
               permissions: decoded[:permissions],
-              permission_list: decoded[:permission_list]
+              permission_list: decoded[:permission_list],
             }
           end
 
@@ -144,7 +144,7 @@ module Familia
             {
               timestamp: time_part,
               permissions: permission_bits,
-              permission_list: decode_permission_flags(permission_bits)
+              permission_list: decode_permission_flags(permission_bits),
             }
           end
 

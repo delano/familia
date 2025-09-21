@@ -128,7 +128,7 @@ module Familia
                 shared_members_list = dbclient.zrange(temp_key, 0, -1, with_scores: true)
                 shared_results["#{format_collection(coll1)} ∩ #{format_collection(coll2)}"] = {
                   count: shared_count,
-                  members: shared_members_list
+                  members: shared_members_list,
                 }
               end
 
@@ -213,7 +213,7 @@ module Familia
               collection_sizes: {},
               total_unique_members: 0,
               total_members: 0,
-              score_ranges: {}
+              score_ranges: {},
             }
 
             all_members = ::Set.new
@@ -236,7 +236,7 @@ module Familia
                 min: min_score,
                 max: max_score,
                 min_decoded: min_score ? decode_score(min_score) : nil,
-                max_decoded: max_score ? decode_score(max_score) : nil
+                max_decoded: max_score ? decode_score(max_score) : nil,
               }
 
               # Track unique members
@@ -456,7 +456,7 @@ module Familia
                 similar_objects[other_identifier] ||= {
                   shared_collections: 0,
                   collections: [],
-                  identifier: other_identifier
+                  identifier: other_identifier,
                 }
                 similar_objects[other_identifier][:shared_collections] += 1
                 similar_objects[other_identifier][:collections] << collection_info
@@ -515,7 +515,7 @@ module Familia
                   key: key,
                   score: score,
                   permission_bits: actual_bits,
-                  permissions: decoded[:permission_list]
+                  permissions: decoded[:permission_list],
                 }
               end
             end

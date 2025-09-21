@@ -266,11 +266,13 @@ module Familia
         # don't want to silently fail at setting expirations and cause data
         # retention issues (e.g. not removed in a timely fashion).
         unless default_expiration.is_a?(Numeric)
-          raise Familia::Problem, "Default expiration must be a number (#{default_expiration.class} given for #{self.class})"
+          raise Familia::Problem,
+                "Default expiration must be a number (#{default_expiration.class} given for #{self.class})"
         end
 
         unless default_expiration >= 0
-          raise Familia::Problem, "Default expiration must be non-negative (#{default_expiration} given for #{self.class})"
+          raise Familia::Problem,
+                "Default expiration must be non-negative (#{default_expiration} given for #{self.class})"
         end
 
         # If zero, simply skip setting an expiry for this key. If we were to set
@@ -325,6 +327,7 @@ module Familia
         current_ttl = ttl
         return false if current_ttl == -1 # no expiration set
         return true  if current_ttl == -2 # key does not exist
+
         current_ttl <= threshold
       end
 
@@ -341,7 +344,7 @@ module Familia
       #
       def extend_expiration(duration)
         current_ttl = ttl
-        return false if current_ttl < 0  # No current expiration set
+        return false if current_ttl < 0 # No current expiration set
 
         new_ttl = current_ttl + duration.to_f
         expire(new_ttl)
@@ -357,7 +360,6 @@ module Familia
       def persist!
         redis.persist(dbkey)
       end
-
     end
   end
 end

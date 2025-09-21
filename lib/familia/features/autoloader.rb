@@ -1,5 +1,6 @@
 # lib/familia/features/autoloader.rb
 
+# rubocop:disable Style/ClassAndModuleChildren
 module Familia::Features
   # Provides autoloading functionality for Ruby files based on patterns and conventions.
   #
@@ -15,7 +16,6 @@ module Familia::Features
     #
     # @param base [Module] the module including this autoloader
     def self.included(base)
-
       # Get the directory where the including module is defined
       # This should be lib/familia for the Features module
       base_path = File.dirname(caller_locations(1, 1).first.path)
@@ -27,10 +27,7 @@ module Familia::Features
       ]
 
       # Ensure the Features module exists within the base module
-      unless base.const_defined?(:Features) || model_name.eql?('features')
-        base.const_set(:Features, Module.new)
-      end
-
+      base.const_set(:Features, Module.new) unless base.const_defined?(:Features) || model_name.eql?('features')
 
       # Use the shared autoload_files method
       autoload_files(dir_patterns, log_prefix: "Autoloader[#{model_name}]")
@@ -59,3 +56,4 @@ module Familia::Features
     end
   end
 end
+# rubocop:enable Style/ClassAndModuleChildren

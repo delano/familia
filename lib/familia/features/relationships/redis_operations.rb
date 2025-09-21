@@ -200,7 +200,7 @@ module Familia
 
           options = {
             limit: (count.positive? ? [offset, count] : nil),
-            with_scores: with_scores
+            with_scores: with_scores,
           }.compact
 
           results = dbclient.zrangebyscore(redis_key, start_score, end_score, **options)
