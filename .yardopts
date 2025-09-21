@@ -12,10 +12,11 @@
 --embed-mixin Features
 --tag feature:"Feature"
 --tag since:"Since Version"
---tag example:"Example Usage"
 --tag note:"Note"
 --tag warning:"Warning"
 --tag deprecated:"Deprecated"
+--tag abstract:"Abstract"
+--tag security:"Security"
 --hide-tag nodoc
 --exclude lib/familia/version.rb
 lib/**/*.rb

@@ -89,9 +89,9 @@ module Familia
     #
     # Usage:
     #
-    #   Session.new("abc123", "user456")                   # positional (brittle)
-    #   Session.new(sessid: "abc123", custid: "user456")   # hash (robust)
-    #   Session.new({sessid: "abc123", custid: "user456"}) # legacy hash (robust)
+    #   `Session.new("abc123", "user456")`                   # positional (brittle)
+    #   `Session.new(sessid: "abc123", custid: "user456")`   # hash (robust)
+    #   `Session.new({sessid: "abc123", custid: "user456"})` # legacy hash (robust)
     #
     def initialize(*args, **kwargs)
       Familia.trace :INITIALIZE, dbclient, "Initializing #{self.class}", caller(1..1) if Familia.debug?
