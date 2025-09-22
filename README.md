@@ -158,6 +158,29 @@ found_customer = Customer.find_by_email("admin@acme.com")
 
 ## Advanced Features
 
+### 🔗 Automatic Relationships with Ruby-like Syntax
+
+Familia supports automatic bidirectional relationship management with explicit, Django-like relationship syntax:
+
+```ruby
+customer.domains << domain  # Automatically updates both sides
+domain.in_customer_domains?(customer.custid)  # => true
+```
+
+### 🔐 Transparent Field Encryption
+
+Built-in encryption with multiple providers, key rotation, and anti-tampering support.
+
+```ruby
+class SecureUser < Familia::Horreum
+  feature :encrypted_fields
+  encrypted_field :credit_card  # Automatically encrypted/decrypted
+end
+
+user.credit_card  # => ConcealedString("[CONCEALED]") - safe for logs
+user.credit_card.reveal  # => "4111-1111-1111-1234" - explicit access
+```
+
 ### Relationships and Associations
 
 Familia provides three types of relationships with automatic management:
