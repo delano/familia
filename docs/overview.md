@@ -209,21 +209,66 @@ This ensures efficient Valkey connection usage in multi-threaded applications.
 
 ### Encrypted Fields
 
-Protect sensitive data at rest:
+Protect sensitive data at rest with transparent encryption:
 
 ```ruby
+# First, configure encryption keys
+Familia.configure do |config|
+  config.encryption_keys = {
+    v1: ENV['FAMILIA_ENCRYPTION_KEY'],
+    v2: ENV['FAMILIA_ENCRYPTION_KEY_V2']
+  }
+  config.current_key_version = :v2
+  config.encryption_personalization = 'MyApp-2024'  # Optional
+end
+
+# Validate configuration before use
+Familia::Encryption.validate_configuration!
+
 class SecureUser < Familia::Horreum
   feature :encrypted_fields
 
   identifier_field :id
-  field :id
-  field :email                    # Plain text
-  encrypted_field :ssn            # Encrypted
-  encrypted_field :notes, aad_fields: [:id, :email]  # With auth data
+  field :id, :email               # Plaintext fields
+  encrypted_field :ssn            # Encrypted with field-specific key
+  encrypted_field :credit_card    # Another encrypted field
+  encrypted_field :notes, aad_fields: [:id, :email]  # With tamper protection
 end
+
+# Usage is transparent
+user = SecureUser.new(
+  id: 'user123',
+  email: 'alice@example.com',
+  ssn: '123-45-6789',
+  credit_card: '4111-1111-1111-1111',
+  notes: 'VIP customer'
+)
+user.save
+
+# Access returns ConcealedString to help prevent accidentally logging or displaying the value
+user.ssn.class                  # => ConcealedString
+user.ssn.reveal                 # => "123-45-6789" (actual value)
+user.ssn.to_s                   # => "[CONCEALED]" (safe for logging)
+
+# Performance optimization for multiple operations
+Familia::Encryption.with_request_cache do
+  user.ssn = "new-ssn"
+  user.credit_card = "new-card"
+  user.save  # Reuses derived keys
+end
+
+# Key rotation support
+user.re_encrypt_fields!  # Re-encrypt with current key version
+user.encrypted_fields_status  # Check encryption status
 ```
 
-Uses authenticated encryption to protect data while allowing selective field access.
+**Features:**
+- **Automatic Encryption**: Fields encrypted/decrypted transparently
+- **Field-Specific Keys**: Each field uses unique encryption keys derived from master key + context
+- **Algorithm Flexibility**: XChaCha20-Poly1305 (preferred) or AES-256-GCM fallback
+- **Key Versioning**: Seamless key rotation with backward compatibility
+- **Tamper Detection**: Optional Additional Authenticated Data (AAD) for integrity
+- **Performance**: Request-level key caching for high-throughput scenarios
 
 ### Open-ended Serialization
 

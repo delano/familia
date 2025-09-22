@@ -1,5 +1,8 @@
 # API Reference
 
+> [!NOTE]
+> This document is deprecated. For comprehensive encryption API documentation, see [`docs/reference/api-technical.md`](../reference/api-technical.md) which contains complete implementation details and examples.
+
 ## Class Methods
 
 ### encrypted_field
@@ -7,22 +10,22 @@
 Defines an encrypted field on a Familia::Horreum class.
 
 ```ruby
-encrypted_field(name, **options)
+encrypted_field(name, aad_fields: [], **options)
 ```
 
 **Parameters:**
 - `name` (Symbol) - Field name
-- `**options` (Hash) - Standard field options plus encryption-specific options
-
-**Options:**
-- `:as` - Custom accessor method name
-- `:on_conflict` - Conflict resolution (always `:raise` for encrypted fields)
+- `aad_fields` (Array<Symbol>) - Additional fields to include in authentication
+- `**options` (Hash) - Standard field options
 
 **Example:**
 ```ruby
 class User < Familia::Horreum
+  feature :encrypted_fields
+
   encrypted_field :favorite_snack
-  encrypted_field :api_key, as: :secret_key
+  encrypted_field :api_key
+  encrypted_field :notes, aad_fields: [:user_id, :email]  # With tamper protection
 end
 ```
 
@@ -38,63 +41,60 @@ User.encrypted_fields  # => [:favorite_snack, :api_key]
 
 ### Field Accessors
 
-Encrypted fields provide standard accessors:
+Encrypted fields provide standard accessors that return ConcealedString objects:
 
 ```ruby
-user.favorite_snack           # Get decrypted value
+user.favorite_snack           # Returns ConcealedString (safe for logging)
+user.favorite_snack.reveal   # Get actual decrypted value
 user.favorite_snack = value   # Set and encrypt value
 user.favorite_snack!          # Fast write (still encrypted)
 ```
 
-### Passphrase-Protected Access
-
+**ConcealedString Methods:**
 ```ruby
-# For passphrase-protected fields
-vault.secret_data(passphrase_value: "user_passphrase")
+concealed = user.favorite_snack
+concealed.to_s                # => "[CONCEALED]" (safe for logging)
+concealed.reveal              # => "actual value"
+concealed.clear!              # Clear from memory
+concealed.cleared?            # Check if cleared
 ```
 
 ## Familia::Encryption Module
 
-### manager
+### with_request_cache
 
-Creates a manager instance with optional algorithm selection.
+Enables key derivation caching for performance optimization:
 
 ```ruby
-# Use best available provider
-mgr = Familia::Encryption.manager
-
-# Use specific algorithm
-mgr = Familia::Encryption.manager(algorithm: 'xchacha20poly1305')
+Familia::Encryption.with_request_cache do
+  # Multiple encryption operations reuse derived keys
+  user.secret_one = "value1"
+  user.secret_two = "value2"
+  user.save
+end
 ```
 
-### encrypt
+### clear_request_cache!
 
-Encrypts plaintext using the default provider.
+Manually clears the request-level key cache:
 
 ```ruby
-Familia::Encryption.encrypt(plaintext,
+Familia::Encryption.clear_request_cache!
+```
+
+### encrypt / decrypt
+
+Low-level encryption methods (typically used internally):
+
+```ruby
+# Encrypt with context for key derivation
+encrypted = Familia::Encryption.encrypt(plaintext,
   context: "User:favorite_snack:user123",
   additional_data: nil
 )
-```
 
-### encrypt_with
-
-Encrypts plaintext with a specific algorithm.
-
-```ruby
-Familia::Encryption.encrypt_with('aes-256-gcm', plaintext,
-  context: "User:favorite_snack:user123",
-  additional_data: nil
-)
-```
-
-### decrypt
-
-Decrypts ciphertext (auto-detects algorithm from JSON).
-
-```ruby
-Familia::Encryption.decrypt(encrypted_json,
+# Decrypt (auto-detects algorithm from JSON)
+decrypted = Familia::Encryption.decrypt(encrypted_json,
   context: "User:favorite_snack:user123",
   additional_data: nil
 )
@@ -200,16 +200,19 @@ Familia.configure do |config|
   }
   config.current_key_version = :v1
 
-  # Multi-version configuration
+  # Multi-version configuration for key rotation
   config.encryption_keys = {
     v1_2024: ENV['OLD_KEY'],
     v2_2025: ENV['NEW_KEY']
   }
   config.current_key_version = :v2_2025
 
-  # Key cache TTL (seconds)
-  config.key_cache_ttl = 300  # Default: 5 minutes
+  # Optional personalization (XChaCha20-Poly1305 only)
+  config.encryption_personalization = 'MyApp-2024'
 end
+
+# Always validate configuration
+Familia::Encryption.validate_configuration!
 ```
 
 ## Data Types
@@ -228,18 +231,30 @@ EncryptedData = Data.define(
 )
 ```
 
-### RedactedString
+### ConcealedString
 
-String subclass that redacts sensitive data in output.
+String-like object that conceals sensitive data in output and provides memory safety.
 
 ```ruby
-class RedactedString < String
+class ConcealedString
+  def reveal
+    # Returns actual decrypted string value
+  end
+
   def to_s
-    '[REDACTED]'
+    '[CONCEALED]'
   end
 
   def inspect
-    '[REDACTED]'
+    '[CONCEALED]'
+  end
+
+  def clear!
+    # Best-effort memory wiping
+  end
+
+  def cleared?
+    # Returns true if cleared from memory
   end
 end
 ```
@@ -265,83 +280,54 @@ rescue Familia::EncryptionError => e
 end
 ```
 
-## CLI Commands
+## Instance Methods
 
-### Generate Key
+### encrypted_data?
 
-```bash
-$ familia encryption:generate_key [--bits 256]
-# Outputs Base64-encoded key
-```
-
-### Verify Encryption
-
-```bash
-$ familia encryption:verify [--model User] [--field favorite_snack]
-# Verifies field encryption is working
-```
-
-### Rotate Keys
-
-```bash
-$ familia encryption:rotate [--from v1] [--to v2]
-# Migrates encrypted fields to new key
-```
-
-## Testing Helpers
-
-### EncryptionTestHelpers
+Check if any encrypted fields have values:
 
 ```ruby
-module Familia::EncryptionTestHelpers
-  # Set up test encryption keys
-  def with_test_encryption_keys(&block)
-
-  # Verify field is encrypted in storage
-  def assert_field_encrypted(model, field)
-
-  # Verify decryption works
-  def assert_decryption_works(model, field, expected)
-end
+user.encrypted_data?  # => true if any encrypted fields have values
 ```
 
-### RSpec Example
+### clear_encrypted_fields!
+
+Clear all encrypted field values from memory:
 
 ```ruby
-RSpec.describe User do
-  include Familia::EncryptionTestHelpers
-
-  it "encrypts favorite snack field" do
-    with_test_encryption_keys do
-      user = User.create(favorite_snack: "chocolate chip cookies")
-
-      assert_field_encrypted(user, :favorite_snack)
-      assert_decryption_works(user, :favorite_snack, "chocolate chip cookies")
-    end
-  end
-end
+user.clear_encrypted_fields!  # Clear all ConcealedString values
 ```
 
-## Performance Considerations
+### encrypted_fields_cleared?
 
-### Key Derivation Caching
+Check if all encrypted fields have been cleared:
 
 ```ruby
-# Automatic in web requests
-class ApplicationController
-  around_action :with_encryption_cache
-
-  def with_encryption_cache
-    Familia::Encryption.with_key_cache { yield }
-  end
-end
+user.encrypted_fields_cleared?  # => true if all cleared
 ```
 
-### Batch Operations
+### re_encrypt_fields!
+
+Re-encrypt all encrypted fields with current key version:
 
 ```ruby
-# Efficient for bulk operations
-User.batch_decrypt(:favorite_snack) do |users|
-  users.each { |u| process(u.favorite_snack) }
-end
+user.re_encrypt_fields!  # Uses current_key_version
+user.save
 ```
+
+### encrypted_fields_status
+
+Get encryption status for debugging:
+
+```ruby
+user.encrypted_fields_status
+# => {
+#   ssn: { encrypted: true, cleared: false },
+#   credit_card: { encrypted: true, cleared: true }
+# }
+```
+
+---
+
+> [!IMPORTANT]
+> For complete implementation details, configuration examples, and advanced usage patterns, see the comprehensive documentation in [`docs/reference/api-technical.md`](../reference/api-technical.md).
