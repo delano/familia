@@ -241,3 +241,10 @@ For more information, visit:
 - [RubyGems Page](https://rubygems.org/gems/familia)
 
 Contributions are welcome! Feel free to submit a Pull Request.
+
+
+## Additional Documentation
+
+- [Overview](file.overview.html)
+- [Implementation Guide](file.implementation-guide.html)
+- [API Reference](file.api-reference.html)
