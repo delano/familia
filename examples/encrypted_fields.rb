@@ -19,7 +19,7 @@ puts
 Familia.configure do |config|
   config.encryption_keys = {
     v1: 'dGVzdGtleWZvcmV4YW1wbGVzMTIzNDU2Nzg5MA==', # Base64 encoded 32 bytes
-    v2: 'bmV3ZXJrZXlmb3JleGFtcGxlczEyMzQ1Njc4OTA='  # Base64 encoded 32 bytes
+    v2: 'bmV3ZXJrZXlmb3JleGFtcGxlczEyMzQ1Njc4OTA=', # Base64 encoded 32 bytes
   }
   config.current_key_version = :v2
   config.encryption_personalization = 'FamiliaExamples'
@@ -28,7 +28,7 @@ end
 # Validate configuration before proceeding
 begin
   Familia::Encryption.validate_configuration!
-  puts "✓ Encryption configuration validated"
+  puts '✓ Encryption configuration validated'
   puts "  Algorithm: #{Familia::Encryption.status[:default_algorithm]}"
   puts "  Available algorithms: #{Familia::Encryption.status[:available_algorithms].join(', ')}"
   puts "  Key versions: #{Familia::Encryption.status[:key_versions].join(', ')}"
@@ -43,18 +43,18 @@ class SecureUser < Familia::Horreum
   feature :encrypted_fields
 
   identifier_field :email
-  field :email                    # Plaintext
-  field :name                     # Plaintext
-  encrypted_field :ssn            # Encrypted
-  encrypted_field :credit_card    # Encrypted
-  encrypted_field :notes          # Encrypted
-  field :created_at               # Plaintext
+  field :email                    # stored as plaintext in the database
+  field :name
+  encrypted_field :ssn            # store as an encrypted string in the database
+  encrypted_field :credit_card
+  encrypted_field :notes
+  field :created_at
 end
 
 puts 'Example 1: Basic encrypted fields'
 user = SecureUser.new(
   email: 'alice@example.com',
-  name: 'Alice Smith',
+  name: 'Alice Windows',
   ssn: '123-45-6789',
   credit_card: '4111-1111-1111-1111',
   notes: 'VIP customer with special handling',
@@ -62,7 +62,7 @@ user = SecureUser.new(
 )
 
 user.save
-puts "✓ User saved with encrypted fields"
+puts '✓ User saved with encrypted fields'
 
 # Demonstrate transparent access
 puts "Name (plaintext): #{user.name}"
@@ -83,8 +83,8 @@ class SecureDocument < Familia::Horreum
   field :doc_id
   field :title                    # Plaintext
   field :owner_id                 # Plaintext
-  field :classification          # Plaintext
-  encrypted_field :content, aad_fields: [:doc_id, :owner_id, :classification]
+  field :classification # Plaintext
+  encrypted_field :content, aad_fields: %i[doc_id owner_id classification]
   encrypted_field :summary        # No AAD
   field :created_at               # Plaintext
 end
@@ -101,7 +101,7 @@ doc = SecureDocument.new(
 )
 
 doc.save
-puts "✓ Document saved with AAD-protected content"
+puts '✓ Document saved with AAD-protected content'
 
 # AAD ensures content can only be decrypted with matching metadata
 puts "Title: #{doc.title}"
@@ -277,7 +277,7 @@ puts 'Example 7: Encryption performance benchmarks'
 if defined?(Familia::Encryption) && Familia::Encryption.respond_to?(:benchmark)
   benchmark_results = Familia::Encryption.benchmark(iterations: 100)
 
-  puts "Encryption benchmark results (100 iterations):"
+  puts 'Encryption benchmark results (100 iterations):'
   benchmark_results.each do |algorithm, stats|
     puts "  #{algorithm}:"
     puts "    Time: #{(stats[:time] * 1000).round(2)}ms total"
@@ -285,7 +285,7 @@ if defined?(Familia::Encryption) && Familia::Encryption.respond_to?(:benchmark)
     puts "    Priority: #{stats[:priority]}"
   end
 else
-  puts "Benchmarking not available in this version"
+  puts 'Benchmarking not available in this version'
 end
 puts
 
@@ -307,7 +307,7 @@ class SecureProfile < Familia::Horreum
   safe_dump_field :profile_id
   safe_dump_field :username
   safe_dump_field :email
-  safe_dump_field :phone_display, ->(profile) {
+  safe_dump_field :phone_display, lambda { |profile|
     phone = profile.phone.reveal
     phone ? "#{phone[0..2]}-***-#{phone[-4..-1]}" : nil
   }
@@ -317,7 +317,7 @@ end
 puts 'Example 8: Integration with SafeDump feature'
 profile = SecureProfile.new(
   profile_id: 'profile_123',
-  username: 'alice_smith',
+  username: 'alice_windows',
   email: 'alice@example.com',
   phone: '555-123-4567',
   ssn: '123-45-6789',
@@ -326,26 +326,28 @@ profile = SecureProfile.new(
 )
 profile.save
 
-puts "Profile safe dump (encrypted fields handled automatically):"
+puts 'Profile safe dump (encrypted fields handled automatically):'
 puts JSON.pretty_generate(profile.safe_dump)
-puts "Notice: SSN and bank account are automatically excluded"
-puts "Phone number is included but masked for display"
+puts 'Notice: SSN and bank account are automatically excluded'
+puts 'Phone number is included but masked for display'
 puts
 
 # Clean up examples
 puts '=== Cleaning up test data ==='
 [SecureUser, SecureDocument, VaultEntry, RotationTest, MemoryTest, SecureProfile].each do |klass|
-  begin
-    keys = klass.dbclient.keys("#{klass.name.downcase.gsub('::', '_')}:*")
-    klass.dbclient.del(*keys) unless keys.empty?
-    puts "✓ Cleaned #{klass.name} (#{keys.length} keys)"
-  rescue StandardError => e
-    puts "✗ Error cleaning #{klass.name}: #{e.message}"
-  end
+  keys = klass.dbclient.keys("#{klass.name.downcase.gsub('::', '_')}:*")
+  klass.dbclient.del(*keys) unless keys.empty?
+  puts "✓ Cleaned #{klass.name} (#{keys.length} keys)"
+rescue StandardError => e
+  puts "✗ Error cleaning #{klass.name}: #{e.message}"
 end
 
 # Clear any request cache
-Familia::Encryption.clear_request_cache! rescue nil
+begin
+  Familia::Encryption.clear_request_cache!
+rescue StandardError
+  nil
+end
 
 puts
 puts '=== Summary ==='

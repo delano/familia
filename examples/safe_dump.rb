@@ -38,7 +38,7 @@ puts 'Example 1: Basic SafeDump'
 user = User.new(
   email: 'alice@example.com',
   first_name: 'Alice',
-  last_name: 'Smith',
+  last_name: 'Windows',
   password_hash: 'secret123',
   ssn: '123-45-6789',
   created_at: Familia.now.to_i

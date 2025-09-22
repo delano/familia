@@ -53,7 +53,7 @@ class Domain < Familia::Horreum
 
   # Track domains by status (using class_ prefix for class-level)
   class_participates_in :active_domains,
-                   score: -> { status == 'active' ? Familia.now.to_i : 0 }
+                        score: -> { status == 'active' ? Familia.now.to_i : 0 }
 end
 
 class Project < Familia::Horreum

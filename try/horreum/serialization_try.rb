@@ -62,7 +62,7 @@ Familia.dbclient.set('debug:ending_save_if_not_exists_tests', Familia.now.to_s)
 #=> "John Doe"
 
 ## batch_update can update multiple fields atomically, to_h
-@result = @customer.batch_update(name: 'Jane Smith', email: 'jane@example.com')
+@result = @customer.batch_update(name: 'Jane Windows', email: 'jane@example.com')
 @result.to_h
 #=> {:success=>true, :results=>[0, 0]}
 
@@ -80,12 +80,12 @@ Familia.dbclient.set('debug:ending_save_if_not_exists_tests', Familia.now.to_s)
 
 ## batch_update updates object fields in memory, confirm fields changed
 [@customer.name, @customer.email]
-#=> ["Jane Smith", "jane@example.com"]
+#=> ["Jane Windows", "jane@example.com"]
 
 ## batch_update persists to Redis
 @customer.refresh!
 [@customer.name, @customer.email]
-#=> ["Jane Smith", "jane@example.com"]
+#=> ["Jane Windows", "jane@example.com"]
 
 ## batch_update with update_expiration: false works
 @customer.batch_update(name: 'Bob Jones', update_expiration: false)

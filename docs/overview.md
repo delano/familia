@@ -134,7 +134,7 @@ class User < Familia::Horreum
 end
 
 user.safe_dump
-#=> {id: "123", email: "alice@example.com", full_name: "Alice Smith"}
+#=> {id: "123", email: "alice@example.com", full_name: "Alice Windows"}
 ```
 
 The new DSL prevents accidental exposure of sensitive data and makes field definitions easier to organize in feature modules.

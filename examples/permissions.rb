@@ -177,7 +177,7 @@ if __FILE__ == $0
   puts '=' * 50
 
   # Create users
-  alice = User.new(user_id: 'alice', email: 'alice@company.com', name: 'Alice Smith', role: 'admin')
+  alice = User.new(user_id: 'alice', email: 'alice@company.com', name: 'Alice Windows', role: 'admin')
   bob = User.new(user_id: 'bob', email: 'bob@company.com', name: 'Bob Jones', role: 'editor')
   charlie = User.new(user_id: 'charlie', email: 'charlie@company.com', name: 'Charlie Brown', role: 'viewer')
 
