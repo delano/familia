@@ -4,7 +4,7 @@
 
 **relationships.rb** - Main orchestrator that unifies all relationship functionality into a single feature, providing the public API and coordinating between all submodules.
 
-**indexing.rb** - O(1) lookup capability via Valkey/Redis sorted sets. Enables fast field-based searches both globally (context: :global) and parent-scoped (context: ParentClass). Creates instance methods on context class for scoped lookups, class methods for global lookups.
+**indexing.rb** - O(1) lookup capability via Valkey/Redis sorted sets. Enables fast field-based searches when parent-scoped (target: ParentClass). Creates instance methods on context class for scoped lookups.
 
 **participation.rb** - Multi-presence management where objects can exist in multiple collections simultaneously with score-encoded metadata (timestamps, permissions, etc.). Includes integrated convenience methods via member_methods parameter.
 
@@ -23,7 +23,6 @@ participates_in Organization, :members, score: :joined_at, member_methods: true
 **indexed_by** - Fast lookups ("find objects by field value")
 ```ruby
 indexed_by :email, :email_index, context: Organization  # Scoped: org.find_by_email()
-indexed_by :email, :global_index, context: :global      # Global: Customer.find_by_email()
 ```
 
 ## Supporting Modules

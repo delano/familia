@@ -42,11 +42,7 @@ module Familia
             # Collect strategies from indexing relationships
             if respond_to?(:indexing_relationships)
               indexing_relationships.each do |config|
-                key = if config[:target_class_name] == 'global'
-                        "global.#{config[:index_name]}"
-                      else
-                        "#{config[:target_class_name]}.#{config[:index_name]}"
-                      end
+                key = "#{config[:target_class_name]}.#{config[:index_name]}"
                 strategies[key] = {
                   type: :indexing,
                   strategy: :remove, # Indexes should always be cleaned up
@@ -162,16 +158,11 @@ module Familia
             field_value = send(field) if respond_to?(field)
             return unless field_value
 
-            if target_class_name == 'global'
-              index_key = "global:#{index_name}"
-              pipeline.hdel(index_key, field_value.to_s)
-            else
-              # Find all indexes this object appears in
-              pattern = "#{target_class_name.downcase}:*:#{index_name}"
+            # Find all indexes this object appears in
+            pattern = "#{target_class_name.downcase}:*:#{index_name}"
 
-              dbclient.scan_each(match: pattern) do |key|
-                pipeline.hdel(key, field_value.to_s)
-              end
+            dbclient.scan_each(match: pattern) do |key|
+              pipeline.hdel(key, field_value.to_s)
             end
           end
 
@@ -307,14 +298,10 @@ module Familia
 
               field_value = send(field) if respond_to?(field)
               if field_value
-                if target_class_name == 'global'
-                  index_key = "global:#{index_name}"
-                  affected_keys << index_key if dbclient.hexists(index_key, field_value.to_s)
-                else
-                  pattern = "#{target_class_name.downcase}:*:#{index_name}"
-                  dbclient.scan_each(match: pattern) do |key|
-                    affected_keys << key if dbclient.hexists(key, field_value.to_s)
-                  end
+
+                pattern = "#{target_class_name.downcase}:*:#{index_name}"
+                dbclient.scan_each(match: pattern) do |key|
+                  affected_keys << key if dbclient.hexists(key, field_value.to_s)
                 end
               end
             end

@@ -64,7 +64,6 @@ module Familia
     #
     #   # Indexing methods
     #   Customer.find_by_display_name(name) # O(1) lookup
-    #   Domain.find_by_display_name(name) # Global lookup
     #
     #   # Bidirectional methods (collision-free naming)
     #   domain.add_to_customer_domains(customer)  # Specific collection
