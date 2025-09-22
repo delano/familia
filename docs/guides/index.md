@@ -9,25 +9,27 @@ Welcome to the comprehensive documentation for Familia v2.0. This guide collecti
 
 ## 📚 Guide Structure
 
-### 🔐 Security & Data Protection
-
-1. **[Encrypted Fields](feature-encrypted-fields.md)** - Persistent encrypted storage with modular providers
-2. **[Transient Fields](feature-transient-fields.md)** - Non-persistent secure data handling with RedactedString
-3. **[Security Model](security-model.md)** - Cryptographic design and Ruby memory considerations
-
 ### 🏗️ Architecture & System Design
 
 4. **[Feature System](feature-system.md)** - Modular architecture with dependencies and autoloader patterns
 5. **[Feature System for Developers](feature-system-devs.md)** - Advanced feature development patterns
+3. **[Security Model](security-model.md)** - Cryptographic design and Ruby memory considerations
 6. **[Connection Pooling](config-connection-pooling.md)** - Provider pattern for efficient Redis/Valkey pooling
 7. **[Core Field System](core-field-system.md)** - Field definitions and data type mappings
+
+
+### 🔐 Special Field Types
+
+1. **[Encrypted Fields](feature-encrypted-fields.md)** - Persistent encrypted storage with modular providers
+2. **[Transient Fields](feature-transient-fields.md)** - Non-persistent secure data handling with RedactedString
+10. **[Object Identifiers](feature-object-identifiers.md)** - Automatic ID generation with configurable strategies _(new!)_
+11. **[External Identifiers](feature-external-identifiers.md)** - Integration with external systems and legacy data _(new!)_
+
 
 ### 🔗 Object Relationships & Identifiers
 
 8. **[Relationships](feature-relationships.md)** - Object relationships and membership system
 9. **[Relationship Methods](feature-relationships-methods.md)** - Detailed method reference for relationships
-10. **[Object Identifiers](feature-object-identifiers.md)** - Automatic ID generation with configurable strategies _(new!)_
-11. **[External Identifiers](feature-external-identifiers.md)** - Integration with external systems and legacy data _(new!)_
 
 ### ⏱️ Time & Analytics Features
 
