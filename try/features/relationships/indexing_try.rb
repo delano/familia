@@ -47,8 +47,8 @@ class ::TestEmployee < Familia::Horreum
   field :manager_id
 
   # Context-based indexing
-  indexed_by :department, :dept_index, context: TestCompany
-  indexed_by :email, :email_index, context: TestCompany, finder: false
+  indexed_by :department, :dept_index, target: TestCompany
+  indexed_by :email, :email_index, target: TestCompany, finder: false
 end
 
 # Setup
@@ -79,7 +79,7 @@ found_emp = @company.find_by_department(@emp2.department)
 
 ## First indexing relationship has correct configuration
 config = @user1.class.indexing_relationships.first
-[config[:field], config[:index_name], config[:context_class] == TestUser, config[:finder]]
+[config[:field], config[:index_name], config[:target_class] == TestUser, config[:finder]]
 #=> [:email, :email_lookup, true, true]
 
 ## Second indexing relationship has finder disabled
@@ -177,7 +177,7 @@ TestUser.respond_to?(:find_by_username)
 
 ## Context-scoped relationship has correct configuration
 config = @emp1.class.indexing_relationships.first
-[config[:field], config[:index_name], config[:context_class], config[:context_class_name]]
+[config[:field], config[:index_name], config[:target_class], config[:target_class_name]]
 #=> [:department, :dept_index, TestCompany, "TestCompany"]
 
 ## Context-scoped methods are generated with collision-free naming

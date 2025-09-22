@@ -29,7 +29,7 @@ class CategoricalTestDocument < Familia::Horreum
   permission_tracking :user_permissions
 
   # Track in customer collections with permission scores
-  tracked_in CategoricalTestCustomer, :documents, score: :created_at
+  participates_in CategoricalTestCustomer, :documents, score: :created_at
 
   def permission_bits
     @permission_bits || 1  # Default to read-only
@@ -472,7 +472,7 @@ end
 end
 #=> 100
 
-## Stage 1: Redis pre-filtering is O(log N + M) efficient
+## Stage 1: Valkey/Redis pre-filtering is O(log N + M) efficient
 @start_time = Familia.now
 @large_accessible = @perf_test_doc.accessible_items(@large_collection)
 @stage1_time = Familia.now - @start_time

@@ -270,7 +270,7 @@ module Familia
                   end
 
       # Return nil for unpopulated identifiers (like unsaved ActiveRecord objects)
-      # Only raise errors when the identifier is actually needed for Redis operations
+      # Only raise errors when the identifier is actually needed for db operations
       return nil if unique_id.nil? || unique_id.to_s.empty?
 
       unique_id

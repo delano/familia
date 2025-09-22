@@ -247,7 +247,7 @@ it "encrypts sensitive fields", :encryption do
   user = User.create(favorite_snack: "leftover pizza")
 
   # Verify encryption in Redis
-  raw_value = redis.hget(user.rediskey, "favorite_snack")
+  raw_value = redis.hget(user.dbkey, "favorite_snack")
   expect(raw_value).not_to include("leftover pizza")
   expect(JSON.parse(raw_value)).to have_key("ciphertext")
 end

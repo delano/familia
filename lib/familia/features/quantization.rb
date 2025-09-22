@@ -251,12 +251,12 @@ module Familia
 
       def self.included(base)
         Familia.trace :LOADED, self, base, caller(1..1) if Familia.debug?
-        base.extend ClassMethods
+        base.extend ModelClassMethods
       end
 
-      # Familia::Quantization::ClassMethods
+      # Familia::Quantization::ModelClassMethods
       #
-      module ClassMethods
+      module ModelClassMethods
         # Generates a quantized timestamp based on the given parameters
         #
         # This method rounds the current time to the nearest quantum and optionally
@@ -395,7 +395,6 @@ module Familia
         "#{base_id}#{separator}#{timestamp}"
       end
 
-      extend ClassMethods
     end
   end
 end

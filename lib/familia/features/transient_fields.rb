@@ -108,13 +108,13 @@ module Familia
 
       def self.included(base)
         Familia.trace :LOADED, self, base, caller(1..1) if Familia.debug?
-        base.extend ClassMethods
+        base.extend ModelClassMethods
 
         # Initialize transient fields tracking
         base.instance_variable_set(:@transient_fields, []) unless base.instance_variable_defined?(:@transient_fields)
       end
 
-      module ClassMethods
+      module ModelClassMethods
         # Define a transient field that automatically wraps values in RedactedString
         #
         # Transient fields are not persisted to Redis/Valkey and exist only in memory.

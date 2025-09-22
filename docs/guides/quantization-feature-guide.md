@@ -145,7 +145,7 @@ class UserActivity < Familia::Horreum
     bucket.user_count ||= 0
     bucket.event_count ||= 0
 
-    # Use Redis sets/hashes for precise counting
+    # Use Valkey/Redis sets/hashes for precise counting
     bucket_users = bucket.related_set("users")
     bucket_users.add(user_id)
 
@@ -526,7 +526,7 @@ class CompactTimeSeriesStorage < Familia::Horreum
   identifier_field :series_id
   field :series_id, :metric_name, :quantum
 
-  # Store quantized data in Redis sorted sets for efficiency
+  # Store quantized data in Valkey/Redis sorted sets for efficiency
   def record_value(value, time = nil)
     bucket_timestamp = self.class.qstamp(quantum, time: time)
 

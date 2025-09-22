@@ -3,19 +3,19 @@
 module Familia
   module Features
     module Relationships
-      # Querying module for advanced Redis set operations on relationship collections
+      # Querying module for advanced Valkey/Redis set operations on relationship collections
       # Provides union, intersection, difference operations with permission filtering
       module Querying
         # Class-level querying capabilities
         def self.included(base)
-          base.extend ClassMethods
-          base.include InstanceMethods
+          base.extend ModelClassMethods
+          base.include ModelInstanceMethods
           super
         end
 
-        # Querying::ClassMethods
+        # Querying::ModelClassMethods
         #
-        module ClassMethods
+        module ModelClassMethods
           # Union of multiple collections (accessible items across multiple sources)
           #
           # @param collections [Array<Hash>] Collection configurations
@@ -256,7 +256,7 @@ module Familia
 
           private
 
-          # Build Redis key for a collection
+          # Build Valkey/Redis key for a collection
           def build_collection_key(collection)
             if collection[:owner]
               owner = collection[:owner]
@@ -269,7 +269,7 @@ module Familia
             end
           end
 
-          # Build Redis keys for multiple collections
+          # Build Valkey/Redis keys for multiple collections
           def build_collection_keys(collections)
             collections.map { |collection| build_collection_key(collection) }
           end
@@ -377,7 +377,7 @@ module Familia
         end
 
         # Instance methods for querying relationships
-        module InstanceMethods
+        module ModelInstanceMethods
           # Find all collections this object appears in with specific permissions
           #
           # @param min_permission [Symbol] Minimum required permission
@@ -481,10 +481,10 @@ module Familia
             collections = []
 
             self.class.tracking_relationships.each do |config|
-              context_class_name = config[:context_class_name]
+              target_class_name = config[:target_class_name]
               collection_name = config[:collection_name]
 
-              pattern = "#{context_class_name.downcase}:*:#{collection_name}"
+              pattern = "#{target_class_name.downcase}:*:#{collection_name}"
 
               dbclient.scan_each(match: pattern) do |key|
                 score = dbclient.zscore(key, identifier)
@@ -506,11 +506,11 @@ module Familia
                   end
                 end
 
-                context_id = key.split(':')[1]
+                target_id = key.split(':')[1]
                 collections << {
                   type: :tracking,
-                  context_class: context_class_name,
-                  context_id: context_id,
+                  target_class: target_class_name,
+                  target_id: target_id,
                   collection_name: collection_name,
                   key: key,
                   score: score,

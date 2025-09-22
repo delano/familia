@@ -15,36 +15,24 @@ module Familia
 
         # Class-level cascade configurations
         def self.included(base)
-          base.extend ClassMethods
-          base.include InstanceMethods
+          base.extend ModelClassMethods
+          base.include ModelInstanceMethods
           super
         end
 
-        # Cascading::ClassMethods
+        # Cascading::ModelClassMethods
         #
-        module ClassMethods
+        module ModelClassMethods
           # Get cascade strategies for all relationships
           def cascade_strategies
             strategies = {}
 
-            # Collect strategies from tracking relationships
-            if respond_to?(:tracking_relationships)
-              tracking_relationships.each do |config|
-                key = "#{config[:context_class_name]}.#{config[:collection_name]}"
+            # Collect strategies from participation relationships
+            if respond_to?(:participation_relationships)
+              participation_relationships.each do |config|
+                key = "#{config[:target_class_name]}.#{config[:collection_name]}"
                 strategies[key] = {
-                  type: :tracking,
-                  strategy: config[:on_destroy] || :remove,
-                  config: config,
-                }
-              end
-            end
-
-            # Collect strategies from membership relationships
-            if respond_to?(:membership_relationships)
-              membership_relationships.each do |config|
-                key = "#{config[:owner_class_name]}.#{config[:collection_name]}"
-                strategies[key] = {
-                  type: :membership,
+                  type: :participation,
                   strategy: config[:on_destroy] || :remove,
                   config: config,
                 }
@@ -54,11 +42,7 @@ module Familia
             # Collect strategies from indexing relationships
             if respond_to?(:indexing_relationships)
               indexing_relationships.each do |config|
-                key = if config[:context_class_name] == 'global'
-                        "global.#{config[:index_name]}"
-                      else
-                        "#{config[:context_class_name]}.#{config[:index_name]}"
-                      end
+                key = "#{config[:target_class_name]}.#{config[:index_name]}"
                 strategies[key] = {
                   type: :indexing,
                   strategy: :remove, # Indexes should always be cleaned up
@@ -72,7 +56,7 @@ module Familia
         end
 
         # Instance methods for cascade operations
-        module InstanceMethods
+        module ModelInstanceMethods
           # Execute cascade operations during destroy
           def execute_cascade_operations
             strategies = self.class.cascade_strategies
@@ -143,10 +127,8 @@ module Familia
             dbclient.pipelined do |pipeline|
               remove_operations.each do |operation|
                 case operation[:type]
-                when :tracking
-                  remove_from_tracking_collections(pipeline, operation[:config])
-                when :membership
-                  remove_from_membership_collections(pipeline, operation[:config])
+                when :participation
+                  remove_from_participation_collections(pipeline, operation[:config])
                 when :indexing
                   remove_from_indexing_collections(pipeline, operation[:config])
                 end
@@ -154,59 +136,33 @@ module Familia
             end
           end
 
-          # Remove from tracking collections
-          def remove_from_tracking_collections(pipeline, config)
-            context_class_name = config[:context_class_name]
+          # Remove from participation collections
+          def remove_from_participation_collections(pipeline, config)
+            target_class_name = config[:target_class_name]
             collection_name = config[:collection_name]
 
-            # Find all collections this object is tracked in
-            pattern = "#{context_class_name.downcase}:*:#{collection_name}"
+            # Find all collections this object is participating in
+            pattern = "#{target_class_name.downcase}:*:#{collection_name}"
 
             dbclient.scan_each(match: pattern) do |key|
               pipeline.zrem(key, identifier)
             end
           end
 
-          # Remove from membership collections
-          def remove_from_membership_collections(pipeline, config)
-            owner_class_name = config[:owner_class_name]
-            collection_name = config[:collection_name]
-            type = config[:type]
-
-            # Find all collections this object is a member of
-            pattern = "#{owner_class_name.downcase}:*:#{collection_name}"
-
-            dbclient.scan_each(match: pattern) do |key|
-              case type
-              when :sorted_set
-                pipeline.zrem(key, identifier)
-              when :set
-                pipeline.srem(key, identifier)
-              when :list
-                pipeline.lrem(key, 0, identifier)
-              end
-            end
-          end
-
           # Remove from indexing collections
           def remove_from_indexing_collections(pipeline, config)
-            context_class_name = config[:context_class_name]
+            target_class_name = config[:target_class_name]
             index_name = config[:index_name]
             field = config[:field]
 
             field_value = send(field) if respond_to?(field)
             return unless field_value
 
-            if context_class_name == 'global'
-              index_key = "global:#{index_name}"
-              pipeline.hdel(index_key, field_value.to_s)
-            else
-              # Find all indexes this object appears in
-              pattern = "#{context_class_name.downcase}:*:#{index_name}"
+            # Find all indexes this object appears in
+            pattern = "#{target_class_name.downcase}:*:#{index_name}"
 
-              dbclient.scan_each(match: pattern) do |key|
-                pipeline.hdel(key, field_value.to_s)
-              end
+            dbclient.scan_each(match: pattern) do |key|
+              pipeline.hdel(key, field_value.to_s)
             end
           end
 
@@ -214,62 +170,33 @@ module Familia
           def execute_cascade_operations_recursive(cascade_operations)
             cascade_operations.each do |operation|
               case operation[:type]
-              when :tracking
-                cascade_tracking_dependents(operation[:config])
-              when :membership
-                cascade_membership_dependents(operation[:config])
+              when :participation
+                cascade_participation_dependents(operation[:config])
+              when :indexing
+                raise NotImplementedError, 'Indexing cascade operation not implemented'
               end
             end
           end
 
-          # Cascade destroy for tracking relationships
-          def cascade_tracking_dependents(config)
+          # Cascade destroy for participation relationships
+          def cascade_participation_dependents(config)
             # This is a complex operation that depends on the specific business logic
             # For now, we'll provide a framework that can be customized
 
-            context_class_name = config[:context_class_name]
+            target_class_name = config[:target_class_name]
             collection_name = config[:collection_name]
 
             # Find all contexts that track this object
-            pattern = "#{context_class_name.downcase}:*:#{collection_name}"
+            pattern = "#{target_class_name.downcase}:*:#{collection_name}"
 
             dbclient.scan_each(match: pattern) do |key|
               # Check if this object is the only member
               if dbclient.zcard(key) == 1 && dbclient.zscore(key, identifier)
-                context_id = key.split(':')[1]
+                target_id = key.split(':')[1]
 
                 # Optionally destroy the context if it becomes empty
                 # This is application-specific logic
-                trigger_cascade_callback(:tracking, context_class_name, context_id, collection_name)
-              end
-            end
-          end
-
-          # Cascade destroy for membership relationships
-          def cascade_membership_dependents(config)
-            # Similar to tracking, this depends on business logic
-
-            owner_class_name = config[:owner_class_name]
-            collection_name = config[:collection_name]
-            type = config[:type]
-
-            # Find all owners that contain this object
-            pattern = "#{owner_class_name.downcase}:*:#{collection_name}"
-
-            dbclient.scan_each(match: pattern) do |key|
-              # Check if this object exists in the collection
-              is_member = case type
-                          when :sorted_set
-                            dbclient.zscore(key, identifier) != nil
-                          when :set
-                            dbclient.sismember(key, identifier)
-                          when :list
-                            dbclient.lpos(key, identifier) != nil
-                          end
-
-              if is_member
-                owner_id = key.split(':')[1]
-                trigger_cascade_callback(:membership, owner_class_name, owner_id, collection_name)
+                trigger_cascade_callback(:participation, target_class_name, target_id, collection_name)
               end
             end
           end
@@ -291,47 +218,19 @@ module Familia
             targets = []
 
             case strategy_info[:type]
-            when :tracking
+            when :participation
               config = strategy_info[:config]
-              context_class_name = config[:context_class_name]
+              target_class_name = config[:target_class_name]
               collection_name = config[:collection_name]
 
-              pattern = "#{context_class_name.downcase}:*:#{collection_name}"
+              pattern = "#{target_class_name.downcase}:*:#{collection_name}"
               dbclient.scan_each(match: pattern) do |key|
                 if dbclient.zscore(key, identifier)
-                  context_id = key.split(':')[1]
+                  target_id = key.split(':')[1]
                   targets << {
                     type: :context,
-                    class: context_class_name,
-                    id: context_id,
-                    collection: collection_name,
-                  }
-                end
-              end
-
-            when :membership
-              config = strategy_info[:config]
-              owner_class_name = config[:owner_class_name]
-              collection_name = config[:collection_name]
-              type = config[:type]
-
-              pattern = "#{owner_class_name.downcase}:*:#{collection_name}"
-              dbclient.scan_each(match: pattern) do |key|
-                is_member = case type
-                            when :sorted_set
-                              dbclient.zscore(key, identifier) != nil
-                            when :set
-                              dbclient.sismember(key, identifier)
-                            when :list
-                              dbclient.lpos(key, identifier) != nil
-                            end
-
-                if is_member
-                  owner_id = key.split(':')[1]
-                  targets << {
-                    type: :owner,
-                    class: owner_class_name,
-                    id: owner_id,
+                    class: target_class_name,
+                    id: target_id,
                     collection: collection_name,
                   }
                 end
@@ -376,56 +275,33 @@ module Familia
             preview
           end
 
-          # Find all Redis keys that would be affected by removing this object
+          # Find all Valkey/Redis keys that would be affected by removing this object
           def find_affected_keys(strategy_info)
             affected_keys = []
 
             case strategy_info[:type]
-            when :tracking
+            when :participation
               config = strategy_info[:config]
-              context_class_name = config[:context_class_name]
+              target_class_name = config[:target_class_name]
               collection_name = config[:collection_name]
-              pattern = "#{context_class_name.downcase}:*:#{collection_name}"
+              pattern = "#{target_class_name.downcase}:*:#{collection_name}"
 
               dbclient.scan_each(match: pattern) do |key|
                 affected_keys << key if dbclient.zscore(key, identifier)
               end
 
-            when :membership
-              config = strategy_info[:config]
-              owner_class_name = config[:owner_class_name]
-              collection_name = config[:collection_name]
-              type = config[:type]
-              pattern = "#{owner_class_name.downcase}:*:#{collection_name}"
-
-              dbclient.scan_each(match: pattern) do |key|
-                is_member = case type
-                            when :sorted_set
-                              dbclient.zscore(key, identifier) != nil
-                            when :set
-                              dbclient.sismember(key, identifier)
-                            when :list
-                              dbclient.lpos(key, identifier) != nil
-                            end
-                affected_keys << key if is_member
-              end
-
             when :indexing
               config = strategy_info[:config]
-              context_class_name = config[:context_class_name]
+              target_class_name = config[:target_class_name]
               index_name = config[:index_name]
               field = config[:field]
 
               field_value = send(field) if respond_to?(field)
               if field_value
-                if context_class_name == 'global'
-                  index_key = "global:#{index_name}"
-                  affected_keys << index_key if dbclient.hexists(index_key, field_value.to_s)
-                else
-                  pattern = "#{context_class_name.downcase}:*:#{index_name}"
-                  dbclient.scan_each(match: pattern) do |key|
-                    affected_keys << key if dbclient.hexists(key, field_value.to_s)
-                  end
+
+                pattern = "#{target_class_name.downcase}:*:#{index_name}"
+                dbclient.scan_each(match: pattern) do |key|
+                  affected_keys << key if dbclient.hexists(key, field_value.to_s)
                 end
               end
             end

@@ -132,7 +132,7 @@ class Customer < Familia::Horreum
 
   # Automatic indexing and tracking
   class_indexed_by :email, :email_lookup
-  class_tracked_in :all_customers, score: :created_at
+  class_participates_in :all_customers, score: :created_at
 end
 
 class Domain < Familia::Horreum
@@ -147,7 +147,7 @@ end
 
 # Clean, Ruby-like syntax
 customer = Customer.new(custid: "cust123", email: "admin@acme.com")
-customer.save  # Automatically indexed and tracked
+customer.save  # Automatically indexed and participating
 
 domain = Domain.new(domain_id: "dom456", name: "acme.com")
 customer.domains << domain  # Clean collection syntax
@@ -164,7 +164,7 @@ Familia provides three types of relationships with automatic management:
 
 - **`member_of`** - Bidirectional membership with clean `<<` operator support
 - **`indexed_by`** - O(1) hash-based field lookups (class-level or relationship-scoped)
-- **`tracked_in`** - Scored collections for rankings, time-series, and analytics
+- **`participates_in`** - Scored collections for rankings, time-series, and analytics
 
 All relationships support automatic indexing and tracking - objects are automatically added to class-level collections when saved, with no manual management required.
 

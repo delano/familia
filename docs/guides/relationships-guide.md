@@ -10,7 +10,7 @@ The Relationships feature provides a sophisticated system for managing object re
 
 The Familia v2.0 relationships system provides three distinct relationship patterns:
 
-1. **`tracked_in`** - Multi-presence tracking with score encoding (sorted sets)
+1. **`participates_in`** - Multi-presence tracking with score encoding (sorted sets)
 2. **`indexed_by`** - O(1) hash-based lookups by field values
 3. **`member_of`** - Bidirectional membership with collision-free naming
 
@@ -32,7 +32,7 @@ class Customer < Familia::Horreum
   sorted_set :activity   # Activity feed with timestamps
 
   # Class-level relationship collections (automatically managed)
-  class_tracked_in :all_customers, score: :created_at
+  class_participates_in :all_customers, score: :created_at
   class_indexed_by :email, :email_lookup
 end
 
@@ -47,11 +47,11 @@ class Domain < Familia::Horreum
 end
 ```
 
-## Tracked In Relationships
+## Participating In Relationships
 
-### Basic Tracking
+### Basic Participation
 
-The `tracked_in` relationship creates collections that track object membership with sophisticated scoring:
+The `participates_in` relationship creates collections that track object membership with sophisticated scoring:
 
 ```ruby
 class User < Familia::Horreum
@@ -61,13 +61,13 @@ class User < Familia::Horreum
   field :user_id, :name, :score_value
 
   # Simple sorted set tracking
-  class_tracked_in :leaderboard, score: :score_value
+  class_participates_in :leaderboard, score: :score_value
 
   # Time-based tracking with automatic timestamps
-  class_tracked_in :activity_log, score: :created_at
+  class_participates_in :activity_log, score: :created_at
 
   # Proc-based scoring for complex calculations
-  class_tracked_in :performance_metrics, score: -> { (score_value || 0) * 2 }
+  class_participates_in :performance_metrics, score: -> { (score_value || 0) * 2 }
 end
 
 # Usage
@@ -96,7 +96,7 @@ class Document < Familia::Horreum
   field :doc_id, :title, :content
 
   # Permission-based tracking with 8-bit encoding
-  class_tracked_in :authorized_users, score: :encode_permissions
+  class_participates_in :authorized_users, score: :encode_permissions
 
   private
 
@@ -198,7 +198,7 @@ class User < Familia::Horreum
   class_indexed_by :username, :username_index
 
   # Scoped indexes for values unique within a context
-  indexed_by :department, :department_index, context: Organization
+  indexed_by :department, :department_index, target: Organization
 end
 
 # Usage for Global Context
@@ -224,7 +224,7 @@ organization = Organization.new(org_id: 'acme_corp')
 organization.find_by_department('engineering')        # Find user by department within this org
 ```
 
-### Context Parameter Usage Patterns
+### Target Parameter Usage Patterns
 
 Understanding when to use global vs class context:
 
@@ -238,7 +238,7 @@ class Product < Familia::Horreum
   class_indexed_by :sku, :sku_index
 
   # Class context: Categories are unique per brand
-  indexed_by :category, :category_index, context: Brand
+  indexed_by :category, :category_index, target: Brand
 end
 
 class Brand < Familia::Horreum
@@ -261,20 +261,15 @@ brand = Brand.new(brand_id: 'apple', name: 'Apple Inc.')
 brand.find_by_category('laptops')         # Find products in this brand's laptop category
 ```
 
-### Context Parameter Reference
+### Target Parameter Reference
 
 The `context` parameter is a **required** architectural decision that determines index scope:
 
-| Context Type | Usage | Redis Key Pattern | When to Use |
+| Context Type | Usage | Valkey/Redis Key Pattern | When to Use |
 |--------------|--------|------------------|-------------|
-| `:global` | `context: :global` | `class_name:index_name` | Field values unique system-wide (emails, usernames, API keys) |
 | Class | `context: SomeClass` | `someclass:instance_id:index_name:field_value` | Field values unique within parent object scope (project names per team) |
 
 #### Generated Methods
-
-**Global Context** (`context: :global`):
-- **Instance methods**: `object.add_to_global_index_name`, `object.remove_from_global_index_name`
-- **Class methods**: `Class.index_name` (returns hash), `Class.find_by_field`
 
 **Class Context** (`context: Customer`):
 - **Instance methods**: `object.add_to_customer_index_name(customer)`, `object.remove_from_customer_index_name(customer)`
@@ -288,7 +283,7 @@ indexed_by :email_lookup, field: :email
 
 # ✅ New correct syntax
 class_indexed_by :email, :email_lookup                  # Global scope
-indexed_by :email, :customer_lookup, context: Customer   # Scoped per customer
+indexed_by :email, :customer_lookup, target: Customer   # Scoped per customer
 ```
 
 ## Member Of Relationships
@@ -442,7 +437,7 @@ end
 class OptimizedQueries
   # Batch membership checks
   def check_multiple_memberships(user_ids, customer)
-    # Single Redis call instead of multiple
+    # Single Valkey/Redis call instead of multiple
     Customer.users.pipeline do |pipe|
       user_ids.each { |uid| pipe.sismember(customer.users.key, uid) }
     end
@@ -493,7 +488,7 @@ class User < Familia::Horreum
 
   # Multi-tenant membership
   member_of Organization, :members, type: :set
-  class_tracked_in :global_activity, score: :created_at
+  class_participates_in :global_activity, score: :created_at
   class_indexed_by :email, :email_lookup
 end
 
@@ -504,7 +499,7 @@ class Project < Familia::Horreum
   field :project_id, :name, :status
 
   member_of Organization, :projects, type: :set
-  class_tracked_in :status_timeline,
+  class_participates_in :status_timeline,
     score: ->(proj) { "#{Familia.now.to_i}.#{proj.status.hash}" }
 end
 
@@ -592,7 +587,7 @@ RSpec.describe "Relationships Feature" do
   let(:domain) { Domain.new(domain_id: 'dom456', name: 'acme.com') }
   let(:user) { User.new(user_id: 'user789', email: 'john@acme.com') }
 
-  describe "tracked_in relationships" do
+  describe "participates_in relationships" do
     it "tracks objects with score encoding" do
       User.add_to_leaderboard(user)
       score = User.leaderboard.score(user.identifier)
@@ -691,7 +686,7 @@ end
 ### Relationship Design
 
 1. **Choose the Right Type**:
-   - Use `tracked_in` for activity feeds, leaderboards, time-series data
+   - Use `participates_in` for activity feeds, leaderboards, time-series data
    - Use `indexed_by` for fast lookups by field values
    - Use `member_of` for bidirectional ownership/membership
 
@@ -702,14 +697,14 @@ end
 
 3. **Performance Optimization**:
    - Batch operations when possible using pipelines
-   - Use appropriate Redis data types for your access patterns
+   - Use appropriate Valkey/Redis data types for your access patterns
    - Index only frequently-queried fields
 
 ### Memory and Storage
 
 1. **Efficient Bit Encoding**:
    - 8 bits can encode 256 permission combinations
-   - Single Redis sorted set score contains time + permissions
+   - Single Valkey/Redis sorted set score contains time + permissions
    - Reduces memory vs. separate permission records
 
 2. **Key Design**:

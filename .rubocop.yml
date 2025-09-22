@@ -28,11 +28,8 @@ AllCops:
   MaxFilesInCache: 100
   TargetRubyVersion: 3.4
   Exclude:
-    - "migrate/**/*.rb"
-    - "migrate/*.rb"
     - "try/**/*"
     - "try/*.rb"
-    - "vendor/**/*"
 
 #
 # Trailing commas
@@ -101,4 +98,7 @@ Style/FrozenStringLiteralComment:
   Enabled: false
 
 Naming/MemoizedInstanceVariableName:
+  Enabled: false
+
+ThreadSafety/ClassInstanceVariable:
   Enabled: false

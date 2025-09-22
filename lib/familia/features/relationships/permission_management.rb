@@ -20,12 +20,12 @@ module Familia
       #   doc.permissions_for(user)  #=> [:read]
       module PermissionManagement
         def self.included(base)
-          base.extend(ClassMethods)
+          base.extend(ModelClassMethods)
         end
 
-        # Relationships::ClassMethods
+        # Relationships::ModelClassMethods
         #
-        module ClassMethods
+        module ModelClassMethods
           # Enable permission tracking for this class
           #
           # @param field_name [Symbol] Name of the hash field to store permissions
@@ -175,7 +175,7 @@ module Familia
 
             # === Two-Stage Filtering Methods ===
 
-            # Stage 1: Redis pre-filtering via zset membership
+            # Stage 1: Valkey/Redis pre-filtering via zset membership
             define_method :accessible_items do |collection_key|
               self.class.dbclient.zrange(collection_key, 0, -1, with_scores: true)
             end

@@ -46,7 +46,7 @@ module Familia
       include Familia::Settings
       include Familia::Horreum::RelatedFieldsManagement # Provides DataType field methods
 
-      using Familia::Refinements::SnakeCase
+      using Familia::Refinements::StylizeWords
 
       # Sets or retrieves the unique identifier field for the class.
       #
@@ -77,7 +77,7 @@ module Familia
       #
       # This method defines a new field for the class, creating getter and setter
       # instance methods similar to `attr_accessor`. It also generates a fast
-      # writer method for immediate persistence to Redis.
+      # writer method for immediate persistence to the database.
       #
       # @param name [Symbol, String] the name of the field to define. If a method
       #   with the same name already exists, an error is raised.
@@ -117,7 +117,7 @@ module Familia
         register_field_type(field_type)
       end
 
-      # Sets or retrieves the suffix for generating Redis keys.
+      # Sets or retrieves the suffix for generating Valkey/Redis keys.
       #
       # @param a [String, Symbol, nil] the suffix to set (optional).
       # @param blk [Proc] a block that returns the suffix (optional).
@@ -128,7 +128,7 @@ module Familia
         @suffix || Familia.default_suffix
       end
 
-      # Sets or retrieves the prefix for generating Redis keys.
+      # Sets or retrieves the prefix for generating Valkey/Redis keys.
       #
       # @param a [String, Symbol, nil] the prefix to set (optional).
       # @return [String, Symbol] the current prefix.
@@ -393,20 +393,20 @@ module Familia
         handle_method_conflict(fast_method_name, on_conflict) do
           # Fast attribute accessor method for the '#{field_name}' attribute.
           # This method provides immediate read and write access to the attribute
-          # in Redis.
+          # in the database.
           #
           # When called without arguments, it retrieves the current value of the
-          # attribute from Redis.
+          # attribute from the database.
           # When called with an argument, it immediately persists the new value to
-          # Redis.
+          # the database.
           #
           # @overload #{method_name}
-          #   Retrieves the current value of the attribute from Redis.
+          #   Retrieves the current value of the attribute from the database.
           #   @return [Object] the current value of the attribute.
           #
           # @overload #{method_name}(value)
           #   Sets and immediately persists the new value of the attribute to
-          #   Redis.
+          #   the database.
           #   @param value [Object] the new value to set for the attribute.
           #   @return [Object] the newly set value.
           #
@@ -415,7 +415,7 @@ module Familia
           #   the method.
           #
           # @note This method bypasses any object-level caching and interacts
-          #   directly with Redis. It does not trigger updates to other attributes
+          #   directly with the database. It does not trigger updates to other attributes
           #   or the object's expiration time.
           #
           # @example

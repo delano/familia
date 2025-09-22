@@ -9,7 +9,7 @@ module Familia
 
       def self.included(base)
         Familia.trace :LOADED, self, base, caller(1..1) if Familia.debug?
-        base.extend ClassMethods
+        base.extend ModelClassMethods
 
         # Ensure default prefix is set in feature options
         base.add_feature_options(:external_identifier, prefix: 'ext')
@@ -129,9 +129,9 @@ module Familia
         end
       end
 
-      # ExternalIdentifier::ClassMethods
+      # ExternalIdentifier::ModelClassMethods
       #
-      module ClassMethods
+      module ModelClassMethods
         # Find an object by its external identifier
         #
         # @param extid [String] The external identifier to search for

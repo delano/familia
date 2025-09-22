@@ -1,4 +1,4 @@
-# Validation testing for Redis command recording and expectation matching
+# Validation testing for Valkey/Redis command recording and expectation matching
 
 require_relative '../helpers/test_helpers'
 require_relative '../../lib/familia/validation'
@@ -17,7 +17,7 @@ extend Familia::Validation::TestHelpers
 # Initialize validation framework
 setup_validation_test
 
-## Command recorder captures basic Redis commands
+## Command recorder captures basic Valkey/Redis commands
 Familia::Validation::CommandRecorder.start_recording
 ValidationTestModel.new(id: "test1", name: "John").save
 commands = Familia::Validation::CommandRecorder.stop_recording

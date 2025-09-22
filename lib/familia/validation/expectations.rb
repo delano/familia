@@ -2,7 +2,7 @@
 
 module Familia
   module Validation
-    # Fluent DSL for defining expected Redis command sequences with support
+    # Fluent DSL for defining expected Valkey/Redis command sequences with support
     # for transaction and pipeline validation. Provides a readable way to
     # specify expected database operations and verify they execute correctly.
     #
@@ -86,7 +86,7 @@ module Familia
         self
       end
 
-      # Redis command expectations - these can be chained
+      # Valkey/Redis command expectations - these can be chained
       %w[
         get set del exists expire ttl type incr decr
         hget hset hdel hexists hkeys hvals hlen hmget hmset
@@ -153,7 +153,7 @@ module Familia
       end
     end
 
-    # Represents an expected Redis command
+    # Represents an expected Valkey/Redis command
     class CommandExpectation
       attr_reader :command, :args, :options
 

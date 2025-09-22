@@ -126,7 +126,7 @@ module Familia
 
     # The Great Database Refresh-o-matic 3000 for HashKey!
     #
-    # This method performs a complete refresh of the hash's state from Redis.
+    # This method performs a complete refresh of the hash's state from the database.
     # It's like giving your hash a memory transfusion - out with the old state,
     # in with the fresh data straight from Redis!
     #
@@ -134,7 +134,7 @@ module Familia
     #   safely. Any unsaved changes to the hash will be overwritten.
     #
     # @return [void] Returns nothing, but your hash will be sparkling clean
-    #   with all its fields synchronized with Redis.
+    #   with all its fields synchronized with the database.
     #
     # @raise [Familia::KeyNotFoundError] If the dbkey for this hash no
     #   longer exists. Time travelers beware!

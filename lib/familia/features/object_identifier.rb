@@ -60,9 +60,9 @@ module Familia
     # Data Integrity Guarantees:
     #
     # The feature preserves the object identifier passed during initialization,
-    # ensuring that existing objects loaded from Redis maintain their IDs:
+    # ensuring that existing objects loaded from Valkey/Redis maintain their IDs:
     #
-    #   # Loading existing object from Redis preserves ID
+    #   # Loading existing object from Valkey/Redis preserves ID
     #   existing = User.new(objid: 'existing-uuid-value', email: 'existing@example.com')
     #   existing.objid  # => "existing-uuid-value" (preserved, not regenerated)
     #
@@ -71,7 +71,7 @@ module Familia
     # - Lazy Generation: IDs generated only when first accessed
     # - Thread-Safe: Generator strategy configured once during initialization
     # - Memory Efficient: No unnecessary ID generation for unused objects
-    # - Redis Efficient: Only persists non-nil values to conserve memory
+    # - Valkey/Redis Efficient: Only persists non-nil values to conserve memory
     #
     # Security Considerations:
     #
@@ -87,7 +87,7 @@ module Familia
 
       def self.included(base)
         Familia.trace :LOADED, self, base, caller(1..1) if Familia.debug?
-        base.extend ClassMethods
+        base.extend ModelClassMethods
 
         # Ensure default generator is set in feature options
         base.add_feature_options(:object_identifier, generator: DEFAULT_GENERATOR)
@@ -101,7 +101,7 @@ module Familia
       # Object identifier fields automatically generate unique identifiers when first
       # accessed if not already set. The generation strategy is configurable via
       # feature options. These fields preserve any values set during initialization
-      # to ensure data integrity when loading existing objects from Redis.
+      # to ensure data integrity when loading existing objects from the database.
       #
       # The field type tracks the generator used for each objid to provide provenance
       # information for security-sensitive operations like external identifier generation.
@@ -205,7 +205,7 @@ module Familia
         end
       end
 
-      module ClassMethods
+      module ModelClassMethods
         # Generate a new object identifier using the configured strategy
         #
         # @return [String] A new unique identifier

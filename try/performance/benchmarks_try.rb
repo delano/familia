@@ -44,7 +44,7 @@ users.each(&:delete!)
 individual_time > 0
 #=!> StandardError
 
-## Redis type access performance
+## Valkey/Redis type access performance
 user_class = Class.new(Familia::Horreum) do
   identifier_field :email
   field :name

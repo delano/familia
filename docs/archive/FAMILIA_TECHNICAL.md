@@ -16,11 +16,11 @@ class User < Familia::Horreum
   # Basic field definitions
   field :name, :email, :created_at
 
-  # Redis data types as instance variables
-  list :sessions      # Redis list
-  set :tags          # Redis set
-  sorted_set :scores # Redis sorted set
-  hash :settings     # Redis hash
+  # Valkey/Redis data types as instance variables
+  list :sessions      # Valkey/Redis list
+  set :tags          # Valkey/Redis set
+  sorted_set :scores # Valkey/Redis sorted set
+  hash :settings     # Valkey/Redis hash
 end
 ```
 
@@ -29,17 +29,17 @@ end
 - `save_if_not_exists` - Conditional persistence (v2.0.0-pre6)
 - `load` - Load object from Redis
 - `exists?` - Check if object exists in Redis
-- `destroy` - Remove object from Redis
+- `destroy` - Remove object from Valkey/Redis
 
-#### `Familia::DataType` - Redis Data Type Wrapper
-Base class for Redis data type implementations.
+#### `Familia::DataType` - Valkey/Redis Data Type Wrapper
+Base class for Valkey/Redis data type implementations.
 
 **Registered Types:**
-- `String` - Redis strings
-- `List` - Redis lists
-- `UnsortedSet` - Redis sets
-- `SortedSet` - Redis sorted sets
-- `HashKey` - Redis hashes
+- `String` - Valkey/Redis strings
+- `List` - Valkey/Redis lists
+- `UnsortedSet` - Valkey/Redis sets
+- `SortedSet` - Valkey/Redis sorted sets
+- `HashKey` - Valkey/Redis hashes
 - `Counter` - Atomic counters
 - `Lock` - Distributed locks
 
@@ -188,7 +188,7 @@ class Customer < Familia::Horreum
   indexed_by :email_lookup, field: :email
 
   # Global tracking with scoring
-  tracked_in :all_customers, type: :sorted_set, score: :created_at
+  participates_in :all_customers, type: :sorted_set, score: :created_at
 end
 
 class Domain < Familia::Horreum
@@ -201,7 +201,7 @@ class Domain < Familia::Horreum
   member_of Customer, :domains, type: :set
 
   # Conditional tracking with lambda scoring
-  tracked_in :active_domains, type: :sorted_set,
+  participates_in :active_domains, type: :sorted_set,
     score: ->(domain) { domain.status == 'active' ? Familia.now.to_i : 0 }
 end
 ```
@@ -240,7 +240,7 @@ recent = Customer.all_customers.range_by_score(
 Flexible connection pooling with provider-based architecture.
 
 ```ruby
-# Basic Redis connection
+# Basic Valkey/Redis connection
 Familia.configure do |config|
   config.redis_uri = "redis://localhost:6379/0"
 end
@@ -356,11 +356,11 @@ class ActivityTracker < Familia::Horreum
   feature :relationships
 
   # Track user activities with timestamps
-  tracked_in :user_activities, type: :sorted_set,
+  participates_in :user_activities, type: :sorted_set,
     score: ->(activity) { activity.created_at }
 
   # Track by activity type
-  tracked_in :activity_by_type, type: :sorted_set,
+  participates_in :activity_by_type, type: :sorted_set,
     score: ->(activity) { "#{activity.activity_type}:#{activity.created_at}".hash }
 
   field :user_id, :activity_type, :data, :created_at
@@ -383,7 +383,7 @@ login_activities = ActivityTracker.activity_by_type.range_by_score(
 ## Data Type Usage Patterns
 
 ### Advanced Sorted UnsortedSet Operations
-Leverage Redis sorted sets for rankings, time series, and scored data.
+Leverage Valkey/Redis sorted sets for rankings, time series, and scored data.
 
 ```ruby
 class Leaderboard < Familia::Horreum
@@ -414,7 +414,7 @@ leaderboard.scores.increment("player1", 100)  # Add 100 to existing score
 ```
 
 ### List-Based Queues and Feeds
-Use Redis lists for queues, feeds, and ordered data.
+Use Valkey/Redis lists for queues, feeds, and ordered data.
 
 ```ruby
 class TaskQueue < Familia::Horreum
@@ -492,7 +492,7 @@ beta_enabled = prefs.feature_flags.get("beta_ui") == "true"
 ## Error Handling and Validation
 
 ### Connection Error Handling
-Robust error handling for Redis connection issues.
+Robust error handling for Valkey/Redis connection issues.
 
 ```ruby
 class ResilientService < Familia::Horreum
@@ -508,7 +508,7 @@ class ResilientService < Familia::Horreum
         sleep(0.1 * (4 - retries))  # Exponential backoff
         retry
       else
-        Familia.warn "Redis operation failed after retries: #{e.message}"
+        Familia.warn "Valkey/Redis operation failed after retries: #{e.message}"
         nil  # Return nil or handle gracefully
       end
     end
@@ -574,7 +574,7 @@ end
 ## Performance Optimization
 
 ### Batch Operations
-Minimize Redis round trips with batch operations.
+Minimize Valkey/Redis round trips with batch operations.
 
 ```ruby
 # Instead of multiple individual operations
@@ -584,7 +584,7 @@ users = []
   users << user
 end
 
-# Use Redis pipelining for batch saves
+# Use Valkey/Redis pipelining for batch saves
 User.transaction do |redis|
   users.each do |user|
     # All operations batched in transaction
@@ -720,7 +720,7 @@ Common patterns for testing Familia applications.
 # test_helper.rb
 require 'familia'
 
-# Use separate Redis database for tests
+# Use separate Valkey/Redis database for tests
 Familia.configure do |config|
   config.redis_uri = ENV.fetch('REDIS_TEST_URI', 'redis://localhost:6379/15')
 end
@@ -787,7 +787,7 @@ Essential configuration options for Familia v2.0.0-pre.
 
 ```ruby
 Familia.configure do |config|
-  # Basic Redis connection
+  # Basic Valkey/Redis connection
   config.redis_uri = ENV['REDIS_URL'] || 'redis://localhost:6379/0'
 
   # Connection provider for pooling (optional)

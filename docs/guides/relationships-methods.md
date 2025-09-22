@@ -23,13 +23,13 @@ customer.domains << domain  # Clean Ruby-like syntax (equivalent to domain.add_t
 
 The method names follow the pattern: `{action}_to_{lowercase_class_name}_{collection_name}`
 
-## tracked_in Relationships
+## participates_in Relationships
 
-### Class-Level Tracking (class_tracked_in)
+### Class-Level Tracking (class_participates_in)
 When you declare:
 ```ruby
 class Customer < Familia::Horreum
-  class_tracked_in :all_customers, score: :created_at
+  class_participates_in :all_customers, score: :created_at
 end
 ```
 
@@ -42,11 +42,11 @@ end
 - Objects are automatically added to class-level tracking collections when saved
 - No manual calls required for basic tracking
 
-### Relationship Tracking (tracked_in with parent class)
+### Relationship Tracking (participates_in with parent class)
 When you declare:
 ```ruby
 class User < Familia::Horreum
-  tracked_in Team, :active_users, score: :last_seen
+  participates_in Team, :active_users, score: :last_seen
 end
 ```
 
@@ -56,7 +56,7 @@ end
 
 ## indexed_by Relationships
 
-The `indexed_by` method creates Redis hash-based indexes for O(1) field lookups with automatic management.
+The `indexed_by` method creates Valkey/Redis hash-based indexes for O(1) field lookups with automatic management.
 
 ### Class-Level Indexing (class_indexed_by)
 When you declare:
@@ -80,7 +80,7 @@ Redis key pattern: `customer:email_lookup`
 When you declare:
 ```ruby
 class Domain < Familia::Horreum
-  indexed_by :name, :domain_index, context: Customer
+  indexed_by :name, :domain_index, target: Customer
 end
 ```
 
@@ -104,12 +104,12 @@ From the relationships example file, you can see the new clean API in action:
 # Domain declares membership in Customer collections
 class Domain < Familia::Horreum
   member_of Customer, :domains
-  class_tracked_in :active_domains, score: -> { status == 'active' ? Time.now.to_i : 0 }
+  class_participates_in :active_domains, score: -> { status == 'active' ? Time.now.to_i : 0 }
 end
 
 class Customer < Familia::Horreum
   class_indexed_by :email, :email_lookup
-  class_tracked_in :all_customers, score: :created_at
+  class_participates_in :all_customers, score: :created_at
 end
 ```
 
@@ -137,7 +137,7 @@ found_id = Customer.email_lookup.get("admin@acme.com")
 
 The relationship system uses consistent naming patterns:
 - **member_of**: `{add_to|remove_from|in}_#{parent_class.downcase}_#{collection_name}`
-- **class_tracked_in**: `{add_to|remove_from}_#{collection_name}` (class methods)
+- **class_participates_in**: `{add_to|remove_from}_#{collection_name}` (class methods)
 - **class_indexed_by**: `{add_to|remove_from}_class_#{index_name}` (instance methods)
 - **indexed_by with context**: `{add_to|remove_from}_#{context_class.downcase}_#{index_name}` (instance methods)
 
@@ -194,8 +194,8 @@ class Domain < Familia::Horreum
   field :domain_id, :name, :subdomain
 
   # Domains are unique per customer (customer can't have duplicate domain names)
-  indexed_by :name, :domain_index, context: Customer
-  indexed_by :subdomain, :subdomain_index, context: Customer
+  indexed_by :name, :domain_index, target: Customer
+  indexed_by :subdomain, :subdomain_index, target: Customer
 end
 
 # Usage:
@@ -220,8 +220,8 @@ class ApiKey < Familia::Horreum
   class_indexed_by :key_hash, :global_key_lookup
 
   # But key names can be reused across different customers
-  indexed_by :name, :customer_key_lookup, context: Customer
-  indexed_by :scope, :scope_lookup, context: Customer
+  indexed_by :name, :customer_key_lookup, target: Customer
+  indexed_by :scope, :scope_lookup, target: Customer
 end
 
 # Usage examples:
@@ -240,21 +240,21 @@ If you have existing code with old syntax, here's how to update it:
 ```ruby
 # ❌ Old syntax (pre-refactoring)
 indexed_by :email_lookup, field: :email
-indexed_by :email, :email_lookup, context: :global
-tracked_in :global, :all_users, score: :created_at
+indexed_by :email, :email_lookup, target: :global
+participates_in :global, :all_users, score: :created_at
 
 # ✅ New syntax - Class-level scope
 class_indexed_by :email, :email_lookup
-class_tracked_in :all_users, score: :created_at
+class_participates_in :all_users, score: :created_at
 
 # ✅ New syntax - Relationship scope
-indexed_by :email, :customer_email_lookup, context: Customer
-tracked_in Customer, :user_activity, score: :last_seen
+indexed_by :email, :customer_email_lookup, target: Customer
+participates_in Customer, :user_activity, score: :last_seen
 ```
 
 **Key Changes**:
-1. **Class-level relationships**: Use `class_` prefix (`class_tracked_in`, `class_indexed_by`)
-2. **Relationship-scoped**: Use `context:` parameter instead of `:global` symbol
+1. **Class-level relationships**: Use `class_` prefix (`class_participates_in`, `class_indexed_by`)
+2. **Relationship-scoped**: Use `target:` parameter instead of `:global` symbol
 3. **Automatic management**: Objects automatically added to class-level collections on save
 4. **Clean syntax**: Collections support `<<` operator for Ruby-like relationship building
 5. **Simplified storage**: All indexes stored at class level (parent is conceptual only)

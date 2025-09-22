@@ -2,7 +2,7 @@
 
 module Familia
   module Validation
-    # Test helper methods for integrating Redis command validation with
+    # Test helper methods for integrating Valkey/Redis command validation with
     # the tryouts testing framework. Provides easy-to-use assertion methods
     # and automatic setup/cleanup for command validation tests.
     #
@@ -10,10 +10,10 @@ module Familia
     #   require_relative '../validation/validation_helpers'
     #   extend Familia::Validation::TestHelpers
     #
-    #   ## User save should execute expected Redis commands
+    #   ## User save should execute expected Valkey/Redis commands
     #   user = TestUser.new(id: "123", name: "John")
     #
-    #   assert_redis_commands do |expect|
+    #   assert_database_commands do |expect|
     #     expect.hset("testuser:123:object", "name", "John")
     #           .hset("testuser:123:object", "id", "123")
     #
@@ -33,8 +33,8 @@ module Familia
     #   #=> true
     #
     module TestHelpers
-      # Assert that a block executes the expected Redis commands
-      def assert_redis_commands(message = nil, &block)
+      # Assert that a block executes the expected Valkey/Redis commands
+      def assert_database_commands(message = nil, &block)
         validator = Validator.new
         result = validator.validate(&block)
 
@@ -47,7 +47,7 @@ module Familia
         result.valid?
       end
 
-      # Assert that a block executes Redis commands atomically
+      # Assert that a block executes Valkey/Redis commands atomically
       def assert_atomic_operation(message = nil, &block)
         validator = Validator.new(strict_atomicity: true)
 
@@ -87,14 +87,14 @@ module Familia
         result.valid?
       end
 
-      # Assert that no Redis commands were executed
-      def assert_no_redis_commands(&block)
+      # Assert that no Valkey/Redis commands were executed
+      def assert_no_database_commands(&)
         CommandRecorder.start_recording
-        block.call if block_given?
+        yield if block_given?
         commands = CommandRecorder.stop_recording
 
         unless commands.command_count == 0
-          error_msg = "Expected no Redis commands, but #{commands.command_count} were executed:"
+          error_msg = "Expected no Valkey/Redis commands, but #{commands.command_count} were executed:"
           commands.commands.each { |cmd| error_msg += "\n  #{cmd}" }
           raise ValidationError, error_msg
         end
@@ -110,7 +110,7 @@ module Familia
 
         actual_count = commands.command_count
         unless actual_count == expected_count
-          error_msg = "Expected #{expected_count} Redis commands, but #{actual_count} were executed"
+          error_msg = "Expected #{expected_count} Valkey/Redis commands, but #{actual_count} were executed"
           raise ValidationError, error_msg
         end
 
@@ -145,10 +145,10 @@ module Familia
         true
       end
 
-      # Capture and return Redis commands without validation
-      def capture_redis_commands(&block)
+      # Capture and return Valkey/Redis commands without validation
+      def capture_database_commands(&)
         CommandRecorder.start_recording
-        block.call if block_given?
+        yield if block_given?
         CommandRecorder.stop_recording
       end
 
@@ -172,14 +172,14 @@ module Familia
       end
 
       # Assert efficient command usage (no N+1 patterns)
-      def assert_efficient_commands(&block)
+      def assert_efficient_commands(&)
         validator = Validator.new(performance_tracking: true)
-        commands = capture_redis_commands(&block)
+        commands = capture_database_commands(&)
 
         analysis = validator.analyze_performance(commands)
 
         if analysis[:efficiency_score] < 70 # Threshold for acceptable efficiency
-          error_msg = "Inefficient Redis command usage detected (score: #{analysis[:efficiency_score]})"
+          error_msg = "Inefficient Valkey/Redis command usage detected (score: #{analysis[:efficiency_score]})"
 
           if analysis[:potential_n_plus_one].any?
             error_msg += "\nPotential N+1 patterns:"
@@ -271,7 +271,7 @@ module Familia
 
       # Debugging helpers
       def debug_print_commands(command_sequence = nil)
-        commands = command_sequence || capture_redis_commands { yield if block_given? }
+        commands = command_sequence || capture_database_commands { yield if block_given? }
 
         puts "Redis Commands Executed (#{commands.command_count} total):"
         puts "=" * 50
@@ -362,7 +362,7 @@ module Familia
         class_name = obj.class.name.split('::').last.downcase
         identifier = obj.identifier
 
-        assert_redis_commands do |expect|
+        assert_database_commands do |expect|
           if expected_fields
             expected_fields.each do |field, value|
               expect.hset("#{class_name}:#{identifier}:object", field.to_s, value.to_s)
@@ -379,7 +379,7 @@ module Familia
       def assert_familia_load(obj_class, identifier, &block)
         class_name = obj_class.name.split('::').last.downcase
 
-        assert_redis_commands do |expect|
+        assert_database_commands do |expect|
           expect.hgetall("#{class_name}:#{identifier}:object")
 
           block.call if block
@@ -391,7 +391,7 @@ module Familia
         class_name = obj.class.name.split('::').last.downcase
         identifier = obj.identifier
 
-        assert_redis_commands do |expect|
+        assert_database_commands do |expect|
           expect.del("#{class_name}:#{identifier}:object")
 
           block.call if block
@@ -405,7 +405,7 @@ module Familia
         identifier = obj.identifier
         dbkey = "#{class_name}:#{identifier}:#{list_name}"
 
-        assert_redis_commands do |expect|
+        assert_database_commands do |expect|
           expect.command(operation.to_s.upcase, dbkey, *args)
 
           block.call if block
@@ -418,7 +418,7 @@ module Familia
         identifier = obj.identifier
         dbkey = "#{class_name}:#{identifier}:#{set_name}"
 
-        assert_redis_commands do |expect|
+        assert_database_commands do |expect|
           expect.command(operation.to_s.upcase, dbkey, *args)
 
           block.call if block
@@ -431,7 +431,7 @@ module Familia
         identifier = obj.identifier
         dbkey = "#{class_name}:#{identifier}:#{zset_name}"
 
-        assert_redis_commands do |expect|
+        assert_database_commands do |expect|
           expect.command(operation.to_s.upcase, dbkey, *args)
 
           block.call if block

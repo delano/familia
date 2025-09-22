@@ -16,11 +16,11 @@ Generated methods on Domain instances:
 
 The method names follow the pattern: {action}_to_{lowercase_class_name}_{collection_name}
 
-tracked_in Relationships
+participates_in Relationships
 
 When you declare:
 class Customer < Familia::Horreum
-  tracked_in :all_customers, type: :sorted_set, score: :created_at
+  participates_in :all_customers, type: :sorted_set, score: :created_at
 end
 
 Generated class methods:
@@ -29,18 +29,18 @@ Generated class methods:
 - Customer.all_customers - Access the sorted set collection directly
 
 For scoped tracking (with class prefix):
-tracked_in :global, :active_users, score: :last_seen
+participates_in :global, :active_users, score: :last_seen
 Generates: Customer.add_to_active_users(customer) and Customer.active_users
 
 indexed_by Relationships
 
-The `indexed_by` method creates Redis hash-based indexes for O(1) field lookups. The `context` parameter determines index ownership and scope.
+The `indexed_by` method creates Valkey/Redis hash-based indexes for O(1) field lookups. The `context` parameter determines index ownership and scope.
 
 **Global Context (Shared Index)**
 When you declare:
 ```ruby
 class Customer < Familia::Horreum
-  indexed_by :email, :email_lookup, context: :global
+  indexed_by :email, :email_lookup, target: :global
 end
 ```
 
@@ -49,13 +49,13 @@ Generated class methods:
 - Customer.remove_from_email_lookup(customer) - Remove customer from global email index
 - Customer.email_lookup - Access the global hash index directly (supports .get(email))
 
-Redis key pattern: `global:email_lookup`
+Valkey/Redis key pattern: `global:email_lookup`
 
 **Class Context (Per-Instance Index)**
 When you declare:
 ```ruby
 class Domain < Familia::Horreum
-  indexed_by :name, :domain_index, context: Customer
+  indexed_by :name, :domain_index, target: Customer
 end
 ```
 
@@ -63,7 +63,7 @@ Generated class methods on Customer:
 - Customer.find_by_name(domain_name) - Find domain by name within this customer
 - Customer.find_all_by_name(domain_names) - Find multiple domains by names
 
-Redis key pattern: `customer:123:domain_index` (per customer instance)
+Valkey/Redis key pattern: `customer:123:domain_index` (per customer instance)
 
 **When to Use Each Context**
 - **Global context (`:global`)**: Use for system-wide lookups where the field value should be unique across all instances
@@ -85,7 +85,7 @@ domain.add_to_customer_domains(customer.custid)     # Add to relationship
 domain.remove_from_customer_domains(customer.custid) # Remove from relationship
 domain.in_customer_domains?(customer.custid)       # Query membership
 
-# For tracked_in relationships:
+# For participates_in relationships:
 Customer.add_to_all_customers(customer)    # Class method
 Customer.all_customers.range(0, -1)        # Direct collection access
 
@@ -97,10 +97,10 @@ Method Naming Conventions
 
 The relationship system uses consistent naming patterns:
 - member_of: {add_to|remove_from|in}_#{parent_class.downcase}_#{collection_name}
-- tracked_in: {add_to|remove_from}_#{collection_name} (class methods)
+- participates_in: {add_to|remove_from}_#{collection_name} (class methods)
 - indexed_by: {add_to|remove_from}_#{index_name} (class methods)
 
-This automatic method generation creates a clean, predictable API that handles both the Redis operations and maintains referential consistency
+This automatic method generation creates a clean, predictable API that handles both the db operations and maintains referential consistency
 across related objects.
 
 
@@ -119,8 +119,8 @@ class User < Familia::Horreum
   field :user_id, :email, :username
 
   # System-wide unique email lookup
-  indexed_by :email, :email_lookup, context: :global
-  indexed_by :username, :username_lookup, context: :global
+  indexed_by :email, :email_lookup, target: :global
+  indexed_by :username, :username_lookup, target: :global
 end
 
 # Usage:
@@ -128,7 +128,7 @@ User.add_to_email_lookup(user)
 found_user_id = User.email_lookup.get("john@example.com")
 ```
 
-**Redis keys generated**: `global:email_lookup`, `global:username_lookup`
+**Valkey/Redis keys generated**: `global:email_lookup`, `global:username_lookup`
 
 ### Class Context Pattern
 Use `context: SomeClass` when field values are unique within a specific parent context:
@@ -149,8 +149,8 @@ class Domain < Familia::Horreum
   field :domain_id, :name, :subdomain
 
   # Domains are unique per customer (customer can't have duplicate domain names)
-  indexed_by :name, :domain_index, context: Customer
-  indexed_by :subdomain, :subdomain_index, context: Customer
+  indexed_by :name, :domain_index, target: Customer
+  indexed_by :subdomain, :subdomain_index, target: Customer
 end
 
 # Usage:
@@ -159,7 +159,7 @@ customer.find_by_name("example.com")           # Find domain within this custome
 customer.find_all_by_subdomain(["www", "api"]) # Find multiple subdomains
 ```
 
-**Redis keys generated**: `customer:cust_123:domain_index`, `customer:cust_123:subdomain_index`
+**Valkey/Redis keys generated**: `customer:cust_123:domain_index`, `customer:cust_123:subdomain_index`
 
 ### Mixed Pattern Example
 A real-world example showing both patterns:
@@ -172,11 +172,11 @@ class ApiKey < Familia::Horreum
   field :key_id, :key_hash, :name, :scope
 
   # API key hashes must be globally unique
-  indexed_by :key_hash, :global_key_lookup, context: :global
+  indexed_by :key_hash, :global_key_lookup, target: :global
 
   # But key names can be reused across different customers
-  indexed_by :name, :customer_key_lookup, context: Customer
-  indexed_by :scope, :scope_lookup, context: Customer
+  indexed_by :name, :customer_key_lookup, target: Customer
+  indexed_by :scope, :scope_lookup, target: Customer
 end
 
 # Usage examples:
@@ -197,10 +197,10 @@ If you have existing code with incorrect syntax, here's how to fix it:
 indexed_by :email_lookup, field: :email
 
 # ✅ New correct syntax - Global scope
-indexed_by :email, :email_lookup, context: :global
+indexed_by :email, :email_lookup, target: :global
 
 # ✅ New correct syntax - Class scope
-indexed_by :email, :customer_email_lookup, context: Customer
+indexed_by :email, :customer_email_lookup, target: Customer
 ```
 
 **Key Differences**:

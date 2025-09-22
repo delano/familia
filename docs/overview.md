@@ -2,7 +2,7 @@
 # Familia - Overview
 
 > [!NOTE]
-> This document refers to Valkey throughout, but all examples and patterns work identically with Redis. Familia supports both Valkey and Redis as they share the same protocol and data structures.
+> This document refers to Valkey throughout, but all examples and patterns work identically with the database. Familia supports both Valkey and Valkey/Redis as they share the same protocol and data structures.
 
 ## Introduction
 
@@ -313,7 +313,7 @@ Familia.connect_to_uri('redis://localhost:6379/0')
 ```ruby
 # Debug key names
 user = User.new(email: 'test@example.com')
-puts user.rediskey  # Shows the Valkey key that would be used
+puts user.dbkey  # Shows the Valkey key that would be used
 ```
 
 **Encryption Issues:**

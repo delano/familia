@@ -7,7 +7,7 @@ module Familia::Features
   # Used by the Features module at library startup to load feature files, and available
   # as a utility for other modules requiring file autoloading capabilities.
   module Autoloader
-    using Familia::Refinements::SnakeCase
+    using Familia::Refinements::StylizeWords
 
     # Autoloads feature files when this module is included.
     #

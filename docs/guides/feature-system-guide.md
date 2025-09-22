@@ -113,7 +113,7 @@ class Customer < Familia::Horreum
   field :custid, :name, :email
 
   # Define relationship collections
-  tracked_in :active_users, type: :sorted_set
+  participates_in :active_users, type: :sorted_set
   indexed_by :email_lookup, field: :email
   set :domains
 end

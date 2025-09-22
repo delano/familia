@@ -259,13 +259,13 @@ module Familia
 
       def self.included(base)
         Familia.trace :LOADED, self, base, caller(1..1) if Familia.debug?
-        base.extend ClassMethods
+        base.extend ModelClassMethods
 
         # Initialize encrypted fields tracking
         base.instance_variable_set(:@encrypted_fields, []) unless base.instance_variable_defined?(:@encrypted_fields)
       end
 
-      module ClassMethods
+      module ModelClassMethods
         # Define an encrypted field that transparently encrypts/decrypts values
         #
         # Encrypted fields are stored as JSON objects containing the encrypted

@@ -3,7 +3,7 @@
 require_relative '../helpers/test_helpers'
 
 class TestUser < Familia::Horreum
-  using Familia::Refinements::SnakeCase
+  using Familia::Refinements::StylizeWords
 
   identifier_field :email
   field :email

@@ -2,10 +2,9 @@
 
 require 'securerandom'
 require_relative 'relationships/score_encoding'
-require_relative 'relationships/redis_operations'
-require_relative 'relationships/tracking'
+require_relative 'relationships/database_operations'
+require_relative 'relationships/participation'
 require_relative 'relationships/indexing'
-require_relative 'relationships/membership'
 require_relative 'relationships/cascading'
 require_relative 'relationships/querying'
 require_relative 'relationships/permission_management'
@@ -20,9 +19,9 @@ module Familia
     #
     # Key improvements in v2:
     # - Multi-presence: Objects can exist in multiple collections simultaneously
-    # - Score encoding: Metadata embedded in Redis scores for efficiency
+    # - Score encoding: Metadata embedded in Valkey/Redis scores for efficiency
     # - Collision-free: Method names include collection names to prevent conflicts
-    # - Redis-native: All operations use Redis commands, no Ruby iteration
+    # - Redis-native: All operations use Valkey/Redis commands, no Ruby iteration
     # - Atomic operations: Multi-collection updates happen atomically
     #
     # Breaking changes from v1:
@@ -42,33 +41,31 @@ module Familia
     #     field :created_at
     #     field :permission_bits
     #
-    #     # Multi-presence tracking with score encoding
-    #     tracked_in Customer, :domains,
-    #                score: -> { permission_encode(created_at, permission_bits) }
-    #     tracked_in Team, :domains, score: :added_at
-    #     tracked_in Organization, :all_domains, score: :created_at
+    #     # Multi-presence participation with score encoding
+    #     participates_in Customer, :domains,
+    #                     score: -> { permission_encode(created_at, permission_bits) }
+    #     participates_in Team, :domains, score: :added_at
+    #     participates_in Organization, :all_domains, score: :created_at
     #
-    #     # O(1) lookups with Redis hashes
-    #     indexed_by :display_name, :domain_index, context: Customer
-    #     indexed_by :display_name, :global_domain_index, context: :global
+    #     # O(1) lookups with Valkey/Redis hashes
+    #     indexed_by :display_name, :domain_index, target: Customer
     #
-    #     # Context-aware membership (no method collisions)
-    #     member_of Customer, :domains
-    #     member_of Team, :domains
-    #     member_of Organization, :domains
+    #     # Participation with bidirectional control (no method collisions)
+    #     participates_in Customer, :domains
+    #     participates_in Team, :domains, bidirectional: false
+    #     participates_in Organization, :domains, type: :set
     #   end
     #
     # @example Generated methods (collision-free)
-    #   # Tracking methods
+    #   # Participation methods
     #   Customer.domains                    # => Familia::SortedSet
     #   Customer.add_domain(domain, score)  # Add to customer's domains
     #   domain.in_customer_domains?(customer) # Check membership
     #
     #   # Indexing methods
     #   Customer.find_by_display_name(name) # O(1) lookup
-    #   Domain.find_by_display_name(name) # Global lookup
     #
-    #   # Membership methods (collision-free naming)
+    #   # Bidirectional methods (collision-free naming)
     #   domain.add_to_customer_domains(customer)  # Specific collection
     #   domain.add_to_team_domains(team)          # Different collection
     #   domain.in_customer_domains?(customer)     # Check specific membership
@@ -104,27 +101,24 @@ module Familia
       # Feature initialization
       def self.included(base)
         Familia.ld "[#{base}] Relationships included"
-        base.extend ClassMethods
-        base.include InstanceMethods
+        base.extend ModelClassMethods
+        base.include ModelInstanceMethods
 
         # Include all relationship submodules and their class methods
         base.include ScoreEncoding
-        base.include RedisOperations
+        base.include DatabaseOperations
 
-        base.include Tracking
-        base.extend Tracking::ClassMethods
+        base.include Participation
+        base.extend Participation::ModelClassMethods
 
         base.include Indexing
-        base.extend Indexing::ClassMethods
-
-        base.include Membership
-        base.extend Membership::ClassMethods
+        base.extend Indexing::ModelClassMethods
 
         base.include Cascading
-        base.extend Cascading::ClassMethods
+        base.extend Cascading::ModelClassMethods
 
         base.include Querying
-        base.extend Querying::ClassMethods
+        base.extend Querying::ModelClassMethods
       end
 
       # Error classes
@@ -133,7 +127,7 @@ module Familia
       class InvalidScoreError < RelationshipError; end
       class CascadeError < RelationshipError; end
 
-      module ClassMethods
+      module ModelClassMethods
         # Define the identifier for this class (replaces identifier_field)
         # This is a compatibility wrapper around the existing identifier_field method
         #
@@ -157,9 +151,8 @@ module Familia
         def relationship_configs
           configs = {}
 
-          configs[:tracking] = tracking_relationships if respond_to?(:tracking_relationships)
+          configs[:participation] = participation_relationships if respond_to?(:participation_relationships)
           configs[:indexing] = indexing_relationships if respond_to?(:indexing_relationships)
-          configs[:membership] = membership_relationships if respond_to?(:membership_relationships)
 
           configs
         end
@@ -171,25 +164,14 @@ module Familia
           # Check for method name collisions
           method_names = []
 
-          if respond_to?(:tracking_relationships)
-            tracking_relationships.each do |config|
-              context_name = config[:context_class_name].downcase
+          if respond_to?(:participation_relationships)
+            participation_relationships.each do |config|
+              target_name = config[:target_class_name].downcase
               collection_name = config[:collection_name]
 
-              method_names << "in_#{context_name}_#{collection_name}?"
-              method_names << "add_to_#{context_name}_#{collection_name}"
-              method_names << "remove_from_#{context_name}_#{collection_name}"
-            end
-          end
-
-          if respond_to?(:membership_relationships)
-            membership_relationships.each do |config|
-              owner_name = config[:owner_class_name].downcase
-              collection_name = config[:collection_name]
-
-              method_names << "in_#{owner_name}_#{collection_name}?"
-              method_names << "add_to_#{owner_name}_#{collection_name}"
-              method_names << "remove_from_#{owner_name}_#{collection_name}"
+              method_names << "in_#{target_name}_#{collection_name}?"
+              method_names << "add_to_#{target_name}_#{collection_name}"
+              method_names << "remove_from_#{target_name}_#{collection_name}"
             end
           end
 
@@ -245,7 +227,7 @@ module Familia
         end
       end
 
-      module InstanceMethods
+      module ModelInstanceMethods
         # Get the identifier value for this instance
         # Uses the existing Horreum identifier infrastructure
         def identifier
@@ -272,10 +254,10 @@ module Familia
             # Automatically update all indexes when object is saved
             update_all_indexes if respond_to?(:update_all_indexes)
 
-            # Auto-add to class-level tracking collections
-            add_to_class_tracking_collections if respond_to?(:add_to_class_tracking_collections)
+            # Auto-add to class-level participation collections
+            add_to_class_participation_collections if respond_to?(:add_to_class_participation_collections)
 
-            # NOTE: Relationship-specific membership and tracking updates are done explicitly
+            # NOTE: Relationship-specific participation updates are done explicitly
             # since we need to know which specific collections this object should be in
           end
 
@@ -294,18 +276,14 @@ module Familia
         def relationship_status
           status = {
             identifier: identifier,
-            tracking_memberships: [],
-            membership_collections: [],
+            participation_memberships: [],
             index_memberships: [],
           }
 
-          # Get tracking memberships
-          if respond_to?(:tracking_collections_membership)
-            status[:tracking_memberships] = tracking_collections_membership
+          # Get participation memberships
+          if respond_to?(:participation_collections_membership)
+            status[:participation_memberships] = participation_collections_membership
           end
-
-          # Get membership collections
-          status[:membership_collections] = membership_collections if respond_to?(:membership_collections)
 
           # Get index memberships
           status[:index_memberships] = indexing_memberships if respond_to?(:indexing_memberships)
@@ -315,11 +293,8 @@ module Familia
 
         # Comprehensive cleanup - remove from all relationships
         def cleanup_all_relationships!
-          # Remove from tracking collections
-          remove_from_all_tracking_collections if respond_to?(:remove_from_all_tracking_collections)
-
-          # Remove from membership collections
-          remove_from_all_memberships if respond_to?(:remove_from_all_memberships)
+          # Remove from participation collections
+          remove_from_all_participation_collections if respond_to?(:remove_from_all_participation_collections)
 
           # Remove from indexes
           remove_from_all_indexes if respond_to?(:remove_from_all_indexes)
@@ -328,8 +303,7 @@ module Familia
         # Dry run for relationship cleanup (preview what would be affected)
         def cleanup_preview
           preview = {
-            tracking_collections: [],
-            membership_collections: [],
+            participation_collections: [],
             index_entries: [],
           }
 
@@ -348,11 +322,11 @@ module Familia
           # Validate identifier exists
           errors << 'Object identifier is nil' unless identifier
 
-          # Validate tracking memberships
-          if respond_to?(:tracking_collections_membership)
-            tracking_collections_membership.each do |membership|
+          # Validate participation memberships
+          if respond_to?(:participation_collections_membership)
+            participation_collections_membership.each do |membership|
               score = membership[:score]
-              errors << "Invalid score in tracking membership: #{membership}" if score && !score.is_a?(Numeric)
+              errors << "Invalid score in participation membership: #{membership}" if score && !score.is_a?(Numeric)
             end
           end
 
@@ -361,12 +335,11 @@ module Familia
           true
         end
 
-        # Refresh relationship data from Redis (useful after external changes)
+        # Refresh relationship data from Valkey/Redis (useful after external changes)
         def refresh_relationships!
           # Clear any cached relationship data
           @relationship_status = nil
-          @tracking_memberships = nil
-          @membership_collections = nil
+          @participation_memberships = nil
           @index_memberships = nil
 
           # Reload fresh data
@@ -380,12 +353,12 @@ module Familia
             identifier: identifier,
             class: self.class.name,
             status: relationship_status,
-            redis_keys: find_related_redis_keys,
+            dbkeys: find_related_dbkeys,
           }
         end
 
-        # Direct Redis access for instance methods
-        def redis
+        # Direct Valkey/Redis access for instance methods
+        def dbclient
           self.class.dbclient
         end
 
@@ -396,7 +369,7 @@ module Familia
           temp_key = "temp:#{base_name}:#{timestamp}:#{random_suffix}"
 
           # UnsortedSet immediate expiry to ensure cleanup even if operation fails
-          redis.expire(temp_key, ttl)
+          dbclient.expire(temp_key, ttl)
 
           temp_key
         end
@@ -406,14 +379,14 @@ module Familia
           cursor = 0
 
           loop do
-            cursor, keys = redis.scan(cursor, match: pattern, count: batch_size)
+            cursor, keys = dbclient.scan(cursor, match: pattern, count: batch_size)
 
             if keys.any?
               # Check TTL and remove keys that should have expired
               keys.each_slice(batch_size) do |key_batch|
-                redis.pipelined do |pipeline|
+                dbclient.pipelined do |pipeline|
                   key_batch.each do |key|
-                    ttl = redis.ttl(key)
+                    ttl = dbclient.ttl(key)
                     pipeline.del(key) if ttl == -1 # Key exists but has no TTL
                   end
                 end
@@ -426,8 +399,8 @@ module Familia
 
         private
 
-        # Find all Redis keys related to this object
-        def find_related_redis_keys
+        # Find all Valkey/Redis keys related to this object
+        def find_related_dbkeys
           related_keys = []
           id = identifier
           return related_keys unless id
@@ -439,20 +412,20 @@ module Familia
           ]
 
           patterns.each do |pattern|
-            redis.scan_each(match: pattern, count: 100) do |key|
+            dbclient.scan_each(match: pattern, count: 100) do |key|
               # Check if this key actually contains our object
-              key_type = redis.type(key)
+              key_type = dbclient.type(key)
 
               case key_type
               when 'zset'
-                related_keys << key if redis.zscore(key, id)
+                related_keys << key if dbclient.zscore(key, id)
               when 'set'
-                related_keys << key if redis.sismember(key, id)
+                related_keys << key if dbclient.sismember(key, id)
               when 'list'
-                related_keys << key if redis.lpos(key, id)
+                related_keys << key if dbclient.lpos(key, id)
               when 'hash'
                 # For hash keys, check if any field values match our identifier
-                hash_values = redis.hvals(key)
+                hash_values = dbclient.hvals(key)
                 related_keys << key if hash_values.include?(id.to_s)
               end
             end

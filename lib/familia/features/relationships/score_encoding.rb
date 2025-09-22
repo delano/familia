@@ -5,7 +5,7 @@ module Familia
     module Relationships
       # Score encoding using bit flags for permissions
       #
-      # Encodes permissions as bit flags in the decimal portion of Redis sorted set scores:
+      # Encodes permissions as bit flags in the decimal portion of Valkey/Redis sorted set scores:
       # - Integer part: Unix timestamp for time-based ordering
       # - Decimal part: 8-bit permission flags (0-255)
       #
@@ -74,7 +74,7 @@ module Familia
           #
           # @param timestamp [Time, Integer] The timestamp to encode
           # @param permission [Symbol, Integer, Array] Permission(s) to encode
-          # @return [Float] Encoded score suitable for Redis sorted sets
+          # @return [Float] Encoded score suitable for Valkey/Redis sorted sets
           def permission_encode(timestamp, permission)
             encode_score(timestamp, permission)
           end
@@ -92,11 +92,11 @@ module Familia
             }
           end
 
-          # Encode a timestamp and permissions into a Redis score
+          # Encode a timestamp and permissions into a Valkey/Redis score
           #
           # @param timestamp [Time, Integer] The timestamp to encode
           # @param permissions [Integer, Symbol, Array] Permissions to encode
-          # @return [Float] Encoded score suitable for Redis sorted sets
+          # @return [Float] Encoded score suitable for Valkey/Redis sorted sets
           #
           # @example Basic encoding with bit flag
           #   encode_score(Familia.now, 5)  # read(1) + write(4) = 5
@@ -127,7 +127,7 @@ module Familia
             time_part + (permission_bits / METADATA_PRECISION)
           end
 
-          # Decode a Redis score back into timestamp and permissions
+          # Decode a Valkey/Redis score back into timestamp and permissions
           #
           # @param score [Float] The encoded score
           # @return [Hash] Hash with :timestamp, :permissions, and :permission_list keys
@@ -211,7 +211,7 @@ module Familia
           #
           # @param min_permissions [Array<Symbol>, nil] Minimum required permissions
           # @param max_permissions [Array<Symbol>, nil] Maximum allowed permissions
-          # @return [Array<Float>] Min and max scores for Redis range queries
+          # @return [Array<Float>] Min and max scores for Valkey/Redis range queries
           #
           # @example
           #   permission_range([:read], [:read, :write])
@@ -231,17 +231,17 @@ module Familia
 
           # Get current timestamp as score (no permissions)
           #
-          # @return [Float] Current time as Redis score
+          # @return [Float] Current time as Valkey/Redis score
           def current_score
             encode_score(Familia.now, 0)
           end
 
-          # Create score range for Redis operations based on time bounds
+          # Create score range for db operations based on time bounds
           #
           # @param start_time [Time, nil] Start time (nil for -inf)
           # @param end_time [Time, nil] End time (nil for +inf)
           # @param min_permissions [Array<Symbol>, nil] Minimum required permissions
-          # @return [Array] Array suitable for Redis ZRANGEBYSCORE operations
+          # @return [Array] Array suitable for Valkey/Redis ZRANGEBYSCORE operations
           #
           # @example Time range
           #   score_range(1.hour.ago, Familia.now)
@@ -367,7 +367,7 @@ module Familia
           # @param category [Symbol] Category to create range for
           # @param start_time [Time, nil] Optional start time filter
           # @param end_time [Time, nil] Optional end time filter
-          # @return [Array<String>] Min and max range strings for Redis queries
+          # @return [Array<String>] Min and max range strings for Valkey/Redis queries
           def category_score_range(category, start_time = nil, end_time = nil)
             PERMISSION_CATEGORIES[category] || 0
 

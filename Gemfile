@@ -5,21 +5,20 @@ source 'https://rubygems.org'
 gemspec
 
 group :test do
-  gem 'tryouts', '~> 3.6.0', require: false
   gem 'concurrent-ruby', '~> 1.3.5', require: false
   gem 'ruby-prof'
   gem 'stackprof'
+  gem 'tryouts', '~> 3.6.0', require: false
 end
 
 group :development, :test do
-  # byebug only works with MRI
-  gem 'byebug', '~> 11.0', require: false if RUBY_ENGINE == 'ruby'
+  gem 'debug', require: false
   gem 'irb', '~> 1.15.2', require: false
-  gem 'kramdown', require: false # Required for YARD markdown processing
-  gem 'pry-byebug', '~> 3.10.1', require: false if RUBY_ENGINE == 'ruby'
+  gem 'kramdown', require: false
   gem 'rubocop', require: false
   gem 'rubocop-performance', require: false
   gem 'rubocop-thread_safety', require: false
+  gem 'solargraph', require: false
   gem 'yard', '~> 0.9', require: false
 end
 

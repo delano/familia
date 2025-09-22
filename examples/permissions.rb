@@ -235,6 +235,6 @@ if __FILE__ == $0
   puts '• Fine-grained permission management with 8-bit encoding'
   puts '• Role-based access control with business logic'
   puts '• Time-based analytics and audit trails'
-  puts '• Efficient Redis storage with sorted sets'
+  puts '• Efficient Valkey/Redis storage with sorted sets'
   puts '• Production-ready error handling and validation'
 end

@@ -4,7 +4,7 @@
 
 require_relative '../helpers/test_helpers'
 
-## move_keys across Redis instances (if available)
+## move_keys across Valkey/Redis instances (if available)
 begin
   source_redis = Redis.new(db: 10)
   dest_redis = Redis.new(db: 11)

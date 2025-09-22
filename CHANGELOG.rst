@@ -342,9 +342,9 @@ Changed
 
 -  **BREAKING**: ``tracked_in :global, collection`` syntax now raises
    ArgumentError - use ``class_tracked_in collection`` instead
--  **BREAKING**: ``indexed_by field, index, context: :global`` syntax
+-  **BREAKING**: ``indexed_by field, index, target: :global`` syntax
    replaced with ``class_indexed_by field, index``
--  **BREAKING**: ``indexed_by field, index, context: SomeClass`` syntax
+-  **BREAKING**: ``indexed_by field, index, target: SomeClass`` syntax
    replaced with ``indexed_by field, index, parent: SomeClass``
 -  Relationships API now provides consistent parameter naming across all
    relationship types
@@ -498,7 +498,7 @@ Added
 ~~~~~
 
 -  Complete API redesign for clarity and modern Ruby conventions
--  Valkey compatibility alongside traditional Redis support
+-  Valkey compatibility alongside traditional Valkey/Redis support
 -  Ruby 3.4+ modernization with fiber and thread safety improvements
 -  Connection pooling foundation with provider pattern architecture
 

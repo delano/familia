@@ -25,7 +25,7 @@ class CustomIntegrationTest < Familia::Horreum
   field :name
 end
 
-# Class testing full lifecycle with Redis persistence
+# Class testing full lifecycle with Valkey/Redis persistence
 class PersistenceTest < Familia::Horreum
   feature :object_identifier
   feature :external_identifier

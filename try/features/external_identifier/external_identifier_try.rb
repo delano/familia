@@ -210,7 +210,7 @@ bug_test_obj.extid
 delete_test_obj = ExternalIdTest.new(id: 'delete_test', name: 'Delete Test')
 delete_test_obj.save
 test_extid = delete_test_obj.extid
-# Delete the object directly from Redis to simulate cleanup scenario
+# Delete the object directly from Valkey/Redis to simulate cleanup scenario
 ExternalIdTest.dbclient.del(delete_test_obj.dbkey)
 # Now try to find by extid - this should clean up mapping and return nil
 ExternalIdTest.find_by_extid(test_extid)

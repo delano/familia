@@ -17,7 +17,7 @@
 
 ### Major API Modernization
 - **Complete API redesign** for clarity and modern Ruby conventions
-- **Valkey compatibility** alongside traditional Redis support
+- **Valkey compatibility** alongside traditional Valkey/Redis support
 - **Ruby 3.4+ modernization** with fiber and thread safety improvements
 - **Connection pooling foundation** with provider pattern architecture
 
@@ -103,7 +103,7 @@ end
 
 ### Comprehensive Relationships System
 - **Three relationship types** optimized for different use cases:
-  - `tracked_in` - Multi-presence tracking with score encoding
+  - `participates_in` - Multi-presence tracking with score encoding
   - `indexed_by` - O(1) hash-based lookups
   - `member_of` - Bidirectional membership with collision-free naming
 
@@ -116,7 +116,7 @@ class Customer < Familia::Horreum
 
   # Define collections
   set :domains
-  tracked_in :active_users, type: :sorted_set
+  participates_in :active_users, type: :sorted_set
 end
 
 class Domain < Familia::Horreum

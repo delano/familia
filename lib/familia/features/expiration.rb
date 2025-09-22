@@ -145,8 +145,8 @@ module Familia
     #
     # - TTL operations are performed on Redis/Valkey side with minimal overhead
     # - Cascading expiration uses pipelining for efficiency when possible
-    # - Zero expiration values skip Redis EXPIRE calls entirely
-    # - TTL queries are direct Redis operations (very fast)
+    # - Zero expiration values skip Valkey/Redis EXPIRE calls entirely
+    # - TTL queries are direct db operations (very fast)
     #
     module Expiration
       @default_expiration = nil
@@ -157,18 +157,20 @@ module Familia
 
       def self.included(base)
         Familia.trace :LOADED, self, base, caller(1..1) if Familia.debug?
-        base.extend ClassMethods
+        base.extend ModelClassMethods
 
         # Initialize default_expiration instance variable if not already defined
         # This ensures the class has a place to store its default expiration setting
         return if base.instance_variable_defined?(:@default_expiration)
 
+        # The instance var here will return the value from the implementing
+        # model class (or nil if it's not set, as you'd expect).
         base.instance_variable_set(:@default_expiration, @default_expiration)
       end
 
-      # Familia::Expiration::ClassMethods
+      # Familia::Expiration::ModelClassMethods
       #
-      module ClassMethods
+      module ModelClassMethods
         # UnsortedSet the default expiration time for instances of this class
         #
         # @param value [Numeric] Time in seconds (can be fractional)
@@ -276,7 +278,7 @@ module Familia
         end
 
         # If zero, simply skip setting an expiry for this key. If we were to set
-        # 0, Redis would drop the key immediately.
+        # 0, Valkey/Redis would drop the key immediately.
         if default_expiration.zero?
           Familia.ld "[update_expiration] No expiration for #{self.class} (#{dbkey})"
           return true
@@ -284,8 +286,9 @@ module Familia
 
         Familia.ld "[update_expiration] Expires #{dbkey} in #{default_expiration} seconds"
 
-        # Redis' EXPIRE command returns 1 if the timeout was set, 0 if key does
-        # not exist or the timeout could not be set. Via redis-rb, it's a boolean.
+        # The Valkey/Redis' EXPIRE command returns 1 if the timeout was set, 0
+        # if key does not exist or the timeout could not be set. Via redis-rb,
+        # it's a boolean.
         expire(default_expiration)
       end
 
@@ -301,7 +304,7 @@ module Familia
       #   expired_session.ttl  # => -1
       #
       def ttl
-        redis.ttl(dbkey)
+        dbclient.ttl(dbkey)
       end
 
       # Check if this object's data will expire
@@ -309,7 +312,7 @@ module Familia
       # @return [Boolean] true if TTL is set, false if data persists indefinitely
       #
       def expires?
-        ttl > 0
+        ttl.positive?
       end
 
       # Check if this object's data has expired or will expire soon
@@ -344,7 +347,7 @@ module Familia
       #
       def extend_expiration(duration)
         current_ttl = ttl
-        return false if current_ttl < 0 # No current expiration set
+        return false unless current_ttl.positive? # no current expiration set
 
         new_ttl = current_ttl + duration.to_f
         expire(new_ttl)
@@ -358,7 +361,7 @@ module Familia
       #   session.persist!
       #
       def persist!
-        redis.persist(dbkey)
+        dbclient.persist(dbkey)
       end
     end
   end

@@ -3,68 +3,63 @@
 module Familia
   module Features
     module Relationships
-      # Indexing module for indexed_by relationships using Redis hashes
+      # Indexing module for indexed_by relationships using Valkey/Redis hashes
       # Provides O(1) lookups for finding objects by field values
       module Indexing
-        using Familia::Refinements::SnakeCase
+        using Familia::Refinements::StylizeWords
 
         # Class-level indexing configurations
         def self.included(base)
-          base.extend ClassMethods
-          base.include InstanceMethods
+          base.extend ModelClassMethods
+          base.include ModelInstanceMethods
           super
         end
 
-        # Indexing::ClassMethods
+        # Indexing::ModelClassMethods
         #
-        module ClassMethods
+        module ModelClassMethods
           # Define an indexed_by relationship for fast lookups
           #
           # @param field [Symbol] The field to index on
           # @param index_name [Symbol] Name of the index
-          # @param context [Class, Symbol] The context class that owns the index
+          # @param target [Class, Symbol] The target class that owns the index
           # @param finder [Boolean] Whether to generate finder methods
           #
-          # @example Context-based indexing
-          #   indexed_by :display_name, :domain_index, context: Customer
+          # @example Target-based indexing
+          #   indexed_by :display_name, :domain_index, target: Customer
           #
-          # @example Global indexing
-          #   indexed_by :display_name, :global_domain_index, context: :global
-          def indexed_by(field, index_name, context:, finder: true)
-            context_class = context
+          def indexed_by(field, index_name, target:, finder: true)
+            target_class = target
 
-            # Handle special :global context for class-level indexing
-            return class_indexed_by(field, index_name, finder: finder) if context == :global
-
-            context_class_name = if context_class.is_a?(Class)
-                                   # Store the actual class name for consistency
-                                   context_class.name
-                                 else
-                                   # For symbol context, convert to string
-                                   context_class.to_s
-                                 end
+            target_class_name = if target_class.is_a?(Class)
+                                  # Store the actual class name for consistency
+                                  target_class.name
+                                else
+                                  # For symbol target, convert to string
+                                  target_class.to_s
+                                end
 
             # Get snake_case version for method naming
-            context_class_snake = if context_class.is_a?(Class)
-                                    context_class.name.snake_case
-                                  else
-                                    context_class.to_s
-                                  end
+            target_class_snake = if target_class.is_a?(Class)
+                                   target_class.name.snake_case
+                                 else
+                                   target_class.to_s
+                                 end
 
             # Store metadata for this indexing relationship
             indexing_relationships << {
               field: field,
-              context_class: context_class,
-              context_class_name: context_class_name,
+              target_class: target_class,
+              target_class_name: target_class_name,
               index_name: index_name,
               finder: finder,
             }
 
-            # Generate finder methods on the context class
-            generate_context_finder_methods(context_class, field, index_name) if finder && context_class.is_a?(Class)
+            # Generate finder methods on the target class
+            generate_target_finder_methods(target_class, field, index_name) if finder && target_class.is_a?(Class)
 
             # Generate instance methods for relationship indexing
-            generate_relationship_index_methods(context_class_snake, field, index_name)
+            generate_relationship_index_methods(target_class_snake, field, index_name)
           end
 
           # Define a class-level indexed lookup
@@ -81,8 +76,8 @@ module Familia
             # Store metadata for this indexing relationship
             indexing_relationships << {
               field: field,
-              context_class: self,
-              context_class_name: name,
+              target_class: self,
+              target_class_name: name,
               index_name: index_name,
               finder: finder,
             }
@@ -96,26 +91,26 @@ module Familia
 
           # Get all indexing relationships for this class
           def indexing_relationships
-            @indexing_relationships ||= [] # rubocop:disable ThreadSafety/ClassInstanceVariable
+            @indexing_relationships ||= []
           end
 
           private
 
-          # Helper method to camelize a word without ActiveSupport dependency
+          # Helper method to pascalize a word without ActiveSupport dependency
           def camelize_word(word)
             word.to_s.split('_').map(&:capitalize).join
           end
 
-          # Generate finder methods on the context class (e.g., company.find_by_department)
-          def generate_context_finder_methods(context_class, field, index_name)
-            # Resolve context class if it's a symbol/string
-            actual_context_class = context_class.is_a?(Class) ? context_class : Object.const_get(camelize_word(context_class))
+          # Generate finder methods on the target class (e.g., company.find_by_department)
+          def generate_target_finder_methods(target_class, field, index_name)
+            # Resolve target class if it's a symbol/string
+            actual_target_class = target_class.is_a?(Class) ? target_class : Object.const_get(camelize_word(target_class))
 
             # Store reference to the indexed class for the finder methods
             indexed_class = self
 
             # Generate instance finder method (e.g., company.find_by_department)
-            actual_context_class.class_eval do
+            actual_target_class.class_eval do
               define_method("find_by_#{field}") do |field_value|
                 parent_key = "#{self.class.config_name}:#{identifier}"
                 index_key = "#{parent_key}:#{index_name}:#{field_value}"
@@ -230,51 +225,51 @@ module Familia
           end
 
           # Generate instance methods for relationship indexing (indexed_by with parent:)
-          def generate_relationship_index_methods(context_class_name, field, index_name)
+          def generate_relationship_index_methods(target_class_name, field, index_name)
             # Indexes are now scoped to parent instances using SortedSets
 
-            method_name = "add_to_#{context_class_name.downcase}_#{index_name}"
+            method_name = "add_to_#{target_class_name.downcase}_#{index_name}"
             Familia.ld("[generate_relationship_index_methods] #{name} method #{method_name}")
 
-            define_method(method_name) do |context_instance|
-              return unless context_instance
+            define_method(method_name) do |target_instance|
+              return unless target_instance
 
               field_value = send(field)
               return unless field_value
 
               # Build parent-scoped key: parent_class:parent_id:index_name:field_value
-              parent_key = "#{context_instance.class.config_name}:#{context_instance.identifier}"
+              parent_key = "#{target_instance.class.config_name}:#{target_instance.identifier}"
               index_key = "#{parent_key}:#{index_name}:#{field_value}"
 
               # Use SortedSet with timestamp score for insertion order
               dbclient.zadd(index_key, Familia.now, identifier)
             end
 
-            method_name = "remove_from_#{context_class_name.downcase}_#{index_name}"
+            method_name = "remove_from_#{target_class_name.downcase}_#{index_name}"
             Familia.ld("[generate_relationship_index_methods] #{name} method #{method_name}")
 
-            define_method(method_name) do |context_instance|
-              return unless context_instance
+            define_method(method_name) do |target_instance|
+              return unless target_instance
 
               field_value = send(field)
               return unless field_value
 
               # Build parent-scoped key
-              parent_key = "#{context_instance.class.config_name}:#{context_instance.identifier}"
+              parent_key = "#{target_instance.class.config_name}:#{target_instance.identifier}"
               index_key = "#{parent_key}:#{index_name}:#{field_value}"
 
               # Remove from SortedSet
               dbclient.zrem(index_key, identifier)
             end
 
-            method_name = "update_in_#{context_class_name.downcase}_#{index_name}"
+            method_name = "update_in_#{target_class_name.downcase}_#{index_name}"
             Familia.ld("[generate_relationship_index_methods] #{name} method #{method_name}")
 
-            define_method(method_name) do |context_instance, old_field_value = nil|
-              return unless context_instance
+            define_method(method_name) do |target_instance, old_field_value = nil|
+              return unless target_instance
 
               new_field_value = send(field)
-              parent_key = "#{context_instance.class.config_name}:#{context_instance.identifier}"
+              parent_key = "#{target_instance.class.config_name}:#{target_instance.identifier}"
 
               dbclient.multi do |tx|
                 # Remove from old index if provided
@@ -294,7 +289,7 @@ module Familia
         end
 
         # Instance methods for indexed objects
-        module InstanceMethods
+        module ModelInstanceMethods
           # Update all indexes for a given parent context
           # For class-level indexes (class_indexed_by), parent_context should be nil
           # For relationship indexes (indexed_by), parent_context should be the parent instance
@@ -304,11 +299,11 @@ module Familia
             self.class.indexing_relationships.each do |config|
               field = config[:field]
               index_name = config[:index_name]
-              context_class = config[:context_class]
+              target_class = config[:target_class]
               old_field_value = old_values[field]
 
               # Determine which update method to call
-              if context_class == self.class
+              if target_class == self.class
                 # Class-level index (class_indexed_by)
                 send("update_in_class_#{index_name}", old_field_value)
               else
@@ -316,8 +311,8 @@ module Familia
                 next unless parent_context
 
                 # Use snake_case for method naming
-                context_class_snake = config[:context_class].name.snake_case
-                send("update_in_#{context_class_snake}_#{index_name}", parent_context, old_field_value)
+                target_class_snake = config[:target_class].name.snake_case
+                send("update_in_#{target_class_snake}_#{index_name}", parent_context, old_field_value)
               end
             end
           end
@@ -330,10 +325,10 @@ module Familia
 
             self.class.indexing_relationships.each do |config|
               index_name = config[:index_name]
-              context_class = config[:context_class]
+              target_class = config[:target_class]
 
               # Determine which remove method to call
-              if context_class == self.class
+              if target_class == self.class
                 # Class-level index (class_indexed_by)
                 send("remove_from_class_#{index_name}")
               else
@@ -341,15 +336,15 @@ module Familia
                 next unless parent_context
 
                 # Use snake_case for method naming
-                context_class_snake = config[:context_class].name.snake_case
-                send("remove_from_#{context_class_snake}_#{index_name}", parent_context)
+                target_class_snake = config[:target_class].name.snake_case
+                send("remove_from_#{target_class_snake}_#{index_name}", parent_context)
               end
             end
           end
 
           # Get all indexes this object appears in
-          # Note: For context-scoped indexes, this only shows class-level indexes
-          # since context-scoped indexes require a specific context instance
+          # Note: For target-scoped indexes, this only shows class-level indexes
+          # since target-scoped indexes require a specific target instance
           #
           # @return [Array<Hash>] Array of index information
           def indexing_memberships
@@ -360,18 +355,18 @@ module Familia
             self.class.indexing_relationships.each do |config|
               field = config[:field]
               index_name = config[:index_name]
-              context_class = config[:context_class]
+              target_class = config[:target_class]
               field_value = send(field)
 
               next unless field_value
 
-              if context_class == self.class
+              if target_class == self.class
                 # Class-level index (class_indexed_by) - check hash key
                 index_key = "#{self.class.config_name}:#{index_name}"
                 next unless dbclient.hexists(index_key, field_value.to_s)
 
                 memberships << {
-                  context_class: 'class',
+                  target_class: 'class',
                   index_name: index_name,
                   field: field,
                   field_value: field_value,
@@ -379,16 +374,16 @@ module Familia
                   type: 'class_indexed_by',
                 }
               else
-                # Context-scoped index (indexed_by) - cannot check without context instance
-                # This would require scanning all possible context instances
+                # Target-scoped index (indexed_by) - cannot check without target instance
+                # This would require scanning all possible target instances
                 memberships << {
-                  context_class: config[:context_class_name].snake_case,
+                  target_class: config[:target_class_name].snake_case,
                   index_name: index_name,
                   field: field,
                   field_value: field_value,
-                  index_key: 'context_dependent',
+                  index_key: 'target_dependent',
                   type: 'indexed_by',
-                  note: 'Requires context instance for verification',
+                  note: 'Requires target instance for verification',
                 }
               end
             end
@@ -396,9 +391,9 @@ module Familia
             memberships
           end
 
-          # Check if this object is indexed in a specific context
+          # Check if this object is indexed in a specific target
           # For class-level indexes, checks the hash key
-          # For context-scoped indexes, returns false (requires context instance)
+          # For target-scoped indexes, returns false (requires target instance)
           def indexed_in?(index_name)
             return false unless self.class.respond_to?(:indexing_relationships)
 
@@ -409,14 +404,14 @@ module Familia
             field_value = send(field)
             return false unless field_value
 
-            context_class = config[:context_class]
+            target_class = config[:target_class]
 
-            if context_class == self.class
+            if target_class == self.class
               # Class-level index (class_indexed_by) - check hash key
               index_key = "#{self.class.config_name}:#{index_name}"
               dbclient.hexists(index_key, field_value.to_s)
             else
-              # Context-scoped index (indexed_by) - cannot verify without context instance
+              # Target-scoped index (indexed_by) - cannot verify without target instance
               false
             end
           end

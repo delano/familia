@@ -246,7 +246,7 @@ end
 ```ruby
 session = UserSession.find('session_123')
 
-# Check TTL using Redis TTL command (returns seconds remaining)
+# Check TTL using Valkey/Redis TTL command (returns seconds remaining)
 ttl_seconds = session.ttl  # e.g., 1800 (30 minutes left)
 
 # Convert to more readable format
@@ -303,7 +303,7 @@ class DataRetentionService
 
   def self.apply_retention_policies
     TTL_POLICIES.each do |data_type, ttl|
-      model_class = data_type.to_s.camelize.constantize
+      model_class = data_type.to_s.pascalize.constantize
 
       model_class.all.each do |record|
         record.update_expiration(default_expiration: ttl)
