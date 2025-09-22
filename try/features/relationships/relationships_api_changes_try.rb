@@ -45,9 +45,9 @@ class ApiTestMembership < Familia::Horreum
   field :role
   field :created_at
 
-  # New API: using context: parameter
-  indexed_by :user_id, :user_memberships, context: ApiTestUser
-  indexed_by :project_id, :project_memberships, context: ApiTestProject
+  # New API: using target: parameter
+  indexed_by :user_id, :user_memberships, target: ApiTestUser
+  indexed_by :project_id, :project_memberships, target: ApiTestProject
 
   # Participation with parent class
   participates_in ApiTestProject, :memberships, score: :created_at
@@ -261,19 +261,19 @@ participation_meta = ApiTestUser.participation_relationships.find { |r| r[:colle
 participation_meta[:target_class_name].end_with?('::ApiTestUser')
 #=> true
 
-## class_indexed_by stores correct context_class
+## class_indexed_by stores correct target_class
 indexing_meta = ApiTestUser.indexing_relationships.find { |r| r[:index_name] == :email_lookup }
-indexing_meta[:context_class] == ApiTestUser
+indexing_meta[:target_class] == ApiTestUser
 #=> true
 
-## class_indexed_by stores correct context_class_name
+## class_indexed_by stores correct target_class_name
 indexing_meta = ApiTestUser.indexing_relationships.find { |r| r[:index_name] == :email_lookup }
-indexing_meta[:context_class_name].end_with?('ApiTestUser')
+indexing_meta[:target_class_name].end_with?('ApiTestUser')
 #=> true
 
 ## indexed_by with context: stores correct metadata
 membership_meta = ApiTestMembership.indexing_relationships.find { |r| r[:index_name] == :user_memberships }
-membership_meta[:context_class] == ApiTestUser
+membership_meta[:target_class] == ApiTestUser
 #=> true
 
 # =============================================

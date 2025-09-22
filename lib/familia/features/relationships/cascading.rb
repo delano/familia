@@ -30,7 +30,7 @@ module Familia
             # Collect strategies from tracking relationships
             if respond_to?(:tracking_relationships)
               tracking_relationships.each do |config|
-                key = "#{config[:context_class_name]}.#{config[:collection_name]}"
+                key = "#{config[:target_class_name]}.#{config[:collection_name]}"
                 strategies[key] = {
                   type: :tracking,
                   strategy: config[:on_destroy] || :remove,
@@ -54,10 +54,10 @@ module Familia
             # Collect strategies from indexing relationships
             if respond_to?(:indexing_relationships)
               indexing_relationships.each do |config|
-                key = if config[:context_class_name] == 'global'
+                key = if config[:target_class_name] == 'global'
                         "global.#{config[:index_name]}"
                       else
-                        "#{config[:context_class_name]}.#{config[:index_name]}"
+                        "#{config[:target_class_name]}.#{config[:index_name]}"
                       end
                 strategies[key] = {
                   type: :indexing,
@@ -156,11 +156,11 @@ module Familia
 
           # Remove from tracking collections
           def remove_from_tracking_collections(pipeline, config)
-            context_class_name = config[:context_class_name]
+            target_class_name = config[:target_class_name]
             collection_name = config[:collection_name]
 
             # Find all collections this object is participating in
-            pattern = "#{context_class_name.downcase}:*:#{collection_name}"
+            pattern = "#{target_class_name.downcase}:*:#{collection_name}"
 
             dbclient.scan_each(match: pattern) do |key|
               pipeline.zrem(key, identifier)
@@ -190,19 +190,19 @@ module Familia
 
           # Remove from indexing collections
           def remove_from_indexing_collections(pipeline, config)
-            context_class_name = config[:context_class_name]
+            target_class_name = config[:target_class_name]
             index_name = config[:index_name]
             field = config[:field]
 
             field_value = send(field) if respond_to?(field)
             return unless field_value
 
-            if context_class_name == 'global'
+            if target_class_name == 'global'
               index_key = "global:#{index_name}"
               pipeline.hdel(index_key, field_value.to_s)
             else
               # Find all indexes this object appears in
-              pattern = "#{context_class_name.downcase}:*:#{index_name}"
+              pattern = "#{target_class_name.downcase}:*:#{index_name}"
 
               dbclient.scan_each(match: pattern) do |key|
                 pipeline.hdel(key, field_value.to_s)
@@ -227,20 +227,20 @@ module Familia
             # This is a complex operation that depends on the specific business logic
             # For now, we'll provide a framework that can be customized
 
-            context_class_name = config[:context_class_name]
+            target_class_name = config[:target_class_name]
             collection_name = config[:collection_name]
 
             # Find all contexts that track this object
-            pattern = "#{context_class_name.downcase}:*:#{collection_name}"
+            pattern = "#{target_class_name.downcase}:*:#{collection_name}"
 
             dbclient.scan_each(match: pattern) do |key|
               # Check if this object is the only member
               if dbclient.zcard(key) == 1 && dbclient.zscore(key, identifier)
-                context_id = key.split(':')[1]
+                target_id = key.split(':')[1]
 
                 # Optionally destroy the context if it becomes empty
                 # This is application-specific logic
-                trigger_cascade_callback(:tracking, context_class_name, context_id, collection_name)
+                trigger_cascade_callback(:tracking, target_class_name, target_id, collection_name)
               end
             end
           end
@@ -293,17 +293,17 @@ module Familia
             case strategy_info[:type]
             when :tracking
               config = strategy_info[:config]
-              context_class_name = config[:context_class_name]
+              target_class_name = config[:target_class_name]
               collection_name = config[:collection_name]
 
-              pattern = "#{context_class_name.downcase}:*:#{collection_name}"
+              pattern = "#{target_class_name.downcase}:*:#{collection_name}"
               dbclient.scan_each(match: pattern) do |key|
                 if dbclient.zscore(key, identifier)
-                  context_id = key.split(':')[1]
+                  target_id = key.split(':')[1]
                   targets << {
                     type: :context,
-                    class: context_class_name,
-                    id: context_id,
+                    class: target_class_name,
+                    id: target_id,
                     collection: collection_name,
                   }
                 end
@@ -383,9 +383,9 @@ module Familia
             case strategy_info[:type]
             when :tracking
               config = strategy_info[:config]
-              context_class_name = config[:context_class_name]
+              target_class_name = config[:target_class_name]
               collection_name = config[:collection_name]
-              pattern = "#{context_class_name.downcase}:*:#{collection_name}"
+              pattern = "#{target_class_name.downcase}:*:#{collection_name}"
 
               dbclient.scan_each(match: pattern) do |key|
                 affected_keys << key if dbclient.zscore(key, identifier)
@@ -412,17 +412,17 @@ module Familia
 
             when :indexing
               config = strategy_info[:config]
-              context_class_name = config[:context_class_name]
+              target_class_name = config[:target_class_name]
               index_name = config[:index_name]
               field = config[:field]
 
               field_value = send(field) if respond_to?(field)
               if field_value
-                if context_class_name == 'global'
+                if target_class_name == 'global'
                   index_key = "global:#{index_name}"
                   affected_keys << index_key if dbclient.hexists(index_key, field_value.to_s)
                 else
-                  pattern = "#{context_class_name.downcase}:*:#{index_name}"
+                  pattern = "#{target_class_name.downcase}:*:#{index_name}"
                   dbclient.scan_each(match: pattern) do |key|
                     affected_keys << key if dbclient.hexists(key, field_value.to_s)
                   end

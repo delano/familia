@@ -48,8 +48,8 @@ module Familia
     #     participates_in Organization, :all_domains, score: :created_at
     #
     #     # O(1) lookups with Valkey/Redis hashes
-    #     indexed_by :display_name, :domain_index, context: Customer
-    #     indexed_by :display_name, :global_domain_index, context: :global
+    #     indexed_by :display_name, :domain_index, target: Customer
+    #     indexed_by :display_name, :global_domain_index, target: :global
     #
     #     # Participation with bidirectional control (no method collisions)
     #     participates_in Customer, :domains

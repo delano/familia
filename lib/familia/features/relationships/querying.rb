@@ -481,10 +481,10 @@ module Familia
             collections = []
 
             self.class.tracking_relationships.each do |config|
-              context_class_name = config[:context_class_name]
+              target_class_name = config[:target_class_name]
               collection_name = config[:collection_name]
 
-              pattern = "#{context_class_name.downcase}:*:#{collection_name}"
+              pattern = "#{target_class_name.downcase}:*:#{collection_name}"
 
               dbclient.scan_each(match: pattern) do |key|
                 score = dbclient.zscore(key, identifier)
@@ -506,11 +506,11 @@ module Familia
                   end
                 end
 
-                context_id = key.split(':')[1]
+                target_id = key.split(':')[1]
                 collections << {
                   type: :tracking,
-                  context_class: context_class_name,
-                  context_id: context_id,
+                  target_class: target_class_name,
+                  target_id: target_id,
                   collection_name: collection_name,
                   key: key,
                   score: score,
