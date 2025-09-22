@@ -8,14 +8,14 @@ module Familia
       module Tracking
         # Class-level tracking configurations
         def self.included(base)
-          base.extend ClassMethods
-          base.include InstanceMethods
+          base.extend ModelClassMethods
+          base.include ModelInstanceMethods
           super
         end
 
-        # Tracking::ClassMethods
+        # Tracking::ModelClassMethods
         #
-        module ClassMethods
+        module ModelClassMethods
           # Simple singularize method (basic implementation)
           def singularize_word(word)
             word = word.to_s
@@ -262,7 +262,7 @@ module Familia
         end
 
         # Instance methods for tracked objects
-        module InstanceMethods
+        module ModelInstanceMethods
           # Calculate the appropriate score for a tracking relationship
           #
           # @param context_class [Class] The context class (e.g., Customer)

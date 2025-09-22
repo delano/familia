@@ -20,12 +20,12 @@ module Familia
       #   doc.permissions_for(user)  #=> [:read]
       module PermissionManagement
         def self.included(base)
-          base.extend(ClassMethods)
+          base.extend(ModelClassMethods)
         end
 
-        # Relationships::ClassMethods
+        # Relationships::ModelClassMethods
         #
-        module ClassMethods
+        module ModelClassMethods
           # Enable permission tracking for this class
           #
           # @param field_name [Symbol] Name of the hash field to store permissions

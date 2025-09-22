@@ -87,7 +87,7 @@ module Familia
 
       def self.included(base)
         Familia.trace :LOADED, self, base, caller(1..1) if Familia.debug?
-        base.extend ClassMethods
+        base.extend ModelClassMethods
 
         # Ensure default generator is set in feature options
         base.add_feature_options(:object_identifier, generator: DEFAULT_GENERATOR)
@@ -205,7 +205,7 @@ module Familia
         end
       end
 
-      module ClassMethods
+      module ModelClassMethods
         # Generate a new object identifier using the configured strategy
         #
         # @return [String] A new unique identifier

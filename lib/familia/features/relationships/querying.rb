@@ -8,14 +8,14 @@ module Familia
       module Querying
         # Class-level querying capabilities
         def self.included(base)
-          base.extend ClassMethods
-          base.include InstanceMethods
+          base.extend ModelClassMethods
+          base.include ModelInstanceMethods
           super
         end
 
-        # Querying::ClassMethods
+        # Querying::ModelClassMethods
         #
-        module ClassMethods
+        module ModelClassMethods
           # Union of multiple collections (accessible items across multiple sources)
           #
           # @param collections [Array<Hash>] Collection configurations
@@ -377,7 +377,7 @@ module Familia
         end
 
         # Instance methods for querying relationships
-        module InstanceMethods
+        module ModelInstanceMethods
           # Find all collections this object appears in with specific permissions
           #
           # @param min_permission [Symbol] Minimum required permission

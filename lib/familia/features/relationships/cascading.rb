@@ -15,14 +15,14 @@ module Familia
 
         # Class-level cascade configurations
         def self.included(base)
-          base.extend ClassMethods
-          base.include InstanceMethods
+          base.extend ModelClassMethods
+          base.include ModelInstanceMethods
           super
         end
 
-        # Cascading::ClassMethods
+        # Cascading::ModelClassMethods
         #
-        module ClassMethods
+        module ModelClassMethods
           # Get cascade strategies for all relationships
           def cascade_strategies
             strategies = {}
@@ -72,7 +72,7 @@ module Familia
         end
 
         # Instance methods for cascade operations
-        module InstanceMethods
+        module ModelInstanceMethods
           # Execute cascade operations during destroy
           def execute_cascade_operations
             strategies = self.class.cascade_strategies

@@ -10,14 +10,14 @@ module Familia
 
         # Class-level indexing configurations
         def self.included(base)
-          base.extend ClassMethods
-          base.include InstanceMethods
+          base.extend ModelClassMethods
+          base.include ModelInstanceMethods
           super
         end
 
-        # Indexing::ClassMethods
+        # Indexing::ModelClassMethods
         #
-        module ClassMethods
+        module ModelClassMethods
           # Define an indexed_by relationship for fast lookups
           #
           # @param field [Symbol] The field to index on
@@ -294,7 +294,7 @@ module Familia
         end
 
         # Instance methods for indexed objects
-        module InstanceMethods
+        module ModelInstanceMethods
           # Update all indexes for a given parent context
           # For class-level indexes (class_indexed_by), parent_context should be nil
           # For relationship indexes (indexed_by), parent_context should be the parent instance

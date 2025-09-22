@@ -8,12 +8,12 @@ module Familia
       module Membership
         # Class-level membership configurations
         def self.included(base)
-          base.extend ClassMethods
-          base.include InstanceMethods
+          base.extend ModelClassMethods
+          base.include ModelInstanceMethods
           super
         end
 
-        module ClassMethods
+        module ModelClassMethods
           # Define a member_of relationship
           #
           # @param owner_class [Class] The class that owns the collection
@@ -307,7 +307,7 @@ module Familia
         end
 
         # Instance methods for objects with membership relationships
-        module InstanceMethods
+        module ModelInstanceMethods
           # Calculate the appropriate score for a membership relationship
           #
           # @param owner_class [Class] The owner class (e.g., Customer)

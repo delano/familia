@@ -51,16 +51,16 @@ module Familia
 
       def self.included(base)
         Familia.trace(:LOADED, self, base, caller(1..1)) if Familia.debug?
-        base.extend ClassMethods
+        base.extend ModelClassMethods
 
         # Initialize the safe dump field map
         base.instance_variable_set(:@safe_dump_field_map, {})
       end
 
-      # SafeDump::ClassMethods
+      # SafeDump::ModelClassMethods
       #
       # These methods become available on the model class
-      module ClassMethods
+      module ModelClassMethods
         # Define a single safe dump field
         # @param field_name [Symbol] The name of the field
         # @param callable [Proc, nil] Optional callable to transform the value
@@ -151,7 +151,7 @@ module Familia
         end
       end
 
-      extend ClassMethods
+      extend ModelClassMethods
     end
   end
 end

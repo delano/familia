@@ -1,13 +1,13 @@
 # lib/familia/horreum/database_commands.rb
 
 module Familia
-  # InstanceMethods - Module containing instance-level methods for Familia
+  # Familia::Horreum
   #
   # This module is included in classes that include Familia, providing
   # instance-level functionality for Database operations and object management.
   #
   class Horreum
-    # Methods that call Database commands (InstanceMethods)
+    # DatabaseCommands - Instance methods for horreum models that call Database commands
     #
     # NOTE: There is no hgetall for Horreum. This is because Horreum
     # is a single hash in Database that we aren't meant to have be working
@@ -63,7 +63,7 @@ module Familia
 
       # Retrieves the remaining time to live (TTL) for the object's dbkey.
       #
-      # This method accesses the ovjects Database client to obtain the TTL of `dbkey`.
+      # This method accesses the objects Database client to obtain the TTL of `dbkey`.
       # If debugging is enabled, it logs the TTL retrieval operation using `Familia.trace`.
       #
       # @return [Integer] The TTL of the key in seconds. Returns -1 if the key does not exist

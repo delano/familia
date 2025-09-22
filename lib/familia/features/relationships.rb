@@ -104,27 +104,27 @@ module Familia
       # Feature initialization
       def self.included(base)
         Familia.ld "[#{base}] Relationships included"
-        base.extend ClassMethods
-        base.include InstanceMethods
+        base.extend ModelClassMethods
+        base.include ModelInstanceMethods
 
         # Include all relationship submodules and their class methods
         base.include ScoreEncoding
         base.include DatabaseOperations
 
         base.include Tracking
-        base.extend Tracking::ClassMethods
+        base.extend Tracking::ModelClassMethods
 
         base.include Indexing
-        base.extend Indexing::ClassMethods
+        base.extend Indexing::ModelClassMethods
 
         base.include Membership
-        base.extend Membership::ClassMethods
+        base.extend Membership::ModelClassMethods
 
         base.include Cascading
-        base.extend Cascading::ClassMethods
+        base.extend Cascading::ModelClassMethods
 
         base.include Querying
-        base.extend Querying::ClassMethods
+        base.extend Querying::ModelClassMethods
       end
 
       # Error classes
@@ -133,7 +133,7 @@ module Familia
       class InvalidScoreError < RelationshipError; end
       class CascadeError < RelationshipError; end
 
-      module ClassMethods
+      module ModelClassMethods
         # Define the identifier for this class (replaces identifier_field)
         # This is a compatibility wrapper around the existing identifier_field method
         #
@@ -245,7 +245,7 @@ module Familia
         end
       end
 
-      module InstanceMethods
+      module ModelInstanceMethods
         # Get the identifier value for this instance
         # Uses the existing Horreum identifier infrastructure
         def identifier
