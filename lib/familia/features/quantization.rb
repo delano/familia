@@ -395,7 +395,6 @@ module Familia
         "#{base_id}#{separator}#{timestamp}"
       end
 
-      extend ModelClassMethods
     end
   end
 end

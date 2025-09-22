@@ -151,7 +151,6 @@ module Familia
         end
       end
 
-      extend ModelClassMethods
     end
   end
 end
