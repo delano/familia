@@ -1,30 +1,43 @@
 # Familia v2.0 Documentation
 
-Welcome to the comprehensive documentation for Familia v2.0. This wiki covers all major features including security, connection management, architecture, and object relationships.
+Welcome to the comprehensive documentation for Familia v2.0. This guide collection provides detailed explanations of all major features including security, connection management, architecture, and object relationships.
 
-## 📚 Documentation Structure
+> **📖 Documentation Layers**
+> - **[Overview](../overview.md)** - Conceptual introduction and getting started
+> - **[Technical Reference](../reference/api-technical.md)** - Implementation patterns and technical details
+> - **This Guide Collection** - Deep-dive topic guides with detailed prose and examples
+
+## 📚 Guide Structure
 
 ### 🔐 Security & Data Protection
 
-1. **[Encrypted Fields Overview](Encrypted-Fields-Overview.md)** - Persistent encrypted storage with modular providers
-2. **[Transient Fields Guide](Transient-Fields-Guide.md)** - Non-persistent secure data handling with RedactedString
-3. **[Security Model](Security-Model.md)** - Cryptographic design and Ruby memory limitations
+1. **[Encrypted Fields](feature-encrypted-fields.md)** - Persistent encrypted storage with modular providers
+2. **[Transient Fields](feature-transient-fields.md)** - Non-persistent secure data handling with RedactedString
+3. **[Security Model](security-model.md)** - Cryptographic design and Ruby memory considerations
 
 ### 🏗️ Architecture & System Design
 
-4. **[Feature System Guide](Feature-System-Guide.md)** - Modular architecture with dependencies and conflict resolution _(new!)_
-5. **[Connection Pooling Guide](Connection-Pooling-Guide.md)** - Provider pattern for efficient Redis/Valkey pooling _(new!)_
-6. **[Relationships Guide](Relationships-Guide.md)** - Object relationships and membership system _(new!)_
+4. **[Feature System](feature-system.md)** - Modular architecture with dependencies and autoloader patterns
+5. **[Feature System for Developers](feature-system-devs.md)** - Advanced feature development patterns
+6. **[Connection Pooling](config-connection-pooling.md)** - Provider pattern for efficient Redis/Valkey pooling
+7. **[Core Field System](core-field-system.md)** - Field definitions and data type mappings
+
+### 🔗 Object Relationships & Identifiers
+
+8. **[Relationships](feature-relationships.md)** - Object relationships and membership system
+9. **[Relationship Methods](feature-relationships-methods.md)** - Detailed method reference for relationships
+10. **[Object Identifiers](feature-object-identifiers.md)** - Automatic ID generation with configurable strategies _(new!)_
+11. **[External Identifiers](feature-external-identifiers.md)** - Integration with external systems and legacy data _(new!)_
+
+### ⏱️ Time & Analytics Features
+
+12. **[Expiration](feature-expiration.md)** - TTL management and cascading expiration
+13. **[Quantization](feature-quantization.md)** - Time-based data bucketing for analytics
+14. **[Time Utilities](time-utilities.md)** - Time manipulation and formatting utilities
 
 ### 🛠️ Implementation & Usage
 
-7. **[Implementation Guide](Implementation-Guide.md)** - Configuration, providers, and advanced usage
-8. **[API Reference](API-Reference.md)** - Complete class and method documentation
-
-### 🚀 Operations (As Needed)
-
-9. **[Migrating Guide](Migrating-Guide.md)** - Upgrading existing fields _(coming soon)_
-10. **[Key Management](Key-Management.md)** - Rotation and best practices _(coming soon)_
+15. **[Implementation Guide](implementation.md)** - Advanced configuration and usage patterns
 
 ## 🚀 Quick Start Examples
 
@@ -81,31 +94,76 @@ class Customer < Familia::Horreum
   feature :relationships
   identifier_field :custid
   field :custid, :name, :email
-
-  # Customer collections
-  set :domains
+  set :domains  # Customer collections
 end
 
 class Domain < Familia::Horreum
   feature :relationships
   identifier_field :domain_id
   field :domain_id, :name, :dns_zone
-
-  # Declare membership in customer collections
-  member_of Customer, :domains, type: :set
+  participates_in Customer, :domains  # Bidirectional membership
 end
 
 # Create objects and establish relationships
 customer = Customer.new(custid: "cust123", name: "Acme Corp")
 domain = Domain.new(domain_id: "dom456", name: "acme.com")
 
-# Establish bidirectional relationship
-domain.add_to_customer_domains(customer.custid)
-customer.domains.add(domain.identifier)
+# Ruby-like syntax for relationships
+customer.domains << domain  # Clean collection syntax
 
 # Query relationships
 domain.in_customer_domains?(customer.custid)  # => true
 customer.domains.member?(domain.identifier)   # => true
+```
+
+### Object Identifiers (Auto-generation)
+```ruby
+class Document < Familia::Horreum
+  feature :object_identifier, generator: :uuid_v4
+  field :title, :content
+end
+
+class Session < Familia::Horreum
+  feature :object_identifier, generator: :hex
+  field :user_id, :data
+end
+
+# Automatic ID generation
+doc = Document.create(title: "My Document")
+doc.objid  # => "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+
+session = Session.create(user_id: "123")
+session.objid  # => "a1b2c3d4e5f6"
+```
+
+### External Identifiers (Legacy Integration)
+```ruby
+class ExternalUser < Familia::Horreum
+  feature :external_identifier
+  field :internal_id, :external_id, :name
+end
+
+# Map external system IDs to internal objects
+user = ExternalUser.create(
+  internal_id: SecureRandom.uuid,
+  external_id: "ext_12345",
+  name: "Legacy User"
+)
+
+# Find by external ID
+found = ExternalUser.find_by_external_id("ext_12345")
+```
+
+### Quantization (Analytics)
+```ruby
+class MetricsBucket < Familia::Horreum
+  feature :quantization
+  field :metric_key, :value_count
+  string :counter, quantize: [10.minutes, '%H:%M']
+end
+
+# Automatic time bucketing for analytics
+MetricsBucket.record_event("page_view")  # Groups into 10-min buckets
 ```
 
 

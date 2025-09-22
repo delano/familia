@@ -12,7 +12,6 @@ The Familia v2.0 relationships system provides three distinct relationship patte
 
 1. **`participates_in`** - Multi-presence tracking with score encoding (sorted sets)
 2. **`indexed_by`** - O(1) hash-based lookups by field values
-3. **`member_of`** - Bidirectional membership with collision-free naming
 
 Each type is optimized for different use cases and provides specific performance characteristics.
 
@@ -43,7 +42,7 @@ class Domain < Familia::Horreum
   field :domain_id, :name, :dns_zone
 
   # Define bidirectional membership
-  member_of Customer, :domains
+  participates_in Customer, :domains
 end
 ```
 
@@ -290,7 +289,7 @@ indexed_by :email, :customer_lookup, target: Customer   # Scoped per customer
 
 ### Bidirectional Membership
 
-The `member_of` relationship creates bidirectional associations with collision-free method naming:
+The `participates_in` relationship creates bidirectional associations with collision-free method naming:
 
 ```ruby
 class Customer < Familia::Horreum
@@ -312,7 +311,7 @@ class Domain < Familia::Horreum
   field :domain_id, :name
 
   # Declare membership in customer collections
-  member_of Customer, :domains, type: :set
+  participates_in Customer, :domains, type: :set
 end
 
 class Project < Familia::Horreum
@@ -321,7 +320,7 @@ class Project < Familia::Horreum
   identifier_field :project_id
   field :project_id, :name
 
-  member_of Customer, :projects, type: :list
+  participates_in Customer, :projects, type: :list
 end
 
 class User < Familia::Horreum
@@ -330,7 +329,7 @@ class User < Familia::Horreum
   identifier_field :user_id
   field :user_id, :email
 
-  member_of Customer, :users, type: :set
+  participates_in Customer, :users, type: :set
 end
 ```
 
@@ -348,8 +347,8 @@ class User < Familia::Horreum
   feature :relationships
 
   # Both memberships create unique methods
-  member_of Customer, :users, type: :set
-  member_of Team, :users, type: :set
+  participates_in Customer, :users, type: :set
+  participates_in Team, :users, type: :set
 end
 
 # Generated methods are collision-free:
@@ -378,9 +377,9 @@ class Document < Familia::Horreum
   field :doc_id, :title
 
   # Multiple membership contexts
-  member_of Customer, :documents, type: :set
-  member_of Project, :documents, type: :list
-  member_of Team, :shared_docs, type: :sorted_set
+  participates_in Customer, :documents, type: :set
+  participates_in Project, :documents, type: :list
+  participates_in Team, :shared_docs, type: :sorted_set
 end
 
 # Usage - same document can belong to multiple contexts
@@ -487,7 +486,7 @@ class User < Familia::Horreum
   field :user_id, :email, :role
 
   # Multi-tenant membership
-  member_of Organization, :members, type: :set
+  participates_in Organization, :members, type: :set
   class_participates_in :global_activity, score: :created_at
   class_indexed_by :email, :email_lookup
 end
@@ -498,7 +497,7 @@ class Project < Familia::Horreum
   identifier_field :project_id
   field :project_id, :name, :status
 
-  member_of Organization, :projects, type: :set
+  participates_in Organization, :projects, type: :set
   class_participates_in :status_timeline,
     score: ->(proj) { "#{Familia.now.to_i}.#{proj.status.hash}" }
 end
@@ -624,7 +623,7 @@ RSpec.describe "Relationships Feature" do
     end
   end
 
-  describe "member_of relationships" do
+  describe "participates_in relationships" do
     it "creates bidirectional associations" do
       domain.add_to_customer_domains(customer.custid)
       customer.domains.add(domain.identifier)
@@ -688,7 +687,6 @@ end
 1. **Choose the Right Type**:
    - Use `participates_in` for activity feeds, leaderboards, time-series data
    - Use `indexed_by` for fast lookups by field values
-   - Use `member_of` for bidirectional ownership/membership
 
 2. **Score Encoding Strategy**:
    - Combine timestamps with metadata for rich queries

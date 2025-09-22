@@ -2,12 +2,12 @@
 
 Here are the methods automatically generated for each relationship type in the new clean API:
 
-## member_of Relationships
+## participates_in Relationships
 
 When you declare:
 ```ruby
 class Domain < Familia::Horreum
-  member_of Customer, :domains
+  participates_in Customer, :domains
 end
 ```
 
@@ -103,7 +103,7 @@ From the relationships example file, you can see the new clean API in action:
 ```ruby
 # Domain declares membership in Customer collections
 class Domain < Familia::Horreum
-  member_of Customer, :domains
+  participates_in Customer, :domains
   class_participates_in :active_domains, score: -> { status == 'active' ? Time.now.to_i : 0 }
 end
 
@@ -136,7 +136,7 @@ found_id = Customer.email_lookup.get("admin@acme.com")
 ## Method Naming Conventions
 
 The relationship system uses consistent naming patterns:
-- **member_of**: `{add_to|remove_from|in}_#{parent_class.downcase}_#{collection_name}`
+- **participates_in**: `{add_to|remove_from|in}_#{parent_class.downcase}_#{collection_name}`
 - **class_participates_in**: `{add_to|remove_from}_#{collection_name}` (class methods)
 - **class_indexed_by**: `{add_to|remove_from}_class_#{index_name}` (instance methods)
 - **indexed_by with context**: `{add_to|remove_from}_#{context_class.downcase}_#{index_name}` (instance methods)

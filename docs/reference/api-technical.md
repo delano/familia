@@ -280,7 +280,7 @@ class Domain < Familia::Horreum
   field :domain_id, :name, :status
 
   # Bidirectional membership with clean << operator support
-  member_of Customer, :domains
+  participates_in Customer, :domains
 
   # Relationship-scoped indexing (per-customer domain lookups)
   indexed_by :name, :domain_index, parent: Customer

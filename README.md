@@ -142,7 +142,7 @@ class Domain < Familia::Horreum
   field :domain_id, :name, :status
 
   # Bidirectional membership
-  member_of Customer, :domains
+  participates_in Customer, :domains
 end
 
 # Clean, Ruby-like syntax
