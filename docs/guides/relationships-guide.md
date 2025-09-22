@@ -224,7 +224,7 @@ organization = Organization.new(org_id: 'acme_corp')
 organization.find_by_department('engineering')        # Find user by department within this org
 ```
 
-### Context Parameter Usage Patterns
+### Target Parameter Usage Patterns
 
 Understanding when to use global vs class context:
 
@@ -261,20 +261,15 @@ brand = Brand.new(brand_id: 'apple', name: 'Apple Inc.')
 brand.find_by_category('laptops')         # Find products in this brand's laptop category
 ```
 
-### Context Parameter Reference
+### Target Parameter Reference
 
 The `context` parameter is a **required** architectural decision that determines index scope:
 
 | Context Type | Usage | Valkey/Redis Key Pattern | When to Use |
 |--------------|--------|------------------|-------------|
-| `:global` | `context: :global` | `class_name:index_name` | Field values unique system-wide (emails, usernames, API keys) |
 | Class | `context: SomeClass` | `someclass:instance_id:index_name:field_value` | Field values unique within parent object scope (project names per team) |
 
 #### Generated Methods
-
-**Global Context** (`context: :global`):
-- **Instance methods**: `object.add_to_global_index_name`, `object.remove_from_global_index_name`
-- **Class methods**: `Class.index_name` (returns hash), `Class.find_by_field`
 
 **Class Context** (`context: Customer`):
 - **Instance methods**: `object.add_to_customer_index_name(customer)`, `object.remove_from_customer_index_name(customer)`

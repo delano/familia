@@ -254,7 +254,7 @@ participates_in Customer, :user_activity, score: :last_seen
 
 **Key Changes**:
 1. **Class-level relationships**: Use `class_` prefix (`class_participates_in`, `class_indexed_by`)
-2. **Relationship-scoped**: Use `context:` parameter instead of `:global` symbol
+2. **Relationship-scoped**: Use `target:` parameter instead of `:global` symbol
 3. **Automatic management**: Objects automatically added to class-level collections on save
 4. **Clean syntax**: Collections support `<<` operator for Ruby-like relationship building
 5. **Simplified storage**: All indexes stored at class level (parent is conceptual only)

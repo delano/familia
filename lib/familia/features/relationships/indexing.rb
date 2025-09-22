@@ -28,13 +28,8 @@ module Familia
           # @example Target-based indexing
           #   indexed_by :display_name, :domain_index, target: Customer
           #
-          # @example Global indexing
-          #   indexed_by :display_name, :global_domain_index, target: :global
           def indexed_by(field, index_name, target:, finder: true)
             target_class = target
-
-            # Handle special :global target for class-level indexing
-            return class_indexed_by(field, index_name, finder: finder) if target == :global
 
             target_class_name = if target_class.is_a?(Class)
                                   # Store the actual class name for consistency

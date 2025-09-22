@@ -49,7 +49,6 @@ module Familia
     #
     #     # O(1) lookups with Valkey/Redis hashes
     #     indexed_by :display_name, :domain_index, target: Customer
-    #     indexed_by :display_name, :global_domain_index, target: :global
     #
     #     # Participation with bidirectional control (no method collisions)
     #     participates_in Customer, :domains
