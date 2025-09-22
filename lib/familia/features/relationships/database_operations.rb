@@ -42,7 +42,7 @@ module Familia
         def update_multiple_presence(collections, action, identifier, default_score = nil)
           return unless collections&.any?
 
-          conn = self.class.dbclient
+          conn = dbclient
 
           atomic_operation(conn) do |tx|
             collections.each do |collection_config|
@@ -244,17 +244,6 @@ module Familia
             end
 
             break if cursor.zero?
-          end
-        end
-
-        # Get Valkey/Redis connection for the current class or instance
-        def dbclient
-          if self.class.respond_to?(:dbclient)
-            self.class.dbclient
-          elsif respond_to?(:dbclient)
-            dbclient
-          else
-            Familia.dbclient
           end
         end
 
