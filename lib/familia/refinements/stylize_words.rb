@@ -96,7 +96,7 @@ module Familia
           when :upper
             split(/[_-]/).map(&:capitalize).join
           else
-            raise ArgumentError, "Uknown stylization in first_letter: #{first_letter}"
+            raise ArgumentError, "Unknown stylization in first_letter: #{first_letter}"
           end
         end
       end
