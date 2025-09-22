@@ -347,7 +347,7 @@ module Familia
       #
       def extend_expiration(duration)
         current_ttl = ttl
-        return false if current_ttl.positive? # No current expiration set
+        return false unless current_ttl.positive? # no current expiration set
 
         new_ttl = current_ttl + duration.to_f
         expire(new_ttl)
