@@ -5,7 +5,7 @@
 
 require_relative '../helpers/test_helpers'
 
-class MockRedis
+class MockDatabase
   attr_reader :logged_commands
 
   def initialize
@@ -27,21 +27,21 @@ class MockRedis
   end
 end
 
-## MockRedis can log commands with timing
-dbclient = MockRedis.new
+## MockDatabase can log commands with timing
+dbclient = MockDatabase.new
 result = dbclient.get("test_key")
-[result, dbclient.logged_commands.length, redis.logged_commands.first[:command]]
+[result, dbclient.logged_commands.length, dbclient.logged_commands.first[:command]]
 #=> ["test_value", 1, "GET"]
 
-## RedisCommandCounter tracks command metrics (if available)
+## DatabaseCommandCounter tracks command metrics (if available)
 begin
-  counter = RedisCommandCounter.new
+  counter = DatabaseCommandCounter.new
   counter.increment("GET")
   counter.increment("SET")
   counter.increment("GET")
   [counter.count("GET"), counter.count("SET"), counter.total]
 rescue NameError
-  # Skip if RedisCommandCounter not available
+  # Skip if DatabaseCommandCounter not available
   [2, 1, 3]
 end
 #=> [2, 1, 3]
