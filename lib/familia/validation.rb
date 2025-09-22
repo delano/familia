@@ -28,7 +28,7 @@
 #
 #   ## User save executes expected Valkey/Redis commands
 #   user = TestUser.new(id: "123", name: "John")
-#   assert_redis_commands do |expect|
+#   assert_database_commands do |expect|
 #     expect.hset("testuser:123:object", "name", "John")
 #     user.save
 #   end

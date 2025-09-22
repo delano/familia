@@ -159,7 +159,7 @@ module Familia
       end
 
       # Capture and return Valkey/Redis commands without validation
-      def capture_redis_commands(&block)
+      def capture_database_commands(&block)
         CommandRecorder.start_recording
         register_middleware_if_needed
         block.call if block_given?

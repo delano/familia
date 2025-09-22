@@ -21,7 +21,7 @@ module Familia
     #   - nil - Valid response for certain operations
     #
     # @example Validating a command response
-    #   response = redis.set("key", "value")
+    #   response = dbclient.set("key", "value")
     #   valid = @valid_command_return_values.include?(response)
     #   # => true if response is "OK"
     #

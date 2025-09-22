@@ -88,9 +88,9 @@ module Familia
       end
 
       # Assert that no Valkey/Redis commands were executed
-      def assert_no_redis_commands(&block)
+      def assert_no_database_commands(&)
         CommandRecorder.start_recording
-        block.call if block_given?
+        yield if block_given?
         commands = CommandRecorder.stop_recording
 
         unless commands.command_count == 0
@@ -146,9 +146,9 @@ module Familia
       end
 
       # Capture and return Valkey/Redis commands without validation
-      def capture_redis_commands(&block)
+      def capture_database_commands(&)
         CommandRecorder.start_recording
-        block.call if block_given?
+        yield if block_given?
         CommandRecorder.stop_recording
       end
 
@@ -172,9 +172,9 @@ module Familia
       end
 
       # Assert efficient command usage (no N+1 patterns)
-      def assert_efficient_commands(&block)
+      def assert_efficient_commands(&)
         validator = Validator.new(performance_tracking: true)
-        commands = capture_redis_commands(&block)
+        commands = capture_database_commands(&)
 
         analysis = validator.analyze_performance(commands)
 
@@ -271,7 +271,7 @@ module Familia
 
       # Debugging helpers
       def debug_print_commands(command_sequence = nil)
-        commands = command_sequence || capture_redis_commands { yield if block_given? }
+        commands = command_sequence || capture_database_commands { yield if block_given? }
 
         puts "Redis Commands Executed (#{commands.command_count} total):"
         puts "=" * 50
