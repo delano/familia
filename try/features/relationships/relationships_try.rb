@@ -72,7 +72,7 @@ TestDomain.included_modules.map(&:name).include?('Familia::Features::Relationshi
 @domain.respond_to?(:permission_encode)
 #=> true
 
-## Redis operations functionality is available
+## db operations functionality is available
 @domain.respond_to?(:atomic_operation)
 #=> true
 

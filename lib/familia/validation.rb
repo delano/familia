@@ -1,8 +1,8 @@
 # lib/familia/validation.rb
 
-# Redis Command Validation Framework for Familia
+# Valkey/Redis Command Validation Framework for Familia
 #
-# Provides comprehensive validation of Redis operations to ensure commands
+# Provides comprehensive validation of db operations to ensure commands
 # execute exactly as expected, with particular focus on atomicity verification
 # for transaction-based operations.
 #
@@ -26,7 +26,7 @@
 #   require_relative 'lib/familia/validation'
 #   extend Familia::Validation::TestHelpers
 #
-#   ## User save executes expected Redis commands
+#   ## User save executes expected Valkey/Redis commands
 #   user = TestUser.new(id: "123", name: "John")
 #   assert_redis_commands do |expect|
 #     expect.hset("testuser:123:object", "name", "John")
@@ -60,7 +60,7 @@ module Familia
       Validator.new(options)
     end
 
-    # Validate a block of code against expected Redis commands
+    # Validate a block of code against expected Valkey/Redis commands
     def self.validate(options = {}, &block)
       validator(options).validate(&block)
     end
@@ -70,7 +70,7 @@ module Familia
       validator(options).validate_atomicity(&block)
     end
 
-    # Capture Redis commands without validation
+    # Capture Valkey/Redis commands without validation
     def self.capture_commands(&block)
       CommandRecorder.start_recording
       block.call if block_given?
@@ -83,7 +83,7 @@ module Familia
       PerformanceAnalyzer.new(commands).analyze
     end
 
-    # Register validation middleware with Redis client
+    # Register validation middleware with Valkey/Redis client
     def self.register_middleware!
       if defined?(RedisClient)
         RedisClient.register(CommandRecorder::Middleware)

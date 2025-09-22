@@ -472,7 +472,7 @@ end
 end
 #=> 100
 
-## Stage 1: Redis pre-filtering is O(log N + M) efficient
+## Stage 1: Valkey/Redis pre-filtering is O(log N + M) efficient
 @start_time = Familia.now
 @large_accessible = @perf_test_doc.accessible_items(@large_collection)
 @stage1_time = Familia.now - @start_time

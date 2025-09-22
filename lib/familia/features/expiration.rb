@@ -145,8 +145,8 @@ module Familia
     #
     # - TTL operations are performed on Redis/Valkey side with minimal overhead
     # - Cascading expiration uses pipelining for efficiency when possible
-    # - Zero expiration values skip Redis EXPIRE calls entirely
-    # - TTL queries are direct Redis operations (very fast)
+    # - Zero expiration values skip Valkey/Redis EXPIRE calls entirely
+    # - TTL queries are direct db operations (very fast)
     #
     module Expiration
       @default_expiration = nil
@@ -276,7 +276,7 @@ module Familia
         end
 
         # If zero, simply skip setting an expiry for this key. If we were to set
-        # 0, Redis would drop the key immediately.
+        # 0, Valkey/Redis would drop the key immediately.
         if default_expiration.zero?
           Familia.ld "[update_expiration] No expiration for #{self.class} (#{dbkey})"
           return true

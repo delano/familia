@@ -175,7 +175,7 @@ module Familia
 
             # === Two-Stage Filtering Methods ===
 
-            # Stage 1: Redis pre-filtering via zset membership
+            # Stage 1: Valkey/Redis pre-filtering via zset membership
             define_method :accessible_items do |collection_key|
               self.class.dbclient.zrange(collection_key, 0, -1, with_scores: true)
             end

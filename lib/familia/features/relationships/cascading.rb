@@ -376,7 +376,7 @@ module Familia
             preview
           end
 
-          # Find all Redis keys that would be affected by removing this object
+          # Find all Valkey/Redis keys that would be affected by removing this object
           def find_affected_keys(strategy_info)
             affected_keys = []
 

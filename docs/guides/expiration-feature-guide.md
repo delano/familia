@@ -246,7 +246,7 @@ end
 ```ruby
 session = UserSession.find('session_123')
 
-# Check TTL using Redis TTL command (returns seconds remaining)
+# Check TTL using Valkey/Redis TTL command (returns seconds remaining)
 ttl_seconds = session.ttl  # e.g., 1800 (30 minutes left)
 
 # Convert to more readable format

@@ -4,13 +4,13 @@ require 'concurrent-ruby'
 
 module Familia
   module Validation
-    # Enhanced command recorder that captures Redis commands with full context
+    # Enhanced command recorder that captures Valkey/Redis commands with full context
     # for validation purposes. Extends the existing DatabaseLogger functionality
     # to provide detailed command tracking including transaction boundaries.
     #
     # @example Basic usage
     #   CommandRecorder.start_recording
-    #   # ... perform Redis operations
+    #   # ... perform db operations
     #   commands = CommandRecorder.stop_recording
     #   puts commands.map(&:to_s)
     #
@@ -33,7 +33,7 @@ module Familia
       @transaction_stack = Concurrent::ThreadLocalVar.new { [] }
       @pipeline_stack = Concurrent::ThreadLocalVar.new { [] }
 
-      # Represents a single Redis command with full context
+      # Represents a single Valkey/Redis command with full context
       class RecordedCommand
         attr_reader :command, :args, :result, :timestamp, :duration_us, :context, :command_type
 
@@ -100,7 +100,7 @@ module Familia
         end
       end
 
-      # Represents a sequence of Redis commands with transaction boundaries
+      # Represents a sequence of Valkey/Redis commands with transaction boundaries
       class CommandSequence
         attr_reader :commands, :transaction_blocks, :pipeline_blocks
 
@@ -218,7 +218,7 @@ module Familia
         end
       end
 
-      # Start recording Redis commands for the current thread
+      # Start recording Valkey/Redis commands for the current thread
       def start_recording
         @recording_state.value = true
         @recorded_commands.value = CommandSequence.new
@@ -239,7 +239,7 @@ module Familia
         @recording_state.value == true
       end
 
-      # Record a Redis command with full context
+      # Record a Valkey/Redis command with full context
       def record_command(command:, args:, result:, timestamp:, duration_us:, context: {})
         return unless recording?
 

@@ -2,7 +2,7 @@
 
 class Familia::DataType
   module Serialization
-    # Serializes a value for storage in Redis.
+    # Serializes a value for storage in the database.
     #
     # @param val [Object] The value to be serialized.
     # @param strict_values [Boolean] Whether to enforce strict value

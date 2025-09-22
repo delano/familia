@@ -20,11 +20,11 @@ module Familia
         dbclient.move dbkey, logical_database
       end
 
-      # Checks if the calling object's key exists in Redis.
+      # Checks if the calling object's key exists in the database.
       #
       # @param check_size [Boolean] When true (default), also verifies the hash has a non-zero size.
       #   When false, only checks key existence regardless of content.
-      # @return [Boolean] Returns `true` if the key exists in Redis. When `check_size` is true,
+      # @return [Boolean] Returns `true` if the key exists in the database. When `check_size` is true,
       #   also requires the hash to have at least one field.
       #
       # @example Check existence with size validation (default behavior)

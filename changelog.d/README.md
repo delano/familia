@@ -53,8 +53,8 @@ git commit
 - **One Fragment Per Change:** Keep each fragment focused on a single feature, fix, or improvement.
 - **Documenting AI Assistance:** If a change involved significant AI assistance, place it in its own fragment. This ensures the `### AI Assistance` section clearly corresponds to the single change described in that fragment.
 - **Write for a Human Audience:** Describe the *impact* of the change, not just the implementation details.
-    - **Good:** "Improved the performance and stability of Redis connections under high load."
-    - **Bad:** "Refactored the `RedisManager`."
+    - **Good:** "Improved the performance and stability of Database connections under high load."
+    - **Bad:** "Refactored the `DatabaseManager`."
 - **Be Specific:** Avoid generic messages like "fixed a bug." Clearly state what was fixed.
 - **Include Context:** Reference issue or pull request numbers to provide a link to the discussion and implementation details. `scriv` will automatically create links for them.
     - **Example:** `- Fixed a bug where users could not reset their passwords. PR #123`

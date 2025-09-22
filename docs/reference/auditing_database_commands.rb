@@ -2,8 +2,8 @@
 
 # examples/redis_command_validation_example.rb
 #
-# Comprehensive example demonstrating Redis command validation for Familia
-# This example shows how to validate that Redis operations execute exactly
+# Comprehensive example demonstrating Valkey/Redis command validation for Familia
+# This example shows how to validate that db operations execute exactly
 # as expected, with particular focus on atomic operations.
 
 require_relative '../lib/familia'
@@ -50,7 +50,7 @@ class TransferService
   end
 end
 
-puts '🧪 Redis Command Validation Framework Demo'
+puts '🧪 Valkey/Redis Command Validation Framework Demo'
 puts '=' * 50
 
 # Clean up any existing test data
@@ -101,7 +101,7 @@ puts '-' * 30
 begin
   validator = Familia::Validation::Validator.new
 
-  # This should pass - we expect the exact Redis commands
+  # This should pass - we expect the exact Valkey/Redis commands
   result = validator.validate do |expect|
     expect.transaction do |tx|
       tx.hset('account:acc004:object', 'balance', '1500')
@@ -123,7 +123,7 @@ begin
   puts "Summary: #{result.summary}"
 rescue StandardError => e
   puts "Validation demo encountered error: #{e.message}"
-  puts 'This is expected as the framework needs Redis middleware integration'
+  puts 'This is expected as the framework needs Valkey/Redis middleware integration'
 end
 
 # Example 4: Performance Analysis
@@ -185,10 +185,10 @@ end
 puts "\n6. Framework Architecture Overview"
 puts '-' * 30
 puts "
-The Redis Command Validation Framework provides:
+The Valkey/Redis Command Validation Framework provides:
 
 🔍 Command Recording
-  - Captures all Redis commands with full context
+  - Captures all Valkey/Redis commands with full context
   - Tracks transaction boundaries (MULTI/EXEC)
   - Records timing and performance metrics
 
@@ -213,7 +213,7 @@ The Redis Command Validation Framework provides:
   - Transaction overhead analysis
 
 Key Benefits:
-• Brass-tacks Redis command validation
+• Brass-tacks Valkey/Redis command validation
 • Atomic operation verification
 • Performance optimization insights
 • Clear diagnostic messages

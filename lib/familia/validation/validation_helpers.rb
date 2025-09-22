@@ -2,7 +2,7 @@
 
 module Familia
   module Validation
-    # Test helper methods for integrating Redis command validation with
+    # Test helper methods for integrating Valkey/Redis command validation with
     # the tryouts testing framework. Provides easy-to-use assertion methods
     # and automatic setup/cleanup for command validation tests.
     #
@@ -10,7 +10,7 @@ module Familia
     #   require_relative '../validation/validation_helpers'
     #   extend Familia::Validation::TestHelpers
     #
-    #   ## User save should execute expected Redis commands
+    #   ## User save should execute expected Valkey/Redis commands
     #   user = TestUser.new(id: "123", name: "John")
     #
     #   assert_redis_commands do |expect|
@@ -33,7 +33,7 @@ module Familia
     #   #=> true
     #
     module TestHelpers
-      # Assert that a block executes the expected Redis commands
+      # Assert that a block executes the expected Valkey/Redis commands
       def assert_redis_commands(message = nil, &block)
         validator = Validator.new
         result = validator.validate(&block)
@@ -47,7 +47,7 @@ module Familia
         result.valid?
       end
 
-      # Assert that a block executes Redis commands atomically
+      # Assert that a block executes Valkey/Redis commands atomically
       def assert_atomic_operation(message = nil, &block)
         validator = Validator.new(strict_atomicity: true)
 
@@ -87,14 +87,14 @@ module Familia
         result.valid?
       end
 
-      # Assert that no Redis commands were executed
+      # Assert that no Valkey/Redis commands were executed
       def assert_no_redis_commands(&block)
         CommandRecorder.start_recording
         block.call if block_given?
         commands = CommandRecorder.stop_recording
 
         unless commands.command_count == 0
-          error_msg = "Expected no Redis commands, but #{commands.command_count} were executed:"
+          error_msg = "Expected no Valkey/Redis commands, but #{commands.command_count} were executed:"
           commands.commands.each { |cmd| error_msg += "\n  #{cmd}" }
           raise ValidationError, error_msg
         end
@@ -110,7 +110,7 @@ module Familia
 
         actual_count = commands.command_count
         unless actual_count == expected_count
-          error_msg = "Expected #{expected_count} Redis commands, but #{actual_count} were executed"
+          error_msg = "Expected #{expected_count} Valkey/Redis commands, but #{actual_count} were executed"
           raise ValidationError, error_msg
         end
 
@@ -145,7 +145,7 @@ module Familia
         true
       end
 
-      # Capture and return Redis commands without validation
+      # Capture and return Valkey/Redis commands without validation
       def capture_redis_commands(&block)
         CommandRecorder.start_recording
         block.call if block_given?
@@ -179,7 +179,7 @@ module Familia
         analysis = validator.analyze_performance(commands)
 
         if analysis[:efficiency_score] < 70 # Threshold for acceptable efficiency
-          error_msg = "Inefficient Redis command usage detected (score: #{analysis[:efficiency_score]})"
+          error_msg = "Inefficient Valkey/Redis command usage detected (score: #{analysis[:efficiency_score]})"
 
           if analysis[:potential_n_plus_one].any?
             error_msg += "\nPotential N+1 patterns:"

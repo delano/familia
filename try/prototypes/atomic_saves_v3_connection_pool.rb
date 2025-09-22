@@ -6,7 +6,7 @@
 # The issue is that refresh! is being called within the transaction, but
 #  Database MULTI transactions queue commands and don't return results until
 #  EXEC. So refresh! inside the transaction isn't going to see the current
-#  state from Redis.
+#  state from the database.
 #
 #  The problem is more fundamental: Database MULTI/EXEC transactions don't
 #  work the way this code expects them to. In Redis:

@@ -20,9 +20,9 @@ module Familia
     #
     # Key improvements in v2:
     # - Multi-presence: Objects can exist in multiple collections simultaneously
-    # - Score encoding: Metadata embedded in Redis scores for efficiency
+    # - Score encoding: Metadata embedded in Valkey/Redis scores for efficiency
     # - Collision-free: Method names include collection names to prevent conflicts
-    # - Redis-native: All operations use Redis commands, no Ruby iteration
+    # - Redis-native: All operations use Valkey/Redis commands, no Ruby iteration
     # - Atomic operations: Multi-collection updates happen atomically
     #
     # Breaking changes from v1:
@@ -48,7 +48,7 @@ module Familia
     #     tracked_in Team, :domains, score: :added_at
     #     tracked_in Organization, :all_domains, score: :created_at
     #
-    #     # O(1) lookups with Redis hashes
+    #     # O(1) lookups with Valkey/Redis hashes
     #     indexed_by :display_name, :domain_index, context: Customer
     #     indexed_by :display_name, :global_domain_index, context: :global
     #
@@ -361,7 +361,7 @@ module Familia
           true
         end
 
-        # Refresh relationship data from Redis (useful after external changes)
+        # Refresh relationship data from Valkey/Redis (useful after external changes)
         def refresh_relationships!
           # Clear any cached relationship data
           @relationship_status = nil
@@ -384,7 +384,7 @@ module Familia
           }
         end
 
-        # Direct Redis access for instance methods
+        # Direct Valkey/Redis access for instance methods
         def redis
           self.class.dbclient
         end
@@ -426,7 +426,7 @@ module Familia
 
         private
 
-        # Find all Redis keys related to this object
+        # Find all Valkey/Redis keys related to this object
         def find_related_dbkeys
           related_keys = []
           id = identifier

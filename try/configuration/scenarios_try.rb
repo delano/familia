@@ -24,7 +24,7 @@ rescue StandardError => e
 end
 #=> false
 
-## custom Redis URI configuration doesn't always work
+## custom Valkey/Redis URI configuration doesn't always work
 begin
   # Test with custom URI
   original_uri = Familia.uri

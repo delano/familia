@@ -3,7 +3,7 @@
 module Familia
   module Features
     module Relationships
-      # Tracking module for tracked_in relationships using Redis sorted sets
+      # Tracking module for tracked_in relationships using Valkey/Redis sorted sets
       # Provides multi-presence support where objects can exist in multiple collections
       module Tracking
         # Class-level tracking configurations

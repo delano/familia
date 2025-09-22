@@ -19,7 +19,7 @@ module Familia
           # @param owner_class [Class] The class that owns the collection
           # @param collection_name [Symbol] Name of the collection on the owner
           # @param score [Symbol, Proc, nil] How to calculate the score for sorted sets
-          # @param type [Symbol] Type of Redis collection (:sorted_set, :set, :list)
+          # @param type [Symbol] Type of Valkey/Redis collection (:sorted_set, :set, :list)
           #
           # @example Basic membership
           #   member_of Customer, :domains

@@ -34,7 +34,7 @@ Generates: Customer.add_to_active_users(customer) and Customer.active_users
 
 indexed_by Relationships
 
-The `indexed_by` method creates Redis hash-based indexes for O(1) field lookups. The `context` parameter determines index ownership and scope.
+The `indexed_by` method creates Valkey/Redis hash-based indexes for O(1) field lookups. The `context` parameter determines index ownership and scope.
 
 **Global Context (Shared Index)**
 When you declare:
@@ -49,7 +49,7 @@ Generated class methods:
 - Customer.remove_from_email_lookup(customer) - Remove customer from global email index
 - Customer.email_lookup - Access the global hash index directly (supports .get(email))
 
-Redis key pattern: `global:email_lookup`
+Valkey/Redis key pattern: `global:email_lookup`
 
 **Class Context (Per-Instance Index)**
 When you declare:
@@ -63,7 +63,7 @@ Generated class methods on Customer:
 - Customer.find_by_name(domain_name) - Find domain by name within this customer
 - Customer.find_all_by_name(domain_names) - Find multiple domains by names
 
-Redis key pattern: `customer:123:domain_index` (per customer instance)
+Valkey/Redis key pattern: `customer:123:domain_index` (per customer instance)
 
 **When to Use Each Context**
 - **Global context (`:global`)**: Use for system-wide lookups where the field value should be unique across all instances
@@ -100,7 +100,7 @@ The relationship system uses consistent naming patterns:
 - tracked_in: {add_to|remove_from}_#{collection_name} (class methods)
 - indexed_by: {add_to|remove_from}_#{index_name} (class methods)
 
-This automatic method generation creates a clean, predictable API that handles both the Redis operations and maintains referential consistency
+This automatic method generation creates a clean, predictable API that handles both the db operations and maintains referential consistency
 across related objects.
 
 
@@ -128,7 +128,7 @@ User.add_to_email_lookup(user)
 found_user_id = User.email_lookup.get("john@example.com")
 ```
 
-**Redis keys generated**: `global:email_lookup`, `global:username_lookup`
+**Valkey/Redis keys generated**: `global:email_lookup`, `global:username_lookup`
 
 ### Class Context Pattern
 Use `context: SomeClass` when field values are unique within a specific parent context:
@@ -159,7 +159,7 @@ customer.find_by_name("example.com")           # Find domain within this custome
 customer.find_all_by_subdomain(["www", "api"]) # Find multiple subdomains
 ```
 
-**Redis keys generated**: `customer:cust_123:domain_index`, `customer:cust_123:subdomain_index`
+**Valkey/Redis keys generated**: `customer:cust_123:domain_index`, `customer:cust_123:subdomain_index`
 
 ### Mixed Pattern Example
 A real-world example showing both patterns:

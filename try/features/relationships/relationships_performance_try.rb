@@ -337,14 +337,14 @@ all_collections_have_domain
 #=> true
 
 ## Partial failures should not leave inconsistent state
-# This would require more complex testing infrastructure to simulate Redis failures
+# This would require more complex testing infrastructure to simulate Valkey/Redis failures
 
-## Recovery from Redis connection issues
+## Recovery from Valkey/Redis connection issues
 begin
-  # Test graceful handling of Redis errors during relationship operations
+  # Test graceful handling of Valkey/Redis errors during relationship operations
   dead_domain = PerfDomain.new(domain_id: 'dead_test')
 
-  # This test would require mocking Redis to fail, which is complex in this context
+  # This test would require mocking Valkey/Redis to fail, which is complex in this context
   # For now, just verify that normal operations work
   dead_domain.save
   dead_domain.destroy!

@@ -56,7 +56,7 @@ end
 
 ## indexed_by Relationships
 
-The `indexed_by` method creates Redis hash-based indexes for O(1) field lookups with automatic management.
+The `indexed_by` method creates Valkey/Redis hash-based indexes for O(1) field lookups with automatic management.
 
 ### Class-Level Indexing (class_indexed_by)
 When you declare:

@@ -40,7 +40,7 @@ end
 customer = Customer.new(
   email: 'user@example.com',
   secret_recipe: 'Add extra vanilla',
-  diary_entry: 'Today I learned Redis is fast'
+  diary_entry: 'Today I learned Valkey/Redis is fast'
 )
 
 customer.save

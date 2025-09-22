@@ -5,7 +5,7 @@
 
 **relationships.rb** - Main orchestrator that unifies all relationship functionality into a single feature, providing the public API and coordinating between all submodules.
 
-**indexing.rb** - O(1) lookup capability via Redis hashes/sorted sets. Enables fast field-based searches both globally (`context: :global`) and parent-scoped (`context: ParentClass`).
+**indexing.rb** - O(1) lookup capability via Valkey/Redis hashes/sorted sets. Enables fast field-based searches both globally (`context: :global`) and parent-scoped (`context: ParentClass`).
 
 **tracking.rb** - Multi-presence management where objects can exist in multiple collections simultaneously with score-encoded metadata (timestamps, permissions, etc.).
 
@@ -17,9 +17,9 @@
 
 ## Supporting Modules
 
-**score_encoding.rb** - Embeds metadata directly into Redis scores for efficient storage and retrieval without additional round trips.
+**score_encoding.rb** - Embeds metadata directly into Valkey/Redis scores for efficient storage and retrieval without additional round trips.
 
-**database_operations.rb** - Low-level Redis command abstractions and atomic multi-collection operations via pipelines/transactions.
+**database_operations.rb** - Low-level Valkey/Redis command abstractions and atomic multi-collection operations via pipelines/transactions.
 
 **permission_management.rb** - Score-based permission encoding allowing fine-grained access control within collections.
 

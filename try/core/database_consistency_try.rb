@@ -35,7 +35,7 @@ end
 # 1. Database Consistency Verification
 # =============================================
 
-## Redis key structure follows expected pattern
+## Valkey/Redis key structure follows expected pattern
 @key_test = ConsistencyTestModel.new(id: next_test_id, name: 'Key Test')
 @key_test.save
 dbkey = @key_test.dbkey
@@ -139,7 +139,7 @@ end
 @empty_hash.save
 
 # Manually remove all fields to create an empty hash
-# First add a temp field then remove it, which creates empty hash in some Redis versions
+# First add a temp field then remove it, which creates empty hash in some Valkey/Redis versions
 Familia.dbclient.hset(@empty_hash.dbkey, 'temp_field', 'temp_value')
 Familia.dbclient.hdel(@empty_hash.dbkey, 'temp_field')
 # Now remove all remaining fields to create truly empty hash

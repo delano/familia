@@ -1,7 +1,7 @@
 # try/core/middleware_try.rb
 
-# Test Redis middleware components
-# Mock Redis client with middleware for testing
+# Test Valkey/Redis middleware components
+# Mock Valkey/Redis client with middleware for testing
 
 require_relative '../helpers/test_helpers'
 
@@ -28,9 +28,9 @@ class MockRedis
 end
 
 ## MockRedis can log commands with timing
-redis = MockRedis.new
-result = redis.get("test_key")
-[result, redis.logged_commands.length, redis.logged_commands.first[:command]]
+dbclient = MockRedis.new
+result = dbclient.get("test_key")
+[result, dbclient.logged_commands.length, redis.logged_commands.first[:command]]
 #=> ["test_value", 1, "GET"]
 
 ## RedisCommandCounter tracks command metrics (if available)
@@ -48,11 +48,11 @@ end
 
 ## Command counting utility works (if available)
 begin
-  redis = Familia.dbclient
+  dbclient = Familia.dbclient
   count = count_commands do
-    redis.set("test_key", "value")
-    redis.get("test_key")
-    redis.del("test_key")
+    dbclient.set("test_key", "value")
+    dbclient.get("test_key")
+    dbclient.del("test_key")
   end
   count >= 3
 rescue NameError, NoMethodError

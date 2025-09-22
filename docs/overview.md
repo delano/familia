@@ -2,7 +2,7 @@
 # Familia - Overview
 
 > [!NOTE]
-> This document refers to Valkey throughout, but all examples and patterns work identically with Redis. Familia supports both Valkey and Redis as they share the same protocol and data structures.
+> This document refers to Valkey throughout, but all examples and patterns work identically with the database. Familia supports both Valkey and Valkey/Redis as they share the same protocol and data structures.
 
 ## Introduction
 

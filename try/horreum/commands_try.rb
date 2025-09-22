@@ -1,4 +1,4 @@
-# Test Horreum Redis commands
+# Test Horreum Valkey/Redis commands
 
 require_relative '../helpers/test_helpers'
 

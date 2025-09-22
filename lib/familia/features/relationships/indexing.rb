@@ -3,7 +3,7 @@
 module Familia
   module Features
     module Relationships
-      # Indexing module for indexed_by relationships using Redis hashes
+      # Indexing module for indexed_by relationships using Valkey/Redis hashes
       # Provides O(1) lookups for finding objects by field values
       module Indexing
         using Familia::Refinements::SnakeCase

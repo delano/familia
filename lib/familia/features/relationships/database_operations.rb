@@ -8,9 +8,9 @@ module Familia
       module DatabaseOperations
         # Execute multiple Database operations atomically using MULTI/EXEC
         #
-        # @param redis [Redis] Redis connection to use
-        # @yield [Redis] Yields Redis connection in transaction context
-        # @return [Array] Results from Redis transaction
+        # @param redis [Redis] Valkey/Redis connection to use
+        # @yield [Redis] Yields Valkey/Redis connection in transaction context
+        # @return [Array] Results from Valkey/Redis transaction
         #
         # @example Atomic multi-collection update
         #   atomic_operation(redis) do |tx|
@@ -62,11 +62,11 @@ module Familia
           end
         end
 
-        # Perform Redis set operations (union, intersection, difference) on sorted sets
+        # Perform Valkey/Redis set operations (union, intersection, difference) on sorted sets
         #
         # @param operation [Symbol] Operation type (:union, :intersection, :difference)
-        # @param destination [String] Redis key for result storage
-        # @param source_keys [Array<String>] Source Redis keys to operate on
+        # @param destination [String] Valkey/Redis key for result storage
+        # @param source_keys [Array<String>] Source Valkey/Redis keys to operate on
         # @param weights [Array<Float>] Optional weights for union operations
         # @param aggregate [Symbol] Aggregation method (:sum, :min, :max)
         # @param ttl [Integer] TTL for destination key in seconds
@@ -112,7 +112,7 @@ module Familia
           redis.zcard(destination)
         end
 
-        # Create temporary Redis key with automatic cleanup
+        # Create temporary Valkey/Redis key with automatic cleanup
         #
         # @param base_name [String] Base name for the temporary key
         # @param ttl [Integer] TTL in seconds (default: 300)
@@ -134,7 +134,7 @@ module Familia
 
         # Batch add multiple items to a sorted set
         #
-        # @param redis_key [String] Redis sorted set key
+        # @param redis_key [String] Valkey/Redis sorted set key
         # @param items [Array<Hash>] Array of `{member: String, score: Float}` hashes
         # @param mode [Symbol] Add mode (:normal, :nx, :xx, :lt, :gt)
         #
@@ -165,7 +165,7 @@ module Familia
 
         # Query sorted set with score filtering and permission checking
         #
-        # @param redis_key [String] Redis sorted set key
+        # @param redis_key [String] Valkey/Redis sorted set key
         # @param start_score [Float] Minimum score (inclusive)
         # @param end_score [Float] Maximum score (inclusive)
         # @param offset [Integer] Offset for pagination
@@ -248,7 +248,7 @@ module Familia
           end
         end
 
-        # Get Redis connection for the current class or instance
+        # Get Valkey/Redis connection for the current class or instance
         def dbclient
           if self.class.respond_to?(:dbclient)
             self.class.dbclient
@@ -261,7 +261,7 @@ module Familia
 
         private
 
-        # Validate Redis key format
+        # Validate Valkey/Redis key format
         def validate_redis_key(key)
           raise ArgumentError, 'Redis key cannot be nil or empty' if key.nil? || key.empty?
           raise ArgumentError, 'Redis key must be a string' unless key.is_a?(String)

@@ -83,7 +83,7 @@ module Familia
       # This method performs a two-step process to safely retrieve and
       # instantiate objects:
       #
-      # 1. It first checks if the key exists in Redis. This is crucial because:
+      # 1. It first checks if the key exists in the database. This is crucial because:
       #    - It provides a definitive answer about the object's existence.
       #    - It prevents ambiguity that could arise from `hgetall` returning an
       #      empty hash for non-existent keys, which could lead to the creation
@@ -111,7 +111,7 @@ module Familia
         Familia.trace :FROM_KEY, dbclient, objkey, caller(1..1) if Familia.debug?
 
         # This is the reason for calling exists first. We want to definitively
-        # and without any ambiguity know if the object exists in Redis. If it
+        # and without any ambiguity know if the object exists in the database. If it
         # doesn't, we return nil. If it does, we proceed to load the object.
         # Otherwise, hgetall will return an empty hash, which will be passed to
         # the constructor, which will then be annoying to debug.
@@ -157,14 +157,14 @@ module Familia
       alias load find_by_id # deprecated
       alias from_identifier find_by_id # deprecated
 
-      # Checks if an object with the given identifier exists in Redis.
+      # Checks if an object with the given identifier exists in the database.
       #
       # @param identifier [String, Integer] The unique identifier for the object.
       # @param suffix [Symbol, nil] The suffix to use in the dbkey (default: class suffix).
       # @return [Boolean] true if the object exists, false otherwise.
       #
       # This method constructs the full dbkey using the provided identifier and suffix,
-      # then checks if the key exists in Redis.
+      # then checks if the key exists in the database.
       #
       # @example
       #   User.exists?(123)  # Returns true if user:123:object exists in Redis

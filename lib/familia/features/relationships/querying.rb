@@ -3,7 +3,7 @@
 module Familia
   module Features
     module Relationships
-      # Querying module for advanced Redis set operations on relationship collections
+      # Querying module for advanced Valkey/Redis set operations on relationship collections
       # Provides union, intersection, difference operations with permission filtering
       module Querying
         # Class-level querying capabilities
@@ -256,7 +256,7 @@ module Familia
 
           private
 
-          # Build Redis key for a collection
+          # Build Valkey/Redis key for a collection
           def build_collection_key(collection)
             if collection[:owner]
               owner = collection[:owner]
@@ -269,7 +269,7 @@ module Familia
             end
           end
 
-          # Build Redis keys for multiple collections
+          # Build Valkey/Redis keys for multiple collections
           def build_collection_keys(collections)
             collections.map { |collection| build_collection_key(collection) }
           end

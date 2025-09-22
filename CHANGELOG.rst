@@ -498,7 +498,7 @@ Added
 ~~~~~
 
 -  Complete API redesign for clarity and modern Ruby conventions
--  Valkey compatibility alongside traditional Redis support
+-  Valkey compatibility alongside traditional Valkey/Redis support
 -  Ruby 3.4+ modernization with fiber and thread safety improvements
 -  Connection pooling foundation with provider pattern architecture
 

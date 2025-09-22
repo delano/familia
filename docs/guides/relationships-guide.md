@@ -265,7 +265,7 @@ brand.find_by_category('laptops')         # Find products in this brand's laptop
 
 The `context` parameter is a **required** architectural decision that determines index scope:
 
-| Context Type | Usage | Redis Key Pattern | When to Use |
+| Context Type | Usage | Valkey/Redis Key Pattern | When to Use |
 |--------------|--------|------------------|-------------|
 | `:global` | `context: :global` | `class_name:index_name` | Field values unique system-wide (emails, usernames, API keys) |
 | Class | `context: SomeClass` | `someclass:instance_id:index_name:field_value` | Field values unique within parent object scope (project names per team) |
@@ -442,7 +442,7 @@ end
 class OptimizedQueries
   # Batch membership checks
   def check_multiple_memberships(user_ids, customer)
-    # Single Redis call instead of multiple
+    # Single Valkey/Redis call instead of multiple
     Customer.users.pipeline do |pipe|
       user_ids.each { |uid| pipe.sismember(customer.users.key, uid) }
     end
@@ -702,14 +702,14 @@ end
 
 3. **Performance Optimization**:
    - Batch operations when possible using pipelines
-   - Use appropriate Redis data types for your access patterns
+   - Use appropriate Valkey/Redis data types for your access patterns
    - Index only frequently-queried fields
 
 ### Memory and Storage
 
 1. **Efficient Bit Encoding**:
    - 8 bits can encode 256 permission combinations
-   - Single Redis sorted set score contains time + permissions
+   - Single Valkey/Redis sorted set score contains time + permissions
    - Reduces memory vs. separate permission records
 
 2. **Key Design**:

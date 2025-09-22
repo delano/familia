@@ -3,7 +3,7 @@
 module Familia
   module Validation
     # Main validation engine that orchestrates command recording and validation.
-    # Provides high-level interface for validating Redis operations against
+    # Provides high-level interface for validating db operations against
     # expectations with detailed reporting and atomicity verification.
     #
     # @example Basic validation
@@ -91,7 +91,7 @@ module Familia
         result
       end
 
-      # Validate that specific code executes expected Redis commands
+      # Validate that specific code executes expected Valkey/Redis commands
       def validate_execution(expectations_block, execution_block)
         expectations = CommandExpectations.new
         expectations_block.call(expectations)
@@ -158,7 +158,7 @@ module Familia
         PerformanceAnalyzer.new(command_sequence).analyze
       end
 
-      # Capture and return Redis commands without validation
+      # Capture and return Valkey/Redis commands without validation
       def capture_redis_commands(&block)
         CommandRecorder.start_recording
         register_middleware_if_needed
@@ -265,7 +265,7 @@ module Familia
           when 'MULTI'
             transaction_depth += 1
             if transaction_depth > 1
-              @errors << "Nested transactions detected - Redis does not support nested MULTI/EXEC"
+              @errors << "Nested transactions detected - Valkey/Redis does not support nested MULTI/EXEC"
             end
           when 'EXEC', 'DISCARD'
             transaction_depth -= 1
