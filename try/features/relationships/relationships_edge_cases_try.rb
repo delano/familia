@@ -24,13 +24,10 @@ class EdgeTestDomain < Familia::Horreum
   field :created_at
   field :score_value
 
-  # Test different score calculation methods - simplified
-  tracked_in EdgeTestCustomer, :domains, score: :created_at, on_destroy: :remove
-
-  # Test different collection types for membership
-  member_of EdgeTestCustomer, :domains, type: :sorted_set
-  member_of EdgeTestCustomer, :simple_domains, type: :set
-  member_of EdgeTestCustomer, :domain_list, type: :list
+  # Test different score calculation methods and collection types - simplified
+  participates_in EdgeTestCustomer, :domains, score: :created_at, on_destroy: :remove, type: :sorted_set
+  participates_in EdgeTestCustomer, :simple_domains, type: :set
+  participates_in EdgeTestCustomer, :domain_list, type: :list
 
   def calculated_score
     (score_value || 0) * 2

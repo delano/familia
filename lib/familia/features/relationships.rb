@@ -3,9 +3,8 @@
 require 'securerandom'
 require_relative 'relationships/score_encoding'
 require_relative 'relationships/database_operations'
-require_relative 'relationships/tracking'
+require_relative 'relationships/participation'
 require_relative 'relationships/indexing'
-require_relative 'relationships/membership'
 require_relative 'relationships/cascading'
 require_relative 'relationships/querying'
 require_relative 'relationships/permission_management'
@@ -42,24 +41,24 @@ module Familia
     #     field :created_at
     #     field :permission_bits
     #
-    #     # Multi-presence tracking with score encoding
-    #     tracked_in Customer, :domains,
-    #                score: -> { permission_encode(created_at, permission_bits) }
-    #     tracked_in Team, :domains, score: :added_at
-    #     tracked_in Organization, :all_domains, score: :created_at
+    #     # Multi-presence participation with score encoding
+    #     participates_in Customer, :domains,
+    #                     score: -> { permission_encode(created_at, permission_bits) }
+    #     participates_in Team, :domains, score: :added_at
+    #     participates_in Organization, :all_domains, score: :created_at
     #
     #     # O(1) lookups with Valkey/Redis hashes
     #     indexed_by :display_name, :domain_index, context: Customer
     #     indexed_by :display_name, :global_domain_index, context: :global
     #
-    #     # Context-aware membership (no method collisions)
-    #     member_of Customer, :domains
-    #     member_of Team, :domains
-    #     member_of Organization, :domains
+    #     # Participation with bidirectional control (no method collisions)
+    #     participates_in Customer, :domains
+    #     participates_in Team, :domains, bidirectional: false
+    #     participates_in Organization, :domains, type: :set
     #   end
     #
     # @example Generated methods (collision-free)
-    #   # Tracking methods
+    #   # Participation methods
     #   Customer.domains                    # => Familia::SortedSet
     #   Customer.add_domain(domain, score)  # Add to customer's domains
     #   domain.in_customer_domains?(customer) # Check membership
@@ -68,7 +67,7 @@ module Familia
     #   Customer.find_by_display_name(name) # O(1) lookup
     #   Domain.find_by_display_name(name) # Global lookup
     #
-    #   # Membership methods (collision-free naming)
+    #   # Bidirectional methods (collision-free naming)
     #   domain.add_to_customer_domains(customer)  # Specific collection
     #   domain.add_to_team_domains(team)          # Different collection
     #   domain.in_customer_domains?(customer)     # Check specific membership
@@ -111,14 +110,11 @@ module Familia
         base.include ScoreEncoding
         base.include DatabaseOperations
 
-        base.include Tracking
-        base.extend Tracking::ModelClassMethods
+        base.include Participation
+        base.extend Participation::ModelClassMethods
 
         base.include Indexing
         base.extend Indexing::ModelClassMethods
-
-        base.include Membership
-        base.extend Membership::ModelClassMethods
 
         base.include Cascading
         base.extend Cascading::ModelClassMethods
@@ -157,9 +153,8 @@ module Familia
         def relationship_configs
           configs = {}
 
-          configs[:tracking] = tracking_relationships if respond_to?(:tracking_relationships)
+          configs[:participation] = participation_relationships if respond_to?(:participation_relationships)
           configs[:indexing] = indexing_relationships if respond_to?(:indexing_relationships)
-          configs[:membership] = membership_relationships if respond_to?(:membership_relationships)
 
           configs
         end
@@ -171,25 +166,14 @@ module Familia
           # Check for method name collisions
           method_names = []
 
-          if respond_to?(:tracking_relationships)
-            tracking_relationships.each do |config|
-              context_name = config[:context_class_name].downcase
+          if respond_to?(:participation_relationships)
+            participation_relationships.each do |config|
+              target_name = config[:target_class_name].downcase
               collection_name = config[:collection_name]
 
-              method_names << "in_#{context_name}_#{collection_name}?"
-              method_names << "add_to_#{context_name}_#{collection_name}"
-              method_names << "remove_from_#{context_name}_#{collection_name}"
-            end
-          end
-
-          if respond_to?(:membership_relationships)
-            membership_relationships.each do |config|
-              owner_name = config[:owner_class_name].downcase
-              collection_name = config[:collection_name]
-
-              method_names << "in_#{owner_name}_#{collection_name}?"
-              method_names << "add_to_#{owner_name}_#{collection_name}"
-              method_names << "remove_from_#{owner_name}_#{collection_name}"
+              method_names << "in_#{target_name}_#{collection_name}?"
+              method_names << "add_to_#{target_name}_#{collection_name}"
+              method_names << "remove_from_#{target_name}_#{collection_name}"
             end
           end
 
@@ -272,10 +256,10 @@ module Familia
             # Automatically update all indexes when object is saved
             update_all_indexes if respond_to?(:update_all_indexes)
 
-            # Auto-add to class-level tracking collections
-            add_to_class_tracking_collections if respond_to?(:add_to_class_tracking_collections)
+            # Auto-add to class-level participation collections
+            add_to_class_participation_collections if respond_to?(:add_to_class_participation_collections)
 
-            # NOTE: Relationship-specific membership and tracking updates are done explicitly
+            # NOTE: Relationship-specific participation updates are done explicitly
             # since we need to know which specific collections this object should be in
           end
 
@@ -294,18 +278,14 @@ module Familia
         def relationship_status
           status = {
             identifier: identifier,
-            tracking_memberships: [],
-            membership_collections: [],
+            participation_memberships: [],
             index_memberships: [],
           }
 
-          # Get tracking memberships
-          if respond_to?(:tracking_collections_membership)
-            status[:tracking_memberships] = tracking_collections_membership
+          # Get participation memberships
+          if respond_to?(:participation_collections_membership)
+            status[:participation_memberships] = participation_collections_membership
           end
-
-          # Get membership collections
-          status[:membership_collections] = membership_collections if respond_to?(:membership_collections)
 
           # Get index memberships
           status[:index_memberships] = indexing_memberships if respond_to?(:indexing_memberships)
@@ -315,11 +295,8 @@ module Familia
 
         # Comprehensive cleanup - remove from all relationships
         def cleanup_all_relationships!
-          # Remove from tracking collections
-          remove_from_all_tracking_collections if respond_to?(:remove_from_all_tracking_collections)
-
-          # Remove from membership collections
-          remove_from_all_memberships if respond_to?(:remove_from_all_memberships)
+          # Remove from participation collections
+          remove_from_all_participation_collections if respond_to?(:remove_from_all_participation_collections)
 
           # Remove from indexes
           remove_from_all_indexes if respond_to?(:remove_from_all_indexes)
@@ -328,8 +305,7 @@ module Familia
         # Dry run for relationship cleanup (preview what would be affected)
         def cleanup_preview
           preview = {
-            tracking_collections: [],
-            membership_collections: [],
+            participation_collections: [],
             index_entries: [],
           }
 
@@ -348,11 +324,11 @@ module Familia
           # Validate identifier exists
           errors << 'Object identifier is nil' unless identifier
 
-          # Validate tracking memberships
-          if respond_to?(:tracking_collections_membership)
-            tracking_collections_membership.each do |membership|
+          # Validate participation memberships
+          if respond_to?(:participation_collections_membership)
+            participation_collections_membership.each do |membership|
               score = membership[:score]
-              errors << "Invalid score in tracking membership: #{membership}" if score && !score.is_a?(Numeric)
+              errors << "Invalid score in participation membership: #{membership}" if score && !score.is_a?(Numeric)
             end
           end
 
@@ -365,8 +341,7 @@ module Familia
         def refresh_relationships!
           # Clear any cached relationship data
           @relationship_status = nil
-          @tracking_memberships = nil
-          @membership_collections = nil
+          @participation_memberships = nil
           @index_memberships = nil
 
           # Reload fresh data

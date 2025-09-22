@@ -39,7 +39,7 @@ class PerfDomain < Familia::Horreum
   class_hashkey :id_lookup
 
   # Define tracking relationships for testing
-  tracked_in PerfCustomer, :domains, score: :created_at
+  participates_in PerfCustomer, :domains, score: :created_at
 end
 
 # Integration test with other features

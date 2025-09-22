@@ -1,7 +1,7 @@
 # try/features/relationships/relationships_api_changes_try.rb
 #
 # Test coverage for Familia v2 relationships API changes
-# Testing new class_tracked_in and class_indexed_by methods
+# Testing new class_participates_in and class_indexed_by methods
 # Testing breaking changes and argument validation
 
 require_relative '../../helpers/test_helpers'
@@ -17,9 +17,9 @@ class ApiTestUser < Familia::Horreum
   field :created_at
   field :status
 
-  # New API: class_tracked_in for class-level tracking
-  class_tracked_in :all_users, score: :created_at
-  class_tracked_in :active_users, score: -> { status == 'active' ? Familia.now.to_i : 0 }
+  # New API: class_participates_in for class-level participation
+  class_participates_in :all_users, score: :created_at
+  class_participates_in :active_users, score: -> { status == 'active' ? Familia.now.to_i : 0 }
 
   # New API: class_indexed_by for class-level indexing
   class_indexed_by :email, :email_lookup
@@ -49,8 +49,8 @@ class ApiTestMembership < Familia::Horreum
   indexed_by :user_id, :user_memberships, context: ApiTestUser
   indexed_by :project_id, :project_memberships, context: ApiTestProject
 
-  # Tracking with parent class
-  tracked_in ApiTestProject, :memberships, score: :created_at
+  # Participation with parent class
+  participates_in ApiTestProject, :memberships, score: :created_at
 end
 
 # Setup test objects
@@ -85,30 +85,30 @@ end
 )
 
 # =============================================
-# 1. New API: class_tracked_in Method Tests
+# 1. New API: class_participates_in Method Tests
 # =============================================
 
-## class_tracked_in generates class-level collection class methods
+## class_participates_in generates class-level collection class methods
 ApiTestUser.respond_to?(:all_users)
 #=> true
 
-## class_tracked_in generates class-level collection access methods
+## class_participates_in generates class-level collection access methods
 ApiTestUser.respond_to?(:active_users)
 #=> true
 
-## class_tracked_in generates class methods for adding items
+## class_participates_in generates class methods for adding items
 ApiTestUser.respond_to?(:add_to_all_users)
 #=> true
 
-## class_tracked_in generates class methods for removing items
+## class_participates_in generates class methods for removing items
 ApiTestUser.respond_to?(:remove_from_all_users)
 #=> true
 
-## class_tracked_in generates membership check methods
+## class_participates_in generates membership check methods
 @user.respond_to?(:in_class_all_users?)
 #=> true
 
-## class_tracked_in generates score retrieval methods
+## class_participates_in generates score retrieval methods
 @user.respond_to?(:score_in_class_all_users)
 #=> true
 
@@ -212,10 +212,10 @@ true
 # 4. Breaking Changes: ArgumentError Tests
 # =============================================
 
-## class_tracked_in creates class-level collections without error
+## class_participates_in creates class-level collections without error
 test_class = Class.new(Familia::Horreum) do
   feature :relationships
-  class_tracked_in :test_collection
+  class_participates_in :test_collection
 end
 test_class.respond_to?(:test_collection)
 #=> true
@@ -251,14 +251,14 @@ context_methods.length > 0
 # 6. Metadata Storage Tests
 # =============================================
 
-## class_tracked_in stores correct context_class
-tracking_meta = ApiTestUser.tracking_relationships.find { |r| r[:collection_name] == :all_users }
-tracking_meta[:context_class].end_with?('::apitestuser')
+## class_participates_in stores correct target_class
+participation_meta = ApiTestUser.participation_relationships.find { |r| r[:collection_name] == :all_users }
+participation_meta[:target_class].end_with?('::apitestuser')
 #=> true
 
-## class_tracked_in stores correct context_class_name
-tracking_meta = ApiTestUser.tracking_relationships.find { |r| r[:collection_name] == :all_users }
-tracking_meta[:context_class_name].end_with?('::ApiTestUser')
+## class_participates_in stores correct target_class_name
+participation_meta = ApiTestUser.participation_relationships.find { |r| r[:collection_name] == :all_users }
+participation_meta[:target_class_name].end_with?('::ApiTestUser')
 #=> true
 
 ## class_indexed_by stores correct context_class

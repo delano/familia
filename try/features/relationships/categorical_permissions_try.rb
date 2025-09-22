@@ -29,7 +29,7 @@ class CategoricalTestDocument < Familia::Horreum
   permission_tracking :user_permissions
 
   # Track in customer collections with permission scores
-  tracked_in CategoricalTestCustomer, :documents, score: :created_at
+  participates_in CategoricalTestCustomer, :documents, score: :created_at
 
   def permission_bits
     @permission_bits || 1  # Default to read-only

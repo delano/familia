@@ -132,7 +132,7 @@ class Customer < Familia::Horreum
 
   # Automatic indexing and tracking
   class_indexed_by :email, :email_lookup
-  class_tracked_in :all_customers, score: :created_at
+  class_participates_in :all_customers, score: :created_at
 end
 
 class Domain < Familia::Horreum

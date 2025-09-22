@@ -30,7 +30,7 @@ class SimplePerfDomain < Familia::Horreum
   class_hashkey :domain_lookup
 
   # Define tracking relationships for testing
-  tracked_in SimplePerfCustomer, :simple_domains, score: :created_at
+  participates_in SimplePerfCustomer, :simple_domains, score: :created_at
 end
 
 # =============================================

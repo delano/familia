@@ -25,14 +25,11 @@ class TestDomain < Familia::Horreum
   field :created_at
   field :permission_level
 
-  # Basic tracking with simplified score
-  tracked_in TestCustomer, :domains, score: :created_at
-  class_tracked_in :all_domains, score: :created_at
+  # Basic participation with simplified score
+  participates_in TestCustomer, :domains, score: :created_at
+  class_participates_in :all_domains, score: :created_at
 
   # Note: Indexing features removed for stability
-
-  # Basic membership
-  member_of TestCustomer, :domains
 end
 
 class TestTag < Familia::Horreum
@@ -42,8 +39,8 @@ class TestTag < Familia::Horreum
   field :name
   field :created_at
 
-  # Global tracking
-  class_tracked_in :all_tags, score: :created_at
+  # Global participation
+  class_participates_in :all_tags, score: :created_at
 end
 
 # Setup
@@ -105,10 +102,10 @@ decoded[:permission_list].include?(:write)
 #=> true
 
 # =============================================
-# 3. Tracking Relationships (tracked_in)
+# 3. Participation Relationships (participates_in)
 # =============================================
 
-## Save operation manages tracking relationships
+## Save operation manages participation relationships
 @customer.save
 @domain.save
 
@@ -154,7 +151,7 @@ score.is_a?(Float) && score > 0
 # 4. Basic Functionality Verification
 # =============================================
 
-## Domain tracking methods work correctly
+## Domain participation methods work correctly
 @domain.respond_to?(:score_in_testcustomer_domains)
 #=> true
 
@@ -163,14 +160,14 @@ score.is_a?(Float) && score > 0
 #=> true
 
 # =============================================
-# 5. Basic Membership Relationships (member_of)
+# 5. Bidirectional Participation Methods
 # =============================================
 
-## Member_of generates collision-free methods with collection names
+## participates_in generates collision-free bidirectional methods with collection names
 @domain.respond_to?(:add_to_testcustomer_domains)
 #=> true
 
-## Basic membership operations work
+## Basic bidirectional participation operations work
 @domain.remove_from_testcustomer_domains(@customer)
 @domain.in_testcustomer_domains?(@customer)
 #=> false
