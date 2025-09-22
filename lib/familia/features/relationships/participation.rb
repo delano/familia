@@ -214,6 +214,11 @@ module Familia
               when :list
                 collection.push(item.identifier)
               end
+
+              # Track participation in reverse index for efficient cleanup
+              if item.respond_to?(:add_participation_tracking)
+                item.add_participation_tracking(collection.dbkey)
+              end
             end
           end
 
@@ -221,7 +226,18 @@ module Familia
             # Generate remove method (e.g., Customer#remove_domain)
             actual_target_class.define_method("remove_#{collection_name.to_s.singularize}") do |item|
               collection = send(collection_name)
-              collection.delete(item.identifier)
+
+              # Use appropriate removal method based on collection type
+              if collection.is_a?(Familia::SortedSet)
+                collection.remove(item.identifier)
+              else
+                collection.delete(item.identifier)
+              end
+
+              # Remove participation tracking
+              if item.respond_to?(:remove_participation_tracking)
+                item.remove_participation_tracking(collection.dbkey)
+              end
             end
           end
 
@@ -348,9 +364,18 @@ module Familia
           # @param collection_name [Symbol] The collection name (e.g., :domains)
           # @return [Float] Calculated score
           def calculate_participation_score(target_class, collection_name)
-            # Find the participation configuration
+            # Find the participation configuration with robust type comparison
             participation_config = self.class.participation_relationships.find do |config|
-              config[:target_class] == target_class && config[:collection_name] == collection_name
+              # Normalize both sides for comparison to handle Class, Symbol, and String types
+              config_target = config[:target_class]
+              config_target = config_target.name if config_target.is_a?(Class)
+              config_target = config_target.to_s
+
+              comparison_target = target_class
+              comparison_target = comparison_target.name if comparison_target.is_a?(Class)
+              comparison_target = comparison_target.to_s
+
+              config_target == comparison_target && config[:collection_name] == collection_name
             end
 
             return current_score unless participation_config
@@ -423,27 +448,32 @@ module Familia
             end
           end
 
+          # Add participation tracking to reverse index
+          def add_participation_tracking(collection_key)
+            reverse_index_key = "#{dbkey}:participations"
+            dbclient.sadd(reverse_index_key, collection_key)
+          end
+
+          # Remove participation tracking from reverse index
+          def remove_participation_tracking(collection_key)
+            reverse_index_key = "#{dbkey}:participations"
+            dbclient.srem(reverse_index_key, collection_key)
+          end
+
           # Remove from all participation collections (used during destroy)
+          # Uses reverse index for efficient cleanup instead of database scan
           def remove_from_all_participation_collections
             return unless self.class.respond_to?(:participation_relationships)
 
-            # Get all possible collection keys this object might be in
-            # This is expensive but necessary for cleanup
-            pattern = '*:*:*' # This could be optimized with better key patterns
+            reverse_index_key = "#{dbkey}:participations"
+            collection_keys = dbclient.smembers(reverse_index_key)
 
-            cursor = 0
-            matching_keys = []
+            return if collection_keys.empty?
 
-            loop do
-              cursor, keys = dbclient.scan(cursor, match: pattern, count: 1000)
-              matching_keys.concat(keys)
-              break if cursor.zero?
-            end
-
-            # Filter keys that might contain this object and remove it
+            # Remove from all tracked collections in a single pipeline
             dbclient.pipelined do |pipeline|
-              matching_keys.each do |key|
-                # Check if this key matches any of our participation relationships
+              collection_keys.each do |key|
+                # Determine collection type from key structure and remove appropriately
                 self.class.participation_relationships.each do |config|
                   target_class_name = config[:target_class_name].downcase
                   collection_name = config[:collection_name]
@@ -461,6 +491,9 @@ module Familia
                   end
                 end
               end
+
+              # Clean up the reverse index itself
+              pipeline.del(reverse_index_key)
             end
           end
 
@@ -470,55 +503,95 @@ module Familia
           def participation_collections_membership
             return [] unless self.class.respond_to?(:participation_relationships)
 
+            # Use reverse index if available, otherwise fall back to scan
+            reverse_index_key = "#{dbkey}:participations"
+            collection_keys = dbclient.smembers(reverse_index_key)
+
+            if collection_keys.empty?
+              # Fall back to scan approach for objects without reverse index
+              collection_keys = []
+              self.class.participation_relationships.each do |config|
+                target_class_name = config[:target_class_name]
+                collection_name = config[:collection_name]
+                pattern = "#{target_class_name.downcase}:*:#{collection_name}"
+
+                dbclient.scan_each(match: pattern) do |key|
+                  collection_keys << key
+                end
+              end
+            end
+
+            return [] if collection_keys.empty?
+
             memberships = []
 
-            self.class.participation_relationships.each do |config|
-              target_class_name = config[:target_class_name]
-              collection_name = config[:collection_name]
-              type = config[:type]
+            # Group keys by type to optimize pipeline operations
+            keys_by_type = {}
+            collection_keys.each do |key|
+              self.class.participation_relationships.each do |config|
+                target_class_name = config[:target_class_name]
+                collection_name = config[:collection_name]
+                type = config[:type]
 
-              # Find all instances of target_class where this object appears
-              # This is simplified - in practice you'd need a more efficient approach
-              pattern = "#{target_class_name.downcase}:*:#{collection_name}"
+                next unless key.include?(target_class_name.downcase) && key.include?(collection_name.to_s)
 
-              dbclient.scan_each(match: pattern) do |key|
-                case type
-                when :sorted_set
-                  score = dbclient.zscore(key, identifier)
-                  if score
-                    target_id = key.split(':')[1]
-                    memberships << {
-                      target_class: target_class_name,
-                      target_id: target_id,
-                      collection_name: collection_name,
-                      type: type,
-                      score: score,
-                      decoded_score: decode_score(score),
-                    }
-                  end
-                when :set
-                  if dbclient.sismember(key, identifier)
-                    target_id = key.split(':')[1]
-                    memberships << {
-                      target_class: target_class_name,
-                      target_id: target_id,
-                      collection_name: collection_name,
-                      type: type,
-                    }
-                  end
-                when :list
-                  position = dbclient.lpos(key, identifier)
-                  if position
-                    target_id = key.split(':')[1]
-                    memberships << {
-                      target_class: target_class_name,
-                      target_id: target_id,
-                      collection_name: collection_name,
-                      type: type,
-                      position: position,
-                    }
+                keys_by_type[type] ||= []
+                keys_by_type[type] << {
+                  key: key,
+                  target_class_name: target_class_name,
+                  collection_name: collection_name,
+                  type: type
+                }
+              end
+            end
+
+            # Use pipelined requests to batch all membership checks
+            results = {}
+            dbclient.pipelined do |pipeline|
+              keys_by_type.each do |type, key_configs|
+                key_configs.each do |config|
+                  key = config[:key]
+                  case type
+                  when :sorted_set
+                    results[key] = pipeline.zscore(key, identifier)
+                  when :set
+                    results[key] = pipeline.sismember(key, identifier)
+                  when :list
+                    results[key] = pipeline.lpos(key, identifier)
                   end
                 end
+              end
+            end
+
+            # Process results and build membership array
+            keys_by_type.each do |type, key_configs|
+              key_configs.each do |config|
+                key = config[:key]
+                result = results[key].value rescue nil
+
+                next unless result
+
+                target_id = key.split(':')[1]
+                membership_data = {
+                  target_class: config[:target_class_name],
+                  target_id: target_id,
+                  collection_name: config[:collection_name],
+                  type: type,
+                }
+
+                case type
+                when :sorted_set
+                  next unless result # score must be present
+                  membership_data[:score] = result
+                  membership_data[:decoded_score] = decode_score(result)
+                when :set
+                  next unless result # must be a member
+                when :list
+                  next unless result # position must be found
+                  membership_data[:position] = result
+                end
+
+                memberships << membership_data
               end
             end
 
