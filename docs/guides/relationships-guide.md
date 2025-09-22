@@ -10,7 +10,7 @@ The Relationships feature provides a sophisticated system for managing object re
 
 The Familia v2.0 relationships system provides three distinct relationship patterns:
 
-1. **`tracked_in`** - Multi-presence tracking with score encoding (sorted sets)
+1. **`participates_in`** - Multi-presence tracking with score encoding (sorted sets)
 2. **`indexed_by`** - O(1) hash-based lookups by field values
 3. **`member_of`** - Bidirectional membership with collision-free naming
 
@@ -32,7 +32,7 @@ class Customer < Familia::Horreum
   sorted_set :activity   # Activity feed with timestamps
 
   # Class-level relationship collections (automatically managed)
-  class_tracked_in :all_customers, score: :created_at
+  class_participates_in :all_customers, score: :created_at
   class_indexed_by :email, :email_lookup
 end
 
@@ -47,11 +47,11 @@ class Domain < Familia::Horreum
 end
 ```
 
-## Tracked In Relationships
+## Participating In Relationships
 
-### Basic Tracking
+### Basic Participation
 
-The `tracked_in` relationship creates collections that track object membership with sophisticated scoring:
+The `participates_in` relationship creates collections that track object membership with sophisticated scoring:
 
 ```ruby
 class User < Familia::Horreum
@@ -61,13 +61,13 @@ class User < Familia::Horreum
   field :user_id, :name, :score_value
 
   # Simple sorted set tracking
-  class_tracked_in :leaderboard, score: :score_value
+  class_participates_in :leaderboard, score: :score_value
 
   # Time-based tracking with automatic timestamps
-  class_tracked_in :activity_log, score: :created_at
+  class_participates_in :activity_log, score: :created_at
 
   # Proc-based scoring for complex calculations
-  class_tracked_in :performance_metrics, score: -> { (score_value || 0) * 2 }
+  class_participates_in :performance_metrics, score: -> { (score_value || 0) * 2 }
 end
 
 # Usage
@@ -96,7 +96,7 @@ class Document < Familia::Horreum
   field :doc_id, :title, :content
 
   # Permission-based tracking with 8-bit encoding
-  class_tracked_in :authorized_users, score: :encode_permissions
+  class_participates_in :authorized_users, score: :encode_permissions
 
   private
 
@@ -198,7 +198,7 @@ class User < Familia::Horreum
   class_indexed_by :username, :username_index
 
   # Scoped indexes for values unique within a context
-  indexed_by :department, :department_index, context: Organization
+  indexed_by :department, :department_index, target: Organization
 end
 
 # Usage for Global Context
@@ -238,7 +238,7 @@ class Product < Familia::Horreum
   class_indexed_by :sku, :sku_index
 
   # Class context: Categories are unique per brand
-  indexed_by :category, :category_index, context: Brand
+  indexed_by :category, :category_index, target: Brand
 end
 
 class Brand < Familia::Horreum
@@ -288,7 +288,7 @@ indexed_by :email_lookup, field: :email
 
 # ✅ New correct syntax
 class_indexed_by :email, :email_lookup                  # Global scope
-indexed_by :email, :customer_lookup, context: Customer   # Scoped per customer
+indexed_by :email, :customer_lookup, target: Customer   # Scoped per customer
 ```
 
 ## Member Of Relationships
@@ -493,7 +493,7 @@ class User < Familia::Horreum
 
   # Multi-tenant membership
   member_of Organization, :members, type: :set
-  class_tracked_in :global_activity, score: :created_at
+  class_participates_in :global_activity, score: :created_at
   class_indexed_by :email, :email_lookup
 end
 
@@ -504,7 +504,7 @@ class Project < Familia::Horreum
   field :project_id, :name, :status
 
   member_of Organization, :projects, type: :set
-  class_tracked_in :status_timeline,
+  class_participates_in :status_timeline,
     score: ->(proj) { "#{Familia.now.to_i}.#{proj.status.hash}" }
 end
 
@@ -592,7 +592,7 @@ RSpec.describe "Relationships Feature" do
   let(:domain) { Domain.new(domain_id: 'dom456', name: 'acme.com') }
   let(:user) { User.new(user_id: 'user789', email: 'john@acme.com') }
 
-  describe "tracked_in relationships" do
+  describe "participates_in relationships" do
     it "tracks objects with score encoding" do
       User.add_to_leaderboard(user)
       score = User.leaderboard.score(user.identifier)
@@ -691,7 +691,7 @@ end
 ### Relationship Design
 
 1. **Choose the Right Type**:
-   - Use `tracked_in` for activity feeds, leaderboards, time-series data
+   - Use `participates_in` for activity feeds, leaderboards, time-series data
    - Use `indexed_by` for fast lookups by field values
    - Use `member_of` for bidirectional ownership/membership
 

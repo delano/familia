@@ -35,7 +35,7 @@ class Customer < Familia::Horreum
   class_indexed_by :plan, :plan_lookup # i.e. Customer.plan_lookup
 
   # Track in class-level collections (using class_ prefix for class-level)
-  class_tracked_in :all_customers, score: :created_at # i.e. Customer.all_customers
+  class_participates_in :all_customers, score: :created_at # i.e. Customer.all_customers
 end
 
 class Domain < Familia::Horreum
@@ -52,7 +52,7 @@ class Domain < Familia::Horreum
   member_of Customer, :domains # , type: :set
 
   # Track domains by status (using class_ prefix for class-level)
-  class_tracked_in :active_domains,
+  class_participates_in :active_domains,
                    score: -> { status == 'active' ? Familia.now.to_i : 0 }
 end
 
@@ -149,7 +149,7 @@ puts "  Customer has #{customer.projects.size} projects"
 puts "  Domain IDs: #{customer.domains.members}"
 puts "  Project IDs: #{customer.projects.members}"
 
-# Test tracked_in collections
+# Test participates_in collections
 all_customers_count = Customer.values.size
 puts "\nClass-level tracking:"
 puts "  Total customers in system: #{all_customers_count}"
@@ -195,7 +195,7 @@ puts
 puts '=== Example Complete! ==='
 puts
 puts 'Key takeaways:'
-puts '• class_tracked_in: Automatic class-level collections updated on save'
+puts '• class_participates_in: Automatic class-level collections updated on save'
 puts '• class_indexed_by: Automatic class-level indexes updated on save'
 puts '• member_of: Use << operator for clean Ruby-like collection syntax'
 puts '• indexed_by with context:: Use for relationship-scoped indexes'

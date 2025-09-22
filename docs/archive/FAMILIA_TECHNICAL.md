@@ -188,7 +188,7 @@ class Customer < Familia::Horreum
   indexed_by :email_lookup, field: :email
 
   # Global tracking with scoring
-  tracked_in :all_customers, type: :sorted_set, score: :created_at
+  participates_in :all_customers, type: :sorted_set, score: :created_at
 end
 
 class Domain < Familia::Horreum
@@ -201,7 +201,7 @@ class Domain < Familia::Horreum
   member_of Customer, :domains, type: :set
 
   # Conditional tracking with lambda scoring
-  tracked_in :active_domains, type: :sorted_set,
+  participates_in :active_domains, type: :sorted_set,
     score: ->(domain) { domain.status == 'active' ? Familia.now.to_i : 0 }
 end
 ```
@@ -356,11 +356,11 @@ class ActivityTracker < Familia::Horreum
   feature :relationships
 
   # Track user activities with timestamps
-  tracked_in :user_activities, type: :sorted_set,
+  participates_in :user_activities, type: :sorted_set,
     score: ->(activity) { activity.created_at }
 
   # Track by activity type
-  tracked_in :activity_by_type, type: :sorted_set,
+  participates_in :activity_by_type, type: :sorted_set,
     score: ->(activity) { "#{activity.activity_type}:#{activity.created_at}".hash }
 
   field :user_id, :activity_type, :data, :created_at

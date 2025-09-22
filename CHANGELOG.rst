@@ -342,9 +342,9 @@ Changed
 
 -  **BREAKING**: ``tracked_in :global, collection`` syntax now raises
    ArgumentError - use ``class_tracked_in collection`` instead
--  **BREAKING**: ``indexed_by field, index, context: :global`` syntax
+-  **BREAKING**: ``indexed_by field, index, target: :global`` syntax
    replaced with ``class_indexed_by field, index``
--  **BREAKING**: ``indexed_by field, index, context: SomeClass`` syntax
+-  **BREAKING**: ``indexed_by field, index, target: SomeClass`` syntax
    replaced with ``indexed_by field, index, parent: SomeClass``
 -  Relationships API now provides consistent parameter naming across all
    relationship types

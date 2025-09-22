@@ -188,7 +188,7 @@ class Customer < Familia::Horreum
   class_indexed_by :email, :email_lookup
 
   # Class-level tracking with scoring (automatically managed on save/destroy)
-  class_tracked_in :all_customers, score: :created_at
+  class_participates_in :all_customers, score: :created_at
 end
 
 class Domain < Familia::Horreum
@@ -204,7 +204,7 @@ class Domain < Familia::Horreum
   indexed_by :name, :domain_index, parent: Customer
 
   # Class-level conditional tracking with lambda scoring
-  class_tracked_in :active_domains,
+  class_participates_in :active_domains,
                    score: -> { status == 'active' ? Familia.now.to_i : 0 }
 end
 ```
@@ -374,8 +374,8 @@ class ActivityTracker < Familia::Horreum
   field :activity_id, :user_id, :activity_type, :data, :created_at
 
   # Class-level tracking with automatic management
-  class_tracked_in :user_activities, score: :created_at
-  class_tracked_in :activity_by_type,
+  class_participates_in :user_activities, score: :created_at
+  class_participates_in :activity_by_type,
                    score: ->(activity) { "#{activity.activity_type}:#{activity.created_at}".hash }
 end
 

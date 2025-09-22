@@ -176,7 +176,7 @@ score.is_a?(Float) && score > 0
 # 6. Basic Global Tag Tracking Test
 # =============================================
 
-## Tag can be tracked globally
+## Tag can be participating globally
 @tag.save
 @tag.respond_to?(:add_to_class_all_tags)
 #=> true

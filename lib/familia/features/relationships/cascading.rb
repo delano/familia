@@ -159,7 +159,7 @@ module Familia
             context_class_name = config[:context_class_name]
             collection_name = config[:collection_name]
 
-            # Find all collections this object is tracked in
+            # Find all collections this object is participating in
             pattern = "#{context_class_name.downcase}:*:#{collection_name}"
 
             dbclient.scan_each(match: pattern) do |key|
