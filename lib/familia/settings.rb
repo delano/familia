@@ -80,8 +80,9 @@ module Familia
       @encryption_personalization
     end
 
-    def config
+    def configure
       self
     end
+    alias config configure
   end
 end
