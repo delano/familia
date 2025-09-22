@@ -251,8 +251,8 @@ module Familia
 
         # Validate Valkey/Redis key format
         def validate_dbkey(key)
-          raise ArgumentError, 'Redis key cannot be nil or empty' if key.nil? || key.empty?
-          raise ArgumentError, 'Redis key must be a string' unless key.is_a?(String)
+          raise ArgumentError, 'Valkey/Redis key cannot be nil or empty' if key.nil? || key.empty?
+          raise ArgumentError, 'Valkey/Redis key must be a string' unless key.is_a?(String)
 
           key
         end
