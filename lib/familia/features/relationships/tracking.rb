@@ -202,7 +202,7 @@ module Familia
               # Use batch operation from DatabaseOperations
               collection.dbclient.pipelined do |pipeline|
                 batch_data.each do |data|
-                  pipeline.zadd(collection.rediskey, data[:score], data[:member])
+                  pipeline.zadd(collection.dbkey, data[:score], data[:member])
                 end
               end
             end
@@ -350,20 +350,19 @@ module Familia
 
             # Get all possible collection keys this object might be in
             # This is expensive but necessary for cleanup
-            redis_conn = redis
             pattern = '*:*:*' # This could be optimized with better key patterns
 
             cursor = 0
             matching_keys = []
 
             loop do
-              cursor, keys = redis_conn.scan(cursor, match: pattern, count: 1000)
+              cursor, keys = dbclient.scan(cursor, match: pattern, count: 1000)
               matching_keys.concat(keys)
               break if cursor.zero?
             end
 
             # Filter keys that might contain this object and remove it
-            redis_conn.pipelined do |pipeline|
+            dbclient.pipelined do |pipeline|
               matching_keys.each do |key|
                 # Check if this key matches any of our tracking relationships
                 self.class.tracking_relationships.each do |config|

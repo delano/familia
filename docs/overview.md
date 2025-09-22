@@ -313,7 +313,7 @@ Familia.connect_to_uri('redis://localhost:6379/0')
 ```ruby
 # Debug key names
 user = User.new(email: 'test@example.com')
-puts user.rediskey  # Shows the Valkey key that would be used
+puts user.dbkey  # Shows the Valkey key that would be used
 ```
 
 **Encryption Issues:**

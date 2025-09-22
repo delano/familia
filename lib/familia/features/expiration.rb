@@ -286,8 +286,9 @@ module Familia
 
         Familia.ld "[update_expiration] Expires #{dbkey} in #{default_expiration} seconds"
 
-        # Redis' EXPIRE command returns 1 if the timeout was set, 0 if key does
-        # not exist or the timeout could not be set. Via redis-rb, it's a boolean.
+        # The Valkey/Redis' EXPIRE command returns 1 if the timeout was set, 0
+        # if key does not exist or the timeout could not be set. Via redis-rb,
+        # it's a boolean.
         expire(default_expiration)
       end
 

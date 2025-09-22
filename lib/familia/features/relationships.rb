@@ -385,7 +385,7 @@ module Familia
         end
 
         # Direct Valkey/Redis access for instance methods
-        def redis
+        def dbclient
           self.class.dbclient
         end
 
@@ -396,7 +396,7 @@ module Familia
           temp_key = "temp:#{base_name}:#{timestamp}:#{random_suffix}"
 
           # UnsortedSet immediate expiry to ensure cleanup even if operation fails
-          redis.expire(temp_key, ttl)
+          dbclient.expire(temp_key, ttl)
 
           temp_key
         end
@@ -406,14 +406,14 @@ module Familia
           cursor = 0
 
           loop do
-            cursor, keys = redis.scan(cursor, match: pattern, count: batch_size)
+            cursor, keys = dbclient.scan(cursor, match: pattern, count: batch_size)
 
             if keys.any?
               # Check TTL and remove keys that should have expired
               keys.each_slice(batch_size) do |key_batch|
-                redis.pipelined do |pipeline|
+                dbclient.pipelined do |pipeline|
                   key_batch.each do |key|
-                    ttl = redis.ttl(key)
+                    ttl = dbclient.ttl(key)
                     pipeline.del(key) if ttl == -1 # Key exists but has no TTL
                   end
                 end
@@ -439,20 +439,20 @@ module Familia
           ]
 
           patterns.each do |pattern|
-            redis.scan_each(match: pattern, count: 100) do |key|
+            dbclient.scan_each(match: pattern, count: 100) do |key|
               # Check if this key actually contains our object
-              key_type = redis.type(key)
+              key_type = dbclient.type(key)
 
               case key_type
               when 'zset'
-                related_keys << key if redis.zscore(key, id)
+                related_keys << key if dbclient.zscore(key, id)
               when 'set'
-                related_keys << key if redis.sismember(key, id)
+                related_keys << key if dbclient.sismember(key, id)
               when 'list'
-                related_keys << key if redis.lpos(key, id)
+                related_keys << key if dbclient.lpos(key, id)
               when 'hash'
                 # For hash keys, check if any field values match our identifier
-                hash_values = redis.hvals(key)
+                hash_values = dbclient.hvals(key)
                 related_keys << key if hash_values.include?(id.to_s)
               end
             end

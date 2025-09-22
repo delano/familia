@@ -1,6 +1,6 @@
 #!/usr/bin/env ruby
 
-# examples/redis_command_validation_example.rb
+# docs/reference/auditing_database_commands.rb
 #
 # Comprehensive example demonstrating Valkey/Redis command validation for Familia
 # This example shows how to validate that db operations execute exactly
@@ -22,6 +22,8 @@ class Account < Familia::Horreum
   field :last_updated
 end
 
+# TransferService - An example service for transferring funds between accounts.
+#
 class TransferService
   def self.atomic_transfer(from_account, to_account, amount)
     # Proper atomic implementation using Familia transaction

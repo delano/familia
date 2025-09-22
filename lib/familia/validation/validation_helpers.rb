@@ -13,7 +13,7 @@ module Familia
     #   ## User save should execute expected Valkey/Redis commands
     #   user = TestUser.new(id: "123", name: "John")
     #
-    #   assert_redis_commands do |expect|
+    #   assert_database_commands do |expect|
     #     expect.hset("testuser:123:object", "name", "John")
     #           .hset("testuser:123:object", "id", "123")
     #
@@ -34,7 +34,7 @@ module Familia
     #
     module TestHelpers
       # Assert that a block executes the expected Valkey/Redis commands
-      def assert_redis_commands(message = nil, &block)
+      def assert_database_commands(message = nil, &block)
         validator = Validator.new
         result = validator.validate(&block)
 
@@ -362,7 +362,7 @@ module Familia
         class_name = obj.class.name.split('::').last.downcase
         identifier = obj.identifier
 
-        assert_redis_commands do |expect|
+        assert_database_commands do |expect|
           if expected_fields
             expected_fields.each do |field, value|
               expect.hset("#{class_name}:#{identifier}:object", field.to_s, value.to_s)
@@ -379,7 +379,7 @@ module Familia
       def assert_familia_load(obj_class, identifier, &block)
         class_name = obj_class.name.split('::').last.downcase
 
-        assert_redis_commands do |expect|
+        assert_database_commands do |expect|
           expect.hgetall("#{class_name}:#{identifier}:object")
 
           block.call if block
@@ -391,7 +391,7 @@ module Familia
         class_name = obj.class.name.split('::').last.downcase
         identifier = obj.identifier
 
-        assert_redis_commands do |expect|
+        assert_database_commands do |expect|
           expect.del("#{class_name}:#{identifier}:object")
 
           block.call if block
@@ -405,7 +405,7 @@ module Familia
         identifier = obj.identifier
         dbkey = "#{class_name}:#{identifier}:#{list_name}"
 
-        assert_redis_commands do |expect|
+        assert_database_commands do |expect|
           expect.command(operation.to_s.upcase, dbkey, *args)
 
           block.call if block
@@ -418,7 +418,7 @@ module Familia
         identifier = obj.identifier
         dbkey = "#{class_name}:#{identifier}:#{set_name}"
 
-        assert_redis_commands do |expect|
+        assert_database_commands do |expect|
           expect.command(operation.to_s.upcase, dbkey, *args)
 
           block.call if block
@@ -431,7 +431,7 @@ module Familia
         identifier = obj.identifier
         dbkey = "#{class_name}:#{identifier}:#{zset_name}"
 
-        assert_redis_commands do |expect|
+        assert_database_commands do |expect|
           expect.command(operation.to_s.upcase, dbkey, *args)
 
           block.call if block

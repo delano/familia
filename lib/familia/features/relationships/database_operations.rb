@@ -8,20 +8,20 @@ module Familia
       module DatabaseOperations
         # Execute multiple Database operations atomically using MULTI/EXEC
         #
-        # @param redis [Redis] Valkey/Redis connection to use
+        # @param conn [Redis] Valkey/Redis connection to use
         # @yield [Redis] Yields Valkey/Redis connection in transaction context
         # @return [Array] Results from Valkey/Redis transaction
         #
         # @example Atomic multi-collection update
-        #   atomic_operation(redis) do |tx|
+        #   atomic_operation(conn) do |tx|
         #     tx.zadd("customer:123:domains", score, domain_id)
         #     tx.zadd("team:456:domains", score, domain_id)
         #     tx.hset("domain_index", domain_name, domain_id)
         #   end
-        def atomic_operation(redis = nil)
-          redis ||= dbclient
+        def atomic_operation(conn = nil)
+          conn ||= dbclient
 
-          redis.multi do |tx|
+          conn.multi do |tx|
             yield tx if block_given?
           end
         end
@@ -42,21 +42,21 @@ module Familia
         def update_multiple_presence(collections, action, identifier, default_score = nil)
           return unless collections&.any?
 
-          redis = self.class.dbclient
+          conn = self.class.dbclient
 
-          atomic_operation(redis) do |tx|
+          atomic_operation(conn) do |tx|
             collections.each do |collection_config|
-              redis_key = collection_config[:key]
+              dbkey = collection_config[:key]
               score = collection_config[:score] || default_score || current_score
 
               case action
               when :add
-                tx.zadd(redis_key, score, identifier)
+                tx.zadd(dbkey, score, identifier)
               when :remove
-                tx.zrem(redis_key, identifier)
+                tx.zrem(dbkey, identifier)
               when :update
                 # Use ZADD with XX flag to only update existing members
-                tx.zadd(redis_key, score, identifier, xx: true)
+                tx.zadd(dbkey, score, identifier, xx: true)
               end
             end
           end
@@ -79,9 +79,9 @@ module Familia
         def set_operation(operation, destination, source_keys, weights: nil, aggregate: :sum, ttl: nil)
           return 0 if source_keys.empty?
 
-          redis = dbclient
+          conn = dbclient
 
-          atomic_operation(redis) do |tx|
+          atomic_operation(conn) do |tx|
             case operation
             when :union
               if weights
@@ -101,7 +101,7 @@ module Familia
 
               tx.zunionstore(destination, [first_key])
               other_keys.each do |key|
-                members = redis.zrange(key, 0, -1)
+                members = conn.zrange(key, 0, -1)
                 tx.zrem(destination, members) if members.any?
               end
             end
@@ -109,7 +109,7 @@ module Familia
             tx.expire(destination, ttl) if ttl
           end
 
-          redis.zcard(destination)
+          conn.zcard(destination)
         end
 
         # Create temporary Valkey/Redis key with automatic cleanup
@@ -134,7 +134,7 @@ module Familia
 
         # Batch add multiple items to a sorted set
         #
-        # @param redis_key [String] Valkey/Redis sorted set key
+        # @param dbkey [String] Valkey/Redis sorted set key
         # @param items [Array<Hash>] Array of `{member: String, score: Float}` hashes
         # @param mode [Symbol] Add mode (:normal, :nx, :xx, :lt, :gt)
         #
@@ -143,29 +143,29 @@ module Familia
         #     { member: "domain1", score: encode_score(Familia.now, permission: :read) },
         #     { member: "domain2", score: encode_score(Familia.now, permission: :write) }
         #   ])
-        def batch_zadd(redis_key, items, mode: :normal)
+        def batch_zadd(dbkey, items, mode: :normal)
           return 0 if items.empty?
 
-          redis = dbclient
+          conn = dbclient
           zadd_args = items.flat_map { |item| [item[:score], item[:member]] }
 
           case mode
           when :nx
-            redis.zadd(redis_key, zadd_args, nx: true)
+            conn.zadd(dbkey, zadd_args, nx: true)
           when :xx
-            redis.zadd(redis_key, zadd_args, xx: true)
+            conn.zadd(dbkey, zadd_args, xx: true)
           when :lt
-            redis.zadd(redis_key, zadd_args, lt: true)
+            conn.zadd(dbkey, zadd_args, lt: true)
           when :gt
-            redis.zadd(redis_key, zadd_args, gt: true)
+            conn.zadd(dbkey, zadd_args, gt: true)
           else
-            redis.zadd(redis_key, zadd_args)
+            conn.zadd(dbkey, zadd_args)
           end
         end
 
         # Query sorted set with score filtering and permission checking
         #
-        # @param redis_key [String] Valkey/Redis sorted set key
+        # @param dbkey [String] Valkey/Redis sorted set key
         # @param start_score [Float] Minimum score (inclusive)
         # @param end_score [Float] Maximum score (inclusive)
         # @param offset [Integer] Offset for pagination
@@ -179,7 +179,7 @@ module Familia
         #                  encode_score(1.hour.ago, 0),
         #                  encode_score(Familia.now, MAX_METADATA),
         #                  min_permission: :read)
-        def query_by_score(redis_key, start_score = '-inf', end_score = '+inf',
+        def query_by_score(dbkey, start_score = '-inf', end_score = '+inf',
                            offset: 0, count: -1, with_scores: false, min_permission: nil)
           self.class.dbclient
 
@@ -203,7 +203,7 @@ module Familia
             with_scores: with_scores,
           }.compact
 
-          results = dbclient.zrangebyscore(redis_key, start_score, end_score, **options)
+          results = dbclient.zrangebyscore(dbkey, start_score, end_score, **options)
 
           # Filter results by permission if needed using correct bitwise operations
           if min_permission && with_scores
@@ -226,7 +226,6 @@ module Familia
         # @example Clean up old temporary keys
         #   cleanup_temp_keys("temp:user_*", 100)
         def cleanup_temp_keys(pattern = 'temp:*', batch_size = 100)
-          self.class.dbclient
           cursor = 0
 
           loop do
@@ -262,7 +261,7 @@ module Familia
         private
 
         # Validate Valkey/Redis key format
-        def validate_redis_key(key)
+        def validate_dbkey(key)
           raise ArgumentError, 'Redis key cannot be nil or empty' if key.nil? || key.empty?
           raise ArgumentError, 'Redis key must be a string' unless key.is_a?(String)
 
