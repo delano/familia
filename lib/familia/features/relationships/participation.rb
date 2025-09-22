@@ -80,7 +80,7 @@ module Familia
                                     class_name
                                   end
             else
-              target_class_name = target_class.to_s.camelize
+              target_class_name = target_class.to_s.pascalize
             end
 
             # Store metadata for this participation relationship
@@ -160,7 +160,10 @@ module Familia
             actual_target_class = if target_class.is_a?(Class)
                                     target_class
                                   else
-                                    Object.const_get(target_class.to_s.camelize)
+                                    # NOTE: This only works if the model class is in the
+                                    # top, main namspace. e.g. model_name -> ModelName
+                                    # and not Models::ModelName.
+                                    Familia.member_by_config_name(target_class)
                                   end
 
             generate_collection_getter(actual_target_class, collection_name, type)

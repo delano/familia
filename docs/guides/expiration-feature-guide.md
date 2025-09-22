@@ -303,7 +303,7 @@ class DataRetentionService
 
   def self.apply_retention_policies
     TTL_POLICIES.each do |data_type, ttl|
-      model_class = data_type.to_s.camelize.constantize
+      model_class = data_type.to_s.pascalize.constantize
 
       model_class.all.each do |record|
         record.update_expiration(default_expiration: ttl)

@@ -33,24 +33,6 @@ module Familia
       # API parameter conversion, database field/table name transformations,
       # and general identifier generation.
       refine String do
-        # Convert to camelCase
-        #
-        # Use in the rare circumstance when you need the first word to not be capitalized.
-        #
-        # @return [String]
-        def camelize
-          _ize(:lower)
-        end
-
-        # Convert to PascalCase (alias for clarity)
-        #
-        # Use for module and class names.
-        #
-        # @return [String]
-        def pascalize
-          _ize(:upper)
-        end
-
         # Convert to snake_case from PascalCase/camelCase
         #
         # Appropriate for converting Ruby class names to database table names, config
@@ -82,12 +64,30 @@ module Familia
           end
         end
 
+        # Convert to camelCase
+        #
+        # Use in the rare circumstance when you need the first word to not be capitalized.
+        #
+        # @return [String]
+        def camelize
+          _ize(:lower)
+        end
+
+        # Convert to PascalCase (alias for clarity)
+        #
+        # Use for module and class names.
+        #
+        # @return [String]
+        def pascalize
+          _ize(:upper)
+        end
+
         private
 
         # Convert to camelCase or PascalCase
         #
         # @param first_letter [Symbol] :upper (default) for PascalCase, :lower for camelCase
-        # @return [String] the camelized string
+        # @return [String] the stylized string
         def _ize(first_letter)
           case first_letter
           when :lower

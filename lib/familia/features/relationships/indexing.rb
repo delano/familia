@@ -101,7 +101,7 @@ module Familia
 
           private
 
-          # Helper method to camelize a word without ActiveSupport dependency
+          # Helper method to pascalize a word without ActiveSupport dependency
           def camelize_word(word)
             word.to_s.split('_').map(&:capitalize).join
           end
