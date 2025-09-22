@@ -6,6 +6,8 @@ module Familia
       # Tracking module for tracked_in relationships using Valkey/Redis sorted sets
       # Provides multi-presence support where objects can exist in multiple collections
       module Tracking
+        using Familia::Refinements::Stylize
+        using Familia::Refinements::Singularize
         # Class-level tracking configurations
         def self.included(base)
           base.extend ModelClassMethods
@@ -16,25 +18,6 @@ module Familia
         # Tracking::ModelClassMethods
         #
         module ModelClassMethods
-          # Simple singularize method (basic implementation)
-          def singularize_word(word)
-            word = word.to_s
-            # Basic English pluralization rules (simplified)
-            if word.end_with?('ies')
-              "#{word[0..-4]}y"
-            elsif word.end_with?('es') && word.length > 3
-              word[0..-3]
-            elsif word.end_with?('s') && word.length > 1
-              word[0..-2]
-            else
-              word
-            end
-          end
-
-          # Simple camelize method (basic implementation)
-          def camelize_word(word)
-            word.to_s.split('_').map(&:capitalize).join
-          end
 
           # Define a class-level tracked collection
           #
@@ -89,7 +72,7 @@ module Familia
                                      class_name
                                    end
             else
-              context_class_name = camelize_word(context_class)
+              context_class_name = context_class.to_s.camelize
             end
 
             # Store metadata for this tracking relationship
@@ -150,7 +133,7 @@ module Familia
           # Generate methods on the context class (e.g., Customer.domains)
           def generate_context_class_methods(context_class, collection_name)
             # Resolve context class if it's a symbol/string
-            actual_context_class = context_class.is_a?(Class) ? context_class : Object.const_get(camelize_word(context_class))
+            actual_context_class = context_class.is_a?(Class) ? context_class : Object.const_get(context_class.to_s.camelize)
 
             # Generate collection getter method
             actual_context_class.define_method(collection_name) do
@@ -159,7 +142,7 @@ module Familia
             end
 
             # Generate add method (e.g., Customer#add_domain)
-            actual_context_class.define_method("add_#{singularize_word(collection_name)}") do |item, score = nil|
+            actual_context_class.define_method("add_#{collection_name.to_s.singularize}") do |item, score = nil|
               collection = send(collection_name)
 
               # Calculate score if not provided
@@ -176,7 +159,7 @@ module Familia
             end
 
             # Generate remove method (e.g., Customer#remove_domain)
-            actual_context_class.define_method("remove_#{singularize_word(collection_name)}") do |item|
+            actual_context_class.define_method("remove_#{collection_name.to_s.singularize}") do |item|
               collection = send(collection_name)
               collection.delete(item.identifier)
             end
