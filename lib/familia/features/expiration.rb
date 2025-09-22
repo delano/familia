@@ -157,18 +157,18 @@ module Familia
 
       def self.included(base)
         Familia.trace :LOADED, self, base, caller(1..1) if Familia.debug?
-        base.extend ClassMethods
+        base.extend ModelClassMethods
 
         # Initialize default_expiration instance variable if not already defined
         # This ensures the class has a place to store its default expiration setting
         return if base.instance_variable_defined?(:@default_expiration)
 
-        base.instance_variable_set(:@default_expiration, @default_expiration)
+        base.instance_variable_set(:@default_expiration, default_expiration)
       end
 
-      # Familia::Expiration::ClassMethods
+      # Familia::Expiration::ModelClassMethods
       #
-      module ClassMethods
+      module ModelClassMethods
         # UnsortedSet the default expiration time for instances of this class
         #
         # @param value [Numeric] Time in seconds (can be fractional)
@@ -301,7 +301,7 @@ module Familia
       #   expired_session.ttl  # => -1
       #
       def ttl
-        redis.ttl(dbkey)
+        dbclient.ttl(dbkey)
       end
 
       # Check if this object's data will expire
@@ -309,7 +309,7 @@ module Familia
       # @return [Boolean] true if TTL is set, false if data persists indefinitely
       #
       def expires?
-        ttl > 0
+        ttl.positive?
       end
 
       # Check if this object's data has expired or will expire soon
@@ -344,7 +344,7 @@ module Familia
       #
       def extend_expiration(duration)
         current_ttl = ttl
-        return false if current_ttl < 0 # No current expiration set
+        return false if current_ttl.positive? # No current expiration set
 
         new_ttl = current_ttl + duration.to_f
         expire(new_ttl)
@@ -358,7 +358,7 @@ module Familia
       #   session.persist!
       #
       def persist!
-        redis.persist(dbkey)
+        dbclient.persist(dbkey)
       end
     end
   end
