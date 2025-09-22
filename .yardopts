@@ -5,7 +5,7 @@
 --verbose
 --charset utf-8
 --markup markdown
---markup-provider kramdown
+--markup-provider redcarpet
 --output-dir public
 --embed-mixin ClassMethods
 --embed-mixin InstanceMethods
@@ -19,6 +19,11 @@
 --tag security:"Security"
 --hide-tag nodoc
 --exclude lib/familia/version.rb
+--template-path templates
+--readme README.md
+--no-stats
+--no-save
+--no-cache
 lib/**/*.rb
 -
 README.md
@@ -40,6 +45,6 @@ docs/guides/security-model.md
 docs/guides/time-utilities.md
 docs/guides/transient-fields-guide.md
 docs/reference/api-technical.md
-docs/migration/*.md
+docs/migrating/*.md
 docs/overview.md
 examples/*.rb

@@ -14,12 +14,13 @@ end
 group :development, :test do
   gem 'debug', require: false
   gem 'irb', '~> 1.15.2', require: false
-  gem 'kramdown', require: false
+  gem 'redcarpet', require: false
   gem 'rubocop', require: false
   gem 'rubocop-performance', require: false
   gem 'rubocop-thread_safety', require: false
   gem 'solargraph', require: false
   gem 'yard', '~> 0.9', require: false
+
 end
 
 group :optional do
