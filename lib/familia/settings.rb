@@ -80,7 +80,21 @@ module Familia
       @encryption_personalization
     end
 
+    # Configure Familia settings
+    #
+    # @yield [Settings] self for block-based configuration
+    # @return [Settings] self for method chaining
+    #
+    # @example Block-based configuration
+    #   Familia.configure do |config|
+    #     config.redis_uri = "redis://localhost:6379/1"
+    #     config.ttl = 3600
+    #   end
+    #
+    # @example Method chaining
+    #   Familia.configure.redis_uri = "redis://localhost:6379/1"
     def configure
+      yield self if block_given?
       self
     end
     alias config configure
