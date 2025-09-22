@@ -2,7 +2,7 @@
 
 require 'securerandom'
 require_relative 'relationships/score_encoding'
-require_relative 'relationships/redis_operations'
+require_relative 'relationships/database_operations'
 require_relative 'relationships/tracking'
 require_relative 'relationships/indexing'
 require_relative 'relationships/membership'
@@ -109,7 +109,7 @@ module Familia
 
         # Include all relationship submodules and their class methods
         base.include ScoreEncoding
-        base.include RedisOperations
+        base.include DatabaseOperations
 
         base.include Tracking
         base.extend Tracking::ClassMethods
@@ -380,7 +380,7 @@ module Familia
             identifier: identifier,
             class: self.class.name,
             status: relationship_status,
-            redis_keys: find_related_redis_keys,
+            dbkeys: find_related_dbkeys,
           }
         end
 
@@ -427,7 +427,7 @@ module Familia
         private
 
         # Find all Redis keys related to this object
-        def find_related_redis_keys
+        def find_related_dbkeys
           related_keys = []
           id = identifier
           return related_keys unless id

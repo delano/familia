@@ -199,7 +199,7 @@ module Familia
                 { member: item.identifier, score: score }
               end
 
-              # Use batch operation from RedisOperations
+              # Use batch operation from DatabaseOperations
               collection.dbclient.pipelined do |pipeline|
                 batch_data.each do |data|
                   pipeline.zadd(collection.rediskey, data[:score], data[:member])

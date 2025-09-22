@@ -1,12 +1,12 @@
-# lib/familia/features/relationships/redis_operations.rb
+# lib/familia/features/relationships/database_operations.rb
 
 module Familia
   module Features
     module Relationships
-      # Redis operations module providing atomic multi-collection operations
-      # and native Redis set operations for relationships
-      module RedisOperations
-        # Execute multiple Redis operations atomically using MULTI/EXEC
+      # Database operations module providing atomic multi-collection operations
+      # and native Valkey/Redis set operations for relationships
+      module DatabaseOperations
+        # Execute multiple Database operations atomically using MULTI/EXEC
         #
         # @param redis [Redis] Redis connection to use
         # @yield [Redis] Yields Redis connection in transaction context
@@ -19,7 +19,7 @@ module Familia
         #     tx.hset("domain_index", domain_name, domain_id)
         #   end
         def atomic_operation(redis = nil)
-          redis ||= redis_connection
+          redis ||= dbclient
 
           redis.multi do |tx|
             yield tx if block_given?
@@ -79,7 +79,7 @@ module Familia
         def set_operation(operation, destination, source_keys, weights: nil, aggregate: :sum, ttl: nil)
           return 0 if source_keys.empty?
 
-          redis = redis_connection
+          redis = dbclient
 
           atomic_operation(redis) do |tx|
             case operation
@@ -127,7 +127,7 @@ module Familia
           temp_key = "temp:#{base_name}:#{timestamp}:#{random_suffix}"
 
           # UnsortedSet immediate expiry to ensure cleanup even if operation fails
-          redis_connection.expire(temp_key, ttl)
+          dbclient.expire(temp_key, ttl)
 
           temp_key
         end
@@ -146,7 +146,7 @@ module Familia
         def batch_zadd(redis_key, items, mode: :normal)
           return 0 if items.empty?
 
-          redis = redis_connection
+          redis = dbclient
           zadd_args = items.flat_map { |item| [item[:score], item[:member]] }
 
           case mode
@@ -249,7 +249,7 @@ module Familia
         end
 
         # Get Redis connection for the current class or instance
-        def redis_connection
+        def dbclient
           if self.class.respond_to?(:dbclient)
             self.class.dbclient
           elsif respond_to?(:dbclient)

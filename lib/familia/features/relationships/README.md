@@ -19,7 +19,7 @@
 
 **score_encoding.rb** - Embeds metadata directly into Redis scores for efficient storage and retrieval without additional round trips.
 
-**redis_operations.rb** - Low-level Redis command abstractions and atomic multi-collection operations via pipelines/transactions.
+**database_operations.rb** - Low-level Redis command abstractions and atomic multi-collection operations via pipelines/transactions.
 
 **permission_management.rb** - Score-based permission encoding allowing fine-grained access control within collections.
 
