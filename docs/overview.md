@@ -11,7 +11,8 @@ Familia is a Ruby ORM for Valkey (Redis) that provides object-oriented access to
 **Why Familia?**
 - Maps Ruby objects directly to Valkey's native data structures (strings, lists, sets, etc.)
 - Maintains Valkey's atomic operations and performance characteristics
-- Handles complex patterns (quantization, encryption, expiration) out of the box
+- Handles complex patterns (quantization, encryption, expiration, relationships) out of the box
+- Modular feature system for organizing functionality across complex projects
 
 ## Core Concepts
 
@@ -151,6 +152,154 @@ end
 
 This automatically groups metrics into 10-minute intervals formatted as "HH:MM", ideal for analytics dashboards.
 
+**Key Benefits:**
+- **Time Bucketing**: Group time-based data into configurable intervals (minutes, hours, days)
+- **Reduced Storage**: Aggregate similar data points to optimize memory usage
+- **Analytics Ready**: Perfect for dashboards and time-series data visualization
+
+> For advanced quantization strategies, value bucketing, geographic quantization, and performance patterns, see the [Technical Reference](reference/api-technical.md#quantization-feature-v200-pre7).
+
+### Object Identifiers
+
+Automatically generate unique identifiers for objects:
+
+```ruby
+class Document < Familia::Horreum
+  feature :object_identifier, generator: :uuid_v4
+  field :title
+  field :content
+end
+
+class Session < Familia::Horreum
+  feature :object_identifier, generator: :hex
+  field :user_id
+  field :data
+end
+
+# Objects get automatic IDs
+doc = Document.create(title: "My Doc")
+doc.objid  # => "550e8400-e29b-41d4-a716-446655440000" (UUID)
+
+session = Session.create(user_id: "123")
+session.objid  # => "a1b2c3d4e5f6" (hex)
+```
+
+**Available Generators:**
+- `:uuid_v4` - Standard UUID format for global uniqueness
+- `:hex` - Compact hexadecimal identifiers for internal use
+
+> For custom generators, collision detection, and advanced identifier patterns, see the [Technical Reference](reference/api-technical.md#object-identifier-feature-v200-pre7).
+
+### External Identifiers
+
+Integrate with external systems and validate identifiers:
+
+```ruby
+class ExternalUser < Familia::Horreum
+  feature :external_identifier
+
+  field :external_id
+  field :name
+  field :sync_status
+
+  # Validate external system identifiers
+  def valid_external_id?
+    external_id.present? && external_id.match?(/^ext_\d+$/)
+  end
+end
+
+# Map external identifiers to internal objects
+user = ExternalUser.create(external_id: "ext_12345", name: "Alice")
+```
+
+This feature helps maintain consistency when integrating with external APIs or legacy systems.
+
+> For advanced external identifier patterns, batch operations, and sync status management, see the [Technical Reference](reference/api-technical.md#external-identifier-feature-v200-pre7).
+
+### Relationships
+
+Manage complex object relationships with CRUD operations:
+
+```ruby
+class User < Familia::Horreum
+  feature :relationships
+  identifier_field :email
+  field :email, :name
+end
+
+class Team < Familia::Horreum
+  feature :relationships
+  identifier_field :name
+  field :name, :description
+end
+
+# Define relationships
+User.relates_to Team, via: :membership
+
+# Create relationships
+alice = User.create(email: "alice@example.com", name: "Alice")
+dev_team = Team.create(name: "developers", description: "Dev Team")
+
+# Add relationships
+alice.add_membership(dev_team)
+
+# Query relationships
+alice.memberships        # => [dev_team]
+dev_team.members         # => [alice]
+
+# Remove relationships
+alice.remove_membership(dev_team)
+
+# Bulk operations
+alice.add_memberships([dev_team, qa_team, design_team])
+alice.clear_memberships
+```
+
+**Key Features:**
+- **Bidirectional Links**: Automatic reverse relationship management
+- **Ruby-like Syntax**: Clean `customer.domains << domain` collection operations
+- **Automatic Indexing**: Efficient O(1) lookups with automatic index maintenance
+- **Performance Optimized**: Bulk operations and efficient sorted set operations
+
+> For advanced relationship patterns, permission-encoded relationships, time-series tracking, and performance optimization, see the [Technical Reference](reference/api-technical.md#relationships-feature-v200-pre7).
+
+### Transient Fields
+
+Handle temporary or sensitive data that shouldn't persist:
+
+```ruby
+class LoginAttempt < Familia::Horreum
+  feature :transient_fields
+
+  field :username
+  field :timestamp
+  transient_field :password
+  redacted_field :security_token
+end
+
+attempt = LoginAttempt.new(
+  username: "alice",
+  password: "secret123",
+  security_token: "sensitive_data"
+)
+
+# Transient fields aren't saved to Valkey
+attempt.save
+attempt.reload
+attempt.password        # => nil (not persisted)
+
+# Redacted fields return safe values
+attempt.security_token.class    # => RedactedString
+attempt.security_token.to_s     # => "[REDACTED]"
+attempt.security_token.reveal   # => "sensitive_data"
+```
+
+**Field Types:**
+- **Transient Fields**: Exist only in memory, never persisted
+- **Redacted Fields**: Return `[REDACTED]` when converted to strings for logging safety
+
+> For RedactedString implementation details, single-use patterns, and security considerations, see the [Technical Reference](reference/api-technical.md#transient-fields-feature-v200-pre5).
+
 ## Advanced Patterns
 
 ### Custom Methods and Logic
@@ -262,13 +411,13 @@ user.re_encrypt_fields!  # Re-encrypt with current key version
 user.encrypted_fields_status  # Check encryption status
 ```
 
-**Features:**
-- **Automatic Encryption**: Fields encrypted/decrypted transparently
-- **Field-Specific Keys**: Each field uses unique encryption keys derived from master key + context
-- **Algorithm Flexibility**: XChaCha20-Poly1305 (preferred) or AES-256-GCM fallback
-- **Key Versioning**: Seamless key rotation with backward compatibility
-- **Tamper Detection**: Optional Additional Authenticated Data (AAD) for integrity
-- **Performance**: Request-level key caching for high-throughput scenarios
+**Key Features:**
+- **Transparent Encryption**: Fields encrypted/decrypted automatically
+- **Security by Default**: ConcealedString prevents accidental value exposure
+- **Key Rotation**: Seamless updates with backward compatibility
+- **Multiple Algorithms**: XChaCha20-Poly1305 (preferred) with AES-256-GCM fallback
+
+> For advanced encryption configuration, multiple providers, request caching, and key rotation procedures, see the [Technical Reference](reference/api-technical.md#encrypted-fields-feature-v200-pre5).
 
 ### Open-ended Serialization
 
@@ -288,6 +437,28 @@ end
 
 Enables integration with custom serialization formats beyond Familia's defaults.
 
+### Feature System Architecture
+
+Familia's modular feature system helps organize functionality across complex projects:
+
+```ruby
+class ComplexModel < Familia::Horreum
+  # Enable features as needed
+  feature :expiration           # TTL management
+  feature :safe_dump           # API-safe serialization
+  feature :relationships       # Object relationships
+  feature :encrypted_fields    # Secure field storage
+end
+```
+
+**Key Benefits:**
+- **Per-Class Configuration**: Each model can configure features independently
+- **Automatic Loading**: Use autoloader for large projects to organize features in separate files
+- **Dependency Management**: Features can depend on other features for complex functionality
+- **Reusable Modules**: Share common functionality across multiple models
+
+> For advanced feature organization patterns, autoloader configuration, and complex dependency management, see the [Technical Reference](reference/api-technical.md#advanced-feature-system-architecture).
+
 ## Configuration
 
 ### Basic Setup
@@ -305,16 +476,82 @@ Familia.redis_config = {
 }
 ```
 
-### Encryption Setup (Optional)
+### Production Configuration
 
+**Environment-based Setup:**
+```ruby
+# config/familia.rb
+case ENV['RAILS_ENV'] || ENV['RACK_ENV']
+when 'production'
+  Familia.redis_config = {
+    host: ENV['REDIS_HOST'],
+    port: ENV['REDIS_PORT'],
+    password: ENV['REDIS_PASSWORD'],
+    ssl: true,
+    timeout: 10,
+    reconnect_attempts: 3
+  }
+when 'development'
+  Familia.uri = 'redis://localhost:6379/0'
+when 'test'
+  Familia.uri = 'redis://localhost:6379/15'
+end
+```
+
+**Advanced Connection Pooling:**
+```ruby
+# Multi-database with connection pooling
+require 'connection_pool'
+
+primary_pool = ConnectionPool.new(size: 20) { Redis.new(url: ENV['PRIMARY_REDIS_URL']) }
+cache_pool = ConnectionPool.new(size: 10) { Redis.new(url: ENV['CACHE_REDIS_URL']) }
+
+Familia.connection_provider = lambda do |uri|
+  case uri
+  when /primary/
+    primary_pool.with { |conn| yield conn }
+  when /cache/
+    cache_pool.with { |conn| yield conn }
+  else
+    Redis.new(url: uri)
+  end
+end
+```
+
+### Encryption Setup
+
+**Development Keys:**
 ```ruby
 # Generate base64-encoded 32-byte keys
-Familia.config.encryption_keys = {
-  v1: Base64.strict_encode64(SecureRandom.bytes(32)),
-  v2: Base64.strict_encode64(SecureRandom.bytes(32))
-}
-Familia.config.current_key_version = :v2
+Familia.configure do |config|
+  config.encryption_keys = {
+    v1: Base64.strict_encode64(SecureRandom.bytes(32)),
+    v2: Base64.strict_encode64(SecureRandom.bytes(32))
+  }
+  config.current_key_version = :v2
+  config.encryption_personalization = "#{Rails.application.class.name}-#{Rails.env}"
+end
 ```
+
+**Production Security:**
+```ruby
+# Use secure key management
+Familia.configure do |config|
+  # Load keys from secure key management service
+  config.encryption_keys = {
+    v1: ENV['FAMILIA_ENCRYPTION_KEY_V1'],
+    v2: ENV['FAMILIA_ENCRYPTION_KEY_V2'],
+    v3: ENV['FAMILIA_ENCRYPTION_KEY_V3']  # For rotation
+  }
+  config.current_key_version = :v3
+  config.encryption_personalization = ENV['FAMILIA_ENCRYPTION_CONTEXT']
+
+  # Validate configuration on startup
+  Familia::Encryption.validate_configuration!
+end
+```
+
+> For production configuration patterns, advanced connection pooling, multi-database setup, and environment-based configuration, see the [Technical Reference](reference/api-technical.md#connection-management-v200-pre).
 
 ## Common Patterns
 
@@ -365,6 +602,37 @@ puts user.dbkey  # Shows the Valkey key that would be used
 ```ruby
 # Validate encryption config
 Familia::Encryption.validate_configuration!
+
+# Check encryption status for specific fields
+user.encrypted_fields_status
+#=> {ssn: {encrypted: true, key_version: :v2}, credit_card: {encrypted: false}}
+
+# Re-encrypt all fields with current key
+user.re_encrypt_fields!
+```
+
+**Relationship Issues:**
+```ruby
+# Debug relationship indexes
+alice.relationships_debug_info
+#=> Shows internal relationship state and indexes
+
+# Check relationship consistency
+User.validate_relationship_indexes!  # Raises if inconsistent
+```
+
+**Feature Conflicts:**
+```ruby
+# Check which features are enabled
+MyModel.features_enabled
+#=> [:safe_dump, :encrypted_fields, :relationships]
+
+# Check feature dependencies
+MyModel.feature_dependencies(:relationships)
+#=> Shows required features
+
+# Verify feature loading order
+Familia.debug = true  # Shows feature loading sequence
 ```
 
 ### Debug Mode
@@ -400,4 +668,81 @@ Familia.config.current_key_version = :v1
 def clear_redis
   Familia.redis.flushdb
 end
+
+# Feature-specific testing patterns
+def setup_encryption_for_tests
+  test_keys = {
+    v1: Base64.strict_encode64('a' * 32),
+    v2: Base64.strict_encode64('b' * 32)
+  }
+  Familia.configure do |config|
+    config.encryption_keys = test_keys
+    config.current_key_version = :v1
+    config.encryption_personalization = 'TestApp-Test'
+  end
+end
+
+def test_relationships_cleanup
+  # Clean up relationship indexes
+  Familia.redis.keys('*:relationships:*').each do |key|
+    Familia.redis.del(key)
+  end
+end
 ```
+
+### Feature Testing Strategies
+
+**Testing with Encrypted Fields:**
+```ruby
+# test/models/secure_user_test.rb
+require 'test_helper'
+
+class SecureUserTest < Minitest::Test
+  def setup
+    setup_encryption_for_tests
+    clear_redis
+  end
+
+  def test_encrypted_field_concealment
+    user = SecureUser.create(
+      id: 'test123',
+      email: 'test@example.com',
+      ssn: '123-45-6789'
+    )
+
+    assert_instance_of Familia::Features::EncryptedFields::ConcealedString, user.ssn
+    assert_equal '[CONCEALED]', user.ssn.to_s
+    assert_equal '123-45-6789', user.ssn.reveal
+  end
+end
+```
+
+**Testing Relationships:**
+```ruby
+def test_relationship_bidirectionality
+  alice = User.create(email: "alice@test.com")
+  team = Team.create(name: "test-team")
+
+  alice.add_membership(team)
+
+  assert_includes alice.memberships, team
+  assert_includes team.members, alice
+end
+```
+
+**Testing Transient Fields:**
+```ruby
+def test_transient_field_not_persisted
+  attempt = LoginAttempt.new(
+    username: "alice",
+    password: "secret"
+  )
+  attempt.save
+
+  reloaded = LoginAttempt.load(attempt.identifier)
+  assert_nil reloaded.password  # Not persisted
+  assert_equal "alice", reloaded.username  # Regular field persisted
+end
+```
+
+> For comprehensive testing patterns, advanced test helpers, and feature-specific testing strategies, see the [Technical Reference](reference/api-technical.md#testing-patterns).

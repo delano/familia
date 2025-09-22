@@ -2,6 +2,8 @@
 
 **Familia** is a Ruby ORM for Redis/Valkey providing object mapping, relationships, and advanced features like encryption, connection pooling, and permission systems. This technical reference covers the major classes, methods, and usage patterns introduced in the v2.0.0-pre series.
 
+> For conceptual understanding and getting started with Familia, see the [Overview Guide](../overview.md). This document provides detailed implementation patterns and advanced configuration options.
+
 ---
 
 ## Core Architecture
@@ -138,11 +140,91 @@ vault.secret_key  # => "super-secret-123" (decrypted on access)
 - **XChaCha20-Poly1305** (preferred) - Requires `rbnacl` gem
 - **AES-256-GCM** (fallback) - Uses OpenSSL, no dependencies
 
-**Security Features:**
-- Field-specific key derivation for domain separation
-- Key versioning and rotation support
-- Memory-safe key handling
-- Configurable encryption algorithms
+**Advanced Security Implementation:**
+```ruby
+# Multiple encryption providers with fallback
+class CriticalData < Familia::Horreum
+  feature :encrypted_fields
+
+  # Configure encryption provider preference
+  set_encryption_provider :xchacha20_poly1305  # Preferred
+  set_fallback_provider :aes_gcm               # Fallback
+
+  encrypted_field :credit_card, aad_fields: [:user_id, :created_at]
+  encrypted_field :ssn, provider: :xchacha20_poly1305  # Force specific provider
+  encrypted_field :notes  # Uses default provider
+end
+
+# Key versioning and rotation
+Familia.configure do |config|
+  config.encryption_keys = {
+    v1: ENV['OLD_KEY'],      # Legacy key
+    v2: ENV['CURRENT_KEY'],  # Current key
+    v3: ENV['NEW_KEY']       # New key for rotation
+  }
+  config.current_key_version = :v2
+
+  # Provider configuration
+  config.encryption_providers = {
+    xchacha20_poly1305: {
+      key_size: 32,
+      nonce_size: 24,
+      require_gem: 'rbnacl'
+    },
+    aes_gcm: {
+      key_size: 32,
+      iv_size: 12,
+      tag_size: 16
+    }
+  }
+end
+
+# Request-level key caching for performance
+Familia::Encryption.with_request_cache do
+  1000.times do |i|
+    record = CriticalData.new(
+      credit_card: "4111-1111-1111-#{i.to_s.rjust(4, '0')}",
+      ssn: "123-45-#{i.to_s.rjust(4, '0')}",
+      notes: "Customer record #{i}"
+    )
+    record.save  # Reuses derived keys for performance
+  end
+end
+
+# Key rotation procedures
+CriticalData.all.each do |record|
+  # Re-encrypt with current key version
+  record.re_encrypt_fields!
+
+  # Verify encryption status
+  status = record.encrypted_fields_status
+  puts "Record #{record.identifier}: #{status}"
+  # => {credit_card: {encrypted: true, key_version: :v2, provider: :xchacha20_poly1305}}
+end
+```
+
+**ConcealedString Security Features:**
+```ruby
+# Automatic protection against accidental exposure
+user = CriticalData.load("user123")
+
+# Safe operations
+user.credit_card.class           # => ConcealedString
+user.credit_card.to_s           # => "[CONCEALED]"
+user.credit_card.inspect        # => "[CONCEALED]"
+user.credit_card.to_json        # => "\"[CONCEALED]\""
+
+# Explicit access when needed
+actual_card = user.credit_card.reveal  # => "4111-1111-1111-1234"
+
+# Logging safety
+Rails.logger.info "Processing card: #{user.credit_card}"
+# => "Processing card: [CONCEALED]" (safe for logs)
+
+# JSON serialization safety
+user_data = user.to_json
+# All encrypted fields show as "[CONCEALED]" in JSON
+```
 
 #### 4. Transient Fields Feature (v2.0.0-pre5)
 Non-persistent fields with memory-safe handling.
@@ -246,6 +328,407 @@ active_domains = Domain.active_domains.members
 - **Simplified Methods**: No complex "global" terminology - uses clear `class_` prefixes
 - **Performance**: O(1) hash lookups and efficient sorted set operations
 - **Flexibility**: Supports class-level and relationship-scoped indexing patterns
+
+#### 6. Object Identifier Feature (v2.0.0-pre7)
+Automatic generation of unique object identifiers with configurable strategies.
+
+```ruby
+class Document < Familia::Horreum
+  feature :object_identifier, generator: :uuid_v4
+
+  field :title, :content, :created_at
+end
+
+class Session < Familia::Horreum
+  feature :object_identifier, generator: :hex, length: 16
+
+  field :user_id, :data, :expires_at
+end
+
+class ApiKey < Familia::Horreum
+  feature :object_identifier, generator: :custom
+
+  field :name, :permissions, :created_at
+
+  # Custom generator implementation
+  def self.generate_identifier
+    "ak_#{SecureRandom.alphanumeric(32)}"
+  end
+end
+```
+
+**Generator Types:**
+- `:uuid_v4` - Standard UUID v4 format (36 characters)
+- `:hex` - Hexadecimal strings (configurable length, default 12)
+- `:custom` - User-defined generator method
+
+**Technical Implementation:**
+```ruby
+# Auto-generated on object creation
+doc = Document.create(title: "My Document")
+doc.objid  # => "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+
+session = Session.create(user_id: "123")
+session.objid  # => "a1b2c3d4e5f67890"
+
+# Custom identifier validation
+api_key = ApiKey.create(name: "Production API")
+api_key.objid  # => "ak_Xy9ZaBcD3fG8HjKlMnOpQrStUvWxYz12"
+
+# Collision detection and retry logic
+Document.feature_options(:object_identifier)
+#=> {generator: :uuid_v4, max_retries: 3, collision_check: true}
+```
+
+#### 7. External Identifier Feature (v2.0.0-pre7)
+Integration patterns for external system identifiers with validation and mapping.
+
+```ruby
+class ExternalUser < Familia::Horreum
+  feature :external_identifier
+
+  identifier_field :internal_id
+  field :internal_id, :external_id, :name, :sync_status, :last_sync_at
+
+  # External system validation
+  validates_external_id_format /^ext_\d{6,}$/
+  external_id_source "CustomerAPI"
+end
+
+class LegacyAccount < Familia::Horreum
+  feature :external_identifier, prefix: "legacy"
+
+  field :legacy_account_id, :migrated_at, :migration_status
+
+  # Custom validation logic
+  def valid_external_id?
+    legacy_account_id.present? &&
+    legacy_account_id.match?(/^LAC[A-Z]{2}\d{8}$/)
+  end
+
+  # Bidirectional mapping
+  def self.find_by_legacy_id(legacy_id)
+    mapping = external_id_mapping.get(legacy_id)
+    mapping ? load(mapping) : nil
+  end
+end
+```
+
+**External ID Management:**
+```ruby
+# Create with external mapping
+user = ExternalUser.new(
+  internal_id: SecureRandom.uuid,
+  external_id: "ext_123456",
+  name: "John Doe"
+)
+user.save  # Automatically creates bidirectional mapping
+
+# Lookup by external ID
+found_user = ExternalUser.find_by_external_id("ext_123456")
+external_id = found_user.external_id_mapping.get(found_user.internal_id)
+
+# Batch external ID operations
+external_ids = ["ext_123456", "ext_789012", "ext_345678"]
+users = ExternalUser.multiget_by_external_ids(external_ids)
+
+# Sync status tracking
+user.mark_sync_pending
+user.mark_sync_completed
+user.mark_sync_failed(error_message)
+user.sync_status  # => "completed", "pending", "failed"
+```
+
+#### 8. Quantization Feature (v2.0.0-pre7)
+Advanced time-based data bucketing with configurable strategies and analytics integration.
+
+```ruby
+class MetricsBucket < Familia::Horreum
+  feature :quantization
+
+  identifier_field :metric_key
+  field :metric_key, :bucket_timestamp, :value_count, :sum_value
+
+  # Time-based quantization with 10-minute buckets
+  quantize_time :bucket_timestamp, interval: 10.minutes, format: '%Y%m%d_%H%M'
+
+  # Custom quantization strategy
+  quantize_value :user_score, buckets: [0, 100, 500, 1000, 5000], labels: %w[bronze silver gold platinum diamond]
+end
+
+class AnalyticsBucket < Familia::Horreum
+  feature :quantization
+
+  field :event_type, :quantized_timestamp, :aggregated_count
+
+  # Multiple quantization strategies
+  quantize_time :hourly_bucket, interval: 1.hour, format: '%Y%m%d_%H'
+  quantize_time :daily_bucket, interval: 1.day, format: '%Y%m%d'
+  quantize_time :weekly_bucket, interval: 1.week, format: '%YW%U'
+
+  # Geographic quantization
+  quantize_geo :location_bucket, precision: :city  # :country, :state, :city, :zipcode
+end
+```
+
+**Quantization Operations:**
+```ruby
+# Automatic time bucketing
+timestamp = Time.now
+bucket = MetricsBucket.quantize_timestamp(timestamp)
+# => "20241215_1430" (for 2:37 PM becomes 2:30 PM bucket)
+
+# Value bucketing with labels
+score = 750
+bucket_label = MetricsBucket.quantize_user_score(score)
+# => "gold" (750 falls in 500-1000 range)
+
+# Analytics aggregation
+events = [
+  {timestamp: Time.now - 5.minutes, count: 10},
+  {timestamp: Time.now - 3.minutes, count: 15},
+  {timestamp: Time.now + 2.minutes, count: 8}
+]
+
+# All events quantized to same 10-minute bucket
+bucketed = events.map { |e| AnalyticsBucket.quantize_timestamp(e[:timestamp]) }
+# => ["20241215_1430", "20241215_1430", "20241215_1430"]
+
+# Geographic bucketing
+coordinates = {lat: 40.7128, lng: -74.0060}  # NYC
+geo_bucket = AnalyticsBucket.quantize_location(coordinates)
+# => "US_NY_NYC" (country_state_city)
+
+# Range queries with quantized data
+start_bucket = AnalyticsBucket.quantize_timestamp(Time.now - 1.hour)
+end_bucket = AnalyticsBucket.quantize_timestamp(Time.now)
+hourly_data = AnalyticsBucket.range_by_quantized_time(start_bucket, end_bucket)
+```
+
+**Performance Optimization Patterns:**
+```ruby
+class HighVolumeMetrics < Familia::Horreum
+  feature :quantization
+
+  # Pre-aggregated counters for efficiency
+  counter :event_count, quantize: [5.minutes, '%H%M']
+  sorted_set :top_events, quantize: [1.hour, '%Y%m%d_%H']
+
+  # Efficient increment operations
+  def self.record_event(event_type, score = nil)
+    current_bucket = quantize_timestamp(Familia.now)
+
+    # Atomic increment
+    quantized_counter = counter("#{event_type}:#{current_bucket}")
+    quantized_counter.increment
+
+    # Optional scoring
+    if score
+      quantized_scores = sorted_set("scores:#{current_bucket}")
+      quantized_scores.add(event_type, score)
+    end
+  end
+end
+```
+
+---
+
+## Advanced Feature System Architecture (v2.0.0-pre7)
+
+### Feature Autoloader for Complex Projects
+Organize features into modular files for large applications.
+
+```ruby
+# app/models/customer.rb - Main model file
+class Customer < Familia::Horreum
+  module Features
+    include Familia::Features::Autoloader
+    # Automatically loads all .rb files from app/models/customer/features/
+  end
+
+  # Core model definition
+  identifier_field :custid
+  field :custid, :name, :email, :created_at
+end
+
+# app/models/customer/features/notifications.rb
+module Customer::Features::Notifications
+  def send_welcome_email
+    NotificationService.send_template(
+      email: email,
+      template: 'customer_welcome',
+      variables: { name: name, custid: custid }
+    )
+  end
+
+  def send_invoice_reminder(invoice_id)
+    NotificationService.send_template(
+      email: email,
+      template: 'invoice_reminder',
+      variables: { invoice_id: invoice_id }
+    )
+  end
+end
+
+# app/models/customer/features/analytics.rb
+module Customer::Features::Analytics
+  extend ActiveSupport::Concern
+
+  included do
+    # Add analytics tracking to core model
+    feature :relationships
+    class_participates_in :customer_analytics, score: :created_at
+  end
+
+  def track_activity(activity_type, metadata = {})
+    activity_data = {
+      custid: custid,
+      activity: activity_type,
+      timestamp: Familia.now.to_i,
+      metadata: metadata
+    }
+
+    # Store in customer's activity stream
+    activities.unshift(activity_data.to_json)
+    activities.trim(0, 999)  # Keep last 1000 activities
+  end
+
+  def recent_activities(limit = 10)
+    activities.range(0, limit - 1).map { |json| JSON.parse(json) }
+  end
+end
+```
+
+### Feature Dependencies and Loading Order
+Control feature loading sequence with dependency declarations.
+
+```ruby
+# lib/features/advanced_encryption.rb
+module AdvancedEncryption
+  extend Familia::Features::Autoloadable
+
+  def self.depends_on
+    [:encrypted_fields, :safe_dump]  # Required features
+  end
+
+  def self.included(base)
+    base.extend ClassMethods
+  end
+
+  module ClassMethods
+    def encrypt_all_fields!
+      # Batch encrypt all existing records
+      all_records.each(&:re_encrypt_fields!)
+    end
+
+    def encryption_health_check
+      # Validate encryption across all records
+      failed_records = []
+      all_records.each do |record|
+        unless record.encrypted_fields_status.all? { |_, status| status[:encrypted] }
+          failed_records << record.identifier
+        end
+      end
+      failed_records
+    end
+  end
+
+  def secure_export
+    # Combine safe_dump with additional security
+    exported = safe_dump
+    exported[:export_timestamp] = Familia.now.to_i
+    exported[:checksum] = Digest::SHA256.hexdigest(exported.to_json)
+    exported
+  end
+end
+
+# Usage with automatic dependency resolution
+class SecureCustomer < Familia::Horreum
+  feature :advanced_encryption  # Automatically includes dependencies
+
+  field :name, :email
+  encrypted_field :api_key, :private_notes
+  safe_dump_field :name, :email
+end
+```
+
+### Per-Class Feature Configuration Isolation
+Each class maintains independent feature options.
+
+```ruby
+class PrimaryCache < Familia::Horreum
+  feature :expiration, cascade_to: [:secondary_cache]
+  feature :quantization, time_buckets: [1.hour, 6.hours, 1.day]
+
+  field :cache_key, :value, :hit_count
+  default_expiration 24.hours
+end
+
+class SecondaryCache < Familia::Horreum
+  feature :expiration, cascade_to: []  # No further cascading
+  feature :quantization, time_buckets: [1.day, 1.week]  # Different buckets
+
+  field :cache_key, :backup_value, :backup_timestamp
+  default_expiration 7.days
+end
+
+# Feature options are completely isolated
+PrimaryCache.feature_options(:expiration)
+#=> {cascade_to: [:secondary_cache]}
+
+SecondaryCache.feature_options(:expiration)
+#=> {cascade_to: []}
+
+PrimaryCache.feature_options(:quantization)
+#=> {time_buckets: [3600, 21600, 86400]}
+
+SecondaryCache.feature_options(:quantization)
+#=> {time_buckets: [86400, 604800]}
+```
+
+### Runtime Feature Management
+Add, remove, and configure features dynamically.
+
+```ruby
+class DynamicModel < Familia::Horreum
+  field :name, :status
+
+  def self.enable_feature_set(feature_set)
+    case feature_set
+    when :basic
+      feature :expiration
+      feature :safe_dump
+    when :secure
+      feature :expiration
+      feature :encrypted_fields
+      feature :safe_dump
+    when :analytics
+      feature :expiration
+      feature :relationships
+      feature :quantization
+    end
+  end
+
+  def self.feature_enabled?(feature_name)
+    features_enabled.include?(feature_name.to_sym)
+  end
+
+  def self.disable_feature(feature_name)
+    # Remove feature from enabled list (affects new instances)
+    features_enabled.delete(feature_name.to_sym)
+    remove_feature_options(feature_name)
+  end
+end
+
+# Runtime configuration
+DynamicModel.enable_feature_set(:analytics)
+DynamicModel.feature_enabled?(:relationships)  # => true
+
+# Conditional feature usage
+if DynamicModel.feature_enabled?(:encrypted_fields)
+  DynamicModel.encrypted_field :sensitive_data
+end
+```
 
 ---
 
@@ -801,6 +1284,98 @@ class UserTest < Minitest::Test
     user.domains << domain  # Ruby-like collection syntax
     assert domain.in_user_domains?(user.identifier)
     assert user.domains.member?(domain.identifier)
+  end
+
+  def test_encrypted_fields_concealment
+    setup_encryption_keys
+
+    vault = SecureVault.new(
+      name: "Test Vault",
+      secret_key: "super-secret-123",
+      api_token: "sk-1234567890"
+    )
+    vault.save
+
+    # Test ConcealedString behavior
+    assert_instance_of Familia::Features::EncryptedFields::ConcealedString, vault.secret_key
+    assert_equal "[CONCEALED]", vault.secret_key.to_s
+    assert_equal "super-secret-123", vault.secret_key.reveal
+
+    # Test JSON safety
+    json_data = vault.to_json
+    refute_includes json_data, "super-secret-123"
+    assert_includes json_data, "[CONCEALED]"
+  end
+
+  def test_transient_fields_non_persistence
+    form = LoginForm.new(
+      username: "testuser",
+      password: "secret123",
+      csrf_token: "abc123"
+    )
+    form.save
+
+    # Reload and verify transient fields not persisted
+    reloaded = LoginForm.load(form.identifier)
+    assert_equal "testuser", reloaded.username
+    assert_nil reloaded.password
+    assert_nil reloaded.csrf_token
+  end
+
+  def test_object_identifier_generation
+    # Test UUID generation
+    doc = UuidDocument.create(title: "Test Doc")
+    assert_match(/\A[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\z/i, doc.objid)
+
+    # Test hex generation
+    session = HexSession.create(user_id: "123")
+    assert_match(/\A[0-9a-f]+\z/i, session.objid)
+    assert_equal 16, session.objid.length
+  end
+
+  def test_quantization_time_bucketing
+    timestamp = Time.parse("2024-12-15 14:37:23")
+    bucket = MetricsBucket.quantize_timestamp(timestamp)
+    assert_equal "20241215_1430", bucket  # 10-minute bucket
+
+    # Test multiple timestamps in same bucket
+    timestamp2 = Time.parse("2024-12-15 14:39:45")
+    bucket2 = MetricsBucket.quantize_timestamp(timestamp2)
+    assert_equal bucket, bucket2
+  end
+
+  def test_external_identifier_mapping
+    user = ExternalUser.new(
+      internal_id: SecureRandom.uuid,
+      external_id: "ext_123456",
+      name: "External User"
+    )
+    user.save
+
+    # Test bidirectional mapping
+    found_by_external = ExternalUser.find_by_external_id("ext_123456")
+    assert_equal user.internal_id, found_by_external.internal_id
+
+    # Test sync status tracking
+    user.mark_sync_pending
+    assert_equal "pending", user.sync_status
+
+    user.mark_sync_completed
+    assert_equal "completed", user.sync_status
+  end
+
+  private
+
+  def setup_encryption_keys
+    test_keys = {
+      v1: Base64.strict_encode64('a' * 32),
+      v2: Base64.strict_encode64('b' * 32)
+    }
+    Familia.configure do |config|
+      config.encryption_keys = test_keys
+      config.current_key_version = :v1
+      config.encryption_personalization = 'TestApp-Test'
+    end
   end
 end
 ```
