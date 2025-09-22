@@ -46,7 +46,7 @@ module Familia
       include Familia::Settings
       include Familia::Horreum::RelatedFieldsManagement # Provides DataType field methods
 
-      using Familia::Refinements::SnakeCase
+      using Familia::Refinements::StylizeWords
 
       # Sets or retrieves the unique identifier field for the class.
       #

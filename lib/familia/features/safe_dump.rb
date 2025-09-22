@@ -44,7 +44,7 @@ module Familia
     module SafeDump
       Familia::Base.add_feature self, :safe_dump
 
-      using Familia::Refinements::SnakeCase
+      using Familia::Refinements::StylizeWords
 
       @dump_method = :to_json
       @load_method = :from_json

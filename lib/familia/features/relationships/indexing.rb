@@ -6,7 +6,7 @@ module Familia
       # Indexing module for indexed_by relationships using Valkey/Redis hashes
       # Provides O(1) lookups for finding objects by field values
       module Indexing
-        using Familia::Refinements::SnakeCase
+        using Familia::Refinements::StylizeWords
 
         # Class-level indexing configurations
         def self.included(base)

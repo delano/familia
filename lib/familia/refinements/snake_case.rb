@@ -2,7 +2,7 @@
 
 module Familia
   module Refinements
-    # Familia::Refinements::SnakeCase
+    # Familia::Refinements::StylizeWords
     #
     # Converts a string from PascalCase/camelCase to snake_case format.
     #

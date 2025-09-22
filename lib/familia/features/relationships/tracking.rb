@@ -6,8 +6,7 @@ module Familia
       # Tracking module for tracked_in relationships using Valkey/Redis sorted sets
       # Provides multi-presence support where objects can exist in multiple collections
       module Tracking
-        using Familia::Refinements::Stylize
-        using Familia::Refinements::Singularize
+        using Familia::Refinements::StylizeWords
         # Class-level tracking configurations
         def self.included(base)
           base.extend ModelClassMethods
