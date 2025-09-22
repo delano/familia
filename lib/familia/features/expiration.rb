@@ -163,7 +163,9 @@ module Familia
         # This ensures the class has a place to store its default expiration setting
         return if base.instance_variable_defined?(:@default_expiration)
 
-        base.instance_variable_set(:@default_expiration, default_expiration)
+        # The instance var here will return the value from the implementing
+        # model class (or nil if it's not set, as you'd expect).
+        base.instance_variable_set(:@default_expiration, @default_expiration)
       end
 
       # Familia::Expiration::ModelClassMethods
