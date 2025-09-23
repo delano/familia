@@ -1,9 +1,10 @@
 # Archived Documentation
 
-This directory contains original documentation files that have been migrated to the new Scriv-based changelog system and reorganized documentation structure.
+This directory contains original documentation files that have either been migrated to the new Scriv-based changelog system or incorporated into other documents.
 
 ## Migration Date
-**September 1, 2025** - As part of implementing [Issue #84: Scriv-based changelog system](https://github.com/delano/familia/issues/84)
+**Sept 22, 1015** - Deprecated api-reference.md, to reduce surface area for stale documentation to hide.
+**Sept 1, 2025** - As part of implementing [Issue #84: Scriv-based changelog system](https://github.com/delano/familia/issues/84)
 
 ## Archived Files
 

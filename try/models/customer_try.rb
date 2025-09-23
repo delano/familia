@@ -123,7 +123,7 @@ Customer.logical_database
 Customer.uri
 #=> nil
 
-## Customer.destroy! makes only one call to Redis
+## Customer.destroy! makes only one call to Valkey/Redis
 DatabaseCommandCounter.count_commands { @customer.destroy! }
 #=> 1
 

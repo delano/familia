@@ -11,7 +11,7 @@ require_relative 'familia/refinements'
 require_relative 'familia/errors'
 require_relative 'familia/version'
 
-# Familia - A family warehouse for Redis
+# Familia - A family warehouse for Valkey/Redis
 #
 # Familia provides a way to organize and store Ruby objects in the database.
 # It includes various modules and classes to facilitate object-Database interactions.

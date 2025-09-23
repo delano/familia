@@ -1,19 +1,64 @@
 # Quantization Feature Guide
 
-## Overview
+The Quantization feature revolutionizes how you handle time-based data by providing automatic bucketing, consistent timestamps, and analytics-ready data organization. Instead of dealing with precise timestamps that make aggregation difficult, quantization rounds time values to predictable intervals, enabling efficient caching, analytics dashboards, and time-series data management.
 
-The Quantization feature provides time-based data bucketing capabilities for Familia objects. It allows you to round timestamps to specific intervals (quantums) and format them for consistent time-based data organization, analytics, and caching strategies.
+> [!NOTE]
+> **Perfect For:** Analytics dashboards, time-series metrics, cache keys, data retention policies, and any scenario where you need consistent time-based data grouping.
+
+## Understanding Time Quantization
+
+### The Problem with Precise Timestamps
+
+Without quantization, time-based data becomes fragmented and difficult to aggregate:
+
+```ruby
+# Problem: Each request gets a unique timestamp
+user_activity_14_30_23 = "login at 2023-06-15 14:30:23"
+user_activity_14_30_45 = "login at 2023-06-15 14:30:45"
+user_activity_14_31_12 = "login at 2023-06-15 14:31:12"
+
+# Result: Three separate data points instead of aggregated hourly data
+# Makes analytics queries complex and cache keys unpredictable
+```
+
+### The Quantization Solution
+
+Quantization groups timestamps into consistent buckets:
+
+```ruby
+# Solution: All timestamps within an hour become the same bucket
+qstamp(1.hour, time: Time.parse("2023-06-15 14:30:23"))  # => 1687276800 (14:00:00)
+qstamp(1.hour, time: Time.parse("2023-06-15 14:30:45"))  # => 1687276800 (14:00:00)
+qstamp(1.hour, time: Time.parse("2023-06-15 14:31:12"))  # => 1687276800 (14:00:00)
+
+# Result: Single aggregated data point for the entire hour
+# Perfect for analytics and predictable cache keys!
+```
+
+> [!NOTE]
+> **Key Benefits:**
+> - **Consistent Buckets**: All timestamps in a period map to the same value
+> - **Predictable Keys**: Cache keys and identifiers become deterministic
+> - **Efficient Aggregation**: Reduce millions of data points to manageable buckets
+> - **Analytics Ready**: Perfect for dashboards requiring time-series data
 
 ## Core Concepts
 
-### Quantum Intervals
+### Quantum Intervals Explained
 
-A **quantum** is a time interval used to bucket timestamps. Common quantums include:
+A **quantum** represents the time bucket size for grouping timestamps. Think of it as the "resolution" of your time-based data:
 
-- **Minutes**: `1.minute`, `5.minutes`, `15.minutes`
-- **Hours**: `1.hour`, `6.hours`, `12.hours`
-- **Days**: `1.day`, `7.days`
-- **Custom**: Any number of seconds (e.g., `90` for 1.5 minutes)
+**Common Quantum Patterns:**
+- **High-Resolution**: `1.minute`, `5.minutes`, `15.minutes` - For real-time monitoring
+- **Medium-Resolution**: `1.hour`, `6.hours`, `12.hours` - For hourly analytics
+- **Low-Resolution**: `1.day`, `1.week`, `1.month` - For long-term trends
+- **Custom Intervals**: Any number of seconds (e.g., `90` for 1.5 minutes, `300` for 5 minutes)
+
+> [!TIP]
+> **Choosing the Right Quantum:**
+> - **Smaller quantums** = More granular data, more storage
+> - **Larger quantums** = Less granular data, less storage
+> - Consider your analytics needs and storage constraints
 
 ### Quantized Timestamps (qstamp)
 
@@ -33,21 +78,28 @@ qstamp(1.hour, pattern: '%H:%M:%S', time: Time.parse('14:05:12'))  # => "14:00:0
 qstamp(1.hour, pattern: '%H:%M:%S', time: Time.parse('14:55:33'))  # => "14:00:00"
 ```
 
-## Basic Usage
+## Getting Started with Quantization
 
-### Enabling Quantization
+### Enabling the Feature
+
+The quantization feature integrates seamlessly with your existing Familia models:
 
 ```ruby
 class AnalyticsEvent < Familia::Horreum
   feature :quantization
-  default_expiration 300  # 5 minutes (used as default quantum)
+  default_expiration 300  # 5 minutes (also used as default quantum)
 
   identifier_field :event_id
   field :event_id, :event_type, :user_id, :data, :timestamp
 end
 ```
 
-### Simple Quantized Timestamps
+> [!TIP]
+> If you set `default_expiration`, it automatically becomes your default quantum for `qstamp` calls without an explicit interval.
+
+### Your First Quantized Timestamps
+
+The `qstamp` method is your main tool for creating consistent time buckets:
 
 ```ruby
 event = AnalyticsEvent.new
@@ -64,6 +116,9 @@ hourly_timestamp = event.qstamp(1.hour)
 AnalyticsEvent.qstamp(1.hour)
 # => 1687276800
 ```
+
+> [!IMPORTANT]
+> The `qstamp` method always rounds DOWN to the quantum boundary. A timestamp of 14:30:45 with a 1-hour quantum becomes 14:00:00, not 15:00:00.
 
 ### Formatted Timestamps
 
@@ -717,5 +772,15 @@ class QuantizationMonitor
   end
 end
 ```
+
+---
+
+## See Also
+
+- **[Technical Reference](../reference/api-technical.md#quantization-feature-v200-pre7)** - Implementation details and advanced patterns
+- **[Overview](../overview.md#time-based-quantization)** - Conceptual introduction to quantization
+- **[Time Utilities Guide](time-utilities.md)** - Time manipulation and formatting utilities
+- **[Feature System Guide](feature-system.md)** - Understanding Familia's feature architecture
+- **[Implementation Guide](implementation.md)** - Production deployment and configuration patterns
 
 The Quantization feature provides powerful time-based data organization capabilities, enabling efficient analytics, caching, and time-series data management in Familia applications.

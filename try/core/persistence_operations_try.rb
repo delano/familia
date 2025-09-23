@@ -141,7 +141,7 @@ end
 # 4. create Method Coverage (MISSING from current tests)
 # =============================================
 
-# NOTE: create method tests disabled due to Redis::Future bug
+# NOTE: create method tests disabled due to Valkey/Redis::Future bug
 # This would be high-priority coverage but needs the create method bug fixed first
 
 ## create method alternative: manual creation simulation

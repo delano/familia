@@ -10,9 +10,9 @@ Familia.debug = false
 #=> ["tryouts-29@test.com", "John Doe"]
 
 ## Keyword argument initialization works (order independent)
-@customer2 = Customer.new(name: 'Jane Smith', custid: 'jane@test.com', email: 'jane@example.com')
+@customer2 = Customer.new(name: 'Jane Windows', custid: 'jane@test.com', email: 'jane@example.com')
 [@customer2.custid, @customer2.name, @customer2.email]
-#=> ["jane@test.com", "Jane Smith", "jane@example.com"]
+#=> ["jane@test.com", "Jane Windows", "jane@example.com"]
 
 ## Keyword arguments are order independent (different order, same result)
 @customer3 = Customer.new(email: 'bob@example.com', custid: 'bob@test.com', name: 'Bob Jones')
@@ -50,11 +50,11 @@ Familia.debug = false
 
 ## to_h works correctly with keyword-initialized objects
 @customer2.to_h["name"]
-#=> "Jane Smith"
+#=> "Jane Windows"
 
 ## to_a works correctly with keyword-initialized objects
 @customer2.to_a[4] # name field should be the fifth field defined in the class
-#=> "Jane Smith"
+#=> "Jane Windows"
 
 ## Session has limited fields (only sessid defined)
 @session1 = Session.new('sess123')

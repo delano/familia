@@ -593,4 +593,13 @@ Familia.configure do |config|
 end
 ```
 
+---
+
+## See Also
+
+- **[Technical Reference](../reference/api-technical.md#expiration-feature-v200-pre5)** - Implementation details and advanced patterns
+- **[Overview](../overview.md#automatic-expiration)** - Conceptual introduction to expiration
+- **[Feature System Guide](feature-system.md)** - Understanding Familia's feature architecture
+- **[Implementation Guide](implementation.md)** - Production deployment and configuration patterns
+
 The Expiration feature provides a robust foundation for managing data lifecycle in Familia applications, with flexible configuration options and automatic cascading to related objects.

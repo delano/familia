@@ -378,8 +378,8 @@ module Familia
       # @raise [ArgumentError] if fast_method_name doesn't end with '!'
       #
       # @note Generated method behavior:
-      #   - Without args: Retrieves current value from Redis
-      #   - With value: Sets and immediately persists to Redis
+      #   - Without args: Retrieves current value from Valkey/Redis
+      #   - With value: Sets and immediately persists to Valkey/Redis
       #   - Returns boolean indicating success for writes
       #   - Bypasses object-level caching and expiration updates
       #

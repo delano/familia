@@ -8,7 +8,7 @@ module Familia
     #
     # Object identifiers are:
     # - Unique across the system
-    # - Persistent (stored in Redis/Valkey)
+    # - Persistent (stored in Valkey/Redis)
     # - Lazily generated (only when first accessed)
     # - Configurable (multiple generation strategies available)
     # - Preserved during initialization (existing IDs never regenerated)
@@ -166,7 +166,7 @@ module Familia
         # Override setter to preserve values during initialization
         #
         # This ensures that values passed during object initialization
-        # (e.g., when loading from Redis) are preserved and not overwritten
+        # (e.g., when loading from Valkey/Redis) are preserved and not overwritten
         # by the lazy generation logic.
         #
         # @param klass [Class] The class to define the method on
@@ -179,7 +179,7 @@ module Familia
             klass.define_method :"#{method_name}=" do |value|
               instance_variable_set(:"@#{field_name}", value)
 
-              # When setting objid from external source (e.g., loading from Redis),
+              # When setting objid from external source (e.g., loading from Valkey/Redis),
               # we cannot determine the original generator, so we clear the provenance
               # tracking to indicate unknown origin. This prevents false assumptions
               # about the security properties of externally-provided identifiers.

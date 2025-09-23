@@ -1,6 +1,6 @@
 # Connection Pooling with Familia
 
-Familia provides efficient Redis/Valkey connection management through a provider pattern that supports multiple logical databases, thread safety, and optimal performance.
+Familia provides efficient Valkey/Redis connection management through a provider pattern that supports multiple logical databases, thread safety, and optimal performance.
 
 ## Connection Provider Contract
 

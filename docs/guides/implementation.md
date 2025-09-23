@@ -5,8 +5,8 @@
 The encrypted fields feature uses a modular provider system with field transformation hooks:
 
 ```
-User Input → Field Setter → Provider Selection → Encryption → Redis/Valkey
-Redis/Valkey → Algorithm Detection → Decryption → Field Getter → User Output
+User Input → Field Setter → Provider Selection → Encryption → Valkey/Redis
+Valkey/Redis → Algorithm Detection → Decryption → Field Getter → User Output
 ```
 
 ### Provider Architecture

@@ -9,7 +9,7 @@
 #  state from the database.
 #
 #  The problem is more fundamental: Database MULTI/EXEC transactions don't
-#  work the way this code expects them to. In Redis:
+#  work the way this code expects them to. In Valkey/Redis:
 #
 #  1. MULTI starts queuing commands
 #  2. All subsequent commands are queued, not executed
@@ -20,7 +20,7 @@
 #     work as expected
 #  2. Read the current balance and modify it - this won't work inside MULTI
 #
-#  The atomic operations need to be restructured to work with Redis's
+#  The atomic operations need to be restructured to work with Valkey/Redis's
 #  actual transaction model. Let me fix this:
 
 require 'bundler/setup'

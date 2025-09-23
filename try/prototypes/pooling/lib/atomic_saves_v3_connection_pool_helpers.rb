@@ -135,7 +135,7 @@ module Familia
         atomic_separate(&block)
       else
         # Use connection pool to get connection
-        # For this prototype, we'll use a simple approach that works with Redis
+        # For this prototype, we'll use a simple approach that works with Valkey/Redis
         connection_pool.with do |conn|
           begin
             # Store the connection for use within the block

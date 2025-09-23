@@ -128,7 +128,7 @@ module Familia
     #
     # This method performs a complete refresh of the hash's state from the database.
     # It's like giving your hash a memory transfusion - out with the old state,
-    # in with the fresh data straight from Redis!
+    # in with the fresh data straight from Valkey/Redis!
     #
     # @note This operation is atomic - it either succeeds completely or fails
     #   safely. Any unsaved changes to the hash will be overwritten.
@@ -168,7 +168,7 @@ module Familia
     # @return [self] Returns the refreshed hash, ready for more adventures!
     #
     # @raise [Familia::KeyNotFoundError] If the dbkey does not exist.
-    #   The hash must exist in Redis-land for this to work!
+    #   The hash must exist in Valkey/Redis-land for this to work!
     #
     # @example Refresh and chain
     #   my_hash.refresh.keys  # Refresh and get all keys

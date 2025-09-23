@@ -49,11 +49,11 @@ class Domain < Familia::Horreum
   field :status
 
   # Declare membership in customer collections
-  member_of Customer, :domains # , type: :set
+  participates_in Customer, :domains # , type: :set
 
   # Track domains by status (using class_ prefix for class-level)
   class_participates_in :active_domains,
-                   score: -> { status == 'active' ? Familia.now.to_i : 0 }
+                        score: -> { status == 'active' ? Familia.now.to_i : 0 }
 end
 
 class Project < Familia::Horreum
@@ -66,7 +66,7 @@ class Project < Familia::Horreum
   field :priority
 
   # Member of customer projects list (ordered)
-  member_of Customer, :projects, type: :list
+  participates_in Customer, :projects, type: :list
 end
 
 puts '=== 1. Basic Object Creation ==='
@@ -110,7 +110,7 @@ puts '=== 2. Establishing Relationships ==='
 customer.save # Automatically adds to email_lookup, plan_lookup, and all_customers
 puts '✓ Customer automatically added to indexes and tracking on save'
 
-# Establish member_of relationships using clean << operator syntax
+# Establish participates_in relationships using clean << operator syntax
 customer.domains << domain1   # Clean Ruby-like syntax
 customer.domains << domain2   # Same as domain1.add_to_customer_domains(customer)
 customer.projects << project  # Same as project.add_to_customer_projects(customer)
@@ -178,7 +178,7 @@ puts '=== 6. Relationship Cleanup ==='
 # Remove relationships
 puts 'Cleaning up relationships...'
 
-# Remove from member_of relationships
+# Remove from participates_in relationships
 domain1.remove_from_customer_domains(customer)
 puts "✓ Removed #{domain1.name} from customer domains"
 
@@ -197,7 +197,7 @@ puts
 puts 'Key takeaways:'
 puts '• class_participates_in: Automatic class-level collections updated on save'
 puts '• class_indexed_by: Automatic class-level indexes updated on save'
-puts '• member_of: Use << operator for clean Ruby-like collection syntax'
+puts '• participates_in: Use << operator for clean Ruby-like collection syntax'
 puts '• indexed_by with context:: Use for relationship-scoped indexes'
 puts '• Save operations: Automatically update indexes and class-level tracking'
 puts '• << operator: Works naturally with all collection types (sets, lists, sorted sets)'

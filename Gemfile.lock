@@ -78,6 +78,7 @@ GEM
     rdoc (6.14.2)
       erb
       psych (>= 4.0.0)
+    redcarpet (3.6.1)
     redis (5.4.1)
       redis-client (>= 0.22.0)
     redis-client (0.25.1)
@@ -182,8 +183,8 @@ DEPENDENCIES
   debug
   familia!
   irb (~> 1.15.2)
-  kramdown
   rbnacl (~> 7.1, >= 7.1.1)
+  redcarpet
   rubocop
   rubocop-performance
   rubocop-thread_safety

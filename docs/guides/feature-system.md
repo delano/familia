@@ -125,7 +125,7 @@ class Domain < Familia::Horreum
   field :domain_id, :name
 
   # Declare membership in customer collections
-  member_of Customer, :domains, type: :set
+  participates_in Customer, :domains, type: :set
 end
 
 # Usage

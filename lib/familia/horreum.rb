@@ -7,24 +7,40 @@ require_relative 'horreum/core'
 
 module Familia
   #
-  # Horreum: A module for managing Redis-based object storage and relationships
+  # Horreum: A Valkey/Redis-backed ORM base class providing field definitions and DataType relationships
   #
-  # Key features:
-  # * Provides instance-level access to a single hash in Redis
-  # * Includes Familia for class/module level access to Database types and operations
-  # * Uses 'hashkey' to define a Database hash referred to as "object"
-  # * Applies a default expiry (5 years) to all keys
+  # Familia::Horreum serves as the foundation for creating Ruby objects that are persisted
+  # to and retrieved from Valkey/Redis. It provides a comprehensive field system, DataType
+  # relationships, and automated key generation for seamless object-relational mapping.
   #
-  # Metaprogramming:
-  # * The class << self block defines class-level behavior
-  # * The `inherited` method extends ClassMethods to subclasses like
-  #  `MyModel` in the example below
+  # Core Features:
+  # * Field definition system with automatic getter/setter/fast writer generation
+  # * DataType relationships (sets, lists, hashes, sorted sets, counters, locks)
+  # * Flexible identifier strategies (symbols, procs, arrays)
+  # * Automatic Redis key generation and management
+  # * Feature system for modular functionality (expiration, safe_dump, relationships)
+  # * Thread-safe DataType instances with automatic freezing
+  # * Multiple initialization patterns for different use cases
+  #
+  # Architecture:
+  # * Inheriting classes automatically extend definition and management methods
+  # * Instance-level DataTypes are created per object with unique Redis keys
+  # * Class-level DataTypes are shared across all instances
+  # * All objects tracked in Familia.members for reloading and introspection
   #
   # Usage:
-  #   class MyModel < Familia::Horreum
+  #   class User < Familia::Horreum
+  #     identifier_field :email
   #     field :name
-  #     field :email
+  #     field :created_at
+  #     set :tags
+  #     list :activity_log
+  #     feature :expiration
   #   end
+  #
+  #   user = User.new(email: "john@example.com", name: "John")
+  #   user.tags << "premium"
+  #   user.save
   #
   class Horreum
     include Familia::Base
@@ -33,34 +49,29 @@ module Familia
 
     using Familia::Refinements::TimeLiterals
 
-    # Singleton Class Context
+    # Class-Level Inheritance and Extension Management
     #
-    # The code within this block operates on the singleton class (also known as
-    # eigenclass or metaclass) of the current class. This means:
+    # This singleton class block defines the metaclass behavior that governs how
+    # Familia::Horreum subclasses are configured and extended when they inherit.
     #
-    # 1. Methods defined here become class methods, not instance methods.
-    # 2. Constants and variables set here belong to the class, not instances.
-    # 3. This is the place to define class-level behavior and properties.
+    # Key Responsibilities:
+    # * Automatically extend subclasses with essential functionality modules
+    # * Register new classes in Familia.members for tracking and reloading
+    # * Provide class-level attribute accessors for configuration
+    # * Establish the inheritance chain that enables the Horreum ORM pattern
     #
-    # Use this context for:
-    # * Defining class methods
-    # * Setting class-level configurations
-    # * Creating factory methods
-    # * Establishing relationships with other classes
+    # When a class inherits from Horreum, the inherited() hook automatically:
+    # * Extends DefinitionMethods (field, identifier_field, dbkey definitions)
+    # * Extends ManagementMethods (create, find, destroy operations)
+    # * Extends Connection (database client and connection management)
+    # * Extends Features (feature loading and configuration)
+    # * Registers the class in Familia.members for introspection
     #
-    # Example:
-    #   class MyClass
-    #     class << self
-    #       def class_method
-    #         puts "This is a class method"
-    #       end
-    #     end
-    #   end
-    #
-    #   MyClass.class_method  # => "This is a class method"
-    #
-    # Note: Changes made here affect the class itself and all future instances,
-    # but not existing instances of the class.
+    # Class-Level Attributes:
+    # * @parent - Parent object reference for nested relationships
+    # * @dbclient - Database connection override for this class
+    # * @dump_method/@load_method - Serialization method configuration
+    # * @has_relations - Flag indicating if DataType relationships are defined
     #
     class << self
       attr_accessor :parent
@@ -85,7 +96,7 @@ module Familia
     end
 
     # Instance initialization
-    # This method sets up the object's state, including Redis-related data.
+    # This method sets up the object's state, including Valkey/Redis-related data.
     #
     # Usage:
     #
@@ -143,7 +154,7 @@ module Familia
     end
 
     # Sets up related Database objects for the instance
-    # This method is crucial for establishing Redis-based relationships
+    # This method is crucial for establishing Valkey/Redis-based relationships
     #
     # This needs to be called in the initialize method.
     #
@@ -281,7 +292,7 @@ module Familia
     # Summon the mystical Database connection from the depths of instance or class.
     #
     # This method is like a magical divining rod, always pointing to the nearest
-    # source of Database goodness. It first checks if we have a personal Redis
+    # source of Database goodness. It first checks if we have a personal Valkey/Redis
     # connection (@dbclient), and if not, it borrows the class's connection.
     #
     # @return [Redis] A shimmering Database connection, ready for your bidding.

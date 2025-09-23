@@ -14,14 +14,14 @@ module Familia
     # Unified Relationships feature for Familia v2
     #
     # This feature merges the functionality of relatable_objects and relationships
-    # into a single, Redis-native implementation that embraces the "where does this appear?"
+    # into a single, Valkey/Redis-native implementation that embraces the "where does this appear?"
     # philosophy rather than "who owns this?".
     #
     # Key improvements in v2:
     # - Multi-presence: Objects can exist in multiple collections simultaneously
     # - Score encoding: Metadata embedded in Valkey/Redis scores for efficiency
     # - Collision-free: Method names include collection names to prevent conflicts
-    # - Redis-native: All operations use Valkey/Redis commands, no Ruby iteration
+    # - Valkey/Redis-native: All operations use Valkey/Redis commands, no Ruby iteration
     # - Atomic operations: Multi-collection updates happen atomically
     #
     # Breaking changes from v1:

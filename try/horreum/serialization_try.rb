@@ -62,7 +62,7 @@ Familia.dbclient.set('debug:ending_save_if_not_exists_tests', Familia.now.to_s)
 #=> "John Doe"
 
 ## batch_update can update multiple fields atomically, to_h
-@result = @customer.batch_update(name: 'Jane Smith', email: 'jane@example.com')
+@result = @customer.batch_update(name: 'Jane Windows', email: 'jane@example.com')
 @result.to_h
 #=> {:success=>true, :results=>[0, 0]}
 
@@ -80,12 +80,12 @@ Familia.dbclient.set('debug:ending_save_if_not_exists_tests', Familia.now.to_s)
 
 ## batch_update updates object fields in memory, confirm fields changed
 [@customer.name, @customer.email]
-#=> ["Jane Smith", "jane@example.com"]
+#=> ["Jane Windows", "jane@example.com"]
 
-## batch_update persists to Redis
+## batch_update persists to Valkey/Redis
 @customer.refresh!
 [@customer.name, @customer.email]
-#=> ["Jane Smith", "jane@example.com"]
+#=> ["Jane Windows", "jane@example.com"]
 
 ## batch_update with update_expiration: false works
 @customer.batch_update(name: 'Bob Jones', update_expiration: false)
@@ -139,7 +139,7 @@ end
 result.size
 #=> 2
 
-## refresh! reloads from Redis
+## refresh! reloads from Valkey/Redis
 @customer.refresh!
 @customer.hget('temp_field')
 #=> "temp_value"
@@ -157,7 +157,7 @@ result.successful?
 @customer.exists?
 #=> false
 
-## destroy! removes object from Redis, not the in-memory object (2 of 2)
+## destroy! removes object from Valkey/Redis, not the in-memory object (2 of 2)
 @customer.refresh!
 @customer.name
 #=> "Bob Jones"
@@ -183,7 +183,7 @@ result.successful?
 [@fresh_customer.role, @fresh_customer.planid]
 #=> ["admin", "premium"]
 
-## Fresh customer changes persist to Redis
+## Fresh customer changes persist to Valkey/Redis
 @fresh_customer.refresh!
 [@fresh_customer.role, @fresh_customer.planid]
 #=> ["admin", "premium"]

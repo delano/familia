@@ -5,7 +5,7 @@ require_relative 'encrypted_fields/encrypted_field_type'
 module Familia
   module Features
     # EncryptedFields is a feature that provides transparent encryption and decryption
-    # of sensitive data stored in Redis/Valkey. It uses strong cryptographic algorithms
+    # of sensitive data stored in Valkey/Redis. It uses strong cryptographic algorithms
     # with field-specific key derivation to protect data at rest while maintaining
     # easy access patterns for authorized applications.
     #
@@ -46,7 +46,7 @@ module Familia
     # Security Features:
     #
     # Each encrypted field uses a unique encryption key derived from:
-    # - Master encryption key (from Familia.encryption_key)
+    # - Master encryption key (from Familia.encryption_keys[current_key_version])
     # - Field name (cryptographic domain separation)
     # - Record identifier (per-record key derivation)
     # - Class name (per-class key derivation)
@@ -97,27 +97,22 @@ module Familia
     #   # The content can only be decrypted if doc_id, owner_id, and classification
     #   # values match those used during encryption
     #
-    # Passphrase Protection:
+    # Request-Level Caching:
     #
-    # For ultra-sensitive fields, require user passphrases for decryption:
+    # For performance optimization, enable key derivation caching per request:
     #
-    #   class PersonalVault < Familia::Horreum
-    #     feature :encrypted_fields
-    #
-    #     field :user_id
-    #     encrypted_field :diary_entry    # Ultra-sensitive
-    #     encrypted_field :photos         # Ultra-sensitive
+    #   Familia::Encryption.with_request_cache do
+    #     vault.secret_key = "value1"
+    #     vault.api_token = "value2"
+    #     vault.save  # Reuses derived keys within this block
     #   end
     #
-    #   vault = PersonalVault.new(user_id: 123, diary_entry: "Dear diary...")
-    #   vault.save
+    #   # Cache is automatically cleared when block exits
+    #   # Or manually: Familia::Encryption.clear_request_cache!
     #
-    #   # Passphrase required for decryption
-    #   diary = vault.diary_entry(passphrase_value: user_passphrase)
+    # Preventing Accidental Leakage:
     #
-    # Memory Safety:
-    #
-    # Encrypted fields return ConcealedString objects that provide memory protection:
+    # Encrypted fields return ConcealedString objects to help prevent exposure.
     #
     #   secret = vault.secret_key
     #   secret.class               # => ConcealedString
@@ -125,13 +120,11 @@ module Familia
     #   secret.inspect             # => "[CONCEALED]" (automatic redaction)
     #
     #   # Safe access pattern
-    #   secret.expose do |value|
-    #     # Use value directly without creating copies
-    #     api_call(authorization: "Bearer #{value}")
-    #   end
+    #   raw_value = secret.reveal  # Returns actual decrypted string
+    #   # Use raw_value carefully - avoid creating copies
     #
-    #   # Direct access (use carefully)
-    #   raw_value = secret.value   # Returns actual decrypted string
+    #   # Check if cleared from memory available to Ruby runtime process.
+    #   secret.cleared?            # Returns true if wiped
     #
     #   # Explicit cleanup
     #   secret.clear!              # Best-effort memory wiping
@@ -143,41 +136,51 @@ module Familia
     #   # Invalid ciphertext or tampering
     #   vault.secret_key  # => Familia::EncryptionError: Authentication failed
     #
-    #   # Wrong passphrase
-    #   vault.diary_entry(passphrase_value: "wrong")
-    #   # => Familia::EncryptionError: Invalid passphrase
+    #   # Missing encryption configuration
+    #   Familia.config.encryption_keys = {}
+    #   vault.secret_key  # => Familia::EncryptionError: No encryption keys configured
     #
-    #   # Missing encryption key
-    #   Familia.encryption_key = nil
-    #   vault.secret_key  # => Familia::EncryptionError: No encryption key configured
+    #   # Invalid key version
+    #   # Key exists in storage but not in current configuration
+    #   vault.secret_key  # => Familia::EncryptionError: Key version not found: v1
     #
     # Configuration:
     #
-    #   # UnsortedSet master encryption key (required)
+    #   # Configure versioned encryption keys (required)
     #   Familia.configure do |config|
-    #     config.encryption_key = ENV['FAMILIA_ENCRYPTION_KEY']
-    #     config.encryption_personalization = 'MyApp-2024'  # Optional customization
+    #     config.encryption_keys = {
+    #       v1: ENV['FAMILIA_ENCRYPTION_KEY'],
+    #       v2: ENV['FAMILIA_ENCRYPTION_KEY_V2']
+    #     }
+    #     config.current_key_version = :v2
+    #     config.encryption_personalization = 'MyApp-2024'  # Optional (XChaCha20 only)
     #   end
     #
-    #   # Generate a new encryption key
-    #   key = Familia::Encryption.generate_key
-    #   puts key  # => "base64-encoded-32-byte-key"
+    #   # Validate configuration before use
+    #   Familia::Encryption.validate_configuration!
     #
     # Key Rotation:
     #
     # The feature supports key versioning for seamless key rotation:
     #
-    #   # Step 1: Add new key while keeping old key
+    #   # Step 1: Add new key version while keeping old keys
     #   Familia.configure do |config|
-    #     config.encryption_key = new_key
-    #     config.legacy_encryption_keys = { 'v1' => old_key }
+    #     config.encryption_keys = {
+    #       v1: old_key,
+    #       v2: new_key
+    #     }
+    #     config.current_key_version = :v2
     #   end
     #
-    #   # Step 2: Objects decrypt with old key, encrypt with new key
-    #   vault.secret_key = "new-secret"  # Encrypted with new key
+    #   # Step 2: Objects decrypt with any valid key, encrypt with current key
+    #   vault.secret_key = "new-secret"  # Encrypted with v2 key
     #   vault.save
     #
-    #   # Step 3: After all data is re-encrypted, remove legacy key
+    #   # Step 3: Re-encrypt existing records
+    #   vault.re_encrypt_fields!  # Uses current key version
+    #   vault.save
+    #
+    #   # Step 4: After all data is re-encrypted, remove old key
     #
     # Integration Patterns:
     #
@@ -208,10 +211,9 @@ module Familia
     #       user = User.find(user_id)
     #
     #       # Access encrypted field safely
-    #       user.credit_card_number.expose do |cc_number|
-    #         # Process payment without storing plaintext
-    #         payment_gateway.charge(cc_number, amount)
-    #       end
+    #       cc_number = user.credit_card_number.reveal
+    #       # Process payment without storing plaintext
+    #       payment_gateway.charge(cc_number, amount)
     #
     #       # Clear sensitive data from memory
     #       user.credit_card_number.clear!
@@ -221,10 +223,12 @@ module Familia
     # Performance Considerations:
     #
     # - Encryption/decryption adds ~1-5ms overhead per field
-    # - Key derivation is cached per field/record combination
+    # - Key derivation is NOT cached by default for security
+    # - Use request-level caching for performance: with_request_cache { ... }
     # - XChaCha20-Poly1305 is ~2x faster than AES-256-GCM
     # - Memory allocation increases due to ciphertext expansion
     # - Consider batching operations for high-throughput scenarios
+    # - Personalization only affects XChaCha20-Poly1305 BLAKE2b derivation
     #
     # Security Limitations:
     #

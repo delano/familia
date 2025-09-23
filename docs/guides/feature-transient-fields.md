@@ -2,7 +2,7 @@
 
 ## Overview
 
-Transient fields provide secure handling of sensitive runtime data that should never be persisted to Redis/Valkey. Unlike encrypted fields, transient fields exist only in memory and are automatically wrapped in `RedactedString` for security.
+Transient fields provide secure handling of sensitive runtime data that should never be persisted to Valkey/Redis. Unlike encrypted fields, transient fields exist only in memory and are automatically wrapped in `RedactedString` for security.
 
 ## When to Use Transient Fields
 
@@ -270,7 +270,7 @@ end
 
 | Feature | Encrypted Fields | Transient Fields |
 |---------|------------------|------------------|
-| **Persistence** | Saved to Redis/Valkey | Memory only |
+| **Persistence** | Saved to Valkey/Redis | Memory only |
 | **Encryption** | AES/XChaCha20 | None (not stored) |
 | **Use Case** | Long-term secrets | Runtime secrets |
 | **Access** | Automatic decrypt | RedactedString wrapper |

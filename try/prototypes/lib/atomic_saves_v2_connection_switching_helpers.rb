@@ -12,7 +12,7 @@
 #    connection or MULTI connection based on Thread-local context
 # 2. **Thread Safety**: Uses Thread-local storage for transaction state
 # 3. **No method_missing**: Clean implementation via method overriding
-# 4. **Database MULTI/EXEC**: Leverages Redis's native transaction support
+# 4. **Database MULTI/EXEC**: Leverages Valkey/Redis's native transaction support
 #
 # Design Decision: TransactionalMethods Module REMOVED
 #

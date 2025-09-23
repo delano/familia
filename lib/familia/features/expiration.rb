@@ -5,7 +5,7 @@ require_relative 'expiration/extensions'
 module Familia
   module Features
     # Expiration is a feature that provides Time To Live (TTL) management for Familia
-    # objects and their associated Redis/Valkey data structures. It enables automatic
+    # objects and their associated Valkey/Redis data structures. It enables automatic
     # data cleanup and supports cascading expiration across related objects.
     #
     # This feature allows you to:
@@ -143,7 +143,7 @@ module Familia
     #
     # Performance Considerations:
     #
-    # - TTL operations are performed on Redis/Valkey side with minimal overhead
+    # - TTL operations are performed on Valkey/Redis side with minimal overhead
     # - Cascading expiration uses pipelining for efficiency when possible
     # - Zero expiration values skip Valkey/Redis EXPIRE calls entirely
     # - TTL queries are direct db operations (very fast)
@@ -220,9 +220,9 @@ module Familia
         @default_expiration || self.class.default_expiration
       end
 
-      # Sets an expiration time for the Redis/Valkey data associated with this object
+      # Sets an expiration time for the Valkey/Redis data associated with this object
       #
-      # This method allows setting a Time To Live (TTL) for the data in Redis,
+      # This method allows setting a Time To Live (TTL) for the data in Valkey/Redis,
       # after which it will be automatically removed. The method also handles
       # cascading expiration to related data structures when applicable.
       #

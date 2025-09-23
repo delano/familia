@@ -49,7 +49,7 @@ class Familia::DataType
       prepared
     end
 
-    # Deserializes multiple values from Redis, removing nil values.
+    # Deserializes multiple values from Valkey/Redis, removing nil values.
     #
     # @param values [Array<String>] The values to deserialize.
     # @return [Array<Object>] Deserialized objects, with nil values removed.
@@ -64,7 +64,7 @@ class Familia::DataType
       deserialize_values_with_nil(*values).compact
     end
 
-    # Deserializes multiple values from Redis, preserving nil values.
+    # Deserializes multiple values from Valkey/Redis, preserving nil values.
     #
     # @param values [Array<String>] The values to deserialize.
     # @return [Array<Object, nil>] Deserialized objects, including nil values.
