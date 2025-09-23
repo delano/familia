@@ -2,7 +2,7 @@
 # Familia - Overview
 
 > [!NOTE]
-> This document refers to Valkey throughout, but all examples and patterns work identically with the database. Familia supports both Valkey and Valkey/Redis as they share the same protocol and data structures.
+> This document refers to Valkey throughout, but all examples and patterns work identically with Redis. Familia supports both Valkey and Redis as they share the same protocol and data structures.
 
 ## Introduction
 
@@ -18,7 +18,7 @@ Familia is a Ruby ORM for Valkey (Redis) that provides object-oriented access to
 
 ### What is a Horreum Class?
 
-The ```Horreum``` class is Familia's foundation, representing Valkey-compatible objects. It's named after ancient Roman storehouses, reflecting its purpose as a structured data repository.
+The `Horreum` class is Familia's foundation, representing Valkey-compatible objects. It's named after ancient Roman storehouses, reflecting its purpose as a structured data repository.
 
 ```ruby
 class Flower < Familia::Horreum
@@ -96,6 +96,47 @@ end
 
 Each type maintains Valkey's native operations while providing Ruby-friendly interfaces.
 
+### Generated Method Patterns
+
+Familia automatically generates methods for all field and data type declarations:
+
+```ruby
+class Product < Familia::Horreum
+  # Field declarations generate three methods each
+  field :name, :price
+  # → name, name=, name!        # getter, setter, fast writer
+  # → price, price=, price!     # getter, setter, fast writer
+
+  # Data type declarations generate accessor, setter, and type check
+  set :tags
+  list :categories
+  hashkey :attributes
+  # → tags, tags=, tags?        # accessor, setter, type check
+  # → categories, categories=, categories?
+  # → attributes, attributes=, attributes?
+
+  # Class-level data types
+  class_set :global_tags
+  class_counter :total_products
+  # → Product.global_tags, Product.global_tags?
+  # → Product.total_products, Product.total_products?
+end
+
+# Field method usage
+product.name = "Ruby Gem"      # Set field value
+product.name                   # Get field value
+product.name!("New Name")      # Set and save immediately
+
+# Data type method usage
+product.tags                   # Get UnsortedSet instance
+product.tags = new_set         # Replace UnsortedSet instance
+product.tags?                  # => true (confirms it's an UnsortedSet)
+
+# Method conflict resolution
+field :type, on_conflict: :skip      # Skip if method exists
+field :id, on_conflict: :overwrite   # Force overwrite existing method
+```
+
 ## Essential Features
 
 ### Automatic Expiration
@@ -134,7 +175,7 @@ class User < Familia::Horreum
 end
 
 user.safe_dump
-#=> {id: "123", email: "alice@example.com", full_name: "Alice Windows"}
+# => {id: "123", email: "alice@example.com", full_name: "Alice Windows"}
 ```
 
 The new DSL prevents accidental exposure of sensitive data and makes field definitions easier to organize in feature modules.
@@ -190,6 +231,63 @@ session.objid  # => "a1b2c3d4e5f6" (hex)
 
 > For custom generators, collision detection, and advanced identifier patterns, see the [Technical Reference](reference/api-technical.md#object-identifier-feature-v200-pre7).
 
+### Specialized Field Types
+
+Familia provides specialized field types beyond basic fields:
+
+```ruby
+class SecureModel < Familia::Horreum
+  feature :encrypted_fields
+  feature :transient_fields
+  feature :object_identifier
+
+  # Regular fields generate: name, name=, name!
+  field :name, :email
+
+  # Encrypted fields return ConcealedString instances
+  encrypted_field :api_key, :credit_card
+  # → api_key, api_key=, api_key!
+  # → Values wrapped in ConcealedString for safety
+
+  # Transient fields never persist to database
+  transient_field :password, :session_token
+  # → password, password= (no fast writer method)
+  # → Values wrapped in RedactedString
+
+  # Redacted fields are persisted but return [REDACTED] in logs
+  redacted_field :security_question
+  # → security_question, security_question=, security_question!
+
+  # Object identifier fields auto-generate unique IDs
+  # → objid, objid= (lazy generation, preserves initialization values)
+  # → objid_generator_used (provenance tracking)
+end
+
+# Usage examples
+model = SecureModel.create(name: "Alice", api_key: "secret123")
+
+# Encrypted field safety
+model.api_key.class                      # => ConcealedString
+model.api_key.to_s                       # => "[CONCEALED]" (safe for logs)
+model.api_key.reveal                     # => "secret123" (actual value)
+
+# Transient field behavior
+model.password = "temp123"
+model.save
+model.reload
+model.password                           # => nil (not persisted)
+
+# Object identifier generation
+model.objid                              # => Auto-generated UUID or hex
+model.objid_generator_used               # => :uuid_v7 (provenance)
+```
+
+**Field Type Features:**
+- **Method Conflict Resolution**: Use `on_conflict: :skip/:warn/:overwrite` for existing methods
+- **Fast Writer Control**: Use `fast_method: false` to disable fast writers
+- **Custom Method Names**: Use `as: :custom_name` for different method names
+- **Security by Default**: Encrypted and transient fields prevent accidental exposure
+
 ### External Identifiers
 
 Integrate with external systems and validate identifiers:
@@ -221,10 +319,14 @@ This feature helps maintain consistency when integrating with external APIs or l
 Manage complex object relationships with CRUD operations:
 
 ```ruby
+
+# Define relationships
 class User < Familia::Horreum
   feature :relationships
   identifier_field :email
   field :email, :name
+
+  participates_in Team, :teams
 end
 
 class Team < Familia::Horreum
@@ -233,26 +335,56 @@ class Team < Familia::Horreum
   field :name, :description
 end
 
-# Define relationships
-User.relates_to Team, via: :membership
-
 # Create relationships
 alice = User.create(email: "alice@example.com", name: "Alice")
 dev_team = Team.create(name: "developers", description: "Dev Team")
 
 # Add relationships
-alice.add_membership(dev_team)
+alice.teams << dev_team
 
 # Query relationships
-alice.memberships        # => [dev_team]
-dev_team.members         # => [alice]
+alice.teams.to_a         # => [dev_team identifiers]
+dev_team.in_user_teams?(alice)  # => true
 
 # Remove relationships
-alice.remove_membership(dev_team)
+alice.teams.delete(dev_team.identifier)
 
 # Bulk operations
-alice.add_memberships([dev_team, qa_team, design_team])
-alice.clear_memberships
+alice.teams.merge([qa_team.identifier, design_team.identifier])
+alice.teams.clear
+```
+
+#### Generated Relationship Method Patterns
+
+The relationships feature automatically generates comprehensive method patterns:
+
+```ruby
+# Participation methods (on User class)
+alice.in_team_teams?(dev_team)           # Check membership
+alice.add_to_team_teams(dev_team, 1.0)   # Add with score
+alice.remove_from_team_teams(dev_team)   # Remove membership
+alice.score_in_team_teams(dev_team)      # Get participation score
+
+# Target class methods (on Team class)
+dev_team.teams                           # Collection getter (SortedSet)
+dev_team.add_team(alice, 1.0)            # Add single member with score
+dev_team.remove_team(alice)              # Remove single member
+dev_team.add_teams([alice, bob])         # Bulk add members
+
+# Indexing methods (if using indexed_by)
+class User < Familia::Horreum
+  indexed_by :email, :email_index, target: Team
+end
+
+# Generated index methods on User:
+alice.add_to_team_email_index(dev_team)        # Add to index
+alice.remove_from_team_email_index(dev_team)   # Remove from index
+alice.update_in_team_email_index(dev_team, old_email)  # Update index
+
+# Generated finder methods on Team:
+Team.find_by_email("alice@example.com")        # Find user by email
+Team.find_all_by_email(["alice@example.com"])  # Bulk find by emails
+Team.email_index_for("alice@example.com")      # Direct index access
 ```
 
 **Key Features:**
@@ -299,6 +431,53 @@ attempt.security_token.reveal   # => "sensitive_data"
 - **Redacted Fields**: Return `[REDACTED]` when converted to strings for logging safety
 
 > For RedactedString implementation details, single-use patterns, and security considerations, see the [Technical Reference](reference/api-technical.md#transient-fields-feature-v200-pre5).
+
+### Permission Management
+
+The relationships feature includes a powerful permission management system:
+
+```ruby
+class Document < Familia::Horreum
+  feature :relationships
+  permission_tracking :user_permissions
+
+  field :title, :content
+end
+
+# Generated permission control methods
+doc.grant(user, :read, :write)           # Grant permissions to user
+doc.revoke(user, :write)                 # Revoke specific permissions
+doc.add_permission(user, :delete)        # Add to existing permissions
+doc.set_permissions(user, :read, :edit)  # Replace all permissions
+
+# Generated permission query methods
+doc.can?(user, :read)                    # Check if user has permission
+doc.permissions_for(user)                # Get user's permission array
+doc.category?(user, :content_editor)     # Check permission category
+doc.permission_tier_for(user)            # Get tier: :administrator, :content_editor, :viewer, :none
+
+# Generated bulk operations
+doc.all_permissions                      # Hash of all users and permissions
+doc.clear_all_permissions               # Remove all permissions
+doc.users_by_category(:viewer)          # Filter users by permission level
+
+# Generated collection filtering
+doc.accessible_items("org:123:documents")               # Get items with scores
+doc.items_by_permission("org:123:documents", :readable) # Filter by permission
+doc.permission_matrix("org:123:documents")              # Count by permission level
+doc.admin_access?(user, "org:123:documents")            # Check admin privileges
+```
+
+**Permission Categories:**
+- `:viewer` - Read-only access
+- `:content_editor` - Read and edit access
+- `:administrator` - Full access including user management
+
+**Key Features:**
+- **Granular Control**: Fine-grained permission assignment per user
+- **Category-based Queries**: Efficient filtering by permission levels
+- **Bulk Operations**: Manage permissions across collections
+- **Performance Optimized**: O(1) permission checks using Redis sorted sets
 
 ## Advanced Patterns
 
@@ -605,7 +784,7 @@ Familia::Encryption.validate_configuration!
 
 # Check encryption status for specific fields
 user.encrypted_fields_status
-#=> {ssn: {encrypted: true, key_version: :v2}, credit_card: {encrypted: false}}
+# => {ssn: {encrypted: true, key_version: :v2}, credit_card: {encrypted: false}}
 
 # Re-encrypt all fields with current key
 user.re_encrypt_fields!
@@ -615,7 +794,7 @@ user.re_encrypt_fields!
 ```ruby
 # Debug relationship indexes
 alice.relationships_debug_info
-#=> Shows internal relationship state and indexes
+# => Shows internal relationship state and indexes
 
 # Check relationship consistency
 User.validate_relationship_indexes!  # Raises if inconsistent
@@ -625,11 +804,11 @@ User.validate_relationship_indexes!  # Raises if inconsistent
 ```ruby
 # Check which features are enabled
 MyModel.features_enabled
-#=> [:safe_dump, :encrypted_fields, :relationships]
+# => [:safe_dump, :encrypted_fields, :relationships]
 
 # Check feature dependencies
 MyModel.feature_dependencies(:relationships)
-#=> Shows required features
+# => Shows required features
 
 # Verify feature loading order
 Familia.debug = true  # Shows feature loading sequence

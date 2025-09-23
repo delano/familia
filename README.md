@@ -103,14 +103,39 @@ user = User.load('alice@example.com')
 user.name = 'Alice Windows'
 user.save
 
+# Fast update (immediate persistence)
+user.name!('Alice Smith')  # Sets and saves immediately
+
 # Check existence
 User.exists?('alice@example.com')  #=> true
 
 # Delete
-user.destroy!
+user.destroy
 
 # Conditional save
 user.save_if_not_exists  # Only saves if object doesn't exist yet
+```
+
+### 5. Generated Method Patterns
+
+Familia automatically generates methods for fields and data types:
+
+```ruby
+class User < Familia::Horreum
+  field :name                    # → name, name=, name!
+  set :tags                      # → tags, tags=, tags?
+  list :history                  # → history, history=, history?
+end
+
+# Field methods
+user.name                        # Get field value
+user.name = 'Alice'              # Set field value
+user.name!('Alice')              # Set and save immediately
+
+# Data type methods
+user.tags                        # Get Set instance
+user.tags = new_set              # Replace Set instance
+user.tags?                       # Check if it's a Set type
 ```
 
 ## Prerequisites
@@ -175,7 +200,8 @@ class User < Familia::Horreum
 
   # Feature-specific functionality
   encrypted_field :api_key                   # Automatically encrypted
-  safe_dump_field :email, :name             # Only these in safe_dump
+  safe_dump_field :email                     # Include in safe_dump
+  safe_dump_field :name                      # Include in safe_dump
   default_expiration 30.days                # Auto-expire inactive users
 end
 
@@ -215,7 +241,7 @@ user = User.find_by_username("alice_doe")   # Fast hash lookup
 ### Creating and Saving Objects
 
 ```ruby
-flower = Flower.create(name: "Red Rose", token: "rrose")
+flower = Flower.create(name: "Red Rose", token: "prose")
 flower.owners.push("Alice", "Bob")
 flower.tags.add("romantic")
 flower.metrics.increment("views", 1)
@@ -226,7 +252,7 @@ flower.save
 ### Retrieving and Updating Objects
 
 ```ruby
-rose = Flower.find_by_id("rrose")
+rose = Flower.load("prose")
 rose.name = "Pink Rose"
 rose.save
 ```
@@ -234,9 +260,9 @@ rose.save
 ### Using Safe Dump
 
 ```ruby
-user = User.create(username: "rosedog", first_name: "Rose", last_name: "Dog")
+user = User.create(username: "prosedog", first_name: "Rose", last_name: "Dog")
 user.safe_dump
-# => {id: "user:rosedog", username: "rosedog", full_name: "Rose Dog"}
+# => {id: "user:prosedog", username: "prosedog", full_name: "Rose Dog"}
 ```
 
 ### Working with Time-based Data
@@ -249,7 +275,7 @@ metric.counter.increment  # Increments the counter for the current hour
 ### Bulk Operations
 
 ```ruby
-Flower.multiget("rrose", "tulip", "daisy")
+Flower.multiget("prose", "tulip", "daisy")
 ```
 
 ### Transactional Operations
@@ -368,7 +394,9 @@ end
 # app/models/customer/features/safe_dump_extensions.rb - Feature-specific config
 module Customer::Features::SafeDumpExtensions
   def self.included(base)
-    base.safe_dump_field :custid, :name, :email  # Exclude sensitive fields
+    base.safe_dump_field :custid
+    base.safe_dump_field :name
+    base.safe_dump_field :email
   end
 end
 ```

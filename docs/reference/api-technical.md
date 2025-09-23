@@ -21,8 +21,8 @@ class User < Familia::Horreum
   # Valkey/Redis data types as instance variables
   list :sessions      # Valkey/Redis list
   set :tags          # Valkey/Redis set
-  sorted_set :scores # Valkey/Redis sorted set
-  hash :settings     # Valkey/Redis hash
+  zset :scores       # Valkey/Redis sorted set
+  hashkey :settings  # Valkey/Redis hash
 end
 ```
 
@@ -39,7 +39,7 @@ Base class for Valkey/Redis data type implementations.
 **Registered Types:**
 - `String` - Valkey/Redis strings
 - `List` - Valkey/Redis lists
-- `UnsortedSet` - Valkey/Redis sets
+- `Set` - Valkey/Redis sets
 - `SortedSet` - Valkey/Redis sorted sets
 - `HashKey` - Valkey/Redis hashes
 - `Counter` - Atomic counters
@@ -264,7 +264,7 @@ class Customer < Familia::Horreum
 
   # Collections for storing related object IDs
   set :domains           # Simple set
-  sorted_set :activity   # Scored/sorted collection
+  zset :activity   # Scored/sorted collection
 
   # Class-level indexed lookups (automatically managed on save/destroy)
   class_indexed_by :email, :email_lookup
@@ -283,7 +283,7 @@ class Domain < Familia::Horreum
   participates_in Customer, :domains
 
   # Relationship-scoped indexing (per-customer domain lookups)
-  indexed_by :name, :domain_index, parent: Customer
+  indexed_by :name, :domain_index, target: Customer
 
   # Class-level conditional tracking with lambda scoring
   class_participates_in :active_domains,
@@ -390,9 +390,10 @@ class ExternalUser < Familia::Horreum
   identifier_field :internal_id
   field :internal_id, :external_id, :name, :sync_status, :last_sync_at
 
-  # External system validation
-  validates_external_id_format /^ext_\d{6,}$/
-  external_id_source "CustomerAPI"
+  # External system validation (custom implementation)
+  def valid_external_id?
+    external_id.present? && external_id.match?(/^ext_\d{6,}$/)
+  end
 end
 
 class LegacyAccount < Familia::Horreum
@@ -424,112 +425,51 @@ user = ExternalUser.new(
 )
 user.save  # Automatically creates bidirectional mapping
 
-# Lookup by external ID
-found_user = ExternalUser.find_by_external_id("ext_123456")
-external_id = found_user.external_id_mapping.get(found_user.internal_id)
+# Lookup by external ID (custom implementation)
+found_user = nil
+ExternalUser.all.each do |user|
+  if user.external_id == "ext_123456"
+    found_user = user
+    break
+  end
+end
 
-# Batch external ID operations
-external_ids = ["ext_123456", "ext_789012", "ext_345678"]
-users = ExternalUser.multiget_by_external_ids(external_ids)
-
-# Sync status tracking
-user.mark_sync_pending
-user.mark_sync_completed
-user.mark_sync_failed(error_message)
-user.sync_status  # => "completed", "pending", "failed"
+# Sync status tracking (custom implementation)
+user.sync_status = "pending"
+user.save
+user.sync_status = "completed"
+user.save
 ```
 
 #### 8. Quantization Feature (v2.0.0-pre7)
 Advanced time-based data bucketing with configurable strategies and analytics integration.
 
 ```ruby
-class MetricsBucket < Familia::Horreum
+class DailyMetric < Familia::Horreum
   feature :quantization
 
   identifier_field :metric_key
   field :metric_key, :bucket_timestamp, :value_count, :sum_value
 
-  # Time-based quantization with 10-minute buckets
-  quantize_time :bucket_timestamp, interval: 10.minutes, format: '%Y%m%d_%H%M'
-
-  # Custom quantization strategy
-  quantize_value :user_score, buckets: [0, 100, 500, 1000, 5000], labels: %w[bronze silver gold platinum diamond]
-end
-
-class AnalyticsBucket < Familia::Horreum
-  feature :quantization
-
-  field :event_type, :quantized_timestamp, :aggregated_count
-
-  # Multiple quantization strategies
-  quantize_time :hourly_bucket, interval: 1.hour, format: '%Y%m%d_%H'
-  quantize_time :daily_bucket, interval: 1.day, format: '%Y%m%d'
-  quantize_time :weekly_bucket, interval: 1.week, format: '%YW%U'
-
-  # Geographic quantization
-  quantize_geo :location_bucket, precision: :city  # :country, :state, :city, :zipcode
+  # Example: Basic time quantization
+  string :counter, default_expiration: 1.day, quantize: [10.minutes, '%H:%M']
 end
 ```
 
-**Quantization Operations:**
+**Basic Usage:**
 ```ruby
-# Automatic time bucketing
-timestamp = Time.now
-bucket = MetricsBucket.quantize_timestamp(timestamp)
-# => "20241215_1430" (for 2:37 PM becomes 2:30 PM bucket)
+# Create metric with quantized timestamp
+metric = DailyMetric.new(metric_key: "page_views")
+metric.counter.increment
 
-# Value bucketing with labels
-score = 750
-bucket_label = MetricsBucket.quantize_user_score(score)
-# => "gold" (750 falls in 500-1000 range)
-
-# Analytics aggregation
-events = [
-  {timestamp: Time.now - 5.minutes, count: 10},
-  {timestamp: Time.now - 3.minutes, count: 15},
-  {timestamp: Time.now + 2.minutes, count: 8}
-]
-
-# All events quantized to same 10-minute bucket
-bucketed = events.map { |e| AnalyticsBucket.quantize_timestamp(e[:timestamp]) }
-# => ["20241215_1430", "20241215_1430", "20241215_1430"]
-
-# Geographic bucketing
-coordinates = {lat: 40.7128, lng: -74.0060}  # NYC
-geo_bucket = AnalyticsBucket.quantize_location(coordinates)
-# => "US_NY_NYC" (country_state_city)
-
-# Range queries with quantized data
-start_bucket = AnalyticsBucket.quantize_timestamp(Time.now - 1.hour)
-end_bucket = AnalyticsBucket.quantize_timestamp(Time.now)
-hourly_data = AnalyticsBucket.range_by_quantized_time(start_bucket, end_bucket)
+# Time-based data grouping occurs automatically
+# All data within the same 10-minute window shares the same key
 ```
 
-**Performance Optimization Patterns:**
-```ruby
-class HighVolumeMetrics < Familia::Horreum
-  feature :quantization
-
-  # Pre-aggregated counters for efficiency
-  counter :event_count, quantize: [5.minutes, '%H%M']
-  sorted_set :top_events, quantize: [1.hour, '%Y%m%d_%H']
-
-  # Efficient increment operations
-  def self.record_event(event_type, score = nil)
-    current_bucket = quantize_timestamp(Familia.now)
-
-    # Atomic increment
-    quantized_counter = counter("#{event_type}:#{current_bucket}")
-    quantized_counter.increment
-
-    # Optional scoring
-    if score
-      quantized_scores = sorted_set("scores:#{current_bucket}")
-      quantized_scores.add(event_type, score)
-    end
-  end
-end
-```
+**Key Benefits:**
+- **Time Bucketing**: Group time-based data into configurable intervals
+- **Reduced Storage**: Aggregate similar data points to optimize memory usage
+- **Analytics Ready**: Perfect for dashboards and time-series data visualization
 
 ---
 
