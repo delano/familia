@@ -5,7 +5,7 @@ require_relative 'encrypted_fields/encrypted_field_type'
 module Familia
   module Features
     # EncryptedFields is a feature that provides transparent encryption and decryption
-    # of sensitive data stored in Redis/Valkey. It uses strong cryptographic algorithms
+    # of sensitive data stored in Valkey/Redis. It uses strong cryptographic algorithms
     # with field-specific key derivation to protect data at rest while maintaining
     # easy access patterns for authorized applications.
     #
@@ -110,9 +110,9 @@ module Familia
     #   # Cache is automatically cleared when block exits
     #   # Or manually: Familia::Encryption.clear_request_cache!
     #
-    # Memory Safety:
+    # Preventing Accidental Leakage:
     #
-    # Encrypted fields return ConcealedString objects that provide memory protection:
+    # Encrypted fields return ConcealedString objects to help prevent exposure.
     #
     #   secret = vault.secret_key
     #   secret.class               # => ConcealedString
@@ -123,7 +123,7 @@ module Familia
     #   raw_value = secret.reveal  # Returns actual decrypted string
     #   # Use raw_value carefully - avoid creating copies
     #
-    #   # Check if cleared from memory
+    #   # Check if cleared from memory available to Ruby runtime process.
     #   secret.cleared?            # Returns true if wiped
     #
     #   # Explicit cleanup

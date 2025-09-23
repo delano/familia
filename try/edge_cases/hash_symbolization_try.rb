@@ -34,7 +34,7 @@ end
 @test_obj.config[:nested].keys
 #=> [:theme]
 
-## Get raw JSON from Redis
+## Get raw JSON from Valkey/Redis
 @raw_json = @test_obj.hget('config')
 @raw_json.class
 #=> String

@@ -2,7 +2,7 @@
 
 require 'concurrent-ruby'
 
-# DatabaseLogger is RedisClient middleware.
+# DatabaseLogger is Valkey/RedisClient middleware.
 #
 # This middleware addresses the need for detailed Database command logging, which
 # was removed from the redis-rb gem due to performance concerns. However, in
@@ -35,7 +35,7 @@ module DatabaseLogger
   # It logs the command and its execution time only if a logger is set.
   #
   # @param command [Array] The Database command and its arguments.
-  # @param _config [Hash] The configuration options for the Redis
+  # @param _config [Hash] The configuration options for the Valkey/Redis
   #   connection.
   # @return [Object] The result of the Database command execution.
   #
@@ -54,7 +54,7 @@ module DatabaseLogger
   end
 end
 
-# DatabaseCommandCounter is RedisClient middleware.
+# DatabaseCommandCounter is Valkey/RedisClient middleware.
 #
 # This middleware counts the number of Database commands executed. It can be
 # useful for performance monitoring and debugging, allowing you to track

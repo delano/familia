@@ -2,7 +2,7 @@
 # Familia - Overview
 
 > [!NOTE]
-> This document refers to Valkey throughout, but all examples and patterns work identically with Redis. Familia supports both Valkey and Redis as they share the same protocol and data structures.
+> This document refers to Valkey throughout, but all examples and patterns work identically with Valkey/Redis. Familia supports both Valkey and Valkey/Redis as they share the same protocol and data structures.
 
 ## Introduction
 
@@ -477,7 +477,7 @@ doc.admin_access?(user, "org:123:documents")            # Check admin privileges
 - **Granular Control**: Fine-grained permission assignment per user
 - **Category-based Queries**: Efficient filtering by permission levels
 - **Bulk Operations**: Manage permissions across collections
-- **Performance Optimized**: O(1) permission checks using Redis sorted sets
+- **Performance Optimized**: O(1) permission checks using Valkey/Redis sorted sets
 
 ## Advanced Patterns
 

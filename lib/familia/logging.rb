@@ -150,7 +150,7 @@ module Familia
       return unless Familia::Refinements::LoggerTrace::ENABLED
 
       # Usually dbclient is a Database object, but it could be
-      # a Redis::Future which is what is used inside of pipelined
+      # a Valkey/Redis::Future which is what is used inside of pipelined
       # and multi blocks. In some contexts it's nil where the
       # database connection isn't relevant.
       instance_id = if dbclient

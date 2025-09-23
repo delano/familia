@@ -40,14 +40,14 @@ end
 user_class.prefix
 #=!> Familia::Problem
 
-## RedisType relations with Horreum expiration
+## DataType relations with Horreum expiration
 user_class = TestUser
 
 user = user_class.new(email: "test@example.com")
 user.save
 user.expire(1800)
 
-# Create related RedisType
+# Create related DataType
 tags = user.tags
 tags << "ruby" << "redis"
 

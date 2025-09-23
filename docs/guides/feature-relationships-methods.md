@@ -133,7 +133,7 @@ recently_active = team.active_users.range_by_score(
 
 ## Indexing Methods (`indexed_by`)
 
-The `indexed_by` declaration creates Redis hash-based indexes for O(1) field lookups with automatic management.
+The `indexed_by` declaration creates Valkey/Redis hash-based indexes for O(1) field lookups with automatic management.
 
 ### Class-Level Indexing (`class_indexed_by`)
 
@@ -406,7 +406,7 @@ class Team < Familia::Horreum
     # Validate all IDs exist first
     valid_ids = user_ids.select { |id| User.exists?(id) }
 
-    # Use Redis pipeline for bulk operations
+    # Use Valkey/Redis pipeline for bulk operations
     Familia.redis.pipelined do |pipeline|
       valid_ids.each do |user_id|
         members.add(user_id)

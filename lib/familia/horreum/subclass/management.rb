@@ -93,7 +93,7 @@ module Familia
       #    it.
       #
       # This approach ensures that we only attempt to instantiate objects that
-      # actually exist in Redis, improving reliability and simplifying
+      # actually exist in Valkey/Redis, improving reliability and simplifying
       # debugging.
       #
       # @example
@@ -167,7 +167,7 @@ module Familia
       # then checks if the key exists in the database.
       #
       # @example
-      #   User.exists?(123)  # Returns true if user:123:object exists in Redis
+      #   User.exists?(123)  # Returns true if user:123:object exists in Valkey/Redis
       #
       def exists?(identifier, suffix = nil)
         raise NoIdentifier, 'Empty identifier' if identifier.to_s.empty?
@@ -194,7 +194,7 @@ module Familia
       # `delete!` when working directly with dbkeys.
       #
       # @example
-      #   User.destroy!(123)  # Removes user:123:object from Redis
+      #   User.destroy!(123)  # Removes user:123:object from Valkey/Redis
       #
       def destroy!(identifier, suffix = nil)
         suffix ||= self.suffix

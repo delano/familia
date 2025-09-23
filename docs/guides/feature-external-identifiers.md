@@ -604,7 +604,7 @@ def benchmark_external_lookups(external_ids)
   end
 end
 
-# Check mapping Redis key sizes
+# Check mapping Valkey/Redis key sizes
 mapping_keys = Familia.redis.keys("*external_id_mapping*")
 mapping_keys.each do |key|
   size = Familia.redis.hlen(key)

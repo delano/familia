@@ -86,7 +86,7 @@ module Familia
         # Override setter to preserve values during initialization
         #
         # This ensures that values passed during object initialization
-        # (e.g., when loading from Redis) are preserved and not overwritten
+        # (e.g., when loading from Valkey/Redis) are preserved and not overwritten
         # by the lazy generation logic.
         #
         # @param klass [Class] The class to define the method on

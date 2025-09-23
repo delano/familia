@@ -7,10 +7,10 @@ require_relative 'horreum/core'
 
 module Familia
   #
-  # Horreum: A module for managing Redis-based object storage and relationships
+  # Horreum: A module for managing Valkey/Redis-based object storage and relationships
   #
   # Key features:
-  # * Provides instance-level access to a single hash in Redis
+  # * Provides instance-level access to a single hash in Valkey/Redis
   # * Includes Familia for class/module level access to Database types and operations
   # * Uses 'hashkey' to define a Database hash referred to as "object"
   # * Applies a default expiry (5 years) to all keys
@@ -85,7 +85,7 @@ module Familia
     end
 
     # Instance initialization
-    # This method sets up the object's state, including Redis-related data.
+    # This method sets up the object's state, including Valkey/Redis-related data.
     #
     # Usage:
     #
@@ -143,7 +143,7 @@ module Familia
     end
 
     # Sets up related Database objects for the instance
-    # This method is crucial for establishing Redis-based relationships
+    # This method is crucial for establishing Valkey/Redis-based relationships
     #
     # This needs to be called in the initialize method.
     #
@@ -281,7 +281,7 @@ module Familia
     # Summon the mystical Database connection from the depths of instance or class.
     #
     # This method is like a magical divining rod, always pointing to the nearest
-    # source of Database goodness. It first checks if we have a personal Redis
+    # source of Database goodness. It first checks if we have a personal Valkey/Redis
     # connection (@dbclient), and if not, it borrows the class's connection.
     #
     # @return [Redis] A shimmering Database connection, ready for your bidding.

@@ -10,7 +10,7 @@ Familia provides object-oriented access to Valkey/Redis using their database typ
 
 **Traditional ORMs** convert your objects to SQL tables. A product with categories becomes two tables with a join table. Checking if a tag exists requires a query with joins.
 
-**Familia** stores your objects using Redis data structures directly. A product with categories uses an actual Redis list. Checking if a tag exists is a native O(1) Redis operation.
+**Familia** stores your objects using Valkey/Redis data structures directly. A product with categories uses an actual Valkey/Redis list. Checking if a tag exists is a native O(1) Valkey/Redis operation.
 
 ```ruby
 # Traditional ORM - everything becomes SQL tables
@@ -20,37 +20,37 @@ end
 
 product.tags.include?(tag)  # SELECT * FROM products_tags WHERE ...
 
-# Familia - uses Redis data types directly
+# Familia - uses Valkey/Redis data types directly
 class Product < Familia::Horreum
-  set :tags                  # Actual Redis set
+  set :tags                  # Actual Valkey/Redis set
 end
 
-product.tags.include?("electronics")  # Redis SISMEMBER - O(1) operation
+product.tags.include?("electronics")  # Valkey/Redis SISMEMBER - O(1) operation
 ```
 
 ### What This Means in Practice
 
-When you define a Familia model, each data type declaration creates the corresponding Redis structure:
+When you define a Familia model, each data type declaration creates the corresponding Valkey/Redis structure:
 
 ```ruby
 class Product < Familia::Horreum
   identifier_field :sku
 
-  field :name, :price        # Stored in Redis hash
-  list :categories           # Actual Redis list
-  set :tags                  # Actual Redis set
-  zset :ratings              # Actual Redis sorted set
-  counter :views             # Redis string with atomic increment
+  field :name, :price        # Stored in Valkey/Redis hash
+  list :categories           # Actual Valkey/Redis list
+  set :tags                  # Actual Valkey/Redis set
+  zset :ratings              # Actual Valkey/Redis sorted set
+  counter :views             # Valkey/Redis string with atomic increment
 end
 
-# These are Redis native operations, not ORM abstractions
+# These are Valkey/Redis native operations, not ORM abstractions
 product.categories.push("electronics")   # LPUSH
 product.tags.add("popular")              # SADD
 product.ratings.add(4.5, "user123")      # ZADD with score
 product.views.increment                  # INCR (atomic)
 ```
 
-The performance characteristics you rely on in Redis remain unchanged. Set membership is O(1). Sorted sets maintain order automatically. Counters increment atomically without read-modify-write cycles.
+The performance characteristics you rely on in Valkey/Redis remain unchanged. Set membership is O(1). Sorted sets maintain order automatically. Counters increment atomically without read-modify-write cycles.
 
 ## Quick Start
 
@@ -159,7 +159,7 @@ class BlogPost < Familia::Horreum
   # Basic fields
   field :slug, :title, :content, :published_at
 
-  # Redis data types as instance variables
+  # Valkey/Redis data types as instance variables
   string :view_count, default: '0'           # Atomic counters
   list :comments                             # Ordered, allows duplicates
   set :tags                                  # Unique values
@@ -172,7 +172,7 @@ end
 
 post = BlogPost.create(slug: "hello-world", title: "Hello World")
 
-# Work with Redis data types naturally
+# Work with Valkey/Redis data types naturally
 post.view_count.increment                    # INCR view_count
 post.comments.push("Great post!")           # LPUSH comments
 post.tags.add("ruby", "programming")        # SADD tags

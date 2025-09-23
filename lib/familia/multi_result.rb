@@ -1,30 +1,29 @@
 # lib/familia/multi_result.rb
 
-# The magical MultiResult, keeper of Redis's deepest secrets!
+# Represents the result of a Valkey/Redis transaction operation.
 #
-# This quirky little class wraps up the outcome of a Database "transaction"
-# (or as I like to call it, a "Database dance party") with a bow made of
-# pure Ruby delight. It knows if your commands were successful and
-# keeps the results safe in its pocket dimension.
+# This class encapsulates the outcome of a Database transaction,
+# providing access to both the success status and the individual
+# command results returned by the transaction.
 #
-# @attr_reader success [Boolean] The golden ticket! True if all your
-#   Database wishes came true in the transaction.
-# @attr_reader results [Array<String>] A mystical array of return values,
-#   each one a whisper from the Database gods.
+# @attr_reader success [Boolean] Indicates whether all commands
+#   in the transaction completed successfully.
+# @attr_reader results [Array<String>] Array of return values
+#   from the Database commands executed in the transaction.
 #
-# @example Summoning a MultiResult from the void
+# @example Creating a MultiResult instance
 #   result = MultiResult.new(true, ["OK", "OK"])
 #
-# @example Divining the success of your Database ritual
+# @example Checking transaction success
 #   if result.successful?
-#     puts "Huzzah! The Database spirits smile upon you!"
+#     puts "Transaction completed successfully"
 #   else
-#     puts "Alas! The Database gremlins have conspired against us!"
+#     puts "Transaction failed"
 #   end
 #
-# @example Peering into the raw essence of results
+# @example Accessing individual command results
 #   result.results.each_with_index do |value, index|
-#     puts "Command #{index + 1} whispered back: #{value}"
+#     puts "Command #{index + 1} returned: #{value}"
 #   end
 #
 class MultiResult

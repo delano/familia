@@ -1,6 +1,6 @@
 # Familia v2.0.0-pre Series Technical Reference
 
-**Familia** is a Ruby ORM for Redis/Valkey providing object mapping, relationships, and advanced features like encryption, connection pooling, and permission systems. This technical reference covers the major classes, methods, and usage patterns introduced in the v2.0.0-pre series.
+**Familia** is a Ruby ORM for Valkey/Redis providing object mapping, relationships, and advanced features like encryption, connection pooling, and permission systems. This technical reference covers the major classes, methods, and usage patterns introduced in the v2.0.0-pre series.
 
 ---
 
@@ -9,7 +9,7 @@
 ### Base Classes
 
 #### `Familia::Horreum` - Primary ORM Base Class
-The main base class for Redis-backed objects, similar to ActiveRecord models.
+The main base class for Valkey/Redis-backed objects, similar to ActiveRecord models.
 
 ```ruby
 class User < Familia::Horreum
@@ -25,10 +25,10 @@ end
 ```
 
 **Key Methods:**
-- `save` - Persist object to Redis
+- `save` - Persist object to Valkey/Redis
 - `save_if_not_exists` - Conditional persistence (v2.0.0-pre6)
-- `load` - Load object from Redis
-- `exists?` - Check if object exists in Redis
+- `load` - Load object from Valkey/Redis
+- `exists?` - Check if object exists in Valkey/Redis
 - `destroy` - Remove object from Valkey/Redis
 
 #### `Familia::DataType` - Valkey/Redis Data Type Wrapper
@@ -152,7 +152,7 @@ class LoginForm < Familia::Horreum
   feature :transient_fields
 
   field :username              # Persistent
-  transient_field :password    # Never stored in Redis
+  transient_field :password    # Never stored in Valkey/Redis
   transient_field :csrf_token  # Runtime only
 end
 

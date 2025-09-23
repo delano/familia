@@ -403,7 +403,7 @@ end
 
 **Collision Detection Failing**
 ```ruby
-# Check Redis connectivity and permissions
+# Check Valkey/Redis connectivity and permissions
 begin
   MyModel.create(name: "test")
 rescue Familia::Problem => e

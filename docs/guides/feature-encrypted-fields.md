@@ -18,7 +18,7 @@ The Encrypted Fields feature provides transparent field-level encryption for sen
 
 **Compliance**: Meet regulatory requirements (GDPR, HIPAA, PCI-DSS) for sensitive data protection.
 
-**Defense in Depth**: Protect against database breaches, memory dumps, and unauthorized Redis access.
+**Defense in Depth**: Protect against database breaches, memory dumps, and unauthorized Valkey/Redis access.
 
 **Transparent Security**: Encryption and decryption happen automatically - no changes to your application logic.
 

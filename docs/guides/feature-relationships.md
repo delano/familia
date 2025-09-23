@@ -23,7 +23,7 @@ customer.domains << domain  # Updates both sides automatically
 **Key Benefits:**
 - **Automatic bidirectional updates** - no manual synchronization
 - **Ruby-like syntax** - familiar `<<` and collection operations
-- **O(1) lookups** - efficient Redis-backed indexing
+- **O(1) lookups** - efficient Valkey/Redis-backed indexing
 - **Lifecycle management** - automatic cleanup and maintenance
 
 ## Core Relationship Capabilities

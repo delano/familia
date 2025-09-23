@@ -293,7 +293,7 @@ Fixed
    (e.g., ``find_by_email``) would fail to correctly instantiate objects
    from the index, returning partially-formed objects.
 
--  Refactored connection handling to properly cache and reuse Redis
+-  Refactored connection handling to properly cache and reuse Valkey/Redis
    connections. This eliminates repetitive “Overriding existing
    connection” warnings and improves performance.
 
