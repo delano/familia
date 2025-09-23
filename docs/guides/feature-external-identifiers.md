@@ -448,16 +448,31 @@ end
 class OptimizedExternalResource < Familia::Horreum
   feature :external_identifier
 
-  # Create compound indexes for common query patterns
-  sorted_set :by_sync_status_and_time,
-             score: ->(obj) { "#{obj.sync_status}:#{obj.last_sync_at || 0}".hash }
+  # Use dedicated sorted sets for each status with timestamp scores
+  sorted_set :pending_sync_resources,
+             score: ->(obj) { obj.last_sync_at&.to_i || 0 }
+  sorted_set :completed_sync_resources,
+             score: ->(obj) { obj.last_sync_at&.to_i || 0 }
+  sorted_set :failed_sync_resources,
+             score: ->(obj) { obj.last_sync_at&.to_i || 0 }
 
   def self.pending_sync_resources(limit: 100)
-    pattern = "pending:*"
-    by_sync_status_and_time.range_by_score(
-      pattern.hash, pattern.hash,
-      limit: [0, limit]
-    ).map { |id| load(id) }.compact
+    # Query resources that need syncing, ordered by oldest first
+    pending_sync_resources.range(0, limit - 1).map { |id| load(id) }.compact
+  end
+
+  def self.recently_synced(status:, limit: 100)
+    # Get recently synced resources by status, newest first
+    case status.to_s
+    when 'pending'
+      pending_sync_resources.revrange(0, limit - 1).map { |id| load(id) }.compact
+    when 'completed'
+      completed_sync_resources.revrange(0, limit - 1).map { |id| load(id) }.compact
+    when 'failed'
+      failed_sync_resources.revrange(0, limit - 1).map { |id| load(id) }.compact
+    else
+      []
+    end
   end
 end
 ```
