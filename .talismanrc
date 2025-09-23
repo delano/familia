@@ -3,3 +3,8 @@ fileignoreconfig:
 - filename: examples/encrypted_fields.rb
   checksum: 732b123b3d9583c36e0e86537d2513e90c3d02cf56e8300694d09df4c4e09d93
 version: ""
+
+fileignoreconfig:
+- filename: lib/familia/secure_identifier.rb
+  checksum: b676fc33f469f7df6ecc57b26d3817fbb1fa4c94b5918d98b49d13a5ba2fee0e
+version: ""

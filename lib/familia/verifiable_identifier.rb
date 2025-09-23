@@ -8,7 +8,7 @@ module Familia
   # allowing for stateless verification of an identifier's authenticity.
   module VerifiableIdentifier
     # By extending SecureIdentifier, we gain access to its instance methods
-    # (like generate_hex_id) as class methods on this module.
+    # (like generate_id) as class methods on this module.
     extend Familia::SecureIdentifier
 
     # The secret key for HMAC generation, loaded from an environment variable.
@@ -61,8 +61,8 @@ module Familia
         # base remains as passed in keyword argument or default
       end
 
-      # Re-use generate_hex_id from the SecureIdentifier module.
-      random_hex = generate_hex_id
+      # Re-use generate_id from the SecureIdentifier module.
+      random_hex = generate_id(16)
       tag_hex = generate_tag(random_hex, scope: scope)
 
       combined_hex = random_hex + tag_hex
