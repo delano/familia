@@ -19,7 +19,6 @@
 --tag security:"Security"
 --hide-tag nodoc
 --exclude lib/familia/version.rb
---template-path templates
 --readme README.md
 --no-stats
 --no-save
