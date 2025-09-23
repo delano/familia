@@ -1,0 +1,5 @@
+
+fileignoreconfig:
+- filename: examples/encrypted_fields.rb
+  checksum: 732b123b3d9583c36e0e86537d2513e90c3d02cf56e8300694d09df4c4e09d93
+version: ""

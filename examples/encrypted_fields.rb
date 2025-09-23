@@ -127,11 +127,18 @@ entries = []
 # Without caching - each field derives keys independently
 start_time = Time.now
 5.times do |i|
+  private_key_pem = <<~PEM
+    -----BEGIN PRIVATE KEY-----
+    FAKE_EXAMPLE_KEY_FOR_TESTING_ONLY
+    FAKE_EXAMPLE_KEY_FOR_TESTING_ONLY
+    -----END PRIVATE KEY-----
+  PEM
+
   entry = VaultEntry.new(
     entry_id: "entry_#{i}",
     api_key: "sk_test_key_#{i}",
     secret_token: "token_#{i}_secret",
-    private_key: "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC...",
+    private_key: private_key_pem.strip,
     webhook_url: "https://api.example.com/webhook/#{i}"
   )
   entry.save
@@ -143,11 +150,18 @@ no_cache_time = Time.now - start_time
 start_time = Time.now
 Familia::Encryption.with_request_cache do
   5.times do |i|
+    private_key_pem = <<~PEM
+      -----BEGIN PRIVATE KEY-----
+      FAKE_EXAMPLE_KEY_FOR_TESTING_ONLY
+      FAKE_EXAMPLE_KEY_FOR_TESTING_ONLY
+      -----END PRIVATE KEY-----
+    PEM
+
     entry = VaultEntry.new(
       entry_id: "cached_entry_#{i}",
       api_key: "sk_test_key_cached_#{i}",
       secret_token: "token_cached_#{i}_secret",
-      private_key: "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC...",
+      private_key: private_key_pem.strip,
       webhook_url: "https://api.example.com/webhook/cached/#{i}"
     )
     entry.save
@@ -345,8 +359,8 @@ end
 # Clear any request cache
 begin
   Familia::Encryption.clear_request_cache!
-rescue StandardError
-  nil
+rescue StandardError => e
+  puts "⚠ Warning: Failed to clear encryption request cache: #{e.message} (#{e.backtrace.join("\n")})"
 end
 
 puts
