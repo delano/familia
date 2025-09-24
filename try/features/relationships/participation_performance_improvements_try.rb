@@ -85,15 +85,18 @@ end
 #=> true
 
 ## Test membership data structure is correct
+@memberships = @domain.participation_collections_membership
 @memberships.length > 0
 #=> true
 
 ## Test membership contains expected target class
+@memberships = @domain.participation_collections_membership
 @membership = @memberships.first
 @membership[:target_class] == 'PerfTestCustomer'
 #=> true
 
 ## Test membership contains collection name
+@memberships = @domain.participation_collections_membership
 @membership[:collection_name] == :domains
 #=> true
 
