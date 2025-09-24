@@ -43,6 +43,13 @@ module Familia
         @registered_types[methname] = klass
       end
 
+      # Get the registered type class from a given method name
+      # +methname+ is the method name used to register the class (e.g. :set, :list, etc)
+      # Returns the registered class or nil if not found
+      def registered_type(methname)
+        @registered_types[methname]
+      end
+
       def logical_database(val = nil)
         @logical_database = val unless val.nil?
         @logical_database || parent&.logical_database

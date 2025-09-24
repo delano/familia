@@ -113,14 +113,11 @@ module Familia
             # Generate class-level collection getter method
             target_class.define_singleton_method(collection_name.to_s) do
               collection_key = "#{name.downcase}:#{collection_name}"
-              case type
-              when :sorted_set
-                Familia::SortedSet.new(nil, dbkey: collection_key, logical_database: logical_database)
-              when :set
-                Familia::UnsortedSet.new(nil, dbkey: collection_key, logical_database: logical_database)
-              when :list
-                Familia::List.new(nil, dbkey: collection_key, logical_database: logical_database)
-              end
+
+              collection_class = Familia::DataType.registered_type(type) # :list, :sorted_set, :set
+
+              # e.g. Familia::SortedSet.new -> target_class.collection_name
+              collection_class.new(nil, dbkey: collection_key, logical_database: logical_database)
             end
 
             # Generate class-level add method (e.g., User.add_to_all_users)

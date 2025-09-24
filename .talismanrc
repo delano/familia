@@ -8,3 +8,8 @@ fileignoreconfig:
 - filename: lib/familia/secure_identifier.rb
   checksum: b676fc33f469f7df6ecc57b26d3817fbb1fa4c94b5918d98b49d13a5ba2fee0e
 version: ""
+
+fileignoreconfig:
+- filename: lib/familia/features/relationships/participation.rb
+  checksum: 7f9b3ced3c78e23e0ddc97941e39dc187fef801f149bc269604039db28a61e0a
+version: ""
