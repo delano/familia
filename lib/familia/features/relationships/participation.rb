@@ -481,22 +481,6 @@ module Familia
 
           public
 
-          # Update presence in all participation collections atomically
-          def update_all_participation_collections
-            return unless self.class.respond_to?(:participation_relationships)
-
-            []
-
-            self.class.participation_relationships.each do |config|
-              config[:target_class_name]
-              config[:collection_name]
-
-              # This is a simplified version - in practice, you'd need to know
-              # which specific instances this object should be participating in
-              # For now, we'll skip the automatic update and rely on explicit calls
-            end
-          end
-
           # Add to class-level participation collections automatically
           def add_to_class_participation_collections
             return unless self.class.respond_to?(:participation_relationships)
