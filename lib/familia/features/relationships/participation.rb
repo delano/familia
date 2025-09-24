@@ -213,9 +213,9 @@ module Familia
               end
 
               # Track participation in reverse index for efficient cleanup
-              return unless item.respond_to?(:add_participation_tracking)
+              return unless item.respond_to?(:add_participation_membership)
 
-              item.add_participation_tracking(collection.dbkey)
+              item.add_participation_membership(collection.dbkey)
             end
           end
 
@@ -232,9 +232,9 @@ module Familia
               end
 
               # Remove participation tracking
-              return unless item.respond_to?(:remove_participation_tracking)
+              return unless item.respond_to?(:remove_participation_membership)
 
-              item.remove_participation_tracking(collection.dbkey)
+              item.remove_participation_membership(collection.dbkey)
             end
           end
 
@@ -482,7 +482,7 @@ module Familia
           public
 
           # Add to class-level participation collections automatically
-          def add_to_class_participation_collections
+          def add_to_class_participations
             return unless self.class.respond_to?(:participation_relationships)
 
             self.class.participation_relationships.each do |config|
@@ -498,20 +498,20 @@ module Familia
           end
 
           # Add participation tracking to reverse index
-          def add_participation_tracking(collection_key)
+          def add_participation_membership(collection_key)
             reverse_index_key = "#{dbkey}:participations"
             dbclient.sadd(reverse_index_key, collection_key)
           end
 
           # Remove participation tracking from reverse index
-          def remove_participation_tracking(collection_key)
+          def remove_participation_membership(collection_key)
             reverse_index_key = "#{dbkey}:participations"
             dbclient.srem(reverse_index_key, collection_key)
           end
 
           # Remove from all participation collections (used during destroy)
           # Uses reverse index for efficient cleanup instead of database scan
-          def remove_from_all_participation_collections
+          def remove_from_all_participations
             return unless self.class.respond_to?(:participation_relationships)
 
             reverse_index_key = "#{dbkey}:participations"
@@ -549,7 +549,7 @@ module Familia
           # Get all collections this object appears in
           #
           # @return [Array<Hash>] Array of collection information
-          def participation_collections_membership
+          def participation_memberships
             return [] unless self.class.respond_to?(:participation_relationships)
 
             # Use reverse index if available, otherwise fall back to scan

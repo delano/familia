@@ -43,11 +43,11 @@ end
 @domain.save
 
 ## Test reverse index tracking methods exist
-@domain.respond_to?(:add_participation_tracking)
+@domain.respond_to?(:add_participation_membership)
 #=> true
 
 ## Test reverse index removal methods exist
-@domain.respond_to?(:remove_participation_tracking)
+@domain.respond_to?(:remove_participation_membership)
 #=> true
 
 ## Test add domain creates reverse index tracking
@@ -80,23 +80,23 @@ end
 #=> true
 
 ## Test participation collections membership method works
-@memberships = @domain.participation_collections_membership
+@memberships = @domain.participation_memberships
 @memberships.is_a?(Array)
 #=> true
 
 ## Test membership data structure is correct
-@memberships = @domain.participation_collections_membership
+@memberships = @domain.participation_memberships
 @memberships.length > 0
 #=> true
 
 ## Test membership contains expected target class
-@memberships = @domain.participation_collections_membership
+@memberships = @domain.participation_memberships
 @membership = @memberships.first
 @membership[:target_class] == 'PerfTestCustomer'
 #=> true
 
 ## Test membership contains collection name
-@memberships = @domain.participation_collections_membership
+@memberships = @domain.participation_memberships
 @membership[:collection_name] == :domains
 #=> true
 
@@ -105,7 +105,7 @@ end
 #=> true
 
 ## Test remove from all participation collections works efficiently
-@domain.remove_from_all_participation_collections
+@domain.remove_from_all_participations
 @final_tracked_collections = Familia.dbclient.smembers(@reverse_index_key)
 @final_tracked_collections.empty?
 #=> true

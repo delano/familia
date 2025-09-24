@@ -94,8 +94,8 @@ end
 @domain1_collections >= 2
 #=> true
 
-## Test remove_from_all_participation_collections uses reverse index
-@domain1.remove_from_all_participation_collections
+## Test remove_from_all_participations uses reverse index
+@domain1.remove_from_all_participations
 @domain1_collections_after = Familia.dbclient.smembers(@ri_key1)
 @domain1_collections_after.empty?
 #=> true
@@ -109,7 +109,7 @@ end
 #=> false
 
 ## Test optimized membership check with reverse index
-@domain2_memberships = @domain2.participation_collections_membership
+@domain2_memberships = @domain2.participation_memberships
 @domain2_memberships.is_a?(Array)
 #=> true
 
@@ -145,12 +145,12 @@ end
 ## Test pipelined operations in membership check
 # Add domain to multiple collections
 @customer.add_preferred_domain(@domain2)
-@domain2_final_memberships = @domain2.participation_collections_membership
+@domain2_final_memberships = @domain2.participation_memberships
 @domain2_final_memberships.length >= 3
 #=> true
 
 ## Test cleanup removes all participations
-@domain2.remove_from_all_participation_collections
+@domain2.remove_from_all_participations
 @ri_key2_final = "#{@domain2.dbkey}:participations"
 @ri_members2_final = Familia.dbclient.smembers(@ri_key2_final)
 @ri_members2_final.empty?

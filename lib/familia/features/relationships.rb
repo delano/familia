@@ -255,7 +255,7 @@ module Familia
             update_all_indexes if respond_to?(:update_all_indexes)
 
             # Auto-add to class-level participation collections
-            add_to_class_participation_collections if respond_to?(:add_to_class_participation_collections)
+            add_to_class_participations if respond_to?(:add_to_class_participations)
 
             # NOTE: Relationship-specific participation updates are done explicitly
             # since we need to know which specific collections this object should be in
@@ -281,8 +281,8 @@ module Familia
           }
 
           # Get participation memberships
-          if respond_to?(:participation_collections_membership)
-            status[:participation_memberships] = participation_collections_membership
+          if respond_to?(:participation_memberships)
+            status[:participation_memberships] = participation_memberships
           end
 
           # Get index memberships
@@ -294,7 +294,7 @@ module Familia
         # Comprehensive cleanup - remove from all relationships
         def cleanup_all_relationships!
           # Remove from participation collections
-          remove_from_all_participation_collections if respond_to?(:remove_from_all_participation_collections)
+          remove_from_all_participations if respond_to?(:remove_from_all_participations)
 
           # Remove from indexes
           remove_from_all_indexes if respond_to?(:remove_from_all_indexes)
@@ -323,8 +323,8 @@ module Familia
           errors << 'Object identifier is nil' unless identifier
 
           # Validate participation memberships
-          if respond_to?(:participation_collections_membership)
-            participation_collections_membership.each do |membership|
+          if respond_to?(:participation_memberships)
+            participation_memberships.each do |membership|
               score = membership[:score]
               errors << "Invalid score in participation membership: #{membership}" if score && !score.is_a?(Numeric)
             end
