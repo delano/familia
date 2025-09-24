@@ -30,10 +30,10 @@ module Familia
             # Collect strategies from participation relationships
             if respond_to?(:participation_relationships)
               participation_relationships.each do |config|
-                key = "#{config[:target_class_name]}.#{config[:collection_name]}"
+                key = "#{config.target_class_name}.#{config.collection_name}"
                 strategies[key] = {
                   type: :participation,
-                  strategy: config[:on_destroy] || :remove,
+                  strategy: config.on_destroy || :remove,
                   config: config,
                 }
               end
@@ -42,7 +42,7 @@ module Familia
             # Collect strategies from indexing relationships
             if respond_to?(:indexing_relationships)
               indexing_relationships.each do |config|
-                key = "#{config[:target_class_name]}.#{config[:index_name]}"
+                key = "#{config.target_class_name}.#{config.index_name}"
                 strategies[key] = {
                   type: :indexing,
                   strategy: :remove, # Indexes should always be cleaned up
@@ -138,8 +138,8 @@ module Familia
 
           # Remove from participation collections
           def remove_from_participation_collections(pipeline, config)
-            target_class_name = config[:target_class_name]
-            collection_name = config[:collection_name]
+            target_class_name = config.target_class_name
+            collection_name = config.collection_name
 
             # Find all collections this object is participating in
             pattern = "#{target_class_name.downcase}:*:#{collection_name}"
@@ -151,9 +151,9 @@ module Familia
 
           # Remove from indexing collections
           def remove_from_indexing_collections(pipeline, config)
-            target_class_name = config[:target_class_name]
-            index_name = config[:index_name]
-            field = config[:field]
+            target_class_name = config.target_class_name
+            index_name = config.index_name
+            field = config.field
 
             field_value = send(field) if respond_to?(field)
             return unless field_value
@@ -183,8 +183,8 @@ module Familia
             # This is a complex operation that depends on the specific business logic
             # For now, we'll provide a framework that can be customized
 
-            target_class_name = config[:target_class_name]
-            collection_name = config[:collection_name]
+            target_class_name = config.target_class_name
+            collection_name = config.collection_name
 
             # Find all contexts that track this object
             pattern = "#{target_class_name.downcase}:*:#{collection_name}"
@@ -220,8 +220,8 @@ module Familia
             case strategy_info[:type]
             when :participation
               config = strategy_info[:config]
-              target_class_name = config[:target_class_name]
-              collection_name = config[:collection_name]
+              target_class_name = config.target_class_name
+              collection_name = config.collection_name
 
               pattern = "#{target_class_name.downcase}:*:#{collection_name}"
               dbclient.scan_each(match: pattern) do |key|
@@ -282,8 +282,8 @@ module Familia
             case strategy_info[:type]
             when :participation
               config = strategy_info[:config]
-              target_class_name = config[:target_class_name]
-              collection_name = config[:collection_name]
+              target_class_name = config.target_class_name
+              collection_name = config.collection_name
               pattern = "#{target_class_name.downcase}:*:#{collection_name}"
 
               dbclient.scan_each(match: pattern) do |key|
@@ -292,9 +292,9 @@ module Familia
 
             when :indexing
               config = strategy_info[:config]
-              target_class_name = config[:target_class_name]
-              index_name = config[:index_name]
-              field = config[:field]
+              target_class_name = config.target_class_name
+              index_name = config.index_name
+              field = config.field
 
               field_value = send(field) if respond_to?(field)
               if field_value

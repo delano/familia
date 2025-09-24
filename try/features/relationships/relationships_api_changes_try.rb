@@ -252,13 +252,13 @@ context_methods.length > 0
 # =============================================
 
 ## class_participates_in stores correct target_class
-participation_meta = ApiTestUser.participation_relationships.find { |r| r[:collection_name] == :all_users }
-participation_meta[:target_class].end_with?('::apitestuser')
+participation_meta = ApiTestUser.participation_relationships.find { |r| r.collection_name == :all_users }
+participation_meta.target_class.end_with?('::apitestuser')
 #=> true
 
 ## class_participates_in stores correct target_class_name
-participation_meta = ApiTestUser.participation_relationships.find { |r| r[:collection_name] == :all_users }
-participation_meta[:target_class_name].end_with?('::ApiTestUser')
+participation_meta = ApiTestUser.participation_relationships.find { |r| r.collection_name == :all_users }
+participation_meta.target_class_name.end_with?('::ApiTestUser')
 #=> true
 
 ## class_indexed_by stores correct target_class

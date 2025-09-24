@@ -1,5 +1,7 @@
 # lib/familia/features/relationships/participation.rb
 
+require_relative 'participation_relationship'
+
 module Familia
   module Features
     module Relationships
@@ -35,7 +37,7 @@ module Familia
             klass_name = (name || to_s).downcase
 
             # Store metadata for this participation relationship
-            participation_relationships << {
+            participation_relationships << ParticipationRelationship.new(
               target_class: klass_name,
               target_class_name: name || to_s,
               collection_name: collection_name,
@@ -43,7 +45,7 @@ module Familia
               on_destroy: on_destroy,
               type: type,
               bidirectional: bidirectional,
-            }
+            )
 
             # Generate class-level collection methods
             generate_participation_class_methods(self, collection_name, type)
@@ -84,7 +86,7 @@ module Familia
             end
 
             # Store metadata for this participation relationship
-            participation_relationships << {
+            participation_relationships << ParticipationRelationship.new(
               target_class: target_class,
               target_class_name: target_class_name,
               collection_name: collection_name,
@@ -92,7 +94,7 @@ module Familia
               on_destroy: on_destroy,
               type: type,
               bidirectional: bidirectional,
-            }
+            )
 
             # Generate target class methods
             generate_target_class_methods(target_class, collection_name, type)
@@ -408,9 +410,9 @@ module Familia
           # @return [Float] Calculated score for sorted set positioning, falls back to current_score
           def calculate_participation_score(target_class, collection_name)
             # Find the participation configuration with robust type comparison
-            participation_config = self.class.participation_relationships.find do |config|
+            participation_config = self.class.participation_relationships.find do |details|
               # Normalize both sides for comparison to handle Class, Symbol, and String types
-              config_target = config[:target_class]
+              config_target = details.target_class
               config_target = config_target.name if config_target.is_a?(Class)
               config_target = config_target.to_s
 
@@ -418,12 +420,12 @@ module Familia
               comparison_target = comparison_target.name if comparison_target.is_a?(Class)
               comparison_target = comparison_target.to_s
 
-              config_target == comparison_target && config[:collection_name] == collection_name
+              config_target == comparison_target && details.collection_name == collection_name
             end
 
             return current_score unless participation_config
 
-            score_calculator = participation_config[:score]
+            score_calculator = participation_config.score
 
             # Get the raw result based on calculator type
             result = case score_calculator
@@ -443,22 +445,6 @@ module Familia
 
             # Convert result to appropriate score with unified logic
             convert_to_score(result)
-          end
-
-          # Update presence in all participation collections atomically
-          def update_all_participation_collections
-            return unless self.class.respond_to?(:participation_relationships)
-
-            []
-
-            self.class.participation_relationships.each do |config|
-              config[:target_class_name]
-              config[:collection_name]
-
-              # This is a simplified version - in practice, you'd need to know
-              # which specific instances this object should be participating in
-              # For now, we'll skip the automatic update and rely on explicit calls
-            end
           end
 
           private
@@ -485,9 +471,9 @@ module Familia
           def add_to_class_participations
             return unless self.class.respond_to?(:participation_relationships)
 
-            self.class.participation_relationships.each do |config|
-              target_class_name = config[:target_class_name]
-              collection_name = config[:collection_name]
+            self.class.participation_relationships.each do |details|
+              target_class_name = details.target_class_name
+              collection_name = details.collection_name
 
               # Only auto-add to class-level collections (where target_class matches self.class)
               if target_class_name.downcase == self.class.name.downcase
@@ -524,9 +510,9 @@ module Familia
               collection_keys.each do |key|
                 # Determine collection type from key structure and remove appropriately
                 self.class.participation_relationships.each do |config|
-                  target_class_name = config[:target_class_name].downcase
-                  collection_name = config[:collection_name]
-                  type = config[:type]
+                  target_class_name = config.target_class_name.downcase
+                  collection_name = config.collection_name
+                  type = config.type
 
                   next unless key.include?(target_class_name) && key.include?(collection_name.to_s)
 
@@ -560,8 +546,8 @@ module Familia
               # Fall back to scan approach for objects without reverse index
               collection_keys = []
               self.class.participation_relationships.each do |config|
-                target_class_name = config[:target_class_name]
-                collection_name = config[:collection_name]
+                target_class_name = config.target_class_name
+                collection_name = config.collection_name
                 pattern = "#{target_class_name.downcase}:*:#{collection_name}"
 
                 dbclient.scan_each(match: pattern) do |key|
@@ -578,9 +564,9 @@ module Familia
             keys_by_type = {}
             collection_keys.each do |key|
               self.class.participation_relationships.each do |config|
-                target_class_name = config[:target_class_name]
-                collection_name = config[:collection_name]
-                type = config[:type]
+                target_class_name = config.target_class_name
+                collection_name = config.collection_name
+                type = config.type
 
                 next unless key.include?(target_class_name.downcase) && key.include?(collection_name.to_s)
 
