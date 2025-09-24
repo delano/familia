@@ -19,7 +19,7 @@ module Familia
     using Familia::Refinements::TimeLiterals
 
     @registered_types = {}
-    @valid_options = %i[class parent default_expiration default logical_database dbkey dbclient suffix prefix]
+    @valid_options = %i[class parent default_expiration default logical_database dbkey dbclient suffix prefix].freeze
     @logical_database = nil
 
     feature :expiration
@@ -67,7 +67,7 @@ module Familia
       end
 
       def relations?
-        @has_relations ||= false # rubocop:disable ThreadSafety/ClassInstanceVariable
+        @has_relations ||= false
       end
     end
     extend ClassMethods
