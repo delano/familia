@@ -112,11 +112,11 @@ module Familia
 
           # Generate class-level collection methods (e.g., User.all_users)
           def generate_participation_class_methods(target_class, collection_name, type)
+            collection_class = Familia::DataType.registered_type(type) # :list, :sorted_set, :set
+
             # Generate class-level collection getter method
             target_class.define_singleton_method(collection_name.to_s) do
               collection_key = "#{name.downcase}:#{collection_name}"
-
-              collection_class = Familia::DataType.registered_type(type) # :list, :sorted_set, :set
 
               # e.g. Familia::SortedSet.new -> target_class.collection_name
               collection_class.new(nil, dbkey: collection_key, logical_database: logical_database)
@@ -139,10 +139,8 @@ module Familia
                 score = item.current_score if score.nil?
 
                 collection.add(score, item.identifier)
-              when :set
+              else
                 collection.add(item.identifier)
-              when :list
-                collection.push(item.identifier)
               end
             end
 
@@ -173,20 +171,12 @@ module Familia
           end
 
           def generate_collection_getter(actual_target_class, collection_name, type)
+            collection_class = Familia::DataType.registered_type(type) # :list, :sorted_set, :set
+
             # Generate collection getter method
             actual_target_class.define_method(collection_name) do
               collection_key = "#{self.class.name.downcase}:#{identifier}:#{collection_name}"
-              case type
-              when :sorted_set
-                Familia::SortedSet.new(nil, dbkey: collection_key,
-                                       logical_database: self.class.logical_database)
-              when :set
-                Familia::UnsortedSet.new(nil, dbkey: collection_key,
-                                         logical_database: self.class.logical_database)
-              when :list
-                Familia::List.new(nil, dbkey: collection_key,
-                                  logical_database: self.class.logical_database)
-              end
+              collection_class.new(nil, dbkey: collection_key, logical_database: logical_database)
             end
           end
 
@@ -208,10 +198,8 @@ module Familia
                 score = item.current_score if score.nil?
 
                 collection.add(score, item.identifier)
-              when :set
+              else
                 collection.add(item.identifier)
-              when :list
-                collection.push(item.identifier)
               end
 
               # Track participation in reverse index for efficient cleanup
@@ -226,12 +214,8 @@ module Familia
             actual_target_class.define_method("remove_#{collection_name.to_s.singularize}") do |item|
               collection = send(collection_name)
 
-              # Use appropriate removal method based on collection type
-              if collection.is_a?(Familia::SortedSet)
-                collection.remove(item.identifier)
-              else
-                collection.delete(item.identifier)
-              end
+              # Use common removal method that all collections support (aka DataType classes)
+              collection.remove(item.identifier)
 
               # Remove participation tracking
               return unless item.respond_to?(:remove_participation_membership)
@@ -288,10 +272,15 @@ module Familia
           end
 
           def generate_add_to_collection(target_class_name, collection_name, type)
+
+            collection_class = Familia::DataType.registered_type(type) # :list, :sorted_set, :set
+
             # Method to add this object to a specific collection
             # e.g., domain.add_to_customer_domains(customer, score)
             define_method("add_to_#{target_class_name.downcase}_#{collection_name}") do |target_instance, score = nil|
               collection_key = "#{target_class_name.downcase}:#{target_instance.identifier}:#{collection_name}"
+
+              collection = collection_class.new(nil, dbkey: collection_key, logical_database: logical_database)
 
               case type
               when :sorted_set
@@ -300,28 +289,24 @@ module Familia
                 # Ensure score is never nil
                 score = current_score if score.nil?
 
-                dbclient.zadd(collection_key, score, identifier)
-              when :set
-                dbclient.sadd(collection_key, identifier)
-              when :list
-                dbclient.lpush(collection_key, identifier)
+                collection.add(score, identifier)
+              else
+                collection.add(identifier)
               end
             end
           end
 
           def generate_remove_from_collection(target_class_name, collection_name, type)
+            collection_class = Familia::DataType.registered_type(type) # :list, :sorted_set, :set
+
             # Method to remove this object from a specific collection
             # e.g., domain.remove_from_customer_domains(customer)
             define_method("remove_from_#{target_class_name.downcase}_#{collection_name}") do |target_instance|
               collection_key = "#{target_class_name.downcase}:#{target_instance.identifier}:#{collection_name}"
-              case type
-              when :sorted_set
-                dbclient.zrem(collection_key, identifier)
-              when :set
-                dbclient.srem(collection_key, identifier)
-              when :list
-                dbclient.lrem(collection_key, 0, identifier) # Remove all occurrences
-              end
+
+              collection = collection_class.new(nil, dbkey: collection_key, logical_database: logical_database)
+
+              collection.remove(identifier) # For list, this removes all occurrences
             end
           end
 

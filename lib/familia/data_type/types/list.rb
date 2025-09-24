@@ -66,6 +66,10 @@ module Familia
     end
     alias slice []
 
+    def member?(value)
+      !dbclient.lpos(dbkey, serialize_value(value)).nil?
+    end
+
     # Removes elements equal to value from the list
     # @param value The value to remove
     # @param count [Integer] Number of elements to remove (0 means all)

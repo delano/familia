@@ -18,3 +18,10 @@ fileignoreconfig:
 - filename: lib/familia/features/relationships/cascading.rb
   checksum: d8b20ac12bb7ac6843f36d772804f2b568a08483ce2d75b5b5f7da8756d50c35
 version: ""
+
+fileignoreconfig:
+- filename: lib/familia/data_type/types/list.rb
+  checksum: dd1e4beec1bfdd5ebae0b1fa94157dde369cbd47d87ea45ab7a03adb43a555e1
+- filename: lib/familia/features/relationships/participation.rb
+  checksum: 65dab20c6dfea6f7cc8164870bbfc3db7834160369db91fc430eadc49daade87
+version: ""
