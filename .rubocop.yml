@@ -83,6 +83,10 @@ Metrics/ModuleLength:
   Max: 250
   CountAsOne: ["method_call"]
 
+Metrics/ParameterLists:
+  Enabled: true
+  Max: 6
+
 Performance/Size:
   Enabled: true
   Exclude:
