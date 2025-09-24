@@ -180,7 +180,7 @@ module Familia
       self
     end
 
-    Familia::DataType.register self, :hash # legacy, deprecated
+    Familia::DataType.register self, :hash
     Familia::DataType.register self, :hashkey
   end
 end
