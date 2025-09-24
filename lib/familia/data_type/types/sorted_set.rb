@@ -50,6 +50,7 @@ module Familia
       update_expiration
       ret
     end
+    alias add_element add
 
     def score(val)
       ret = dbclient.zscore dbkey, serialize_value(val, strict_values: false)

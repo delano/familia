@@ -23,10 +23,16 @@ module Familia
     end
     alias append push
 
-    def <<(val)
-      push val
+    def add(val)
+      ret = push val
+      update_expiration
+      ret
     end
-    alias add <<
+    alias add_element add
+
+    def <<(val)
+      add(val)
+    end
 
     def unshift *values
       values.flatten.compact.each { |v| dbclient.lpush dbkey, serialize_value(v) }

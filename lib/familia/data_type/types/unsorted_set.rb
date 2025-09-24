@@ -22,6 +22,7 @@ module Familia
       update_expiration
       self
     end
+    alias add_element add
 
     def <<(v)
       add v
