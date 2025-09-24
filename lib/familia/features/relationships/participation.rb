@@ -216,9 +216,9 @@ module Familia
               end
 
               # Track participation in reverse index for efficient cleanup
-              if item.respond_to?(:add_participation_tracking)
-                item.add_participation_tracking(collection.dbkey)
-              end
+              return unless item.respond_to?(:add_participation_tracking)
+
+              item.add_participation_tracking(collection.dbkey)
             end
           end
 
@@ -235,9 +235,9 @@ module Familia
               end
 
               # Remove participation tracking
-              if item.respond_to?(:remove_participation_tracking)
-                item.remove_participation_tracking(collection.dbkey)
-              end
+              return unless item.respond_to?(:remove_participation_tracking)
+
+              item.remove_participation_tracking(collection.dbkey)
             end
           end
 
@@ -358,11 +358,57 @@ module Familia
 
         # Instance methods for participating objects
         module ModelInstanceMethods
-          # Calculate the appropriate score for a participation relationship
+          # Calculate the appropriate score for a participation relationship based on configured scoring strategy
           #
-          # @param target_class [Class] The target class (e.g., Customer)
-          # @param collection_name [Symbol] The collection name (e.g., :domains)
-          # @return [Float] Calculated score
+          # This method serves as the single source of truth for participation scoring, supporting multiple
+          # scoring strategies defined in relationship configurations. It's called during relationship
+          # addition, object creation/save callbacks, field updates, and score maintenance operations.
+          #
+          # Scoring Strategies:
+          # * Symbol - Field name or method name (e.g., :priority_level, :created_at)
+          # * Proc - Dynamic calculation executed in instance context (e.g., -> { tenure + performance })
+          # * Numeric - Static score applied to all instances (e.g., 100.0)
+          # * Fallback - Returns current_score for unrecognized types or missing configs
+          #
+          # Type Safety:
+          # * Robust type normalization handles Class/Symbol/String target class variations
+          # * Nil-safe evaluation with multiple fallback layers
+          # * Automatic numeric conversion (to_f for floats, encode_score for integers)
+          #
+          # Usage Examples:
+          #   # Field-based scoring
+          #   participates_in Organization, :members, score: :priority_level
+          #
+          #   # Time-based scoring
+          #   participates_in Blog, :posts, score: :published_at
+          #
+          #   # Complex business logic
+          #   participates_in Project, :contributors, score: -> { contributions.count * 10 }
+          #
+          #   # Priority-based Scoring
+          #   class Task < Familia::Horreum
+          #     field :priority  # 1=low, 5=high
+          #     participates_in Project, :tasks, score: :priority
+          #   end
+          #   task.priority = 5                 # when priority changes
+          #   task.add_to_project_tasks(project)
+          #
+          #   # Complex business logic (sales employee changes departments)
+          #   class Employee < Familia::Horreum
+          #     field :hire_date
+          #     field :performance_rating
+          #     participates_in Department, :members, score: -> {
+          #       tenure_months = (Time.now - hire_date) / 1.month
+          #       base_score = tenure_months * 10
+          #       performance_bonus = performance_rating * 100
+          #       base_score + performance_bonus
+          #     }
+          #   end
+          #   employee.add_to_department_members(new_department)
+          #
+          # @param target_class [Class, Symbol, String] The target class containing the collection
+          # @param collection_name [Symbol] The collection name within the target class
+          # @return [Float] Calculated score for sorted set positioning, falls back to current_score
           def calculate_participation_score(target_class, collection_name)
             # Find the participation configuration with robust type comparison
             participation_config = self.class.participation_relationships.find do |config|
@@ -382,38 +428,61 @@ module Familia
 
             score_calculator = participation_config[:score]
 
-            case score_calculator
-            when Symbol
-              # Field name or method name
-              if respond_to?(score_calculator)
-                value = send(score_calculator)
-                if value.respond_to?(:to_f)
-                  value.to_f
-                elsif value.respond_to?(:to_i)
-                  encode_score(value, 0)
-                else
-                  current_score
-                end
-              else
-                current_score
-              end
-            when Proc
-              # Execute proc in target of this instance
-              result = instance_exec(&score_calculator)
-              # Ensure we get a numeric result
-              if result.nil?
-                current_score
-              elsif result.respond_to?(:to_f)
-                result.to_f
-              else
-                current_score
-              end
-            when Numeric
-              score_calculator.to_f
+            # Get the raw result based on calculator type
+            result = case score_calculator
+                     when Symbol
+                       # Field name or method name
+                       respond_to?(score_calculator) ? send(score_calculator) : nil
+                     when Proc
+                       # Execute proc in context of this instance
+                       instance_exec(&score_calculator)
+                     when Numeric
+                       # Static numeric value
+                       return score_calculator.to_f
+                     else
+                       # Unrecognized type
+                       return current_score
+                     end
+
+            # Convert result to appropriate score with unified logic
+            convert_to_score(result)
+          end
+
+          # Update presence in all participation collections atomically
+          def update_all_participation_collections
+            return unless self.class.respond_to?(:participation_relationships)
+
+            []
+
+            self.class.participation_relationships.each do |config|
+              config[:target_class_name]
+              config[:collection_name]
+
+              # This is a simplified version - in practice, you'd need to know
+              # which specific instances this object should be participating in
+              # For now, we'll skip the automatic update and rely on explicit calls
+            end
+          end
+
+          private
+
+          # Convert a raw value to an appropriate participation score
+          #
+          # @param value [Object] The raw value to convert
+          # @return [Float] Converted score, falls back to current_score
+          def convert_to_score(value)
+            return current_score if value.nil?
+
+            if value.respond_to?(:to_f)
+              value.to_f
+            elsif value.respond_to?(:to_i)
+              encode_score(value, 0)
             else
               current_score
             end
           end
+
+          public
 
           # Update presence in all participation collections atomically
           def update_all_participation_collections
@@ -437,7 +506,6 @@ module Familia
 
             self.class.participation_relationships.each do |config|
               target_class_name = config[:target_class_name]
-              config[:target_class]
               collection_name = config[:collection_name]
 
               # Only auto-add to class-level collections (where target_class matches self.class)
@@ -540,7 +608,7 @@ module Familia
                   key: key,
                   target_class_name: target_class_name,
                   collection_name: collection_name,
-                  type: type
+                  type: type,
                 }
               end
             end
@@ -567,7 +635,11 @@ module Familia
             keys_by_type.each do |type, key_configs|
               key_configs.each do |config|
                 key = config[:key]
-                result = results[key].value rescue nil
+                result = begin
+                  results[key].value
+                rescue StandardError
+                  nil
+                end
 
                 next unless result
 
@@ -582,12 +654,14 @@ module Familia
                 case type
                 when :sorted_set
                   next unless result # score must be present
+
                   membership_data[:score] = result
                   membership_data[:decoded_score] = decode_score(result)
                 when :set
                   next unless result # must be a member
                 when :list
                   next unless result # position must be found
+
                   membership_data[:position] = result
                 end
 
