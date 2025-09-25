@@ -9,5 +9,5 @@ fileignoreconfig:
 - filename: lib/familia/data_type/types/list.rb
   checksum: dd1e4beec1bfdd5ebae0b1fa94157dde369cbd47d87ea45ab7a03adb43a555e1
 - filename: lib/familia/features/relationships/participation.rb
-  checksum: 65dab20c6dfea6f7cc8164870bbfc3db7834160369db91fc430eadc49daade87
+  checksum: f4cc564ea37542fdb365fb2cee21ae835a54cbcc8177eb881b30167849fc87ce
 version: ""

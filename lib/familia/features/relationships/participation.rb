@@ -595,8 +595,8 @@ module Familia
                 key = config[:key]
                 result = begin
                   results[key].value
-                rescue StandardError
-                  nil
+                rescue Redis::ConnectionError, Redis::TimeoutError => e
+                  Familia.ld "[#{key}] Error: #{e.message}"
                 end
 
                 next unless result

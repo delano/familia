@@ -1,4 +1,4 @@
-# try/core/familia_new_methods_try.rb
+# try/core/familia_members_methods_try.rb
 
 require_relative '../helpers/test_helpers'
 
