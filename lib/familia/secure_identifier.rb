@@ -5,41 +5,58 @@ require 'securerandom'
 # Provides a suite of tools for generating and manipulating cryptographically
 # secure identifiers in various formats and lengths.
 module Familia
+  # Cryptographically secure random identifiers.
+  #
+  # Strength tiers
+  # --------------
+  # 256-bit : cryptographic secrets, session tokens, API keys
+  # 128-bit : business/user IDs, product SKUs, non-secret resources
+  #  64-bit : request tracing, log correlation, ephemeral tags
+  #
+  # All methods use `SecureRandom`; collisions are probabilistic and
+  # scale with the number of generated values, not time.
+  #
   module SecureIdentifier
-    # Generates a 256-bit cryptographically secure hexadecimal identifier.
+    # 256-bit identifier – the "full-strength" version.
     #
-    # @return [String] A 64-character hex string representing 256 bits of entropy.
-    # @security Provides ~10^77 possible values, far exceeding UUIDv4's 128 bits.
-    def generate_hex_id
-      SecureRandom.hex(32)
-    end
-
-    # Generates a 64-bit cryptographically secure hexadecimal trace identifier.
+    # Safe for:
+    #   * cryptographic secrets, session tokens, API keys
+    #   * any identifier that must resist brute-force or intentional guessing
     #
-    # @return [String] A 16-character hex string representing 64 bits of entropy.
-    # @note 64 bits provides ~18 quintillion values, sufficient for request tracing.
-    def generate_hex_trace_id
-      SecureRandom.hex(8)
-    end
-
-    # Generates a cryptographically secure identifier, encoded in the specified base.
-    # By default, this creates a compact, URL-safe base-36 string.
-    #
-    # @param base [Integer] The base for encoding the output string (2-36, default: 36).
-    # @return [String] A secure identifier.
+    # @param base [Integer] 2–36, defaults to 36 for URL-safe chars
+    # @return [String] identifier in specified base, zero-padded to minimum length for 256 bits
     def generate_id(base = 36)
-      target_length = SecureIdentifier.min_length_for_bits(256, base)
-      generate_hex_id.to_i(16).to_s(base).rjust(target_length, '0')
+      _generate_secure_id(bits: 256, base: base)
     end
 
-    # Generates a short, secure trace identifier, encoded in the specified base.
-    # Suitable for tracing, logging, and other ephemeral use cases.
+    # 128-bit identifier – the "lite" version.
     #
-    # @param base [Integer] The base for encoding the output string (2-36, default: 36).
-    # @return [String] A secure short identifier.
+    # Safe for:
+    #   * ~ 10¹⁵ generated values (collision risk < 10⁻⁹)
+    #   * business/user IDs, product SKUs, non-secret resources
+    #
+    # NOT safe for:
+    #   * security tokens that must resist intentional guessing
+    #
+    # @param base [Integer] 2–36, defaults to 36 for URL-safe chars
+    # @return [String] identifier in specified base, zero-padded to minimum length for 128 bits
+    def generate_lite_id(base = 36)
+      _generate_secure_id(bits: 128, base: base)
+    end
+
+    # 64-bit identifier – the "trace" version.
+    #
+    # Safe for:
+    #   * request tracing, log correlation, ephemeral tags
+    #   * up to ~ 10⁹ values (collision risk < 10⁻⁶)
+    #
+    # NOT safe for:
+    #   * long-lived identifiers or security contexts
+    #
+    # @param base [Integer] 2–36, defaults to 36 for URL-safe chars
+    # @return [String] identifier in specified base, zero-padded to minimum length for 64 bits
     def generate_trace_id(base = 36)
-      target_length = SecureIdentifier.min_length_for_bits(64, base)
-      generate_hex_trace_id.to_i(16).to_s(base).rjust(target_length, '0')
+      _generate_secure_id(bits: 64, base: base)
     end
 
     # Creates a deterministic 64-bit trace identifier from a longer hex ID.
@@ -68,9 +85,7 @@ module Familia
       target_length = SecureIdentifier.min_length_for_bits(bits, base)
       input_bits = hex_id.length * 4
 
-      unless hex_id.match?(/\A[0-9a-fA-F]+\z/)
-        raise ArgumentError, "Invalid hexadecimal string: #{hex_id}"
-      end
+      raise ArgumentError, "Invalid hexadecimal string: #{hex_id}" unless hex_id.match?(/\A[0-9a-fA-F]+\z/)
 
       if input_bits < bits
         raise ArgumentError, "Input bits (#{input_bits}) cannot be less than desired output bits (#{bits})."
@@ -84,6 +99,23 @@ module Familia
     # Calculates the minimum string length required to represent a given number of
     # bits in a specific numeric base.
     #
+    private
+
+    # Generates a secure identifier with specified bit length and base.
+    #
+    # @private
+    #
+    # @param bits [Integer] The number of bits of entropy (64, 128, or 256).
+    # @param base [Integer] The numeric base (2-36).
+    # @return [String] The generated identifier.
+    def _generate_secure_id(bits:, base:)
+      hex_id = SecureRandom.hex(bits / 8)
+      return hex_id if base == 16
+
+      len = SecureIdentifier.min_length_for_bits(bits, base)
+      hex_id.to_i(16).to_s(base).rjust(len, '0')
+    end
+
     # @private
     #
     # @param bits [Integer] The number of bits of entropy.

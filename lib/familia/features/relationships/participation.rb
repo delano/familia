@@ -1,5 +1,7 @@
 # lib/familia/features/relationships/participation.rb
 
+require_relative 'participation_relationship'
+
 module Familia
   module Features
     module Relationships
@@ -35,7 +37,7 @@ module Familia
             klass_name = (name || to_s).downcase
 
             # Store metadata for this participation relationship
-            participation_relationships << {
+            participation_relationships << ParticipationRelationship.new(
               target_class: klass_name,
               target_class_name: name || to_s,
               collection_name: collection_name,
@@ -43,7 +45,7 @@ module Familia
               on_destroy: on_destroy,
               type: type,
               bidirectional: bidirectional,
-            }
+            )
 
             # Generate class-level collection methods
             generate_participation_class_methods(self, collection_name, type)
@@ -84,21 +86,23 @@ module Familia
             end
 
             # Store metadata for this participation relationship
-            participation_relationships << {
-              target_class: target_class,
-              target_class_name: target_class_name,
+            participation_relationships << ParticipationRelationship.new(
+              target_class: target_class,           # as passed to `participates_in`
+              target_class_name: target_class_name, # pascalized
               collection_name: collection_name,
               score: score,
               on_destroy: on_destroy,
               type: type,
               bidirectional: bidirectional,
-            }
+            )
 
             # Generate target class methods
             generate_target_class_methods(target_class, collection_name, type)
 
+            return unless bidirectional
+
             # Generate instance methods on this class (participant)
-            generate_participation_instance_methods(target_class_name, collection_name, score, type) if bidirectional
+            generate_participation_instance_methods(target_class_name, collection_name, score, type)
           end
 
           # Get all participation relationships for this class
@@ -110,17 +114,14 @@ module Familia
 
           # Generate class-level collection methods (e.g., User.all_users)
           def generate_participation_class_methods(target_class, collection_name, type)
+            collection_class = Familia::DataType.registered_type(type) # :list, :sorted_set, :set
+
             # Generate class-level collection getter method
             target_class.define_singleton_method(collection_name.to_s) do
               collection_key = "#{name.downcase}:#{collection_name}"
-              case type
-              when :sorted_set
-                Familia::SortedSet.new(nil, dbkey: collection_key, logical_database: logical_database)
-              when :set
-                Familia::UnsortedSet.new(nil, dbkey: collection_key, logical_database: logical_database)
-              when :list
-                Familia::List.new(nil, dbkey: collection_key, logical_database: logical_database)
-              end
+
+              # e.g. Familia::SortedSet.new -> target_class.collection_name
+              collection_class.new(nil, dbkey: collection_key, logical_database: logical_database)
             end
 
             # Generate class-level add method (e.g., User.add_to_all_users)
@@ -140,10 +141,8 @@ module Familia
                 score = item.current_score if score.nil?
 
                 collection.add(score, item.identifier)
-              when :set
+              else
                 collection.add(item.identifier)
-              when :list
-                collection.push(item.identifier)
               end
             end
 
@@ -174,20 +173,12 @@ module Familia
           end
 
           def generate_collection_getter(actual_target_class, collection_name, type)
+            collection_class = Familia::DataType.registered_type(type) # :list, :sorted_set, :set
+
             # Generate collection getter method
             actual_target_class.define_method(collection_name) do
               collection_key = "#{self.class.name.downcase}:#{identifier}:#{collection_name}"
-              case type
-              when :sorted_set
-                Familia::SortedSet.new(nil, dbkey: collection_key,
-                                       logical_database: self.class.logical_database)
-              when :set
-                Familia::UnsortedSet.new(nil, dbkey: collection_key,
-                                         logical_database: self.class.logical_database)
-              when :list
-                Familia::List.new(nil, dbkey: collection_key,
-                                  logical_database: self.class.logical_database)
-              end
+              collection_class.new(nil, dbkey: collection_key, logical_database: logical_database)
             end
           end
 
@@ -209,16 +200,14 @@ module Familia
                 score = item.current_score if score.nil?
 
                 collection.add(score, item.identifier)
-              when :set
+              else
                 collection.add(item.identifier)
-              when :list
-                collection.push(item.identifier)
               end
 
               # Track participation in reverse index for efficient cleanup
-              if item.respond_to?(:add_participation_tracking)
-                item.add_participation_tracking(collection.dbkey)
-              end
+              return unless item.respond_to?(:add_participation_membership)
+
+              item.add_participation_membership(collection.dbkey)
             end
           end
 
@@ -227,17 +216,13 @@ module Familia
             actual_target_class.define_method("remove_#{collection_name.to_s.singularize}") do |item|
               collection = send(collection_name)
 
-              # Use appropriate removal method based on collection type
-              if collection.is_a?(Familia::SortedSet)
-                collection.remove(item.identifier)
-              else
-                collection.delete(item.identifier)
-              end
+              # Use common removal method that all collections support (aka DataType classes)
+              collection.remove(item.identifier)
 
               # Remove participation tracking
-              if item.respond_to?(:remove_participation_tracking)
-                item.remove_participation_tracking(collection.dbkey)
-              end
+              return unless item.respond_to?(:remove_participation_membership)
+
+              item.remove_participation_membership(collection.dbkey)
             end
           end
 
@@ -264,18 +249,20 @@ module Familia
           end
 
           # Generate instance methods on the participant class
-          def generate_participation_instance_methods(target_class_name, collection_name, _score_calculator, type)
-            generate_membership_check(target_class_name, collection_name, type)
-            generate_add_to_collection(target_class_name, collection_name, type)
-            generate_remove_from_collection(target_class_name, collection_name, type)
-            generate_score_methods(target_class_name, collection_name, type)
-            generate_position_method(target_class_name, collection_name, type)
+          def generate_participation_instance_methods(target_class, collection_name, _score_calculator, type)
+            generate_membership_check(target_class, collection_name, type)
+            generate_add_to_collection(target_class, collection_name, type)
+            generate_remove_from_collection(target_class, collection_name, type)
+            generate_score_methods(target_class, collection_name, type)
+            generate_position_method(target_class, collection_name, type)
           end
 
           def generate_membership_check(target_class_name, collection_name, type)
             # Method to check if this object is in a specific collection
             # e.g., domain.in_customer_domains?(customer)
             define_method("in_#{target_class_name.downcase}_#{collection_name}?") do |target_instance|
+              return false unless target_instance&.identifier
+
               collection_key = "#{target_class_name.downcase}:#{target_instance.identifier}:#{collection_name}"
               case type
               when :sorted_set
@@ -289,40 +276,43 @@ module Familia
           end
 
           def generate_add_to_collection(target_class_name, collection_name, type)
+
+            collection_class = Familia::DataType.registered_type(type) # :list, :sorted_set, :set
+
             # Method to add this object to a specific collection
             # e.g., domain.add_to_customer_domains(customer, score)
             define_method("add_to_#{target_class_name.downcase}_#{collection_name}") do |target_instance, score = nil|
               collection_key = "#{target_class_name.downcase}:#{target_instance.identifier}:#{collection_name}"
 
+              collection = collection_class.new(nil, dbkey: collection_key, logical_database: logical_database)
+
               case type
               when :sorted_set
                 score ||= calculate_participation_score(target_class_name, collection_name)
 
-                # Ensure score is never nil
+                # Ensure score is never nil, by relying on ScoreEncoding.current_score
                 score = current_score if score.nil?
 
-                dbclient.zadd(collection_key, score, identifier)
-              when :set
-                dbclient.sadd(collection_key, identifier)
-              when :list
-                dbclient.lpush(collection_key, identifier)
+                collection.add(score, identifier)
+              else
+                collection.add(identifier)
               end
             end
           end
 
           def generate_remove_from_collection(target_class_name, collection_name, type)
+            collection_class = Familia::DataType.registered_type(type) # :list, :sorted_set, :set
+
             # Method to remove this object from a specific collection
             # e.g., domain.remove_from_customer_domains(customer)
             define_method("remove_from_#{target_class_name.downcase}_#{collection_name}") do |target_instance|
+              return unless target_instance&.identifier
+
               collection_key = "#{target_class_name.downcase}:#{target_instance.identifier}:#{collection_name}"
-              case type
-              when :sorted_set
-                dbclient.zrem(collection_key, identifier)
-              when :set
-                dbclient.srem(collection_key, identifier)
-              when :list
-                dbclient.lrem(collection_key, 0, identifier) # Remove all occurrences
-              end
+
+              collection = collection_class.new(nil, dbkey: collection_key, logical_database: logical_database)
+
+              collection.remove(identifier) # For list, this removes all occurrences
             end
           end
 
@@ -358,16 +348,62 @@ module Familia
 
         # Instance methods for participating objects
         module ModelInstanceMethods
-          # Calculate the appropriate score for a participation relationship
+          # Calculate the appropriate score for a participation relationship based on configured scoring strategy
           #
-          # @param target_class [Class] The target class (e.g., Customer)
-          # @param collection_name [Symbol] The collection name (e.g., :domains)
-          # @return [Float] Calculated score
+          # This method serves as the single source of truth for participation scoring, supporting multiple
+          # scoring strategies defined in relationship configurations. It's called during relationship
+          # addition, object creation/save callbacks, field updates, and score maintenance operations.
+          #
+          # Scoring Strategies:
+          # * Symbol - Field name or method name (e.g., :priority_level, :created_at)
+          # * Proc - Dynamic calculation executed in instance context (e.g., -> { tenure + performance })
+          # * Numeric - Static score applied to all instances (e.g., 100.0)
+          # * Fallback - Returns current_score for unrecognized types or missing configs
+          #
+          # Type Safety:
+          # * Robust type normalization handles Class/Symbol/String target class variations
+          # * Nil-safe evaluation with multiple fallback layers
+          # * Automatic numeric conversion (to_f for floats, encode_score for integers)
+          #
+          # Usage Examples:
+          #   # Field-based scoring
+          #   participates_in Organization, :members, score: :priority_level
+          #
+          #   # Time-based scoring
+          #   participates_in Blog, :posts, score: :published_at
+          #
+          #   # Complex business logic
+          #   participates_in Project, :contributors, score: -> { contributions.count * 10 }
+          #
+          #   # Priority-based Scoring
+          #   class Task < Familia::Horreum
+          #     field :priority  # 1=low, 5=high
+          #     participates_in Project, :tasks, score: :priority
+          #   end
+          #   task.priority = 5                 # when priority changes
+          #   task.add_to_project_tasks(project)
+          #
+          #   # Complex business logic (sales employee changes departments)
+          #   class Employee < Familia::Horreum
+          #     field :hire_date
+          #     field :performance_rating
+          #     participates_in Department, :members, score: -> {
+          #       tenure_months = (Time.now - hire_date) / 1.month
+          #       base_score = tenure_months * 10
+          #       performance_bonus = performance_rating * 100
+          #       base_score + performance_bonus
+          #     }
+          #   end
+          #   employee.add_to_department_members(new_department)
+          #
+          # @param target_class [Class, Symbol, String] The target class containing the collection
+          # @param collection_name [Symbol] The collection name within the target class
+          # @return [Float] Calculated score for sorted set positioning, falls back to current_score
           def calculate_participation_score(target_class, collection_name)
             # Find the participation configuration with robust type comparison
-            participation_config = self.class.participation_relationships.find do |config|
+            participation_config = self.class.participation_relationships.find do |details|
               # Normalize both sides for comparison to handle Class, Symbol, and String types
-              config_target = config[:target_class]
+              config_target = details.target_class
               config_target = config_target.name if config_target.is_a?(Class)
               config_target = config_target.to_s
 
@@ -375,70 +411,60 @@ module Familia
               comparison_target = comparison_target.name if comparison_target.is_a?(Class)
               comparison_target = comparison_target.to_s
 
-              config_target == comparison_target && config[:collection_name] == collection_name
+              config_target == comparison_target && details.collection_name == collection_name
             end
 
             return current_score unless participation_config
 
-            score_calculator = participation_config[:score]
+            score_calculator = participation_config.score
 
-            case score_calculator
-            when Symbol
-              # Field name or method name
-              if respond_to?(score_calculator)
-                value = send(score_calculator)
-                if value.respond_to?(:to_f)
-                  value.to_f
-                elsif value.respond_to?(:to_i)
-                  encode_score(value, 0)
-                else
-                  current_score
-                end
-              else
-                current_score
-              end
-            when Proc
-              # Execute proc in target of this instance
-              result = instance_exec(&score_calculator)
-              # Ensure we get a numeric result
-              if result.nil?
-                current_score
-              elsif result.respond_to?(:to_f)
-                result.to_f
-              else
-                current_score
-              end
-            when Numeric
-              score_calculator.to_f
+            # Get the raw result based on calculator type
+            result = case score_calculator
+                     when Symbol
+                       # Field name or method name
+                       respond_to?(score_calculator) ? send(score_calculator) : nil
+                     when Proc
+                       # Execute proc in context of this instance
+                       instance_exec(&score_calculator)
+                     when Numeric
+                       # Static numeric value
+                       return score_calculator.to_f
+                     else
+                       # Unrecognized type
+                       return current_score
+                     end
+
+            # Convert result to appropriate score with unified logic
+            convert_to_score(result)
+          end
+
+          private
+
+          # Convert a raw value to an appropriate participation score
+          #
+          # @param value [Object] The raw value to convert
+          # @return [Float] Converted score, falls back to current_score
+          def convert_to_score(value)
+            return current_score if value.nil?
+
+            if value.respond_to?(:to_f)
+              value.to_f
+            elsif value.respond_to?(:to_i)
+              encode_score(value, 0)
             else
               current_score
             end
           end
 
-          # Update presence in all participation collections atomically
-          def update_all_participation_collections
-            return unless self.class.respond_to?(:participation_relationships)
-
-            []
-
-            self.class.participation_relationships.each do |config|
-              config[:target_class_name]
-              config[:collection_name]
-
-              # This is a simplified version - in practice, you'd need to know
-              # which specific instances this object should be participating in
-              # For now, we'll skip the automatic update and rely on explicit calls
-            end
-          end
+          public
 
           # Add to class-level participation collections automatically
-          def add_to_class_participation_collections
+          def add_to_class_participations
             return unless self.class.respond_to?(:participation_relationships)
 
-            self.class.participation_relationships.each do |config|
-              target_class_name = config[:target_class_name]
-              config[:target_class]
-              collection_name = config[:collection_name]
+            self.class.participation_relationships.each do |details|
+              target_class_name = details.target_class_name
+              collection_name = details.collection_name
 
               # Only auto-add to class-level collections (where target_class matches self.class)
               if target_class_name.downcase == self.class.name.downcase
@@ -449,20 +475,20 @@ module Familia
           end
 
           # Add participation tracking to reverse index
-          def add_participation_tracking(collection_key)
+          def add_participation_membership(collection_key)
             reverse_index_key = "#{dbkey}:participations"
             dbclient.sadd(reverse_index_key, collection_key)
           end
 
           # Remove participation tracking from reverse index
-          def remove_participation_tracking(collection_key)
+          def remove_participation_membership(collection_key)
             reverse_index_key = "#{dbkey}:participations"
             dbclient.srem(reverse_index_key, collection_key)
           end
 
           # Remove from all participation collections (used during destroy)
           # Uses reverse index for efficient cleanup instead of database scan
-          def remove_from_all_participation_collections
+          def remove_from_all_participations
             return unless self.class.respond_to?(:participation_relationships)
 
             reverse_index_key = "#{dbkey}:participations"
@@ -475,9 +501,9 @@ module Familia
               collection_keys.each do |key|
                 # Determine collection type from key structure and remove appropriately
                 self.class.participation_relationships.each do |config|
-                  target_class_name = config[:target_class_name].downcase
-                  collection_name = config[:collection_name]
-                  type = config[:type]
+                  target_class_name = config.target_class_name.downcase
+                  collection_name = config.collection_name
+                  type = config.type
 
                   next unless key.include?(target_class_name) && key.include?(collection_name.to_s)
 
@@ -500,7 +526,7 @@ module Familia
           # Get all collections this object appears in
           #
           # @return [Array<Hash>] Array of collection information
-          def participation_collections_membership
+          def participation_memberships
             return [] unless self.class.respond_to?(:participation_relationships)
 
             # Use reverse index if available, otherwise fall back to scan
@@ -511,8 +537,8 @@ module Familia
               # Fall back to scan approach for objects without reverse index
               collection_keys = []
               self.class.participation_relationships.each do |config|
-                target_class_name = config[:target_class_name]
-                collection_name = config[:collection_name]
+                target_class_name = config.target_class_name
+                collection_name = config.collection_name
                 pattern = "#{target_class_name.downcase}:*:#{collection_name}"
 
                 dbclient.scan_each(match: pattern) do |key|
@@ -529,9 +555,9 @@ module Familia
             keys_by_type = {}
             collection_keys.each do |key|
               self.class.participation_relationships.each do |config|
-                target_class_name = config[:target_class_name]
-                collection_name = config[:collection_name]
-                type = config[:type]
+                target_class_name = config.target_class_name
+                collection_name = config.collection_name
+                type = config.type
 
                 next unless key.include?(target_class_name.downcase) && key.include?(collection_name.to_s)
 
@@ -540,7 +566,7 @@ module Familia
                   key: key,
                   target_class_name: target_class_name,
                   collection_name: collection_name,
-                  type: type
+                  type: type,
                 }
               end
             end
@@ -567,7 +593,11 @@ module Familia
             keys_by_type.each do |type, key_configs|
               key_configs.each do |config|
                 key = config[:key]
-                result = results[key].value rescue nil
+                result = begin
+                  results[key].value
+                rescue Redis::ConnectionError, Redis::TimeoutError => e
+                  Familia.ld "[#{key}] Error: #{e.message}"
+                end
 
                 next unless result
 
@@ -582,12 +612,14 @@ module Familia
                 case type
                 when :sorted_set
                   next unless result # score must be present
+
                   membership_data[:score] = result
                   membership_data[:decoded_score] = decode_score(result)
                 when :set
                   next unless result # must be a member
                 when :list
                   next unless result # position must be found
+
                   membership_data[:position] = result
                 end
 

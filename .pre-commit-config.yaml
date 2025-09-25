@@ -62,6 +62,8 @@ repos:
     rev: v1.32.2
     hooks:
       - id: talisman-commit
+        env:
+          TALISMAN_SCAN_MODE: CI
 
   - repo: https://github.com/avilaton/add-msg-issue-prefix-hook
     rev: v0.0.11

@@ -19,7 +19,7 @@ module Familia
     using Familia::Refinements::TimeLiterals
 
     @registered_types = {}
-    @valid_options = %i[class parent default_expiration default logical_database dbkey dbclient suffix prefix]
+    @valid_options = %i[class parent default_expiration default logical_database dbkey dbclient suffix prefix].freeze
     @logical_database = nil
 
     feature :expiration
@@ -41,6 +41,13 @@ module Familia
         Familia.trace :REGISTER, nil, "[#{self}] Registering #{klass} as #{methname.inspect}", caller(1..1) if Familia.debug?
 
         @registered_types[methname] = klass
+      end
+
+      # Get the registered type class from a given method name
+      # +methname+ is the method name used to register the class (e.g. :set, :list, etc)
+      # Returns the registered class or nil if not found
+      def registered_type(methname)
+        @registered_types[methname]
       end
 
       def logical_database(val = nil)
@@ -67,7 +74,7 @@ module Familia
       end
 
       def relations?
-        @has_relations ||= false # rubocop:disable ThreadSafety/ClassInstanceVariable
+        @has_relations ||= false
       end
     end
     extend ClassMethods

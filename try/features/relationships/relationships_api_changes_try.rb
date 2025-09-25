@@ -7,7 +7,7 @@
 require_relative '../../helpers/test_helpers'
 
 # Test classes for new API
-class ApiTestUser < Familia::Horreum
+class ::ApiTestUser < Familia::Horreum
   feature :relationships
 
   identifier_field :user_id
@@ -26,7 +26,7 @@ class ApiTestUser < Familia::Horreum
   class_indexed_by :username, :username_lookup, finder: false
 end
 
-class ApiTestProject < Familia::Horreum
+class ::ApiTestProject < Familia::Horreum
   feature :relationships
 
   identifier_field :project_id
@@ -35,7 +35,7 @@ class ApiTestProject < Familia::Horreum
   field :created_at
 end
 
-class ApiTestMembership < Familia::Horreum
+class ::ApiTestMembership < Familia::Horreum
   feature :relationships
 
   identifier_field :membership_id
@@ -252,29 +252,29 @@ context_methods.length > 0
 # =============================================
 
 ## class_participates_in stores correct target_class
-participation_meta = ApiTestUser.participation_relationships.find { |r| r[:collection_name] == :all_users }
-participation_meta[:target_class].end_with?('::apitestuser')
-#=> true
+participation_meta = ApiTestUser.participation_relationships.find { |r| r.collection_name == :all_users }
+participation_meta.target_class
+#=> 'apitestuser'
 
 ## class_participates_in stores correct target_class_name
-participation_meta = ApiTestUser.participation_relationships.find { |r| r[:collection_name] == :all_users }
-participation_meta[:target_class_name].end_with?('::ApiTestUser')
-#=> true
+participation_meta = ApiTestUser.participation_relationships.find { |r| r.collection_name == :all_users }
+participation_meta.target_class_name
+#=> 'ApiTestUser'
 
 ## class_indexed_by stores correct target_class
 indexing_meta = ApiTestUser.indexing_relationships.find { |r| r[:index_name] == :email_lookup }
-indexing_meta[:target_class] == ApiTestUser
-#=> true
+indexing_meta[:target_class]
+#=> ApiTestUser
 
 ## class_indexed_by stores correct target_class_name
 indexing_meta = ApiTestUser.indexing_relationships.find { |r| r[:index_name] == :email_lookup }
-indexing_meta[:target_class_name].end_with?('ApiTestUser')
-#=> true
+indexing_meta[:target_class_name]
+#=> 'ApiTestUser'
 
 ## indexed_by with context: stores correct metadata
 membership_meta = ApiTestMembership.indexing_relationships.find { |r| r[:index_name] == :user_memberships }
-membership_meta[:target_class] == ApiTestUser
-#=> true
+membership_meta[:target_class]
+#=> ApiTestUser
 
 # =============================================
 # 7. Functional Integration Tests

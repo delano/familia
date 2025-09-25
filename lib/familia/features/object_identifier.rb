@@ -220,7 +220,7 @@ module Familia
           when :uuid_v4
             SecureRandom.uuid_v4
           when :hex
-            Familia.generate_hex_id
+            Familia.generate_id(16)
           when Proc
             generator.call
           else

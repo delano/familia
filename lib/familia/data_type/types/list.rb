@@ -24,8 +24,9 @@ module Familia
     alias append push
 
     def <<(val)
-      push val
+      push(val)
     end
+    alias add_element <<
     alias add <<
 
     def unshift *values
@@ -59,6 +60,10 @@ module Familia
       end
     end
     alias slice []
+
+    def member?(value)
+      !dbclient.lpos(dbkey, serialize_value(value)).nil?
+    end
 
     # Removes elements equal to value from the list
     # @param value The value to remove
