@@ -19,18 +19,19 @@ module Familia::Features
       # Get the directory where the including module is defined
       # This should be lib/familia for the Features module
       base_path = File.dirname(caller_locations(1, 1).first.path)
-      model_name = base.name.snake_case
+      config_name = normalize_to_config_name(base.name)
+
       dir_patterns = [
         File.join(base_path, 'features', '*.rb'),
-        File.join(base_path, model_name, 'features', '*.rb'),
-        File.join(base_path, model_name, 'features.rb'),
+        File.join(base_path, config_name, 'features', '*.rb'),
+        File.join(base_path, config_name, 'features.rb'),
       ]
 
       # Ensure the Features module exists within the base module
-      base.const_set(:Features, Module.new) unless base.const_defined?(:Features) || model_name.eql?('features')
+      base.const_set(:Features, Module.new) unless base.const_defined?(:Features) || config_name.eql?('features')
 
       # Use the shared autoload_files method
-      autoload_files(dir_patterns, log_prefix: "Autoloader[#{model_name}]")
+      autoload_files(dir_patterns, log_prefix: "Autoloader[#{config_name}]")
     end
 
     # Autoloads Ruby files matching the given patterns.
@@ -49,9 +50,28 @@ module Familia::Features
           # Skip excluded files
           next if exclude.include?(basename)
 
-          Familia.trace :FEATURE, nil, "[#{log_prefix}] Loading #{file_path}", caller(1..1) if Familia.debug?
+          Familia.trace :FEATURE, nil, "[#{log_prefix}] Loading #{basename}", caller(1..1) if Familia.debug?
           require File.expand_path(file_path)
         end
+      end
+    end
+
+    class << self
+      # Converts the value into a string that can be used to look up configuration
+      # values or system paths. This replicates the normalization done by the
+      # Familia::Horreum model class config_name method.
+      #
+      # @see Familia::Horreum::DefinitionMethods#config_name
+      #
+      # NOTE: We don't call that existing method directly b/c Autoloader is meant
+      # to work for any class/module that matches `dir_patterns` (see `included`).
+      #
+      # @param value [String] the value to normalize (typically a class name)
+      # @return [String] the underscored value as a string
+      def normalize_to_config_name(value)
+        return nil if value.nil?
+
+        value.demodularize.snake_case
       end
     end
   end
