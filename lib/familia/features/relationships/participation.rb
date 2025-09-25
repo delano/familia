@@ -87,8 +87,8 @@ module Familia
 
             # Store metadata for this participation relationship
             participation_relationships << ParticipationRelationship.new(
-              target_class: target_class,
-              target_class_name: target_class_name,
+              target_class: target_class,           # as passed to `participates_in`
+              target_class_name: target_class_name, # pascalized
               collection_name: collection_name,
               score: score,
               on_destroy: on_destroy,
@@ -99,8 +99,10 @@ module Familia
             # Generate target class methods
             generate_target_class_methods(target_class, collection_name, type)
 
+            return unless bidirectional
+
             # Generate instance methods on this class (participant)
-            generate_participation_instance_methods(target_class_name, collection_name, score, type) if bidirectional
+            generate_participation_instance_methods(target_class_name, collection_name, score, type)
           end
 
           # Get all participation relationships for this class
@@ -247,12 +249,12 @@ module Familia
           end
 
           # Generate instance methods on the participant class
-          def generate_participation_instance_methods(target_class_name, collection_name, _score_calculator, type)
-            generate_membership_check(target_class_name, collection_name, type)
-            generate_add_to_collection(target_class_name, collection_name, type)
-            generate_remove_from_collection(target_class_name, collection_name, type)
-            generate_score_methods(target_class_name, collection_name, type)
-            generate_position_method(target_class_name, collection_name, type)
+          def generate_participation_instance_methods(target_class, collection_name, _score_calculator, type)
+            generate_membership_check(target_class, collection_name, type)
+            generate_add_to_collection(target_class, collection_name, type)
+            generate_remove_from_collection(target_class, collection_name, type)
+            generate_score_methods(target_class, collection_name, type)
+            generate_position_method(target_class, collection_name, type)
           end
 
           def generate_membership_check(target_class_name, collection_name, type)
