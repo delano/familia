@@ -185,7 +185,7 @@ module Familia
       #
       # @return [String] The underscored class name as a string
       def config_name
-        name.snake_case
+        name.split('::').last.snake_case
       end
 
       def dump_method

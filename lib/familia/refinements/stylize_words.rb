@@ -39,12 +39,12 @@ module Familia
         # keys, part of a path or any other snake_case identifiers. The only situation
         # it is not appropriate for is investigating actual snakes.
         #
+        # NOTE:
         # @return [String] the snake_case version of the string
         def snake_case
-          split('::').last
-                     .gsub(/([A-Z]+)([A-Z][a-z])/, '\\1_\\2')
-                     .gsub(/([a-z\\d])([A-Z])/, '\\1_\\2')
-                     .downcase
+          gsub(/([A-Z]+)([A-Z][a-z])/, '\\1_\\2')
+            .gsub(/([a-z\\d])([A-Z])/, '\\1_\\2')
+            .downcase
         end
 
         # Convert from plural to singular form using basic English rules
