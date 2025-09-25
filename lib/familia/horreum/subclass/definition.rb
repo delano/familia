@@ -185,6 +185,8 @@ module Familia
       #
       # @return [String] The underscored class name as a string
       def config_name
+        return nil if name.nil?
+
         name.demodularize.snake_case
       end
 
@@ -193,7 +195,9 @@ module Familia
       # @example V2::Session.config_name => 'Session'
       #
       def familia_name
-        name.demodularize
+        return nil if name.nil?
+
+        name.split('::').last
       end
 
       def dump_method
