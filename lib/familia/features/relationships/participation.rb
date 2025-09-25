@@ -261,6 +261,8 @@ module Familia
             # Method to check if this object is in a specific collection
             # e.g., domain.in_customer_domains?(customer)
             define_method("in_#{target_class_name.downcase}_#{collection_name}?") do |target_instance|
+              return false unless target_instance&.identifier
+
               collection_key = "#{target_class_name.downcase}:#{target_instance.identifier}:#{collection_name}"
               case type
               when :sorted_set
@@ -288,7 +290,7 @@ module Familia
               when :sorted_set
                 score ||= calculate_participation_score(target_class_name, collection_name)
 
-                # Ensure score is never nil
+                # Ensure score is never nil, by relying on ScoreEncoding.current_score
                 score = current_score if score.nil?
 
                 collection.add(score, identifier)
@@ -304,6 +306,8 @@ module Familia
             # Method to remove this object from a specific collection
             # e.g., domain.remove_from_customer_domains(customer)
             define_method("remove_from_#{target_class_name.downcase}_#{collection_name}") do |target_instance|
+              return unless target_instance&.identifier
+
               collection_key = "#{target_class_name.downcase}:#{target_instance.identifier}:#{collection_name}"
 
               collection = collection_class.new(nil, dbkey: collection_key, logical_database: logical_database)
