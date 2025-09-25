@@ -185,7 +185,7 @@ module Familia
       #
       # @return [String] The underscored class name as a string
       def config_name
-        name.split('::').last.snake_case
+        name.demodularize.snake_case
       end
 
       # Familia::Horreum::DefinitionMethods#familia_name
@@ -193,7 +193,7 @@ module Familia
       # @example V2::Session.config_name => 'Session'
       #
       def familia_name
-        name.split('::').last
+        name.demodularize
       end
 
       def dump_method
