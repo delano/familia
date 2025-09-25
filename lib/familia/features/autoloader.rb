@@ -69,6 +69,8 @@ module Familia::Features
       # @param value [String] the value to normalize (typically a class name)
       # @return [String] the underscored value as a string
       def normalize_to_config_name(value)
+        return nil if value.nil?
+
         value.demodularize.snake_case
       end
     end

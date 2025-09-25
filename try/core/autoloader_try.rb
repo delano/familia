@@ -164,8 +164,8 @@ Familia::Features::Autoloader.normalize_to_config_name('#<Class:0x0001991a8>::Ap
 # rather than the full namespaced name
 # Create a test directory structure that simulates what would happen
 # when a namespaced class includes the autoloader
-@pattern_test_dir = Dir.mktmpdir('familia_autoloader_pattern_test')
-@base_path = @pattern_test_dir
+@namespace_pattern_test_dir = Dir.mktmpdir('familia_autoloader_namespace_test')
+@base_path = @namespace_pattern_test_dir
 @config_name = 'api_test_module'  # This would be the result of normalize_to_config_name
 
 # Create directory structure for different patterns
@@ -227,3 +227,4 @@ $global_feature_loaded && $config_feature_loaded && $features_file_loaded
 FileUtils.rm_rf(@test_dir)
 FileUtils.rm_rf(@exclude_test_dir)
 FileUtils.rm_rf(@pattern_test_dir)
+FileUtils.rm_rf(@namespace_pattern_test_dir)
