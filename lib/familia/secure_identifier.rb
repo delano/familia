@@ -26,11 +26,7 @@ module Familia
     # @param base [Integer] 2–36, defaults to 36 for URL-safe chars
     # @return [String] identifier in specified base, zero-padded to minimum length for 256 bits
     def generate_id(base = 36)
-      hex_id = SecureRandom.hex(32)
-      return hex_id if base == 16
-
-      len = SecureIdentifier.min_length_for_bits(256, base)
-      hex_id.to_i(16).to_s(base).rjust(len, '0')
+      _generate_secure_id(bits: 256, base: base)
     end
 
     # 128-bit identifier – the "lite" version.
@@ -45,11 +41,7 @@ module Familia
     # @param base [Integer] 2–36, defaults to 36 for URL-safe chars
     # @return [String] identifier in specified base, zero-padded to minimum length for 128 bits
     def generate_lite_id(base = 36)
-      hex_id = SecureRandom.hex(16)
-      return hex_id if base == 16
-
-      len = SecureIdentifier.min_length_for_bits(128, base)
-      hex_id.to_i(16).to_s(base).rjust(len, '0')
+      _generate_secure_id(bits: 128, base: base)
     end
 
     # 64-bit identifier – the "trace" version.
@@ -64,11 +56,7 @@ module Familia
     # @param base [Integer] 2–36, defaults to 36 for URL-safe chars
     # @return [String] identifier in specified base, zero-padded to minimum length for 64 bits
     def generate_trace_id(base = 36)
-      hex_id = SecureRandom.hex(8)
-      return hex_id if base == 16
-
-      len = SecureIdentifier.min_length_for_bits(64, base)
-      hex_id.to_i(16).to_s(base).rjust(len, '0')
+      _generate_secure_id(bits: 64, base: base)
     end
 
     # Creates a deterministic 64-bit trace identifier from a longer hex ID.
@@ -111,6 +99,23 @@ module Familia
     # Calculates the minimum string length required to represent a given number of
     # bits in a specific numeric base.
     #
+    private
+
+    # Generates a secure identifier with specified bit length and base.
+    #
+    # @private
+    #
+    # @param bits [Integer] The number of bits of entropy (64, 128, or 256).
+    # @param base [Integer] The numeric base (2-36).
+    # @return [String] The generated identifier.
+    def _generate_secure_id(bits:, base:)
+      hex_id = SecureRandom.hex(bits / 8)
+      return hex_id if base == 16
+
+      len = SecureIdentifier.min_length_for_bits(bits, base)
+      hex_id.to_i(16).to_s(base).rjust(len, '0')
+    end
+
     # @private
     #
     # @param bits [Integer] The number of bits of entropy.
