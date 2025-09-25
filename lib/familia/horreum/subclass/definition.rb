@@ -188,6 +188,14 @@ module Familia
         name.split('::').last.snake_case
       end
 
+      # Familia::Horreum::DefinitionMethods#familia_name
+      #
+      # @example V2::Session.config_name => 'Session'
+      #
+      def familia_name
+        name.split('::').last
+      end
+
       def dump_method
         @dump_method || :to_json # Familia.dump_method
       end
