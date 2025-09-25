@@ -35,6 +35,8 @@ module Familia
   @debug = ENV['FAMILIA_DEBUG'].to_s.downcase.match?(/^(true|1)$/i).freeze
   @members = []
 
+  using Refinements::StylizeWords
+
   class << self
     attr_accessor :debug # rubocop:disable ThreadSafety/ClassAndModuleAttributes
     attr_reader :members
@@ -43,25 +45,16 @@ module Familia
       raise Problem, "#{member} should subclass Familia::Horreum"
     end
 
-    # Finds a member class by its symbolized name
-    #
-    # NOTE: If you are not getting the expected results, check the load order of
-    # the models. The one your looking for may not be loaded yet. Currently
-    # models are loaded naively -- that is, they are loaded in the order
-    # they are defined in the codebase.
-    #
-    # @param member_symbolized [Symbol, String] The symbolized name of the member class
-    # @return [Class, nil] The member class if found, nil otherwise
-    #
-    # @example
-    #   Familia.member_by_config_name(:flower) # => Flower class
-    #   Familia.member_by_config_name('flower') # => Flower class
-    #   Familia.member_by_config_name(:nonexistent) # => nil
-    #
-    def member_by_config_name(member_symbolized)
-      Familia.ld "[member_by_config_name] #{@members.map(&:config_name)} #{member_symbolized}"
-
-      @members.find { |m| m.config_name.to_s.eql?(member_symbolized.to_s) }
+    def resolve_class(target)
+      case target
+      when Class
+        target
+      when ::String, Symbol
+        config_name = target.to_s.demodularize.snake_case
+        member_by_config_name(config_name)
+      else
+        raise ArgumentError, "Expected Class, String, or Symbol, got #{target.class}"
+      end
     end
 
     # A convenience pattern for configuring Familia.
@@ -84,6 +77,29 @@ module Familia
     # @return [Boolean] true if debug mode is on, false otherwise
     def debug?
       @debug == true
+    end
+
+    private
+
+    # Finds a member class by its symbolized name
+    #
+    # NOTE: If you are not getting the expected results, check the load order of
+    # the models. The one your looking for may not be loaded yet. Currently
+    # models are loaded naively -- that is, they are loaded in the order
+    # they are defined in the codebase.
+    #
+    # @param member_symbolized [Symbol, String] The symbolized name of the member class
+    # @return [Class, nil] The member class if found, nil otherwise
+    #
+    # @example
+    #   Familia.member_by_config_name(:flower) # => Flower class
+    #   Familia.member_by_config_name('flower') # => Flower class
+    #   Familia.member_by_config_name(:nonexistent) # => nil
+    #
+    def member_by_config_name(config_name)
+      Familia.ld "[member_by_config_name] #{members.map(&:config_name)} #{config_name}"
+
+      members.find { |m| m.config_name.to_s.eql?(config_name.to_s) }
     end
   end
 
