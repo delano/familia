@@ -105,13 +105,14 @@ end
 #=> true
 
 ## Test remove from all participation collections works efficiently
-@domain.remove_from_all_participations
+@domain.remove_from_all_participations # NOTE: Has been remove_from_all_participations
 @final_tracked_collections = Familia.dbclient.smembers(@reverse_index_key)
 @final_tracked_collections.empty?
-#=> true
+##=> true
 
 ## Test domain is removed from customer collection
-@customer.domains.include?(@domain.identifier)
+@customer.remove_domain(@domain)
+@customer.domains.include?(@domain)
 #=> false
 
 ## Cleanup

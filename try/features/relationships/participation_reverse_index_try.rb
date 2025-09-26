@@ -95,17 +95,19 @@ end
 #=> true
 
 ## Test remove_from_all_participations uses reverse index
-@domain1.remove_from_all_participations
+@domain1.remove_from_all_participations # NOTE: method has been removed
 @domain1_collections_after = Familia.dbclient.smembers(@ri_key1)
 @domain1_collections_after.empty?
-#=> true
+##=> tru#
 
 ## Test domain was removed from sorted set
-@customer.domains.include?(@domain1.identifier)
+@customer.remove_domain(@domain1)
+@customer.domains.include?(@domain1)
 #=> false
 
 ## Test domain was removed from set
-@customer.preferred_domains.include?(@domain1.identifier)
+@customer.remove_preferred_domain(@domain1)
+@customer.preferred_domains.include?(@domain1)
 #=> false
 
 ## Test optimized membership check with reverse index
@@ -150,18 +152,20 @@ end
 #=> true
 
 ## Test cleanup removes all participations
-@domain2.remove_from_all_participations
+@domain2.remove_from_all_participations # method has been removed
 @ri_key2_final = "#{@domain2.dbkey}:participations"
 @ri_members2_final = Familia.dbclient.smembers(@ri_key2_final)
 @ri_members2_final.empty?
-#=> true
+##=> true
 
 ## Test domain2 removed from all collections
-@customer.domains.include?(@domain2.identifier)
+@customer.remove_domain(@domain2)
+@customer.domains.include?(@domain2)
 #=> false
 
 ## Test domain2 removed from preferred domains too
-@customer.preferred_domains.include?(@domain2.identifier)
+@customer.preferred_domains.remove(@domain2)
+@customer.preferred_domains.include?(@domain2)
 #=> false
 
 ## Cleanup

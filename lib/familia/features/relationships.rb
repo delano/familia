@@ -281,9 +281,7 @@ module Familia
           }
 
           # Get participation memberships
-          if respond_to?(:participation_memberships)
-            status[:participation_memberships] = participation_memberships
-          end
+          status[:participation_memberships] = participation_memberships if respond_to?(:participation_memberships)
 
           # Get index memberships
           status[:index_memberships] = indexing_memberships if respond_to?(:indexing_memberships)
@@ -294,7 +292,13 @@ module Familia
         # Comprehensive cleanup - remove from all relationships
         def cleanup_all_relationships!
           # Remove from participation collections
-          remove_from_all_participations if respond_to?(:remove_from_all_participations)
+          #
+          # NOTE: This method has been removed for being poorly implemented. It
+          # was repetative and laborious to debug. It'll come back in a cleaner
+          # for after the rest of the module is in ship shape.
+          #
+          # remove_from_all_participations if respond_to?(:remove_from_all_participations)
+          warn 'Not currently removing from participation collections. See pull #115.'
 
           # Remove from indexes
           remove_from_all_indexes if respond_to?(:remove_from_all_indexes)

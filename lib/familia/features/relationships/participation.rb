@@ -486,43 +486,6 @@ module Familia
             dbclient.srem(reverse_index_key, collection_key)
           end
 
-          # Remove from all participation collections (used during destroy)
-          # Uses reverse index for efficient cleanup instead of database scan
-          def remove_from_all_participations
-            return unless self.class.respond_to?(:participation_relationships)
-
-            reverse_index_key = "#{dbkey}:participations"
-            collection_keys = dbclient.smembers(reverse_index_key)
-
-            return if collection_keys.empty?
-
-            # Remove from all tracked collections in a single pipeline
-            dbclient.pipelined do |pipeline|
-              collection_keys.each do |key|
-                # Determine collection type from key structure and remove appropriately
-                self.class.participation_relationships.each do |config|
-                  target_class_name = config.target_class_name.downcase
-                  collection_name = config.collection_name
-                  type = config.type
-
-                  next unless key.include?(target_class_name) && key.include?(collection_name.to_s)
-
-                  case type
-                  when :sorted_set
-                    pipeline.zrem(key, identifier)
-                  when :set
-                    pipeline.srem(key, identifier)
-                  when :list
-                    pipeline.lrem(key, 0, identifier)
-                  end
-                end
-              end
-
-              # Clean up the reverse index itself
-              pipeline.del(reverse_index_key)
-            end
-          end
-
           # Get all collections this object appears in
           #
           # @return [Array<Hash>] Array of collection information
