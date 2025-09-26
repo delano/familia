@@ -91,7 +91,9 @@ module Familia
                 collection,
                 item,
                 score: score,
-                type: type
+                type: type,
+                target_class: self.class,
+                collection_name: collection_name
               )
 
               # Track participation in reverse index for efficient cleanup
@@ -128,7 +130,7 @@ module Familia
               return if items.empty?
 
               collection = send(collection_name)
-              TargetMethods::Builder.bulk_add_to_collection(collection, items, type: type)
+              TargetMethods::Builder.bulk_add_to_collection(collection, items, type: type, target_class: self.class, collection_name: collection_name)
 
               # Track all participations
               items.each do |item|
@@ -190,7 +192,9 @@ module Familia
                 collection,
                 item,
                 score: score,
-                type: type
+                type: type,
+                target_class: self.class,
+                collection_name: collection_name
               )
             end
           end

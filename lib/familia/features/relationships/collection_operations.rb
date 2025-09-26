@@ -24,11 +24,11 @@ module Familia
         # @param item [Object] The item to add (must respond to identifier)
         # @param score [Float, nil] Score for sorted sets
         # @param type [Symbol] Collection type
-        def add_to_collection(collection, item, score: nil, type:)
+        def add_to_collection(collection, item, score: nil, type:, target_class: nil, collection_name: nil)
           case type
           when :sorted_set
             # Ensure score is never nil for sorted sets
-            score ||= calculate_item_score(item)
+            score ||= calculate_item_score(item, target_class, collection_name)
             collection.add(item.identifier, score)
           when :list
             # Lists use push/unshift operations
@@ -62,14 +62,14 @@ module Familia
         # @param collection [Familia::DataType] The collection to add to
         # @param items [Array] Array of items to add
         # @param type [Symbol] Collection type
-        def bulk_add_to_collection(collection, items, type:)
+        def bulk_add_to_collection(collection, items, type:, target_class: nil, collection_name: nil)
           return if items.empty?
 
           case type
           when :sorted_set
             # Add items one by one for sorted sets to ensure proper scoring
             items.each do |item|
-              score = calculate_item_score(item)
+              score = calculate_item_score(item, target_class, collection_name)
               collection.add(item.identifier, score)
             end
           when :set, :list
@@ -86,10 +86,12 @@ module Familia
 
         # Calculate score for an item
         # @param item [Object] The item to score
+        # @param target_class [Class, nil] The target class for participation scoring
+        # @param collection_name [Symbol, nil] The collection name for participation scoring
         # @return [Float] The calculated score
-        def calculate_item_score(item)
-          if item.respond_to?(:calculate_participation_score)
-            item.calculate_participation_score
+        def calculate_item_score(item, target_class = nil, collection_name = nil)
+          if item.respond_to?(:calculate_participation_score) && target_class && collection_name
+            item.calculate_participation_score(target_class, collection_name)
           elsif item.respond_to?(:current_score)
             item.current_score
           else
