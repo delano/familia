@@ -10,6 +10,7 @@ require_relative 'multi_result'
 module Familia
   @uri = URI.parse 'redis://127.0.0.1:6379'
   @database_clients = {}
+  @middleware_registered = false
 
   # The Connection module provides Database connection management for Familia.
   # It allows easy setup and access to Database clients across different URIs
@@ -22,10 +23,26 @@ module Familia
     attr_reader :database_clients
 
     # @return [Boolean] Whether Database command logging is enabled
-    attr_accessor :enable_database_logging
+    attr_reader :enable_database_logging
 
     # @return [Boolean] Whether Database command counter is enabled
-    attr_accessor :enable_database_counter
+    attr_reader :enable_database_counter
+
+    # Sets whether Database command logging is enabled
+    # Registers middleware immediately when enabled
+    def enable_database_logging=(value)
+      @enable_database_logging = value
+      register_middleware_once if value
+      clear_cached_clients if value && !@database_clients.empty?
+    end
+
+    # Sets whether Database command counter is enabled
+    # Registers middleware immediately when enabled
+    def enable_database_counter=(value)
+      @enable_database_counter = value
+      register_middleware_once if value
+      clear_cached_clients if value && !@database_clients.empty?
+    end
 
     # @return [Proc] A callable that provides Database connections
     attr_accessor :connection_provider
@@ -65,21 +82,42 @@ module Familia
     def create_dbclient(uri = nil)
       parsed_uri = normalize_uri(uri)
 
+      # Register middleware only once, globally
+      register_middleware_once
+
+      Redis.new(parsed_uri.conf)
+    end
+    alias connect create_dbclient # backwards compatibility
+    alias isolated_dbclient create_dbclient # matches with_isolated_dbclient api
+
+    # Registers middleware once globally, regardless of when clients are created.
+    # This prevents duplicate middleware registration and ensures all clients get middleware.
+    def register_middleware_once
+      return if @middleware_registered
+
       if Familia.enable_database_logging
         DatabaseLogger.logger = Familia.logger
         RedisClient.register(DatabaseLogger)
       end
 
       if Familia.enable_database_counter
-        # NOTE: This middleware uses AtommicFixnum from concurrent-ruby which is
-        # less contentious than Mutex-based counters. Safe for
+        # NOTE: This middleware uses AtomicFixnum from concurrent-ruby which is
+        # less contentious than Mutex-based counters. Safe for production.
         RedisClient.register(DatabaseCommandCounter)
       end
 
-      Redis.new(parsed_uri.conf)
+      @middleware_registered = true
     end
-    alias connect create_dbclient # backwards compatibility
-    alias isolated_dbclient create_dbclient # matches with_isolated_dbclient api
+
+    # Clears all cached Database clients, forcing them to be recreated
+    # with the current middleware configuration. Use this when changing
+    # middleware settings after clients have been created.
+    def clear_cached_clients
+      @database_clients.each_value(&:close) rescue nil
+      @database_clients.clear
+      Thread.current[:familia_connection] = nil
+      @middleware_registered = false
+    end
 
     def reconnect(uri = nil)
       parsed_uri = normalize_uri(uri)
