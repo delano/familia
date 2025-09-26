@@ -72,18 +72,9 @@ module Familia
           #   participates_in Organization, :all_domains, score: :created_at, bidirectional: false
           def participates_in(target_class, collection_name, score: nil, on_destroy: :remove,
                               type: :sorted_set, bidirectional: true)
-            # Handle class target
-            if target_class.is_a?(Class)
-              class_name = target_class.name
-              target_class_name = if class_name.include?('::')
-                                    # Extract the last part after the last ::
-                                    class_name.split('::').last
-                                  else
-                                    class_name
-                                  end
-            else
-              target_class_name = target_class.to_s.pascalize
-            end
+            # Handle class target using Familia.resolve_class and string refinements
+            resolved_class = Familia.resolve_class(target_class)
+            target_class_name = resolved_class.name.demodularize
 
             # Store metadata for this participation relationship
             participation_relationships << ParticipationRelationship.new(
