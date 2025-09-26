@@ -1,10 +1,10 @@
 # try/features/categorical_permissions_try.rb
 
+require_relative '../../helpers/test_helpers'
+
 # Test Suite: Categorical Bit Encoding & Two-Stage Filtering
 # Validates the implementation of categorical permission management with
 # two-stage filtering pattern for efficient permission-based queries.
-
-require_relative '../../helpers/test_helpers'
 
 # Categorical Permission System Setup
 
@@ -185,12 +185,13 @@ Familia::Features::Relationships::ScoreEncoding.meets_category?(128, :administra
 @doc3 = CategoricalTestDocument.new(doc_id: 'doc3', title: 'Document 3', created_at: Familia.now.to_i)
 @doc3.permission_bits = 128  # admin
 @doc3.save
+#=> true
 
-# Add documents to customer collection
+## Add documents to customer collection
 @customer.documents.add(@doc1.encode_score(Familia.now, @doc1.permission_bits), @doc1.identifier)
 @customer.documents.add(@doc2.encode_score(Familia.now, @doc2.permission_bits), @doc2.identifier)
 @customer.documents.add(@doc3.encode_score(Familia.now, @doc3.permission_bits), @doc3.identifier)
-#=> true
+##=> true
 
 ## Grant permissions to user
 @doc1.grant('user123', :read, :write)
