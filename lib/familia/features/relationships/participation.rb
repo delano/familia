@@ -1,6 +1,9 @@
 # lib/familia/features/relationships/participation.rb
 
 require_relative 'participation_relationship'
+require_relative 'collection_operations'
+require_relative 'participant_methods'
+require_relative 'target_methods'
 
 module Familia
   module Features
@@ -8,6 +11,30 @@ module Familia
       # Participation module for participates_in relationships using Valkey/Redis collections
       # Provides multi-presence support where objects can exist in multiple collections
       # Integrates both tracking and membership functionality into a single API
+      #
+      # === Architecture Overview ===
+      # This module is organized into clear, separate concerns:
+      #
+      # 1. CollectionOperations: Shared helpers for all collection manipulation
+      # 2. ParticipantMethods: Methods added to the class calling participates_in
+      # 3. TargetMethods: Methods added to the target class specified in participates_in
+      #
+      # This separation makes it crystal clear what methods are added to which class.
+      #
+      # === Visual Example ===
+      # When Domain calls: participates_in Customer, :domains
+      #
+      # PARTICIPANT (Domain) gets:
+      # - domain.in_customer_domains?(customer)
+      # - domain.add_to_customer_domains(customer)
+      # - domain.remove_from_customer_domains(customer)
+      #
+      # TARGET (Customer) gets:
+      # - customer.domains
+      # - customer.add_domain(domain)
+      # - customer.remove_domain(domain)
+      # - customer.add_domains([...])
+      #
       module Participation
         using Familia::Refinements::StylizeWords
 
@@ -47,11 +74,15 @@ module Familia
               bidirectional: bidirectional,
             )
 
-            # Generate class-level collection methods
-            generate_participation_class_methods(self, collection_name, type)
+            # STEP 1: Add collection management methods to the class itself
+            # e.g., User.all_users, User.add_to_all_users(user)
+            TargetMethods::Builder.build_class_level(self, collection_name, type)
 
-            # Generate instance methods for class-level participation
-            generate_participation_instance_methods('class', collection_name, score, type) if bidirectional
+            # STEP 2: Add participation methods to instances (if bidirectional)
+            # e.g., user.in_class_all_users?, user.add_to_class_all_users
+            if bidirectional
+              ParticipantMethods::Builder.build(self, 'class', collection_name, type)
+            end
           end
 
           # Define a participates_in relationship (previously tracked_in and member_of)
@@ -87,250 +118,27 @@ module Familia
               bidirectional: bidirectional,
             )
 
-            # Generate target class methods
-            generate_target_class_methods(target_class, collection_name, type)
+            # Resolve target class if it's a symbol/string
+            actual_target_class = if target_class.is_a?(Class)
+                                    target_class
+                                  else
+                                    Familia.member_by_config_name(target_class)
+                                  end
 
-            return unless bidirectional
+            # STEP 1: Add collection management methods to TARGET class (Customer)
+            # Customer gets: domains, add_domain, remove_domain, etc.
+            TargetMethods::Builder.build(actual_target_class, collection_name, type)
 
-            # Generate instance methods on this class (participant)
-            generate_participation_instance_methods(target_class_name, collection_name, score, type)
+            # STEP 2: Add participation methods to PARTICIPANT class (Domain) - only if bidirectional
+            # Domain gets: in_customer_domains?, add_to_customer_domains, etc.
+            if bidirectional
+              ParticipantMethods::Builder.build(self, target_class_name, collection_name, type)
+            end
           end
 
           # Get all participation relationships for this class
           def participation_relationships
             @participation_relationships ||= []
-          end
-
-          private
-
-          # Generate class-level collection methods (e.g., User.all_users)
-          def generate_participation_class_methods(target_class, collection_name, type)
-            collection_class = Familia::DataType.registered_type(type) # :list, :sorted_set, :set
-
-            # Generate class-level collection getter method
-            target_class.define_singleton_method(collection_name.to_s) do
-              collection_key = "#{name.downcase}:#{collection_name}"
-
-              # e.g. Familia::SortedSet.new -> target_class.collection_name
-              collection_class.new(nil, dbkey: collection_key, logical_database: logical_database)
-            end
-
-            # Generate class-level add method (e.g., User.add_to_all_users)
-            target_class.define_singleton_method("add_to_#{collection_name}") do |item, score = nil|
-              collection = send(collection_name.to_s)
-
-              case type
-              when :sorted_set
-                # Calculate score if not provided
-                score ||= if item.respond_to?(:calculate_participation_score)
-                            item.calculate_participation_score('class', collection_name)
-                          else
-                            item.current_score
-                          end
-
-                # Ensure score is never nil
-                score = item.current_score if score.nil?
-
-                collection.add(score, item.identifier)
-              else
-                collection.add(item.identifier)
-              end
-            end
-
-            # Generate class-level remove method
-            target_class.define_singleton_method("remove_from_#{collection_name}") do |item|
-              collection = send(collection_name.to_s)
-              collection.delete(item.identifier)
-            end
-          end
-
-          # Generate methods on the target class (e.g., Customer.domains)
-          def generate_target_class_methods(target_class, collection_name, type)
-            # Resolve target class if it's a symbol/string
-            actual_target_class = if target_class.is_a?(Class)
-                                    target_class
-                                  else
-                                    # NOTE: This only works if the model class is in the
-                                    # top, main namspace. e.g. model_name -> ModelName
-                                    # and not Models::ModelName.
-                                    Familia.member_by_config_name(target_class)
-                                  end
-
-            generate_collection_getter(actual_target_class, collection_name, type)
-            generate_add_method(actual_target_class, collection_name, type)
-            generate_remove_method(actual_target_class, collection_name)
-            generate_bulk_add_method(actual_target_class, collection_name, type)
-            generate_permission_query(actual_target_class, collection_name, type)
-          end
-
-          def generate_collection_getter(actual_target_class, collection_name, type)
-            collection_class = Familia::DataType.registered_type(type) # :list, :sorted_set, :set
-
-            # Generate collection getter method
-            actual_target_class.define_method(collection_name) do
-              collection_key = "#{self.class.name.downcase}:#{identifier}:#{collection_name}"
-              collection_class.new(nil, dbkey: collection_key, logical_database: logical_database)
-            end
-          end
-
-          def generate_add_method(actual_target_class, collection_name, type)
-            # Generate add method (e.g., Customer#add_domain)
-            actual_target_class.define_method("add_#{collection_name.to_s.singularize}") do |item, score = nil|
-              collection = send(collection_name)
-
-              case type
-              when :sorted_set
-                # Calculate score if not provided
-                score ||= if item.respond_to?(:calculate_participation_score)
-                            item.calculate_participation_score(self.class, collection_name)
-                          else
-                            item.current_score
-                          end
-
-                # Ensure score is never nil
-                score = item.current_score if score.nil?
-
-                collection.add(score, item.identifier)
-              else
-                collection.add(item.identifier)
-              end
-
-              # Track participation in reverse index for efficient cleanup
-              return unless item.respond_to?(:add_participation_membership)
-
-              item.add_participation_membership(collection.dbkey)
-            end
-          end
-
-          def generate_remove_method(actual_target_class, collection_name)
-            # Generate remove method (e.g., Customer#remove_domain)
-            actual_target_class.define_method("remove_#{collection_name.to_s.singularize}") do |item|
-              collection = send(collection_name)
-
-              # Use common removal method that all collections support (aka DataType classes)
-              collection.remove(item.identifier)
-
-              # Remove participation tracking
-              return unless item.respond_to?(:remove_participation_membership)
-
-              item.remove_participation_membership(collection.dbkey)
-            end
-          end
-
-          def generate_bulk_add_method(actual_target_class, collection_name, type)
-            # Generate bulk add method (e.g., Customer#add_domains)
-            actual_target_class.define_method("add_#{collection_name}") do |items|
-              return if items.empty?
-
-              collection = send(collection_name)
-              send("bulk_add_#{type}_items", collection, items)
-            end
-          end
-
-          def generate_permission_query(actual_target_class, collection_name, type)
-            return unless type == :sorted_set
-
-            # Generate query methods with score filtering (for sorted sets)
-            actual_target_class.define_method("#{collection_name}_with_permission") do |min_permission = :read|
-              collection = send(collection_name)
-              permission_score = ScoreEncoding.permission_encode(0, min_permission)
-
-              collection.zrangebyscore(permission_score, '+inf', with_scores: true)
-            end
-          end
-
-          # Generate instance methods on the participant class
-          def generate_participation_instance_methods(target_class, collection_name, _score_calculator, type)
-            generate_membership_check(target_class, collection_name, type)
-            generate_add_to_collection(target_class, collection_name, type)
-            generate_remove_from_collection(target_class, collection_name, type)
-            generate_score_methods(target_class, collection_name, type)
-            generate_position_method(target_class, collection_name, type)
-          end
-
-          def generate_membership_check(target_class_name, collection_name, type)
-
-            collection_class = Familia::DataType.registered_type(type)
-
-            # Method to check if this object is in a specific collection
-            # e.g., domain.in_customer_domains?(customer)
-            define_method("in_#{target_class_name.downcase}_#{collection_name}?") do |target_instance|
-              return false unless target_instance&.identifier
-
-              collection_key = "#{target_class_name.downcase}:#{target_instance.identifier}:#{collection_name}"
-              collection = collection_class.new(nil, dbkey: collection_key, logical_database: logical_database)
-              collection.member?(identifier)
-            end
-          end
-
-          def generate_add_to_collection(target_class_name, collection_name, type)
-
-            collection_class = Familia::DataType.registered_type(type) # :list, :sorted_set, :set
-
-            # Method to add this object to a specific collection
-            # e.g., domain.add_to_customer_domains(customer, score)
-            define_method("add_to_#{target_class_name.downcase}_#{collection_name}") do |target_instance, score = nil|
-              collection_key = "#{target_class_name.downcase}:#{target_instance.identifier}:#{collection_name}"
-
-              collection = collection_class.new(nil, dbkey: collection_key, logical_database: logical_database)
-
-              case type
-              when :sorted_set
-                score ||= calculate_participation_score(target_class_name, collection_name)
-
-                # Ensure score is never nil, by relying on ScoreEncoding.current_score
-                score = current_score if score.nil?
-
-                collection.add(score, identifier)
-              else
-                collection.add(identifier)
-              end
-            end
-          end
-
-          def generate_remove_from_collection(target_class_name, collection_name, type)
-            collection_class = Familia::DataType.registered_type(type) # :list, :sorted_set, :set
-
-            # Method to remove this object from a specific collection
-            # e.g., domain.remove_from_customer_domains(customer)
-            define_method("remove_from_#{target_class_name.downcase}_#{collection_name}") do |target_instance|
-              return unless target_instance&.identifier
-
-              collection_key = "#{target_class_name.downcase}:#{target_instance.identifier}:#{collection_name}"
-
-              collection = collection_class.new(nil, dbkey: collection_key, logical_database: logical_database)
-
-              collection.remove(identifier) # For list, this removes all occurrences
-            end
-          end
-
-          def generate_score_methods(target_class_name, collection_name, type)
-            return unless type == :sorted_set
-
-            # Method to get score in a specific collection (for sorted sets)
-            # e.g., domain.score_in_customer_domains(customer)
-            define_method("score_in_#{target_class_name.downcase}_#{collection_name}") do |target_instance|
-              collection_key = "#{target_class_name.downcase}:#{target_instance.identifier}:#{collection_name}"
-              dbclient.zscore(collection_key, identifier)
-            end
-
-            # Method to update score in a specific collection
-            # e.g., domain.update_score_in_customer_domains(customer, new_score)
-            define_method("update_score_in_#{target_class_name.downcase}_#{collection_name}") do |target_instance,
-                                                                                                new_score|
-              collection_key = "#{target_class_name.downcase}:#{target_instance.identifier}:#{collection_name}"
-              dbclient.zadd(collection_key, new_score, identifier, xx: true) # Only update existing
-            end
-          end
-
-          def generate_position_method(target_class_name, collection_name, type)
-            return unless type == :list
-
-            # Method to get position in a specific collection (for lists)
-            define_method("position_in_#{target_class_name.downcase}_#{collection_name}") do |target_instance|
-              collection_key = "#{target_class_name.downcase}:#{target_instance.identifier}:#{collection_name}"
-              dbclient.lpos(collection_key, identifier)
-            end
           end
         end
 
@@ -425,26 +233,6 @@ module Familia
             # Convert result to appropriate score with unified logic
             convert_to_score(result)
           end
-
-          private
-
-          # Convert a raw value to an appropriate participation score
-          #
-          # @param value [Object] The raw value to convert
-          # @return [Float] Converted score, falls back to current_score
-          def convert_to_score(value)
-            return current_score if value.nil?
-
-            if value.respond_to?(:to_f)
-              value.to_f
-            elsif value.respond_to?(:to_i)
-              encode_score(value, 0)
-            else
-              current_score
-            end
-          end
-
-          public
 
           # Add participation tracking to reverse index
           def add_participation_membership(collection_key)
@@ -564,6 +352,26 @@ module Familia
 
             memberships
           end
+
+
+          private
+
+          # Convert a raw value to an appropriate participation score
+          #
+          # @param value [Object] The raw value to convert
+          # @return [Float] Converted score, falls back to current_score
+          def convert_to_score(value)
+            return current_score if value.nil?
+
+            if value.respond_to?(:to_f)
+              value.to_f
+            elsif value.respond_to?(:to_i)
+              encode_score(value, 0)
+            else
+              current_score
+            end
+          end
+
         end
       end
     end
