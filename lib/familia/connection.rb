@@ -100,7 +100,10 @@ module Familia
     #   Familia.dbclient(2)  # Use DB 2 with default server
     def dbclient(uri = nil)
       # First priority: Thread-local connection (middleware pattern)
-      return Thread.current[:familia_connection] if Thread.current.key?(:familia_connection)
+      if Thread.current.key?(:familia_connection)
+        Familia.trace :DBCLIENT, self, "Using thread-local connection for #{uri}", caller(1..1) if Familia.debug?
+        return Thread.current[:familia_connection]
+      end
 
       # Second priority: Connection provider
       if connection_provider
