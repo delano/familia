@@ -160,7 +160,7 @@ puts "After add_preferred_domain - domain2 participations: #{@domain2.participat
 puts "Domain2 participation relationships:"
 @domain2.class.participation_relationships.each_with_index do |cfg, i|
   puts "  #{i}: target_class=#{cfg.target_class.inspect}, target_class_name=#{cfg.target_class_name.inspect}, collection_name=#{cfg.collection_name.inspect}"
-  puts "      target_class_name.snake_case=#{cfg.target_class_name.snake_case.inspect}"
+  # Debug: snake_case conversion (removed to avoid refinement issues)
 end
 
 @domain2_final_memberships = @domain2.current_participations

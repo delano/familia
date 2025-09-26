@@ -138,12 +138,12 @@ decoded[:permission_list].include?(:write)
 #=> true
 
 ## Add domain to customer collection
-@domain.add_to_testcustomer_domains(@customer)
-@domain.in_testcustomer_domains?(@customer)
+@domain.add_to_test_customer_domains(@customer)
+@domain.in_test_customer_domains?(@customer)
 #=> true
 
 ## Score is properly encoded
-score = @domain.score_in_testcustomer_domains(@customer)
+score = @domain.score_in_test_customer_domains(@customer)
 score.is_a?(Float) && score > 0
 #=> true
 
@@ -168,8 +168,8 @@ score.is_a?(Float) && score > 0
 #=> true
 
 ## Basic bidirectional participation operations work
-@domain.remove_from_testcustomer_domains(@customer)
-@domain.in_testcustomer_domains?(@customer)
+@domain.remove_from_test_customer_domains(@customer)
+@domain.in_test_customer_domains?(@customer)
 #=> false
 
 # =============================================
