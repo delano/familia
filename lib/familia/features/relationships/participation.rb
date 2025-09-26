@@ -509,15 +509,9 @@ module Familia
           def current_participations
             return [] unless self.class.respond_to?(:participation_relationships)
 
-            # Use Horreum's DataType field instead of manual key construction
+            # Use the reverse index as the single source of truth
             collection_keys = participations.members
-
-            if collection_keys.empty?
-              # Fall back to scanning for objects without reverse index tracking
-              # This is a simplified version - in a real implementation we might
-              # add a proper scan method to DataType or use a different approach
-              return []
-            end
+            return [] if collection_keys.empty?
 
             memberships = []
 
