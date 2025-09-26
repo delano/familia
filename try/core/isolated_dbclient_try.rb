@@ -82,25 +82,27 @@ all_worked && all_distinct && keys_set
 
 ## with_isolated_dbclient handles exceptions gracefully
 exception_raised = false
-connection_closed = true
+database_state_correct = false
 
 begin
   Familia.with_isolated_dbclient(0) do |client|
     client.set("before_error", "value")
     raise "Test exception"
+    # This line should not be reached
     client.set("after_error", "should_not_be_set")
   end
 rescue => e
-  exception_raised = true
-  # Verify connection was still closed despite exception
-  # by checking that the before_error key was actually set
-  connection_closed = Familia.with_isolated_dbclient(0) do |client|
-    client.get("before_error") == "value" &&
-    client.get("after_error").nil?
+  exception_raised = (e.message == "Test exception")
+end
+
+# Verify the database state after the exception was caught
+if exception_raised
+  database_state_correct = Familia.with_isolated_dbclient(0) do |client|
+    client.get("before_error") == "value" && client.get("after_error").nil?
   end
 end
 
-exception_raised && connection_closed
+exception_raised && database_state_correct
 #=> true
 
 ## isolated connections don't interfere with model connections
