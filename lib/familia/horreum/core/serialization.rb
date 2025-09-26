@@ -73,7 +73,7 @@ module Familia
 
         # Add to class-level instances collection after successful save
         if ret && self.class.respond_to?(:instances)
-          self.class.instances.add(Familia.now, identifier)
+          self.class.instances.add(identifier, Familia.now)
         end
 
         Familia.ld "[save] #{self.class} #{dbkey} #{ret} (update_expiration: #{update_expiration})"

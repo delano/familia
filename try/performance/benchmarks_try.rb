@@ -10,7 +10,7 @@ user_class = Class.new(Familia::Horreum) do
   field :data
 end
 
-large_data = { items: (1..1000).to_a, metadata: "x" * 1000 }
+large_data = { metadata: "x" * 1000, items: (1..1000).to_a }
 
 json_time = Benchmark.realtime do
   100.times { JSON.dump(large_data) }

@@ -136,7 +136,7 @@ module Familia
               # Use Horreum's DataType accessor for updates
               collection = target_instance.send(collection_name)
               # Add with new score (will update if exists)
-              collection.add(new_score, identifier)
+              collection.add(identifier, new_score)
             end
           end
 

@@ -31,7 +31,7 @@ module Familia
     #   specifying a custom score. Use `add` or `[]=` for more control.
     #
     def <<(val)
-      add(Familia.now.to_i, val)
+      add(val)
     end
 
     # NOTE: The argument order is the reverse of #add. We do this to
@@ -42,10 +42,11 @@ module Familia
     #     obj.metrics[VALUE]  # => SCORE
     #
     def []=(val, score)
-      add score, val
+      add val, score
     end
 
-    def add(score, val)
+    def add(val, score=nil)
+      score ||= Familia.now
       ret = dbclient.zadd dbkey, score, serialize_value(val)
       update_expiration
       ret

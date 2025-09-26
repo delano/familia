@@ -29,7 +29,7 @@ module Familia
           when :sorted_set
             # Ensure score is never nil for sorted sets
             score ||= calculate_item_score(item)
-            collection.add(score, item.identifier)
+            collection.add(item.identifier, score)
           when :list
             # Lists use push/unshift operations
             collection.add(item.identifier)
@@ -70,7 +70,7 @@ module Familia
             # Add items one by one for sorted sets to ensure proper scoring
             items.each do |item|
               score = calculate_item_score(item)
-              collection.add(score, item.identifier)
+              collection.add(item.identifier, score)
             end
           when :set, :list
             # For sets and lists, add items one by one using DataType methods
