@@ -79,6 +79,7 @@ module Familia
       Redis.new(parsed_uri.conf)
     end
     alias connect create_dbclient # backwards compatibility
+    alias isolated_dbclient create_dbclient # matches with_isolated_dbclient api
 
     def reconnect(uri = nil)
       parsed_uri = normalize_uri(uri)
@@ -234,6 +235,39 @@ module Familia
     #
     def with_dbclient(&)
       yield dbclient
+    end
+
+    # Provides explicit access to an isolated Database connection for temporary operations.
+    #
+    # This method creates a new connection that won't interfere with the cached
+    # connection pool, executes the given block with that connection, and ensures
+    # the connection is properly closed afterward.
+    #
+    # Perfect for database scanning, inspection, or migration operations where
+    # you need to access different databases without affecting your models'
+    # normal connections.
+    #
+    # @param uri [String, URI, Integer, nil] The URI or database number to connect to.
+    # @yield [Redis] An isolated Database connection
+    # @return The result of the block
+    #
+    # @example Safely scanning for legacy data
+    #   Familia.with_isolated_dbclient(5) do |conn|
+    #     conn.keys("session:*")
+    #   end
+    #
+    # @example Performing migration tasks
+    #   Familia.with_isolated_dbclient(1) do |conn|
+    #     conn.scan_each(match: "user:*") { |key| puts key }
+    #   end
+    #
+    def with_isolated_dbclient(uri = nil, &)
+      client = isolated_dbclient(uri)
+      begin
+        yield client
+      ensure
+        client&.close
+      end
     end
 
     private
