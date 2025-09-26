@@ -111,7 +111,7 @@ end
 #=> false
 
 ## Test optimized membership check with reverse index
-@domain2_memberships = @domain2.participation_memberships
+@domain2_memberships = @domain2.current_participations
 @domain2_memberships.is_a?(Array)
 #=> true
 
@@ -147,7 +147,7 @@ end
 ## Test pipelined operations in membership check
 # Add domain to multiple collections
 @customer.add_preferred_domain(@domain2)
-@domain2_final_memberships = @domain2.participation_memberships
+@domain2_final_memberships = @domain2.current_participations
 @domain2_final_memberships.length >= 3
 #=> true
 

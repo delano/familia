@@ -43,11 +43,11 @@ end
 @domain.save
 
 ## Test reverse index tracking methods exist
-@domain.respond_to?(:add_participation_membership)
+@domain.respond_to?(:track_participation_in)
 #=> true
 
 ## Test reverse index removal methods exist
-@domain.respond_to?(:remove_participation_membership)
+@domain.respond_to?(:untrack_participation_in)
 #=> true
 
 ## Test add domain creates reverse index tracking
@@ -80,23 +80,23 @@ end
 #=> true
 
 ## Test participation collections membership method works
-@memberships = @domain.participation_memberships
+@memberships = @domain.current_participations
 @memberships.is_a?(Array)
 #=> true
 
 ## Test membership data structure is correct
-@memberships = @domain.participation_memberships
+@memberships = @domain.current_participations
 @memberships.length > 0
 #=> true
 
 ## Test membership contains expected target class
-@memberships = @domain.participation_memberships
+@memberships = @domain.current_participations
 @membership = @memberships.first
 @membership[:target_class] == 'PerfTestCustomer'
 #=> true
 
 ## Test membership contains collection name
-@memberships = @domain.participation_memberships
+@memberships = @domain.current_participations
 @membership[:collection_name] == :domains
 #=> true
 

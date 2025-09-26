@@ -92,7 +92,7 @@ module Familia
               )
 
               # Track participation for efficient cleanup
-              add_participation_membership(collection.dbkey) if respond_to?(:add_participation_membership)
+              track_participation_in(collection.dbkey) if respond_to?(:track_participation_in)
             end
           end
 
@@ -110,7 +110,7 @@ module Familia
               ParticipantMethods::Builder.remove_from_collection(collection, self, type: type)
 
               # Remove from participation tracking
-              remove_participation_membership(collection.dbkey) if respond_to?(:remove_participation_membership)
+              untrack_participation_in(collection.dbkey) if respond_to?(:untrack_participation_in)
             end
           end
 

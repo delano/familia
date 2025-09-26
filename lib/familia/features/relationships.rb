@@ -273,12 +273,12 @@ module Familia
         def relationship_status
           status = {
             identifier: identifier,
-            participation_memberships: [],
+            current_participations: [],
             index_memberships: [],
           }
 
           # Get participation memberships
-          status[:participation_memberships] = participation_memberships if respond_to?(:participation_memberships)
+          status[:current_participations] = current_participations if respond_to?(:current_participations)
 
           # Get index memberships
           status[:index_memberships] = indexing_memberships if respond_to?(:indexing_memberships)
@@ -324,8 +324,8 @@ module Familia
           errors << 'Object identifier is nil' unless identifier
 
           # Validate participation memberships
-          if respond_to?(:participation_memberships)
-            participation_memberships.each do |membership|
+          if respond_to?(:current_participations)
+            current_participations.each do |membership|
               score = membership[:score]
               errors << "Invalid score in participation membership: #{membership}" if score && !score.is_a?(Numeric)
             end
@@ -340,7 +340,7 @@ module Familia
         def refresh_relationships!
           # Clear any cached relationship data
           @relationship_status = nil
-          @participation_memberships = nil
+          @current_participations = nil
           @index_memberships = nil
 
           # Reload fresh data

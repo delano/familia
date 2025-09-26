@@ -418,7 +418,7 @@ module Familia
           # @see #untrack_participation_in for removal
           # @see #current_participations for membership queries
           # @since 1.0.0
-          def add_participation_membership(collection_key)
+          def track_participation_in(collection_key)
             # Use Horreum's DataType field instead of manual key construction
             participations.add(collection_key)
           end
@@ -435,7 +435,7 @@ module Familia
           # @see #track_participation_in for addition
           # @see #current_participations for membership queries
           # @since 1.0.0
-          def remove_participation_membership(collection_key)
+          def untrack_participation_in(collection_key)
             # Use Horreum's DataType field instead of manual key construction
             participations.remove(collection_key)
           end
@@ -506,7 +506,7 @@ module Familia
           # @see #track_participation_in for reverse index management
           # @see #calculate_participation_score for scoring details
           # @since 1.0.0
-          def participation_memberships
+          def current_participations
             return [] unless self.class.respond_to?(:participation_relationships)
 
             # Use Horreum's DataType field instead of manual key construction

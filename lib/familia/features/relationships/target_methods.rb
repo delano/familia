@@ -95,8 +95,8 @@ module Familia
               )
 
               # Track participation in reverse index for efficient cleanup
-              if item.respond_to?(:add_participation_membership)
-                item.add_participation_membership(collection.dbkey)
+              if item.respond_to?(:track_participation_in)
+                item.track_participation_in(collection.dbkey)
               end
             end
           end
@@ -113,8 +113,8 @@ module Familia
               TargetMethods::Builder.remove_from_collection(collection, item, type: type)
 
               # Remove from participation tracking
-              if item.respond_to?(:remove_participation_membership)
-                item.remove_participation_membership(collection.dbkey)
+              if item.respond_to?(:untrack_participation_in)
+                item.untrack_participation_in(collection.dbkey)
               end
             end
           end
@@ -132,8 +132,8 @@ module Familia
 
               # Track all participations
               items.each do |item|
-                if item.respond_to?(:add_participation_membership)
-                  item.add_participation_membership(collection.dbkey)
+                if item.respond_to?(:track_participation_in)
+                  item.track_participation_in(collection.dbkey)
                 end
               end
             end
