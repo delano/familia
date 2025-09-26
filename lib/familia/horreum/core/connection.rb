@@ -20,7 +20,7 @@ module Familia
       end
 
       def connect(*)
-        Familia.connect(*)
+        Familia.create_dbclient(*)
       end
 
       def uri=(uri)

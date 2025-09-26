@@ -150,8 +150,8 @@ end
 [@account_a.balance, @account_b.balance]
 #=> [1000.0, 500.0]
 
-## Test 13: with_connection method
-@connection_test_result = Familia.with_connection do |conn|
+## Test 13: with_dbclient method
+@connection_test_result = Familia.with_dbclient do |conn|
   conn.set("test_key_#{SecureRandom.hex(4)}", "test_value")
 end
 @connection_test_result
@@ -209,7 +209,7 @@ timeout_mutex = Mutex.new
 3.times do |i|
   timeout_threads << Thread.new do
     begin
-      result = Familia.with_connection do |conn|
+      result = Familia.with_dbclient do |conn|
         sleep(0.1)  # Brief hold
         conn.ping
       end
