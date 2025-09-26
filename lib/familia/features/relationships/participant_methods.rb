@@ -35,8 +35,8 @@ module Familia
           # @param collection_name [Symbol] Name of the collection (e.g., :domains)
           # @param type [Symbol] Collection type (:sorted_set, :set, :list)
           def self.build(participant_class, target_class_name, collection_name, type)
-            # Downcase once for consistency
-            target_name = target_class_name.to_s.downcase
+            # Convert to snake_case once for consistency
+            target_name = target_class_name.to_s.snake_case
 
             # Core participant methods
             build_membership_check(participant_class, target_name, collection_name, type)
@@ -57,7 +57,7 @@ module Familia
           # Build method to check membership in target's collection
           # Creates: domain.in_customer_domains?(customer)
           def self.build_membership_check(participant_class, target_name, collection_name, type)
-            method_name = "in_#{target_name.snake_case}_#{collection_name}?"
+            method_name = "in_#{target_name}_#{collection_name}?"
 
             participant_class.define_method(method_name) do |target_instance|
               return false unless target_instance&.identifier
@@ -71,7 +71,7 @@ module Familia
           # Build method to add self to target's collection
           # Creates: domain.add_to_customer_domains(customer, score)
           def self.build_add_to_target(participant_class, target_name, collection_name, type)
-            method_name = "add_to_#{target_name.snake_case}_#{collection_name}"
+            method_name = "add_to_#{target_name}_#{collection_name}"
 
             participant_class.define_method(method_name) do |target_instance, score = nil|
               return unless target_instance&.identifier
@@ -88,7 +88,9 @@ module Familia
                 collection,
                 self,
                 score: score,
-                type: type
+                type: type,
+                target_class: target_instance.class,
+                collection_name: collection_name
               )
 
               # Track participation for efficient cleanup
@@ -99,7 +101,7 @@ module Familia
           # Build method to remove self from target's collection
           # Creates: domain.remove_from_customer_domains(customer)
           def self.build_remove_from_target(participant_class, target_name, collection_name, type)
-            method_name = "remove_from_#{target_name.snake_case}_#{collection_name}"
+            method_name = "remove_from_#{target_name}_#{collection_name}"
 
             participant_class.define_method(method_name) do |target_instance|
               return unless target_instance&.identifier
@@ -119,7 +121,7 @@ module Familia
           #          domain.update_score_in_customer_domains(customer, new_score)
           def self.build_score_methods(participant_class, target_name, collection_name)
             # Get score method
-            score_method = "score_in_#{target_name.snake_case}_#{collection_name}"
+            score_method = "score_in_#{target_name}_#{collection_name}"
             participant_class.define_method(score_method) do |target_instance|
               return nil unless target_instance&.identifier
 
@@ -129,7 +131,7 @@ module Familia
             end
 
             # Update score method
-            update_method = "update_score_in_#{target_name.snake_case}_#{collection_name}"
+            update_method = "update_score_in_#{target_name}_#{collection_name}"
             participant_class.define_method(update_method) do |target_instance, new_score|
               return unless target_instance&.identifier
 
@@ -143,7 +145,7 @@ module Familia
           # Build position method for lists
           # Creates: domain.position_in_customer_domains(customer)
           def self.build_position_method(participant_class, target_name, collection_name)
-            method_name = "position_in_#{target_name.snake_case}_#{collection_name}"
+            method_name = "position_in_#{target_name}_#{collection_name}"
 
             participant_class.define_method(method_name) do |target_instance|
               return nil unless target_instance&.identifier
