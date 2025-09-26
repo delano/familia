@@ -46,14 +46,23 @@ module Familia
     alias url uri
     alias url= uri=
 
-    # Establishes a connection to a Database server.
+    # Creates a new Database connection instance.
+    #
+    # This method always creates a fresh connection and does not use caching.
+    # Each call returns a new Redis client instance that you are responsible
+    # for managing and closing when done.
     #
     # @param uri [String, URI, nil] The URI of the Database server to connect to.
     #   If nil, uses the default URI from `@database_clients` or `Familia.uri`.
-    # @return [Redis] The connected Database client.
+    # @return [Redis] A new Database client connection.
     # @raise [ArgumentError] If no URI is specified.
-    # @example Familia.connect('redis://localhost:6379')
-    def connect(uri = nil)
+    #
+    # @example Creating a new connection
+    #   client = Familia.create_dbclient('redis://localhost:6379')
+    #   client.ping
+    #   client.close
+    #
+    def create_dbclient(uri = nil)
       parsed_uri = normalize_uri(uri)
 
       if Familia.enable_database_logging
@@ -69,6 +78,8 @@ module Familia
 
       Redis.new(parsed_uri.conf)
     end
+    alias connect create_dbclient # backwards compatibility
+    alias isolated_dbclient create_dbclient # matches with_isolated_dbclient api
 
     def reconnect(uri = nil)
       parsed_uri = normalize_uri(uri)
@@ -78,7 +89,7 @@ module Familia
       @database_clients[serverid].close if @database_clients.key?(serverid)
       @database_clients.delete(serverid)
 
-      connect(parsed_uri)
+      create_dbclient(parsed_uri)
     end
 
     # Retrieves a Database connection from the appropriate pool.
@@ -118,7 +129,7 @@ module Familia
       parsed_uri = normalize_uri(uri)
       serverid = parsed_uri.serverid
 
-      @database_clients[serverid] ||= connect(parsed_uri)
+      @database_clients[serverid] ||= create_dbclient(parsed_uri)
     end
 
     # Executes Database commands atomically within a transaction (MULTI/EXEC).
@@ -216,14 +227,47 @@ module Familia
     # @yield [Redis] A Database connection
     # @return The result of the block
     #
-    # @example Using with_connection for custom operations
-    #   Familia.with_connection do |conn|
+    # @example Using with_dbclient for custom operations
+    #   Familia.with_dbclient do |conn|
     #     conn.set("custom_key", "value")
     #     conn.expire("custom_key", 3600)
     #   end
     #
-    def with_connection(&)
+    def with_dbclient(&)
       yield dbclient
+    end
+
+    # Provides explicit access to an isolated Database connection for temporary operations.
+    #
+    # This method creates a new connection that won't interfere with the cached
+    # connection pool, executes the given block with that connection, and ensures
+    # the connection is properly closed afterward.
+    #
+    # Perfect for database scanning, inspection, or migration operations where
+    # you need to access different databases without affecting your models'
+    # normal connections.
+    #
+    # @param uri [String, URI, Integer, nil] The URI or database number to connect to.
+    # @yield [Redis] An isolated Database connection
+    # @return The result of the block
+    #
+    # @example Safely scanning for legacy data
+    #   Familia.with_isolated_dbclient(5) do |conn|
+    #     conn.keys("session:*")
+    #   end
+    #
+    # @example Performing migration tasks
+    #   Familia.with_isolated_dbclient(1) do |conn|
+    #     conn.scan_each(match: "user:*") { |key| puts key }
+    #   end
+    #
+    def with_isolated_dbclient(uri = nil, &)
+      client = isolated_dbclient(uri)
+      begin
+        yield client
+      ensure
+        client&.close
+      end
     end
 
     private

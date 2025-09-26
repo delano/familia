@@ -20,13 +20,17 @@ uri.host
 #=> "localhost"
 
 ## Can establish Database connection
+Familia.create_dbclient
+#=:> Redis
+
+## Can establish Database connection with deprecated method
 Familia.connect
 #=:> Redis
 
-## Can connect to different URI
+## Can create connection to different URI
 ## Doesn't confirm the logical DB number, dbclient.options raises an error?
 test_uri = 'redis://localhost:6379/2'
-Familia.connect(test_uri)
+Familia.create_dbclient(test_uri)
 #=:> Redis
 
 ## Database client responds to basic commands
@@ -48,7 +52,7 @@ Familia.enable_database_counter
 #=> true
 
 ## Middleware gets registered when enabled
-dbclient = Familia.connect('redis://localhost:6379/3')
+dbclient = Familia.create_dbclient('redis://localhost:6379/3')
 dbclient.ping
 #=> "PONG"
 
