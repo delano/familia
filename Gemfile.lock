@@ -152,6 +152,7 @@ GEM
     stringio (3.1.7)
     thor (1.4.0)
     tilt (2.6.1)
+    timecop (0.9.10)
     tryouts (3.6.0)
       concurrent-ruby (~> 1.0)
       irb
@@ -191,6 +192,7 @@ DEPENDENCIES
   ruby-prof
   solargraph
   stackprof
+  timecop
   tryouts (~> 3.6.0)
   yard (~> 0.9)
 

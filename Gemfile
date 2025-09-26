@@ -8,6 +8,7 @@ group :test do
   gem 'concurrent-ruby', '~> 1.3.5', require: false
   gem 'ruby-prof'
   gem 'stackprof'
+  gem 'timecop', require: false
   gem 'tryouts', '~> 3.6.0', require: false
 end
 
@@ -20,7 +21,6 @@ group :development, :test do
   gem 'rubocop-thread_safety', require: false
   gem 'solargraph', require: false
   gem 'yard', '~> 0.9', require: false
-
 end
 
 group :optional do
