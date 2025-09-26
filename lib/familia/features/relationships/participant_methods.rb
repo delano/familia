@@ -62,13 +62,8 @@ module Familia
             participant_class.define_method(method_name) do |target_instance|
               return false unless target_instance&.identifier
 
-              collection = ParticipantMethods::Builder.create_collection(
-                target_instance.class,
-                collection_name,
-                type,
-                target_instance.identifier
-              )
-
+              # Use Horreum's DataType accessor instead of manual creation
+              collection = target_instance.send(collection_name)
               ParticipantMethods::Builder.member_of_collection?(collection, self)
             end
           end
@@ -81,12 +76,8 @@ module Familia
             participant_class.define_method(method_name) do |target_instance, score = nil|
               return unless target_instance&.identifier
 
-              collection = ParticipantMethods::Builder.create_collection(
-                target_instance.class,
-                collection_name,
-                type,
-                target_instance.identifier
-              )
+              # Use Horreum's DataType accessor instead of manual creation
+              collection = target_instance.send(collection_name)
 
               # Calculate score if needed and not provided
               if type == :sorted_set && score.nil?
@@ -113,12 +104,8 @@ module Familia
             participant_class.define_method(method_name) do |target_instance|
               return unless target_instance&.identifier
 
-              collection = ParticipantMethods::Builder.create_collection(
-                target_instance.class,
-                collection_name,
-                type,
-                target_instance.identifier
-              )
+              # Use Horreum's DataType accessor instead of manual creation
+              collection = target_instance.send(collection_name)
 
               ParticipantMethods::Builder.remove_from_collection(collection, self, type: type)
 
@@ -136,9 +123,9 @@ module Familia
             participant_class.define_method(score_method) do |target_instance|
               return nil unless target_instance&.identifier
 
-              keyparts = [target_instance.class.config_name, target_instance.identifier, collection_name]
-              collection_key = Familia.join(keyparts)
-              dbclient.zscore(collection_key, identifier)
+              # Use Horreum's DataType accessor instead of manual key construction
+              collection = target_instance.send(collection_name)
+              collection.score(identifier)
             end
 
             # Update score method
@@ -146,10 +133,10 @@ module Familia
             participant_class.define_method(update_method) do |target_instance, new_score|
               return unless target_instance&.identifier
 
-              keyparts = [target_instance.class.config_name, target_instance.identifier, collection_name]
-              collection_key = Familia.join(keyparts)
-              # Only update if already exists (xx: true)
-              dbclient.zadd(collection_key, new_score, identifier, xx: true)
+              # Use Horreum's DataType accessor for updates
+              collection = target_instance.send(collection_name)
+              # Add with new score (will update if exists)
+              collection.add(new_score, identifier)
             end
           end
 
@@ -161,9 +148,10 @@ module Familia
             participant_class.define_method(method_name) do |target_instance|
               return nil unless target_instance&.identifier
 
-              keyparts = [target_instance.class.config_name, target_instance.identifier, collection_name]
-              collection_key = Familia.join(keyparts)
-              dbclient.lpos(collection_key, identifier)
+              # Use Horreum's DataType accessor instead of manual key construction
+              collection = target_instance.send(collection_name)
+              # Use DataType method to find position (index in list)
+              collection.to_a.index(identifier)
             end
           end
         end

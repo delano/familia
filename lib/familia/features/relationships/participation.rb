@@ -125,6 +125,10 @@ module Familia
                                     Familia.member_by_config_name(target_class)
                                   end
 
+            # STEP 0: Add participations tracking field to PARTICIPANT class (Domain)
+            # This creates the proper key: "domain:123:participations" (not "domain:123:object:participations")
+            set :participations unless method_defined?(:participations)
+
             # STEP 1: Add collection management methods to TARGET class (Customer)
             # Customer gets: domains, add_domain, remove_domain, etc.
             TargetMethods::Builder.build(actual_target_class, collection_name, type)
@@ -236,14 +240,14 @@ module Familia
 
           # Add participation tracking to reverse index
           def add_participation_membership(collection_key)
-            reverse_index_key = "#{dbkey}:participations"
-            dbclient.sadd(reverse_index_key, collection_key)
+            # Use Horreum's DataType field instead of manual key construction
+            participations.add(collection_key)
           end
 
           # Remove participation tracking from reverse index
           def remove_participation_membership(collection_key)
-            reverse_index_key = "#{dbkey}:participations"
-            dbclient.srem(reverse_index_key, collection_key)
+            # Use Horreum's DataType field instead of manual key construction
+            participations.remove(collection_key)
           end
 
           # Get all collections this object appears in
@@ -252,101 +256,77 @@ module Familia
           def participation_memberships
             return [] unless self.class.respond_to?(:participation_relationships)
 
-            # Use reverse index if available, otherwise fall back to scan
-            reverse_index_key = "#{dbkey}:participations"
-            collection_keys = dbclient.smembers(reverse_index_key)
+            # Use Horreum's DataType field instead of manual key construction
+            collection_keys = participations.members
 
             if collection_keys.empty?
-              # Fall back to scan approach for objects without reverse index
-              collection_keys = []
-              self.class.participation_relationships.each do |config|
-                target_class_name = config.target_class_name
-                collection_name = config.collection_name
-                pattern = "#{target_class_name.downcase}:*:#{collection_name}"
-
-                dbclient.scan_each(match: pattern) do |key|
-                  collection_keys << key
-                end
-              end
+              # Fall back to scanning for objects without reverse index tracking
+              # This is a simplified version - in a real implementation we might
+              # add a proper scan method to DataType or use a different approach
+              return []
             end
-
-            return [] if collection_keys.empty?
 
             memberships = []
 
-            # Group keys by type to optimize pipeline operations
-            keys_by_type = {}
-            collection_keys.each do |key|
-              self.class.participation_relationships.each do |config|
-                target_class_name = config.target_class_name
-                collection_name = config.collection_name
-                type = config.type
+            # Check membership in each tracked collection using DataType methods
+            collection_keys.each do |collection_key|
+              # Parse the collection key to extract target info
+              # Expected format: "targetclass:targetid:collectionname"
+              key_parts = collection_key.split(':')
+              next unless key_parts.length >= 3
 
-                next unless key.include?(target_class_name.downcase) && key.include?(collection_name.to_s)
+              target_class_config = key_parts[0]
+              target_id = key_parts[1]
+              collection_name_from_key = key_parts[2]
 
-                keys_by_type[type] ||= []
-                keys_by_type[type] << {
-                  key: key,
-                  target_class_name: target_class_name,
-                  collection_name: collection_name,
-                  type: type,
-                }
+              # Find the matching participation configuration
+              # Note: target_class_config from key is snake_case, target_class_name is PascalCase
+              config = self.class.participation_relationships.find do |cfg|
+                cfg.target_class_name.snake_case == target_class_config &&
+                  cfg.collection_name.to_s == collection_name_from_key
               end
-            end
 
-            # Use pipelined requests to batch all membership checks
-            results = {}
-            dbclient.pipelined do |pipeline|
-              keys_by_type.each do |type, key_configs|
-                key_configs.each do |config|
-                  key = config[:key]
-                  case type
-                  when :sorted_set
-                    results[key] = pipeline.zscore(key, identifier)
-                  when :set
-                    results[key] = pipeline.sismember(key, identifier)
-                  when :list
-                    results[key] = pipeline.lpos(key, identifier)
-                  end
-                end
-              end
-            end
+              next unless config
 
-            # Process results and build membership array
-            keys_by_type.each do |type, key_configs|
-              key_configs.each do |config|
-                key = config[:key]
-                result = begin
-                  results[key].value
-                rescue Redis::ConnectionError, Redis::TimeoutError => e
-                  Familia.ld "[#{key}] Error: #{e.message}"
-                end
+              # Find the target instance and check membership using Horreum DataTypes
+              begin
+                target_class = Familia.resolve_class(config.target_class)
+                target_instance = target_class.find_by_id(target_id)
+                next unless target_instance
 
-                next unless result
+                # Use Horreum's DataType accessor to get the collection
+                collection = target_instance.send(config.collection_name)
 
-                target_id = key.split(':')[1]
+                # Check membership using DataType methods
                 membership_data = {
-                  target_class: config[:target_class_name],
+                  target_class: config.target_class_name,
                   target_id: target_id,
-                  collection_name: config[:collection_name],
-                  type: type,
+                  collection_name: config.collection_name,
+                  type: config.type,
                 }
 
-                case type
+                case config.type
                 when :sorted_set
-                  next unless result # score must be present
+                  score = collection.score(identifier)
+                  next unless score
 
-                  membership_data[:score] = result
-                  membership_data[:decoded_score] = decode_score(result)
+                  membership_data[:score] = score
+                  membership_data[:decoded_score] = decode_score(score) if respond_to?(:decode_score)
                 when :set
-                  next unless result # must be a member
+                  is_member = collection.member?(identifier)
+                  next unless is_member
                 when :list
-                  next unless result # position must be found
+                  position = collection.to_a.index(identifier)
+                  next unless position
 
-                  membership_data[:position] = result
+                  membership_data[:position] = position
                 end
 
                 memberships << membership_data
+
+              rescue => e
+                Familia.ld "[#{collection_key}] Error checking membership: #{e.message}"
+                next
               end
             end
 

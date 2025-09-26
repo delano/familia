@@ -33,6 +33,9 @@ module Familia
           # @param collection_name [Symbol] Name of the collection (e.g., :domains)
           # @param type [Symbol] Collection type (:sorted_set, :set, :list)
           def self.build(target_class, collection_name, type)
+            # FIRST: Ensure the DataType field is defined on the target class
+            TargetMethods::Builder.ensure_collection_field(target_class, collection_name, type)
+
             # Core target methods
             build_collection_getter(target_class, collection_name, type)
             build_add_item(target_class, collection_name, type)
@@ -50,6 +53,9 @@ module Familia
           # @param collection_name [Symbol] Name of the collection
           # @param type [Symbol] Collection type
           def self.build_class_level(target_class, collection_name, type)
+            # FIRST: Ensure the class-level DataType field is defined
+            target_class.send("class_#{type}", collection_name)
+
             # Class-level collection getter (e.g., User.all_users)
             build_class_collection_getter(target_class, collection_name, type)
             build_class_add_method(target_class, collection_name, type)
@@ -61,9 +67,10 @@ module Familia
           # Build method to get the collection
           # Creates: customer.domains
           def self.build_collection_getter(target_class, collection_name, type)
-            target_class.define_method(collection_name) do
-              TargetMethods::Builder.create_collection(self, collection_name, type)
-            end
+            # No need to define the method - Horreum automatically creates it
+            # when we call ensure_collection_field above. This method is
+            # kept for backwards compatibility but now does nothing.
+            # The field definition (sorted_set :domains) creates the accessor automatically.
           end
 
           # Build method to add an item to the collection
@@ -154,9 +161,10 @@ module Familia
           # Build class-level collection getter
           # Creates: User.all_users (class method)
           def self.build_class_collection_getter(target_class, collection_name, type)
-            target_class.define_singleton_method(collection_name.to_s) do
-              TargetMethods::Builder.create_collection(self, collection_name, type)
-            end
+            # No need to define the method - Horreum automatically creates it
+            # when we call class_#{type} above. This method is kept for
+            # backwards compatibility but now does nothing.
+            # The field definition (class_sorted_set :all_users) creates the accessor automatically.
           end
 
           # Build class-level add method
