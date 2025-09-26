@@ -258,20 +258,17 @@ module Familia
           end
 
           def generate_membership_check(target_class_name, collection_name, type)
+
+            collection_class = Familia::DataType.registered_type(type)
+
             # Method to check if this object is in a specific collection
             # e.g., domain.in_customer_domains?(customer)
             define_method("in_#{target_class_name.downcase}_#{collection_name}?") do |target_instance|
               return false unless target_instance&.identifier
 
               collection_key = "#{target_class_name.downcase}:#{target_instance.identifier}:#{collection_name}"
-              case type
-              when :sorted_set
-                !dbclient.zscore(collection_key, identifier).nil?
-              when :set
-                dbclient.sismember(collection_key, identifier)
-              when :list
-                !dbclient.lpos(collection_key, identifier).nil?
-              end
+              collection = collection_class.new(nil, dbkey: collection_key, logical_database: logical_database)
+              collection.member?(identifier)
             end
           end
 
