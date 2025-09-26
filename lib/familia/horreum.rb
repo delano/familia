@@ -91,6 +91,10 @@ module Familia
 
         # Track all classes that inherit from Horreum
         Familia.members << member
+
+        # Set up automatic instance tracking using built-in class_sorted_set
+        member.class_sorted_set :instances
+
         super
       end
     end

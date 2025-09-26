@@ -218,7 +218,7 @@ debug_array.map(&:to_s)
 ## Debug what's actually in the database
 @all_keys = Familia.dbclient.keys("*")
 @all_keys
-#=> ["secret_document:test123:object"]
+#=> ["secret_document:test123:object", "secret_document:instances"]
 
 ## Check database storage - should be encrypted
 @db_hash = Familia.dbclient.hgetall("secret_document:test123:object")

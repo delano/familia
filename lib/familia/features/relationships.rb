@@ -254,9 +254,6 @@ module Familia
             # Automatically update all indexes when object is saved
             update_all_indexes if respond_to?(:update_all_indexes)
 
-            # Auto-add to class-level participation collections
-            add_to_class_participations if respond_to?(:add_to_class_participations)
-
             # NOTE: Relationship-specific participation updates are done explicitly
             # since we need to know which specific collections this object should be in
           end

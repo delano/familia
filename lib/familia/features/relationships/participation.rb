@@ -446,22 +446,6 @@ module Familia
 
           public
 
-          # Add to class-level participation collections automatically
-          def add_to_class_participations
-            return unless self.class.respond_to?(:participation_relationships)
-
-            self.class.participation_relationships.each do |details|
-              target_class_name = details.target_class_name
-              collection_name = details.collection_name
-
-              # Only auto-add to class-level collections (where target_class matches self.class)
-              if target_class_name.downcase == self.class.name.downcase
-                # Call the class method to add this object
-                self.class.send("add_to_#{collection_name}", self)
-              end
-            end
-          end
-
           # Add participation tracking to reverse index
           def add_participation_membership(collection_key)
             reverse_index_key = "#{dbkey}:participations"

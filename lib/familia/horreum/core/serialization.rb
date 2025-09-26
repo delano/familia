@@ -71,6 +71,11 @@ module Familia
         #
         ret = commit_fields(update_expiration: update_expiration)
 
+        # Add to class-level instances collection after successful save
+        if ret && self.class.respond_to?(:instances)
+          self.class.instances.add(Familia.now, identifier)
+        end
+
         Familia.ld "[save] #{self.class} #{dbkey} #{ret} (update_expiration: #{update_expiration})"
 
         # Did Database accept our offering?
