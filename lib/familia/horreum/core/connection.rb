@@ -16,7 +16,10 @@ module Familia
       # @return [Redis] the Database connection instance.
       #
       def dbclient
-        Fiber[:familia_transaction] || @dbclient || Familia.dbclient(uri || logical_database)
+        class_client = self.class.respond_to?(:dbclient) ? self.class.dbclient : nil
+        client = Fiber[:familia_transaction] || @dbclient || Familia.dbclient(uri || logical_database)
+        Familia.trace :DBCLIENT_CLASS, nil, "fiber:#{!!Fiber[:familia_transaction]} instance:#{!!@dbclient} fallback:#{!Fiber[:familia_transaction] && !@dbclient}", caller(1..1) if Familia.debug?
+        client
       end
 
       def connect(*)

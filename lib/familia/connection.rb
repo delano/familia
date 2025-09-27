@@ -148,7 +148,7 @@ module Familia
       if Fiber[:familia_connection]
         conn, version = Fiber[:familia_connection]
         if version == middleware_version
-          Familia.trace :DBCLIENT, self, "Using fiber-local connection for #{uri}", caller(1..1) if Familia.debug?
+          Familia.trace :DBCLIENT_MODULE_FIBER, nil, "Using fiber-local connection for #{uri}", caller(1..1) if Familia.debug?
           return conn
         else
           # Version mismatch, clear stale connection
@@ -173,17 +173,20 @@ module Familia
           end
         end
 
+        Familia.trace :DBCLIENT_MODULE_PROVIDER, nil, "Using connection provider", caller(1..1) if Familia.debug?
         return client
       end
 
       # Third priority: Fallback behavior or error
       raise Familia::NoConnectionAvailable, 'No connection available.' if connection_required
 
-      # Legacy behavior: create connection
+      # Legacy behavior: create connection™
       parsed_uri = normalize_uri(uri)
       serverid = parsed_uri.serverid
 
-      @database_clients[serverid] ||= create_dbclient(parsed_uri)
+      client = @database_clients[serverid] ||= create_dbclient(parsed_uri)
+      Familia.trace :DBCLIENT_MODULE_CACHED, nil, "Using cached/created connection for #{serverid}", caller(1..1) if Familia.debug?
+      client
     end
 
     # Executes Database commands atomically within a transaction (MULTI/EXEC).

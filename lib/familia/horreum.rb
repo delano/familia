@@ -189,15 +189,16 @@ module Familia
 
       # Initialize object with arguments using one of four strategies:
       #
-      # 1. **Identifier** (Recommended for lookups): A single argument is treated as the identifier.
-      #    Example: Customer.new("cust_123")
-      #    - Robust and convenient for creating objects from an ID.
+      # 1. **Identifier** (Recommended for lookups): A single argument is
+      #     treated as the identifier. Robust and convenient for creating
+      #     objects from an ID. e.g. `Customer.new("cust_123")`
       #
-      # 2. **Keyword Arguments** (Recommended for creation): Order-independent field assignment
-      #    Example: Customer.new(name: "John", email: "john@example.com")
+      # 2. **Keyword Arguments** (Recommended for creation): Order-independent
+      #     field assignment
+      #    e.g. Customer.new(name: "John", email: "john@example.com")
       #
       # 3. **Positional Arguments** (Legacy): Field assignment by definition order
-      #    Example: Customer.new("cust_123", "John", "john@example.com")
+      #    e.g. Customer.new("cust_123", "John", "john@example.com")
       #
       # 4. **No Arguments**: Object created with all fields as nil
       #
@@ -372,8 +373,11 @@ module Familia
     #   # => #<Redis client v5.4.1 for redis://localhost:6379/0>
     #
     def dbclient
-      Fiber[:familia_transaction] || @dbclient || self.class.dbclient
+      class_client = self.class.respond_to?(:dbclient) ? self.class.dbclient : nil
+      client = Fiber[:familia_transaction] || @dbclient || class_client || Familia.dbclient
+      Familia.trace :DBCLIENT_INSTANCE, nil, "fiber:#{!!Fiber[:familia_transaction]} instance:#{!!@dbclient} class:#{!!class_client} fallback:#{!Fiber[:familia_transaction] && !@dbclient && !class_client}", caller(1..1) if Familia.debug?
       # conn.select(self.class.logical_database)
+      client
     end
 
     def generate_id
