@@ -17,29 +17,17 @@ module Familia
     # into a single, Valkey/Redis-native implementation that embraces the "where does this appear?"
     # philosophy rather than "who owns this?".
     #
-    # Key improvements in v2:
-    # - Multi-presence: Objects can exist in multiple collections simultaneously
-    # - Score encoding: Metadata embedded in Valkey/Redis scores for efficiency
-    # - Collision-free: Method names include collection names to prevent conflicts
-    # - Valkey/Redis-native: All operations use Valkey/Redis commands, no Ruby iteration
-    # - Atomic operations: Multi-collection updates happen atomically
-    #
-    # Breaking changes from v1:
-    # - Single feature: Use `feature :relationships` instead of separate features
-    # - Simplified identifier: Use `identifier :field` instead of `identifier_field :field`
-    # - No ownership concept: Remove `owned_by`, use multi-presence instead
-    # - Method naming: Generated methods include collection names for uniqueness
-    # - Score encoding: Scores can carry metadata like permissions
-    #
     # @example Basic usage
     #   class Domain < Familia::Horreum
-    #     feature :relationships
     #
-    #     identifier :domain_id
+    #     identifier_field :domain_id
+    #
     #     field :domain_id
     #     field :display_name
     #     field :created_at
     #     field :permission_bits
+    #
+    #     feature :relationships
     #
     #     # Multi-presence participation with score encoding
     #     participates_in Customer, :domains,
@@ -228,18 +216,8 @@ module Familia
       end
 
       module ModelInstanceMethods
-        # Get the identifier value for this instance
-        # Uses the existing Horreum identifier infrastructure
-        def identifier
-          id_field = self.class.identifier_field
-          send(id_field) if respond_to?(id_field)
-        end
-
-        # UnsortedSet the identifier value for this instance
-        def identifier=(value)
-          id_field = self.class.identifier_field
-          send("#{id_field}=", value) if respond_to?("#{id_field}=")
-        end
+        # NOTE: identifier and identifier= methods are provided by Horreum base class
+        # No need to override them here - use the existing infrastructure
 
         # Initialize relationships (called after object creation)
         def initialize_relationships
