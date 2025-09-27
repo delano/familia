@@ -3,7 +3,7 @@
 $LOAD_PATH.unshift(File.expand_path('lib', __dir__))
 ENV['TEST'] = 'true'  # Mark as test environment
 require 'familia'
-require_relative 'try/helpers/test_helpers'
+require_relative '../helpers/test_helpers'
 
 puts "Testing ConcealedString internal call chain..."
 
