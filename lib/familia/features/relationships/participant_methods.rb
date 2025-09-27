@@ -130,16 +130,7 @@ module Familia
               collection.score(identifier)
             end
 
-            # Update score method
-            update_method = "update_score_in_#{target_name}_#{collection_name}"
-            participant_class.define_method(update_method) do |target_instance, new_score|
-              return unless target_instance&.identifier
 
-              # Use Horreum's DataType accessor for updates
-              collection = target_instance.send(collection_name)
-              # Add with new score (will update if exists)
-              collection.add(identifier, new_score)
-            end
           end
 
           # Build position method for lists
