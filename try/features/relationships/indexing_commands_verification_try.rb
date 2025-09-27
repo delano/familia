@@ -7,9 +7,8 @@
 require_relative '../../helpers/test_helpers'
 
 # Test classes for command verification
-class TestIndexedUser < Familia::Horreum
+class ::TestIndexedUser < Familia::Horreum
   feature :relationships
-  include Familia::Features::Relationships::Indexing
 
   identifier_field :user_id
   field :user_id
@@ -20,18 +19,16 @@ class TestIndexedUser < Familia::Horreum
   class_indexed_by :email, :email_index
 end
 
-class TestIndexedCompany < Familia::Horreum
+class ::TestIndexedCompany < Familia::Horreum
   feature :relationships
-  include Familia::Features::Relationships::Indexing
 
   identifier_field :company_id
   field :company_id
   field :name
 end
 
-class TestIndexedEmployee < Familia::Horreum
+class ::TestIndexedEmployee < Familia::Horreum
   feature :relationships
-  include Familia::Features::Relationships::Indexing
 
   identifier_field :emp_id
   field :emp_id

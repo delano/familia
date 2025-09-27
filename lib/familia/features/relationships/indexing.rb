@@ -243,7 +243,7 @@ module Familia
           def generate_relationship_index_methods(target_class_name, field, index_name)
             # Indexes are now scoped to parent instances using SortedSets
 
-            method_name = "add_to_#{target_class_name.downcase}_#{index_name}"
+            method_name = "add_to_#{target_class_name}_#{index_name}"
             Familia.ld("[generate_relationship_index_methods] #{name} method #{method_name}")
 
             define_method(method_name) do |target_instance|
@@ -260,7 +260,7 @@ module Familia
               index_set.add(identifier, Familia.now)
             end
 
-            method_name = "remove_from_#{target_class_name.downcase}_#{index_name}"
+            method_name = "remove_from_#{target_class_name}_#{index_name}"
             Familia.ld("[generate_relationship_index_methods] #{name} method #{method_name}")
 
             define_method(method_name) do |target_instance|
@@ -277,7 +277,7 @@ module Familia
               index_set.remove(identifier)
             end
 
-            method_name = "update_in_#{target_class_name.downcase}_#{index_name}"
+            method_name = "update_in_#{target_class_name}_#{index_name}"
             Familia.ld("[generate_relationship_index_methods] #{name} method #{method_name}")
 
             define_method(method_name) do |target_instance, old_field_value = nil|
