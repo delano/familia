@@ -110,24 +110,19 @@ module Familia
             member.instance_variable_set(:@field_types, copied_field_types)
             # Re-install field methods on the child class using proper method name detection
             parent_class.field_types.each do |name, field_type|
-              # Check for the actual method names that field_type.install will create
-              method_name = field_type.method_name
-              setter_name = method_name ? :"#{method_name}=" : nil
-              fast_method_name = field_type.fast_method_name
+              # Collect all method names that field_type.install will create
+              methods_to_check = [
+                field_type.method_name,
+                (field_type.method_name ? :"#{field_type.method_name}=" : nil),
+                field_type.fast_method_name
+              ].compact
 
-              # Only install if none of the methods that would be created already exist
-              should_install = true
-              if method_name && (member.method_defined?(method_name) || member.private_method_defined?(method_name))
-                should_install = false
-              end
-              if setter_name && (member.method_defined?(setter_name) || member.private_method_defined?(setter_name))
-                should_install = false
-              end
-              if fast_method_name && (member.method_defined?(fast_method_name) || member.private_method_defined?(fast_method_name))
-                should_install = false
+              # Only install if none of the methods already exist
+              methods_exist = methods_to_check.any? do |method_name|
+                member.method_defined?(method_name) || member.private_method_defined?(method_name)
               end
 
-              field_type.install(member) if should_install
+              field_type.install(member) unless methods_exist
             end
           end
 
