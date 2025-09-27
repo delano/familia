@@ -243,7 +243,7 @@ module Familia
 
           if Familia.debug?
             reference = caller(1..1).first
-            Familia.trace :FIND_BY_OBJID, Familia.dbclient, objid, reference
+            Familia.trace :FIND_BY_OBJID, nil, objid, reference
           end
 
           # Use the object identifier as the key for lookup

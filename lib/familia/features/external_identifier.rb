@@ -142,7 +142,7 @@ module Familia
 
           if Familia.debug?
             reference = caller(1..1).first
-            Familia.trace :FIND_BY_EXTID, Familia.dbclient, extid, reference
+            Familia.trace :FIND_BY_EXTID, nil, extid, reference
           end
 
           # Look up the primary ID from the external ID mapping

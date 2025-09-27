@@ -150,7 +150,7 @@ module Familia
         objkey = dbkey(identifier, suffix)
 
         Familia.ld "[.find_by_id] #{self} from key #{objkey})"
-        Familia.trace :FIND_BY_ID, Familia.dbclient(uri), objkey, caller(1..1).first if Familia.debug?
+        Familia.trace :FIND_BY_ID, nil, objkey, caller(1..1).first if Familia.debug?
         find_by_key objkey
       end
       alias find find_by_id
