@@ -288,7 +288,7 @@ ApiTestUser.all_users.member?(@user.identifier) && ApiTestUser.email_lookup.get(
 ## Parent-based relationships work with tracking
 @project.save
 # Note: Skipping complex parent relationship test
-@membership.respond_to?(:add_to_apitestproject_memberships)
+@membership.respond_to?(:add_to_api_test_project_memberships)
 #=> true
 
 ## Score-based tracking maintains proper ordering

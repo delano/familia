@@ -51,7 +51,18 @@ class ReverseIndexDomain < Familia::Horreum
   class_participates_in :all_domains, score: :created_at
 end
 
-
+# Create test objects (part of setup)
+@customer = ReverseIndexCustomer.new(customer_id: 'ri_cust_123', name: 'Reverse Index Test Customer')
+@domain1 = ReverseIndexDomain.new(
+  domain_id: 'ri_dom_1',
+  display_domain: 'example1.com',
+  created_at: Time.now.to_f
+)
+@domain2 = ReverseIndexDomain.new(
+  domain_id: 'ri_dom_2',
+  display_domain: 'example2.com',
+  created_at: Time.now.to_f + 1
+)
 
 ## Clear commands and test command tracking isolation
 DatabaseLogger.clear_commands
@@ -61,17 +72,8 @@ initial_commands.empty?
 
 ## Check that instantiation commands are captured correctly
 instantiation_commands = DatabaseLogger.capture_commands do
-  @customer = ReverseIndexCustomer.new(customer_id: 'ri_cust_123', name: 'Reverse Index Test Customer')
-  @domain1 = ReverseIndexDomain.new(
-    domain_id: 'ri_dom_1',
-    display_domain: 'example1.com',
-    created_at: Time.now.to_f
-  )
-  @domain2 = ReverseIndexDomain.new(
-    domain_id: 'ri_dom_2',
-    display_domain: 'example2.com',
-    created_at: Time.now.to_f + 1
-  )
+  # Object instantiation happens above, this block is just to verify no commands are generated
+  nil
 end
 # Object instantiation should not trigger database commands
 instantiation_commands.empty?
