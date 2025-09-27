@@ -11,6 +11,7 @@ module Familia
   @uri = URI.parse 'redis://127.0.0.1:6379'
   @database_clients = {}
   @middleware_registered = false
+  @middleware_version = 0
 
   # The Connection module provides Database connection management for Familia.
   # It allows easy setup and access to Database clients across different URIs
@@ -21,6 +22,11 @@ module Familia
 
     # @return [Hash] A hash of Database clients, keyed by server ID
     attr_reader :database_clients
+
+    # @return [Integer] Current middleware version for cache invalidation
+    def middleware_version
+      @middleware_version
+    end
 
     # @return [Boolean] Whether Database command logging is enabled
     attr_reader :enable_database_logging
@@ -115,7 +121,8 @@ module Familia
     def clear_cached_clients
       @database_clients.each_value(&:close) rescue nil
       @database_clients.clear
-      Thread.current[:familia_connection] = nil
+      # Increment middleware version to invalidate all thread-local connections
+      @middleware_version += 1
       @middleware_registered = false
     end
 
@@ -139,8 +146,14 @@ module Familia
     def dbclient(uri = nil)
       # First priority: Thread-local connection (middleware pattern)
       if Thread.current.key?(:familia_connection)
-        Familia.trace :DBCLIENT, self, "Using thread-local connection for #{uri}", caller(1..1) if Familia.debug?
-        return Thread.current[:familia_connection]
+        conn, version = Thread.current[:familia_connection]
+        if version == middleware_version
+          Familia.trace :DBCLIENT, self, "Using thread-local connection for #{uri}", caller(1..1) if Familia.debug?
+          return conn
+        else
+          # Version mismatch, clear stale connection
+          Thread.current[:familia_connection] = nil
+        end
       end
 
       # Second priority: Connection provider
