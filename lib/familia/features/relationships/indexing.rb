@@ -55,6 +55,13 @@ module Familia
               finder: finder,
             }
 
+            # Ensure proper DataType fields are declared on target class for sorted_set indexes
+            # This creates the needed DataType infrastructure that will be accessed by field value
+            if target_class.is_a?(Class)
+              # No specific field declaration needed here - the indexes are created dynamically
+              # based on field values, but we need the target class to understand index access
+            end
+
             # Generate finder methods on the target class
             generate_target_finder_methods(target_class, field, index_name) if finder && target_class.is_a?(Class)
 
@@ -82,6 +89,9 @@ module Familia
               finder: finder,
             }
 
+            # Ensure proper DataType field is declared for the index
+            ensure_index_field(self, index_name, :class_hashkey)
+
             # Generate class-level finder methods if requested
             generate_class_finder_methods(field, index_name) if finder
 
@@ -92,6 +102,14 @@ module Familia
           # Get all indexing relationships for this class
           def indexing_relationships
             @indexing_relationships ||= []
+          end
+
+          # Ensure proper DataType field is declared for index
+          # Similar to ensure_collection_field in participation system
+          def ensure_index_field(target_class, index_name, field_type)
+            return if target_class.method_defined?(index_name)
+
+            target_class.send(field_type, index_name)
           end
 
           private
@@ -112,31 +130,33 @@ module Familia
             # Generate instance finder method (e.g., company.find_by_department)
             actual_target_class.class_eval do
               define_method("find_by_#{field}") do |field_value|
-                parent_key = "#{self.class.config_name}:#{identifier}"
-                index_key = "#{parent_key}:#{index_name}:#{field_value}"
+                # Create DataType for this specific field value index using proper Horreum pattern
+                index_key = "#{index_name}:#{field_value}"
+                index_set = Familia::SortedSet.new(index_key, parent: self)
 
                 # Get first member from sorted set
-                object_ids = dbclient.zrange(index_key, 0, 0)
-                return nil if object_ids.empty?
+                members = index_set.range(0, 0)
+                return nil if members.empty?
 
-                indexed_class.new(object_ids.first)
+                indexed_class.new(members.first)
               end
 
               # Generate bulk finder method (e.g., company.find_all_by_department)
               define_method("find_all_by_#{field}") do |field_value|
-                parent_key = "#{self.class.config_name}:#{identifier}"
-                index_key = "#{parent_key}:#{index_name}:#{field_value}"
+                # Create DataType for this specific field value index using proper Horreum pattern
+                index_key = "#{index_name}:#{field_value}"
+                index_set = Familia::SortedSet.new(index_key, parent: self)
 
                 # Get all members from sorted set
-                object_ids = dbclient.zrange(index_key, 0, -1)
-                object_ids.map { |id| indexed_class.new(id) }
+                members = index_set.range(0, -1)
+                members.map { |id| indexed_class.new(id) }
               end
 
               # Generate method to get the index for a specific field value
               define_method("#{index_name}_for") do |field_value|
-                parent_key = "#{self.class.config_name}:#{identifier}"
-                index_key = "#{parent_key}:#{index_name}:#{field_value}"
-                Familia::SortedSet.new(nil, dbkey: index_key, logical_database: logical_database)
+                # Return properly managed DataType instance
+                index_key = "#{index_name}:#{field_value}"
+                Familia::SortedSet.new(index_key, parent: self)
               end
 
               # Generate method to rebuild the index for this parent instance
@@ -152,8 +172,8 @@ module Familia
           def generate_class_finder_methods(field, index_name)
             # Generate class-level finder method (e.g., Domain.find_by_display_name)
             define_singleton_method("find_by_#{field}") do |field_value|
-              index_key = "#{config_name}:#{index_name}"
-              object_id = dbclient.hget(index_key, field_value.to_s)
+              index_hash = send(index_name)  # Access the class-level hashkey DataType
+              object_id = index_hash[field_value.to_s]
 
               return nil unless object_id
 
@@ -164,24 +184,21 @@ module Familia
             define_singleton_method("find_all_by_#{field}") do |field_values|
               return [] if field_values.empty?
 
-              index_key = "#{config_name}:#{index_name}"
-              object_ids = dbclient.hmget(index_key, *field_values.map(&:to_s))
+              index_hash = send(index_name)  # Access the class-level hashkey DataType
+              object_ids = index_hash.values_at(*field_values.map(&:to_s))
               # Filter out nil values and instantiate objects
               object_ids.compact.map { |object_id| new(object_id) }
             end
 
-            # Generate method to get the class-level index hash directly
-            define_singleton_method(index_name.to_s) do
-              index_key = "#{config_name}:#{index_name}"
-              Familia::HashKey.new(nil, dbkey: index_key, logical_database: logical_database)
-            end
+            # The index accessor method is already created by the class_hashkey declaration
+            # No need to manually create it - Horreum handles this automatically
 
             # Generate method to rebuild the class-level index
             define_singleton_method("rebuild_#{index_name}") do
-              index_key = "#{config_name}:#{index_name}"
+              index_hash = send(index_name)  # Access the class-level hashkey DataType
 
-              # Clear existing index
-              dbclient.del(index_key)
+              # Clear existing index using DataType method
+              index_hash.clear
 
               # Rebuild from all existing objects
               # This would need to scan through all objects of this class
@@ -191,36 +208,34 @@ module Familia
 
           # Generate instance methods for class-level indexing (class_indexed_by)
           def generate_direct_index_methods(field, index_name)
-            # Class-level index methods
+            # Class-level index methods using DataType operations
             define_method("add_to_class_#{index_name}") do
-              index_key = "#{self.class.config_name}:#{index_name}"
+              index_hash = self.class.send(index_name)  # Access the class-level hashkey DataType
               field_value = send(field)
 
               return unless field_value
 
-              dbclient.hset(index_key, field_value.to_s, identifier)
+              index_hash[field_value.to_s] = identifier
             end
 
             define_method("remove_from_class_#{index_name}") do
-              index_key = "#{self.class.config_name}:#{index_name}"
+              index_hash = self.class.send(index_name)  # Access the class-level hashkey DataType
               field_value = send(field)
 
               return unless field_value
 
-              dbclient.hdel(index_key, field_value.to_s)
+              index_hash.remove(field_value.to_s)
             end
 
             define_method("update_in_class_#{index_name}") do |old_field_value = nil|
-              index_key = "#{self.class.config_name}:#{index_name}"
+              index_hash = self.class.send(index_name)  # Access the class-level hashkey DataType
               new_field_value = send(field)
 
-              dbclient.multi do |tx|
-                # Remove old value if provided
-                tx.hdel(index_key, old_field_value.to_s) if old_field_value
+              # Remove old value if provided
+              index_hash.remove(old_field_value.to_s) if old_field_value
 
-                # Add new value if present
-                tx.hset(index_key, new_field_value.to_s, identifier) if new_field_value
-              end
+              # Add new value if present
+              index_hash[new_field_value.to_s] = identifier if new_field_value
             end
           end
 
@@ -237,12 +252,12 @@ module Familia
               field_value = send(field)
               return unless field_value
 
-              # Build parent-scoped key: parent_class:parent_id:index_name:field_value
-              parent_key = "#{target_instance.class.config_name}:#{target_instance.identifier}"
-              index_key = "#{parent_key}:#{index_name}:#{field_value}"
+              # Create DataType for this specific field value index using proper Horreum pattern
+              index_key = "#{index_name}:#{field_value}"
+              index_set = Familia::SortedSet.new(index_key, parent: target_instance)
 
-              # Use SortedSet with timestamp score for insertion order
-              dbclient.zadd(index_key, Familia.now, identifier)
+              # Use SortedSet DataType method with timestamp score for insertion order
+              index_set.add(identifier, Familia.now)
             end
 
             method_name = "remove_from_#{target_class_name.downcase}_#{index_name}"
@@ -254,12 +269,12 @@ module Familia
               field_value = send(field)
               return unless field_value
 
-              # Build parent-scoped key
-              parent_key = "#{target_instance.class.config_name}:#{target_instance.identifier}"
-              index_key = "#{parent_key}:#{index_name}:#{field_value}"
+              # Create DataType for this specific field value index using proper Horreum pattern
+              index_key = "#{index_name}:#{field_value}"
+              index_set = Familia::SortedSet.new(index_key, parent: target_instance)
 
-              # Remove from SortedSet
-              dbclient.zrem(index_key, identifier)
+              # Remove using SortedSet DataType method
+              index_set.remove(identifier)
             end
 
             method_name = "update_in_#{target_class_name.downcase}_#{index_name}"
@@ -269,20 +284,19 @@ module Familia
               return unless target_instance
 
               new_field_value = send(field)
-              parent_key = "#{target_instance.class.config_name}:#{target_instance.identifier}"
 
-              dbclient.multi do |tx|
-                # Remove from old index if provided
-                if old_field_value
-                  old_index_key = "#{parent_key}:#{index_name}:#{old_field_value}"
-                  tx.zrem(old_index_key, identifier)
-                end
+              # Remove from old index if provided
+              if old_field_value
+                old_index_key = "#{index_name}:#{old_field_value}"
+                old_index_set = Familia::SortedSet.new(old_index_key, parent: target_instance)
+                old_index_set.remove(identifier)
+              end
 
-                # Add to new index if present
-                if new_field_value
-                  new_index_key = "#{parent_key}:#{index_name}:#{new_field_value}"
-                  tx.zadd(new_index_key, Familia.now, identifier)
-                end
+              # Add to new index if present
+              if new_field_value
+                new_index_key = "#{index_name}:#{new_field_value}"
+                new_index_set = Familia::SortedSet.new(new_index_key, parent: target_instance)
+                new_index_set.add(identifier, Familia.now)
               end
             end
           end
@@ -361,16 +375,16 @@ module Familia
               next unless field_value
 
               if target_class == self.class
-                # Class-level index (class_indexed_by) - check hash key
-                index_key = "#{self.class.config_name}:#{index_name}"
-                next unless dbclient.hexists(index_key, field_value.to_s)
+                # Class-level index (class_indexed_by) - check hash key using DataType
+                index_hash = self.class.send(index_name)
+                next unless index_hash.has_key?(field_value.to_s)
 
                 memberships << {
                   target_class: 'class',
                   index_name: index_name,
                   field: field,
                   field_value: field_value,
-                  index_key: index_key,
+                  index_key: index_hash.dbkey,
                   type: 'class_indexed_by',
                 }
               else
@@ -407,9 +421,9 @@ module Familia
             target_class = config[:target_class]
 
             if target_class == self.class
-              # Class-level index (class_indexed_by) - check hash key
-              index_key = "#{self.class.config_name}:#{index_name}"
-              dbclient.hexists(index_key, field_value.to_s)
+              # Class-level index (class_indexed_by) - check hash key using DataType
+              index_hash = self.class.send(index_name)
+              index_hash.has_key?(field_value.to_s)
             else
               # Target-scoped index (indexed_by) - cannot verify without target instance
               false
