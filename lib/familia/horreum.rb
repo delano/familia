@@ -89,6 +89,72 @@ module Familia
         member.extend(Familia::Horreum::Connection)           # dbclient, connection management
         member.extend(Familia::Features)             # feature() method for optional modules
 
+        # Copy parent class configuration to child class
+        # This implements conventional ORM inheritance behavior where child classes
+        # automatically inherit all parent configuration without manual copying
+        parent_class = member.superclass
+        if parent_class.respond_to?(:identifier_field) && parent_class != Familia::Horreum
+          # Copy essential configuration instance variables from parent
+          if parent_class.identifier_field
+            member.instance_variable_set(:@identifier_field, parent_class.identifier_field)
+          end
+
+          # Copy field system configuration
+          if parent_class.fields&.any?
+            member.instance_variable_set(:@fields, parent_class.fields.dup)
+          end
+
+          if parent_class.respond_to?(:field_types) && parent_class.field_types&.any?
+            # Copy field_types hash (FieldType instances are frozen/immutable and can be safely shared)
+            copied_field_types = parent_class.field_types.dup
+            member.instance_variable_set(:@field_types, copied_field_types)
+            # Re-install field methods on the child class using proper method name detection
+            parent_class.field_types.each do |name, field_type|
+              # Collect all method names that field_type.install will create
+              methods_to_check = [
+                field_type.method_name,
+                (field_type.method_name ? :"#{field_type.method_name}=" : nil),
+                field_type.fast_method_name
+              ].compact
+
+              # Only install if none of the methods already exist
+              methods_exist = methods_to_check.any? { |method_name|
+                member.method_defined?(method_name) || member.private_method_defined?(method_name)
+              }
+
+              field_type.install(member) unless methods_exist
+            end
+          end
+
+          # Copy features configuration
+          if parent_class.respond_to?(:features_enabled) && parent_class.features_enabled&.any?
+            member.instance_variable_set(:@features_enabled, parent_class.features_enabled.dup)
+          end
+
+          # Copy other configuration using consistent instance variable access
+          if (prefix = parent_class.instance_variable_get(:@prefix))
+            member.instance_variable_set(:@prefix, prefix)
+          end
+          if (suffix = parent_class.instance_variable_get(:@suffix))
+            member.instance_variable_set(:@suffix, suffix)
+          end
+          if (logical_db = parent_class.instance_variable_get(:@logical_database))
+            member.instance_variable_set(:@logical_database, logical_db)
+          end
+          if (default_exp = parent_class.instance_variable_get(:@default_expiration))
+            member.instance_variable_set(:@default_expiration, default_exp)
+          end
+
+          # Copy DataType relationships
+          if parent_class.class_related_fields&.any?
+            member.instance_variable_set(:@class_related_fields, parent_class.class_related_fields.dup)
+          end
+          if parent_class.related_fields&.any?
+            member.instance_variable_set(:@related_fields, parent_class.related_fields.dup)
+          end
+          member.instance_variable_set(:@has_relations, parent_class.instance_variable_get(:@has_relations)) if parent_class.instance_variable_get(:@has_relations)
+        end
+
         # Track all classes that inherit from Horreum
         Familia.members << member
 

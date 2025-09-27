@@ -246,6 +246,8 @@ module Familia
         # Complete the registration after installation. If we do this beforehand
         # we can run into issues where it looks like it's already installed.
         field_types[field_type.name] = field_type
+        # Freeze the field_type to ensure immutability (maintains Data class heritage)
+        field_type.freeze
       end
 
       # Retrieves feature options for the current class.
