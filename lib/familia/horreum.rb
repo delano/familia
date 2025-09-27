@@ -118,9 +118,9 @@ module Familia
               ].compact
 
               # Only install if none of the methods already exist
-              methods_exist = methods_to_check.any? do |method_name|
+              methods_exist = methods_to_check.any? { |method_name|
                 member.method_defined?(method_name) || member.private_method_defined?(method_name)
-              end
+              }
 
               field_type.install(member) unless methods_exist
             end
