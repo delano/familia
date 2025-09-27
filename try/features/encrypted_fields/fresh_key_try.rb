@@ -162,7 +162,7 @@ internal_empty.nil?
 ## Consistent behavior across Ruby restart simulation
 model = PersistenceTestModel.new(user_id: 'persistence-test')
 model.persistent_data = 'data-to-persist'
-Thread.current[:familia_request_cache] = nil if Thread.current[:familia_request_cache]
+Fiber[:familia_request_cache] = nil if Fiber[:familia_request_cache]
 # With secure-by-default, field access returns ConcealedString
 model.persistent_data.to_s
 #=> '[CONCEALED]'

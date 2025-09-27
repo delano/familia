@@ -418,7 +418,7 @@ class AuditedFieldType < Familia::FieldType
             old_value: old_value,
             new_value: value,
             changed_at: Familia.now,
-            changed_by: Thread.current[:current_user]&.id
+            changed_by: Fiber[:current_user]&.id
           }
 
           # Store audit trail
@@ -449,7 +449,7 @@ end
 doc = AuditedDocument.new(doc_id: 'doc_123')
 doc.save
 
-Thread.current[:current_user] = OpenStruct.new(id: 'user_456')
+Fiber[:current_user] = OpenStruct.new(id: 'user_456')
 doc.content!("Initial content")    # Audited change
 doc.status!("draft")               # Audited change
 

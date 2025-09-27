@@ -9,7 +9,7 @@ module Familia
   @logger.formatter = proc do |severity, datetime, _progname, msg|
     severity_letter = severity[0] # Get the first letter of the severity
     pid = Process.pid
-    thread_id = Thread.current.object_id
+    thread_id = Thread.current.object_id # TODO: In Ruby 3.4+, should this be Fiber.object_id?
     full_path, line = caller(5..5).first.split(':')[0..1]
     parent_path = Pathname.new(full_path).ascend.find { |p| p.basename.to_s == 'familia' }
     relative_path = full_path.sub(parent_path.to_s, 'familia')
@@ -19,7 +19,7 @@ module Familia
     # the default. The thread local variable is set in the trace
     # method in the Familia::Refinements::LoggerTrace module. The name of the
     # variable `severity_letter` is arbitrary and could be anything.
-    severity_letter = Thread.current[:severity_letter] || severity_letter
+    severity_letter = Fiber[:severity_letter] || severity_letter
 
     "#{severity_letter}, #{utc_datetime} #{pid} #{thread_id}: #{msg}  [#{relative_path}:#{line}]\n"
   end

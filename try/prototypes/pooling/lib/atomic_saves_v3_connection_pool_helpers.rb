@@ -121,11 +121,11 @@ module Familia
     end
 
     def current_transaction
-      Thread.current[:familia_current_transaction_v3]
+      Fiber[:familia_current_transaction_v3]
     end
 
     def current_transaction=(transaction)
-      Thread.current[:familia_current_transaction_v3] = transaction
+      Fiber[:familia_current_transaction_v3] = transaction
     end
 
     # Proxy approach - transparent like V2

@@ -144,15 +144,15 @@ module Familia
     # @example Familia.dbclient('redis://localhost:6379/1')
     #   Familia.dbclient(2)  # Use DB 2 with default server
     def dbclient(uri = nil)
-      # First priority: Thread-local connection (middleware pattern)
-      if Thread.current.key?(:familia_connection)
-        conn, version = Thread.current[:familia_connection]
+      # First priority: Fiber-local connection (middleware pattern)
+      if Fiber[:familia_connection]
+        conn, version = Fiber[:familia_connection]
         if version == middleware_version
-          Familia.trace :DBCLIENT, self, "Using thread-local connection for #{uri}", caller(1..1) if Familia.debug?
+          Familia.trace :DBCLIENT, self, "Using fiber-local connection for #{uri}", caller(1..1) if Familia.debug?
           return conn
         else
           # Version mismatch, clear stale connection
-          Thread.current[:familia_connection] = nil
+          Fiber[:familia_connection] = nil
         end
       end
 

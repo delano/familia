@@ -21,7 +21,7 @@ Familia uses a three-tier connection resolution:
 
 ```ruby
 # Priority 1: Thread-local (set by middleware)
-Thread.current[:familia_connection] = redis_client
+Fiber[:familia_connection] = redis_client
 
 # Priority 2: Connection provider
 Familia.connection_provider = ->(uri) { pool.checkout(uri) }
@@ -175,11 +175,11 @@ class FamiliaConnectionMiddleware
   def call(env)
     # Provide single connection for entire request
     ConnectionPool.with do |conn|
-      Thread.current[:familia_connection] = conn
+      Fiber[:familia_connection] = conn
       @app.call(env)
     end
   ensure
-    Thread.current[:familia_connection] = nil
+    Fiber[:familia_connection] = nil
   end
 end
 

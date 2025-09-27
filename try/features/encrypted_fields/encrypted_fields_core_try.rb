@@ -122,4 +122,4 @@ end
 @user2.api_key.reveal { |decrypted| decrypted }
 #=> 'secret-key-123'
 
-Thread.current[:familia_key_cache]&.clear if Thread.current[:familia_key_cache]
+Fiber[:familia_key_cache]&.clear if Fiber[:familia_key_cache]

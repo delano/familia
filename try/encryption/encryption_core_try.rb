@@ -327,4 +327,4 @@ nonce_bytes_aes.length
 #=> 12
 
 # TEARDOWN
-Thread.current[:familia_key_cache]&.clear if Thread.current[:familia_key_cache]
+Fiber[:familia_key_cache]&.clear if Fiber[:familia_key_cache]

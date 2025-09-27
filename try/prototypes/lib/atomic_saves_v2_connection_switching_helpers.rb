@@ -78,11 +78,11 @@ end
 module Familia
   class << self
     def current_transaction
-      Thread.current[:familia_current_transaction]
+      Fiber[:familia_current_transaction]
     end
 
     def current_transaction=(transaction)
-      Thread.current[:familia_current_transaction] = transaction
+      Fiber[:familia_current_transaction] = transaction
     end
 
     def atomic(&block)
