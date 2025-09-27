@@ -2,10 +2,8 @@
 
 require 'securerandom'
 require_relative 'relationships/score_encoding'
-require_relative 'relationships/database_operations'
 require_relative 'relationships/participation'
 require_relative 'relationships/indexing'
-require_relative 'relationships/permission_management'
 
 module Familia
   module Features
@@ -92,15 +90,12 @@ module Familia
 
         # Include all relationship submodules and their class methods
         base.include ScoreEncoding
-        base.include DatabaseOperations
 
         base.include Participation
         base.extend Participation::ModelClassMethods
 
         base.include Indexing
         base.extend Indexing::ModelClassMethods
-
-
       end
 
       # Error classes
