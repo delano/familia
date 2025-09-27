@@ -9,6 +9,7 @@ module Familia
     end
     alias size field_count
     alias length field_count
+    alias count field_count
 
     def empty?
       field_count.zero?
