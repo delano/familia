@@ -5,7 +5,6 @@ require_relative 'relationships/score_encoding'
 require_relative 'relationships/database_operations'
 require_relative 'relationships/participation'
 require_relative 'relationships/indexing'
-require_relative 'relationships/querying'
 require_relative 'relationships/permission_management'
 
 module Familia
@@ -101,8 +100,7 @@ module Familia
         base.include Indexing
         base.extend Indexing::ModelClassMethods
 
-        base.include Querying
-        base.extend Querying::ModelClassMethods
+
       end
 
       # Error classes
