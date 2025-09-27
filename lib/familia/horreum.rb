@@ -105,12 +105,29 @@ module Familia
           end
 
           if parent_class.respond_to?(:field_types) && parent_class.field_types&.any?
-            member.instance_variable_set(:@field_types, parent_class.field_types.dup)
-            # Re-install field methods on the child class only if they don't already exist
+            # Copy field_types hash (FieldType instances are frozen/immutable and can be safely shared)
+            copied_field_types = parent_class.field_types.dup
+            member.instance_variable_set(:@field_types, copied_field_types)
+            # Re-install field methods on the child class using proper method name detection
             parent_class.field_types.each do |name, field_type|
-              unless member.method_defined?(name) || member.private_method_defined?(name)
-                field_type.install(member)
+              # Check for the actual method names that field_type.install will create
+              method_name = field_type.method_name
+              setter_name = method_name ? :"#{method_name}=" : nil
+              fast_method_name = field_type.fast_method_name
+
+              # Only install if none of the methods that would be created already exist
+              should_install = true
+              if method_name && (member.method_defined?(method_name) || member.private_method_defined?(method_name))
+                should_install = false
               end
+              if setter_name && (member.method_defined?(setter_name) || member.private_method_defined?(setter_name))
+                should_install = false
+              end
+              if fast_method_name && (member.method_defined?(fast_method_name) || member.private_method_defined?(fast_method_name))
+                should_install = false
+              end
+
+              field_type.install(member) if should_install
             end
           end
 
@@ -119,11 +136,19 @@ module Familia
             member.instance_variable_set(:@features_enabled, parent_class.features_enabled.dup)
           end
 
-          # Copy other configuration
-          member.instance_variable_set(:@prefix, parent_class.prefix) if parent_class.instance_variable_get(:@prefix)
-          member.instance_variable_set(:@suffix, parent_class.instance_variable_get(:@suffix)) if parent_class.instance_variable_get(:@suffix)
-          member.instance_variable_set(:@logical_database, parent_class.logical_database) if parent_class.logical_database
-          member.instance_variable_set(:@default_expiration, parent_class.instance_variable_get(:@default_expiration)) if parent_class.instance_variable_get(:@default_expiration)
+          # Copy other configuration using consistent instance variable access
+          if (prefix = parent_class.instance_variable_get(:@prefix))
+            member.instance_variable_set(:@prefix, prefix)
+          end
+          if (suffix = parent_class.instance_variable_get(:@suffix))
+            member.instance_variable_set(:@suffix, suffix)
+          end
+          if (logical_db = parent_class.instance_variable_get(:@logical_database))
+            member.instance_variable_set(:@logical_database, logical_db)
+          end
+          if (default_exp = parent_class.instance_variable_get(:@default_expiration))
+            member.instance_variable_set(:@default_expiration, default_exp)
+          end
 
           # Copy DataType relationships
           if parent_class.class_related_fields&.any?
