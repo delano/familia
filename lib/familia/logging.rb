@@ -146,7 +146,7 @@ module Familia
     #   pipelined and multi blocks), or nil (when the database connection isn't
     #   relevant).
     #
-    def trace(label, dbclient, ident, context = nil)
+    def trace(label, dbclient = nil, ident = nil, context = nil)
       return unless Familia::Refinements::LoggerTrace::ENABLED
 
       # Usually dbclient is a Database object, but it could be
