@@ -27,7 +27,7 @@ class Familia::DataType
     def serialize_value(val, strict_values: true)
       prepared = nil
 
-      Familia.trace :TOREDIS, dbclient, "#{val}<#{val.class}|#{opts[:class]}>", caller(1..1) if Familia.debug?
+      Familia.trace :TOREDIS, nil, "#{val}<#{val.class}|#{opts[:class]}>" if Familia.debug?
 
       if opts[:class]
         prepared = Familia.distinguisher(opts[:class], strict_values: strict_values)
@@ -41,8 +41,7 @@ class Familia::DataType
       end
 
       if Familia.debug?
-        Familia.trace :TOREDIS, dbclient, "#{val}<#{val.class}|#{opts[:class]}> => #{prepared}<#{prepared.class}>",
-                      caller(1..1)
+        Familia.trace :TOREDIS, nil, "#{val}<#{val.class}|#{opts[:class]}> => #{prepared}<#{prepared.class}>"
       end
 
       Familia.warn "[#{self.class}#serialize_value] nil returned for #{opts[:class]}##{name}" if prepared.nil?

@@ -149,7 +149,7 @@ module Familia
       end
 
       def logical_database(v = nil)
-        Familia.trace :LOGICAL_DATABASE_CLASS, nil, "#{@logical_database} #{v.nil?}", caller(0..2) if Familia.debug?
+        Familia.trace :LOGICAL_DATABASE_DEF, "instvar:#{@logical_database}", v if Familia.debug?
         @logical_database = v unless v.nil?
         @logical_database || parent&.logical_database
       end
@@ -450,7 +450,7 @@ module Familia
 
             begin
               # Trace the operation if debugging is enabled.
-              Familia.trace :FAST_WRITER, dbclient, "#{field_name}: #{val.inspect}", caller(1..1) if Familia.debug?
+              Familia.trace :FAST_WRITER, nil, "#{field_name}: #{val.inspect}" if Familia.debug?
 
               # Convert the provided value to a format suitable for Database storage.
               prepared = serialize_value(val)

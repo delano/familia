@@ -8,7 +8,7 @@ module Familia
       Familia::Base.add_feature self, :external_identifier, depends_on: [:object_identifier]
 
       def self.included(base)
-        Familia.trace :LOADED, self, base, caller(1..1) if Familia.debug?
+        Familia.trace :LOADED, self, base if Familia.debug?
         base.extend ModelClassMethods
 
         # Ensure default prefix is set in feature options

@@ -130,7 +130,7 @@ module Familia
         return
       end
 
-      Familia.trace :FEATURE, nil, "#{self} includes #{feature_name.inspect}", caller(1..1) if Familia.debug?
+      Familia.trace :FEATURE, nil, "#{self} includes #{feature_name.inspect}" if Familia.debug?
 
       # Check dependencies and raise error if missing
       feature_def = Familia::Base.feature_definitions[feature_name]

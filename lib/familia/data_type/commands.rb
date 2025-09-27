@@ -23,7 +23,7 @@ class Familia::DataType
     # Deletes the entire dbkey
     # @return [Boolean] true if the key was deleted, false otherwise
     def delete!
-      Familia.trace :DELETE!, dbclient, uri, caller(1..1) if Familia.debug?
+      Familia.trace :DELETE!, nil, uri if Familia.debug?
       ret = dbclient.del dbkey
       ret.positive?
     end

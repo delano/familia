@@ -57,7 +57,7 @@ module Familia
       #
       def expire(default_expiration = nil)
         default_expiration ||= self.class.default_expiration
-        Familia.trace :EXPIRE, dbclient, default_expiration, caller(1..1) if Familia.debug?
+        Familia.trace :EXPIRE, nil, default_expiration if Familia.debug?
         dbclient.expire dbkey, default_expiration.to_i
       end
 
@@ -69,7 +69,7 @@ module Familia
       # @return [Integer] The TTL of the key in seconds. Returns -1 if the key does not exist
       #   or has no associated expire time.
       def current_expiration
-        Familia.trace :CURRENT_EXPIRATION, dbclient, uri, caller(1..1) if Familia.debug?
+        Familia.trace :CURRENT_EXPIRATION, nil, uri if Familia.debug?
         dbclient.ttl dbkey
       end
 
@@ -78,32 +78,32 @@ module Familia
       # @param field [String] The field to remove from the hash.
       # @return [Integer] The number of fields that were removed from the hash (0 or 1).
       def remove_field(field)
-        Familia.trace :HDEL, dbclient, field, caller(1..1) if Familia.debug?
+        Familia.trace :HDEL, nil, field if Familia.debug?
         dbclient.hdel dbkey, field
       end
       alias remove remove_field # deprecated
 
       def data_type
-        Familia.trace :DATATYPE, dbclient, uri, caller(1..1) if Familia.debug?
+        Familia.trace :DATATYPE, nil, uri if Familia.debug?
         dbclient.type dbkey(suffix)
       end
 
       # For parity with DataType#hgetall
       def hgetall
-        Familia.trace :HGETALL, dbclient, uri, caller(1..1) if Familia.debug?
+        Familia.trace :HGETALL, nil, uri if Familia.debug?
         dbclient.hgetall dbkey(suffix)
       end
       alias all hgetall
 
       def hget(field)
-        Familia.trace :HGET, dbclient, field, caller(1..1) if Familia.debug?
+        Familia.trace :HGET, nil, field if Familia.debug?
         dbclient.hget dbkey(suffix), field
       end
 
       # @return The number of fields that were added to the hash. If the
       #  field already exists, this will return 0.
       def hset(field, value)
-        Familia.trace :HSET, dbclient, field, caller(1..1) if Familia.debug?
+        Familia.trace :HSET, nil, field if Familia.debug?
         dbclient.hset dbkey, field, value
       end
 
@@ -116,18 +116,18 @@ module Familia
       # @return [Integer] 1 if the field is a new field in the hash and the value was set,
       #   0 if the field already exists in the hash and no operation was performed
       def hsetnx(field, value)
-        Familia.trace :HSETNX, dbclient, field, caller(1..1) if Familia.debug?
+        Familia.trace :HSETNX, nil, field if Familia.debug?
         dbclient.hsetnx dbkey, field, value
       end
 
       def hmset(hsh = {})
         hsh ||= to_h
-        Familia.trace :HMSET, dbclient, hsh, caller(1..1) if Familia.debug?
+        Familia.trace :HMSET, nil, hsh if Familia.debug?
         dbclient.hmset dbkey(suffix), hsh
       end
 
       def hkeys
-        Familia.trace :HKEYS, dbclient, 'uri', caller(1..1) if Familia.debug?
+        Familia.trace :HKEYS, nil, 'uri' if Familia.debug?
         dbclient.hkeys dbkey(suffix)
       end
 
@@ -173,7 +173,7 @@ module Familia
       # Deletes the entire dbkey
       # @return [Boolean] true if the key was deleted, false otherwise
       def delete!
-        Familia.trace :DELETE!, dbclient, uri, caller(1..1) if Familia.debug?
+        Familia.trace :DELETE!, nil, uri if Familia.debug?
         ret = dbclient.del dbkey
         ret.positive?
       end

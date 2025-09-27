@@ -18,7 +18,7 @@ module Familia
       def dbclient
         class_client = self.class.respond_to?(:dbclient) ? self.class.dbclient : nil
         client = Fiber[:familia_transaction] || @dbclient || Familia.dbclient(uri || logical_database)
-        Familia.trace :DBCLIENT_CLASS, nil, "fiber:#{!!Fiber[:familia_transaction]} instance:#{!!@dbclient} fallback:#{!Fiber[:familia_transaction] && !@dbclient}", caller(1..1) if Familia.debug?
+        Familia.trace :DBCLIENT_CLASS, nil, "fiber:#{!!Fiber[:familia_transaction]} instance:#{!!@dbclient} fallback:#{!Fiber[:familia_transaction] && !@dbclient}" if Familia.debug?
         client
       end
 

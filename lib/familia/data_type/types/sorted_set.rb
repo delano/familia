@@ -69,7 +69,7 @@ module Familia
     alias [] score
 
     def member?(val)
-      Familia.trace :MEMBER, dbclient, "#{val}<#{val.class}>", caller(1..1) if Familia.debug?
+      Familia.trace :MEMBER, nil, "#{val}<#{val.class}>" if Familia.debug?
       !rank(val).nil?
     end
     alias include? member?
@@ -143,7 +143,7 @@ module Familia
     end
 
     def range(sidx, eidx, opts = {})
-      echo :range, caller(1..1).first if Familia.debug
+      echo :range, Familia.pretty_stack(limit: 1) if Familia.debug
       elements = rangeraw(sidx, eidx, opts)
       deserialize_values(*elements)
     end
@@ -160,7 +160,7 @@ module Familia
     end
 
     def revrange(sidx, eidx, opts = {})
-      echo :revrange, caller(1..1).first if Familia.debug
+      echo :revrange, Familia.pretty_stack(limit: 1) if Familia.debug
       elements = revrangeraw(sidx, eidx, opts)
       deserialize_values(*elements)
     end
@@ -171,25 +171,25 @@ module Familia
 
     # e.g. obj.metrics.rangebyscore (now-12.hours), now, :limit => [0, 10]
     def rangebyscore(sscore, escore, opts = {})
-      echo :rangebyscore, caller(1..1).first if Familia.debug
+      echo :rangebyscore, Familia.pretty_stack(limit: 1) if Familia.debug
       elements = rangebyscoreraw(sscore, escore, opts)
       deserialize_values(*elements)
     end
 
     def rangebyscoreraw(sscore, escore, opts = {})
-      echo :rangebyscoreraw, caller(1..1).first if Familia.debug
+      echo :rangebyscoreraw, Familia.pretty_stack(limit: 1) if Familia.debug
       dbclient.zrangebyscore(dbkey, sscore, escore, **opts)
     end
 
     # e.g. obj.metrics.revrangebyscore (now-12.hours), now, :limit => [0, 10]
     def revrangebyscore(sscore, escore, opts = {})
-      echo :revrangebyscore, caller(1..1).first if Familia.debug
+      echo :revrangebyscore, Familia.pretty_stack(limit: 1) if Familia.debug
       elements = revrangebyscoreraw(sscore, escore, opts)
       deserialize_values(*elements)
     end
 
     def revrangebyscoreraw(sscore, escore, opts = {})
-      echo :revrangebyscoreraw, caller(1..1).first if Familia.debug
+      echo :revrangebyscoreraw, Familia.pretty_stack(limit: 1) if Familia.debug
       opts[:with_scores] = true if opts[:withscores]
       dbclient.zrevrangebyscore(dbkey, sscore, escore, opts)
     end
@@ -218,7 +218,7 @@ module Familia
     # @param value The value to remove from the sorted set
     # @return [Integer] The number of members that were removed (0 or 1)
     def remove_element(value)
-      Familia.trace :REMOVE_ELEMENT, dbclient, "#{value}<#{value.class}>", caller(1..1) if Familia.debug?
+      Familia.trace :REMOVE_ELEMENT, nil, "#{value}<#{value.class}>" if Familia.debug?
       # We use `strict_values: false` here to allow for the deletion of values
       # that are in the sorted set. If it's a horreum object, the value is
       # the identifier and not a serialized version of the object. So either

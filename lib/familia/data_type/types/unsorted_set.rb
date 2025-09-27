@@ -30,7 +30,7 @@ module Familia
     end
 
     def members
-      echo :members, caller(1..1).first if Familia.debug
+      echo :members, Familia.pretty_stack(limit: 1) if Familia.debug
       elements = membersraw
       deserialize_values(*elements)
     end

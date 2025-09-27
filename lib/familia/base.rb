@@ -33,7 +33,7 @@ module Familia
 
       def add_feature(klass, feature_name, depends_on: [])
         @features_available ||= {}
-        Familia.trace :ADD_FEATURE, klass, feature_name, caller(1..1) if Familia.debug?
+        Familia.trace :ADD_FEATURE, klass, feature_name if Familia.debug?
 
         # Create field definition object
         feature_def = FeatureDefinition.new(
@@ -71,7 +71,7 @@ module Familia
 
       def add_feature(klass, feature_name, depends_on: [])
         @features_available ||= {}
-        Familia.trace :ADD_FEATURE, klass, feature_name, caller(1..1) if Familia.debug?
+        Familia.trace :ADD_FEATURE, klass, feature_name if Familia.debug?
 
         # Create field definition object
         feature_def = FeatureDefinition.new(

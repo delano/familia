@@ -145,7 +145,7 @@ module Familia
 
           begin
             # Trace the operation if debugging is enabled
-            Familia.trace :FAST_WRITER, dbclient, "#{field_name}: #{val.inspect}", caller(1..1) if Familia.debug?
+            Familia.trace :FAST_WRITER, nil, "#{field_name}: #{val.inspect}" if Familia.debug?
 
             # Convert value for database storage
             prepared = serialize_value(val)

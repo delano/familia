@@ -81,7 +81,7 @@ module Familia
 
       # Extends ClassMethods to subclasses and tracks Familia members
       def inherited(member)
-        Familia.trace :HORREUM, nil, "Welcome #{member} to the family", caller(1..1) if Familia.debug?
+        Familia.trace :HORREUM, nil, "Welcome #{member} to the family" if Familia.debug?
 
         # Class-level functionality extensions:
         member.extend(Familia::Horreum::DefinitionMethods)    # field(), identifier_field(), dbkey()
@@ -175,7 +175,7 @@ module Familia
     #   `Session.new({sessid: "abc123", custid: "user456"})` # legacy hash (robust)
     #
     def initialize(*args, **kwargs)
-      Familia.trace :INITIALIZE, dbclient, "Initializing #{self.class}", caller(1..1) if Familia.debug?
+      Familia.trace :INITIALIZE, nil, "Initializing #{self.class}" if Familia.debug?
       initialize_relatives
 
       # No longer auto-create a key field - the identifier method will
@@ -210,7 +210,7 @@ module Familia
       elsif args.any?
         initialize_with_positional_args(*args)
       else
-        Familia.trace :INITIALIZE, dbclient, "#{self.class} initialized with no arguments", caller(1..1) if Familia.debug?
+        Familia.trace :INITIALIZE, nil, "#{self.class} initialized with no arguments" if Familia.debug?
         # Default values are intentionally NOT set here
       end
 
@@ -241,7 +241,7 @@ module Familia
       self.class.related_fields.each_pair do |name, data_type_definition|
         klass = data_type_definition.klass
         opts = data_type_definition.opts
-        Familia.trace :INITIALIZE_RELATIVES, dbclient, "#{name} => #{klass} #{opts.keys}", caller(1..1) if Familia.debug?
+        Familia.trace :INITIALIZE_RELATIVES, nil, "#{name} => #{klass} #{opts.keys}" if Familia.debug?
 
         # As a subclass of Familia::Horreum, we add ourselves as the parent
         # automatically. This is what determines the dbkey for DataType
@@ -278,7 +278,7 @@ module Familia
     #   (i.e., had non-nil values assigned)
     # @private
     def initialize_with_positional_args(*args)
-      Familia.trace :INITIALIZE_ARGS, dbclient, args, caller(1..1) if Familia.debug?
+      Familia.trace :INITIALIZE_ARGS, nil, args if Familia.debug?
       self.class.fields.zip(args).filter_map do |field, value|
         if value
           send(:"#{field}=", value)
@@ -297,7 +297,7 @@ module Familia
     #   (i.e., had non-nil values assigned)
     # @private
     def initialize_with_keyword_args(**fields)
-      Familia.trace :INITIALIZE_KWARGS, dbclient, fields.keys, caller(1..1) if Familia.debug?
+      Familia.trace :INITIALIZE_KWARGS, nil, fields.keys if Familia.debug?
       self.class.fields.filter_map do |field|
         # Database will give us field names as strings back, but internally
         # we use symbols. So we check for both.
@@ -375,7 +375,7 @@ module Familia
     def dbclient
       class_client = self.class.respond_to?(:dbclient) ? self.class.dbclient : nil
       client = Fiber[:familia_transaction] || @dbclient || class_client || Familia.dbclient
-      Familia.trace :DBCLIENT_INSTANCE, nil, "fiber:#{!!Fiber[:familia_transaction]} instance:#{!!@dbclient} class:#{!!class_client} fallback:#{!Fiber[:familia_transaction] && !@dbclient && !class_client}", caller(1..1) if Familia.debug?
+      Familia.trace :DBCLIENT_INSTANCE, nil, "fiber:#{!!Fiber[:familia_transaction]} instance:#{!!@dbclient} class:#{!!class_client} fallback:#{!Fiber[:familia_transaction] && !@dbclient && !class_client}" if Familia.debug?
       # conn.select(self.class.logical_database)
       client
     end

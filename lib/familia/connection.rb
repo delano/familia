@@ -148,7 +148,7 @@ module Familia
       if Fiber[:familia_connection]
         conn, version = Fiber[:familia_connection]
         if version == middleware_version
-          Familia.trace :DBCLIENT_MODULE_FIBER, nil, "Using fiber-local connection for #{uri}", caller(1..1) if Familia.debug?
+          Familia.trace :DBCLIENT_MODULE_FIBER, nil, "Using fiber-local connection for #{uri}" if Familia.debug?
           return conn
         else
           # Version mismatch, clear stale connection
@@ -173,7 +173,7 @@ module Familia
           end
         end
 
-        Familia.trace :DBCLIENT_MODULE_PROVIDER, nil, "Using connection provider", caller(1..1) if Familia.debug?
+        Familia.trace :DBCLIENT_MODULE_PROVIDER, nil, "Using connection provider" if Familia.debug?
         return client
       end
 
@@ -185,7 +185,7 @@ module Familia
       serverid = parsed_uri.serverid
 
       client = @database_clients[serverid] ||= create_dbclient(parsed_uri)
-      Familia.trace :DBCLIENT_MODULE_CACHED, nil, "Using cached/created connection for #{serverid}", caller(1..1) if Familia.debug?
+      Familia.trace :DBCLIENT_MODULE_CACHED, nil, "for #{serverid}" if Familia.debug?
       client
     end
 

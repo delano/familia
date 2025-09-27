@@ -52,7 +52,7 @@ Familia.debug = false
 #=> true
 
 ## Horreum object fields have a fast attribute method (1 of 2)
-Familia.trace :LOAD, @customer.dbclient, @customer.uri, caller if Familia.debug?
+Familia.trace :LOAD, nil, @customer.uri if Familia.debug?
 @customer.name! 'Jane Doe'
 #=> true
 

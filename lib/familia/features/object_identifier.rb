@@ -86,7 +86,7 @@ module Familia
       DEFAULT_GENERATOR = :uuid_v7
 
       def self.included(base)
-        Familia.trace :LOADED, self, base, caller(1..1) if Familia.debug?
+        Familia.trace :LOADED, self, base if Familia.debug?
         base.extend ModelClassMethods
 
         # Ensure default generator is set in feature options
@@ -300,7 +300,7 @@ module Familia
 
         options = self.class.feature_options(:object_identifier)
         generator = options[:generator] || DEFAULT_GENERATOR
-        Familia.trace :OBJID_INIT, dbclient, "Generator strategy: #{generator}", caller(1..1)
+        Familia.trace :OBJID_INIT, nil, "Generator strategy: #{generator}"
       end
     end
   end

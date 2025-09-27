@@ -24,7 +24,7 @@ module Familia
     rescue TypeError => e
       Familia.le "[hset]= #{e.message}"
       Familia.ld "[hset]= #{dbkey} #{field}=#{val}" if Familia.debug
-      echo :hset, caller(1..1).first if Familia.debug # logs via echo to the db and back
+      echo :hset, Familia.pretty_stack(limit: 1) if Familia.debug # logs via echo to the db and back
       klass = val.class
       msg = "Cannot store #{field} => #{val.inspect} (#{klass}) in #{dbkey}"
       raise e.class, msg
@@ -75,7 +75,7 @@ module Familia
     rescue TypeError => e
       Familia.le "[hsetnx] #{e.message}"
       Familia.ld "[hsetnx] #{dbkey} #{field}=#{val}" if Familia.debug
-      echo :hsetnx, caller(1..1).first if Familia.debug # logs via echo to the db and back
+      echo :hsetnx, Familia.pretty_stack(limit: 1) if Familia.debug # logs via echo to the db and back
       klass = val.class
       msg = "Cannot store #{field} => #{val.inspect} (#{klass}) in #{dbkey}"
       raise e.class, msg
@@ -150,7 +150,7 @@ module Familia
     #     puts "Oops! Our hash seems to have vanished into the Database void!"
     #   end
     def refresh!
-      Familia.trace :REFRESH, dbclient, uri, caller(1..1) if Familia.debug?
+      Familia.trace :REFRESH, nil, uri if Familia.debug?
       raise Familia::KeyNotFoundError, dbkey unless dbclient.exists(dbkey)
 
       fields = hgetall

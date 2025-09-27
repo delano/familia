@@ -16,7 +16,7 @@ module Familia
     end
 
     def push *values
-      echo :push, caller(1..1).first if Familia.debug
+      echo :push, Familia.pretty_stack(limit: 1) if Familia.debug
       values.flatten.compact.each { |v| dbclient.rpush dbkey, serialize_value(v) }
       dbclient.ltrim dbkey, -@opts[:maxlength], -1 if @opts[:maxlength]
       update_expiration
@@ -85,7 +85,7 @@ module Familia
     end
 
     def members(count = -1)
-      echo :members, caller(1..1).first if Familia.debug
+      echo :members, Familia.pretty_stack(limit: 1) if Familia.debug
       count -= 1 if count.positive?
       range 0, count
     end
