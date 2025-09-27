@@ -69,10 +69,6 @@ TestDomain.included_modules.map(&:name).include?('Familia::Features::Relationshi
 @domain.respond_to?(:permission_encode)
 #=> true
 
-## db operations functionality is available
-@domain.respond_to?(:atomic_operation)
-#=> true
-
 ## Identifier method works (wraps identifier_field)
 TestDomain.identifier_field
 #=> :domain_id
@@ -208,10 +204,6 @@ Familia::Features::Relationships::RelationshipError.ancestors.include?(StandardE
 ## Temporary keys are created with TTL
 temp_key = @domain.create_temp_key("test_operation", 60)
 temp_key.start_with?("temp:")
-#=> true
-
-## Batch operations are available
-@domain.respond_to?(:batch_zadd)
 #=> true
 
 ## Score range queries work

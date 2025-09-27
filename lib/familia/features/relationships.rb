@@ -2,12 +2,8 @@
 
 require 'securerandom'
 require_relative 'relationships/score_encoding'
-require_relative 'relationships/database_operations'
 require_relative 'relationships/participation'
 require_relative 'relationships/indexing'
-require_relative 'relationships/cascading'
-require_relative 'relationships/querying'
-require_relative 'relationships/permission_management'
 
 module Familia
   module Features
@@ -94,19 +90,12 @@ module Familia
 
         # Include all relationship submodules and their class methods
         base.include ScoreEncoding
-        base.include DatabaseOperations
 
         base.include Participation
         base.extend Participation::ModelClassMethods
 
         base.include Indexing
         base.extend Indexing::ModelClassMethods
-
-        base.include Cascading
-        base.extend Cascading::ModelClassMethods
-
-        base.include Querying
-        base.extend Querying::ModelClassMethods
       end
 
       # Error classes
@@ -241,9 +230,6 @@ module Familia
 
         # Override destroy to handle cascade operations
         def destroy!
-          # Execute cascade operations before destroying the object
-          execute_cascade_operations if respond_to?(:execute_cascade_operations)
-
           super
         end
 
@@ -285,11 +271,6 @@ module Familia
             participation_collections: [],
             index_entries: [],
           }
-
-          if respond_to?(:cascade_dry_run)
-            cascade_preview = cascade_dry_run
-            preview.merge!(cascade_preview)
-          end
 
           preview
         end

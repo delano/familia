@@ -8,15 +8,11 @@
 
 **participation.rb** - Multi-presence management where objects can exist in multiple collections simultaneously with score-encoded metadata (timestamps, permissions, etc.). Includes integrated convenience methods via member_methods parameter.
 
-**querying.rb** - Advanced search operations across collections with filtering, unions, intersections, and permission-based access control.
-
-**cascading.rb** - Automated cleanup and dependency management. Handles what happens when objects are deleted (remove from collections, update indexes, etc.).
-
 ## Quick API Guide
 
 **participates_in** - Collection membership ("this object belongs in that collection")
 ```ruby
-participates_in Organization, :members, score: :joined_at, member_methods: true
+participates_in Organization, :members, score: :joined_at, bidirectional: true
 # Creates: org.members, org.add_member(), customer.add_to_organization_members()
 ```
 
@@ -24,14 +20,6 @@ participates_in Organization, :members, score: :joined_at, member_methods: true
 ```ruby
 indexed_by :email, :email_index, context: Organization  # Scoped: org.find_by_email()
 ```
-
-## Supporting Modules
-
-**score_encoding.rb** - Embeds metadata directly into Valkey/Redis scores for efficient storage and retrieval without additional round trips.
-
-**database_operations.rb** - Low-level Valkey/Redis command abstractions and atomic multi-collection operations via pipelines/transactions.
-
-**permission_management.rb** - Score-based permission encoding allowing fine-grained access control within collections.
 
 ## Key Philosophy
 

@@ -82,7 +82,6 @@ module Familia
           #   - +Proc+: Dynamic calculation in instance context (e.g., +-> { status == 'premium' ? 100 : 0 }+)
           #   - +Numeric+: Static score for all instances (e.g., +50.0+)
           #   - +nil+: Use +current_score+ method fallback
-          # @param on_destroy [Symbol] Cleanup behavior when instance is destroyed:
           #   - +:remove+: Remove from collection on destruction (default)
           #   - +:ignore+: Leave in collection when destroyed
           # @param type [Symbol] Valkey/Redis collection type:
@@ -114,7 +113,7 @@ module Familia
           #
           # @see #participates_in for instance-level participation relationships
           # @since 1.0.0
-          def class_participates_in(collection_name, score: nil, on_destroy: :remove,
+          def class_participates_in(collection_name, score: nil,
                                     type: :sorted_set, bidirectional: true)
             klass_name = (name || to_s).downcase
 
@@ -124,7 +123,7 @@ module Familia
               target_class_name: name || to_s,
               collection_name: collection_name,
               score: score,
-              on_destroy: on_destroy,
+
               type: type,
               bidirectional: bidirectional,
             )
@@ -179,7 +178,6 @@ module Familia
           #   - +Proc+: Dynamic calculation executed in participant instance context
           #   - +Numeric+: Static score applied to all participants
           #   - +nil+: Use +current_score+ method as fallback
-          # @param on_destroy [Symbol] Cleanup behavior when participant is destroyed:
           #   - +:remove+: Remove from all collections on destruction (default)
           #   - +:ignore+: Leave in collections when destroyed
           # @param type [Symbol] Valkey/Redis collection type:
@@ -230,7 +228,7 @@ module Familia
           # @see ModelInstanceMethods#current_participations for membership queries
           # @see ModelInstanceMethods#calculate_participation_score for scoring details
           # @since 1.0.0
-          def participates_in(target_class, collection_name, score: nil, on_destroy: :remove,
+          def participates_in(target_class, collection_name, score: nil,
                               type: :sorted_set, bidirectional: true)
             # Handle class target using Familia.resolve_class and string refinements
             resolved_class = Familia.resolve_class(target_class)
@@ -242,7 +240,7 @@ module Familia
               target_class_name: target_class_name, # pascalized
               collection_name: collection_name,
               score: score,
-              on_destroy: on_destroy,
+
               type: type,
               bidirectional: bidirectional,
             )
