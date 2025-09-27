@@ -15,7 +15,6 @@ module Familia
         :target_class_name,
         :collection_name,     # Symbol name of the collection (e.g., :members, :domains)
         :score,               # Proc/Symbol/nil - score calculator for sorted sets
-        :on_destroy,          # Symbol - cleanup behavior (:remove, :cascade, etc.)
         :type,                # Symbol - collection type (:sorted_set, :set, :list)
         :bidirectional        # Boolean - whether to generate reverse methods
       ) do

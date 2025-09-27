@@ -83,7 +83,7 @@ instantiation_commands.empty?
 database_commands = DatabaseLogger.capture_commands do
   @customer.save
 end
-database_commands.map { |cmd| cmd[:command] }
+database_commands.map { |cmd| cmd[:command] } if database_commands
 ##=> [["hmset", "reverse_index_customer:ri_cust_123:object", "customer_id", "ri_cust_123", "name", "Reverse Index Test Customer"], ["zadd", "reverse_index_customer:instances", "1705343400.0", "ri_cust_123"]]
 
 
@@ -91,16 +91,15 @@ database_commands.map { |cmd| cmd[:command] }
 database_commands = DatabaseLogger.capture_commands do
   @domain1.save
 end
-database_commands[0][:command]
+database_commands[0][:command] if database_commands && database_commands[0]
 ##=>  ["hmset", "reverse_index_domain:ri_dom_1:object", "domain_id", "ri_dom_1", "display_domain", "example1.com", "created_at", "1705343400.0"]
 
 ## Domain2 save functionality
 database_commands = DatabaseLogger.capture_commands do
   @domain2.save
 end
-database_commands[0][:command]
+database_commands[0][:command]if database_commands && database_commands[0]
 ##=> ["hmset", "reverse_index_domain:ri_dom_2:object", "domain_id", "ri_dom_2", "display_domain", "example2.com", "created_at", "1705343401.0"]
-
 
 
 Timecop.return # Clean up
