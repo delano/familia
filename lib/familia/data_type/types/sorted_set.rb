@@ -47,6 +47,14 @@ module Familia
     end
 
     def add(val, score=nil)
+      # TODO: Support some or all of the ZADD options.
+      # XX: Only update existing elements. Don't add new ones.
+      # NX: Only add new elements. Don't update existing ones.
+      # LT: Only update if new score < current score. Doesn't prevent adding.
+      # GT: Only update if new score > current score. Doesn't prevent adding.
+      # CH: Return total changed elements (new + updated) instead of just new.
+      # INCR: Acts like ZINCRBY. Only one score-element pair allowed.
+      # Note: GT, LT and NX options are mutually exclusive.
       score ||= Familia.now
       ret = dbclient.zadd dbkey, score, serialize_value(val)
       update_expiration
