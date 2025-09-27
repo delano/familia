@@ -57,10 +57,8 @@ module Familia
 
             # Ensure proper DataType fields are declared on target class for sorted_set indexes
             # This creates the needed DataType infrastructure that will be accessed by field value
-            if target_class.is_a?(Class)
-              # No specific field declaration needed here - the indexes are created dynamically
-              # based on field values, but we need the target class to understand index access
-            end
+            # No specific field declaration needed here - the indexes are created dynamically
+            # based on field values, but we need the target class to understand index access
 
             # Generate finder methods on the target class
             generate_target_finder_methods(target_class, field, index_name) if finder && target_class.is_a?(Class)
@@ -107,7 +105,7 @@ module Familia
           # Ensure proper DataType field is declared for index
           # Similar to ensure_collection_field in participation system
           def ensure_index_field(target_class, index_name, field_type)
-            return if target_class.method_defined?(index_name)
+            return if target_class.method_defined?(index_name) || target_class.respond_to?(index_name)
 
             target_class.send(field_type, index_name)
           end
@@ -231,11 +229,14 @@ module Familia
               index_hash = self.class.send(index_name)  # Access the class-level hashkey DataType
               new_field_value = send(field)
 
-              # Remove old value if provided
-              index_hash.remove(old_field_value.to_s) if old_field_value
+              # Use atomic transaction for remove and add operations
+              index_hash.dbclient.multi do |tx|
+                # Remove old value if provided
+                tx.hdel(index_hash.dbkey, old_field_value.to_s) if old_field_value
 
-              # Add new value if present
-              index_hash[new_field_value.to_s] = identifier if new_field_value
+                # Add new value if present
+                tx.hset(index_hash.dbkey, new_field_value.to_s, identifier) if new_field_value
+              end
             end
           end
 
@@ -285,18 +286,21 @@ module Familia
 
               new_field_value = send(field)
 
-              # Remove from old index if provided
-              if old_field_value
-                old_index_key = "#{index_name}:#{old_field_value}"
-                old_index_set = Familia::SortedSet.new(old_index_key, parent: target_instance)
-                old_index_set.remove(identifier)
-              end
+              # Use atomic transaction for remove and add operations
+              target_instance.dbclient.multi do |tx|
+                # Remove from old index if provided
+                if old_field_value
+                  old_index_key = "#{index_name}:#{old_field_value}"
+                  old_index_set = Familia::SortedSet.new(old_index_key, parent: target_instance)
+                  tx.zrem(old_index_set.dbkey, identifier)
+                end
 
-              # Add to new index if present
-              if new_field_value
-                new_index_key = "#{index_name}:#{new_field_value}"
-                new_index_set = Familia::SortedSet.new(new_index_key, parent: target_instance)
-                new_index_set.add(identifier, Familia.now)
+                # Add to new index if present
+                if new_field_value
+                  new_index_key = "#{index_name}:#{new_field_value}"
+                  new_index_set = Familia::SortedSet.new(new_index_key, parent: target_instance)
+                  tx.zadd(new_index_set.dbkey, Familia.now, identifier)
+                end
               end
             end
           end
