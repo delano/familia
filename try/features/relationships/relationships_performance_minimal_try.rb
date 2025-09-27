@@ -44,7 +44,7 @@ save_time = Benchmark.realtime do
   @domains.each do |domain|
     domain.save
     # Use numeric scores for sorted sets
-    MinimalDomain.all_domains.add(domain.priority_score.to_f, domain.identifier)
+    MinimalDomain.all_domains.add(domain.identifier, domain.priority_score.to_f)
     MinimalDomain.active_domains.add(domain.identifier)
     MinimalDomain.domain_history.push(domain.identifier)
     MinimalDomain.domain_lookup[domain.display_domain] = domain.identifier
@@ -105,7 +105,7 @@ end
 large_time = Benchmark.realtime do
   @large_domains.each do |domain|
     domain.save
-    MinimalDomain.all_domains.add(domain.priority_score.to_f, domain.identifier)
+    MinimalDomain.all_domains.add(domain.identifier, domain.priority_score.to_f)
   end
 end
 

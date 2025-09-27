@@ -12,6 +12,7 @@ module Familia
     end
     alias size element_count
     alias length element_count
+    alias count element_count
 
     def empty?
       element_count.zero?

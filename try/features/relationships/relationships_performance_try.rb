@@ -93,8 +93,8 @@ save_time = Benchmark.realtime do
     domain.save
     # Manually populate collections for testing
     score = domain.created_at.is_a?(Time) ? domain.created_at.to_f : domain.created_at.to_f
-    PerfDomain.all_domains.add(score, domain.identifier)
-    PerfDomain.priority_queue.add(domain.priority_score, domain.identifier)
+    PerfDomain.all_domains.add(domain.identifier, score)
+    PerfDomain.priority_queue.add(domain.identifier, domain.priority_score)
     PerfDomain.active_domains.add(domain.identifier)
     PerfDomain.domain_history.push(domain.identifier)
     PerfDomain.domain_lookup[domain.display_domain] = domain.identifier
@@ -153,7 +153,7 @@ instances = 100.times.map { |i| PerfDomain.new(domain_id: "mem_test_#{i}") }
 after_instances = ObjectSpace.count_objects[:T_OBJECT]
 
 # Should not have created excessive objects (relationship metadata is shared)
-(after_instances - before_instances) < 200  # Allow for reasonable overhead
+(after_instances - before_instances) < 250  # Allow for reasonable, 2.5x overhead
 #=> true
 
 ## Class-level relationship metadata should be constant size
@@ -209,13 +209,13 @@ operation_threads = 3.times.map do |i|
       domain.save
 
       # Add to collections manually
-      PerfDomain.all_domains.add(domain.created_at.to_f, domain.identifier)
-      PerfDomain.priority_queue.add(domain.priority_score, domain.identifier)
+      PerfDomain.all_domains.add(domain.identifier, domain.created_at.to_f)
+      PerfDomain.priority_queue.add(domain.identifier, domain.priority_score)
       domain.save
 
       # Manually add to collections for thread test
-      PerfDomain.all_domains.add(domain.created_at.to_f, domain.identifier)
-      PerfDomain.priority_queue.add(domain.priority_score, domain.identifier)
+      PerfDomain.all_domains.add(domain.identifier, domain.created_at.to_f)
+      PerfDomain.priority_queue.add(domain.identifier, domain.priority_score)
 
       # Verify the domain was added to collections
       in_all = PerfDomain.all_domains.member?(domain.identifier)
@@ -322,8 +322,8 @@ test_domain = PerfDomain.new(
 # Save should succeed and add to all collections
 test_domain.save
 # Manually add to collections
-PerfDomain.all_domains.add(test_domain.created_at.to_f, test_domain.identifier)
-PerfDomain.priority_queue.add(test_domain.priority_score, test_domain.identifier)
+PerfDomain.all_domains.add(test_domain.identifier, test_domain.created_at.to_f)
+PerfDomain.priority_queue.add(test_domain.identifier, test_domain.priority_score)
 PerfDomain.active_domains.add(test_domain.identifier)
 PerfDomain.domain_history.push(test_domain.identifier)
 

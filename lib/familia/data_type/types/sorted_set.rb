@@ -9,6 +9,7 @@ module Familia
     end
     alias size element_count
     alias length element_count
+    alias count element_count
 
     def empty?
       element_count.zero?
@@ -31,7 +32,7 @@ module Familia
     #   specifying a custom score. Use `add` or `[]=` for more control.
     #
     def <<(val)
-      add(Familia.now.to_i, val)
+      add(val)
     end
 
     # NOTE: The argument order is the reverse of #add. We do this to
@@ -42,10 +43,19 @@ module Familia
     #     obj.metrics[VALUE]  # => SCORE
     #
     def []=(val, score)
-      add score, val
+      add val, score
     end
 
-    def add(score, val)
+    def add(val, score=nil)
+      # TODO: Support some or all of the ZADD options.
+      # XX: Only update existing elements. Don't add new ones.
+      # NX: Only add new elements. Don't update existing ones.
+      # LT: Only update if new score < current score. Doesn't prevent adding.
+      # GT: Only update if new score > current score. Doesn't prevent adding.
+      # CH: Return total changed elements (new + updated) instead of just new.
+      # INCR: Acts like ZINCRBY. Only one score-element pair allowed.
+      # Note: GT, LT and NX options are mutually exclusive.
+      score ||= Familia.now
       ret = dbclient.zadd dbkey, score, serialize_value(val)
       update_expiration
       ret

@@ -129,7 +129,7 @@ module Familia
     #             interval: interval.to_i)
     #       end
     #
-    #       metric.data_points.add(timestamp, value)
+    #       metric.data_points.add(value, timestamp)
     #       metric.timestamp = timestamp
     #       metric.value = value
     #       metric.save

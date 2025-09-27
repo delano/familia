@@ -126,24 +126,24 @@ decoded[:permission_list].include?(:write)
 #=> true
 
 ## Domain can check membership in customer domains (collision-free naming)
-@domain.respond_to?(:in_testcustomer_domains?)
+@domain.respond_to?(:in_test_customer_domains?)
 #=> true
 
 ## Domain can add itself to customer domains (collision-free naming)
-@domain.respond_to?(:add_to_testcustomer_domains)
+@domain.respond_to?(:add_to_test_customer_domains)
 #=> true
 
 ## Domain can remove itself from customer domains (collision-free naming)
-@domain.respond_to?(:remove_from_testcustomer_domains)
+@domain.respond_to?(:remove_from_test_customer_domains)
 #=> true
 
 ## Add domain to customer collection
-@domain.add_to_testcustomer_domains(@customer)
-@domain.in_testcustomer_domains?(@customer)
+@domain.add_to_test_customer_domains(@customer)
+@domain.in_test_customer_domains?(@customer)
 #=> true
 
 ## Score is properly encoded
-score = @domain.score_in_testcustomer_domains(@customer)
+score = @domain.score_in_test_customer_domains(@customer)
 score.is_a?(Float) && score > 0
 #=> true
 
@@ -152,7 +152,7 @@ score.is_a?(Float) && score > 0
 # =============================================
 
 ## Domain participation methods work correctly
-@domain.respond_to?(:score_in_testcustomer_domains)
+@domain.respond_to?(:score_in_test_customer_domains)
 #=> true
 
 ## Score calculation methods are available
@@ -164,12 +164,12 @@ score.is_a?(Float) && score > 0
 # =============================================
 
 ## participates_in generates collision-free bidirectional methods with collection names
-@domain.respond_to?(:add_to_testcustomer_domains)
+@domain.respond_to?(:add_to_test_customer_domains)
 #=> true
 
 ## Basic bidirectional participation operations work
-@domain.remove_from_testcustomer_domains(@customer)
-@domain.in_testcustomer_domains?(@customer)
+@domain.remove_from_test_customer_domains(@customer)
+@domain.in_test_customer_domains?(@customer)
 #=> false
 
 # =============================================

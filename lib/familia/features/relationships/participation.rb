@@ -1,6 +1,9 @@
 # lib/familia/features/relationships/participation.rb
 
 require_relative 'participation_relationship'
+require_relative 'collection_operations'
+require_relative 'participant_methods'
+require_relative 'target_methods'
 
 module Familia
   module Features
@@ -8,30 +11,109 @@ module Familia
       # Participation module for participates_in relationships using Valkey/Redis collections
       # Provides multi-presence support where objects can exist in multiple collections
       # Integrates both tracking and membership functionality into a single API
+      #
+      # === Architecture Overview ===
+      # This module is organized into clear, separate concerns:
+      #
+      # 1. CollectionOperations: Shared helpers for all collection manipulation
+      # 2. ParticipantMethods: Methods added to the class calling participates_in
+      # 3. TargetMethods: Methods added to the target class specified in participates_in
+      #
+      # This separation makes it crystal clear what methods are added to which class.
+      #
+      # === Visual Example ===
+      # When Domain calls: participates_in Customer, :domains
+      #
+      # PARTICIPANT (Domain) gets:
+      # - domain.in_customer_domains?(customer)
+      # - domain.add_to_customer_domains(customer)
+      # - domain.remove_from_customer_domains(customer)
+      #
+      # TARGET (Customer) gets:
+      # - customer.domains
+      # - customer.add_domain(domain)
+      # - customer.remove_domain(domain)
+      # - customer.add_domains([...])
+      #
       module Participation
         using Familia::Refinements::StylizeWords
 
-        # Class-level participation configurations
+        # Hook called when module is included in a class.
+        #
+        # Extends the host class with ModelClassMethods for relationship definitions
+        # and includes ModelInstanceMethods for instance-level operations.
+        #
+        # @param base [Class] The class including this module
         def self.included(base)
           base.extend ModelClassMethods
           base.include ModelInstanceMethods
           super
         end
 
-        # Participation::ModelClassMethods
+        # Class methods for defining participation relationships.
         #
+        # These methods are available on any class that includes the Participation module,
+        # allowing definition of both instance-level and class-level participation relationships.
         module ModelClassMethods
-          # Define a class-level participation collection
+          # Define a class-level participation collection where all instances automatically participate.
           #
-          # @param collection_name [Symbol] Name of the class-level collection
-          # @param score [Symbol, Proc, nil] How to calculate the score
-          # @param on_destroy [Symbol] What to do when object is destroyed (:remove, :ignore)
-          # @param type [Symbol] Type of Valkey/Redis collection (:sorted_set, :set, :list)
-          # @param bidirectional [Boolean] Whether to generate convenience methods
+          # Class-level participation creates a global collection containing all instances of the class,
+          # with automatic management of membership based on object lifecycle events. This is useful
+          # for maintaining global indexes, leaderboards, or categorical groupings.
           #
-          # @example Class-level participation
-          #   class_participates_in :all_customers, score: :created_at
-          #   class_participates_in :active_users, score: -> { status == 'active' ? Familia.now.to_i : 0 }
+          # The collection is created at the class level (e.g., User.all_users) rather than on
+          # individual instances, providing a centralized view of all objects matching the criteria.
+          #
+          # === Generated Methods
+          #
+          # ==== On the Class (Target Methods)
+          # - +ClassName.collection_name+ - Access the collection DataType
+          # - +ClassName.add_to_collection_name(instance)+ - Add instance to collection
+          # - +ClassName.remove_from_collection_name(instance)+ - Remove instance from collection
+          #
+          # ==== On Instances (Participant Methods, if bidirectional)
+          # - +instance.in_class_collection_name?+ - Check membership in class collection
+          # - +instance.add_to_class_collection_name+ - Add self to class collection
+          # - +instance.remove_from_class_collection_name+ - Remove self from class collection
+          #
+          # @param collection_name [Symbol] Name of the class-level collection (e.g., +:all_users+, +:active_members+)
+          # @param score [Symbol, Proc, Numeric, nil] Scoring strategy for sorted collections:
+          #   - +Symbol+: Field name or method name (e.g., +:priority_level+, +:created_at+)
+          #   - +Proc+: Dynamic calculation in instance context (e.g., +-> { status == 'premium' ? 100 : 0 }+)
+          #   - +Numeric+: Static score for all instances (e.g., +50.0+)
+          #   - +nil+: Use +current_score+ method fallback
+          # @param on_destroy [Symbol] Cleanup behavior when instance is destroyed:
+          #   - +:remove+: Remove from collection on destruction (default)
+          #   - +:ignore+: Leave in collection when destroyed
+          # @param type [Symbol] Valkey/Redis collection type:
+          #   - +:sorted_set+: Ordered by score (default)
+          #   - +:set+: Unordered unique membership
+          #   - +:list+: Ordered sequence allowing duplicates
+          # @param bidirectional [Boolean] Whether to generate convenience methods on instances (default: +true+)
+          #
+          # @example Simple priority-based global collection
+          #   class User < Familia::Horreum
+          #     field :priority_level
+          #     class_participates_in :all_users, score: :priority_level
+          #   end
+          #
+          #   User.all_users.first        # Highest priority user
+          #   user.in_class_all_users?    # true if user is in collection
+          #
+          # @example Dynamic scoring based on status
+          #   class Customer < Familia::Horreum
+          #     field :status
+          #     field :last_purchase
+          #
+          #     class_participates_in :active_customers, score: -> {
+          #       status == 'active' ? last_purchase.to_i : 0
+          #     }
+          #   end
+          #
+          #   Customer.active_customers.to_a  # All active customers, sorted by last purchase
+          #
+          # @see #participates_in for instance-level participation relationships
+          # @since 1.0.0
           def class_participates_in(collection_name, score: nil, on_destroy: :remove,
                                     type: :sorted_set, bidirectional: true)
             klass_name = (name || to_s).downcase
@@ -47,43 +129,112 @@ module Familia
               bidirectional: bidirectional,
             )
 
-            # Generate class-level collection methods
-            generate_participation_class_methods(self, collection_name, type)
+            # STEP 1: Add collection management methods to the class itself
+            # e.g., User.all_users, User.add_to_all_users(user)
+            TargetMethods::Builder.build_class_level(self, collection_name, type)
 
-            # Generate instance methods for class-level participation
-            generate_participation_instance_methods('class', collection_name, score, type) if bidirectional
+            # STEP 2: Add participation methods to instances (if bidirectional)
+            # e.g., user.in_class_all_users?, user.add_to_class_all_users
+            if bidirectional
+              ParticipantMethods::Builder.build(self, 'class', collection_name, type)
+            end
           end
 
-          # Define a participates_in relationship (previously tracked_in and member_of)
+          # Define an instance-level participation relationship between two classes.
           #
-          # @param target_class [Class, Symbol] The class that owns the collection
-          # @param collection_name [Symbol] Name of the collection
-          # @param score [Symbol, Proc, nil] How to calculate the score
-          # @param on_destroy [Symbol] What to do when object is destroyed (:remove, :ignore)
-          # @param type [Symbol] Type of Valkey/Redis collection (:sorted_set, :set, :list)
-          # @param bidirectional [Boolean] Whether to generate convenience methods on participant
+          # This method creates a bidirectional relationship where instances of the calling class
+          # (participants) can join collections owned by instances of the target class. This enables
+          # flexible multi-membership scenarios where objects can belong to multiple collections
+          # simultaneously with different scoring and management strategies.
           #
-          # @example Basic participation
-          #   participates_in Customer, :domains, score: :created_at
+          # The relationship automatically handles reverse index tracking, allowing efficient
+          # lookup of all collections a participant belongs to via the +current_participations+ method.
           #
-          # @example Multi-presence participation with different types
-          #   participates_in Customer, :domains, score: -> { permission_encode(created_at, permission_level) }
-          #   participates_in Team, :domains, score: :added_at, type: :set
-          #   participates_in Organization, :all_domains, score: :created_at, bidirectional: false
+          # === Generated Methods
+          #
+          # ==== On Target Class (Collection Owner)
+          # - +target.collection_name+ - Access the collection DataType
+          # - +target.add_participant_class_name(participant)+ - Add participant to collection
+          # - +target.remove_participant_class_name(participant)+ - Remove participant from collection
+          # - +target.add_participant_class_names([participants])+ - Bulk add multiple participants
+          #
+          # ==== On Participant Class (if bidirectional)
+          # - +participant.in_target_collection_name?(target)+ - Check membership in target's collection
+          # - +participant.add_to_target_collection_name(target)+ - Add self to target's collection
+          # - +participant.remove_from_target_collection_name(target)+ - Remove self from target's collection
+          #
+          # === Reverse Index Tracking
+          #
+          # Automatically creates a +:participations+ set field on the participant class to track
+          # all collections the instance belongs to. This enables efficient membership queries
+          # and cleanup operations without scanning all possible collections.
+          #
+          # @param target_class [Class, Symbol, String] The class that owns the collection. Can be:
+          #   - +Class+ object (e.g., +Customer+)
+          #   - +Symbol+ referencing class name (e.g., +:customer+, +:Customer+)
+          #   - +String+ class name (e.g., +"Customer"+)
+          # @param collection_name [Symbol] Name of the collection on the target class (e.g., +:domains+, +:members+)
+          # @param score [Symbol, Proc, Numeric, nil] Scoring strategy for sorted collections:
+          #   - +Symbol+: Field name or method name (e.g., +:priority+, +:created_at+)
+          #   - +Proc+: Dynamic calculation executed in participant instance context
+          #   - +Numeric+: Static score applied to all participants
+          #   - +nil+: Use +current_score+ method as fallback
+          # @param on_destroy [Symbol] Cleanup behavior when participant is destroyed:
+          #   - +:remove+: Remove from all collections on destruction (default)
+          #   - +:ignore+: Leave in collections when destroyed
+          # @param type [Symbol] Valkey/Redis collection type:
+          #   - +:sorted_set+: Ordered by score, allows duplicates with different scores (default)
+          #   - +:set+: Unordered unique membership
+          #   - +:list+: Ordered sequence, allows duplicates
+          # @param bidirectional [Boolean] Whether to generate convenience methods on participant class (default: +true+)
+          #
+          # @example Basic domain-customer relationship
+          #   class Domain < Familia::Horreum
+          #     field :name
+          #     field :created_at
+          #
+          #     participates_in Customer, :domains, score: :created_at
+          #   end
+          #
+          #   # Usage:
+          #   domain.add_to_customer_domains(customer)  # Add domain to customer's collection
+          #   customer.domains.first                    # Most recent domain
+          #   domain.in_customer_domains?(customer)     # true
+          #   domain.current_participations             # All collections domain belongs to
+          #
+          # @example Multi-collection participation with different types
+          #   class Employee < Familia::Horreum
+          #     field :hire_date
+          #     field :skill_level
+          #
+          #     # Sorted by hire date in department
+          #     participates_in Department, :members, score: :hire_date
+          #
+          #     # Simple set membership in teams
+          #     participates_in Team, :contributors, score: :skill_level, type: :set
+          #
+          #     # Complex scoring for project assignments
+          #     participates_in Project, :assignees, score: -> {
+          #       base_score = skill_level * 100
+          #       seniority = (Time.now - hire_date) / 1.year
+          #       base_score + seniority * 10
+          #     }
+          #   end
+          #
+          #   # Employee can belong to department, multiple teams, and projects
+          #   employee.add_to_department_members(engineering_dept)
+          #   employee.add_to_team_contributors(frontend_team)
+          #   employee.add_to_project_assignees(mobile_app_project)
+          #
+          # @see #class_participates_in for class-level participation
+          # @see ModelInstanceMethods#current_participations for membership queries
+          # @see ModelInstanceMethods#calculate_participation_score for scoring details
+          # @since 1.0.0
           def participates_in(target_class, collection_name, score: nil, on_destroy: :remove,
                               type: :sorted_set, bidirectional: true)
-            # Handle class target
-            if target_class.is_a?(Class)
-              class_name = target_class.name
-              target_class_name = if class_name.include?('::')
-                                    # Extract the last part after the last ::
-                                    class_name.split('::').last
-                                  else
-                                    class_name
-                                  end
-            else
-              target_class_name = target_class.to_s.pascalize
-            end
+            # Handle class target using Familia.resolve_class and string refinements
+            resolved_class = Familia.resolve_class(target_class)
+            target_class_name = resolved_class.name.demodularize
 
             # Store metadata for this participation relationship
             participation_relationships << ParticipationRelationship.new(
@@ -96,309 +247,124 @@ module Familia
               bidirectional: bidirectional,
             )
 
-            # Generate target class methods
-            generate_target_class_methods(target_class, collection_name, type)
-
-            return unless bidirectional
-
-            # Generate instance methods on this class (participant)
-            generate_participation_instance_methods(target_class_name, collection_name, score, type)
-          end
-
-          # Get all participation relationships for this class
-          def participation_relationships
-            @participation_relationships ||= []
-          end
-
-          private
-
-          # Generate class-level collection methods (e.g., User.all_users)
-          def generate_participation_class_methods(target_class, collection_name, type)
-            collection_class = Familia::DataType.registered_type(type) # :list, :sorted_set, :set
-
-            # Generate class-level collection getter method
-            target_class.define_singleton_method(collection_name.to_s) do
-              collection_key = "#{name.downcase}:#{collection_name}"
-
-              # e.g. Familia::SortedSet.new -> target_class.collection_name
-              collection_class.new(nil, dbkey: collection_key, logical_database: logical_database)
-            end
-
-            # Generate class-level add method (e.g., User.add_to_all_users)
-            target_class.define_singleton_method("add_to_#{collection_name}") do |item, score = nil|
-              collection = send(collection_name.to_s)
-
-              case type
-              when :sorted_set
-                # Calculate score if not provided
-                score ||= if item.respond_to?(:calculate_participation_score)
-                            item.calculate_participation_score('class', collection_name)
-                          else
-                            item.current_score
-                          end
-
-                # Ensure score is never nil
-                score = item.current_score if score.nil?
-
-                collection.add(score, item.identifier)
-              else
-                collection.add(item.identifier)
-              end
-            end
-
-            # Generate class-level remove method
-            target_class.define_singleton_method("remove_from_#{collection_name}") do |item|
-              collection = send(collection_name.to_s)
-              collection.delete(item.identifier)
-            end
-          end
-
-          # Generate methods on the target class (e.g., Customer.domains)
-          def generate_target_class_methods(target_class, collection_name, type)
             # Resolve target class if it's a symbol/string
             actual_target_class = if target_class.is_a?(Class)
                                     target_class
                                   else
-                                    # NOTE: This only works if the model class is in the
-                                    # top, main namspace. e.g. model_name -> ModelName
-                                    # and not Models::ModelName.
                                     Familia.member_by_config_name(target_class)
                                   end
 
-            generate_collection_getter(actual_target_class, collection_name, type)
-            generate_add_method(actual_target_class, collection_name, type)
-            generate_remove_method(actual_target_class, collection_name)
-            generate_bulk_add_method(actual_target_class, collection_name, type)
-            generate_permission_query(actual_target_class, collection_name, type)
-          end
+            # STEP 0: Add participations tracking field to PARTICIPANT class (Domain)
+            # This creates the proper key: "domain:123:participations" (not "domain:123:object:participations")
+            set :participations unless method_defined?(:participations)
 
-          def generate_collection_getter(actual_target_class, collection_name, type)
-            collection_class = Familia::DataType.registered_type(type) # :list, :sorted_set, :set
+            # STEP 1: Add collection management methods to TARGET class (Customer)
+            # Customer gets: domains, add_domain, remove_domain, etc.
+            TargetMethods::Builder.build(actual_target_class, collection_name, type)
 
-            # Generate collection getter method
-            actual_target_class.define_method(collection_name) do
-              collection_key = "#{self.class.name.downcase}:#{identifier}:#{collection_name}"
-              collection_class.new(nil, dbkey: collection_key, logical_database: logical_database)
+            # STEP 2: Add participation methods to PARTICIPANT class (Domain) - only if bidirectional
+            # Domain gets: in_customer_domains?, add_to_customer_domains, etc.
+            if bidirectional
+              ParticipantMethods::Builder.build(self, target_class_name, collection_name, type)
             end
           end
 
-          def generate_add_method(actual_target_class, collection_name, type)
-            # Generate add method (e.g., Customer#add_domain)
-            actual_target_class.define_method("add_#{collection_name.to_s.singularize}") do |item, score = nil|
-              collection = send(collection_name)
-
-              case type
-              when :sorted_set
-                # Calculate score if not provided
-                score ||= if item.respond_to?(:calculate_participation_score)
-                            item.calculate_participation_score(self.class, collection_name)
-                          else
-                            item.current_score
-                          end
-
-                # Ensure score is never nil
-                score = item.current_score if score.nil?
-
-                collection.add(score, item.identifier)
-              else
-                collection.add(item.identifier)
-              end
-
-              # Track participation in reverse index for efficient cleanup
-              return unless item.respond_to?(:add_participation_membership)
-
-              item.add_participation_membership(collection.dbkey)
-            end
-          end
-
-          def generate_remove_method(actual_target_class, collection_name)
-            # Generate remove method (e.g., Customer#remove_domain)
-            actual_target_class.define_method("remove_#{collection_name.to_s.singularize}") do |item|
-              collection = send(collection_name)
-
-              # Use common removal method that all collections support (aka DataType classes)
-              collection.remove(item.identifier)
-
-              # Remove participation tracking
-              return unless item.respond_to?(:remove_participation_membership)
-
-              item.remove_participation_membership(collection.dbkey)
-            end
-          end
-
-          def generate_bulk_add_method(actual_target_class, collection_name, type)
-            # Generate bulk add method (e.g., Customer#add_domains)
-            actual_target_class.define_method("add_#{collection_name}") do |items|
-              return if items.empty?
-
-              collection = send(collection_name)
-              send("bulk_add_#{type}_items", collection, items)
-            end
-          end
-
-          def generate_permission_query(actual_target_class, collection_name, type)
-            return unless type == :sorted_set
-
-            # Generate query methods with score filtering (for sorted sets)
-            actual_target_class.define_method("#{collection_name}_with_permission") do |min_permission = :read|
-              collection = send(collection_name)
-              permission_score = ScoreEncoding.permission_encode(0, min_permission)
-
-              collection.zrangebyscore(permission_score, '+inf', with_scores: true)
-            end
-          end
-
-          # Generate instance methods on the participant class
-          def generate_participation_instance_methods(target_class, collection_name, _score_calculator, type)
-            generate_membership_check(target_class, collection_name, type)
-            generate_add_to_collection(target_class, collection_name, type)
-            generate_remove_from_collection(target_class, collection_name, type)
-            generate_score_methods(target_class, collection_name, type)
-            generate_position_method(target_class, collection_name, type)
-          end
-
-          def generate_membership_check(target_class_name, collection_name, type)
-            # Method to check if this object is in a specific collection
-            # e.g., domain.in_customer_domains?(customer)
-            define_method("in_#{target_class_name.downcase}_#{collection_name}?") do |target_instance|
-              return false unless target_instance&.identifier
-
-              collection_key = "#{target_class_name.downcase}:#{target_instance.identifier}:#{collection_name}"
-              case type
-              when :sorted_set
-                !dbclient.zscore(collection_key, identifier).nil?
-              when :set
-                dbclient.sismember(collection_key, identifier)
-              when :list
-                !dbclient.lpos(collection_key, identifier).nil?
-              end
-            end
-          end
-
-          def generate_add_to_collection(target_class_name, collection_name, type)
-
-            collection_class = Familia::DataType.registered_type(type) # :list, :sorted_set, :set
-
-            # Method to add this object to a specific collection
-            # e.g., domain.add_to_customer_domains(customer, score)
-            define_method("add_to_#{target_class_name.downcase}_#{collection_name}") do |target_instance, score = nil|
-              collection_key = "#{target_class_name.downcase}:#{target_instance.identifier}:#{collection_name}"
-
-              collection = collection_class.new(nil, dbkey: collection_key, logical_database: logical_database)
-
-              case type
-              when :sorted_set
-                score ||= calculate_participation_score(target_class_name, collection_name)
-
-                # Ensure score is never nil, by relying on ScoreEncoding.current_score
-                score = current_score if score.nil?
-
-                collection.add(score, identifier)
-              else
-                collection.add(identifier)
-              end
-            end
-          end
-
-          def generate_remove_from_collection(target_class_name, collection_name, type)
-            collection_class = Familia::DataType.registered_type(type) # :list, :sorted_set, :set
-
-            # Method to remove this object from a specific collection
-            # e.g., domain.remove_from_customer_domains(customer)
-            define_method("remove_from_#{target_class_name.downcase}_#{collection_name}") do |target_instance|
-              return unless target_instance&.identifier
-
-              collection_key = "#{target_class_name.downcase}:#{target_instance.identifier}:#{collection_name}"
-
-              collection = collection_class.new(nil, dbkey: collection_key, logical_database: logical_database)
-
-              collection.remove(identifier) # For list, this removes all occurrences
-            end
-          end
-
-          def generate_score_methods(target_class_name, collection_name, type)
-            return unless type == :sorted_set
-
-            # Method to get score in a specific collection (for sorted sets)
-            # e.g., domain.score_in_customer_domains(customer)
-            define_method("score_in_#{target_class_name.downcase}_#{collection_name}") do |target_instance|
-              collection_key = "#{target_class_name.downcase}:#{target_instance.identifier}:#{collection_name}"
-              dbclient.zscore(collection_key, identifier)
-            end
-
-            # Method to update score in a specific collection
-            # e.g., domain.update_score_in_customer_domains(customer, new_score)
-            define_method("update_score_in_#{target_class_name.downcase}_#{collection_name}") do |target_instance,
-                                                                                                new_score|
-              collection_key = "#{target_class_name.downcase}:#{target_instance.identifier}:#{collection_name}"
-              dbclient.zadd(collection_key, new_score, identifier, xx: true) # Only update existing
-            end
-          end
-
-          def generate_position_method(target_class_name, collection_name, type)
-            return unless type == :list
-
-            # Method to get position in a specific collection (for lists)
-            define_method("position_in_#{target_class_name.downcase}_#{collection_name}") do |target_instance|
-              collection_key = "#{target_class_name.downcase}:#{target_instance.identifier}:#{collection_name}"
-              dbclient.lpos(collection_key, identifier)
-            end
+          # Get all participation relationships defined for this class.
+          #
+          # Returns an array of ParticipationRelationship objects containing metadata
+          # about each participation relationship, including target class, collection name,
+          # scoring strategy, and configuration options.
+          #
+          # @return [Array<ParticipationRelationship>] Array of relationship configurations
+          # @since 1.0.0
+          def participation_relationships
+            @participation_relationships ||= []
           end
         end
 
-        # Instance methods for participating objects
+        # Instance methods available on objects that participate in collections.
+        #
+        # These methods provide the core functionality for participation management,
+        # including score calculation, membership tracking, and participation queries.
         module ModelInstanceMethods
-          # Calculate the appropriate score for a participation relationship based on configured scoring strategy
+          # Calculate the appropriate score for a participation relationship based on configured scoring strategy.
           #
-          # This method serves as the single source of truth for participation scoring, supporting multiple
-          # scoring strategies defined in relationship configurations. It's called during relationship
-          # addition, object creation/save callbacks, field updates, and score maintenance operations.
+          # This method serves as the single source of truth for participation scoring across the entire
+          # relationship lifecycle. It supports multiple scoring strategies and provides robust fallback
+          # behavior for edge cases and error conditions.
           #
-          # Scoring Strategies:
-          # * Symbol - Field name or method name (e.g., :priority_level, :created_at)
-          # * Proc - Dynamic calculation executed in instance context (e.g., -> { tenure + performance })
-          # * Numeric - Static score applied to all instances (e.g., 100.0)
-          # * Fallback - Returns current_score for unrecognized types or missing configs
+          # The calculated score determines the object's position within sorted collections and can be
+          # dynamically recalculated as object state changes, enabling responsive collection ordering
+          # based on real-time business logic.
           #
-          # Type Safety:
-          # * Robust type normalization handles Class/Symbol/String target class variations
-          # * Nil-safe evaluation with multiple fallback layers
-          # * Automatic numeric conversion (to_f for floats, encode_score for integers)
+          # === Scoring Strategies
           #
-          # Usage Examples:
-          #   # Field-based scoring
-          #   participates_in Organization, :members, score: :priority_level
+          # [Symbol] Field name or method name - calls +send(symbol)+ on the instance
+          #   * +:priority_level+ - Uses value of priority_level field
+          #   * +:created_at+ - Uses timestamp for chronological ordering
+          #   * +:calculate_importance+ - Calls custom method for complex logic
           #
-          #   # Time-based scoring
-          #   participates_in Blog, :posts, score: :published_at
+          # [Proc] Dynamic calculation executed in instance context using +instance_exec+
+          #   * +-> { skill_level * experience_years }+ - Combines multiple fields
+          #   * +-> { active? ? 100 : 0 }+ - Conditional scoring based on state
+          #   * +-> { Rails.cache.fetch("score:#{id}") { expensive_calculation } }+ - Cached computations
           #
-          #   # Complex business logic
-          #   participates_in Project, :contributors, score: -> { contributions.count * 10 }
+          # [Numeric] Static score applied uniformly to all instances
+          #   * +50.0+ - All instances get same floating-point score
+          #   * +100+ - All instances get same integer score (converted to float)
           #
-          #   # Priority-based Scoring
-          #   class Task < Familia::Horreum
-          #     field :priority  # 1=low, 5=high
-          #     participates_in Project, :tasks, score: :priority
-          #   end
-          #   task.priority = 5                 # when priority changes
-          #   task.add_to_project_tasks(project)
+          # [nil] Uses +current_score+ method as fallback if available
           #
-          #   # Complex business logic (sales employee changes departments)
-          #   class Employee < Familia::Horreum
-          #     field :hire_date
-          #     field :performance_rating
-          #     participates_in Department, :members, score: -> {
-          #       tenure_months = (Time.now - hire_date) / 1.month
-          #       base_score = tenure_months * 10
-          #       performance_bonus = performance_rating * 100
-          #       base_score + performance_bonus
-          #     }
-          #   end
-          #   employee.add_to_department_members(new_department)
+          # === Performance Considerations
+          #
+          # - Score calculations are performed on-demand during collection operations
+          # - Proc-based calculations should be efficient as they may be called frequently
+          # - Consider caching expensive calculations within the Proc itself
+          # - Static numeric scores have no performance overhead
+          #
+          # === Thread Safety
+          #
+          # Score calculations should be idempotent and thread-safe since they may be
+          # called concurrently during collection updates. Avoid modifying instance state
+          # within scoring Procs.
           #
           # @param target_class [Class, Symbol, String] The target class containing the collection
           # @param collection_name [Symbol] The collection name within the target class
           # @return [Float] Calculated score for sorted set positioning, falls back to current_score
+          #
+          # @example Field-based scoring
+          #   class Task < Familia::Horreum
+          #     field :priority  # 1=low, 5=high
+          #     participates_in Project, :tasks, score: :priority
+          #   end
+          #
+          #   task.priority = 5
+          #   score = task.calculate_participation_score(Project, :tasks)  # => 5.0
+          #
+          # @example Complex business logic with multiple factors
+          #   class Employee < Familia::Horreum
+          #     field :hire_date
+          #     field :performance_rating
+          #     field :salary
+          #
+          #     participates_in Department, :members, score: -> {
+          #       tenure_months = (Time.now - hire_date) / 1.month
+          #       base_score = tenure_months * 10
+          #       performance_bonus = performance_rating * 100
+          #       salary_factor = salary / 1000.0
+          #
+          #       (base_score + performance_bonus + salary_factor).round(2)
+          #     }
+          #   end
+          #
+          #   # Score reflects seniority, performance, and compensation
+          #   employee.performance_rating = 4.5
+          #   employee.salary = 85000
+          #   score = employee.calculate_participation_score(Department, :members)  # => 1375.0
+          #
+          # @see #participates_in for relationship configuration
+          # @see #track_participation_in for reverse index management
+          # @since 1.0.0
           def calculate_participation_score(target_class, collection_name)
             # Find the participation configuration with robust type comparison
             participation_config = self.class.participation_relationships.find do |details|
@@ -438,12 +404,206 @@ module Familia
             convert_to_score(result)
           end
 
+          # Add participation tracking to the reverse index.
+          #
+          # This method maintains the reverse index that tracks which collections this object
+          # participates in. The reverse index enables efficient lookup of all memberships
+          # via +current_participations+ without requiring expensive scans.
+          #
+          # The collection key follows the pattern: +"targetclass:targetid:collectionname"+
+          #
+          # @param collection_key [String] Unique identifier for the collection (format: "class:id:collection")
+          # @example
+          #   domain.track_participation_in("customer:123:domains")
+          # @see #untrack_participation_in for removal
+          # @see #current_participations for membership queries
+          # @since 1.0.0
+          def track_participation_in(collection_key)
+            # Use Horreum's DataType field instead of manual key construction
+            participations.add(collection_key)
+          end
+
+          # Remove participation tracking from the reverse index.
+          #
+          # This method removes the collection key from the reverse index when the object
+          # is removed from a collection. This keeps the reverse index accurate and prevents
+          # stale references from appearing in +current_participations+ results.
+          #
+          # @param collection_key [String] Collection identifier to remove from tracking
+          # @example
+          #   domain.untrack_participation_in("customer:123:domains")
+          # @see #track_participation_in for addition
+          # @see #current_participations for membership queries
+          # @since 1.0.0
+          def untrack_participation_in(collection_key)
+            # Use Horreum's DataType field instead of manual key construction
+            participations.remove(collection_key)
+          end
+
+          # Get comprehensive information about all collections this object participates in.
+          #
+          # This method leverages the reverse index to efficiently retrieve membership details
+          # across all collections without requiring expensive scans. For each membership,
+          # it provides collection metadata, membership details, and type-specific information
+          # like scores or positions.
+          #
+          # The method handles missing target objects gracefully and validates membership
+          # using the actual DataType collections to ensure accuracy.
+          #
+          # === Return Format
+          #
+          # Returns an array of hashes, each containing:
+          # - +:target_class+ - Name of the class owning the collection
+          # - +:target_id+ - Identifier of the specific target instance
+          # - +:collection_name+ - Name of the collection within the target
+          # - +:type+ - Collection type (:sorted_set, :set, :list)
+          #
+          # Additional fields based on collection type:
+          # - +:score+ - Current score (sorted_set only)
+          # - +:decoded_score+ - Human-readable score if decode_score method exists
+          # - +:position+ - Zero-based position in the list (list only)
+          #
+          # @return [Array<Hash>] Array of membership details with collection metadata
+          #
+          # @example Employee participating in multiple collections
+          #   class Employee < Familia::Horreum
+          #     field :name
+          #     participates_in Department, :members, score: :hire_date
+          #     participates_in Team, :contributors, score: :skill_level, type: :set
+          #     participates_in Project, :assignees, score: :priority, type: :list
+          #   end
+          #
+          #   employee.add_to_department_members(engineering)
+          #   employee.add_to_team_contributors(frontend_team)
+          #   employee.add_to_project_assignees(mobile_project)
+          #
+          #   # Query all memberships
+          #   memberships = employee.current_participations
+          #   # => [
+          #   #   {
+          #   #     target_class: "Department",
+          #   #     target_id: "engineering",
+          #   #     collection_name: :members,
+          #   #     type: :sorted_set,
+          #   #     score: 1640995200.0,
+          #   #     decoded_score: "2022-01-01 00:00:00 UTC"
+          #   #   },
+          #   #   {
+          #   #     target_class: "Team",
+          #   #     target_id: "frontend",
+          #   #     collection_name: :contributors,
+          #   #     type: :set
+          #   #   },
+          #   #   {
+          #   #     target_class: "Project",
+          #   #     target_id: "mobile",
+          #   #     collection_name: :assignees,
+          #   #     type: :list,
+          #   #     position: 2
+          #   #   }
+          #   # ]
+          #
+          # @see #track_participation_in for reverse index management
+          # @see #calculate_participation_score for scoring details
+          # @since 1.0.0
+          def current_participations
+            return [] unless self.class.respond_to?(:participation_relationships)
+
+            # Use the reverse index as the single source of truth
+            collection_keys = participations.members
+            return [] if collection_keys.empty?
+
+            memberships = []
+
+            # Check membership in each tracked collection using DataType methods
+            collection_keys.each do |collection_key|
+              # Parse the collection key to extract target info
+              # Expected format: "targetclass:targetid:collectionname"
+              key_parts = collection_key.split(':')
+              next unless key_parts.length >= 3
+
+              target_class_config = key_parts[0]
+              target_id = key_parts[1]
+              collection_name_from_key = key_parts[2]
+
+              # Find the matching participation configuration
+              # Note: target_class_config from key is snake_case, target_class_name is PascalCase
+              config = self.class.participation_relationships.find do |cfg|
+                cfg.target_class_name.snake_case == target_class_config &&
+                  cfg.collection_name.to_s == collection_name_from_key
+              end
+
+              next unless config
+
+              # Find the target instance and check membership using Horreum DataTypes
+              begin
+                target_class = Familia.resolve_class(config.target_class)
+                target_instance = target_class.find_by_id(target_id)
+                next unless target_instance
+
+                # Use Horreum's DataType accessor to get the collection
+                collection = target_instance.send(config.collection_name)
+
+                # Check membership using DataType methods
+                membership_data = {
+                  target_class: config.target_class_name,
+                  target_id: target_id,
+                  collection_name: config.collection_name,
+                  type: config.type,
+                }
+
+                case config.type
+                when :sorted_set
+                  score = collection.score(identifier)
+                  next unless score
+
+                  membership_data[:score] = score
+                  membership_data[:decoded_score] = decode_score(score) if respond_to?(:decode_score)
+                when :set
+                  is_member = collection.member?(identifier)
+                  next unless is_member
+                when :list
+                  position = collection.to_a.index(identifier)
+                  next unless position
+
+                  membership_data[:position] = position
+                end
+
+                memberships << membership_data
+
+              rescue => e
+                Familia.ld "[#{collection_key}] Error checking membership: #{e.message}"
+                next
+              end
+            end
+
+            memberships
+          end
+
+
           private
 
-          # Convert a raw value to an appropriate participation score
+          # Convert a raw value to an appropriate participation score.
           #
-          # @param value [Object] The raw value to convert
-          # @return [Float] Converted score, falls back to current_score
+          # This private method handles the final conversion step for participation scores,
+          # providing robust type coercion and fallback behavior for edge cases. It's called
+          # by +calculate_participation_score+ after the scoring strategy has produced a raw value.
+          #
+          # The method never raises exceptions, always returning a valid Float value
+          # suitable for use in Valkey/Redis sorted sets. Invalid or missing values
+          # gracefully fall back to the +current_score+ method.
+          #
+          # === Conversion Strategy
+          #
+          # [Numeric types] Convert using +to_f+ for floating-point precision
+          # [Integer-like] Use +encode_score+ if available, otherwise convert to float
+          # [nil values] Fall back to +current_score+ method
+          # [Other types] Fall back to +current_score+ method
+          #
+          # @param value [Object] The raw value to convert to a participation score
+          # @return [Float] Converted score suitable for sorted set operations
+          # @api private
+          # @since 1.0.0
           def convert_to_score(value)
             return current_score if value.nil?
 
@@ -456,179 +616,6 @@ module Familia
             end
           end
 
-          public
-
-          # Add to class-level participation collections automatically
-          def add_to_class_participations
-            return unless self.class.respond_to?(:participation_relationships)
-
-            self.class.participation_relationships.each do |details|
-              target_class_name = details.target_class_name
-              collection_name = details.collection_name
-
-              # Only auto-add to class-level collections (where target_class matches self.class)
-              if target_class_name.downcase == self.class.name.downcase
-                # Call the class method to add this object
-                self.class.send("add_to_#{collection_name}", self)
-              end
-            end
-          end
-
-          # Add participation tracking to reverse index
-          def add_participation_membership(collection_key)
-            reverse_index_key = "#{dbkey}:participations"
-            dbclient.sadd(reverse_index_key, collection_key)
-          end
-
-          # Remove participation tracking from reverse index
-          def remove_participation_membership(collection_key)
-            reverse_index_key = "#{dbkey}:participations"
-            dbclient.srem(reverse_index_key, collection_key)
-          end
-
-          # Remove from all participation collections (used during destroy)
-          # Uses reverse index for efficient cleanup instead of database scan
-          def remove_from_all_participations
-            return unless self.class.respond_to?(:participation_relationships)
-
-            reverse_index_key = "#{dbkey}:participations"
-            collection_keys = dbclient.smembers(reverse_index_key)
-
-            return if collection_keys.empty?
-
-            # Remove from all tracked collections in a single pipeline
-            dbclient.pipelined do |pipeline|
-              collection_keys.each do |key|
-                # Determine collection type from key structure and remove appropriately
-                self.class.participation_relationships.each do |config|
-                  target_class_name = config.target_class_name.downcase
-                  collection_name = config.collection_name
-                  type = config.type
-
-                  next unless key.include?(target_class_name) && key.include?(collection_name.to_s)
-
-                  case type
-                  when :sorted_set
-                    pipeline.zrem(key, identifier)
-                  when :set
-                    pipeline.srem(key, identifier)
-                  when :list
-                    pipeline.lrem(key, 0, identifier)
-                  end
-                end
-              end
-
-              # Clean up the reverse index itself
-              pipeline.del(reverse_index_key)
-            end
-          end
-
-          # Get all collections this object appears in
-          #
-          # @return [Array<Hash>] Array of collection information
-          def participation_memberships
-            return [] unless self.class.respond_to?(:participation_relationships)
-
-            # Use reverse index if available, otherwise fall back to scan
-            reverse_index_key = "#{dbkey}:participations"
-            collection_keys = dbclient.smembers(reverse_index_key)
-
-            if collection_keys.empty?
-              # Fall back to scan approach for objects without reverse index
-              collection_keys = []
-              self.class.participation_relationships.each do |config|
-                target_class_name = config.target_class_name
-                collection_name = config.collection_name
-                pattern = "#{target_class_name.downcase}:*:#{collection_name}"
-
-                dbclient.scan_each(match: pattern) do |key|
-                  collection_keys << key
-                end
-              end
-            end
-
-            return [] if collection_keys.empty?
-
-            memberships = []
-
-            # Group keys by type to optimize pipeline operations
-            keys_by_type = {}
-            collection_keys.each do |key|
-              self.class.participation_relationships.each do |config|
-                target_class_name = config.target_class_name
-                collection_name = config.collection_name
-                type = config.type
-
-                next unless key.include?(target_class_name.downcase) && key.include?(collection_name.to_s)
-
-                keys_by_type[type] ||= []
-                keys_by_type[type] << {
-                  key: key,
-                  target_class_name: target_class_name,
-                  collection_name: collection_name,
-                  type: type,
-                }
-              end
-            end
-
-            # Use pipelined requests to batch all membership checks
-            results = {}
-            dbclient.pipelined do |pipeline|
-              keys_by_type.each do |type, key_configs|
-                key_configs.each do |config|
-                  key = config[:key]
-                  case type
-                  when :sorted_set
-                    results[key] = pipeline.zscore(key, identifier)
-                  when :set
-                    results[key] = pipeline.sismember(key, identifier)
-                  when :list
-                    results[key] = pipeline.lpos(key, identifier)
-                  end
-                end
-              end
-            end
-
-            # Process results and build membership array
-            keys_by_type.each do |type, key_configs|
-              key_configs.each do |config|
-                key = config[:key]
-                result = begin
-                  results[key].value
-                rescue Redis::ConnectionError, Redis::TimeoutError => e
-                  Familia.ld "[#{key}] Error: #{e.message}"
-                end
-
-                next unless result
-
-                target_id = key.split(':')[1]
-                membership_data = {
-                  target_class: config[:target_class_name],
-                  target_id: target_id,
-                  collection_name: config[:collection_name],
-                  type: type,
-                }
-
-                case type
-                when :sorted_set
-                  next unless result # score must be present
-
-                  membership_data[:score] = result
-                  membership_data[:decoded_score] = decode_score(result)
-                when :set
-                  next unless result # must be a member
-                when :list
-                  next unless result # position must be found
-
-                  membership_data[:position] = result
-                end
-
-                memberships << membership_data
-              end
-            end
-
-            memberships
-          end
         end
       end
     end

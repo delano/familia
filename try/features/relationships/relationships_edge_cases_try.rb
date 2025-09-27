@@ -109,22 +109,22 @@ decoded_boundary[:permissions] <= 255
 ## Method score calculation works with saved objects
 @customer1.save
 @domain1.save
-@domain1.add_to_edgetestcustomer_domains(@customer1)
-method_score = @domain1.score_in_edgetestcustomer_domains(@customer1)
+@domain1.add_to_edge_test_customer_domains(@customer1)
+method_score = @domain1.score_in_edge_test_customer_domains(@customer1)
 method_score.is_a?(Float) && method_score > 0
 #=> true
 
 ## Sorted set membership works
-@domain1.in_edgetestcustomer_domains?(@customer1)
+@domain1.in_edge_test_customer_domains?(@customer1)
 #=> true
 
 ## Score methods respond correctly
-@domain1.respond_to?(:score_in_edgetestcustomer_domains)
+@domain1.respond_to?(:score_in_edge_test_customer_domains)
 #=> true
 
 ## Basic relationship cleanup works
-@domain1.remove_from_edgetestcustomer_domains(@customer1)
-@domain1.in_edgetestcustomer_domains?(@customer1)
+@domain1.remove_from_edge_test_customer_domains(@customer1)
+@domain1.in_edge_test_customer_domains?(@customer1)
 #=> false
 
 # Clean up test data

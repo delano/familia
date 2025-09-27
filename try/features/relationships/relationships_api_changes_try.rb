@@ -129,13 +129,13 @@ score.is_a?(Float) && score > 0
 #=> true
 
 ## Score calculation works for lambda scores with active user
-@user.save  # Should automatically add to active_users
+ApiTestUser.add_to_active_users(@user)  # Explicit addition to active_users collection
 active_score = ApiTestUser.active_users.score(@user.identifier)
 active_score > 0
 #=> true
 
 ## Score calculation works for lambda scores with inactive user
-@inactive_user.save  # Should automatically add to active_users
+ApiTestUser.add_to_active_users(@inactive_user)  # Explicit addition to active_users collection
 ApiTestUser.active_users.member?(@inactive_user.identifier)
 #=> true
 
@@ -288,7 +288,7 @@ ApiTestUser.all_users.member?(@user.identifier) && ApiTestUser.email_lookup.get(
 ## Parent-based relationships work with tracking
 @project.save
 # Note: Skipping complex parent relationship test
-@membership.respond_to?(:add_to_apitestproject_memberships)
+@membership.respond_to?(:add_to_api_test_project_memberships)
 #=> true
 
 ## Score-based tracking maintains proper ordering

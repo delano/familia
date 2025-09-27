@@ -17,29 +17,17 @@ module Familia
     # into a single, Valkey/Redis-native implementation that embraces the "where does this appear?"
     # philosophy rather than "who owns this?".
     #
-    # Key improvements in v2:
-    # - Multi-presence: Objects can exist in multiple collections simultaneously
-    # - Score encoding: Metadata embedded in Valkey/Redis scores for efficiency
-    # - Collision-free: Method names include collection names to prevent conflicts
-    # - Valkey/Redis-native: All operations use Valkey/Redis commands, no Ruby iteration
-    # - Atomic operations: Multi-collection updates happen atomically
-    #
-    # Breaking changes from v1:
-    # - Single feature: Use `feature :relationships` instead of separate features
-    # - Simplified identifier: Use `identifier :field` instead of `identifier_field :field`
-    # - No ownership concept: Remove `owned_by`, use multi-presence instead
-    # - Method naming: Generated methods include collection names for uniqueness
-    # - Score encoding: Scores can carry metadata like permissions
-    #
     # @example Basic usage
     #   class Domain < Familia::Horreum
-    #     feature :relationships
     #
-    #     identifier :domain_id
+    #     identifier_field :domain_id
+    #
     #     field :domain_id
     #     field :display_name
     #     field :created_at
     #     field :permission_bits
+    #
+    #     feature :relationships
     #
     #     # Multi-presence participation with score encoding
     #     participates_in Customer, :domains,
@@ -228,18 +216,8 @@ module Familia
       end
 
       module ModelInstanceMethods
-        # Get the identifier value for this instance
-        # Uses the existing Horreum identifier infrastructure
-        def identifier
-          id_field = self.class.identifier_field
-          send(id_field) if respond_to?(id_field)
-        end
-
-        # UnsortedSet the identifier value for this instance
-        def identifier=(value)
-          id_field = self.class.identifier_field
-          send("#{id_field}=", value) if respond_to?("#{id_field}=")
-        end
+        # NOTE: identifier and identifier= methods are provided by Horreum base class
+        # No need to override them here - use the existing infrastructure
 
         # Initialize relationships (called after object creation)
         def initialize_relationships
@@ -253,9 +231,6 @@ module Familia
           if result
             # Automatically update all indexes when object is saved
             update_all_indexes if respond_to?(:update_all_indexes)
-
-            # Auto-add to class-level participation collections
-            add_to_class_participations if respond_to?(:add_to_class_participations)
 
             # NOTE: Relationship-specific participation updates are done explicitly
             # since we need to know which specific collections this object should be in
@@ -276,14 +251,12 @@ module Familia
         def relationship_status
           status = {
             identifier: identifier,
-            participation_memberships: [],
+            current_participations: [],
             index_memberships: [],
           }
 
           # Get participation memberships
-          if respond_to?(:participation_memberships)
-            status[:participation_memberships] = participation_memberships
-          end
+          status[:current_participations] = current_participations if respond_to?(:current_participations)
 
           # Get index memberships
           status[:index_memberships] = indexing_memberships if respond_to?(:indexing_memberships)
@@ -294,7 +267,13 @@ module Familia
         # Comprehensive cleanup - remove from all relationships
         def cleanup_all_relationships!
           # Remove from participation collections
-          remove_from_all_participations if respond_to?(:remove_from_all_participations)
+          #
+          # NOTE: This method has been removed for being poorly implemented. It
+          # was repetative and laborious to debug. It'll come back in a cleaner
+          # for after the rest of the module is in ship shape.
+          #
+          # remove_from_all_participations if respond_to?(:remove_from_all_participations)
+          warn 'Not currently removing from participation collections. See pull #115.'
 
           # Remove from indexes
           remove_from_all_indexes if respond_to?(:remove_from_all_indexes)
@@ -323,8 +302,8 @@ module Familia
           errors << 'Object identifier is nil' unless identifier
 
           # Validate participation memberships
-          if respond_to?(:participation_memberships)
-            participation_memberships.each do |membership|
+          if respond_to?(:current_participations)
+            current_participations.each do |membership|
               score = membership[:score]
               errors << "Invalid score in participation membership: #{membership}" if score && !score.is_a?(Numeric)
             end
@@ -339,7 +318,7 @@ module Familia
         def refresh_relationships!
           # Clear any cached relationship data
           @relationship_status = nil
-          @participation_memberships = nil
+          @current_participations = nil
           @index_memberships = nil
 
           # Reload fresh data

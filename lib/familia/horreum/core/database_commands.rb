@@ -178,6 +178,10 @@ module Familia
         ret.positive?
       end
       alias clear delete!
+
+      def echo(*args)
+        dbclient.echo "[#{self.class}] #{args.join(' ')}"
+      end
     end
   end
 end

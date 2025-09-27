@@ -46,7 +46,7 @@ Customer.find_by_id(ident).planid
 #=> 1
 
 ## Customer can add custom domain via add method
-@customer.custom_domains.add(@now, 'example.org')
+@customer.custom_domains.add('example.org', @now)
 @customer.custom_domains.members.include?('example.org')
 #=> true
 
@@ -69,7 +69,7 @@ Customer.find_by_id(ident).planid
 #=> true
 
 ## Customer can be added to class-level sorted set
-Customer.instances << @customer
+Customer.instances.add(@customer.identifier)
 Customer.instances.member?(@customer)
 #=> true
 

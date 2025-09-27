@@ -80,8 +80,8 @@ prefs = @test_user.preferences
 
 ## Can work with SortedSet Database type
 @test_user.scores.clear
-@test_user.scores.add(100, 'level1')
-@test_user.scores.add(200, 'level2')
+@test_user.scores.add('level1', 100)
+@test_user.scores.add('level2', 200)
 @test_user.scores.size
 #=> 2
 
@@ -117,7 +117,7 @@ prefs = @test_user.preferences
 #=> :tags
 
 ## Can check if Database types exist
-@test_user.scores.add(50, 'test')
+@test_user.scores.add('test', 50)
 before_exists = @test_user.scores.exists?
 @test_user.scores.clear
 after_exists = @test_user.scores.exists?
@@ -131,7 +131,7 @@ after_exists = @test_user.scores.exists?
 #=> false
 
 ## Parent object destruction does not clean up relations
-@test_user.sessions.add('cleanup_test')
+@test_user.sessions.push('cleanup_test')
 @test_user.destroy!
 @test_user.sessions.exists?
 #=> true

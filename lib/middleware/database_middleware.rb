@@ -13,6 +13,13 @@ require 'concurrent-ruby'
 #   DatabaseLogger.logger = Logger.new(STDOUT)
 #   RedisClient.register(DatabaseLogger)
 #
+# @example Capture commands for testing
+#   commands = DatabaseLogger.capture_commands do
+#     redis.set('key', 'value')
+#     redis.get('key')
+#   end
+#   puts commands.first[:command]  # => ["SET", "key", "value"]
+#
 # @see https://github.com/redis-rb/redis-client?tab=readme-ov-file#instrumentation-and-middlewares
 #
 # @note While there were concerns about the performance impact of logging in
@@ -22,34 +29,72 @@ require 'concurrent-ruby'
 #   often outweigh the slight performance cost when enabled.
 module DatabaseLogger
   @logger = nil
+  @commands = []
 
   class << self
     # Gets/sets the logger instance used by DatabaseLogger.
     # @return [Logger, nil] The current logger instance or nil if not set.
     attr_accessor :logger
+
+    # Gets the captured commands for testing purposes.
+    # @return [Array] Array of command hashes with :command, :duration, :timestamp
+    attr_reader :commands
+
+    # Clears the captured commands array.
+    # @return [Array] Empty array
+    def clear_commands
+      @commands = []
+    end
+
+    # Captures commands in a block and returns them.
+    # This is useful for testing to see what commands were executed.
+    #
+    # @yield [] The block of code to execute while capturing commands.
+    # @return [Array] Array of captured commands with timing information.
+    #   Each command is a hash with :command, :duration, :timestamp keys.
+    #
+    # @example Test what Redis commands your code executes
+    #   commands = DatabaseLogger.capture_commands do
+    #     my_library_method()
+    #   end
+    #   assert_equal "SET", commands.first[:command][0]
+    #   assert commands.first[:duration] > 0
+    def capture_commands
+      clear_commands
+      yield
+      @commands.dup
+    end
   end
 
   # Logs the Database command and its execution time.
   #
   # This method is called for each Database command when the middleware is active.
-  # It logs the command and its execution time only if a logger is set.
+  # It always captures commands for testing and logs them if a logger is set.
   #
   # @param command [Array] The Database command and its arguments.
   # @param _config [Hash] The configuration options for the Valkey/Redis
   #   connection.
   # @return [Object] The result of the Database command execution.
   #
-  # @note The performance impact of this logging is negligible when no logger
-  #   is set, as it quickly returns control to the Database client. When a logger
-  #   is set, the minimal overhead is often offset by the valuable insights
-  #   gained during development and debugging.
+  # @note Commands are always captured with minimal overhead for testing purposes.
+  #   Logging only occurs when DatabaseLogger.logger is set.
   def call(command, _config)
-    return yield unless DatabaseLogger.logger
-
     start = Process.clock_gettime(Process::CLOCK_MONOTONIC, :microsecond)
     result = yield
     duration = Process.clock_gettime(Process::CLOCK_MONOTONIC, :microsecond) - start
-    DatabaseLogger.logger.debug("Redis: #{command.inspect} (#{duration}µs)")
+
+    # Always capture commands for testing purposes
+    DatabaseLogger.instance_variable_get(:@commands) << {
+      command: command.dup,
+      duration: duration,
+      timestamp: Time.now
+    }
+
+    # Log if logger is set
+    if DatabaseLogger.logger
+      DatabaseLogger.logger.debug("Redis: #{command.inspect} (#{duration}µs)")
+    end
+
     result
   end
 end

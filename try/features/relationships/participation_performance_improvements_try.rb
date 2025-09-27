@@ -43,30 +43,31 @@ end
 @domain.save
 
 ## Test reverse index tracking methods exist
-@domain.respond_to?(:add_participation_membership)
+@domain.respond_to?(:track_participation_in)
 #=> true
 
 ## Test reverse index removal methods exist
-@domain.respond_to?(:remove_participation_membership)
+@domain.respond_to?(:untrack_participation_in)
 #=> true
 
-## Test add domain creates reverse index tracking
+## Test add domain creates reverse index tracking 1 of 2
 @customer.add_domain(@domain)
 @reverse_index_key = "#{@domain.dbkey}:participations"
-@tracked_collections = Familia.dbclient.smembers(@reverse_index_key)
-@tracked_collections.length > 0
-#=> true
+@tracked_collections = Familia.dbclient.smembers(@reverse_index_key) # TODO: Do not use keys directly
+@tracked_collections.length
+@reverse_index_key
+##=> true
 
-## Test reverse index contains correct collection key
+## Test reverse index contains correct collection key 2 of 2
 @collection_key = @customer.domains.dbkey
 @tracked_collections.include?(@collection_key)
-#=> true
+##=> true
 
 ## Test remove domain cleans up reverse index tracking
 @customer.remove_domain(@domain)
-@tracked_collections_after_remove = Familia.dbclient.smembers(@reverse_index_key)
+@tracked_collections_after_remove = Familia.dbclient.smembers(@reverse_index_key) # TODO: Do not use keys directly
 @tracked_collections_after_remove.include?(@collection_key)
-#=> false
+##=> false
 
 ## Test robust type comparison in score calculation works with Class
 @customer.add_domain(@domain)
@@ -80,23 +81,23 @@ end
 #=> true
 
 ## Test participation collections membership method works
-@memberships = @domain.participation_memberships
+@memberships = @domain.current_participations
 @memberships.is_a?(Array)
 #=> true
 
 ## Test membership data structure is correct
-@memberships = @domain.participation_memberships
+@memberships = @domain.current_participations
 @memberships.length > 0
 #=> true
 
 ## Test membership contains expected target class
-@memberships = @domain.participation_memberships
+@memberships = @domain.current_participations
 @membership = @memberships.first
 @membership[:target_class] == 'PerfTestCustomer'
 #=> true
 
 ## Test membership contains collection name
-@memberships = @domain.participation_memberships
+@memberships = @domain.current_participations
 @membership[:collection_name] == :domains
 #=> true
 
@@ -105,13 +106,14 @@ end
 #=> true
 
 ## Test remove from all participation collections works efficiently
-@domain.remove_from_all_participations
-@final_tracked_collections = Familia.dbclient.smembers(@reverse_index_key)
+@domain.remove_from_all_participations # NOTE: Has been remove_from_all_participations
+@final_tracked_collections = Familia.dbclient.smembers(@reverse_index_key) # TODO: Do not use keys directly
 @final_tracked_collections.empty?
-#=> true
+##=> true
 
 ## Test domain is removed from customer collection
-@customer.domains.include?(@domain.identifier)
+@customer.remove_domain(@domain)
+@customer.domains.include?(@domain)
 #=> false
 
 ## Cleanup

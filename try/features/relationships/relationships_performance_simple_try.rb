@@ -62,11 +62,11 @@ save_time = Benchmark.realtime do
             elsif domain.created_at.is_a?(Time)
               domain.created_at.to_f
             else
-              domain.created_at.to_f
-            end
-    SimplePerfDomain.all_domains.add(score, domain.identifier)
-    SimplePerfDomain.domain_lookup[domain.display_domain] = domain.identifier
-  end
+            domain.created_at.to_f
+          end
+  SimplePerfDomain.all_domains.add(domain.identifier, score)
+  SimplePerfDomain.domain_lookup[domain.display_domain] = domain.identifier
+end
 end
 
 # Should complete in reasonable time

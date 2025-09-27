@@ -49,8 +49,8 @@ class Familia::DataType
       dbclient.persist dbkey
     end
 
-    def echo(meth, trace)
-      dbclient.echo "[#{self.class}##{meth}] #{trace} (#{@opts[:class]}#)"
+    def echo(*args)
+      dbclient.echo "[#{self.class}] #{args.join(' ')} (#{opts&.fetch(:class, '<no opts>')})"
     end
   end
 end
