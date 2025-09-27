@@ -89,6 +89,52 @@ module Familia
         member.extend(Familia::Horreum::Connection)           # dbclient, connection management
         member.extend(Familia::Features)             # feature() method for optional modules
 
+        # Copy parent class configuration to child class
+        # This implements conventional ORM inheritance behavior where child classes
+        # automatically inherit all parent configuration without manual copying
+        parent_class = member.superclass
+        if parent_class.respond_to?(:identifier_field) && parent_class != Familia::Horreum
+          # Copy essential configuration instance variables from parent
+          if parent_class.identifier_field
+            member.instance_variable_set(:@identifier_field, parent_class.identifier_field)
+          end
+
+          # Copy field system configuration
+          if parent_class.fields&.any?
+            member.instance_variable_set(:@fields, parent_class.fields.dup)
+          end
+
+          if parent_class.respond_to?(:field_types) && parent_class.field_types&.any?
+            member.instance_variable_set(:@field_types, parent_class.field_types.dup)
+            # Re-install field methods on the child class only if they don't already exist
+            parent_class.field_types.each do |name, field_type|
+              unless member.method_defined?(name) || member.private_method_defined?(name)
+                field_type.install(member)
+              end
+            end
+          end
+
+          # Copy features configuration
+          if parent_class.respond_to?(:features_enabled) && parent_class.features_enabled&.any?
+            member.instance_variable_set(:@features_enabled, parent_class.features_enabled.dup)
+          end
+
+          # Copy other configuration
+          member.instance_variable_set(:@prefix, parent_class.prefix) if parent_class.instance_variable_get(:@prefix)
+          member.instance_variable_set(:@suffix, parent_class.instance_variable_get(:@suffix)) if parent_class.instance_variable_get(:@suffix)
+          member.instance_variable_set(:@logical_database, parent_class.logical_database) if parent_class.logical_database
+          member.instance_variable_set(:@default_expiration, parent_class.instance_variable_get(:@default_expiration)) if parent_class.instance_variable_get(:@default_expiration)
+
+          # Copy DataType relationships
+          if parent_class.class_related_fields&.any?
+            member.instance_variable_set(:@class_related_fields, parent_class.class_related_fields.dup)
+          end
+          if parent_class.related_fields&.any?
+            member.instance_variable_set(:@related_fields, parent_class.related_fields.dup)
+          end
+          member.instance_variable_set(:@has_relations, parent_class.instance_variable_get(:@has_relations)) if parent_class.instance_variable_get(:@has_relations)
+        end
+
         # Track all classes that inherit from Horreum
         Familia.members << member
 
