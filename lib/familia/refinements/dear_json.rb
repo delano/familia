@@ -30,77 +30,78 @@ module Familia
     # - Maintains Familia's security-first approach
     # - Provides familiar Ruby JSON interface
     #
-    module DearJson
-      # Refine Hash to use Familia's JsonSerializer while maintaining
-      # the standard Ruby JSON interface pattern.
+    module DearJsonHashMethods
+      # Convert hash to JSON string using Familia's secure JsonSerializer.
+      # This method preprocesses the hash to handle Familia objects properly
+      # by calling as_json on any objects that support it.
       #
-      refine Hash do
-        # Convert hash to JSON string using Familia's secure JsonSerializer.
-        # This method preprocesses the hash to handle Familia objects properly
-        # by calling as_json on any objects that support it.
-        #
-        # @param options [Hash] Optional parameters (currently unused, for compatibility)
-        # @return [String] JSON string representation
-        #
-        def to_json(options = nil)
-          # Preprocess the hash to handle Familia objects
-          processed_hash = transform_values do |value|
-            if value.respond_to?(:as_json)
-              value.as_json(options)
-            else
-              value
-            end
+      # @param options [Hash] Optional parameters (currently unused, for compatibility)
+      # @return [String] JSON string representation
+      #
+      def to_json(options = nil)
+        # Preprocess the hash to handle Familia objects
+        processed_hash = transform_values do |value|
+          if value.respond_to?(:as_json)
+            value.as_json(options)
+          else
+            value
           end
-
-          Familia::JsonSerializer.dump(processed_hash)
         end
 
-        # Convert hash to JSON-serializable representation.
-        # For Hash objects, this returns self since hashes are already JSON-compatible.
-        # This method is provided for compatibility with the standard JSON pattern.
-        #
-        # @param options [Hash] Optional parameters (currently unused)
-        # @return [Hash] The hash itself (already JSON-compatible)
-        #
-        def as_json(_options = nil)
-          self
-        end
+        Familia::JsonSerializer.dump(processed_hash)
       end
 
-      # Refine Array to use Familia's JsonSerializer while maintaining
-      # the standard Ruby JSON interface pattern.
+      # Convert hash to JSON-serializable representation.
+      # For Hash objects, this returns self since hashes are already JSON-compatible.
+      # This method is provided for compatibility with the standard JSON pattern.
       #
-      refine Array do
-        # Convert array to JSON string using Familia's secure JsonSerializer.
-        # This method preprocesses the array to handle Familia objects properly
-        # by calling as_json on any objects that support it.
-        #
-        # @param options [Hash] Optional parameters (currently unused, for compatibility)
-        # @return [String] JSON string representation
-        #
-        def to_json(options = nil)
-          # Preprocess the array to handle Familia objects
-          processed_array = map do |item|
-            if item.respond_to?(:as_json)
-              item.as_json(options)
-            else
-              item
-            end
+      # @param options [Hash] Optional parameters (currently unused)
+      # @return [Hash] The hash itself (already JSON-compatible)
+      #
+      def as_json(_options = nil)
+        self
+      end
+    end
+
+    module DearJsonArrayMethods
+      # Convert array to JSON string using Familia's secure JsonSerializer.
+      # This method preprocesses the array to handle Familia objects properly
+      # by calling as_json on any objects that support it.
+      #
+      # @param options [Hash] Optional parameters (currently unused, for compatibility)
+      # @return [String] JSON string representation
+      #
+      def to_json(options = nil)
+        # Preprocess the array to handle Familia objects
+        processed_array = map do |item|
+          if item.respond_to?(:as_json)
+            item.as_json(options)
+          else
+            item
           end
-
-          Familia::JsonSerializer.dump(processed_array)
         end
 
-        # Convert array to JSON-serializable representation.
-        # For Array objects, this returns self since arrays are already JSON-compatible.
-        # This method is provided for compatibility with the standard JSON pattern.
-        #
-        # @param options [Hash] Optional parameters (currently unused)
-        # @return [Array] The array itself (already JSON-compatible)
-        #
-        def as_json(_options = nil)
-          self
-        end
+        Familia::JsonSerializer.dump(processed_array)
+      end
+
+      # Convert array to JSON-serializable representation.
+      # For Array objects, this returns self since arrays are already JSON-compatible.
+      # This method is provided for compatibility with the standard JSON pattern.
+      #
+      # @param options [Hash] Optional parameters (currently unused)
+      # @return [Array] The array itself (already JSON-compatible)
+      #
+      def as_json(_options = nil)
+        self
+      end
+    end
+    module DearJson
+      refine Hash do
+        import_methods DearJsonHashMethods
+      end
+
+      refine Array do
+        import_methods DearJsonArrayMethods
       end
     end
   end
