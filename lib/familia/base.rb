@@ -64,6 +64,49 @@ module Familia
       "#<#{self.class}:0x#{object_id.to_s(16)}>"
     end
 
+    # Prepares the object for JSON serialization by converting it to a hash.
+    # This method provides the data preparation step in the standard Ruby JSON
+    # pattern: to_json → as_json → JSON serialization.
+    #
+    # Implementing classes can override this method to customize their JSON
+    # representation. For Horreum objects, this delegates to to_h which returns
+    # only the public fields. For DataType objects, this returns the raw value.
+    #
+    # @param options [Hash] Optional parameters for customizing JSON output
+    # @return [Hash, Object] JSON-serializable representation of the object
+    #
+    def as_json(options = nil)
+      if respond_to?(:to_h)
+        # Horreum objects - return their field hash
+        to_h
+      elsif respond_to?(:members)
+        # DataType objects (List, Set, etc.) - return their members
+        members
+      elsif respond_to?(:value)
+        # String-like objects or simple values
+        value
+      else
+        # Fallback for objects that don't have standard value methods
+        # This ensures we don't expose internal state accidentally
+        { class: self.class.name, id: respond_to?(:identifier) ? identifier : object_id }
+      end
+    end
+
+    # Converts the object to a JSON string using Familia's JsonSerializer.
+    # This method completes the standard Ruby JSON pattern by calling as_json
+    # to prepare the data, then using JsonSerializer.dump for serialization.
+    #
+    # This maintains security by ensuring all JSON serialization goes through
+    # Familia's controlled JsonSerializer (OJ in strict mode) rather than
+    # potentially unsafe serialization methods.
+    #
+    # @param options [Hash] Optional parameters passed to as_json
+    # @return [String] JSON string representation of the object
+    #
+    def to_json(options = nil)
+      Familia::JsonSerializer.dump(as_json(options))
+    end
+
     # Module-level methods for Familia::Base itself
     class << self
       attr_reader :features_available, :feature_definitions
