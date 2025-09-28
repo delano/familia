@@ -79,7 +79,7 @@ end
 
 ## JSON serialization - to_json (fails for security)
 begin
-  @doc.content.to_json
+  Familia::JsonSerializer.dump(@doc.content)
   raise "Should have raised SerializerError"
 rescue Familia::SerializerError => e
   e.class
@@ -147,7 +147,7 @@ end
 
 ## Encrypted data is valid JSON
 begin
-  parsed = JSON.parse(@encrypted_data)
+  parsed = Familia::JsonSerializer.parse(@encrypted_data)
   parsed.key?('algorithm')
 rescue
   false

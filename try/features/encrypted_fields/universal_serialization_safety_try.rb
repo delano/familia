@@ -69,7 +69,7 @@ hash_result.keys.include?("api_token")
 
 ## JSON serialization - to_json (fails for security)
 begin
-  @record.api_token.to_json
+  Familia::JsonSerializer.dump(@record.api_token)
   raise "Should have raised SerializerError"
 rescue Familia::SerializerError => e
   e.class
@@ -96,7 +96,7 @@ end
 @record.api_token.to_f
 #=!> NoMethodError
 
-## Complex nested JSON structure
+## Nested JSON with ConcealedString raises error
 @nested_data = {
   record: @record,
   fields: {
@@ -104,23 +104,16 @@ end
     encrypted: [@record.api_token, @record.secret_notes]
   }
 }
+Familia::JsonSerializer.dump(@nested_data)
+#=!> Familia::SerializerError
+#==> error.message.include?("Failed to dump")
 
-begin
-  @serialized = @nested_data.to_json
-  false
-rescue Familia::SerializerError
-  true
-end
-#=> true
-
-## Nested JSON with ConcealedString raises error
-begin
-  @nested_data.to_json
-  false
-rescue Familia::SerializerError => e
-  e.message.include?("ConcealedString cannot be serialized")
-end
-#=> true
+## Nested JSON with ConcealedString raises error, plus
+## Oj strict mode prevents serialization of custom objects
+Familia::JsonSerializer.dump(@record)
+#=:> Familia::SerializerError
+#==> error.message.include?("Failed to dump")
+#==> error.message.include?("strict mode")
 
 ## Array of mixed field types safety
 @mixed_array = [
@@ -131,7 +124,7 @@ end
 ]
 
 begin
-  @mixed_array.to_json
+  Familia::JsonSerializer.dump(@mixed_array)
   false
 rescue Familia::SerializerError
   true
@@ -140,7 +133,7 @@ end
 
 ## Mixed array with ConcealedString raises error
 begin
-  @mixed_array.to_json
+  Familia::JsonSerializer.dump(@mixed_array)
   false
 rescue Familia::SerializerError => e
   e.message.include?("ConcealedString")

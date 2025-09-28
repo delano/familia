@@ -26,7 +26,7 @@ plaintext = "sensitive data here"
 Familia.config.encryption_keys = test_keys
 Familia.config.current_key_version = :v2
 encrypted = Familia::Encryption.encrypt(plaintext, context: context)
-encrypted_data = JSON.parse(encrypted, symbolize_names: true)
+encrypted_data = Familia::JsonSerializer.parse(encrypted, symbolize_names: true)
 encrypted_data[:algorithm]
 #=> "xchacha20poly1305"
 
@@ -38,7 +38,7 @@ plaintext = "sensitive data here"
 Familia.config.encryption_keys = test_keys
 Familia.config.current_key_version = :v2
 encrypted = Familia::Encryption.encrypt(plaintext, context: context)
-encrypted_data = JSON.parse(encrypted, symbolize_names: true)
+encrypted_data = Familia::JsonSerializer.parse(encrypted, symbolize_names: true)
 encrypted_data[:key_version]
 #=> "v2"
 
@@ -109,13 +109,13 @@ Familia.config.encryption_keys = test_keys
 Familia.config.current_key_version = :v1
 
 # Create encrypted data with unknown algorithm. Error should not leak algorithm details.
-invalid_encrypted = {
+invalid_encrypted = Familia::JsonSerializer.dump({
   algorithm: "unknown-cipher",
   key_version: "v1",
   nonce: Base64.strict_encode64("x" * 12),
   ciphertext: Base64.strict_encode64("encrypted_data"),
   auth_tag: Base64.strict_encode64("y" * 16)
-}.to_json
+})
 
 Familia::Encryption.decrypt(invalid_encrypted, context: context)
 #=!> Familia::EncryptionError
@@ -141,13 +141,13 @@ Familia.config.encryption_keys = test_keys
 Familia.config.current_key_version = :v1
 
 # Create encrypted data with invalid base64 nonce
-invalid_encrypted = {
+invalid_encrypted = Familia::JsonSerializer.dump({
   algorithm: "aes-256-gcm",
   key_version: "v1",
   nonce: "invalid_base64!@#",
   ciphertext: Base64.strict_encode64("encrypted_data"),
   auth_tag: Base64.strict_encode64("y" * 16)
-}.to_json
+})
 
 begin
   Familia::Encryption.decrypt(invalid_encrypted, context: context)
@@ -165,13 +165,13 @@ Familia.config.encryption_keys = test_keys
 Familia.config.current_key_version = :v1
 
 # Create encrypted data with invalid base64 auth_tag
-invalid_encrypted = {
+invalid_encrypted = Familia::JsonSerializer.dump({
   algorithm: "aes-256-gcm",
   key_version: "v1",
   nonce: Base64.strict_encode64("x" * 12),
   ciphertext: Base64.strict_encode64("encrypted_data"),
   auth_tag: "invalid_base64!@#"
-}.to_json
+})
 
 begin
   Familia::Encryption.decrypt(invalid_encrypted, context: context)
@@ -189,13 +189,13 @@ Familia.config.encryption_keys = test_keys
 Familia.config.current_key_version = :v1
 
 # Create encrypted data with wrong nonce size (8 bytes instead of 12)
-invalid_encrypted = {
+invalid_encrypted = Familia::JsonSerializer.dump({
   algorithm: "aes-256-gcm",
   key_version: "v1",
   nonce: Base64.strict_encode64("x" * 8),
   ciphertext: Base64.strict_encode64("encrypted_data"),
   auth_tag: Base64.strict_encode64("y" * 16)
-}.to_json
+})
 
 begin
   Familia::Encryption.decrypt(invalid_encrypted, context: context)
@@ -213,13 +213,13 @@ Familia.config.encryption_keys = test_keys
 Familia.config.current_key_version = :v1
 
 # Create encrypted data with wrong auth_tag size (8 bytes instead of 16)
-invalid_encrypted = {
+invalid_encrypted = Familia::JsonSerializer.dump({
   algorithm: "aes-256-gcm",
   key_version: "v1",
   nonce: Base64.strict_encode64("x" * 12),
   ciphertext: Base64.strict_encode64("encrypted_data"),
   auth_tag: Base64.strict_encode64("y" * 8)
-}.to_json
+})
 
 begin
   Familia::Encryption.decrypt(invalid_encrypted, context: context)
@@ -237,12 +237,12 @@ Familia.config.encryption_keys = test_keys
 Familia.config.current_key_version = :v1
 
 # Create encrypted data missing nonce field
-invalid_encrypted = {
+invalid_encrypted = Familia::JsonSerializer.dump({
   algorithm: "aes-256-gcm",
   key_version: "v1",
   ciphertext: Base64.strict_encode64("encrypted_data"),
   auth_tag: Base64.strict_encode64("y" * 16)
-}.to_json
+})
 
 begin
   Familia::Encryption.decrypt(invalid_encrypted, context: context)
@@ -284,7 +284,7 @@ plaintext = "algorithm check"
 Familia.config.encryption_keys = test_keys
 Familia.config.current_key_version = :v1
 encrypted_xchacha = Familia::Encryption.encrypt_with('xchacha20poly1305', plaintext, context: context)
-encrypted_data_xchacha = JSON.parse(encrypted_xchacha, symbolize_names: true)
+encrypted_data_xchacha = Familia::JsonSerializer.parse(encrypted_xchacha, symbolize_names: true)
 encrypted_data_xchacha[:algorithm]
 #=> "xchacha20poly1305"
 
@@ -296,7 +296,7 @@ plaintext = "algorithm check"
 Familia.config.encryption_keys = test_keys
 Familia.config.current_key_version = :v1
 encrypted_aes = Familia::Encryption.encrypt_with('aes-256-gcm', plaintext, context: context)
-encrypted_data_aes = JSON.parse(encrypted_aes, symbolize_names: true)
+encrypted_data_aes = Familia::JsonSerializer.parse(encrypted_aes, symbolize_names: true)
 encrypted_data_aes[:algorithm]
 #=> "aes-256-gcm"
 
@@ -308,7 +308,7 @@ plaintext = "nonce size test"
 Familia.config.encryption_keys = test_keys
 Familia.config.current_key_version = :v1
 encrypted_xchacha = Familia::Encryption.encrypt_with('xchacha20poly1305', plaintext, context: context)
-encrypted_data_xchacha = JSON.parse(encrypted_xchacha, symbolize_names: true)
+encrypted_data_xchacha = Familia::JsonSerializer.parse(encrypted_xchacha, symbolize_names: true)
 nonce_bytes_xchacha = Base64.strict_decode64(encrypted_data_xchacha[:nonce])
 nonce_bytes_xchacha.length
 #=> 24
@@ -321,7 +321,7 @@ plaintext = "nonce size test"
 Familia.config.encryption_keys = test_keys
 Familia.config.current_key_version = :v1
 encrypted_aes = Familia::Encryption.encrypt_with('aes-256-gcm', plaintext, context: context)
-encrypted_data_aes = JSON.parse(encrypted_aes, symbolize_names: true)
+encrypted_data_aes = Familia::JsonSerializer.parse(encrypted_aes, symbolize_names: true)
 nonce_bytes_aes = Base64.strict_decode64(encrypted_data_aes[:nonce])
 nonce_bytes_aes.length
 #=> 12

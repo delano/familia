@@ -190,11 +190,11 @@ end
 
 ## JSON serialization prevents leakage by raising error
 begin
-  user_json = {
+  user_json = Familia::JsonSerializer.dump({
     id: @user.id,
     username: @user.username,
     password: @user.password_hash
-  }.to_json
+  })
   false
 rescue Familia::SerializerError
   true
@@ -203,11 +203,11 @@ end
 
 ## JSON serialization with ConcealedString raises error
 begin
-  user_json = {
+  user_json = Familia::JsonSerializer.dump({
     id: @user.id,
     username: @user.username,
     password: @user.password_hash
-  }.to_json
+  })
   false
 rescue Familia::SerializerError => e
   e.message.include?("ConcealedString")
@@ -294,7 +294,7 @@ api_response = {
 }
 
 begin
-  @response_json = api_response.to_json
+  @response_json = Familia::JsonSerializer.dump(api_response)
   false
 rescue Familia::SerializerError
   true
@@ -311,7 +311,7 @@ api_response = {
 }
 
 begin
-  @response_json = api_response.to_json
+  @response_json = Familia::JsonSerializer.dump(api_response)
   false
 rescue Familia::SerializerError
   true
@@ -328,7 +328,7 @@ api_response = {
 }
 
 begin
-  @response_json = api_response.to_json
+  @response_json = Familia::JsonSerializer.dump(api_response)
   false
 rescue Familia::SerializerError => e
   e.message.include?("ConcealedString")
