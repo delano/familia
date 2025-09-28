@@ -57,6 +57,9 @@ class MultiResult
   end
   alias to_a tuple
 
+  # Returns the number of results in the multi-operation.
+  #
+  # @return [Integer] The number of individual command results returned by the transaction.
   def size
     results.size
   end
