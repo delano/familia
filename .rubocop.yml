@@ -121,3 +121,6 @@ Naming/MemoizedInstanceVariableName:
 
 ThreadSafety/ClassInstanceVariable:
   Enabled: false
+
+ThreadSafety/MutableClassInstanceVariable:
+  Enabled: false
