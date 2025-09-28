@@ -40,7 +40,7 @@ module Familia
         #
         def setup_related_fields_accessors
           Familia::DataType.registered_types.each_pair do |kind, klass|
-            Familia.trace :registered_types, kind, klass, caller(1..1) if Familia.debug?
+            Familia.trace :registered_types, kind, klass if Familia.debug?
 
             # Dynamically define instance-level relation methods
             #
@@ -97,7 +97,7 @@ module Familia
 
       # Creates an instance-level relation
       def attach_instance_related_field(name, klass, opts)
-        Familia.trace :attach_instance, "#{name} #{klass}", opts, caller(1..1) if Familia.debug?
+        Familia.trace :attach_instance_related_field, name, klass, opts if Familia.debug?
         raise ArgumentError, "Name is blank (#{klass})" if name.to_s.empty?
 
         name = name.to_s.to_sym
@@ -122,7 +122,7 @@ module Familia
 
       # Creates a class-level relation
       def attach_class_related_field(name, klass, opts)
-        Familia.trace :attach_class_related_field, "#{name} #{klass}", opts, caller(1..1) if Familia.debug?
+        Familia.trace :attach_class_related_field, "#{name} #{klass}", opts if Familia.debug?
         raise ArgumentError, 'Name is blank (klass)' if name.to_s.empty?
 
         name = name.to_s.to_sym

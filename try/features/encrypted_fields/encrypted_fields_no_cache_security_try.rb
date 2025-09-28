@@ -14,7 +14,7 @@ Familia.config.current_key_version = :v1
 
 ## No persistent key cache exists
 ## Verify that we don't maintain a key cache at all
-Thread.current[:familia_key_cache]
+Fiber[:familia_key_cache]
 #=> nil
 
 ## Each encryption gets fresh key derivation
@@ -30,7 +30,7 @@ end
 #=> 'secret-value'
 
 ## No cache should be created
-Thread.current[:familia_key_cache]
+Fiber[:familia_key_cache]
 #=> nil
 
 ## Reading the value also doesn't create cache
@@ -41,7 +41,7 @@ end
 #=> 'secret-value'
 
 ## repaired test
-Thread.current[:familia_key_cache]
+Fiber[:familia_key_cache]
 #=> nil
 
 ## Multiple fields don't share state
@@ -61,7 +61,7 @@ end
 #=> 'value-c'
 
 ## Still no cache after multiple operations
-Thread.current[:familia_key_cache]
+Fiber[:familia_key_cache]
 #=> nil
 
 ## All values can be retrieved correctly
@@ -83,7 +83,7 @@ end
 #=> 'value-c'
 
 ## Still no cache
-Thread.current[:familia_key_cache]
+Fiber[:familia_key_cache]
 #=> nil
 
 ## Master keys are wiped after each operation
@@ -111,7 +111,7 @@ end.all?
 #=> true
 
 ## Still no cache after multiple operations
-Thread.current[:familia_key_cache]
+Fiber[:familia_key_cache]
 #=> nil
 
 ## Thread isolation (no shared state between threads)
@@ -132,7 +132,7 @@ end
     model.thread_secret = "thread-secret-#{i}"
 
     # Verify no cache in this thread
-    cache_state = Thread.current[:familia_key_cache]
+    cache_state = Fiber[:familia_key_cache]
 
     # Store results
     @results << {
@@ -182,7 +182,7 @@ end
 #=> true
 
 ## Still no cache after 100 operations
-Thread.current[:familia_key_cache]
+Fiber[:familia_key_cache]
 #=> nil
 
 ## Key rotation works without cache complications
@@ -200,7 +200,7 @@ end
 @model6.rotated_field = 'encrypted-with-v2'
 
 # Still no cache with new key version
-Thread.current[:familia_key_cache]
+Fiber[:familia_key_cache]
 #=> nil
 
 ## Value is correctly encrypted/decrypted with v2
@@ -214,6 +214,6 @@ Familia.config.current_key_version = :v1
 #=> :v1
 
 # Teardown
-Thread.current[:familia_key_cache] = nil
+Fiber[:familia_key_cache] = nil
 Familia.config.encryption_keys = nil
 Familia.config.current_key_version = nil

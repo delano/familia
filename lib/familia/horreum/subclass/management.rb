@@ -68,7 +68,7 @@ module Familia
         ids.collect! { |objid| dbkey(objid) }
         return [] if ids.compact.empty?
 
-        Familia.trace :MULTIGET, dbclient, "#{ids.size}: #{ids}", caller(1..1) if Familia.debug?
+        Familia.trace :MULTIGET, nil, "#{ids.size}: #{ids}" if Familia.debug?
         dbclient.mget(*ids)
       end
 
@@ -108,7 +108,7 @@ module Familia
         does_exist = dbclient.exists(objkey).positive?
 
         Familia.ld "[.find_by_key] #{self} from key #{objkey} (exists: #{does_exist})"
-        Familia.trace :FROM_KEY, dbclient, objkey, caller(1..1) if Familia.debug?
+        Familia.trace :FROM_KEY, nil, objkey if Familia.debug?
 
         # This is the reason for calling exists first. We want to definitively
         # and without any ambiguity know if the object exists in the database. If it
@@ -118,7 +118,7 @@ module Familia
         return unless does_exist
 
         obj = dbclient.hgetall(objkey) # horreum objects are persisted as database hashes
-        Familia.trace :FROM_KEY2, dbclient, "#{objkey}: #{obj.inspect}", caller(1..1) if Familia.debug?
+        Familia.trace :FROM_KEY2, nil, "#{objkey}: #{obj.inspect}" if Familia.debug?
 
         new(**obj)
       end
@@ -150,7 +150,7 @@ module Familia
         objkey = dbkey(identifier, suffix)
 
         Familia.ld "[.find_by_id] #{self} from key #{objkey})"
-        Familia.trace :FIND_BY_ID, Familia.dbclient(uri), objkey, caller(1..1).first if Familia.debug?
+        Familia.trace :FIND_BY_ID, nil, objkey if Familia.debug?
         find_by_key objkey
       end
       alias find find_by_id
@@ -177,7 +177,7 @@ module Familia
         objkey = dbkey identifier, suffix
 
         ret = dbclient.exists objkey
-        Familia.trace :EXISTS, dbclient, "#{objkey} #{ret.inspect}", caller(1..1) if Familia.debug?
+        Familia.trace :EXISTS, nil, "#{objkey} #{ret.inspect}" if Familia.debug?
 
         ret.positive? # differs from Valkey API but I think it's okay bc `exists?` is a predicate method.
       end
@@ -203,7 +203,7 @@ module Familia
         objkey = dbkey identifier, suffix
 
         ret = dbclient.del objkey
-        Familia.trace :DESTROY!, dbclient, "#{objkey} #{ret.inspect}", caller(1..1) if Familia.debug?
+        Familia.trace :DESTROY!, nil, "#{objkey} #{ret.inspect}" if Familia.debug?
         ret.positive?
       end
 

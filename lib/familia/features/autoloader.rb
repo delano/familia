@@ -43,14 +43,14 @@ module Familia::Features
       patterns = Array(patterns)
 
       patterns.each do |pattern|
-        Familia.ld "[#{log_prefix}] Autoloader loading features from #{pattern}"
+        Familia.trace :AUTOLOAD, nil, "[#{log_prefix}] Autoloader loading features from #{pattern}"
         Dir.glob(pattern).each do |file_path|
           basename = File.basename(file_path)
 
           # Skip excluded files
           next if exclude.include?(basename)
 
-          Familia.trace :FEATURE, nil, "[#{log_prefix}] Loading #{basename}", caller(1..1) if Familia.debug?
+          Familia.trace :FEATURE, nil, "[#{log_prefix}] Loading #{basename}" if Familia.debug?
           require File.expand_path(file_path)
         end
       end

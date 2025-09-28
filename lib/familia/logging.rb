@@ -10,6 +10,7 @@ module Familia
     severity_letter = severity[0] # Get the first letter of the severity
     pid = Process.pid
     thread_id = Thread.current.object_id
+    fiber_id = Fiber.current.object_id
     full_path, line = caller(5..5).first.split(':')[0..1]
     parent_path = Pathname.new(full_path).ascend.find { |p| p.basename.to_s == 'familia' }
     relative_path = full_path.sub(parent_path.to_s, 'familia')
@@ -19,9 +20,9 @@ module Familia
     # the default. The thread local variable is set in the trace
     # method in the Familia::Refinements::LoggerTrace module. The name of the
     # variable `severity_letter` is arbitrary and could be anything.
-    severity_letter = Thread.current[:severity_letter] || severity_letter
+    severity_letter = Fiber[:severity_letter] || severity_letter
 
-    "#{severity_letter}, #{utc_datetime} #{pid} #{thread_id}: #{msg}  [#{relative_path}:#{line}]\n"
+    "#{severity_letter}, #{utc_datetime} #{pid} #{thread_id}/#{fiber_id}: #{msg}  [#{relative_path}:#{line}]\n"
   end
 
   # The Logging module provides a set of methods and constants for logging messages
@@ -129,15 +130,12 @@ module Familia
     #
     # @param label [Symbol] A label for the trace message (e.g., :EXPAND,
     #   :FROMREDIS, :LOAD, :EXISTS).
-    # @param dbclient [Redis, Redis::Future, nil] The Database instance or
-    #   Future being used.
+    # @param instance_id
     # @param ident [String] An identifier or key related to the operation being
     #   traced.
-    # @param context [Array<String>, String, nil] The calling context, typically
-    #   obtained from `caller` or `caller.first`. Default is nil.
+    # @param extra_context [Array<String>, String, nil] Any extra details to include.
     #
-    # @example Familia.trace :LOAD, Familia.dbclient(uri), objkey, caller(1..1) if
-    #   Familia.debug?
+    # @example Familia.trace :LOAD, Familia.dbclient(uri), objkey if Familia.debug?
     #
     # @return [nil]
     #
@@ -146,110 +144,11 @@ module Familia
     #   pipelined and multi blocks), or nil (when the database connection isn't
     #   relevant).
     #
-    def trace(label, dbclient, ident, context = nil)
+    def trace(label, instance_id = nil, ident = nil, extra_context = nil)
       return unless Familia::Refinements::LoggerTrace::ENABLED
-
-      # Usually dbclient is a Database object, but it could be
-      # a Valkey/Redis::Future which is what is used inside of pipelined
-      # and multi blocks. In some contexts it's nil where the
-      # database connection isn't relevant.
-      instance_id = if dbclient
-                      case dbclient
-                      when Redis
-                        dbclient.id.respond_to?(:to_s) ? dbclient.id.to_s : dbclient.class.name
-                      when Redis::Future
-                        'Redis::Future'
-                      else
-                        dbclient.class.name
-                      end
-                    end
-
-      codeline = if context
-                   context = [context].flatten
-                   context.reject! { |line| line =~ %r{lib/familia} }
-                   context.first
-                 end
-
-      @logger.trace format('[%s] %s -> %s <- at %s', label, instance_id, ident, codeline)
+      # Let the other values show nothing when nil, but make it known for the focused value
+      ident_str = "#{ident.nil? ? '<nil>' : ident}"
+      @logger.trace format('[%s] %s -> %s <-%s', label, instance_id, ident_str, extra_context)
     end
   end
 end
-
-
-__END__
-
-
-### Example 1: Basic Logging
-```ruby
-require 'logger'
-
-logger = Logger.new($stdout)
-logger.info("This is an info message")
-logger.warn("This is a warning message")
-logger.error("This is an error message")
-```
-
-### Example 2: Setting Log Level
-```ruby
-require 'logger'
-
-logger = Logger.new($stdout)
-logger.level = Logger::WARN
-
-logger.debug("This is a debug message") # Will not be logged
-logger.info("This is an info message")  # Will not be logged
-logger.warn("This is a warning message")
-logger.error("This is an error message")
-```
-
-### Example 3: Customizing Log Format
-```ruby
-require 'logger'
-
-logger = Logger.new($stdout)
-logger.formatter = proc do |severity, datetime, progname, msg|
-  "#{datetime}: #{severity} - #{msg}\n"
-end
-
-logger.info("This is an info message")
-logger.warn("This is a warning message")
-logger.error("This is an error message")
-```
-
-### Example 4: Logging with a Program Name
-```ruby
-require 'logger'
-
-logger = Logger.new($stdout)
-logger.progname = 'Familia'
-
-logger.info("This is an info message")
-logger.warn("This is a warning message")
-logger.error("This is an error message")
-```
-
-### Example 5: Logging with a Block
-```ruby
-require 'logger'
-
-# Calling any of the methods above with a block
-#   (affects only the one entry).
-#   Doing so can have two benefits:
-#
-#   - Context: the block can evaluate the entire program context
-#     and create a context-dependent message.
-#   - Performance: the block is not evaluated unless the log level
-#     permits the entry actually to be written:
-#
-#       logger.error { my_slow_message_generator }
-#
-#     Contrast this with the string form, where the string is
-#     always evaluated, regardless of the log level:
-#
-#       logger.error("#{my_slow_message_generator}")
-logger = Logger.new($stdout)
-
-logger.info { "This is an info message" }
-logger.warn { "This is a warning message" }
-logger.error { "This is an error message" }
-```

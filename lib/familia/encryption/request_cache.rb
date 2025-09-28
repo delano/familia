@@ -18,8 +18,8 @@ module Familia
     class << self
       # Enable request-scoped caching (opt-in for performance)
       def with_request_cache
-        Thread.current[:familia_request_cache_enabled] = true
-        Thread.current[:familia_request_cache] = {}
+        Fiber[:familia_request_cache_enabled] = true
+        Fiber[:familia_request_cache] = {}
         yield
       ensure
         clear_request_cache!
@@ -27,12 +27,12 @@ module Familia
 
       # Clear all cached keys and disable caching
       def clear_request_cache!
-        if (cache = Thread.current[:familia_request_cache])
+        if (cache = Fiber[:familia_request_cache])
           cache.each_value { |key| secure_wipe(key) }
           cache.clear
         end
-        Thread.current[:familia_request_cache_enabled] = false
-        Thread.current[:familia_request_cache] = nil
+        Fiber[:familia_request_cache_enabled] = false
+        Fiber[:familia_request_cache] = nil
       end
 
       private
@@ -43,8 +43,8 @@ module Familia
         master_key = get_master_key(version)
 
         # Only use cache if explicitly enabled for this request
-        if Thread.current[:familia_request_cache_enabled]
-          cache = Thread.current[:familia_request_cache] ||= {}
+        if Fiber[:familia_request_cache_enabled]
+          cache = Fiber[:familia_request_cache] ||= {}
           cache_key = "#{version}:#{context}"
 
           # Return cached key if available (within same request only)

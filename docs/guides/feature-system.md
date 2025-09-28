@@ -165,7 +165,7 @@ module Familia
   module Features
     module MyCustomFeature
       def self.included(base)
-        Familia.trace :LOADED, self, base, caller(1..1) if Familia.debug?
+        Familia.trace :LOADED, self, base if Familia.debug?
         base.extend ClassMethods
         base.prepend InstanceMethods  # Use prepend for method interception
       end

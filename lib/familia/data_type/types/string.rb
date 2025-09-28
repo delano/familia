@@ -17,7 +17,7 @@ module Familia
     end
 
     def value
-      echo :value, caller(0..0) if Familia.debug
+      echo :value, Familia.pretty_stack(limit: 1) if Familia.debug
       dbclient.setnx dbkey, @opts[:default] if @opts[:default]
       deserialize_value dbclient.get(dbkey)
     end

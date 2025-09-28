@@ -1,5 +1,7 @@
 # lib/familia/horreum/serialization.rb
-#
+
+require_relative '../../multi_result'
+
 module Familia
   # Familia::Horreum
   #
@@ -61,7 +63,7 @@ module Familia
       # @see #commit_fields The underlying method that performs the field persistence
       #
       def save(update_expiration: true)
-        Familia.trace :SAVE, dbclient, uri, caller(1..1) if Familia.debug?
+        Familia.trace :SAVE, nil, uri if Familia.debug?
 
         # No longer need to sync computed identifier with a cache field
         self.created ||= Familia.now.to_i if respond_to?(:created)
@@ -128,7 +130,7 @@ module Familia
         identifier_field = self.class.identifier_field
 
         Familia.ld "[save_if_not_exists]: #{self.class} #{identifier_field}=#{identifier}"
-        Familia.trace :SAVE_IF_NOT_EXISTS, dbclient, uri, caller(1..1) if Familia.debug?
+        Familia.trace :SAVE_IF_NOT_EXISTS, nil, uri if Familia.debug?
 
         dbclient.watch(dbkey) do
           if dbclient.exists(dbkey).positive?
@@ -199,9 +201,9 @@ module Familia
         update_expiration = kwargs.delete(:update_expiration) { true }
         fields = kwargs
 
-        Familia.trace :BATCH_UPDATE, dbclient, fields.keys, caller(1..1) if Familia.debug?
+        Familia.trace :BATCH_UPDATE, nil, fields.keys if Familia.debug?
 
-        command_return_values = transaction do |conn|
+        transaction_result = transaction do |conn|
           fields.each do |field, value|
             prepared_value = serialize_value(value)
             conn.hset dbkey, field, prepared_value
@@ -213,9 +215,8 @@ module Familia
         # Update expiration if requested and supported
         self.update_expiration(default_expiration: nil) if update_expiration && respond_to?(:update_expiration)
 
-        # Return same MultiResult format as other methods
-        summary_boolean = command_return_values.all? { |ret| %w[OK 0 1].include?(ret.to_s) }
-        MultiResult.new(summary_boolean, command_return_values)
+        # Return the MultiResult directly (transaction already returns MultiResult)
+        transaction_result
       end
 
       # Updates the object by applying multiple field values.
@@ -264,7 +265,7 @@ module Familia
       # @see #delete! The underlying method that performs the key deletion
       #
       def destroy!
-        Familia.trace :DESTROY, dbclient, uri, caller(1..1) if Familia.debug?
+        Familia.trace :DESTROY, nil, uri if Familia.debug?
         delete!
       end
 
@@ -311,7 +312,7 @@ module Familia
       #   no authoritative source in Valkey storage.
       #
       def refresh!
-        Familia.trace :REFRESH, dbclient, uri, caller(1..1) if Familia.debug?
+        Familia.trace :REFRESH, nil, uri if Familia.debug?
         raise Familia::KeyNotFoundError, dbkey unless dbclient.exists(dbkey)
 
         fields = hgetall

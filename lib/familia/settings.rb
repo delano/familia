@@ -39,7 +39,7 @@ module Familia
     end
 
     def logical_database(v = nil)
-      Familia.trace :DB, dbclient, "#{@logical_database} #{v}", caller(1..1) if Familia.debug?
+      Familia.trace :DB, nil, "#{@logical_database} #{v}" if Familia.debug?
       @logical_database = v unless v.nil?
       @logical_database
     end

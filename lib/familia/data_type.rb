@@ -38,7 +38,7 @@ module Familia
       # +methname+ is the term used for the class and instance methods
       # that are created for the given +klass+ (e.g. set, list, etc)
       def register(klass, methname)
-        Familia.trace :REGISTER, nil, "[#{self}] Registering #{klass} as #{methname.inspect}", caller(1..1) if Familia.debug?
+        Familia.trace :REGISTER, nil, "[#{self}] Registering #{klass} as #{methname.inspect}" if Familia.debug?
 
         @registered_types[methname] = klass
       end
@@ -61,7 +61,7 @@ module Familia
       end
 
       def inherited(obj)
-        Familia.trace :DATATYPE, nil, "#{obj} is my kinda type", caller(1..1) if Familia.debug?
+        Familia.trace :DATATYPE, nil, "#{obj} is my kinda type" if Familia.debug?
         obj.logical_database = logical_database
         obj.default_expiration = default_expiration # method added via Features::Expiration
         obj.uri = uri
@@ -128,13 +128,14 @@ module Familia
         # this point. This would result in a Familia::Problem being raised. So
         # to be on the safe-side here until we have a better understanding of
         # the issue, we'll just log the class name for each key-value pair.
-        Familia.trace :SETTING, nil, " [setting] #{k} #{v.class}", caller(1..1) if Familia.debug?
+        Familia.trace :SETTING, nil, " [setting] #{k} #{v.class}" if Familia.debug?
         send(:"#{k}=", v) if respond_to? :"#{k}="
       end
 
       init if respond_to? :init
     end
 
+    # TODO: Replace with Chain of Responsibility pattern
     def dbclient
       return Fiber[:familia_transaction] if Fiber[:familia_transaction]
       return @dbclient if @dbclient

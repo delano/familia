@@ -66,7 +66,7 @@ module Familia
         puts "   Context: #{context}"
         puts "   Version: #{version || 'current'}"
 
-        cache = Thread.current[:familia_key_cache] ||= {}
+        cache = Fiber[:familia_key_cache] ||= {}
         cache_key = "#{version || current_key_version}:#{context}"
         puts "   Cache key: #{cache_key}"
         puts "   Cache before: #{cache.keys.inspect}"
@@ -75,7 +75,7 @@ module Familia
         result = orig_derive_key_with_provider(provider, context, version: version)
         elapsed = ((Familia.now - start_time) * 1000).round(2)
 
-        cache_after = Thread.current[:familia_key_cache] || {}
+        cache_after = Fiber[:familia_key_cache] || {}
         puts "   Cache after: #{cache_after.keys.inspect}"
         puts "   Derived key: [#{result.bytesize} bytes]"
         puts "   Elapsed: #{elapsed}ms"
@@ -92,7 +92,7 @@ Familia.config.encryption_keys = test_keys
 Familia.config.current_key_version = :v1
 
 # Clear cache
-Thread.current[:familia_key_cache] = nil
+Fiber[:familia_key_cache] = nil
 
 # Define test model
 class TraceTestModel < Familia::Horreum

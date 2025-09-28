@@ -141,8 +141,8 @@ threads.each(&:join)
   # Test that transaction connection is available
   conn.ping
 end
-# Transaction returns array with results
-@transfer_result.first
+# Transaction returns MultiResult with success status and results
+@transfer_result.results.first
 #=> "PONG"
 
 ## Test 12: Transaction block executes properly
@@ -158,11 +158,11 @@ end
 #=> "OK"
 
 ## Test 14: Pipeline operations with connection pool
-@pipeline_results = Familia.pipeline do |conn|
+@pipeline_results = Familia.pipelined do |conn|
   conn.ping
 end
 # Pipeline executes successfully
-@pipeline_results.first
+@pipeline_results.results.first
 #=> "PONG"
 
 ## Test 15: Multi/EXEC operations with connection pool
@@ -170,7 +170,7 @@ end
   conn.ping
 end
 # Multi/EXEC executes successfully
-@multi_results.first
+@multi_results.results.first
 #=> "PONG"
 
 ## Test 16: Error handling in transactions
@@ -277,3 +277,13 @@ PoolTestAccountDB1.config_name
 
 
 puts "Connection pool tests completed successfully!"
+
+# Teardown
+Familia.connection_provider = nil
+Fiber[:familia_connection] = nil
+Fiber[:familia_connection_handler_class] = nil
+Fiber[:familia_transaction] = nil
+Fiber[:familia_pipeline] = nil
+Fiber[:familia_key_cache] = nil
+Fiber[:familia_request_cache] = nil
+Fiber[:familia_request_cache_enabled] = nil

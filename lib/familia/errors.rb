@@ -10,6 +10,9 @@ module Familia
 
   class SerializerError < Problem; end
 
+  # Raised when attempting to start transactions or pipelines on connection types that don't support them
+  class OperationModeError < Problem; end
+
   class HighRiskFactor < Problem
     attr_reader :value
 

@@ -46,10 +46,10 @@ module Familia
         # @example Logging a trace message
         #   logger.trace("MyApp") { "Detailed trace information" }
         def trace(progname = nil, &block)
-          Thread.current[:severity_letter] = 'T'
+          Fiber[:severity_letter] = 'T'
           add(Familia::Refinements::LoggerTrace::TRACE, nil, progname, &block)
         ensure
-          Thread.current[:severity_letter] = nil
+          Fiber[:severity_letter] = nil
         end
       end
     end

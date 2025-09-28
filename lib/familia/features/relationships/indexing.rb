@@ -226,16 +226,17 @@ module Familia
             end
 
             define_method("update_in_class_#{index_name}") do |old_field_value = nil|
-              index_hash = self.class.send(index_name)  # Access the class-level hashkey DataType
               new_field_value = send(field)
 
-              # Use atomic transaction for remove and add operations
-              index_hash.dbclient.multi do |tx|
+              # Use class-level transaction for atomicity with DataType abstraction
+              self.class.transaction do |tx|
+                index_hash = self.class.send(index_name)  # Access the class-level hashkey DataType
+
                 # Remove old value if provided
-                tx.hdel(index_hash.dbkey, old_field_value.to_s) if old_field_value
+                index_hash.remove(old_field_value.to_s) if old_field_value
 
                 # Add new value if present
-                tx.hset(index_hash.dbkey, new_field_value.to_s, identifier) if new_field_value
+                index_hash[new_field_value.to_s] = identifier if new_field_value
               end
             end
           end
@@ -286,20 +287,20 @@ module Familia
 
               new_field_value = send(field)
 
-              # Use atomic transaction for remove and add operations
-              target_instance.dbclient.multi do |tx|
+              # Use Familia's transaction method for atomicity with DataType abstraction
+              target_instance.transaction do |tx|
                 # Remove from old index if provided
                 if old_field_value
                   old_index_key = "#{index_name}:#{old_field_value}"
                   old_index_set = Familia::SortedSet.new(old_index_key, parent: target_instance)
-                  tx.zrem(old_index_set.dbkey, identifier)
+                  old_index_set.remove(identifier)
                 end
 
                 # Add to new index if present
                 if new_field_value
                   new_index_key = "#{index_name}:#{new_field_value}"
                   new_index_set = Familia::SortedSet.new(new_index_key, parent: target_instance)
-                  tx.zadd(new_index_set.dbkey, Familia.now, identifier)
+                  new_index_set.add(identifier, Familia.now)
                 end
               end
             end

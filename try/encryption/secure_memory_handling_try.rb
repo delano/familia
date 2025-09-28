@@ -122,4 +122,4 @@ nonce.bytesize
 #=> "xchacha20poly1305-secure"
 
 # TEARDOWN
-Thread.current[:familia_key_cache]&.clear if Thread.current[:familia_key_cache]
+Fiber[:familia_key_cache]&.clear if Fiber[:familia_key_cache]

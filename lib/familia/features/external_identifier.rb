@@ -8,7 +8,7 @@ module Familia
       Familia::Base.add_feature self, :external_identifier, depends_on: [:object_identifier]
 
       def self.included(base)
-        Familia.trace :LOADED, self, base, caller(1..1) if Familia.debug?
+        Familia.trace :LOADED, self, base if Familia.debug?
         base.extend ModelClassMethods
 
         # Ensure default prefix is set in feature options
@@ -142,7 +142,7 @@ module Familia
 
           if Familia.debug?
             reference = caller(1..1).first
-            Familia.trace :FIND_BY_EXTID, Familia.dbclient, extid, reference
+            Familia.trace :FIND_BY_EXTID, nil, extid, reference
           end
 
           # Look up the primary ID from the external ID mapping

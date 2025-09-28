@@ -175,4 +175,4 @@ derived_key1 == derived_key2
 #=> true
 
 # TEARDOWN
-Thread.current[:familia_key_cache]&.clear if Thread.current[:familia_key_cache]
+Fiber[:familia_key_cache]&.clear if Fiber[:familia_key_cache]

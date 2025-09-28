@@ -107,7 +107,7 @@ module Familia
       Familia::Base.add_feature self, :transient_fields, depends_on: nil
 
       def self.included(base)
-        Familia.trace :LOADED, self, base, caller(1..1) if Familia.debug?
+        Familia.trace :LOADED, self, base if Familia.debug?
         base.extend ModelClassMethods
 
         # Initialize transient fields tracking
