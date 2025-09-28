@@ -33,13 +33,19 @@ module Familia
       #   | Use case        | Data consistency| Bulk operations |
       #
       def transaction(&)
+        # Check for nested transaction
+        return yield(Fiber[:familia_transaction]) if Fiber[:familia_transaction]
+
         block_result = nil
+        previous_conn = Fiber[:familia_connection]
+
         dbclient.multi do |conn|
-          Fiber[:familia_connection] = conn
+          Fiber[:familia_transaction] = conn
           begin
             block_result = yield(conn)
           ensure
-            Fiber[:familia_connection] = nil # cleanup reference
+            Fiber[:familia_transaction] = nil
+            Fiber[:familia_connection] = previous_conn # restore previous context
           end
         end
         # Return the multi result which contains the transaction results
@@ -81,13 +87,18 @@ module Familia
       #   # Result: neither item1 nor item2 are set due to the error
       #
       def pipeline(&)
+        # Check for existing pipeline context
+        return yield(Fiber[:familia_pipeline]) if Fiber[:familia_pipeline]
+
         block_result = nil
-        previous_conn = Fiber[:familia_connection] || nil
+        previous_conn = Fiber[:familia_connection]
+
         dbclient.pipelined do |conn|
-          Fiber[:familia_connection] = conn
+          Fiber[:familia_pipeline] = conn
           begin
             block_result = yield(conn)
           ensure
+            Fiber[:familia_pipeline] = nil
             Fiber[:familia_connection] = previous_conn # leave nothing but footprints
           end
         end

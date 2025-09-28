@@ -67,7 +67,7 @@ module Familia
         # Always pass normalized URI with database to provider
         # Provider MUST return connection already on the correct database
         parsed_uri = @familia_module.normalize_uri(uri)
-        @familia_module.connection_provider.call(parsed_uri)
+        @familia_module.connection_provider.call(parsed_uri.to_s)
       end
     end
 
