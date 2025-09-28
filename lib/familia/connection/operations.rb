@@ -41,13 +41,11 @@ module Familia
             "Cannot start transaction with #{handler_class.name} connection. Use connection pools."
         end
 
-        # Handle reentrant case - already in transaction
-        if handler_class&.allows_transaction? == :reentrant
+        # Check for nested transaction
+        if Fiber[:familia_transaction]
+          # Handle reentrant case - already in a transaction
           return yield(Fiber[:familia_transaction])
         end
-
-        # Check for nested transaction
-        return yield(Fiber[:familia_transaction]) if Fiber[:familia_transaction]
 
         block_result = nil
         previous_conn = Fiber[:familia_connection]

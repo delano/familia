@@ -280,3 +280,10 @@ puts "Connection pool tests completed successfully!"
 
 # Teardown
 Familia.connection_provider = nil
+Fiber[:familia_connection] = nil
+Fiber[:familia_connection_class] = nil
+Fiber[:familia_transaction] = nil
+Fiber[:familia_pipeline] = nil
+Fiber[:familia_key_cache] = nil
+Fiber[:familia_request_cache] = nil
+Fiber[:familia_request_cache_enabled] = nil
