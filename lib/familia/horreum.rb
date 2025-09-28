@@ -87,7 +87,7 @@ module Familia
         member.extend(Familia::Horreum::DefinitionMethods)    # field(), identifier_field(), dbkey()
         member.extend(Familia::Horreum::ManagementMethods)    # create(), find(), destroy!()
         member.extend(Familia::Horreum::Connection)           # dbclient, connection management
-        member.extend(Familia::Features)             # feature() method for optional modules
+        member.extend(Familia::Features) # feature() method for optional modules
 
         # Copy parent class configuration to child class
         # This implements conventional ORM inheritance behavior where child classes
@@ -100,9 +100,7 @@ module Familia
           end
 
           # Copy field system configuration
-          if parent_class.fields&.any?
-            member.instance_variable_set(:@fields, parent_class.fields.dup)
-          end
+          member.instance_variable_set(:@fields, parent_class.fields.dup) if parent_class.fields&.any?
 
           if parent_class.respond_to?(:field_types) && parent_class.field_types&.any?
             # Copy field_types hash (FieldType instances are frozen/immutable and can be safely shared)
@@ -114,13 +112,13 @@ module Familia
               methods_to_check = [
                 field_type.method_name,
                 (field_type.method_name ? :"#{field_type.method_name}=" : nil),
-                field_type.fast_method_name
+                field_type.fast_method_name,
               ].compact
 
               # Only install if none of the methods already exist
-              methods_exist = methods_to_check.any? { |method_name|
+              methods_exist = methods_to_check.any? do |method_name|
                 member.method_defined?(method_name) || member.private_method_defined?(method_name)
-              }
+              end
 
               field_type.install(member) unless methods_exist
             end
@@ -152,7 +150,10 @@ module Familia
           if parent_class.related_fields&.any?
             member.instance_variable_set(:@related_fields, parent_class.related_fields.dup)
           end
-          member.instance_variable_set(:@has_relations, parent_class.instance_variable_get(:@has_relations)) if parent_class.instance_variable_get(:@has_relations)
+          if parent_class.instance_variable_get(:@has_relations)
+            member.instance_variable_set(:@has_relations,
+                                         parent_class.instance_variable_get(:@has_relations))
+          end
         end
 
         # Track all classes that inherit from Horreum
@@ -164,6 +165,8 @@ module Familia
         super
       end
     end
+
+    attr_writer :dbclient
 
     # Instance initialization
     # This method sets up the object's state, including Valkey/Redis-related data.
@@ -209,8 +212,8 @@ module Familia
         initialize_with_keyword_args(**kwargs)
       elsif args.any?
         initialize_with_positional_args(*args)
-      else
-        Familia.trace :INITIALIZE, nil, "#{self.class} initialized with no arguments" if Familia.debug?
+      elsif Familia.debug?
+        Familia.trace :INITIALIZE, nil, "#{self.class} initialized with no arguments"
         # Default values are intentionally NOT set here
       end
 
@@ -270,48 +273,6 @@ module Familia
       end
     end
 
-    # Initializes the object with positional arguments.
-    # Maps each argument to a corresponding field in the order they are defined.
-    #
-    # @param args [Array] List of values to be assigned to fields
-    # @return [Array<Symbol>] List of field names that were successfully updated
-    #   (i.e., had non-nil values assigned)
-    # @private
-    def initialize_with_positional_args(*args)
-      Familia.trace :INITIALIZE_ARGS, nil, args if Familia.debug?
-      self.class.fields.zip(args).filter_map do |field, value|
-        if value
-          send(:"#{field}=", value)
-          field.to_sym
-        end
-      end
-    end
-    private :initialize_with_positional_args
-
-    # Initializes the object with keyword arguments.
-    # Assigns values to fields based on the provided hash of field names and values.
-    # Handles both symbol and string keys to accommodate different sources of data.
-    #
-    # @param fields [Hash] Hash of field names (as symbols or strings) and their values
-    # @return [Array<Symbol>] List of field names that were successfully updated
-    #   (i.e., had non-nil values assigned)
-    # @private
-    def initialize_with_keyword_args(**fields)
-      Familia.trace :INITIALIZE_KWARGS, nil, fields.keys if Familia.debug?
-      self.class.fields.filter_map do |field|
-        # Database will give us field names as strings back, but internally
-        # we use symbols. So we check for both.
-        value = fields[field.to_sym] || fields[field.to_s]
-        if value
-          # Use the mapped method name, not the field name
-          method_name = self.class.field_method_map[field] || field
-          send(:"#{method_name}=", value)
-          field.to_sym
-        end
-      end
-    end
-    private :initialize_with_keyword_args
-
     def initialize_with_keyword_args_deserialize_value(**fields)
       # Deserialize Database string values back to their original types
       deserialized_fields = fields.transform_values { |value| deserialize_value(value) }
@@ -358,30 +319,23 @@ module Familia
       unique_id
     end
 
-    attr_writer :dbclient
-
-    # Summon the mystical Database connection from the depths of instance or class.
+    # Returns the Database connection for the instance using Chain of Responsibility pattern.
     #
-    # This method is like a magical divining rod, always pointing to the nearest
-    # source of Database goodness. It first checks if we have a personal Valkey/Redis
-    # connection (@dbclient), and if not, it borrows the class's connection.
+    # This method uses a chain of handlers to resolve connections in priority order:
+    # 1. FiberTransactionHandler - Fiber[:familia_transaction] (active transaction)
+    # 2. DefaultConnectionHandler - Accesses self.dbclient
+    # 3. DefaultConnectionHandler - Accesses self.class.dbclient
+    # 4. GlobalFallbackHandler - Familia.dbclient(uri || logical_database) (global fallback)
     #
-    # @return [Redis] A shimmering Database connection, ready for your bidding.
-    #
-    # @example Finding your Database way
-    #   puts object.dbclient
-    #   # => #<Redis client v5.4.1 for redis://localhost:6379/0>
+    # @return [Redis] the Database connection instance.
     #
     def dbclient
-      class_client = self.class.respond_to?(:dbclient) ? self.class.dbclient : nil
-      client = Fiber[:familia_transaction] || @dbclient || class_client || Familia.dbclient
-      Familia.trace :DBCLIENT_INSTANCE, nil, "fiber:#{!!Fiber[:familia_transaction]} instance:#{!!@dbclient} class:#{!!class_client} fallback:#{!Fiber[:familia_transaction] && !@dbclient && !class_client}" if Familia.debug?
-      # conn.select(self.class.logical_database)
-      client
+      @instance_connection_chain ||= build_connection_chain
+      @instance_connection_chain.handle(nil)
     end
 
     def generate_id
-      @objid ||= Familia.generate_id # rubocop:disable Naming/MemoizedInstanceVariableName
+      @objid ||= Familia.generate_id
     end
 
     # The principle is: **If Familia objects have `to_s`, then they should work
@@ -393,6 +347,57 @@ module Familia
       return super if identifier.to_s.empty?
 
       identifier.to_s
+    end
+
+    private
+
+    # Initializes the object with positional arguments.
+    # Maps each argument to a corresponding field in the order they are defined.
+    #
+    # @param args [Array] List of values to be assigned to fields
+    # @return [Array<Symbol>] List of field names that were successfully updated
+    #   (i.e., had non-nil values assigned)
+    # @private
+    def initialize_with_positional_args(*args)
+      Familia.trace :INITIALIZE_ARGS, nil, args if Familia.debug?
+      self.class.fields.zip(args).filter_map do |field, value|
+        if value
+          send(:"#{field}=", value)
+          field.to_sym
+        end
+      end
+    end
+
+    # Initializes the object with keyword arguments.
+    # Assigns values to fields based on the provided hash of field names and values.
+    # Handles both symbol and string keys to accommodate different sources of data.
+    #
+    # @param fields [Hash] Hash of field names (as symbols or strings) and their values
+    # @return [Array<Symbol>] List of field names that were successfully updated
+    #   (i.e., had non-nil values assigned)
+    # @private
+    def initialize_with_keyword_args(**fields)
+      Familia.trace :INITIALIZE_KWARGS, nil, fields.keys if Familia.debug?
+      self.class.fields.filter_map do |field|
+        # Database will give us field names as strings back, but internally
+        # we use symbols. So we check for both.
+        value = fields[field.to_sym] || fields[field.to_s]
+        if value
+          # Use the mapped method name, not the field name
+          method_name = self.class.field_method_map[field] || field
+          send(:"#{method_name}=", value)
+          field.to_sym
+        end
+      end
+    end
+
+    # Builds the instance-level connection chain with handlers in priority order
+    def build_connection_chain
+      Familia::Connection::ResponsibilityChain.new
+                                              .add_handler(Familia::Connection::FiberTransactionHandler.new)
+                                              .add_handler(Familia::Connection::DefaultConnectionHandler.new(self))
+                                              .add_handler(Familia::Connection::DefaultConnectionHandler.new(self.class))
+                                              .add_handler(Familia::Connection::CreateConnectionHandler.new)
     end
   end
 end

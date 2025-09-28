@@ -135,6 +135,7 @@ module Familia
       init if respond_to? :init
     end
 
+    # TODO: Replace with Chain of Responsibility pattern
     def dbclient
       return Fiber[:familia_transaction] if Fiber[:familia_transaction]
       return @dbclient if @dbclient

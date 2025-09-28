@@ -1,4 +1,4 @@
-# lib/familia/connection/base_handler.rb
+# lib/familia/connection/handlers.rb
 
 # Familia
 #
@@ -20,7 +20,7 @@ module Familia
 
       def handle(uri)
         @handlers.each do |handler|
-          connection = handler.try_connection(uri)
+          connection = handler.handle(uri)
           return connection if connection
         end
 
@@ -30,69 +30,98 @@ module Familia
       end
     end
 
-    # Connection handler base class for Chain of Responsibility pattern
+    # Connection handler base class for Chain of Responsibility pattern.
+    # When no arguments are passed, all behaviour is based on the top
+    # Familia module itself. e.g. Familia.create_dbclient.
+    #
     class BaseConnectionHandler
-      def initialize(familia_module)
-        @familia = familia_module
+      def initialize(familia_module=nil)
+        @familia_module = familia_module || Familia
       end
 
-      def try_connection(uri)
-        raise NotImplementedError, 'Subclasses must implement try_connection'
+      def handle(uri)
+        raise NotImplementedError, 'Subclasses must implement handle'
       end
     end
 
-    # Creates new connections directly (no caching at module level)
-    class DefaultConnectionHandler < BaseConnectionHandler
-      def try_connection(uri)
+    # Creates new connections directly, with no caching of any kind. If
+    # the make it to here in the chain, it'll create a new connection
+    # every time.
+    class CreateConnectionHandler < BaseConnectionHandler
+      def handle(uri)
         # Create new connection (no module-level caching)
-        parsed_uri = @familia.normalize_uri(uri)
-        client = @familia.create_dbclient(parsed_uri)
-        @familia.trace :DBCLIENT_DEFAULT, nil, "Created new connection for #{parsed_uri.serverid}" if @familia.debug?
+        parsed_uri = @familia_module.normalize_uri(uri)
+        client = @familia_module.create_dbclient(parsed_uri)
+        @familia_module.trace :DBCLIENT_DEFAULT, nil, "Created new connection for #{parsed_uri.serverid}"
         client
-      end
-    end
-
-    # Checks for fiber-local connections with version validation
-    class FiberConnectionHandler < BaseConnectionHandler
-      def try_connection(uri)
-        return nil unless Fiber[:familia_connection]
-
-        conn, version = Fiber[:familia_connection]
-        if version == @familia.middleware_version
-          @familia.trace :DBCLIENT_FIBER, nil, "Using fiber-local connection for #{uri}" if @familia.debug?
-          conn
-        else
-          # Version mismatch, clear stale connection
-          Fiber[:familia_connection] = nil
-          @familia.trace :DBCLIENT_FIBER, nil, 'Cleared stale fiber connection (version mismatch)' if @familia.debug?
-          nil
-        end
       end
     end
 
     # Delegates to user-defined connection provider
     class ProviderConnectionHandler < BaseConnectionHandler
-      def try_connection(uri)
-        return nil unless @familia.connection_provider
+      def handle(uri)
+        return nil unless @familia_module.connection_provider
+
+        @familia_module.trace :DBCLIENT_PROVIDER, nil, 'Using connection provider'
 
         # Always pass normalized URI with database to provider
         # Provider MUST return connection already on the correct database
-        parsed_uri = @familia.normalize_uri(uri)
-        client = @familia.connection_provider.call(parsed_uri.to_s)
-
-        # In debug mode, verify the provider honored the contract
-        if @familia.debug? && client&.respond_to?(:connection)
-          current_db = client.connection[:db]
-          expected_db = parsed_uri.db || 0
-          @familia.ld "Connection provider returned client on DB #{current_db}, expected #{expected_db}"
-          if current_db != expected_db
-            @familia.warn "Connection provider returned client on DB #{current_db}, expected #{expected_db}"
-          end
-          @familia.trace :DBCLIENT_PROVIDER, nil, 'Using connection provider' if @familia.debug?
-        end
-
-        client
+        parsed_uri = @familia_module.normalize_uri(uri)
+        @familia_module.connection_provider.call(parsed_uri)
       end
     end
+
+    # Checks for fiber-local connections with version validation
+    class FiberConnectionHandler < BaseConnectionHandler
+      def handle(uri)
+        return nil unless Fiber[:familia_connection]
+
+        conn, version = Fiber[:familia_connection]
+        if version == @familia_module.middleware_version
+          @familia_module.trace :DBCLIENT_FIBER, nil, "Using fiber-local connection for #{uri}"
+          conn
+        else
+          # Version mismatch, clear stale connection
+          Fiber[:familia_connection] = nil
+          @familia_module.trace :DBCLIENT_FIBER, nil, 'Cleared stale fiber connection (version mismatch)'
+          nil
+        end
+      end
+    end
+
+    # Checks for fiber-local transaction connections (highest priority for Horreum)
+    class FiberTransactionHandler < BaseConnectionHandler
+      def handle(_uri)
+        return nil unless Fiber[:familia_transaction]
+
+        Familia.trace :DBCLIENT_FIBER_TRANSACTION, nil, 'Using fiber-local transaction connection'
+        Fiber[:familia_transaction]
+      end
+    end
+
+    # Checks for a dbclient instance variable
+    #
+    # This works on any module, class, or instance that implements has a
+    # dbclient method. From a Horreum model instance, if you call
+    # DefaultConnectionHandler.new(self) it'll return self.dbclient or
+    # nil, or you can call DefaultConnectionHandler(self.class) and it'll
+    # attempt the same using the model's class.
+    #
+    # +familia_module+ is required.
+    #
+    class DefaultConnectionHandler < BaseConnectionHandler
+      def initialize(familia_module)
+        @familia_module = familia_module
+      end
+
+      def handle(_uri)
+        dbclient = @familia_module.instance_variable_get(:@dbclient)
+        return nil unless dbclient
+
+        Familia.trace :DBCLIENT_INSTVAL_OVERRIDE, nil, "Using @dbclient from #{@familia_module.class}"
+        dbclient
+      end
+    end
+
   end
 end

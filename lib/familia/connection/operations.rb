@@ -35,11 +35,11 @@ module Familia
       def transaction(&)
         block_result = nil
         dbclient.multi do |conn|
-          Fiber[:familia_transaction] = conn
+          Fiber[:familia_connection] = conn
           begin
             block_result = yield(conn)
           ensure
-            Fiber[:familia_transaction] = nil # cleanup reference
+            Fiber[:familia_connection] = nil # cleanup reference
           end
         end
         # Return the multi result which contains the transaction results
@@ -82,12 +82,13 @@ module Familia
       #
       def pipeline(&)
         block_result = nil
+        previous_conn = Fiber[:familia_connection] || nil
         dbclient.pipelined do |conn|
-          Fiber[:familia_pipeline] = conn
+          Fiber[:familia_connection] = conn
           begin
             block_result = yield(conn)
           ensure
-            Fiber[:familia_pipeline] = nil # cleanup reference
+            Fiber[:familia_connection] = previous_conn # leave nothing but footprints
           end
         end
         # Return the pipeline result which contains the command results

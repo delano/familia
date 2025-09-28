@@ -7,19 +7,18 @@ module Familia
     module Connection
       attr_reader :uri
 
-      # Returns the Database connection for the class.
+      # Returns the Database connection for the class using Chain of Responsibility pattern.
       #
-      # This method retrieves the Database connection instance for the class. If no
-      # connection is set, it initializes a new connection using the provided URI
-      # or database configuration.
+      # This method uses a chain of handlers to resolve connections in priority order:
+      # 1. FiberTransactionHandler - Fiber[:familia_transaction] (active transaction)
+      # 2. DefaultConnectionHandler - Horreum model class-level @dbclient
+      # 3. GlobalFallbackHandler - Familia.dbclient(uri || logical_database) (global fallback)
       #
       # @return [Redis] the Database connection instance.
       #
-      def dbclient
-        class_client = self.class.respond_to?(:dbclient) ? self.class.dbclient : nil
-        client = Fiber[:familia_transaction] || @dbclient || Familia.dbclient(uri || logical_database)
-        Familia.trace :DBCLIENT_CLASS, nil, "fiber:#{!!Fiber[:familia_transaction]} instance:#{!!@dbclient} fallback:#{!Fiber[:familia_transaction] && !@dbclient}" if Familia.debug?
-        client
+      def dbclient(uri = nil)
+        @class_connection_chain ||= build_connection_chain
+        @class_connection_chain.handle(uri)
       end
 
       def connect(*)
@@ -51,8 +50,8 @@ module Familia
       #
       def transaction(&)
         # If we're already in a Familia.transaction context, just yield the multi connection
-        if Fiber[:familia_transaction]
-          yield(Fiber[:familia_transaction])
+        if Fiber[:familia_connection]
+          yield(Fiber[:familia_connection])
         else
           # Otherwise, create a local transaction
           block_result = dbclient.multi(&)
@@ -70,6 +69,16 @@ module Familia
           block_result = dbclient.pipeline(&)
         end
         block_result
+      end
+
+      private
+
+      # Builds the class-level connection chain with handlers in priority order
+      def build_connection_chain
+        Familia::Connection::ResponsibilityChain.new
+                                                .add_handler(Familia::Connection::FiberTransactionHandler.new)
+                                                .add_handler(Familia::Connection::DefaultConnectionHandler.new(self))
+                                                .add_handler(Familia::Connection::CreateConnectionHandler.new)
       end
     end
   end
