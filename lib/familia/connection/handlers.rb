@@ -9,15 +9,9 @@ module Familia
 
     # Manages ordered chain of connection handlers
     #
-    # ## Summary of Behaviors
-    #
-    #   | Handler | Transaction | Pipeline | Ad-hoc Commands |
-    #   |---------|------------|----------|-----------------|
-    #   | **FiberTransaction** | Reentrant (same conn) | Error | Use transaction conn |
-    #   | **FiberConnection** | Error | Error | ✓ Allowed |
-    #   | **Provider** | ✓ New checkout | ✓ New checkout | ✓ New checkout |
-    #   | **Default** | ✓ With guards | ✓ With guards | ✓ Check mode |
-    #   | **Create** | ✓ Fresh conn | ✓ Fresh conn | ✓ Fresh conn |
+    # NOTE: It is important that the last handler in a responsibility chain
+    # either always provides a connection or raises an error. Otherwise the
+    # end result will simply be `nil` without any guidance to the caller.
     #
     class ResponsibilityChain
       def initialize
@@ -33,7 +27,7 @@ module Familia
         @handlers.each do |handler|
           connection = handler.handle(uri)
           if connection
-            Fiber[:familia_connection_class] = handler.class
+            Fiber[:familia_connection_handler_class] = handler.class
             return connection
           end
         end
@@ -47,7 +41,27 @@ module Familia
     # When no arguments are passed, all behaviour is based on the top
     # Familia module itself. e.g. Familia.create_dbclient.
     #
+    # Summary of Behaviors
+    #
+    #   | Handler | Transaction | Pipeline | Ad-hoc Commands |
+    #   |---------|------------|----------|-----------------|
+    #   | **FiberTransaction** | Reentrant (same conn) | Error | Use transaction conn |
+    #   | **FiberConnection** | Error | Error | ✓ Allowed |
+    #   | **Provider** | ✓ New checkout | ✓ New checkout | ✓ New checkout |
+    #   | **Default** | ✓ With guards | ✓ With guards | ✓ Check mode |
+    #   | **Create** | ✓ Fresh conn | ✓ Fresh conn | ✓ Fresh conn |
+    #
+    # NOTE: Every subclass must provide values for the @allows_transaction
+    # and @allows_pipelined attributes.
+    #
     class BaseConnectionHandler
+      @allows_transaction = true
+      @allows_pipelined = true
+
+      class << self
+        attr_reader :allows_transaction, :allows_pipelined
+      end
+
       def initialize(familia_module=nil)
         @familia_module = familia_module || Familia
       end
@@ -55,21 +69,19 @@ module Familia
       def handle(uri)
         raise NotImplementedError, 'Subclasses must implement handle'
       end
-
-      # Default: allow all operations (safe for fresh connections)
-      def self.allows_transaction?
-        true
-      end
-
-      def self.allows_pipeline?
-        true
-      end
     end
 
     # Creates new connections directly, with no caching of any kind. If
     # the make it to here in the chain, it'll create a new connection
     # every time.
+    #
+    # Fresh connection each time - all operations safe (transactions,
+    # pipelined, ad-hoc)
+    #
     class CreateConnectionHandler < BaseConnectionHandler
+      @allows_transaction = true
+      @allows_pipelined = true
+
       def handle(uri)
         # Create new connection (no module-level caching)
         parsed_uri = @familia_module.normalize_uri(uri)
@@ -77,19 +89,9 @@ module Familia
         Familia.trace :DBCLIENT_DEFAULT, nil, "Created new connection for #{parsed_uri.serverid}"
         client
       end
-
-      # Fresh connection each time - all operations safe
-      def self.allows_transaction?
-        true
-      end
-
-      def self.allows_pipeline?
-        true
-      end
     end
 
     # Delegates to user-defined connection provider
-    #
     #
     # Provider pattern = full flexibility. Use ad-hoc, operations, whatever you
     # like. For each connection, choose one and then get another connection.
@@ -98,6 +100,9 @@ module Familia
     # This is where connection pools live
     #
     class ProviderConnectionHandler < BaseConnectionHandler
+      @allows_transaction = true
+      @allows_pipelined = true
+
       def handle(uri)
         return nil unless @familia_module.connection_provider
 
@@ -112,15 +117,6 @@ module Familia
         # Provider MUST return connection already on the correct database
         parsed_uri = @familia_module.normalize_uri(uri)
         @familia_module.connection_provider.call(parsed_uri.to_s)
-      end
-
-      # Fresh checkout each time - all operations safe
-      def self.allows_transaction?
-        true
-      end
-
-      def self.allows_pipeline?
-        true
       end
     end
 
@@ -146,6 +142,9 @@ module Familia
     #     end
     #
     class FiberConnectionHandler < BaseConnectionHandler
+      @allows_transaction = false
+      @allows_pipelined = false
+
       def handle(uri)
         return nil unless Fiber[:familia_connection]
 
@@ -159,15 +158,6 @@ module Familia
           @familia_module.trace :DBCLIENT_FIBER, nil, 'Cleared stale fiber connection (version mismatch)'
           nil
         end
-      end
-
-      # Single middleware connection - block all multi-mode operations
-      def self.allows_transaction?
-        false
-      end
-
-      def self.allows_pipeline?
-        false
       end
     end
 
@@ -183,20 +173,14 @@ module Familia
     # Fiber[:familia_transaction_depth] += 1
     #
     class FiberTransactionHandler < BaseConnectionHandler
+      @allows_transaction = :reentrant
+      @allows_pipelined = false
+
       def handle(_uri)
         return nil unless Fiber[:familia_transaction]
 
         Familia.trace :DBCLIENT_FIBER_TRANSACTION, nil, 'Using fiber-local transaction connection'
         Fiber[:familia_transaction]
-      end
-
-      # Allow reentrant transactions, block pipelines
-      def self.allows_transaction?
-        :reentrant
-      end
-
-      def self.allows_pipeline?
-        false
       end
     end
 
@@ -210,9 +194,12 @@ module Familia
     #
     # +familia_module+ is required.
     #
-    # DefaultConnectionHandler - Smart Caching with Guards against transactions/pipeline
+    # DefaultConnectionHandler - Single cached connection - block all multi-mode operations
     #
     class DefaultConnectionHandler < BaseConnectionHandler
+      @allows_transaction = false
+      @allows_pipelined = false
+
       def initialize(familia_module)
         @familia_module = familia_module
       end
@@ -223,15 +210,6 @@ module Familia
 
         Familia.trace :DBCLIENT_INSTVAL_OVERRIDE, nil, "Using @dbclient from #{@familia_module.class}"
         dbclient
-      end
-
-      # Single cached connection - block all multi-mode operations
-      def self.allows_transaction?
-        false
-      end
-
-      def self.allows_pipeline?
-        false
       end
     end
 

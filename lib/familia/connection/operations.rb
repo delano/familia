@@ -36,7 +36,7 @@ module Familia
         handler_class = Fiber[:familia_connection_class]
 
         # Check if transaction allowed
-        if handler_class&.allows_transaction? == false
+        if handler_class&.allows_transaction == false
           raise Familia::OperationModeError,
                 "Cannot start transaction with #{handler_class.name} connection. Use connection pools."
         end
@@ -45,15 +45,12 @@ module Familia
         return yield(Fiber[:familia_transaction]) if Fiber[:familia_transaction]
 
         block_result = nil
-        previous_conn = Fiber[:familia_connection]
-
         dbclient.multi do |conn|
           Fiber[:familia_transaction] = conn
           begin
             block_result = yield(conn)
           ensure
             Fiber[:familia_transaction] = nil
-            Fiber[:familia_connection] = previous_conn # restore previous context
           end
         end
         # Return the multi result which contains the transaction results
@@ -70,7 +67,7 @@ module Familia
       # @return [Array] Results of all commands executed in the pipeline
       #
       # @example Basic pipeline usage
-      #   Familia.pipeline do |pipe|
+      #   Familia.pipelined do |pipe|
       #     pipe.set("key1", "value1")
       #     pipe.incr("counter")
       #     pipe.lpush("list", "item")
@@ -78,7 +75,7 @@ module Familia
       #   # Returns: ["OK", 2, 1] - results of all commands
       #
       # @example Error handling - commands succeed/fail independently
-      #   results = Familia.pipeline do |conn|
+      #   results = Familia.pipelined do |conn|
       #     conn.set("valid_key", "value")     # This will succeed
       #     conn.incr("string_key")            # This will fail (wrong type)
       #     conn.set("another_key", "value2")  # This will still succeed
@@ -94,11 +91,11 @@ module Familia
       #   end
       #   # Result: neither item1 nor item2 are set due to the error
       #
-      def pipeline(&)
+      def pipelined(&)
         handler_class = Fiber[:familia_connection_class]
 
         # Check if pipeline allowed
-        if handler_class&.allows_pipeline? == false
+        if handler_class&.allows_pipelined == false
           raise Familia::OperationModeError,
                 "Cannot start pipeline with #{handler_class.name} connection. Use connection pools."
         end
@@ -107,19 +104,17 @@ module Familia
         return yield(Fiber[:familia_pipeline]) if Fiber[:familia_pipeline]
 
         block_result = nil
-        previous_conn = Fiber[:familia_connection]
-
         dbclient.pipelined do |conn|
           Fiber[:familia_pipeline] = conn
           begin
             block_result = yield(conn)
           ensure
             Fiber[:familia_pipeline] = nil
-            Fiber[:familia_connection] = previous_conn # leave nothing but footprints
           end
         end
         # Return the pipeline result which contains the command results
       end
+      alias pipeline pipelined
 
       # Provides explicit access to a Database connection.
       #

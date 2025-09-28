@@ -11,49 +11,49 @@
 require_relative '../helpers/test_helpers'
 
 ## FiberTransactionHandler constraints
-Familia::Connection::FiberTransactionHandler.allows_transaction?
+Familia::Connection::FiberTransactionHandler.allows_transaction
 #=> :reentrant
 
 ## FiberTransactionHandler blocks pipelines
-Familia::Connection::FiberTransactionHandler.allows_pipeline?
+Familia::Connection::FiberTransactionHandler.allows_pipelined
 #=> false
 
 ## FiberConnectionHandler blocks transactions
-Familia::Connection::FiberConnectionHandler.allows_transaction?
+Familia::Connection::FiberConnectionHandler.allows_transaction
 #=> false
 
 ## FiberConnectionHandler blocks pipelines
-Familia::Connection::FiberConnectionHandler.allows_pipeline?
+Familia::Connection::FiberConnectionHandler.allows_pipelined
 #=> false
 
 ## DefaultConnectionHandler blocks transactions
-Familia::Connection::DefaultConnectionHandler.allows_transaction?
+Familia::Connection::DefaultConnectionHandler.allows_transaction
 #=> false
 
 ## DefaultConnectionHandler blocks pipelines
-Familia::Connection::DefaultConnectionHandler.allows_pipeline?
+Familia::Connection::DefaultConnectionHandler.allows_pipelined
 #=> false
 
 ## ProviderConnectionHandler allows transactions
-Familia::Connection::ProviderConnectionHandler.allows_transaction?
+Familia::Connection::ProviderConnectionHandler.allows_transaction
 #=> true
 
 ## ProviderConnectionHandler allows pipelines
-Familia::Connection::ProviderConnectionHandler.allows_pipeline?
+Familia::Connection::ProviderConnectionHandler.allows_pipelined
 #=> true
 
 ## CreateConnectionHandler allows transactions
-Familia::Connection::CreateConnectionHandler.allows_transaction?
+Familia::Connection::CreateConnectionHandler.allows_transaction
 #=> true
 
 ## CreateConnectionHandler allows pipelines
-Familia::Connection::CreateConnectionHandler.allows_pipeline?
+Familia::Connection::CreateConnectionHandler.allows_pipelined
 #=> true
 
 ## BaseConnectionHandler defaults to allow all
-Familia::Connection::BaseConnectionHandler.allows_transaction?
+Familia::Connection::BaseConnectionHandler.allows_transaction
 #=> true
 
 ## BaseConnectionHandler defaults to allow all pipelines
-Familia::Connection::BaseConnectionHandler.allows_pipeline?
+Familia::Connection::BaseConnectionHandler.allows_pipelined
 #=> true

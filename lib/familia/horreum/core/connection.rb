@@ -81,18 +81,16 @@ module Familia
       # @note This method works with the global Familia.transaction context when available
       #
       def transaction(&)
-        handler_class = Fiber[:familia_connection_class]
+        handler_class = Fiber[:familia_connection_handler_class]
 
         # Check if transaction allowed
-        if handler_class&.allows_transaction? == false
+        if handler_class&.allows_transaction == false
           raise Familia::OperationModeError,
-            "Cannot start transaction with #{handler_class.name} connection. Use connection pools."
+                "Cannot start transaction with #{handler_class.name} connection. Use connection pools."
         end
 
         # Handle reentrant case - already in transaction
-        if handler_class&.allows_transaction? == :reentrant
-          return yield(Fiber[:familia_transaction])
-        end
+        return yield(Fiber[:familia_transaction]) if handler_class&.allows_transaction == :reentrant
 
         # If we're already in a Familia.transaction context, just yield the multi connection
         if Fiber[:familia_transaction]
@@ -105,24 +103,25 @@ module Familia
       end
       alias multi transaction
 
-      def pipeline(&)
-        handler_class = Fiber[:familia_connection_class]
+      def pipelined(&)
+        handler_class = Fiber[:familia_connection_handler_class]
 
         # Check if pipeline allowed
-        if handler_class&.allows_pipeline? == false
+        if handler_class&.allows_pipelined == false
           raise Familia::OperationModeError,
-            "Cannot start pipeline with #{handler_class.name} connection. Use connection pools."
+                "Cannot start pipeline with #{handler_class.name} connection. Use connection pools."
         end
 
-        # If we're already in a Familia.pipeline context, just yield the pipeline connection
+        # If we're already in a Familia.pipelined context, just yield the pipeline connection
         if Fiber[:familia_pipeline]
           yield(Fiber[:familia_pipeline])
         else
           # Otherwise, create a local transaction
-          block_result = dbclient.pipeline(&)
+          block_result = dbclient.pipelined(&)
         end
         block_result
       end
+      alias pipeline pipelined
 
       private
 

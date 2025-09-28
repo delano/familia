@@ -18,7 +18,7 @@ require_relative '../helpers/test_helpers'
 begin
   # Simulate middleware connection
   Fiber[:familia_connection] = [Customer.create_dbclient, Familia.middleware_version]
-  Fiber[:familia_connection_class] = Familia::Connection::FiberConnectionHandler
+  Fiber[:familia_connection_handler_class] = Familia::Connection::FiberConnectionHandler
   customer = Customer.new
   customer.transaction { |conn| conn.set('test', 'value') }
   false
@@ -26,7 +26,7 @@ rescue Familia::OperationModeError
   true
 ensure
   Fiber[:familia_connection] = nil
-  Fiber[:familia_connection_class] = nil
+  Fiber[:familia_connection_handler_class] = nil
 end
 #=> true
 
@@ -34,15 +34,15 @@ end
 begin
   # Simulate middleware connection
   Fiber[:familia_connection] = [Customer.create_dbclient, Familia.middleware_version]
-  Fiber[:familia_connection_class] = Familia::Connection::FiberConnectionHandler
+  Fiber[:familia_connection_handler_class] = Familia::Connection::FiberConnectionHandler
   customer = Customer.new
-  customer.pipeline { |conn| conn.set('test', 'value') }
+  customer.pipelined { |conn| conn.set('test', 'value') }
   false
 rescue Familia::OperationModeError
   true
 ensure
   Fiber[:familia_connection] = nil
-  Fiber[:familia_connection_class] = nil
+  Fiber[:familia_connection_handler_class] = nil
 end
 #=> true
 
@@ -89,19 +89,19 @@ end
 ## Handler class tracking works correctly
 customer = Customer.new
 customer.dbclient # Trigger connection
-Fiber[:familia_connection_class]
+Fiber[:familia_connection_handler_class]
 #=> Familia::Connection::CreateConnectionHandler
 
 ## Error messages are descriptive
 begin
   Fiber[:familia_connection] = [Customer.create_dbclient, Familia.middleware_version]
-  Fiber[:familia_connection_class] = Familia::Connection::FiberConnectionHandler
+  Fiber[:familia_connection_handler_class] = Familia::Connection::FiberConnectionHandler
   customer = Customer.new
   customer.transaction { }
 rescue Familia::OperationModeError => e
   e.message.include?('FiberConnectionHandler') && e.message.include?('connection pools')
 ensure
   Fiber[:familia_connection] = nil
-  Fiber[:familia_connection_class] = nil
+  Fiber[:familia_connection_handler_class] = nil
 end
 #=> true

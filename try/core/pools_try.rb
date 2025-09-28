@@ -158,7 +158,7 @@ end
 #=> "OK"
 
 ## Test 14: Pipeline operations with connection pool
-@pipeline_results = Familia.pipeline do |conn|
+@pipeline_results = Familia.pipelined do |conn|
   conn.ping
 end
 # Pipeline executes successfully
@@ -281,7 +281,7 @@ puts "Connection pool tests completed successfully!"
 # Teardown
 Familia.connection_provider = nil
 Fiber[:familia_connection] = nil
-Fiber[:familia_connection_class] = nil
+Fiber[:familia_connection_handler_class] = nil
 Fiber[:familia_transaction] = nil
 Fiber[:familia_pipeline] = nil
 Fiber[:familia_key_cache] = nil
