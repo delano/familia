@@ -360,7 +360,7 @@ def summary_and_solutions
 end
 
 # Main execution - run all demonstrations
-if __FILE__ == $0
+if __FILE__ == $PROGRAM_NAME
   setup_redis_demo
   demo1_multi_queues_commands
   demo2_nested_multi_fails

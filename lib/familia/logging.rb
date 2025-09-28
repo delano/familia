@@ -146,7 +146,7 @@ module Familia
       return unless Familia::Refinements::LoggerTrace::ENABLED
 
       # Let the other values show nothing when nil, but make it known for the focused value
-      ident_str = "#{ident.nil? ? '<nil>' : ident}"
+      ident_str = (ident.nil? ? '<nil>' : ident).to_s
       @logger.trace format('[%s] %s -> %s <-%s', label, instance_id, ident_str, extra_context)
     end
   end

@@ -228,11 +228,6 @@ module Familia
           result
         end
 
-        # Override destroy to handle cascade operations
-        def destroy!
-          super
-        end
-
         # Get comprehensive relationship status for this object
         def relationship_status
           status = {

@@ -382,7 +382,7 @@ module Familia
               if target_class == self.class
                 # Class-level index (class_indexed_by) - check hash key using DataType
                 index_hash = self.class.send(index_name)
-                next unless index_hash.has_key?(field_value.to_s)
+                next unless index_hash.key?(field_value.to_s)
 
                 memberships << {
                   target_class: 'class',
@@ -428,7 +428,7 @@ module Familia
             if target_class == self.class
               # Class-level index (class_indexed_by) - check hash key using DataType
               index_hash = self.class.send(index_name)
-              index_hash.has_key?(field_value.to_s)
+              index_hash.key?(field_value.to_s)
             else
               # Target-scoped index (indexed_by) - cannot verify without target instance
               false

@@ -53,7 +53,7 @@ module Familia
 
           {
             ciphertext: ciphertext_with_tag[0...-16],
-            auth_tag: ciphertext_with_tag[-16..-1],
+            auth_tag: ciphertext_with_tag[-16..],
             nonce: nonce,
           }
         end

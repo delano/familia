@@ -91,7 +91,7 @@ module DatabaseLogger
     }
 
     # Log if logger is set
-    DatabaseLogger.logger.debug("Redis: #{command.inspect} (#{duration}µs)") if DatabaseLogger.logger
+    DatabaseLogger.logger&.debug("Redis: #{command.inspect} (#{duration}µs)")
 
     result
   end

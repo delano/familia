@@ -70,7 +70,7 @@ class Product < Familia::Horreum
 
   # Computed fields using callables
   safe_dump_field :price, ->(product) { "$#{format('%.2f', product.price_cents.to_i / 100.0)}" }
-  safe_dump_field :in_stock, ->(product) { product.inventory_count.to_i > 0 }
+  safe_dump_field :in_stock, ->(product) { product.inventory_count.to_i.positive? }
   safe_dump_field :display_name, ->(product) { "#{product.name} (#{product.sku})" }
 end
 
