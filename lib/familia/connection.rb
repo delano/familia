@@ -83,9 +83,6 @@ module Familia
       @connection_chain = nil # Force rebuild of chain
     end
 
-    # @return [Boolean] Whether to require external connections (no fallback)
-    attr_accessor :connection_required
-
     # Sets the default URI for Database connections.
     #
     # NOTE: uri is not a property of the Settings module b/c it's not
