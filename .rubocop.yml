@@ -59,6 +59,16 @@ Gemspec/DevelopmentDependencies:
 Layout/HashAlignment:
   Enabled: false
 
+# Format with consistent indentation levels rather than vertical dot alignment.
+Layout/MultilineMethodCallIndentation:
+  EnforcedStyle: indented
+
+Layout/IndentationWidth:
+  Width: 2
+
+Layout/DotPosition:
+  EnforcedStyle: leading # or 'trailing'
+
 Lint/Void:
   Enabled: false
 
