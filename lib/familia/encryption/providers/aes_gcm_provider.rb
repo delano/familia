@@ -49,7 +49,7 @@ module Familia
           {
             ciphertext: ciphertext,
             auth_tag: cipher.auth_tag,
-            nonce: nonce
+            nonce: nonce,
           }
         end
 

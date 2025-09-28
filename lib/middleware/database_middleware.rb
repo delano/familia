@@ -87,13 +87,11 @@ module DatabaseLogger
     DatabaseLogger.instance_variable_get(:@commands) << {
       command: command.dup,
       duration: duration,
-      timestamp: Time.now
+      timestamp: Time.now,
     }
 
     # Log if logger is set
-    if DatabaseLogger.logger
-      DatabaseLogger.logger.debug("Redis: #{command.inspect} (#{duration}µs)")
-    end
+    DatabaseLogger.logger.debug("Redis: #{command.inspect} (#{duration}µs)") if DatabaseLogger.logger
 
     result
   end
@@ -111,7 +109,6 @@ end
 #
 # @see https://github.com/redis-rb/redis-client?tab=readme-ov-file#instrumentation-and-middlewares
 #
-# rubocop:disable ThreadSafety/ClassInstanceVariable
 module DatabaseCommandCounter
   @count = Concurrent::AtomicFixnum.new(0)
 

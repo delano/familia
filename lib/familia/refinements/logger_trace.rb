@@ -25,7 +25,6 @@ FAMILIA_TRACE = ENV.fetch('FAMILIA_TRACE', 'false').downcase
 #
 module Familia
   module Refinements
-
     # Familia::Refinements::LoggerTrace
     module LoggerTrace
       unless defined?(ENABLED)
@@ -45,9 +44,9 @@ module Familia
         #
         # @example Logging a trace message
         #   logger.trace("MyApp") { "Detailed trace information" }
-        def trace(progname = nil, &block)
+        def trace(progname = nil, &)
           Fiber[:severity_letter] = 'T'
-          add(Familia::Refinements::LoggerTrace::TRACE, nil, progname, &block)
+          add(Familia::Refinements::LoggerTrace::TRACE, nil, progname, &)
         ensure
           Fiber[:severity_letter] = nil
         end

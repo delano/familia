@@ -39,7 +39,8 @@ module Familia
         Familia::Encryption.derivation_count.increment
 
         begin
-          data = Familia::Encryption::EncryptedData.new(**Familia::JsonSerializer.parse(encrypted_json, symbolize_names: true))
+          data = Familia::Encryption::EncryptedData.new(**Familia::JsonSerializer.parse(encrypted_json,
+                                                                                        symbolize_names: true))
 
           # Validate algorithm support
           provider = Registry.get(data.algorithm)
@@ -67,15 +68,16 @@ module Familia
       def decode_and_validate(encoded, expected_size, component)
         decoded = Base64.strict_decode64(encoded)
         raise EncryptionError, 'Invalid encrypted data' unless decoded.bytesize == expected_size
+
         decoded
-      rescue ArgumentError => e
+      rescue ArgumentError
         raise EncryptionError, "Invalid Base64 encoding in #{component} field"
       end
 
       def decode_and_validate_ciphertext(encoded)
         Base64.strict_decode64(encoded)
-      rescue ArgumentError => e
-        raise EncryptionError, "Invalid Base64 encoding in ciphertext field"
+      rescue ArgumentError
+        raise EncryptionError, 'Invalid Base64 encoding in ciphertext field'
       end
 
       def derive_key(context, version: nil, provider: nil)

@@ -217,9 +217,9 @@ module Familia
         def save(update_expiration: true)
           result = super
 
-          if result
+          if result && respond_to?(:update_all_indexes)
             # Automatically update all indexes when object is saved
-            update_all_indexes if respond_to?(:update_all_indexes)
+            update_all_indexes
 
             # NOTE: Relationship-specific participation updates are done explicitly
             # since we need to know which specific collections this object should be in
@@ -267,12 +267,10 @@ module Familia
 
         # Dry run for relationship cleanup (preview what would be affected)
         def cleanup_preview
-          preview = {
+          {
             participation_collections: [],
             index_entries: [],
           }
-
-          preview
         end
 
         # Validate that this object's relationships are consistent

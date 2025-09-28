@@ -16,7 +16,6 @@ module Familia
   class EncryptionError < StandardError; end
 
   module Encryption
-
     # Smart facade with provider selection and field-specific encryption
     #
     # Usage in EncryptedFieldType can now be more flexible:
@@ -109,7 +108,7 @@ module Familia
           preferred_available: Registry.default_provider&.class&.name,
           using_hardware: hardware_acceleration?,
           key_versions: encryption_keys.keys,
-          current_version: current_key_version
+          current_version: current_key_version,
         }
       end
 
@@ -140,7 +139,7 @@ module Familia
           results[algo] = {
             time: time,
             ops_per_sec: (iterations * 2 / time).round,
-            priority: provider_class.priority
+            priority: provider_class.priority,
           }
         end
 

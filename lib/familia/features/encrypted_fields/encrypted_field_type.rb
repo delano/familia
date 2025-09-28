@@ -91,7 +91,7 @@ module Familia
       field_name = @name
       method_name = @method_name
       fast_method_name = @fast_method_name
-      field_type = self
+      self
 
       handle_method_conflict(klass, fast_method_name) do
         klass.define_method fast_method_name do |val|

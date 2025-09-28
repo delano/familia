@@ -52,11 +52,9 @@ module Familia
             end
           end
 
-          private
-
           # Build method to check membership in target's collection
           # Creates: domain.in_customer_domains?(customer)
-          def self.build_membership_check(participant_class, target_name, collection_name, type)
+          def self.build_membership_check(participant_class, target_name, collection_name, _type)
             method_name = "in_#{target_name}_#{collection_name}?"
 
             participant_class.define_method(method_name) do |target_instance|
@@ -129,8 +127,6 @@ module Familia
               collection = target_instance.send(collection_name)
               collection.score(identifier)
             end
-
-
           end
 
           # Build position method for lists

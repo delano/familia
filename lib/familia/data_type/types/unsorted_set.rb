@@ -1,7 +1,6 @@
 # lib/familia/data_type/types/unsorted_set.rb
 
 module Familia
-
   # Familia::UnsortedSet
   #
   class UnsortedSet < DataType

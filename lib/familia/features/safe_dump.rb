@@ -1,6 +1,5 @@
 # lib/familia/features/safe_dump.rb
 
-# rubocop:disable ThreadSafety/ClassInstanceVariable
 #
 #   Class instance variables are used here for feature configuration
 #   (e.g., @dump_method, @load_method). These are set once and not mutated
@@ -150,7 +149,6 @@ module Familia
           end
         end
       end
-
     end
   end
 end

@@ -139,7 +139,7 @@ def demo2_nested_multi_fails
     end
   rescue Redis::CommandError => e
     puts "❌ Redis Error: #{e.message}"
-    puts "💡 This makes shared connection patterns dangerous"
+    puts '💡 This makes shared connection patterns dangerous'
   end
 
   puts "📊 Counter after error: #{$redis.get('counter')} (partial execution)\n\n"
@@ -170,7 +170,7 @@ def demo3_pipeline_multi_confusion
   end
 
   puts "📊 Pipeline results: #{results.inspect}"
-  puts "🔍 Analysis:"
+  puts '🔍 Analysis:'
   puts "  - results[0]: Initial value ('20')"
   puts "  - results[1]: MULTI/EXEC result (['21', '22'])"
   puts "  - results[2]: Final value ('22')"
@@ -190,12 +190,12 @@ def demo4_interrupted_multi_cleanup
 
   begin
     $redis.multi do |conn|
-      conn.incr('value1')  # Queued but not executed
+      conn.incr('value1') # Queued but not executed
 
       # Simulate business logic error
       raise StandardError, 'Payment validation failed'
 
-      conn.incr('value1')  # Never reached
+      conn.incr('value1') # Never reached
     end
   rescue StandardError => e
     puts "🔥 Exception caught: #{e.message}"
@@ -226,7 +226,7 @@ def demo5_shared_connection_logic_failure
   $redis.multi do |conn|
     # Same service class, but now connection is in MULTI mode
     transaction_service = OrderService.new(conn)
-    transaction_service.process_order(2)  # Logic fails silently
+    transaction_service.process_order(2) # Logic fails silently
   end
   puts "   Result: #{$redis.get('order:2:confirmed')} (business logic bypassed!)"
 
@@ -246,7 +246,7 @@ def demo6_pipeline_future_confusion
   puts '❌ Broken approach - using Future in conditional:'
   begin
     $redis.pipelined do |pipeline|
-      current_score = pipeline.get('score')  # Returns Redis::Future
+      current_score = pipeline.get('score') # Returns Redis::Future
 
       puts "   Future object: #{current_score.class}"
       puts "   Future value (immediate): #{current_score.inspect}"
@@ -254,7 +254,7 @@ def demo6_pipeline_future_confusion
       # This will cause an error - Future doesn't have to_i method
       if current_score.to_i > 40
         pipeline.set('achievement', 'high_score')
-        puts "   ❌ Achievement awarded (incorrect - score is 30!)"
+        puts '   ❌ Achievement awarded (incorrect - score is 30!)'
       end
     end
   rescue NoMethodError => e
@@ -287,28 +287,26 @@ def demo7_mode_switching_catastrophe
 
   # Utility function that assumes immediate execution
   def update_stats(redis_conn, key, increment = 10)
-    begin
-      # Read current value
-      current = redis_conn.get(key).to_i
-      puts "   📖 Read current value: #{current}"
+    # Read current value
+    current = redis_conn.get(key).to_i
+    puts "   📖 Read current value: #{current}"
 
-      # Business logic
-      new_value = current + increment
-      puts "   🧮 Calculated new value: #{new_value}"
+    # Business logic
+    new_value = current + increment
+    puts "   🧮 Calculated new value: #{new_value}"
 
-      # Write new value
-      redis_conn.set(key, new_value)
+    # Write new value
+    redis_conn.set(key, new_value)
 
-      # Verification read (common pattern for critical updates)
-      verified = redis_conn.get(key)
-      puts "   ✅ Verification read: #{verified}"
+    # Verification read (common pattern for critical updates)
+    verified = redis_conn.get(key)
+    puts "   ✅ Verification read: #{verified}"
 
-      verified
-    rescue NoMethodError => e
-      puts "   ❌ Error: #{e.message}"
-      puts "   💡 Function expects immediate values but got Future objects!"
-      return "ERROR: #{e.message}"
-    end
+    verified
+  rescue NoMethodError => e
+    puts "   ❌ Error: #{e.message}"
+    puts '   💡 Function expects immediate values but got Future objects!'
+    "ERROR: #{e.message}"
   end
 
   $redis.set('stats', '5')
@@ -318,7 +316,7 @@ def demo7_mode_switching_catastrophe
   puts "   Final result: #{result} ✅"
 
   puts "\n🔄 MULTI mode - same function breaks:"
-  $redis.set('stats', '5')  # Reset
+  $redis.set('stats', '5') # Reset
 
   $redis.multi do |conn|
     result = update_stats(conn, 'stats')
@@ -373,9 +371,9 @@ if __FILE__ == $0
   demo7_mode_switching_catastrophe
   summary_and_solutions
 
-  puts "🎯 Demo complete! Load in IRB to run individual methods:"
+  puts '🎯 Demo complete! Load in IRB to run individual methods:'
   puts "   load './single_connection_transaction_confusions.rb'"
-  puts "   demo1_multi_queues_commands"
-  puts "   demo2_nested_multi_fails"
-  puts "   # ... etc"
+  puts '   demo1_multi_queues_commands'
+  puts '   demo2_nested_multi_fails'
+  puts '   # ... etc'
 end

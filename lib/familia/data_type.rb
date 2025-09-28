@@ -213,7 +213,6 @@ module Familia
       @opts[:parent]
     end
 
-
     def logical_database
       @opts[:logical_database] || self.class.logical_database
     end

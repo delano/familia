@@ -125,7 +125,7 @@ module Familia
               score: score,
 
               type: type,
-              bidirectional: bidirectional,
+              bidirectional: bidirectional
             )
 
             # STEP 1: Add collection management methods to the class itself
@@ -134,9 +134,9 @@ module Familia
 
             # STEP 2: Add participation methods to instances (if bidirectional)
             # e.g., user.in_class_all_users?, user.add_to_class_all_users
-            if bidirectional
-              ParticipantMethods::Builder.build(self, 'class', collection_name, type)
-            end
+            return unless bidirectional
+
+            ParticipantMethods::Builder.build(self, 'class', collection_name, type)
           end
 
           # Define an instance-level participation relationship between two classes.
@@ -242,7 +242,7 @@ module Familia
               score: score,
 
               type: type,
-              bidirectional: bidirectional,
+              bidirectional: bidirectional
             )
 
             # Resolve target class if it's a symbol/string
@@ -262,9 +262,9 @@ module Familia
 
             # STEP 2: Add participation methods to PARTICIPANT class (Domain) - only if bidirectional
             # Domain gets: in_customer_domains?, add_to_customer_domains, etc.
-            if bidirectional
-              ParticipantMethods::Builder.build(self, target_class_name, collection_name, type)
-            end
+            return unless bidirectional
+
+            ParticipantMethods::Builder.build(self, target_class_name, collection_name, type)
           end
 
           # Get all participation relationships defined for this class.
@@ -568,8 +568,7 @@ module Familia
                 end
 
                 memberships << membership_data
-
-              rescue => e
+              rescue StandardError => e
                 Familia.ld "[#{collection_key}] Error checking membership: #{e.message}"
                 next
               end
@@ -577,7 +576,6 @@ module Familia
 
             memberships
           end
-
 
           private
 
@@ -613,7 +611,6 @@ module Familia
               current_score
             end
           end
-
         end
       end
     end

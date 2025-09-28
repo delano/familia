@@ -394,7 +394,6 @@ module Familia
         base_id = respond_to?(:identifier) ? identifier : object_id
         "#{base_id}#{separator}#{timestamp}"
       end
-
     end
   end
 end

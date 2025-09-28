@@ -6,7 +6,6 @@
 #
 module Familia
   module Connection
-
     # Manages ordered chain of connection handlers
     #
     # NOTE: It is important that the last handler in a responsibility chain
@@ -62,7 +61,7 @@ module Familia
         attr_reader :allows_transaction, :allows_pipelined
       end
 
-      def initialize(familia_module=nil)
+      def initialize(familia_module = nil)
         @familia_module = familia_module || Familia
       end
 
@@ -212,6 +211,5 @@ module Familia
         dbclient
       end
     end
-
   end
 end

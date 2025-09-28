@@ -120,9 +120,7 @@ module Familia
       # If there's a value provided check that it's a valid feature
       feature_name = feature_name.to_sym
       feature_module = Familia::Base.find_feature(feature_name, self)
-      unless feature_module
-        raise Familia::Problem, "Unsupported feature: #{feature_name}"
-      end
+      raise Familia::Problem, "Unsupported feature: #{feature_name}" unless feature_module
 
       # If the feature is already available, do nothing but log about it
       if features_enabled.member?(feature_name)
@@ -150,9 +148,7 @@ module Familia
       options[:calling_location] = calling_location&.path
 
       # Add feature options if the class supports them (Horreum classes)
-      if respond_to?(:add_feature_options)
-        add_feature_options(feature_name, **options)
-      end
+      add_feature_options(feature_name, **options) if respond_to?(:add_feature_options)
 
       # Extend the Familia::Base subclass (e.g. Customer) with the feature module
       include feature_module
