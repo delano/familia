@@ -8,6 +8,17 @@ module Familia
   module Connection
 
     # Manages ordered chain of connection handlers
+    #
+    # ## Summary of Behaviors
+    #
+    #   | Handler | Transaction | Pipeline | Ad-hoc Commands |
+    #   |---------|------------|----------|-----------------|
+    #   | **FiberTransaction** | Reentrant (same conn) | Error | Use transaction conn |
+    #   | **FiberConnection** | Error | Error | ✓ Allowed |
+    #   | **Provider** | ✓ New checkout | ✓ New checkout | ✓ New checkout |
+    #   | **Default** | ✓ With guards | ✓ With guards | ✓ Check mode |
+    #   | **Create** | ✓ Fresh conn | ✓ Fresh conn | ✓ Fresh conn |
+    #
     class ResponsibilityChain
       def initialize
         @handlers = []
@@ -58,6 +69,14 @@ module Familia
     end
 
     # Delegates to user-defined connection provider
+    #
+    #
+    # Provider pattern = full flexibility. Use ad-hoc, operations, whatever you
+    # like. For each connection, choose one and then get another connection.
+    # Rapid-fire sub ms connection pool connection checkouts are all good
+    # and also expected how they are to be used.
+    # This is where connection pools live
+    #
     class ProviderConnectionHandler < BaseConnectionHandler
       def handle(uri)
         return nil unless @familia_module.connection_provider
@@ -72,6 +91,26 @@ module Familia
     end
 
     # Checks for fiber-local connections with version validation
+    #
+    # Strict Ad-hoc Only. Raise error for transaction, pipeline etc operations.
+    #
+    #     # Enforce middleware connection constraints
+    #     case request.operation
+    #     when :transaction
+    #       raise Familia::MiddlewareConnectionError,
+    #         "Cannot start transaction on middleware-provided connection. " \
+    #         "Middleware connections are for ad-hoc commands only."
+    #     when :pipeline
+    #       raise Familia::MiddlewareConnectionError,
+    #         "Cannot start pipeline on middleware-provided connection. " \
+    #         "Middleware connections are for ad-hoc commands only."
+    #     when :command, nil
+    #       # Ad-hoc commands are fine
+    #       conn
+    #     else
+    #       raise "Unknown operation: #{request.operation}"
+    #     end
+    #
     class FiberConnectionHandler < BaseConnectionHandler
       def handle(uri)
         return nil unless Fiber[:familia_connection]
@@ -90,6 +129,16 @@ module Familia
     end
 
     # Checks for fiber-local transaction connections (highest priority for Horreum)
+    #
+    # Key insight: Mark that we're in reentrant mode and also track of
+    # depth. This allows nested transaction calls to be safely reentrant
+    # without breaking Redis's single-level MULTI/EXEC.
+    #
+    # Reentrant transaction - just yield the existing connection
+    # No new MULTI/EXEC, just participate in existing transaction
+    # Fiber[:familia_transaction_depth] ||= 0
+    # Fiber[:familia_transaction_depth] += 1
+    #
     class FiberTransactionHandler < BaseConnectionHandler
       def handle(_uri)
         return nil unless Fiber[:familia_transaction]
@@ -108,6 +157,8 @@ module Familia
     # attempt the same using the model's class.
     #
     # +familia_module+ is required.
+    #
+    # DefaultConnectionHandler - Smart Caching with Guards against transactions/pipeline
     #
     class DefaultConnectionHandler < BaseConnectionHandler
       def initialize(familia_module)

@@ -394,10 +394,11 @@ module Familia
     # Builds the instance-level connection chain with handlers in priority order
     def build_connection_chain
       Familia::Connection::ResponsibilityChain.new
-                                              .add_handler(Familia::Connection::FiberTransactionHandler.new)
-                                              .add_handler(Familia::Connection::DefaultConnectionHandler.new(self))
-                                              .add_handler(Familia::Connection::DefaultConnectionHandler.new(self.class))
-                                              .add_handler(Familia::Connection::CreateConnectionHandler.new)
+        .add_handler(Familia::Connection::FiberTransactionHandler.new)
+        .add_handler(Familia::Connection::FiberConnectionHandler.new)
+        .add_handler(Familia::Connection::DefaultConnectionHandler.new(self))
+        .add_handler(Familia::Connection::DefaultConnectionHandler.new(self.class))
+        .add_handler(Familia::Connection::CreateConnectionHandler.new)
     end
   end
 end
