@@ -160,7 +160,7 @@ obj_exists_without_check = @empty_hash.exists?(check_size: false)
 @tx_test.save
 
 # Verify transaction doesn't interfere with exists? calls
-result = @tx_test.transaction do |conn|
+multi_result = @tx_test.transaction do |conn|
   # During transaction, exists? should still work
   exists_in_tx = @tx_test.exists?
   conn.hset(@tx_test.dbkey, 'active', 'true')
@@ -168,7 +168,7 @@ result = @tx_test.transaction do |conn|
 end
 
 exists_after_tx = @tx_test.exists?
-[result, exists_after_tx]
+[multi_result.results, exists_after_tx]
 #=> [[0], true]
 
 # =============================================

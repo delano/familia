@@ -203,7 +203,7 @@ module Familia
 
         Familia.trace :BATCH_UPDATE, nil, fields.keys if Familia.debug?
 
-        command_return_values = transaction do |conn|
+        transaction_result = transaction do |conn|
           fields.each do |field, value|
             prepared_value = serialize_value(value)
             conn.hset dbkey, field, prepared_value
@@ -215,9 +215,8 @@ module Familia
         # Update expiration if requested and supported
         self.update_expiration(default_expiration: nil) if update_expiration && respond_to?(:update_expiration)
 
-        # Return same MultiResult format as other methods
-        summary_boolean = command_return_values.all? { |ret| %w[OK 0 1].include?(ret.to_s) }
-        MultiResult.new(summary_boolean, command_return_values)
+        # Return the MultiResult directly (transaction already returns MultiResult)
+        transaction_result
       end
 
       # Updates the object by applying multiple field values.

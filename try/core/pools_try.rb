@@ -141,8 +141,8 @@ threads.each(&:join)
   # Test that transaction connection is available
   conn.ping
 end
-# Transaction returns array with results
-@transfer_result.first
+# Transaction returns MultiResult with success status and results
+@transfer_result.results.first
 #=> "PONG"
 
 ## Test 12: Transaction block executes properly
@@ -162,7 +162,7 @@ end
   conn.ping
 end
 # Pipeline executes successfully
-@pipeline_results.first
+@pipeline_results.results.first
 #=> "PONG"
 
 ## Test 15: Multi/EXEC operations with connection pool
@@ -170,7 +170,7 @@ end
   conn.ping
 end
 # Multi/EXEC executes successfully
-@multi_results.first
+@multi_results.results.first
 #=> "PONG"
 
 ## Test 16: Error handling in transactions
