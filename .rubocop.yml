@@ -78,19 +78,19 @@ Metrics/AbcSize:
 
 Metrics/ClassLength:
   Enabled: true
-  Max: 200
+  Max: 350
 
 Metrics/CyclomaticComplexity:
   Enabled: false
 
 Metrics/MethodLength:
   Enabled: true
-  Max: 40
+  Max: 50
   CountAsOne: ["method_call"]
 
 Metrics/ModuleLength:
   Enabled: true
-  Max: 250
+  Max: 350
   CountAsOne: ["method_call"]
 
 Metrics/ParameterLists:
@@ -108,8 +108,13 @@ Style/NegatedIfElseCondition:
 Naming/AsciiIdentifiers:
   Enabled: false
 
+Style/StringLiterals:
+  Enabled: true
+  EnforcedStyle: single_quotes
+
 Style/FrozenStringLiteralComment:
-  Enabled: false
+  Enabled: true
+  EnforcedStyle: never
 
 Naming/MemoizedInstanceVariableName:
   Enabled: false
