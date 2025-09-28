@@ -16,7 +16,6 @@
 # How to resolve "RuboCop version incompatibility found":
 #  `rubocop --stop-server`
 #
-inherit_from: .rubocop_todo.yml
 
 plugins:
   - rubocop-performance
@@ -28,8 +27,9 @@ AllCops:
   MaxFilesInCache: 100
   TargetRubyVersion: 3.4
   Exclude:
-    - "try/**/*"
-    - "try/*.rb"
+    - "rspec/**/*.rb"
+    - "tmp/**/*.rb"
+    - "try/**/*.rb"
 
 #
 # Trailing commas
