@@ -37,10 +37,6 @@ Familia.create_dbclient(test_uri)
 Familia.dbclient.ping
 #=> "PONG"
 
-## Multiple connections are managed separately
-Familia.database_clients.size >= 1
-#=> true
-
 ## Can enable Database logging
 Familia.enable_database_logging = true
 Familia.enable_database_logging

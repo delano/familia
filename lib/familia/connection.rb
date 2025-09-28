@@ -9,9 +9,113 @@ require_relative 'multi_result'
 #
 module Familia
   @uri = URI.parse 'redis://127.0.0.1:6379'
-  @database_clients = {}
   @middleware_registered = false
   @middleware_version = 0
+
+  # Connection handler base class for Chain of Responsibility pattern
+  class ConnectionHandler
+    def try_connection(uri)
+      raise NotImplementedError, "Subclasses must implement try_connection"
+    end
+  end
+
+  # Checks for fiber-local connections with version validation
+  class FiberConnectionHandler < ConnectionHandler
+    def initialize(familia_module)
+      @familia = familia_module
+    end
+
+    def try_connection(uri)
+      return nil unless Fiber[:familia_connection]
+
+      conn, version = Fiber[:familia_connection]
+      if version == @familia.middleware_version
+        @familia.trace :DBCLIENT_FIBER, nil, "Using fiber-local connection for #{uri}" if @familia.debug?
+        return conn
+      else
+        # Version mismatch, clear stale connection
+        Fiber[:familia_connection] = nil
+        @familia.trace :DBCLIENT_FIBER, nil, "Cleared stale fiber connection (version mismatch)" if @familia.debug?
+        nil
+      end
+    end
+  end
+
+  # Delegates to user-defined connection provider
+  class ProviderConnectionHandler < ConnectionHandler
+    def initialize(familia_module)
+      @familia = familia_module
+    end
+
+    def try_connection(uri)
+      return nil unless @familia.connection_provider
+
+      # Always pass normalized URI with database to provider
+      # Provider MUST return connection already on the correct database
+      parsed_uri = @familia.normalize_uri(uri)
+      client = @familia.connection_provider.call(parsed_uri.to_s)
+
+      if client
+        # In debug mode, verify the provider honored the contract
+        if @familia.debug? && client.respond_to?(:client)
+          current_db = client.connection[:db]
+          expected_db = parsed_uri.db || 0
+          @familia.ld "Connection provider returned client on DB #{current_db}, expected #{expected_db}"
+          if current_db != expected_db
+            @familia.warn "Connection provider returned client on DB #{current_db}, expected #{expected_db}"
+          end
+        end
+
+        @familia.trace :DBCLIENT_PROVIDER, nil, "Using connection provider" if @familia.debug?
+        return client
+      end
+
+      nil
+    end
+  end
+
+  # Creates new connections directly (no caching at module level)
+  class DefaultConnectionHandler < ConnectionHandler
+    def initialize(familia_module)
+      @familia = familia_module
+    end
+
+    def try_connection(uri)
+      # If connection is required but we have no other options, raise error
+      if @familia.connection_required
+        raise Familia::NoConnectionAvailable, "No connection available for #{uri}"
+      end
+
+      # Create new connection (no module-level caching)
+      parsed_uri = @familia.normalize_uri(uri)
+      client = @familia.create_dbclient(parsed_uri)
+      @familia.trace :DBCLIENT_DEFAULT, nil, "Created new connection for #{parsed_uri.serverid}" if @familia.debug?
+      client
+    end
+  end
+
+  # Manages ordered chain of connection handlers
+  class ConnectionChain
+    def initialize
+      @handlers = []
+    end
+
+    def add_handler(handler)
+      @handlers << handler
+      self
+    end
+
+    def handle(uri)
+      @handlers.each do |handler|
+        connection = handler.try_connection(uri)
+        return connection if connection
+      end
+
+      # If we get here, no handler provided a connection
+      # The DefaultConnectionHandler should always return something or raise
+      nil
+    end
+  end
 
   # The Connection module provides Database connection management for Familia.
   # It allows easy setup and access to Database clients across different URIs
@@ -20,12 +124,29 @@ module Familia
     # @return [URI] The default URI for Database connections
     attr_reader :uri
 
-    # @return [Hash] A hash of Database clients, keyed by server ID
-    attr_reader :database_clients
+
 
     # @return [Integer] Current middleware version for cache invalidation
     def middleware_version
       @middleware_version
+    end
+
+    # Increments the middleware version, invalidating all cached connections
+    def increment_middleware_version!
+      @middleware_version += 1
+      Familia.trace :MIDDLEWARE_VERSION, nil, "Incremented to #{@middleware_version}" if Familia.debug?
+    end
+
+    # Sets a versioned fiber-local connection
+    def set_fiber_connection(connection)
+      Fiber[:familia_connection] = [connection, middleware_version]
+      Familia.trace :FIBER_CONNECTION, nil, "Set with version #{middleware_version}" if Familia.debug?
+    end
+
+    # Clears the fiber-local connection
+    def clear_fiber_connection!
+      Fiber[:familia_connection] = nil
+      Familia.trace :FIBER_CONNECTION, nil, "Cleared" if Familia.debug?
     end
 
     # @return [Boolean] Whether Database command logging is enabled
@@ -39,7 +160,7 @@ module Familia
     def enable_database_logging=(value)
       @enable_database_logging = value
       register_middleware_once if value
-      clear_cached_clients if value && !@database_clients.empty?
+      increment_middleware_version! if value
     end
 
     # Sets whether Database command counter is enabled
@@ -47,11 +168,26 @@ module Familia
     def enable_database_counter=(value)
       @enable_database_counter = value
       register_middleware_once if value
-      clear_cached_clients if value && !@database_clients.empty?
+      increment_middleware_version! if value
     end
 
     # @return [Proc] A callable that provides Database connections
-    attr_accessor :connection_provider
+    # The provider should accept a URI string and return a Redis connection
+    # already connected to the correct database specified in the URI.
+    #
+    # @example Setting a connection provider
+    #   Familia.connection_provider = ->(uri) do
+    #     pool = ConnectionPool.new { Redis.new(url: uri) }
+    #     pool.with { |conn| conn }
+    #   end
+    attr_reader :connection_provider
+
+    # Sets the connection provider and bumps middleware version
+    def connection_provider=(provider)
+      @connection_provider = provider
+      increment_middleware_version! if provider
+      @connection_chain = nil # Force rebuild of chain
+    end
 
     # @return [Boolean] Whether to require external connections (no fallback)
     attr_accessor :connection_required
@@ -76,7 +212,7 @@ module Familia
     # for managing and closing when done.
     #
     # @param uri [String, URI, nil] The URI of the Database server to connect to.
-    #   If nil, uses the default URI from `@database_clients` or `Familia.uri`.
+    #   If nil, uses the default URI from Familia.uri.
     # @return [Redis] A new Database client connection.
     # @raise [ArgumentError] If no URI is specified.
     #
@@ -115,78 +251,44 @@ module Familia
       @middleware_registered = true
     end
 
-    # Clears all cached Database clients, forcing them to be recreated
-    # with the current middleware configuration. Use this when changing
-    # middleware settings after clients have been created.
-    def clear_cached_clients
-      @database_clients.each_value(&:close) rescue nil
-      @database_clients.clear
-      # Increment middleware version to invalidate all thread-local connections
-      @middleware_version += 1
-      @middleware_registered = false
-    end
 
-    def reconnect(uri = nil)
-      parsed_uri = normalize_uri(uri)
-      serverid = parsed_uri.serverid
 
-      # Close the existing connection if it exists
-      @database_clients[serverid].close if @database_clients.key?(serverid)
-      @database_clients.delete(serverid)
-
-      create_dbclient(parsed_uri)
-    end
-
-    # Retrieves a Database connection from the appropriate pool.
+    # Retrieves a Database connection using the Chain of Responsibility pattern.
     # Handles DB selection automatically based on the URI.
     #
     # @return [Redis] The Database client for the specified URI
     # @example Familia.dbclient('redis://localhost:6379/1')
     #   Familia.dbclient(2)  # Use DB 2 with default server
     def dbclient(uri = nil)
-      # First priority: Fiber-local connection (middleware pattern)
-      if Fiber[:familia_connection]
-        conn, version = Fiber[:familia_connection]
-        if version == middleware_version
-          Familia.trace :DBCLIENT_MODULE_FIBER, nil, "Using fiber-local connection for #{uri}" if Familia.debug?
-          return conn
-        else
-          # Version mismatch, clear stale connection
-          Fiber[:familia_connection] = nil
-        end
+      @connection_chain ||= build_connection_chain
+      @connection_chain.handle(uri)
+    end
+
+    # Builds the connection chain with handlers in priority order
+    def build_connection_chain
+      ConnectionChain.new
+        .add_handler(FiberConnectionHandler.new(self))
+        .add_handler(ProviderConnectionHandler.new(self))
+        .add_handler(DefaultConnectionHandler.new(self))
+    end
+
+    # Make normalize_uri public for handlers to use
+    # Normalizes various URI formats to a consistent URI object
+    def normalize_uri(uri)
+      case uri
+      when Integer
+        new_uri = Familia.uri.dup
+        new_uri.db = uri
+        new_uri
+      when ->(obj) { obj.is_a?(String) || obj.instance_of?(::String) }
+        URI.parse(uri)
+      when URI
+        uri
+      when nil
+        Familia.uri
+      else
+        raise ArgumentError, "Invalid URI type: #{uri.class.name}"
       end
-
-      # Second priority: Connection provider
-      if connection_provider
-        # Always pass normalized URI with database to provider
-        # Provider MUST return connection already on the correct database
-        parsed_uri = normalize_uri(uri)
-        client = connection_provider.call(parsed_uri.to_s)
-
-        # In debug mode, verify the provider honored the contract
-        if Familia.debug? && client.respond_to?(:client)
-          current_db = client.connection[:db]
-          expected_db = parsed_uri.db || 0
-          Familia.ld "Connection provider returned client on DB #{current_db}, expected #{expected_db}"
-          if current_db != expected_db
-            Familia.warn "Connection provider returned client on DB #{current_db}, expected #{expected_db}"
-          end
-        end
-
-        Familia.trace :DBCLIENT_MODULE_PROVIDER, nil, "Using connection provider" if Familia.debug?
-        return client
-      end
-
-      # Third priority: Fallback behavior or error
-      raise Familia::NoConnectionAvailable, 'No connection available.' if connection_required
-
-      # Legacy behavior: create connection™
-      parsed_uri = normalize_uri(uri)
-      serverid = parsed_uri.serverid
-
-      client = @database_clients[serverid] ||= create_dbclient(parsed_uri)
-      Familia.trace :DBCLIENT_MODULE_CACHED, nil, "for #{serverid}" if Familia.debug?
-      client
     end
 
     # Executes Database commands atomically within a transaction (MULTI/EXEC).
@@ -327,24 +429,5 @@ module Familia
       end
     end
 
-    private
-
-    # Normalizes various URI formats to a consistent URI object
-    def normalize_uri(uri)
-      case uri
-      when Integer
-        new_uri = Familia.uri.dup
-        new_uri.db = uri
-        new_uri
-      when ->(obj) { obj.is_a?(String) || obj.instance_of?(::String) }
-        URI.parse(uri)
-      when URI
-        uri
-      when nil
-        Familia.uri
-      else
-        raise ArgumentError, "Invalid URI type: #{uri.class.name}"
-      end
-    end
   end
 end
