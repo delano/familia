@@ -81,9 +81,22 @@ module Familia
       # @note This method works with the global Familia.transaction context when available
       #
       def transaction(&)
+        handler_class = Fiber[:familia_connection_class]
+
+        # Check if transaction allowed
+        if handler_class&.allows_transaction? == false
+          raise Familia::OperationModeError,
+            "Cannot start transaction with #{handler_class.name} connection. Use connection pools."
+        end
+
+        # Handle reentrant case - already in transaction
+        if handler_class&.allows_transaction? == :reentrant
+          return yield(Fiber[:familia_transaction])
+        end
+
         # If we're already in a Familia.transaction context, just yield the multi connection
-        if Fiber[:familia_connection]
-          yield(Fiber[:familia_connection])
+        if Fiber[:familia_transaction]
+          yield(Fiber[:familia_transaction])
         else
           # Otherwise, create a local transaction
           block_result = dbclient.multi(&)
@@ -93,6 +106,14 @@ module Familia
       alias multi transaction
 
       def pipeline(&)
+        handler_class = Fiber[:familia_connection_class]
+
+        # Check if pipeline allowed
+        if handler_class&.allows_pipeline? == false
+          raise Familia::OperationModeError,
+            "Cannot start pipeline with #{handler_class.name} connection. Use connection pools."
+        end
+
         # If we're already in a Familia.pipeline context, just yield the pipeline connection
         if Fiber[:familia_pipeline]
           yield(Fiber[:familia_pipeline])

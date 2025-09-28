@@ -32,11 +32,13 @@ module Familia
       def handle(uri)
         @handlers.each do |handler|
           connection = handler.handle(uri)
-          return connection if connection
+          if connection
+            Fiber[:familia_connection_class] = handler.class
+            return connection
+          end
         end
 
         # If we get here, no handler provided a connection
-        # The DefaultConnectionHandler should always return something or raise
         nil
       end
     end
@@ -53,6 +55,15 @@ module Familia
       def handle(uri)
         raise NotImplementedError, 'Subclasses must implement handle'
       end
+
+      # Default: allow all operations (safe for fresh connections)
+      def self.allows_transaction?
+        true
+      end
+
+      def self.allows_pipeline?
+        true
+      end
     end
 
     # Creates new connections directly, with no caching of any kind. If
@@ -65,6 +76,15 @@ module Familia
         client = @familia_module.create_dbclient(parsed_uri)
         Familia.trace :DBCLIENT_DEFAULT, nil, "Created new connection for #{parsed_uri.serverid}"
         client
+      end
+
+      # Fresh connection each time - all operations safe
+      def self.allows_transaction?
+        true
+      end
+
+      def self.allows_pipeline?
+        true
       end
     end
 
@@ -83,10 +103,24 @@ module Familia
 
         @familia_module.trace :DBCLIENT_PROVIDER, nil, 'Using connection provider'
 
+        # Determine the correct URI including logical database if needed
+        if uri.nil? && @familia_module.respond_to?(:logical_database) && @familia_module.logical_database
+          uri = @familia_module.logical_database
+        end
+
         # Always pass normalized URI with database to provider
         # Provider MUST return connection already on the correct database
         parsed_uri = @familia_module.normalize_uri(uri)
         @familia_module.connection_provider.call(parsed_uri.to_s)
+      end
+
+      # Fresh checkout each time - all operations safe
+      def self.allows_transaction?
+        true
+      end
+
+      def self.allows_pipeline?
+        true
       end
     end
 
@@ -126,6 +160,15 @@ module Familia
           nil
         end
       end
+
+      # Single middleware connection - block all multi-mode operations
+      def self.allows_transaction?
+        false
+      end
+
+      def self.allows_pipeline?
+        false
+      end
     end
 
     # Checks for fiber-local transaction connections (highest priority for Horreum)
@@ -145,6 +188,15 @@ module Familia
 
         Familia.trace :DBCLIENT_FIBER_TRANSACTION, nil, 'Using fiber-local transaction connection'
         Fiber[:familia_transaction]
+      end
+
+      # Allow reentrant transactions, block pipelines
+      def self.allows_transaction?
+        :reentrant
+      end
+
+      def self.allows_pipeline?
+        false
       end
     end
 
@@ -171,6 +223,15 @@ module Familia
 
         Familia.trace :DBCLIENT_INSTVAL_OVERRIDE, nil, "Using @dbclient from #{@familia_module.class}"
         dbclient
+      end
+
+      # Single cached connection - block all multi-mode operations
+      def self.allows_transaction?
+        false
+      end
+
+      def self.allows_pipeline?
+        false
       end
     end
 

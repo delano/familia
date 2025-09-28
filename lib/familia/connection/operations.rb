@@ -33,6 +33,19 @@ module Familia
       #   | Use case        | Data consistency| Bulk operations |
       #
       def transaction(&)
+        handler_class = Fiber[:familia_connection_class]
+
+        # Check if transaction allowed
+        if handler_class&.allows_transaction? == false
+          raise Familia::OperationModeError,
+            "Cannot start transaction with #{handler_class.name} connection. Use connection pools."
+        end
+
+        # Handle reentrant case - already in transaction
+        if handler_class&.allows_transaction? == :reentrant
+          return yield(Fiber[:familia_transaction])
+        end
+
         # Check for nested transaction
         return yield(Fiber[:familia_transaction]) if Fiber[:familia_transaction]
 
@@ -87,6 +100,14 @@ module Familia
       #   # Result: neither item1 nor item2 are set due to the error
       #
       def pipeline(&)
+        handler_class = Fiber[:familia_connection_class]
+
+        # Check if pipeline allowed
+        if handler_class&.allows_pipeline? == false
+          raise Familia::OperationModeError,
+            "Cannot start pipeline with #{handler_class.name} connection. Use connection pools."
+        end
+
         # Check for existing pipeline context
         return yield(Fiber[:familia_pipeline]) if Fiber[:familia_pipeline]
 
