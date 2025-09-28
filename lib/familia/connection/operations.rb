@@ -38,14 +38,11 @@ module Familia
         # Check if transaction allowed
         if handler_class&.allows_transaction? == false
           raise Familia::OperationModeError,
-            "Cannot start transaction with #{handler_class.name} connection. Use connection pools."
+                "Cannot start transaction with #{handler_class.name} connection. Use connection pools."
         end
 
-        # Check for nested transaction
-        if Fiber[:familia_transaction]
-          # Handle reentrant case - already in a transaction
-          return yield(Fiber[:familia_transaction])
-        end
+        # Check for nested transaction (handles both reentrant and existing transaction cases)
+        return yield(Fiber[:familia_transaction]) if Fiber[:familia_transaction]
 
         block_result = nil
         previous_conn = Fiber[:familia_connection]
@@ -103,7 +100,7 @@ module Familia
         # Check if pipeline allowed
         if handler_class&.allows_pipeline? == false
           raise Familia::OperationModeError,
-            "Cannot start pipeline with #{handler_class.name} connection. Use connection pools."
+                "Cannot start pipeline with #{handler_class.name} connection. Use connection pools."
         end
 
         # Check for existing pipeline context
