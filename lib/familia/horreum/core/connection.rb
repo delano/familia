@@ -7,6 +7,38 @@ module Familia
     module Connection
       attr_reader :uri
 
+      # Normalizes various URI formats to a consistent URI object
+      # Considers the class/instance logical_database when uri is nil or Integer
+      def normalize_uri(uri)
+        case uri
+        when Integer
+          new_uri = Familia.uri.dup
+          new_uri.db = uri
+          new_uri
+        when ->(obj) { obj.is_a?(String) || obj.instance_of?(::String) }
+          URI.parse(uri)
+        when URI
+          uri
+        when nil
+          # Use logical_database if available, otherwise fall back to Familia.uri
+          if respond_to?(:logical_database) && logical_database
+            new_uri = Familia.uri.dup
+            new_uri.db = logical_database
+            new_uri
+          else
+            Familia.uri
+          end
+        else
+          raise ArgumentError, "Invalid URI type: #{uri.class.name}"
+        end
+      end
+
+      # Creates a new Database connection instance using the class/instance configuration
+      def create_dbclient(uri = nil)
+        parsed_uri = normalize_uri(uri)
+        Familia.create_dbclient(parsed_uri)
+      end
+
       # Returns the Database connection for the class using Chain of Responsibility pattern.
       #
       # This method uses a chain of handlers to resolve connections in priority order:
@@ -21,8 +53,8 @@ module Familia
         @class_connection_chain.handle(uri)
       end
 
-      def connect(*)
-        Familia.create_dbclient(*)
+      def connect(*args)
+        create_dbclient(*args)
       end
 
       def uri=(uri)
@@ -78,7 +110,7 @@ module Familia
         Familia::Connection::ResponsibilityChain.new
                                                 .add_handler(Familia::Connection::FiberTransactionHandler.new)
                                                 .add_handler(Familia::Connection::DefaultConnectionHandler.new(self))
-                                                .add_handler(Familia::Connection::CreateConnectionHandler.new)
+                                                .add_handler(Familia::Connection::CreateConnectionHandler.new(self))
       end
     end
   end

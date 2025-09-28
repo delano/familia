@@ -63,7 +63,7 @@ module Familia
         # Create new connection (no module-level caching)
         parsed_uri = @familia_module.normalize_uri(uri)
         client = @familia_module.create_dbclient(parsed_uri)
-        @familia_module.trace :DBCLIENT_DEFAULT, nil, "Created new connection for #{parsed_uri.serverid}"
+        Familia.trace :DBCLIENT_DEFAULT, nil, "Created new connection for #{parsed_uri.serverid}"
         client
       end
     end

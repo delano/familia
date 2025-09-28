@@ -398,7 +398,7 @@ module Familia
         .add_handler(Familia::Connection::FiberConnectionHandler.new)
         .add_handler(Familia::Connection::DefaultConnectionHandler.new(self))
         .add_handler(Familia::Connection::DefaultConnectionHandler.new(self.class))
-        .add_handler(Familia::Connection::CreateConnectionHandler.new)
+        .add_handler(Familia::Connection::CreateConnectionHandler.new(self))
     end
   end
 end
