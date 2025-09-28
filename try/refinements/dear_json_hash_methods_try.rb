@@ -27,8 +27,8 @@ test_hash = TestHashWithDearJson.new
 test_hash[:simple] = 'value'
 test_hash[:number] = 42
 json_result = test_hash.to_json
-json_result.class
-#=> String
+json_result
+#=:> String
 
 ## to_json handles objects with as_json methods
 test_hash = TestHashWithDearJson.new
@@ -36,8 +36,8 @@ test_obj = TestObjectWithAsJson.new('test')
 test_hash[:object] = test_obj
 test_hash[:simple] = 'value'
 json_result = test_hash.to_json
-json_result.include?('test_object')
-#=> true
+json_result
+#=~> /test_object/
 
 ## as_json returns the hash itself
 test_hash = TestHashWithDearJson.new

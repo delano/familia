@@ -27,8 +27,8 @@ test_array = TestArrayWithDearJson.new
 test_array << 'simple'
 test_array << 42
 json_result = test_array.to_json
-json_result.class
-#=> String
+json_result
+#=:> String
 
 ## to_json handles objects with as_json methods
 test_array = TestArrayWithDearJson.new
@@ -36,8 +36,7 @@ test_obj = TestObjectWithAsJson.new('test')
 test_array << test_obj
 test_array << 'simple'
 json_result = test_array.to_json
-json_result.include?('test_object')
-#=> true
+#=~> /test_object/
 
 ## as_json returns the array itself
 test_array = TestArrayWithDearJson.new

@@ -26,6 +26,24 @@ FAMILIA_TRACE = ENV.fetch('FAMILIA_TRACE', 'false').downcase
 module Familia
   module Refinements
     # Familia::Refinements::LoggerTrace
+    module LoggerTraceMethods
+      ##
+      # Logs a message at the TRACE level.
+      #
+      # @param progname [String] The program name to include in the log message
+      # @yield A block that evaluates to the message to log
+      # @return [true] Always returns true
+      #
+      # @example Logging a trace message
+      #   logger.trace("MyApp") { "Detailed trace information" }
+      def trace(progname = nil, &)
+        Fiber[:severity_letter] = 'T'
+        add(Familia::Refinements::LoggerTrace::TRACE, nil, progname, &)
+      ensure
+        Fiber[:severity_letter] = nil
+      end
+    end
+
     module LoggerTrace
       unless defined?(ENABLED)
         # Indicates whether trace logging is enabled
@@ -35,21 +53,7 @@ module Familia
       end
 
       refine Logger do
-        ##
-        # Logs a message at the TRACE level.
-        #
-        # @param progname [String] The program name to include in the log message
-        # @yield A block that evaluates to the message to log
-        # @return [true] Always returns true
-        #
-        # @example Logging a trace message
-        #   logger.trace("MyApp") { "Detailed trace information" }
-        def trace(progname = nil, &)
-          Fiber[:severity_letter] = 'T'
-          add(Familia::Refinements::LoggerTrace::TRACE, nil, progname, &)
-        ensure
-          Fiber[:severity_letter] = nil
-        end
+        import_methods LoggerTraceMethods
       end
     end
   end
