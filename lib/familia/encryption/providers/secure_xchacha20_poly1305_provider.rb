@@ -95,9 +95,7 @@ module Familia
           validate_key_length!(master_key)
 
           raw_personal = personal || Familia.config.encryption_personalization
-          if raw_personal.include?("\0")
-            raise EncryptionError, 'Personalization string must not contain null bytes'
-          end
+          raise EncryptionError, 'Personalization string must not contain null bytes' if raw_personal.include?("\0")
 
           personal_string = raw_personal.ljust(16, "\0")
 
@@ -132,8 +130,8 @@ module Familia
 
           result = {
             ciphertext: ciphertext_with_tag[0...-16],
-            auth_tag: ciphertext_with_tag[-16..-1],
-            nonce: nonce
+            auth_tag: ciphertext_with_tag[-16..],
+            nonce: nonce,
           }
 
           # Clear intermediate values
@@ -168,10 +166,10 @@ module Familia
         def clear_aead_instance(aead_instance)
           # Attempt to clear RbNaCl's internal key storage
           # This is a best-effort cleanup since RbNaCl stores keys as strings internally
-          if aead_instance.instance_variable_defined?(:@key)
-            internal_key = aead_instance.instance_variable_get(:@key)
-            secure_wipe(internal_key) if internal_key
-          end
+          return unless aead_instance.instance_variable_defined?(:@key)
+
+          internal_key = aead_instance.instance_variable_get(:@key)
+          secure_wipe(internal_key) if internal_key
         end
 
         def validate_key_length!(key)

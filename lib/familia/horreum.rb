@@ -107,7 +107,7 @@ module Familia
             copied_field_types = parent_class.field_types.dup
             member.instance_variable_set(:@field_types, copied_field_types)
             # Re-install field methods on the child class using proper method name detection
-            parent_class.field_types.each do |name, field_type|
+            parent_class.field_types.each_value do |field_type|
               # Collect all method names that field_type.install will create
               methods_to_check = [
                 field_type.method_name,

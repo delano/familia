@@ -14,9 +14,10 @@ module Familia
     def acquire(token = SecureRandom.uuid, ttl: 10)
       success = setnx(token)
       # Handle both integer (1/0) and boolean (true/false) return values
-      return false unless success == 1 || success == true
+      return false unless [1, true].include?(success)
       return del && false if ttl&.<=(0)
       return del && false if ttl&.positive? && !expire(ttl)
+
       token
     end
 

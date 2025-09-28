@@ -349,7 +349,7 @@ module Familia
           bucket_start = qstamp(quantum, time: Time.at(bucket_time))
           bucket_end = bucket_start + quantum - 1
 
-          timestamp >= bucket_start && timestamp <= bucket_end
+          timestamp.between?(bucket_start, bucket_end)
         end
       end
 
@@ -394,7 +394,6 @@ module Familia
         base_id = respond_to?(:identifier) ? identifier : object_id
         "#{base_id}#{separator}#{timestamp}"
       end
-
     end
   end
 end

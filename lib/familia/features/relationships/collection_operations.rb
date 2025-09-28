@@ -24,7 +24,7 @@ module Familia
         # @param item [Object] The item to add (must respond to identifier)
         # @param score [Float, nil] Score for sorted sets
         # @param type [Symbol] Collection type
-        def add_to_collection(collection, item, score: nil, type:, target_class: nil, collection_name: nil)
+        def add_to_collection(collection, item, type:, score: nil, target_class: nil, collection_name: nil)
           case type
           when :sorted_set
             # Ensure score is never nil for sorted sets

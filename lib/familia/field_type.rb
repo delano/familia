@@ -228,7 +228,7 @@ module Familia
         "method_name=#{@method_name}",
         "fast_method_name=#{@fast_method_name}",
         "on_conflict=#{@on_conflict}",
-        "category=#{category}"
+        "category=#{category}",
       ]
       "#<#{self.class.name} #{attributes.join(' ')}>"
     end

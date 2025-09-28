@@ -13,7 +13,6 @@ module Familia
   #   parsed = Familia::JsonSerializer.parse(json, symbolize_names: true)
   #
   module JsonSerializer
-
     class << self
       # Parse JSON string into Ruby objects
       #

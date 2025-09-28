@@ -250,7 +250,7 @@ module Familia
       end
 
       def any?(filter = '*')
-        matching_keys_count(filter) > 0
+        matching_keys_count(filter).positive?
       end
 
       # Returns the number of dbkeys matching the given filter pattern

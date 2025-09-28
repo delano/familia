@@ -1,11 +1,9 @@
 # lib/familia/utils.rb
 
 module Familia
-
   # Family-related utility methods
   #
   module Utils
-
     using Familia::Refinements::TimeLiterals
 
     # Joins array elements with Familia delimiter
@@ -112,6 +110,5 @@ module Familia
     def pretty_stack(skip: 1, limit: 5)
       caller(skip..(skip + limit + 1)).first(limit).map { |frame| pretty_path(frame) }.join("\n")
     end
-
   end
 end

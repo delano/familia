@@ -323,7 +323,7 @@ class SecureProfile < Familia::Horreum
   safe_dump_field :email
   safe_dump_field :phone_display, lambda { |profile|
     phone = profile.phone.reveal
-    phone ? "#{phone[0..2]}-***-#{phone[-4..-1]}" : nil
+    phone ? "#{phone[0..2]}-***-#{phone[-4..]}" : nil
   }
   safe_dump_field :created_at
 end

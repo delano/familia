@@ -104,9 +104,7 @@ module Familia
     attr_reader :logger
 
     # Gives our logger the ability to use our trace method.
-    if Familia::Refinements::LoggerTrace::ENABLED
-      using Familia::Refinements::LoggerTrace
-    end
+    using Familia::Refinements::LoggerTrace if Familia::Refinements::LoggerTrace::ENABLED
 
     def info(*msg)
       @logger.info(*msg)
@@ -146,8 +144,9 @@ module Familia
     #
     def trace(label, instance_id = nil, ident = nil, extra_context = nil)
       return unless Familia::Refinements::LoggerTrace::ENABLED
+
       # Let the other values show nothing when nil, but make it known for the focused value
-      ident_str = "#{ident.nil? ? '<nil>' : ident}"
+      ident_str = (ident.nil? ? '<nil>' : ident).to_s
       @logger.trace format('[%s] %s -> %s <-%s', label, instance_id, ident_str, extra_context)
     end
   end

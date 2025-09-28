@@ -53,8 +53,8 @@ module Familia
 
           {
             ciphertext: ciphertext_with_tag[0...-16],
-            auth_tag: ciphertext_with_tag[-16..-1],
-            nonce: nonce
+            auth_tag: ciphertext_with_tag[-16..],
+            nonce: nonce,
           }
         end
 
@@ -88,9 +88,8 @@ module Familia
         def derive_key(master_key, context, personal: nil)
           validate_key_length!(master_key)
           raw_personal = personal || Familia.config.encryption_personalization
-          if raw_personal.include?("\0")
-            raise EncryptionError, 'Personalization string must not contain null bytes'
-          end
+          raise EncryptionError, 'Personalization string must not contain null bytes' if raw_personal.include?("\0")
+
           personal_string = raw_personal.ljust(16, "\0")
 
           RbNaCl::Hash.blake2b(

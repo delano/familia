@@ -2,7 +2,6 @@
 
 module Familia
   module Refinements
-
     # Familia::Refinements::TimeLiterals
     #
     # This module provides a set of refinements for `Numeric` and `String` to
@@ -155,11 +154,11 @@ module Familia
           gte_zero = positive? || zero?
           duration = (gte_zero ? self : abs) # let's keep it positive up in here
           text = case (s = duration.to_i)
-                in 0..59 then "#{s} second#{'s' if s != 1}"
-                in 60..3599 then "#{s /= 60} minute#{'s' if s != 1}"
-                in 3600..86_399 then "#{s /= 3600} hour#{'s' if s != 1}"
-                else "#{s /= 86_400} day#{'s' if s != 1}"
-                end
+                 in 0..59 then "#{s} second#{'s' if s != 1}"
+                 in 60..3599 then "#{s /= 60} minute#{'s' if s != 1}"
+                 in 3600..86_399 then "#{s /= 3600} hour#{'s' if s != 1}"
+                 else "#{s /= 86_400} day#{'s' if s != 1}"
+                 end
           gte_zero ? text : "#{text} ago"
         end
 

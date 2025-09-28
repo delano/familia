@@ -31,7 +31,7 @@ module Familia
     end
 
     def to_i
-      value&.to_i || 0
+      value.to_i
     end
 
     def value=(val)

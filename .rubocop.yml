@@ -16,7 +16,6 @@
 # How to resolve "RuboCop version incompatibility found":
 #  `rubocop --stop-server`
 #
-inherit_from: .rubocop_todo.yml
 
 plugins:
   - rubocop-performance
@@ -28,8 +27,9 @@ AllCops:
   MaxFilesInCache: 100
   TargetRubyVersion: 3.4
   Exclude:
-    - "try/**/*"
-    - "try/*.rb"
+    - "rspec/**/*.rb"
+    - "tmp/**/*.rb"
+    - "try/**/*.rb"
 
 #
 # Trailing commas
@@ -78,19 +78,19 @@ Metrics/AbcSize:
 
 Metrics/ClassLength:
   Enabled: true
-  Max: 200
+  Max: 350
 
 Metrics/CyclomaticComplexity:
   Enabled: false
 
 Metrics/MethodLength:
   Enabled: true
-  Max: 40
+  Max: 50
   CountAsOne: ["method_call"]
 
 Metrics/ModuleLength:
   Enabled: true
-  Max: 250
+  Max: 350
   CountAsOne: ["method_call"]
 
 Metrics/ParameterLists:
@@ -108,11 +108,19 @@ Style/NegatedIfElseCondition:
 Naming/AsciiIdentifiers:
   Enabled: false
 
+Style/StringLiterals:
+  Enabled: true
+  EnforcedStyle: single_quotes
+
 Style/FrozenStringLiteralComment:
-  Enabled: false
+  Enabled: true
+  EnforcedStyle: never
 
 Naming/MemoizedInstanceVariableName:
   Enabled: false
 
 ThreadSafety/ClassInstanceVariable:
+  Enabled: false
+
+ThreadSafety/MutableClassInstanceVariable:
   Enabled: false

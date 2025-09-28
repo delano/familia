@@ -46,7 +46,7 @@ module Familia
       add val, score
     end
 
-    def add(val, score=nil)
+    def add(val, score = nil)
       # TODO: Support some or all of the ZADD options.
       # XX: Only update existing elements. Don't add new ones.
       # NX: Only add new elements. Don't update existing ones.

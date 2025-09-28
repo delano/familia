@@ -170,7 +170,7 @@ module Familia
           def generate_class_finder_methods(field, index_name)
             # Generate class-level finder method (e.g., Domain.find_by_display_name)
             define_singleton_method("find_by_#{field}") do |field_value|
-              index_hash = send(index_name)  # Access the class-level hashkey DataType
+              index_hash = send(index_name) # Access the class-level hashkey DataType
               object_id = index_hash[field_value.to_s]
 
               return nil unless object_id
@@ -182,7 +182,7 @@ module Familia
             define_singleton_method("find_all_by_#{field}") do |field_values|
               return [] if field_values.empty?
 
-              index_hash = send(index_name)  # Access the class-level hashkey DataType
+              index_hash = send(index_name) # Access the class-level hashkey DataType
               object_ids = index_hash.values_at(*field_values.map(&:to_s))
               # Filter out nil values and instantiate objects
               object_ids.compact.map { |object_id| new(object_id) }
@@ -193,7 +193,7 @@ module Familia
 
             # Generate method to rebuild the class-level index
             define_singleton_method("rebuild_#{index_name}") do
-              index_hash = send(index_name)  # Access the class-level hashkey DataType
+              index_hash = send(index_name) # Access the class-level hashkey DataType
 
               # Clear existing index using DataType method
               index_hash.clear
@@ -229,8 +229,8 @@ module Familia
               new_field_value = send(field)
 
               # Use class-level transaction for atomicity with DataType abstraction
-              self.class.transaction do |tx|
-                index_hash = self.class.send(index_name)  # Access the class-level hashkey DataType
+              self.class.transaction do |_tx|
+                index_hash = self.class.send(index_name) # Access the class-level hashkey DataType
 
                 # Remove old value if provided
                 index_hash.remove(old_field_value.to_s) if old_field_value
@@ -288,7 +288,7 @@ module Familia
               new_field_value = send(field)
 
               # Use Familia's transaction method for atomicity with DataType abstraction
-              target_instance.transaction do |tx|
+              target_instance.transaction do |_tx|
                 # Remove from old index if provided
                 if old_field_value
                   old_index_key = "#{index_name}:#{old_field_value}"
@@ -382,7 +382,7 @@ module Familia
               if target_class == self.class
                 # Class-level index (class_indexed_by) - check hash key using DataType
                 index_hash = self.class.send(index_name)
-                next unless index_hash.has_key?(field_value.to_s)
+                next unless index_hash.key?(field_value.to_s)
 
                 memberships << {
                   target_class: 'class',
@@ -428,7 +428,7 @@ module Familia
             if target_class == self.class
               # Class-level index (class_indexed_by) - check hash key using DataType
               index_hash = self.class.send(index_name)
-              index_hash.has_key?(field_value.to_s)
+              index_hash.key?(field_value.to_s)
             else
               # Target-scoped index (indexed_by) - cannot verify without target instance
               false

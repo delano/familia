@@ -43,9 +43,9 @@ module Familia
             build_bulk_add(target_class, collection_name, type)
 
             # Type-specific methods
-            if type == :sorted_set
-              build_permission_query(target_class, collection_name)
-            end
+            return unless type == :sorted_set
+
+            build_permission_query(target_class, collection_name)
           end
 
           # Build class-level collection methods (for class_participates_in)
@@ -61,8 +61,6 @@ module Familia
             build_class_add_method(target_class, collection_name, type)
             build_class_remove_method(target_class, collection_name)
           end
-
-          private
 
           # Build method to get the collection
           # Creates: customer.domains
@@ -97,9 +95,9 @@ module Familia
               )
 
               # Track participation in reverse index for efficient cleanup
-              if item.respond_to?(:track_participation_in)
-                item.track_participation_in(collection.dbkey)
-              end
+              return unless item.respond_to?(:track_participation_in)
+
+              item.track_participation_in(collection.dbkey)
             end
           end
 
@@ -115,9 +113,9 @@ module Familia
               TargetMethods::Builder.remove_from_collection(collection, item, type: type)
 
               # Remove from participation tracking
-              if item.respond_to?(:untrack_participation_in)
-                item.untrack_participation_in(collection.dbkey)
-              end
+              return unless item.respond_to?(:untrack_participation_in)
+
+              item.untrack_participation_in(collection.dbkey)
             end
           end
 
@@ -130,13 +128,12 @@ module Familia
               return if items.empty?
 
               collection = send(collection_name)
-              TargetMethods::Builder.bulk_add_to_collection(collection, items, type: type, target_class: self.class, collection_name: collection_name)
+              TargetMethods::Builder.bulk_add_to_collection(collection, items, type: type, target_class: self.class,
+collection_name: collection_name)
 
               # Track all participations
               items.each do |item|
-                if item.respond_to?(:track_participation_in)
-                  item.track_participation_in(collection.dbkey)
-                end
+                item.track_participation_in(collection.dbkey) if item.respond_to?(:track_participation_in)
               end
             end
           end
@@ -180,12 +177,12 @@ module Familia
               # Calculate score if needed
               if type == :sorted_set && score.nil?
                 score = if item.respond_to?(:calculate_participation_score)
-                         item.calculate_participation_score('class', collection_name)
-                       elsif item.respond_to?(:current_score)
-                         item.current_score
-                       else
-                         Familia.now.to_f
-                       end
+                          item.calculate_participation_score('class', collection_name)
+                        elsif item.respond_to?(:current_score)
+                          item.current_score
+                        else
+                          Familia.now.to_f
+                        end
               end
 
               TargetMethods::Builder.add_to_collection(
