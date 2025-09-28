@@ -43,7 +43,7 @@ module Familia::Features
       patterns = Array(patterns)
 
       patterns.each do |pattern|
-        Familia.ld "[#{log_prefix}] Autoloader loading features from #{pattern}"
+        Familia.trace :AUTOLOAD, nil, "[#{log_prefix}] Autoloader loading features from #{pattern}"
         Dir.glob(pattern).each do |file_path|
           basename = File.basename(file_path)
 

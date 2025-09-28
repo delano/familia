@@ -396,6 +396,7 @@ module Familia
       Familia::Connection::ResponsibilityChain.new
         .add_handler(Familia::Connection::FiberTransactionHandler.new)
         .add_handler(Familia::Connection::FiberConnectionHandler.new)
+        .add_handler(Familia::Connection::ProviderConnectionHandler.new)
         .add_handler(Familia::Connection::DefaultConnectionHandler.new(self))
         .add_handler(Familia::Connection::DefaultConnectionHandler.new(self.class))
         .add_handler(Familia::Connection::CreateConnectionHandler.new(self))

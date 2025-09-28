@@ -277,3 +277,6 @@ PoolTestAccountDB1.config_name
 
 
 puts "Connection pool tests completed successfully!"
+
+# Teardown
+Familia.connection_provider = nil

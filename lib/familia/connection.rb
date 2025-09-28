@@ -92,9 +92,10 @@ module Familia
     # Builds the connection chain with handlers in priority order
     def build_connection_chain
       ResponsibilityChain.new
-                         .add_handler(FiberConnectionHandler.new)
-                         .add_handler(ProviderConnectionHandler.new)
-                         .add_handler(CreateConnectionHandler.new)
+        .add_handler(Familia::Connection::FiberTransactionHandler.new)
+        .add_handler(FiberConnectionHandler.new)
+        .add_handler(ProviderConnectionHandler.new)
+        .add_handler(CreateConnectionHandler.new)
     end
 
     # Normalizes various URI formats to a consistent URI object

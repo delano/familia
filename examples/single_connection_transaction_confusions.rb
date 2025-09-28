@@ -1,12 +1,10 @@
 #!/usr/bin/env ruby
+# examples/single_connection_transaction_confusions.rb
 
 # Redis Single Connection Mode Confusions
 #
 # This file demonstrates why mixing Redis operation modes on a single connection
 # causes subtle but critical failures in production applications.
-#
-# Load in IRB with: load './single_connection_transaction_confusions.rb'
-# Then call individual demo methods to see specific failure modes.
 #
 # Key Concepts:
 # - Normal mode: Commands execute immediately, return actual values
@@ -18,6 +16,20 @@
 # - Business rules fail silently when code assumes immediate execution
 # - Nested operations cause Redis protocol errors
 # - Race conditions emerge from incorrect mode assumptions
+#
+# Key Insight: Connection source should determine which operations are
+# allowed. This is how we prevent bugs like expecting values but getting "QUEUED".
+#
+# Summary of Behaviors:
+#
+#   | Handler | Transaction | Pipeline | Ad-hoc Commands |
+#   |---------|------------|----------|-----------------|
+#   | **FiberTransaction** | Reentrant (same conn) | Error | Use transaction conn |
+#   | **FiberConnection** | Error | Error | ✓ Allowed |
+#   | **Provider** | ✓ New checkout | ✓ New checkout | ✓ New checkout |
+#   | **Default** | ✓ With guards | ✓ With guards | ✓ Check mode |
+#   | **Create** | ✓ Fresh conn | ✓ Fresh conn | ✓ Fresh conn |
+#
 #
 # Usage:
 #
