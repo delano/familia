@@ -7,7 +7,7 @@ require_relative '../helpers/test_helpers'
 ## Has all datatype relativess
 registered_types = Familia::DataType.registered_types.keys
 registered_types.collect(&:to_s).sort
-#=> ["counter", "hash", "hashkey", "list", "lock", "set", "sorted_set", "string", "unsorted_set", "zset"]
+#=> ["counter", "hash", "hashkey", "list", "listkey", "lock", "set", "sorted_set", "string", "stringkey", "unsorted_set", "zset"]
 
 ## Familia created class methods for datatype list class
 Familia::Horreum::DefinitionMethods.public_method_defined? :list?
@@ -36,7 +36,7 @@ Bone.list? :owners
 ## A Familia object can get a specific datatype relatives def
 definition = Bone.list :owners
 definition.klass
-#=> Familia::List
+#=> Familia::ListKey
 
 ## Familia.now
 parsed_time = Familia.now(Time.parse('2011-04-10 20:56:20 UTC').utc)

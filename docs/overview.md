@@ -96,6 +96,39 @@ end
 
 Each type maintains Valkey's native operations while providing Ruby-friendly interfaces.
 
+### DataType Naming Options
+
+Familia provides both traditional concise names and explicit names for DataType methods to avoid namespace confusion with Ruby core types:
+
+```ruby
+class Product < Familia::Horreum
+  # Traditional naming (concise, safe for lowercase)
+  string :view_count     # Creates StringKey instance
+  list :categories       # Creates ListKey instance
+
+  # Explicit naming (clear intent, namespace-safe)
+  stringkey :description # Creates StringKey instance
+  listkey :history       # Creates ListKey instance
+
+  # Both work identically - choose based on preference
+  set :tags              # UnsortedSet (unchanged)
+  sorted_set :ratings    # SortedSet (unchanged)
+  hashkey :attributes    # HashKey (unchanged)
+end
+
+# Access patterns are identical
+product.view_count.class        # => Familia::StringKey
+product.description.class       # => Familia::StringKey
+product.categories.class        # => Familia::ListKey
+product.history.class           # => Familia::ListKey
+```
+
+**Key Benefits:**
+- **Developer Choice**: Use concise (`string`, `list`) or explicit (`stringkey`, `listkey`) method names
+- **Namespace Safety**: No confusion with Ruby's core `String`, `Array`, `Set`, `Hash` types
+- **Backward Compatibility**: All existing code continues to work unchanged
+- **Future-Proof**: Clear naming convention for any new DataTypes
+
 ### Generated Method Patterns
 
 Familia automatically generates methods for all field and data type declarations:
@@ -109,10 +142,12 @@ class Product < Familia::Horreum
 
   # Data type declarations generate accessor, setter, and type check
   set :tags
-  list :categories
+  list :categories              # Traditional method
+  listkey :search_history       # Explicit method (same functionality)
   hashkey :attributes
   # → tags, tags=, tags?        # accessor, setter, type check
   # → categories, categories=, categories?
+  # → search_history, search_history=, search_history?
   # → attributes, attributes=, attributes?
 
   # Class-level data types

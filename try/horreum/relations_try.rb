@@ -56,7 +56,7 @@ tags = @test_user.tags
 scores = @test_user.scores
 prefs = @test_user.preferences
 [sessions.class.name, tags.class.name, scores.class.name, prefs.class.name]
-#=> ["Familia::List", "Familia::UnsortedSet", "Familia::SortedSet", "Familia::HashKey"]
+#=> ["Familia::ListKey", "Familia::UnsortedSet", "Familia::SortedSet", "Familia::HashKey"]
 
 ## Database types use correct dbkeys
 @test_user.sessions.dbkey

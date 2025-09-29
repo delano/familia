@@ -1,7 +1,7 @@
 # lib/familia/data_type/types/lock.rb
 
 module Familia
-  class Lock < String
+  class Lock < StringKey
     def initialize(*args)
       super
       @opts[:default] = nil

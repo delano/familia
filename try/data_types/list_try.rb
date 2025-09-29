@@ -4,37 +4,37 @@ require_relative '../helpers/test_helpers'
 
 @a = Bone.new 'atoken'
 
-## Familia::List#push
+## Familia::ListKey#push
 ret = @a.owners.push :value1
 ret.class
-#=> Familia::List
+#=> Familia::ListKey
 
-## Familia::List#<<
+## Familia::ListKey#<<
 ret = @a.owners << :value2 << :value3 << :value4
 ret.class
-#=> Familia::List
+#=> Familia::ListKey
 
-## Familia::List#pop
+## Familia::ListKey#pop
 @a.owners.pop
 #=> 'value4'
 
-## Familia::List#first
+## Familia::ListKey#first
 @a.owners.first
 #=> 'value1'
 
-## Familia::List#last
+## Familia::ListKey#last
 @a.owners.last
 #=> 'value3'
 
-## Familia::List#to_a
+## Familia::ListKey#to_a
 @a.owners.to_a
 #=> ['value1','value2','value3']
 
-## Familia::List#delete
+## Familia::ListKey#delete
 @a.owners.remove 'value3'
 #=> 1
 
-## Familia::List#size
+## Familia::ListKey#size
 @a.owners.size
 #=> 2
 

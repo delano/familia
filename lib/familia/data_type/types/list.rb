@@ -1,7 +1,7 @@
 # lib/familia/data_type/types/list.rb
 
 module Familia
-  class List < DataType
+  class ListKey < DataType
     # Returns the number of elements in the list
     # @return [Integer] number of elements
     def element_count
@@ -164,5 +164,6 @@ module Familia
     # end
 
     Familia::DataType.register self, :list
+    Familia::DataType.register self, :listkey
   end
 end

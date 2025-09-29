@@ -77,7 +77,7 @@ TestCar.features_enabled
 
 ## Child instance inherits DataType relationships
 @car.maintenance_log.class
-#=> Familia::List
+#=> Familia::ListKey
 
 ## Child instance can use inherited DataType relationships
 @car.tags << 'reliable'
