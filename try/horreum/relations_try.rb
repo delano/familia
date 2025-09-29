@@ -108,9 +108,14 @@ prefs = @test_user.preferences
 @test_product.views.value
 #=> 6
 
-## Database types maintain parent reference
-@test_user.sessions.parent == @test_user
-#=> true
+## Database types maintain ParentDefinition reference, not the parent itself
+@test_user.sessions.parent
+#=/> @test_user
+#=:> Familia::Horreum::ParentDefinition
+
+## Database types maintain ParentDefinition reference, not the parent itself
+@test_user.sessions.parent
+#=> Familia::Horreum::ParentDefinition.from_parent(@test_user)
 
 ## Database types know their field name
 @test_user.tags.keystring
@@ -130,15 +135,18 @@ after_exists = @test_user.scores.exists?
 @test_user.preferences.exists?
 #=> false
 
-## Parent object destruction does not clean up relations
+## Parent object destruction DOES clean up relations (since v2.0.0.pre16)
 @test_user.sessions.push('cleanup_test')
 @test_user.destroy!
 @test_user.sessions.exists?
-#=> true
+#=> false
 
 ## If the parent instance is still in memory, can use it
 ## to access and clear the child field.
-@test_user.sessions.clear
-#=> true
+@test_user.sessions.add(Familia.now)
+@test_user.sessions.size
+#=> 1
+
+@test_user.sessions.delete!
 
 @test_product.destroy!
