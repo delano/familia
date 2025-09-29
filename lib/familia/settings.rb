@@ -16,7 +16,7 @@ module Familia
   #
   module Settings
     attr_writer :delim, :suffix, :default_expiration, :logical_database, :prefix, :encryption_keys,
-                :current_key_version, :encryption_personalization
+                :current_key_version, :encryption_personalization, :transaction_mode
 
     def delim(val = nil)
       @delim = val if val
@@ -78,6 +78,31 @@ module Familia
         @encryption_personalization = val
       end
       @encryption_personalization
+    end
+
+    # Controls transaction behavior when connection handlers don't support transactions
+    #
+    # @param val [Symbol, nil] The transaction mode or nil to get current value
+    # @return [Symbol] Current transaction mode (:strict, :warn, :permissive)
+    #
+    # Available modes:
+    # - :warn (default): Log warning and execute commands individually
+    # - :strict: Raise OperationModeError when transaction unavailable
+    # - :permissive: Silently execute commands individually
+    #
+    # @example Setting transaction mode
+    #   Familia.configure do |config|
+    #     config.transaction_mode = :warn
+    #   end
+    #
+    def transaction_mode(val = nil)
+      if val
+        unless [:strict, :warn, :permissive].include?(val)
+          raise ArgumentError, 'Transaction mode must be :strict, :warn, or :permissive'
+        end
+        @transaction_mode = val
+      end
+      @transaction_mode || :warn  # default to warn mode
     end
 
     # Configure Familia settings

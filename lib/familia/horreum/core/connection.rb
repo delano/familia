@@ -147,27 +147,7 @@ module Familia
       # @see MultiResult For details on the return value structure
       # @see #batch_update For similar atomic field updates with MultiResult
       def transaction(&)
-        handler_class = Fiber[:familia_connection_handler_class]
-
-        # Check if transaction allowed
-        if handler_class&.allows_transaction == false
-          raise Familia::OperationModeError,
-                "Cannot start transaction with #{handler_class.name} connection. Use connection pools."
-        end
-
-        # Handle reentrant case - already in transaction
-        return yield(Fiber[:familia_transaction]) if handler_class&.allows_transaction == :reentrant
-
-        # If we're already in a Familia.transaction context, just yield the multi connection
-        if Fiber[:familia_transaction]
-          yield(Fiber[:familia_transaction])
-        else
-          # Otherwise, create a local transaction
-          command_return_values = dbclient.multi(&)
-          # Return same MultiResult format as other methods
-          summary_boolean = command_return_values.all? { |ret| %w[OK 0 1].include?(ret.to_s) }
-          MultiResult.new(summary_boolean, command_return_values)
-        end
+        Familia::Connection::TransactionCore.execute_transaction(-> { dbclient }, &)
       end
       alias multi transaction
 
