@@ -283,6 +283,14 @@ module Familia
         self.objid = value
       end
 
+      def destroy!
+        # Clean up objid mapping when object is destroyed
+        current_objid = instance_variable_get(:@objid)
+        self.class.objid_lookup.remove_field(current_objid) if current_objid
+
+        super if defined?(super)
+      end
+
       # Initialize object identifier configuration
       #
       # Called during object initialization to set up the ID generation strategy.
