@@ -13,6 +13,7 @@
 #   bundle exec reek --format=json                   # JSON output for CI
 #   bundle exec reek --config .reek.yml              # Use specific config
 #   bundle exec reek --show-docs IrresponsibleModule # Explain specific smell
+#   bundle exec reek --failure-exit-code 1           # Exit with error on smells (for CI)
 
 ---
 detectors:
@@ -93,10 +94,5 @@ exclude_paths:
   - "bin/*" # Executable scripts
   - "*.gemspec" # Gem specification files
 
-# Mass assignment protection (for Rails-like patterns)
-mass_assignment:
-  enabled: false # Familia uses different patterns than ActiveRecord
-
-# Advanced settings
-max_warnings: 100 # Don't overwhelm with too many warnings initially
-failure_exit_code: 1 # Exit with error code if smells detected (for CI)
+# Note: For limiting warnings output, use CLI: bundle exec reek | head -50
+# Note: For failure exit codes, use CLI: bundle exec reek --failure-exit-code 1

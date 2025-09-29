@@ -43,7 +43,8 @@ jobs:
           echo ""
 
           # Run reek and capture output (don't fail on warnings)
-          bundle exec reek --format=text || true
+          # Use success-exit-code to prevent failures from stopping the analysis
+          bundle exec reek --format=text --success-exit-code 0 --failure-exit-code 0 || true
 
           echo ""
           echo "=== Reek analysis complete ==="
@@ -54,7 +55,7 @@ jobs:
           echo "=== Generating detailed Reek report ==="
 
           # Generate JSON report for potential future processing
-          bundle exec reek --format=json > reek-report.json || true
+          bundle exec reek --format=json --success-exit-code 0 --failure-exit-code 0 > reek-report.json || true
 
           # Display summary
           if [ -s reek-report.json ]; then
