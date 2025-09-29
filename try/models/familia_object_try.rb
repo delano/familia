@@ -57,7 +57,7 @@ obj.save
 
 ## Familia.class_list
 Customer.customers.class
-#=> Familia::List
+#=> Familia::ListKey
 
 ## Familia class dbkey
 Customer.customers.dbkey

@@ -1,7 +1,7 @@
 # lib/familia/data_type/types/string.rb
 
 module Familia
-  class String < DataType
+  class StringKey < DataType
     def init; end
 
     # Returns the number of elements in the list
@@ -119,9 +119,10 @@ module Familia
     end
 
     Familia::DataType.register self, :string
+    Familia::DataType.register self, :stringkey
   end
 end
 
-# Both subclass String
+# Both subclass StringKey
 require_relative 'lock'
 require_relative 'counter'

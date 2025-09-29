@@ -1,7 +1,7 @@
 # lib/familia/data_type/types/counter.rb
 
 module Familia
-  class Counter < String
+  class Counter < StringKey
     def initialize(*args)
       super
       @opts[:default] ||= 0

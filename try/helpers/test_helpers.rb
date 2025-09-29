@@ -91,7 +91,7 @@ class Customer < Familia::Horreum
   field :reset_requested #=> Boolean
 
   hashkey :password_reset #=> Familia::HashKey
-  list :sessions #=> Familia::List
+  list :sessions #=> Familia::ListKey
 
   class_list :customers, suffix: []
   class_string :message

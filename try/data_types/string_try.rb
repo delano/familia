@@ -8,24 +8,24 @@ require_relative '../helpers/test_helpers'
 @a.dbkey
 #=> 'bone:atoken2:object'
 
-## Familia::String#value should give default value
+## Familia::StringKey#value should give default value
 @a.value.value
 #=> 'GREAT!'
 
-## Familia::String#value=
+## Familia::StringKey#value=
 @a.value.value = 'DECENT!'
 #=> 'DECENT!'
 
-## Familia::String#to_s
+## Familia::StringKey#to_s
 @a.value.to_s
 #=> 'DECENT!'
 
-## Familia::String#destroy!
+## Familia::StringKey#destroy!
 @a.value.delete!
 #=> true
 
-## Familia::String.new
-@ret = Familia::String.new 'arbitrary:key'
+## Familia::StringKey.new
+@ret = Familia::StringKey.new 'arbitrary:key'
 @ret.dbkey
 #=> 'arbitrary:key'
 
@@ -37,27 +37,27 @@ require_relative '../helpers/test_helpers'
 @ret.value
 #=> '1000'
 
-## Familia::String#increment
+## Familia::StringKey#increment
 @ret.increment
 #=> 1001
 
-## Familia::String#incrementby
+## Familia::StringKey#incrementby
 @ret.incrementby 99
 #=> 1100
 
-## Familia::String#decrement
+## Familia::StringKey#decrement
 @ret.decrement
 #=> 1099
 
-## Familia::String#decrementby
+## Familia::StringKey#decrementby
 @ret.decrementby 49
 #=> 1050
 
-## Familia::String#append
+## Familia::StringKey#append
 @ret.append 'bytes'
 #=> 9
 
-## Familia::String#value after append
+## Familia::StringKey#value after append
 @ret.value
 #=> '1050bytes'
 

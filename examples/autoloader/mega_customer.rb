@@ -3,6 +3,8 @@
 require_relative '../../lib/familia'
 
 class MegaCustomer < Familia::Horreum
+  include Familia::Features::Autoloader
+
   field :custid
   field :username
   field :email
@@ -13,5 +15,5 @@ class MegaCustomer < Familia::Horreum
   field :updated_at
 
   feature :safe_dump
-  # feature :deprecated_fields
+  feature :deprecated_fields
 end

@@ -27,7 +27,7 @@ class Customer < Familia::Horreum
 
   # Define collections for tracking relationships
   set :domains           # Simple set of domain IDs
-  list :projects         # Ordered list of project IDs
+  listkey :projects      # Ordered list of project IDs
   sorted_set :activity   # Activity feed with timestamps
 
   # Create indexes for fast lookups (using class_ prefix for class-level)

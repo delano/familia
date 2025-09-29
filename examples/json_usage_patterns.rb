@@ -13,7 +13,7 @@ class User < Familia::Horreum
   field :name
   field :email
   encrypted_field :password_hash  # This will be concealed in JSON
-  list :tags
+  listkey :tags                   # Associates a separate ListKey field
   set :permissions
 end
 
