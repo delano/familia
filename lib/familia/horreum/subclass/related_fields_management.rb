@@ -1,6 +1,9 @@
 # lib/familia/horreum/related_fields_management.rb
 
 module Familia
+
+  RelatedFieldDefinition = Data.define(:name, :klass, :opts)
+
   class Horreum
 
     # Each related field needs some details from the parent (Horreum model)
@@ -114,10 +117,7 @@ module Familia
         name = name.to_s.to_sym
         opts ||= {}
 
-        related_fields[name] = Struct.new(:name, :klass, :opts).new
-        related_fields[name].name = name
-        related_fields[name].klass = klass
-        related_fields[name].opts = opts
+        related_fields[name] = RelatedFieldDefinition.new(name, klass, opts)
 
         attr_reader name
 
@@ -140,10 +140,7 @@ module Familia
         opts = opts.nil? ? {} : opts.clone
         opts[:parent] = self unless opts.key?(:parent)
 
-        class_related_fields[name] = Struct.new(:name, :klass, :opts).new
-        class_related_fields[name].name = name
-        class_related_fields[name].klass = klass
-        class_related_fields[name].opts = opts
+        class_related_fields[name] = RelatedFieldDefinition.new(name, klass, opts)
 
         # An accessor method created in the metaclass will
         # access the instance variables for this class.
