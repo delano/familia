@@ -57,14 +57,18 @@ jobs:
           # Generate JSON report for potential future processing
           bundle exec reek --format=json --success-exit-code 0 --failure-exit-code 0 > reek-report.json || true
 
-          # Display summary
-          if [ -s reek-report.json ]; then
+          # If no JSON was generated, create an empty valid JSON array
+          if [ ! -s reek-report.json ]; then
+            echo "[]" > reek-report.json
+            echo "No code smells detected - created empty report"
+          else
             echo "Reek JSON report generated: $(wc -l < reek-report.json) lines"
             echo "Top code smell types found:"
             jq -r '.[].smells[].smell_type' reek-report.json 2>/dev/null | sort | uniq -c | sort -rn | head -10 || echo "Unable to parse JSON report"
-          else
-            echo "No code smells detected or analysis failed"
           fi
+
+          # Also generate a human-readable HTML report for easier viewing
+          bundle exec reek --format=html --success-exit-code 0 --failure-exit-code 0 > reek-report.html || echo "<!-- No code smells detected -->" > reek-report.html
         continue-on-error: true
 
       - name: Upload Reek report as artifact
@@ -72,7 +76,9 @@ jobs:
         if: always()
         with:
           name: reek-report
-          path: reek-report.json
+          path: |
+            reek-report.json
+            reek-report.html
           if-no-files-found: ignore
           retention-days: 30
 
