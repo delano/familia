@@ -110,40 +110,41 @@ end
 #=> true
 
 ## Data type operations work with transaction fallback
-begin
-  Familia.configure { |config| config.transaction_mode = :permissive }
-  IntegrationTestUser.instance_variable_set(:@dbclient, Familia.create_dbclient)
 
-  user = IntegrationTestUser.new(user_id: 'datatype_test_001')
-  user.save
+Familia.configure { |config| config.transaction_mode = :permissive }
+IntegrationTestUser.instance_variable_set(:@dbclient, Familia.create_dbclient)
 
-  # Test list operations
-  user.activity_log.add('user_created')
-  user.activity_log.add('profile_updated')
+user = IntegrationTestUser.new(user_id: 'datatype_test_001')
+user.transaction { |conn| conn.set('test', 'value') }
 
-  # Test set operations
-  user.tags.add('premium')
-  user.tags.add('verified')
+# Test list operations
+user.activity_log.add('user_created')
+user.activity_log.add('profile_updated')
 
-  # Test sorted set operations
-  user.scores.add('game_score', 100)
-  user.scores.add('quiz_score', 85)
+# Test set operations
+user.tags.add('premium')
+user.tags.add('verified')
 
-  # Verify all operations worked
-  user.activity_log.size == 2 &&
-  user.tags.include?('premium') &&
-  user.scores.score('game_score') == 100.0
-ensure
-  # Clean up test data
-  begin
-    IntegrationTestUser.destroy!('datatype_test_001')
-  rescue => e
-    # Ignore cleanup errors
-  end
-  IntegrationTestUser.remove_instance_variable(:@dbclient)
-  Familia.configure { |config| config.transaction_mode = :strict }
-end
-#=> true
+# Test sorted set operations
+user.scores.add('game_score', 100)
+user.scores.add('quiz_score', 85)
+
+# Verify all operations worked
+results = [
+  user.activity_log.size,
+  user.tags.include?('premium'),
+  user.scores.score('game_score')
+]
+
+user.destroy!
+
+# Clean up test data
+IntegrationTestUser.destroy!('datatype_test_001')
+IntegrationTestUser.remove_instance_variable(:@dbclient)
+Familia.configure { |config| config.transaction_mode = :strict }
+
+results
+#=> [18, true, 100.0]
 
 ## Connection provider integration with transaction modes
 begin
