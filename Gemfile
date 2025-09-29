@@ -16,6 +16,7 @@ group :development, :test do
   gem 'debug', require: false
   gem 'irb', '~> 1.15.2', require: false
   gem 'redcarpet', require: false
+  gem 'reek', require: false
   gem 'rubocop', require: false
   gem 'rubocop-performance', require: false
   gem 'rubocop-thread_safety', require: false
