@@ -199,7 +199,7 @@ module Familia
               instance_variable_set(:"@#{field_name}", value)
 
               # Update mapping from objid to this new identifier
-              self.class.objid_lookup[value] = identifier unless value.nil?
+              self.class.objid_lookup[value] = identifier unless value.nil? || identifier.nil?
 
               # When setting objid from external source (e.g., loading from Valkey/Redis),
               # we cannot determine the original generator, so we clear the provenance
