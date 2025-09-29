@@ -97,6 +97,7 @@ persistence_obj.save
 
 # Load from Valkey/Redis
 loaded_obj = PersistenceTest.new(id: 'persistence_test')
+#=> nil
 
 ## objid persists after save/load
 persistence_obj = PersistenceTest.new
@@ -198,6 +199,7 @@ complex_obj = IntegrationTest.new(
   objid: 'preset_objid_123',
   extid: 'preset_ext_456'
 )
+#=> nil
 
 ## Preset objid value is preserved
 complex_obj = IntegrationTest.new(
@@ -225,6 +227,7 @@ complex_obj.extid
 search_obj = IntegrationTest.new
 search_obj.id = 'search_test'
 search_obj.save
+#=> nil
 
 ## find_by_objid returns nil (stub implementation)
 search_obj = IntegrationTest.new
@@ -235,7 +238,7 @@ found_by_objid
 #=> nil
 
 ## find_by_extid works with real implementation
-@search_obj = IntegrationTest.new
+@search_obj = IntegrationTest.new name: 'Tucker', email: 'tucker@example.com'
 @search_obj.id = 'search_test'
 @search_obj.save
 found_by_extid = IntegrationTest.find_by_extid(@search_obj.extid)
@@ -248,8 +251,7 @@ first_objid = stability_obj.objid
 first_extid = stability_obj.extid
 second_objid = stability_obj.objid
 second_extid = stability_obj.extid
-
-## objid remains stable across accesses
+# objid remains stable across accesses
 stability_obj = IntegrationTest.new
 first_objid = stability_obj.objid
 second_objid = stability_obj.objid

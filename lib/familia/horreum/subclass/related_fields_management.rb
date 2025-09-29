@@ -2,7 +2,18 @@
 
 module Familia
   class Horreum
+
+    # Each related field needs some details from the parent (Horreum model)
+    # in order to generate its dbkey. We use a parent proxy pattern to store
+    # only essential parent information instead of full object reference. We
+    # need only the model class and an optional unique identifier to generate
+    # the dbkey; when the identifier is nil, we treat this as a class-level
+    # relation (e.g. model_name:related_field_name); when the identifier
+    # is not nil, we treat this as an instance-level relation
+    # (model_name:identifier:related_field_name).
     #
+    ParentDefinition = Data.define(:model_klass, :identifier)
+
     # RelatedFieldsManagement: Manages DataType fields and relations
     #
     # This module uses metaprogramming to dynamically create methods

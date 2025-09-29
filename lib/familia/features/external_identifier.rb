@@ -75,7 +75,7 @@ module Familia
 
               instance_variable_set(:"@#{field_name}", derived_extid)
 
-              # Update mapping if we have an identifier
+              # Update mapping if we have an identifier (objid)
               self.class.extid_lookup[derived_extid] = identifier if respond_to?(:identifier) && identifier
 
               derived_extid
@@ -101,7 +101,7 @@ module Familia
               old_value = instance_variable_get(:"@#{field_name}")
               self.class.extid_lookup.remove_field(old_value) if old_value && old_value != value
 
-              # UnsortedSet the new value
+              # Set the new value
               instance_variable_set(:"@#{field_name}", value)
 
               # Update mapping if we have both extid and identifier
@@ -153,7 +153,8 @@ module Familia
           find_by_id(primary_id)
         rescue Familia::NotFound
           # If the object was deleted but mapping wasn't cleaned up
-          extid_lookup.remove_field(extid)
+          # we could autoclean here, as long as we log it.
+          # extid_lookup.remove_field(extid)
           nil
         end
       end

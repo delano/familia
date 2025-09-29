@@ -42,6 +42,9 @@ module Familia
   # UnsortedSet Familia.connection_provider or use middleware to provide connections.
   class NoConnectionAvailable < Problem; end
 
+  # Raised when a load method fails to find the requested object
+  class NotFound < Problem; end
+
   # Raised when attempting to refresh an object whose key doesn't exist in the database
   class KeyNotFoundError < NonUniqueKey
     attr_reader :key
