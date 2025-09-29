@@ -142,6 +142,10 @@ end
 ## Operation guards prevent fiber issues before they occur
 # FiberConnectionHandler blocks transactions before fiber interference
 begin
+  # Set strict mode to ensure OperationModeError is raised
+  original_mode = Familia.transaction_mode
+  Familia.configure { |config| config.transaction_mode = :strict }
+
   Fiber[:familia_connection] = [Customer.create_dbclient, Familia.middleware_version]
   Fiber[:familia_connection_handler_class] = Familia::Connection::FiberConnectionHandler
 
@@ -154,6 +158,8 @@ rescue Familia::OperationModeError => e
 ensure
   Fiber[:familia_connection] = nil
   Fiber[:familia_connection_handler_class] = nil
+  # Restore original mode
+  Familia.configure { |config| config.transaction_mode = original_mode }
 end
 #=> true
 

@@ -102,7 +102,7 @@ module Familia
 
         # Return MultiResult format for consistency with normal transactions
         results = proxy.collected_results
-        summary_boolean = results.all? { |ret| ret.is_a?(Exception) ? false : %w[OK 0 1].include?(ret.to_s) }
+        summary_boolean = results.all? { |ret| !ret.is_a?(Exception) }
         MultiResult.new(summary_boolean, results)
       end
 
