@@ -176,6 +176,13 @@ module Familia
       @allows_transaction = :reentrant
       @allows_pipelined = false
 
+      # Singleton pattern for stateless handler
+      @instance = new.freeze
+      
+      def self.instance
+        @instance
+      end
+
       def handle(_uri)
         return nil unless Fiber[:familia_transaction]
 

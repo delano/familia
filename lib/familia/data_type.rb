@@ -19,7 +19,7 @@ module Familia
     using Familia::Refinements::TimeLiterals
 
     @registered_types = {}
-    @valid_options = %i[class parent default_expiration default logical_database dbkey dbclient suffix prefix].freeze
+    @valid_options = %i[class parent default_expiration default dbkey suffix prefix].freeze
     @logical_database = nil
 
     feature :expiration
@@ -118,17 +118,10 @@ module Familia
       @keystring = @keystring.join(Familia.delim) if @keystring.is_a?(Array)
 
       # Remove all keys from the opts that are not in the allowed list
-      @opts = opts || {}
-      @opts = DataType.valid_keys_only(@opts)
+      @opts = DataType.valid_keys_only(opts || {})
 
       # Apply the options to instance method setters of the same name
       @opts.each do |k, v|
-        # Bewarde logging :parent instance here implicitly calls #to_s which for
-        # some classes could include the identifier which could still be nil at
-        # this point. This would result in a Familia::Problem being raised. So
-        # to be on the safe-side here until we have a better understanding of
-        # the issue, we'll just log the class name for each key-value pair.
-        Familia.trace :SETTING, nil, " [setting] #{k} #{v.class}" if Familia.debug?
         send(:"#{k}=", v) if respond_to? :"#{k}="
       end
 
@@ -140,7 +133,8 @@ module Familia
       return Fiber[:familia_transaction] if Fiber[:familia_transaction]
       return @dbclient if @dbclient
 
-      parent? ? parent.dbclient : Familia.dbclient(opts[:logical_database])
+      # Delegate to parent if present, otherwise fall back to Familia
+      parent ? parent.dbclient : Familia.dbclient(opts[:logical_database])
     end
 
     # Produces the full dbkey for this object.
@@ -197,20 +191,17 @@ module Familia
       !@opts[:class].to_s.empty? && @opts[:class].is_a?(Familia)
     end
 
-    def parent_instance?
-      parent.is_a?(Familia::Horreum)
-    end
 
-    def parent_class?
-      parent.is_a?(Class) && parent <= Familia::Horreum
-    end
-
-    def parent?
-      parent_class? || parent_instance?
-    end
 
     def parent
-      @opts[:parent]
+      parent_obj = @opts[:parent]
+      
+      # Lazy conversion: if parent is a Horreum instance, convert to ParentDefinition
+      if parent_obj.is_a?(Familia::Horreum)
+        @opts[:parent] = Familia::Horreum::ParentDefinition.from_parent(parent_obj)
+      else
+        parent_obj
+      end
     end
 
     def logical_database
@@ -221,26 +212,16 @@ module Familia
       # If a specific URI is set in opts, use it
       return @opts[:uri] if @opts[:uri]
 
-      # If parent has a DB set, create a URI with that DB
-      if parent? && parent.respond_to?(:logical_database) && parent.logical_database
-        base_uri = self.class.uri || Familia.uri
-        if base_uri
-          uri_with_db = base_uri.dup
-          uri_with_db.db = parent.logical_database
-          return uri_with_db
-        end
-      end
-
       # Otherwise fall back to class URI
       self.class.uri
     end
 
     def dump_method
-      @dump_method || self.class.dump_method
+      self.class.dump_method
     end
 
     def load_method
-      @load_method || self.class.load_method
+      self.class.load_method
     end
 
     include Commands

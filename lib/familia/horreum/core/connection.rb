@@ -266,12 +266,18 @@ module Familia
 
       # Builds the class-level connection chain with handlers in priority order
       def build_connection_chain
+        # Cache handlers at class level to avoid creating new instances per model instance
+        @fiber_connection_handler ||= Familia::Connection::FiberConnectionHandler.new
+        @provider_connection_handler ||= Familia::Connection::ProviderConnectionHandler.new
+        @cached_connection_handler ||= Familia::Connection::CachedConnectionHandler.new(self)
+        @create_connection_handler ||= Familia::Connection::CreateConnectionHandler.new(self)
+        
         Familia::Connection::ResponsibilityChain.new
-          .add_handler(Familia::Connection::FiberTransactionHandler.new)
-          .add_handler(Familia::Connection::FiberConnectionHandler.new)
-          .add_handler(Familia::Connection::ProviderConnectionHandler.new)
-          .add_handler(Familia::Connection::CachedConnectionHandler.new(self))
-          .add_handler(Familia::Connection::CreateConnectionHandler.new(self))
+          .add_handler(Familia::Connection::FiberTransactionHandler.instance)
+          .add_handler(@fiber_connection_handler)
+          .add_handler(@provider_connection_handler)
+          .add_handler(@cached_connection_handler)
+          .add_handler(@create_connection_handler)
       end
     end
   end

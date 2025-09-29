@@ -15,7 +15,27 @@ module Familia
     # is not nil, we treat this as an instance-level relation
     # (model_name:identifier:related_field_name).
     #
-    ParentDefinition = Data.define(:model_klass, :identifier)
+    ParentDefinition = Data.define(:model_klass, :identifier) do
+      # Factory method to create ParentDefinition from a parent instance
+      def self.from_parent(parent_instance)
+        new(parent_instance.class, parent_instance.identifier)
+      end
+      
+      # Delegation methods for common operations needed by DataTypes
+      def dbclient(uri = nil)
+        model_klass.dbclient(uri)
+      end
+      
+      def dbkey(keystring = nil)
+        if identifier
+          # Instance-level relation: model_name:identifier:keystring
+          model_klass.dbkey(identifier, keystring)
+        else
+          # Class-level relation: model_name:keystring
+          model_klass.dbkey(keystring, nil)
+        end
+      end
+    end
 
     # RelatedFieldsManagement: Manages DataType fields and relations
     #

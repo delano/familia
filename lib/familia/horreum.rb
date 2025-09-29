@@ -254,7 +254,8 @@ module Familia
         #     then the dbkey for this DataType instance will be
         #     `customer:customer_id:name`.
         #
-        opts[:parent] = self # unless opts.key(:parent)
+        # Store reference to the instance for lazy ParentDefinition creation
+        opts[:parent] = self
 
         suffix_override = opts.fetch(:suffix, name)
 
@@ -329,10 +330,7 @@ module Familia
     #
     # @return [Redis] the Database connection instance.
     #
-    def dbclient
-      @instance_connection_chain ||= build_connection_chain
-      @instance_connection_chain.handle(nil)
-    end
+
 
     def generate_id
       @objid ||= Familia.generate_id
@@ -392,14 +390,6 @@ module Familia
     end
 
     # Builds the instance-level connection chain with handlers in priority order
-    def build_connection_chain
-      Familia::Connection::ResponsibilityChain.new
-        .add_handler(Familia::Connection::FiberTransactionHandler.new)
-        .add_handler(Familia::Connection::FiberConnectionHandler.new)
-        .add_handler(Familia::Connection::ProviderConnectionHandler.new)
-        .add_handler(Familia::Connection::CachedConnectionHandler.new(self))
-        .add_handler(Familia::Connection::CachedConnectionHandler.new(self.class))
-        .add_handler(Familia::Connection::CreateConnectionHandler.new(self))
-    end
+
   end
 end
