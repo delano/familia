@@ -65,12 +65,12 @@ puts
 # Pattern 3: Opt-in refinement for Hash/Array (new convenience feature)
 puts "3. Opt-in Refinement Pattern (Developer Convenience):"
 puts "   # Add this line to enable refinements in your file:"
-puts "   using Familia::JsonRefinements"
+puts "   using Familia::Refinements::DearJson"
 puts
 
 # Demonstrate the refinement
-require_relative '../lib/familia/json_refinements'
-using Familia::JsonRefinements
+require_relative '../lib/familia/refinements/dear_json'
+using Familia::Refinements::DearJson
 
 mixed_hash = {
   user: user,                    # Familia object (will call as_json)
@@ -126,7 +126,7 @@ puts "     user.to_json  # Direct serialization"
 puts "   end"
 puts
 puts "   # API response with refinement"
-puts "   using Familia::JsonRefinements"
+puts "   using Familia::Refinements::DearJson"
 puts "   response = {"
 puts "     user: user,"
 puts "     meta: { version: '1.0' }"

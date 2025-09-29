@@ -137,12 +137,10 @@ module Familia
 
         # Converts seconds to specified time unit
         #
-        # @param u [String, Symbol] Unit to convert to
+        # @param unit [String, Symbol] Unit to convert to
         # @return [Float] Converted time value
-        def in_seconds(u = nil)
-          return self unless u
-
-          TimeLiterals.convert_to_seconds(self, u)
+        def in_seconds(unit = nil)
+          unit ? TimeLiterals.convert_to_seconds(self, unit) : self
         end
 
         # Converts the number to a human-readable string representation
@@ -157,11 +155,11 @@ module Familia
         def humanize
           gte_zero = positive? || zero?
           duration = (gte_zero ? self : abs) # let's keep it positive up in here
-          text = case (s = duration.to_i)
-                 in 0..59 then "#{s} second#{'s' if s != 1}"
-                 in 60..3599 then "#{s /= 60} minute#{'s' if s != 1}"
-                 in 3600..86_399 then "#{s /= 3600} hour#{'s' if s != 1}"
-                 else "#{s /= 86_400} day#{'s' if s != 1}"
+          text = case (num = duration.to_i)
+                 in 0..59 then "#{num} second#{'s' if num != 1}"
+                 in 60..3599 then "#{num /= 60} minute#{'s' if num != 1}"
+                 in 3600..86_399 then "#{num /= 3600} hour#{'s' if num != 1}"
+                 else "#{num /= 86_400} day#{'s' if num != 1}"
                  end
           gte_zero ? text : "#{text} ago"
         end
@@ -269,12 +267,12 @@ module Familia
         #
         # @return [Float, nil] Time in seconds or nil if invalid
         def in_seconds
-          q, u = scan(/([\d.]+)([a-zA-Zμs]+)?/).flatten
-          return nil unless q
+          quantity, unit = scan(/([\d.]+)([a-zA-Zμs]+)?/).flatten
+          return nil unless quantity
 
-          q   = q.to_f
-          u ||= 's'
-          TimeLiterals.convert_to_seconds(q, u)
+          quantity = quantity.to_f
+          unit ||= 's'
+          TimeLiterals.convert_to_seconds(quantity, unit)
         end
       end
 

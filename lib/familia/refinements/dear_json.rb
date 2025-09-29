@@ -12,7 +12,7 @@ module Familia
     # serialization goes through Familia's controlled, secure serialization.
     #
     # @example Basic usage with refinement
-    #   using Familia::DearJson
+    #   using Familia::Refinements::DearJson
     #
     #   data = { user: user.as_json, tags: user.tags.as_json }
     #   json = data.to_json  # Uses Familia::JsonSerializer.dump
@@ -52,14 +52,21 @@ module Familia
       end
 
       # Convert hash to JSON-serializable representation.
-      # For Hash objects, this returns self since hashes are already JSON-compatible.
-      # This method is provided for compatibility with the standard JSON pattern.
+      # This method recursively calls as_json on nested values to ensure
+      # Familia objects are properly serialized in nested structures.
       #
       # @param options [Hash] Optional parameters (currently unused)
-      # @return [Hash] The hash itself (already JSON-compatible)
+      # @return [Hash] A new hash with all values converted via as_json
       #
-      def as_json(_options = nil)
-        self
+      def as_json(options = nil)
+        # Create a new hash, calling as_json on each value.
+        transform_values do |value|
+          if value.respond_to?(:as_json)
+            value.as_json(options)
+          else
+            value
+          end
+        end
       end
     end
 
@@ -85,14 +92,21 @@ module Familia
       end
 
       # Convert array to JSON-serializable representation.
-      # For Array objects, this returns self since arrays are already JSON-compatible.
-      # This method is provided for compatibility with the standard JSON pattern.
+      # This method recursively calls as_json on nested elements to ensure
+      # Familia objects are properly serialized in nested structures.
       #
       # @param options [Hash] Optional parameters (currently unused)
-      # @return [Array] The array itself (already JSON-compatible)
+      # @return [Array] A new array with all elements converted via as_json
       #
-      def as_json(_options = nil)
-        self
+      def as_json(options = nil)
+        # Create a new array, calling as_json on each element.
+        map do |item|
+          if item.respond_to?(:as_json)
+            item.as_json(options)
+          else
+            item
+          end
+        end
       end
     end
     module DearJson
