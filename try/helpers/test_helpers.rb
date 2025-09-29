@@ -65,7 +65,7 @@ class Customer < Familia::Horreum
   # We use a callable here since `:active?` is not a valid method symbol.
   safe_dump_field :active, ->(cust) { cust.active? }
 
-  class_sorted_set :values, key: 'onetime:customer'
+  class_sorted_set :values, key: 'familia:customer'
   class_hashkey :domains
 
   hashkey :stripe_customer
@@ -93,7 +93,7 @@ class Customer < Familia::Horreum
   hashkey :password_reset #=> Familia::HashKey
   list :sessions #=> Familia::ListKey
 
-  class_list :customers, suffix: []
+  class_list :all_customers, suffix: [] # no suffix
   class_string :message
 
   class_zset :instances, class: self, reference: true

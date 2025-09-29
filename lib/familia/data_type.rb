@@ -19,7 +19,7 @@ module Familia
     using Familia::Refinements::TimeLiterals
 
     @registered_types = {}
-    @valid_options = %i[class parent default_expiration default dbkey suffix prefix].freeze
+    @valid_options = %i[class parent default_expiration default logical_database dbkey dbclient suffix prefix].freeze
     @logical_database = nil
 
     feature :expiration
@@ -27,13 +27,14 @@ module Familia
 
     class << self
       attr_reader :registered_types, :valid_options, :has_relations
-      attr_accessor :parent
-      attr_writer :logical_database, :uri
     end
 
     # DataType::ClassMethods
     #
     module ClassMethods
+      attr_accessor :parent, :suffix, :prefix, :uri
+      attr_writer :logical_database
+
       # To be called inside every class that inherits DataType
       # +methname+ is the term used for the class and instance methods
       # that are created for the given +klass+ (e.g. set, list, etc)
@@ -65,7 +66,6 @@ module Familia
         obj.logical_database = logical_database
         obj.default_expiration = default_expiration # method added via Features::Expiration
         obj.uri = uri
-        obj.parent = self
         super
       end
 
@@ -79,8 +79,9 @@ module Familia
     end
     extend ClassMethods
 
-    attr_reader :keystring, :opts
-    attr_writer :dump_method, :load_method
+    attr_reader :keystring, :opts, :uri, :logical_database
+
+    alias url uri
 
     # +keystring+: If parent is set, this will be used as the suffix
     # for dbkey. Otherwise this becomes the value of the key.
@@ -100,10 +101,6 @@ module Familia
     # You can also call it explicitly via #update_expiration.
     #
     # :default => the default value (String-only)
-    #
-    # :logical_database => the logical database index to use (ignored if :dbclient is used).
-    #
-    # :dbclient => an instance of database client.
     #
     # :dbkey => a hardcoded key to use instead of the deriving the from
     # the name and parent (e.g. a derived key: customer:custid:secret_counter).
@@ -191,29 +188,58 @@ module Familia
       !@opts[:class].to_s.empty? && @opts[:class].is_a?(Familia)
     end
 
+    def parent_instance?
+      parent&.is_a?(Horreum::ParentDefinition)
+    end
 
+    def parent_class?
+      parent.is_a?(Class) && parent <= Horreum::ParentDefinition
+    end
+
+    def parent?
+      parent_class? || parent_instance?
+    end
 
     def parent
-      parent_obj = @opts[:parent]
-      
-      # Lazy conversion: if parent is a Horreum instance, convert to ParentDefinition
-      if parent_obj.is_a?(Familia::Horreum)
-        @opts[:parent] = Familia::Horreum::ParentDefinition.from_parent(parent_obj)
+      # Return cached ParentDefinition if available
+      return @parent if @parent
+
+      # Return class-level parent if no instance parent
+      return self.class.parent unless @parent_ref
+
+      # Create ParentDefinition dynamically from stored reference.
+      # This ensures we get the current identifier value (available after initialization)
+      # rather than a stale nil value from initialization time. Cannot cache due to frozen object.
+      Horreum::ParentDefinition.from_parent(@parent_ref)
+    end
+
+    def parent=(value)
+      case value
+      when Horreum::ParentDefinition
+        @parent = value
+      when nil
+        @parent = nil
+        @parent_ref = nil
       else
-        parent_obj
+        # Store parent instance reference for lazy ParentDefinition creation.
+        # During initialization, the parent's identifier may not be available yet,
+        # so we defer ParentDefinition creation until first access for memory efficiency.
+        # Note: @parent_ref is not cleared after use because DataType objects are frozen.
+        @parent_ref = value
+        @parent = nil  # Will be created dynamically in parent method
       end
     end
 
-    def logical_database
-      @opts[:logical_database] || self.class.logical_database
+    def uri
+      @uri || self.class.uri
     end
 
-    def uri
-      # If a specific URI is set in opts, use it
-      return @opts[:uri] if @opts[:uri]
+    def uri=(value)
+      @uri = value
+    end
 
-      # Otherwise fall back to class URI
-      self.class.uri
+    def dbclient
+      parent ? parent.dbclient : Familia.dbclient
     end
 
     def dump_method

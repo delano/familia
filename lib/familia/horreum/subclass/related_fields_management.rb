@@ -18,14 +18,22 @@ module Familia
     ParentDefinition = Data.define(:model_klass, :identifier) do
       # Factory method to create ParentDefinition from a parent instance
       def self.from_parent(parent_instance)
-        new(parent_instance.class, parent_instance.identifier)
+        case parent_instance
+        when Class
+          # Handle class-level relationships
+          new(parent_instance, nil)
+        else
+          # Handle instance-level relationships
+          identifier = parent_instance.respond_to?(:identifier) ? parent_instance.identifier : nil
+          new(parent_instance.class, identifier)
+        end
       end
-      
+
       # Delegation methods for common operations needed by DataTypes
       def dbclient(uri = nil)
         model_klass.dbclient(uri)
       end
-      
+
       def dbkey(keystring = nil)
         if identifier
           # Instance-level relation: model_name:identifier:keystring
@@ -35,6 +43,20 @@ module Familia
           model_klass.dbkey(keystring, nil)
         end
       end
+
+      # Allow comparison with the original parent instance
+      def ==(other)
+        case other
+        when ParentDefinition
+          model_klass == other.model_klass && identifier == other.identifier
+        when Class
+          model_klass == other && identifier.nil?
+        else
+          # Compare with instance: check class and identifier match
+          other.is_a?(model_klass) && identifier == other.identifier
+        end
+      end
+      alias eql? ==
     end
 
     # RelatedFieldsManagement: Manages DataType fields and relations
