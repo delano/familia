@@ -239,11 +239,12 @@ module Familia
         self
       end
 
-      # Permanently removes this object from the DB storage.
+      # Permanently removes this object and its related fields from the DB.
       #
-      # Deletes the object's Valkey key and all associated data. This operation
+      # Deletes the object's database key and all associated data. This operation
       # is irreversible and will permanently destroy all stored information
-      # for this object instance.
+      # for this object instance and the additional list, set, hash, string
+      # etc fields defined for this class.
       #
       # @return [void]
       #
@@ -263,8 +264,25 @@ module Familia
       # @see #delete! The underlying method that performs the key deletion
       #
       def destroy!
-        Familia.trace :DESTROY, nil, uri if Familia.debug?
+        Familia.trace :DESTROY, dbkey, uri
         delete!
+        delete_related_fields!
+      end
+
+      def delete_related_fields!
+        return unless self.class.relations?
+
+        Familia.trace :DELETE_RELATED_FIELDS!, nil,
+                      "#{self.class} has relations: #{self.class.related_fields.keys}"
+
+        self.class.related_fields.each do |name, definition|
+          # Calling the instance method instantiates the DataType class but does
+          # not read from the database. This is important; otherwise deleting
+          # would require 2 commands.
+          obj = send(name)
+          Familia.trace :DELETE_RELATED_FIELD, name, "Deleting related field #{name} (#{obj.dbkey})"
+          obj.delete!
+        end
       end
 
       # Clears all fields by setting them to nil.

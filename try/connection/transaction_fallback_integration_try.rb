@@ -139,12 +139,11 @@ results = [
 user.destroy!
 
 # Clean up test data
-IntegrationTestUser.destroy!('datatype_test_001')
 IntegrationTestUser.remove_instance_variable(:@dbclient)
 Familia.configure { |config| config.transaction_mode = :strict }
 
 results
-#=> [18, true, 100.0]
+#=> [2, true, 100.0]
 
 ## Connection provider integration with transaction modes
 begin

@@ -202,6 +202,23 @@ module Familia
 
         objkey = dbkey identifier, suffix
 
+        # Clean up related fields first to avoid orphaned keys
+        if relations?
+          Familia.trace :DESTROY_RELATIONS!, nil, "#{self} has relations: #{related_fields.keys}" if Familia.debug?
+
+          # Create a temporary instance to access related fields
+          temp_instance = new
+          # Set the identifier field so the temporary instance can generate proper keys
+          identifier_field_name = self.identifier_field
+          temp_instance.send("#{identifier_field_name}=", identifier.to_s) if identifier_field_name
+
+          related_fields.each do |name, definition|
+            obj = temp_instance.send(name)
+            Familia.trace :DESTROY_RELATION!, name, "Deleting related field #{name} (#{obj.dbkey})" if Familia.debug?
+            obj.delete!
+          end
+        end
+
         ret = dbclient.del objkey
         Familia.trace :DESTROY!, nil, "#{objkey} #{ret.inspect}" if Familia.debug?
         ret.positive?

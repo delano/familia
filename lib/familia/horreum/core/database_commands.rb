@@ -170,10 +170,15 @@ module Familia
       end
       alias has_key? key?
 
-      # Deletes the entire dbkey
+      # Deletes the dbkey for this horreum :object.
+      #
+      # It does not delete the related fields keys. See destroy!
+      #
       # @return [Boolean] true if the key was deleted, false otherwise
       def delete!
         Familia.trace :DELETE!, nil, uri if Familia.debug?
+
+        # Delete the main object key
         ret = dbclient.del dbkey
         ret.positive?
       end
