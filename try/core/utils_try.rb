@@ -72,10 +72,10 @@ sym_result = Familia.distinguisher(:symbol)
 ## distinguisher raises error for high-risk types with strict mode
 begin
   Familia.distinguisher(true, strict_values: true)
-rescue Familia::HighRiskFactor => e
+rescue Familia::NotDistinguishableError => e
   e.class
 end
-#=> Familia::HighRiskFactor
+#=> Familia::NotDistinguishableError
 
 ## distinguisher allows high-risk types with non-strict mode
 result = Familia.distinguisher(false, strict_values: false)

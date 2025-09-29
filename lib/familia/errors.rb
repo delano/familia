@@ -13,7 +13,7 @@ module Familia
   # Raised when attempting to start transactions or pipelines on connection types that don't support them
   class OperationModeError < Problem; end
 
-  class HighRiskFactor < Problem
+  class NotDistinguishableError < Problem
     attr_reader :value
 
     def initialize(value)
@@ -22,7 +22,7 @@ module Familia
     end
 
     def message
-      "High risk factor for serialization bugs: #{value}<#{value.class}>"
+      "Cannot represent #{value}<#{value.class}> as a string"
     end
   end
 

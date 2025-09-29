@@ -48,7 +48,7 @@ module Familia
         # exception when encountering these types unless the strict_values option is
         # explicitly set to false.
         #
-        raise Familia::HighRiskFactor, value_to_distinguish if strict_values
+        raise Familia::NotDistinguishableError, value_to_distinguish if strict_values
 
         value_to_distinguish.to_s #=> "true", "false", ""
 
@@ -73,7 +73,7 @@ module Familia
 
         else
           Familia.trace :TOREDIS_DISTINGUISHER, nil, "else2 #{strict_values}" if Familia.debug?
-          raise Familia::HighRiskFactor, value_to_distinguish if strict_values
+          raise Familia::NotDistinguishableError, value_to_distinguish if strict_values
 
           nil
         end
