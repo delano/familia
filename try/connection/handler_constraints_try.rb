@@ -26,12 +26,12 @@ Familia::Connection::FiberConnectionHandler.allows_transaction
 Familia::Connection::FiberConnectionHandler.allows_pipelined
 #=> false
 
-## DefaultConnectionHandler blocks transactions
-Familia::Connection::DefaultConnectionHandler.allows_transaction
+## CachedConnectionHandler blocks transactions
+Familia::Connection::CachedConnectionHandler.allows_transaction
 #=> false
 
-## DefaultConnectionHandler blocks pipelines
-Familia::Connection::DefaultConnectionHandler.allows_pipelined
+## CachedConnectionHandler blocks pipelines
+Familia::Connection::CachedConnectionHandler.allows_pipelined
 #=> false
 
 ## ProviderConnectionHandler allows transactions

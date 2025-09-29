@@ -182,7 +182,7 @@ module Familia
       # @return [MultiResult] Result object with success status and command results
       #
       # @raise [Familia::OperationModeError] When called with incompatible connection handlers
-      #   (e.g., FiberConnectionHandler or DefaultConnectionHandler that don't support pipelines)
+      #   (e.g., FiberConnectionHandler or CachedConnectionHandler that don't support pipelines)
       #
       # @example Basic instance pipeline
       #   customer = Customer.new(custid: 'cust_123')
@@ -290,7 +290,7 @@ module Familia
           .add_handler(Familia::Connection::FiberTransactionHandler.new)
           .add_handler(Familia::Connection::FiberConnectionHandler.new)
           .add_handler(Familia::Connection::ProviderConnectionHandler.new)
-          .add_handler(Familia::Connection::DefaultConnectionHandler.new(self))
+          .add_handler(Familia::Connection::CachedConnectionHandler.new(self))
           .add_handler(Familia::Connection::CreateConnectionHandler.new(self))
       end
     end

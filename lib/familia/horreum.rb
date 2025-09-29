@@ -323,8 +323,8 @@ module Familia
     #
     # This method uses a chain of handlers to resolve connections in priority order:
     # 1. FiberTransactionHandler - Fiber[:familia_transaction] (active transaction)
-    # 2. DefaultConnectionHandler - Accesses self.dbclient
-    # 3. DefaultConnectionHandler - Accesses self.class.dbclient
+    # 2. CachedConnectionHandler - Accesses self.dbclient
+    # 3. CachedConnectionHandler - Accesses self.class.dbclient
     # 4. GlobalFallbackHandler - Familia.dbclient(uri || logical_database) (global fallback)
     #
     # @return [Redis] the Database connection instance.
@@ -397,8 +397,8 @@ module Familia
         .add_handler(Familia::Connection::FiberTransactionHandler.new)
         .add_handler(Familia::Connection::FiberConnectionHandler.new)
         .add_handler(Familia::Connection::ProviderConnectionHandler.new)
-        .add_handler(Familia::Connection::DefaultConnectionHandler.new(self))
-        .add_handler(Familia::Connection::DefaultConnectionHandler.new(self.class))
+        .add_handler(Familia::Connection::CachedConnectionHandler.new(self))
+        .add_handler(Familia::Connection::CachedConnectionHandler.new(self.class))
         .add_handler(Familia::Connection::CreateConnectionHandler.new(self))
     end
   end

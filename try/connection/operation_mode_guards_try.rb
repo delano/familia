@@ -5,7 +5,7 @@
 #
 # - FiberTransactionHandler: Allow reentrant transactions, block pipelines
 # - FiberConnectionHandler: Block all multi-mode operations (middleware single conn)
-# - DefaultConnectionHandler: Block all multi-mode operations (cached single conn)
+# - CachedConnectionHandler: Block all multi-mode operations (cached single conn)
 # - ProviderConnectionHandler: Allow all operations (fresh checkout each time)
 # - CreateConnectionHandler: Allow all operations (new connection each time)
 #
