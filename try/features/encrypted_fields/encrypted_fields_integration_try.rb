@@ -189,7 +189,7 @@ end
 # Test shows that algorithm parameter is currently ignored - XChaCha20Poly1305 is used by default
 concealed_data = @aes_model.secret_data
 encrypted_json = concealed_data.encrypted_value
-parsed_data = JSON.parse(encrypted_json, symbolize_names: true)
+parsed_data = Familia::JsonSerializer.parse(encrypted_json, symbolize_names: true)
 [parsed_data[:algorithm], @aes_model.secret_data.reveal { |data| data }]
 #=> ["xchacha20poly1305", "aes-gcm integration test"]
 
@@ -211,6 +211,6 @@ end
 # Verify algorithm and decryption
 concealed_data = @aes_model2.secret_data
 encrypted_json = concealed_data.encrypted_value
-parsed_data = JSON.parse(encrypted_json, symbolize_names: true)
+parsed_data = Familia::JsonSerializer.parse(encrypted_json, symbolize_names: true)
 [parsed_data[:algorithm], @aes_model2.secret_data.reveal { |data| data }]
 #=> ["xchacha20poly1305", "aes-gcm integration test"]

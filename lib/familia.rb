@@ -153,13 +153,3 @@ require_relative 'familia/features'
 require_relative 'familia/data_type'
 require_relative 'familia/horreum'
 require_relative 'familia/encryption'
-
-# Ensure JSON constant is available for backward compatibility with existing code
-# This approach is safer than monkey-patching core classes globally
-begin
-  require 'json'
-rescue LoadError
-  # If json gem is not available, define a minimal JSON constant
-  # that delegates to Familia::JsonSerializer for compatibility
-  JSON = Familia::JsonSerializer
-end

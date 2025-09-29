@@ -73,7 +73,22 @@ module Familia
         'μs' => :microseconds,
       }.freeze
 
-      refine Numeric do
+      # Shared conversion logic
+      def self.convert_to_seconds(value, unit)
+        case UNIT_METHODS.fetch(unit.to_s.downcase, nil)
+        when :milliseconds then value * PER_MILLISECOND
+        when :microseconds then value * PER_MICROSECOND
+        when :minutes then value * PER_MINUTE
+        when :hours then value * PER_HOUR
+        when :days then value * PER_DAY
+        when :weeks then value * PER_WEEK
+        when :months then value * PER_MONTH
+        when :years then value * PER_YEAR
+        else value
+        end
+      end
+
+      module NumericMethods
         def microseconds = seconds * PER_MICROSECOND
         def milliseconds = seconds * PER_MILLISECOND
         def seconds      = self
@@ -85,19 +100,19 @@ module Familia
         def years        = seconds * PER_YEAR
 
         # Aliases with singular forms
-        alias_method :microsecond, :microseconds
-        alias_method :millisecond, :milliseconds
-        alias_method :second,      :seconds
-        alias_method :minute,      :minutes
-        alias_method :hour,        :hours
-        alias_method :day,         :days
-        alias_method :week,        :weeks
-        alias_method :month,       :months
-        alias_method :year,        :years
+        def microsecond = microseconds
+        def millisecond = milliseconds
+        def second = seconds
+        def minute = minutes
+        def hour = hours
+        def day = days
+        def week = weeks
+        def month = months
+        def year = years
 
         # Shortest aliases
-        alias_method :ms, :milliseconds
-        alias_method :μs, :microseconds
+        def ms = milliseconds
+        def μs = microseconds
 
         # Seconds -> other time units
         def in_years        = seconds / PER_YEAR
@@ -108,12 +123,11 @@ module Familia
         def in_minutes      = seconds / PER_MINUTE
         def in_milliseconds = seconds / PER_MILLISECOND
         def in_microseconds = seconds / PER_MICROSECOND
-        # For semantic purposes
-        def in_seconds      = seconds
+        def in_seconds      = seconds # for semantic purposes
 
         # Time manipulation
-        def ago         = Familia.now - seconds
-        def from_now    = Familia.now + seconds
+        def ago          = Familia.now - seconds
+        def from_now     = Familia.now + seconds
         def before(time) = time - seconds
         def after(time)  = time + seconds
         def in_time = Time.at(seconds).utc
@@ -123,22 +137,10 @@ module Familia
 
         # Converts seconds to specified time unit
         #
-        # @param u [String, Symbol] Unit to convert to
+        # @param unit [String, Symbol] Unit to convert to
         # @return [Float] Converted time value
-        def in_seconds(u = nil)
-          return self unless u
-
-          case UNIT_METHODS.fetch(u.to_s.downcase, nil)
-          when :milliseconds then self * PER_MILLISECOND
-          when :microseconds then self * PER_MICROSECOND
-          when :minutes then self * PER_MINUTE
-          when :hours then self * PER_HOUR
-          when :days then self * PER_DAY
-          when :weeks then self * PER_WEEK
-          when :months then self * PER_MONTH
-          when :years then self * PER_YEAR
-          else self
-          end
+        def in_seconds(unit = nil)
+          unit ? TimeLiterals.convert_to_seconds(self, unit) : self
         end
 
         # Converts the number to a human-readable string representation
@@ -153,11 +155,11 @@ module Familia
         def humanize
           gte_zero = positive? || zero?
           duration = (gte_zero ? self : abs) # let's keep it positive up in here
-          text = case (s = duration.to_i)
-                 in 0..59 then "#{s} second#{'s' if s != 1}"
-                 in 60..3599 then "#{s /= 60} minute#{'s' if s != 1}"
-                 in 3600..86_399 then "#{s /= 3600} hour#{'s' if s != 1}"
-                 else "#{s /= 86_400} day#{'s' if s != 1}"
+          text = case (num = duration.to_i)
+                 in 0..59 then "#{num} second#{'s' if num != 1}"
+                 in 60..3599 then "#{num /= 60} minute#{'s' if num != 1}"
+                 in 3600..86_399 then "#{num /= 3600} hour#{'s' if num != 1}"
+                 else "#{num /= 86_400} day#{'s' if num != 1}"
                  end
           gte_zero ? text : "#{text} ago"
         end
@@ -255,7 +257,7 @@ module Familia
         end
       end
 
-      refine ::String do
+      module StringMethods
         # Converts string time representation to seconds
         #
         # @example
@@ -265,13 +267,20 @@ module Familia
         #
         # @return [Float, nil] Time in seconds or nil if invalid
         def in_seconds
-          q, u = scan(/([\d.]+)([a-zA-Zμs]+)?/).flatten
-          return nil unless q
+          quantity, unit = scan(/([\d.]+)([a-zA-Zμs]+)?/).flatten
+          return nil unless quantity
 
-          q   = q.to_f
-          u ||= 's'
-          q.in_seconds(u)
+          quantity = quantity.to_f
+          unit ||= 's'
+          TimeLiterals.convert_to_seconds(quantity, unit)
         end
+      end
+
+      refine ::Numeric do
+        import_methods NumericMethods
+      end
+      refine ::String do
+        import_methods StringMethods
       end
     end
   end

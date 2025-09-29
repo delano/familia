@@ -446,7 +446,7 @@ module Familia
       #
       # The serialization process:
       # 1. Attempts conversion using Familia.distinguisher with relaxed type checking
-      # 2. For Hash/Array types that return nil, tries custom dump_method or JSON.dump
+      # 2. For Hash/Array types that return nil, tries custom dump_method or Familia::JsonSerializer.dump
       # 3. Logs warnings when serialization fails completely
       #
       # @param val [Object] The Ruby object to serialize for Valkey storage
