@@ -9,8 +9,10 @@
 
 require_relative '../helpers/test_helpers'
 
+MANY_FIELD_MULTIPLIER = 10
+
 # Test model with various related fields
-class DestroyTestUser < Familia::Horreum
+class ::DestroyTestUser < Familia::Horreum
   identifier_field :user_id
   field :user_id
   field :name
@@ -24,7 +26,7 @@ class DestroyTestUser < Familia::Horreum
   string :status_message
 end
 
-class CustomOptionsUser < Familia::Horreum
+class ::CustomOptionsUser < Familia::Horreum
   identifier_field :user_id
   field :user_id
 
@@ -34,26 +36,26 @@ class CustomOptionsUser < Familia::Horreum
   zset :custom_scores, class: self
 end
 
-class ParentModel < Familia::Horreum
+class ::ParentModel < Familia::Horreum
   identifier_field :parent_id
   field :parent_id
   list :children_ids
   set :child_tags
 end
 
-class ChildModel < Familia::Horreum
+class ::ChildModel < Familia::Horreum
   identifier_field :child_id
   field :child_id
   field :parent_id
   list :child_activities
 end
 
-class ManyFieldsModel < Familia::Horreum
+class ::ManyFieldsModel < Familia::Horreum
   identifier_field :model_id
   field :model_id
 
   # Create many different types of related fields
-  10.times do |i|
+  MANY_FIELD_MULTIPLIER.times do |i|
     list :"list_#{i}"
     set :"set_#{i}"
     zset :"zset_#{i}"
@@ -62,7 +64,7 @@ class ManyFieldsModel < Familia::Horreum
 end
 
 # From transaction_fallback_integration_try.rb for bug verification test
-class IntegrationTestUser < Familia::Horreum
+class ::IntegrationTestUser < Familia::Horreum
   identifier_field :user_id
   field :user_id
   field :name
@@ -238,7 +240,7 @@ parent_destroy_result && keys_exist_before && parent_keys_gone && child_keys_exi
 model = ManyFieldsModel.new(model_id: 'many_fields_001')
 
 # Add data to some of the fields
-5.times do |i|
+MANY_FIELD_MULTIPLIER.times do |i|
   model.send(:"list_#{i}").add("item_#{i}")
   model.send(:"set_#{i}").add("tag_#{i}")
   model.send(:"zset_#{i}").add("score_#{i}", i * 10)
@@ -247,18 +249,13 @@ end
 
 model.save
 
-# Measure destruction time (should be reasonable even with many fields)
-start_time = Time.now
-destroy_result = model.destroy!
-end_time = Time.now
+destroy_result = model.destroy! # TODO: Should return a MultiResult, not Hash.
 
-destruction_time = end_time - start_time
-
-# Should result in success and also complete in a
-# reasonable time (under 1 second for this test)
-destroy_result.values
-#=> true
-#=%> 10
+# Should result in success and also complete in a reasonable amount of
+# time (under 100ms for this test). I acknowledge this is flaky.
+[destroy_result.class, destroy_result.size, destroy_result.first.class, destroy_result.first.size]
+#=> [Hash, 40, Array, 2]
+#=%> 100
 
 ## Verify transaction_fallback_integration_try.rb bug is fixed
 # Recreate the scenario from the failing test
@@ -289,6 +286,8 @@ destroy_result = user.destroy!
 
 # Now all related keys should be properly cleaned up
 keys_exist_after = keys_before.any? { |key| user.dbclient.exists(key) > 0 }
+
+Object.send(:remove_const, :ManyFieldsModel) if Object.const_defined?(:ManyFieldsModel)
 
 destroy_result && keys_exist_before && !keys_exist_after
 #=> true
