@@ -231,15 +231,22 @@ module Familia
     end
 
     def uri
-      @uri || self.class.uri
+      # Return explicit instance URI if set
+      return @uri if @uri
+
+      # If we have a parent with logical_database, build URI with that database
+      if parent && parent.respond_to?(:logical_database) && parent.logical_database
+        new_uri = (self.class.uri || Familia.uri).dup
+        new_uri.db = parent.logical_database
+        new_uri
+      else
+        # Fall back to class-level URI or global Familia.uri
+        self.class.uri || Familia.uri
+      end
     end
 
     def uri=(value)
       @uri = value
-    end
-
-    def dbclient
-      parent ? parent.dbclient : Familia.dbclient
     end
 
     def dump_method

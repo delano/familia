@@ -57,53 +57,16 @@ module Familia
 
       # Handles transaction fallback based on configured transaction mode
       #
+      # Delegates to OperationCore.handle_fallback for consistent behavior
+      # across transaction and pipeline operations.
+      #
       # @param dbclient_proc [Proc] Lambda that returns the Redis connection
       # @param handler_class [Class] The connection handler class that blocked transaction
       # @param block [Proc] Block containing Redis commands to execute
       # @return [MultiResult] Result from individual command execution or raises error
       #
       def self.handle_transaction_fallback(dbclient_proc, handler_class, &block)
-        case Familia.transaction_mode
-        when :strict
-          raise Familia::OperationModeError,
-                "Cannot start transaction with #{handler_class.name} connection. Use connection pools."
-        when :warn
-          if Familia.respond_to?(:logger) && Familia.logger
-            Familia.logger.warn "Transaction unavailable with #{handler_class.name}. Using individual commands."
-          else
-            warn "Transaction unavailable with #{handler_class.name}. Using individual commands."
-          end
-          execute_individual_commands(dbclient_proc, &block)
-        when :permissive
-          execute_individual_commands(dbclient_proc, &block)
-        else
-          # Default to strict mode if invalid setting
-          raise Familia::OperationModeError,
-                "Cannot start transaction with #{handler_class.name} connection. Use connection pools."
-        end
-      end
-
-      # Executes commands individually using a proxy that collects results
-      #
-      # Creates an IndividualCommandProxy that executes each Redis command immediately
-      # instead of queuing them in a transaction. Results are collected to maintain
-      # the same interface as normal transactions.
-      #
-      # @param dbclient_proc [Proc] Lambda that returns the Redis connection
-      # @param block [Proc] Block containing Redis commands to execute
-      # @return [MultiResult] Result object with collected command results
-      #
-      def self.execute_individual_commands(dbclient_proc, &block)
-        conn = dbclient_proc.call
-        proxy = IndividualCommandProxy.new(conn)
-
-        # Execute the block with the proxy
-        block.call(proxy)
-
-        # Return MultiResult format for consistency with normal transactions
-        results = proxy.collected_results
-        summary_boolean = results.all? { |ret| !ret.is_a?(Exception) }
-        MultiResult.new(summary_boolean, results)
+        OperationCore.handle_fallback(:transaction, dbclient_proc, handler_class, &block)
       end
 
       # Executes a normal Redis transaction using MULTI/EXEC

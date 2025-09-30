@@ -34,6 +34,10 @@ module Familia
         model_klass.dbclient(uri)
       end
 
+      def logical_database
+        model_klass.logical_database
+      end
+
       def dbkey(keystring = nil)
         if identifier
           # Instance-level relation: model_name:identifier:keystring

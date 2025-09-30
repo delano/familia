@@ -242,25 +242,8 @@ module Familia
       # @see Familia.pipelined For global pipeline method
       # @see MultiResult For details on the return value structure
       # @see Familia.transaction For atomic command execution
-      def pipelined(&)
-        handler_class = Fiber[:familia_connection_handler_class]
-
-        # Check if pipeline allowed
-        if handler_class&.allows_pipelined == false
-          raise Familia::OperationModeError,
-                "Cannot start pipeline with #{handler_class.name} connection. Use connection pools."
-        end
-
-        # If we're already in a Familia.pipelined context, just yield the pipeline connection
-        if Fiber[:familia_pipeline]
-          yield(Fiber[:familia_pipeline])
-        else
-          # Otherwise, create a local pipeline
-          command_return_values = dbclient.pipelined(&)
-          # Return same MultiResult format as other methods
-          summary_boolean = command_return_values.all? { |ret| %w[OK 0 1].include?(ret.to_s) }
-          MultiResult.new(summary_boolean, command_return_values)
-        end
+      def pipelined(&block)
+        Familia::Connection::PipelineCore.execute_pipeline(-> { dbclient }, &block)
       end
       alias pipeline pipelined
 

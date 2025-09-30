@@ -165,6 +165,9 @@ end
 
 ## Operation guards prevent pipeline fiber issues before they occur
 begin
+  # Ensure we're in strict mode for this test
+  Familia.configure { |config| config.pipeline_mode = :strict }
+
   Fiber[:familia_connection] = [Customer.create_dbclient, Familia.middleware_version]
   Fiber[:familia_connection_handler_class] = Familia::Connection::FiberConnectionHandler
 

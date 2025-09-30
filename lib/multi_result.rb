@@ -1,4 +1,4 @@
-# lib/familia/multi_result.rb
+# lib/multi_result.rb
 
 # Represents the result of a Valkey/Redis transaction operation.
 #

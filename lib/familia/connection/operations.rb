@@ -216,30 +216,8 @@ module Familia
       # @see MultiResult For details on the return value structure
       # @see Familia.transaction For atomic command execution
       # @see #batch_update For similar MultiResult pattern in Horreum models
-      def pipelined(&)
-        handler_class = Fiber[:familia_connection_handler_class]
-
-        # Check if pipeline allowed
-        if handler_class&.allows_pipelined == false
-          raise Familia::OperationModeError,
-                "Cannot start pipeline with #{handler_class.name} connection. Use connection pools."
-        end
-
-        # Check for existing pipeline context
-        return yield(Fiber[:familia_pipeline]) if Fiber[:familia_pipeline]
-
-        command_return_values = dbclient.pipelined do |conn|
-          Fiber[:familia_pipeline] = conn
-          begin
-            yield(conn)
-          ensure
-            Fiber[:familia_pipeline] = nil
-          end
-        end
-
-        # Return same MultiResult format as other methods
-        summary_boolean = command_return_values.all? { |ret| %w[OK 0 1].include?(ret.to_s) }
-        MultiResult.new(summary_boolean, command_return_values)
+      def pipelined(&block)
+        PipelineCore.execute_pipeline(-> { dbclient }, &block)
       end
       alias pipeline pipelined
 
