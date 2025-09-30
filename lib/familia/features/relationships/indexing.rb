@@ -119,10 +119,10 @@ module Familia
             # based on field values, but we need the target class to understand index access
 
             # Generate finder methods on the target class
-            generate_target_multi_finder_methods(target_class, field, index_name) if finder && target_class.is_a?(Class)
+            generate_multi_query_methods_destination(target_class, field, index_name) if finder && target_class.is_a?(Class)
 
             # Generate instance methods for relationship indexing
-            generate_relationship_multi_index_methods(target_class_snake, field, index_name)
+            generate_multi_mutation_methods_self(target_class_snake, field, index_name)
           end
 
           # Define a unique index lookup (1:1 mapping)
@@ -168,10 +168,10 @@ module Familia
               }
 
               # Generate finder methods on the target class
-              generate_target_unique_finder_methods(target_class, field, index_name) if finder && target_class.is_a?(Class)
+              generate_unique_query_methods_destination(target_class, field, index_name) if finder && target_class.is_a?(Class)
 
               # Generate instance methods for instance-scoped unique indexing
-              generate_relationship_unique_index_methods(target_class_snake, field, index_name)
+              generate_unique_mutation_methods_self(target_class_snake, field, index_name)
             else
               # Class-level unique index (no within: parameter)
               # Store metadata for this indexing relationship
@@ -188,10 +188,10 @@ module Familia
               ensure_index_field(self, index_name, :class_hashkey)
 
               # Generate class-level finder methods if requested
-              generate_class_unique_finder_methods(field, index_name) if finder
+              generate_unique_query_methods_class(field, index_name) if finder
 
               # Generate instance methods for class-level indexing
-              generate_class_unique_index_methods(field, index_name)
+              generate_unique_mutation_methods_class(field, index_name)
             end
           end
 
@@ -215,8 +215,12 @@ module Familia
             word.to_s.split('_').map(&:capitalize).join
           end
 
-          # Generate finder methods on the target class (e.g., company.find_by_department)
-          def generate_target_multi_finder_methods(target_class, field, index_name)
+          # Generates methods ON THE PARENT CLASS (Company when within: Company):
+          # - company.sample_from_department(dept, count=1)
+          # - company.find_all_by_department(dept)
+          # - company.dept_index_for(dept_value)
+          # - company.rebuild_dept_index
+          def generate_multi_query_methods_destination(target_class, field, index_name)
             # Resolve target class if it's a symbol/string
             actual_target_class = target_class.is_a?(Class) ? target_class : Object.const_get(camelize_word(target_class))
 
@@ -263,8 +267,12 @@ module Familia
             end
           end
 
-          # Generate finder methods on the target class for unique indexes (e.g., company.find_by_badge_number)
-          def generate_target_unique_finder_methods(target_class, field, index_name)
+          # Generates methods ON THE PARENT CLASS (Company when within: Company):
+          # - company.find_by_badge_number(badge)
+          # - company.find_all_by_badge_number([badges])
+          # - company.badge_index
+          # - company.rebuild_badge_index
+          def generate_unique_query_methods_destination(target_class, field, index_name)
             # Resolve target class if it's a symbol/string
             actual_target_class = target_class.is_a?(Class) ? target_class : Object.const_get(camelize_word(target_class))
 
@@ -317,8 +325,13 @@ module Familia
             end
           end
 
-          # Generate class-level finder methods
-          def generate_class_unique_finder_methods(field, index_name)
+          # Generates methods ON THE INDEXED CLASS (Employee):
+          # Class-level methods (singleton):
+          # - Employee.find_by_email(email)
+          # - Employee.find_all_by_email([emails])
+          # - Employee.email_index
+          # - Employee.rebuild_email_index
+          def generate_unique_query_methods_class(field, index_name)
             # Generate class-level finder method (e.g., Domain.find_by_display_name)
             define_singleton_method("find_by_#{field}") do |field_value|
               index_hash = send(index_name) # Access the class-level hashkey DataType
@@ -355,8 +368,12 @@ module Familia
             end
           end
 
-          # Generate instance methods for class-level indexing (class_indexed_by)
-          def generate_class_unique_index_methods(field, index_name)
+          # Generates methods ON THE INDEXED CLASS (Employee):
+          # Instance methods for class-level index operations:
+          # - employee.add_to_class_email_index
+          # - employee.remove_from_class_email_index
+          # - employee.update_in_class_email_index(old_email)
+          def generate_unique_mutation_methods_class(field, index_name)
             # Class-level index methods using DataType operations
             define_method("add_to_class_#{index_name}") do
               index_hash = self.class.send(index_name)  # Access the class-level hashkey DataType
@@ -392,12 +409,16 @@ module Familia
             end
           end
 
-          # Generate instance methods for multi-value relationship indexing (multi_index with within:)
-          def generate_relationship_multi_index_methods(target_class_name, field, index_name)
+          # Generates methods ON THE INDEXED CLASS (Employee):
+          # Instance methods for parent-scoped multi-value index operations:
+          # - employee.add_to_company_dept_index(company)
+          # - employee.remove_from_company_dept_index(company)
+          # - employee.update_in_company_dept_index(company, old_dept)
+          def generate_multi_mutation_methods_self(target_class_name, field, index_name)
             # Multi-value indexes are scoped to parent instances using UnsortedSets
 
             method_name = "add_to_#{target_class_name}_#{index_name}"
-            Familia.ld("[generate_relationship_index_methods] #{name} method #{method_name}")
+            Familia.ld("[generate_index_metho_self_s] #{name} method #{method_name}")
 
             define_method(method_name) do |target_instance|
               return unless target_instance
@@ -414,7 +435,7 @@ module Familia
             end
 
             method_name = "remove_from_#{target_class_name}_#{index_name}"
-            Familia.ld("[generate_relationship_index_methods] #{name} method #{method_name}")
+            Familia.ld("[generate_index_metho_self_s] #{name} method #{method_name}")
 
             define_method(method_name) do |target_instance|
               return unless target_instance
@@ -431,7 +452,7 @@ module Familia
             end
 
             method_name = "update_in_#{target_class_name}_#{index_name}"
-            Familia.ld("[generate_relationship_index_methods] #{name} method #{method_name}")
+            Familia.ld("[generate_index_metho_self_s] #{name} method #{method_name}")
 
             define_method(method_name) do |target_instance, old_field_value = nil|
               return unless target_instance
@@ -457,12 +478,16 @@ module Familia
             end
           end
 
-          # Generate instance methods for relationship unique indexing (unique_index with within:)
-          def generate_relationship_unique_index_methods(target_class_name, field, index_name)
+          # Generates methods ON THE INDEXED CLASS (Employee):
+          # Instance methods for parent-scoped unique index operations:
+          # - employee.add_to_company_badge_index(company)
+          # - employee.remove_from_company_badge_index(company)
+          # - employee.update_in_company_badge_index(company, old_badge)
+          def generate_unique_mutation_methods_self(target_class_name, field, index_name)
             # Unique indexes are scoped to parent instances using HashKeys
 
             method_name = "add_to_#{target_class_name}_#{index_name}"
-            Familia.ld("[generate_relationship_unique_index_methods] #{name} method #{method_name}")
+            Familia.ld("[generate_unique_mutation_methods_self] #{name} method #{method_name}")
 
             define_method(method_name) do |target_instance|
               return unless target_instance
@@ -478,7 +503,7 @@ module Familia
             end
 
             method_name = "remove_from_#{target_class_name}_#{index_name}"
-            Familia.ld("[generate_relationship_unique_index_methods] #{name} method #{method_name}")
+            Familia.ld("[generate_unique_mutation_methods_self] #{name} method #{method_name}")
 
             define_method(method_name) do |target_instance|
               return unless target_instance
@@ -494,7 +519,7 @@ module Familia
             end
 
             method_name = "update_in_#{target_class_name}_#{index_name}"
-            Familia.ld("[generate_relationship_unique_index_methods] #{name} method #{method_name}")
+            Familia.ld("[generate_unique_mutation_methods_self] #{name} method #{method_name}")
 
             define_method(method_name) do |target_instance, old_field_value = nil|
               return unless target_instance
