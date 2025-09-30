@@ -8,9 +8,12 @@ require_relative 'target_methods'
 module Familia
   module Features
     module Relationships
-      # Participation module for participates_in relationships using Valkey/Redis collections
-      # Provides multi-presence support where objects can exist in multiple collections
-      # Integrates both tracking and membership functionality into a single API
+      # Participation module for bidirectional business relationships using Valkey/Redis collections.
+      # Provides semantic, scored relationships with automatic reverse tracking.
+      #
+      # Unlike Indexing (which is for attribute lookups), Participation manages
+      # relationships where membership has meaning, scores have semantic value,
+      # and bidirectional tracking is essential
       #
       # === Architecture Overview ===
       # This module is organized into clear, separate concerns:
@@ -21,19 +24,59 @@ module Familia
       #
       # This separation makes it crystal clear what methods are added to which class.
       #
-      # === Visual Example ===
-      # When Domain calls: participates_in Customer, :domains
+      # @example Basic participation with temporal scoring
+      #   class Domain < Familia::Horreum
+      #     feature :relationships
+      #     field :created_at
+      #     participates_in Customer, :domains, score: :created_at
+      #   end
       #
-      # PARTICIPANT (Domain) gets:
-      # - domain.in_customer_domains?(customer)
-      # - domain.add_to_customer_domains(customer)
-      # - domain.remove_from_customer_domains(customer)
+      #   # TARGET (Customer) gets collection management:
+      #   customer.domains                    # → Familia::SortedSet (by created_at)
+      #   customer.add_domain(domain)         # → adds with created_at score
+      #   customer.remove_domain(domain)      # → removes + cleans reverse index
+      #   customer.add_domains([d1, d2, d3])  # → efficient bulk addition
       #
-      # TARGET (Customer) gets:
-      # - customer.domains
-      # - customer.add_domain(domain)
-      # - customer.remove_domain(domain)
-      # - customer.add_domains([...])
+      #   # PARTICIPANT (Domain) gets membership methods:
+      #   domain.in_customer_domains?(customer)              # → true/false
+      #   domain.add_to_customer_domains(customer)           # → self-addition
+      #   domain.remove_from_customer_domains(customer)      # → self-removal
+      #   domain.participations                              # → reverse index tracking
+      #
+      # @example Class-level participation (all instances auto-tracked)
+      #   class User < Familia::Horreum
+      #     feature :relationships
+      #     field :created_at
+      #     class_participates_in :all_users, score: :created_at
+      #   end
+      #
+      #   User.all_users              # → Familia::SortedSet (class-level)
+      #   user.in_class_all_users?    # → true if auto-added
+      #   user.add_to_class_all_users # → explicit addition
+      #
+      # @example Semantic scores with permission encoding
+      #   class Domain < Familia::Horreum
+      #     feature :relationships
+      #     field :created_at
+      #     field :permission_bits
+      #
+      #     participates_in Customer, :domains,
+      #       score: -> { permission_encode(created_at, permission_bits) }
+      #   end
+      #
+      #   customer.domains_with_permission(:read)  # → filtered by score
+      #
+      # Key Differences from Indexing:
+      # - Participation: Bidirectional relationships with semantic scores
+      # - Indexing: Unidirectional lookups without relationship semantics
+      # - Participation: Collection name in key (customer:123:domains)
+      # - Indexing: Field value in key (company:123:dept_index:engineering)
+      #
+      # When to Use Participation:
+      # - Modeling business relationships (Customer owns Domains)
+      # - Scores have meaning (priority, permissions, join_date)
+      # - Need bidirectional tracking ("what collections does this belong to?")
+      # - Relationship lifecycle matters (cascade cleanup, reverse tracking)
       #
       module Participation
         using Familia::Refinements::StylizeWords
