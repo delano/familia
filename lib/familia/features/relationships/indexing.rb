@@ -41,7 +41,7 @@ module Familia
 
             # Get snake_case version for method naming
             target_class_snake = if target_class.is_a?(Class)
-                                   target_class.name.snake_case
+                                   target_class.name.demodularize.snake_case
                                  else
                                    target_class.to_s
                                  end
@@ -330,7 +330,7 @@ module Familia
                 next unless parent_context
 
                 # Use snake_case for method naming
-                target_class_snake = config[:target_class].name.snake_case
+                target_class_snake = config[:target_class].name.demodularize.snake_case
                 send("update_in_#{target_class_snake}_#{index_name}", parent_context, old_field_value)
               end
             end
@@ -355,7 +355,7 @@ module Familia
                 next unless parent_context
 
                 # Use snake_case for method naming
-                target_class_snake = config[:target_class].name.snake_case
+                target_class_snake = config[:target_class].name.demodularize.snake_case
                 send("remove_from_#{target_class_snake}_#{index_name}", parent_context)
               end
             end
@@ -396,7 +396,7 @@ module Familia
                 # Target-scoped index (indexed_by) - cannot check without target instance
                 # This would require scanning all possible target instances
                 memberships << {
-                  target_class: config[:target_class_name].snake_case,
+                  target_class: config[:target_class_name].demodularize.snake_case,
                   index_name: index_name,
                   field: field,
                   field_value: field_value,

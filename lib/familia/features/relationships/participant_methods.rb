@@ -36,7 +36,7 @@ module Familia
           # @param type [Symbol] Collection type (:sorted_set, :set, :list)
           def self.build(participant_class, target_class_name, collection_name, type)
             # Convert to snake_case once for consistency
-            target_name = target_class_name.to_s.snake_case
+            target_name = target_class_name.to_s.demodularize.snake_case
 
             # Core participant methods
             build_membership_check(participant_class, target_name, collection_name, type)
