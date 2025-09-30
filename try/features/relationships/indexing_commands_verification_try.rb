@@ -92,8 +92,8 @@ end
 
 ## Instance-level indexing works with parent context
 @employee.add_to_test_indexed_company_dept_index(@company)
-found_employee = @company.find_by_department('sales')
-found_employee&.emp_id == @employee.emp_id
+sample = @company.sample_from_department('sales')
+sample.first&.emp_id == @employee.emp_id
 #=> true
 
 ## Instance-level index creates proper DataType

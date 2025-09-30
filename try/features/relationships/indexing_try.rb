@@ -64,8 +64,8 @@ end
 
 ## Context-scoped methods require context parameter
 @emp2.add_to_test_company_dept_index(@company)
-found_emp = @company.find_by_department(@emp2.department)
-[found_emp&.emp_id, @emp2.emp_id]
+sample = @company.sample_from_department(@emp2.department)
+[sample.first&.emp_id, @emp2.emp_id]
 #=> ["emp_002", "emp_002"]
 
 
@@ -192,8 +192,8 @@ config = @emp1.class.indexing_relationships.first
 @emp1.respond_to?(:remove_from_test_company_dept_index)
 #=> true
 
-## Instance finder methods are generated on context class
-@company.respond_to?(:find_by_department)
+## Instance sampling methods are generated on context class
+@company.respond_to?(:sample_from_department)
 #=> true
 
 ## Instance bulk finder methods are generated on context class
@@ -206,13 +206,13 @@ config = @emp1.class.indexing_relationships.first
 
 ## Employee can be added to company department index
 @emp1.add_to_test_company_dept_index(@company)
-found_emp = @company.find_by_department(@emp1.department)
-found_emp&.emp_id
+sample = @company.sample_from_department(@emp1.department)
+sample.first&.emp_id
 #=> "emp_001"
 
-## Context instance finder method works
-found_emp = @company.find_by_department('engineering')
-found_emp&.emp_id
+## Context instance sampling method works
+sample = @company.sample_from_department('engineering')
+sample.first&.emp_id
 #=> "emp_001"
 
 ## Multiple employees in same department (one-to-many)
@@ -221,6 +221,16 @@ found_emp&.emp_id
 employees = @company.find_all_by_department('engineering')
 employees.length
 #=> 2
+
+## Sample with count parameter returns array of specified size
+sample = @company.sample_from_department('engineering', 2)
+sample.length
+#=> 2
+
+## Sample without count parameter defaults to 1
+sample = @company.sample_from_department('engineering')
+sample.length
+#=> 1
 
 ## Update context-scoped index entry
 old_dept = @emp1.department
@@ -292,8 +302,8 @@ TestUser.email_lookup[@user1.email]
 ## Context-scoped indexes require context parameter for updates
 @emp2.add_to_test_company_dept_index(@company)
 @emp2.update_all_indexes({}, @company)
-found_emp = @company.find_by_department(@emp2.department)
-found_emp&.emp_id
+sample = @company.sample_from_department(@emp2.department)
+sample.first&.emp_id
 #=> "emp_002"
 
 # =============================================

@@ -223,18 +223,17 @@ module Familia
             # Store reference to the indexed class for the finder methods
             indexed_class = self
 
-            # Generate instance finder method (e.g., company.find_by_department)
+            # Generate instance sampling method (e.g., company.sample_from_department)
             actual_target_class.class_eval do
-              define_method("find_by_#{field}") do |field_value|
-              # Create DataType for this specific field value index using proper Horreum pattern
-              index_key = "#{index_name}:#{field_value}"
-              index_set = Familia::UnsortedSet.new(index_key, parent: self)
+              define_method("sample_from_#{field}") do |field_value, count = 1|
+                # Create DataType for this specific field value index using proper Horreum pattern
+                index_key = "#{index_name}:#{field_value}"
+                index_set = Familia::UnsortedSet.new(index_key, parent: self)
 
-                # Get a random member from the set efficiently (O(1) via SRANDMEMBER)
-              member = index_set.random
-              return nil unless member
-
-              indexed_class.new(member)
+                # Get random members efficiently (O(1) via SRANDMEMBER with count)
+                # Returns array even for count=1 for consistent API
+                members = index_set.dbclient.srandmember(index_set.dbkey, count) || []
+                members.map { |id| indexed_class.new(index_set.deserialize_value(id)) }
               end
 
               # Generate bulk finder method (e.g., company.find_all_by_department)
