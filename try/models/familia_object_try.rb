@@ -44,7 +44,8 @@ obj = Customer.find_by_id :delano
 
 ## Customer.destroy
 @cust.destroy!
-#=> true
+#=:> MultiResult
+#==> result.successful?
 
 ## Customer.instances
 Customer.values.size

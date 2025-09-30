@@ -20,21 +20,22 @@ Familia.transaction_mode
 #=> :strict
 
 ## Strict mode raises error with CachedConnectionHandler
-begin
-  # Force CachedConnectionHandler
-  StrictModeTestCustomer.instance_variable_set(:@dbclient, Familia.create_dbclient)
 
-  customer = StrictModeTestCustomer.new(custid: 'strict_test')
-  customer.transaction do |conn|
-    conn.hset(customer.dbkey, 'name', 'Should Not Work')
-  end
-  false  # Should not reach here
-rescue Familia::OperationModeError => e
-  e.message.include?('Cannot start transaction with') && e.message.include?('CachedConnectionHandler')
-ensure
-  StrictModeTestCustomer.remove_instance_variable(:@dbclient)
+# Force CachedConnectionHandler
+StrictModeTestCustomer.instance_variable_set(:@dbclient, Familia.create_dbclient)
+
+customer = StrictModeTestCustomer.new(custid: 'strict_test')
+customer.transaction do |conn|
+  conn.hset(customer.dbkey, 'name', 'Should Not Work')
 end
-#=> true
+
+#=:> Familia::OperationModeError
+#=~> /Cannot start transaction with/
+#=~> /CachedConnectionHandler/
+
+## Clear the dbclient instance var
+StrictModeTestCustomer.remove_instance_variable(:@dbclient)
+#=*>
 
 ## Strict mode raises error with FiberConnectionHandler
 begin

@@ -269,9 +269,16 @@ module Familia
         # Cache handlers at class level to avoid creating new instances per model instance
         @fiber_connection_handler ||= Familia::Connection::FiberConnectionHandler.new
         @provider_connection_handler ||= Familia::Connection::ProviderConnectionHandler.new
-        @cached_connection_handler ||= Familia::Connection::CachedConnectionHandler.new(self)
-        @create_connection_handler ||= Familia::Connection::CreateConnectionHandler.new(self)
-        
+
+        # Determine the appropriate class context
+        # When called from instance: self is instance, self.class is the model class
+        # When called from class: self is the model class
+        klass = self.is_a?(Class) ? self : self.class
+
+        # Always check class first for @dbclient since instance-level connections were removed
+        @cached_connection_handler ||= Familia::Connection::CachedConnectionHandler.new(klass)
+        @create_connection_handler ||= Familia::Connection::CreateConnectionHandler.new(klass)
+
         Familia::Connection::ResponsibilityChain.new
           .add_handler(Familia::Connection::FiberTransactionHandler.instance)
           .add_handler(@fiber_connection_handler)

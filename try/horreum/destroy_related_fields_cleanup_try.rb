@@ -249,12 +249,12 @@ end
 
 model.save
 
-destroy_result = model.destroy! # TODO: Should return a MultiResult, not Hash.
+destroy_result = model.destroy!
 
 # Should result in success and also complete in a reasonable amount of
 # time (under 100ms for this test). I acknowledge this is flaky.
-[destroy_result.class, destroy_result.size, destroy_result.first.class, destroy_result.first.size]
-#=> [Hash, 40, Array, 2]
+[destroy_result.class, destroy_result.successful?, destroy_result.results.size]
+#=> [MultiResult, true, 41]
 #=%> 100
 
 ## Verify transaction_fallback_integration_try.rb bug is fixed
