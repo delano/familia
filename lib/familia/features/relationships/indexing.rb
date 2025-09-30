@@ -1,5 +1,6 @@
 # lib/familia/features/relationships/indexing.rb
 
+require_relative 'indexing_relationship'
 require_relative 'indexing/multi_index_generators'
 require_relative 'indexing/unique_index_generators'
 
@@ -92,23 +93,24 @@ module Familia
           #
           def multi_index(field, index_name, within:, finder: true)
             target_class = within
-            target = resolve_target_class(target_class)
+            resolved_class = Familia.resolve_class(target_class)
+            target_class_name = resolved_class.name.demodularize
 
             # Store metadata for this indexing relationship
-            indexing_relationships << {
+            indexing_relationships << IndexingRelationship.new(
               field: field,
               target_class: target_class,
-              target_class_name: target[:name],
+              target_class_name: target_class_name,
               index_name: index_name,
               finder: finder,
-              cardinality: :multi,
-            }
+              cardinality: :multi
+            )
 
             # Generate query methods on the parent class
             MultiIndexGenerators.generate_query_methods_destination(target_class, field, index_name, self) if finder && target_class.is_a?(Class)
 
             # Generate mutation methods on the indexed class
-            MultiIndexGenerators.generate_mutation_methods_self(target[:snake], field, index_name, self)
+            MultiIndexGenerators.generate_mutation_methods_self(resolved_class, field, index_name, self)
           end
 
           # Define a unique index lookup (1:1 mapping)
@@ -129,34 +131,35 @@ module Familia
             # Handle instance-scoped unique index (within: parameter provided)
             if within
               target_class = within
-              target = resolve_target_class(target_class)
+              resolved_class = Familia.resolve_class(target_class)
+              target_class_name = resolved_class.name.demodularize
 
               # Store metadata for instance-scoped unique index
-              indexing_relationships << {
+              indexing_relationships << IndexingRelationship.new(
                 field: field,
                 target_class: target_class,
-                target_class_name: target[:name],
+                target_class_name: target_class_name,
                 index_name: index_name,
                 finder: finder,
-                cardinality: :unique,
-              }
+                cardinality: :unique
+              )
 
               # Generate query methods on the parent class
               UniqueIndexGenerators.generate_query_methods_destination(target_class, field, index_name, self) if finder && target_class.is_a?(Class)
 
               # Generate mutation methods on the indexed class
-              UniqueIndexGenerators.generate_mutation_methods_self(target[:snake], field, index_name, self)
+              UniqueIndexGenerators.generate_mutation_methods_self(resolved_class, field, index_name, self)
             else
               # Class-level unique index (no within: parameter)
               # Store metadata for this indexing relationship
-              indexing_relationships << {
+              indexing_relationships << IndexingRelationship.new(
                 field: field,
                 target_class: self,
                 target_class_name: name,
                 index_name: index_name,
                 finder: finder,
-                cardinality: :unique,
-              }
+                cardinality: :unique
+              )
 
               # Ensure proper DataType field is declared for the index
               ensure_index_field(self, index_name, :class_hashkey)
@@ -180,32 +183,7 @@ module Familia
             target_class.send(field_type, index_name)
           end
 
-          private
-
-          # Resolve target class to name and snake_case versions
-          # Eliminates duplicate resolution logic in multi_index and unique_index
-          #
-          # @param target [Class, Symbol, String] Target class or identifier
-          # @return [Hash] { name: "Company", snake: "company" }
-          def resolve_target_class(target)
-            if target.is_a?(Class)
-              {
-                name: target.name,
-                snake: target.name.demodularize.snake_case
-              }
-            else
-              {
-                name: target.to_s,
-                snake: target.to_s
-              }
-            end
           end
-
-          # Helper method to pascalize a word without ActiveSupport dependency
-          def camelize_word(word)
-            word.to_s.split('_').map(&:capitalize).join
-          end
-        end
 
         # Instance methods for indexed objects
         module ModelInstanceMethods
@@ -216,9 +194,9 @@ module Familia
             return unless self.class.respond_to?(:indexing_relationships)
 
             self.class.indexing_relationships.each do |config|
-              field = config[:field]
-              index_name = config[:index_name]
-              target_class = config[:target_class]
+              field = config.field
+              index_name = config.index_name
+              target_class = config.target_class
               old_field_value = old_values[field]
 
               # Determine which update method to call
@@ -229,9 +207,9 @@ module Familia
                 # Relationship index (unique_index or multi_index with within:) - requires parent context
                 next unless parent_context
 
-                # Use snake_case for method naming
-                target_class_snake = config[:target_class].name.demodularize.snake_case
-                send("update_in_#{target_class_snake}_#{index_name}", parent_context, old_field_value)
+                # Use config_name for method naming
+                target_class_config = Familia.resolve_class(config.target_class).config_name
+                send("update_in_#{target_class_config}_#{index_name}", parent_context, old_field_value)
               end
             end
           end
@@ -243,8 +221,8 @@ module Familia
             return unless self.class.respond_to?(:indexing_relationships)
 
             self.class.indexing_relationships.each do |config|
-              index_name = config[:index_name]
-              target_class = config[:target_class]
+              index_name = config.index_name
+              target_class = config.target_class
 
               # Determine which remove method to call
               if target_class == self.class
@@ -254,9 +232,9 @@ module Familia
                 # Relationship index (unique_index or multi_index with within:) - requires parent context
                 next unless parent_context
 
-                # Use snake_case for method naming
-                target_class_snake = config[:target_class].name.demodularize.snake_case
-                send("remove_from_#{target_class_snake}_#{index_name}", parent_context)
+                # Use config_name for method naming
+                target_class_config = Familia.resolve_class(config.target_class).config_name
+                send("remove_from_#{target_class_config}_#{index_name}", parent_context)
               end
             end
           end
@@ -272,10 +250,10 @@ module Familia
             memberships = []
 
             self.class.indexing_relationships.each do |config|
-              field = config[:field]
-              index_name = config[:index_name]
-              target_class = config[:target_class]
-              cardinality = config[:cardinality]
+              field = config.field
+              index_name = config.index_name
+              target_class = config.target_class
+              cardinality = config.cardinality
               field_value = send(field)
 
               next unless field_value
@@ -298,7 +276,7 @@ module Familia
                 # Instance-scoped index (unique_index or multi_index with within:) - cannot check without target instance
                 # This would require scanning all possible target instances
                 memberships << {
-                  target_class: config[:target_class_name].demodularize.snake_case,
+                  target_class: config.target_class_name.demodularize.snake_case,
                   index_name: index_name,
                   field: field,
                   field_value: field_value,
@@ -319,14 +297,14 @@ module Familia
           def indexed_in?(index_name)
             return false unless self.class.respond_to?(:indexing_relationships)
 
-            config = self.class.indexing_relationships.find { |rel| rel[:index_name] == index_name }
+            config = self.class.indexing_relationships.find { |rel| rel.index_name == index_name }
             return false unless config
 
-            field = config[:field]
+            field = config.field
             field_value = send(field)
             return false unless field_value
 
-            target_class = config[:target_class]
+            target_class = config.target_class
 
             if target_class == self.class
               # Class-level index (class_indexed_by) - check hash key using DataType

@@ -262,18 +262,18 @@ participation_meta.target_class_name
 #=> 'ApiTestUser'
 
 ## unique_index stores correct target_class
-indexing_meta = ApiTestUser.indexing_relationships.find { |r| r[:index_name] == :email_lookup }
-indexing_meta[:target_class]
+indexing_meta = ApiTestUser.indexing_relationships.find { |r| r.index_name == :email_lookup }
+indexing_meta.target_class
 #=> ApiTestUser
 
 ## unique_index stores correct target_class_name
-indexing_meta = ApiTestUser.indexing_relationships.find { |r| r[:index_name] == :email_lookup }
-indexing_meta[:target_class_name]
+indexing_meta = ApiTestUser.indexing_relationships.find { |r| r.index_name == :email_lookup }
+indexing_meta.target_class_name
 #=> 'ApiTestUser'
 
 ## multi_index with within: stores correct metadata
-membership_meta = ApiTestMembership.indexing_relationships.find { |r| r[:index_name] == :user_memberships }
-membership_meta[:target_class]
+membership_meta = ApiTestMembership.indexing_relationships.find { |r| r.index_name == :user_memberships }
+membership_meta.target_class
 #=> ApiTestUser
 
 # =============================================

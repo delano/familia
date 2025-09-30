@@ -79,12 +79,12 @@ sample = @company.sample_from_department(@emp2.department)
 
 ## First indexing relationship has correct configuration
 config = @user1.class.indexing_relationships.first
-[config[:field], config[:index_name], config[:target_class] == TestUser, config[:finder]]
+[config.field, config.index_name, config.target_class == TestUser, config.finder]
 #=> [:email, :email_lookup, true, true]
 
 ## Second indexing relationship has finder disabled
 config = @user1.class.indexing_relationships.last
-[config[:field], config[:index_name], config[:finder]]
+[config.field, config.index_name, config.finder]
 #=> [:username, :username_lookup, false]
 
 ## Class-level finder methods are generated for email
@@ -177,7 +177,7 @@ TestUser.respond_to?(:find_by_username)
 
 ## Context-scoped relationship has correct configuration
 config = @emp1.class.indexing_relationships.first
-[config[:field], config[:index_name], config[:target_class], config[:target_class_name]]
+[config.field, config.index_name, config.target_class, config.target_class_name]
 #=> [:department, :dept_index, TestCompany, "TestCompany"]
 
 ## Context-scoped methods are generated with collision-free naming

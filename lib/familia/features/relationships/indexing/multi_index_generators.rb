@@ -31,8 +31,8 @@ module Familia
           # - company.dept_index_for(dept_value) - DataType accessor
           # - company.rebuild_dept_index - rebuild index
           def generate_query_methods_destination(target_class, field, index_name, indexed_class)
-            # Resolve target class if it's a symbol/string
-            actual_target_class = target_class.is_a?(Class) ? target_class : Object.const_get(camelize_word(target_class))
+            # Resolve target class using Familia pattern
+            actual_target_class = Familia.resolve_class(target_class)
 
             # Generate instance sampling method (e.g., company.sample_from_department)
             actual_target_class.class_eval do
@@ -78,9 +78,10 @@ module Familia
           # - employee.add_to_company_dept_index(company)
           # - employee.remove_from_company_dept_index(company)
           # - employee.update_in_company_dept_index(company, old_dept)
-          def generate_mutation_methods_self(target_class_snake, field, index_name, indexed_class)
+          def generate_mutation_methods_self(target_class, field, index_name, indexed_class)
+            target_class_config = target_class.config_name
             indexed_class.class_eval do
-              method_name = "add_to_#{target_class_snake}_#{index_name}"
+              method_name = "add_to_#{target_class_config}_#{index_name}"
               Familia.ld("[MultiIndexGenerators] #{name} method #{method_name}")
 
               define_method(method_name) do |target_instance|
@@ -97,7 +98,7 @@ module Familia
                 index_set.add(identifier)
               end
 
-              method_name = "remove_from_#{target_class_snake}_#{index_name}"
+              method_name = "remove_from_#{target_class_config}_#{index_name}"
               Familia.ld("[MultiIndexGenerators] #{name} method #{method_name}")
 
               define_method(method_name) do |target_instance|
@@ -114,7 +115,7 @@ module Familia
                 index_set.remove(identifier)
               end
 
-              method_name = "update_in_#{target_class_snake}_#{index_name}"
+              method_name = "update_in_#{target_class_config}_#{index_name}"
               Familia.ld("[MultiIndexGenerators] #{name} method #{method_name}")
 
               define_method(method_name) do |target_instance, old_field_value = nil|
@@ -142,13 +143,7 @@ module Familia
             end
           end
 
-          private
-
-          # Helper method to pascalize a word without ActiveSupport dependency
-          def camelize_word(word)
-            word.to_s.split('_').map(&:capitalize).join
           end
-        end
       end
     end
   end
