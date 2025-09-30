@@ -178,7 +178,7 @@ module Familia
 
       # Singleton pattern for stateless handler
       @instance = new.freeze
-      
+
       def self.instance
         @instance
       end
@@ -191,7 +191,7 @@ module Familia
       end
     end
 
-    # Checks for a dbclient instance variable with a cached client instance
+    # Checks for a dbclient class instance variable with a cached client instance
     #
     # This works on any module, class, or instance that implements has a
     # dbclient method. From a Horreum model instance, if you call

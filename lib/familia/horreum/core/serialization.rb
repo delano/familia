@@ -265,23 +265,23 @@ module Familia
       #
       def destroy!
         Familia.trace :DESTROY, dbkey, uri
-        delete!
-        delete_related_fields!
-      end
 
-      def delete_related_fields!
-        return unless self.class.relations?
+        # Execute all deletion operations within a transaction
+        transaction do |conn|
+          # Delete the main object key
+          conn.del(dbkey)
 
-        Familia.trace :DELETE_RELATED_FIELDS!, nil,
-                      "#{self.class} has relations: #{self.class.related_fields.keys}"
+          # Delete all related fields if present
+          if self.class.relations?
+            Familia.trace :DELETE_RELATED_FIELDS!, nil,
+                          "#{self.class} has relations: #{self.class.related_fields.keys}"
 
-        self.class.related_fields.each do |name, definition|
-          # Calling the instance method instantiates the DataType class but does
-          # not read from the database. This is important; otherwise deleting
-          # would require 2 commands.
-          obj = send(name)
-          Familia.trace :DELETE_RELATED_FIELD, name, "Deleting related field #{name} (#{obj.dbkey})"
-          obj.delete!
+            self.class.related_fields.each do |name, _definition|
+              obj = send(name)
+              Familia.trace :DELETE_RELATED_FIELD, name, "Deleting related field #{name} (#{obj.dbkey})"
+              conn.del(obj.dbkey)
+            end
+          end
         end
       end
 
