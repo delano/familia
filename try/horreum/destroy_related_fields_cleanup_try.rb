@@ -291,3 +291,40 @@ Object.send(:remove_const, :ManyFieldsModel) if Object.const_defined?(:ManyField
 
 destroy_result && keys_exist_before && !keys_exist_after
 #=> true
+
+## Test destroy! with init hook that depends on identifier
+# This verifies that the temp instance initialization fix works correctly
+class TestModelWithInit < Familia::Horreum
+  identifier_field :user_id
+  field :user_id
+  field :region
+  list :activities
+
+  def init(*args, **kwargs)
+    # Set region based on user_id (simulates real-world logic)
+    self.region = user_id.split('-').first if user_id
+  end
+end
+
+# Create object - init should set region based on user_id
+init_obj = TestModelWithInit.new(user_id: "us-west-123")
+init_obj.save
+init_obj.activities << "login"
+init_obj.activities << "purchase"
+
+# Verify init worked and region is set
+region_set_correctly = init_obj.region == "us"
+
+# Verify related field key includes region (would be nil without fix)
+activities_key = init_obj.activities.dbkey
+
+# Destroy using class method - temp instance init should execute with identifier
+TestModelWithInit.destroy!("us-west-123")
+
+# Verify all keys are cleaned up (including activities with correct key)
+activities_cleaned = TestModelWithInit.dbclient.exists(activities_key).zero?
+
+Object.send(:remove_const, :TestModelWithInit) if Object.const_defined?(:TestModelWithInit)
+
+region_set_correctly && activities_cleaned
+#=> true

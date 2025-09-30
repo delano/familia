@@ -208,11 +208,10 @@ module Familia
           if relations?
             Familia.trace :DESTROY_RELATIONS!, nil, "#{self} has relations: #{related_fields.keys}" if Familia.debug?
 
-            # Create a temporary instance to access related fields
-            temp_instance = new
-            # Set the identifier field so the temporary instance can generate proper keys
+            # Create a temporary instance to access related fields.
+            # Pass identifier in constructor so init() sees it and can set dependent fields.
             identifier_field_name = self.identifier_field
-            temp_instance.send("#{identifier_field_name}=", identifier.to_s) if identifier_field_name
+            temp_instance = identifier_field_name ? new(identifier_field_name => identifier.to_s) : new
 
             related_fields.each do |name, _definition|
               obj = temp_instance.send(name)

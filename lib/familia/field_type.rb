@@ -116,6 +116,26 @@ module Familia
       handle_method_conflict(klass, :"#{method_name}=") do
         klass.define_method :"#{method_name}=" do |value|
           instance_variable_set(:"@#{field_name}", value)
+
+          # If this field is the identifier and object_identifier feature is loaded,
+          # update objid_lookup mapping when identifier is set after objid generation
+          if respond_to?(:objid) &&
+             self.class.respond_to?(:identifier_field) &&
+             self.class.identifier_field == field_name &&
+             self.class.respond_to?(:objid_lookup)
+            current_objid = instance_variable_get(:@objid)
+            self.class.objid_lookup[current_objid] = value if current_objid && value
+          end
+
+          # If this field is the identifier and external_identifier feature is loaded,
+          # update extid_lookup mapping when identifier is set after extid generation
+          if respond_to?(:extid) &&
+             self.class.respond_to?(:identifier_field) &&
+             self.class.identifier_field == field_name &&
+             self.class.respond_to?(:extid_lookup)
+            current_extid = instance_variable_get(:@extid)
+            self.class.extid_lookup[current_extid] = value if current_extid && value
+          end
         end
       end
     end
