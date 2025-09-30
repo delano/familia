@@ -69,7 +69,8 @@ Familia.trace :LOAD, nil, @customer.uri if Familia.debug?
 
 ## Horreum objects can be destroyed
 @customer.destroy!
-#=> true
+#=:> MultiResult
+#==> result.successful?
 
 ## All horrerum objects have a key field
 @customer.identifier
