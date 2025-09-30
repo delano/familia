@@ -7,7 +7,7 @@ module Familia
   # instance-level functionality for Database operations and object management.
   #
   class Horreum
-    # DatabaseCommands - Instance methods for horreum models that call Database commands
+    # DatabaseCommands - Instance-level methods for horreum models that call Database commands
     #
     # NOTE: There is no hgetall for Horreum. This is because Horreum
     # is a single hash in Database that we aren't meant to have be working

@@ -33,7 +33,7 @@ module Familia
       attr_reader :valid_command_return_values
     end
 
-    # Serialization: Object persistence and retrieval from the DB
+    # Serialization - Instance-level methods for object persistence and retrieval
     # Handles conversion between Ruby objects and Valkey hash storage
     #
     module Serialization

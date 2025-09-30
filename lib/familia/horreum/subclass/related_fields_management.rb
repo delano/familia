@@ -59,14 +59,19 @@ module Familia
       alias eql? ==
     end
 
-    # RelatedFieldsManagement: Manages DataType fields and relations
+    # RelatedFieldsManagement - Class-level methods for defining DataType relationships
     #
-    # This module uses metaprogramming to dynamically create methods
-    # for managing different types of Database objects (e.g., sets, lists, hashes).
+    # This module uses metaprogramming to dynamically create field definition methods
+    # that generate both class-level and instance-level accessor methods for DataTypes
+    # (e.g., list, set, zset, hashkey, string).
+    #
+    # When included in a class via ManagementMethods, it provides class methods like:
+    # * Customer.list :recent_orders    # defines class method for class-level list
+    # * customer.recent_orders          # creates instance method returning list instance
     #
     # Key metaprogramming features:
-    # * Dynamically defines methods for each Database type (e.g., set, list, hashkey)
-    # * Creates both instance-level and class-level relation methods
+    # * Dynamically defines DSL methods for each Database type (e.g., set, list, hashkey)
+    # * Each DSL method creates corresponding instance/class accessor methods
     # * Provides query methods for checking relation types
     #
     # Usage:

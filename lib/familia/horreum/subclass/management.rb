@@ -4,11 +4,11 @@ require_relative 'related_fields_management'
 
 module Familia
   class Horreum
-    # ManagementMethods: Provides class-level functionality for Horreum
-    # records.
+    # ManagementMethods - Class-level methods for Horreum model management
     #
     # This module is extended into classes that include Familia::Horreum,
-    # providing methods for Database operations and object management.
+    # providing class methods for database operations and object management
+    # (e.g., Customer.create, Customer.find_by_id)
     #
     # # Key features:
     # * Includes RelatedFieldsManagement for DataType field handling

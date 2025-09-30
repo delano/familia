@@ -2,8 +2,10 @@
 
 module Familia
   class Horreum
-    # Connection: Valkey connection management for Horreum instances
-    # Provides both instance and class-level connection methods
+    # Connection - Mixed instance and class-level methods for Valkey connection management
+    # Provides connection handling, transactions, and URI normalization for both
+    # class-level operations (e.g., Customer.dbclient) and instance-level operations
+    # (e.g., customer.dbclient)
     module Connection
       attr_reader :uri
 

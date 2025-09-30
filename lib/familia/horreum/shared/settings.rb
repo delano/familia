@@ -7,7 +7,8 @@ module Familia
   # instance-level functionality for Database operations and object management.
   #
   class Horreum
-    # Settings - Module containing settings for Familia::Horreum (InstanceMethods)
+    # Settings - Instance-level configuration methods for Horreum models
+    # Provides per-instance settings like logical_database, dump_method, load_method, suffix
     #
     module Settings
       attr_writer :dump_method, :load_method, :suffix

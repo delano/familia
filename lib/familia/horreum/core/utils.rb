@@ -7,7 +7,8 @@ module Familia
   # instance-level functionality for Database operations and object management.
   #
   class Horreum
-    # Utils - Module containing utility methods for Familia::Horreum (InstanceMethods)
+    # Utils - Instance-level utility methods for Familia::Horreum
+    # Provides identifier handling, dbkey generation, and object inspection
     #
     module Utils
       # def uri
