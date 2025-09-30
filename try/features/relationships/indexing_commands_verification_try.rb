@@ -115,7 +115,7 @@ remaining_employees.map(&:emp_id)
 #=> ["test_emp_999"]
 
 ## Index update methods work correctly
-@employee2 = TestIndexedEmployee.new(emp_id: 'test_emp_999', email: 'emp2@example.com', department: 'sales')
+@employee2.department = 'sales'
 @employee2.add_to_test_indexed_company_dept_index(@company)
 @employee2.department = 'marketing'
 @employee2.update_in_test_indexed_company_dept_index(@company, 'sales')

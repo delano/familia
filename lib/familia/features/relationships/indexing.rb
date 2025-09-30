@@ -230,11 +230,11 @@ module Familia
               index_key = "#{index_name}:#{field_value}"
               index_set = Familia::UnsortedSet.new(index_key, parent: self)
 
-                # Get first member from set
-              members = index_set.members.first(1)
-                return nil if members.empty?
+                # Get a random member from the set efficiently (O(1) via SRANDMEMBER)
+              member = index_set.random
+              return nil unless member
 
-                indexed_class.new(members.first)
+              indexed_class.new(member)
               end
 
               # Generate bulk finder method (e.g., company.find_all_by_department)
