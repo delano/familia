@@ -1,7 +1,7 @@
 # try/features/relationships/indexing_try.rb
 #
 # Comprehensive tests for Familia indexing relationships functionality
-# Tests both indexed_by (parent-context) and class_indexed_by (class-level) indexing
+# Tests both multi_index (parent-context) and unique_index (class-level) indexing
 #
 
 require_relative '../../helpers/test_helpers'
@@ -18,9 +18,9 @@ class ::TestUser < Familia::Horreum
   field :department
   field :role
 
-  # Class-level indexing
-  class_indexed_by :email, :email_lookup
-  class_indexed_by :username, :username_lookup, finder: false
+  # Class-level unique indexing
+  unique_index :email, :email_lookup
+  unique_index :username, :username_lookup, finder: false
 end
 
 class ::TestCompany < Familia::Horreum
@@ -31,7 +31,7 @@ class ::TestCompany < Familia::Horreum
   field :company_id
   field :name
 
-  class_indexed_by :email, :email_index
+  unique_index :email, :email_index
 
   unsorted_set :employees
 end
@@ -46,9 +46,9 @@ class ::TestEmployee < Familia::Horreum
   field :department
   field :manager_id
 
-  # Context-based indexing
-  indexed_by :department, :dept_index, target: TestCompany
-  indexed_by :email, :email_index, target: TestCompany, finder: false
+  # Instance-scoped multi-value indexing
+  multi_index :department, :dept_index, within: TestCompany
+  multi_index :email, :email_index, within: TestCompany, finder: false
 end
 
 # Setup
@@ -70,7 +70,7 @@ found_emp = @company.find_by_department(@emp2.department)
 
 
 # =============================================
-# 1. Class-Level Indexing (class_indexed_by) Tests
+# 1. Class-Level Indexing (unique_index) Tests
 # =============================================
 
 ## Class indexing relationships are properly registered
@@ -168,7 +168,7 @@ TestUser.respond_to?(:find_by_username)
 #=> false
 
 # =============================================
-# 2. Context-Scoped Indexing (indexed_by) Tests
+# 2. Context-Scoped Indexing (multi_index) Tests
 # =============================================
 
 ## Context-scoped indexing relationships are registered
@@ -275,7 +275,7 @@ research_emps.length
 memberships = @user1.indexing_memberships
 membership = memberships.find { |m| m[:index_name] == :email_lookup }
 [membership[:type], membership[:field], membership[:field_value]]
-#=> ["class_indexed_by", :email, "alice@example.com"]
+#=> ["unique_index", :email, "alice@example.com"]
 
 ## Update all indexes with old values (class-level only)
 old_values = { email: 'alice@example.com' }
