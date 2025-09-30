@@ -114,5 +114,5 @@ Familia.debug = false
   @session1, @session2, @session3,
   @domain1, @domain2,
   @partial, @complex
-].map(&:destroy!).map(&:successful?)
+].map(&:destroy!).map(&:areyouhappynow?)
 #==> result.all?(true)

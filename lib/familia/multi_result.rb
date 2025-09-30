@@ -75,4 +75,5 @@ class MultiResult
     @success
   end
   alias success? successful?
+  alias areyouhappynow? successful?
 end
