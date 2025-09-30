@@ -79,6 +79,7 @@ module Familia
         module ModelClassMethods
           extend MultiIndexGenerators
           extend UniqueIndexGenerators
+
           # Define an indexed_by relationship for fast lookups
           #
           # Define a multi-value index (1:many mapping)
@@ -103,11 +104,13 @@ module Familia
               target_class_name: target_class_name,
               index_name: index_name,
               finder: finder,
-              cardinality: :multi
+              cardinality: :multi,
             )
 
             # Generate query methods on the parent class
-            MultiIndexGenerators.generate_query_methods_destination(target_class, field, index_name, self) if finder && target_class.is_a?(Class)
+            if finder && target_class.is_a?(Class)
+              MultiIndexGenerators.generate_query_methods_destination(target_class, field, index_name, self)
+            end
 
             # Generate mutation methods on the indexed class
             MultiIndexGenerators.generate_mutation_methods_self(resolved_class, field, index_name, self)
@@ -128,43 +131,30 @@ module Familia
           #   unique_index :badge_number, :badge_index, within: Company
           #
           def unique_index(field, index_name, within: nil, finder: true)
-            # Handle instance-scoped unique index (within: parameter provided)
-            if within
-              target_class = within
-              resolved_class = Familia.resolve_class(target_class)
-              target_class_name = resolved_class.name.demodularize
-
-              # Store metadata for instance-scoped unique index
-              indexing_relationships << IndexingRelationship.new(
-                field: field,
-                target_class: target_class,
-                target_class_name: target_class_name,
-                index_name: index_name,
-                finder: finder,
-                cardinality: :unique
-              )
-
-              # Generate query methods on the parent class
-              UniqueIndexGenerators.generate_query_methods_destination(target_class, field, index_name, self) if finder && target_class.is_a?(Class)
-
-              # Generate mutation methods on the indexed class
-              UniqueIndexGenerators.generate_mutation_methods_self(resolved_class, field, index_name, self)
+            target_class, target_class_name, scope_type = if within
+              k = Familia.resolve_class(within)
+              [k, k.name.demodularize, :instance]
             else
-              # Class-level unique index (no within: parameter)
-              # Store metadata for this indexing relationship
-              indexing_relationships << IndexingRelationship.new(
-                field: field,
-                target_class: self,
-                target_class_name: name,
-                index_name: index_name,
-                finder: finder,
-                cardinality: :unique
-              )
+              [self, name, :class]
+            end
 
-              # Ensure proper DataType field is declared for the index
+            indexing_relationships << IndexingRelationship.new(
+              field:             field,
+              target_class:      target_class,
+              target_class_name: target_class_name,
+              index_name:        index_name,
+              finder:            finder,
+              cardinality:       :unique,
+            )
+
+            case scope_type
+            when :instance
+              if finder && target_class.is_a?(Class)
+                UniqueIndexGenerators.generate_query_methods_destination(target_class, field, index_name, self)
+              end
+              UniqueIndexGenerators.generate_mutation_methods_self(target_class, field, index_name, self)
+            when :class
               ensure_index_field(self, index_name, :class_hashkey)
-
-              # Generate class-level query and mutation methods
               UniqueIndexGenerators.generate_query_methods_class(field, index_name, self) if finder
               UniqueIndexGenerators.generate_mutation_methods_class(field, index_name, self)
             end
@@ -182,8 +172,7 @@ module Familia
 
             target_class.send(field_type, index_name)
           end
-
-          end
+        end
 
         # Instance methods for indexed objects
         module ModelInstanceMethods
