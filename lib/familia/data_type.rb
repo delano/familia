@@ -193,7 +193,7 @@ module Familia
     end
 
     def parent_class?
-      parent.is_a?(Class) && parent <= Horreum::ParentDefinition
+      parent.is_a?(Class) && parent.ancestors.include?(Familia::Horreum)
     end
 
     def parent?

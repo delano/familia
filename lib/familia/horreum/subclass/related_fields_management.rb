@@ -57,7 +57,7 @@ module Familia
           model_klass == other && identifier.nil?
         else
           # Compare with instance: check class and identifier match
-          other.is_a?(model_klass) && identifier == other.identifier
+          other.is_a?(model_klass) && other.respond_to?(:identifier) && identifier == other.identifier
         end
       end
       alias eql? ==
