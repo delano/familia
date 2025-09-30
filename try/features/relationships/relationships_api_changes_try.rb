@@ -23,7 +23,7 @@ class ::ApiTestUser < Familia::Horreum
 
   # New API: unique_index for class-level indexing
   unique_index :email, :email_lookup
-  unique_index :username, :username_lookup, finder: false
+  unique_index :username, :username_lookup, query: false
 end
 
 class ::ApiTestProject < Familia::Horreum
@@ -52,6 +52,7 @@ class ::ApiTestMembership < Familia::Horreum
   # Participation with parent class
   participates_in ApiTestProject, :memberships, score: :created_at
 end
+
 
 # Setup test objects
 @user = ApiTestUser.new(
@@ -143,15 +144,15 @@ ApiTestUser.active_users.member?(@inactive_user.identifier)
 # 2. New API: unique_index Method Tests
 # =============================================
 
-## unique_index with finder: true generates finder methods
+## unique_index with query: true generates query methods
 ApiTestUser.respond_to?(:find_by_email)
 #=> true
 
-## unique_index with finder: true generates bulk finder methods
+## unique_index with query: true generates bulk query methods
 ApiTestUser.respond_to?(:find_all_by_email)
 #=> true
 
-## unique_index with finder: false does not generate finder methods
+## unique_index with query: false does not generate query methods
 ApiTestUser.respond_to?(:find_by_username)
 #=> false
 

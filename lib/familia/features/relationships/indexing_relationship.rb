@@ -19,7 +19,7 @@ module Familia
         :target_class,       # Class/Symbol - parent class for instance-scoped indexes (within:)
         :target_class_name,  # String - demodularized class name for method generation
         :cardinality,        # Symbol - :unique (1:1) or :multi (1:many)
-        :finder              # Boolean - whether to generate finder methods
+        :query               # Boolean - whether to generate query  methods
       ) do
         #
         # Get the normalized config name for the target class

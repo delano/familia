@@ -20,7 +20,7 @@ class ::TestUser < Familia::Horreum
 
   # Class-level unique indexing
   unique_index :email, :email_lookup
-  unique_index :username, :username_lookup, finder: false
+  unique_index :username, :username_lookup, query: false
 end
 
 class ::TestCompany < Familia::Horreum
@@ -48,7 +48,7 @@ class ::TestEmployee < Familia::Horreum
 
   # Instance-scoped multi-value indexing
   multi_index :department, :dept_index, within: TestCompany
-  multi_index :email, :email_index, within: TestCompany, finder: false
+  multi_index :email, :email_index, within: TestCompany, query: false
 end
 
 # Setup
@@ -79,19 +79,19 @@ sample = @company.sample_from_department(@emp2.department)
 
 ## First indexing relationship has correct configuration
 config = @user1.class.indexing_relationships.first
-[config.field, config.index_name, config.target_class == TestUser, config.finder]
+[config.field, config.index_name, config.target_class == TestUser, config.query]
 #=> [:email, :email_lookup, true, true]
 
-## Second indexing relationship has finder disabled
+## Second indexing relationship has query disabled
 config = @user1.class.indexing_relationships.last
-[config.field, config.index_name, config.finder]
+[config.field, config.index_name, config.query]
 #=> [:username, :username_lookup, false]
 
-## Class-level finder methods are generated for email
+## Class-level query methods are generated for email
 TestUser.respond_to?(:find_by_email)
 #=> true
 
-## Class-level bulk finder methods are generated
+## Class-level bulk query methods are generated
 TestUser.respond_to?(:find_all_by_email)
 #=> true
 
@@ -103,7 +103,7 @@ TestUser.respond_to?(:email_lookup)
 TestUser.respond_to?(:rebuild_email_lookup)
 #=> true
 
-## No finder methods generated when finder: false
+## No query methods generated when query: false
 TestUser.respond_to?(:find_by_username)
 #=> false
 
@@ -129,7 +129,7 @@ user.user_id
 TestUser.email_lookup['alice@example.com']
 #=> "user_001"
 
-## Class finder method works
+## Class query method works
 found_user = TestUser.find_by_email('alice@example.com')
 found_user&.user_id
 #=> "user_001"
@@ -140,13 +140,13 @@ found_user&.user_id
 TestUser.email_lookup.length
 #=> 3
 
-## Bulk finder returns multiple users
+## Bulk query returns multiple users
 emails = ['alice@example.com', 'bob@example.com']
 found_users = TestUser.find_all_by_email(emails)
 found_users.map(&:user_id).sort
 #=> ["user_001", "user_002"]
 
-## Empty array for bulk finder with empty input
+## Empty array for bulk query with empty input
 TestUser.find_all_by_email([]).length
 #=> 0
 
@@ -162,7 +162,7 @@ old_email = @user1.email
 TestUser.email_lookup[@user1.email]
 #=> nil
 
-## Username index works without finder methods (finder: false)
+## Username index works without query methods (query: false)
 @user1.add_to_class_username_lookup
 TestUser.respond_to?(:find_by_username)
 #=> false
@@ -196,7 +196,7 @@ config = @emp1.class.indexing_relationships.first
 @company.respond_to?(:sample_from_department)
 #=> true
 
-## Instance bulk finder methods are generated on context class
+## Instance bulk query methods are generated on context class
 @company.respond_to?(:find_all_by_department)
 #=> true
 
@@ -247,7 +247,7 @@ research_emps = @company.find_all_by_department('research')
 research_emps.length
 #=> 0
 
-## Finder methods respect finder: false setting
+## Query methods respect query: false setting
 @company.respond_to?(:find_by_email)
 #=> false
 
@@ -310,11 +310,11 @@ sample.first&.emp_id
 # 4. Edge Cases and Error Handling
 # =============================================
 
-## Finder returns nil for non-existent key
+## Query returns nil for non-existent key
 TestUser.find_by_email('nonexistent@example.com')
 #=> nil
 
-## Bulk finder handles mixed existing/non-existing keys
+## Bulk query handles mixed existing/non-existing keys
 emails = ['bob@example.com', 'nonexistent@example.com']
 found = TestUser.find_all_by_email(emails)
 found.map(&:user_id)

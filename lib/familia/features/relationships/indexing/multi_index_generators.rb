@@ -47,7 +47,7 @@ module Familia
                 members.map { |id| indexed_class.new(index_set.deserialize_value(id)) }
               end
 
-              # Generate bulk finder method (e.g., company.find_all_by_department)
+              # Generate bulk query method (e.g., company.find_all_by_department)
               define_method("find_all_by_#{field}") do |field_value|
                 # Create DataType for this specific field value index using proper Horreum pattern
                 index_key = "#{index_name}:#{field_value}"
@@ -142,8 +142,7 @@ module Familia
               end
             end
           end
-
-          end
+        end
       end
     end
   end

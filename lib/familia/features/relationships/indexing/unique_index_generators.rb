@@ -48,7 +48,7 @@ module Familia
             # Resolve target class using Familia pattern
             actual_target_class = Familia.resolve_class(target_class)
 
-            # Generate instance finder method (e.g., company.find_by_badge_number)
+            # Generate instance query method (e.g., company.find_by_badge_number)
             actual_target_class.class_eval do
               define_method("find_by_#{field}") do |field_value|
                 # Create HashKey DataType for this parent instance
@@ -61,7 +61,7 @@ module Familia
                 indexed_class.new(object_id)
               end
 
-              # Generate bulk finder method (e.g., company.find_all_by_badge_number)
+              # Generate bulk query method (e.g., company.find_all_by_badge_number)
               define_method("find_all_by_#{field}") do |field_values|
                 return [] if field_values.empty?
 
@@ -173,7 +173,7 @@ module Familia
               new(object_id)
             end
 
-            # Generate class-level bulk finder method
+            # Generate class-level bulk query method
             indexed_class.define_singleton_method("find_all_by_#{field}") do |field_values|
               return [] if field_values.empty?
 
@@ -240,8 +240,7 @@ module Familia
               end
             end
           end
-
-          end
+        end
       end
     end
   end
