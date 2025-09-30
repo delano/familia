@@ -1,7 +1,5 @@
 # lib/familia/horreum/serialization.rb
 
-require_relative '../../multi_result'
-
 module Familia
   # Familia::Horreum
   #
