@@ -254,7 +254,8 @@ module Familia
         #     then the dbkey for this DataType instance will be
         #     `customer:customer_id:name`.
         #
-        opts[:parent] = self # unless opts.key(:parent)
+        # Store reference to the instance for lazy ParentDefinition creation
+        opts[:parent] = self
 
         suffix_override = opts.fetch(:suffix, name)
 
@@ -323,16 +324,13 @@ module Familia
     #
     # This method uses a chain of handlers to resolve connections in priority order:
     # 1. FiberTransactionHandler - Fiber[:familia_transaction] (active transaction)
-    # 2. DefaultConnectionHandler - Accesses self.dbclient
-    # 3. DefaultConnectionHandler - Accesses self.class.dbclient
+    # 2. CachedConnectionHandler - Accesses self.dbclient
+    # 3. CachedConnectionHandler - Accesses self.class.dbclient
     # 4. GlobalFallbackHandler - Familia.dbclient(uri || logical_database) (global fallback)
     #
     # @return [Redis] the Database connection instance.
     #
-    def dbclient
-      @instance_connection_chain ||= build_connection_chain
-      @instance_connection_chain.handle(nil)
-    end
+
 
     def generate_id
       @objid ||= Familia.generate_id
@@ -392,14 +390,6 @@ module Familia
     end
 
     # Builds the instance-level connection chain with handlers in priority order
-    def build_connection_chain
-      Familia::Connection::ResponsibilityChain.new
-        .add_handler(Familia::Connection::FiberTransactionHandler.new)
-        .add_handler(Familia::Connection::FiberConnectionHandler.new)
-        .add_handler(Familia::Connection::ProviderConnectionHandler.new)
-        .add_handler(Familia::Connection::DefaultConnectionHandler.new(self))
-        .add_handler(Familia::Connection::DefaultConnectionHandler.new(self.class))
-        .add_handler(Familia::Connection::CreateConnectionHandler.new(self))
-    end
+
   end
 end

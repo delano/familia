@@ -11,12 +11,13 @@ module Familia
   @encryption_keys = nil
   @current_key_version = nil
   @encryption_personalization = 'FamilialMatters'.freeze
+  @pipeline_mode = :warn
 
   # Familia::Settings
   #
   module Settings
     attr_writer :delim, :suffix, :default_expiration, :logical_database, :prefix, :encryption_keys,
-                :current_key_version, :encryption_personalization
+                :current_key_version, :encryption_personalization, :transaction_mode
 
     def delim(val = nil)
       @delim = val if val
@@ -78,6 +79,63 @@ module Familia
         @encryption_personalization = val
       end
       @encryption_personalization
+    end
+
+    # Controls transaction behavior when connection handlers don't support transactions
+    #
+    # @param val [Symbol, nil] The transaction mode or nil to get current value
+    # @return [Symbol] Current transaction mode (:strict, :warn, :permissive)
+    #
+    # Available modes:
+    # - :warn (default): Log warning and execute commands individually
+    # - :strict: Raise OperationModeError when transaction unavailable
+    # - :permissive: Silently execute commands individually
+    #
+    # @example Setting transaction mode
+    #   Familia.configure do |config|
+    #     config.transaction_mode = :warn
+    #   end
+    #
+    def transaction_mode(val = nil)
+      if val
+        unless [:strict, :warn, :permissive].include?(val)
+          raise ArgumentError, 'Transaction mode must be :strict, :warn, or :permissive'
+        end
+        @transaction_mode = val
+      end
+      @transaction_mode || :warn  # default to warn mode
+    end
+
+    # Controls pipeline behavior when connection handlers don't support pipelines
+    #
+    # @param val [Symbol, nil] The pipeline mode or nil to get current value
+    # @return [Symbol] Current pipeline mode (:strict, :warn, :permissive)
+    #
+    # Available modes:
+    # - :warn (default): Log warning and execute commands individually
+    # - :strict: Raise OperationModeError when pipeline unavailable
+    # - :permissive: Silently execute commands individually
+    #
+    # @example Setting pipeline mode
+    #   Familia.configure do |config|
+    #     config.pipeline_mode = :permissive
+    #   end
+    #
+    def pipeline_mode(val = nil)
+      if val
+        unless [:strict, :warn, :permissive].include?(val)
+          raise ArgumentError, 'Pipeline mode must be :strict, :warn, or :permissive'
+        end
+        @pipeline_mode = val
+      end
+      @pipeline_mode || :warn  # default to warn mode
+    end
+
+    def pipeline_mode=(val)
+      unless [:strict, :warn, :permissive].include?(val)
+        raise ArgumentError, 'Pipeline mode must be :strict, :warn, or :permissive'
+      end
+      @pipeline_mode = val
     end
 
     # Configure Familia settings

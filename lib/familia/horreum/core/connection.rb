@@ -2,8 +2,10 @@
 
 module Familia
   class Horreum
-    # Connection: Valkey connection management for Horreum instances
-    # Provides both instance and class-level connection methods
+    # Connection - Mixed instance and class-level methods for Valkey connection management
+    # Provides connection handling, transactions, and URI normalization for both
+    # class-level operations (e.g., Customer.dbclient) and instance-level operations
+    # (e.g., customer.dbclient)
     module Connection
       attr_reader :uri
 
@@ -147,27 +149,7 @@ module Familia
       # @see MultiResult For details on the return value structure
       # @see #batch_update For similar atomic field updates with MultiResult
       def transaction(&)
-        handler_class = Fiber[:familia_connection_handler_class]
-
-        # Check if transaction allowed
-        if handler_class&.allows_transaction == false
-          raise Familia::OperationModeError,
-                "Cannot start transaction with #{handler_class.name} connection. Use connection pools."
-        end
-
-        # Handle reentrant case - already in transaction
-        return yield(Fiber[:familia_transaction]) if handler_class&.allows_transaction == :reentrant
-
-        # If we're already in a Familia.transaction context, just yield the multi connection
-        if Fiber[:familia_transaction]
-          yield(Fiber[:familia_transaction])
-        else
-          # Otherwise, create a local transaction
-          command_return_values = dbclient.multi(&)
-          # Return same MultiResult format as other methods
-          summary_boolean = command_return_values.all? { |ret| %w[OK 0 1].include?(ret.to_s) }
-          MultiResult.new(summary_boolean, command_return_values)
-        end
+        Familia::Connection::TransactionCore.execute_transaction(-> { dbclient }, &)
       end
       alias multi transaction
 
@@ -182,7 +164,7 @@ module Familia
       # @return [MultiResult] Result object with success status and command results
       #
       # @raise [Familia::OperationModeError] When called with incompatible connection handlers
-      #   (e.g., FiberConnectionHandler or DefaultConnectionHandler that don't support pipelines)
+      #   (e.g., FiberConnectionHandler or CachedConnectionHandler that don't support pipelines)
       #
       # @example Basic instance pipeline
       #   customer = Customer.new(custid: 'cust_123')
@@ -260,25 +242,8 @@ module Familia
       # @see Familia.pipelined For global pipeline method
       # @see MultiResult For details on the return value structure
       # @see Familia.transaction For atomic command execution
-      def pipelined(&)
-        handler_class = Fiber[:familia_connection_handler_class]
-
-        # Check if pipeline allowed
-        if handler_class&.allows_pipelined == false
-          raise Familia::OperationModeError,
-                "Cannot start pipeline with #{handler_class.name} connection. Use connection pools."
-        end
-
-        # If we're already in a Familia.pipelined context, just yield the pipeline connection
-        if Fiber[:familia_pipeline]
-          yield(Fiber[:familia_pipeline])
-        else
-          # Otherwise, create a local pipeline
-          command_return_values = dbclient.pipelined(&)
-          # Return same MultiResult format as other methods
-          summary_boolean = command_return_values.all? { |ret| %w[OK 0 1].include?(ret.to_s) }
-          MultiResult.new(summary_boolean, command_return_values)
-        end
+      def pipelined(&block)
+        Familia::Connection::PipelineCore.execute_pipeline(-> { dbclient }, &block)
       end
       alias pipeline pipelined
 
@@ -286,12 +251,25 @@ module Familia
 
       # Builds the class-level connection chain with handlers in priority order
       def build_connection_chain
+        # Cache handlers at class level to avoid creating new instances per model instance
+        @fiber_connection_handler ||= Familia::Connection::FiberConnectionHandler.new
+        @provider_connection_handler ||= Familia::Connection::ProviderConnectionHandler.new
+
+        # Determine the appropriate class context
+        # When called from instance: self is instance, self.class is the model class
+        # When called from class: self is the model class
+        klass = self.is_a?(Class) ? self : self.class
+
+        # Always check class first for @dbclient since instance-level connections were removed
+        @cached_connection_handler ||= Familia::Connection::CachedConnectionHandler.new(klass)
+        @create_connection_handler ||= Familia::Connection::CreateConnectionHandler.new(klass)
+
         Familia::Connection::ResponsibilityChain.new
-          .add_handler(Familia::Connection::FiberTransactionHandler.new)
-          .add_handler(Familia::Connection::FiberConnectionHandler.new)
-          .add_handler(Familia::Connection::ProviderConnectionHandler.new)
-          .add_handler(Familia::Connection::DefaultConnectionHandler.new(self))
-          .add_handler(Familia::Connection::CreateConnectionHandler.new(self))
+          .add_handler(Familia::Connection::FiberTransactionHandler.instance)
+          .add_handler(@fiber_connection_handler)
+          .add_handler(@provider_connection_handler)
+          .add_handler(@cached_connection_handler)
+          .add_handler(@create_connection_handler)
       end
     end
   end

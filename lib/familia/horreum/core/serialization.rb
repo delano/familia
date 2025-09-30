@@ -1,7 +1,5 @@
 # lib/familia/horreum/serialization.rb
 
-require_relative '../../multi_result'
-
 module Familia
   # Familia::Horreum
   #
@@ -33,7 +31,7 @@ module Familia
       attr_reader :valid_command_return_values
     end
 
-    # Serialization: Object persistence and retrieval from the DB
+    # Serialization - Instance-level methods for object persistence and retrieval
     # Handles conversion between Ruby objects and Valkey hash storage
     #
     module Serialization
@@ -239,11 +237,12 @@ module Familia
         self
       end
 
-      # Permanently removes this object from the DB storage.
+      # Permanently removes this object and its related fields from the DB.
       #
-      # Deletes the object's Valkey key and all associated data. This operation
+      # Deletes the object's database key and all associated data. This operation
       # is irreversible and will permanently destroy all stored information
-      # for this object instance.
+      # for this object instance and the additional list, set, hash, string
+      # etc fields defined for this class.
       #
       # @return [void]
       #
@@ -263,8 +262,25 @@ module Familia
       # @see #delete! The underlying method that performs the key deletion
       #
       def destroy!
-        Familia.trace :DESTROY, nil, uri if Familia.debug?
-        delete!
+        Familia.trace :DESTROY, dbkey, uri
+
+        # Execute all deletion operations within a transaction
+        transaction do |conn|
+          # Delete the main object key
+          conn.del(dbkey)
+
+          # Delete all related fields if present
+          if self.class.relations?
+            Familia.trace :DELETE_RELATED_FIELDS!, nil,
+                          "#{self.class} has relations: #{self.class.related_fields.keys}"
+
+            self.class.related_fields.each do |name, _definition|
+              obj = send(name)
+              Familia.trace :DELETE_RELATED_FIELD, name, "Deleting related field #{name} (#{obj.dbkey})"
+              conn.del(obj.dbkey)
+            end
+          end
+        end
       end
 
       # Clears all fields by setting them to nil.

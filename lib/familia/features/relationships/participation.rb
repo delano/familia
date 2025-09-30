@@ -527,7 +527,7 @@ module Familia
               # Find the matching participation configuration
               # Note: target_class_config from key is snake_case, target_class_name is PascalCase
               config = self.class.participation_relationships.find do |cfg|
-                cfg.target_class_name.snake_case == target_class_config &&
+                cfg.target_class_name.demodularize.snake_case == target_class_config &&
                   cfg.collection_name.to_s == collection_name_from_key
               end
 

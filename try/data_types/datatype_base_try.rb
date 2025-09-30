@@ -30,8 +30,6 @@ RefinedContext.eval_in_refined_context("@limiter1.counter.qstamp(10.minutes, '%H
 
 ## Limiter#qstamp as a number
 @limiter2 = Limiter.new :requests
-p [@limiter1.default_expiration, @limiter2.default_expiration]
-p [@limiter1.counter.parent.default_expiration, @limiter2.counter.parent.default_expiration]
 RefinedContext.instance_variable_set(:@limiter2, @limiter2)
 RefinedContext.eval_in_refined_context("@limiter2.counter.qstamp(10.minutes, pattern: nil, time: 1_302_468_980)")
 #=> 1302468600

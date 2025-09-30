@@ -92,6 +92,15 @@ module Familia
         # Ensure default generator is set in feature options
         base.add_feature_options(:object_identifier, generator: DEFAULT_GENERATOR)
 
+        # Add class-level mapping for objid -> id lookups.
+        #
+        # If the model uses objid as it's primary key, this mapping will be
+        # redundant to the builtin functionality of horreum clases, that
+        # automatically populate ModelClass.instances sorted set. However,
+        # if the model uses any other field as primary key, this mapping
+        # is necessary to lookup objects by their objid.
+        base.class_hashkey :objid_lookup
+
         # Register the objid field using a simple custom field type
         base.register_field_type(ObjectIdentifierFieldType.new(:objid, as: :objid, fast_method: false))
       end
@@ -151,6 +160,9 @@ module Familia
               generator = options[:generator] || DEFAULT_GENERATOR
               instance_variable_set(:"@#{field_name}_generator_used", generator)
 
+              # Update mapping from objid to model primary key
+              self.class.objid_lookup[generated_id] = identifier if respond_to?(:identifier) && identifier
+
               generated_id
             end
           end
@@ -177,7 +189,17 @@ module Familia
 
           handle_method_conflict(klass, :"#{method_name}=") do
             klass.define_method :"#{method_name}=" do |value|
+              # Remove old mapping if objid is changing
+              old_value = instance_variable_get(:"@#{field_name}")
+              if old_value && old_value != value
+                Familia.logger.info("Removing objid mapping for #{old_value}")
+                self.class.objid_lookup.remove_field(old_value)
+              end
+
               instance_variable_set(:"@#{field_name}", value)
+
+              # Update mapping from objid to this new identifier
+              self.class.objid_lookup[value] = identifier unless value.nil? || identifier.nil?
 
               # When setting objid from external source (e.g., loading from Valkey/Redis),
               # we cannot determine the original generator, so we clear the provenance
@@ -246,11 +268,18 @@ module Familia
             Familia.trace :FIND_BY_OBJID, nil, objid, reference
           end
 
-          # Use the object identifier as the key for lookup
-          # This is a simple stub implementation - would need more sophisticated
-          # search logic in a real application
-          find_by_id(objid)
+          # Look up the primary ID from the external ID mapping
+          primary_id = objid_lookup[objid]
+
+          # If there is no mapping for this instance's objid, perhaps
+          # the object dbkey is already using the objid.
+          primary_id = objid if primary_id.nil?
+
+          find_by_id(primary_id)
         rescue Familia::NotFound
+          # If the object was deleted but mapping wasn't cleaned up
+          # we could autoclean here, as long as we log it.
+          # objid_lookup.remove_field(objid)
           nil
         end
       end
@@ -281,6 +310,15 @@ module Familia
       #
       def object_identifier=(value)
         self.objid = value
+      end
+
+      def destroy!
+        # Clean up objid mapping when object is destroyed
+        current_objid = instance_variable_get(:@objid)
+
+        self.class.objid_lookup.remove_field(current_objid) if current_objid
+
+        super if defined?(super)
       end
 
       # Initialize object identifier configuration

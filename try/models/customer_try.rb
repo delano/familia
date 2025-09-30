@@ -89,15 +89,17 @@ Customer.instances.member?(@customer)
 #=> "reset123"
 
 ## Customer can be destroyed
-ret = @customer.destroy!
+multi_result = @customer.destroy!
 cust = Customer.find_by_id('test@example.com')
 exists = Customer.exists?('test@example.com')
-[ret, cust.nil?, exists]
-#=> [true, true, false]
+[multi_result.results, cust.nil?, exists]
+#=> [[1, 0, 1, 1, 1, 1, 1], true, false]
 
 ## Customer.destroy! can be called on an already destroyed object
 @customer.destroy!
-#=> false
+#=:> MultiResult
+#==> result.successful?
+#=*> result.results
 
 ## Customer.logical_database returns the correct database number
 Customer.logical_database

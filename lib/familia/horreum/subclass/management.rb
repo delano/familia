@@ -4,11 +4,11 @@ require_relative 'related_fields_management'
 
 module Familia
   class Horreum
-    # ManagementMethods: Provides class-level functionality for Horreum
-    # records.
+    # ManagementMethods - Class-level methods for Horreum model management
     #
     # This module is extended into classes that include Familia::Horreum,
-    # providing methods for Database operations and object management.
+    # providing class methods for database operations and object management
+    # (e.g., Customer.create, Customer.find_by_id)
     #
     # # Key features:
     # * Includes RelatedFieldsManagement for DataType field handling
@@ -198,13 +198,32 @@ module Familia
       #
       def destroy!(identifier, suffix = nil)
         suffix ||= self.suffix
-        return false if identifier.to_s.empty?
+        return MultiResult.new(false, []) if identifier.to_s.empty?
 
         objkey = dbkey identifier, suffix
 
-        ret = dbclient.del objkey
-        Familia.trace :DESTROY!, nil, "#{objkey} #{ret.inspect}" if Familia.debug?
-        ret.positive?
+        # Execute all deletion operations within a transaction
+        transaction do |conn|
+          # Clean up related fields first to avoid orphaned keys
+          if relations?
+            Familia.trace :DESTROY_RELATIONS!, nil, "#{self} has relations: #{related_fields.keys}" if Familia.debug?
+
+            # Create a temporary instance to access related fields.
+            # Pass identifier in constructor so init() sees it and can set dependent fields.
+            identifier_field_name = self.identifier_field
+            temp_instance = identifier_field_name ? new(identifier_field_name => identifier.to_s) : new
+
+            related_fields.each do |name, _definition|
+              obj = temp_instance.send(name)
+              Familia.trace :DESTROY_RELATION!, name, "Deleting related field #{name} (#{obj.dbkey})" if Familia.debug?
+              conn.del(obj.dbkey)
+            end
+          end
+
+          # Delete the main object key
+          ret = conn.del(objkey)
+          Familia.trace :DESTROY!, nil, "#{objkey} #{ret.inspect}" if Familia.debug?
+        end
       end
 
       # Finds all keys in Database matching the given suffix pattern.

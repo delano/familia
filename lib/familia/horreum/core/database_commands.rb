@@ -7,7 +7,7 @@ module Familia
   # instance-level functionality for Database operations and object management.
   #
   class Horreum
-    # DatabaseCommands - Instance methods for horreum models that call Database commands
+    # DatabaseCommands - Instance-level methods for horreum models that call Database commands
     #
     # NOTE: There is no hgetall for Horreum. This is because Horreum
     # is a single hash in Database that we aren't meant to have be working
@@ -170,10 +170,15 @@ module Familia
       end
       alias has_key? key?
 
-      # Deletes the entire dbkey
+      # Deletes the dbkey for this horreum :object.
+      #
+      # It does not delete the related fields keys. See destroy!
+      #
       # @return [Boolean] true if the key was deleted, false otherwise
       def delete!
         Familia.trace :DELETE!, nil, uri if Familia.debug?
+
+        # Delete the main object key
         ret = dbclient.del dbkey
         ret.positive?
       end

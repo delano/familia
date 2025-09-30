@@ -32,15 +32,17 @@ module Familia
     @dump_method = nil
     @load_method = nil
 
-    # DefinitionMethods: Provides class-level functionality for Horreum subclasses
+    # DefinitionMethods - Class-level DSL methods for defining Horreum model structure
     #
     # This module is extended into classes that include Familia::Horreum,
-    # providing methods for Database operations and object management.
+    # providing class methods for defining model structure and configuration
+    # (e.g., Customer.field :name, Customer.identifier_field :custid).
     #
     # Key features:
-    # * Includes RelatedFieldsManagement for DataType field handling
-    # * Defines methods for managing fields, identifiers, and dbkeys
-    # * Provides utility methods for working with Database objects
+    # * Defines DSL methods for field definitions (field, identifier_field)
+    # * Includes RelatedFieldsManagement for DataType field DSL (list, set, zset, etc.)
+    # * Provides class-level configuration (prefix, suffix, logical_database)
+    # * Manages field metadata and inheritance
     #
     module DefinitionMethods
       include Familia::Settings

@@ -1,21 +1,86 @@
 # lib/familia/horreum/related_fields_management.rb
 
 module Familia
+
+  RelatedFieldDefinition = Data.define(:name, :klass, :opts)
+
   class Horreum
+
+    # Each related field needs some details from the parent (Horreum model)
+    # in order to generate its dbkey. We use a parent proxy pattern to store
+    # only essential parent information instead of full object reference. We
+    # need only the model class and an optional unique identifier to generate
+    # the dbkey; when the identifier is nil, we treat this as a class-level
+    # relation (e.g. model_name:related_field_name); when the identifier
+    # is not nil, we treat this as an instance-level relation
+    # (model_name:identifier:related_field_name).
     #
-    # RelatedFieldsManagement: Manages DataType fields and relations
+    ParentDefinition = Data.define(:model_klass, :identifier) do
+      # Factory method to create ParentDefinition from a parent instance
+      def self.from_parent(parent_instance)
+        case parent_instance
+        when Class
+          # Handle class-level relationships
+          new(parent_instance, nil)
+        else
+          # Handle instance-level relationships
+          identifier = parent_instance.respond_to?(:identifier) ? parent_instance.identifier : nil
+          new(parent_instance.class, identifier)
+        end
+      end
+
+      # Delegation methods for common operations needed by DataTypes
+      def dbclient(uri = nil)
+        model_klass.dbclient(uri)
+      end
+
+      def logical_database
+        model_klass.logical_database
+      end
+
+      def dbkey(keystring = nil)
+        if identifier
+          # Instance-level relation: model_name:identifier:keystring
+          model_klass.dbkey(identifier, keystring)
+        else
+          # Class-level relation: model_name:keystring
+          model_klass.dbkey(keystring, nil)
+        end
+      end
+
+      # Allow comparison with the original parent instance
+      def ==(other)
+        case other
+        when ParentDefinition
+          model_klass == other.model_klass && identifier == other.identifier
+        when Class
+          model_klass == other && identifier.nil?
+        else
+          # Compare with instance: check class and identifier match
+          other.is_a?(model_klass) && other.respond_to?(:identifier) && identifier == other.identifier
+        end
+      end
+      alias eql? ==
+    end
+
+    # RelatedFieldsManagement - Class-level methods for defining DataType relationships
     #
-    # This module uses metaprogramming to dynamically create methods
-    # for managing different types of Database objects (e.g., sets, lists, hashes).
+    # This module uses metaprogramming to dynamically create field definition methods
+    # that generate both class-level and instance-level accessor methods for DataTypes
+    # (e.g., list, set, zset, hashkey, string).
+    #
+    # When included in a class via ManagementMethods, it provides class methods like:
+    # * Customer.list :recent_orders    # defines class method for class-level list
+    # * customer.recent_orders          # creates instance method returning list instance
     #
     # Key metaprogramming features:
-    # * Dynamically defines methods for each Database type (e.g., set, list, hashkey)
-    # * Creates both instance-level and class-level relation methods
+    # * Dynamically defines DSL methods for each Database type (e.g., set, list, hashkey)
+    # * Each DSL method creates corresponding instance/class accessor methods
     # * Provides query methods for checking relation types
     #
     # Usage:
     #   Include this module in classes that need DataType management
-    #   Call setup_related_fields_accessors to initialize the feature
+    #   Call setup_related_fields_definition_methods to initialize the feature
     #
     module RelatedFieldsManagement
       # A practical flag to indicate that a Horreum member has relations,
@@ -24,7 +89,7 @@ module Familia
 
       def self.included(base)
         base.extend(RelatedFieldsAccessors)
-        base.setup_related_fields_accessors
+        base.setup_related_fields_definition_methods
       end
 
       # RelatedFieldsManagement::RelatedFieldsAccessors
@@ -38,7 +103,7 @@ module Familia
         # Collection methods: sets(), lists(), hashkeys(), sorted_sets(), etc.
         # Class methods: class_set(), class_list(), etc.
         #
-        def setup_related_fields_accessors
+        def setup_related_fields_definition_methods
           Familia::DataType.registered_types.each_pair do |kind, klass|
             Familia.trace :registered_types, kind, klass if Familia.debug?
 
@@ -103,10 +168,7 @@ module Familia
         name = name.to_s.to_sym
         opts ||= {}
 
-        related_fields[name] = Struct.new(:name, :klass, :opts).new
-        related_fields[name].name = name
-        related_fields[name].klass = klass
-        related_fields[name].opts = opts
+        related_fields[name] = RelatedFieldDefinition.new(name, klass, opts)
 
         attr_reader name
 
@@ -129,10 +191,7 @@ module Familia
         opts = opts.nil? ? {} : opts.clone
         opts[:parent] = self unless opts.key?(:parent)
 
-        class_related_fields[name] = Struct.new(:name, :klass, :opts).new
-        class_related_fields[name].name = name
-        class_related_fields[name].klass = klass
-        class_related_fields[name].opts = opts
+        class_related_fields[name] = RelatedFieldDefinition.new(name, klass, opts)
 
         # An accessor method created in the metaclass will
         # access the instance variables for this class.

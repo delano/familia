@@ -26,21 +26,18 @@ rescue Familia::NonUniqueKey => e
 end
 #=> Familia::NonUniqueKey
 
-## HighRiskFactor error stores value
+## NotDistinguishableError error stores value
 begin
-  raise Familia::HighRiskFactor.new('dangerous_value')
-rescue Familia::HighRiskFactor => e
+  raise Familia::NotDistinguishableError.new('dangerous_value')
+rescue Familia::NotDistinguishableError => e
   e.value
 end
 #=> "dangerous_value"
 
-## HighRiskFactor error has custom message
-begin
-  raise Familia::HighRiskFactor.new(123)
-rescue Familia::HighRiskFactor => e
-  e.message.include?('High risk factor')
-end
-#=> true
+## NotDistinguishableError error has custom message
+raise Familia::NotDistinguishableError, 'A customized message'
+#=:> Familia::NotDistinguishableError
+#=~> /A customized message/
 
 ## NotConnected error stores URI
 test_uri = URI.parse('redis://localhost:6379')
@@ -105,7 +102,7 @@ Familia::RecordExistsError.superclass
 [
   Familia::NoIdentifier,
   Familia::NonUniqueKey,
-  Familia::HighRiskFactor,
+  Familia::NotDistinguishableError,
   Familia::NotConnected,
   Familia::KeyNotFoundError,
   Familia::RecordExistsError

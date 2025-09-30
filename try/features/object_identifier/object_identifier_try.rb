@@ -189,3 +189,13 @@ empty_obj.instance_variable_get(:@objid)
 complex_obj = BasicObjectTest.new(id: 'complex', name: 'Complex Object')
 complex_obj
 #=*> _.objid
+
+## Test objid_lookup mapping when identifier set after objid generation (race condition fix)
+# Create object without identifier, access objid first, then set identifier
+race_obj = BasicObjectTest.new
+generated_objid = race_obj.objid           # Generate objid before setting identifier
+race_obj.id = "race_test_123"               # Set identifier after objid exists
+race_obj.save                                # Save so find_by_objid can locate it
+found = BasicObjectTest.find_by_objid(generated_objid)
+found && found.id == "race_test_123"
+#=> true

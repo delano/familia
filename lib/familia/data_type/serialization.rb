@@ -22,7 +22,7 @@ module Familia
       #   serialize_value(123) #=> "123"
       #   serialize_value("hello") #=> "hello"
       #
-      # @raise [Familia::HighRiskFactor] If serialization fails under strict
+      # @raise [Familia::NotDistinguishableError] If serialization fails under strict
       #   mode.
       #
       def serialize_value(val, strict_values: true)

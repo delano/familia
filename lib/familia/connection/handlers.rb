@@ -89,6 +89,7 @@ module Familia
         client
       end
     end
+    DefaultConnectionHandler = CreateConnectionHandler
 
     # Delegates to user-defined connection provider
     #
@@ -175,6 +176,13 @@ module Familia
       @allows_transaction = :reentrant
       @allows_pipelined = false
 
+      # Singleton pattern for stateless handler
+      @instance = new.freeze
+
+      def self.instance
+        @instance
+      end
+
       def handle(_uri)
         return nil unless Fiber[:familia_transaction]
 
@@ -183,19 +191,19 @@ module Familia
       end
     end
 
-    # Checks for a dbclient instance variable
+    # Checks for a dbclient class instance variable with a cached client instance
     #
     # This works on any module, class, or instance that implements has a
     # dbclient method. From a Horreum model instance, if you call
-    # DefaultConnectionHandler.new(self) it'll return self.dbclient or
-    # nil, or you can call DefaultConnectionHandler(self.class) and it'll
+    # CachedConnectionHandler.new(self) it'll return self.dbclient or
+    # nil, or you can call CachedConnectionHandler(self.class) and it'll
     # attempt the same using the model's class.
     #
     # +familia_module+ is required.
     #
-    # DefaultConnectionHandler - Single cached connection - block all multi-mode operations
+    # CachedConnectionHandler - Single cached connection - block all multi-mode operations
     #
-    class DefaultConnectionHandler < BaseConnectionHandler
+    class CachedConnectionHandler < BaseConnectionHandler
       @allows_transaction = false
       @allows_pipelined = false
 

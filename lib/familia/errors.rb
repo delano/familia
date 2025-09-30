@@ -13,7 +13,7 @@ module Familia
   # Raised when attempting to start transactions or pipelines on connection types that don't support them
   class OperationModeError < Problem; end
 
-  class HighRiskFactor < Problem
+  class NotDistinguishableError < Problem
     attr_reader :value
 
     def initialize(value)
@@ -22,7 +22,7 @@ module Familia
     end
 
     def message
-      "High risk factor for serialization bugs: #{value}<#{value.class}>"
+      "Cannot represent #{value}<#{value.class}> as a string"
     end
   end
 
@@ -41,6 +41,9 @@ module Familia
 
   # UnsortedSet Familia.connection_provider or use middleware to provide connections.
   class NoConnectionAvailable < Problem; end
+
+  # Raised when a load method fails to find the requested object
+  class NotFound < Problem; end
 
   # Raised when attempting to refresh an object whose key doesn't exist in the database
   class KeyNotFoundError < NonUniqueKey

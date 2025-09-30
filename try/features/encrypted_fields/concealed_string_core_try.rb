@@ -77,14 +77,18 @@ end
 @doc.content.to_str
 #=!> NoMethodError
 
-## JSON serialization - to_json (fails for security)
+## JSON serialization - to_json (fails for security) - Basic tryouts testcase
 begin
   Familia::JsonSerializer.dump(@doc.content)
-  raise "Should have raised SerializerError"
 rescue Familia::SerializerError => e
   e.class
 end
 #=> Familia::SerializerError
+
+## JSON serialization - to_json (fails for security) - Robust tryout testcase
+Familia::JsonSerializer.dump(@doc.content)
+#=:> Familia::SerializerError
+#=~> /Failed to dump ConcealedString/
 
 ## JSON serialization - as_json
 @doc.content.as_json

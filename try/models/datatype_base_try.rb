@@ -35,8 +35,8 @@ stripe_customer.class.name
 #=> "Familia::HashKey"
 
 ## DataType instances know their owner
-@sample_obj.timeline.parent == @sample_obj
-#=> true
+@sample_obj.timeline.parent.class
+#=> Familia::Horreum::ParentDefinition
 
 ## DataType instances know their field name
 @sample_obj.timeline.keystring

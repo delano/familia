@@ -3,6 +3,10 @@
 require_relative 'connection/handlers'
 require_relative 'connection/middleware'
 require_relative 'connection/operations'
+require_relative 'connection/individual_command_proxy'
+require_relative 'connection/operation_core'
+require_relative 'connection/transaction_core'
+require_relative 'connection/pipeline_core'
 
 # Familia
 #

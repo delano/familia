@@ -27,13 +27,14 @@ module Familia
 
     class << self
       attr_reader :registered_types, :valid_options, :has_relations
-      attr_accessor :parent
-      attr_writer :logical_database, :uri
     end
 
     # DataType::ClassMethods
     #
     module ClassMethods
+      attr_accessor :parent, :suffix, :prefix, :uri
+      attr_writer :logical_database
+
       # To be called inside every class that inherits DataType
       # +methname+ is the term used for the class and instance methods
       # that are created for the given +klass+ (e.g. set, list, etc)
@@ -65,7 +66,6 @@ module Familia
         obj.logical_database = logical_database
         obj.default_expiration = default_expiration # method added via Features::Expiration
         obj.uri = uri
-        obj.parent = self
         super
       end
 
@@ -79,8 +79,9 @@ module Familia
     end
     extend ClassMethods
 
-    attr_reader :keystring, :opts
-    attr_writer :dump_method, :load_method
+    attr_reader :keystring, :opts, :uri, :logical_database
+
+    alias url uri
 
     # +keystring+: If parent is set, this will be used as the suffix
     # for dbkey. Otherwise this becomes the value of the key.
@@ -101,10 +102,6 @@ module Familia
     #
     # :default => the default value (String-only)
     #
-    # :logical_database => the logical database index to use (ignored if :dbclient is used).
-    #
-    # :dbclient => an instance of database client.
-    #
     # :dbkey => a hardcoded key to use instead of the deriving the from
     # the name and parent (e.g. a derived key: customer:custid:secret_counter).
     #
@@ -118,17 +115,10 @@ module Familia
       @keystring = @keystring.join(Familia.delim) if @keystring.is_a?(Array)
 
       # Remove all keys from the opts that are not in the allowed list
-      @opts = opts || {}
-      @opts = DataType.valid_keys_only(@opts)
+      @opts = DataType.valid_keys_only(opts || {})
 
       # Apply the options to instance method setters of the same name
       @opts.each do |k, v|
-        # Bewarde logging :parent instance here implicitly calls #to_s which for
-        # some classes could include the identifier which could still be nil at
-        # this point. This would result in a Familia::Problem being raised. So
-        # to be on the safe-side here until we have a better understanding of
-        # the issue, we'll just log the class name for each key-value pair.
-        Familia.trace :SETTING, nil, " [setting] #{k} #{v.class}" if Familia.debug?
         send(:"#{k}=", v) if respond_to? :"#{k}="
       end
 
@@ -140,7 +130,8 @@ module Familia
       return Fiber[:familia_transaction] if Fiber[:familia_transaction]
       return @dbclient if @dbclient
 
-      parent? ? parent.dbclient : Familia.dbclient(opts[:logical_database])
+      # Delegate to parent if present, otherwise fall back to Familia
+      parent ? parent.dbclient : Familia.dbclient(opts[:logical_database])
     end
 
     # Produces the full dbkey for this object.
@@ -198,11 +189,11 @@ module Familia
     end
 
     def parent_instance?
-      parent.is_a?(Familia::Horreum)
+      parent&.is_a?(Horreum::ParentDefinition)
     end
 
     def parent_class?
-      parent.is_a?(Class) && parent <= Familia::Horreum
+      parent.is_a?(Class) && parent.ancestors.include?(Familia::Horreum)
     end
 
     def parent?
@@ -210,37 +201,60 @@ module Familia
     end
 
     def parent
-      @opts[:parent]
+      # Return cached ParentDefinition if available
+      return @parent if @parent
+
+      # Return class-level parent if no instance parent
+      return self.class.parent unless @parent_ref
+
+      # Create ParentDefinition dynamically from stored reference.
+      # This ensures we get the current identifier value (available after initialization)
+      # rather than a stale nil value from initialization time. Cannot cache due to frozen object.
+      Horreum::ParentDefinition.from_parent(@parent_ref)
     end
 
-    def logical_database
-      @opts[:logical_database] || self.class.logical_database
+    def parent=(value)
+      case value
+      when Horreum::ParentDefinition
+        @parent = value
+      when nil
+        @parent = nil
+        @parent_ref = nil
+      else
+        # Store parent instance reference for lazy ParentDefinition creation.
+        # During initialization, the parent's identifier may not be available yet,
+        # so we defer ParentDefinition creation until first access for memory efficiency.
+        # Note: @parent_ref is not cleared after use because DataType objects are frozen.
+        @parent_ref = value
+        @parent = nil  # Will be created dynamically in parent method
+      end
     end
 
     def uri
-      # If a specific URI is set in opts, use it
-      return @opts[:uri] if @opts[:uri]
+      # Return explicit instance URI if set
+      return @uri if @uri
 
-      # If parent has a DB set, create a URI with that DB
-      if parent? && parent.respond_to?(:logical_database) && parent.logical_database
-        base_uri = self.class.uri || Familia.uri
-        if base_uri
-          uri_with_db = base_uri.dup
-          uri_with_db.db = parent.logical_database
-          return uri_with_db
-        end
+      # If we have a parent with logical_database, build URI with that database
+      if parent && parent.respond_to?(:logical_database) && parent.logical_database
+        new_uri = (self.class.uri || Familia.uri).dup
+        new_uri.db = parent.logical_database
+        new_uri
+      else
+        # Fall back to class-level URI or global Familia.uri
+        self.class.uri || Familia.uri
       end
+    end
 
-      # Otherwise fall back to class URI
-      self.class.uri
+    def uri=(value)
+      @uri = value
     end
 
     def dump_method
-      @dump_method || self.class.dump_method
+      self.class.dump_method
     end
 
     def load_method
-      @load_method || self.class.load_method
+      self.class.load_method
     end
 
     include Commands

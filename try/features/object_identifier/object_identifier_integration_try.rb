@@ -7,9 +7,9 @@ Familia.debug = false
 # Integration test for ObjectIdentifier and ExternalIdentifiers features together
 
 # Class using both features with defaults
-class IntegrationTest < Familia::Horreum
+class ::IntegrationTest < Familia::Horreum
   feature :object_identifier
-  feature :external_identifier  # This depends on :object_identifier
+  feature :external_identifier # This depends on :object_identifier
   identifier_field :id
   field :id
   field :name
@@ -17,7 +17,7 @@ class IntegrationTest < Familia::Horreum
 end
 
 # Class with custom configurations for both features
-class CustomIntegrationTest < Familia::Horreum
+class ::CustomIntegrationTest < Familia::Horreum
   feature :object_identifier, generator: :hex
   feature :external_identifier, prefix: 'custom'
   identifier_field :id
@@ -26,7 +26,7 @@ class CustomIntegrationTest < Familia::Horreum
 end
 
 # Class testing full lifecycle with Valkey/Redis persistence
-class PersistenceTest < Familia::Horreum
+class ::PersistenceTest < Familia::Horreum
   feature :object_identifier
   feature :external_identifier
   identifier_field :id
@@ -79,7 +79,7 @@ obj.extid == original_extid
 #==> true
 
 ## Custom objid uses hex format (64 chars for 256-bit)
-@custom_obj.objid.match(/\A[0-9a-f]{64}\z/)
+@custom_obj.objid =~ /\A[0-9a-f]{64}\z/
 #=*> nil
 
 ## Custom extid uses custom prefix
@@ -96,7 +96,8 @@ original_extid = persistence_obj.extid
 persistence_obj.save
 
 # Load from Valkey/Redis
-loaded_obj = PersistenceTest.new(id: 'persistence_test')
+loaded_obj = PersistenceTest.load(id: 'persistence_test')
+#=> nil
 
 ## objid persists after save/load
 persistence_obj = PersistenceTest.new
@@ -138,7 +139,7 @@ lazy_obj.instance_variable_get(:@extid)
 
 ## Accessing extid triggers objid generation if needed
 lazy_obj2 = IntegrationTest.new
-lazy_obj2.extid  # This should trigger objid generation too
+lazy_obj2.extid # This should trigger objid generation too
 lazy_obj2.instance_variable_get(:@objid)
 #=*> nil
 
@@ -182,12 +183,12 @@ CustomIntegrationTest.feature_options(:external_identifier)[:prefix]
 
 ## objid is URL-safe (UUID format)
 obj = IntegrationTest.new
-obj.objid.match(/\A[A-Za-z0-9\-]+\z/)
+obj.objid =~ /\A[A-Za-z0-9-]+\z/
 #=*> nil
 
 ## extid is URL-safe (base36 format)
 obj = IntegrationTest.new
-obj.extid.match(/\A[a-z0-9_]+\z/)
+obj.extid =~ /\A[a-z0-9_]+\z/
 #=*> nil
 
 ## Data integrity preserved during complex initialization
@@ -197,27 +198,16 @@ complex_obj = IntegrationTest.new(
   email: 'complex@test.com',
   objid: 'preset_objid_123',
   extid: 'preset_ext_456'
-)
+).save
+#=> true
 
 ## Preset objid value is preserved
-complex_obj = IntegrationTest.new(
-  id: 'complex_integration',
-  name: 'Complex Integration',
-  email: 'complex@test.com',
-  objid: 'preset_objid_123',
-  extid: 'preset_ext_456'
-)
+complex_obj = IntegrationTest.load('complex_integration')
 complex_obj.objid
 #=> 'preset_objid_123'
 
 ## Preset extid value is preserved
-complex_obj = IntegrationTest.new(
-  id: 'complex_integration',
-  name: 'Complex Integration',
-  email: 'complex@test.com',
-  objid: 'preset_objid_123',
-  extid: 'preset_ext_456'
-)
+complex_obj = IntegrationTest.load('complex_integration')
 complex_obj.extid
 #=> 'preset_ext_456'
 
@@ -225,6 +215,7 @@ complex_obj.extid
 search_obj = IntegrationTest.new
 search_obj.id = 'search_test'
 search_obj.save
+#=> true
 
 ## find_by_objid returns nil (stub implementation)
 search_obj = IntegrationTest.new
@@ -232,10 +223,10 @@ search_obj.id = 'search_test'
 search_obj.save
 found_by_objid = IntegrationTest.find_by_objid(search_obj.objid)
 found_by_objid
-#=> nil
+#=:> IntegrationTest
 
 ## find_by_extid works with real implementation
-@search_obj = IntegrationTest.new
+@search_obj = IntegrationTest.new name: 'Tucker', email: 'tucker@example.com'
 @search_obj.id = 'search_test'
 @search_obj.save
 found_by_extid = IntegrationTest.find_by_extid(@search_obj.extid)
@@ -248,8 +239,7 @@ first_objid = stability_obj.objid
 first_extid = stability_obj.extid
 second_objid = stability_obj.objid
 second_extid = stability_obj.extid
-
-## objid remains stable across accesses
+# objid remains stable across accesses
 stability_obj = IntegrationTest.new
 first_objid = stability_obj.objid
 second_objid = stability_obj.objid
@@ -284,4 +274,8 @@ obj.respond_to?(:delete!)
 #==> true
 
 # Cleanup test objects
-@search_obj.destroy! rescue nil
+begin
+  @search_obj.destroy!
+rescue StandardError
+  nil
+end

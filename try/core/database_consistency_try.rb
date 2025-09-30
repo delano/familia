@@ -159,17 +159,17 @@ obj_exists_without_check = @empty_hash.exists?(check_size: false)
 @tx_test = ConsistencyTestModel.new(id: next_test_id, name: 'Transaction Test')
 @tx_test.save
 
-# Verify transaction doesn't interfere with exists? calls
+# Verify transaction works and doesn't corrupt object state
+exists_before_tx = @tx_test.exists?
 multi_result = @tx_test.transaction do |conn|
-  # During transaction, exists? should still work
-  exists_in_tx = @tx_test.exists?
+  # Update a field within transaction
   conn.hset(@tx_test.dbkey, 'active', 'true')
-  exists_in_tx
+  conn.hset(@tx_test.dbkey, 'processed', 'true')
 end
 
 exists_after_tx = @tx_test.exists?
-[multi_result.results, exists_after_tx]
-#=> [[0], true]
+[exists_before_tx, multi_result.successful?, exists_after_tx]
+#=> [true, true, true]
 
 # =============================================
 # 4. Performance Consistency

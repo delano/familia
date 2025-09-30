@@ -7,6 +7,7 @@ require 'connection_pool'
 
 # OJ configuration is handled internally by Familia::JsonSerializer
 
+require_relative 'multi_result'
 require_relative 'familia/refinements'
 require_relative 'familia/errors'
 require_relative 'familia/version'

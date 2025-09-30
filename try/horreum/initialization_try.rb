@@ -103,12 +103,16 @@ Familia.debug = false
 [@customer6, @complex].map(&:delete!)
 #=> [true, true]
 
-## "Cleaning up" test objects that were never saved returns false.
+## "Cleaning up" test objects that were never saved returns true regardless
+## b/c it takes place in a transaction and it's the transaction's success
+## that successful? is based on. If you look at the MultiResult#results,
+## it's an array of 0s, except for the @customer1 that had been saved.
+## That's b/c DEL command returns the number of keys deleted.
 @customer1.save
 [
   @customer1, @customer2, @customer3, @customer4, @customer6, @customer7,
   @session1, @session2, @session3,
   @domain1, @domain2,
   @partial, @complex
-].map(&:destroy!)
-#=> [true, false, false, false, false, false, false, false, false, false, false, false, false]
+].map(&:destroy!).map(&:areyouhappynow?)
+#==> result.all?(true)

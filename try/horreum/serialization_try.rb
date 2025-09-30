@@ -151,7 +151,8 @@ result.successful?
 
 ## destroy! removes object from Database (1 of 2)
 @customer.destroy!
-#=> true
+#=:> MultiResult
+#==> result.successful?
 
 ## After destroy!, dbkey no longer exists (2 of 2)
 @customer.exists?

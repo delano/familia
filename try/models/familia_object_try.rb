@@ -44,7 +44,8 @@ obj = Customer.find_by_id :delano
 
 ## Customer.destroy
 @cust.destroy!
-#=> true
+#=:> MultiResult
+#==> result.successful?
 
 ## Customer.instances
 Customer.values.size
@@ -56,20 +57,20 @@ obj.save
 #=> true
 
 ## Familia.class_list
-Customer.customers.class
+Customer.all_customers.class
 #=> Familia::ListKey
 
 ## Familia class dbkey
-Customer.customers.dbkey
-#=> 'customer:customers'
+Customer.all_customers.dbkey
+#=> 'customer:all_customers'
 
 ## Familia.class_list
-Customer.customers << :delano << :tucker << :morton
-Customer.customers.size
+Customer.all_customers << :delano << :tucker << :morton
+Customer.all_customers.size
 #=> 3
 
 ## Familia class clear
-Customer.customers.delete!
+Customer.all_customers.delete!
 #=> true
 
 ## Familia class replace 1 of 4
