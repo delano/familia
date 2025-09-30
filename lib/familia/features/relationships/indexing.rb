@@ -1,5 +1,8 @@
 # lib/familia/features/relationships/indexing.rb
 
+require_relative 'indexing/multi_index_generators'
+require_relative 'indexing/unique_index_generators'
+
 module Familia
   module Features
     module Relationships
@@ -73,6 +76,8 @@ module Familia
         # Indexing::ModelClassMethods
         #
         module ModelClassMethods
+          extend MultiIndexGenerators
+          extend UniqueIndexGenerators
           # Define an indexed_by relationship for fast lookups
           #
           # Define a multi-value index (1:many mapping)
@@ -87,42 +92,23 @@ module Familia
           #
           def multi_index(field, index_name, within:, finder: true)
             target_class = within
-
-            target_class_name = if target_class.is_a?(Class)
-                                  # Store the actual class name for consistency
-                                  target_class.name
-                                else
-                                  # For symbol target, convert to string
-                                  target_class.to_s
-                                end
-
-            # Get snake_case version for method naming
-            target_class_snake = if target_class.is_a?(Class)
-                                   target_class.name.demodularize.snake_case
-                                 else
-                                   target_class.to_s
-                                 end
+            target = resolve_target_class(target_class)
 
             # Store metadata for this indexing relationship
             indexing_relationships << {
               field: field,
               target_class: target_class,
-              target_class_name: target_class_name,
+              target_class_name: target[:name],
               index_name: index_name,
               finder: finder,
               cardinality: :multi,
             }
 
-            # Ensure proper DataType fields are declared on target class for sorted_set indexes
-            # This creates the needed DataType infrastructure that will be accessed by field value
-            # No specific field declaration needed here - the indexes are created dynamically
-            # based on field values, but we need the target class to understand index access
+            # Generate query methods on the parent class
+            MultiIndexGenerators.generate_query_methods_destination(target_class, field, index_name, self) if finder && target_class.is_a?(Class)
 
-            # Generate finder methods on the target class
-            generate_multi_query_methods_destination(target_class, field, index_name) if finder && target_class.is_a?(Class)
-
-            # Generate instance methods for relationship indexing
-            generate_multi_mutation_methods_self(target_class_snake, field, index_name)
+            # Generate mutation methods on the indexed class
+            MultiIndexGenerators.generate_mutation_methods_self(target[:snake], field, index_name, self)
           end
 
           # Define a unique index lookup (1:1 mapping)
@@ -143,35 +129,23 @@ module Familia
             # Handle instance-scoped unique index (within: parameter provided)
             if within
               target_class = within
-
-              target_class_name = if target_class.is_a?(Class)
-                                    target_class.name
-                                  else
-                                    target_class.to_s
-                                  end
-
-              #
-              target_class_snake = if target_class.is_a?(Class)
-                                     target_class.name.demodularize.snake_case
-                                   else
-                                     target_class.to_s
-                                   end
+              target = resolve_target_class(target_class)
 
               # Store metadata for instance-scoped unique index
               indexing_relationships << {
                 field: field,
                 target_class: target_class,
-                target_class_name: target_class_name,
+                target_class_name: target[:name],
                 index_name: index_name,
                 finder: finder,
                 cardinality: :unique,
               }
 
-              # Generate finder methods on the target class
-              generate_unique_query_methods_destination(target_class, field, index_name) if finder && target_class.is_a?(Class)
+              # Generate query methods on the parent class
+              UniqueIndexGenerators.generate_query_methods_destination(target_class, field, index_name, self) if finder && target_class.is_a?(Class)
 
-              # Generate instance methods for instance-scoped unique indexing
-              generate_unique_mutation_methods_self(target_class_snake, field, index_name)
+              # Generate mutation methods on the indexed class
+              UniqueIndexGenerators.generate_mutation_methods_self(target[:snake], field, index_name, self)
             else
               # Class-level unique index (no within: parameter)
               # Store metadata for this indexing relationship
@@ -187,11 +161,9 @@ module Familia
               # Ensure proper DataType field is declared for the index
               ensure_index_field(self, index_name, :class_hashkey)
 
-              # Generate class-level finder methods if requested
-              generate_unique_query_methods_class(field, index_name) if finder
-
-              # Generate instance methods for class-level indexing
-              generate_unique_mutation_methods_class(field, index_name)
+              # Generate class-level query and mutation methods
+              UniqueIndexGenerators.generate_query_methods_class(field, index_name, self) if finder
+              UniqueIndexGenerators.generate_mutation_methods_class(field, index_name, self)
             end
           end
 
@@ -210,334 +182,28 @@ module Familia
 
           private
 
+          # Resolve target class to name and snake_case versions
+          # Eliminates duplicate resolution logic in multi_index and unique_index
+          #
+          # @param target [Class, Symbol, String] Target class or identifier
+          # @return [Hash] { name: "Company", snake: "company" }
+          def resolve_target_class(target)
+            if target.is_a?(Class)
+              {
+                name: target.name,
+                snake: target.name.demodularize.snake_case
+              }
+            else
+              {
+                name: target.to_s,
+                snake: target.to_s
+              }
+            end
+          end
+
           # Helper method to pascalize a word without ActiveSupport dependency
           def camelize_word(word)
             word.to_s.split('_').map(&:capitalize).join
-          end
-
-          # Generates methods ON THE PARENT CLASS (Company when within: Company):
-          # - company.sample_from_department(dept, count=1)
-          # - company.find_all_by_department(dept)
-          # - company.dept_index_for(dept_value)
-          # - company.rebuild_dept_index
-          def generate_multi_query_methods_destination(target_class, field, index_name)
-            # Resolve target class if it's a symbol/string
-            actual_target_class = target_class.is_a?(Class) ? target_class : Object.const_get(camelize_word(target_class))
-
-            # Store reference to the indexed class for the finder methods
-            indexed_class = self
-
-            # Generate instance sampling method (e.g., company.sample_from_department)
-            actual_target_class.class_eval do
-              define_method("sample_from_#{field}") do |field_value, count = 1|
-                # Create DataType for this specific field value index using proper Horreum pattern
-                index_key = "#{index_name}:#{field_value}"
-                index_set = Familia::UnsortedSet.new(index_key, parent: self)
-
-                # Get random members efficiently (O(1) via SRANDMEMBER with count)
-                # Returns array even for count=1 for consistent API
-                members = index_set.dbclient.srandmember(index_set.dbkey, count) || []
-                members.map { |id| indexed_class.new(index_set.deserialize_value(id)) }
-              end
-
-              # Generate bulk finder method (e.g., company.find_all_by_department)
-              define_method("find_all_by_#{field}") do |field_value|
-                # Create DataType for this specific field value index using proper Horreum pattern
-              index_key = "#{index_name}:#{field_value}"
-              index_set = Familia::UnsortedSet.new(index_key, parent: self)
-
-              # Get all members from set
-              members = index_set.members
-                members.map { |id| indexed_class.new(id) }
-              end
-
-              # Generate method to get the index for a specific field value
-              define_method("#{index_name}_for") do |field_value|
-                # Return properly managed DataType instance
-              index_key = "#{index_name}:#{field_value}"
-              Familia::UnsortedSet.new(index_key, parent: self)
-              end
-
-              # Generate method to rebuild the index for this parent instance
-              define_method("rebuild_#{index_name}") do
-                # This would need to be implemented based on how you track which
-                # objects belong to this parent instance
-                # For now, just a placeholder
-              end
-            end
-          end
-
-          # Generates methods ON THE PARENT CLASS (Company when within: Company):
-          # - company.find_by_badge_number(badge)
-          # - company.find_all_by_badge_number([badges])
-          # - company.badge_index
-          # - company.rebuild_badge_index
-          def generate_unique_query_methods_destination(target_class, field, index_name)
-            # Resolve target class if it's a symbol/string
-            actual_target_class = target_class.is_a?(Class) ? target_class : Object.const_get(camelize_word(target_class))
-
-            # Store reference to the indexed class for the finder methods
-            indexed_class = self
-
-            # Generate instance finder method (e.g., company.find_by_badge_number)
-            actual_target_class.class_eval do
-              define_method("find_by_#{field}") do |field_value|
-                # Create HashKey DataType for this parent instance
-                index_hash = Familia::HashKey.new(index_name, parent: self)
-
-                # Get the identifier from the hash
-                object_id = index_hash[field_value.to_s]
-                return nil unless object_id
-
-                indexed_class.new(object_id)
-              end
-
-              # Generate bulk finder method (e.g., company.find_all_by_badge_number)
-              define_method("find_all_by_#{field}") do |field_values|
-                return [] if field_values.empty?
-
-                # Create HashKey DataType for this parent instance
-                index_hash = Familia::HashKey.new(index_name, parent: self)
-
-                # Get all identifiers from the hash
-                object_ids = index_hash.values_at(*field_values.map(&:to_s))
-                # Filter out nil values and instantiate objects
-                object_ids.compact.map { |object_id| indexed_class.new(object_id) }
-              end
-
-              # Generate method to get the index HashKey for this parent instance
-              define_method(index_name) do
-                # Return properly managed DataType instance
-                Familia::HashKey.new(index_name, parent: self)
-              end
-
-              # Generate method to rebuild the unique index for this parent instance
-              define_method("rebuild_#{index_name}") do
-                index_hash = Familia::HashKey.new(index_name, parent: self)
-
-                # Clear existing index using DataType method
-                index_hash.clear
-
-                # Rebuild from all existing objects
-                # This would need to scan through all objects belonging to this parent
-                # Implementation depends on how objects are stored/tracked
-              end
-            end
-          end
-
-          # Generates methods ON THE INDEXED CLASS (Employee):
-          # Class-level methods (singleton):
-          # - Employee.find_by_email(email)
-          # - Employee.find_all_by_email([emails])
-          # - Employee.email_index
-          # - Employee.rebuild_email_index
-          def generate_unique_query_methods_class(field, index_name)
-            # Generate class-level finder method (e.g., Domain.find_by_display_name)
-            define_singleton_method("find_by_#{field}") do |field_value|
-              index_hash = send(index_name) # Access the class-level hashkey DataType
-              object_id = index_hash[field_value.to_s]
-
-              return nil unless object_id
-
-              new(object_id)
-            end
-
-            # Generate class-level bulk finder method
-            define_singleton_method("find_all_by_#{field}") do |field_values|
-              return [] if field_values.empty?
-
-              index_hash = send(index_name) # Access the class-level hashkey DataType
-              object_ids = index_hash.values_at(*field_values.map(&:to_s))
-              # Filter out nil values and instantiate objects
-              object_ids.compact.map { |object_id| new(object_id) }
-            end
-
-            # The index accessor method is already created by the class_hashkey declaration
-            # No need to manually create it - Horreum handles this automatically
-
-            # Generate method to rebuild the class-level index
-            define_singleton_method("rebuild_#{index_name}") do
-              index_hash = send(index_name) # Access the class-level hashkey DataType
-
-              # Clear existing index using DataType method
-              index_hash.clear
-
-              # Rebuild from all existing objects
-              # This would need to scan through all objects of this class
-              # Implementation depends on how objects are stored/tracked
-            end
-          end
-
-          # Generates methods ON THE INDEXED CLASS (Employee):
-          # Instance methods for class-level index operations:
-          # - employee.add_to_class_email_index
-          # - employee.remove_from_class_email_index
-          # - employee.update_in_class_email_index(old_email)
-          def generate_unique_mutation_methods_class(field, index_name)
-            # Class-level index methods using DataType operations
-            define_method("add_to_class_#{index_name}") do
-              index_hash = self.class.send(index_name)  # Access the class-level hashkey DataType
-              field_value = send(field)
-
-              return unless field_value
-
-              index_hash[field_value.to_s] = identifier
-            end
-
-            define_method("remove_from_class_#{index_name}") do
-              index_hash = self.class.send(index_name)  # Access the class-level hashkey DataType
-              field_value = send(field)
-
-              return unless field_value
-
-              index_hash.remove(field_value.to_s)
-            end
-
-            define_method("update_in_class_#{index_name}") do |old_field_value = nil|
-              new_field_value = send(field)
-
-              # Use class-level transaction for atomicity with DataType abstraction
-              self.class.transaction do |_tx|
-                index_hash = self.class.send(index_name) # Access the class-level hashkey DataType
-
-                # Remove old value if provided
-                index_hash.remove(old_field_value.to_s) if old_field_value
-
-                # Add new value if present
-                index_hash[new_field_value.to_s] = identifier if new_field_value
-              end
-            end
-          end
-
-          # Generates methods ON THE INDEXED CLASS (Employee):
-          # Instance methods for parent-scoped multi-value index operations:
-          # - employee.add_to_company_dept_index(company)
-          # - employee.remove_from_company_dept_index(company)
-          # - employee.update_in_company_dept_index(company, old_dept)
-          def generate_multi_mutation_methods_self(target_class_name, field, index_name)
-            # Multi-value indexes are scoped to parent instances using UnsortedSets
-
-            method_name = "add_to_#{target_class_name}_#{index_name}"
-            Familia.ld("[generate_index_metho_self_s] #{name} method #{method_name}")
-
-            define_method(method_name) do |target_instance|
-              return unless target_instance
-
-              field_value = send(field)
-              return unless field_value
-
-              # Create DataType for this specific field value index using proper Horreum pattern
-              index_key = "#{index_name}:#{field_value}"
-              index_set = Familia::UnsortedSet.new(index_key, parent: target_instance)
-
-              # Use UnsortedSet DataType method (no scoring)
-              index_set.add(identifier)
-            end
-
-            method_name = "remove_from_#{target_class_name}_#{index_name}"
-            Familia.ld("[generate_index_metho_self_s] #{name} method #{method_name}")
-
-            define_method(method_name) do |target_instance|
-              return unless target_instance
-
-              field_value = send(field)
-              return unless field_value
-
-              # Create DataType for this specific field value index using proper Horreum pattern
-              index_key = "#{index_name}:#{field_value}"
-              index_set = Familia::UnsortedSet.new(index_key, parent: target_instance)
-
-              # Remove using UnsortedSet DataType method
-              index_set.remove(identifier)
-            end
-
-            method_name = "update_in_#{target_class_name}_#{index_name}"
-            Familia.ld("[generate_index_metho_self_s] #{name} method #{method_name}")
-
-            define_method(method_name) do |target_instance, old_field_value = nil|
-              return unless target_instance
-
-              new_field_value = send(field)
-
-              # Use Familia's transaction method for atomicity with DataType abstraction
-              target_instance.transaction do |_tx|
-                # Remove from old index if provided
-                if old_field_value
-                  old_index_key = "#{index_name}:#{old_field_value}"
-                  old_index_set = Familia::UnsortedSet.new(old_index_key, parent: target_instance)
-                  old_index_set.remove(identifier)
-                end
-
-                # Add to new index if present
-                if new_field_value
-                  new_index_key = "#{index_name}:#{new_field_value}"
-                  new_index_set = Familia::UnsortedSet.new(new_index_key, parent: target_instance)
-                  new_index_set.add(identifier)
-                end
-              end
-            end
-          end
-
-          # Generates methods ON THE INDEXED CLASS (Employee):
-          # Instance methods for parent-scoped unique index operations:
-          # - employee.add_to_company_badge_index(company)
-          # - employee.remove_from_company_badge_index(company)
-          # - employee.update_in_company_badge_index(company, old_badge)
-          def generate_unique_mutation_methods_self(target_class_name, field, index_name)
-            # Unique indexes are scoped to parent instances using HashKeys
-
-            method_name = "add_to_#{target_class_name}_#{index_name}"
-            Familia.ld("[generate_unique_mutation_methods_self] #{name} method #{method_name}")
-
-            define_method(method_name) do |target_instance|
-              return unless target_instance
-
-              field_value = send(field)
-              return unless field_value
-
-              # Create HashKey DataType for this parent instance
-              index_hash = Familia::HashKey.new(index_name, parent: target_instance)
-
-              # Use HashKey DataType method
-              index_hash[field_value.to_s] = identifier
-            end
-
-            method_name = "remove_from_#{target_class_name}_#{index_name}"
-            Familia.ld("[generate_unique_mutation_methods_self] #{name} method #{method_name}")
-
-            define_method(method_name) do |target_instance|
-              return unless target_instance
-
-              field_value = send(field)
-              return unless field_value
-
-              # Create HashKey DataType for this parent instance
-              index_hash = Familia::HashKey.new(index_name, parent: target_instance)
-
-              # Remove using HashKey DataType method
-              index_hash.remove(field_value.to_s)
-            end
-
-            method_name = "update_in_#{target_class_name}_#{index_name}"
-            Familia.ld("[generate_unique_mutation_methods_self] #{name} method #{method_name}")
-
-            define_method(method_name) do |target_instance, old_field_value = nil|
-              return unless target_instance
-
-              new_field_value = send(field)
-
-              # Use Familia's transaction method for atomicity with DataType abstraction
-              target_instance.transaction do |_tx|
-                # Create HashKey DataType for this parent instance
-                index_hash = Familia::HashKey.new(index_name, parent: target_instance)
-
-                # Remove old value if provided
-                index_hash.remove(old_field_value.to_s) if old_field_value
-
-                # Add new value if present
-                index_hash[new_field_value.to_s] = identifier if new_field_value
-              end
-            end
           end
         end
 
