@@ -111,7 +111,7 @@ Customer.logical_database
 
 ## @customer.dbclient.connection returns the correct database URI
 @customer.dbclient.connection
-#=> {:host=>"127.0.0.1", :port=>6379, :db=>15, :id=>"redis://127.0.0.1:6379/15", :location=>"127.0.0.1:6379"}
+#=> {:host=>"127.0.0.1", :port=>2525, :db=>15, :id=>"redis://127.0.0.1:2525/15", :location=>"127.0.0.1:2525"}
 
 ## @customer.dbclient.uri returns the correct database URI
 @customer.secrets_created.logical_database
@@ -119,7 +119,7 @@ Customer.logical_database
 
 ## @customer.dbclient.uri returns the correct database URI
 @customer.secrets_created.dbclient.connection
-#=> {:host=>"127.0.0.1", :port=>6379, :db=>15, :id=>"redis://127.0.0.1:6379/15", :location=>"127.0.0.1:6379"}
+#=> {:host=>"127.0.0.1", :port=>2525, :db=>15, :id=>"redis://127.0.0.1:2525/15", :location=>"127.0.0.1:2525"}
 
 ## Customer.url is nil by default
 Customer.uri

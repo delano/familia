@@ -40,7 +40,7 @@ raise Familia::NotDistinguishableError, 'A customized message'
 #=~> /A customized message/
 
 ## NotConnected error stores URI
-test_uri = URI.parse('redis://localhost:6379')
+test_uri = URI.parse('redis://localhost:2525')
 begin
   raise Familia::NotConnected.new(test_uri)
 rescue Familia::NotConnected => e
@@ -49,7 +49,7 @@ end
 #=> "redis://localhost"
 
 ## NotConnected error has custom message
-test_uri = URI.parse('redis://localhost:6379')
+test_uri = URI.parse('redis://localhost:2525')
 begin
   raise Familia::NotConnected.new(test_uri)
 rescue Familia::NotConnected => e

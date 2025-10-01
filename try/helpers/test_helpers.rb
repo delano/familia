@@ -10,6 +10,7 @@ require_relative '../../lib/familia'
 
 Familia.enable_database_logging = true
 Familia.enable_database_counter = true
+Familia.uri = 'redis://127.0.0.1:2525'
 
 class Bone < Familia::Horreum
   using Familia::Refinements::TimeLiterals
@@ -48,8 +49,6 @@ class Customer < Familia::Horreum
   default_expiration 5.years
 
   feature :safe_dump
-  # feature :expiration
-  # feature :api_version
 
   # Use new SafeDump DSL instead of @safe_dump_fields
   safe_dump_field :custid

@@ -15,7 +15,7 @@ Familia.uri.to_s
 #=> "redis://127.0.0.1"
 
 ## Can parse URI from string
-uri = URI.parse('redis://localhost:6379/1')
+uri = URI.parse('redis://localhost:2525/1')
 uri.host
 #=> "localhost"
 
@@ -29,7 +29,7 @@ Familia.connect
 
 ## Can create connection to different URI
 ## Doesn't confirm the logical DB number, dbclient.options raises an error?
-test_uri = 'redis://localhost:6379/2'
+test_uri = 'redis://localhost:2525/2'
 Familia.create_dbclient(test_uri)
 #=:> Redis
 
@@ -48,7 +48,7 @@ Familia.enable_database_counter
 #=> true
 
 ## Middleware gets registered when enabled
-dbclient = Familia.create_dbclient('redis://localhost:6379/3')
+dbclient = Familia.create_dbclient('redis://localhost:2525/3')
 dbclient.ping
 #=> "PONG"
 
