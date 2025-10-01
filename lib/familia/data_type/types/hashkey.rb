@@ -95,7 +95,9 @@ module Familia
     def remove_field(field)
       dbclient.hdel dbkey, field.to_s
     end
-    alias remove remove_field # deprecated
+    alias remove remove_field
+    alias remove remove_field
+    alias remove_element remove_field
 
     def increment(field, by = 1)
       dbclient.hincrby(dbkey, field.to_s, by).to_i
