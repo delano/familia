@@ -43,8 +43,12 @@ class ::TestEmployee < Familia::Horreum
   field :email
   field :department
   field :manager_id
+  field :badge_number
 
-  # Instance-scoped multi-value indexing
+  # Instance-scoped unique indexing (1:1 mapping)
+  unique_index :badge_number, :badge_index, within: TestCompany
+
+  # Instance-scoped multi-value indexing (1:many mapping)
   multi_index :department, :dept_index, within: TestCompany
   multi_index :email, :email_index, within: TestCompany, query: false
 end
@@ -56,8 +60,8 @@ end
 
 @company_id = "comp_#{rand(10000000)}"
 @company = TestCompany.create(company_id: @company_id, name: 'Acme Corp')
-@emp1 = TestEmployee.new(emp_id: 'emp_001', email: 'alice@acme.com', department: 'engineering', manager_id: 'mgr_001')
-@emp2 = TestEmployee.new(emp_id: 'emp_002', email: 'bob@acme.com', department: 'sales', manager_id: 'mgr_002')
+@emp1 = TestEmployee.new(emp_id: 'emp_001', email: 'alice@acme.com', department: 'engineering', manager_id: 'mgr_001', badge_number: 'BADGE001')
+@emp2 = TestEmployee.new(emp_id: 'emp_002', email: 'bob@acme.com', department: 'sales', manager_id: 'mgr_002', badge_number: 'BADGE002')
 
 
 ## Context-scoped methods require context parameter
@@ -166,15 +170,98 @@ TestUser.respond_to?(:find_by_username)
 #=> false
 
 # =============================================
-# 2. Context-Scoped Indexing (multi_index) Tests
+# 2. Instance-Scoped Unique Indexing Tests
 # =============================================
 
-## Context-scoped indexing relationships are registered
-@emp1.class.indexing_relationships.length
-#=> 2
+## Instance-scoped unique index relationships are registered
+@emp1.class.indexing_relationships.any? { |r| r.field == :badge_number }
+#=> true
 
-## Context-scoped relationship has correct configuration
-config = @emp1.class.indexing_relationships.first
+## Instance-scoped unique index has correct configuration
+config = @emp1.class.indexing_relationships.find { |r| r.field == :badge_number }
+[config.index_name, config.target_class, config.cardinality]
+#=> [:badge_index, TestCompany, :unique]
+
+## Target class gets finder method for unique index
+@company.respond_to?(:find_by_badge_number)
+#=> true
+
+## Target class gets bulk finder method for unique index
+@company.respond_to?(:find_all_by_badge_number)
+#=> true
+
+## Target class gets index accessor method
+@company.respond_to?(:badge_index)
+#=> true
+
+## Target class gets rebuild method
+@company.respond_to?(:rebuild_badge_index)
+#=> true
+
+## Participant gets add method with context parameter
+@emp1.respond_to?(:add_to_test_company_badge_index)
+#=> true
+
+## Participant gets remove method with context parameter
+@emp1.respond_to?(:remove_from_test_company_badge_index)
+#=> true
+
+## Participant gets update method with context parameter
+@emp1.respond_to?(:update_in_test_company_badge_index)
+#=> true
+
+## Employee can be added to company badge index
+@emp1.add_to_test_company_badge_index(@company)
+found = @company.find_by_badge_number(@emp1.badge_number)
+found&.emp_id
+#=> "emp_001"
+
+## Index accessor returns HashKey DataType
+@company.badge_index.class.name
+#=> "Familia::HashKey"
+
+## Badge index lookup via hash access
+@company.badge_index[@emp1.badge_number]
+#=> "emp_001"
+
+## Second employee can be added with unique badge
+@emp2.add_to_test_company_badge_index(@company)
+found = @company.find_by_badge_number('BADGE002')
+found&.emp_id
+#=> "emp_002"
+
+## Bulk query works for unique index
+badges = ['BADGE001', 'BADGE002']
+found_emps = @company.find_all_by_badge_number(badges)
+found_emps.map(&:emp_id).sort
+#=> ["emp_001", "emp_002"]
+
+## Update badge index entry
+old_badge = @emp1.badge_number
+@emp1.badge_number = 'BADGE001_NEW'
+@emp1.update_in_test_company_badge_index(@company, old_badge)
+[@company.badge_index[old_badge], @company.badge_index[@emp1.badge_number]]
+#=> [nil, "emp_001"]
+
+## Remove from badge index
+@emp1.remove_from_test_company_badge_index(@company)
+@company.badge_index[@emp1.badge_number]
+#=> nil
+
+## Non-existent badge returns nil
+@company.find_by_badge_number('NONEXISTENT')
+#=> nil
+
+# =============================================
+# 3. Context-Scoped Indexing (multi_index) Tests
+# =============================================
+
+## Context-scoped indexing relationships are registered (unique + multi)
+@emp1.class.indexing_relationships.length
+#=> 3
+
+## Context-scoped multi_index relationship has correct configuration
+config = @emp1.class.indexing_relationships.find { |r| r.field == :department }
 [config.field, config.index_name, config.target_class]
 #=> [:department, :dept_index, TestCompany]
 
