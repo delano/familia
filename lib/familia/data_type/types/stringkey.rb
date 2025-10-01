@@ -1,4 +1,4 @@
-# lib/familia/data_type/types/string.rb
+# lib/familia/data_type/types/stringkey.rb
 
 module Familia
   class StringKey < DataType

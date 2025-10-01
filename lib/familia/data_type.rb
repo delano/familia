@@ -261,9 +261,9 @@ module Familia
     include Serialization
   end
 
-  require_relative 'data_type/types/list'
+  require_relative 'data_type/types/listkey'
   require_relative 'data_type/types/unsorted_set'
   require_relative 'data_type/types/sorted_set'
   require_relative 'data_type/types/hashkey'
-  require_relative 'data_type/types/string'
+  require_relative 'data_type/types/stringkey'
 end

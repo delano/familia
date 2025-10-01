@@ -1,4 +1,4 @@
-# lib/familia/data_type/types/list.rb
+# lib/familia/data_type/types/listkey.rb
 
 module Familia
   class ListKey < DataType

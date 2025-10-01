@@ -101,7 +101,7 @@ module Familia
 
               define_method("sample_from_#{field}") do |field_value, count = 1|
                 # Use helper method instead of manual instantiation
-                index_set = send("#{index_name}_for", field_value)
+                index_set = send("#{index_name}_for", field_value) # i.e. UnsortedSet
 
                 # Get random members efficiently (O(1) via SRANDMEMBER with count)
                 # Returns array even for count=1 for consistent API
