@@ -38,13 +38,11 @@ module Familia
             # Multi-index always requires a parent context
             target_class = within
             resolved_class = Familia.resolve_class(target_class)
-            target_class_name = resolved_class.familia_name
 
             # Store metadata for this indexing relationship
             indexed_class.indexing_relationships << IndexingRelationship.new(
               field:             field,
               target_class:      target_class,
-              target_class_name: target_class_name,
               index_name:        index_name,
               query:            query,
               cardinality:       :multi,

@@ -18,7 +18,6 @@ module Familia
         :field,              # Symbol - field being indexed (e.g., :email, :department)
         :index_name,         # Symbol - name of the index (e.g., :email_index, :dept_index)
         :target_class,       # Class/Symbol - parent class for instance-scoped indexes (within:)
-        :target_class_name,  # String - demodularized class name for method generation
         :cardinality,        # Symbol - :unique (1:1) or :multi (1:many)
         :query               # Boolean - whether to generate query  methods
       ) do

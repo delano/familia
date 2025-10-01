@@ -50,18 +50,17 @@ module Familia
           # @param query [Boolean] Whether to generate query methods
           def setup(indexed_class:, field:, index_name:, within:, query:)
             # Normalize parameters and determine scope type
-            target_class, target_class_name, scope_type = if within
+            target_class, scope_type = if within
               k = Familia.resolve_class(within)
-              [k, k.familia_name, :instance]
+              [k, :instance]
             else
-              [indexed_class, indexed_class.familia_name, :class]
+              [indexed_class, :class]
             end
 
             # Store metadata for this indexing relationship
             indexed_class.indexing_relationships << IndexingRelationship.new(
               field:             field,
               target_class:      target_class,
-              target_class_name: target_class_name,
               index_name:        index_name,
               query:             query,
               cardinality:       :unique,

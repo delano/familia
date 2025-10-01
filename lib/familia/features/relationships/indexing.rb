@@ -228,7 +228,7 @@ module Familia
                 # Instance-scoped index (unique_index or multi_index with within:) - cannot check without target instance
                 # This would require scanning all possible target instances
                 memberships << {
-                  target_class: config.target_class_name.snake_case,
+                  target_class: config.target_class_config_name,
                   index_name: index_name,
                   field: field,
                   field_value: field_value,

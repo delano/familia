@@ -175,8 +175,8 @@ TestUser.respond_to?(:find_by_username)
 
 ## Context-scoped relationship has correct configuration
 config = @emp1.class.indexing_relationships.first
-[config.field, config.index_name, config.target_class, config.target_class_name]
-#=> [:department, :dept_index, TestCompany, "TestCompany"]
+[config.field, config.index_name, config.target_class]
+#=> [:department, :dept_index, TestCompany]
 
 ## Context-scoped methods are generated with collision-free naming
 @emp1.respond_to?(:add_to_test_company_dept_index)
