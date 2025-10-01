@@ -119,20 +119,6 @@ module Familia
           identifier_field
         end
 
-        # Generate a secure temporary identifier
-        def generate_identifier
-          SecureRandom.hex(8)
-        end
-
-        # Get all relationship configurations for this class
-        def relationship_configs
-          configs = {}
-
-          configs[:participation] = participation_relationships if respond_to?(:participation_relationships)
-          configs[:indexing] = indexing_relationships if respond_to?(:indexing_relationships)
-
-          configs
-        end
 
         # Validate relationship configurations
         def validate_relationships!
@@ -167,13 +153,6 @@ module Familia
           true
         end
 
-        # Create a new instance with relationships initialized
-        def create_with_relationships(attributes = {})
-          instance = new(attributes)
-          instance.initialize_relationships
-          instance
-        end
-
         # Class method wrapper for create_temp_key
         def create_temp_key(base_name, ttl = 300)
           timestamp = Familia.now.to_i
@@ -194,24 +173,11 @@ module Familia
         include ScoreEncoding
 
         private
-
-        # Simple constantize method to convert string to constant
-        def constantize_class_name(class_name)
-          class_name.split('::').reduce(Object) { |mod, name| mod.const_get(name) }
-        rescue NameError
-          # If the class doesn't exist, return nil
-          nil
-        end
       end
 
       module ModelInstanceMethods
         # NOTE: identifier and identifier= methods are provided by Horreum base class
         # No need to override them here - use the existing infrastructure
-
-        # Initialize relationships (called after object creation)
-        def initialize_relationships
-          # This can be overridden by subclasses to set up initial relationships
-        end
 
         # Override save to update relationships automatically
         def save(update_expiration: true)
@@ -246,26 +212,19 @@ module Familia
         end
 
         # Comprehensive cleanup - remove from all relationships
+        #
+        # @deprecated This method is poorly implemented and will be removed in v3.0.
+        #   The participation collection removal logic was repetitive and difficult to debug.
+        #   A cleaner implementation will be provided in a future version.
+        #   See pull #115 for details.
+        #
+        # @note Currently only removes from indexes, not participation collections
         def cleanup_all_relationships!
-          # Remove from participation collections
-          #
-          # NOTE: This method has been removed for being poorly implemented. It
-          # was repetative and laborious to debug. It'll come back in a cleaner
-          # for after the rest of the module is in ship shape.
-          #
-          # remove_from_all_participations if respond_to?(:remove_from_all_participations)
-          warn 'Not currently removing from participation collections. See pull #115.'
+          warn '[DEPRECATED] cleanup_all_relationships! will be removed in v3.0. See pull #115.'
+          warn 'Not currently removing from participation collections. Only indexes will be cleaned.'
 
           # Remove from indexes
           remove_from_all_indexes if respond_to?(:remove_from_all_indexes)
-        end
-
-        # Dry run for relationship cleanup (preview what would be affected)
-        def cleanup_preview
-          {
-            participation_collections: [],
-            index_entries: [],
-          }
         end
 
         # Validate that this object's relationships are consistent
@@ -288,28 +247,6 @@ module Familia
           true
         end
 
-        # Refresh relationship data from Valkey/Redis (useful after external changes)
-        def refresh_relationships!
-          # Clear any cached relationship data
-          @relationship_status = nil
-          @current_participations = nil
-          @index_memberships = nil
-
-          # Reload fresh data
-          relationship_status
-        end
-
-        # Create a snapshot of current relationship state (for debugging)
-        def relationship_snapshot
-          {
-            timestamp: Familia.now,
-            identifier: identifier,
-            class: self.class.name,
-            status: relationship_status,
-            dbkeys: find_related_dbkeys,
-          }
-        end
-
         # Direct Valkey/Redis access for instance methods
         def dbclient
           self.class.dbclient
@@ -327,65 +264,7 @@ module Familia
           temp_key
         end
 
-        # Instance method wrapper for cleanup_temp_keys
-        def cleanup_temp_keys(pattern = 'temp:*', batch_size = 100)
-          cursor = 0
-
-          loop do
-            cursor, keys = dbclient.scan(cursor, match: pattern, count: batch_size)
-
-            if keys.any?
-              # Check TTL and remove keys that should have expired
-              keys.each_slice(batch_size) do |key_batch|
-                dbclient.pipelined do |pipeline|
-                  key_batch.each do |key|
-                    ttl = dbclient.ttl(key)
-                    pipeline.del(key) if ttl == -1 # Key exists but has no TTL
-                  end
-                end
-              end
-            end
-
-            break if cursor.zero?
-          end
-        end
-
         private
-
-        # Find all Valkey/Redis keys related to this object
-        def find_related_dbkeys
-          related_keys = []
-          id = identifier
-          return related_keys unless id
-
-          # Scan for keys that might contain this object
-          patterns = [
-            '*:*:*', # General pattern for relationship keys
-            "*#{id}*", # Keys containing the identifier
-          ]
-
-          patterns.each do |pattern|
-            dbclient.scan_each(match: pattern, count: 100) do |key|
-              # Check if this key actually contains our object
-              key_type = dbclient.type(key)
-
-              case key_type
-              when 'zset'
-                related_keys << key if dbclient.zscore(key, id)
-              when 'set'
-                related_keys << key if dbclient.sismember(key, id)
-              when 'list'
-                related_keys << key if dbclient.lpos(key, id)
-              when 'hash'
-                # For hash keys, check if any field values match our identifier
-                hash_values = dbclient.hvals(key)
-                related_keys << key if hash_values.include?(id.to_s)
-              end
-            end
-          end
-
-          related_keys.uniq
-        end
       end
     end
   end
