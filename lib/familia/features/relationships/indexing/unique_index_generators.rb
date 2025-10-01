@@ -114,6 +114,7 @@ module Familia
 
               # Generate bulk query method (e.g., company.find_all_by_badge_number)
               define_method("find_all_by_#{field}") do |field_values|
+                field_values = Array(field_values)
                 return [] if field_values.empty?
 
                 # Use declared field accessor instead of manual instantiation
@@ -229,6 +230,7 @@ module Familia
 
             # Generate class-level bulk query method
             indexed_class.define_singleton_method("find_all_by_#{field}") do |field_values|
+              field_values = Array(field_values)
               return [] if field_values.empty?
 
               index_hash = send(index_name) # Access the class-level hashkey DataType

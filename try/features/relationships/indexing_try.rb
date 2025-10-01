@@ -152,6 +152,11 @@ found_users.map(&:user_id).sort
 TestUser.find_all_by_email([]).length
 #=> 0
 
+## Single value (non-array) is accepted by find_all_by method
+found_users = TestUser.find_all_by_email('bob@example.com')
+found_users.map(&:user_id)
+#=> ["user_002"]
+
 ## Update index entry with old value removal
 old_email = @user1.email
 @user1.email = 'alice.new@example.com'
@@ -235,6 +240,11 @@ badges = ['BADGE001', 'BADGE002']
 found_emps = @company.find_all_by_badge_number(badges)
 found_emps.map(&:emp_id).sort
 #=> ["emp_001", "emp_002"]
+
+## Single value (non-array) accepted for instance-scoped find_all_by
+found_emps = @company.find_all_by_badge_number('BADGE002')
+found_emps.map(&:emp_id)
+#=> ["emp_002"]
 
 ## Update badge index entry
 old_badge = @emp1.badge_number
