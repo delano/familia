@@ -172,7 +172,7 @@ module Familia
       end
 
       def relations?
-        @has_relations ||= false
+        @has_related_fields ||= false
       end
 
       def dump_method

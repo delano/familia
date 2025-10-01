@@ -85,7 +85,7 @@ module Familia
     module RelatedFieldsManagement
       # A practical flag to indicate that a Horreum member has relations,
       # not just theoretically but actually at least one list/haskey/etc.
-      @has_relations = nil
+      @has_related_fields = nil
 
       def self.included(base)
         base.extend(RelatedFieldsAccessors)
@@ -117,7 +117,7 @@ module Familia
               name, opts = *args
 
               # As log as we have at least one relation, we can set this flag.
-              @has_relations = true
+              @has_related_fields = true
 
               attach_instance_related_field name, klass, opts
             end

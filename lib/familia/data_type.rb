@@ -26,7 +26,7 @@ module Familia
     feature :quantization
 
     class << self
-      attr_reader :registered_types, :valid_options, :has_relations
+      attr_reader :registered_types, :valid_options, :has_related_fields
     end
 
     # DataType::ClassMethods
@@ -74,7 +74,7 @@ module Familia
       end
 
       def relations?
-        @has_relations ||= false
+        @has_related_fields ||= false
       end
     end
     extend ClassMethods

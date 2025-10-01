@@ -71,13 +71,13 @@ module Familia
     # * @parent - Parent object reference for nested relationships
     # * @dbclient - Database connection override for this class
     # * @dump_method/@load_method - Serialization method configuration
-    # * @has_relations - Flag indicating if DataType relationships are defined
+    # * @has_related_fields - Flag indicating if DataType relationships are defined
     #
     class << self
       attr_accessor :parent
       # TODO: Where are we calling dbclient= from now with connection pool?
       attr_writer :dbclient, :dump_method, :load_method
-      attr_reader :has_relations
+      attr_reader :has_related_fields
 
       # Extends ClassMethods to subclasses and tracks Familia members
       def inherited(member)
@@ -150,9 +150,9 @@ module Familia
           if parent_class.related_fields&.any?
             member.instance_variable_set(:@related_fields, parent_class.related_fields.dup)
           end
-          if parent_class.instance_variable_get(:@has_relations)
-            member.instance_variable_set(:@has_relations,
-                                         parent_class.instance_variable_get(:@has_relations))
+          if parent_class.instance_variable_get(:@has_related_fields)
+            member.instance_variable_set(:@has_related_fields,
+                                         parent_class.instance_variable_get(:@has_related_fields))
           end
         end
 
