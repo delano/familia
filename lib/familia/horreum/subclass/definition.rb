@@ -48,8 +48,6 @@ module Familia
       include Familia::Settings
       include Familia::Horreum::RelatedFieldsManagement # Provides DataType field methods
 
-      using Familia::Refinements::StylizeWords
-
       # Sets or retrieves the unique identifier field for the class.
       #
       # This method defines or returns the field or method that contains the unique
@@ -175,31 +173,6 @@ module Familia
 
       def relations?
         @has_relations ||= false
-      end
-
-      # Converts the class name into a string that can be used to look up
-      # configuration values. This is particularly useful when mapping
-      # familia models with specific database numbers in the configuration.
-      #
-      # Familia::Horreum::DefinitionMethods#config_name
-      #
-      # @example V2::Session.config_name => 'session'
-      #
-      # @return [String] The underscored class name as a string
-      def config_name
-        return nil if name.nil?
-
-        name.demodularize.snake_case
-      end
-
-      # Familia::Horreum::DefinitionMethods#familia_name
-      #
-      # @example V2::Session.config_name => 'Session'
-      #
-      def familia_name
-        return nil if name.nil?
-
-        name.split('::').last
       end
 
       def dump_method
