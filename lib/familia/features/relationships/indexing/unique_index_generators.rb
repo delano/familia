@@ -39,6 +39,50 @@ module Familia
         module UniqueIndexGenerators
           module_function
 
+          using Familia::Refinements::StylizeWords
+
+          # Main setup method that orchestrates unique index creation
+          #
+          # @param indexed_class [Class] The class being indexed (e.g., Employee)
+          # @param field [Symbol] The field to index
+          # @param index_name [Symbol] Name of the index
+          # @param within [Class, Symbol, nil] Parent class for instance-scoped index
+          # @param query [Boolean] Whether to generate query methods
+          def setup(indexed_class:, field:, index_name:, within:, query:)
+            # Normalize parameters and determine scope type
+            target_class, target_class_name, scope_type = if within
+              k = Familia.resolve_class(within)
+              [k, k.name.demodularize, :instance]
+            else
+              [indexed_class, indexed_class.name, :class]
+            end
+
+            # Store metadata for this indexing relationship
+            indexed_class.indexing_relationships << IndexingRelationship.new(
+              field:             field,
+              target_class:      target_class,
+              target_class_name: target_class_name,
+              index_name:        index_name,
+              query:             query,
+              cardinality:       :unique,
+            )
+
+            # Generate appropriate methods based on scope type
+            case scope_type
+            when :instance
+              # Instance-scoped index (within: Company)
+              if query && target_class.is_a?(Class)
+                generate_query_methods_destination(target_class, field, index_name, indexed_class)
+              end
+              generate_mutation_methods_self(target_class, field, index_name, indexed_class)
+            when :class
+              # Class-level index (no within:)
+              indexed_class.send(:ensure_index_field, indexed_class, index_name, :class_hashkey)
+              generate_query_methods_class(field, index_name, indexed_class) if query
+              generate_mutation_methods_class(field, index_name, indexed_class)
+            end
+          end
+
           # Generates query methods ON THE PARENT CLASS (Company when within: Company):
           # - company.find_by_badge_number(badge) - find by field value
           # - company.find_all_by_badge_number([badges]) - batch lookup

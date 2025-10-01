@@ -51,7 +51,7 @@ module Familia
       # - unique_index: 1:1 field-to-object mapping (HashKey)
       # - multi_index: 1:many field-to-objects mapping (UnsortedSet, no scores)
       # - within: parent class for instance-scoped indexes
-      # - finder: whether to generate find_by_* methods (default: true)
+      # - query: whether to generate find_by_* methods (default: true)
       #
       # Key Patterns:
       # - Class unique: "user:email_index" → HashKey
@@ -77,9 +77,6 @@ module Familia
         # Indexing::ModelClassMethods
         #
         module ModelClassMethods
-          extend MultiIndexGenerators
-          extend UniqueIndexGenerators
-
           # Define an indexed_by relationship for fast lookups
           #
           # Define a multi-value index (1:many mapping)
@@ -87,33 +84,19 @@ module Familia
           # @param field [Symbol] The field to index on
           # @param index_name [Symbol] Name of the index
           # @param within [Class, Symbol] The parent class that owns the index
-          # @param finder [Boolean] Whether to generate finder methods
+          # @param query [Boolean] Whether to generate query methods
           #
           # @example Instance-scoped multi-value indexing
           #   multi_index :department, :dept_index, within: Company
           #
-          def multi_index(field, index_name, within:, finder: true)
-            target_class = within
-            resolved_class = Familia.resolve_class(target_class)
-            target_class_name = resolved_class.name.demodularize
-
-            # Store metadata for this indexing relationship
-            indexing_relationships << IndexingRelationship.new(
+          def multi_index(field, index_name, within:, query: true)
+            MultiIndexGenerators.setup(
+              indexed_class: self,
               field: field,
-              target_class: target_class,
-              target_class_name: target_class_name,
               index_name: index_name,
-              finder: finder,
-              cardinality: :multi,
+              within: within,
+              query: query,
             )
-
-            # Generate query methods on the parent class
-            if finder && target_class.is_a?(Class)
-              MultiIndexGenerators.generate_query_methods_destination(target_class, field, index_name, self)
-            end
-
-            # Generate mutation methods on the indexed class
-            MultiIndexGenerators.generate_mutation_methods_self(resolved_class, field, index_name, self)
           end
 
           # Define a unique index lookup (1:1 mapping)
@@ -121,43 +104,23 @@ module Familia
           # @param field [Symbol] The field to index on
           # @param index_name [Symbol] Name of the index hash
           # @param within [Class, Symbol] Optional parent class for instance-scoped unique index
-          # @param finder [Boolean] Whether to generate finder methods
+          # @param query [Boolean] Whether to generate query methods
           #
           # @example Class-level unique index
           #   unique_index :email, :email_lookup
-          #   unique_index :username, :username_lookup, finder: false
+          #   unique_index :username, :username_lookup, query: false
           #
           # @example Instance-scoped unique index
           #   unique_index :badge_number, :badge_index, within: Company
           #
-          def unique_index(field, index_name, within: nil, finder: true)
-            target_class, target_class_name, scope_type = if within
-              k = Familia.resolve_class(within)
-              [k, k.name.demodularize, :instance]
-            else
-              [self, name, :class]
-            end
-
-            indexing_relationships << IndexingRelationship.new(
-              field:             field,
-              target_class:      target_class,
-              target_class_name: target_class_name,
-              index_name:        index_name,
-              finder:            finder,
-              cardinality:       :unique,
+          def unique_index(field, index_name, within: nil, query: true)
+            UniqueIndexGenerators.setup(
+              indexed_class: self,
+              field: field,
+              index_name: index_name,
+              within: within,
+              query: query,
             )
-
-            case scope_type
-            when :instance
-              if finder && target_class.is_a?(Class)
-                UniqueIndexGenerators.generate_query_methods_destination(target_class, field, index_name, self)
-              end
-              UniqueIndexGenerators.generate_mutation_methods_self(target_class, field, index_name, self)
-            when :class
-              ensure_index_field(self, index_name, :class_hashkey)
-              UniqueIndexGenerators.generate_query_methods_class(field, index_name, self) if finder
-              UniqueIndexGenerators.generate_mutation_methods_class(field, index_name, self)
-            end
           end
 
           # Get all indexing relationships for this class

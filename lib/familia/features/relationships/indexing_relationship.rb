@@ -3,7 +3,8 @@
 module Familia
   module Features
     module Relationships
-      #
+      using Familia::Refinements::StylizeWords
+
       # IndexingRelationship
       #
       # Stores metadata about indexing relationships defined at class level.

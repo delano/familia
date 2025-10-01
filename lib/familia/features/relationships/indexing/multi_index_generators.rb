@@ -25,6 +25,40 @@ module Familia
         module MultiIndexGenerators
           module_function
 
+          using Familia::Refinements::StylizeWords
+
+          # Main setup method that orchestrates multi-value index creation
+          #
+          # @param indexed_class [Class] The class being indexed (e.g., Employee)
+          # @param field [Symbol] The field to index
+          # @param index_name [Symbol] Name of the index
+          # @param within [Class, Symbol] Parent class for instance-scoped index (required)
+          # @param query [Boolean] Whether to generate query methods
+          def setup(indexed_class:, field:, index_name:, within:, query:)
+            # Multi-index always requires a parent context
+            target_class = within
+            resolved_class = Familia.resolve_class(target_class)
+            target_class_name = resolved_class.name.demodularize
+
+            # Store metadata for this indexing relationship
+            indexed_class.indexing_relationships << IndexingRelationship.new(
+              field:             field,
+              target_class:      target_class,
+              target_class_name: target_class_name,
+              index_name:        index_name,
+              query:            query,
+              cardinality:       :multi,
+            )
+
+            # Generate query methods on the parent class
+            if query && target_class.is_a?(Class)
+              generate_query_methods_destination(target_class, field, index_name, indexed_class)
+            end
+
+            # Generate mutation methods on the indexed class
+            generate_mutation_methods_self(resolved_class, field, index_name, indexed_class)
+          end
+
           # Generates query methods ON THE PARENT CLASS (Company when within: Company):
           # - company.sample_from_department(dept, count=1) - random sampling
           # - company.find_all_by_department(dept) - all objects
