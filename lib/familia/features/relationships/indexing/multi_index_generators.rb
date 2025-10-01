@@ -100,25 +100,21 @@ module Familia
             actual_target_class.class_eval do
 
               define_method("sample_from_#{field}") do |field_value, count = 1|
-                # Use helper method instead of manual instantiation
                 index_set = send("#{index_name}_for", field_value) # i.e. UnsortedSet
 
                 # Get random members efficiently (O(1) via SRANDMEMBER with count)
                 # Returns array even for count=1 for consistent API
-                members = index_set.direct_access do |conn, dbkey|
-                  conn.srandmember(dbkey, count) || []
+                index_set.sample(count).map do |id|
+                  indexed_class.new(index_set.deserialize_value(id))
                 end
-                members.map { |id| indexed_class.new(index_set.deserialize_value(id)) }
               end
 
               # Generate bulk query method (e.g., company.find_all_by_department)
               define_method("find_all_by_#{field}") do |field_value|
-                # Use helper method instead of manual instantiation
-                index_set = send("#{index_name}_for", field_value)
+                index_set = send("#{index_name}_for", field_value) # i.e. UnsortedSet
 
                 # Get all members from set
-                members = index_set.members
-                members.map { |id| indexed_class.new(id) }
+                index_set.members.map { |id| indexed_class.new(id) }
               end
 
               # Generate method to rebuild the index for this parent instance
