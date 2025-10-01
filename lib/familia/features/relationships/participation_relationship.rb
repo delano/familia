@@ -15,7 +15,7 @@ module Familia
         :collection_name,     # Symbol name of the collection (e.g., :members, :domains)
         :score,               # Proc/Symbol/nil - score calculator for sorted sets
         :type,                # Symbol - collection type (:sorted_set, :set, :list)
-        :bidirectional        # Boolean - whether to generate reverse methods
+        :bidirectional, # Boolean - whether to generate reverse methods
       ) do
         #
         # Get the normalized config name for the target class

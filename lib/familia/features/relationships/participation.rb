@@ -165,7 +165,7 @@ module Familia
               score: score,
 
               type: type,
-              bidirectional: bidirectional
+              bidirectional: bidirectional,
             )
 
             # STEP 1: Add collection management methods to the class itself
@@ -275,20 +275,20 @@ module Familia
 
             # Store metadata for this participation relationship
             participation_relationships << ParticipationRelationship.new(
-              target_class: target_class,           # as passed to `participates_in`
+              target_class: target_class, # as passed to `participates_in`
               collection_name: collection_name,
               score: score,
 
               type: type,
-              bidirectional: bidirectional
+              bidirectional: bidirectional,
             )
 
             # Resolve target class if it's a symbol/string
             actual_target_class = if target_class.is_a?(Class)
-                                    target_class
-                                  else
-                                    Familia.member_by_config_name(target_class)
-                                  end
+              target_class
+            else
+              Familia.member_by_config_name(target_class)
+            end
 
             # STEP 0: Add participations tracking field to PARTICIPANT class (Domain)
             # This creates the proper key: "domain:123:participations" (not "domain:123:object:participations")
@@ -434,7 +434,7 @@ module Familia
                      else
                        # Unrecognized type
                        return current_score
-                     end
+            end
 
             # Convert result to appropriate score with unified logic
             convert_to_score(result)

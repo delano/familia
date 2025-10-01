@@ -88,7 +88,7 @@ module Familia
                 score: score,
                 type: type,
                 target_class: target_instance.class,
-                collection_name: collection_name
+                collection_name: collection_name,
               )
 
               # Track participation for efficient cleanup

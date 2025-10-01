@@ -91,7 +91,7 @@ module Familia
                 score: score,
                 type: type,
                 target_class: self.class,
-                collection_name: collection_name
+                collection_name: collection_name,
               )
 
               # Track participation in reverse index for efficient cleanup
@@ -177,12 +177,12 @@ collection_name: collection_name)
               # Calculate score if needed
               if type == :sorted_set && score.nil?
                 score = if item.respond_to?(:calculate_participation_score)
-                          item.calculate_participation_score('class', collection_name)
-                        elsif item.respond_to?(:current_score)
-                          item.current_score
-                        else
-                          Familia.now.to_f
-                        end
+                  item.calculate_participation_score('class', collection_name)
+                elsif item.respond_to?(:current_score)
+                  item.current_score
+                else
+                  Familia.now.to_f
+                end
               end
 
               TargetMethods::Builder.add_to_collection(
@@ -191,7 +191,7 @@ collection_name: collection_name)
                 score: score,
                 type: type,
                 target_class: self.class,
-                collection_name: collection_name
+                collection_name: collection_name,
               )
             end
           end
