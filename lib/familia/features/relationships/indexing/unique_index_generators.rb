@@ -97,7 +97,7 @@ module Familia
             actual_target_class = Familia.resolve_class(target_class)
 
             # Ensure the index field is declared (creates accessor that returns DataType)
-            ensure_index_field(actual_target_class, index_name, :hashkey)
+            actual_target_class.send(:ensure_index_field, actual_target_class, index_name, :hashkey)
 
             # Generate instance query method (e.g., company.find_by_badge_number)
             actual_target_class.class_eval do
