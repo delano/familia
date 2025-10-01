@@ -252,14 +252,14 @@ context_methods.length > 0
 # 6. Metadata Storage Tests
 # =============================================
 
-## class_participates_in stores correct target_class
+## class_participates_in stores correct target_class (now a Class object)
 participation_meta = ApiTestUser.participation_relationships.find { |r| r.collection_name == :all_users }
 participation_meta.target_class
-#=> 'apitestuser'
+#=> ApiTestUser
 
-## class_participates_in stores correct target_class_name
+## class_participates_in stores correct target_class via familia_name
 participation_meta = ApiTestUser.participation_relationships.find { |r| r.collection_name == :all_users }
-participation_meta.target_class_name
+participation_meta.target_class.familia_name
 #=> 'ApiTestUser'
 
 ## unique_index stores correct target_class

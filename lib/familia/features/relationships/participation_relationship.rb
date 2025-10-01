@@ -12,7 +12,6 @@ module Familia
       #
       ParticipationRelationship = Data.define(
         :target_class,        # Class object that owns the collection
-        :target_class_name,
         :collection_name,     # Symbol name of the collection (e.g., :members, :domains)
         :score,               # Proc/Symbol/nil - score calculator for sorted sets
         :type,                # Symbol - collection type (:sorted_set, :set, :list)

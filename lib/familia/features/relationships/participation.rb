@@ -158,12 +158,9 @@ module Familia
           # @since 1.0.0
           def class_participates_in(collection_name, score: nil,
                                     type: :sorted_set, bidirectional: true)
-            klass_name = (name || to_s).downcase
-
             # Store metadata for this participation relationship
             participation_relationships << ParticipationRelationship.new(
-              target_class: klass_name,
-              target_class_name: name || to_s,
+              target_class: self,
               collection_name: collection_name,
               score: score,
 
@@ -273,14 +270,12 @@ module Familia
           # @since 1.0.0
           def participates_in(target_class, collection_name, score: nil,
                               type: :sorted_set, bidirectional: true)
-            # Handle class target using Familia.resolve_class and string refinements
+            # Handle class target using Familia.resolve_class
             resolved_class = Familia.resolve_class(target_class)
-            target_class_name = resolved_class.familia_name
 
             # Store metadata for this participation relationship
             participation_relationships << ParticipationRelationship.new(
               target_class: target_class,           # as passed to `participates_in`
-              target_class_name: target_class_name, # PascalCase via familia_name
               collection_name: collection_name,
               score: score,
 
@@ -307,7 +302,7 @@ module Familia
             # Domain gets: in_customer_domains?, add_to_customer_domains, etc.
             return unless bidirectional
 
-            ParticipantMethods::Builder.build(self, target_class_name, collection_name, type)
+            ParticipantMethods::Builder.build(self, resolved_class.familia_name, collection_name, type)
           end
 
           # Get all participation relationships defined for this class.
@@ -568,9 +563,9 @@ module Familia
               collection_name_from_key = key_parts[2]
 
               # Find the matching participation configuration
-              # Note: target_class_config from key is snake_case, target_class_name is PascalCase
+              # Note: target_class_config from key is snake_case
               config = self.class.participation_relationships.find do |cfg|
-                cfg.target_class_name.snake_case == target_class_config &&
+                cfg.target_class_config_name == target_class_config &&
                   cfg.collection_name.to_s == collection_name_from_key
               end
 
@@ -587,7 +582,7 @@ module Familia
 
                 # Check membership using DataType methods
                 membership_data = {
-                  target_class: config.target_class_name,
+                  target_class: config.target_class.familia_name,
                   target_id: target_id,
                   collection_name: config.collection_name,
                   type: config.type,
