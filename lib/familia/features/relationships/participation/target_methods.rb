@@ -85,19 +85,22 @@ module Familia
                 score = item.calculate_participation_score(self.class, collection_name)
               end
 
-              TargetMethods::Builder.add_to_collection(
-                collection,
-                item,
-                score: score,
-                type: type,
-                target_class: self.class,
-                collection_name: collection_name,
-              )
+              # Use transaction for atomicity between collection add and reverse index tracking
+              # All operations use Horreum's DataType methods (not direct Redis calls)
+              transaction do |_tx|
+                # Add to collection using DataType method (ZADD/SADD/RPUSH)
+                TargetMethods::Builder.add_to_collection(
+                  collection,
+                  item,
+                  score: score,
+                  type: type,
+                  target_class: self.class,
+                  collection_name: collection_name,
+                )
 
-              # Track participation in reverse index for efficient cleanup
-              return unless item.respond_to?(:track_participation_in)
-
-              item.track_participation_in(collection.dbkey)
+                # Track participation in reverse index using DataType method (SADD)
+                item.track_participation_in(collection.dbkey) if item.respond_to?(:track_participation_in)
+              end
             end
           end
 
@@ -110,12 +113,15 @@ module Familia
             target_class.define_method(method_name) do |item|
               collection = send(collection_name)
 
-              TargetMethods::Builder.remove_from_collection(collection, item, type: type)
+              # Use transaction for atomicity between collection remove and reverse index untracking
+              # All operations use Horreum's DataType methods (not direct Redis calls)
+              transaction do |_tx|
+                # Remove from collection using DataType method (ZREM/SREM/LREM)
+                TargetMethods::Builder.remove_from_collection(collection, item, type: type)
 
-              # Remove from participation tracking
-              return unless item.respond_to?(:untrack_participation_in)
-
-              item.untrack_participation_in(collection.dbkey)
+                # Remove from participation tracking using DataType method (SREM)
+                item.untrack_participation_in(collection.dbkey) if item.respond_to?(:untrack_participation_in)
+              end
             end
           end
 
@@ -128,12 +134,18 @@ module Familia
               return if items.empty?
 
               collection = send(collection_name)
-              TargetMethods::Builder.bulk_add_to_collection(collection, items, type: type, target_class: self.class,
+
+              # Use transaction for atomicity across all bulk additions and reverse index tracking
+              # All operations use Horreum's DataType methods (not direct Redis calls)
+              transaction do |_tx|
+                # Bulk add to collection using DataType methods (multiple ZADD/SADD/RPUSH)
+                TargetMethods::Builder.bulk_add_to_collection(collection, items, type: type, target_class: self.class,
 collection_name: collection_name)
 
-              # Track all participations
-              items.each do |item|
-                item.track_participation_in(collection.dbkey) if item.respond_to?(:track_participation_in)
+                # Track all participations using DataType methods (multiple SADD)
+                items.each do |item|
+                  item.track_participation_in(collection.dbkey) if item.respond_to?(:track_participation_in)
+                end
               end
             end
           end
