@@ -52,9 +52,9 @@ module Familia
             # Normalize parameters and determine scope type
             target_class, target_class_name, scope_type = if within
               k = Familia.resolve_class(within)
-              [k, k.name.demodularize, :instance]
+              [k, k.familia_name, :instance]
             else
-              [indexed_class, indexed_class.name, :class]
+              [indexed_class, indexed_class.familia_name, :class]
             end
 
             # Store metadata for this indexing relationship

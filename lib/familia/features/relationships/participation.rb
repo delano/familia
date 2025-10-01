@@ -275,12 +275,12 @@ module Familia
                               type: :sorted_set, bidirectional: true)
             # Handle class target using Familia.resolve_class and string refinements
             resolved_class = Familia.resolve_class(target_class)
-            target_class_name = resolved_class.name.demodularize
+            target_class_name = resolved_class.familia_name
 
             # Store metadata for this participation relationship
             participation_relationships << ParticipationRelationship.new(
               target_class: target_class,           # as passed to `participates_in`
-              target_class_name: target_class_name, # pascalized
+              target_class_name: target_class_name, # PascalCase via familia_name
               collection_name: collection_name,
               score: score,
 
@@ -570,7 +570,7 @@ module Familia
               # Find the matching participation configuration
               # Note: target_class_config from key is snake_case, target_class_name is PascalCase
               config = self.class.participation_relationships.find do |cfg|
-                cfg.target_class_name.demodularize.snake_case == target_class_config &&
+                cfg.target_class_name.snake_case == target_class_config &&
                   cfg.collection_name.to_s == collection_name_from_key
               end
 
