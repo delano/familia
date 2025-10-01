@@ -17,6 +17,8 @@ module Familia
     module ManagementMethods
       include Familia::Horreum::RelatedFieldsManagement # Provides DataType query methods
 
+      using Familia::Refinements::StylizeWords
+
       # Creates and persists a new instance of the class.
       #
       # @param args [Array] Variable number of positional arguments to be passed
@@ -70,6 +72,31 @@ module Familia
 
         Familia.trace :MULTIGET, nil, "#{ids.size}: #{ids}" if Familia.debug?
         dbclient.mget(*ids)
+      end
+
+      # Converts the class name into a string that can be used to look up
+      # configuration values. This is particularly useful when mapping
+      # familia models with specific database numbers in the configuration.
+      #
+      # Familia::Horreum::DefinitionMethods#config_name
+      #
+      # @example V2::Session.config_name => 'session'
+      #
+      # @return [String] The underscored class name as a string
+      def config_name
+        return nil if name.nil?
+
+        name.demodularize.snake_case
+      end
+
+      # Familia::Horreum::DefinitionMethods#familia_name
+      #
+      # @example V2::Session.config_name => 'Session'
+      #
+      def familia_name
+        return nil if name.nil?
+
+        name.demodularize
       end
 
       # Retrieves and instantiates an object from Database using the full object

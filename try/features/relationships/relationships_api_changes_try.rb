@@ -1,7 +1,7 @@
 # try/features/relationships/relationships_api_changes_try.rb
 #
 # Test coverage for Familia v2 relationships API changes
-# Testing new class_participates_in and class_indexed_by methods
+# Testing new class_participates_in and unique_index methods
 # Testing breaking changes and argument validation
 
 require_relative '../../helpers/test_helpers'
@@ -21,9 +21,9 @@ class ::ApiTestUser < Familia::Horreum
   class_participates_in :all_users, score: :created_at
   class_participates_in :active_users, score: -> { status == 'active' ? Familia.now.to_i : 0 }
 
-  # New API: class_indexed_by for class-level indexing
-  class_indexed_by :email, :email_lookup
-  class_indexed_by :username, :username_lookup, finder: false
+  # New API: unique_index for class-level indexing
+  unique_index :email, :email_lookup
+  unique_index :username, :username_lookup, query: false
 end
 
 class ::ApiTestProject < Familia::Horreum
@@ -46,12 +46,13 @@ class ::ApiTestMembership < Familia::Horreum
   field :created_at
 
   # New API: using target: parameter
-  indexed_by :user_id, :user_memberships, target: ApiTestUser
-  indexed_by :project_id, :project_memberships, target: ApiTestProject
+  multi_index :user_id, :user_memberships, within: ApiTestUser
+  multi_index :project_id, :project_memberships, within: ApiTestProject
 
   # Participation with parent class
   participates_in ApiTestProject, :memberships, score: :created_at
 end
+
 
 # Setup test objects
 @user = ApiTestUser.new(
@@ -140,38 +141,38 @@ ApiTestUser.active_users.member?(@inactive_user.identifier)
 #=> true
 
 # =============================================
-# 2. New API: class_indexed_by Method Tests
+# 2. New API: unique_index Method Tests
 # =============================================
 
-## class_indexed_by with finder: true generates finder methods
+## unique_index with query: true generates query methods
 ApiTestUser.respond_to?(:find_by_email)
 #=> true
 
-## class_indexed_by with finder: true generates bulk finder methods
+## unique_index with query: true generates bulk query methods
 ApiTestUser.respond_to?(:find_all_by_email)
 #=> true
 
-## class_indexed_by with finder: false does not generate finder methods
+## unique_index with query: false does not generate query methods
 ApiTestUser.respond_to?(:find_by_username)
 #=> false
 
-## class_indexed_by generates class-level index access methods
+## unique_index generates class-level index access methods
 ApiTestUser.respond_to?(:email_lookup)
 #=> true
 
-## class_indexed_by generates class-level index rebuild methods
+## unique_index generates class-level index rebuild methods
 ApiTestUser.respond_to?(:rebuild_email_lookup)
 #=> true
 
-## class_indexed_by generates instance methods for class indexing
+## unique_index generates instance methods for class indexing
 @user.respond_to?(:add_to_class_email_lookup)
 #=> true
 
-## class_indexed_by generates removal methods
+## unique_index generates removal methods
 @user.respond_to?(:remove_from_class_email_lookup)
 #=> true
 
-## class_indexed_by generates update methods
+## unique_index generates update methods
 @user.respond_to?(:update_in_class_email_lookup)
 #=> true
 
@@ -189,15 +190,15 @@ ApiTestUser.email_lookup.get(@user.email) == @user.user_id
 # 3. New API: parent: Parameter Tests
 # =============================================
 
-## indexed_by with context: generates context-specific methods
+## multi_index with within: generates context-specific methods
 @membership.respond_to?(:add_to_api_test_user_user_memberships)
 #=> true
 
-## indexed_by with context: generates removal methods
+## multi_index with within: generates removal methods
 @membership.respond_to?(:remove_from_api_test_user_user_memberships)
 #=> true
 
-## indexed_by with context: generates update methods
+## multi_index with within: generates update methods
 @membership.respond_to?(:update_in_api_test_user_user_memberships)
 #=> true
 
@@ -220,10 +221,10 @@ end
 test_class.respond_to?(:test_collection)
 #=> true
 
-## class_indexed_by works like class-level (old feature)
+## unique_index works like class-level (old feature)
 test_class = Class.new(Familia::Horreum) do
   feature :relationships
-  class_indexed_by :test_field, :test_index
+  unique_index :test_field, :test_index
 end
 test_class.respond_to?(:indexing_relationships)
 ##=> true
@@ -251,29 +252,29 @@ context_methods.length > 0
 # 6. Metadata Storage Tests
 # =============================================
 
-## class_participates_in stores correct target_class
+## class_participates_in stores correct target_class (now a Class object)
 participation_meta = ApiTestUser.participation_relationships.find { |r| r.collection_name == :all_users }
 participation_meta.target_class
-#=> 'apitestuser'
-
-## class_participates_in stores correct target_class_name
-participation_meta = ApiTestUser.participation_relationships.find { |r| r.collection_name == :all_users }
-participation_meta.target_class_name
-#=> 'ApiTestUser'
-
-## class_indexed_by stores correct target_class
-indexing_meta = ApiTestUser.indexing_relationships.find { |r| r[:index_name] == :email_lookup }
-indexing_meta[:target_class]
 #=> ApiTestUser
 
-## class_indexed_by stores correct target_class_name
-indexing_meta = ApiTestUser.indexing_relationships.find { |r| r[:index_name] == :email_lookup }
-indexing_meta[:target_class_name]
+## class_participates_in stores correct target_class via familia_name
+participation_meta = ApiTestUser.participation_relationships.find { |r| r.collection_name == :all_users }
+participation_meta.target_class.familia_name
 #=> 'ApiTestUser'
 
-## indexed_by with context: stores correct metadata
-membership_meta = ApiTestMembership.indexing_relationships.find { |r| r[:index_name] == :user_memberships }
-membership_meta[:target_class]
+## unique_index stores correct target_class
+indexing_meta = ApiTestUser.indexing_relationships.find { |r| r.index_name == :email_lookup }
+indexing_meta.target_class
+#=> ApiTestUser
+
+## unique_index stores correct target_class via familia_name
+indexing_meta = ApiTestUser.indexing_relationships.find { |r| r.index_name == :email_lookup }
+indexing_meta.target_class.familia_name
+#=> 'ApiTestUser'
+
+## multi_index with within: stores correct metadata
+membership_meta = ApiTestMembership.indexing_relationships.find { |r| r.index_name == :user_memberships }
+membership_meta.target_class
 #=> ApiTestUser
 
 # =============================================

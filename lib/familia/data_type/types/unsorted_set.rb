@@ -97,13 +97,21 @@ module Familia
       dbclient.smove dbkey, dstkey, val
     end
 
-    def random
-      deserialize_value randomraw
+    # Get one or more random members from the set
+    # @param count [Integer] Number of random members to return (default: 1)
+    # @return [Array] Array of deserialized random members
+    def sample(count = 1)
+      deserialize_values(*sampleraw(count))
     end
+    alias random sample
 
-    def randomraw
-      dbclient.srandmember(dbkey)
+    # Get one or more random members from the set without deserialization
+    # @param count [Integer] Number of random members to return (default: 1)
+    # @return [Array] Array of raw random members
+    def sampleraw(count = 1)
+      dbclient.srandmember(dbkey, count) || []
     end
+    alias random sampleraw
 
     Familia::DataType.register self, :set
     Familia::DataType.register self, :unsorted_set

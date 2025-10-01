@@ -1,7 +1,7 @@
 # try/features/relationships/indexing_try.rb
 #
 # Comprehensive tests for Familia indexing relationships functionality
-# Tests both indexed_by (parent-context) and class_indexed_by (class-level) indexing
+# Tests both multi_index (parent-context) and unique_index (class-level) indexing
 #
 
 require_relative '../../helpers/test_helpers'
@@ -18,9 +18,9 @@ class ::TestUser < Familia::Horreum
   field :department
   field :role
 
-  # Class-level indexing
-  class_indexed_by :email, :email_lookup
-  class_indexed_by :username, :username_lookup, finder: false
+  # Class-level unique indexing
+  unique_index :email, :email_lookup
+  unique_index :username, :username_lookup, query: false
 end
 
 class ::TestCompany < Familia::Horreum
@@ -30,8 +30,6 @@ class ::TestCompany < Familia::Horreum
   identifier_field :company_id
   field :company_id
   field :name
-
-  class_indexed_by :email, :email_index
 
   unsorted_set :employees
 end
@@ -45,10 +43,14 @@ class ::TestEmployee < Familia::Horreum
   field :email
   field :department
   field :manager_id
+  field :badge_number
 
-  # Context-based indexing
-  indexed_by :department, :dept_index, target: TestCompany
-  indexed_by :email, :email_index, target: TestCompany, finder: false
+  # Instance-scoped unique indexing (1:1 mapping)
+  unique_index :badge_number, :badge_index, within: TestCompany
+
+  # Instance-scoped multi-value indexing (1:many mapping)
+  multi_index :department, :dept_index, within: TestCompany
+  multi_index :email, :email_index, within: TestCompany, query: false
 end
 
 # Setup
@@ -58,19 +60,19 @@ end
 
 @company_id = "comp_#{rand(10000000)}"
 @company = TestCompany.create(company_id: @company_id, name: 'Acme Corp')
-@emp1 = TestEmployee.new(emp_id: 'emp_001', email: 'alice@acme.com', department: 'engineering', manager_id: 'mgr_001')
-@emp2 = TestEmployee.new(emp_id: 'emp_002', email: 'bob@acme.com', department: 'sales', manager_id: 'mgr_002')
+@emp1 = TestEmployee.new(emp_id: 'emp_001', email: 'alice@acme.com', department: 'engineering', manager_id: 'mgr_001', badge_number: 'BADGE001')
+@emp2 = TestEmployee.new(emp_id: 'emp_002', email: 'bob@acme.com', department: 'sales', manager_id: 'mgr_002', badge_number: 'BADGE002')
 
 
 ## Context-scoped methods require context parameter
 @emp2.add_to_test_company_dept_index(@company)
-found_emp = @company.find_by_department(@emp2.department)
-[found_emp&.emp_id, @emp2.emp_id]
+sample = @company.sample_from_department(@emp2.department)
+[sample.first&.emp_id, @emp2.emp_id]
 #=> ["emp_002", "emp_002"]
 
 
 # =============================================
-# 1. Class-Level Indexing (class_indexed_by) Tests
+# 1. Class-Level Indexing (unique_index) Tests
 # =============================================
 
 ## Class indexing relationships are properly registered
@@ -79,19 +81,19 @@ found_emp = @company.find_by_department(@emp2.department)
 
 ## First indexing relationship has correct configuration
 config = @user1.class.indexing_relationships.first
-[config[:field], config[:index_name], config[:target_class] == TestUser, config[:finder]]
+[config.field, config.index_name, config.target_class == TestUser, config.query]
 #=> [:email, :email_lookup, true, true]
 
-## Second indexing relationship has finder disabled
+## Second indexing relationship has query disabled
 config = @user1.class.indexing_relationships.last
-[config[:field], config[:index_name], config[:finder]]
+[config.field, config.index_name, config.query]
 #=> [:username, :username_lookup, false]
 
-## Class-level finder methods are generated for email
+## Class-level query methods are generated for email
 TestUser.respond_to?(:find_by_email)
 #=> true
 
-## Class-level bulk finder methods are generated
+## Class-level bulk query methods are generated
 TestUser.respond_to?(:find_all_by_email)
 #=> true
 
@@ -103,7 +105,7 @@ TestUser.respond_to?(:email_lookup)
 TestUser.respond_to?(:rebuild_email_lookup)
 #=> true
 
-## No finder methods generated when finder: false
+## No query methods generated when query: false
 TestUser.respond_to?(:find_by_username)
 #=> false
 
@@ -129,7 +131,7 @@ user.user_id
 TestUser.email_lookup['alice@example.com']
 #=> "user_001"
 
-## Class finder method works
+## Class query method works
 found_user = TestUser.find_by_email('alice@example.com')
 found_user&.user_id
 #=> "user_001"
@@ -140,13 +142,13 @@ found_user&.user_id
 TestUser.email_lookup.length
 #=> 3
 
-## Bulk finder returns multiple users
+## Bulk query returns multiple users
 emails = ['alice@example.com', 'bob@example.com']
 found_users = TestUser.find_all_by_email(emails)
 found_users.map(&:user_id).sort
 #=> ["user_001", "user_002"]
 
-## Empty array for bulk finder with empty input
+## Empty array for bulk query with empty input
 TestUser.find_all_by_email([]).length
 #=> 0
 
@@ -162,23 +164,106 @@ old_email = @user1.email
 TestUser.email_lookup[@user1.email]
 #=> nil
 
-## Username index works without finder methods (finder: false)
+## Username index works without query methods (query: false)
 @user1.add_to_class_username_lookup
 TestUser.respond_to?(:find_by_username)
 #=> false
 
 # =============================================
-# 2. Context-Scoped Indexing (indexed_by) Tests
+# 2. Instance-Scoped Unique Indexing Tests
 # =============================================
 
-## Context-scoped indexing relationships are registered
-@emp1.class.indexing_relationships.length
-#=> 2
+## Instance-scoped unique index relationships are registered
+@emp1.class.indexing_relationships.any? { |r| r.field == :badge_number }
+#=> true
 
-## Context-scoped relationship has correct configuration
-config = @emp1.class.indexing_relationships.first
-[config[:field], config[:index_name], config[:target_class], config[:target_class_name]]
-#=> [:department, :dept_index, TestCompany, "TestCompany"]
+## Instance-scoped unique index has correct configuration
+config = @emp1.class.indexing_relationships.find { |r| r.field == :badge_number }
+[config.index_name, config.target_class, config.cardinality]
+#=> [:badge_index, TestCompany, :unique]
+
+## Target class gets finder method for unique index
+@company.respond_to?(:find_by_badge_number)
+#=> true
+
+## Target class gets bulk finder method for unique index
+@company.respond_to?(:find_all_by_badge_number)
+#=> true
+
+## Target class gets index accessor method
+@company.respond_to?(:badge_index)
+#=> true
+
+## Target class gets rebuild method
+@company.respond_to?(:rebuild_badge_index)
+#=> true
+
+## Participant gets add method with context parameter
+@emp1.respond_to?(:add_to_test_company_badge_index)
+#=> true
+
+## Participant gets remove method with context parameter
+@emp1.respond_to?(:remove_from_test_company_badge_index)
+#=> true
+
+## Participant gets update method with context parameter
+@emp1.respond_to?(:update_in_test_company_badge_index)
+#=> true
+
+## Employee can be added to company badge index
+@emp1.add_to_test_company_badge_index(@company)
+found = @company.find_by_badge_number(@emp1.badge_number)
+found&.emp_id
+#=> "emp_001"
+
+## Index accessor returns HashKey DataType
+@company.badge_index.class.name
+#=> "Familia::HashKey"
+
+## Badge index lookup via hash access
+@company.badge_index[@emp1.badge_number]
+#=> "emp_001"
+
+## Second employee can be added with unique badge
+@emp2.add_to_test_company_badge_index(@company)
+found = @company.find_by_badge_number('BADGE002')
+found&.emp_id
+#=> "emp_002"
+
+## Bulk query works for unique index
+badges = ['BADGE001', 'BADGE002']
+found_emps = @company.find_all_by_badge_number(badges)
+found_emps.map(&:emp_id).sort
+#=> ["emp_001", "emp_002"]
+
+## Update badge index entry
+old_badge = @emp1.badge_number
+@emp1.badge_number = 'BADGE001_NEW'
+@emp1.update_in_test_company_badge_index(@company, old_badge)
+[@company.badge_index[old_badge], @company.badge_index[@emp1.badge_number]]
+#=> [nil, "emp_001"]
+
+## Remove from badge index
+@emp1.remove_from_test_company_badge_index(@company)
+@company.badge_index[@emp1.badge_number]
+#=> nil
+
+## Non-existent badge returns nil
+@company.find_by_badge_number('NONEXISTENT')
+#=> nil
+
+# =============================================
+# 3. Context-Scoped Indexing (multi_index) Tests
+# =============================================
+
+## Context-scoped indexing relationships are registered (unique + multi)
+@emp1.class.indexing_relationships.length
+#=> 3
+
+## Context-scoped multi_index relationship has correct configuration
+config = @emp1.class.indexing_relationships.find { |r| r.field == :department }
+[config.field, config.index_name, config.target_class]
+#=> [:department, :dept_index, TestCompany]
 
 ## Context-scoped methods are generated with collision-free naming
 @emp1.respond_to?(:add_to_test_company_dept_index)
@@ -192,11 +277,11 @@ config = @emp1.class.indexing_relationships.first
 @emp1.respond_to?(:remove_from_test_company_dept_index)
 #=> true
 
-## Instance finder methods are generated on context class
-@company.respond_to?(:find_by_department)
+## Instance sampling methods are generated on context class
+@company.respond_to?(:sample_from_department)
 #=> true
 
-## Instance bulk finder methods are generated on context class
+## Instance bulk query methods are generated on context class
 @company.respond_to?(:find_all_by_department)
 #=> true
 
@@ -206,13 +291,13 @@ config = @emp1.class.indexing_relationships.first
 
 ## Employee can be added to company department index
 @emp1.add_to_test_company_dept_index(@company)
-found_emp = @company.find_by_department(@emp1.department)
-found_emp&.emp_id
+sample = @company.sample_from_department(@emp1.department)
+sample.first&.emp_id
 #=> "emp_001"
 
-## Context instance finder method works
-found_emp = @company.find_by_department('engineering')
-found_emp&.emp_id
+## Context instance sampling method works
+sample = @company.sample_from_department('engineering')
+sample.first&.emp_id
 #=> "emp_001"
 
 ## Multiple employees in same department (one-to-many)
@@ -221,6 +306,16 @@ found_emp&.emp_id
 employees = @company.find_all_by_department('engineering')
 employees.length
 #=> 2
+
+## Sample with count parameter returns array of specified size
+sample = @company.sample_from_department('engineering', 2)
+sample.length
+#=> 2
+
+## Sample without count parameter defaults to 1
+sample = @company.sample_from_department('engineering')
+sample.length
+#=> 1
 
 ## Update context-scoped index entry
 old_dept = @emp1.department
@@ -237,7 +332,7 @@ research_emps = @company.find_all_by_department('research')
 research_emps.length
 #=> 0
 
-## Finder methods respect finder: false setting
+## Query methods respect query: false setting
 @company.respond_to?(:find_by_email)
 #=> false
 
@@ -253,8 +348,8 @@ research_emps.length
 @user1.respond_to?(:remove_from_all_indexes)
 #=> true
 
-## Indexing memberships query method exists
-@user1.respond_to?(:indexing_memberships)
+## Current indexings query method exists
+@user1.respond_to?(:current_indexings)
 #=> true
 
 ## Indexed in check method exists
@@ -271,11 +366,11 @@ research_emps.length
 @user1.indexed_in?(:nonexistent_index)
 #=> false
 
-## Indexing memberships returns correct information
-memberships = @user1.indexing_memberships
+## Current indexings returns correct information
+memberships = @user1.current_indexings
 membership = memberships.find { |m| m[:index_name] == :email_lookup }
 [membership[:type], membership[:field], membership[:field_value]]
-#=> ["class_indexed_by", :email, "alice@example.com"]
+#=> ["unique_index", :email, "alice@example.com"]
 
 ## Update all indexes with old values (class-level only)
 old_values = { email: 'alice@example.com' }
@@ -292,19 +387,19 @@ TestUser.email_lookup[@user1.email]
 ## Context-scoped indexes require context parameter for updates
 @emp2.add_to_test_company_dept_index(@company)
 @emp2.update_all_indexes({}, @company)
-found_emp = @company.find_by_department(@emp2.department)
-found_emp&.emp_id
+sample = @company.sample_from_department(@emp2.department)
+sample.first&.emp_id
 #=> "emp_002"
 
 # =============================================
 # 4. Edge Cases and Error Handling
 # =============================================
 
-## Finder returns nil for non-existent key
+## Query returns nil for non-existent key
 TestUser.find_by_email('nonexistent@example.com')
 #=> nil
 
-## Bulk finder handles mixed existing/non-existing keys
+## Bulk query handles mixed existing/non-existing keys
 emails = ['bob@example.com', 'nonexistent@example.com']
 found = TestUser.find_all_by_email(emails)
 found.map(&:user_id)
@@ -322,8 +417,8 @@ TestUser.find_by_email('')
 TestUser.email_lookup['bob@example.com']
 #=> nil
 
-## Indexing memberships returns empty array when no indexes
-@user_nil.indexing_memberships.length
+## Current indexings returns empty array when no indexes
+@user_nil.current_indexings.length
 #=> 0
 
 # Teardown

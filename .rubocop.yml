@@ -43,6 +43,7 @@ Style/TrailingCommaInArrayLiteral:
 
 Style/TrailingCommaInArguments:
   Enabled: true
+  EnforcedStyleForMultiline: comma
 
 Style/TrailingCommaInBlockArgs:
   Enabled: true
@@ -61,16 +62,31 @@ Layout/HashAlignment:
 
 # Format with consistent indentation levels rather than vertical dot alignment.
 Layout/MultilineMethodCallIndentation:
+  Enabled: false
   EnforcedStyle: indented
+  IndentationWidth: 2
 
 Layout/IndentationWidth:
   Width: 2
+
+Layout/ArgumentAlignment:
+  Enabled: false
 
 Layout/DotPosition:
   EnforcedStyle: leading # or 'trailing'
 
 Lint/Void:
   Enabled: false
+
+Layout/MultilineAssignmentLayout:
+  Enabled: true
+  EnforcedStyle: same_line
+
+Layout/EndAlignment:
+  EnforcedStyleAlignWith: start_of_line
+
+Layout/FirstArgumentIndentation:
+  EnforcedStyle: consistent
 
 Metrics/AbcSize:
   Enabled: false

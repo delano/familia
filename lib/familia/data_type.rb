@@ -26,7 +26,7 @@ module Familia
     feature :quantization
 
     class << self
-      attr_reader :registered_types, :valid_options, :has_relations
+      attr_reader :registered_types, :valid_options, :has_related_fields
     end
 
     # DataType::ClassMethods
@@ -74,7 +74,7 @@ module Familia
       end
 
       def relations?
-        @has_relations ||= false
+        @has_related_fields ||= false
       end
     end
     extend ClassMethods
@@ -188,6 +188,13 @@ module Familia
       !@opts[:class].to_s.empty? && @opts[:class].is_a?(Familia)
     end
 
+    # Provides a structured way to "gear down" to run db commands that are
+    # not implemented in our DataType classes since we intentionally don't
+    # have a method_missing method.
+    def direct_access
+      yield(dbclient, dbkey)
+    end
+
     def parent_instance?
       parent&.is_a?(Horreum::ParentDefinition)
     end
@@ -261,9 +268,9 @@ module Familia
     include Serialization
   end
 
-  require_relative 'data_type/types/list'
+  require_relative 'data_type/types/listkey'
   require_relative 'data_type/types/unsorted_set'
   require_relative 'data_type/types/sorted_set'
   require_relative 'data_type/types/hashkey'
-  require_relative 'data_type/types/string'
+  require_relative 'data_type/types/stringkey'
 end

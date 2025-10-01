@@ -1,6 +1,6 @@
-# lib/familia/features/relationships/participant_methods.rb
+# lib/familia/features/relationships/participation/participant_methods.rb
 
-require_relative 'collection_operations'
+require_relative '../collection_operations'
 
 module Familia
   module Features
@@ -35,8 +35,8 @@ module Familia
           # @param collection_name [Symbol] Name of the collection (e.g., :domains)
           # @param type [Symbol] Collection type (:sorted_set, :set, :list)
           def self.build(participant_class, target_class_name, collection_name, type)
-            # Convert to snake_case once for consistency
-            target_name = target_class_name.to_s.demodularize.snake_case
+            # Convert to snake_case once for consistency (target_class_name is PascalCase)
+            target_name = target_class_name.to_s.snake_case
 
             # Core participant methods
             build_membership_check(participant_class, target_name, collection_name, type)
@@ -82,17 +82,22 @@ module Familia
                 score = calculate_participation_score(target_instance.class, collection_name)
               end
 
-              ParticipantMethods::Builder.add_to_collection(
-                collection,
-                self,
-                score: score,
-                type: type,
-                target_class: target_instance.class,
-                collection_name: collection_name
-              )
+              # Use transaction for atomicity between collection add and reverse index tracking
+              # All operations use Horreum's DataType methods (not direct Redis calls)
+              target_instance.transaction do |_tx|
+                # Add to collection using DataType method (ZADD/SADD/RPUSH)
+                ParticipantMethods::Builder.add_to_collection(
+                  collection,
+                  self,
+                  score: score,
+                  type: type,
+                  target_class: target_instance.class,
+                  collection_name: collection_name,
+                )
 
-              # Track participation for efficient cleanup
-              track_participation_in(collection.dbkey) if respond_to?(:track_participation_in)
+                # Track participation for efficient cleanup using DataType method (SADD)
+                track_participation_in(collection.dbkey) if respond_to?(:track_participation_in)
+              end
             end
           end
 
@@ -107,10 +112,15 @@ module Familia
               # Use Horreum's DataType accessor instead of manual creation
               collection = target_instance.send(collection_name)
 
-              ParticipantMethods::Builder.remove_from_collection(collection, self, type: type)
+              # Use transaction for atomicity between collection remove and reverse index untracking
+              # All operations use Horreum's DataType methods (not direct Redis calls)
+              target_instance.transaction do |_tx|
+                # Remove from collection using DataType method (ZREM/SREM/LREM)
+                ParticipantMethods::Builder.remove_from_collection(collection, self, type: type)
 
-              # Remove from participation tracking
-              untrack_participation_in(collection.dbkey) if respond_to?(:untrack_participation_in)
+                # Remove from participation tracking using DataType method (SREM)
+                untrack_participation_in(collection.dbkey) if respond_to?(:untrack_participation_in)
+              end
             end
           end
 

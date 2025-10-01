@@ -31,6 +31,7 @@ module Familia
     end
     alias put []=
     alias store []=
+    alias add []=
 
     def [](field)
       deserialize_value dbclient.hget(dbkey, field.to_s)

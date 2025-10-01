@@ -159,7 +159,7 @@ puts "After add_preferred_domain - domain2 participations: #{@domain2.participat
 # Debug the parsing logic
 puts "Domain2 participation relationships:"
 @domain2.class.participation_relationships.each_with_index do |cfg, i|
-  puts "  #{i}: target_class=#{cfg.target_class.inspect}, target_class_name=#{cfg.target_class_name.inspect}, collection_name=#{cfg.collection_name.inspect}"
+  puts "  #{i}: target_class=#{cfg.target_class.inspect}, collection_name=#{cfg.collection_name.inspect}"
   # Debug: snake_case conversion (removed to avoid refinement issues)
 end
 

@@ -19,7 +19,7 @@ class ::TestIndexedUser < Familia::Horreum
   field :department
 
   # Class-level indexing
-  class_indexed_by :email, :email_index
+  unique_index :email, :email_index
 end
 
 class ::TestIndexedCompany < Familia::Horreum
@@ -39,7 +39,7 @@ class ::TestIndexedEmployee < Familia::Horreum
   field :department
 
   # Instance-level indexing
-  indexed_by :department, :dept_index, target: TestIndexedCompany
+  multi_index :department, :dept_index, within: TestIndexedCompany
 end
 
 # Test data
@@ -92,14 +92,14 @@ end
 
 ## Instance-level indexing works with parent context
 @employee.add_to_test_indexed_company_dept_index(@company)
-found_employee = @company.find_by_department('sales')
-found_employee&.emp_id == @employee.emp_id
+sample = @company.sample_from_department('sales')
+sample.first&.emp_id == @employee.emp_id
 #=> true
 
 ## Instance-level index creates proper DataType
 dept_index = @company.dept_index_for('sales')
 dept_index.class.name
-#=> "Familia::SortedSet"
+#=> "Familia::UnsortedSet"
 
 ## Multiple employees in same department
 @employee2 = TestIndexedEmployee.new(emp_id: 'test_emp_999', email: 'emp2@example.com', department: 'sales')
@@ -115,6 +115,8 @@ remaining_employees.map(&:emp_id)
 #=> ["test_emp_999"]
 
 ## Index update methods work correctly
+@employee2.department = 'sales'
+@employee2.add_to_test_indexed_company_dept_index(@company)
 @employee2.department = 'marketing'
 @employee2.update_in_test_indexed_company_dept_index(@company, 'sales')
 sales_employees = @company.find_all_by_department('sales')
@@ -127,8 +129,8 @@ marketing_employees = @company.find_all_by_department('marketing')
 @user.indexed_in?(:email_index)
 #=> true
 
-## Class-level index memberships are tracked correctly
-memberships = @user.indexing_memberships
-membership = memberships.find { |m| m[:type] == 'class_indexed_by' }
+## Class-level indexings are tracked correctly
+memberships = @user.current_indexings
+membership = memberships.find { |m| m[:type] == 'unique_index' }
 [membership[:index_name], membership[:field], membership[:field_value]]
 #=> [:email_index, :email, "test@example.com"]

@@ -2,15 +2,18 @@
 
 require_relative 'participation_relationship'
 require_relative 'collection_operations'
-require_relative 'participant_methods'
-require_relative 'target_methods'
+require_relative 'participation/participant_methods'
+require_relative 'participation/target_methods'
 
 module Familia
   module Features
     module Relationships
-      # Participation module for participates_in relationships using Valkey/Redis collections
-      # Provides multi-presence support where objects can exist in multiple collections
-      # Integrates both tracking and membership functionality into a single API
+      # Participation module for bidirectional business relationships using Valkey/Redis collections.
+      # Provides semantic, scored relationships with automatic reverse tracking.
+      #
+      # Unlike Indexing (which is for attribute lookups), Participation manages
+      # relationships where membership has meaning, scores have semantic value,
+      # and bidirectional tracking is essential
       #
       # === Architecture Overview ===
       # This module is organized into clear, separate concerns:
@@ -21,19 +24,59 @@ module Familia
       #
       # This separation makes it crystal clear what methods are added to which class.
       #
-      # === Visual Example ===
-      # When Domain calls: participates_in Customer, :domains
+      # @example Basic participation with temporal scoring
+      #   class Domain < Familia::Horreum
+      #     feature :relationships
+      #     field :created_at
+      #     participates_in Customer, :domains, score: :created_at
+      #   end
       #
-      # PARTICIPANT (Domain) gets:
-      # - domain.in_customer_domains?(customer)
-      # - domain.add_to_customer_domains(customer)
-      # - domain.remove_from_customer_domains(customer)
+      #   # TARGET (Customer) gets collection management:
+      #   customer.domains                    # → Familia::SortedSet (by created_at)
+      #   customer.add_domain(domain)         # → adds with created_at score
+      #   customer.remove_domain(domain)      # → removes + cleans reverse index
+      #   customer.add_domains([d1, d2, d3])  # → efficient bulk addition
       #
-      # TARGET (Customer) gets:
-      # - customer.domains
-      # - customer.add_domain(domain)
-      # - customer.remove_domain(domain)
-      # - customer.add_domains([...])
+      #   # PARTICIPANT (Domain) gets membership methods:
+      #   domain.in_customer_domains?(customer)              # → true/false
+      #   domain.add_to_customer_domains(customer)           # → self-addition
+      #   domain.remove_from_customer_domains(customer)      # → self-removal
+      #   domain.participations                              # → reverse index tracking
+      #
+      # @example Class-level participation (all instances auto-tracked)
+      #   class User < Familia::Horreum
+      #     feature :relationships
+      #     field :created_at
+      #     class_participates_in :all_users, score: :created_at
+      #   end
+      #
+      #   User.all_users              # → Familia::SortedSet (class-level)
+      #   user.in_class_all_users?    # → true if auto-added
+      #   user.add_to_class_all_users # → explicit addition
+      #
+      # @example Semantic scores with permission encoding
+      #   class Domain < Familia::Horreum
+      #     feature :relationships
+      #     field :created_at
+      #     field :permission_bits
+      #
+      #     participates_in Customer, :domains,
+      #       score: -> { permission_encode(created_at, permission_bits) }
+      #   end
+      #
+      #   customer.domains_with_permission(:read)  # → filtered by score
+      #
+      # Key Differences from Indexing:
+      # - Participation: Bidirectional relationships with semantic scores
+      # - Indexing: Unidirectional lookups without relationship semantics
+      # - Participation: Collection name in key (customer:123:domains)
+      # - Indexing: Field value in key (company:123:dept_index:engineering)
+      #
+      # When to Use Participation:
+      # - Modeling business relationships (Customer owns Domains)
+      # - Scores have meaning (priority, permissions, join_date)
+      # - Need bidirectional tracking ("what collections does this belong to?")
+      # - Relationship lifecycle matters (cascade cleanup, reverse tracking)
       #
       module Participation
         using Familia::Refinements::StylizeWords
@@ -115,17 +158,14 @@ module Familia
           # @since 1.0.0
           def class_participates_in(collection_name, score: nil,
                                     type: :sorted_set, bidirectional: true)
-            klass_name = (name || to_s).downcase
-
             # Store metadata for this participation relationship
             participation_relationships << ParticipationRelationship.new(
-              target_class: klass_name,
-              target_class_name: name || to_s,
+              target_class: self,
               collection_name: collection_name,
               score: score,
 
               type: type,
-              bidirectional: bidirectional
+              bidirectional: bidirectional,
             )
 
             # STEP 1: Add collection management methods to the class itself
@@ -230,27 +270,25 @@ module Familia
           # @since 1.0.0
           def participates_in(target_class, collection_name, score: nil,
                               type: :sorted_set, bidirectional: true)
-            # Handle class target using Familia.resolve_class and string refinements
+            # Handle class target using Familia.resolve_class
             resolved_class = Familia.resolve_class(target_class)
-            target_class_name = resolved_class.name.demodularize
 
             # Store metadata for this participation relationship
             participation_relationships << ParticipationRelationship.new(
-              target_class: target_class,           # as passed to `participates_in`
-              target_class_name: target_class_name, # pascalized
+              target_class: target_class, # as passed to `participates_in`
               collection_name: collection_name,
               score: score,
 
               type: type,
-              bidirectional: bidirectional
+              bidirectional: bidirectional,
             )
 
             # Resolve target class if it's a symbol/string
             actual_target_class = if target_class.is_a?(Class)
-                                    target_class
-                                  else
-                                    Familia.member_by_config_name(target_class)
-                                  end
+              target_class
+            else
+              Familia.member_by_config_name(target_class)
+            end
 
             # STEP 0: Add participations tracking field to PARTICIPANT class (Domain)
             # This creates the proper key: "domain:123:participations" (not "domain:123:object:participations")
@@ -264,7 +302,7 @@ module Familia
             # Domain gets: in_customer_domains?, add_to_customer_domains, etc.
             return unless bidirectional
 
-            ParticipantMethods::Builder.build(self, target_class_name, collection_name, type)
+            ParticipantMethods::Builder.build(self, resolved_class.familia_name, collection_name, type)
           end
 
           # Get all participation relationships defined for this class.
@@ -396,7 +434,7 @@ module Familia
                      else
                        # Unrecognized type
                        return current_score
-                     end
+            end
 
             # Convert result to appropriate score with unified logic
             convert_to_score(result)
@@ -525,9 +563,9 @@ module Familia
               collection_name_from_key = key_parts[2]
 
               # Find the matching participation configuration
-              # Note: target_class_config from key is snake_case, target_class_name is PascalCase
+              # Note: target_class_config from key is snake_case
               config = self.class.participation_relationships.find do |cfg|
-                cfg.target_class_name.demodularize.snake_case == target_class_config &&
+                cfg.target_class_config_name == target_class_config &&
                   cfg.collection_name.to_s == collection_name_from_key
               end
 
@@ -544,7 +582,7 @@ module Familia
 
                 # Check membership using DataType methods
                 membership_data = {
-                  target_class: config.target_class_name,
+                  target_class: config.target_class.familia_name,
                   target_id: target_id,
                   collection_name: config.collection_name,
                   type: config.type,
