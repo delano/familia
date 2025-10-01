@@ -102,17 +102,17 @@ module Familia
 
         # Create appropriate field type based on category
         field_type = if category == :transient
-                       require_relative '../../features/transient_fields/transient_field_type'
-                       TransientFieldType.new(name, as: as, fast_method: false, on_conflict: on_conflict)
-                     else
-                       # For regular fields and other categories, create custom field type with category override
-                       custom_field_type = Class.new(FieldType) do
-                         define_method :category do
-                           category || :field
-                         end
-                       end
-                       custom_field_type.new(name, as: as, fast_method: fast_method, on_conflict: on_conflict)
-                     end
+          require_relative '../../features/transient_fields/transient_field_type'
+          TransientFieldType.new(name, as: as, fast_method: false, on_conflict: on_conflict)
+        else
+          # For regular fields and other categories, create custom field type with category override
+          custom_field_type = Class.new(FieldType) do
+            define_method :category do
+              category || :field
+            end
+          end
+          custom_field_type.new(name, as: as, fast_method: fast_method, on_conflict: on_conflict)
+        end
 
         register_field_type(field_type)
       end
@@ -123,8 +123,8 @@ module Familia
       # @param blk [Proc] a block that returns the suffix (optional).
       # @return [String, Symbol] the current suffix or Familia.default_suffix if none is set.
       #
-      def suffix(a = nil, &blk)
-        @suffix = a || blk if a || !blk.nil?
+      def suffix(val = nil, &blk)
+        @suffix = val || blk if val || !blk.nil?
         @suffix || Familia.default_suffix
       end
 
@@ -137,8 +137,8 @@ module Familia
       # which typically occurs with anonymous classes that haven't had their prefix
       # explicitly set.
       #
-      def prefix(a = nil)
-        @prefix = a if a
+      def prefix(val = nil)
+        @prefix = val if val
         @prefix || begin
           if name.nil?
             raise Problem, 'Cannot generate prefix for anonymous class. ' \
@@ -148,9 +148,9 @@ module Familia
         end
       end
 
-      def logical_database(v = nil)
-        Familia.trace :LOGICAL_DATABASE_DEF, "instvar:#{@logical_database}", v if Familia.debug?
-        @logical_database = v unless v.nil?
+      def logical_database(num = nil)
+        Familia.trace :LOGICAL_DATABASE_DEF, "instvar:#{@logical_database}", num if Familia.debug?
+        @logical_database = num unless num.nil?
         @logical_database || parent&.logical_database
       end
 
