@@ -50,30 +50,60 @@ module Familia
               cardinality:       :multi,
             )
 
-            # Generate query methods on the parent class
+            # Always generate the factory method - required by mutation methods
+            if target_class.is_a?(Class)
+              generate_factory_method(resolved_class, index_name)
+            end
+
+            # Generate query methods on the parent class (optional)
             if query && target_class.is_a?(Class)
-              generate_query_methods_destination(target_class, field, index_name, indexed_class)
+              generate_query_methods_destination(indexed_class, field, resolved_class, index_name)
             end
 
             # Generate mutation methods on the indexed class
-            generate_mutation_methods_self(resolved_class, field, index_name, indexed_class)
+            generate_mutation_methods_self(indexed_class, field, resolved_class, index_name)
+          end
+
+          # Generates the factory method ON THE PARENT CLASS (Company when within: Company):
+          # - company.index_name_for(field_value) - DataType factory (always needed)
+          #
+          # This method is required by mutation methods even when query: false
+          #
+          # @param target_class [Class] The parent class (e.g., Company)
+          # @param index_name [Symbol] Name of the index (e.g., :dept_index)
+          def generate_factory_method(target_class, index_name)
+            actual_target_class = Familia.resolve_class(target_class)
+
+            actual_target_class.class_eval do
+              # Helper method to get index set for a specific field value
+              # This acts as a factory for field-value-specific DataTypes
+              define_method("#{index_name}_for") do |field_value|
+                # Return properly managed DataType instance with parameterized key
+                index_key = "#{index_name}:#{field_value}"
+                Familia::UnsortedSet.new(index_key, parent: self)
+              end
+            end
           end
 
           # Generates query methods ON THE PARENT CLASS (Company when within: Company):
           # - company.sample_from_department(dept, count=1) - random sampling
           # - company.find_all_by_department(dept) - all objects
-          # - company.dept_index_for(dept_value) - DataType accessor
           # - company.rebuild_dept_index - rebuild index
-          def generate_query_methods_destination(target_class, field, index_name, indexed_class)
+          #
+          # @param indexed_class [Class] The class being indexed (e.g., Employee)
+          # @param field [Symbol] The field to index (e.g., :department)
+          # @param target_class [Class] The parent class (e.g., Company)
+          # @param index_name [Symbol] Name of the index (e.g., :dept_index)
+          def generate_query_methods_destination(indexed_class, field, target_class, index_name)
             # Resolve target class using Familia pattern
             actual_target_class = Familia.resolve_class(target_class)
 
             # Generate instance sampling method (e.g., company.sample_from_department)
             actual_target_class.class_eval do
+
               define_method("sample_from_#{field}") do |field_value, count = 1|
-                # Create DataType for this specific field value index using proper Horreum pattern
-                index_key = "#{index_name}:#{field_value}"
-                index_set = Familia::UnsortedSet.new(index_key, parent: self)
+                # Use helper method instead of manual instantiation
+                index_set = send("#{index_name}_for", field_value)
 
                 # Get random members efficiently (O(1) via SRANDMEMBER with count)
                 # Returns array even for count=1 for consistent API
@@ -83,20 +113,12 @@ module Familia
 
               # Generate bulk query method (e.g., company.find_all_by_department)
               define_method("find_all_by_#{field}") do |field_value|
-                # Create DataType for this specific field value index using proper Horreum pattern
-                index_key = "#{index_name}:#{field_value}"
-                index_set = Familia::UnsortedSet.new(index_key, parent: self)
+                # Use helper method instead of manual instantiation
+                index_set = send("#{index_name}_for", field_value)
 
                 # Get all members from set
                 members = index_set.members
                 members.map { |id| indexed_class.new(id) }
-              end
-
-              # Generate method to get the index for a specific field value
-              define_method("#{index_name}_for") do |field_value|
-                # Return properly managed DataType instance
-                index_key = "#{index_name}:#{field_value}"
-                Familia::UnsortedSet.new(index_key, parent: self)
               end
 
               # Generate method to rebuild the index for this parent instance
@@ -112,7 +134,12 @@ module Familia
           # - employee.add_to_company_dept_index(company)
           # - employee.remove_from_company_dept_index(company)
           # - employee.update_in_company_dept_index(company, old_dept)
-          def generate_mutation_methods_self(target_class, field, index_name, indexed_class)
+          #
+          # @param indexed_class [Class] The class being indexed (e.g., Employee)
+          # @param field [Symbol] The field to index (e.g., :department)
+          # @param target_class [Class] The parent class (e.g., Company)
+          # @param index_name [Symbol] Name of the index (e.g., :dept_index)
+          def generate_mutation_methods_self(indexed_class, field, target_class, index_name)
             target_class_config = target_class.config_name
             indexed_class.class_eval do
               method_name = "add_to_#{target_class_config}_#{index_name}"
@@ -124,9 +151,8 @@ module Familia
                 field_value = send(field)
                 return unless field_value
 
-                # Create DataType for this specific field value index using proper Horreum pattern
-                index_key = "#{index_name}:#{field_value}"
-                index_set = Familia::UnsortedSet.new(index_key, parent: target_instance)
+                # Use helper method on target instance instead of manual instantiation
+                index_set = target_instance.send("#{index_name}_for", field_value)
 
                 # Use UnsortedSet DataType method (no scoring)
                 index_set.add(identifier)
@@ -141,9 +167,8 @@ module Familia
                 field_value = send(field)
                 return unless field_value
 
-                # Create DataType for this specific field value index using proper Horreum pattern
-                index_key = "#{index_name}:#{field_value}"
-                index_set = Familia::UnsortedSet.new(index_key, parent: target_instance)
+                # Use helper method on target instance instead of manual instantiation
+                index_set = target_instance.send("#{index_name}_for", field_value)
 
                 # Remove using UnsortedSet DataType method
                 index_set.remove(identifier)
@@ -159,17 +184,15 @@ module Familia
 
                 # Use Familia's transaction method for atomicity with DataType abstraction
                 target_instance.transaction do |_tx|
-                  # Remove from old index if provided
+                  # Remove from old index if provided - use helper method
                   if old_field_value
-                    old_index_key = "#{index_name}:#{old_field_value}"
-                    old_index_set = Familia::UnsortedSet.new(old_index_key, parent: target_instance)
+                    old_index_set = target_instance.send("#{index_name}_for", old_field_value)
                     old_index_set.remove(identifier)
                   end
 
-                  # Add to new index if present
+                  # Add to new index if present - use helper method
                   if new_field_value
-                    new_index_key = "#{index_name}:#{new_field_value}"
-                    new_index_set = Familia::UnsortedSet.new(new_index_key, parent: target_instance)
+                    new_index_set = target_instance.send("#{index_name}_for", new_field_value)
                     new_index_set.add(identifier)
                   end
                 end

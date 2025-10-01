@@ -72,9 +72,9 @@ module Familia
             when :instance
               # Instance-scoped index (within: Company)
               if query && target_class.is_a?(Class)
-                generate_query_methods_destination(target_class, field, index_name, indexed_class)
+                generate_query_methods_destination(indexed_class, field, target_class, index_name)
               end
-              generate_mutation_methods_self(target_class, field, index_name, indexed_class)
+              generate_mutation_methods_self(indexed_class, field, target_class, index_name)
             when :class
               # Class-level index (no within:)
               indexed_class.send(:ensure_index_field, indexed_class, index_name, :class_hashkey)
@@ -88,15 +88,23 @@ module Familia
           # - company.find_all_by_badge_number([badges]) - batch lookup
           # - company.badge_index - DataType accessor
           # - company.rebuild_badge_index - rebuild index
-          def generate_query_methods_destination(target_class, field, index_name, indexed_class)
+          #
+          # @param indexed_class [Class] The class being indexed (e.g., Employee)
+          # @param field [Symbol] The field to index (e.g., :badge_number)
+          # @param target_class [Class] The parent class (e.g., Company)
+          # @param index_name [Symbol] Name of the index (e.g., :badge_index)
+          def generate_query_methods_destination(indexed_class, field, target_class, index_name)
             # Resolve target class using Familia pattern
             actual_target_class = Familia.resolve_class(target_class)
+
+            # Ensure the index field is declared (creates accessor that returns DataType)
+            ensure_index_field(actual_target_class, index_name, :hashkey)
 
             # Generate instance query method (e.g., company.find_by_badge_number)
             actual_target_class.class_eval do
               define_method("find_by_#{field}") do |field_value|
-                # Create HashKey DataType for this parent instance
-                index_hash = Familia::HashKey.new(index_name, parent: self)
+                # Use declared field accessor instead of manual instantiation
+                index_hash = send(index_name)
 
                 # Get the identifier from the hash
                 object_id = index_hash[field_value.to_s]
@@ -109,8 +117,8 @@ module Familia
               define_method("find_all_by_#{field}") do |field_values|
                 return [] if field_values.empty?
 
-                # Create HashKey DataType for this parent instance
-                index_hash = Familia::HashKey.new(index_name, parent: self)
+                # Use declared field accessor instead of manual instantiation
+                index_hash = send(index_name)
 
                 # Get all identifiers from the hash
                 object_ids = index_hash.values_at(*field_values.map(&:to_s))
@@ -118,15 +126,13 @@ module Familia
                 object_ids.compact.map { |object_id| indexed_class.new(object_id) }
               end
 
-              # Generate method to get the index HashKey for this parent instance
-              define_method(index_name) do
-                # Return properly managed DataType instance
-                Familia::HashKey.new(index_name, parent: self)
-              end
+              # Accessor method already created by ensure_index_field above
+              # No need to manually define it here
 
               # Generate method to rebuild the unique index for this parent instance
               define_method("rebuild_#{index_name}") do
-                index_hash = Familia::HashKey.new(index_name, parent: self)
+                # Use declared field accessor instead of manual instantiation
+                index_hash = send(index_name)
 
                 # Clear existing index using DataType method
                 index_hash.clear
@@ -143,7 +149,12 @@ module Familia
           # - employee.add_to_company_badge_index(company)
           # - employee.remove_from_company_badge_index(company)
           # - employee.update_in_company_badge_index(company, old_badge)
-          def generate_mutation_methods_self(target_class, field, index_name, indexed_class)
+          #
+          # @param indexed_class [Class] The class being indexed (e.g., Employee)
+          # @param field [Symbol] The field to index (e.g., :badge_number)
+          # @param target_class [Class] The parent class (e.g., Company)
+          # @param index_name [Symbol] Name of the index (e.g., :badge_index)
+          def generate_mutation_methods_self(indexed_class, field, target_class, index_name)
             target_class_config = target_class.config_name
             indexed_class.class_eval do
               method_name = "add_to_#{target_class_config}_#{index_name}"
@@ -155,8 +166,8 @@ module Familia
                 field_value = send(field)
                 return unless field_value
 
-                # Create HashKey DataType for this parent instance
-                index_hash = Familia::HashKey.new(index_name, parent: target_instance)
+                # Use declared field accessor on target instance
+                index_hash = target_instance.send(index_name)
 
                 # Use HashKey DataType method
                 index_hash[field_value.to_s] = identifier
@@ -171,8 +182,8 @@ module Familia
                 field_value = send(field)
                 return unless field_value
 
-                # Create HashKey DataType for this parent instance
-                index_hash = Familia::HashKey.new(index_name, parent: target_instance)
+                # Use declared field accessor on target instance
+                index_hash = target_instance.send(index_name)
 
                 # Remove using HashKey DataType method
                 index_hash.remove(field_value.to_s)
@@ -188,8 +199,8 @@ module Familia
 
                 # Use Familia's transaction method for atomicity with DataType abstraction
                 target_instance.transaction do |_tx|
-                  # Create HashKey DataType for this parent instance
-                  index_hash = Familia::HashKey.new(index_name, parent: target_instance)
+                  # Use declared field accessor on target instance
+                  index_hash = target_instance.send(index_name)
 
                   # Remove old value if provided
                   index_hash.remove(old_field_value.to_s) if old_field_value

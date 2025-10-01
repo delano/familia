@@ -31,8 +31,6 @@ class ::TestCompany < Familia::Horreum
   field :company_id
   field :name
 
-  unique_index :email, :email_index
-
   unsorted_set :employees
 end
 
