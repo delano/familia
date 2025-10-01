@@ -15,6 +15,7 @@
 *.txt
 .ruby-version
 appendonlydir
+data
 log
 tmp
 vendor

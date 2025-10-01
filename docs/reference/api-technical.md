@@ -1167,7 +1167,7 @@ require 'familia'
 
 # Use separate Valkey/Redis database for tests
 Familia.configure do |config|
-  config.redis_uri = ENV.fetch('REDIS_TEST_URI', 'redis://localhost:6379/15')
+  config.redis_uri = ENV.fetch('REDIS_TEST_URI', 'redis://localhost:2525/3')
 end
 
 module TestHelpers

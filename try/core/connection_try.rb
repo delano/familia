@@ -12,7 +12,7 @@ Familia.uri
 
 ## Default URI points to localhost database server
 Familia.uri.to_s
-#=> "redis://127.0.0.1"
+#=> "redis://127.0.0.1:2525"
 
 ## Can parse URI from string
 uri = URI.parse('redis://localhost:2525/1')
@@ -48,7 +48,7 @@ Familia.enable_database_counter
 #=> true
 
 ## Middleware gets registered when enabled
-dbclient = Familia.create_dbclient('redis://localhost:2525/3')
+dbclient = Familia.create_dbclient('redis://localhost:2525/2')
 dbclient.ping
 #=> "PONG"
 

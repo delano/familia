@@ -8,7 +8,7 @@
 require_relative '../helpers/test_helpers'
 
 # Clean up any existing test data in all test databases
-(0..15).each do |db|
+(0..2).each do |db|
   Familia.with_isolated_dbclient(db) do |client|
     client.flushdb
   end

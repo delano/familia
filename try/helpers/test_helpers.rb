@@ -45,7 +45,7 @@ class Customer < Familia::Horreum
 
   using Familia::Refinements::TimeLiterals
 
-  logical_database 15 # Use something other than the default DB
+  logical_database 3 # Use something other than the default DB
   default_expiration 5.years
 
   feature :safe_dump
@@ -107,7 +107,7 @@ end
 class Session < Familia::Horreum
   using Familia::Refinements::TimeLiterals
 
-  logical_database 14 # don't use Onetime's default DB
+  logical_database 2 # a non-default database
   default_expiration 180.minutes
 
   identifier_field :sessid

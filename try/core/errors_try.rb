@@ -46,7 +46,7 @@ begin
 rescue Familia::NotConnected => e
   e.uri.to_s
 end
-#=> "redis://localhost"
+#=> "redis://localhost:2525"
 
 ## NotConnected error has custom message
 test_uri = URI.parse('redis://localhost:2525')
