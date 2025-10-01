@@ -5,7 +5,7 @@
 Familia provides object-oriented access to Valkey/Redis using their database types. Unlike traditional ORMs that map objects to relational tables, Familia maps Ruby objects directly to Valkey's native data structures (strings, lists, sets, sorted sets, hashes) as instance variables.
 
 > [!CAUTION]
-> Familia 2 is in pre-release and not ready for production use. (September 2025)
+> Familia 2 is in pre-release and not ready for production use. (October 2025)
 ## Traditional ORM vs Familia
 
 **Traditional ORMs** convert your objects to SQL tables. A product with categories becomes two tables with a join table. Checking if a tag exists requires a query with joins.

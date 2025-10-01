@@ -12,6 +12,66 @@ Versioning <https://semver.org/spec/v2.0.0.html>`__.
 
    <!--scriv-insert-here-->
 
+.. _changelog-2.0.0.pre16:
+
+2.0.0.pre16 — 2025-09-30
+========================
+
+Added
+-----
+
+- Added support for instance-scoped unique indexes via ``unique_index`` with ``within:`` parameter. Issue #128
+
+  Example: ``unique_index :badge_number, :badge_index, within: Company`` creates per-company unique badge lookups using HashKey DataType.
+
+Changed
+-------
+
+- **BREAKING**: Consolidated relationships API by replacing ``tracked_in`` and ``member_of`` with unified ``participates_in`` method. PR #110
+- **BREAKING**: Renamed ``context_class`` terminology to ``target_class`` throughout relationships module for clarity
+- **BREAKING**: Removed ``tracking.rb`` and ``membership.rb`` modules, merged functionality into ``participation.rb``
+- **BREAKING**: Updated method names and configuration keys to use ``target`` instead of ``context`` terminology
+- Added ``bidirectional`` parameter to ``participates_in`` to control generation of convenience methods (default: true)
+- Added support for different collection types (sorted_set, set, list) in unified ``participates_in`` API
+- Renamed ``class_tracked_in`` to ``class_participates_in`` for consistency
+
+- Renamed DataType classes to avoid Ruby namespace confusion: ``Familia::String`` → ``Familia::StringKey``, ``Familia::List`` → ``Familia::ListKey``
+- Added dual registration for both traditional and explicit method names (``string``/``stringkey``, ``list``/``listkey``)
+- Updated ``Counter`` and ``Lock`` to inherit from ``StringKey`` instead of ``String``
+
+- **BREAKING:** Renamed indexing API methods for clarity. Issue #128
+
+  - ``class_indexed_by`` → ``unique_index`` (1:1 field-to-object mapping via HashKey)
+  - ``indexed_by`` → ``multi_index`` (1:many field-to-objects mapping via UnsortedSet)
+  - Parameter ``target:`` → ``within:`` for consistency across both index types
+
+- **BREAKING:** Changed ``multi_index`` to use ``UnsortedSet`` instead of ``SortedSet``. Issue #128
+
+  Multi-value indexes no longer include temporal scoring. This aligns with the design philosophy that indexing is for finding objects by attribute, not ordering them. Sort results in Ruby when needed: ``employees.sort_by(&:hire_date)``
+
+Documentation
+-------------
+
+- Updated overview documentation to explain dual naming system and namespace safety benefits
+- Enhanced examples to demonstrate both traditional and explicit DataType method naming
+
+- Updated inline module documentation
+    - ``Familia::Features::Relationships::Indexing`` with comprehensive examples, terminology guide, and design philosophy.
+    - ``Familia::Features::Relationships::Participation`` to clarify differences from indexing module.
+
+AI Assistance
+-------------
+
+- Comprehensive analysis of existing ``tracked_in`` and ``member_of`` implementations
+- Design and implementation of unified ``participates_in`` API integrating both functionalities
+- Systematic refactoring of codebase terminology from context to target
+- Complete test suite updates to verify API consolidation and new functionality
+
+- DataType class renaming and dual registration system implementation designed and developed with Claude Code assistance
+- All test updates and documentation enhancements created with AI support
+
+- Architecture design, implementation, test updates, and documentation for indexing API refactoring completed with Claude Code assistance. Issue #128
+
 .. _changelog-2.0.0.pre14:
 
 2.0.0.pre14 — 2025-09-08
