@@ -1,6 +1,6 @@
-# lib/familia/features/relationships/participant_methods.rb
+# lib/familia/features/relationships/participation/participant_methods.rb
 
-require_relative 'collection_operations'
+require_relative '../collection_operations'
 
 module Familia
   module Features

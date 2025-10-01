@@ -2,8 +2,8 @@
 
 require_relative 'participation_relationship'
 require_relative 'collection_operations'
-require_relative 'participant_methods'
-require_relative 'target_methods'
+require_relative 'participation/participant_methods'
+require_relative 'participation/target_methods'
 
 module Familia
   module Features
