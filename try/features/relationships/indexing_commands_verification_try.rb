@@ -129,8 +129,8 @@ marketing_employees = @company.find_all_by_department('marketing')
 @user.indexed_in?(:email_index)
 #=> true
 
-## Class-level index memberships are tracked correctly
-memberships = @user.indexing_memberships
+## Class-level indexings are tracked correctly
+memberships = @user.current_indexings
 membership = memberships.find { |m| m[:type] == 'unique_index' }
 [membership[:index_name], membership[:field], membership[:field_value]]
 #=> [:email_index, :email, "test@example.com"]

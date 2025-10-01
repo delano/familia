@@ -263,8 +263,8 @@ research_emps.length
 @user1.respond_to?(:remove_from_all_indexes)
 #=> true
 
-## Indexing memberships query method exists
-@user1.respond_to?(:indexing_memberships)
+## Current indexings query method exists
+@user1.respond_to?(:current_indexings)
 #=> true
 
 ## Indexed in check method exists
@@ -281,8 +281,8 @@ research_emps.length
 @user1.indexed_in?(:nonexistent_index)
 #=> false
 
-## Indexing memberships returns correct information
-memberships = @user1.indexing_memberships
+## Current indexings returns correct information
+memberships = @user1.current_indexings
 membership = memberships.find { |m| m[:index_name] == :email_lookup }
 [membership[:type], membership[:field], membership[:field_value]]
 #=> ["unique_index", :email, "alice@example.com"]
@@ -332,8 +332,8 @@ TestUser.find_by_email('')
 TestUser.email_lookup['bob@example.com']
 #=> nil
 
-## Indexing memberships returns empty array when no indexes
-@user_nil.indexing_memberships.length
+## Current indexings returns empty array when no indexes
+@user_nil.current_indexings.length
 #=> 0
 
 # Teardown

@@ -206,7 +206,7 @@ module Familia
           status[:current_participations] = current_participations if respond_to?(:current_participations)
 
           # Get index memberships
-          status[:index_memberships] = indexing_memberships if respond_to?(:indexing_memberships)
+          status[:index_memberships] = current_indexings if respond_to?(:current_indexings)
 
           status
         end

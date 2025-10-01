@@ -196,7 +196,7 @@ module Familia
           # since target-scoped indexes require a specific target instance
           #
           # @return [Array<Hash>] Array of index information
-          def indexing_memberships
+          def current_indexings
             return [] unless self.class.respond_to?(:indexing_relationships)
 
             memberships = []
