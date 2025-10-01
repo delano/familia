@@ -105,7 +105,9 @@ module Familia
 
                 # Get random members efficiently (O(1) via SRANDMEMBER with count)
                 # Returns array even for count=1 for consistent API
-                members = index_set.dbclient.srandmember(index_set.dbkey, count) || []
+                members = index_set.direct_access do |conn, dbkey|
+                  conn.srandmember(dbkey, count) || []
+                end
                 members.map { |id| indexed_class.new(index_set.deserialize_value(id)) }
               end
 

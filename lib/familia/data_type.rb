@@ -188,6 +188,13 @@ module Familia
       !@opts[:class].to_s.empty? && @opts[:class].is_a?(Familia)
     end
 
+    # Provides a structured way to "gear down" to run db commands that are
+    # not implemented in our DataType classes since we intentionally don't
+    # have a method_missing method.
+    def direct_access
+      yield(dbclient, dbkey)
+    end
+
     def parent_instance?
       parent&.is_a?(Horreum::ParentDefinition)
     end
