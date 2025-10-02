@@ -202,10 +202,10 @@ module Familia
               self.class.objid_lookup[value] = identifier unless value.nil? || identifier.nil?
 
               # When setting objid from external source (e.g., loading from Valkey/Redis),
-              # we cannot determine the original generator, so we clear the provenance
-              # tracking to indicate unknown origin. This prevents false assumptions
-              # about the security properties of externally-provided identifiers.
-              instance_variable_set(:"@#{field_name}_generator_used", nil)
+              # infer the generator type from the format to restore provenance tracking.
+              # This allows features like ExternalIdentifier to work correctly on loaded objects.
+              inferred_generator = infer_objid_generator(value)
+              instance_variable_set(:"@#{field_name}_generator_used", inferred_generator)
             end
           end
         end
@@ -308,6 +308,42 @@ module Familia
       #
       # @param value [String] The object identifier to set
       #
+      # Infers the generator type from an objid string format
+      #
+      # This method analyzes the format of an objid to determine which generator
+      # was likely used to create it. This is necessary to restore provenance
+      # tracking when loading objects from Redis, allowing dependent features
+      # like ExternalIdentifier to work correctly.
+      #
+      # @param objid_value [String] The objid string to analyze
+      # @return [Symbol, nil] The inferred generator type (:uuid_v7, :uuid_v4, :hex) or nil
+      #
+      def infer_objid_generator(objid_value)
+        return nil if objid_value.nil? || objid_value.to_s.empty?
+
+        objid_str = objid_value.to_s
+
+        # UUID format: xxxxxxxx-xxxx-Vxxx-xxxx-xxxxxxxxxxxx (36 chars with hyphens)
+        # where V is the version nibble at position 14
+        if objid_str.length == 36 && objid_str[8] == '-' && objid_str[13] == '-'
+          version_char = objid_str[14]
+          case version_char
+          when '7'
+            :uuid_v7
+          when '4'
+            :uuid_v4
+          else
+            nil # Unknown UUID version
+          end
+        # Hex format: pure hexadecimal without hyphens (32 or 64 chars typically)
+        elsif objid_str.match?(/\A[0-9a-fA-F]+\z/)
+          :hex
+        else
+          nil # Unknown format
+        end
+      end
+      private :infer_objid_generator
+
       def object_identifier=(value)
         self.objid = value
       end
