@@ -28,7 +28,7 @@ end
 begin
   # Test with custom URI
   original_uri = Familia.uri
-  test_uri = 'redis://localhost:6379/10'
+  test_uri = 'redis://localhost:2525/10'
 
   Familia.uri = test_uri
   current_uri = Familia.uri

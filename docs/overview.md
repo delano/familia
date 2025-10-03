@@ -708,7 +708,7 @@ when 'production'
 when 'development'
   Familia.uri = 'redis://localhost:6379/0'
 when 'test'
-  Familia.uri = 'redis://localhost:6379/15'
+  Familia.uri = 'redis://localhost:2525/3'
 end
 ```
 
@@ -868,7 +868,7 @@ Familia.redis.keys('*')  # List all keys (use carefully in production)
 require 'familia'
 
 # Use separate test database
-Familia.uri = 'redis://localhost:6379/15'
+Familia.uri = 'redis://localhost:2525/3'
 
 # Setup encryption for tests
 test_keys = {

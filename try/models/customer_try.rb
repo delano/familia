@@ -103,15 +103,15 @@ exists = Customer.exists?('test@example.com')
 
 ## Customer.logical_database returns the correct database number
 Customer.logical_database
-#=> 15
+#=> 3
 
 ## Customer.logical_database returns the correct database number
 @customer.logical_database
-#=> 15
+#=> 3
 
 ## @customer.dbclient.connection returns the correct database URI
 @customer.dbclient.connection
-#=> {:host=>"127.0.0.1", :port=>6379, :db=>15, :id=>"redis://127.0.0.1:6379/15", :location=>"127.0.0.1:6379"}
+#=> {:host=>"127.0.0.1", :port=>2525, :db=>3, :id=>"redis://127.0.0.1:2525/3", :location=>"127.0.0.1:2525"}
 
 ## @customer.dbclient.uri returns the correct database URI
 @customer.secrets_created.logical_database
@@ -119,7 +119,7 @@ Customer.logical_database
 
 ## @customer.dbclient.uri returns the correct database URI
 @customer.secrets_created.dbclient.connection
-#=> {:host=>"127.0.0.1", :port=>6379, :db=>15, :id=>"redis://127.0.0.1:6379/15", :location=>"127.0.0.1:6379"}
+#=> {:host=>"127.0.0.1", :port=>2525, :db=>3, :id=>"redis://127.0.0.1:2525/3", :location=>"127.0.0.1:2525"}
 
 ## Customer.url is nil by default
 Customer.uri
@@ -131,7 +131,7 @@ Customer.instances.logical_database
 
 ## Customer.logical_database returns the correct database number
 Customer.instances.uri.to_s
-#=> 'redis://127.0.0.1/15'
+#=> 'redis://127.0.0.1/3'
 
 # Teardown
 Customer.instances.delete!

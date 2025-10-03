@@ -10,7 +10,7 @@ $LOAD_PATH.unshift File.expand_path('../lib', __dir__)
 require 'familia'
 
 # Configure connection
-Familia.uri = 'redis://localhost:6379/15'
+Familia.uri = 'redis://localhost:2525/3'
 
 puts '=== Encrypted Fields Feature Examples ==='
 puts

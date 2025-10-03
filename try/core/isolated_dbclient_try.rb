@@ -8,7 +8,7 @@
 require_relative '../helpers/test_helpers'
 
 # Clean up any existing test data in all test databases
-(0..15).each do |db|
+(0..2).each do |db|
   Familia.with_isolated_dbclient(db) do |client|
     client.flushdb
   end
@@ -143,7 +143,7 @@ result
 #=> "seven"
 
 ## isolated_dbclient with String URI argument
-client = Familia.isolated_dbclient("redis://localhost:6379/8")
+client = Familia.isolated_dbclient("redis://localhost:2525/8")
 client.set("uri_test", "eight")
 result = client.get("uri_test")
 client.close

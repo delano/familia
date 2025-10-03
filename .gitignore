@@ -14,7 +14,9 @@
 *.log
 *.txt
 .ruby-version
+dump.rdb
 appendonlydir
+data
 log
 tmp
 vendor

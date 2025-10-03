@@ -6,8 +6,8 @@ require_relative '../helpers/test_helpers'
 
 ## move_keys across Valkey/Redis instances (if available)
 begin
-  source_redis = Redis.new(db: 10)
-  dest_redis = Redis.new(db: 11)
+  source_redis = Redis.new(db: 1, port: 2525)
+  dest_redis = Redis.new(db: 2, port: 2525)
   source_redis.set('test:key1', 'value1')
   source_redis.set('test:key2', 'value2')
 

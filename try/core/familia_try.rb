@@ -12,7 +12,7 @@ Familia.uri
 
 ## Familia has a uri as a string
 Familia.uri.to_s
-#=> 'redis://127.0.0.1'
+#=> 'redis://127.0.0.1:2525'
 
 ## Familia has a url, an alias to uri
 Familia.url.eql?(Familia.uri)
