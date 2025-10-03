@@ -325,7 +325,7 @@ module Familia
 
         # UUID format: xxxxxxxx-xxxx-Vxxx-xxxx-xxxxxxxxxxxx (36 chars with hyphens)
         # where V is the version nibble at position 14
-        if objid_str.length == 36 && objid_str[8] == '-' && objid_str[13] == '-'
+        if objid_str.length == 36 && objid_str[8] == '-' && objid_str[13] == '-' && objid_str[18] == '-' && objid_str[23] == '-'
           version_char = objid_str[14]
           case version_char
           when '7'

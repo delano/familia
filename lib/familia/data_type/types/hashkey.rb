@@ -96,7 +96,6 @@ module Familia
       dbclient.hdel dbkey, field.to_s
     end
     alias remove remove_field
-    alias remove remove_field
     alias remove_element remove_field
 
     def increment(field, by = 1)
