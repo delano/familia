@@ -1,5 +1,8 @@
 # lib/familia/data_type.rb
 
+require_relative 'data_type/class_methods'
+require_relative 'data_type/settings'
+require_relative 'data_type/connection'
 require_relative 'data_type/commands'
 require_relative 'data_type/serialization'
 
@@ -14,6 +17,7 @@ module Familia
   # @abstract Subclass and implement Database data type specific methods
   class DataType
     include Familia::Base
+    extend ClassMethods
     extend Familia::Features
 
     using Familia::Refinements::TimeLiterals
@@ -28,60 +32,6 @@ module Familia
     class << self
       attr_reader :registered_types, :valid_options, :has_related_fields
     end
-
-    # DataType::ClassMethods
-    #
-    module ClassMethods
-      attr_accessor :parent, :suffix, :prefix, :uri
-      attr_writer :logical_database
-
-      # To be called inside every class that inherits DataType
-      # +methname+ is the term used for the class and instance methods
-      # that are created for the given +klass+ (e.g. set, list, etc)
-      def register(klass, methname)
-        Familia.trace :REGISTER, nil, "[#{self}] Registering #{klass} as #{methname.inspect}" if Familia.debug?
-
-        @registered_types[methname] = klass
-      end
-
-      # Get the registered type class from a given method name
-      # +methname+ is the method name used to register the class (e.g. :set, :list, etc)
-      # Returns the registered class or nil if not found
-      def registered_type(methname)
-        @registered_types[methname]
-      end
-
-      def logical_database(val = nil)
-        @logical_database = val unless val.nil?
-        @logical_database || parent&.logical_database
-      end
-
-      def uri(val = nil)
-        @uri = val unless val.nil?
-        @uri || (parent ? parent.uri : Familia.uri)
-      end
-
-      def inherited(obj)
-        Familia.trace :DATATYPE, nil, "#{obj} is my kinda type" if Familia.debug?
-        obj.logical_database = logical_database
-        obj.default_expiration = default_expiration # method added via Features::Expiration
-        obj.uri = uri
-        super
-      end
-
-      def valid_keys_only(opts)
-        opts.slice(*DataType.valid_options)
-      end
-
-      def relations?
-        @has_related_fields ||= false
-      end
-    end
-    extend ClassMethods
-
-    attr_reader :keystring, :opts, :uri, :logical_database
-
-    alias url uri
 
     # +keystring+: If parent is set, this will be used as the suffix
     # for dbkey. Otherwise this becomes the value of the key.
@@ -125,145 +75,8 @@ module Familia
       init if respond_to? :init
     end
 
-    # TODO: Replace with Chain of Responsibility pattern
-    def dbclient
-      return Fiber[:familia_transaction] if Fiber[:familia_transaction]
-      return @dbclient if @dbclient
-
-      # Delegate to parent if present, otherwise fall back to Familia
-      parent ? parent.dbclient : Familia.dbclient(opts[:logical_database])
-    end
-
-    # Produces the full dbkey for this object.
-    #
-    # @return [String] The full dbkey.
-    #
-    # This method determines the appropriate dbkey based on the context of the DataType object:
-    #
-    # 1. If a hardcoded key is set in the options, it returns that key.
-    # 2. For instance-level DataType objects, it uses the parent instance's dbkey method.
-    # 3. For class-level DataType objects, it uses the parent class's dbkey method.
-    # 4. For standalone DataType objects, it uses the keystring as the full dbkey.
-    #
-    # For class-level DataType objects (parent_class? == true):
-    # - The suffix is optional and used to differentiate between different types of objects.
-    # - If no suffix is provided, the class's default suffix is used (via the self.suffix method).
-    # - If a nil suffix is explicitly passed, it won't appear in the resulting dbkey.
-    # - Passing nil as the suffix is how class-level DataType objects are created without
-    #   the global default 'object' suffix.
-    #
-    # @example Instance-level DataType
-    #   user_instance.some_datatype.dbkey  # => "user:123:some_datatype"
-    #
-    # @example Class-level DataType
-    #   User.some_datatype.dbkey  # => "user:some_datatype"
-    #
-    # @example Standalone DataType
-    #   DataType.new("mykey").dbkey  # => "mykey"
-    #
-    # @example Class-level DataType with explicit nil suffix
-    #   User.dbkey("123", nil)  # => "user:123"
-    #
-    def dbkey
-      # Return the hardcoded key if it's set. This is useful for
-      # support legacy keys that aren't derived in the same way.
-      return opts[:dbkey] if opts[:dbkey]
-
-      if parent_instance?
-        # This is an instance-level datatype object so the parent instance's
-        # dbkey method is defined in Familia::Horreum::InstanceMethods.
-        parent.dbkey(keystring)
-      elsif parent_class?
-        # This is a class-level datatype object so the parent class' dbkey
-        # method is defined in Familia::Horreum::DefinitionMethods.
-        parent.dbkey(keystring, nil)
-      else
-        # This is a standalone DataType object where it's keystring
-        # is the full database key (dbkey).
-        keystring
-      end
-    end
-
-    def class?
-      !@opts[:class].to_s.empty? && @opts[:class].is_a?(Familia)
-    end
-
-    # Provides a structured way to "gear down" to run db commands that are
-    # not implemented in our DataType classes since we intentionally don't
-    # have a method_missing method.
-    def direct_access
-      yield(dbclient, dbkey)
-    end
-
-    def parent_instance?
-      parent&.is_a?(Horreum::ParentDefinition)
-    end
-
-    def parent_class?
-      parent.is_a?(Class) && parent.ancestors.include?(Familia::Horreum)
-    end
-
-    def parent?
-      parent_class? || parent_instance?
-    end
-
-    def parent
-      # Return cached ParentDefinition if available
-      return @parent if @parent
-
-      # Return class-level parent if no instance parent
-      return self.class.parent unless @parent_ref
-
-      # Create ParentDefinition dynamically from stored reference.
-      # This ensures we get the current identifier value (available after initialization)
-      # rather than a stale nil value from initialization time. Cannot cache due to frozen object.
-      Horreum::ParentDefinition.from_parent(@parent_ref)
-    end
-
-    def parent=(value)
-      case value
-      when Horreum::ParentDefinition
-        @parent = value
-      when nil
-        @parent = nil
-        @parent_ref = nil
-      else
-        # Store parent instance reference for lazy ParentDefinition creation.
-        # During initialization, the parent's identifier may not be available yet,
-        # so we defer ParentDefinition creation until first access for memory efficiency.
-        # Note: @parent_ref is not cleared after use because DataType objects are frozen.
-        @parent_ref = value
-        @parent = nil  # Will be created dynamically in parent method
-      end
-    end
-
-    def uri
-      # Return explicit instance URI if set
-      return @uri if @uri
-
-      # If we have a parent with logical_database, build URI with that database
-      if parent && parent.respond_to?(:logical_database) && parent.logical_database
-        new_uri = (self.class.uri || Familia.uri).dup
-        new_uri.db = parent.logical_database
-        new_uri
-      else
-        # Fall back to class-level URI or global Familia.uri
-        self.class.uri || Familia.uri
-      end
-    end
-
-    def uri=(value)
-      @uri = value
-    end
-
-    def dump_method
-      self.class.dump_method
-    end
-
-    def load_method
-      self.class.load_method
-    end
-
+    include Settings
+    include Connection
     include Commands
     include Serialization
   end
