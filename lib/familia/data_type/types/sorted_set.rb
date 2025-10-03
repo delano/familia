@@ -46,17 +46,81 @@ module Familia
       add val, score
     end
 
-    def add(val, score = nil)
-      # TODO: Support some or all of the ZADD options.
-      # XX: Only update existing elements. Don't add new ones.
-      # NX: Only add new elements. Don't update existing ones.
-      # LT: Only update if new score < current score. Doesn't prevent adding.
-      # GT: Only update if new score > current score. Doesn't prevent adding.
-      # CH: Return total changed elements (new + updated) instead of just new.
-      # INCR: Acts like ZINCRBY. Only one score-element pair allowed.
-      # Note: GT, LT and NX options are mutually exclusive.
+    # Adds an element to the sorted set with an optional score and ZADD options.
+    #
+    # This method supports Redis ZADD options for conditional adds and updates:
+    # - **NX**: Only add new elements (don't update existing)
+    # - **XX**: Only update existing elements (don't add new)
+    # - **GT**: Only update if new score > current score
+    # - **LT**: Only update if new score < current score
+    # - **CH**: Return changed count (new + updated) instead of just new count
+    #
+    # @param val [Object] The value to add to the sorted set
+    # @param score [Numeric, nil] The score for ranking (defaults to current timestamp)
+    # @param nx [Boolean] Only add new elements, don't update existing (default: false)
+    # @param xx [Boolean] Only update existing elements, don't add new (default: false)
+    # @param gt [Boolean] Only update if new score > current score (default: false)
+    # @param lt [Boolean] Only update if new score < current score (default: false)
+    # @param ch [Boolean] Return changed count instead of added count (default: false)
+    #
+    # @return [Boolean] Returns the return value from the redis gem's ZADD
+    #   command. Returns true if element was added or changed (with CH option),
+    #   false if element score was updated without change tracking or no
+    #   operation occurred due to option constraints (NX, XX, GT, LT).
+    #
+    # @raise [ArgumentError] If mutually exclusive options are specified together
+    #   (NX+XX, GT+LT, NX+GT, NX+LT)
+    #
+    # @example Add new element with timestamp
+    #   metrics.add('pageview', Time.now.to_f)  #=> true
+    #
+    # @example Preserve original timestamp on subsequent saves
+    #   index.add(email, Time.now.to_f, nx: true)  #=> true
+    #   index.add(email, Time.now.to_f, nx: true)  #=> false (unchanged)
+    #
+    # @example Update timestamp only for existing entries
+    #   index.add(email, Time.now.to_f, xx: true)  #=> false (if doesn't exist)
+    #
+    # @example Only update if new score is higher (leaderboard)
+    #   scores.add(player, 1000, gt: true)  #=> true (new entry)
+    #   scores.add(player, 1500, gt: true)  #=> false (updated)
+    #   scores.add(player, 1200, gt: true)  #=> false (not updated, score lower)
+    #
+    # @example Track total changes for analytics
+    #   changed = metrics.add(user, score, ch: true)  #=> true (new or updated)
+    #
+    # @example Combined options: only update existing, only if score increases
+    #   index.add(key, new_score, xx: true, gt: true)
+    #
+    # @note GT and LT options do NOT prevent adding new elements, they only
+    #   affect update behavior for existing elements.
+    #
+    # @note Default behavior (no options) adds new elements and updates existing
+    #   ones unconditionally, matching standard Redis ZADD semantics.
+    #
+    # @note INCR option is not supported. Use the increment method for ZINCRBY operations.
+    #
+    def add(val, score = nil, nx: false, xx: false, gt: false, lt: false, ch: false)
       score ||= Familia.now
-      ret = dbclient.zadd dbkey, score, serialize_value(val)
+
+      # Validate mutual exclusivity
+      validate_zadd_options!(nx: nx, xx: xx, gt: gt, lt: lt)
+
+      # Build options hash for redis gem
+      opts = {}
+      opts[:nx] = true if nx
+      opts[:xx] = true if xx
+      opts[:gt] = true if gt
+      opts[:lt] = true if lt
+      opts[:ch] = true if ch
+
+      # Pass options to ZADD
+      ret = if opts.empty?
+        dbclient.zadd(dbkey, score, serialize_value(val))
+      else
+        dbclient.zadd(dbkey, score, serialize_value(val), **opts)
+      end
+
       update_expiration
       ret
     end
@@ -240,6 +304,45 @@ module Familia
     # Return the last element in the list. Redis: ZRANGE(-1)
     def last
       at(-1)
+    end
+
+
+    private
+
+    # Validates that mutually exclusive ZADD options are not specified together.
+    #
+    # @param nx [Boolean] NX option flag
+    # @param xx [Boolean] XX option flag
+    # @param gt [Boolean] GT option flag
+    # @param lt [Boolean] LT option flag
+    #
+    # @raise [ArgumentError] If mutually exclusive options are specified
+    #
+    # @note Valid combinations: XX+GT, XX+LT
+    # @note Invalid combinations: NX+XX, GT+LT, NX+GT, NX+LT
+    #
+    def validate_zadd_options!(nx:, xx:, gt:, lt:)
+      # NX and XX are mutually exclusive
+      if nx && xx
+        raise ArgumentError, "ZADD options NX and XX are mutually exclusive"
+      end
+
+      # GT and LT are mutually exclusive
+      if gt && lt
+        raise ArgumentError, "ZADD options GT and LT are mutually exclusive"
+      end
+
+      # NX is mutually exclusive with GT
+      if nx && gt
+        raise ArgumentError, "ZADD options NX and GT are mutually exclusive"
+      end
+
+      # NX is mutually exclusive with LT
+      if nx && lt
+        raise ArgumentError, "ZADD options NX and LT are mutually exclusive"
+      end
+
+      # Note: XX + GT and XX + LT are valid combinations
     end
 
     Familia::DataType.register self, :sorted_set
