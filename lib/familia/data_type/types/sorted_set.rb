@@ -63,28 +63,31 @@ module Familia
     # @param lt [Boolean] Only update if new score < current score (default: false)
     # @param ch [Boolean] Return changed count instead of added count (default: false)
     #
-    # @return [Integer] Count of elements added (or changed if CH option used)
+    # @return [Boolean] Returns the return value from the redis gem's ZADD
+    #   command. Returns true if element was added or changed (with CH option),
+    #   false if element score was updated without change tracking or no
+    #   operation occurred due to option constraints (NX, XX, GT, LT).
     #
     # @raise [ArgumentError] If mutually exclusive options are specified together
     #   (NX+XX, GT+LT, NX+GT, NX+LT)
     #
     # @example Add new element with timestamp
-    #   metrics.add('pageview', Time.now.to_f)  #=> 1
+    #   metrics.add('pageview', Time.now.to_f)  #=> true
     #
     # @example Preserve original timestamp on subsequent saves
-    #   index.add(email, Time.now.to_f, nx: true)  #=> 1
-    #   index.add(email, Time.now.to_f, nx: true)  #=> 0 (unchanged)
+    #   index.add(email, Time.now.to_f, nx: true)  #=> true
+    #   index.add(email, Time.now.to_f, nx: true)  #=> false (unchanged)
     #
     # @example Update timestamp only for existing entries
-    #   index.add(email, Time.now.to_f, xx: true)  #=> 0 (if doesn't exist)
+    #   index.add(email, Time.now.to_f, xx: true)  #=> false (if doesn't exist)
     #
     # @example Only update if new score is higher (leaderboard)
-    #   scores.add(player, 1000, gt: true)  #=> 1 (new entry)
-    #   scores.add(player, 1500, gt: true)  #=> 0 (updated)
-    #   scores.add(player, 1200, gt: true)  #=> 0 (not updated, score lower)
+    #   scores.add(player, 1000, gt: true)  #=> true (new entry)
+    #   scores.add(player, 1500, gt: true)  #=> false (updated)
+    #   scores.add(player, 1200, gt: true)  #=> false (not updated, score lower)
     #
     # @example Track total changes for analytics
-    #   changed = metrics.add(user, score, ch: true)  #=> 1 (new or updated)
+    #   changed = metrics.add(user, score, ch: true)  #=> true (new or updated)
     #
     # @example Combined options: only update existing, only if score increases
     #   index.add(key, new_score, xx: true, gt: true)
