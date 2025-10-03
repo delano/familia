@@ -304,20 +304,13 @@ module Familia
         objid
       end
 
-      # Full-length alias setter for objid
+      # Infers the generator type (:uuid_v7, :uuid_v4, :hex) from the format of an objid string.
       #
-      # @param value [String] The object identifier to set
-      #
-      # Infers the generator type from an objid string format
-      #
-      # This method analyzes the format of an objid to determine which generator
-      # was likely used to create it. This is necessary to restore provenance
-      # tracking when loading objects from Redis, allowing dependent features
-      # like ExternalIdentifier to work correctly.
+      # This method analyzes the objid format to restore provenance tracking when loading
+      # objects from Redis, allowing dependent features like ExternalIdentifier to work correctly.
       #
       # @param objid_value [String] The objid string to analyze
-      # @return [Symbol, nil] The inferred generator type (:uuid_v7, :uuid_v4, :hex) or nil
-      #
+      # @return [Symbol, nil] The inferred generator type or nil if unknown
       def infer_objid_generator(objid_value)
         return nil if objid_value.nil? || objid_value.to_s.empty?
 
