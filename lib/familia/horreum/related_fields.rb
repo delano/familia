@@ -1,4 +1,4 @@
-# lib/familia/horreum/related_fields_management.rb
+# lib/familia/horreum/related_fields.rb
 
 module Familia
 

@@ -8,6 +8,8 @@ Familia.debug = false
 Familia.dbclient.flushdb
 
 class SecretService < Familia::Horreum
+  feature :transient_fields
+
   identifier_field :name
 
   field :name

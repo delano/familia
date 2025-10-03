@@ -1,9 +1,14 @@
 # lib/familia/horreum.rb
 
-require_relative 'horreum/subclass/definition'
-require_relative 'horreum/subclass/management'
-require_relative 'horreum/shared/settings'
-require_relative 'horreum/core'
+require_relative 'horreum/settings'
+require_relative 'horreum/connection'
+require_relative 'horreum/database_commands'
+require_relative 'horreum/related_fields'
+require_relative 'horreum/definition'
+require_relative 'horreum/management'
+require_relative 'horreum/persistence'
+require_relative 'horreum/serialization'
+require_relative 'horreum/utils'
 
 module Familia
   #
@@ -44,8 +49,12 @@ module Familia
   #
   class Horreum
     include Familia::Base
-    include Familia::Horreum::Core
+    include Familia::Horreum::Persistence
+    include Familia::Horreum::Serialization
+    include Familia::Horreum::Connection
+    include Familia::Horreum::DatabaseCommands
     include Familia::Horreum::Settings
+    include Familia::Horreum::Utils
 
     using Familia::Refinements::TimeLiterals
 
@@ -311,7 +320,7 @@ module Familia
                     send(definition)
                   when Proc
                     definition.call(self)
-                  end
+      end
 
       # Return nil for unpopulated identifiers (like unsaved ActiveRecord objects)
       # Only raise errors when the identifier is actually needed for db operations
@@ -330,7 +339,6 @@ module Familia
     #
     # @return [Redis] the Database connection instance.
     #
-
 
     def generate_id
       @objid ||= Familia.generate_id
@@ -390,6 +398,5 @@ module Familia
     end
 
     # Builds the instance-level connection chain with handlers in priority order
-
   end
 end
