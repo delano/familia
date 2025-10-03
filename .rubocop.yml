@@ -135,6 +135,9 @@ Style/FrozenStringLiteralComment:
 Naming/MemoizedInstanceVariableName:
   Enabled: false
 
+ThreadSafety/ClassAndModuleAttributes:
+  Enabled: false
+
 ThreadSafety/ClassInstanceVariable:
   Enabled: false
 
