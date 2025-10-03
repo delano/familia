@@ -124,6 +124,9 @@ Style/NegatedIfElseCondition:
 Naming/AsciiIdentifiers:
   Enabled: false
 
+Naming/PredicateMethod:
+  Enabled: false
+
 Style/StringLiterals:
   Enabled: true
   EnforcedStyle: single_quotes
