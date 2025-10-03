@@ -35,8 +35,8 @@ jobs:
           --health-retries 5
         ports:
           # https://docs.github.com/en/actions/using-containerized-services/creating-redis-service-containers#running-jobs-in-containers
-          # Maps port 6379 on service container to the host
-          - 6379:6379
+          # Maps port 6379 on service container to 2525 on the host
+          - 2525:6379
 
     steps:
       - uses: actions/checkout@v4
