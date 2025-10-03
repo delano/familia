@@ -1,6 +1,4 @@
-# lib/familia/horreum/subclass/management.rb
-
-require_relative 'related_fields_management'
+# lib/familia/horreum/management.rb
 
 module Familia
   class Horreum

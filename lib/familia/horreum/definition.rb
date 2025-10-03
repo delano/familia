@@ -1,7 +1,6 @@
-# lib/familia/horreum/subclass/definition.rb
+# lib/familia/horreum/definition.rb
 
-require_relative 'related_fields_management'
-require_relative '../shared/settings'
+require_relative 'settings'
 
 module Familia
   VALID_STRATEGIES = %i[raise skip ignore warn overwrite].freeze
@@ -98,11 +97,11 @@ module Familia
       #
       def field(name, as: name, fast_method: :"#{name}!", on_conflict: :raise, category: nil)
         # Use field type system for consistency
-        require_relative '../../field_type'
+        require_relative '../field_type'
 
         # Create appropriate field type based on category
         field_type = if category == :transient
-          require_relative '../../features/transient_fields/transient_field_type'
+          require_relative '../features/transient_fields/transient_field_type'
           TransientFieldType.new(name, as: as, fast_method: false, on_conflict: on_conflict)
         else
           # For regular fields and other categories, create custom field type with category override
@@ -301,16 +300,6 @@ module Familia
         end
 
         @feature_options[feature_name.to_sym]
-      end
-
-      # Create and register a transient field type
-      #
-      # @param name [Symbol] The field name
-      #
-      def transient_field(name, **)
-        require_relative '../../features/transient_fields/transient_field_type'
-        field_type = TransientFieldType.new(name, **, fast_method: false)
-        register_field_type(field_type)
       end
 
       private

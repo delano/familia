@@ -214,6 +214,7 @@ exists_after_batch = @batch_obj.exists?
 
 ## Transient fields don't affect exists? behavior
 class TransientConsistencyTest < Familia::Horreum
+  feature :transient_fields
   identifier_field :id
   field :id
   field :name
