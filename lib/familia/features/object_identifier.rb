@@ -303,6 +303,28 @@ module Familia
 
           result
         end
+
+        # Override save_if_not_exists to update objid_lookup mapping
+        #
+        # This ensures the objid_lookup index is populated during create operations
+        # which use save_if_not_exists instead of save.
+        #
+        # @param update_expiration [Boolean] Whether to update key expiration
+        # @return [Boolean] True if save was successful
+        #
+        def save_if_not_exists(update_expiration: true)
+          result = super
+
+          # Update objid_lookup mapping after successful save
+          if result && respond_to?(:objid) && respond_to?(:identifier)
+            current_objid = objid  # Triggers lazy generation if needed
+            if current_objid && identifier
+              self.class.objid_lookup[current_objid] = identifier
+            end
+          end
+
+          result
+        end
       end
 
       # Instance method for generating object identifier using configured strategy
