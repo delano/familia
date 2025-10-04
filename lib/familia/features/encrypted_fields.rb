@@ -265,8 +265,6 @@ module Familia
         Familia.trace :LOADED, self, base if Familia.debug?
         base.extend ModelClassMethods
 
-        require_relative 'encrypted_fields/encrypted_field_type'
-
         # Initialize encrypted fields tracking
         base.instance_variable_set(:@encrypted_fields, []) unless base.instance_variable_defined?(:@encrypted_fields)
       end

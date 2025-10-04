@@ -1,6 +1,7 @@
 # lib/familia/features/transient_fields.rb
 
 require_relative 'transient_fields/redacted_string'
+require_relative 'transient_fields/transient_field_type'
 
 module Familia
   module Features
@@ -109,8 +110,6 @@ module Familia
       def self.included(base)
         Familia.trace :LOADED, self, base if Familia.debug?
         base.extend ModelClassMethods
-
-        require_relative 'transient_fields/transient_field_type'
 
         # Initialize transient fields tracking
         base.instance_variable_set(:@transient_fields, []) unless base.instance_variable_defined?(:@transient_fields)
