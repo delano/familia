@@ -179,6 +179,41 @@ class NestedGroupsModel < Familia::Horreum
 end
 #=!> Familia::Problem
 
+## Exception during field_group block resets @current_field_group
+class ErrorDuringGroup < Familia::Horreum
+  begin
+    field_group :broken do
+      field :first_field
+      raise StandardError, "Simulated error"
+      field :unreachable_field
+    end
+  rescue StandardError
+    # Swallow the error for testing
+  end
+
+  # Field defined after the error should not be in :broken group
+  field :after_error
+end
+
+ErrorDuringGroup
+#=> ErrorDuringGroup
+
+## Exception handling - broken group has only first_field
+ErrorDuringGroup.instance_variable_get(:@field_groups)[:broken]
+#=> [:first_field]
+
+## Exception handling - after_error field is not in broken group
+ErrorDuringGroup.instance_variable_get(:@field_groups)[:broken].include?(:after_error)
+#=> false
+
+## Exception handling - after_error is in fields list
+ErrorDuringGroup.fields.include?(:after_error)
+#=> true
+
+## Exception handling - current_field_group was reset to nil
+ErrorDuringGroup.instance_variable_get(:@current_field_group)
+#=> nil
+
 
 ## Fields outside - access grouped field group via hash
 FieldsOutsideGroups.instance_variable_get(:@field_groups)[:grouped]

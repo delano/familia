@@ -76,8 +76,6 @@ module Familia
         if ret
           transaction do |conn|
             auto_update_class_indexes
-            # Update objid_lookup mapping if object_identifier feature is enabled
-            update_objid_lookup if respond_to?(:objid) && self.class.respond_to?(:objid_lookup)
             # Add to class-level instances collection after successful save
             self.class.instances.add(identifier, Familia.now) if self.class.respond_to?(:instances)
           end
@@ -155,8 +153,6 @@ module Familia
         if success
           transaction do |conn|
             auto_update_class_indexes
-            # Update objid_lookup mapping if object_identifier feature is enabled
-            update_objid_lookup if respond_to?(:objid) && self.class.respond_to?(:objid_lookup)
           end
         end
 
@@ -454,21 +450,6 @@ module Familia
         end
       end
 
-      # Updates the objid_lookup mapping for object_identifier feature
-      #
-      # Called automatically during save operations to maintain the mapping
-      # between objid and the model's primary identifier field.
-      #
-      # @private
-      #
-      def update_objid_lookup
-        return unless respond_to?(:objid) && respond_to?(:identifier)
-
-        current_objid = instance_variable_get(:@objid)
-        return if current_objid.nil? || identifier.nil?
-
-        self.class.objid_lookup[current_objid] = identifier
-      end
     end
   end
 end
