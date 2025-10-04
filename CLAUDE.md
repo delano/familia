@@ -126,6 +126,10 @@ end
 
 **Why this matters**: Familia's `initialize` method calls `initialize_relatives` to set up DataType objects (lists, sets, etc.). Without calling `super`, these objects remain nil and you'll get helpful errors pointing to the missing super call.
 
+**When to use each approach:**
+- **Use `init` hook** (preferred): For simple initialization logic that doesn't need to intercept constructor arguments. The `init` method is called automatically after `super` with the same arguments passed to `new`.
+- **Use explicit `super`**: When you need full control over initialization order or need to transform arguments before passing to parent. Remember to pass `**kwargs` to preserve keyword argument handling.
+
 **DataType Definition**: Use class methods to define keystore database-backed attributes:
 ```ruby
 class User < Familia::Horreum
