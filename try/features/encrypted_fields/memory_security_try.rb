@@ -1,7 +1,7 @@
 # try/features/encryption_fields/memory_security_try.rb
 
 require 'base64'
-require_relative '../../helpers/test_helpers'
+require_relative '../../support/helpers/test_helpers'
 
 test_keys = {
   v1: Base64.strict_encode64('a' * 32),

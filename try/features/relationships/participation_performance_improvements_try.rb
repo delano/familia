@@ -3,7 +3,7 @@
 # Tests for performance improvements in participation functionality
 # Verifies reverse index functionality and robust type comparison
 
-require_relative '../../helpers/test_helpers'
+require_relative '../../support/helpers/test_helpers'
 
 # Test classes for performance improvements
 class PerfTestCustomer < Familia::Horreum

@@ -1,6 +1,6 @@
 # Test connection race conditions
 
-require_relative '../helpers/test_helpers'
+require_relative '../support/helpers/test_helpers'
 
 ## concurrent connection access test
 user_class = Class.new(Familia::Horreum) do

@@ -4,7 +4,7 @@
 # This test ensures the indexing system uses proper DataType methods instead of direct Redis calls
 #
 
-require_relative '../../helpers/test_helpers'
+require_relative '../../support/helpers/test_helpers'
 
 # Enable database command logging for command verification tests
 Familia.enable_database_logging = true

@@ -4,7 +4,7 @@
 # Testing new class_participates_in and unique_index methods
 # Testing breaking changes and argument validation
 
-require_relative '../../helpers/test_helpers'
+require_relative '../../support/helpers/test_helpers'
 
 # Test classes for new API
 class ::ApiTestUser < Familia::Horreum

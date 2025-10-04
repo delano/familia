@@ -1,6 +1,6 @@
 # try/features/feature_improvements_try.rb
 
-require_relative '../helpers/test_helpers'
+require_relative '../support/helpers/test_helpers'
 
 # Test hierarchical feature registration
 class ::TestClass

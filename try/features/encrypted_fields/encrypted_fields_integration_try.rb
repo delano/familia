@@ -2,7 +2,7 @@
 
 # Test constants will be redefined in each test since variables don't persist
 
-require_relative '../../helpers/test_helpers'
+require_relative '../../support/helpers/test_helpers'
 require 'base64'
 
 

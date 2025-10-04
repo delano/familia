@@ -1,4 +1,4 @@
-require_relative '../../helpers/test_helpers'
+require_relative '../../support/helpers/test_helpers'
 require 'base64'
 
 # Setup encryption configuration

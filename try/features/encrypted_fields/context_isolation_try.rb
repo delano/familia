@@ -2,7 +2,7 @@
 
 require 'base64'
 
-require_relative '../../helpers/test_helpers'
+require_relative '../../support/helpers/test_helpers'
 
 # Setup encryption keys for testing
 test_keys = {

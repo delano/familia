@@ -1,6 +1,6 @@
 # Test reserved keyword handling
 
-require_relative '../helpers/test_helpers'
+require_relative '../support/helpers/test_helpers'
 
 ## attempting to use ttl as field name causes error
 TestClass = Class.new(Familia::Horreum) do

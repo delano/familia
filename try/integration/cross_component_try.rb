@@ -1,6 +1,6 @@
 # Test cross-component integration scenarios
 
-require_relative '../helpers/test_helpers'
+require_relative '../support/helpers/test_helpers'
 
 class TestUser < Familia::Horreum
   using Familia::Refinements::StylizeWords

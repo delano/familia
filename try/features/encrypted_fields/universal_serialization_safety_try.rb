@@ -1,6 +1,6 @@
 # try/features/encryption_fields/universal_serialization_safety_try.rb
 
-require_relative '../../helpers/test_helpers'
+require_relative '../../support/helpers/test_helpers'
 require 'base64'
 
 Familia.debug = false

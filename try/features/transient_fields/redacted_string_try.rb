@@ -1,6 +1,6 @@
 # try/features/transient_fields/redacted_string_try.rb
 
-require_relative '../../helpers/test_helpers'
+require_relative '../../support/helpers/test_helpers'
 
 
 # Create sample sensitive values for testing

@@ -1,6 +1,6 @@
 # Performance benchmarks separate from stress tests
 
-require_relative '../helpers/test_helpers'
+require_relative '../support/helpers/test_helpers'
 require 'benchmark'
 
 ## serialization performance comparison

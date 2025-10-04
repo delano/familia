@@ -1,6 +1,6 @@
 # Test TTL side effects
 
-require_relative '../helpers/test_helpers'
+require_relative '../support/helpers/test_helpers'
 
 ## field update behavior with TTL
 begin
