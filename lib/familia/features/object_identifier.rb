@@ -295,7 +295,7 @@ module Familia
 
           # Update objid_lookup mapping after successful save
           if result && respond_to?(:objid) && respond_to?(:identifier)
-            current_objid = instance_variable_get(:@objid)
+            current_objid = objid  # Triggers lazy generation if needed
             if current_objid && identifier
               self.class.objid_lookup[current_objid] = identifier
             end

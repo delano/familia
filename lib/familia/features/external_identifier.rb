@@ -168,7 +168,7 @@ module Familia
 
           # Update extid_lookup mapping after successful save
           if result && respond_to?(:extid) && respond_to?(:identifier)
-            current_extid = instance_variable_get(:@extid)
+            current_extid = extid  # Triggers lazy generation if needed
             if current_extid && identifier
               self.class.extid_lookup[current_extid] = identifier
             end
