@@ -94,8 +94,11 @@ module Familia
 
         if block_given?
           @current_field_group = name.to_sym
-          instance_eval(&block)
-          @current_field_group = nil
+          begin
+            instance_eval(&block)
+          ensure
+            @current_field_group = nil
+          end
         else
           Familia.ld "[field_group] Created field group :#{name} but no block given" if Familia.debug?
         end
