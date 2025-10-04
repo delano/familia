@@ -68,13 +68,18 @@ module Familia
         self.updated = Familia.now.to_i if respond_to?(:updated)
 
         # Commit our tale to the Database chronicles
+        # Wrap in transaction for atomicity between save and indexing
         ret = commit_fields(update_expiration: update_expiration)
 
         # Auto-index for class-level indexes after successful save
-        auto_update_class_indexes if ret
-
-        # Add to class-level instances collection after successful save
-        self.class.instances.add(identifier, Familia.now) if ret && self.class.respond_to?(:instances)
+        # Use transaction to ensure atomicity with the save operation
+        if ret
+          transaction do |conn|
+            auto_update_class_indexes
+            # Add to class-level instances collection after successful save
+            self.class.instances.add(identifier, Familia.now) if self.class.respond_to?(:instances)
+          end
+        end
 
         Familia.ld "[save] #{self.class} #{dbkey} #{ret} (update_expiration: #{update_expiration})"
 
@@ -144,7 +149,12 @@ module Familia
         end
 
         # Auto-index for class-level indexes after successful save
-        auto_update_class_indexes if success
+        # Use transaction to ensure atomicity with the save operation
+        if success
+          transaction do |conn|
+            auto_update_class_indexes
+          end
+        end
 
         success
       end
