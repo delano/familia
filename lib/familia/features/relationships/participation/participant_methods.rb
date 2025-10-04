@@ -23,8 +23,10 @@ module Familia
         # ├── add_to_customer_domains(customer, score)    # Add myself to customer's domains
         # ├── remove_from_customer_domains(customer)      # Remove myself from customer's domains
         # ├── score_in_customer_domains(customer)         # Get my score (sorted_set only)
-        # ├── update_score_in_customer_domains(customer)  # Update my score (sorted_set only)
         # └── position_in_customer_domains(customer)      # Get my position (list only)
+        #
+        # Note: To update scores, use the DataType API directly:
+        #   customer.domains.add(domain.identifier, new_score, xx: true)
 
         module Builder
           extend CollectionOperations
@@ -126,7 +128,9 @@ module Familia
 
           # Build score-related methods for sorted sets
           # Creates: domain.score_in_customer_domains(customer)
-          #          domain.update_score_in_customer_domains(customer, new_score)
+          #
+          # Note: Score updates use DataType API directly:
+          #   customer.domains.add(domain.identifier, new_score, xx: true)
           def self.build_score_methods(participant_class, target_name, collection_name)
             # Get score method
             score_method = "score_in_#{target_name}_#{collection_name}"

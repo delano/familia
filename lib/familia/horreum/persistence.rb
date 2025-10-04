@@ -68,11 +68,18 @@ module Familia
         self.updated = Familia.now.to_i if respond_to?(:updated)
 
         # Commit our tale to the Database chronicles
-        #
+        # Wrap in transaction for atomicity between save and indexing
         ret = commit_fields(update_expiration: update_expiration)
 
-        # Add to class-level instances collection after successful save
-        self.class.instances.add(identifier, Familia.now) if ret && self.class.respond_to?(:instances)
+        # Auto-index for class-level indexes after successful save
+        # Use transaction to ensure atomicity with the save operation
+        if ret
+          transaction do |conn|
+            auto_update_class_indexes
+            # Add to class-level instances collection after successful save
+            self.class.instances.add(identifier, Familia.now) if self.class.respond_to?(:instances)
+          end
+        end
 
         Familia.ld "[save] #{self.class} #{dbkey} #{ret} (update_expiration: #{update_expiration})"
 
@@ -128,7 +135,7 @@ module Familia
         Familia.ld "[save_if_not_exists]: #{self.class} #{identifier_field}=#{identifier}"
         Familia.trace :SAVE_IF_NOT_EXISTS, nil, uri if Familia.debug?
 
-        dbclient.watch(dbkey) do
+        success = dbclient.watch(dbkey) do
           if dbclient.exists(dbkey).positive?
             dbclient.unwatch
             raise Familia::RecordExistsError, dbkey
@@ -140,6 +147,16 @@ module Familia
 
           result.is_a?(Array) # transaction succeeded
         end
+
+        # Auto-index for class-level indexes after successful save
+        # Use transaction to ensure atomicity with the save operation
+        if success
+          transaction do |conn|
+            auto_update_class_indexes
+          end
+        end
+
+        success
       end
 
       # Commits object fields to the DB storage.
@@ -382,6 +399,54 @@ module Familia
           # UnsortedSet the transient field back to nil
           send("#{field_type.method_name}=", nil)
           Familia.ld "[reset_transient_fields!] Reset #{field_name} to nil"
+        end
+      end
+
+      # Automatically update class-level indexes after save
+      #
+      # Iterates through class-level indexing relationships and calls their
+      # corresponding add_to_class_* methods to populate indexes. Only processes
+      # class-level indexes (where target_class == self.class), skipping
+      # instance-scoped indexes which require parent context.
+      #
+      # Uses idempotent Redis commands (HSET for unique_index) so repeated calls
+      # are safe and have negligible performance overhead. Note that multi_index
+      # always requires within: parameter, so only unique_index benefits from this.
+      #
+      # @return [void]
+      #
+      # @example Automatic indexing on save
+      #   class Customer < Familia::Horreum
+      #     feature :relationships
+      #     unique_index :email, :email_lookup
+      #   end
+      #
+      #   customer = Customer.new(email: 'test@example.com')
+      #   customer.save  # Automatically calls add_to_class_email_lookup
+      #
+      # @note Only class-level unique_index declarations auto-populate.
+      #   Instance-scoped indexes (with within:) require manual population:
+      #   employee.add_to_company_badge_index(company)
+      #
+      # @see Familia::Features::Relationships::Indexing For index declaration details
+      #
+      def auto_update_class_indexes
+        return unless self.class.respond_to?(:indexing_relationships)
+
+        self.class.indexing_relationships.each do |rel|
+          # Skip instance-scoped indexes (require parent context)
+          # Instance-scoped indexes must be manually populated because they need
+          # the parent object reference (e.g., employee.add_to_company_badge_index(company))
+          unless rel.target_class == self.class
+            Familia.ld <<~LOG_MESSAGE
+              [auto_update_class_indexes] Skipping #{rel.index_name} (requires parent context)
+            LOG_MESSAGE
+            next
+          end
+
+          # Call the existing add_to_class_* methods
+          add_method = :"add_to_class_#{rel.index_name}"
+          send(add_method) if respond_to?(add_method)
         end
       end
     end
