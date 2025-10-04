@@ -160,9 +160,6 @@ module Familia
               generator = options[:generator] || DEFAULT_GENERATOR
               instance_variable_set(:"@#{field_name}_generator_used", generator)
 
-              # Update mapping from objid to model primary key
-              self.class.objid_lookup[generated_id] = identifier if respond_to?(:identifier) && identifier
-
               generated_id
             end
           end
@@ -197,9 +194,6 @@ module Familia
               end
 
               instance_variable_set(:"@#{field_name}", value)
-
-              # Update mapping from objid to this new identifier
-              self.class.objid_lookup[value] = identifier unless value.nil? || identifier.nil?
 
               # When setting objid from external source (e.g., loading from Valkey/Redis),
               # infer the generator type from the format to restore provenance tracking.
