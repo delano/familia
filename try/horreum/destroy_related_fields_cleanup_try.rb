@@ -1,3 +1,5 @@
+# try/horreum/destroy_related_fields_cleanup_try.rb
+
 # Horreum destroy! Related Fields Cleanup Tryouts
 #
 # Tests that when a Horreum instance is destroyed, all its related fields
