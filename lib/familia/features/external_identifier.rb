@@ -10,6 +10,7 @@ module Familia
       def self.included(base)
         Familia.trace :LOADED, self, base if Familia.debug?
         base.extend ModelClassMethods
+        base.include ModelInstanceMethods
 
         # Ensure default prefix is set in feature options
         base.add_feature_options(:external_identifier, prefix: 'ext')
@@ -75,9 +76,6 @@ module Familia
 
               instance_variable_set(:"@#{field_name}", derived_extid)
 
-              # Update mapping if we have an identifier (objid)
-              self.class.extid_lookup[derived_extid] = identifier if respond_to?(:identifier) && identifier
-
               derived_extid
             end
           end
@@ -103,11 +101,6 @@ module Familia
 
               # Set the new value
               instance_variable_set(:"@#{field_name}", value)
-
-              # Update mapping if we have both extid and identifier
-              return unless value && respond_to?(:identifier) && identifier
-
-              self.class.extid_lookup[value] = identifier
             end
           end
         end
@@ -156,6 +149,32 @@ module Familia
           # we could autoclean here, as long as we log it.
           # extid_lookup.remove_field(extid)
           nil
+        end
+      end
+
+      # Instance methods for external identifier management
+      module ModelInstanceMethods
+        # Override save to update extid_lookup mapping
+        #
+        # This ensures the extid_lookup index is populated during save operations
+        # rather than during object initialization, preventing unwanted database
+        # writes when calling .new()
+        #
+        # @param update_expiration [Boolean] Whether to update key expiration
+        # @return [Boolean] True if save was successful
+        #
+        def save(update_expiration: true)
+          result = super
+
+          # Update extid_lookup mapping after successful save
+          if result && respond_to?(:extid) && respond_to?(:identifier)
+            current_extid = instance_variable_get(:@extid)
+            if current_extid && identifier
+              self.class.extid_lookup[current_extid] = identifier
+            end
+          end
+
+          result
         end
       end
 

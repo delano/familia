@@ -88,6 +88,7 @@ module Familia
       def self.included(base)
         Familia.trace :LOADED, self, base if Familia.debug?
         base.extend ModelClassMethods
+        base.include ModelInstanceMethods
 
         # Ensure default generator is set in feature options
         base.add_feature_options(:object_identifier, generator: DEFAULT_GENERATOR)
@@ -275,6 +276,32 @@ module Familia
           # we could autoclean here, as long as we log it.
           # objid_lookup.remove_field(objid)
           nil
+        end
+      end
+
+      # Instance methods for object identifier management
+      module ModelInstanceMethods
+        # Override save to update objid_lookup mapping
+        #
+        # This ensures the objid_lookup index is populated during save operations
+        # rather than during object initialization, preventing unwanted database
+        # writes when calling .new()
+        #
+        # @param update_expiration [Boolean] Whether to update key expiration
+        # @return [Boolean] True if save was successful
+        #
+        def save(update_expiration: true)
+          result = super
+
+          # Update objid_lookup mapping after successful save
+          if result && respond_to?(:objid) && respond_to?(:identifier)
+            current_objid = instance_variable_get(:@objid)
+            if current_objid && identifier
+              self.class.objid_lookup[current_objid] = identifier
+            end
+          end
+
+          result
         end
       end
 
