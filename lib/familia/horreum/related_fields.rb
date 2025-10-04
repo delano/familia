@@ -170,7 +170,26 @@ module Familia
 
         related_fields[name] = RelatedFieldDefinition.new(name, klass, opts)
 
-        attr_reader name
+        # Create lazy-initializing accessor that calls initialize_relatives if needed
+        define_method name do
+          ivar = :"@#{name}"
+          value = instance_variable_get(ivar)
+
+          # If nil and we haven't initialized relatives, do it now
+          # Check singleton class to avoid polluting instance variables
+          if value.nil? && !singleton_class.instance_variable_defined?(:"@relatives_initialized")
+            initialize_relatives
+            value = instance_variable_get(ivar)
+          end
+
+          # If still nil after lazy initialization attempt, raise helpful error
+          # Only raise if we tried to initialize but it's still nil
+          if value.nil? && singleton_class.instance_variable_defined?(:"@relatives_initialized")
+            raise "#{self.class}##{name} is nil. Did you override initialize without calling super?"
+          end
+
+          value
+        end
 
         define_method :"#{name}=" do |val|
           send(name).replace val
