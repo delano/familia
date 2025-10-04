@@ -185,7 +185,8 @@ module Familia
           # If still nil after lazy initialization attempt, raise helpful error
           # Only raise if we tried to initialize but it's still nil
           if value.nil? && singleton_class.instance_variable_defined?(:"@relatives_initialized")
-            raise "#{self.class}##{name} is nil. Did you override initialize without calling super?"
+            raise "#{self.class}##{name} is nil. Did you override initialize without calling super? " \
+                  "(Field is nil after initialization attempt)"
           end
 
           value
