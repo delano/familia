@@ -18,7 +18,7 @@ module Familia
       #   end
       #
       #   user = User.new(user_id: 'u1', email: 'alice@example.com')
-      #   user.add_to_class_email_lookup
+      #   user.save  # Automatically populates email_lookup index
       #   User.find_by_email('alice@example.com')  # → user
       #
       # @example Instance-scoped unique index (within parent, 1:1 via HashKey)
@@ -57,6 +57,12 @@ module Familia
       # - Class unique: "user:email_index" → HashKey
       # - Instance unique: "company:c1:badge_index" → HashKey
       # - Instance multi: "company:c1:dept_index:engineering" → UnsortedSet
+      #
+      # Auto-Indexing:
+      # Class-level unique_index declarations automatically populate on save():
+      #   user = User.new(email: 'test@example.com')
+      #   user.save  # Auto-indexes email → user_id
+      # Instance-scoped indexes (with within:) remain manual (require parent context).
       #
       # Design Philosophy:
       # Indexing is for finding objects by attribute, not ordering them.

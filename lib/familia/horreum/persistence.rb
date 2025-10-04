@@ -399,18 +399,26 @@ module Familia
       # class-level indexes (where target_class == self.class), skipping
       # instance-scoped indexes which require parent context.
       #
-      # Uses idempotent Redis commands (HSET for unique_index, SADD for multi_index)
-      # so repeated calls are safe and have negligible performance overhead.
+      # Uses idempotent Redis commands (HSET for unique_index) so repeated calls
+      # are safe and have negligible performance overhead. Note that multi_index
+      # always requires within: parameter, so only unique_index benefits from this.
       #
       # @return [void]
       #
       # @example Automatic indexing on save
       #   class Customer < Familia::Horreum
+      #     feature :relationships
       #     unique_index :email, :email_lookup
       #   end
       #
       #   customer = Customer.new(email: 'test@example.com')
       #   customer.save  # Automatically calls add_to_class_email_lookup
+      #
+      # @note Only class-level unique_index declarations auto-populate.
+      #   Instance-scoped indexes (with within:) require manual population:
+      #   employee.add_to_company_badge_index(company)
+      #
+      # @see Familia::Features::Relationships::Indexing For index declaration details
       #
       def auto_update_class_indexes
         return unless self.class.respond_to?(:indexing_relationships)

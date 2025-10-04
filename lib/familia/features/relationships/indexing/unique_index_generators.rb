@@ -33,9 +33,12 @@ module Familia
         #   - Employee.rebuild_email_index
         #
         # Generates on Employee (self):
-        #   - employee.add_to_class_email_index
+        #   - employee.add_to_class_email_index (called automatically on save)
         #   - employee.remove_from_class_email_index
         #   - employee.update_in_class_email_index(old_email)
+        #
+        # Note: Class-level indexes auto-populate on save(). Instance-scoped indexes
+        # (with within:) remain manual as they require parent context.
         module UniqueIndexGenerators
           module_function
 

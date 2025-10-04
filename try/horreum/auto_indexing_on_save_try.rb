@@ -124,25 +124,25 @@ AutoIndexUser.email_index.has_key?('')
 #=> true
 
 ## Auto-indexing works with create method
-@user3_id = "user_#{rand(1000000)}"
-@user3 = AutoIndexUser.create(user_id: @user3_id, email: 'create@example.com', username: 'createuser', department: 'marketing')
+@user2_id = "user_#{rand(1000000)}"
+@user2 = AutoIndexUser.create(user_id: @user2_id, email: 'create@example.com', username: 'createuser', department: 'marketing')
 AutoIndexUser.find_by_email('create@example.com')&.user_id
-#=> @user3_id
+#=> @user2_id
 
 ## Auto-indexing idempotent with multiple saves
-@user3.save
-@user3.save
-@user3.save
+@user2.save
+@user2.save
+@user2.save
 AutoIndexUser.email_index.get('create@example.com')
-#=> @user3_id
+#=> @user2_id
 
 ## Field update followed by save adds new entry (use update_in_class_* for proper updates)
-old_email = @user3.email
-@user3.email = 'updated@example.com'
-@user3.save
+old_email = @user2.email
+@user2.email = 'updated@example.com'
+@user2.save
 # Both old and new emails are indexed (auto-indexing doesn't remove old values)
-# For proper updates that remove old values, use: @user3.update_in_class_email_index(old_email)
-[AutoIndexUser.email_index.has_key?(old_email), AutoIndexUser.email_index.get('updated@example.com') == @user3_id]
+# For proper updates that remove old values, use: @user2.update_in_class_email_index(old_email)
+[AutoIndexUser.email_index.has_key?(old_email), AutoIndexUser.email_index.get('updated@example.com') == @user2_id]
 #=> [true, true]
 
 # =============================================
@@ -200,7 +200,7 @@ AutoIndexUser.email_index.get('perf@example.com')
 #=> @employee2_id
 
 # Teardown - clean up test objects
-[@user, @user2, @user3, @user4, @user_nil, @user_empty, @company, @employee, @employee2, @transient_obj].each do |obj|
+[@user, @user2, @user4, @user_nil, @user_empty, @company, @employee, @employee2, @transient_obj].each do |obj|
   obj.destroy! if obj.respond_to?(:destroy!) && obj.respond_to?(:exists?) && obj.exists?
 end
 
