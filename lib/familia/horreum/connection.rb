@@ -149,6 +149,7 @@ module Familia
       # @see MultiResult For details on the return value structure
       # @see #batch_update For similar atomic field updates with MultiResult
       def transaction(&)
+        ensure_relatives_initialized!
         Familia::Connection::TransactionCore.execute_transaction(-> { dbclient }, &)
       end
       alias multi transaction
@@ -243,11 +244,31 @@ module Familia
       # @see MultiResult For details on the return value structure
       # @see Familia.transaction For atomic command execution
       def pipelined(&block)
+        ensure_relatives_initialized!
         Familia::Connection::PipelineCore.execute_pipeline(-> { dbclient }, &block)
       end
       alias pipeline pipelined
 
       private
+
+      # Ensures that related fields have been initialized before entering transactions or pipelines.
+      #
+      # This prevents Redis::Future errors when lazy initialization would occur inside
+      # transaction/pipeline blocks. When commands execute inside transactions, Redis returns
+      # Future objects that don't respond to standard methods, causing cryptic NoMethodError.
+      #
+      # @raise [RuntimeError] if instance has relations but they haven't been initialized
+      # @note Skips check for class methods - they create temporary instances internally
+      # @note Uses singleton class to avoid polluting instance variables
+      def ensure_relatives_initialized!
+        return if is_a?(Class)  # Class methods handle their own instances
+        return unless self.class.respond_to?(:relations?) && self.class.relations?
+        return if singleton_class.instance_variable_defined?(:"@relatives_initialized")
+
+        raise "#{self.class} has related fields but they haven't been initialized. " \
+              "Did you override initialize without calling super? " \
+              "Related fields: #{self.class.related_fields.keys.join(', ')}"
+      end
 
       # Builds the class-level connection chain with handlers in priority order
       def build_connection_chain

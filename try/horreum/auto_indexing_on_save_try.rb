@@ -1,3 +1,5 @@
+# try/horreum/auto_indexing_on_save_try.rb
+
 #
 # Auto-indexing on save functionality tests
 # Tests automatic index population when Familia::Horreum objects are saved

@@ -92,6 +92,44 @@ Familia uses a modular feature system where features are mixed into classes:
 
 **Inheritance Chain**: `MyClass < Familia::Horreum` automatically extends `ClassMethods` and `Features`
 
+**Common Pitfall: Overriding initialize**
+
+⚠️ **Do NOT override `initialize` without calling `super`** - this breaks related field initialization.
+
+**Bad - will cause crashes:**
+```ruby
+class User < Familia::Horreum
+  def initialize(email)
+    @email = email  # Missing super! Related fields won't work
+  end
+end
+```
+
+**Good - use the `init` hook instead:**
+```ruby
+class User < Familia::Horreum
+  def init(email = nil)
+    @email = email  # Called after super, related fields work
+  end
+end
+```
+
+**Good - call super explicitly:**
+```ruby
+class User < Familia::Horreum
+  def initialize(email = nil, **kwargs)
+    super(**kwargs)  # ✓ Related fields initialized
+    @email = email
+  end
+end
+```
+
+**Why this matters**: Familia's `initialize` method calls `initialize_relatives` to set up DataType objects (lists, sets, etc.). Without calling `super`, these objects remain nil and you'll get helpful errors pointing to the missing super call.
+
+**When to use each approach:**
+- **Use `init` hook** (preferred): For simple initialization logic that doesn't need to intercept constructor arguments. The `init` method is called automatically after `super` with the same arguments passed to `new`.
+- **Use explicit `super`**: When you need full control over initialization order or need to transform arguments before passing to parent. Remember to pass `**kwargs` to preserve keyword argument handling.
+
 **DataType Definition**: Use class methods to define keystore database-backed attributes:
 ```ruby
 class User < Familia::Horreum

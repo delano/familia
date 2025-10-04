@@ -232,6 +232,15 @@ module Familia
       init
     end
 
+    # Override this method in subclasses for custom initialization logic.
+    # This is called AFTER fields are set and relatives are initialized.
+    #
+    # DO NOT override initialize() - use this init() hook instead.
+    #
+    # Example:
+    #   def init(name = nil)
+    #     @name = name || SecureRandom.hex(4)
+    #   end
     def init(*args, **kwargs)
       # Default no-op
     end
@@ -242,6 +251,8 @@ module Familia
     # This needs to be called in the initialize method.
     #
     def initialize_relatives
+      # Store initialization flag on singleton class to avoid polluting instance variables
+      return if singleton_class.instance_variable_defined?(:"@relatives_initialized")
       # Generate instances of each DataType. These need to be
       # unique for each instance of this class so they can piggyback
       # on the specifc index of this instance.
@@ -281,6 +292,9 @@ module Familia
         # e.g. customer.name  #=> `#<Familia::HashKey:0x0000...>`
         instance_variable_set :"@#{name}", related_object
       end
+
+      # Mark relatives as initialized on singleton class to avoid polluting instance variables
+      singleton_class.instance_variable_set(:"@relatives_initialized", true)
     end
 
     def initialize_with_keyword_args_deserialize_value(**fields)

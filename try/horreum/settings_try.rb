@@ -1,3 +1,5 @@
+# try/horreum/settings_try.rb
+
 # Test Horreum settings
 
 require_relative '../helpers/test_helpers'
