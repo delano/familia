@@ -149,6 +149,16 @@ module Familia
       # @see MultiResult For details on the return value structure
       # @see #batch_update For similar atomic field updates with MultiResult
       def transaction(&)
+        # Ensure relatives are initialized before entering transaction (instance methods only)
+        # This prevents Redis::Future errors when lazy initialization occurs inside pipelines
+        # Skip check for class methods - they create temporary instances internally
+        # Check singleton class to avoid polluting instance variables
+        if !is_a?(Class) && self.class.respond_to?(:relations?) && self.class.relations? && !singleton_class.instance_variable_defined?(:"@relatives_initialized")
+          raise "#{self.class} has related fields but they haven't been initialized. " \
+                "Did you override initialize without calling super? " \
+                "Related fields: #{self.class.related_fields.keys.join(', ')}"
+        end
+
         Familia::Connection::TransactionCore.execute_transaction(-> { dbclient }, &)
       end
       alias multi transaction
@@ -243,6 +253,16 @@ module Familia
       # @see MultiResult For details on the return value structure
       # @see Familia.transaction For atomic command execution
       def pipelined(&block)
+        # Ensure relatives are initialized before entering pipeline (instance methods only)
+        # This prevents Redis::Future errors when lazy initialization occurs inside pipelines
+        # Skip check for class methods - they create temporary instances internally
+        # Check singleton class to avoid polluting instance variables
+        if !is_a?(Class) && self.class.respond_to?(:relations?) && self.class.relations? && !singleton_class.instance_variable_defined?(:"@relatives_initialized")
+          raise "#{self.class} has related fields but they haven't been initialized. " \
+                "Did you override initialize without calling super? " \
+                "Related fields: #{self.class.related_fields.keys.join(', ')}"
+        end
+
         Familia::Connection::PipelineCore.execute_pipeline(-> { dbclient }, &block)
       end
       alias pipeline pipelined
