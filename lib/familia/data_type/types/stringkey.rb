@@ -114,10 +114,6 @@ module Familia
       ret.positive?
     end
 
-    def nil?
-      value.nil?
-    end
-
     Familia::DataType.register self, :string
     Familia::DataType.register self, :stringkey
   end
