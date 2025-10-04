@@ -12,6 +12,28 @@ Versioning <https://semver.org/spec/v2.0.0.html>`__.
 
    <!--scriv-insert-here-->
 
+.. _changelog-2.0.0.pre17:
+
+2.0.0.pre17 — 2025-10-03
+========================
+
+Added
+-----
+
+- **SortedSet#add**: Full ZADD option support (NX, XX, GT, LT, CH) for atomic conditional operations and accurate change tracking. This enables proper index management with timestamp preservation, update-only operations, conditional score updates, and analytics tracking. Closes issue #135.
+
+Fixed
+-----
+
+- Restored objid provenance tracking when loading objects from Redis. The ``ObjectIdentifier`` feature now infers the generator type (:uuid_v7, :uuid_v4, :hex) from the objid format, enabling dependent features like ``ExternalIdentifier`` to derive external identifiers from loaded objects. PR #131
+
+AI Assistance
+-------------
+
+- Claude Code assisted with implementing the ``infer_objid_generator`` method and updating the setter logic in ``lib/familia/features/object_identifier.rb``.
+
+- Claude Code assisted with Redis ZADD option semantics research, mutual exclusivity validation design, comprehensive test case matrix creation (50+ test cases), and YAML documentation examples.
+
 .. _changelog-2.0.0.pre16:
 
 2.0.0.pre16 — 2025-09-30
