@@ -4,7 +4,7 @@
 require_relative 'features/autoloader'
 
 module Familia
-  FeatureDefinition = Data.define(:name, :depends_on)
+  FeatureDefinition = Data.define(:name, :depends_on, :field_group)
 
   # Familia::Features
   #
@@ -146,6 +146,11 @@ module Familia
       # Always capture and store the calling location for every feature
       calling_location = caller_locations(1, 1)&.first
       options[:calling_location] = calling_location&.path
+
+      # Initialize field group if feature declares one
+      if feature_def&.field_group && respond_to?(:field_group)
+        field_group(feature_def.field_group)
+      end
 
       # Add feature options if the class supports them (Horreum classes)
       add_feature_options(feature_name, **options) if respond_to?(:add_feature_options)

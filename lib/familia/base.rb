@@ -31,14 +31,15 @@ module Familia
       attr_reader :features_available, :feature_definitions
       attr_accessor :dump_method, :load_method
 
-      def add_feature(klass, feature_name, depends_on: [])
+      def add_feature(klass, feature_name, depends_on: [], field_group: nil)
         @features_available ||= {}
         Familia.trace :ADD_FEATURE, klass, feature_name if Familia.debug?
 
         # Create field definition object
         feature_def = FeatureDefinition.new(
           name: feature_name,
-          depends_on: depends_on
+          depends_on: depends_on,
+          field_group: field_group
         )
 
         # Track field definitions after defining field methods
@@ -112,14 +113,15 @@ module Familia
       attr_reader :features_available, :feature_definitions
       attr_accessor :dump_method, :load_method
 
-      def add_feature(klass, feature_name, depends_on: [])
+      def add_feature(klass, feature_name, depends_on: [], field_group: nil)
         @features_available ||= {}
         Familia.trace :ADD_FEATURE, klass, feature_name if Familia.debug?
 
         # Create field definition object
         feature_def = FeatureDefinition.new(
           name: feature_name,
-          depends_on: depends_on
+          depends_on: depends_on,
+          field_group: field_group
         )
 
         # Track field definitions after defining field methods
