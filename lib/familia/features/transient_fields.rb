@@ -104,11 +104,13 @@ module Familia
     # (HashiCorp Vault, AWS Secrets Manager) or languages with secure memory handling.
     #
     module TransientFields
-      Familia::Base.add_feature self, :transient_fields, depends_on: nil
+      Familia::Base.add_feature self, :transient_fields, depends_on: nil, field_group: :transient_fields
 
       def self.included(base)
         Familia.trace :LOADED, self, base if Familia.debug?
         base.extend ModelClassMethods
+
+        require_relative 'transient_fields/transient_field_type'
 
         # Initialize transient fields tracking
         base.instance_variable_set(:@transient_fields, []) unless base.instance_variable_defined?(:@transient_fields)
@@ -143,8 +145,12 @@ module Familia
           @transient_fields ||= []
           @transient_fields << name unless @transient_fields.include?(name)
 
+          # Add to field_groups if the group exists
+          if field_groups&.key?(:transient_fields)
+            field_groups[:transient_fields] << name
+          end
+
           # Use the field type system for proper integration
-          require_relative 'transient_fields/transient_field_type'
           field_type = TransientFieldType.new(name, as: as, **kwargs.merge(fast_method: false))
           register_field_type(field_type)
         end

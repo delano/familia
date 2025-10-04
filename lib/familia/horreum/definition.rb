@@ -31,6 +31,10 @@ module Familia
     @dump_method = nil
     @load_method = nil
 
+    # Field groups
+    @field_groups = nil
+    @current_field_group = nil
+
     # DefinitionMethods - Class-level DSL methods for defining Horreum model structure
     #
     # This module is extended into classes that include Familia::Horreum,
@@ -46,6 +50,81 @@ module Familia
     module DefinitionMethods
       include Familia::Settings
       include Familia::Horreum::RelatedFieldsManagement # Provides DataType field methods
+
+      # Defines a field group to organize related fields.
+      #
+      # Field groups provide a way to categorize and query fields by purpose or feature.
+      # When a block is provided, fields defined within the block are automatically
+      # added to the group. Without a block, an empty group is initialized.
+      #
+      # @param name [Symbol, String] the name of the field group
+      # @yield optional block for defining fields within the group
+      # @return [Array<Symbol>] the array of field names in the group
+      #
+      # @raise [Familia::Problem] if attempting to nest field groups
+      #
+      # @example Manual field grouping
+      #   class User < Familia::Horreum
+      #     field_group :personal_info do
+      #       field :name
+      #       field :email
+      #     end
+      #   end
+      #
+      #   User.personal_info  # => [:name, :email]
+      #
+      # @example Initialize empty group
+      #   class User < Familia::Horreum
+      #     field_group :placeholder
+      #   end
+      #
+      #   User.placeholder  # => []
+      #
+      def field_group(name, &block)
+
+        # Prevent nested field groups
+        if @current_field_group
+          raise Familia::Problem,
+            "Cannot define field group :#{name} while :#{@current_field_group} is being defined. " \
+            "Nested field groups are not supported."
+        end
+
+        # Initialize group
+        field_groups[name.to_sym] ||= []
+
+        if block_given?
+          @current_field_group = name.to_sym
+          instance_eval(&block)
+          @current_field_group = nil
+        else
+          Familia.ld "[field_group] Created field group :#{name} but no block given" if Familia.debug?
+        end
+
+        field_groups[name.to_sym]
+      end
+
+      # Returns the list of all field group names defined for the class.
+      #
+      # @return [Array<Symbol>] array of field group names
+      #
+      # @example
+      #   class User < Familia::Horreum
+      #     field_group :personal_info do
+      #       field :name
+      #     end
+      #     field_group :metadata do
+      #       field :created_at
+      #     end
+      #   end
+      #
+      #   User.field_groups  # => [
+      #     :personal_info => [...],
+      #     :metadata => [..]
+      #   ]
+      #
+      def field_groups
+        @field_groups ||= {}
+      end
 
       # Sets or retrieves the unique identifier field for the class.
       #
@@ -220,6 +299,12 @@ module Familia
         # Complete the registration after installation. If we do this beforehand
         # we can run into issues where it looks like it's already installed.
         field_types[field_type.name] = field_type
+
+        # Add to current field group if one is active
+        if @current_field_group
+          @field_groups[@current_field_group] << field_type.name
+        end
+
         # Freeze the field_type to ensure immutability (maintains Data class heritage)
         field_type.freeze
       end

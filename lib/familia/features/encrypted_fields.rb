@@ -259,11 +259,13 @@ module Familia
     # - Insider threats with application access
     #
     module EncryptedFields
-      Familia::Base.add_feature self, :encrypted_fields
+      Familia::Base.add_feature self, :encrypted_fields, depends_on: nil, field_group: :encrypted_fields
 
       def self.included(base)
         Familia.trace :LOADED, self, base if Familia.debug?
         base.extend ModelClassMethods
+
+        require_relative 'encrypted_fields/encrypted_field_type'
 
         # Initialize encrypted fields tracking
         base.instance_variable_set(:@encrypted_fields, []) unless base.instance_variable_defined?(:@encrypted_fields)
@@ -297,7 +299,10 @@ module Familia
           @encrypted_fields ||= []
           @encrypted_fields << name unless @encrypted_fields.include?(name)
 
-          require_relative 'encrypted_fields/encrypted_field_type'
+          # Add to field_groups if the group exists
+          if field_groups&.key?(:encrypted_fields)
+            field_groups[:encrypted_fields] << name
+          end
 
           field_type = EncryptedFieldType.new(name, aad_fields: aad_fields, **)
           register_field_type(field_type)
