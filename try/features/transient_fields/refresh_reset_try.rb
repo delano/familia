@@ -1,7 +1,7 @@
 # try/features/transient_fields/refresh_reset_try.rb
 # Test that refresh! properly resets transient fields to nil
 
-require_relative '../../helpers/test_helpers'
+require_relative '../../support/helpers/test_helpers'
 
 Familia.debug = false
 

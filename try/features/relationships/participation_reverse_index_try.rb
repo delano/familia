@@ -3,7 +3,7 @@
 # Tests for participation reverse index functionality
 # Verifies performance improvements and correct behavior
 
-require_relative '../../helpers/test_helpers'
+require_relative '../../support/helpers/test_helpers'
 
 # Test classes for reverse index functionality
 class ReverseIndexCustomer < Familia::Horreum

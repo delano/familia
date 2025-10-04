@@ -1,6 +1,6 @@
 # try/features/encryption_fields/secure_by_default_behavior_try.rb
 
-require_relative '../../helpers/test_helpers'
+require_relative '../../support/helpers/test_helpers'
 require 'base64'
 
 Familia.debug = false

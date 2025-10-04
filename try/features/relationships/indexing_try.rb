@@ -4,7 +4,7 @@
 # Tests both multi_index (parent-context) and unique_index (class-level) indexing
 #
 
-require_relative '../../helpers/test_helpers'
+require_relative '../../support/helpers/test_helpers'
 
 # Test classes for indexing functionality
 class ::TestUser < Familia::Horreum

@@ -3,7 +3,7 @@
 # Simplified Familia v2 relationship functionality tests - focusing on core working features
 #
 
-require_relative '../../helpers/test_helpers'
+require_relative '../../support/helpers/test_helpers'
 
 # Test classes for Familia v2 relationship functionality
 class TestCustomer < Familia::Horreum

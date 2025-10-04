@@ -1,6 +1,6 @@
 # try/features/expiration_try.rb
 
-require_relative '../../helpers/test_helpers'
+require_relative '../../support/helpers/test_helpers'
 
 Familia.debug = false
 

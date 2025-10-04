@@ -2,7 +2,7 @@
 
 require 'base64'
 
-require_relative '../../helpers/test_helpers'
+require_relative '../../support/helpers/test_helpers'
 
 # This tryouts file is based on the premise that there is no current key
 # version set. This is a global setting so if other tryouts rely on

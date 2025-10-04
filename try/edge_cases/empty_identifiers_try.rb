@@ -2,7 +2,7 @@
 
 # Test empty identifier edge cases
 
-require_relative '../helpers/test_helpers'
+require_relative '../support/helpers/test_helpers'
 
 
 ## empty string identifier handling

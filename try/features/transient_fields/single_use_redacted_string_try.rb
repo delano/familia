@@ -1,6 +1,6 @@
 # try/features/transient_fields/single_use_redacted_string_try.rb
 
-require_relative '../../helpers/test_helpers'
+require_relative '../../support/helpers/test_helpers'
 
 @otp_code = "123456"
 @auth_token = "temp-auth-token-xyz"
