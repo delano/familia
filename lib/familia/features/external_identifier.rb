@@ -168,7 +168,29 @@ module Familia
 
           # Update extid_lookup mapping after successful save
           if result && respond_to?(:extid) && respond_to?(:identifier)
-            current_extid = instance_variable_get(:@extid)
+            current_extid = extid  # Triggers lazy generation if needed
+            if current_extid && identifier
+              self.class.extid_lookup[current_extid] = identifier
+            end
+          end
+
+          result
+        end
+
+        # Override save_if_not_exists to update extid_lookup mapping
+        #
+        # This ensures the extid_lookup index is populated during create operations
+        # which use save_if_not_exists instead of save.
+        #
+        # @param update_expiration [Boolean] Whether to update key expiration
+        # @return [Boolean] True if save was successful
+        #
+        def save_if_not_exists(update_expiration: true)
+          result = super
+
+          # Update extid_lookup mapping after successful save
+          if result && respond_to?(:extid) && respond_to?(:identifier)
+            current_extid = extid  # Triggers lazy generation if needed
             if current_extid && identifier
               self.class.extid_lookup[current_extid] = identifier
             end
