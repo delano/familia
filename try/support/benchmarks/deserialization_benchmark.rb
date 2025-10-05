@@ -91,7 +91,7 @@ def strategy_selective(fields, klass)
   deserialized = fields.transform_values do |value|
     if value.to_s.start_with?('{', '[')
       begin
-        JSON.parse(value)
+        JSON.parse(value, symbolize_names: true)
       rescue JSON::ParserError
         value
       end
