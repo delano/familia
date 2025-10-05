@@ -120,7 +120,7 @@ module Familia
       severity_letter = if Fiber[:familia_trace_mode]
         'T'
       else
-        SEVERITY_LETTERS[severity] || severity.to_s[0]
+        SEVERITY_LETTERS.fetch(severity, 'U')
       end
 
       utc_datetime = datetime.utc.strftime('%m-%d %H:%M:%S.%3N')
