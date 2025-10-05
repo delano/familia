@@ -6,31 +6,39 @@ Familia.debug = false
 
 # Test class with mixed field categories for serialization
 class SerializationCategoryTest < Familia::Horreum
+  feature :encrypted_fields
+  feature :transient_fields
+
   identifier_field :id
   field :id
   field :name                           # persistent by default
-  field :email, category: :encrypted    # persistent, encrypted category
-  field :tryouts_cache_data, category: :transient # should be excluded from serialization
-  field :description, category: :persistent # explicitly persistent
-  field :temp_settings, category: :transient # should be excluded
-  field :metadata, category: :persistent # explicitly persistent
+  encrypted_field :email                # persistent, encrypted
+  transient_field :tryouts_cache_data   # should be excluded from serialization
+  field :description                    # explicitly persistent
+  transient_field :temp_settings        # should be excluded
+  field :metadata                       # explicitly persistent
 end
 
 # Class with all transient fields
 class AllTransientSerializationTest < Familia::Horreum
+  feature :transient_fields
+
   identifier_field :id
   field :id
-  field :temp1, category: :transient
-  field :temp2, category: :transient
+  transient_field :temp1
+  transient_field :temp2
 end
 
 # Mixed categories with aliased fields
 class AliasedSerializationTest < Familia::Horreum
+  feature :encrypted_fields
+  feature :transient_fields
+
   identifier_field :id
   field :id
   field :internal_name, as: :display_name
-  field :temp_cache, as: :cache, category: :transient
-  field :user_data, as: :data, category: :encrypted
+  transient_field :temp_cache, as: :cache
+  encrypted_field :user_data, as: :data
 end
 
 # Setup test instance with all field types

@@ -50,17 +50,20 @@ customer.email = "admin@acme.com"     # Custom method name
 customer.name!("Updated Corp")        # Fast writer (immediate DB persistence)
 ```
 
-### Field Categories
+### Special Field Types
 
-Fields can be categorized for special processing by features:
+Use dedicated field methods provided by features for special field behaviors:
 
 ```ruby
 class Document < Familia::Horreum
-  field :title                           # Regular field
-  field :content, category: :encrypted   # Will be processed by encrypted_fields feature
-  field :api_key, category: :transient   # Non-persistent field
-  field :tags, category: :indexed        # Custom category for indexing
-  field :metadata, category: :json       # Custom JSON serialization
+  feature :encrypted_fields
+  feature :transient_fields
+
+  field :title                    # Regular persistent field
+  encrypted_field :content        # Encrypted storage
+  transient_field :api_key        # Non-persistent (memory only)
+  field :tags                     # Regular field
+  field :metadata                 # Regular field
 end
 ```
 
@@ -285,27 +288,28 @@ order.priority_urgent?   # => false
 
 ```ruby
 class Product < Familia::Horreum
-  field :name, category: :searchable
-  field :price, category: :numeric
-  field :description, category: :text
-  field :secret_key, category: :encrypted
+  feature :transient_fields
+
+  field :name
+  field :price
+  field :description
   transient_field :temp_data
 end
 
 # Get all field names
 Product.fields
-# => [:name, :price, :description, :secret_key, :temp_data]
+# => [:name, :price, :description, :temp_data]
 
 # Get field types registry
 Product.field_types
 # => { name: #<FieldType...>, price: #<FieldType...>, ... }
 
-# Get fields by category
-Product.fields.select { |f| Product.field_types[f].category == :searchable }
-# => [:name]
+# Get fields by category (read-only introspection)
+Product.fields.select { |f| Product.field_types[f].category == :transient }
+# => [:temp_data]
 
 # Get persistent vs transient fields
-Product.persistent_fields  # => [:name, :price, :description, :secret_key]
+Product.persistent_fields  # => [:name, :price, :description]
 Product.transient_fields   # => [:temp_data]
 
 # Field method mapping (for backward compatibility)
@@ -313,15 +317,24 @@ Product.field_method_map
 # => { name: :name, price: :price, secret_key: :secret_key, temp_data: :temp_data }
 ```
 
-### Field Categories for Feature Processing
+### Using Field Type Category for Introspection
+
+The `category` method on FieldType provides read-only metadata for introspection:
 
 ```ruby
-# Features can process fields by category
+# Custom field type with category metadata
+class SearchableFieldType < Familia::FieldType
+  def category
+    :searchable
+  end
+end
+
+# Features can process fields by inspecting their category
 module SearchableFieldsFeature
   def self.included(base)
     base.extend ClassMethods
 
-    # Process all searchable fields
+    # Find all searchable fields by inspecting field type category
     searchable_fields = base.fields.select do |field|
       base.field_types[field].category == :searchable
     end
@@ -348,11 +361,17 @@ module SearchableFieldsFeature
 end
 
 class Product < Familia::Horreum
-  feature :searchable_fields  # Processes all :searchable category fields
+  feature :searchable_fields
 
-  field :name, category: :searchable
-  field :description, category: :searchable
-  field :internal_id, category: :system
+  # Use custom field type with searchable category
+  def self.searchable_field(name, **options)
+    field_type = SearchableFieldType.new(name, **options)
+    register_field_type(field_type)
+  end
+
+  searchable_field :name
+  searchable_field :description
+  field :internal_id
 end
 
 # Auto-generated search methods available
@@ -733,10 +752,13 @@ end
 ### 1. Choose Appropriate Field Types
 
 ```ruby
-# Use built-in field types when possible
+# Use dedicated field methods provided by features
 class User < Familia::Horreum
-  field :name                    # Simple string field
-  field :metadata, category: :json  # For complex data
+  feature :transient_fields
+  feature :encrypted_fields
+
+  field :name                    # Simple persistent field
+  field :metadata                # For complex data
   transient_field :temp_token    # For runtime-only data
   encrypted_field :api_key       # For sensitive data
 end
