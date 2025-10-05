@@ -282,9 +282,9 @@ RTPEmployee.exists?(@test_emp_id)
 @sampled.first.class
 #=> RTPEmployee
 
-## INCOMPLETE HYDRATION BUG: Only identifier populated, other fields nil
+## FIXED: Objects now fully hydrated with all fields
 [@sampled.first.emp_id, @sampled.first.email, @sampled.first.department]
-#=> [@test_emp_id, nil, nil]
+#=> [@test_emp_id, @test_emp_email, @test_department]
 
 ## INCOMPLETE HYDRATION BUG: find_all_by returns objects missing fields
 @dept_employees = @company.find_all_by_department(@test_department)
@@ -305,9 +305,9 @@ RTPEmployee.exists?(@test_emp_id)
 @company.find_all_by_department(@test_department).length
 #=> 2
 
-## INCOMPLETE HYDRATION BUG: All multi-index objects missing non-identifier fields
+## FIXED: All multi-index objects fully hydrated with all fields
 @all_eng = @company.find_all_by_department(@test_department)
-@all_eng.all? { |e| e.is_a?(RTPEmployee) && e.emp_id && !e.email }
+@all_eng.all? { |e| e.is_a?(RTPEmployee) && e.emp_id && e.email }
 #=> true
 
 # =============================================

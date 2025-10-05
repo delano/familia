@@ -105,7 +105,7 @@ module Familia
                 # Get random members efficiently (O(1) via SRANDMEMBER with count)
                 # Returns array even for count=1 for consistent API
                 index_set.sample(count).map do |id|
-                  indexed_class.new(index_set.deserialize_value(id))
+                  indexed_class.find_by_identifier(index_set.deserialize_value(id))
                 end
               end
 
@@ -114,7 +114,7 @@ module Familia
                 index_set = send("#{index_name}_for", field_value) # i.e. UnsortedSet
 
                 # Get all members from set
-                index_set.members.map { |id| indexed_class.new(id) }
+                index_set.members.map { |id| indexed_class.find_by_identifier(id) }
               end
 
               # Generate method to rebuild the index for this parent instance

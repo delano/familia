@@ -70,14 +70,13 @@ module DatabaseLogger
     # Returns the current time in microseconds.
     # This is used to measure the duration of Database commands.
     #
-    # Aliases: now_in_microseconds, now_in_ms
+    # Alias: now_in_microseconds
     #
     # @return [Integer] The current time in microseconds.
     def now_in_μs
       Process.clock_gettime(Process::CLOCK_MONOTONIC, :microsecond)
     end
     alias now_in_microseconds now_in_μs
-    alias now_in_ms now_in_μs
   end
 
   # Logs the Database command and its execution time.
@@ -99,7 +98,7 @@ module DatabaseLogger
 
     # Always capture commands for testing purposes
     message = CommandMessage.new(command.join(' '), duration, Time.now.to_f)
-    DatabaseLogger.commands << message
+    DatabaseLogger.instance_variable_get(:@commands) << message
 
     # Log if logger is set
     DatabaseLogger.logger&.debug(Oj.dump(message.to_h, mode: :strict))
