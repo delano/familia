@@ -77,7 +77,7 @@ module Familia
   #   T, 10-05 20:43:10.123 pid:12345 [67890/54321]: [LOAD] redis -> user:123
   #
   # Severity letters:
-  #   T = TRACE (FamiliaLogger only)
+  #   T = TRACE (when Fiber[:familia_trace_mode] is set, or level 0 when not using FamiliaLogger)
   #   D = DEBUG
   #   I = INFO
   #   W = WARN
@@ -85,26 +85,41 @@ module Familia
   #   F = FATAL
   #   U = UNKNOWN
   #
-  # @note Checks Fiber[:familia_trace_mode] to distinguish TRACE from DEBUG
+  # @example Use with FamiliaLogger for TRACE support
+  #   logger = Familia::FamiliaLogger.new($stderr)
+  #   logger.formatter = Familia::LogFormatter.new
+  #   logger.trace("Trace message")  # => T, ...
+  #   logger.debug("Debug message")  # => D, ...
+  #
+  # @example Use with standard Logger (level 0 becomes 'T')
+  #   logger = Logger.new($stderr)
+  #   logger.formatter = Familia::LogFormatter.new
+  #   logger.debug("Debug message")  # => T, ... (because DEBUG=0)
+  #
+  # @note When used with FamiliaLogger, checks Fiber[:familia_trace_mode] to
+  #   distinguish TRACE from DEBUG. When used with standard Logger, treats
+  #   level 0 as TRACE since DEBUG and TRACE share the same numeric level.
+  #
   # @see FamiliaLogger#trace
   #
   class LogFormatter < Logger::Formatter
-    # Severity level to letter mapping.
+    # Severity string to letter mapping.
     #
-    # Maps numeric severity levels to single-letter codes for compact output.
-    # Note: TRACE is handled via thread-local check in #call, not this hash.
+    # Maps severity string labels to single-letter codes for compact output.
+    # Note: TRACE is handled via Fiber check in #call for FamiliaLogger.
     SEVERITY_LETTERS = {
-      Logger::DEBUG => 'D',
-      Logger::INFO => 'I',
-      Logger::WARN => 'W',
-      Logger::ERROR => 'E',
-      Logger::FATAL => 'F',
-      Logger::UNKNOWN => 'U',
+      'DEBUG' => 'D',
+      'INFO' => 'I',
+      'WARN' => 'W',
+      'ERROR' => 'E',
+      'FATAL' => 'F',
+      'UNKNOWN' => 'U',
+      'ANY' => 'T'  # ANY is Logger's label for severity < 0, treat as TRACE
     }.freeze
 
     # Format a log message with severity, timestamp, and context.
     #
-    # @param severity [Integer] Numeric severity level
+    # @param severity [String] Severity label (e.g., "INFO", "DEBUG", "UNKNOWN")
     # @param datetime [Time] Timestamp of the log message
     # @param _progname [String] Program name (unused, kept for Logger compatibility)
     # @param msg [String] The log message
@@ -112,15 +127,16 @@ module Familia
     #
     # @example
     #   formatter = Familia::LogFormatter.new
-    #   formatter.call(Logger::INFO, Time.now, nil, "Test message")
+    #   formatter.call("INFO", Time.now, nil, "Test message")
     #   # => "I, 10-05 20:43:09.843 pid:12345 [67890/54321]: Test message\n"
     #
     def call(severity, datetime, _progname, msg)
       # Check if we're in trace mode (TRACE uses same level as DEBUG but marks itself)
+      # FamiliaLogger sets Fiber[:familia_trace_mode] when trace() is called
       severity_letter = if Fiber[:familia_trace_mode]
         'T'
       else
-        SEVERITY_LETTERS.fetch(severity, 'U')
+        SEVERITY_LETTERS.fetch(severity, severity[0])
       end
 
       utc_datetime = datetime.utc.strftime('%m-%d %H:%M:%S.%3N')
