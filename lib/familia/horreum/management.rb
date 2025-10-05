@@ -132,8 +132,8 @@ module Familia
         # full key and not just the identifier.
         does_exist = dbclient.exists(objkey).positive?
 
-        Familia.ld "[.find_by_key] #{self} from key #{objkey} (exists: #{does_exist})"
-        Familia.trace :FROM_KEY, nil, objkey if Familia.debug?
+        Familia.ld "[find_by_key] #{self} from key #{objkey} (exists: #{does_exist})"
+        Familia.trace :FIND_BY_DBKEY_KEY, nil, objkey
 
         # This is the reason for calling exists first. We want to definitively
         # and without any ambiguity know if the object exists in the database. If it
@@ -143,7 +143,7 @@ module Familia
         return unless does_exist
 
         obj = dbclient.hgetall(objkey) # horreum objects are persisted as database hashes
-        Familia.trace :FROM_KEY2, nil, "#{objkey}: #{obj.inspect}" if Familia.debug?
+        Familia.trace :FIND_BY_DBKEY_INSPECT, nil, "#{objkey}: #{obj.inspect}"
 
         new(**obj)
       end
@@ -174,7 +174,7 @@ module Familia
 
         objkey = dbkey(identifier, suffix)
 
-        Familia.ld "[.find_by_id] #{self} from key #{objkey})"
+        Familia.ld "[find_by_id] #{self} from key #{objkey})"
         Familia.trace :FIND_BY_ID, nil, objkey if Familia.debug?
         find_by_key objkey
       end
