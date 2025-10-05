@@ -438,6 +438,19 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
+### PR Compliance Checks
+
+Pull requests are automatically reviewed by [Qodo Merge](https://qodo.ai) with compliance checks for:
+- **Error Handling** - External API calls and database operations must have proper error handling
+- **Test Coverage** - New features must include tests using the Tryouts framework
+- **Changelog Fragments** - User-facing changes should include a changelog entry
+- **Documentation** - API changes must update documentation
+- **Backward Compatibility** - Breaking changes must be documented
+- **Thread Safety** - Shared state must be properly synchronized
+- **Database Key Naming** - Keys must follow Familia conventions
+
+See [docs/qodo-merge-compliance.md](docs/qodo-merge-compliance.md) for details.
+
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
