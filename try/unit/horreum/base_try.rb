@@ -203,11 +203,11 @@ end
 @aliased.display_size! 100
 #=> true
 
-## Aliased field refresh works correctly
+## Aliased field refresh works correctly (type preserved)
 @aliased.width = 50  # unsaved change
 @aliased.refresh!
 @aliased.width
-#=> "100"
+#=> 100
 
 ## Fast method with custom name
 class CustomFastMethodTest < Familia::Horreum

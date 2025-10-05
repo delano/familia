@@ -4,6 +4,10 @@
 #
 # Verifies that different deserialization approaches produce identical
 # results for all field types (strings, numbers, JSON, nested structures).
+#
+# Usage:
+#   $ try/support/benchmarks/deserialization_correctness_test.rb
+#
 
 require_relative '../../../lib/familia'
 require 'json'

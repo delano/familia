@@ -55,7 +55,7 @@ key_parts = dbkey.split(':')
 # Refresh and verify data integrity
 @serial_test.refresh!
 [@serial_test.name, @serial_test.active, @serial_test.metadata]
-#=> ['Serialization Test', 'true', {:key=>'value', :array=>[1, 2, 3]}]
+#=> ["Serialization Test", true, {"key"=>"value", "array"=>[1, 2, 3]}]
 
 ## Hash field count matches object field count
 expected_fields = @serial_test.class.persistent_fields.length

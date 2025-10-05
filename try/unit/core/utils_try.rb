@@ -62,25 +62,28 @@ custom_stamp = Familia.qstamp(3600, time: test_time)
 Time.at(custom_stamp).utc.hour
 #=> 14
 
-## distinguisher handles basic types
-str_result = Familia.distinguisher('test')
-int_result = Familia.distinguisher(123)
-sym_result = Familia.distinguisher(:symbol)
-[str_result, int_result, sym_result]
-#=> ["test", "123", "symbol"]
+## identifier_extractor extracts class names
+test_class = Class.new(Familia::Horreum)
+test_class.define_singleton_method(:name) { 'TestClass' }
+Familia.identifier_extractor(test_class)
+#=> "TestClass"
 
-## distinguisher raises error for high-risk types with strict mode
+## identifier_extractor extracts identifiers from Familia objects
+customer_class = Class.new(Familia::Horreum) do
+  identifier_field :custid
+  field :custid
+end
+customer = customer_class.new(custid: 'customer_123')
+Familia.identifier_extractor(customer)
+#=> "customer_123"
+
+## identifier_extractor raises error for non-Familia objects
 begin
-  Familia.distinguisher(true, strict_values: true)
+  Familia.identifier_extractor({ key: 'value' })
 rescue Familia::NotDistinguishableError => e
   e.class
 end
 #=> Familia::NotDistinguishableError
-
-## distinguisher allows high-risk types with non-strict mode
-result = Familia.distinguisher(false, strict_values: false)
-result
-#=> "false"
 
 # Cleanup - restore defaults, leave nothing but footprints
 Familia.delim(':')

@@ -121,7 +121,7 @@ Familia.dbclient.set('debug:ending_save_if_not_exists_tests', Familia.now.to_s)
 
 ## deserialize_value handles JSON strings back to objects
 @customer.deserialize_value('{"key":"value","num":123}')
-#=> {:key=>"value", :num=>123}
+#=> {"key"=>"value", "num"=>123}
 
 ## deserialize_value handles JSON arrays
 @customer.deserialize_value('[1,2,"three"]')

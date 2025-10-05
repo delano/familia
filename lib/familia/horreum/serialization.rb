@@ -100,14 +100,14 @@ module Familia
 
       # Serializes a Ruby object for Valkey storage.
       #
-      # Converts Ruby objects into the DB-compatible string representations using
-      # the Familia distinguisher for type coercion. Falls back to JSON serialization
-      # for complex types (Hash, Array) when the primary distinguisher returns nil.
+      # Converts Ruby objects into DB-compatible string representations using
+      # JSON serialization for type preservation. Strings are stored as-is to
+      # avoid double-quoting.
       #
       # The serialization process:
-      # 1. Attempts conversion using Familia.distinguisher with relaxed type checking
-      # 2. For Hash/Array types that return nil, tries custom dump_method or Familia::JsonSerializer.dump
-      # 3. Logs warnings when serialization fails completely
+      # 1. ConcealedStrings (encrypted values) → extract encrypted_value
+      # 2. Strings → store as-is (no JSON encoding)
+      # 3. All other types → JSON serialization (Integer, Boolean, Float, nil, Hash, Array)
       #
       # @param val [Object] The Ruby object to serialize for Valkey storage
       #
@@ -123,75 +123,49 @@ module Familia
       # @note This method integrates with Familia's type system and supports
       #   custom serialization methods when available on the object
       #
-      # @see Familia.distinguisher The primary serialization mechanism
+      # @see Familia.identifier_extractor For extracting identifiers from Familia objects
       #
       def serialize_value(val)
         # Security: Handle ConcealedString safely - extract encrypted data for storage
         return val.encrypted_value if val.respond_to?(:encrypted_value)
 
-        prepared = Familia.distinguisher(val, strict_values: false)
+        # Strings are already strings in Redis - no need to JSON-encode them
+        # This avoids double-quoting and simplifies storage
+        return val.to_s if val.is_a?(String)
 
-        # If the distinguisher returns nil, try using the dump_method but only
-        # use JSON serialization for complex types that need it.
-        if prepared.nil? && (val.is_a?(Hash) || val.is_a?(Array))
-          prepared = val.respond_to?(dump_method) ? val.send(dump_method) : Familia::JsonSerializer.dump(val)
-        end
-
-        # If both the distinguisher and dump_method return nil, log an error
-        Familia.ld "[#{self.class}#serialize_value] nil returned for #{self.class}" if prepared.nil?
-
-        prepared
+        # All non-string values use JSON serialization for type preservation
+        # (Integer, Boolean, Float, nil, Hash, Array)
+        Familia::JsonSerializer.dump(val)
       end
 
-      # Converts a Database string value back to its original Ruby type
+      # Converts a Redis string value back to its original Ruby type
       #
-      # This method attempts to deserialize JSON strings back to their original
-      # Hash or Array types. Simple string values are returned as-is.
+      # This method deserializes JSON strings back to their original Ruby types
+      # (Integer, Boolean, Float, nil, Hash, Array). Plain strings that cannot
+      # be parsed as JSON are returned as-is.
       #
-      # DESIGN NOTE: Type Preservation vs Performance
-      # ----------------------------------------------
-      # Git History:
-      # - 32c3702 (2025-05-28): Original implementation with complex-type-only return
-      #   "Only return parsed value if it's a complex type (Hash/Array)"
-      #   Rationale: Prevent unwanted type coercion ("123" → 123, "true" → true)
-      #
-      # - 6680fdc (2025-05-28): Paired with serialize_value refinement
-      #   "only attempt JSON serialization for Array and Hash types"
-      #   Establishes contract: serialize only encodes complex types as JSON
-      #
-      # - acbe28f (2025-10-02): File reorganization, check still present
-      #   Complex-type check maintained: "return parsed if parsed.is_a?(Hash/Array)"
-      #
-      # Current Implementation:
-      # Maintains the original complex-type-only approach for safety. While this means
-      # we parse JSON but discard simple-type results, it prevents type coercion bugs.
-      # The paired serialize_value() contract ensures:
-      # 1. Only Hash/Array are JSON-encoded (see 6680fdc)
-      # 2. Simple values stored via Familia.distinguisher (strings/numbers as-is)
-      #
-      # Therefore, any value that successfully parses as JSON SHOULD be Hash/Array.
-      # The type check is defensive - catching cases where simple values were
-      # accidentally JSON-encoded upstream
+      # This pairs with serialize_value which JSON-encodes all non-string values.
+      # The contract ensures type preservation across Redis storage:
+      # - Strings stored as-is → returned as-is
+      # - All other types JSON-encoded → JSON-decoded back to original type
       #
       # @param val [String] The string value from Redis to deserialize
-      # @param symbolize [Boolean] Whether to symbolize hash keys (default: true)
-      # @return [Object] The deserialized value (Hash, Array, or original string)
+      # @param symbolize [Boolean] Whether to symbolize hash keys (default: false)
+      # @return [Object] The deserialized value with original Ruby type, or the original string if not JSON
       #
-      def deserialize_value(val, symbolize: true)
+      def deserialize_value(val, symbolize: false)
         return val if val.nil? || val == ''
 
-        # Try to parse as JSON - only complex types should be JSON-encoded
+        # Try to parse as JSON - if successful, we have a typed value (Integer, Boolean, etc.)
+        # If parsing fails, treat as plain string (the Redis baseline)
         begin
-          parsed = Familia::JsonSerializer.parse(val, symbolize_names: symbolize)
-          # Only return parsed value if it's a complex type (Hash/Array)
-          # Simple values should remain as strings
-          return parsed if parsed.is_a?(Hash) || parsed.is_a?(Array)
+          Familia::JsonSerializer.parse(val, symbolize_names: symbolize)
         rescue Familia::SerializerError
-          # Not valid JSON, return as-is (simple string/number stored directly)
+          # Not valid JSON - treat as plain string
+          val
         end
-
-        val
       end
+
     end
   end
 end

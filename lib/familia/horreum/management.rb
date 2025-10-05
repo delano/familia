@@ -145,7 +145,12 @@ module Familia
         obj = dbclient.hgetall(objkey) # horreum objects are persisted as database hashes
         Familia.trace :FIND_BY_DBKEY_INSPECT, nil, "#{objkey}: #{obj.inspect}"
 
-        new(**obj)
+        # Create instance and deserialize fields using existing helper method
+        # This avoids duplicating deserialization logic and keeps field-by-field processing
+        instance = allocate
+        instance.send(:initialize_relatives)
+        instance.send(:initialize_with_keyword_args_deserialize_value, **obj)
+        instance
       end
       alias find_by_key find_by_dbkey
 

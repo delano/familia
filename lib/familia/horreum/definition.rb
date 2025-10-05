@@ -27,10 +27,6 @@ module Familia
     @related_fields = nil
     @default_expiration = nil
 
-    # Serialization settings
-    @dump_method = nil
-    @load_method = nil
-
     # Field groups
     @field_groups = nil
     @current_field_group = nil
@@ -254,14 +250,6 @@ module Familia
 
       def relations?
         @has_related_fields ||= false
-      end
-
-      def dump_method
-        @dump_method || :to_json # Familia.dump_method
-      end
-
-      def load_method
-        @load_method || :from_json # Familia.load_method
       end
 
       # Storage for field type instances

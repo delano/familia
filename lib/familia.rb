@@ -39,7 +39,7 @@ module Familia
   using Refinements::StylizeWords
 
   class << self
-    attr_accessor :debug # rubocop:disable ThreadSafety/ClassAndModuleAttributes
+    attr_accessor :debug
     attr_reader :members
 
     def included(member)
@@ -139,7 +139,7 @@ module Familia
   require_relative 'familia/connection'
   require_relative 'familia/settings'
   require_relative 'familia/utils'
-  require_relative 'familia/distinguisher'
+  require_relative 'familia/identifier_extractor'
   require_relative 'familia/json_serializer'
 
   extend SecureIdentifier

@@ -401,8 +401,10 @@ module Familia
       self.class.fields.filter_map do |field|
         # Database will give us field names as strings back, but internally
         # we use symbols. So we check for both.
-        value = fields[field.to_sym] || fields[field.to_s]
-        if value
+        # Use fetch with default to avoid || operator which skips false values
+        value = fields.fetch(field.to_sym) { fields[field.to_s] }
+        # Check for nil explicitly to allow false and 0 values
+        unless value.nil?
           # Use the mapped method name, not the field name
           method_name = self.class.field_method_map[field] || field
           send(:"#{method_name}=", value)

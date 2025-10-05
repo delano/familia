@@ -44,8 +44,18 @@ module Familia
         new(**parsed)
       end
 
-      def self.from_json(json_string)
-        validate!(json_string)
+      def self.from_json(json_string_or_hash)
+        # Support both JSON strings (legacy) and already-parsed Hashes (v2.0 deserialization)
+        if json_string_or_hash.is_a?(Hash)
+          # Already parsed - use directly
+          parsed = json_string_or_hash
+          # Symbolize keys if they're strings
+          parsed = parsed.transform_keys(&:to_sym) if parsed.keys.first.is_a?(String)
+          new(**parsed)
+        else
+          # JSON string - validate and parse
+          validate!(json_string_or_hash)
+        end
       end
 
       # Instance methods for decryptability validation

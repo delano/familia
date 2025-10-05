@@ -154,8 +154,15 @@ end
 
 ### Important Implementation Notes
 
-**Field Initialization**: Objects can be initialized with positional args (brittle) or keyword args (robust). Keyword args are recommended.
-**Serialization**: Uses JSON by default but supports custom `serialize_value`/`deserialize_value` methods.
+**Field Initialization**: Objects can be initialized with positional args (brittle) or keyword args (robust). Keyword args are recommended. All non-nil values including `false` and `0` are preserved during initialization.
+
+**Serialization**: All field values are JSON-encoded for storage and JSON-decoded on retrieval to preserve Ruby types (Integer, Boolean, String, Float, Hash, Array, nil). This ensures type preservation across the Redis storage boundary. For example:
+- `age: 35` (Integer) stores as `"35"` in Redis and loads back as Integer `35`
+- `active: true` (Boolean) stores as `"true"` in Redis and loads back as Boolean `true`
+- `metadata: {key: "value"}` (Hash) stores as JSON and loads back as Hash with proper types
+
 **Database Key Generation**: Automatic key generation using class name, identifier, and field/type names (aka dbkey). Pattern: `classname:identifier:fieldname`
+
 **Memory Efficiency**: Only non-nil values are stored in keystore database to optimize memory usage.
+
 **Thread Safety**: Data types are frozen after instantiation to ensure immutability.

@@ -17,7 +17,7 @@ json_time = Benchmark.realtime do
 end
 
 familia_time = Benchmark.realtime do
-  100.times { Familia.distinguisher(large_data) }
+  100.times { Familia::JsonSerializer.dump(large_data) }
 end
 
 json_time > 0 && familia_time > 0

@@ -11,9 +11,9 @@ module Familia
       # @return [String, nil] The serialized representation of the value, or nil
       #   if serialization fails.
       #
-      # @note When a class option is specified, it uses that class's
-      #   serialization method. Otherwise, it relies on Familia.distinguisher for
-      #   serialization.
+      # @note When a class option is specified, it uses Familia.identifier_extractor
+      #   to extract the identifier from objects. Otherwise, it extracts identifiers
+      #   from Familia::Base instances or class names.
       #
       # @example With a class option
       #   serialize_value(User.new(name: "Cloe"), strict_values: false) #=> '{"name":"Cloe"}'
@@ -31,13 +31,13 @@ module Familia
         Familia.trace :TOREDIS, nil, "#{val}<#{val.class}|#{opts[:class]}>" if Familia.debug?
 
         if opts[:class]
-          prepared = Familia.distinguisher(opts[:class], strict_values: strict_values)
+          prepared = Familia.identifier_extractor(opts[:class])
           Familia.ld "  from opts[class] <#{opts[:class]}>: #{prepared || '<nil>'}"
         end
 
         if prepared.nil?
           # Enforce strict values when no class option is specified
-          prepared = Familia.distinguisher(val, strict_values: true)
+          prepared = Familia.identifier_extractor(val)
           Familia.ld "  from <#{val.class}> => <#{prepared.class}>"
         end
 

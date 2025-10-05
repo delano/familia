@@ -7,37 +7,37 @@ pr_compliances:
     objective: "All external API calls and database operations must have proper error handling"
     success_criteria: "Try-catch blocks around external calls with appropriate logging or error handling mechanisms"
     failure_criteria: "External API calls, database operations, or network requests without error handling"
-  
+
   - title: "TestCoverage"
     compliance_label: true
     objective: "New features must include corresponding tests using the Tryouts framework"
     success_criteria: "Test files present in try/ directory for new functionality following *_try.rb or *.try.rb naming convention"
     failure_criteria: "New code without test coverage or tests not following Tryouts framework conventions"
-  
+
   - title: "ChangelogFragment"
     compliance_label: true
     objective: "User-facing changes must include a changelog fragment"
     success_criteria: "New fragment file in changelog.d/ directory following the naming convention and RST format, or explicit justification for omission"
     failure_criteria: "User-facing changes without changelog fragment or documentation updates"
-  
+
   - title: "DocumentationUpdates"
     compliance_label: true
     objective: "API changes must be reflected in documentation"
     success_criteria: "YARD documentation comments for new public methods, or updates to docs/ for significant changes"
     failure_criteria: "New public APIs or significant behavior changes without documentation updates"
-  
+
   - title: "BackwardCompatibility"
     compliance_label: true
     objective: "Changes must maintain backward compatibility or document breaking changes"
     success_criteria: "No breaking changes to public APIs, or breaking changes clearly documented in migration guides"
     failure_criteria: "Breaking changes without migration documentation or deprecation warnings"
-  
+
   - title: "ThreadSafety"
     compliance_label: true
     objective: "Code handling shared state must be thread-safe"
     success_criteria: "Proper synchronization for shared mutable state, or clear documentation of thread-safety assumptions"
     failure_criteria: "Shared mutable state accessed without synchronization in concurrent contexts"
-  
+
   - title: "DatabaseKeyNaming"
     compliance_label: true
     objective: "Database key generation must follow Familia conventions"

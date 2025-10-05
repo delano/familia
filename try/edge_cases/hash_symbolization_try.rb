@@ -25,22 +25,31 @@ end
 @test_hash.keys
 #=> ["name", "age", "nested"]
 
-## After save and refresh, default behavior uses symbol keys
+## After save and refresh, default behavior uses string keys
 @test_obj.refresh!
 @test_obj.config.keys
-#=> [:name, :age, :nested]
+#=> ["name", "age", "nested"]
 
-## Nested hash also has symbol keys
-@test_obj.config[:nested].keys
-#=> [:theme]
+## Nested hash also has string keys
+@test_obj.config["nested"].keys
+#=> ["theme"]
 
 ## Get raw JSON from Valkey/Redis
 @raw_json = @test_obj.hget('config')
 @raw_json.class
 #=> String
 
-## deserialize_value with default symbolize: true returns symbol keys
-@symbol_result = @test_obj.deserialize_value(@raw_json)
+## deserialize_value with default symbolize: false returns string keys
+@string_result_default = @test_obj.deserialize_value(@raw_json)
+@string_result_default.keys
+#=> ["name", "age", "nested"]
+
+## Nested hash in default result also has string keys
+@string_result_default["nested"].keys
+#=> ["theme"]
+
+## deserialize_value with symbolize: true returns symbol keys
+@symbol_result = @test_obj.deserialize_value(@raw_json, symbolize: true)
 @symbol_result.keys
 #=> [:name, :age, :nested]
 
@@ -48,21 +57,12 @@ end
 @symbol_result[:nested].keys
 #=> [:theme]
 
-## deserialize_value with symbolize: false returns string keys
-@string_result = @test_obj.deserialize_value(@raw_json, symbolize: false)
-@string_result.keys
-#=> ["name", "age", "nested"]
-
-## Nested hash in string result also has string keys
-@string_result['nested'].keys
-#=> ["theme"]
-
-## Values are preserved correctly in both cases
+## Values are preserved correctly with symbol keys
 @symbol_result[:name]
 #=> "John"
 
-## String keys also work correctly
-@string_result['name']
+## Values are preserved correctly with string keys
+@string_result_default['name']
 #=> "John"
 
 ## Arrays are handled correctly too
@@ -71,27 +71,27 @@ end
 @array_json = @test_obj.hget('config')
 #=> "[{\"item\":\"value\"},\"string\",123]"
 
+## Array with default (symbolize: false) keeps hash keys as strings
+@string_array_default = @test_obj.deserialize_value(@array_json)
+@string_array_default[0].keys
+#=> ["item"]
+
 ## Array with symbolize: true converts hash keys to symbols
-@symbol_array = @test_obj.deserialize_value(@array_json)
+@symbol_array = @test_obj.deserialize_value(@array_json, symbolize: true)
 @symbol_array[0].keys
 #=> [:item]
 
-## Array with symbolize: false keeps hash keys as strings
-@string_array = @test_obj.deserialize_value(@array_json, symbolize: false)
-@string_array[0].keys
-#=> ["item"]
-
-## Non-hash/array values are returned as-is
+## JSON-encoded string is parsed correctly
 @test_obj.deserialize_value('"just a string"')
-#=> "\"just a string\""
+#=> "just a string"
 
-## Non-hash/array values are returned as-is
+## Non-JSON string returns as-is
 @test_obj.deserialize_value('just a string')
 #=> "just a string"
 
-## A stringified number is still a stringified number
+## JSON number is parsed to Integer
 @test_obj.deserialize_value('42')
-#=> "42"
+#=> 42
 
 ## Invalid JSON returns original string
 @test_obj.deserialize_value('invalid json')

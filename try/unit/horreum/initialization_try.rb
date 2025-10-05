@@ -97,7 +97,7 @@ Familia.debug = false
 @complex.save
 @complex.refresh!
 [@complex.custid, @complex.name, @complex.role, @complex.verified]
-#=> ["complex@test.com", "Complex User", "admin", "true"]
+#=> ["complex@test.com", "Complex User", "admin", true]
 
 ## Clean up saved test objects
 [@customer6, @complex].map(&:delete!)

@@ -182,19 +182,17 @@ RTPUser.email_index.hgetall[@test_email]
 @found_user.name
 #=> @test_name
 
-## Found user has correct age
+## Found user has correct age (Integer preserved)
 @found_user.age
-#=> @test_age.to_s
+#=> @test_age
 
-## TODO: (Serialization) created_at comes back as String instead of Integer even
-## though an Integer is a simple, valid JSON-supported type. Historically all
-## Horreum object fields are returned as-is (i.e. prior to v2).
+## created_at is correctly deserialized as Integer
 @found_user.created_at
-#=:<> Integer
+#=:> Integer
 
-## TODO: (Serialization) Age comparison fails due to Integer -> String conversion
+## All fields match original values (types preserved)
 [@found_user.user_id, @found_user.email, @found_user.name, @found_user.age]
-#=<> [@user.user_id, @user.email, @user.name, @user.age]
+#=> [@user.user_id, @user.email, @user.name, @user.age]
 
 ## Find via second index also returns fully hydrated object
 @found_by_name = RTPUser.find_by_name(@test_name)
@@ -255,9 +253,9 @@ RTPEmployee.exists?(@test_emp_id)
 @found_emp.department
 #=> @test_department
 
-## Found employee has correct hire_date (string serialization)
+## Found employee has correct hire_date (Integer preserved)
 @found_emp.hire_date
-#=> @test_hire_date.to_s
+#=> @test_hire_date
 
 ## Bulk query via instance-scoped index returns hydrated objects
 @found_emps = @company.find_all_by_badge_number([@test_badge])
@@ -347,9 +345,9 @@ RTPDomain.exists?(@test_domain_id)
 @loaded_domains.first.name
 #=> @test_domain_name
 
-## Loaded domain has correct created_at
+## Loaded domain has correct created_at (Integer preserved)
 @loaded_domains.first.created_at
-#=> @test_domain_created.to_s
+#=> @test_domain_created
 
 ## Class-level participation requires manual addition - API unclear for add_to_class_all_domains
 # Skip: @domain.add_to_class_all_domains - method signature unclear
@@ -373,10 +371,10 @@ RTPDomain.all_domains.size
 @user.age
 #=> @new_age
 
-## SERIALIZATION BUG: Updated age comes back as string
+## Updated age correctly preserved as Integer
 @reloaded_user = RTPUser.find_by_email(@test_email)
 @reloaded_user.age
-#=> @new_age.to_s
+#=> @new_age
 
 ## Update email and verify index updates
 @new_email = "newemail@example.com"
@@ -406,10 +404,10 @@ RTPUser.find_by_email(@old_email)
 @user_nil_age.age
 #=> nil
 
-## NIL HANDLING BUG: Nil fields become empty strings instead of nil
+## Nil fields correctly preserved as nil (not empty string)
 @reloaded_nil = RTPUser.find(@user_nil_age.user_id)
 @reloaded_nil.age
-#=> ""
+#=> nil
 
 ## Nil field vs missing field handled correctly, the field exists
 @reloaded_nil.respond_to?(:age)
@@ -423,12 +421,12 @@ RTPUser.find_by_email(@old_email)
 # 7. TYPE PRESERVATION - Round-Trip
 # =============================================
 
-## TYPE PRESERVATION BUG: Integer fields become Strings after round-trip
+## Type preservation: Integer fields stay Integer after round-trip
 @test_int_user = RTPUser.new(user_id: "rtp_int_#{Familia.now.to_i}", age: 42)
 @test_int_user.save
 @reloaded_int = RTPUser.find(@test_int_user.user_id)
 @reloaded_int.age.class
-#=> String
+#=> Integer
 
 ## String fields work correctly (expected behavior)
 @reloaded_int.user_id.class
