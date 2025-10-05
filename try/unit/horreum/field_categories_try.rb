@@ -4,41 +4,50 @@ require_relative '../../support/helpers/test_helpers'
 
 Familia.debug = false
 
-# Define test class with various field categories
+# Define test class with various field types
 class FieldCategoryTest < Familia::Horreum
+  feature :encrypted_fields
+  feature :transient_fields
+
   identifier_field :id
   field :id
-  field :name                           # default category (:field)
-  field :email, category: :encrypted    # encrypted category
-  field :tryouts_cache_data, category: :transient # transient category
-  field :description, category: :persistent # explicit persistent category
-  field :settings, category: nil        # nil category (defaults to :field)
+  field :name                           # regular field
+  encrypted_field :email                # encrypted field
+  transient_field :tryouts_cache_data   # transient field
+  field :description                    # regular persistent field
+  field :settings                       # regular field
 end
 
 # Test class with multiple transient fields
 class MultiTransientTest < Familia::Horreum
+  feature :transient_fields
+
   identifier_field :id
   field :id
   field :permanent_data
-  field :temp1, category: :transient
-  field :temp2, category: :transient
-  field :temp3, category: :transient
+  transient_field :temp1
+  transient_field :temp2
+  transient_field :temp3
 end
 
-# Field categories work with field aliasing
+# Field types work with field aliasing
 class AliasedCategoryTest < Familia::Horreum
+  feature :transient_fields
+
   identifier_field :id
   field :id
-  field :internal_temp, as: :temp, category: :transient
-  field :internal_perm, as: :perm, category: :persistent
+  transient_field :internal_temp, as: :temp
+  field :internal_perm, as: :perm
 end
 
 # Test edge case with all transient fields
 class AllTransientTest < Familia::Horreum
+  feature :transient_fields
+
   identifier_field :id
   field :id
-  field :temp1, category: :transient
-  field :temp2, category: :transient
+  transient_field :temp1
+  transient_field :temp2
 end
 
 ## Field types are stored correctly
@@ -58,11 +67,11 @@ FieldCategoryTest.field_types[:email].category
 FieldCategoryTest.field_types[:tryouts_cache_data].category
 #=> :transient
 
-## Explicit persistent category field has correct category
+## Regular fields have :field category
 FieldCategoryTest.field_types[:description].category
-#=> :persistent
+#=> :field
 
-## Nil category field defaults to :field
+## Regular fields default to :field category
 FieldCategoryTest.field_types[:settings].category
 #=> :field
 

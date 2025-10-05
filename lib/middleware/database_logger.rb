@@ -117,12 +117,10 @@ module DatabaseLogger
     block_duration = DatabaseLogger.now_in_μs - block_start
     lifetime_duration = (Time.now.to_f - DatabaseLogger.process_start).round(6)
 
-    return result if DatabaseLogger.logger.nil?
-
     # We intentionally use two different codepaths for getting the
     # time, although they will almost always be so similar that the
     # difference is negligible.
-    message = CommandMessage.new(command.join(' '), block_duration, lifetime_duration)
+    message = CommandMessage.new(command, block_duration, lifetime_duration)
     DatabaseLogger.append_command(message)
 
     # Log if logger is set

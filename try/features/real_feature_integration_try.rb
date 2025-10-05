@@ -12,15 +12,17 @@ class ExpirationIntegrationTest < Familia::Horreum
   feature :expiration
 end
 
-# Safe dump feature integration with field categories
+# Safe dump feature integration with field types
 class SafeDumpCategoryTest < Familia::Horreum
+  feature :encrypted_fields
+  feature :transient_fields
+  feature :safe_dump
+
   identifier_field :id
   field :id
-  field :public_name, category: :persistent
-  field :email, category: :encrypted
-  field :tryouts_cache_data, category: :transient
-
-  feature :safe_dump
+  field :public_name
+  encrypted_field :email
+  transient_field :tryouts_cache_data
 
   # Use new SafeDump DSL
   safe_dump_field :id
@@ -30,13 +32,14 @@ end
 
 # Combined features work together
 class CombinedFeaturesTest < Familia::Horreum
-  identifier_field :id
-  field :id
-  field :name, category: :persistent
-  field :temp_data, category: :transient
-
+  feature :transient_fields
   feature :expiration
   feature :safe_dump
+
+  identifier_field :id
+  field :id
+  field :name
+  transient_field :temp_data
 
   # Use new SafeDump DSL
   safe_dump_field :id
@@ -123,11 +126,11 @@ CombinedFeaturesTest.features_enabled.include?(:safe_dump)
 
 ## Test that feature() method returns current features when called with no args
 CombinedFeaturesTest.feature
-#=> [:expiration, :safe_dump]
+#=> [:transient_fields, :expiration, :safe_dump]
 
 ## Test that features_enabled() method returns the same results as feature() method
 CombinedFeaturesTest.feature
-#=> [:expiration, :safe_dump]
+#=> [:transient_fields, :expiration, :safe_dump]
 
 ## Features list is accessible
 QueryFeaturesTest.feature
