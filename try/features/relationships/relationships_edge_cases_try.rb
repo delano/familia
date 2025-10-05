@@ -41,14 +41,14 @@ end
 @domain1 = EdgeTestDomain.new(
   domain_id: 'edge_dom_1',
   display_domain: 'edge1.example.com',
-  created_at: Time.new(2025, 6, 15, 12, 0, 0),
+  created_at: Time.new(2025, 6, 15, 12, 0, 0).to_i,  # Convert Time to Integer for JSON serialization
   score_value: 10
 )
 
 @domain2 = EdgeTestDomain.new(
   domain_id: 'edge_dom_2',
   display_domain: 'edge2.example.com',
-  created_at: Time.new(2025, 7, 20, 15, 30, 0),
+  created_at: Time.new(2025, 7, 20, 15, 30, 0).to_i,  # Convert Time to Integer for JSON serialization
   score_value: 25
 )
 

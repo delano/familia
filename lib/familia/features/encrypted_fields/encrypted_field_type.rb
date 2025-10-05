@@ -29,8 +29,10 @@ module Familia
             # Already concealed, store as-is
             instance_variable_set(:"@#{field_name}", value)
           elsif field_type.encrypted_json?(value)
-            # Already encrypted JSON from database - wrap in ConcealedString without re-encrypting
-            concealed = ConcealedString.new(value, self, field_type)
+            # Already encrypted (JSON string or Hash from database) - wrap in ConcealedString without re-encrypting
+            # Convert Hash back to JSON string if needed (v2.0 deserialization returns Hash)
+            encrypted_string = value.is_a?(Hash) ? Familia::JsonSerializer.dump(value) : value
+            concealed = ConcealedString.new(encrypted_string, self, field_type)
             instance_variable_set(:"@#{field_name}", concealed)
           else
             # Encrypt plaintext and wrap in ConcealedString
@@ -138,7 +140,13 @@ module Familia
 
     # Check if a string looks like encrypted JSON data
     def encrypted_json?(data)
-      Familia::Encryption::EncryptedData.valid?(data)
+      # Support both JSON strings (legacy) and Hashes (v2.0 deserialization)
+      if data.is_a?(Hash)
+        required_keys = %w[algorithm nonce ciphertext auth_tag key_version]
+        required_keys.all? { |key| data.key?(key) || data.key?(key.to_sym) }
+      else
+        Familia::Encryption::EncryptedData.valid?(data)
+      end
     end
 
     private

@@ -39,7 +39,7 @@ module Familia
   using Refinements::StylizeWords
 
   class << self
-    attr_accessor :debug # rubocop:disable ThreadSafety/ClassAndModuleAttributes
+    attr_accessor :debug
     attr_reader :members
 
     def included(member)

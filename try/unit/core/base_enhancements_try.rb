@@ -97,14 +97,6 @@ EmptyBaseTest.respond_to?(:feature)
 Familia::Base.features_available
 #=:> Hash
 
-## Dump and load methods are set
-Familia::Base.dump_method
-#=> :to_json
-
-## Load method is set correctly
-Familia::Base.load_method
-#=> :from_json
-
 ## Base module provides inspect with class name
 @base_uuid.inspect.include?('BaseUuidTest')
 #=> true

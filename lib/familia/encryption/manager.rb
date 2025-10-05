@@ -32,15 +32,23 @@ module Familia
         Familia::Encryption.secure_wipe(key) if key
       end
 
-      def decrypt(encrypted_json, context:, additional_data: nil)
-        return nil if encrypted_json.nil? || encrypted_json.empty?
+      def decrypt(encrypted_json_or_hash, context:, additional_data: nil)
+        return nil if encrypted_json_or_hash.nil? || (encrypted_json_or_hash.respond_to?(:empty?) && encrypted_json_or_hash.empty?)
 
         # Increment counter immediately to track all decryption attempts, even failed ones
         Familia::Encryption.derivation_count.increment
 
         begin
-          data = Familia::Encryption::EncryptedData.new(**Familia::JsonSerializer.parse(encrypted_json,
-                                                                                        symbolize_names: true))
+          # Support both JSON strings (legacy) and already-parsed Hashes (v2.0 deserialization)
+          if encrypted_json_or_hash.is_a?(Hash)
+            parsed = encrypted_json_or_hash
+            # Symbolize keys if they're strings
+            parsed = parsed.transform_keys(&:to_sym) if parsed.keys.first.is_a?(String)
+          else
+            parsed = Familia::JsonSerializer.parse(encrypted_json_or_hash, symbolize_names: true)
+          end
+
+          data = Familia::Encryption::EncryptedData.new(**parsed)
 
           # Validate algorithm support
           provider = Registry.get(data.algorithm)

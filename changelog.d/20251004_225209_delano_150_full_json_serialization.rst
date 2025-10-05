@@ -6,7 +6,9 @@
 Changed
 -------
 
-- **BREAKING**: Implemented full JSON serialization for all Horreum field values to preserve Ruby types across Redis storage boundary. All field values (Integer, Boolean, String, Hash, Array, Float, nil) are now JSON-encoded for storage and JSON-decoded on retrieval, ensuring type preservation in round-trip operations.
+- **BREAKING**: Implemented type-preserving JSON serialization for Horreum field values. Non-string values (Integer, Boolean, Float, nil, Hash, Array) are JSON-encoded for storage and JSON-decoded on retrieval. **Strings are stored as-is without JSON encoding** to avoid double-quoting and maintain Redis baseline simplicity. Type preservation is achieved through smart deserialization: values that parse as JSON restore to their original types, otherwise remain as strings.
+
+- **BREAKING**: Changed default Hash key format from symbols to strings throughout the codebase (``symbolize: false`` default). This eliminates ambiguity with HTTP request parameters and IndifferentHash-style implementations, providing strict adherence to JSON parsing rules and avoiding key duplication issues.
 
 - **BREAKING**: Fixed ``initialize_with_keyword_args`` to properly handle ``false`` and ``0`` values during object initialization. Previously, falsy values were incorrectly skipped due to truthiness checks. Now uses explicit nil checking with ``fetch`` to preserve all non-nil values including ``false`` and ``0``.
 
@@ -22,7 +24,9 @@ Fixed
 
 - Fixed ``deserialize_value`` to return all JSON-parsed types instead of filtering to Hash/Array only. This enables proper deserialization of primitive types (Integer, Boolean, Float, String) from Redis storage.
 
-- Added JSON deserialization in ``find_by_dbkey`` before object instantiation to ensure loaded objects receive properly typed field values rather than raw Redis strings.
+- Added JSON deserialization in ``find_by_dbkey`` using existing ``initialize_with_keyword_args_deserialize_value`` helper method to maintain DRY principles and ensure loaded objects receive properly typed field values rather than raw Redis strings.
+
+- Optimized serialization to avoid double-encoding strings - strings stored directly in Redis as-is, only non-string types use JSON encoding. This reduces storage overhead and maintains Redis's string baseline semantics.
 
 Documentation
 -------------

@@ -145,17 +145,12 @@ module Familia
         obj = dbclient.hgetall(objkey) # horreum objects are persisted as database hashes
         Familia.trace :FIND_BY_DBKEY_INSPECT, nil, "#{objkey}: #{obj.inspect}"
 
-        # Deserialize JSON-encoded field values to restore proper Ruby types
-        # (Integer, Boolean, String, Hash, Array) before object instantiation
-        deserialized = obj.transform_values do |value|
-          begin
-            Familia::JsonSerializer.parse(value, symbolize_names: false)
-          rescue Familia::SerializerError
-            value  # Fallback for malformed data
-          end
-        end
-
-        new(**deserialized)
+        # Create instance and deserialize fields using existing helper method
+        # This avoids duplicating deserialization logic and keeps field-by-field processing
+        instance = allocate
+        instance.send(:initialize_relatives)
+        instance.send(:initialize_with_keyword_args_deserialize_value, **obj)
+        instance
       end
       alias find_by_key find_by_dbkey
 

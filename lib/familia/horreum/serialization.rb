@@ -129,9 +129,12 @@ module Familia
         # Security: Handle ConcealedString safely - extract encrypted data for storage
         return val.encrypted_value if val.respond_to?(:encrypted_value)
 
-        # All other values use JSON serialization for strict type preservation
-        # This ensures integers, booleans, strings, hashes, and arrays maintain
-        # their types across the Redis storage boundary
+        # Strings are already strings in Redis - no need to JSON-encode them
+        # This avoids double-quoting and simplifies storage
+        return val.to_s if val.is_a?(String)
+
+        # All non-string values use JSON serialization for type preservation
+        # (Integer, Boolean, Float, nil, Hash, Array)
         Familia::JsonSerializer.dump(val)
       end
 
@@ -169,17 +172,26 @@ module Familia
       # @param symbolize [Boolean] Whether to symbolize hash keys (default: true)
       # @return [Object] The deserialized value (Hash, Array, or original string)
       #
-      def deserialize_value(val, symbolize: true)
+      def deserialize_value(val, symbolize: false)
         return val if val.nil? || val == ''
 
-        # All field values are JSON-encoded for type preservation
-        # Parse to restore original Ruby types (Integer, Boolean, String, Hash, Array)
+        # Try to parse as JSON - if successful, we have a typed value (Integer, Boolean, etc.)
+        # If parsing fails, treat as plain string (the Redis baseline)
         begin
           Familia::JsonSerializer.parse(val, symbolize_names: symbolize)
         rescue Familia::SerializerError
-          # Fallback for malformed data - return as-is
+          # Not valid JSON - treat as plain string
           val
         end
+      end
+
+      private
+
+      # Check if a hash looks like encrypted field data
+      # Encrypted data has specific keys: algorithm, nonce, ciphertext, auth_tag, key_version
+      def encrypted_field_data?(hash)
+        required_keys = %w[algorithm nonce ciphertext auth_tag key_version]
+        required_keys.all? { |key| hash.key?(key) || hash.key?(key.to_sym) }
       end
     end
   end
