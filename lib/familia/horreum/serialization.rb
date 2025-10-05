@@ -7,19 +7,20 @@ module Familia
     module Serialization
       # Converts the object's persistent fields to a hash for external use.
       #
-      # Serializes persistent field values for external consumption (APIs, logs),
-      # excluding non-loggable fields like encrypted fields for security.
+      # Returns actual Ruby values (String, Integer, Hash, etc.) for API consumption,
+      # NOT JSON-encoded strings. Excludes non-loggable fields like encrypted fields
+      # for security.
       #
-      # @return [Hash] Hash with field names as keys and serialized values
-      #   safe for external exposure
+      # @return [Hash] Hash with field names as string keys and Ruby values
       #
       # @example Converting an object to hash format for API response
       #   user = User.new(name: "John", email: "john@example.com", age: 30)
       #   user.to_h
-      #   # => {"name"=>"John", "email"=>"john@example.com", "age"=>"30"}
-      #   # encrypted fields are excluded for security
+      #   # => {"name"=>"John", "email"=>"john@example.com", "age"=>30}
+      #   # Note: Returns actual Ruby types, not JSON strings
       #
-      # @note Only loggable fields are included for security
+      # @note Only loggable fields are included. Encrypted fields are excluded.
+      # @note Nil values are excluded from the returned hash (storage optimization)
       #
       def to_h
         self.class.persistent_fields.each_with_object({}) do |field, hsh|
@@ -39,14 +40,20 @@ module Familia
 
       # Converts the object's persistent fields to a hash for database storage.
       #
-      # Serializes ALL persistent field values for database storage, including
-      # encrypted fields. This is used internally by commit_fields and other
-      # persistence operations.
+      # Returns JSON-encoded strings for ALL persistent field values, ready for
+      # Redis storage. Unlike to_h, this includes encrypted fields and serializes
+      # values using serialize_value (JSON encoding).
       #
-      # @return [Hash] Hash with field names as keys and serialized values
-      #   ready for database storage
+      # @return [Hash] Hash with field names as string keys and JSON-encoded values
       #
-      # @note Includes ALL persistent fields, including encrypted fields
+      # @example Internal storage preparation
+      #   user = User.new(name: "John", age: 30)
+      #   user.to_h_for_storage
+      #   # => {"name"=>"\"John\"", "age"=>"30"}
+      #   # Note: Strings are JSON-encoded with quotes
+      #
+      # @note This is an internal method used by commit_fields and hmset
+      # @note Nil values are excluded to optimize Redis storage
       #
       def to_h_for_storage
         self.class.persistent_fields.each_with_object({}) do |field, hsh|
@@ -98,25 +105,26 @@ module Familia
 
       # Serializes a Ruby object for Valkey storage.
       #
-      # Converts Ruby objects into DB-compatible string representations using
-      # JSON serialization for type preservation. Strings are stored as-is to
-      # avoid double-quoting.
+      # Converts ALL Ruby values (including strings) to JSON-encoded strings for
+      # type-safe storage. This ensures round-trip type preservation: the type you
+      # save is the type you get back.
       #
       # The serialization process:
       # 1. ConcealedStrings (encrypted values) → extract encrypted_value
-      # 2. Strings → store as-is (no JSON encoding)
-      # 3. All other types → JSON serialization (Integer, Boolean, Float, nil, Hash, Array)
+      # 2. ALL other types → JSON serialization (String, Integer, Boolean, Float, nil, Hash, Array)
       #
       # @param val [Object] The Ruby object to serialize for Valkey storage
       #
-      # @return [String, nil] The serialized value ready for Valkey storage, or nil
-      #   if serialization failed
+      # @return [String] JSON-encoded string representation
       #
-      # @example Serializing different data types
-      #   serialize_value("hello")        # => "hello"
-      #   serialize_value(42)             # => "42"
-      #   serialize_value({name: "John"}) # => '{"name":"John"}'
-      #   serialize_value([1, 2, 3])      # => "[1,2,3]"
+      # @example Type preservation through JSON encoding
+      #   serialize_value("007")           # => "\"007\"" (JSON string)
+      #   serialize_value(123)             # => "123" (JSON number)
+      #   serialize_value(true)            # => "true" (JSON boolean)
+      #   serialize_value({a: 1})          # => "{\"a\":1}" (JSON object)
+      #
+      # @note Strings are JSON-encoded to prevent type coercion bugs where
+      #   string "123" would be indistinguishable from integer 123 in storage
       #
       # @note This method integrates with Familia's type system and supports
       #   custom serialization methods when available on the object
