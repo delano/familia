@@ -138,39 +138,20 @@ module Familia
         Familia::JsonSerializer.dump(val)
       end
 
-      # Converts a Database string value back to its original Ruby type
+      # Converts a Redis string value back to its original Ruby type
       #
-      # This method attempts to deserialize JSON strings back to their original
-      # Hash or Array types. Simple string values are returned as-is.
+      # This method deserializes JSON strings back to their original Ruby types
+      # (Integer, Boolean, Float, nil, Hash, Array). Plain strings that cannot
+      # be parsed as JSON are returned as-is.
       #
-      # DESIGN NOTE: Type Preservation vs Performance
-      # ----------------------------------------------
-      # Git History:
-      # - 32c3702 (2025-05-28): Original implementation with complex-type-only return
-      #   "Only return parsed value if it's a complex type (Hash/Array)"
-      #   Rationale: Prevent unwanted type coercion ("123" → 123, "true" → true)
-      #
-      # - 6680fdc (2025-05-28): Paired with serialize_value refinement
-      #   "only attempt JSON serialization for Array and Hash types"
-      #   Establishes contract: serialize only encodes complex types as JSON
-      #
-      # - acbe28f (2025-10-02): File reorganization, check still present
-      #   Complex-type check maintained: "return parsed if parsed.is_a?(Hash/Array)"
-      #
-      # Current Implementation:
-      # Maintains the original complex-type-only approach for safety. While this means
-      # we parse JSON but discard simple-type results, it prevents type coercion bugs.
-      # The paired serialize_value() contract ensures:
-      # 1. Strings stored as-is (no JSON encoding)
-      # 2. All other types JSON-encoded (Integer, Boolean, Float, nil, Hash, Array)
-      #
-      # Therefore, any value that successfully parses as JSON SHOULD be Hash/Array.
-      # The type check is defensive - catching cases where simple values were
-      # accidentally JSON-encoded upstream
+      # This pairs with serialize_value which JSON-encodes all non-string values.
+      # The contract ensures type preservation across Redis storage:
+      # - Strings stored as-is → returned as-is
+      # - All other types JSON-encoded → JSON-decoded back to original type
       #
       # @param val [String] The string value from Redis to deserialize
-      # @param symbolize [Boolean] Whether to symbolize hash keys (default: true)
-      # @return [Object] The deserialized value (Hash, Array, or original string)
+      # @param symbolize [Boolean] Whether to symbolize hash keys (default: false)
+      # @return [Object] The deserialized value with original Ruby type, or the original string if not JSON
       #
       def deserialize_value(val, symbolize: false)
         return val if val.nil? || val == ''
@@ -185,14 +166,6 @@ module Familia
         end
       end
 
-      private
-
-      # Check if a hash looks like encrypted field data
-      # Encrypted data has specific keys: algorithm, nonce, ciphertext, auth_tag, key_version
-      def encrypted_field_data?(hash)
-        required_keys = %w[algorithm nonce ciphertext auth_tag key_version]
-        required_keys.all? { |key| hash.key?(key) || hash.key?(key.to_sym) }
-      end
     end
   end
 end

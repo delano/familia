@@ -39,16 +39,15 @@ module Familia
         Familia::Encryption.derivation_count.increment
 
         begin
-          # Support both JSON strings (legacy) and already-parsed Hashes (v2.0 deserialization)
-          if encrypted_json_or_hash.is_a?(Hash)
-            parsed = encrypted_json_or_hash
-            # Symbolize keys if they're strings
-            parsed = parsed.transform_keys(&:to_sym) if parsed.keys.first.is_a?(String)
-          else
-            parsed = Familia::JsonSerializer.parse(encrypted_json_or_hash, symbolize_names: true)
+          # Delegate parsing and instantiation to EncryptedData.from_json
+          # Wrap validation errors for security (don't expose internal structure details)
+          begin
+            data = Familia::Encryption::EncryptedData.from_json(encrypted_json_or_hash)
+            raise EncryptionError, 'Failed to parse encrypted data' unless data
+          rescue EncryptionError => e
+            # Re-wrap validation errors with generic message for security
+            raise EncryptionError, "Decryption failed: #{e.message}"
           end
-
-          data = Familia::Encryption::EncryptedData.new(**parsed)
 
           # Validate algorithm support
           provider = Registry.get(data.algorithm)
