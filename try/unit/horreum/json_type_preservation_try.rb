@@ -15,6 +15,9 @@ class JsonTestModel < Familia::Horreum
   field :metadata       # Hash
   field :tags           # Array
   field :nested_data    # Hash with nested structures
+  field :badge_number   # String that looks numeric
+  field :status         # String that looks boolean
+  field :placeholder    # String that looks like null
 end
 
 @test_id = "json_test_#{Familia.now.to_i}"
@@ -190,6 +193,45 @@ end
 ## Empty string has String class
 @loaded.name.class
 #=> String
+
+## String fields with numeric values preserve String type (badge "007")
+@model = JsonTestModel.new(model_id: @test_id, badge_number: "007")
+@model.save
+@loaded = JsonTestModel.find(@test_id)
+@loaded.badge_number
+#=> "007"
+
+## Badge number preserves String class (not Integer)
+@loaded.badge_number.class
+#=> String
+
+## String "true" stays String (not Boolean)
+@model = JsonTestModel.new(model_id: @test_id, status: "true")
+@model.save
+@loaded = JsonTestModel.find(@test_id)
+[@loaded.status, @loaded.status.class]
+#=> ["true", String]
+
+## String "false" stays String (not Boolean)
+@model = JsonTestModel.new(model_id: @test_id, status: "false")
+@model.save
+@loaded = JsonTestModel.find(@test_id)
+[@loaded.status, @loaded.status.class]
+#=> ["false", String]
+
+## String "null" stays String (not nil)
+@model = JsonTestModel.new(model_id: @test_id, placeholder: "null")
+@model.save
+@loaded = JsonTestModel.find(@test_id)
+[@loaded.placeholder, @loaded.placeholder.class]
+#=> ["null", String]
+
+## Numeric string "123" preserves String type
+@model = JsonTestModel.new(model_id: @test_id, badge_number: "123")
+@model.save
+@loaded = JsonTestModel.find(@test_id)
+[@loaded.badge_number, @loaded.badge_number.class]
+#=> ["123", String]
 
 ## Zero values preserved with correct types
 @model = JsonTestModel.new(model_id: @test_id, age: 0, score: 0.0)

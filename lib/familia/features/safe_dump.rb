@@ -1,9 +1,8 @@
 # lib/familia/features/safe_dump.rb
 
 #
-#   Class instance variables are used here for feature configuration
-#   (e.g., @dump_method, @load_method). These are set once and not mutated
-#   at runtime, so thread safety is not a concern for this feature.
+# Class instance variables are used here for configuration. These are set
+# once at loadtime and not mutated, so thread safety is not an issue here.
 #
 module Familia
   module Features

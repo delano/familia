@@ -299,7 +299,9 @@ module Familia
 
     def initialize_with_keyword_args_deserialize_value(**fields)
       # Deserialize Database string values back to their original types
-      deserialized_fields = fields.transform_values { |value| deserialize_value(value) }
+      deserialized_fields = fields.each_with_object({}) do |(field_name, value), hsh|
+        hsh[field_name] = deserialize_value(value, field_name: field_name)
+      end
       initialize_with_keyword_args(**deserialized_fields)
     end
 

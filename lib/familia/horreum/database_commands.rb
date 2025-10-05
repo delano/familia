@@ -121,7 +121,7 @@ module Familia
       end
 
       def hmset(hsh = {})
-        hsh ||= to_h
+        hsh ||= to_h_for_storage
         Familia.trace :HMSET, nil, hsh if Familia.debug?
         dbclient.hmset dbkey(suffix), hsh
       end

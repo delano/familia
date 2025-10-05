@@ -44,7 +44,7 @@ test_obj.simple = 'just a string'
 test_obj.tags = %w[ruby valkey json familia]
 test_obj.save
 test_obj.hgetall
-#=> {"id"=>"json_test_1", "config"=>"{\"theme\":\"dark\",\"notifications\":true,\"settings\":{\"volume\":80}}", "tags"=>"[\"ruby\",\"valkey\",\"json\",\"familia\"]", "simple"=>"just a string"}
+#=> {"id"=>"\"json_test_1\"", "config"=>"{\"theme\":\"dark\",\"notifications\":true,\"settings\":{\"volume\":80}}", "tags"=>"[\"ruby\",\"valkey\",\"json\",\"familia\"]", "simple"=>"\"just a string\""}
 
 ## Test 4: Hash should be deserialized back to Hash
 test_obj = JsonTest.new 'any_id_will_do'
