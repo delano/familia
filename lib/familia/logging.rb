@@ -298,14 +298,15 @@ module Familia
 
     # Check if trace logging is enabled via FAMILIA_TRACE environment variable.
     #
-    # Caches the result on first check. Trace logging is enabled when
-    # FAMILIA_TRACE is set to '1', 'true', or 'yes' (case-insensitive).
+    # Trace logging is enabled when FAMILIA_TRACE is set to '1', 'true',
+    # or 'yes' (case-insensitive). Checks the environment variable on every
+    # call to support dynamic changes in test environments.
     #
     # @return [Boolean] true if trace logging is enabled
     # @api private
     #
     def trace_enabled?
-      @trace_enabled ||= %w[1 true yes].include?(ENV.fetch('FAMILIA_TRACE', 'false').downcase)
+      %w[1 true yes].include?(ENV.fetch('FAMILIA_TRACE', 'false').downcase)
     end
   end
 end
