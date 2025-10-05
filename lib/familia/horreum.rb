@@ -308,7 +308,7 @@ module Familia
     #
     # This method is part of horreum.rb rather than serialization.rb because it
     # operates solely on the provided values and doesn't query Database or other
-    # external sources. That's why it's called "optimistic" refresh: it assumes
+    # external sources. That's why it's called "naive" refresh: it assumes
     # the provided values are correct and updates the object accordingly.
     #
     # @see #refresh!
@@ -316,8 +316,8 @@ module Familia
     # @param fields [Hash] A hash of field names and their new values to update
     #   the object with.
     # @return [Array] The list of field names that were updated.
-    def optimistic_refresh(**fields)
-      Familia.ld "[optimistic_refresh] #{self.class} #{dbkey} #{fields.keys}"
+    def naive_refresh(**fields)
+      Familia.ld "[naive_refresh] #{self.class} #{dbkey} #{fields.keys}"
       initialize_with_keyword_args_deserialize_value(**fields)
     end
 

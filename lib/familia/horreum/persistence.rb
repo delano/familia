@@ -354,7 +354,7 @@ module Familia
         # their uninitialized state during refresh operations
         reset_transient_fields!
 
-        optimistic_refresh(**fields)
+        naive_refresh(**fields)
       end
 
       # Refreshes object state from the DB and returns self for method chaining.
