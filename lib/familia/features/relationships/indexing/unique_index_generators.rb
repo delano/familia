@@ -112,7 +112,7 @@ module Familia
                 record_id = index_hash.get(provided_value)
                 return nil unless record_id
 
-                indexed_class.new(object_id)
+                indexed_class.find_by_identifier(record_id)
               end
 
               # Generate bulk query method (e.g., company.find_all_by_badge_number)
@@ -126,7 +126,9 @@ module Familia
                 # Get all identifiers from the hash
                 record_ids = index_hash.values_at(*provided_ids.map(&:to_s))
                 # Filter out nil values and instantiate objects
-                object_ids.compact.map { |object_id| indexed_class.new(object_id) }
+                record_ids.compact.map { |record_id|
+                  indexed_class.find_by_identifier(record_id)
+                }
               end
 
               # Accessor method already created by ensure_index_field above
@@ -228,7 +230,7 @@ module Familia
 
               return nil unless record_id
 
-              new(object_id)
+              indexed_class.find_by_identifier(record_id)
             end
 
             # Generate class-level bulk query method
@@ -239,7 +241,9 @@ module Familia
               index_hash = send(index_name) # Access the class-level hashkey DataType
               record_ids = index_hash.values_at(*provided_ids.map(&:to_s))
               # Filter out nil values and instantiate objects
-              object_ids.compact.map { |object_id| new(object_id) }
+              record_ids.compact.map { |record_id|
+                indexed_class.find_by_identifier(record_id)
+              }
             end
 
             # The index accessor method is already created by the class_hashkey declaration

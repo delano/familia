@@ -55,13 +55,18 @@ end
 
 # Setup
 @user1 = TestUser.new(user_id: 'user_001', email: 'alice@example.com', username: 'alice', department: 'engineering', role: 'developer')
+@user1.save
 @user2 = TestUser.new(user_id: 'user_002', email: 'bob@example.com', username: 'bob', department: 'marketing', role: 'manager')
+@user2.save
 @user3 = TestUser.new(user_id: 'user_003', email: 'charlie@example.com', username: 'charlie', department: 'engineering', role: 'lead')
+@user3.save
 
 @company_id = "comp_#{rand(10000000)}"
 @company = TestCompany.create(company_id: @company_id, name: 'Acme Corp')
 @emp1 = TestEmployee.new(emp_id: 'emp_001', email: 'alice@acme.com', department: 'engineering', manager_id: 'mgr_001', badge_number: 'BADGE001')
+@emp1.save
 @emp2 = TestEmployee.new(emp_id: 'emp_002', email: 'bob@acme.com', department: 'sales', manager_id: 'mgr_002', badge_number: 'BADGE002')
+@emp2.save
 
 
 ## Context-scoped methods require context parameter
