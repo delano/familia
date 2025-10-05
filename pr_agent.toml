@@ -1,0 +1,31 @@
+# Qodo Merge Configuration
+# Documentation: https://qodo-merge-docs.qodo.ai/usage-guide/configuration_options/
+
+[config]
+# Ensure consistent review language across all PRs
+response_language = "en"
+
+[rag_arguments]
+# Enable RAG context enrichment for codebase duplication compliance checks
+enable_rag = true
+# Include related repositories for comprehensive context
+rag_repo_list = ['delano/familia', 'delano/tryouts', 'delano/otto']
+
+[compliance]
+# Reference custom compliance checklist for project-specific rules
+custom_compliance_path = "pr_compliance_checklist.yaml"
+
+[ignore]
+# Reduce noise by excluding generated files and build artifacts
+glob = [
+    "*.lock",           # Lock files (Gemfile.lock, etc.)
+    "*.gem",            # Built gem files
+    "vendor/**",        # Vendored dependencies
+    "tmp/**",           # Temporary files
+    "log/**",           # Log files
+    "data/**",          # Data directories
+    "public/**",        # Public assets
+    ".yardoc/**",       # YARD documentation cache
+    "dump.rdb",         # Redis database dumps
+    "appendonlydir/**", # Redis append-only file directory
+]
