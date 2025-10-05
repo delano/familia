@@ -100,14 +100,14 @@ module Familia
 
       # Serializes a Ruby object for Valkey storage.
       #
-      # Converts Ruby objects into the DB-compatible string representations using
-      # the Familia distinguisher for type coercion. Falls back to JSON serialization
-      # for complex types (Hash, Array) when the primary distinguisher returns nil.
+      # Converts Ruby objects into DB-compatible string representations using
+      # JSON serialization for type preservation. Strings are stored as-is to
+      # avoid double-quoting.
       #
       # The serialization process:
-      # 1. Attempts conversion using Familia.distinguisher with relaxed type checking
-      # 2. For Hash/Array types that return nil, tries custom dump_method or Familia::JsonSerializer.dump
-      # 3. Logs warnings when serialization fails completely
+      # 1. ConcealedStrings (encrypted values) → extract encrypted_value
+      # 2. Strings → store as-is (no JSON encoding)
+      # 3. All other types → JSON serialization (Integer, Boolean, Float, nil, Hash, Array)
       #
       # @param val [Object] The Ruby object to serialize for Valkey storage
       #
@@ -123,7 +123,7 @@ module Familia
       # @note This method integrates with Familia's type system and supports
       #   custom serialization methods when available on the object
       #
-      # @see Familia.distinguisher The primary serialization mechanism
+      # @see Familia.identifier_extractor For extracting identifiers from Familia objects
       #
       def serialize_value(val)
         # Security: Handle ConcealedString safely - extract encrypted data for storage
@@ -161,8 +161,8 @@ module Familia
       # Maintains the original complex-type-only approach for safety. While this means
       # we parse JSON but discard simple-type results, it prevents type coercion bugs.
       # The paired serialize_value() contract ensures:
-      # 1. Only Hash/Array are JSON-encoded (see 6680fdc)
-      # 2. Simple values stored via Familia.distinguisher (strings/numbers as-is)
+      # 1. Strings stored as-is (no JSON encoding)
+      # 2. All other types JSON-encoded (Integer, Boolean, Float, nil, Hash, Array)
       #
       # Therefore, any value that successfully parses as JSON SHOULD be Hash/Array.
       # The type check is defensive - catching cases where simple values were
