@@ -57,10 +57,13 @@ module Familia
     #
     def trace(progname = nil, &)
       # Store marker in thread-local to signal this is TRACE not DEBUG
+      # Track whether we set the flag to avoid clearing it in nested calls
+      was_already_tracing = Fiber[:familia_trace_mode]
       Fiber[:familia_trace_mode] = true
       add(TRACE, nil, progname, &)
     ensure
-      Fiber[:familia_trace_mode] = false
+      # Only clear the flag if we set it (not already tracing)
+      Fiber[:familia_trace_mode] = false unless was_already_tracing
     end
   end
 
