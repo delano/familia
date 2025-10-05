@@ -129,18 +129,10 @@ module Familia
         # Security: Handle ConcealedString safely - extract encrypted data for storage
         return val.encrypted_value if val.respond_to?(:encrypted_value)
 
-        prepared = Familia.distinguisher(val, strict_values: false)
-
-        # If the distinguisher returns nil, try using the dump_method but only
-        # use JSON serialization for complex types that need it.
-        if prepared.nil? && (val.is_a?(Hash) || val.is_a?(Array))
-          prepared = val.respond_to?(dump_method) ? val.send(dump_method) : Familia::JsonSerializer.dump(val)
-        end
-
-        # If both the distinguisher and dump_method return nil, log an error
-        Familia.ld "[#{self.class}#serialize_value] nil returned for #{self.class}" if prepared.nil?
-
-        prepared
+        # All other values use JSON serialization for strict type preservation
+        # This ensures integers, booleans, strings, hashes, and arrays maintain
+        # their types across the Redis storage boundary
+        Familia::JsonSerializer.dump(val)
       end
 
       # Converts a Database string value back to its original Ruby type
@@ -180,17 +172,14 @@ module Familia
       def deserialize_value(val, symbolize: true)
         return val if val.nil? || val == ''
 
-        # Try to parse as JSON - only complex types should be JSON-encoded
+        # All field values are JSON-encoded for type preservation
+        # Parse to restore original Ruby types (Integer, Boolean, String, Hash, Array)
         begin
-          parsed = Familia::JsonSerializer.parse(val, symbolize_names: symbolize)
-          # Only return parsed value if it's a complex type (Hash/Array)
-          # Simple values should remain as strings
-          return parsed if parsed.is_a?(Hash) || parsed.is_a?(Array)
+          Familia::JsonSerializer.parse(val, symbolize_names: symbolize)
         rescue Familia::SerializerError
-          # Not valid JSON, return as-is (simple string/number stored directly)
+          # Fallback for malformed data - return as-is
+          val
         end
-
-        val
       end
     end
   end

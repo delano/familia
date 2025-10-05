@@ -17,8 +17,6 @@ module Familia
 
     @features_available = nil
     @feature_definitions = nil
-    @dump_method = :to_json
-    @load_method = :from_json
 
     def self.included(base)
       # Ensure the including class gets its own feature registry
