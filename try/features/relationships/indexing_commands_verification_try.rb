@@ -94,6 +94,7 @@ end
 #=> false
 
 ## Instance-level indexing works with parent context
+@employee.save
 @employee.add_to_test_indexed_company_dept_index(@company)
 sample = @company.sample_from_department('sales')
 sample.first&.emp_id == @employee.emp_id
@@ -109,13 +110,13 @@ dept_index.class.name
 @employee2.save
 @employee2.add_to_test_indexed_company_dept_index(@company)
 employees_in_sales = @company.find_all_by_department('sales')
-employees_in_sales.map(&:emp_id).sort
+employees_in_sales&.map(&:emp_id).sort
 #=> ["test_emp_789", "test_emp_999"]
 
 ## Removing from instance-level index works
 @employee.remove_from_test_indexed_company_dept_index(@company)
 remaining_employees = @company.find_all_by_department('sales')
-remaining_employees.map(&:emp_id)
+remaining_employees&.map(&:emp_id)
 #=> ["test_emp_999"]
 
 ## Index update methods work correctly
