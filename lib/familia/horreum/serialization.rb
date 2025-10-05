@@ -153,21 +153,38 @@ module Familia
       #
       # @param val [String] The string value from Redis to deserialize
       # @param symbolize [Boolean] Whether to symbolize hash keys (default: false)
+      # @param field_name [Symbol, nil] Optional field name for better error context
       # @return [Object] The deserialized value with original Ruby type, or the original string if not JSON
       #
-      def deserialize_value(val, symbolize: false)
-        return val if val.nil? || val == ''
+      def deserialize_value(val, symbolize: false, field_name: nil)
+        return nil if val.nil? || val == ''
 
-        # Try to parse as JSON - if successful, we have a typed value (Integer, Boolean, etc.)
-        # If parsing fails, treat as plain string (the Redis baseline)
         begin
           Familia::JsonSerializer.parse(val, symbolize_names: symbolize)
         rescue Familia::SerializerError
-          # Not valid JSON - treat as plain string
+          log_deserialization_issue(val, field_name)
           val
         end
       end
 
+      private
+
+      def log_deserialization_issue(val, field_name)
+        context = field_name ? "#{self.class}##{field_name}" : self.class.to_s
+        dbkey_info = respond_to?(:dbkey) ? dbkey : 'no dbkey'
+
+        msg = if looks_like_json?(val)
+          "Corrupted JSON in #{context}: #{val.inspect} (#{dbkey_info})"
+        else
+          "Legacy plain string in #{context}: #{val.inspect} (#{dbkey_info})"
+        end
+
+        Familia.le(msg)
+      end
+
+      def looks_like_json?(val)
+        val.start_with?('{', '[', '"') || %w[true false null].include?(val)
+      end
     end
   end
 end
