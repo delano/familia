@@ -148,21 +148,46 @@ module Familia
       # This method attempts to deserialize JSON strings back to their original
       # Hash or Array types. Simple string values are returned as-is.
       #
-      # @param val [String] The string value from Database to deserialize
-      # @param symbolize [Boolean] Whether to symbolize hash keys (default: true for compatibility)
+      # DESIGN NOTE: Type Preservation vs Performance
+      # ----------------------------------------------
+      # Git History:
+      # - 32c3702 (2025-05-28): Original implementation with complex-type-only return
+      #   "Only return parsed value if it's a complex type (Hash/Array)"
+      #   Rationale: Prevent unwanted type coercion ("123" → 123, "true" → true)
+      #
+      # - 6680fdc (2025-05-28): Paired with serialize_value refinement
+      #   "only attempt JSON serialization for Array and Hash types"
+      #   Establishes contract: serialize only encodes complex types as JSON
+      #
+      # - acbe28f (2025-10-02): File reorganization, check still present
+      #   Complex-type check maintained: "return parsed if parsed.is_a?(Hash/Array)"
+      #
+      # Current Implementation:
+      # Maintains the original complex-type-only approach for safety. While this means
+      # we parse JSON but discard simple-type results, it prevents type coercion bugs.
+      # The paired serialize_value() contract ensures:
+      # 1. Only Hash/Array are JSON-encoded (see 6680fdc)
+      # 2. Simple values stored via Familia.distinguisher (strings/numbers as-is)
+      #
+      # Therefore, any value that successfully parses as JSON SHOULD be Hash/Array.
+      # The type check is defensive - catching cases where simple values were
+      # accidentally JSON-encoded upstream
+      #
+      # @param val [String] The string value from Redis to deserialize
+      # @param symbolize [Boolean] Whether to symbolize hash keys (default: true)
       # @return [Object] The deserialized value (Hash, Array, or original string)
       #
       def deserialize_value(val, symbolize: true)
         return val if val.nil? || val == ''
 
-        # Try to parse as JSON first for complex types
+        # Try to parse as JSON - only complex types should be JSON-encoded
         begin
           parsed = Familia::JsonSerializer.parse(val, symbolize_names: symbolize)
           # Only return parsed value if it's a complex type (Hash/Array)
           # Simple values should remain as strings
           return parsed if parsed.is_a?(Hash) || parsed.is_a?(Array)
         rescue Familia::SerializerError
-          # Not valid JSON, return as-is
+          # Not valid JSON, return as-is (simple string/number stored directly)
         end
 
         val

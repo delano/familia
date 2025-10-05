@@ -506,7 +506,7 @@ module Familia
 
               # Convert the provided value to a format suitable for Database storage.
               prepared = serialize_value(val)
-              Familia.ld "[.define_fast_writer_method] #{fast_method_name} val: #{val.class} prepared: #{prepared.class}"
+              Familia.ld "[define_fast_writer_method] #{fast_method_name} val: #{val.class} prepared: #{prepared.class}"
 
               # Use the existing accessor method to set the attribute value.
               send :"#{method_name}=", val

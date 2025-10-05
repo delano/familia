@@ -1,6 +1,6 @@
 # lib/familia/connection/middleware.rb
 
-require_relative '../../middleware/database_middleware'
+require_relative '../../middleware/database_logger'
 
 module Familia
   module Connection
@@ -19,13 +19,13 @@ module Familia
       # Increments the middleware version, invalidating all cached connections
       def increment_middleware_version!
         @middleware_version += 1
-        Familia.trace :MIDDLEWARE_VERSION, nil, "Incremented to #{@middleware_version}" if Familia.debug?
+        Familia.trace :MIDDLEWARE_VERSION, nil, "Incremented to #{@middleware_version}"
       end
 
       # Sets a versioned fiber-local connection
       def set_fiber_connection(connection)
         Fiber[:familia_connection] = [connection, middleware_version]
-        Familia.trace :FIBER_CONNECTION, nil, "Set with version #{middleware_version}" if Familia.debug?
+        Familia.trace :FIBER_CONNECTION, nil, "Set with version #{middleware_version}"
       end
 
       # Clears the fiber-local connection

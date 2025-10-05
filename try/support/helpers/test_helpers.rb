@@ -12,6 +12,15 @@ Familia.enable_database_logging = true
 Familia.enable_database_counter = true
 Familia.uri = 'redis://127.0.0.1:2525'
 
+def generate_random_email
+  # Generate a random username
+  username = (0...8).map { ('a'..'z').to_a[rand(26)] }.join
+  # Define a domain
+  domain = "example.com"
+  # Combine to form an email address
+  "#{username}@#{domain}"
+end
+
 class Bone < Familia::Horreum
   using Familia::Refinements::TimeLiterals
 

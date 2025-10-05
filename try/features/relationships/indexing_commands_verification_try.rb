@@ -44,8 +44,11 @@ end
 
 # Test data
 @user = TestIndexedUser.new(user_id: 'test_user_123', email: 'test@example.com', department: 'engineering')
+@user.save
 @company = TestIndexedCompany.new(company_id: 'test_company_456', name: 'Test Corp')
+@company.save
 @employee = TestIndexedEmployee.new(emp_id: 'test_emp_789', email: 'emp@example.com', department: 'sales')
+@employee.save
 
 ## Class-level indexing creates proper DataType field
 TestIndexedUser.respond_to?(:email_index)
@@ -91,6 +94,7 @@ end
 #=> false
 
 ## Instance-level indexing works with parent context
+@employee.save
 @employee.add_to_test_indexed_company_dept_index(@company)
 sample = @company.sample_from_department('sales')
 sample.first&.emp_id == @employee.emp_id
@@ -103,15 +107,16 @@ dept_index.class.name
 
 ## Multiple employees in same department
 @employee2 = TestIndexedEmployee.new(emp_id: 'test_emp_999', email: 'emp2@example.com', department: 'sales')
+@employee2.save
 @employee2.add_to_test_indexed_company_dept_index(@company)
 employees_in_sales = @company.find_all_by_department('sales')
-employees_in_sales.map(&:emp_id).sort
+employees_in_sales&.map(&:emp_id).sort
 #=> ["test_emp_789", "test_emp_999"]
 
 ## Removing from instance-level index works
 @employee.remove_from_test_indexed_company_dept_index(@company)
 remaining_employees = @company.find_all_by_department('sales')
-remaining_employees.map(&:emp_id)
+remaining_employees&.map(&:emp_id)
 #=> ["test_emp_999"]
 
 ## Index update methods work correctly

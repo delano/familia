@@ -75,7 +75,7 @@ module Familia
             actual_target_class.class_eval do
               # Helper method to get index set for a specific field value
               # This acts as a factory for field-value-specific DataTypes
-              define_method("#{index_name}_for") do |field_value|
+              define_method(:"#{index_name}_for") do |field_value|
                 # Return properly managed DataType instance with parameterized key
                 index_key = "#{index_name}:#{field_value}"
                 Familia::UnsortedSet.new(index_key, parent: self)
@@ -99,26 +99,26 @@ module Familia
             # Generate instance sampling method (e.g., company.sample_from_department)
             actual_target_class.class_eval do
 
-              define_method("sample_from_#{field}") do |field_value, count = 1|
+              define_method(:"sample_from_#{field}") do |field_value, count = 1|
                 index_set = send("#{index_name}_for", field_value) # i.e. UnsortedSet
 
                 # Get random members efficiently (O(1) via SRANDMEMBER with count)
                 # Returns array even for count=1 for consistent API
                 index_set.sample(count).map do |id|
-                  indexed_class.new(index_set.deserialize_value(id))
+                  indexed_class.find_by_identifier(id)
                 end
               end
 
               # Generate bulk query method (e.g., company.find_all_by_department)
-              define_method("find_all_by_#{field}") do |field_value|
+              define_method(:"find_all_by_#{field}") do |field_value|
                 index_set = send("#{index_name}_for", field_value) # i.e. UnsortedSet
 
                 # Get all members from set
-                index_set.members.map { |id| indexed_class.new(id) }
+                index_set.members.map { |id| indexed_class.find_by_identifier(id) }
               end
 
               # Generate method to rebuild the index for this parent instance
-              define_method("rebuild_#{index_name}") do
+              define_method(:"rebuild_#{index_name}") do
                 # This would need to be implemented based on how you track which
                 # objects belong to this parent instance
                 # For now, just a placeholder
@@ -138,7 +138,7 @@ module Familia
           def generate_mutation_methods_self(indexed_class, field, target_class, index_name)
             target_class_config = target_class.config_name
             indexed_class.class_eval do
-              method_name = "add_to_#{target_class_config}_#{index_name}"
+              method_name = :"add_to_#{target_class_config}_#{index_name}"
               Familia.ld("[MultiIndexGenerators] #{name} method #{method_name}")
 
               define_method(method_name) do |target_instance|
@@ -154,7 +154,7 @@ module Familia
                 index_set.add(identifier)
               end
 
-              method_name = "remove_from_#{target_class_config}_#{index_name}"
+              method_name = :"remove_from_#{target_class_config}_#{index_name}"
               Familia.ld("[MultiIndexGenerators] #{name} method #{method_name}")
 
               define_method(method_name) do |target_instance|
@@ -170,7 +170,7 @@ module Familia
                 index_set.remove(identifier)
               end
 
-              method_name = "update_in_#{target_class_config}_#{index_name}"
+              method_name = :"update_in_#{target_class_config}_#{index_name}"
               Familia.ld("[MultiIndexGenerators] #{name} method #{method_name}")
 
               define_method(method_name) do |target_instance, old_field_value = nil|

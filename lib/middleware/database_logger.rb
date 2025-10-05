@@ -1,4 +1,4 @@
-# lib/middleware/database_middleware.rb
+# lib/middleware/database_logger.rb
 
 require 'concurrent-ruby'
 
@@ -29,21 +29,34 @@ require 'concurrent-ruby'
 #   often outweigh the slight performance cost when enabled.
 module DatabaseLogger
   @logger = nil
-  @commands = []
+  @commands = Concurrent::Array.new
+  @max_commands = 10_000
+  @process_start = Time.now.to_f.freeze
+
+  CommandMessage = Data.define(:command, :μs, :timeline)
 
   class << self
     # Gets/sets the logger instance used by DatabaseLogger.
     # @return [Logger, nil] The current logger instance or nil if not set.
     attr_accessor :logger
 
+    # Gets/sets the maximum number of commands to capture.
+    # @return [Integer] The maximum number of commands to capture.
+    attr_accessor :max_commands
+
     # Gets the captured commands for testing purposes.
-    # @return [Array] Array of command hashes with :command, :duration, :timestamp
+    # @return [Array] Array of command hashes with :command, :duration, :timeline
     attr_reader :commands
+
+    # Gets the timestamp when DatabaseLogger was loaded.
+    # @return [Float] The timestamp when DatabaseLogger was loaded.
+    attr_reader :process_start
 
     # Clears the captured commands array.
     # @return [Array] Empty array
     def clear_commands
-      @commands = []
+      @commands.clear
+      nil
     end
 
     # Captures commands in a block and returns them.
@@ -62,8 +75,28 @@ module DatabaseLogger
     def capture_commands
       clear_commands
       yield
-      @commands.dup
+      @commands.to_a
     end
+
+    # Thread-safe append with bounded size
+    #
+    # @param message [String] The message to append.
+    # @return [Array] The updated array of commands.
+    def append_command(message)
+      @commands.shift if @commands.size >= @max_commands
+      @commands << message
+    end
+
+    # Returns the current time in microseconds.
+    # This is used to measure the duration of Database commands.
+    #
+    # Alias: now_in_microseconds
+    #
+    # @return [Integer] The current time in microseconds.
+    def now_in_μs
+      Process.clock_gettime(Process::CLOCK_MONOTONIC, :microsecond)
+    end
+    alias now_in_microseconds now_in_μs
   end
 
   # Logs the Database command and its execution time.
@@ -79,19 +112,21 @@ module DatabaseLogger
   # @note Commands are always captured with minimal overhead for testing purposes.
   #   Logging only occurs when DatabaseLogger.logger is set.
   def call(command, _config)
-    start = Process.clock_gettime(Process::CLOCK_MONOTONIC, :microsecond)
+    block_start = DatabaseLogger.now_in_μs
     result = yield
-    duration = Process.clock_gettime(Process::CLOCK_MONOTONIC, :microsecond) - start
+    block_duration = DatabaseLogger.now_in_μs - block_start
+    lifetime_duration = (Time.now.to_f - DatabaseLogger.process_start).round(6)
 
-    # Always capture commands for testing purposes
-    DatabaseLogger.instance_variable_get(:@commands) << {
-      command: command.dup,
-      duration: duration,
-      timestamp: Time.now,
-    }
+    return result if DatabaseLogger.logger.nil?
+
+    # We intentionally use two different codepaths for getting the
+    # time, although they will almost always be so similar that the
+    # difference is negligible.
+    message = CommandMessage.new(command.join(' '), block_duration, lifetime_duration)
+    DatabaseLogger.append_command(message)
 
     # Log if logger is set
-    DatabaseLogger.logger&.debug("Redis: #{command.inspect} (#{duration}µs)")
+    DatabaseLogger.logger&.debug(Oj.dump(message.to_h, mode: :strict))
 
     result
   end

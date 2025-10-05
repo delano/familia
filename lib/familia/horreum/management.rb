@@ -125,15 +125,15 @@ module Familia
       #   User.find_by_key("user:123")  # Returns a User instance if it exists,
       #   nil otherwise
       #
-      def find_by_key(objkey)
+      def find_by_dbkey(objkey)
         raise ArgumentError, 'Empty key' if objkey.to_s.empty?
 
         # We use a lower-level method here b/c we're working with the
         # full key and not just the identifier.
         does_exist = dbclient.exists(objkey).positive?
 
-        Familia.ld "[.find_by_key] #{self} from key #{objkey} (exists: #{does_exist})"
-        Familia.trace :FROM_KEY, nil, objkey if Familia.debug?
+        Familia.ld "[find_by_key] #{self} from key #{objkey} (exists: #{does_exist})"
+        Familia.trace :FIND_BY_DBKEY_KEY, nil, objkey
 
         # This is the reason for calling exists first. We want to definitively
         # and without any ambiguity know if the object exists in the database. If it
@@ -143,11 +143,11 @@ module Familia
         return unless does_exist
 
         obj = dbclient.hgetall(objkey) # horreum objects are persisted as database hashes
-        Familia.trace :FROM_KEY2, nil, "#{objkey}: #{obj.inspect}" if Familia.debug?
+        Familia.trace :FIND_BY_DBKEY_INSPECT, nil, "#{objkey}: #{obj.inspect}"
 
         new(**obj)
       end
-      alias from_dbkey find_by_key # deprecated
+      alias find_by_key find_by_dbkey
 
       # Retrieves and instantiates an object from Database using its identifier.
       #
@@ -168,19 +168,19 @@ module Familia
       # @example
       #   User.find_by_id(123)  # Equivalent to User.find_by_key("user:123:object")
       #
-      def find_by_id(identifier, suffix = nil)
+      def find_by_identifier(identifier, suffix = nil)
         suffix ||= self.suffix
         return nil if identifier.to_s.empty?
 
         objkey = dbkey(identifier, suffix)
 
-        Familia.ld "[.find_by_id] #{self} from key #{objkey})"
+        Familia.ld "[find_by_id] #{self} from key #{objkey})"
         Familia.trace :FIND_BY_ID, nil, objkey if Familia.debug?
-        find_by_key objkey
+        find_by_dbkey objkey
       end
+      alias find_by_id find_by_identifier
       alias find find_by_id
-      alias load find_by_id # deprecated
-      alias from_identifier find_by_id # deprecated
+      alias load find_by_id
 
       # Checks if an object with the given identifier exists in the database.
       #

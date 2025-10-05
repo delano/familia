@@ -1,10 +1,10 @@
-# lib/familia/data_type/commands.rb
+# lib/familia/data_type/database_commands.rb
 
 module Familia
   class DataType
     # Must be included in all DataType classes to provide Valkey/Redis
     # commands. The class must have a dbkey method.
-    module Commands
+    module DatabaseCommands
       def move(logical_database)
         dbclient.move dbkey, logical_database
       end
