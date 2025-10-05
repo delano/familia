@@ -4,15 +4,14 @@ require_relative '../../support/helpers/test_helpers'
 
 Familia.debug = false
 
-# Test class with mixed field categories for serialization
+# Test class with mixed field types for serialization
 class SerializationCategoryTest < Familia::Horreum
-  feature :encrypted_fields
   feature :transient_fields
 
   identifier_field :id
   field :id
   field :name                           # persistent by default
-  encrypted_field :email                # persistent, encrypted
+  field :email                          # persistent field
   transient_field :tryouts_cache_data   # should be excluded from serialization
   field :description                    # explicitly persistent
   transient_field :temp_settings        # should be excluded
@@ -29,16 +28,15 @@ class AllTransientSerializationTest < Familia::Horreum
   transient_field :temp2
 end
 
-# Mixed categories with aliased fields
+# Mixed field types with aliased fields
 class AliasedSerializationTest < Familia::Horreum
-  feature :encrypted_fields
   feature :transient_fields
 
   identifier_field :id
   field :id
   field :internal_name, as: :display_name
   transient_field :temp_cache, as: :cache
-  encrypted_field :user_data, as: :data
+  field :user_data, as: :data
 end
 
 # Setup test instance with all field types
@@ -65,18 +63,18 @@ end
   data: { key: 'value' }
 )
 
-## to_h excludes transient fields and encrypted fields
+## to_h excludes transient fields
 @hash_result = @serialization_test.to_h
 @hash_result.keys.sort
-#=> ["description", "id", "metadata", "name"]
+#=> ["description", "email", "id", "metadata", "name"]
 
 ## to_h includes all persistent fields
 @hash_result.key?("name")
 #=> true
 
-## to_h excludes encrypted fields for security
+## to_h includes regular persistent fields
 @hash_result.key?("email")
-#=> false
+#=> true
 
 ## to_h includes explicitly persistent fields
 @hash_result.key?("description")
@@ -141,10 +139,10 @@ SerializationCategoryTest.persistent_fields.include?(:email)
 @all_transient.to_a
 #=> ["transient_test_1"]
 
-## Aliased fields serialization uses original field names (encrypted excluded)
+## Aliased fields serialization uses original field names (transient excluded)
 @aliased_hash = @aliased_test.to_h
 @aliased_hash.keys.sort
-#=> ["id", "internal_name"]
+#=> ["id", "internal_name", "user_data"]
 
 ## Aliased transient fields are excluded
 @aliased_hash.key?(:temp_cache)
