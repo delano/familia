@@ -6,22 +6,24 @@ require 'logger'
 # Familia - Logbook
 #
 module Familia
-  @logger = Logger.new($stderr)
-  @logger.progname = name
-  @logger.formatter = proc do |severity, datetime, _progname, msg|
-    severity_letter = severity[0] # Get the first letter of the severity
-    pid = Process.pid
-    thread_id = Thread.current.object_id
-    fiber_id = Fiber.current.object_id
-    utc_datetime = datetime.utc.strftime('%m-%d %H:%M:%S.%3N')
 
-    # Get the severity letter from the thread local variable or use
-    # the default. The thread local variable is set in the trace
-    # method in the Familia::Refinements::LoggerTrace module. The name of the
-    # variable `severity_letter` is arbitrary and could be anything.
-    severity_letter = Fiber[:severity_letter] || severity_letter
+  # Custom formatter extracted to its own class for clarity
+  class LogFormatter < Logger::Formatter
+    def call(severity, datetime, _progname, msg)
+      severity_letter = Fiber[:severity_letter] || severity[0]
+      utc_datetime = datetime.utc.strftime('%m-%d %H:%M:%S.%3N')
+      pid = Process.pid
+      thread_id = Thread.current.object_id
+      fiber_id = Fiber.current.object_id
 
-    "#{severity_letter}, #{utc_datetime} pid:#{pid} [#{thread_id}/#{fiber_id}]: #{msg}\n"
+      # Get the severity letter from the thread local variable or use
+      # the default. The thread local variable is set in the trace
+      # method in the Familia::Refinements::LoggerTrace module. The name of the
+      # variable `severity_letter` is arbitrary and could be anything.
+      severity_letter = Fiber[:severity_letter] || severity_letter
+
+      "#{severity_letter}, #{utc_datetime} pid:#{pid} [#{thread_id}/#{fiber_id}]: #{msg}\n"
+    end
   end
 
   # The Logging module provides a set of methods and constants for logging messages
@@ -100,27 +102,47 @@ module Familia
   # This module requires Ruby 2.0.0 or later to use refinements.
   #
   module Logging
-    attr_reader :logger
-
-    # Gives our logger the ability to use our trace method.
     using Familia::Refinements::LoggerTrace if Familia::Refinements::LoggerTrace::ENABLED
 
-    def info(*msg)
-      @logger.info(*msg)
+    # Get the logger instance, initializing with defaults if not yet set
+    #
+    # @return [Logger] the logger instance
+    #
+    # @example Set a custom logger
+    #   Familia.logger = Logger.new('familia.log')
+    #
+    # @example Use the default logger
+    #   Familia.logger.info "Connection established"
+    #
+    def logger
+      @logger ||= Logger.new($stderr).tap do |log|
+        log.progname = self.name
+        log.formatter = LogFormatter.new
+      end
     end
 
-    def warn(*msg)
-      @logger.warn(*msg)
+    # Set a custom logger instance
+    #
+    # @param new_logger [Logger] the logger to use
+    #
+    def logger=(new_logger)
+      @logger = new_logger
     end
 
-    def ld(*msg)
-      return unless Familia.debug?
-
-      @logger.debug(*msg)
+    def info(msg)
+      logger.info(msg)
     end
 
-    def le(*msg)
-      @logger.error(*msg)
+    def warn(msg)
+      logger.warn(msg)
+    end
+
+    def ld(msg)
+      logger.debug(msg) if Familia.debug?
+    end
+
+    def le(msg)
+      logger.error(msg)
     end
 
     # Logs a trace message for debugging purposes if Familia.debug? is true.
@@ -142,11 +164,10 @@ module Familia
     #   relevant).
     #
     def trace(label, instance_id = nil, ident = nil, extra_context = nil)
-      return unless Familia::Refinements::LoggerTrace::ENABLED
+      return unless Familia::Refinements::LoggerTrace::ENABLED && Familia.debug?
 
-      # Let the other values show nothing when nil, but make it known for the focused value
-      ident_str = (ident.nil? ? '<nil>' : ident).to_s
-      @logger.trace format('[%s] %s -> %s <-%s', label, instance_id, ident_str, extra_context)
+      ident_str = ident.nil? ? '<nil>' : ident.to_s
+      logger.trace format('[%s] %s -> %s <-%s', label, instance_id, ident_str, extra_context)
     end
   end
 end
