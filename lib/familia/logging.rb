@@ -3,18 +3,17 @@
 require 'pathname'
 require 'logger'
 
+# Familia - Logbook
+#
 module Familia
-  @logger = Logger.new($stdout)
+  @logger = Logger.new($stderr)
   @logger.progname = name
   @logger.formatter = proc do |severity, datetime, _progname, msg|
     severity_letter = severity[0] # Get the first letter of the severity
     pid = Process.pid
     thread_id = Thread.current.object_id
     fiber_id = Fiber.current.object_id
-    full_path, line = caller(5..5).first.split(':')[0..1]
-    parent_path = Pathname.new(full_path).ascend.find { |p| p.basename.to_s == 'familia' }
-    relative_path = full_path.sub(parent_path.to_s, 'familia')
-    utc_datetime = datetime.utc.strftime('%m-%d %H:%M:%S.%6N')
+    utc_datetime = datetime.utc.strftime('%m-%d %H:%M:%S.%3N')
 
     # Get the severity letter from the thread local variable or use
     # the default. The thread local variable is set in the trace
@@ -22,7 +21,7 @@ module Familia
     # variable `severity_letter` is arbitrary and could be anything.
     severity_letter = Fiber[:severity_letter] || severity_letter
 
-    "#{severity_letter}, #{utc_datetime} #{pid} #{thread_id}/#{fiber_id}: #{msg}  [#{relative_path}:#{line}]\n"
+    "#{severity_letter}, #{utc_datetime} pid:#{pid} [#{thread_id}/#{fiber_id}]: #{msg}\n"
   end
 
   # The Logging module provides a set of methods and constants for logging messages
