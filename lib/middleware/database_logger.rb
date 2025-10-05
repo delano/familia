@@ -31,6 +31,8 @@ module DatabaseLogger
   @logger = nil
   @commands = []
 
+  CommandMessage = Data.define(:command, :μs, :timestamp)
+
   class << self
     # Gets/sets the logger instance used by DatabaseLogger.
     # @return [Logger, nil] The current logger instance or nil if not set.
@@ -64,6 +66,18 @@ module DatabaseLogger
       yield
       @commands.dup
     end
+
+    # Returns the current time in microseconds.
+    # This is used to measure the duration of Database commands.
+    #
+    # Aliases: now_in_microseconds, now_in_ms
+    #
+    # @return [Integer] The current time in microseconds.
+    def now_in_μs
+      Process.clock_gettime(Process::CLOCK_MONOTONIC, :microsecond)
+    end
+    alias now_in_microseconds now_in_μs
+    alias now_in_ms now_in_μs
   end
 
   # Logs the Database command and its execution time.
@@ -79,19 +93,16 @@ module DatabaseLogger
   # @note Commands are always captured with minimal overhead for testing purposes.
   #   Logging only occurs when DatabaseLogger.logger is set.
   def call(command, _config)
-    start = Process.clock_gettime(Process::CLOCK_MONOTONIC, :microsecond)
+    start = DatabaseLogger.now_in_μs
     result = yield
-    duration = Process.clock_gettime(Process::CLOCK_MONOTONIC, :microsecond) - start
+    duration = DatabaseLogger.now_in_μs - start
 
     # Always capture commands for testing purposes
-    DatabaseLogger.instance_variable_get(:@commands) << {
-      command: command.dup,
-      duration: duration,
-      timestamp: Time.now,
-    }
+    message = CommandMessage.new(command.join(' '), duration, Time.now.to_f)
+    DatabaseLogger.commands << message
 
     # Log if logger is set
-    DatabaseLogger.logger&.debug("Redis: #{command.inspect} (#{duration}µs)")
+    DatabaseLogger.logger&.debug(Oj.dump(message.to_h, mode: :strict))
 
     result
   end
