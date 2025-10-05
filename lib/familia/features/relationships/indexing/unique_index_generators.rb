@@ -104,27 +104,27 @@ module Familia
 
             # Generate instance query method (e.g., company.find_by_badge_number)
             actual_target_class.class_eval do
-              define_method("find_by_#{field}") do |field_value|
+              define_method(:"find_by_#{field}") do |provided_value|
                 # Use declared field accessor instead of manual instantiation
                 index_hash = send(index_name)
 
                 # Get the identifier from the hash
-                object_id = index_hash[field_value.to_s]
-                return nil unless object_id
+                record_id = index_hash.get(provided_value)
+                return nil unless record_id
 
                 indexed_class.new(object_id)
               end
 
               # Generate bulk query method (e.g., company.find_all_by_badge_number)
-              define_method("find_all_by_#{field}") do |field_values|
-                field_values = Array(field_values)
-                return [] if field_values.empty?
+              define_method(:"find_all_by_#{field}") do |provided_ids|
+                provided_ids = Array(provided_ids)
+                return [] if provided_ids.empty?
 
                 # Use declared field accessor instead of manual instantiation
                 index_hash = send(index_name)
 
                 # Get all identifiers from the hash
-                object_ids = index_hash.values_at(*field_values.map(&:to_s))
+                record_ids = index_hash.values_at(*provided_ids.map(&:to_s))
                 # Filter out nil values and instantiate objects
                 object_ids.compact.map { |object_id| indexed_class.new(object_id) }
               end
@@ -133,7 +133,7 @@ module Familia
               # No need to manually define it here
 
               # Generate method to rebuild the unique index for this parent instance
-              define_method("rebuild_#{index_name}") do
+              define_method(:"rebuild_#{index_name}") do
                 # Use declared field accessor instead of manual instantiation
                 index_hash = send(index_name)
 
@@ -160,7 +160,7 @@ module Familia
           def generate_mutation_methods_self(indexed_class, field, target_class, index_name)
             target_class_config = target_class.config_name
             indexed_class.class_eval do
-              method_name = "add_to_#{target_class_config}_#{index_name}"
+              method_name = :"add_to_#{target_class_config}_#{index_name}"
               Familia.ld("[UniqueIndexGenerators] #{name} method #{method_name}")
 
               define_method(method_name) do |target_instance|
@@ -176,7 +176,7 @@ module Familia
                 index_hash[field_value.to_s] = identifier
               end
 
-              method_name = "remove_from_#{target_class_config}_#{index_name}"
+              method_name = :"remove_from_#{target_class_config}_#{index_name}"
               Familia.ld("[UniqueIndexGenerators] #{name} method #{method_name}")
 
               define_method(method_name) do |target_instance|
@@ -192,7 +192,7 @@ module Familia
                 index_hash.remove(field_value.to_s)
               end
 
-              method_name = "update_in_#{target_class_config}_#{index_name}"
+              method_name = :"update_in_#{target_class_config}_#{index_name}"
               Familia.ld("[UniqueIndexGenerators] #{name} method #{method_name}")
 
               define_method(method_name) do |target_instance, old_field_value = nil|
@@ -222,22 +222,22 @@ module Familia
           # - Employee.email_index
           # - Employee.rebuild_email_index
           def generate_query_methods_class(field, index_name, indexed_class)
-            indexed_class.define_singleton_method("find_by_#{field}") do |field_value|
+            indexed_class.define_singleton_method(:"find_by_#{field}") do |provided_id|
               index_hash = send(index_name) # Access the class-level hashkey DataType
-              object_id = index_hash[field_value.to_s]
+              record_id = index_hash.get(provided_id)
 
-              return nil unless object_id
+              return nil unless record_id
 
               new(object_id)
             end
 
             # Generate class-level bulk query method
-            indexed_class.define_singleton_method("find_all_by_#{field}") do |field_values|
-              field_values = Array(field_values)
-              return [] if field_values.empty?
+            indexed_class.define_singleton_method(:"find_all_by_#{field}") do |provided_ids|
+              provided_ids = Array(provided_ids)
+              return [] if provided_ids.empty?
 
               index_hash = send(index_name) # Access the class-level hashkey DataType
-              object_ids = index_hash.values_at(*field_values.map(&:to_s))
+              record_ids = index_hash.values_at(*provided_ids.map(&:to_s))
               # Filter out nil values and instantiate objects
               object_ids.compact.map { |object_id| new(object_id) }
             end
@@ -246,7 +246,7 @@ module Familia
             # No need to manually create it - Horreum handles this automatically
 
             # Generate method to rebuild the class-level index
-            indexed_class.define_singleton_method("rebuild_#{index_name}") do
+            indexed_class.define_singleton_method(:"rebuild_#{index_name}") do
               index_hash = send(index_name) # Access the class-level hashkey DataType
 
               # Clear existing index using DataType method
@@ -265,7 +265,7 @@ module Familia
           # - employee.update_in_class_email_index(old_email)
           def generate_mutation_methods_class(field, index_name, indexed_class)
             indexed_class.class_eval do
-              define_method("add_to_class_#{index_name}") do
+              define_method(:"add_to_class_#{index_name}") do
                 index_hash = self.class.send(index_name)  # Access the class-level hashkey DataType
                 field_value = send(field)
 
@@ -274,7 +274,7 @@ module Familia
                 index_hash[field_value.to_s] = identifier
               end
 
-              define_method("remove_from_class_#{index_name}") do
+              define_method(:"remove_from_class_#{index_name}") do
                 index_hash = self.class.send(index_name)  # Access the class-level hashkey DataType
                 field_value = send(field)
 
@@ -283,7 +283,7 @@ module Familia
                 index_hash.remove(field_value.to_s)
               end
 
-              define_method("update_in_class_#{index_name}") do |old_field_value = nil|
+              define_method(:"update_in_class_#{index_name}") do |old_field_value = nil|
                 new_field_value = send(field)
 
                 # Use class-level transaction for atomicity with DataType abstraction
