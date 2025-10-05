@@ -46,3 +46,65 @@ logger.formatter = Familia::LogFormatter.new
 logger.trace('Trace test')
 output.string
 #=~> /^T,/
+
+## Nested trace calls preserve TRACE context
+output = StringIO.new
+logger = Familia::FamiliaLogger.new(output)
+logger.level = Familia::FamiliaLogger::TRACE
+logger.formatter = Familia::LogFormatter.new
+logger.trace do
+  logger.trace('Inner trace message')
+  'Outer trace message'
+end
+output.string.lines.size
+#=> 2
+
+## Nested trace inner message formatted as TRACE
+output = StringIO.new
+logger = Familia::FamiliaLogger.new(output)
+logger.level = Familia::FamiliaLogger::TRACE
+logger.formatter = Familia::LogFormatter.new
+logger.trace do
+  logger.trace('Inner trace message')
+  'Outer trace message'
+end
+output.string.lines[0]
+#=~> /^T,.*Inner trace message/
+
+## Nested trace outer message formatted as TRACE
+output = StringIO.new
+logger = Familia::FamiliaLogger.new(output)
+logger.level = Familia::FamiliaLogger::TRACE
+logger.formatter = Familia::LogFormatter.new
+logger.trace do
+  logger.trace('Inner trace message')
+  'Outer trace message'
+end
+output.string.lines[1]
+#=~> /^T,.*Outer trace message/
+
+## Nested trace calls clean up context for subsequent debug calls
+output = StringIO.new
+logger = Familia::FamiliaLogger.new(output)
+logger.level = Familia::FamiliaLogger::TRACE
+logger.formatter = Familia::LogFormatter.new
+logger.trace do
+  logger.trace('Inner trace')
+  'Outer trace'
+end
+logger.debug('After nested traces')
+output.string.lines.size
+#=> 3
+
+## Debug call after nested traces formatted as DEBUG not TRACE
+output = StringIO.new
+logger = Familia::FamiliaLogger.new(output)
+logger.level = Familia::FamiliaLogger::TRACE
+logger.formatter = Familia::LogFormatter.new
+logger.trace do
+  logger.trace('Inner trace')
+  'Outer trace'
+end
+logger.debug('After nested traces')
+output.string.lines[2]
+#=~> /^D,.*After nested traces/
