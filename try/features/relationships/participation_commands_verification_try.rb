@@ -17,7 +17,7 @@ puts Date.today  # Always returns 2024-01-15
 
 
 # Load middleware first
-require_relative '../../../lib/middleware/database_middleware'
+require_relative '../../../lib/middleware/database_logger'
 
 # Load Familia
 require_relative '../../../lib/familia'

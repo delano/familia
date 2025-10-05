@@ -1,4 +1,4 @@
-# lib/middleware/database_middleware.rb
+# lib/middleware/database_logger.rb
 
 require 'concurrent-ruby'
 

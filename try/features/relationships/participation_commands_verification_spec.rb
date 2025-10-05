@@ -7,7 +7,7 @@ RSpec.describe 'participation_commands_verification_try' do
     Timecop.freeze(Time.parse("2024-01-15 10:30:00"))
     puts Time.now  # Always returns 2024-01-15 10:30:00
     puts Date.today  # Always returns 2024-01-15
-    require_relative '../../../lib/middleware/database_middleware'
+    require_relative '../../../lib/middleware/database_logger'
     require_relative '../../../lib/familia'
     Familia.enable_database_logging = true
     Familia.enable_database_counter = true

@@ -3,7 +3,7 @@
 require_relative 'data_type/class_methods'
 require_relative 'data_type/settings'
 require_relative 'data_type/connection'
-require_relative 'data_type/commands'
+require_relative 'data_type/database_commands'
 require_relative 'data_type/serialization'
 
 # Familia
@@ -77,7 +77,7 @@ module Familia
 
     include Settings
     include Connection
-    include Commands
+    include DatabaseCommands
     include Serialization
   end
 
