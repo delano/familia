@@ -6,147 +6,303 @@ require 'logger'
 # Familia - Logbook
 #
 module Familia
-  @logger = Logger.new($stderr)
-  @logger.progname = name
-  @logger.formatter = proc do |severity, datetime, _progname, msg|
-    severity_letter = severity[0] # Get the first letter of the severity
-    pid = Process.pid
-    thread_id = Thread.current.object_id
-    fiber_id = Fiber.current.object_id
-    utc_datetime = datetime.utc.strftime('%m-%d %H:%M:%S.%3N')
+  # Custom Logger subclass with TRACE level support.
+  #
+  # FamiliaLogger extends Ruby's standard Logger with a TRACE level for
+  # extremely detailed debugging output. The TRACE level is numerically
+  # equal to DEBUG (0) but distinguishes itself via a thread-local marker
+  # that the LogFormatter uses to output 'T' instead of 'D'.
+  #
+  # @example Basic usage
+  #   logger = Familia::FamiliaLogger.new($stderr)
+  #   logger.level = Familia::FamiliaLogger::TRACE
+  #   logger.trace "Detailed trace message"
+  #   # => T, 10-05 20:43:09.843 pid:123 [456/789]: Detailed trace message
+  #
+  # @example With progname
+  #   logger.trace("MyApp") { "Trace with progname" }
+  #
+  # @see Familia::LogFormatter
+  #
+  class FamiliaLogger < Logger
+    # TRACE severity level (numerically equal to DEBUG=0).
+    #
+    # Uses the same numeric level as DEBUG but signals via thread-local
+    # marker to output 'T' prefix instead of 'D'. This approach works
+    # around Logger's limitation with negative severity values.
+    #
+    # Standard Logger levels: DEBUG=0, INFO=1, WARN=2, ERROR=3, FATAL=4, UNKNOWN=5
+    TRACE = 0
 
-    # Get the severity letter from the thread local variable or use
-    # the default. The thread local variable is set in the trace
-    # method in the Familia::Refinements::LoggerTrace module. The name of the
-    # variable `severity_letter` is arbitrary and could be anything.
-    severity_letter = Fiber[:severity_letter] || severity_letter
-
-    "#{severity_letter}, #{utc_datetime} pid:#{pid} [#{thread_id}/#{fiber_id}]: #{msg}\n"
+    # Log a TRACE level message.
+    #
+    # This method behaves like the standard Logger methods (debug, info, etc.)
+    # but outputs with a 'T' severity letter when used with LogFormatter.
+    #
+    # @param progname [String, nil] Program name to include in log output
+    # @yield Block that returns the message to log (lazy evaluation)
+    # @return [true] Always returns true
+    #
+    # @example Simple message
+    #   logger.trace("Entering complex calculation")
+    #
+    # @example With block for lazy evaluation
+    #   logger.trace { "Expensive: #{expensive_debug_info}" }
+    #
+    # @example With progname
+    #   logger.trace("MyApp") { "Application trace" }
+    #
+    # @note Sets Fiber[:familia_trace_mode] during execution to
+    #   signal LogFormatter to output 'T' instead of 'D'
+    #
+    def trace(progname = nil, &)
+      # Store marker in thread-local to signal this is TRACE not DEBUG
+      Fiber[:familia_trace_mode] = true
+      add(TRACE, nil, progname, &)
+    ensure
+      Fiber[:familia_trace_mode] = false
+    end
   end
 
-  # The Logging module provides a set of methods and constants for logging messages
-  # at various levels of severity. It is designed to be used with the Ruby Logger class
-  # to facilitate logging in applications.
+  # Custom formatter for Familia logger output.
   #
-  # == Constants:
-  # Logger::TRACE::
-  #   A custom log level for trace messages, typically used for very detailed
-  #   debugging information.
+  # LogFormatter produces structured log output with severity letters,
+  # timestamps, process/thread/fiber IDs, and the log message.
   #
-  # == Methods:
-  # trace::
-  #   Logs a message at the TRACE level. This method is only available if the
-  #   Familia::Refinements::LoggerTrace is used.
+  # Output format:
+  #   SEVERITY, MM-DD HH:MM:SS.mmm pid:PID [THREAD_ID/FIBER_ID]: MESSAGE
   #
-  # debug::
-  #   Logs a message at the DEBUG level. This is used for low-level system information
-  #   for debugging purposes.
+  # @example Output
+  #   I, 10-05 20:43:09.843 pid:12345 [67890/54321]: Connection established
+  #   T, 10-05 20:43:10.123 pid:12345 [67890/54321]: [LOAD] redis -> user:123
   #
-  # info::
-  #   Logs a message at the INFO level. This is used for general information about
-  #   system operation.
+  # Severity letters:
+  #   T = TRACE (when Fiber[:familia_trace_mode] is set, or level 0 when not using FamiliaLogger)
+  #   D = DEBUG
+  #   I = INFO
+  #   W = WARN
+  #   E = ERROR
+  #   F = FATAL
+  #   U = UNKNOWN
   #
-  # warn::
-  #   Logs a message at the WARN level. This is used for warning messages, typically
-  #   for non-critical issues that require attention.
+  # @example Use with FamiliaLogger for TRACE support
+  #   logger = Familia::FamiliaLogger.new($stderr)
+  #   logger.formatter = Familia::LogFormatter.new
+  #   logger.trace("Trace message")  # => T, ...
+  #   logger.debug("Debug message")  # => D, ...
   #
-  # error::
-  #   Logs a message at the ERROR level. This is used for error messages, typically
-  #   for critical issues that require immediate attention.
+  # @example Use with standard Logger (level 0 becomes 'T')
+  #   logger = Logger.new($stderr)
+  #   logger.formatter = Familia::LogFormatter.new
+  #   logger.debug("Debug message")  # => T, ... (because DEBUG=0)
   #
-  # fatal::
-  #   Logs a message at the FATAL level. This is used for very severe error events
-  #   that will presumably lead the application to abort.
+  # @note When used with FamiliaLogger, checks Fiber[:familia_trace_mode] to
+  #   distinguish TRACE from DEBUG. When used with standard Logger, treats
+  #   level 0 as TRACE since DEBUG and TRACE share the same numeric level.
+  #
+  # @see FamiliaLogger#trace
+  #
+  class LogFormatter < Logger::Formatter
+    # Severity string to letter mapping.
+    #
+    # Maps severity string labels to single-letter codes for compact output.
+    # Note: TRACE is handled via Fiber check in #call for FamiliaLogger.
+    SEVERITY_LETTERS = {
+      'DEBUG' => 'D',
+      'INFO' => 'I',
+      'WARN' => 'W',
+      'ERROR' => 'E',
+      'FATAL' => 'F',
+      'UNKNOWN' => 'U',
+      'ANY' => 'T'  # ANY is Logger's label for severity < 0, treat as TRACE
+    }.freeze
+
+    # Format a log message with severity, timestamp, and context.
+    #
+    # @param severity [String] Severity label (e.g., "INFO", "DEBUG", "UNKNOWN")
+    # @param datetime [Time] Timestamp of the log message
+    # @param _progname [String] Program name (unused, kept for Logger compatibility)
+    # @param msg [String] The log message
+    # @return [String] Formatted log line with newline
+    #
+    # @example
+    #   formatter = Familia::LogFormatter.new
+    #   formatter.call("INFO", Time.now, nil, "Test message")
+    #   # => "I, 10-05 20:43:09.843 pid:12345 [67890/54321]: Test message\n"
+    #
+    def call(severity, datetime, _progname, msg)
+      # Check if we're in trace mode (TRACE uses same level as DEBUG but marks itself)
+      # FamiliaLogger sets Fiber[:familia_trace_mode] when trace() is called
+      severity_letter = if Fiber[:familia_trace_mode]
+        'T'
+      else
+        SEVERITY_LETTERS.fetch(severity, severity[0])
+      end
+
+      utc_datetime = datetime.utc.strftime('%m-%d %H:%M:%S.%3N')
+      pid = Process.pid
+      thread_id = Thread.current.object_id
+      fiber_id = Fiber.current.object_id
+
+      "#{severity_letter}, #{utc_datetime} pid:#{pid} [#{thread_id}/#{fiber_id}]: #{msg}\n"
+    end
+  end
+
+  # The Logging module provides logging capabilities for Familia.
+  #
+  # Familia uses a custom FamiliaLogger that extends the standard Ruby Logger
+  # with a TRACE level for detailed debugging output.
+  #
+  # == Log Levels (from most to least verbose):
+  # - TRACE: Extremely detailed debugging (controlled by FAMILIA_TRACE env var)
+  # - DEBUG: Detailed debugging information
+  # - INFO: General informational messages
+  # - WARN: Warning messages
+  # - ERROR: Error messages
+  # - FATAL: Fatal errors that cause termination
   #
   # == Usage:
-  # To use the Logging module, you need to include the Familia::Refinements::LoggerTrace module
-  # and use the `using` keyword to enable the refinement. This will add the TRACE
-  # log level and the trace method to the Logger class.
+  #   # Use default logger
+  #   Familia.info "Connection established"
+  #   Familia.warn "Cache miss"
   #
-  # Example:
-  #   require 'logger'
+  #   # Set custom logger
+  #   Familia.logger = Logger.new('familia.log')
   #
-  #   module Familia::Refinements::LoggerTrace
-  #     refine Logger do
-  #       TRACE = 0
-  #
-  #       def trace(progname = nil, &block)
-  #         add(TRACE, nil, progname, &block)
-  #       end
-  #     end
-  #   end
-  #
-  #   using Familia::Refinements::LoggerTrace
-  #
-  #   logger = Logger.new(STDOUT)
-  #   logger.trace("This is a trace message")
-  #   logger.debug("This is a debug message")
-  #   logger.info("This is an info message")
-  #   logger.warn("This is a warning message")
-  #   logger.error("This is an error message")
-  #   logger.fatal("This is a fatal message")
-  #
-  # In this example, the Familia::Refinements::LoggerTrace module is defined with a refinement
-  # for the Logger class. The TRACE constant and trace method are added to the Logger
-  # class within the refinement. The `using` keyword is used to apply the refinement
-  # in the scope where it's needed.
-  #
-  # == Conditions:
-  # The trace method and TRACE log level are only available if the Familia::Refinements::LoggerTrace
-  # module is used with the `using` keyword. Without this, the Logger class will not
-  # have the trace method or the TRACE log level.
-  #
-  # == Minimum Ruby Version:
-  # This module requires Ruby 2.0.0 or later to use refinements.
+  #   # Trace-level debugging (requires FAMILIA_TRACE=true)
+  #   Familia.trace :LOAD, redis_client, "user:123", "from cache"
   #
   module Logging
-    attr_reader :logger
-
-    # Gives our logger the ability to use our trace method.
-    using Familia::Refinements::LoggerTrace if Familia::Refinements::LoggerTrace::ENABLED
-
-    def info(*msg)
-      @logger.info(*msg)
+    # Get the logger instance, initializing with defaults if not yet set
+    #
+    # @return [FamiliaLogger] the logger instance
+    #
+    # @example Set a custom logger
+    #   Familia.logger = Logger.new('familia.log')
+    #
+    # @example Use the default logger
+    #   Familia.logger.info "Connection established"
+    #
+    def logger
+      @logger ||= FamiliaLogger.new($stderr).tap do |log|
+        log.progname = name
+        log.formatter = LogFormatter.new
+      end
     end
 
-    def warn(*msg)
-      @logger.warn(*msg)
+    # Set a custom logger instance.
+    #
+    # Allows replacing the default FamiliaLogger with any Logger-compatible
+    # object. Useful for integrating with application logging frameworks.
+    #
+    # @param new_logger [Logger] The logger to use
+    # @return [Logger] The logger that was set
+    #
+    # @example Use Rails logger
+    #   Familia.logger = Rails.logger
+    #
+    # @example Custom file logger
+    #   Familia.logger = Logger.new('familia.log').tap do |log|
+    #     log.level = Logger::INFO
+    #   end
+    #
+    def logger=(new_logger)
+      @logger = new_logger
     end
 
-    def ld(*msg)
-      return unless Familia.debug?
-
-      @logger.debug(*msg)
+    # Log an informational message.
+    #
+    # @param msg [String] The message to log
+    # @return [true]
+    #
+    # @example
+    #   Familia.info "Redis connection established"
+    #
+    def info(msg)
+      logger.info(msg)
     end
 
-    def le(*msg)
-      @logger.error(*msg)
+    # Log a warning message.
+    #
+    # @param msg [String] The message to log
+    # @return [true]
+    #
+    # @example
+    #   Familia.warn "Cache miss for key: user:123"
+    #
+    def warn(msg)
+      logger.warn(msg)
     end
 
-    # Logs a trace message for debugging purposes if Familia.debug? is true.
+    # Log a debug message (only when Familia.debug? is true).
+    #
+    # Short for "log debug". Only outputs when FAMILIA_DEBUG environment
+    # variable is set to '1' or 'true'.
+    #
+    # @param msg [String] The message to log
+    # @return [true, nil] Returns true if logged, nil if debug disabled
+    #
+    # @example
+    #   Familia.ld "Cache lookup for user:123"
+    #   # Only outputs when FAMILIA_DEBUG=true
+    #
+    def ld(msg)
+      logger.debug(msg) if Familia.debug?
+    end
+
+    # Log an error message.
+    #
+    # Short for "log error".
+    #
+    # @param msg [String] The message to log
+    # @return [true]
+    #
+    # @example
+    #   Familia.le "Failed to deserialize value: #{e.message}"
+    #
+    def le(msg)
+      logger.error(msg)
+    end
+
+    # Logs a structured trace message for debugging Familia operations.
+    #
+    # This method only executes when both FAMILIA_TRACE and FAMILIA_DEBUG
+    # environment variables are enabled.
     #
     # @param label [Symbol] A label for the trace message (e.g., :EXPAND,
     #   :FROMREDIS, :LOAD, :EXISTS).
-    # @param instance_id
-    # @param ident [String] An identifier or key related to the operation being
-    #   traced.
-    # @param extra_context [Array<String>, String, nil] Any extra details to include.
-    #
-    # @example Familia.trace :LOAD, Familia.dbclient(uri), objkey if Familia.debug?
+    # @param instance_id [Object] The object instance being traced (e.g., Redis client)
+    # @param ident [String] An identifier or key related to the operation being traced
+    # @param extra_context [String, nil] Any extra details to include
     #
     # @return [nil]
     #
-    # @note This method only executes if Familia::Refinements::LoggerTrace::ENABLED is true.
-    # @note The dbclient can be a Database object, Redis::Future (used in
-    #   pipelined and multi blocks), or nil (when the database connection isn't
-    #   relevant).
+    # @example
+    #   Familia.trace :LOAD, redis_client, "user:123", "from cache"
+    #   # Output: T, 10-05 20:43:09.843 pid:123 [456/789]: [LOAD] #<Redis> -> user:123 <-from cache
+    #
+    # @note Controlled by FAMILIA_TRACE environment variable (set to '1', 'true', or 'yes')
+    # @note The instance_id can be a Redis client, Redis::Future, or nil
     #
     def trace(label, instance_id = nil, ident = nil, extra_context = nil)
-      return unless Familia::Refinements::LoggerTrace::ENABLED
+      return unless trace_enabled? && Familia.debug?
 
-      # Let the other values show nothing when nil, but make it known for the focused value
-      ident_str = (ident.nil? ? '<nil>' : ident).to_s
-      @logger.trace format('[%s] %s -> %s <-%s', label, instance_id, ident_str, extra_context)
+      ident_str = ident.nil? ? '<nil>' : ident.to_s
+      logger.trace format('[%s] %s -> %s <-%s', label, instance_id, ident_str, extra_context)
+    end
+
+    private
+
+    # Check if trace logging is enabled via FAMILIA_TRACE environment variable.
+    #
+    # Caches the result on first check. Trace logging is enabled when
+    # FAMILIA_TRACE is set to '1', 'true', or 'yes' (case-insensitive).
+    #
+    # @return [Boolean] true if trace logging is enabled
+    # @api private
+    #
+    def trace_enabled?
+      @trace_enabled ||= %w[1 true yes].include?(ENV.fetch('FAMILIA_TRACE', 'false').downcase)
     end
   end
 end

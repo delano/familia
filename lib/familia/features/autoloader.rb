@@ -28,7 +28,9 @@ module Familia::Features
       ]
 
       # Ensure the Features module exists within the base module
-      base.const_set(:Features, Module.new) unless base.const_defined?(:Features) || config_name.eql?('features')
+      unless base.const_defined?(:Features) || config_name.eql?('features')
+        base.const_set(:Features, Module.new)
+      end
 
       # Use the shared autoload_files method
       autoload_files(dir_patterns, log_prefix: "Autoloader[#{config_name}]")
