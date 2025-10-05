@@ -2,6 +2,8 @@
 
 require_relative 'settings'
 
+require_relative '../field_type'
+
 module Familia
   VALID_STRATEGIES = %i[raise skip ignore warn overwrite].freeze
 
@@ -174,11 +176,11 @@ module Familia
       #   - Others, depending on features available
       #
       def field(name, as: name, fast_method: :"#{name}!", on_conflict: :raise, category: nil)
-        # Use field type system for consistency
-        require_relative '../field_type'
 
         # Create appropriate field type based on category
         field_type = if category == :transient
+          # TODO: Horreum should not be referring to specific features. The
+          # feature should override `field` method.
           require_relative '../features/transient_fields/transient_field_type'
           TransientFieldType.new(name, as: as, fast_method: false, on_conflict: on_conflict)
         else
@@ -188,7 +190,9 @@ module Familia
               category || :field
             end
           end
-          custom_field_type.new(name, as: as, fast_method: fast_method, on_conflict: on_conflict)
+          # Encrypted fields should not be loggable for security
+          loggable = category != :encrypted
+          custom_field_type.new(name, as: as, fast_method: fast_method, on_conflict: on_conflict, loggable: loggable)
         end
 
         register_field_type(field_type)

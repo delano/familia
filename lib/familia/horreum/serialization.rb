@@ -9,7 +9,6 @@ module Familia
       #
       # Serializes persistent field values for external consumption (APIs, logs),
       # excluding non-loggable fields like encrypted fields for security.
-      # Only non-nil values are included in the resulting hash.
       #
       # @return [Hash] Hash with field names as keys and serialized values
       #   safe for external exposure
@@ -21,7 +20,6 @@ module Familia
       #   # encrypted fields are excluded for security
       #
       # @note Only loggable fields are included for security
-      # @note Only fields with non-nil values are included
       #
       def to_h
         self.class.persistent_fields.each_with_object({}) do |field, hsh|
@@ -30,14 +28,12 @@ module Familia
           # Security: Skip non-loggable fields (e.g., encrypted fields)
           next unless field_type.loggable
 
-          method_name = field_type.method_name
-          val = send(method_name)
-          prepared = serialize_value(val)
-          Familia.ld " [to_h] field: #{field} val: #{val.class} prepared: #{prepared&.class || '[nil]'}"
+          val = send(field_type.method_name)
+          Familia.ld " [to_h] field: #{field} val: #{val.class}"
 
-          # Only include non-nil values in the hash for Valkey
-          # Use string key for database compatibility
-          hsh[field.to_s] = prepared unless prepared.nil?
+          # Use string key for external API compatibility
+          # Return Ruby values, not JSON-encoded strings
+          hsh[field.to_s] = val
         end
       end
 
@@ -51,19 +47,20 @@ module Familia
       #   ready for database storage
       #
       # @note Includes ALL persistent fields, including encrypted fields
-      # @note Only fields with non-nil values are included for storage efficiency
       #
       def to_h_for_storage
         self.class.persistent_fields.each_with_object({}) do |field, hsh|
           field_type = self.class.field_types[field]
-          method_name = field_type.method_name
-          val = send(method_name)
-          prepared = serialize_value(val)
-          Familia.ld " [to_h_for_storage] field: #{field} val: #{val.class} prepared: #{prepared&.class || '[nil]'}"
 
-          # Only include non-nil values in the hash for Valkey
+          val = send(field_type.method_name)
+          prepared = serialize_value(val)
+
+          if Familia.debug?
+            Familia.ld " [to_h_for_storage] field: #{field} val: #{val.class} prepared: #{prepared&.class || '[nil]'}"
+          end
+
           # Use string key for database compatibility
-          hsh[field.to_s] = prepared unless prepared.nil?
+          hsh[field.to_s] = prepared
         end
       end
 
@@ -84,7 +81,7 @@ module Familia
       #   methods to maintain data consistency across operations.
       #
       def to_a
-        self.class.persistent_fields.filter_map do |field|
+        self.class.persistent_fields.map do |field|
           field_type = self.class.field_types[field]
 
           # Security: Skip non-loggable fields (e.g., encrypted fields)
@@ -92,9 +89,10 @@ module Familia
 
           method_name = field_type.method_name
           val = send(method_name)
-          prepared = serialize_value(val)
-          Familia.ld " [to_a] field: #{field} method: #{method_name} val: #{val.class} prepared: #{prepared.class}"
-          prepared
+          Familia.ld " [to_a] field: #{field} method: #{method_name} val: #{val.class}"
+
+          # Return actual Ruby values, including nil to maintain array positions
+          val
         end
       end
 
@@ -129,12 +127,8 @@ module Familia
         # Security: Handle ConcealedString safely - extract encrypted data for storage
         return val.encrypted_value if val.respond_to?(:encrypted_value)
 
-        # Strings are already strings in Redis - no need to JSON-encode them
-        # This avoids double-quoting and simplifies storage
-        return val.to_s if val.is_a?(String)
-
-        # All non-string values use JSON serialization for type preservation
-        # (Integer, Boolean, Float, nil, Hash, Array)
+        # ALWAYS write valid JSON for type preservation
+        # This includes strings, which get JSON-encoded with wrapping quotes
         Familia::JsonSerializer.dump(val)
       end
 

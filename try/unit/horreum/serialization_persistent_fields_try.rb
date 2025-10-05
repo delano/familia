@@ -28,7 +28,7 @@ end
 class AliasedSerializationTest < Familia::Horreum
   identifier_field :id
   field :id
-  field :internal_name, as: :display_name, category: :persistent
+  field :internal_name, as: :display_name
   field :temp_cache, as: :cache, category: :transient
   field :user_data, as: :data, category: :encrypted
 end
@@ -57,18 +57,18 @@ end
   data: { key: 'value' }
 )
 
-## to_h excludes transient fields
+## to_h excludes transient fields and encrypted fields
 @hash_result = @serialization_test.to_h
 @hash_result.keys.sort
-#=> ["description", "email", "id", "metadata", "name"]
+#=> ["description", "id", "metadata", "name"]
 
 ## to_h includes all persistent fields
 @hash_result.key?("name")
 #=> true
 
-## to_h includes encrypted persistent fields
+## to_h excludes encrypted fields for security
 @hash_result.key?("email")
-#=> true
+#=> false
 
 ## to_h includes explicitly persistent fields
 @hash_result.key?("description")
@@ -82,9 +82,9 @@ end
 @hash_result.key?(:temp_settings)
 #=> false
 
-## to_h serializes complex values correctly
-@hash_result["metadata"]
-#=:> String
+## to_h returns actual Ruby values (Hash, not serialized JSON string)
+@hash_result["metadata"].class
+#=> Hash
 
 ## to_a excludes transient fields
 @array_result = @serialization_test.to_a
@@ -133,10 +133,10 @@ SerializationCategoryTest.persistent_fields.include?(:email)
 @all_transient.to_a
 #=> ["transient_test_1"]
 
-## Aliased fields serialization uses original field names
+## Aliased fields serialization uses original field names (encrypted excluded)
 @aliased_hash = @aliased_test.to_h
 @aliased_hash.keys.sort
-#=> ["id", "internal_name", "user_data"]
+#=> ["id", "internal_name"]
 
 ## Aliased transient fields are excluded
 @aliased_hash.key?(:temp_cache)

@@ -103,9 +103,9 @@ Familia.dbclient.set('debug:ending_save_if_not_exists_tests', Familia.now.to_s)
 [@customer.name, @customer.email]
 #=> ["Bob Jones", "jane@example.com"]
 
-## serialize_value handles strings
+## serialize_value handles strings with JSON encoding
 @customer.serialize_value('test string')
-#=> "test string"
+#=> "\"test string\""
 
 ## serialize_value handles numbers
 @customer.serialize_value(42)

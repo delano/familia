@@ -58,12 +58,15 @@ key_parts = dbkey.split(':')
 #=> ["Serialization Test", true, {"key"=>"value", "array"=>[1, 2, 3]}]
 
 ## Hash field count matches object field count
+@serial_test = ConsistencyTestModel.new(id: next_test_id)
+@serial_test.save
 expected_fields = @serial_test.class.persistent_fields.length
 redis_field_count = Familia.dbclient.hlen(@serial_test.dbkey)
 actual_object_fields = @serial_test.to_h.keys.length
-# All should match (redis may have fewer due to nil exclusion)
-[expected_fields >= redis_field_count, redis_field_count, actual_object_fields]
-#=> [true, 5, 5]
+# The JSON Serializer stores all fields (including nil as "null")
+# Expected fields (5) >= redis count (5) >= to_h count (5, even though email is nil)
+[expected_fields, redis_field_count, actual_object_fields]
+#=> [5, 5, 5]
 
 ## Memory vs persistence state consistency after save
 @consistency_obj = ConsistencyTestModel.new(id: next_test_id, name: 'Memory Test', email: 'test@example.com')
@@ -73,9 +76,9 @@ actual_object_fields = @serial_test.to_h.keys.length
 memory_name = @consistency_obj.name
 memory_email = @consistency_obj.email
 
-# Get persistence state
-redis_name = Familia.dbclient.hget(@consistency_obj.dbkey, 'name')
-redis_email = Familia.dbclient.hget(@consistency_obj.dbkey, 'email')
+# Get persistence state (deserialize from JSON storage)
+redis_name = @consistency_obj.deserialize_value(Familia.dbclient.hget(@consistency_obj.dbkey, 'name'))
+redis_email = @consistency_obj.deserialize_value(Familia.dbclient.hget(@consistency_obj.dbkey, 'email'))
 
 [memory_name == redis_name, memory_email == redis_email]
 #=> [true, true]
