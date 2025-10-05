@@ -125,7 +125,7 @@ module Familia
       #   User.find_by_key("user:123")  # Returns a User instance if it exists,
       #   nil otherwise
       #
-      def find_by_key(objkey)
+      def find_by_dbkey(objkey)
         raise ArgumentError, 'Empty key' if objkey.to_s.empty?
 
         # We use a lower-level method here b/c we're working with the
@@ -147,7 +147,7 @@ module Familia
 
         new(**obj)
       end
-      alias from_dbkey find_by_key # deprecated
+      alias find_by_key find_by_dbkey
 
       # Retrieves and instantiates an object from Database using its identifier.
       #
@@ -168,7 +168,7 @@ module Familia
       # @example
       #   User.find_by_id(123)  # Equivalent to User.find_by_key("user:123:object")
       #
-      def find_by_id(identifier, suffix = nil)
+      def find_by_identifier(identifier, suffix = nil)
         suffix ||= self.suffix
         return nil if identifier.to_s.empty?
 
@@ -178,9 +178,9 @@ module Familia
         Familia.trace :FIND_BY_ID, nil, objkey if Familia.debug?
         find_by_key objkey
       end
+      alias find_by_id find_by_identifier
       alias find find_by_id
-      alias load find_by_id # deprecated
-      alias from_identifier find_by_id # deprecated
+      alias load find_by_id
 
       # Checks if an object with the given identifier exists in the database.
       #
