@@ -176,7 +176,7 @@ module Familia
 
         Familia.ld "[find_by_id] #{self} from key #{objkey})"
         Familia.trace :FIND_BY_ID, nil, objkey if Familia.debug?
-        find_by_key objkey
+        find_by_dbkey objkey
       end
       alias find_by_id find_by_identifier
       alias find find_by_id

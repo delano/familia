@@ -108,7 +108,11 @@ module Familia
                 # Use declared field accessor instead of manual instantiation
                 index_hash = send(index_name)
 
-                # Get the identifier from the hash
+                # Get the identifier from the hash using .get method.
+                # We use .get instead of [] because it's part of the standard interface
+                # common across all DataType classes (List, UnsortedSet, SortedSet, HashKey).
+                # While unique indexes always use HashKey, using .get maintains consistency
+                # with the broader DataType API patterns used throughout Familia.
                 record_id = index_hash.get(provided_value)
                 return nil unless record_id
 
@@ -226,6 +230,12 @@ module Familia
           def generate_query_methods_class(field, index_name, indexed_class)
             indexed_class.define_singleton_method(:"find_by_#{field}") do |provided_id|
               index_hash = send(index_name) # Access the class-level hashkey DataType
+
+              # Get the identifier from the hash using .get method.
+              # We use .get instead of [] because it's part of the standard interface
+              # common across all DataType classes (List, UnsortedSet, SortedSet, HashKey).
+              # While unique indexes always use HashKey, using .get maintains consistency
+              # with the broader DataType API patterns used throughout Familia.
               record_id = index_hash.get(provided_id)
 
               return nil unless record_id
