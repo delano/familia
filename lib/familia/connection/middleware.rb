@@ -65,6 +65,9 @@ module Familia
       # Existing connection pools will naturally create new connections with middleware
       # as old connections are cycled out.
       #
+      # @note If no middleware is enabled, this method safely clears connection state
+      #       but won't register any middleware until it's enabled.
+      #
       # @example Enable middleware and reconnect
       #   Familia.enable_database_logging = true
       #   Familia.reconnect!
@@ -91,7 +94,7 @@ module Familia
         # Clear fiber-local connections
         clear_fiber_connection!
 
-        Familia.trace :RECONNECT, nil, 'Connection chain rebuilt with current middleware'
+        Familia.trace :RECONNECT, nil, 'Connection chain cleared, will rebuild with current middleware on next use'
       end
 
       private

@@ -20,6 +20,22 @@ class ReconnectTestUser < Familia::Horreum
   end
 end
 
+## Test 5: Middleware re-registration flag is reset and re-set
+Familia.enable_database_logging = true
+Familia.instance_variable_set(:@middleware_registered, true)
+Familia.reconnect!
+was_registered = Familia.instance_variable_get(:@middleware_registered)
+was_registered
+#=> true
+
+## Test 6: reconnect! safely handles no middleware enabled
+Familia.enable_database_logging = false
+Familia.enable_database_counter = false
+Familia.reconnect!
+chain_cleared = Familia.instance_variable_get(:@connection_chain).nil?
+chain_cleared
+#=> true
+
 
 
 ## Setup: Clean database
