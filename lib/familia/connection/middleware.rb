@@ -23,7 +23,7 @@ module Familia
       end
 
       # Sets a versioned fiber-local connection
-      def set_fiber_connection(connection)
+      def fiber_connection=(connection)
         Fiber[:familia_connection] = [connection, middleware_version]
         Familia.trace :FIBER_CONNECTION, nil, "Set with version #{middleware_version}"
       end
