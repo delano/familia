@@ -50,43 +50,17 @@ module Familia
         increment_middleware_version! if value
       end
 
-      # Reconnects with fresh middleware registration
-      #
-      # This method is useful when middleware needs to be applied to connection pools
-      # that were created before middleware was enabled. It:
-      #
-      # 1. Shuts down existing connection pools (if provided)
-      # 2. Clears middleware registration flag to allow re-registration
-      # 3. Clears connection chain to force rebuild
-      # 4. Increments middleware version to invalidate cached connections
-      # 5. Re-registers middleware on next connection
-      #
-      # @param connection_pools [Array<ConnectionPool>, ConnectionPool, nil] Optional pools to shutdown
-      #
-      # @example Reconnect without pools (simple case)
-      #   Familia.enable_database_logging = true
-      #   Familia.reconnect!
-      #
-      # @example Reconnect with single pool
-      #   pool = ConnectionPool.new { Redis.new }
-      #   Familia.connection_provider = ->(uri) { pool.with { |c| c } }
-      #   Familia.enable_database_logging = true
-      #   Familia.reconnect!(pool)
-      #
-      # @example Reconnect with multiple pools
-      #   pools = { db0: pool1, db1: pool2 }
-      #   Familia.enable_database_logging = true
-      #   Familia.reconnect!(pools.values)
-      #
       def reconnect!
         # Reconnects with fresh middleware registration
         #
         # This method is useful when middleware needs to be applied to connection pools
         # that were created before middleware was enabled. It:
         #
-        # 1. Clears connection chain to force rebuild
-        # 2. Increments middleware version to invalidate cached connections
-        # 3. Clears fiber-local connections
+        # 1. Clears the middleware registration flag to allow re-registration.
+        # 2. Re-runs the middleware registration logic.
+        # 3. Clears connection chain to force rebuild.
+        # 4. Increments middleware version to invalidate cached connections.
+        # 5. Clears fiber-local connections.
         #
         # The next connection request will use the updated middleware configuration.
         # Existing connection pools will naturally create new connections with middleware
@@ -104,6 +78,10 @@ module Familia
         #   Familia.enable_database_logging = true
         #   Familia.reconnect!  # Force new connections with middleware
         #
+
+        # Allow middleware to be re-registered
+        @middleware_registered = false
+        register_middleware_once
 
         # Clear connection chain to force rebuild
         @connection_chain = nil
