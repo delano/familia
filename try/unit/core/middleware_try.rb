@@ -27,6 +27,46 @@ class MockDatabase
   end
 end
 
+## increment_middleware_version! increases version counter
+initial_version = Familia.middleware_version
+Familia.increment_middleware_version!
+Familia.middleware_version > initial_version
+#=> true
+
+## increment_middleware_version! increments by exactly 1
+initial_version = Familia.middleware_version
+Familia.increment_middleware_version!
+Familia.middleware_version - initial_version
+#=> 1
+
+## set_fiber_connection stores connection with current version
+mock_connection = "test_connection"
+Familia.set_fiber_connection(mock_connection)
+stored = Fiber[:familia_connection]
+[stored[0], stored[1] == Familia.middleware_version]
+#=> ["test_connection", true]
+
+## set_fiber_connection updates version when middleware version changes
+mock_connection = "test_connection"
+Familia.set_fiber_connection(mock_connection)
+old_version = Fiber[:familia_connection][1]
+Familia.increment_middleware_version!
+Familia.set_fiber_connection(mock_connection)
+new_version = Fiber[:familia_connection][1]
+new_version > old_version
+#=> true
+
+## clear_fiber_connection! removes fiber-local connection
+Familia.set_fiber_connection("test_connection")
+Familia.clear_fiber_connection!
+Fiber[:familia_connection]
+#=> nil
+
+## clear_fiber_connection! is safe when no connection exists
+Familia.clear_fiber_connection!
+Fiber[:familia_connection]
+#=> nil
+
 ## MockDatabase can log commands with timing
 dbclient = MockDatabase.new
 result = dbclient.get("test_key")
