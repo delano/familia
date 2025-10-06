@@ -50,35 +50,34 @@ module Familia
         increment_middleware_version! if value
       end
 
+      # Reconnects with fresh middleware registration
+      #
+      # This method is useful when middleware needs to be applied to connection pools
+      # that were created before middleware was enabled. It:
+      #
+      # 1. Clears the middleware registration flag to allow re-registration
+      # 2. Re-runs the middleware registration logic
+      # 3. Clears connection chain to force rebuild
+      # 4. Increments middleware version to invalidate cached connections
+      # 5. Clears fiber-local connections
+      #
+      # The next connection request will use the updated middleware configuration.
+      # Existing connection pools will naturally create new connections with middleware
+      # as old connections are cycled out.
+      #
+      # @example Enable middleware and reconnect
+      #   Familia.enable_database_logging = true
+      #   Familia.reconnect!
+      #
+      # @example In test suites
+      #   # Test file A creates pools
+      #   Familia.connection_provider = ->(uri) { pool.with { |c| c } }
+      #
+      #   # Test file B enables middleware
+      #   Familia.enable_database_logging = true
+      #   Familia.reconnect!  # Force new connections with middleware
+      #
       def reconnect!
-        # Reconnects with fresh middleware registration
-        #
-        # This method is useful when middleware needs to be applied to connection pools
-        # that were created before middleware was enabled. It:
-        #
-        # 1. Clears the middleware registration flag to allow re-registration.
-        # 2. Re-runs the middleware registration logic.
-        # 3. Clears connection chain to force rebuild.
-        # 4. Increments middleware version to invalidate cached connections.
-        # 5. Clears fiber-local connections.
-        #
-        # The next connection request will use the updated middleware configuration.
-        # Existing connection pools will naturally create new connections with middleware
-        # as old connections are cycled out.
-        #
-        # @example Enable middleware and reconnect
-        #   Familia.enable_database_logging = true
-        #   Familia.reconnect!
-        #
-        # @example In test suites
-        #   # Test file A creates pools
-        #   Familia.connection_provider = ->(uri) { pool.with { |c| c } }
-        #
-        #   # Test file B enables middleware
-        #   Familia.enable_database_logging = true
-        #   Familia.reconnect!  # Force new connections with middleware
-        #
-
         # Allow middleware to be re-registered
         @middleware_registered = false
         register_middleware_once
