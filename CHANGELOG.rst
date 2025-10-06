@@ -12,6 +12,66 @@ Versioning <https://semver.org/spec/v2.0.0.html>`__.
 
    <!--scriv-insert-here-->
 
+.. _changelog-2.0.0.pre18:
+
+2.0.0.pre18 — 2025-10-05
+========================
+
+Added
+-----
+
+- Added ``Familia.reconnect!`` method to refresh connection pools with current middleware configuration. This solves issues in test suites where middleware (like DatabaseLogger) is enabled after connection pools are created. The method clears the connection chain, increments the middleware version, and clears fiber-local connections, ensuring new connections include the latest middleware. See ``lib/familia/connection/middleware.rb:81-117``.
+
+Changed
+-------
+
+- **BREAKING**: Implemented type-preserving JSON serialization for Horreum field values. Non-string values (Integer, Boolean, Float, nil, Hash, Array) are JSON-encoded for storage and JSON-decoded on retrieval. **Strings are stored as-is without JSON encoding** to avoid double-quoting and maintain Redis baseline simplicity. Type preservation is achieved through smart deserialization: values that parse as JSON restore to their original types, otherwise remain as strings.
+
+- **BREAKING**: Changed default Hash key format from symbols to strings throughout the codebase (``symbolize: false`` default). This eliminates ambiguity with HTTP request parameters and IndifferentHash-style implementations, providing strict adherence to JSON parsing rules and avoiding key duplication issues.
+
+- **BREAKING**: Fixed ``initialize_with_keyword_args`` to properly handle ``false`` and ``0`` values during object initialization. Previously, falsy values were incorrectly skipped due to truthiness checks. Now uses explicit nil checking with ``fetch`` to preserve all non-nil values including ``false`` and ``0``.
+
+- **String serialization now uses JSON encoding**: All string values are JSON-encoded during storage (wrapped in quotes) for consistent type preservation. The lenient deserializer handles both new JSON-encoded strings and legacy plain strings automatically. PR #152
+
+Removed
+-------
+
+- **BREAKING**: Removed ``dump_method`` and ``load_method`` configuration options from ``Familia::Base`` and ``Familia::Horreum::Definition``. JSON serialization is now hard-coded for consistency and type safety. Custom serialization methods are no longer supported.
+
+Fixed
+-----
+
+- Fixed type coercion bugs where Integer fields (e.g., ``age: 35``) became Strings (``"35"``) and Boolean fields (e.g., ``active: true``) became Strings (``"true"``) after database round-trips. All primitive types now maintain their original types through ``find_by_dbkey``, ``refresh!``, and ``batch_update`` operations.
+
+- Fixed ``deserialize_value`` to return all JSON-parsed types instead of filtering to Hash/Array only. This enables proper deserialization of primitive types (Integer, Boolean, Float, String) from Redis storage.
+
+- Added JSON deserialization in ``find_by_dbkey`` using existing ``initialize_with_keyword_args_deserialize_value`` helper method to maintain DRY principles and ensure loaded objects receive properly typed field values rather than raw Redis strings.
+
+- Optimized serialization to avoid double-encoding strings - strings stored directly in Redis as-is, only non-string types use JSON encoding. This reduces storage overhead and maintains Redis's string baseline semantics.
+
+- Fixed encrypted fields with ``category: :encrypted`` appearing in ``to_h()`` output. These fields now correctly set ``loggable: false`` to prevent accidental exposure in logs, APIs, or external interfaces. PR #152
+
+- Fixed middleware registration to only set ``@middleware_registered`` flag when middleware is actually enabled and registered. Previously, calling ``create_dbclient`` before enabling middleware would set the flag to ``true`` without registering anything, preventing later middleware enablement from working. The fix ensures ``register_middleware_once`` only sets the flag after successful registration. See ``lib/familia/connection/middleware.rb:124-146``.
+
+Security
+--------
+
+- Encrypted fields defined via ``field :name, category: :encrypted`` now properly excluded from ``to_h()`` serialization, matching the security behavior of ``encrypted_field``. PR #152
+
+Documentation
+-------------
+
+- Added comprehensive type preservation test suite (``try/unit/horreum/json_type_preservation_try.rb``) with 30 test cases covering Integer, Boolean, String, Float, Hash, Array, nested structures, nil handling, empty strings, zero values, round-trip consistency, ``batch_update``, and ``refresh!`` operations.
+
+AI Assistance
+-------------
+
+- Claude Code (claude-sonnet-4-5) provided implementation guidance, identified the ``initialize_with_keyword_args`` falsy value bug, wrote comprehensive test suite, and coordinated multi-file changes across serialization, management, and base modules.
+
+- Issue analysis, implementation guidance, test verification, and documentation for JSON serialization changes and encrypted field security fix.
+
+- Claude Code (Sonnet 4.5) provided architecture analysis, implementation design, and identified critical issues through the second-opinion agent. Key contributions included recommending the simplified approach without pool shutdown lifecycle management, identifying the race condition risk in clearing ``@middleware_registered``, and suggesting the use of natural pool aging instead of explicit shutdown.
+
 .. _changelog-2.0.0.pre17:
 
 2.0.0.pre17 — 2025-10-03
