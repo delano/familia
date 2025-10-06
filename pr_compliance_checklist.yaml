@@ -16,9 +16,9 @@ pr_compliances:
 
   - title: "ChangelogFragment"
     compliance_label: true
-    objective: "User-facing changes must include a changelog fragment"
-    success_criteria: "New fragment file in changelog.d/ directory following the naming convention and RST format, or explicit justification for omission"
-    failure_criteria: "User-facing changes without changelog fragment or documentation updates"
+    objective: "User-facing changes must include a changelog"
+    success_criteria: "New fragment file in changelog.d/ directory following the naming convention and RST format, or updates to CHANGELOG.rst in root directory, or explicit justification for omission"
+    failure_criteria: "User-facing changes without changelog fragment, CHANGELOG.rst updates, or documentation updates"
 
   - title: "DocumentationUpdates"
     compliance_label: true
