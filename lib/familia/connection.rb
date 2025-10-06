@@ -42,7 +42,7 @@ module Familia
       @connection_chain = nil # Force rebuild of chain
     end
 
-    # Sets the default URI for Database connections.
+# Sets the default URI for Database connections.
     #
     # NOTE: uri is not a property of the Settings module b/c it's not
     # configured in class defintions like default_expiration or logical DB index.
