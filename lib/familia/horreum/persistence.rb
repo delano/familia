@@ -279,7 +279,7 @@ module Familia
       # @see #delete! The underlying method that performs the key deletion
       #
       def destroy!
-        Familia.trace :DESTROY, dbkey, uri
+        Familia.trace :DESTROY!, dbkey, self.class.uri
 
         # Execute all deletion operations within a transaction
         transaction do |conn|
@@ -291,7 +291,7 @@ module Familia
             Familia.trace :DELETE_RELATED_FIELDS!, nil,
                           "#{self.class} has relations: #{self.class.related_fields.keys}"
 
-            self.class.related_fields.each do |name, _definition|
+            self.class.related_fields.each_key do |name|
               obj = send(name)
               Familia.trace :DELETE_RELATED_FIELD, name, "Deleting related field #{name} (#{obj.dbkey})"
               conn.del(obj.dbkey)
@@ -318,6 +318,7 @@ module Familia
       #   after clear_fields! if you want to persist the cleared state.
       #
       def clear_fields!
+        Familia.trace :CLEAR_FIELDS!, dbkey, self.class.uri
         self.class.field_method_map.each_value { |method_name| send("#{method_name}=", nil) }
       end
 
@@ -454,7 +455,6 @@ module Familia
           send(add_method) if respond_to?(add_method)
         end
       end
-
     end
   end
 end
