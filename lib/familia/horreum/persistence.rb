@@ -151,7 +151,7 @@ module Familia
         # Auto-index for class-level indexes after successful save
         # Use transaction to ensure atomicity with the save operation
         if success
-          transaction do |conn|
+          transaction do |_conn|
             auto_update_class_indexes
           end
         end
@@ -193,7 +193,7 @@ module Familia
         # Only classes that have the expiration ferature enabled will
         # actually set an expiration time on their keys. Otherwise
         # this will be a no-op that simply logs the attempt.
-        update_expiration(default_expiration: nil) if update_expiration
+        update_expiration(expiration: nil) if update_expiration
 
         result
       end
@@ -216,20 +216,57 @@ module Familia
 
         Familia.trace :BATCH_UPDATE, nil, fields.keys if Familia.debug?
 
-        transaction_result = transaction do |conn|
+        transaction do |conn|
           fields.each do |field, value|
             prepared_value = serialize_value(value)
-            conn.hset dbkey, field, prepared_value
+            conn.hset dbkey, field, prepared_value # TODO: Remove conn, allow dbclient to handle it
             # Update instance variable to keep object in sync
             send("#{field}=", value) if respond_to?("#{field}=")
           end
+          # Update expiration if requested and supported
+          # TODO: Should be updating expiration in the transactin after the fields
+          self.update_expiration(expiration: nil) if update_expiration && respond_to?(:update_expiration)
         end
 
-        # Update expiration if requested and supported
-        self.update_expiration(default_expiration: nil) if update_expiration && respond_to?(:update_expiration)
-
         # Return the MultiResult directly (transaction already returns MultiResult)
-        transaction_result
+      end
+
+      # Persists only the specified fields to Redis.
+      #
+      # Saves the current in-memory values of specified fields to Redis without
+      # modifying them first. Fields must already be set on the instance.
+      #
+      # @param field_names [Array<Symbol, String>] Names of fields to persist
+      # @param update_expiration [Boolean] Whether to refresh key expiration
+      # @return [self] Returns self for method chaining
+      #
+      # @example Persist only passphrase fields after updating them
+      #   customer.update_passphrase('secret').save_fields(:passphrase, :passphrase_encryption)
+      #
+      def save_fields(*field_names, update_expiration: true)
+        raise ArgumentError, 'No fields specified' if field_names.empty?
+
+        Familia.trace :SAVE_FIELDS, nil, field_names if Familia.debug?
+
+        transaction do |_conn|
+          # Build hash of field names to serialized values
+          fields_hash = {}
+          field_names.each do |field|
+            field_sym = field.to_sym
+            raise ArgumentError, "Unknown field: #{field}" unless respond_to?(field_sym)
+
+            value = send(field_sym)
+            prepared_value = serialize_value(value)
+            fields_hash[field] = prepared_value
+          end
+
+          # Set all fields at once using hmset
+          hmset(fields_hash)
+
+          self.update_expiration if update_expiration
+        end
+
+        self
       end
 
       # Updates the object by applying multiple field values.
