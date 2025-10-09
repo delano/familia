@@ -277,9 +277,9 @@ module Familia
         @provider_connection_handler ||= Familia::Connection::ProviderConnectionHandler.new
 
         # Determine the appropriate class context
-        # When called from instance: self is instance, self.class is the model class
-        # When called from class: self is the model class
-        klass = self.is_a?(Class) ? self : self.class
+        # When called from instance: self is instance, use the model class connection
+        # When called from class: we'll use our own connection
+        klass = is_a?(Class) ? self : self.class
 
         # Always check class first for @dbclient since instance-level connections were removed
         @cached_connection_handler ||= Familia::Connection::CachedConnectionHandler.new(klass)

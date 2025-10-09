@@ -34,26 +34,24 @@ module Familia
       #   result.successful?  # => true/false
       #   result.results     # => ["OK", 1]
       #
-      def self.execute_transaction(dbclient_proc, &block)
+      def self.execute_transaction(dbclient_proc, &)
         # First, get the connection to populate the handler class
-        connection = dbclient_proc.call
+        dbclient_proc.call
         handler_class = Fiber[:familia_connection_handler_class]
 
         # Check transaction capability
         transaction_capability = handler_class&.allows_transaction
 
         if transaction_capability == false
-          handle_transaction_fallback(dbclient_proc, handler_class, &block)
+          handle_transaction_fallback(dbclient_proc, handler_class, &)
         elsif transaction_capability == :reentrant
           # Already in transaction, just yield the connection
           yield(Fiber[:familia_transaction])
         else
           # Normal transaction flow (includes nil, true, and other values)
-          execute_normal_transaction(dbclient_proc, &block)
+          execute_normal_transaction(dbclient_proc, &)
         end
       end
-
-      private
 
       # Handles transaction fallback based on configured transaction mode
       #
@@ -65,8 +63,8 @@ module Familia
       # @param block [Proc] Block containing Redis commands to execute
       # @return [MultiResult] Result from individual command execution or raises error
       #
-      def self.handle_transaction_fallback(dbclient_proc, handler_class, &block)
-        OperationCore.handle_fallback(:transaction, dbclient_proc, handler_class, &block)
+      def self.handle_transaction_fallback(dbclient_proc, handler_class, &)
+        OperationCore.handle_fallback(:transaction, dbclient_proc, handler_class, &)
       end
 
       # Executes a normal Redis transaction using MULTI/EXEC
@@ -78,7 +76,7 @@ module Familia
       # @param block [Proc] Block containing Redis commands to execute
       # @return [MultiResult] Result object with transaction command results
       #
-      def self.execute_normal_transaction(dbclient_proc, &block)
+      def self.execute_normal_transaction(dbclient_proc)
         # Check for existing transaction context
         return yield(Fiber[:familia_transaction]) if Fiber[:familia_transaction]
 
