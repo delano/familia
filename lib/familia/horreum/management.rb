@@ -23,7 +23,7 @@ module Familia
       #   to the constructor.
       # @param kwargs [Hash] Keyword arguments to be passed to the constructor.
       # @return [Object] The newly created and persisted instance.
-      # @raise [Familia::Problem] If an instance with the same identifier already
+      # @raise [Familia::RecordExistsError] If an instance with the same identifier already
       #   exists.
       #
       # This method serves as a factory method for creating and persisting new
@@ -35,7 +35,7 @@ module Familia
       # - Keyword arguments (**kwargs) are passed as a hash to the constructor.
       #
       # After instantiation, the method checks if an object with the same
-      # identifier already exists. If it does, a Familia::Problem exception is
+      # identifier already exists. If it does, a Familia::RecordExistsError exception is
       # raised to prevent overwriting existing data.
       #
       # Finally, the method saves the new instance returns it.
@@ -52,24 +52,22 @@ module Familia
       # @see #new
       # @see #exists?
       # @see #save
-      #
-      def create(*, **)
-        fobj = new(*, **)
-        fobj.save_if_not_exists
-        fobj
+      def create!(...)
+        hobj = new(...)
+        hobj.save_if_not_exists!
+        hobj
       end
 
-      def multiget(*ids)
-        ids = rawmultiget(*ids)
-        ids.filter_map { |json| from_json(json) }
+      def multiget(...)
+        rawmultiget(...).filter_map { |json| Familia::JsonSerializer.parse(json) }
       end
 
-      def rawmultiget(*ids)
-        ids.collect! { |objid| dbkey(objid) }
-        return [] if ids.compact.empty?
+      def rawmultiget(*hids)
+        hids.collect! { |hobjid| dbkey(hobjid) }
+        return [] if hids.compact.empty?
 
-        Familia.trace :MULTIGET, nil, "#{ids.size}: #{ids}" if Familia.debug?
-        dbclient.mget(*ids)
+        Familia.trace :MULTIGET, nil, "#{hids.size}: #{hids}" if Familia.debug?
+        dbclient.mget(*hids)
       end
 
       # Converts the class name into a string that can be used to look up
