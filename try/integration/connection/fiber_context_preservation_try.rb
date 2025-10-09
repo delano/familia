@@ -166,7 +166,7 @@ end
 ## Operation guards prevent pipeline fiber issues before they occur
 begin
   # Ensure we're in strict mode for this test
-  Familia.configure { |config| config.pipeline_mode = :strict }
+  Familia.configure { |config| config.pipelined_mode = :strict }
 
   Fiber[:familia_connection] = [Customer.create_dbclient, Familia.middleware_version]
   Fiber[:familia_connection_handler_class] = Familia::Connection::FiberConnectionHandler
@@ -185,7 +185,7 @@ end
 
 ## Method aliases work correctly
 # pipeline alias for pipelined
-result1 = Familia.pipeline do |conn|
+result1 = Familia.pipelined do |conn|
   conn.set('alias_test', 'alias_success')
   conn.get('alias_test')
 end
@@ -203,7 +203,7 @@ result1.results.last == 'alias_success' && result2.results.last == 'alias_succes
 customer = Customer.new(custid: 'alias_test')
 
 # pipeline alias
-result1 = customer.pipeline do |conn|
+result1 = customer.pipelined do |conn|
   conn.set('horreum:alias1', 'success1')
   conn.get('horreum:alias1')
 end

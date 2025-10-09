@@ -16,7 +16,7 @@ module Familia
       #
       # Handles pipeline execution based on connection handler capabilities.
       # When handler doesn't support pipelines, fallback behavior is controlled
-      # by Familia.pipeline_mode setting.
+      # by Familia.pipelined_mode setting.
       #
       # @param dbclient_proc [Proc] Lambda that returns the Redis connection
       # @param block [Proc] Block containing Redis commands to execute
@@ -32,7 +32,7 @@ module Familia
       #   result.results     # => ["OK", 1]
       #
       # @example With fallback modes
-      #   Familia.configure { |c| c.pipeline_mode = :permissive }
+      #   Familia.configure { |c| c.pipelined_mode = :permissive }
       #   result = PipelineCore.execute_pipeline(-> { cached_conn }) do |conn|
       #     conn.set('key', 'value')  # Executes individually, no error
       #   end

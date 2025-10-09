@@ -11,7 +11,7 @@ module Familia
   @encryption_keys = nil
   @current_key_version = nil
   @encryption_personalization = 'FamilialMatters'.freeze
-  @pipeline_mode = :warn
+  @pipelined_mode = :warn
 
   # Familia::Settings
   #
@@ -118,24 +118,24 @@ module Familia
     #
     # @example Setting pipeline mode
     #   Familia.configure do |config|
-    #     config.pipeline_mode = :permissive
+    #     config.pipelined_mode = :permissive
     #   end
     #
-    def pipeline_mode(val = nil)
+    def pipelined_mode(val = nil)
       if val
         unless [:strict, :warn, :permissive].include?(val)
           raise ArgumentError, 'Pipeline mode must be :strict, :warn, or :permissive'
         end
-        @pipeline_mode = val
+        @pipelined_mode = val
       end
-      @pipeline_mode || :warn  # default to warn mode
+      @pipelined_mode || :warn  # default to warn mode
     end
 
-    def pipeline_mode=(val)
+    def pipelined_mode=(val)
       unless [:strict, :warn, :permissive].include?(val)
         raise ArgumentError, 'Pipeline mode must be :strict, :warn, or :permissive'
       end
-      @pipeline_mode = val
+      @pipelined_mode = val
     end
 
     # Configure Familia settings
