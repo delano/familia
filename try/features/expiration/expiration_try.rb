@@ -58,7 +58,7 @@ ExpiringTest.default_expiration
 #=> true
 
 ## Can call update_expiration method
-result = @test_obj.update_expiration(default_expiration: 180)
+result = @test_obj.update_expiration(expiration: 180)
 [result.class, result]
 #=> [FalseClass, false]
 

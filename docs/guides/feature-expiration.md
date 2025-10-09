@@ -66,7 +66,7 @@ session.default_expiration  # => 900.0
 session.update_expiration  # Uses instance expiration (15 minutes)
 
 # Or specify expiration inline
-session.update_expiration(default_expiration: 5.minutes)
+session.update_expiration(expiration: 5.minutes)
 ```
 
 ## Advanced Usage
@@ -112,7 +112,7 @@ customer = Customer.new(customer_id: 'cust_123')
 customer.save
 
 # This will set TTL on the main object AND all related fields
-customer.update_expiration(default_expiration: 12.hours)
+customer.update_expiration(expiration: 12.hours)
 # Sets expiration on:
 # - customer:cust_123 (main hash)
 # - customer:cust_123:recent_orders (list)
@@ -137,9 +137,9 @@ class AnalyticsEvent < Familia::Horreum
     save
 
     if should_expire?
-      update_expiration(default_expiration: 1.hour)
+      update_expiration(expiration: 1.hour)
     else
-      update_expiration(default_expiration: 30.days)
+      update_expiration(expiration: 30.days)
     end
   end
 end
@@ -200,7 +200,7 @@ class SessionCleanupJob
     # Extend expiration for active sessions
     UserSession.all.each do |session|
       if session.recently_active?
-        session.update_expiration(default_expiration: 30.minutes)
+        session.update_expiration(expiration: 30.minutes)
       end
     end
   end
@@ -225,7 +225,7 @@ class SessionExpirationMiddleware
       session = UserSession.find(session_token)
 
       # Extend session TTL on each request
-      session&.update_expiration(default_expiration: 30.minutes)
+      session&.update_expiration(expiration: 30.minutes)
     end
 
     @app.call(env)
@@ -268,14 +268,14 @@ end
 class SessionManager
   def self.extend_all_sessions(new_ttl)
     UserSession.all.each do |session|
-      session.update_expiration(default_expiration: new_ttl)
+      session.update_expiration(expiration: new_ttl)
     end
   end
 
   def self.expire_inactive_sessions
     UserSession.all.select(&:inactive?).each do |session|
       # Set very short TTL for inactive sessions
-      session.update_expiration(default_expiration: 5.minutes)
+      session.update_expiration(expiration: 5.minutes)
     end
   end
 
@@ -306,7 +306,7 @@ class DataRetentionService
       model_class = data_type.to_s.pascalize.constantize
 
       model_class.all.each do |record|
-        record.update_expiration(default_expiration: ttl)
+        record.update_expiration(expiration: ttl)
       end
     end
   end
@@ -323,7 +323,7 @@ DataRetentionService.apply_retention_policies
 ```ruby
 # ❌ Inefficient: Multiple round trips
 sessions.each do |session|
-  session.update_expiration(default_expiration: 1.hour)
+  session.update_expiration(expiration: 1.hour)
 end
 
 # ✅ Efficient: Batch operations
@@ -357,7 +357,7 @@ class ResilientSession < Familia::Horreum
     return unless exists?
 
     begin
-      update_expiration(default_expiration: new_ttl)
+      update_expiration(expiration: new_ttl)
     rescue => e
       # Log error but don't crash the application
       Familia.logger.warn "Failed to update expiration for #{dbkey}: #{e.message}"
@@ -377,7 +377,7 @@ Familia.debug = true
 
 session = UserSession.new(session_token: 'debug_session')
 session.save
-session.update_expiration(default_expiration: 5.minutes)
+session.update_expiration(expiration: 5.minutes)
 # Logs will show:
 # [update_expiration] Expires session:debug_session in 300.0 seconds
 ```
@@ -388,11 +388,11 @@ session.update_expiration(default_expiration: 5.minutes)
 ```ruby
 session = UserSession.new
 # ❌ Won't work - object must be saved first
-session.update_expiration(default_expiration: 1.hour)
+session.update_expiration(expiration: 1.hour)
 
 # ✅ Correct - save first, then expire
 session.save
-session.update_expiration(default_expiration: 1.hour)
+session.update_expiration(expiration: 1.hour)
 ```
 
 **2. Related Fields Not Expiring**
@@ -459,7 +459,7 @@ RSpec.describe UserSession do
 
     it "applies TTL to database key" do
       session.save
-      session.update_expiration(default_expiration: 10.minutes)
+      session.update_expiration(expiration: 10.minutes)
 
       ttl = session.ttl
       expect(ttl).to be > 500  # Should be close to 600 seconds
@@ -470,7 +470,7 @@ RSpec.describe UserSession do
       session.save
       session.activity_log.push('login')  # Assume activity_log is a list
 
-      session.update_expiration(default_expiration: 5.minutes)
+      session.update_expiration(expiration: 5.minutes)
 
       # Both main object and related fields should have TTL
       expect(session.ttl).to be > 250
@@ -542,7 +542,7 @@ class TTLHealthCheck
         expired_count += 1
       elsif ttl < 300  # Less than 5 minutes remaining
         # Extend TTL for active sessions
-        session.update_expiration(default_expiration: 30.minutes) if session.active?
+        session.update_expiration(expiration: 30.minutes) if session.active?
       end
     end
 
@@ -565,7 +565,7 @@ class RobustSessionManager
     # Check if session exists and hasn't expired
     if session&.ttl&.positive?
       # Extend TTL on access
-      session.update_expiration(default_expiration: 30.minutes)
+      session.update_expiration(expiration: 30.minutes)
       session
     else
       # Create new session if old one expired
