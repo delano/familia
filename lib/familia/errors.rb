@@ -1,14 +1,19 @@
 # lib/familia/errors.rb
 #
 module Familia
+  # Base exception class for all Familia errors
   class Problem < RuntimeError; end
   class NoIdentifier < Problem; end
   class NonUniqueKey < Problem; end
 
   class FieldTypeError < Problem; end
   class AutoloadError < Problem; end
+  # Base exception class for Redis/persistence-related errors
+  class PersistenceError < Problem; end
 
   class SerializerError < Problem; end
+  # Base exception class for Horreum models
+  class HorreumError < Problem; end
 
   # Raised when attempting to start transactions or pipelines on connection types that don't support them
   class OperationModeError < Problem; end
