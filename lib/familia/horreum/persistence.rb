@@ -378,6 +378,11 @@ module Familia
         self
       end
 
+      # Convenience methods that forward to the class method of the same name
+      def transaction(...) = self.class.transaction(...)
+      def pipelined(...) = self.class.pipelined(...)
+      def dbclient(...) = self.class.dbclient(...)
+
       private
 
       # Reset all transient fields to nil
