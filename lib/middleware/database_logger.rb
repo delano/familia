@@ -33,7 +33,13 @@ module DatabaseLogger
   @max_commands = 10_000
   @process_start = Time.now.to_f.freeze
 
-  CommandMessage = Data.define(:command, :μs, :timeline)
+  CommandMessage = Data.define(:command, :μs, :timeline) do
+    alias to_a deconstruct
+    def inspect
+      cmd, duration, timeline = to_a
+      format('%.6f %4dμs > %s', timeline, duration, cmd)
+    end
+  end
 
   class << self
     # Gets/sets the logger instance used by DatabaseLogger.
@@ -78,6 +84,12 @@ module DatabaseLogger
       @commands.to_a
     end
 
+    # Gets the current count of Database commands executed.
+    # @return [Integer] The number of Database commands executed.
+    def index
+      @commands.size
+    end
+
     # Thread-safe append with bounded size
     #
     # @param message [String] The message to append.
@@ -115,16 +127,18 @@ module DatabaseLogger
     block_start = DatabaseLogger.now_in_μs
     result = yield
     block_duration = DatabaseLogger.now_in_μs - block_start
-    lifetime_duration = (Time.now.to_f - DatabaseLogger.process_start).round(6)
 
     # We intentionally use two different codepaths for getting the
     # time, although they will almost always be so similar that the
     # difference is negligible.
-    message = CommandMessage.new(command, block_duration, lifetime_duration)
-    DatabaseLogger.append_command(message)
+    lifetime_duration = (Time.now.to_f - DatabaseLogger.process_start).round(6)
+
+    msgpack = CommandMessage.new(command.join(' '), block_duration, lifetime_duration)
+    DatabaseLogger.append_command(msgpack)
 
     # Log if logger is set
-    DatabaseLogger.logger&.debug(Oj.dump(message.to_h, mode: :strict))
+    message = format('[%s] %s', DatabaseLogger.index, msgpack.inspect)
+    DatabaseLogger.logger&.trace(message)
 
     result
   end
