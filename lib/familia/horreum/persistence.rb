@@ -64,8 +64,8 @@ module Familia
         Familia.trace :SAVE, nil, uri if Familia.debug?
 
         # No longer need to sync computed identifier with a cache field
-        self.created ||= Familia.now.to_i if respond_to?(:created)
-        self.updated = Familia.now.to_i if respond_to?(:updated)
+        self.created ||= Familia.now if respond_to?(:created)
+        self.updated = Familia.now if respond_to?(:updated)
 
         # Commit our tale to the Database chronicles
         # Wrap in transaction for atomicity between save and indexing
