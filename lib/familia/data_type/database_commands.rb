@@ -22,11 +22,14 @@ module Familia
       end
 
       # Deletes the entire dbkey
-      # @return [Boolean] true if the key was deleted, false otherwise
+      #
+      # We return the dbclient.del command's return value instead of a friendly
+      # boolean b/c that logic doesn't work inside of a transaction. The return
+      # value in that case is a Redis::Future which based on the name indicates
+      # that the commend hasn't even run yet.
       def delete!
         Familia.trace :DELETE!, nil, uri if Familia.debug?
-        ret = dbclient.del dbkey
-        ret.positive?
+         dbclient.del dbkey
       end
       alias clear delete!
 

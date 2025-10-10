@@ -240,8 +240,7 @@ module Familia
         Familia.trace :DELETE!, nil, uri if Familia.debug?
 
         # Delete the main object key
-        ret = dbclient.del dbkey
-        ret.positive?
+        dbclient.del dbkey
       end
       alias clear delete!
 
