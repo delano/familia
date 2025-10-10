@@ -245,6 +245,57 @@ module Familia
       end
       alias clear delete!
 
+      # Watches the key for changes during a MULTI/EXEC transaction.
+      #
+      # Decision Matrix:
+      #
+      #   | Scenario | Use | Why |
+      #   |----------|-----|-----|
+      #   | Check if exists, then create | WATCH | Must prevent duplicate creation |
+      #   | Read value, update conditionally | WATCH | Decision depends on current state |
+      #   | Compare-and-swap operations | WATCH | Need optimistic locking |
+      #   | Version-based updates | WATCH | Must detect concurrent changes |
+      #   | Batch field updates | MULTI only | No conditional logic |
+      #   | Increment + timestamp together | MULTI only | Concurrent increments OK |
+      #   | Save object atomically | MULTI only | Just need atomicity |
+      #   | Update indexes with save | MULTI only | No state checking needed |
+      #
+      # @param suffix_override [String, nil] Optional suffix override
+      # @return [String] 'OK' on success
+      def watch(...)
+        raise ArgumentError, "Block required" unless block_given?
+
+        result = dbclient.watch(dbkey, ...)
+
+        # If watch failed (returns nil), raise exception
+        raise OptimisticLockError, "Transaction aborted" if result.nil?
+
+        result
+      rescue Redis::BaseError => ex
+        raise OptimisticLockError, "Redis error: #{ex.message}"
+      end
+
+      # Flushes all the previously watched keys for a transaction.
+      #
+      # If a transaction completes successfully or discard is called, there's
+      # no need to manually call unwatch.
+      #
+      # NOTE: This command operates on the connection itself; not a specific key
+      #
+      # @return [String] 'OK' always, regardless of whether the key was watched or not
+      def unwatch(...) = dbclient.unwatch(...)
+
+      # Flushes all previously queued commands in a transaction and all watched keys
+      #
+      # NOTE: This command operates on the connection itself; not a specific key
+      #
+      # @return [String] 'OK' always
+      def discard(...) = dbclient.discard(...)
+
+      # Echoes a message through the Redis connection.
+      #
+      # @param args [Array] Arguments to join and echo
+      # @return [String] The echoed message
       def echo(*args)
         dbclient.echo "[#{self.class}] #{args.join(' ')}"
       end
