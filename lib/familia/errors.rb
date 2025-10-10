@@ -10,11 +10,17 @@ module Familia
   # Base exception class for Horreum models
   class HorreumError < Problem; end
 
+  # Raised when an object creation fails (e.g. the identifier is already in use)
+  class CreationError < HorreumError; end
+
   # Raised when an object lacks a required identifier
   class NoIdentifier < HorreumError; end
 
   # Raised when a key is expected to be unique but isn't
   class NonUniqueKey < PersistenceError; end
+
+  # Raised when watch failed (e.g. key was modified), typically retry
+  class OptimisticLockError < PersistenceError; end
 
   # Raised when a field type is invalid or unexpected
   class FieldTypeError < HorreumError; end
