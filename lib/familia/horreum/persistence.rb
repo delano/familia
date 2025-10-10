@@ -133,34 +133,43 @@ module Familia
       # Check if record exists
       # If exists, raise Familia::RecordExistsError
       # If not exists, save
-      def save_if_not_exists(update_expiration: true)
+      def save_if_not_exists!(update_expiration: true)
         identifier_field = self.class.identifier_field
 
         Familia.ld "[save_if_not_exists]: #{self.class} #{identifier_field}=#{identifier}"
         Familia.trace :SAVE_IF_NOT_EXISTS, nil, uri if Familia.debug?
 
-        success = dbclient.watch(dbkey) do
-          if dbclient.exists(dbkey).positive?
-            dbclient.unwatch
-            raise Familia::RecordExistsError, dbkey
+        attempts = 0
+        begin
+          attempts += 1
+
+          watch do
+            raise Familia::RecordExistsError, dbkey if exists?
+
+            txn_result = transaction do |_multi|
+              hmset(to_h_for_storage)
+
+              self.update_expiration if update_expiration
+
+              # Auto-index for class-level indexes after successful save
+              auto_update_class_indexes
+            end
+            pp txn_result
+            txn_result.successful?
           end
 
-          result = dbclient.multi do |multi|
-            multi.hmset(dbkey, to_h_for_storage)
-          end
-
-          result.is_a?(Array) # transaction succeeded
+        rescue OptimisticLockError => ex
+          Familia.ld "[save_if_not_exists]: OptimisticLockError (#{attempts}): #{ex.message}"
+          raise if attempts >= 3
+          sleep(0.001 * (2 ** attempts))
+          retry
         end
+      end
 
-        # Auto-index for class-level indexes after successful save
-        # Use transaction to ensure atomicity with the save operation
-        if success
-          transaction do |_conn|
-            auto_update_class_indexes
-          end
-        end
-
-        success
+      def save_if_not_exists(...)
+        save_if_not_exists!(...)
+      rescue PersistenceError
+        false
       end
 
       # Commits object fields to the DB storage.
