@@ -16,6 +16,10 @@ module Familia
     # just load the object again.
     #
     module DatabaseCommands
+      # Moves the object's key to a different logical database.
+      #
+      # @param logical_database [Integer] The target database number
+      # @return [Boolean] true if the key was moved successfully
       def move(logical_database)
         dbclient.move dbkey, logical_database
       end
@@ -55,6 +59,8 @@ module Familia
       # automatically be deleted. Returns 1 if the timeout was set, 0 if key
       # does not exist or the timeout could not be set.
       #
+      # @param default_expiration [Integer] TTL in seconds (uses class default if nil)
+      # @return [Integer] 1 if timeout was set, 0 otherwise
       def expire(default_expiration = nil)
         default_expiration ||= self.class.default_expiration
         Familia.trace :EXPIRE, nil, default_expiration if Familia.debug?
@@ -83,24 +89,38 @@ module Familia
       end
       alias remove remove_field # deprecated
 
+      # Returns the Redis data type of the key.
+      #
+      # @return [String] The data type (e.g., 'hash', 'string', 'list')
       def data_type
         Familia.trace :DATATYPE, nil, uri if Familia.debug?
         dbclient.type dbkey(suffix)
       end
 
-      # For parity with DataType#hgetall
+      # Returns all fields and values in the hash.
+      #
+      # @return [Hash] All field-value pairs in the hash
+      # @note For parity with DataType#hgetall
       def hgetall
         Familia.trace :HGETALL, nil, uri if Familia.debug?
         dbclient.hgetall dbkey(suffix)
       end
       alias all hgetall
 
+      # Gets the value of a hash field.
+      #
+      # @param field [String] The field name
+      # @return [String, nil] The value of the field, or nil if field doesn't exist
       def hget(field)
         Familia.trace :HGET, nil, field if Familia.debug?
         dbclient.hget dbkey(suffix), field
       end
 
-      # @return The number of fields that were added to the hash. If the
+      # Sets the value of a hash field.
+      #
+      # @param field [String] The field name
+      # @param value [String] The value to set
+      # @return [Integer] The number of fields that were added to the hash. If the
       #  field already exists, this will return 0.
       def hset(field, value)
         Familia.trace :HSET, nil, field if Familia.debug?
@@ -120,51 +140,92 @@ module Familia
         dbclient.hsetnx dbkey, field, value
       end
 
+      # Sets multiple hash fields to multiple values.
+      #
+      # @param hsh [Hash] Hash of field-value pairs to set
+      # @return [String] 'OK' on success
       def hmset(hsh = {})
         hsh ||= to_h_for_storage
         Familia.trace :HMSET, nil, hsh if Familia.debug?
         dbclient.hmset dbkey(suffix), hsh
       end
 
+      # Returns all field names in the hash.
+      #
+      # @return [Array<String>] Array of field names
       def hkeys
         Familia.trace :HKEYS, nil, 'uri' if Familia.debug?
         dbclient.hkeys dbkey(suffix)
       end
 
+      # Returns all values in the hash.
+      #
+      # @return [Array<String>] Array of values
       def hvals
         dbclient.hvals dbkey(suffix)
       end
 
+      # Increments the integer value of a hash field by 1.
+      #
+      # @param field [String] The field name
+      # @return [Integer] The value after incrementing
       def incr(field)
         dbclient.hincrby dbkey(suffix), field, 1
       end
       alias increment incr
 
+      # Increments the integer value of a hash field by the given amount.
+      #
+      # @param field [String] The field name
+      # @param increment [Integer] The increment value
+      # @return [Integer] The value after incrementing
       def incrby(field, increment)
         dbclient.hincrby dbkey(suffix), field, increment
       end
       alias incrementby incrby
 
+      # Increments the float value of a hash field by the given amount.
+      #
+      # @param field [String] The field name
+      # @param increment [Float] The increment value
+      # @return [Float] The value after incrementing
       def incrbyfloat(field, increment)
         dbclient.hincrbyfloat dbkey(suffix), field, increment
       end
       alias incrementbyfloat incrbyfloat
 
+      # Decrements the integer value of a hash field by the given amount.
+      #
+      # @param field [String] The field name
+      # @param decrement [Integer] The decrement value
+      # @return [Integer] The value after decrementing
       def decrby(field, decrement)
         dbclient.decrby dbkey(suffix), field, decrement
       end
       alias decrementby decrby
 
+      # Decrements the integer value of a hash field by 1.
+      #
+      # @param field [String] The field name
+      # @return [Integer] The value after decrementing
       def decr(field)
         dbclient.hdecr field
       end
       alias decrement decr
 
+      # Returns the string length of the value associated with field in the hash.
+      #
+      # @param field [String] The field name
+      # @return [Integer] The string length of the field value, or 0 if field doesn't exist
       def hstrlen(field)
         dbclient.hstrlen dbkey(suffix), field
       end
       alias hstrlength hstrlen
 
+      # Determines if a hash field exists.
+      #
+      # @param field [String] The field name
+      # @return [Boolean] true if the field exists, false otherwise
       def key?(field)
         dbclient.hexists dbkey(suffix), field
       end
