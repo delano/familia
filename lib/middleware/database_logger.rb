@@ -142,6 +142,50 @@ module DatabaseLogger
 
     result
   end
+
+  # Handle pipelined commands (including MULTI/EXEC transactions)
+  #
+  # Captures MULTI/EXEC and shows you the full transaction. The WATCH
+  # and EXISTS appear separately because they're executed as individual
+  # commands before the transaction starts.
+  def call_pipelined(commands, _config)
+    block_start = DatabaseLogger.now_in_μs
+    results = yield
+    block_duration = DatabaseLogger.now_in_μs - block_start
+    lifetime_duration = (Time.now.to_f - DatabaseLogger.process_start).round(6)
+
+    # Log the entire pipeline as a single operation
+    cmd_string = commands.map { |cmd| cmd.join(' ') }.join(' | ')
+    msgpack = CommandMessage.new(cmd_string, block_duration, lifetime_duration)
+    DatabaseLogger.append_command(msgpack)
+
+    message = format('[%s] %s', DatabaseLogger.index, msgpack.inspect)
+    DatabaseLogger.logger&.trace(message)
+
+    results
+  end
+
+  # call_once is used for commands that need dedicated connection handling:
+  #
+  #   * Blocking commands (BLPOP, BRPOP, BRPOPLPUSH)
+  #   * Pub/sub operations (SUBSCRIBE, PSUBSCRIBE)
+  #   * Commands requiring connection affinity
+  #   * Explicit non-pooled command execution
+  #
+  def call_once(command, _config)
+     block_start = DatabaseLogger.now_in_μs
+     result = yield
+     block_duration = DatabaseLogger.now_in_μs - block_start
+     lifetime_duration = (Time.now.to_f - DatabaseLogger.process_start).round(6)
+
+     msgpack = CommandMessage.new(command.join(' '), block_duration, lifetime_duration)
+     DatabaseLogger.append_command(msgpack)
+
+     message = format('[%s] %s', DatabaseLogger.index, msgpack.inspect)
+     DatabaseLogger.logger&.trace(message)
+
+     result
+   end
 end
 
 # DatabaseCommandCounter is Valkey/RedisClient middleware.
@@ -232,6 +276,19 @@ module DatabaseCommandCounter
   # @param _config [Hash] The configuration options for the Database connection.
   # @return [Object] The result of the Database command execution.
   def call(command, _config)
+    klass.increment unless klass.skip_command?(command)
+    yield
+  end
+
+  def call_pipelined(commands, _config)
+    # Count all commands in the pipeline (except skipped ones)
+    commands.each do |command|
+      klass.increment unless klass.skip_command?(command)
+    end
+    yield
+  end
+
+  def call_once(command, _config)
     klass.increment unless klass.skip_command?(command)
     yield
   end
