@@ -262,16 +262,13 @@ module Familia
       # @param suffix_override [String, nil] Optional suffix override
       # @return [String] 'OK' on success
       def watch(...)
-        raise ArgumentError, "Block required" unless block_given?
+        raise ArgumentError, 'Block required' unless block_given?
 
-        result = dbclient.watch(dbkey, ...)
+        # Forward all arguments including the block to the watch command
+        dbclient.watch(dbkey, ...)
 
-        # If watch failed (returns nil), raise exception
-        raise OptimisticLockError, "Transaction aborted" if result.nil?
-
-        result
-      rescue Redis::BaseError => ex
-        raise OptimisticLockError, "Redis error: #{ex.message}"
+      rescue Redis::BaseError => e
+        raise OptimisticLockError, "Redis error: #{e.message}"
       end
 
       # Flushes all the previously watched keys for a transaction.

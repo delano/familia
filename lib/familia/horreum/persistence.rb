@@ -154,21 +154,23 @@ module Familia
               # Auto-index for class-level indexes after successful save
               auto_update_class_indexes
             end
-            pp txn_result
+
+            Familia.ld "[save_if_not_exists]: txn_result=#{txn_result.inspect}"
+
             txn_result.successful?
           end
-
-        rescue OptimisticLockError => ex
-          Familia.ld "[save_if_not_exists]: OptimisticLockError (#{attempts}): #{ex.message}"
+        rescue OptimisticLockError => e
+          Familia.ld "[save_if_not_exists]: OptimisticLockError (#{attempts}): #{e.message}"
           raise if attempts >= 3
-          sleep(0.001 * (2 ** attempts))
+
+          sleep(0.001 * (2**attempts))
           retry
         end
       end
 
       def save_if_not_exists(...)
         save_if_not_exists!(...)
-      rescue PersistenceError
+      rescue RecordExistsError, OptimisticLockError
         false
       end
 

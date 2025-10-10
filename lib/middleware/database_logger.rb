@@ -34,7 +34,7 @@ module DatabaseLogger
   @process_start = Time.now.to_f.freeze
 
   CommandMessage = Data.define(:command, :μs, :timeline) do
-    alias to_a deconstruct
+    alias_method :to_a, :deconstruct
     def inspect
       cmd, duration, timeline = to_a
       format('%.6f %4dμs > %s', timeline, duration, cmd)
@@ -173,19 +173,19 @@ module DatabaseLogger
   #   * Explicit non-pooled command execution
   #
   def call_once(command, _config)
-     block_start = DatabaseLogger.now_in_μs
-     result = yield
-     block_duration = DatabaseLogger.now_in_μs - block_start
-     lifetime_duration = (Time.now.to_f - DatabaseLogger.process_start).round(6)
+    block_start = DatabaseLogger.now_in_μs
+    result = yield
+    block_duration = DatabaseLogger.now_in_μs - block_start
+    lifetime_duration = (Time.now.to_f - DatabaseLogger.process_start).round(6)
 
-     msgpack = CommandMessage.new(command.join(' '), block_duration, lifetime_duration)
-     DatabaseLogger.append_command(msgpack)
+    msgpack = CommandMessage.new(command.join(' '), block_duration, lifetime_duration)
+    DatabaseLogger.append_command(msgpack)
 
-     message = format('[%s] %s', DatabaseLogger.index, msgpack.inspect)
-     DatabaseLogger.logger&.trace(message)
+    message = format('[%s] %s', DatabaseLogger.index, msgpack.inspect)
+    DatabaseLogger.logger&.trace(message)
 
-     result
-   end
+    result
+  end
 end
 
 # DatabaseCommandCounter is Valkey/RedisClient middleware.
