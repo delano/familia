@@ -1,7 +1,7 @@
 #!/usr/bin/env ruby
 # examples/datatype_standalone.rb
 
-# Demonstration: Familia::StringKey for Session Storage
+# Demonstration: Familia::StringKey for Session Storage with Atomic Transactions
 #
 # This example shows how to use Familia's DataType classes independently
 # without inheriting from Familia::Horreum. It implements a Rack-compatible
@@ -9,17 +9,10 @@
 #
 # Key Familia Features Demonstrated:
 # - Standalone DataType usage (no parent model required)
+# - Atomic transactions for multi-operation consistency
 # - TTL management for automatic expiration
 # - JSON serialization for complex data structures
 # - Direct Redis access through DataType objects
-#
-# Usage:
-#   ruby examples/datatype_standalone.rb
-#   # Or in your Rack app:
-#   use SecureSessionStore, secret: 'your-secret-key', expire_after: 3600
-#
-# @see https://raw.githubusercontent.com/rack/rack-session/dadcfe60f193e8/lib/rack/session/abstract/id.rb
-# @see https://raw.githubusercontent.com/rack/rack-session/dadcfe60f193e8/lib/rack/session/encryptor.rb
 
 require 'rack/session/abstract/id'
 require 'securerandom'
@@ -35,6 +28,16 @@ rescue LoadError
   require 'familia'
 end
 
+# SecureSessionStore - a rack-session compatible session store using Familia::StringKey
+#
+# Usage:
+#   ruby examples/datatype_standalone.rb
+#   # Or in your Rack app:
+#   use SecureSessionStore, secret: 'your-secret-key', expire_after: 3600
+#
+# @see https://raw.githubusercontent.com/rack/rack-session/dadcfe60f193e8/lib/rack/session/abstract/id.rb
+# @see https://raw.githubusercontent.com/rack/rack-session/dadcfe60f193e8/lib/rack/session/encryptor.rb
+#
 class SecureSessionStore < Rack::Session::Abstract::PersistedSecure
   unless defined?(DEFAULT_OPTIONS)
     DEFAULT_OPTIONS = {
@@ -85,9 +88,8 @@ class SecureSessionStore < Rack::Session::Abstract::PersistedSecure
     # Extract string ID from SessionId object if needed
     sid_string = sid.respond_to?(:public_id) ? sid.public_id : sid
 
-    if stringkey = get_stringkey(sid_string)
-      stringkey.del
-    end
+    get_stringkey(sid_string)&.del
+
     generate_sid
   end
 
@@ -142,7 +144,7 @@ class SecureSessionStore < Rack::Session::Abstract::PersistedSecure
       session_data = Familia::JsonSerializer.parse(Base64.decode64(data))
 
       [sid, session_data]
-    rescue StandardError => e
+    rescue Familia::PersistenceError => e
       # Log error in development/debugging
       Familia.ld "[Session] Error reading session #{sid_string}: #{e.message}"
 
@@ -163,16 +165,23 @@ class SecureSessionStore < Rack::Session::Abstract::PersistedSecure
     # Get or create StringKey for this session
     stringkey = get_stringkey(sid_string)
 
-    # Use transaction to atomically save data and set expiration
-    # This demonstrates the DataType transaction feature added in this PR
-    stringkey.transaction do |conn|
-      conn.set(stringkey.dbkey, signed_data)
-      conn.expire(stringkey.dbkey, @expire_after) if @expire_after && @expire_after > 0
+    # ATOMIC TRANSACTION: Ensures both operations succeed or both fail
+    #
+    # Before DataType transaction support (PR #160), these operations were not atomic:
+    #   stringkey.set(signed_data)
+    #   stringkey.update_expiration(expiration: @expire_after)
+    #
+    # With transaction support, we guarantee atomicity - critical for session storage
+    # where partial writes could lead to sessions without TTL (memory leaks) or
+    # expired sessions with stale data (security issues).
+    stringkey.transaction do
+      stringkey.set(signed_data)
+      stringkey.update_expiration(expiration: @expire_after) if @expire_after&.positive?
     end
 
     # Return the original sid (may be SessionId object)
     sid
-  rescue StandardError => e
+  rescue Familia::PersistenceError => e
     # Log error in development/debugging
     Familia.ld "[Session] Error writing session #{sid_string}: #{e.message}"
 
@@ -247,7 +256,7 @@ if __FILE__ == $0
   # Ensure Redis is available
   begin
     Familia.dbclient.ping
-  rescue StandardError => e
+  rescue Familia::PersistenceError => e
     puts "❌ Redis connection failed: #{e.message}"
     puts '   Please ensure Redis is running on localhost:6379'
     exit 1

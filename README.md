@@ -280,10 +280,37 @@ Flower.multiget("prose", "tulip", "daisy")
 
 ### Transactional Operations
 
+**Horreum Model Transactions:**
 ```ruby
 user.transaction do |conn|
   conn.set("user:#{user.id}:status", "active")
   conn.zadd("active_users", Familia.now.to_i, user.id)
+end
+```
+
+**DataType Transactions** (standalone or parent-owned):
+```ruby
+# Parent-owned DataType transaction
+user.scores.transaction do
+  add('level1', 100)
+  add('level2', 200)
+end
+
+# Standalone DataType transaction (e.g., session storage)
+session_key = Familia::StringKey.new('session:abc123')
+session_key.transaction do
+  set(session_data)
+  update_expiration(expiration: 3600)  # Atomic: both succeed or both fail
+end
+```
+
+**Pipeline Operations** (batch commands for performance):
+```ruby
+# Execute multiple commands in a single round-trip
+leaderboard.pipelined do
+  add('player1', 500)
+  add('player2', 600)
+  size
 end
 ```
 

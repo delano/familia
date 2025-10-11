@@ -36,30 +36,30 @@ Added
    * Enhanced ``direct_access`` method with automatic transaction/pipeline context detection
    * Shared ``Familia::Connection::Behavior`` module extracting common connection functionality
 
-   This enhancement addresses a critical gap where standalone DataType objects (like those used in Rack::Session implementations) could not guarantee atomicity across multiple operations. Both parent-owned DataTypes (delegating to parent Horreum objects) and standalone DataTypes now support the full transaction and pipeline API.
+   This enhancement addresses a critical gap where standalone DataType objects could not guarantee atomicity across multiple operations. A prime example is session storage implementations (similar to Rack::Session stores) where setting session data and expiration must be atomic to prevent memory leaks or security issues. Both parent-owned DataTypes (delegating to parent Horreum objects) and standalone DataTypes now support the full transaction and pipeline API.
 
    Example usage:
 
    .. code-block:: ruby
 
       # Parent-owned DataType transaction
-      user.scores.transaction do |conn|
-        conn.zadd(user.scores.dbkey, 100, 'level1')
-        conn.zadd(user.scores.dbkey, 200, 'level2')
+      user.scores.transaction do
+        add('level1', 100)
+        add('level2', 200)
       end
 
-      # Standalone DataType transaction
+      # Standalone DataType transaction (e.g., session storage)
       session_store = Familia::StringKey.new('session:abc123')
-      session_store.transaction do |conn|
-        conn.set(session_store.dbkey, data)
-        conn.expire(session_store.dbkey, 3600)
+      session_store.transaction do
+        set(session_data)
+        update_expiration(expiration: 3600)
       end
 
       # Pipeline for performance optimization
-      leaderboard.pipelined do |pipe|
-        pipe.zadd(leaderboard.dbkey, 500, 'player1')
-        pipe.zadd(leaderboard.dbkey, 600, 'player2')
-        pipe.zcard(leaderboard.dbkey)
+      leaderboard.pipelined do
+        add('player1', 500)
+        add('player2', 600)
+        size
       end
 
 Changed
