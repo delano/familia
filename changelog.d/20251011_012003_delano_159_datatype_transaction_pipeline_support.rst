@@ -67,6 +67,8 @@ Changed
 
 -  **DataType URI Construction** - DataType objects with ``logical_database`` settings now return clean URIs without custom port information (e.g., ``redis://127.0.0.1/3`` instead of ``redis://127.0.0.1:2525/3``), ensuring consistent URI representation across the library.
 
+-  **Horreum::Connection Refactored** - The ``Horreum::Connection`` module now includes ``Familia::Connection::Behavior``, eliminating code duplication by sharing URI normalization and connection creation methods between Horreum and DataType. This refactoring improves maintainability while preserving all existing functionality.
+
 AI Assistance
 -------------
 

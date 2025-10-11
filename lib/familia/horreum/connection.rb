@@ -6,40 +6,16 @@ module Familia
     # Provides connection handling, transactions, and URI normalization for both
     # class-level operations (e.g., Customer.dbclient) and instance-level operations
     # (e.g., customer.dbclient)
+    #
+    # Includes shared connection behavior from Familia::Connection::Behavior, providing:
+    # - URI normalization (normalize_uri)
+    # - Connection creation (create_dbclient)
+    # - Transaction method signatures
+    # - Pipeline method signatures
     module Connection
+      include Familia::Connection::Behavior
+
       attr_reader :uri
-
-      # Normalizes various URI formats to a consistent URI object
-      # Considers the class/instance logical_database when uri is nil or Integer
-      def normalize_uri(uri)
-        case uri
-        when Integer
-          new_uri = Familia.uri.dup
-          new_uri.db = uri
-          new_uri
-        when ->(obj) { obj.is_a?(String) || obj.instance_of?(::String) }
-          URI.parse(uri)
-        when URI
-          uri
-        when nil
-          # Use logical_database if available, otherwise fall back to Familia.uri
-          if respond_to?(:logical_database) && logical_database
-            new_uri = Familia.uri.dup
-            new_uri.db = logical_database
-            new_uri
-          else
-            Familia.uri
-          end
-        else
-          raise ArgumentError, "Invalid URI type: #{uri.class.name}"
-        end
-      end
-
-      # Creates a new Database connection instance using the class/instance configuration
-      def create_dbclient(uri = nil)
-        parsed_uri = normalize_uri(uri)
-        Familia.create_dbclient(parsed_uri)
-      end
 
       # Returns the Database connection for the class using Chain of Responsibility pattern.
       #
