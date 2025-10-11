@@ -185,7 +185,7 @@ DEPENDENCIES
   rbnacl (~> 7.1, >= 7.1.1)
   redcarpet
   reek
-  rubocop
+  rubocop (~> 1.81.1)
   rubocop-performance
   rubocop-thread_safety
   ruby-lsp
