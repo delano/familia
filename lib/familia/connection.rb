@@ -1,5 +1,6 @@
 # lib/familia/connection.rb
 
+require_relative 'connection/behavior'
 require_relative 'connection/handlers'
 require_relative 'connection/middleware'
 require_relative 'connection/operations'
