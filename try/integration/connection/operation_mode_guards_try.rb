@@ -36,7 +36,7 @@ end
 ## FiberConnectionHandler blocks pipelines
 begin
   # Ensure we're in strict mode for this test
-  Familia.configure { |config| config.pipeline_mode = :strict }
+  Familia.configure { |config| config.pipelined_mode = :strict }
 
   # Simulate middleware connection
   Fiber[:familia_connection] = [Customer.create_dbclient, Familia.middleware_version]

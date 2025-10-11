@@ -51,7 +51,6 @@ module Familia
     include Familia::Base
     include Familia::Horreum::Persistence
     include Familia::Horreum::Serialization
-    include Familia::Horreum::Connection
     include Familia::Horreum::DatabaseCommands
     include Familia::Horreum::Settings
     include Familia::Horreum::Utils

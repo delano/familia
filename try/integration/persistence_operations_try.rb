@@ -13,6 +13,27 @@ class PersistenceTestModel < Familia::Horreum
   field :value
 end
 
+# Create model with expiration feature for save_fields testing
+class ExpirationPersistenceTest < Familia::Horreum
+  feature :expiration
+  identifier_field :id
+  field :id
+  field :name
+  field :email
+  field :status
+  field :metadata
+
+  default_expiration 3600  # 1 hour
+end
+
+# Simple model without expiration feature
+class SimpleModel < Familia::Horreum
+  identifier_field :id
+  field :id
+  field :name
+  field :value
+end
+
 # Clean up any existing test data
 cleanup_keys = []
 begin
@@ -111,9 +132,9 @@ result = @sine_new.save_if_not_exists
 [result, @sine_new.exists?]
 #=> [true, true]
 
-## save_if_not_exists raises error for existing object
+## save_if_not_exists! raises error for existing object
 @sine_duplicate = PersistenceTestModel.new(id: @sine_new.identifier, name: 'Duplicate')
-@sine_duplicate.save_if_not_exists
+@sine_duplicate.save_if_not_exists!
 #=!> Familia::RecordExistsError
 
 ## save_if_not_exists with update_expiration: false
@@ -128,14 +149,10 @@ original_name = 'Original Name'
 @sine_fail_test.save_if_not_exists
 # Now create duplicate and verify state doesn't change on failure
 @sine_fail_duplicate = PersistenceTestModel.new(id: @sine_fail_test.identifier, name: 'Changed Name')
-begin
-  @sine_fail_duplicate.save_if_not_exists
-  false # Should not reach here
-rescue Familia::RecordExistsError
-  # State should be unchanged
-  @sine_fail_duplicate.name == 'Changed Name'
-end
-#=> true
+result = @sine_fail_duplicate.save_if_not_exists
+# save_if_not_exists returns false on failure, state should be unchanged
+[result == false, @sine_fail_duplicate.name == 'Changed Name']
+#=> [true, true]
 
 # =============================================
 # 4. create Method Coverage (MISSING from current tests)
@@ -291,7 +308,142 @@ actual_key = @key_obj.dbkey
 # Cleanup
 # =============================================
 
+# =============================================
+# 8. save_fields Method Coverage
+# =============================================
+
+## save_fields basic functionality with specified fields
+@save_fields_obj = ExpirationPersistenceTest.new(id: next_test_id, name: 'Original Name', email: 'test@example.com', status: 'active')
+@save_fields_obj.save
+# Modify fields locally
+@save_fields_obj.name = 'Updated Name'
+@save_fields_obj.status = 'inactive'
+@save_fields_obj.metadata = { updated: true }
+# Save only specific fields
+result = @save_fields_obj.save_fields(:name, :metadata)
+[result.class == ExpirationPersistenceTest, @save_fields_obj.exists?]
+#=> [true, true]
+
+## Verify only specified fields were saved
+@save_fields_obj.refresh!
+[@save_fields_obj.name, @save_fields_obj.status, @save_fields_obj.metadata]
+#=> ['Updated Name', 'active', { 'updated' => true }]
+
+## save_fields with update_expiration: true (default)
+@exp_obj = ExpirationPersistenceTest.new(id: next_test_id, name: 'Expiration Test')
+@exp_obj.save
+original_ttl = @exp_obj.ttl
+# Wait a moment to ensure TTL decreases
+sleep 0.1
+@exp_obj.name = 'Updated with TTL'
+@exp_obj.save_fields(:name)  # Should update expiration by default
+new_ttl = @exp_obj.ttl
+# TTL should be refreshed (closer to default_expiration)
+# Allow for small timing variations
+new_ttl >= (ExpirationPersistenceTest.default_expiration - 10)
+#=> true
+
+## save_fields with update_expiration: false
+@no_exp_obj = ExpirationPersistenceTest.new(id: next_test_id, name: 'No Exp Update')
+@no_exp_obj.save
+# Wait briefly and get TTL
+sleep 0.1
+original_ttl = @no_exp_obj.ttl
+@no_exp_obj.name = 'Updated without TTL'
+@no_exp_obj.save_fields(:name, update_expiration: false)
+new_ttl = @no_exp_obj.ttl
+# TTL should be approximately the same (slightly less due to time passing)
+(new_ttl - original_ttl).abs < 2
+#=> true
+
+## save_fields with multiple fields
+@multi_fields_obj = ExpirationPersistenceTest.new(id: next_test_id, name: 'Multi', email: 'multi@test.com')
+@multi_fields_obj.save
+@multi_fields_obj.name = 'Multi Updated'
+@multi_fields_obj.email = 'updated@test.com'
+@multi_fields_obj.status = 'new_status'
+result = @multi_fields_obj.save_fields(:name, :email, :status)
+@multi_fields_obj.refresh!
+[@multi_fields_obj.name, @multi_fields_obj.email, @multi_fields_obj.status]
+#=> ['Multi Updated', 'updated@test.com', 'new_status']
+
+## save_fields with string field names
+@string_fields_obj = ExpirationPersistenceTest.new(id: next_test_id, name: 'String Fields')
+@string_fields_obj.save
+@string_fields_obj.name = 'Updated via String'
+result = @string_fields_obj.save_fields('name')  # String instead of symbol
+@string_fields_obj.refresh!
+@string_fields_obj.name
+#=> 'Updated via String'
+
+## save_fields error handling - empty fields
+@empty_fields_obj = ExpirationPersistenceTest.new(id: next_test_id, name: 'Empty Test')
+@empty_fields_obj.save
+@empty_fields_obj.save_fields()
+#=!> ArgumentError
+
+## save_fields error handling - unknown field
+@unknown_field_obj = ExpirationPersistenceTest.new(id: next_test_id, name: 'Unknown Field')
+@unknown_field_obj.save
+@unknown_field_obj.save_fields(:nonexistent_field)
+#=!> ArgumentError
+
+## save_fields with nil values
+@nil_values_obj = ExpirationPersistenceTest.new(id: next_test_id, name: 'Nil Values', status: 'initial')
+@nil_values_obj.save
+@nil_values_obj.status = nil
+@nil_values_obj.save_fields(:status)
+@nil_values_obj.refresh!
+@nil_values_obj.status
+#=> nil
+
+## save_fields with complex data types (Hash, Array)
+@complex_obj = ExpirationPersistenceTest.new(id: next_test_id, name: 'Complex')
+@complex_obj.save
+@complex_obj.metadata = {
+  tags: ['ruby', 'redis'],
+  config: { timeout: 30, retries: 3 },
+  enabled: true
+}
+@complex_obj.save_fields(:metadata)
+@complex_obj.refresh!
+expected_metadata = {
+  'tags' => ['ruby', 'redis'],
+  'config' => { 'timeout' => 30, 'retries' => 3 },
+  'enabled' => true
+}
+@complex_obj.metadata == expected_metadata
+#=> true
+
+## save_fields transactional behavior
+@transaction_obj = ExpirationPersistenceTest.new(id: next_test_id, name: 'Transaction Test')
+@transaction_obj.save
+@transaction_obj.name = 'Updated in Transaction'
+@transaction_obj.email = 'transaction@test.com'
+# All fields should be saved atomically
+@transaction_obj.save_fields(:name, :email)
+@transaction_obj.refresh!
+[@transaction_obj.name, @transaction_obj.email]
+#=> ['Updated in Transaction', 'transaction@test.com']
+
+## save_fields performance with model without expiration feature
+
+@simple_obj = SimpleModel.new(id: next_test_id, name: 'Simple', value: 'test')
+@simple_obj.save
+@simple_obj.name = 'Simple Updated'
+# Should work without expiration feature (update_expiration param ignored)
+result = @simple_obj.save_fields(:name, update_expiration: true)
+@simple_obj.refresh!
+@simple_obj.name
+#=> 'Simple Updated'
+
+# =============================================
+# Cleanup
+# =============================================
+
 # Clean up test data
 test_keys = Familia.dbclient.keys('persistencetestmodel:*')
 test_keys.concat(Familia.dbclient.keys('encryptedpersistencetest:*')) if defined?(EncryptedPersistenceTest)
+test_keys.concat(Familia.dbclient.keys('expirationpersistencetest:*'))
+test_keys.concat(Familia.dbclient.keys('simplemodel:*'))
 Familia.dbclient.del(*test_keys) if test_keys.any?

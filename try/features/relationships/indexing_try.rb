@@ -62,7 +62,7 @@ end
 @user3.save
 
 @company_id = "comp_#{rand(10000000)}"
-@company = TestCompany.create(company_id: @company_id, name: 'Acme Corp')
+@company = TestCompany.create!(company_id: @company_id, name: 'Acme Corp')
 @emp1 = TestEmployee.new(emp_id: 'emp_001', email: 'alice@acme.com', department: 'engineering', manager_id: 'mgr_001', badge_number: 'BADGE001')
 @emp1.save
 @emp2 = TestEmployee.new(emp_id: 'emp_002', email: 'bob@acme.com', department: 'sales', manager_id: 'mgr_002', badge_number: 'BADGE002')

@@ -45,7 +45,7 @@ module Familia
         when :transaction
           Familia.transaction_mode
         when :pipeline
-          Familia.pipeline_mode
+          Familia.pipelined_mode
         else
           :strict
         end

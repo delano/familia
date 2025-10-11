@@ -1,13 +1,13 @@
 #
 # Tests pipeline fallback modes when connection handlers don't support pipelines.
-# Validates that pipeline_mode configuration works correctly with cached connections
+# Validates that pipelined_mode configuration works correctly with cached connections
 # and that the fallback behavior matches transaction fallback patterns.
 #
 
 require_relative '../../support/helpers/test_helpers'
 
 # Store original values
-$original_pipeline_mode = Familia.pipeline_mode
+$original_pipelined_mode = Familia.pipelined_mode
 $original_transaction_mode = Familia.transaction_mode
 
 # Test model for pipeline fallback scenarios
@@ -17,7 +17,7 @@ class PipelineFallbackTest < Familia::Horreum
 end
 
 ## Test 1: Strict mode raises error with cached connection
-Familia.configure { |c| c.pipeline_mode = :strict }
+Familia.configure { |c| c.pipelined_mode = :strict }
 
 # Cache connection at class level (uses DefaultConnectionHandler which doesn't support pipelines)
 PipelineFallbackTest.instance_variable_set(:@dbclient, Familia.create_dbclient)
@@ -28,7 +28,7 @@ customer.pipelined { |c| c.set('key', 'value') }
 #=~> /Cannot start pipeline with.*CachedConnectionHandler/
 
 ## Test 2: Warn mode falls back successfully with cached connection
-Familia.configure { |c| c.pipeline_mode = :warn }
+Familia.configure { |c| c.pipelined_mode = :warn }
 
 # Cache connection at class level
 PipelineFallbackTest.instance_variable_set(:@dbclient, Familia.create_dbclient)
@@ -51,7 +51,7 @@ $warn_result.results[2]
 #=> 'value1'
 
 ## Test 3: Fresh connections still support real pipelines in strict mode
-Familia.configure { |c| c.pipeline_mode = :strict }
+Familia.configure { |c| c.pipelined_mode = :strict }
 
 # Clear cached class-level connection to force CreateConnectionHandler
 PipelineFallbackTest.remove_instance_variable(:@dbclient) if PipelineFallbackTest.instance_variable_defined?(:@dbclient)
@@ -70,7 +70,7 @@ $fresh_result.results.size
 #=> 3
 
 ## Test 4: MultiResult format is correct for fallback
-Familia.configure { |c| c.pipeline_mode = :permissive }
+Familia.configure { |c| c.pipelined_mode = :permissive }
 
 # Cache connection at class level
 PipelineFallbackTest.instance_variable_set(:@dbclient, Familia.create_dbclient)
@@ -92,7 +92,7 @@ $multi_result.results.class
 #=> Array
 
 ## Test 5: Permissive mode silently falls back
-Familia.configure { |c| c.pipeline_mode = :permissive }
+Familia.configure { |c| c.pipelined_mode = :permissive }
 
 # Cache connection at class level
 PipelineFallbackTest.instance_variable_set(:@dbclient, Familia.create_dbclient)
@@ -111,18 +111,18 @@ $permissive_result.results
 #=> ['OK', 1, '1']
 
 ## Test 6: Pipeline mode configuration validation
-Familia.configure { |c| c.pipeline_mode = :invalid }
+Familia.configure { |c| c.pipelined_mode = :invalid }
 #=:> ArgumentError
 #=~> /Pipeline mode must be :strict, :warn, or :permissive/
 
-## Test 7: Default pipeline_mode is :warn
-Familia.instance_variable_set(:@pipeline_mode, nil)
-Familia.pipeline_mode
+## Test 7: Default pipelined_mode is :warn
+Familia.instance_variable_set(:@pipelined_mode, nil)
+Familia.pipelined_mode
 #=> :warn
 
 ## Cleanup: Restore original values
 Familia.configure do |c|
-  c.pipeline_mode = $original_pipeline_mode
+  c.pipelined_mode = $original_pipelined_mode
   c.transaction_mode = $original_transaction_mode
 end
 PipelineFallbackTest.remove_instance_variable(:@dbclient) if PipelineFallbackTest.instance_variable_defined?(:@dbclient)

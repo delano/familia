@@ -130,15 +130,15 @@ process_identifier(@customer)
 
 ## Cleanup after test, 1
 @metadata.delete!
-#=> true
+#=> 1
 
 ## Cleanup after test, 2
 @customer.delete!
-#=> true
+#=> 1
 
 ## Cleanup after test, 3
 @session.delete!
-#=> true
+#=> 1
 
 ## to_s handles identifier errors gracefully
 badboi = BadIdentifierTest.new
@@ -154,4 +154,4 @@ badboi.to_s # .include?('BadIdentifierTest')
 
 ## Delete customer2
 [@customer2.exists?, @customer2.delete!]
-#=> [false, false]
+#=> [false, 0]

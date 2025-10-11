@@ -125,9 +125,9 @@ AutoIndexUser.email_index.has_key?('')
 AutoIndexUser.email_index.has_key?('')
 #=> true
 
-## Auto-indexing works with create method
+## Auto-indexing works with create! method
 @user2_id = "user_#{rand(1000000)}"
-@user2 = AutoIndexUser.create(user_id: @user2_id, email: 'create@example.com', username: 'createuser', department: 'marketing')
+@user2 = AutoIndexUser.create!(user_id: @user2_id, email: 'create@example.com', username: 'createuser', department: 'marketing')
 AutoIndexUser.find_by_email('create@example.com')&.user_id
 #=> @user2_id
 

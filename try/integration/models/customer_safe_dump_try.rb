@@ -39,7 +39,11 @@ require_relative '../../support/helpers/test_helpers'
 
 ## Safe dump includes correct updated timestamp
 @safe_dump[:updated]
-#=> @now
+#=:> Float
+
+## Safe dump includes correct updated timestamp
+@safe_dump[:updated].to_i
+#=> @now.to_i
 
 ## Safe dump includes correct secrets_created count
 @customer.secrets_created.increment

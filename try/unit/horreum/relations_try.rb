@@ -92,15 +92,15 @@ prefs = @test_user.preferences
 @test_user.preferences.size
 #=> 2
 
-## Clearing a counter returns false when not set yet
+## Clearing a counter returns 0 when not set yet
 @test_product.views.clear
 @test_product.views.clear
-#=> false
+#=> 0
 
-## Clearing a counter returns true when it is set
+## Clearing a counter returns 1 when it is set
 @test_product.views.increment
 @test_product.views.clear
-#=> true
+#=> 1
 
 ## Counter Database type works
 @test_product.views.increment

@@ -71,7 +71,7 @@ Customer.all_customers.size
 
 ## Familia class clear
 Customer.all_customers.delete!
-#=> true
+#=> 1
 
 ## Familia class replace 1 of 4
 Customer.message.value = 'msg1'

@@ -61,30 +61,34 @@ module Familia
       # @see #commit_fields The underlying method that performs the field persistence
       #
       def save(update_expiration: true)
-        Familia.trace :SAVE, nil, uri if Familia.debug?
+        Familia.trace :SAVE, nil, self.class.uri if Familia.debug?
 
-        # No longer need to sync computed identifier with a cache field
-        self.created ||= Familia.now.to_i if respond_to?(:created)
-        self.updated = Familia.now.to_i if respond_to?(:updated)
+        # Update timestamp fields before saving
+        self.created ||= Familia.now if respond_to?(:created)
+        self.updated = Familia.now if respond_to?(:updated)
 
-        # Commit our tale to the Database chronicles
-        # Wrap in transaction for atomicity between save and indexing
-        ret = commit_fields(update_expiration: update_expiration)
+        # Everything in ONE transaction for complete atomicity
+        result = transaction do |_conn|
+          # 1. Save all fields
+          prepared_h = to_h_for_storage
+          hmset_result = hmset(prepared_h)
 
-        # Auto-index for class-level indexes after successful save
-        # Use transaction to ensure atomicity with the save operation
-        if ret
-          transaction do |conn|
-            auto_update_class_indexes
-            # Add to class-level instances collection after successful save
-            self.class.instances.add(identifier, Familia.now) if self.class.respond_to?(:instances)
-          end
+          # 2. Set expiration in same transaction
+          self.update_expiration if update_expiration
+
+          # 3. Update class-level indexes
+          auto_update_class_indexes
+
+          # 4. Add to instances collection if available
+          self.class.instances.add(identifier, Familia.now) if self.class.respond_to?(:instances)
+
+          hmset_result
         end
 
-        Familia.ld "[save] #{self.class} #{dbkey} #{ret} (update_expiration: #{update_expiration})"
+        Familia.ld "[save] #{self.class} #{dbkey} #{result} (update_expiration: #{update_expiration})"
 
-        # Did Database accept our offering?
-        !ret.nil?
+        # Return boolean indicating success
+        !result.nil?
       end
 
       # Saves the object to Valkey storage only if it doesn't already exist.
@@ -129,34 +133,45 @@ module Familia
       # Check if record exists
       # If exists, raise Familia::RecordExistsError
       # If not exists, save
-      def save_if_not_exists(update_expiration: true)
+      def save_if_not_exists!(update_expiration: true)
         identifier_field = self.class.identifier_field
 
         Familia.ld "[save_if_not_exists]: #{self.class} #{identifier_field}=#{identifier}"
-        Familia.trace :SAVE_IF_NOT_EXISTS, nil, uri if Familia.debug?
+        Familia.trace :SAVE_IF_NOT_EXISTS, nil, self.class.uri if Familia.debug?
 
-        success = dbclient.watch(dbkey) do
-          if dbclient.exists(dbkey).positive?
-            dbclient.unwatch
-            raise Familia::RecordExistsError, dbkey
+        attempts = 0
+        begin
+          attempts += 1
+
+          watch do
+            raise Familia::RecordExistsError, dbkey if exists?
+
+            txn_result = transaction do |_multi|
+              hmset(to_h_for_storage)
+
+              self.update_expiration if update_expiration
+
+              # Auto-index for class-level indexes after successful save
+              auto_update_class_indexes
+            end
+
+            Familia.ld "[save_if_not_exists]: txn_result=#{txn_result.inspect}"
+
+            txn_result.successful?
           end
+        rescue OptimisticLockError => e
+          Familia.ld "[save_if_not_exists]: OptimisticLockError (#{attempts}): #{e.message}"
+          raise if attempts >= 3
 
-          result = dbclient.multi do |multi|
-            multi.hmset(dbkey, to_h_for_storage)
-          end
-
-          result.is_a?(Array) # transaction succeeded
+          sleep(0.001 * (2**attempts))
+          retry
         end
+      end
 
-        # Auto-index for class-level indexes after successful save
-        # Use transaction to ensure atomicity with the save operation
-        if success
-          transaction do |conn|
-            auto_update_class_indexes
-          end
-        end
-
-        success
+      def save_if_not_exists(...)
+        save_if_not_exists!(...)
+      rescue RecordExistsError, OptimisticLockError
+        false
       end
 
       # Commits object fields to the DB storage.
@@ -188,14 +203,15 @@ module Familia
         prepared_value = to_h_for_storage
         Familia.ld "[commit_fields] Begin #{self.class} #{dbkey} #{prepared_value} (exp: #{update_expiration})"
 
-        result = hmset(prepared_value)
+        transaction do |_conn|
+          # Set all fields atomically
+          result = hmset(prepared_value)
 
-        # Only classes that have the expiration ferature enabled will
-        # actually set an expiration time on their keys. Otherwise
-        # this will be a no-op that simply logs the attempt.
-        update_expiration(default_expiration: nil) if update_expiration
+          # Update expiration in same transaction to ensure atomicity
+          self.update_expiration if result && update_expiration
 
-        result
+          result
+        end
       end
 
       # Updates multiple fields atomically in a Database transaction.
@@ -216,20 +232,57 @@ module Familia
 
         Familia.trace :BATCH_UPDATE, nil, fields.keys if Familia.debug?
 
-        transaction_result = transaction do |conn|
+        transaction do |_conn|
+          # 1. Update all fields atomically
           fields.each do |field, value|
             prepared_value = serialize_value(value)
-            conn.hset dbkey, field, prepared_value
+            hset field, prepared_value
             # Update instance variable to keep object in sync
             send("#{field}=", value) if respond_to?("#{field}=")
           end
+
+          # 2. Update expiration in same transaction
+          self.update_expiration if update_expiration
+        end
+      end
+
+      # Persists only the specified fields to Redis.
+      #
+      # Saves the current in-memory values of specified fields to Redis without
+      # modifying them first. Fields must already be set on the instance.
+      #
+      # @param field_names [Array<Symbol, String>] Names of fields to persist
+      # @param update_expiration [Boolean] Whether to refresh key expiration
+      # @return [self] Returns self for method chaining
+      #
+      # @example Persist only passphrase fields after updating them
+      #   customer.update_passphrase('secret').save_fields(:passphrase, :passphrase_encryption)
+      #
+      def save_fields(*field_names, update_expiration: true)
+        raise ArgumentError, 'No fields specified' if field_names.empty?
+
+        Familia.trace :SAVE_FIELDS, nil, field_names if Familia.debug?
+
+        transaction do |_conn|
+          # Build hash of field names to serialized values
+          fields_hash = {}
+          field_names.each do |field|
+            field_sym = field.to_sym
+            raise ArgumentError, "Unknown field: #{field}" unless respond_to?(field_sym)
+
+            value = send(field_sym)
+            prepared_value = serialize_value(value)
+            fields_hash[field] = prepared_value
+          end
+
+          # Set all fields at once using hmset
+          hmset(fields_hash)
+
+          # Update expiration in same transaction
+          self.update_expiration if update_expiration
         end
 
-        # Update expiration if requested and supported
-        self.update_expiration(default_expiration: nil) if update_expiration && respond_to?(:update_expiration)
-
-        # Return the MultiResult directly (transaction already returns MultiResult)
-        transaction_result
+        self
       end
 
       # Updates the object by applying multiple field values.
@@ -279,22 +332,22 @@ module Familia
       # @see #delete! The underlying method that performs the key deletion
       #
       def destroy!
-        Familia.trace :DESTROY, dbkey, uri
+        Familia.trace :DESTROY!, dbkey, self.class.uri
 
         # Execute all deletion operations within a transaction
-        transaction do |conn|
+        transaction do |_conn|
           # Delete the main object key
-          conn.del(dbkey)
+          delete!
 
           # Delete all related fields if present
           if self.class.relations?
             Familia.trace :DELETE_RELATED_FIELDS!, nil,
                           "#{self.class} has relations: #{self.class.related_fields.keys}"
 
-            self.class.related_fields.each do |name, _definition|
+            self.class.related_fields.each_key do |name|
               obj = send(name)
               Familia.trace :DELETE_RELATED_FIELD, name, "Deleting related field #{name} (#{obj.dbkey})"
-              conn.del(obj.dbkey)
+              obj.delete!
             end
           end
         end
@@ -318,6 +371,7 @@ module Familia
       #   after clear_fields! if you want to persist the cleared state.
       #
       def clear_fields!
+        Familia.trace :CLEAR_FIELDS!, dbkey, self.class.uri
         self.class.field_method_map.each_value { |method_name| send("#{method_name}=", nil) }
       end
 
@@ -343,7 +397,7 @@ module Familia
       #   no authoritative source in Valkey storage.
       #
       def refresh!
-        Familia.trace :REFRESH, nil, uri if Familia.debug?
+        Familia.trace :REFRESH, nil, self.class.uri if Familia.debug?
         raise Familia::KeyNotFoundError, dbkey unless dbclient.exists(dbkey)
 
         fields = hgetall
@@ -377,6 +431,11 @@ module Familia
         refresh!
         self
       end
+
+      # Convenience methods that forward to the class method of the same name
+      def transaction(...) = self.class.transaction(...)
+      def pipelined(...) = self.class.pipelined(...)
+      def dbclient(...) = self.class.dbclient(...)
 
       private
 
@@ -449,7 +508,6 @@ module Familia
           send(add_method) if respond_to?(add_method)
         end
       end
-
     end
   end
 end

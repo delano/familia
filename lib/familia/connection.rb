@@ -6,7 +6,7 @@ require_relative 'connection/operations'
 require_relative 'connection/individual_command_proxy'
 require_relative 'connection/operation_core'
 require_relative 'connection/transaction_core'
-require_relative 'connection/pipeline_core'
+require_relative 'connection/pipelined_core'
 
 # Familia
 #
@@ -42,7 +42,7 @@ module Familia
       @connection_chain = nil # Force rebuild of chain
     end
 
-# Sets the default URI for Database connections.
+    # Sets the default URI for Database connections.
     #
     # NOTE: uri is not a property of the Settings module b/c it's not
     # configured in class defintions like default_expiration or logical DB index.

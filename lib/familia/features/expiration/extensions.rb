@@ -10,25 +10,23 @@ module Familia
     # with the :expiration feature's implementation.
     #
     # This is a no-op implementation that gets overridden by the :expiration
-    # feature. It accepts an optional default_expiration parameter to maintain
-    # interface compatibility with the overriding implementations.
+    # feature when it is enabled. This allows for calling this method on any
+    # horreum model regardless of the feature status. It accepts an optional
+    # expiration parameter to maintain interface compatibility with
+    # the overriding implementations.
     #
-    # @param default_expiration [Numeric, nil] Time To Live in seconds
+    # @param expiration [Numeric, nil] Time To Live in seconds
     # @return [nil] Always returns nil for the base implementation
     #
     # @note This is a no-op implementation. Classes that need expiration
     #       functionality should include the :expiration feature.
     #
-    # @example Enable expiration feature
-    #   class MyModel < Familia::Horreum
-    #     feature :expiration
-    #     default_expiration 1.hour
-    #   end
+    # @example MyModel.new.update_expiration(expiration: 3600) # => nothing happens
     #
-    def update_expiration(default_expiration: nil)
+    def update_expiration(expiration: nil)
       Familia.ld <<~LOG
         [update_expiration] Expiration feature not enabled for #{self.class}.
-        Key: #{dbkey} Arg: #{default_expiration} (caller: #{caller(1..1)})
+        Key: #{dbkey} Arg: #{expiration} (caller: #{caller(1..1)})
       LOG
       nil
     end

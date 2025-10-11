@@ -101,7 +101,7 @@ Familia.debug = false
 
 ## Clean up saved test objects
 [@customer6, @complex].map(&:delete!)
-#=> [true, true]
+#=> [1, 1]
 
 ## "Cleaning up" test objects that were never saved returns true regardless
 ## b/c it takes place in a transaction and it's the transaction's success

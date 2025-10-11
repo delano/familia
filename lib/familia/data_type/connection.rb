@@ -13,7 +13,7 @@ module Familia
     # * Direct database access for advanced operations
     #
     module Connection
-      # TODO: Replace with Chain of Responsibility pattern
+
       def dbclient
         return Fiber[:familia_transaction] if Fiber[:familia_transaction]
         return @dbclient if @dbclient

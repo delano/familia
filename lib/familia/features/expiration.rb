@@ -36,7 +36,7 @@ module Familia
     #   session.ttl  # => 1799
     #
     #   # UnsortedSet custom expiration for new objects
-    #   session.update_expiration(default_expiration: 2.hours)
+    #   session.update_expiration(expiration: 2.hours)
     #
     # Class-Level Configuration:
     #
@@ -89,7 +89,7 @@ module Familia
     #
     # Setting expiration to 0 (zero) disables TTL, making data persist indefinitely:
     #
-    #   session.update_expiration(default_expiration: 0)  # No expiration
+    #   session.update_expiration(expiration: 0)  # No expiration
     #
     # TTL Querying:
     #
@@ -115,7 +115,7 @@ module Familia
     #       when 'free'
     #         update_expiration(1.hour)
     #       else
-    #         update_expiration(default_expiration)
+    #         update_expiration(expiration)
     #       end
     #     end
     #   end
@@ -135,10 +135,10 @@ module Familia
     #
     # The feature validates expiration values and raises descriptive errors:
     #
-    #   session.update_expiration(default_expiration: "invalid")
+    #   session.update_expiration(expiration: "invalid")
     #   # => Familia::Problem: Default expiration must be a number
     #
-    #   session.update_expiration(default_expiration: -1)
+    #   session.update_expiration(expiration: -1)
     #   # => Familia::Problem: Default expiration must be non-negative
     #
     # Performance Considerations:
@@ -226,20 +226,20 @@ module Familia
       # after which it will be automatically removed. The method also handles
       # cascading expiration to related data structures when applicable.
       #
-      # @param default_expiration [Numeric, nil] The Time To Live in seconds. If nil,
+      # @param expiration [Numeric, nil] The Time To Live in seconds. If nil,
       #   the default TTL will be used.
       #
       # @return [Boolean] Returns true if the expiration was set successfully,
       #   false otherwise.
       #
       # @example Setting an expiration of one day
-      #   object.update_expiration(default_expiration: 86400)
+      #   object.update_expiration(expiration: 86400)
       #
       # @example Using default expiration
       #   object.update_expiration  # Uses class default_expiration
       #
       # @example Removing expiration (persist indefinitely)
-      #   object.update_expiration(default_expiration: 0)
+      #   object.update_expiration(expiration: 0)
       #
       # @note If default expiration is set to zero, the expiration will be removed,
       #   making the data persist indefinitely.
@@ -247,8 +247,8 @@ module Familia
       # @raise [Familia::Problem] Raises an error if the default expiration is not
       #   a non-negative number.
       #
-      def update_expiration(default_expiration: nil)
-        default_expiration ||= self.default_expiration
+      def update_expiration(expiration: nil)
+        expiration ||= default_expiration
 
         # Handle cascading expiration to related data structures
         if self.class.relations?
@@ -258,8 +258,8 @@ module Familia
             next if definition.opts[:default_expiration].nil?
 
             obj = send(name)
-            Familia.ld "[update_expiration] Updating expiration for #{name} (#{obj.dbkey}) to #{default_expiration}"
-            obj.update_expiration(default_expiration: default_expiration)
+            Familia.ld "[update_expiration] Updating expiration for #{name} (#{obj.dbkey}) to #{expiration}"
+            obj.update_expiration(expiration: expiration)
           end
         end
 
@@ -267,29 +267,29 @@ module Familia
         # It's important to raise exceptions here and not just log warnings. We
         # don't want to silently fail at setting expirations and cause data
         # retention issues (e.g. not removed in a timely fashion).
-        unless default_expiration.is_a?(Numeric)
+        unless expiration.is_a?(Numeric)
           raise Familia::Problem,
-                "Default expiration must be a number (#{default_expiration.class} given for #{self.class})"
+                "Default expiration must be a number (#{expiration.class} given for #{self.class})"
         end
 
-        unless default_expiration >= 0
+        unless expiration >= 0
           raise Familia::Problem,
-                "Default expiration must be non-negative (#{default_expiration} given for #{self.class})"
+                "Default expiration must be non-negative (#{expiration} given for #{self.class})"
         end
 
         # If zero, simply skip setting an expiry for this key. If we were to set
         # 0, Valkey/Redis would drop the key immediately.
-        if default_expiration.zero?
+        if expiration.zero?
           Familia.ld "[update_expiration] No expiration for #{self.class} (#{dbkey})"
           return true
         end
 
-        Familia.ld "[update_expiration] Expires #{dbkey} in #{default_expiration} seconds"
+        Familia.ld "[update_expiration] Expires #{dbkey} in #{expiration} seconds"
 
         # The Valkey/Redis' EXPIRE command returns 1 if the timeout was set, 0
         # if key does not exist or the timeout could not be set. Via redis-rb,
         # it's a boolean.
-        expire(default_expiration)
+        expire(expiration)
       end
 
       # Get the remaining time to live for this object's data

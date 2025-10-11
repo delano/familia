@@ -11,14 +11,6 @@ module Familia
     # Provides identifier handling, dbkey generation, and object inspection
     #
     module Utils
-      # def uri
-      #   base_uri = self.class.uri || Familia.uri
-      #   u = base_uri.dup # make a copy to modify safely
-      #   u.logical_database = logical_database if logical_database
-      #   u.key = dbkey
-      #   u
-      # end
-
       # +suffix+ is the value to be used at the end of the db key
       # (e.g. `customer:customer_id:scores` would have `scores` as the suffix
       # and `customer_id` would have been the identifier in that case).

@@ -142,12 +142,9 @@ module Familia
         SEVERITY_LETTERS.fetch(severity, severity[0])
       end
 
-      utc_datetime = datetime.utc.strftime('%m-%d %H:%M:%S.%3N')
-      pid = Process.pid
-      thread_id = Thread.current.object_id
-      fiber_id = Fiber.current.object_id
+      utc_datetime = datetime.utc.strftime('%H:%M:%S.%3N')
 
-      "#{severity_letter}, #{utc_datetime} pid:#{pid} [#{thread_id}/#{fiber_id}]: #{msg}\n"
+      "#{severity_letter}, #{utc_datetime} #{msg}\n"
     end
   end
 
