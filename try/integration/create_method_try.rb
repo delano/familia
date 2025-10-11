@@ -158,10 +158,10 @@ rescue => e
   e.class
 end
 
-# Test save_if_not_exists raises RecordExistsError
+# Test save_if_not_exists! raises RecordExistsError
 sine_error_class = begin
   duplicate_obj = CreateTestModel.new(id: @consistency_id, name: 'SINE Duplicate')
-  duplicate_obj.save_if_not_exists
+  duplicate_obj.save_if_not_exists!
   nil
 rescue => e
   e.class
@@ -182,7 +182,7 @@ rescue => e
 end
 
 sine_error_msg = begin
-  CreateTestModel.new(id: @error_comparison_id, name: 'SINE Error').save_if_not_exists
+  CreateTestModel.new(id: @error_comparison_id, name: 'SINE Error').save_if_not_exists!
   nil
 rescue => e
   e.message

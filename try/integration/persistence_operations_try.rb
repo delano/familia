@@ -149,14 +149,10 @@ original_name = 'Original Name'
 @sine_fail_test.save_if_not_exists
 # Now create duplicate and verify state doesn't change on failure
 @sine_fail_duplicate = PersistenceTestModel.new(id: @sine_fail_test.identifier, name: 'Changed Name')
-begin
-  @sine_fail_duplicate.save_if_not_exists
-  false # Should not reach here
-rescue Familia::RecordExistsError
-  # State should be unchanged
-  @sine_fail_duplicate.name == 'Changed Name'
-end
-#=> true
+result = @sine_fail_duplicate.save_if_not_exists
+# save_if_not_exists returns false on failure, state should be unchanged
+[result == false, @sine_fail_duplicate.name == 'Changed Name']
+#=> [true, true]
 
 # =============================================
 # 4. create Method Coverage (MISSING from current tests)

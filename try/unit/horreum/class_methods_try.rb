@@ -16,9 +16,9 @@ module AnotherModuleName
   end
 end
 
-## create factory method with existence checking
+## create! factory method with existence checking
 TestUser
-#==> _.respond_to?(:create)
+#==> _.respond_to?(:create!)
 #==> _.respond_to?(:exists?)
 
 ## multiget method is available
