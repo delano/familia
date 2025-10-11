@@ -15,7 +15,6 @@ GEM
   remote: https://rubygems.org/
   specs:
     ast (2.4.3)
-    backport (1.2.0)
     base64 (0.3.0)
     benchmark (0.4.1)
     bigdecimal (3.2.3)
@@ -64,23 +63,11 @@ GEM
       pp (>= 0.6.0)
       rdoc (>= 4.0.0)
       reline (>= 0.4.2)
-    jaro_winkler (1.6.1)
-    json (2.15.0)
-    kramdown (2.5.1)
-      rexml (>= 3.3.9)
-    kramdown-parser-gfm (1.1.0)
-      kramdown (~> 2.0)
+    json (2.15.1)
     language_server-protocol (3.17.0.5)
     lint_roller (1.1.0)
     logger (1.7.0)
-    mini_portile2 (2.8.9)
     minitest (5.25.5)
-    nokogiri (1.18.10)
-      mini_portile2 (~> 2.8.2)
-      racc (~> 1.4)
-    nokogiri (1.18.10-arm64-darwin)
-      racc (~> 1.4)
-    observer (0.1.2)
     oj (3.16.11)
       bigdecimal (>= 3.0)
       ostruct (>= 0.2)
@@ -94,7 +81,7 @@ GEM
     pp (0.6.2)
       prettyprint
     prettyprint (0.2.0)
-    prism (1.5.1)
+    prism (1.5.2)
     psych (5.2.6)
       date
       stringio
@@ -121,8 +108,6 @@ GEM
     regexp_parser (2.11.3)
     reline (0.6.2)
       io-console (~> 0.5)
-    reverse_markdown (3.0.0)
-      nokogiri
     rexml (3.4.1)
     rspec (3.13.1)
       rspec-core (~> 3.13.0)
@@ -159,34 +144,15 @@ GEM
       lint_roller (~> 1.1)
       rubocop (~> 1.72, >= 1.72.1)
       rubocop-ast (>= 1.44.0, < 2.0)
+    ruby-lsp (0.26.1)
+      language_server-protocol (~> 3.17.0)
+      prism (>= 1.2, < 2.0)
+      rbs (>= 3, < 5)
     ruby-prof (1.7.2)
       base64
     ruby-progressbar (1.13.0)
-    solargraph (0.57.0)
-      backport (~> 1.2)
-      benchmark (~> 0.4)
-      bundler (~> 2.0)
-      diff-lcs (~> 1.4)
-      jaro_winkler (~> 1.6, >= 1.6.1)
-      kramdown (~> 2.3)
-      kramdown-parser-gfm (~> 1.1)
-      logger (~> 1.6)
-      observer (~> 0.1)
-      ostruct (~> 0.6)
-      parser (~> 3.0)
-      prism (~> 1.4)
-      rbs (>= 3.6.1, <= 4.0.0.dev.4)
-      reverse_markdown (~> 3.0)
-      rubocop (~> 1.76)
-      thor (~> 1.0)
-      tilt (~> 2.0)
-      yard (~> 0.9, >= 0.9.24)
-      yard-activesupport-concern (~> 0.0)
-      yard-solargraph (~> 0.1)
     stackprof (0.2.27)
     stringio (3.1.7)
-    thor (1.4.0)
-    tilt (2.6.1)
     timecop (0.9.10)
     tryouts (3.6.0)
       concurrent-ruby (~> 1.0)
@@ -205,10 +171,6 @@ GEM
     unicode-emoji (4.1.0)
     uri-valkey (1.4.0)
     yard (0.9.37)
-    yard-activesupport-concern (0.0.1)
-      yard (>= 0.8)
-    yard-solargraph (0.1.0)
-      yard (~> 0.9)
     zeitwerk (2.7.3)
 
 PLATFORMS
@@ -223,11 +185,11 @@ DEPENDENCIES
   rbnacl (~> 7.1, >= 7.1.1)
   redcarpet
   reek
-  rubocop
+  rubocop (~> 1.81.1)
   rubocop-performance
   rubocop-thread_safety
+  ruby-lsp
   ruby-prof
-  solargraph
   stackprof
   timecop
   tryouts (~> 3.6.0)

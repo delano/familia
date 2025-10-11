@@ -17,10 +17,10 @@ group :development, :test do
   gem 'irb', '~> 1.15.2', require: false
   gem 'redcarpet', require: false
   gem 'reek', require: false
-  gem 'rubocop', require: false
+  gem 'rubocop', '~> 1.81.1', require: false
   gem 'rubocop-performance', require: false
   gem 'rubocop-thread_safety', require: false
-  gem 'solargraph', require: false
+  gem 'ruby-lsp', require: false
   gem 'yard', '~> 0.9', require: false
 end
 

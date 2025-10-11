@@ -219,5 +219,100 @@ module Familia
         dbclient
       end
     end
+
+    # Handler for delegating connection resolution to parent object
+    #
+    # Used by DataType objects that are attached to a parent (Horreum instance or class).
+    # Delegates the connection resolution to the parent's dbclient method, which allows
+    # DataType objects to inherit connection settings, logical_database, and transaction
+    # context from their parent.
+    #
+    # This preserves the existing architectural pattern where DataType objects owned by
+    # Horreum models use the parent's connection chain. This is the primary behavior
+    # for DataType objects in typical usage.
+    #
+    # @example Instance-level DataType with parent
+    #   user = User.new(userid: 'user_123')
+    #   user.tags  # DataType that delegates to user.dbclient
+    #
+    # @example Class-level DataType with parent
+    #   User.global_users  # DataType that delegates to User.dbclient
+    #
+    class ParentDelegationHandler < BaseConnectionHandler
+      @allows_transaction = true
+      @allows_pipelined = true
+
+      def initialize(data_type)
+        @data_type = data_type
+      end
+
+      def handle(uri)
+        return nil unless @data_type.parent
+
+        # Delegate to parent's connection chain
+        # Parent can be either a Horreum class or instance
+        parent_connection = @data_type.parent.dbclient(uri)
+
+        if parent_connection
+          Familia.trace :DBCLIENT_PARENT_DELEGATION, @data_type.dbkey,
+                       "Using parent connection from #{@data_type.parent.class}"
+        end
+
+        parent_connection
+      end
+    end
+
+    # Handler for standalone DataType objects without a parent
+    #
+    # Provides connection resolution for DataType objects that are created independently
+    # rather than being attached to a Horreum model. Checks for instance-level @dbclient
+    # first, then falls back to creating a connection based on logical_database option
+    # or global Familia connection.
+    #
+    # This enables standalone DataType usage patterns like Rack::Session implementations
+    # where DataType objects need independent connection management and transaction support.
+    #
+    # @example Standalone DataType with custom connection
+    #   leaderboard = Familia::SortedSet.new('game:leaderboard')
+    #   leaderboard.dbclient = ConnectionPool.new { Redis.new }
+    #
+    # @example Standalone DataType with logical_database option
+    #   cache = Familia::HashKey.new('app:cache', logical_database: 2)
+    #
+    class StandaloneConnectionHandler < BaseConnectionHandler
+      @allows_transaction = true
+      @allows_pipelined = true
+
+      def initialize(data_type)
+        @data_type = data_type
+      end
+
+      def handle(uri)
+        # If a specific URI is provided, always use it to get a connection.
+        if uri
+          connection = Familia.dbclient(uri)
+          Familia.trace :DBCLIENT_STANDALONE_DATATYPE, @data_type.dbkey,
+                       "Created standalone connection for specific URI: #{uri}"
+          return connection
+        end
+
+        # Use instance @dbclient if explicitly set and no URI was passed
+        instance_dbclient = @data_type.instance_variable_get(:@dbclient)
+        if instance_dbclient
+          Familia.trace :DBCLIENT_DATATYPE_INSTANCE, @data_type.dbkey,
+                       'Using DataType instance @dbclient'
+          return instance_dbclient
+        end
+
+        # Fall back to creating connection based on opts or global
+        target_uri = @data_type.opts[:logical_database]
+        connection = Familia.dbclient(target_uri)
+
+        Familia.trace :DBCLIENT_STANDALONE_DATATYPE, @data_type.dbkey,
+                     "Created standalone connection for #{target_uri || 'default'}"
+
+        connection
+      end
+    end
   end
 end

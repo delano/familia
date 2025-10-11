@@ -280,10 +280,49 @@ Flower.multiget("prose", "tulip", "daisy")
 
 ### Transactional Operations
 
+**Horreum Model Transactions:**
 ```ruby
 user.transaction do |conn|
   conn.set("user:#{user.id}:status", "active")
   conn.zadd("active_users", Familia.now.to_i, user.id)
+end
+```
+
+**DataType Transactions** (standalone or parent-owned):
+```ruby
+# Recommended: Use DataType methods for clean, automatic key handling
+user.scores.transaction do
+  user.scores.add('level1', 100)
+  user.scores.add('level2', 200)
+end
+
+# Standalone DataType transaction (e.g., session storage)
+session_key = Familia::StringKey.new('session:abc123')
+session_key.transaction do
+  session_key.set(session_data)
+  session_key.expire(3600)  # Atomic: both succeed or both fail
+end
+
+# Advanced: Connection available for low-level Redis commands
+user.scores.transaction do |conn|
+  conn.zadd(user.scores.dbkey, 100, 'level1')
+  conn.hset(user.profile.dbkey, 'status', 'active')
+end
+```
+
+**Pipeline Operations** (batch commands for performance):
+```ruby
+# Recommended: Use DataType methods
+leaderboard.pipelined do
+  leaderboard.add('player1', 500)
+  leaderboard.add('player2', 600)
+  leaderboard.size
+end
+
+# Advanced: Raw Redis commands for fine-grained control
+leaderboard.pipelined do |conn|
+  conn.zadd(leaderboard.dbkey, 500, 'player1')
+  conn.zadd(leaderboard.dbkey, 600, 'player2')
 end
 ```
 
