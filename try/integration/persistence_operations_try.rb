@@ -132,9 +132,9 @@ result = @sine_new.save_if_not_exists
 [result, @sine_new.exists?]
 #=> [true, true]
 
-## save_if_not_exists raises error for existing object
+## save_if_not_exists! raises error for existing object
 @sine_duplicate = PersistenceTestModel.new(id: @sine_new.identifier, name: 'Duplicate')
-@sine_duplicate.save_if_not_exists
+@sine_duplicate.save_if_not_exists!
 #=!> Familia::RecordExistsError
 
 ## save_if_not_exists with update_expiration: false

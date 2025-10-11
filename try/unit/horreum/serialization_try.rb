@@ -20,10 +20,10 @@ Familia.dbclient.set('debug:starting_save_if_not_exists_tests', Familia.now.to_s
 @new_customer.save_if_not_exists
 #=> true
 
-## save_if_not_exists raises error when customer already exists
+## save_if_not_exists! raises error when customer already exists
 @duplicate_customer = Customer.new "new-customer-#{@test_id}@test.com"
 @duplicate_customer.name = 'Duplicate Customer'
-@duplicate_customer.save_if_not_exists
+@duplicate_customer.save_if_not_exists!
 #=!> Familia::RecordExistsError
 #==> error.message.include?("Key already exists")
 

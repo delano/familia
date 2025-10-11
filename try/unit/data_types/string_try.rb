@@ -22,7 +22,7 @@ require_relative '../../support/helpers/test_helpers'
 
 ## Familia::StringKey#destroy!
 @a.value.delete!
-#=> true
+#=> 1
 
 ## Familia::StringKey.new
 @ret = Familia::StringKey.new 'arbitrary:key'
