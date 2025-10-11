@@ -37,7 +37,7 @@ end
 # =============================================
 
 ## create method successfully creates new object
-@created_obj = CreateTestModel.create(id: @first_test_id, name: 'Created Object', value: 'test_value')
+@created_obj = CreateTestModel.create!(id: @first_test_id, name: 'Created Object', value: 'test_value')
 [@created_obj.class, @created_obj.exists?, @created_obj.name]
 #=> [CreateTestModel, true, 'Created Object']
 
@@ -55,17 +55,17 @@ end
 # =============================================
 
 ## create method raises RecordExistsError for duplicate
-CreateTestModel.create(id: @first_test_id, name: 'Duplicate Attempt')
+CreateTestModel.create!(id: @first_test_id, name: 'Duplicate Attempt')
 #=!> Familia::RecordExistsError
 
 ## RecordExistsError includes the dbkey in the message
-CreateTestModel.create(id: @first_test_id, name: 'Another Duplicate')
+CreateTestModel.create!(id: @first_test_id, name: 'Another Duplicate')
 #=!> Familia::RecordExistsError
 #==> !!error.message.match(/create_test_model:#{@first_test_id}:object/)
 
 ## RecordExistsError message follows consistent format
 begin
-  CreateTestModel.create(id: @first_test_id, name: 'Yet Another Duplicate')
+  CreateTestModel.create!(id: @first_test_id, name: 'Yet Another Duplicate')
   false  # Should not reach here
 rescue Familia::RecordExistsError => e
   e.message.start_with?('Key already exists:')
@@ -74,10 +74,10 @@ end
 
 ## RecordExistsError exposes key property for programmatic access
 @final_test_id = next_test_id
-CreateTestModel.create(id: @final_test_id, name: 'Setup for Key Test')
+CreateTestModel.create!(id: @final_test_id, name: 'Setup for Key Test')
 
 begin
-  CreateTestModel.create(id: @final_test_id, name: 'Key Test Duplicate')
+  CreateTestModel.create!(id: @final_test_id, name: 'Key Test Duplicate')
   false  # Should not reach here
 rescue Familia::RecordExistsError => e
   # Key should be accessible and contain the identifier
@@ -90,22 +90,22 @@ end
 # =============================================
 
 ## create with empty identifier raises NoIdentifier error
-CreateTestModel.create(id: '')
+CreateTestModel.create!(id: '')
 #=!> Familia::NoIdentifier
 
 ## create with nil identifier raises NoIdentifier error
-CreateTestModel.create(id: nil)
+CreateTestModel.create!(id: nil)
 #=!> Familia::NoIdentifier
 
 ## create with only some fields set
 @partial_id = next_test_id
-@partial_obj = CreateTestModel.create(id: @partial_id, name: 'Partial Object')
+@partial_obj = CreateTestModel.create!(id: @partial_id, name: 'Partial Object')
 [@partial_obj.exists?, @partial_obj.name, @partial_obj.value]
 #=> [true, 'Partial Object', nil]
 
 ## create with no additional fields (only identifier)
 @minimal_id = next_test_id
-@minimal_obj = CreateTestModel.create(id: @minimal_id)
+@minimal_obj = CreateTestModel.create!(id: @minimal_id)
 [@minimal_obj.exists?, @minimal_obj.id]
 #=> [true, @minimal_id]
 
@@ -115,14 +115,14 @@ CreateTestModel.create(id: nil)
 
 ## create is atomic - no partial state on failure
 @concurrent_id = next_test_id
-@first_obj = CreateTestModel.create(id: @concurrent_id, name: 'First')
+@first_obj = CreateTestModel.create!(id: @concurrent_id, name: 'First')
 
 # Verify first object exists
 first_exists = @first_obj.exists?
 
 # Attempt to create duplicate should not affect existing object
 begin
-  CreateTestModel.create(id: @concurrent_id, name: 'Concurrent Attempt')
+  CreateTestModel.create!(id: @concurrent_id, name: 'Concurrent Attempt')
   false  # Should not reach here
 rescue Familia::RecordExistsError
   # Original object should be unchanged
@@ -134,7 +134,7 @@ end
 ## create failure doesn't leave partial data
 before_failed_create = Familia.dbclient.keys("create_test_model:#{@concurrent_id}:*").length
 begin
-  CreateTestModel.create(id: @concurrent_id, name: 'Should Fail')
+  CreateTestModel.create!(id: @concurrent_id, name: 'Should Fail')
 rescue Familia::RecordExistsError
   # Should not create any additional keys
   after_failed_create = Familia.dbclient.keys("create_test_model:#{@concurrent_id}:*").length
@@ -148,11 +148,11 @@ end
 
 ## Both create and save_if_not_exists raise same error type for duplicates
 @consistency_id = next_test_id
-@consistency_obj = CreateTestModel.create(id: @consistency_id, name: 'Consistency Test')
+@consistency_obj = CreateTestModel.create!(id: @consistency_id, name: 'Consistency Test')
 
 # Test create raises RecordExistsError
 create_error_class = begin
-  CreateTestModel.create(id: @consistency_id, name: 'Create Duplicate')
+  CreateTestModel.create!(id: @consistency_id, name: 'Create Duplicate')
   nil
 rescue => e
   e.class
@@ -172,10 +172,10 @@ end
 
 ## Both methods have similar error message patterns
 @error_comparison_id = next_test_id
-CreateTestModel.create(id: @error_comparison_id, name: 'Error Comparison')
+CreateTestModel.create!(id: @error_comparison_id, name: 'Error Comparison')
 
 create_error_msg = begin
-  CreateTestModel.create(id: @error_comparison_id, name: 'Create Error')
+  CreateTestModel.create!(id: @error_comparison_id, name: 'Create Error')
   nil
 rescue => e
   e.message
@@ -198,7 +198,7 @@ end
 
 ## create works with complex field values
 @complex_id = next_test_id
-@complex_obj = CreateTestModel.create(
+@complex_obj = CreateTestModel.create!(
   id: @complex_id,
   name: 'Complex Object',
   value: { nested: 'data', array: [1, 2, 3] }
@@ -214,7 +214,7 @@ end
 @consistency_check_id = next_test_id
 
 # Create via class method
-@class_created = CreateTestModel.create(id: @consistency_check_id, name: 'Class Created')
+@class_created = CreateTestModel.create!(id: @consistency_check_id, name: 'Class Created')
 
 # Both class and instance methods should see the object as existing
 class_sees_exists = CreateTestModel.exists?(@consistency_check_id)
