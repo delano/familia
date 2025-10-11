@@ -28,7 +28,7 @@ module Familia
       # value in that case is a Redis::Future which based on the name indicates
       # that the commend hasn't even run yet.
       def delete!
-        Familia.trace :DELETE!, nil, uri if Familia.debug?
+        Familia.trace :DELETE!, nil, self.class.uri if Familia.debug?
          dbclient.del dbkey
       end
       alias clear delete!

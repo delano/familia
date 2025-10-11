@@ -152,7 +152,7 @@ module Familia
     #     puts "Oops! Our hash seems to have vanished into the Database void!"
     #   end
     def refresh!
-      Familia.trace :REFRESH, nil, uri if Familia.debug?
+      Familia.trace :REFRESH, nil, self.class.uri if Familia.debug?
       raise Familia::KeyNotFoundError, dbkey unless dbclient.exists(dbkey)
 
       fields = hgetall

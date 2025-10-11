@@ -61,7 +61,7 @@ module Familia
       # @see #commit_fields The underlying method that performs the field persistence
       #
       def save(update_expiration: true)
-        Familia.trace :SAVE, nil, uri if Familia.debug?
+        Familia.trace :SAVE, nil, self.class.uri if Familia.debug?
 
         # Update timestamp fields before saving
         self.created ||= Familia.now if respond_to?(:created)
@@ -137,7 +137,7 @@ module Familia
         identifier_field = self.class.identifier_field
 
         Familia.ld "[save_if_not_exists]: #{self.class} #{identifier_field}=#{identifier}"
-        Familia.trace :SAVE_IF_NOT_EXISTS, nil, uri if Familia.debug?
+        Familia.trace :SAVE_IF_NOT_EXISTS, nil, self.class.uri if Familia.debug?
 
         attempts = 0
         begin
@@ -397,7 +397,7 @@ module Familia
       #   no authoritative source in Valkey storage.
       #
       def refresh!
-        Familia.trace :REFRESH, nil, uri if Familia.debug?
+        Familia.trace :REFRESH, nil, self.class.uri if Familia.debug?
         raise Familia::KeyNotFoundError, dbkey unless dbclient.exists(dbkey)
 
         fields = hgetall

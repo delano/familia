@@ -75,7 +75,7 @@ module Familia
       # @return [Integer] The TTL of the key in seconds. Returns -1 if the key does not exist
       #   or has no associated expire time.
       def current_expiration
-        Familia.trace :CURRENT_EXPIRATION, nil, uri if Familia.debug?
+        Familia.trace :CURRENT_EXPIRATION, nil, self.class.uri if Familia.debug?
         dbclient.ttl dbkey
       end
 
@@ -93,7 +93,7 @@ module Familia
       #
       # @return [String] The data type (e.g., 'hash', 'string', 'list')
       def data_type
-        Familia.trace :DATATYPE, nil, uri if Familia.debug?
+        Familia.trace :DATATYPE, nil, self.class.uri if Familia.debug?
         dbclient.type dbkey(suffix)
       end
 
@@ -102,7 +102,7 @@ module Familia
       # @return [Hash] All field-value pairs in the hash
       # @note For parity with DataType#hgetall
       def hgetall
-        Familia.trace :HGETALL, nil, uri if Familia.debug?
+        Familia.trace :HGETALL, nil, self.class.uri if Familia.debug?
         dbclient.hgetall dbkey(suffix)
       end
       alias all hgetall
@@ -154,7 +154,7 @@ module Familia
       #
       # @return [Array<String>] Array of field names
       def hkeys
-        Familia.trace :HKEYS, nil, 'uri' if Familia.debug?
+        Familia.trace :HKEYS, nil, self.class.uri if Familia.debug?
         dbclient.hkeys dbkey(suffix)
       end
 
@@ -237,7 +237,7 @@ module Familia
       #
       # @return [Boolean] true if the key was deleted, false otherwise
       def delete!
-        Familia.trace :DELETE!, nil, uri if Familia.debug?
+        Familia.trace :DELETE!, nil, self.class.uri if Familia.debug?
 
         # Delete the main object key
         dbclient.del dbkey
