@@ -42,24 +42,31 @@ Added
 
    .. code-block:: ruby
 
+      # Recommended: Use DataType methods for clean, key-free syntax
       # Parent-owned DataType transaction
       user.scores.transaction do
-        add('level1', 100)
-        add('level2', 200)
+        user.scores.add('level1', 100)
+        user.scores.add('level2', 200)
       end
 
       # Standalone DataType transaction (e.g., session storage)
       session_store = Familia::StringKey.new('session:abc123')
       session_store.transaction do
-        set(session_data)
-        update_expiration(expiration: 3600)
+        session_store.set(session_data)
+        session_store.update_expiration(expiration: 3600)
       end
 
       # Pipeline for performance optimization
       leaderboard.pipelined do
-        add('player1', 500)
-        add('player2', 600)
-        size
+        leaderboard.add('player1', 500)
+        leaderboard.add('player2', 600)
+        leaderboard.size
+      end
+
+      # Advanced: Connection available for low-level Redis commands when needed
+      user.scores.transaction do |conn|
+        conn.zadd(user.scores.dbkey, 100, 'level1')
+        conn.hset(user.profile.dbkey, 'status', 'active')
       end
 
 Changed

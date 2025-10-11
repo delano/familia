@@ -290,27 +290,39 @@ end
 
 **DataType Transactions** (standalone or parent-owned):
 ```ruby
-# Parent-owned DataType transaction
+# Recommended: Use DataType methods for clean, automatic key handling
 user.scores.transaction do
-  add('level1', 100)
-  add('level2', 200)
+  user.scores.add('level1', 100)
+  user.scores.add('level2', 200)
 end
 
 # Standalone DataType transaction (e.g., session storage)
 session_key = Familia::StringKey.new('session:abc123')
 session_key.transaction do
-  set(session_data)
-  update_expiration(expiration: 3600)  # Atomic: both succeed or both fail
+  session_key.set(session_data)
+  session_key.expire(3600)  # Atomic: both succeed or both fail
+end
+
+# Advanced: Connection available for low-level Redis commands
+user.scores.transaction do |conn|
+  conn.zadd(user.scores.dbkey, 100, 'level1')
+  conn.hset(user.profile.dbkey, 'status', 'active')
 end
 ```
 
 **Pipeline Operations** (batch commands for performance):
 ```ruby
-# Execute multiple commands in a single round-trip
+# Recommended: Use DataType methods
 leaderboard.pipelined do
-  add('player1', 500)
-  add('player2', 600)
-  size
+  leaderboard.add('player1', 500)
+  leaderboard.add('player2', 600)
+  leaderboard.size
+end
+
+# Advanced: Raw Redis commands for fine-grained control
+leaderboard.pipelined do |conn|
+  conn.zadd(leaderboard.dbkey, 500, 'player1')
+  conn.zadd(leaderboard.dbkey, 600, 'player2')
 end
 ```
 

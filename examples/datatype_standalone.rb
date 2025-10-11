@@ -174,10 +174,23 @@ class SecureSessionStore < Rack::Session::Abstract::PersistedSecure
     # With transaction support, we guarantee atomicity - critical for session storage
     # where partial writes could lead to sessions without TTL (memory leaks) or
     # expired sessions with stale data (security issues).
+    #
+    # RECOMMENDED PATTERN: Use DataType methods inside transaction blocks
+    # The transaction block automatically handles the atomic MULTI/EXEC wrapping.
+    # DataType methods handle key generation and provide clean, expressive syntax.
     stringkey.transaction do
       stringkey.set(signed_data)
       stringkey.update_expiration(expiration: @expire_after) if @expire_after&.positive?
     end
+
+    # ADVANCED: The block yields the Redis connection for low-level access when needed
+    # This is useful for operations that require direct Redis command access or
+    # when working with multiple DataTypes in a single transaction.
+    #
+    # stringkey.transaction do |conn|
+    #   conn.set(stringkey.dbkey, signed_data)
+    #   conn.expire(stringkey.dbkey, @expire_after) if @expire_after&.positive?
+    # end
 
     # Return the original sid (may be SessionId object)
     sid
