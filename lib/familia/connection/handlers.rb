@@ -288,7 +288,15 @@ module Familia
       end
 
       def handle(uri)
-        # Use instance @dbclient if explicitly set
+        # If a specific URI is provided, always use it to get a connection.
+        if uri
+          connection = Familia.dbclient(uri)
+          Familia.trace :DBCLIENT_STANDALONE_DATATYPE, @data_type.dbkey,
+                       "Created standalone connection for specific URI: #{uri}"
+          return connection
+        end
+
+        # Use instance @dbclient if explicitly set and no URI was passed
         instance_dbclient = @data_type.instance_variable_get(:@dbclient)
         if instance_dbclient
           Familia.trace :DBCLIENT_DATATYPE_INSTANCE, @data_type.dbkey,
@@ -297,7 +305,7 @@ module Familia
         end
 
         # Fall back to creating connection based on opts or global
-        target_uri = uri || @data_type.opts[:logical_database]
+        target_uri = @data_type.opts[:logical_database]
         connection = Familia.dbclient(target_uri)
 
         Familia.trace :DBCLIENT_STANDALONE_DATATYPE, @data_type.dbkey,

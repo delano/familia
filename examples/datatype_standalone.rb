@@ -26,14 +26,13 @@ require 'securerandom'
 
 require 'base64'
 require 'openssl'
-require 'familia'
 
-# Onetime::Session - A secure Rack session store using Familia's StringKey DataType
+# Load local development version of Familia (not the gem)
 begin
-  require 'familia'
-rescue LoadError
-  # For running from examples directory
   require_relative '../lib/familia'
+rescue LoadError
+  # Fall back to installed gem
+  require 'familia'
 end
 
 class SecureSessionStore < Rack::Session::Abstract::PersistedSecure
@@ -74,7 +73,7 @@ class SecureSessionStore < Rack::Session::Abstract::PersistedSecure
 
   # Create a StringKey instance for a session ID
   def get_stringkey(sid)
-    return nil unless sid
+    return nil if sid.to_s.empty?
 
     key = Familia.join(@namespace, sid)
     Familia::StringKey.new(key,
@@ -164,11 +163,12 @@ class SecureSessionStore < Rack::Session::Abstract::PersistedSecure
     # Get or create StringKey for this session
     stringkey = get_stringkey(sid_string)
 
-    # Save the session data
-    stringkey.set(signed_data)
-
-    # Update expiration if configured
-    stringkey.update_expiration(expiration: @expire_after) if @expire_after && @expire_after > 0
+    # Use transaction to atomically save data and set expiration
+    # This demonstrates the DataType transaction feature added in this PR
+    stringkey.transaction do |conn|
+      conn.set(stringkey.dbkey, signed_data)
+      conn.expire(stringkey.dbkey, @expire_after) if @expire_after && @expire_after > 0
+    end
 
     # Return the original sid (may be SessionId object)
     sid
