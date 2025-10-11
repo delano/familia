@@ -1,16 +1,68 @@
 CHANGELOG.rst
 =============
 
-All notable changes to Familia are documented here.
-
-The format is based on `Keep a
-Changelog <https://keepachangelog.com/en/1.1.0/>`__, and this project
-adheres to `Semantic
-Versioning <https://semver.org/spec/v2.0.0.html>`__.
+The format is based on `Keep a Changelog <https://keepachangelog.com/en/1.1.0/>`__, and this project adheres to `Semantic Versioning <https://semver.org/spec/v2.0.0.html>`__.
 
 .. raw:: html
 
    <!--scriv-insert-here-->
+
+.. _changelog-2.0.0.pre19:
+
+2.0.0.pre19 — 2025-10-11
+=========================
+
+Added
+-----
+
+-  **DataType Transaction and Pipeline Support** - DataType objects can now initiate transactions and pipelines independently, enabling atomic operations and batch command execution for both parent-owned and standalone DataType objects. `PR #160 <https://github.com/familia/familia/pull/160>`__. Key capabilities added:
+
+   * ``transaction`` and ``pipelined`` methods for atomic MULTI/EXEC operations and batched command execution on all DataType classes
+   * Connection chain pattern with Chain of Responsibility for DataType objects
+   * Two new connection handlers: ``ParentDelegationHandler`` for owned DataTypes and ``StandaloneConnectionHandler`` for independent DataTypes
+   * Enhanced ``direct_access`` method with automatic transaction/pipeline context detection
+   * Shared ``Familia::Connection::Behavior`` module extracting common connection functionality
+
+-  New error hierarchy with ``PersistenceError``, ``HorreumError``, ``CreationError``, and ``OptimisticLockError`` classes for better error categorization and handling
+-  ``watch``, ``unwatch``, and ``discard`` Redis commands for optimistic locking support
+-  Enhanced database command logging with structured format for pipelined and transaction operations
+-  ``save_fields`` method in Persistence module for selective field updates
+
+Changed
+-------
+
+-  **Connection Architecture Refactored** - The ``Horreum::Connection`` module now includes ``Familia::Connection::Behavior``, eliminating code duplication by sharing URI normalization and connection creation methods between Horreum and DataType. DataType objects with ``logical_database`` settings now return clean URIs without custom port information (e.g., ``redis://127.0.0.1/3`` instead of ``redis://127.0.0.1:2525/3``), ensuring consistent URI representation across the library.
+
+-  **BREAKING**: Renamed ``Management.create`` to ``create!`` to follow Rails conventions and indicate potential exceptions
+-  **BREAKING**: Updated ``save_if_not_exists`` to ``save_if_not_exists!`` with optimistic locking and automatic retry logic (up to 3 attempts)
+-  Improved ``save`` method to use single atomic transaction encompassing field updates, expiration setting, index updates, and instance collection management
+-  Enhanced ``delete!`` methods to work correctly within Redis transactions
+-  Updated timestamp fields (``created``, ``updated``) to use float values instead of integers for higher precision
+-  Refined log message formatting for better readability and debugging
+-  Removed deprecated Connection instance methods for Horreum models in favor of class-level database operations
+-  Clarified "pipelined" terminology throughout codebase (renamed from "pipeline" for consistency with Redis documentation)
+
+Fixed
+-----
+
+-  Resolved atomicity issues and race conditions in save operations by consolidating all related operations into single Redis transaction with proper watch/multi/exec pattern and optimistic locking
+-  Corrected transaction handling to ensure proper cleanup and error propagation
+
+Documentation
+-------------
+
+-  Added comprehensive parameter documentation for database command methods including return value specifications and usage examples
+
+AI Assistance
+-------------
+
+This feature was implemented with AI assistance from Claude Sonnet 4.5, Opus 4.1 (Anthropic).
+
+* Architectural design of the connection chain pattern and shared Behavior module
+* Implementation of DataType-specific connection handlers  (ParentDelegationHandler, StandaloneConnectionHandler) and comprehensive test coverage
+* Error hierarchy design and transaction atomicity optimization
+* Documentation enhancement and URI formatting debugging
+
 
 .. _changelog-2.0.0.pre18:
 
