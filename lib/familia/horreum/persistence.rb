@@ -35,16 +35,22 @@ module Familia
     # Handles conversion between Ruby objects and Valkey hash storage
     #
     module Persistence
-      # Persists the object to Valkey storage with automatic timestamping.
+      # Persists the object to Valkey storage with automatic timestamping and validation.
       #
       # Saves the current object state to Valkey storage, automatically setting
       # created and updated timestamps if the object supports them. The method
-      # commits all persistent fields and optionally updates the key's expiration.
+      # validates unique indexes before the transaction, commits all persistent
+      # fields, and optionally updates the key's expiration.
       #
       # @param update_expiration [Boolean] Whether to update the key's expiration
       #   time after saving. Defaults to true.
       #
       # @return [Boolean] true if the save operation was successful, false otherwise.
+      #
+      # @raise [Familia::OperationModeError] If called within an existing transaction.
+      #   Guards need to read current values, which is not possible inside MULTI/EXEC.
+      # @raise [Familia::RecordExistsError] If a unique index constraint is violated
+      #   for any class-level unique_index relationships.
       #
       # @example Save an object to Valkey
       #   user = User.new(name: "John", email: "john@example.com")
@@ -55,12 +61,28 @@ module Familia
       #   user.save(update_expiration: false)
       #   # => true
       #
+      # @example Handle duplicate unique index
+      #   user2 = User.new(name: "Jane", email: "john@example.com")
+      #   user2.save
+      #   # => raises Familia::RecordExistsError
+      #
+      # @note Cannot be called within a transaction. Call save first to start
+      #   the transaction, or use commit_fields/hmset for manual field updates
+      #   within transactions.
+      #
       # @note When Familia.debug? is enabled, this method will trace the save
       #   operation for debugging purposes.
       #
       # @see #commit_fields The underlying method that performs the field persistence
+      # @see #guard_unique_indexes! Automatic validation of class-level unique indexes
       #
       def save(update_expiration: true)
+        # Prevent save within transaction or pipeline - guards need to read current values
+        if Fiber[:familia_transaction]
+          raise Familia::OperationModeError,
+            "Cannot call save within a transaction. Call save first to start the transaction."
+        end
+
         Familia.trace :SAVE, nil, self.class.uri if Familia.debug?
 
         # Update timestamp fields before saving

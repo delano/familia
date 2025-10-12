@@ -157,10 +157,10 @@ module Familia
           # Generates mutation methods ON THE INDEXED CLASS (Employee)
           #
           # Instance methods for parent-scoped unique index operations:
-          # - employee.add_to_company_badge_index(company)
+          # - employee.add_to_company_badge_index(company) - automatically validates uniqueness
           # - employee.remove_from_company_badge_index(company)
           # - employee.update_in_company_badge_index(company, old_badge)
-          # - employee.guard_unique_company_badge_index!(company)
+          # - employee.guard_unique_company_badge_index!(company) - manual validation
           #
           # @param indexed_class [Class] The class being indexed (e.g., Employee)
           # @param field [Symbol] The field to index (e.g., :badge_number)
@@ -178,10 +178,14 @@ module Familia
                 field_value = send(field)
                 return unless field_value
 
+                # Automatically validate uniqueness before adding to index
+                guard_method = :"guard_unique_#{target_class_config}_#{index_name}!"
+                send(guard_method, target_instance) if respond_to?(guard_method)
+
                 # Use declared field accessor on target instance
                 index_hash = target_instance.send(index_name)
 
-                # Just set the value - uniqueness validation happens separately
+                # Set the value (guard already validated uniqueness)
                 index_hash[field_value.to_s] = identifier
               end
 
