@@ -14,10 +14,16 @@ module Familia
       # Similar to ParticipationRelationship but for attribute-based lookups
       # rather than collection membership.
       #
+      # The `within` field preserves the original DSL parameter to explicitly
+      # distinguish class-level indexes (within: nil) from instance-scoped
+      # indexes (within: SomeClass). This avoids brittle class comparisons
+      # and prevents issues with inheritance scenarios.
+      #
       IndexingRelationship = Data.define(
         :field,              # Symbol - field being indexed (e.g., :email, :department)
         :index_name,         # Symbol - name of the index (e.g., :email_index, :dept_index)
         :target_class,       # Class/Symbol - parent class for instance-scoped indexes (within:)
+        :within,             # Class/Symbol/nil - within: parameter (nil for class-level, Class for instance-scoped)
         :cardinality,        # Symbol - :unique (1:1) or :multi (1:many)
         :query               # Boolean - whether to generate query  methods
       ) do

@@ -512,8 +512,8 @@ module Familia
           # Only validate unique indexes (not multi_index)
           next unless rel.cardinality == :unique
 
-          # Only validate class-level indexes
-          next unless rel.target_class == self.class
+          # Only validate class-level indexes (skip instance-scoped)
+          next if rel.within
 
           # Call the validation method if it exists
           validate_method = :"guard_unique_#{rel.index_name}!"
@@ -525,8 +525,8 @@ module Familia
       #
       # Iterates through class-level indexing relationships and calls their
       # corresponding add_to_class_* methods to populate indexes. Only processes
-      # class-level indexes (where target_class == self.class), skipping
-      # instance-scoped indexes which require parent context.
+      # class-level indexes (where within is nil), skipping instance-scoped
+      # indexes which require parent context.
       #
       # Uses idempotent Redis commands (HSET for unique_index) so repeated calls
       # are safe and have negligible performance overhead. Note that multi_index
@@ -556,7 +556,7 @@ module Familia
           # Skip instance-scoped indexes (require parent context)
           # Instance-scoped indexes must be manually populated because they need
           # the parent object reference (e.g., employee.add_to_company_badge_index(company))
-          unless rel.target_class == self.class
+          if rel.within
             Familia.ld <<~LOG_MESSAGE
               [auto_update_class_indexes] Skipping #{rel.index_name} (requires parent context)
             LOG_MESSAGE

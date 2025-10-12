@@ -154,11 +154,10 @@ module Familia
             self.class.indexing_relationships.each do |config|
               field = config.field
               index_name = config.index_name
-              target_class = config.target_class
               old_field_value = old_values[field]
 
               # Determine which update method to call
-              if target_class == self.class
+              if config.within.nil?
                 # Class-level index (unique_index without within:)
                 send("update_in_class_#{index_name}", old_field_value)
               else
@@ -180,10 +179,9 @@ module Familia
 
             self.class.indexing_relationships.each do |config|
               index_name = config.index_name
-              target_class = config.target_class
 
               # Determine which remove method to call
-              if target_class == self.class
+              if config.within.nil?
                 # Class-level index (unique_index without within:)
                 send("remove_from_class_#{index_name}")
               else
@@ -210,13 +208,12 @@ module Familia
             self.class.indexing_relationships.each do |config|
               field = config.field
               index_name = config.index_name
-              target_class = config.target_class
               cardinality = config.cardinality
               field_value = send(field)
 
               next unless field_value
 
-              if target_class == self.class
+              if config.within.nil?
                 # Class-level index (unique_index without within:) - check hash key using DataType
                 index_hash = self.class.send(index_name)
                 next unless index_hash.key?(field_value.to_s)
@@ -262,9 +259,7 @@ module Familia
             field_value = send(field)
             return false unless field_value
 
-            target_class = config.target_class
-
-            if target_class == self.class
+            if config.within.nil?
               # Class-level index (class_indexed_by) - check hash key using DataType
               index_hash = self.class.send(index_name)
               index_hash.key?(field_value.to_s)

@@ -43,6 +43,7 @@ module Familia
             indexed_class.indexing_relationships << IndexingRelationship.new(
               field:             field,
               target_class:      target_class,
+              within:            within,
               index_name:        index_name,
               query:            query,
               cardinality:       :multi,
