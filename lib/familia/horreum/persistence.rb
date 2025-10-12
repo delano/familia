@@ -496,9 +496,9 @@ module Familia
       #   Instance-scoped indexes (with within:) are validated automatically when
       #   calling add_to_*_index methods:
       #
-      # @example Instance-scoped indexes validate automatically
-      #   employee.add_to_company_badge_index(company)
-      #   # Automatically validates uniqueness and raises RecordExistsError on duplicate
+      # @example Instance-scoped indexes need to be called explicitly but when
+      # called they will perform the validation automatically:
+      #   employee.add_to_company_badge_index(company) # raises on duplicate
       #
       # @return [void]
       #
