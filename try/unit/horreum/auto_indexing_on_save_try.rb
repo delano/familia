@@ -43,6 +43,19 @@ class ::AutoIndexEmployee < Familia::Horreum
   multi_index :department, :dept_index, within: AutoIndexCompany
 end
 
+class ::AutoIndexWithTransient < Familia::Horreum
+  feature :transient_fields
+  feature :relationships
+
+  identifier_field :id
+  field :id
+  field :email
+  transient_field :temp_value
+
+  unique_index :email, :email_index
+end
+
+
 # Setup
 @user_id = "user_#{rand(1000000)}"
 @user = AutoIndexUser.new(user_id: @user_id, email: 'test@example.com', username: 'testuser', department: 'engineering')
@@ -152,28 +165,31 @@ old_email = @user2.email
 # =============================================
 
 ## Auto-indexing works with transient fields
-class ::AutoIndexWithTransient < Familia::Horreum
-  feature :transient_fields
-  feature :relationships
-
-  identifier_field :id
-  field :id
-  field :email
-  transient_field :temp_value
-
-  unique_index :email, :email_index
-end
-
 @transient_id = "trans_#{rand(1000000)}"
-@transient_obj = AutoIndexWithTransient.new(id: @transient_id, email: 'transient@example.com', temp_value: 'ignored')
+@transient_obj = AutoIndexWithTransient.new(id: @transient_id, email: "transient_#{rand(1000000)}@example.com", temp_value: 'ignored')
 @transient_obj.save
-AutoIndexWithTransient.find_by_email('transient@example.com')&.id
+@transient_email = @transient_obj.email
+AutoIndexWithTransient.find_by_email(@transient_email)&.id
 #=> @transient_id
 
 ## Auto-indexing works regardless of other features
 # Just verify that the feature system doesn't interfere
 @transient_obj.class.respond_to?(:indexing_relationships)
 #=> true
+
+## Guard validation prevents duplicate transient field email
+@transient_dup = AutoIndexWithTransient.new(id: "trans_dup_#{rand(1000000)}", email: @transient_email, temp_value: 'duplicate')
+begin
+  @transient_dup.save
+rescue Familia::RecordExistsError => ex
+  Familia.ld ex.backtrace.join("\n")
+  ex.message
+end
+#=:> String
+#=~> /Key already exists/
+#=~> /AutoIndexWithTransient exists /
+#=~> /email=#{@transient_email}/
+#=/=> @transient_email.nil?
 
 # =============================================
 # 5. Performance and Behavior Verification

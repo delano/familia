@@ -468,9 +468,18 @@ module Familia
       # This must be called OUTSIDE of transactions to allow reading current values
       #
       # @raise [Familia::RecordExistsError] If a unique index constraint is violated
-      # for any class-level unique_index relationships
+      #   for any class-level unique_index relationships
+      #
+      # @note Only validates class-level unique indexes (without within: parameter).
+      #   Instance-scoped indexes (with within:) must be validated manually before
+      #   calling add_to_*_index methods:
+      #
+      # @example Manual validation for instance-scoped indexes
+      #   employee.guard_unique_company_badge_index!(company)
+      #   employee.add_to_company_badge_index(company)
       #
       # @return [void]
+      #
       def guard_unique_indexes!
         # Skip validation if we're already in a transaction (can't read values)
         return if Fiber[:familia_transaction]

@@ -160,6 +160,7 @@ module Familia
           # - employee.add_to_company_badge_index(company)
           # - employee.remove_from_company_badge_index(company)
           # - employee.update_in_company_badge_index(company, old_badge)
+          # - employee.guard_unique_company_badge_index!(company)
           #
           # @param indexed_class [Class] The class being indexed (e.g., Employee)
           # @param field [Symbol] The field to index (e.g., :badge_number)
@@ -182,6 +183,35 @@ module Familia
 
                 # Just set the value - uniqueness validation happens separately
                 index_hash[field_value.to_s] = identifier
+              end
+
+              # Add a guard method to enforce unique constraint on this instance-scoped index
+              #
+              # @param target_instance [Object] The parent instance (e.g., a Company)
+              # @raise [Familia::RecordExistsError] if a record with the same field value
+              #   exists in the parent's index. Values are compared as strings.
+              # @return [void]
+              #
+              # @example
+              #   employee.guard_unique_company_badge_index!(company)
+              #
+              method_name = :"guard_unique_#{target_class_config}_#{index_name}!"
+              Familia.ld("[UniqueIndexGenerators] #{name} method #{method_name}")
+
+              define_method(method_name) do |target_instance|
+                return unless target_instance
+
+                field_value = send(field)
+                return unless field_value
+
+                # Use declared field accessor on target instance
+                index_hash = target_instance.send(index_name)
+                existing_id = index_hash.get(field_value.to_s)
+
+                if existing_id && existing_id != identifier
+                  raise Familia::RecordExistsError,
+                    "#{self.class} exists in #{target_instance.class} with #{field}=#{field_value}"
+                end
               end
 
               method_name = :"remove_from_#{target_class_config}_#{index_name}"
