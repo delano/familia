@@ -159,6 +159,9 @@ module Familia
       def deserialize_value(val, symbolize: false, field_name: nil)
         return nil if val.nil? || val == ''
 
+        # Handle Redis::Future objects during transactions
+        return val if val.is_a?(Redis::Future)
+
         begin
           Familia::JsonSerializer.parse(val, symbolize_names: symbolize)
         rescue Familia::SerializerError

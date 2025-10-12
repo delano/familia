@@ -118,6 +118,10 @@ module Familia
       #
       def deserialize_value(val)
         return @opts[:default] if val.nil?
+
+        # Handle Redis::Future objects during transactions
+        return val if val.is_a?(Redis::Future)
+
         return val unless @opts[:class]
 
         ret = deserialize_values val
