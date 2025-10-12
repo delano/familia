@@ -52,7 +52,6 @@ module Familia
       # - multi_index: 1:many field-to-objects mapping (UnsortedSet, no scores)
       # - within: scope class providing uniqueness boundary for instance-scoped indexes
       # - query: whether to generate find_by_* methods (default: true)
-      # - query: whether to generate find_by_* methods (default: true)
       #
       # Key Patterns:
       # - Class unique: "user:email_index" → HashKey
