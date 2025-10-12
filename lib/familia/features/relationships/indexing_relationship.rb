@@ -14,26 +14,30 @@ module Familia
       # Similar to ParticipationRelationship but for attribute-based lookups
       # rather than collection membership.
       #
-      # The `within` field preserves the original DSL parameter to explicitly
-      # distinguish class-level indexes (within: nil) from instance-scoped
-      # indexes (within: SomeClass). This avoids brittle class comparisons
-      # and prevents issues with inheritance scenarios.
+      # Terminology:
+      # - `scope_class`: The class that provides the uniqueness boundary for
+      #   instance-scoped indexes. For example, in `unique_index :badge_number,
+      #   :badge_index, within: Company`, the Company is the scope class.
+      # - `within`: Preserves the original DSL parameter to explicitly distinguish
+      #   class-level indexes (within: nil) from instance-scoped indexes (within:
+      #   SomeClass). This avoids brittle class comparisons and prevents issues
+      #   with inheritance scenarios.
       #
       IndexingRelationship = Data.define(
         :field,              # Symbol - field being indexed (e.g., :email, :department)
         :index_name,         # Symbol - name of the index (e.g., :email_index, :dept_index)
-        :target_class,       # Class/Symbol - parent class for instance-scoped indexes (within:)
+        :scope_class,        # Class/Symbol - scope class for instance-scoped indexes (within:)
         :within,             # Class/Symbol/nil - within: parameter (nil for class-level, Class for instance-scoped)
         :cardinality,        # Symbol - :unique (1:1) or :multi (1:many)
         :query               # Boolean - whether to generate query  methods
       ) do
         #
-        # Get the normalized config name for the target class
+        # Get the normalized config name for the scope class
         #
         # @return [String] The config name (e.g., "user", "company", "test_company")
         #
-        def target_class_config_name
-          target_class.config_name
+        def scope_class_config_name
+          scope_class.config_name
         end
       end
     end

@@ -1,0 +1,26 @@
+.. Internal terminology refactoring for indexing relationships
+
+Changed
+-------
+
+- **Indexing terminology refactoring**: Renamed internal field ``target_class`` to ``scope_class`` throughout the indexing system to better reflect the semantic role. The ``within:`` parameter in index declarations refers to a "scope" that provides a uniqueness boundary, not a "target" or "parent" relationship. This change affects internal code, comments, and documentation but has no user-facing API impact.
+
+  - Renamed ``IndexingRelationship.target_class`` to ``scope_class``
+  - Updated method parameter names from ``target_instance`` to ``scope_instance``
+  - Replaced "parent" terminology with "scope" in comments and documentation
+  - Updated cheatsheets to reflect correct terminology
+
+  **Rationale**: The term "target" created semantic confusion because it has different meanings in participation relationships (where objects target a collection owner) versus indexing relationships (where objects use a scope for uniqueness). The term "parent" was misleading because it implied an ownership relationship that doesn't exist. "Scope" accurately describes the role: Company provides the scope within which badge_number must be unique.
+
+Documentation
+-------------
+
+- Updated indexing and relationships cheatsheets with improved terminology explanations
+- Added explicit clarification of scope vs target vs parent semantics
+
+AI Assistance
+-------------
+
+- Claude Code (Sonnet 4.5) provided second-opinion analysis on terminology confusion
+- Assisted with systematic refactoring of variable names, comments, and documentation
+- Helped identify all occurrences requiring updates across codebase and tests

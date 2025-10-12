@@ -49,11 +49,11 @@ module Familia
           # @param indexed_class [Class] The class being indexed (e.g., Employee)
           # @param field [Symbol] The field to index
           # @param index_name [Symbol] Name of the index
-          # @param within [Class, Symbol, nil] Parent class for instance-scoped index
+          # @param within [Class, Symbol, nil] Scope class for instance-scoped index
           # @param query [Boolean] Whether to generate query methods
           def setup(indexed_class:, field:, index_name:, within:, query:)
             # Normalize parameters and determine scope type
-            target_class, scope_type = if within
+            scope_class, scope_type = if within
               k = Familia.resolve_class(within)
               [k, :instance]
             else
@@ -63,7 +63,7 @@ module Familia
             # Store metadata for this indexing relationship
             indexed_class.indexing_relationships << IndexingRelationship.new(
               field:             field,
-              target_class:      target_class,
+              scope_class:       scope_class,
               within:            within,
               index_name:        index_name,
               query:             query,
@@ -74,10 +74,10 @@ module Familia
             case scope_type
             when :instance
               # Instance-scoped index (within: Company)
-              if query && target_class.is_a?(Class)
-                generate_query_methods_destination(indexed_class, field, target_class, index_name)
+              if query && scope_class.is_a?(Class)
+                generate_query_methods_destination(indexed_class, field, scope_class, index_name)
               end
-              generate_mutation_methods_self(indexed_class, field, target_class, index_name)
+              generate_mutation_methods_self(indexed_class, field, scope_class, index_name)
             when :class
               # Class-level index (no within:)
               indexed_class.send(:ensure_index_field, indexed_class, index_name, :class_hashkey)
@@ -86,7 +86,7 @@ module Familia
             end
           end
 
-          # Generates query methods ON THE PARENT CLASS (Company when within: Company)
+          # Generates query methods ON THE SCOPE CLASS (Company when within: Company)
           #
           # - company.find_by_badge_number(badge) - find by field value
           # - company.find_all_by_badge_number([badges]) - batch lookup
@@ -95,17 +95,17 @@ module Familia
           #
           # @param indexed_class [Class] The class being indexed (e.g., Employee)
           # @param field [Symbol] The field to index (e.g., :badge_number)
-          # @param target_class [Class] The parent class (e.g., Company)
+          # @param scope_class [Class] The scope class providing uniqueness context (e.g., Company)
           # @param index_name [Symbol] Name of the index (e.g., :badge_index)
-          def generate_query_methods_destination(indexed_class, field, target_class, index_name)
-            # Resolve target class using Familia pattern
-            actual_target_class = Familia.resolve_class(target_class)
+          def generate_query_methods_destination(indexed_class, field, scope_class, index_name)
+            # Resolve scope class using Familia pattern
+            actual_scope_class = Familia.resolve_class(scope_class)
 
             # Ensure the index field is declared (creates accessor that returns DataType)
-            actual_target_class.send(:ensure_index_field, actual_target_class, index_name, :hashkey)
+            actual_scope_class.send(:ensure_index_field, actual_scope_class, index_name, :hashkey)
 
             # Generate instance query method (e.g., company.find_by_badge_number)
-            actual_target_class.class_eval do
+            actual_scope_class.class_eval do
               define_method(:"find_by_#{field}") do |provided_value|
                 # Use declared field accessor instead of manual instantiation
                 index_hash = send(index_name)
@@ -157,7 +157,7 @@ module Familia
 
           # Generates mutation methods ON THE INDEXED CLASS (Employee)
           #
-          # Instance methods for parent-scoped unique index operations:
+          # Instance methods for scope-scoped unique index operations:
           # - employee.add_to_company_badge_index(company) - automatically validates uniqueness
           # - employee.remove_from_company_badge_index(company)
           # - employee.update_in_company_badge_index(company, old_badge)
@@ -165,26 +165,26 @@ module Familia
           #
           # @param indexed_class [Class] The class being indexed (e.g., Employee)
           # @param field [Symbol] The field to index (e.g., :badge_number)
-          # @param target_class [Class] The parent class (e.g., Company)
+          # @param scope_class [Class] The scope class providing uniqueness context (e.g., Company)
           # @param index_name [Symbol] Name of the index (e.g., :badge_index)
-          def generate_mutation_methods_self(indexed_class, field, target_class, index_name)
-            target_class_config = target_class.config_name
+          def generate_mutation_methods_self(indexed_class, field, scope_class, index_name)
+            scope_class_config = scope_class.config_name
             indexed_class.class_eval do
-              method_name = :"add_to_#{target_class_config}_#{index_name}"
+              method_name = :"add_to_#{scope_class_config}_#{index_name}"
               Familia.ld("[UniqueIndexGenerators] #{name} method #{method_name}")
 
-              define_method(method_name) do |target_instance|
-                return unless target_instance
+              define_method(method_name) do |scope_instance|
+                return unless scope_instance
 
                 field_value = send(field)
                 return unless field_value
 
                 # Automatically validate uniqueness before adding to index
-                guard_method = :"guard_unique_#{target_class_config}_#{index_name}!"
-                send(guard_method, target_instance) if respond_to?(guard_method)
+                guard_method = :"guard_unique_#{scope_class_config}_#{index_name}!"
+                send(guard_method, scope_instance) if respond_to?(guard_method)
 
-                # Use declared field accessor on target instance
-                index_hash = target_instance.send(index_name)
+                # Use declared field accessor on scope instance
+                index_hash = scope_instance.send(index_name)
 
                 # Set the value (guard already validated uniqueness)
                 index_hash[field_value.to_s] = identifier
@@ -192,61 +192,61 @@ module Familia
 
               # Add a guard method to enforce unique constraint on this instance-scoped index
               #
-              # @param target_instance [Object] The parent instance (e.g., a Company)
+              # @param scope_instance [Object] The scope instance providing uniqueness context (e.g., a Company)
               # @raise [Familia::RecordExistsError] if a record with the same field value
-              #   exists in the parent's index. Values are compared as strings.
+              #   exists in the scope's index. Values are compared as strings.
               # @return [void]
               #
               # @example
               #   employee.guard_unique_company_badge_index!(company)
               #
-              method_name = :"guard_unique_#{target_class_config}_#{index_name}!"
+              method_name = :"guard_unique_#{scope_class_config}_#{index_name}!"
               Familia.ld("[UniqueIndexGenerators] #{name} method #{method_name}")
 
-              define_method(method_name) do |target_instance|
-                return unless target_instance
+              define_method(method_name) do |scope_instance|
+                return unless scope_instance
 
                 field_value = send(field)
                 return unless field_value
 
-                # Use declared field accessor on target instance
-                index_hash = target_instance.send(index_name)
+                # Use declared field accessor on scope instance
+                index_hash = scope_instance.send(index_name)
                 existing_id = index_hash.get(field_value.to_s)
 
                 if existing_id && existing_id != identifier
                   raise Familia::RecordExistsError,
-                    "#{self.class} exists in #{target_instance.class} with #{field}=#{field_value}"
+                    "#{self.class} exists in #{scope_instance.class} with #{field}=#{field_value}"
                 end
               end
 
-              method_name = :"remove_from_#{target_class_config}_#{index_name}"
+              method_name = :"remove_from_#{scope_class_config}_#{index_name}"
               Familia.ld("[UniqueIndexGenerators] #{name} method #{method_name}")
 
-              define_method(method_name) do |target_instance|
-                return unless target_instance
+              define_method(method_name) do |scope_instance|
+                return unless scope_instance
 
                 field_value = send(field)
                 return unless field_value
 
-                # Use declared field accessor on target instance
-                index_hash = target_instance.send(index_name)
+                # Use declared field accessor on scope instance
+                index_hash = scope_instance.send(index_name)
 
                 # Remove using HashKey DataType method
                 index_hash.remove(field_value.to_s)
               end
 
-              method_name = :"update_in_#{target_class_config}_#{index_name}"
+              method_name = :"update_in_#{scope_class_config}_#{index_name}"
               Familia.ld("[UniqueIndexGenerators] #{name} method #{method_name}")
 
-              define_method(method_name) do |target_instance, old_field_value = nil|
-                return unless target_instance
+              define_method(method_name) do |scope_instance, old_field_value = nil|
+                return unless scope_instance
 
                 new_field_value = send(field)
 
                 # Use Familia's transaction method for atomicity with DataType abstraction
-                target_instance.transaction do |_tx|
-                  # Use declared field accessor on target instance
-                  index_hash = target_instance.send(index_name)
+                scope_instance.transaction do |_tx|
+                  # Use declared field accessor on scope instance
+                  index_hash = scope_instance.send(index_name)
 
                   # Remove old value if provided
                   index_hash.remove(old_field_value.to_s) if old_field_value

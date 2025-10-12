@@ -526,7 +526,7 @@ module Familia
       # Iterates through class-level indexing relationships and calls their
       # corresponding add_to_class_* methods to populate indexes. Only processes
       # class-level indexes (where within is nil), skipping instance-scoped
-      # indexes which require parent context.
+      # indexes which require scope context.
       #
       # Uses idempotent Redis commands (HSET for unique_index) so repeated calls
       # are safe and have negligible performance overhead. Note that multi_index
@@ -553,12 +553,12 @@ module Familia
         return unless self.class.respond_to?(:indexing_relationships)
 
         self.class.indexing_relationships.each do |rel|
-          # Skip instance-scoped indexes (require parent context)
+          # Skip instance-scoped indexes (require scope context)
           # Instance-scoped indexes must be manually populated because they need
-          # the parent object reference (e.g., employee.add_to_company_badge_index(company))
+          # the scope instance reference (e.g., employee.add_to_company_badge_index(company))
           if rel.within
             Familia.ld <<~LOG_MESSAGE
-              [auto_update_class_indexes] Skipping #{rel.index_name} (requires parent context)
+              [auto_update_class_indexes] Skipping #{rel.index_name} (requires scope context)
             LOG_MESSAGE
             next
           end

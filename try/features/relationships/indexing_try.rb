@@ -86,7 +86,7 @@ sample = @company.sample_from_department(@emp2.department)
 
 ## First indexing relationship has correct configuration
 config = @user1.class.indexing_relationships.first
-[config.field, config.index_name, config.target_class == TestUser, config.query]
+[config.field, config.index_name, config.scope_class == TestUser, config.query]
 #=> [:email, :email_lookup, true, true]
 
 ## Second indexing relationship has query disabled
@@ -189,7 +189,7 @@ TestUser.respond_to?(:find_by_username)
 
 ## Instance-scoped unique index has correct configuration
 config = @emp1.class.indexing_relationships.find { |r| r.field == :badge_number }
-[config.index_name, config.target_class, config.cardinality]
+[config.index_name, config.scope_class, config.cardinality]
 #=> [:badge_index, TestCompany, :unique]
 
 ## Target class gets finder method for unique index
@@ -277,7 +277,7 @@ old_badge = @emp1.badge_number
 
 ## Context-scoped multi_index relationship has correct configuration
 config = @emp1.class.indexing_relationships.find { |r| r.field == :department }
-[config.field, config.index_name, config.target_class]
+[config.field, config.index_name, config.scope_class]
 #=> [:department, :dept_index, TestCompany]
 
 ## Context-scoped methods are generated with collision-free naming
