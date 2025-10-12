@@ -493,12 +493,12 @@ module Familia
       #   for any class-level unique_index relationships
       #
       # @note Only validates class-level unique indexes (without within: parameter).
-      #   Instance-scoped indexes (with within:) must be validated manually before
+      #   Instance-scoped indexes (with within:) are validated automatically when
       #   calling add_to_*_index methods:
       #
-      # @example Manual validation for instance-scoped indexes
-      #   employee.guard_unique_company_badge_index!(company)
+      # @example Instance-scoped indexes validate automatically
       #   employee.add_to_company_badge_index(company)
+      #   # Automatically validates uniqueness and raises RecordExistsError on duplicate
       #
       # @return [void]
       #
