@@ -68,7 +68,7 @@ module Familia
         self.updated = Familia.now if respond_to?(:updated)
 
         # Validate unique indexes BEFORE the transaction
-        validate_unique_indexes
+        guard_unique_indexes!
 
         # Everything in ONE transaction for complete atomicity
         result = transaction do |_conn|
@@ -466,7 +466,12 @@ module Familia
 
       # Validates that unique index constraints are satisfied before saving
       # This must be called OUTSIDE of transactions to allow reading current values
-      def validate_unique_indexes
+      #
+      # @raise [Familia::RecordExistsError] If a unique index constraint is violated
+      # for any class-level unique_index relationships
+      #
+      # @return [void]
+      def guard_unique_indexes!
         # Skip validation if we're already in a transaction (can't read values)
         return if Fiber[:familia_transaction]
 
@@ -480,7 +485,7 @@ module Familia
           next unless rel.target_class == self.class
 
           # Call the validation method if it exists
-          validate_method = :"validate_unique_#{rel.index_name}"
+          validate_method = :"guard_unique_#{rel.index_name}!"
           send(validate_method) if respond_to?(validate_method)
         end
       end

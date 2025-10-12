@@ -85,7 +85,8 @@ module Familia
             end
           end
 
-          # Generates query methods ON THE PARENT CLASS (Company when within: Company):
+          # Generates query methods ON THE PARENT CLASS (Company when within: Company)
+          #
           # - company.find_by_badge_number(badge) - find by field value
           # - company.find_all_by_badge_number([badges]) - batch lookup
           # - company.badge_index - DataType accessor
@@ -153,7 +154,8 @@ module Familia
             end
           end
 
-          # Generates mutation methods ON THE INDEXED CLASS (Employee):
+          # Generates mutation methods ON THE INDEXED CLASS (Employee)
+          #
           # Instance methods for parent-scoped unique index operations:
           # - employee.add_to_company_badge_index(company)
           # - employee.remove_from_company_badge_index(company)
@@ -302,10 +304,15 @@ module Familia
                 index_hash[field_value.to_s] = identifier
               end
 
-              # Add a validation method for unique constraints
-              define_method(:"validate_unique_#{index_name}") do
+              # Add a guard method to enforce unique constraint on this specific index
+              #
+              # @raise [Familia::RecordExistsError] if a record with the same
+              # field value exists. Values are compared as strings.
+              #
+              # @return [void]
+              define_method(:"guard_unique_#{index_name}!") do
                 field_value = send(field)
-                return true unless field_value
+                return unless field_value
 
                 index_hash = self.class.send(index_name)
                 existing_id = index_hash.get(field_value.to_s)
@@ -313,8 +320,6 @@ module Familia
                 if existing_id && existing_id != identifier
                   raise Familia::RecordExistsError, "#{self.class} exists #{field}=#{field_value}"
                 end
-
-                true
               end
 
               define_method(:"remove_from_class_#{index_name}") do
