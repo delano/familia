@@ -178,7 +178,7 @@ module Familia
                 # Use declared field accessor on target instance
                 index_hash = target_instance.send(index_name)
 
-                # Use HashKey DataType method
+                # Just set the value - uniqueness validation happens separately
                 index_hash[field_value.to_s] = identifier
               end
 
@@ -228,10 +228,12 @@ module Familia
           # - Employee.email_index
           # - Employee.rebuild_email_index
           def generate_query_methods_class(field, index_name, indexed_class)
+            # Generate class-level single record method
             indexed_class.define_singleton_method(:"find_by_#{field}") do |provided_id|
-              index_hash = send(index_name) # Access the class-level hashkey DataType
+              index_hash = send(index_name) # access the class-level hashkey DataType
 
-              # Get the identifier from the hash using .get method.
+              # Get the identifier from the db hashkey using .get method.
+              #
               # We use .get instead of [] because it's part of the standard interface
               # common across all DataType classes (List, UnsortedSet, SortedSet, HashKey).
               # While unique indexes always use HashKey, using .get maintains consistency
@@ -245,12 +247,23 @@ module Familia
 
             # Generate class-level bulk query method
             indexed_class.define_singleton_method(:"find_all_by_#{field}") do |provided_ids|
+              # Check the inputs before dealing with the field since we may not need to
               provided_ids = Array(provided_ids)
               return [] if provided_ids.empty?
 
-              index_hash = send(index_name) # Access the class-level hashkey DataType
+              index_hash = send(index_name) # access the class-level hashkey DataType
+
+              # Get multiple identifiers from the db hashkey using .values_at
               record_ids = index_hash.values_at(*provided_ids.map(&:to_s))
+
               # Filter out nil values and instantiate objects
+              #
+              # TODO: Resolve compact/nil ambiguity. If we just called .to_s on them
+              # there won't be any nils here. If we call compact after the map here
+              # we'll filter out identifiers that returned no record but then the
+              # number of output elements will be less than the number of input
+              # elements. We need a decision there and also probably to add a
+              # compact in the guard `provided_ids.compact.empty?`.
               record_ids.compact.map { |record_id|
                 indexed_class.find_by_identifier(record_id)
               }
@@ -285,7 +298,23 @@ module Familia
 
                 return unless field_value
 
+                # Just set the value - uniqueness should be validated before save
                 index_hash[field_value.to_s] = identifier
+              end
+
+              # Add a validation method for unique constraints
+              define_method(:"validate_unique_#{index_name}") do
+                field_value = send(field)
+                return true unless field_value
+
+                index_hash = self.class.send(index_name)
+                existing_id = index_hash.get(field_value.to_s)
+
+                if existing_id && existing_id != identifier
+                  raise Familia::RecordExistsError, "#{self.class} exists #{field}=#{field_value}"
+                end
+
+                true
               end
 
               define_method(:"remove_from_class_#{index_name}") do

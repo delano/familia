@@ -67,6 +67,9 @@ module Familia
         self.created ||= Familia.now if respond_to?(:created)
         self.updated = Familia.now if respond_to?(:updated)
 
+        # Validate unique indexes BEFORE the transaction
+        validate_unique_indexes
+
         # Everything in ONE transaction for complete atomicity
         result = transaction do |_conn|
           # 1. Save all fields
@@ -458,6 +461,27 @@ module Familia
           # UnsortedSet the transient field back to nil
           send("#{field_type.method_name}=", nil)
           Familia.ld "[reset_transient_fields!] Reset #{field_name} to nil"
+        end
+      end
+
+      # Validates that unique index constraints are satisfied before saving
+      # This must be called OUTSIDE of transactions to allow reading current values
+      def validate_unique_indexes
+        # Skip validation if we're already in a transaction (can't read values)
+        return if Fiber[:familia_transaction]
+
+        return unless self.class.respond_to?(:indexing_relationships)
+
+        self.class.indexing_relationships.each do |rel|
+          # Only validate unique indexes (not multi_index)
+          next unless rel.cardinality == :unique
+
+          # Only validate class-level indexes
+          next unless rel.target_class == self.class
+
+          # Call the validation method if it exists
+          validate_method = :"validate_unique_#{rel.index_name}"
+          send(validate_method) if respond_to?(validate_method)
         end
       end
 
