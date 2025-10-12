@@ -117,10 +117,10 @@ module Familia
       # for serialization since everything becomes a string in Valkey.
       #
       def deserialize_value(val)
-        return @opts[:default] if val.nil?
-
-        # Handle Redis::Future objects during transactions
+        # Handle Redis::Future objects during transactions first
         return val if val.is_a?(Redis::Future)
+
+        return @opts[:default] if val.nil?
 
         return val unless @opts[:class]
 

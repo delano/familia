@@ -1,44 +1,9 @@
-.. A new scriv changelog fragment.
-..
-.. Uncomment the section that is right (remove the leading dots).
-.. For top level release notes, leave all the headers commented out.
-..
-.. Added
-.. -----
-..
-.. - A bullet item for the Added category.
-..
+
 Changed
 -------
 
 - **IndexingRelationship**: Added explicit ``:within`` field to preserve the original DSL parameter, replacing brittle ``target_class`` equality checks with clearer ``within.nil?`` checks. This makes the distinction between class-level and instance-scoped indexes more explicit and prevents potential issues with inheritance scenarios.
 
-..
-.. Deprecated
-.. ----------
-..
-.. - A bullet item for the Deprecated category.
-..
-.. Removed
-.. -------
-..
-.. - A bullet item for the Removed category.
-..
-.. Fixed
-.. -----
-..
-.. - A bullet item for the Fixed category.
-..
-.. Security
-.. --------
-..
-.. - A bullet item for the Security category.
-..
-.. Documentation
-.. -------------
-..
-.. - A bullet item for the Documentation category.
-..
 AI Assistance
 -------------
 

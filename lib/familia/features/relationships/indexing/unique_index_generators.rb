@@ -179,9 +179,11 @@ module Familia
                 field_value = send(field)
                 return unless field_value
 
-                # Automatically validate uniqueness before adding to index
-                guard_method = :"guard_unique_#{scope_class_config}_#{index_name}!"
-                send(guard_method, scope_instance) if respond_to?(guard_method)
+                # Automatically validate uniqueness before adding to index, but skip inside a transaction
+                unless Fiber[:familia_transaction]
+                  guard_method = :"guard_unique_#{scope_class_config}_#{index_name}!"
+                  send(guard_method, scope_instance) if respond_to?(guard_method)
+                end
 
                 # Use declared field accessor on scope instance
                 index_hash = scope_instance.send(index_name)

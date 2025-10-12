@@ -252,17 +252,18 @@ end
 @user_tx.guard_unique_email_index!
 #=> nil
 
-## Guard is skipped during transaction (can't read Redis::Future)
-result = GuardUser.transaction do
-  @user_in_tx = GuardUser.new(user_id: "user_in_tx_#{rand(1000000)}", email: 'intx@example.com', username: 'intxuser')
-  # guard_unique_indexes! returns early when Fiber[:familia_transaction] is set
-  @user_in_tx.send(:guard_unique_indexes!)
-end
-result.class
-#=> MultiResult
+## Guard must be called outside transaction (new rule)
+unique_timestamp = Time.now.to_i
+unique_rand = rand(1000000)
+email = "tx_unique_#{unique_timestamp}_#{unique_rand}@example.com"
+@user_tx_unique = GuardUser.new(user_id: "user_tx_unique_#{unique_rand}", email: email, username: "txuser_#{unique_rand}")
+
+# Guards should be called outside transactions
+@user_tx_unique.send(:guard_unique_indexes!)
+#=> nil
 
 # Teardown - clean up test objects
-[@user1, @user2, @user_nil, @user_empty1, @user_empty2, @user_dup, @user_tx].each do |obj|
+[@user1, @user2, @user_nil, @user_empty1, @user_empty2, @user_dup, @user_tx, @user_tx_unique].each do |obj|
   obj.destroy! if obj.respond_to?(:destroy!) && obj.respond_to?(:exists?) && obj.exists?
 end
 

@@ -55,6 +55,11 @@ module Familia
       def create!(...)
         hobj = new(...)
         hobj.save_if_not_exists!
+
+        # If a block is given, yield the created object
+        # This allows for additional operations on successful creation
+        yield hobj if block_given?
+
         hobj
       end
 
@@ -206,6 +211,9 @@ module Familia
 
         ret = dbclient.exists objkey
         Familia.trace :EXISTS, nil, "#{objkey} #{ret.inspect}" if Familia.debug?
+
+        # Handle Redis::Future objects during transactions
+        return ret if ret.is_a?(Redis::Future)
 
         ret.positive? # differs from Valkey API but I think it's okay bc `exists?` is a predicate method.
       end

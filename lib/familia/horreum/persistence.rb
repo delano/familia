@@ -77,10 +77,10 @@ module Familia
       # @see #guard_unique_indexes! Automatic validation of class-level unique indexes
       #
       def save(update_expiration: true)
-        # Prevent save within transaction or pipeline - guards need to read current values
+        # Prevent save within transaction - guards and validations need to read current values
         if Fiber[:familia_transaction]
           raise Familia::OperationModeError,
-            "Cannot call save within a transaction. Call save first to start the transaction."
+            "Cannot call save within a transaction. Save operations must be called outside transactions to ensure unique constraints can be validated."
         end
 
         Familia.trace :SAVE, nil, self.class.uri if Familia.debug?
@@ -159,6 +159,12 @@ module Familia
       # If exists, raise Familia::RecordExistsError
       # If not exists, save
       def save_if_not_exists!(update_expiration: true)
+        # Prevent save_if_not_exists! within transaction - needs to read existence state
+        if Fiber[:familia_transaction]
+          raise Familia::OperationModeError,
+            "Cannot call save_if_not_exists! within a transaction. This method must be called outside transactions to properly check existence."
+        end
+
         identifier_field = self.class.identifier_field
 
         Familia.ld "[save_if_not_exists]: #{self.class} #{identifier_field}=#{identifier}"
@@ -503,9 +509,6 @@ module Familia
       # @return [void]
       #
       def guard_unique_indexes!
-        # Skip validation if we're already in a transaction (can't read values)
-        return if Fiber[:familia_transaction]
-
         return unless self.class.respond_to?(:indexing_relationships)
 
         self.class.indexing_relationships.each do |rel|
@@ -519,6 +522,8 @@ module Familia
           validate_method = :"guard_unique_#{rel.index_name}!"
           send(validate_method) if respond_to?(validate_method)
         end
+
+        nil # Explicit nil return as documented
       end
 
       # Automatically update class-level indexes after save
