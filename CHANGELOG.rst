@@ -9,59 +9,45 @@ The format is based on `Keep a Changelog <https://keepachangelog.com/en/1.1.0/>`
 
 .. _changelog-2.0.0.pre19:
 
-2.0.0.pre19 — 2025-10-11
-=========================
+2.0.0.pre19 — 2025-10-13
+========================
 
 Added
 -----
 
--  **DataType Transaction and Pipeline Support** - DataType objects can now initiate transactions and pipelines independently, enabling atomic operations and batch command execution for both parent-owned and standalone DataType objects. `PR #160 <https://github.com/familia/familia/pull/160>`__. Key capabilities added:
+-  **DataType Transaction and Pipeline Support** - DataType objects can now initiate transactions and pipelines independently, enabling atomic operations and batch command execution. `PR #159 <https://github.com/familia/familia/pull/159>`_
 
-   * ``transaction`` and ``pipelined`` methods for atomic MULTI/EXEC operations and batched command execution on all DataType classes
-   * Connection chain pattern with Chain of Responsibility for DataType objects
-   * Two new connection handlers: ``ParentDelegationHandler`` for owned DataTypes and ``StandaloneConnectionHandler`` for independent DataTypes
-   * Enhanced ``direct_access`` method with automatic transaction/pipeline context detection
-   * Shared ``Familia::Connection::Behavior`` module extracting common connection functionality
+   * ``transaction`` and ``pipelined`` methods for all DataType classes
+   * Connection chain pattern with ``ParentDelegationHandler`` and ``StandaloneConnectionHandler``
+   * Enhanced ``direct_access`` method with automatic context detection
+   * Shared ``Familia::Connection::Behavior`` module for common functionality
 
--  New error hierarchy with ``PersistenceError``, ``HorreumError``, ``CreationError``, and ``OptimisticLockError`` classes for better error categorization and handling
--  ``watch``, ``unwatch``, and ``discard`` Redis commands for optimistic locking support
--  Enhanced database command logging with structured format for pipelined and transaction operations
--  ``save_fields`` method in Persistence module for selective field updates
+-  **Automatic Unique Index Validation** - Instance-scoped unique indexes now validate automatically in ``add_to_*`` methods, with transaction detection to prevent ``save()`` calls within MULTI/EXEC blocks
 
 Changed
 -------
 
--  **Connection Architecture Refactored** - The ``Horreum::Connection`` module now includes ``Familia::Connection::Behavior``, eliminating code duplication by sharing URI normalization and connection creation methods between Horreum and DataType. DataType objects with ``logical_database`` settings now return clean URIs without custom port information (e.g., ``redis://127.0.0.1/3`` instead of ``redis://127.0.0.1:2525/3``), ensuring consistent URI representation across the library.
+-  **Connection Architecture** - Refactored to share ``Familia::Connection::Behavior`` between Horreum and DataType, with cleaner URI construction for logical databases
 
--  **BREAKING**: Renamed ``Management.create`` to ``create!`` to follow Rails conventions and indicate potential exceptions
--  **BREAKING**: Updated ``save_if_not_exists`` to ``save_if_not_exists!`` with optimistic locking and automatic retry logic (up to 3 attempts)
--  Improved ``save`` method to use single atomic transaction encompassing field updates, expiration setting, index updates, and instance collection management
--  Enhanced ``delete!`` methods to work correctly within Redis transactions
--  Updated timestamp fields (``created``, ``updated``) to use float values instead of integers for higher precision
--  Refined log message formatting for better readability and debugging
--  Removed deprecated Connection instance methods for Horreum models in favor of class-level database operations
--  Clarified "pipelined" terminology throughout codebase (renamed from "pipeline" for consistency with Redis documentation)
+-  **Indexing Terminology** - Renamed internal ``target_class`` to ``scope_class`` throughout to clarify semantic role. Added explicit ``:within`` field to IndexingRelationship for clearer instance-scoped index handling
 
 Fixed
 -----
 
--  Resolved atomicity issues and race conditions in save operations by consolidating all related operations into single Redis transaction with proper watch/multi/exec pattern and optimistic locking
--  Corrected transaction handling to ensure proper cleanup and error propagation
+-  URI formatting for DataType objects with logical database settings
+-  Transaction detection and validation flow for unique index operations
 
 Documentation
 -------------
 
--  Added comprehensive parameter documentation for database command methods including return value specifications and usage examples
+-  Enhanced ``save()`` method documentation with transaction restrictions
+-  Updated indexing and relationship cheatsheets with improved terminology
+-  Added comprehensive test coverage (48 new tests) for transactions, pipelines, and validation
 
 AI Assistance
 -------------
 
-This feature was implemented with AI assistance from Claude Sonnet 4.5, Opus 4.1 (Anthropic).
-
-* Architectural design of the connection chain pattern and shared Behavior module
-* Implementation of DataType-specific connection handlers  (ParentDelegationHandler, StandaloneConnectionHandler) and comprehensive test coverage
-* Error hierarchy design and transaction atomicity optimization
-* Documentation enhancement and URI formatting debugging
+This release was implemented with assistance from Claude (Anthropic) for architectural design, test coverage, and systematic refactoring of terminology across the codebase.
 
 
 .. _changelog-2.0.0.pre18:
@@ -118,7 +104,7 @@ Documentation
 AI Assistance
 -------------
 
-- Claude Code (claude-sonnet-4-5) provided implementation guidance, identified the ``initialize_with_keyword_args`` falsy value bug, wrote comprehensive test suite, and coordinated multi-file changes across serialization, management, and base modules.
+- Claude Code (claude-sonnet-4-5) provided implementation guidance, identified the ``initialize_with_keyword_args`` falsy value bug, wrote test coverage, and coordinated multi-file changes across serialization, management, and base modules.
 
 - Issue analysis, implementation guidance, test verification, and documentation for JSON serialization changes and encrypted field security fix.
 
