@@ -251,6 +251,16 @@ found_emps = @company.find_all_by_badge_number('BADGE002')
 found_emps.map(&:emp_id)
 #=> ["emp_002"]
 
+## Instance-scoped bulk query filters nil inputs
+badges_with_nil = [nil, 'BADGE001', nil]
+found_emps = @company.find_all_by_badge_number(badges_with_nil)
+found_emps.map(&:emp_id)
+#=> ["emp_001"]
+
+## Instance-scoped bulk query with only nil returns empty
+@company.find_all_by_badge_number([nil, nil]).length
+#=> 0
+
 ## Update badge index entry
 old_badge = @emp1.badge_number
 @emp1.badge_number = 'BADGE001_NEW'
@@ -419,6 +429,20 @@ emails = ['bob@example.com', 'nonexistent@example.com']
 found = TestUser.find_all_by_email(emails)
 found.map(&:user_id)
 #=> ["user_002"]
+
+## Bulk query filters nil inputs before querying
+emails_with_nil = [nil, 'bob@example.com', nil]
+found = TestUser.find_all_by_email(emails_with_nil)
+found.map(&:user_id)
+#=> ["user_002"]
+
+## Bulk query with only nil inputs returns empty array
+TestUser.find_all_by_email([nil, nil]).length
+#=> 0
+
+## Bulk query with nil as single value returns empty array
+TestUser.find_all_by_email(nil).length
+#=> 0
 
 ## Adding to index with nil field value does nothing
 @user_nil = TestUser.new(user_id: 'user_nil', email: nil)

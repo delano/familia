@@ -123,7 +123,10 @@ module Familia
 
               # Generate bulk query method (e.g., company.find_all_by_badge_number)
               define_method(:"find_all_by_#{field}") do |provided_ids|
-                provided_ids = Array(provided_ids)
+                # Convert to array and filter nil inputs before querying Redis.
+                # This prevents wasteful lookups for empty string keys (nil.to_s → "").
+                # Output may contain fewer elements than input (standard ORM behavior).
+                provided_ids = Array(provided_ids).compact
                 return [] if provided_ids.empty?
 
                 # Use declared field accessor instead of manual instantiation
@@ -131,7 +134,8 @@ module Familia
 
                 # Get all identifiers from the hash
                 record_ids = index_hash.values_at(*provided_ids.map(&:to_s))
-                # Filter out nil values and instantiate objects
+
+                # Filter out nil values (non-existent records) and instantiate objects
                 record_ids.compact.map { |record_id|
                   indexed_class.find_by_identifier(record_id)
                 }
@@ -286,8 +290,10 @@ module Familia
 
             # Generate class-level bulk query method
             indexed_class.define_singleton_method(:"find_all_by_#{field}") do |provided_ids|
-              # Check the inputs before dealing with the field since we may not need to
-              provided_ids = Array(provided_ids)
+              # Convert to array and filter nil inputs before querying Redis.
+              # This prevents wasteful lookups for empty string keys (nil.to_s → "").
+              # Output may contain fewer elements than input (standard ORM behavior).
+              provided_ids = Array(provided_ids).compact
               return [] if provided_ids.empty?
 
               index_hash = send(index_name) # access the class-level hashkey DataType
@@ -295,14 +301,7 @@ module Familia
               # Get multiple identifiers from the db hashkey using .values_at
               record_ids = index_hash.values_at(*provided_ids.map(&:to_s))
 
-              # Filter out nil values and instantiate objects
-              #
-              # TODO: Resolve compact/nil ambiguity. If we just called .to_s on them
-              # there won't be any nils here. If we call compact after the map here
-              # we'll filter out identifiers that returned no record but then the
-              # number of output elements will be less than the number of input
-              # elements. We need a decision there and also probably to add a
-              # compact in the guard `provided_ids.compact.empty?`.
+              # Filter out nil values (non-existent records) and instantiate objects
               record_ids.compact.map { |record_id|
                 indexed_class.find_by_identifier(record_id)
               }
