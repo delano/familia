@@ -183,7 +183,9 @@ module Familia
                 field_value = send(field)
                 return unless field_value
 
-                # Automatically validate uniqueness before adding to index, but skip inside a transaction
+                # Automatically validate uniqueness before adding to index.
+                # Skip validation inside transactions since guard methods require read
+                # operations not available in MULTI/EXEC blocks.
                 unless Fiber[:familia_transaction]
                   guard_method = :"guard_unique_#{scope_class_config}_#{index_name}!"
                   send(guard_method, scope_instance) if respond_to?(guard_method)
