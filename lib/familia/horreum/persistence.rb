@@ -77,7 +77,8 @@ module Familia
       # @see #guard_unique_indexes! Automatic validation of class-level unique indexes
       #
       def save(update_expiration: true)
-        # Prevent save within transaction - guards and validations need to read current values
+        # Prevent save within transaction - unique index guards require read operations
+        # which are not available in Redis MULTI/EXEC blocks
         if Fiber[:familia_transaction]
           raise Familia::OperationModeError,
             "Cannot call save within a transaction. Save operations must be called outside transactions to ensure unique constraints can be validated."
