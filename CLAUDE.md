@@ -105,30 +105,55 @@ class User < Familia::Horreum
 end
 ```
 
-**Good - use the `init` hook instead:**
+**Good - use the `init` hook to apply defaults (use `||=` not `=`):**
 ```ruby
 class User < Familia::Horreum
-  def init(email = nil)
-    @email = email  # Called after super, related fields work
+  field :objid
+  field :email
+
+  # Called after Horreum sets fields from kwargs
+  # IMPORTANT: Use ||= to apply defaults, not = to override
+  def init
+    @objid ||= SecureRandom.uuid  # Apply default only if not already set
+    _run_post_init_hooks          # Additional setup logic
   end
 end
+
+# This works correctly:
+user = User.new(email: 'test@example.com')
+user.objid      # → generated UUID (applied by init)
+user.email      # → 'test@example.com' (set by Horreum from kwargs)
 ```
 
-**Good - call super explicitly:**
+**Okay - if absolutely necessary, override and call super explicitly:**
 ```ruby
 class User < Familia::Horreum
   def initialize(email = nil, **kwargs)
-    super(**kwargs)  # ✓ Related fields initialized
-    @email = email
+    super # Initializes related fields here and also calls init
+    @email ||= generate_email if email.nil?
   end
 end
 ```
 
-**Why this matters**: Familia's `initialize` method calls `initialize_relatives` to set up DataType objects (lists, sets, etc.). Without calling `super`, these objects remain nil and you'll get helpful errors pointing to the missing super call.
+**Why this matters**: Familia's `initialize` method processes kwargs FIRST (setting fields), then calls `initialize_relatives` (setting up DataType objects), then calls your `init` hook. By the time `init` runs, kwargs have already been consumed and fields are set.
+
+**The ||= Pattern Explained**:
+```ruby
+# WRONG - overwrites what Horreum already set
+def init
+  @email = generate_email  # Overwrites the correct value
+end
+
+# RIGHT - applies default only if not already set
+def init
+  @email ||= email               # Preserves value Horreum set from kwargs
+  @email ||= 'default@example.com'  # Apply fallback default if still nil
+end
+```
 
 **When to use each approach:**
-- **Use `init` hook** (preferred): For simple initialization logic that doesn't need to intercept constructor arguments. The `init` method is called automatically after `super` with the same arguments passed to `new`.
-- **Use explicit `super`**: When you need full control over initialization order or need to transform arguments before passing to parent. Remember to pass `**kwargs` to preserve keyword argument handling.
+- **Use `init` hook with `||=`** (preferred): Apply defaults, run validations, setup callbacks - any logic that should run after field initialization. Follows standard ORM lifecycle hook patterns.
+- **Use explicit `super`**: Only when you need to intercept or transform arguments before Horreum processes them (rare).
 
 **DataType Definition**: Use class methods to define keystore database-backed attributes:
 ```ruby
