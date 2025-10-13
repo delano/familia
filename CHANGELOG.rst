@@ -9,59 +9,45 @@ The format is based on `Keep a Changelog <https://keepachangelog.com/en/1.1.0/>`
 
 .. _changelog-2.0.0.pre19:
 
-2.0.0.pre19 — 2025-10-11
-=========================
+2.0.0.pre19 — 2025-10-13
+========================
 
 Added
 -----
 
--  **DataType Transaction and Pipeline Support** - DataType objects can now initiate transactions and pipelines independently, enabling atomic operations and batch command execution for both parent-owned and standalone DataType objects. `PR #160 <https://github.com/familia/familia/pull/160>`__. Key capabilities added:
+-  **DataType Transaction and Pipeline Support** - DataType objects can now initiate transactions and pipelines independently, enabling atomic operations and batch command execution. `PR #159 <https://github.com/familia/familia/pull/159>`_
 
-   * ``transaction`` and ``pipelined`` methods for atomic MULTI/EXEC operations and batched command execution on all DataType classes
-   * Connection chain pattern with Chain of Responsibility for DataType objects
-   * Two new connection handlers: ``ParentDelegationHandler`` for owned DataTypes and ``StandaloneConnectionHandler`` for independent DataTypes
-   * Enhanced ``direct_access`` method with automatic transaction/pipeline context detection
-   * Shared ``Familia::Connection::Behavior`` module extracting common connection functionality
+   * ``transaction`` and ``pipelined`` methods for all DataType classes
+   * Connection chain pattern with ``ParentDelegationHandler`` and ``StandaloneConnectionHandler``
+   * Enhanced ``direct_access`` method with automatic context detection
+   * Shared ``Familia::Connection::Behavior`` module for common functionality
 
--  New error hierarchy with ``PersistenceError``, ``HorreumError``, ``CreationError``, and ``OptimisticLockError`` classes for better error categorization and handling
--  ``watch``, ``unwatch``, and ``discard`` Redis commands for optimistic locking support
--  Enhanced database command logging with structured format for pipelined and transaction operations
--  ``save_fields`` method in Persistence module for selective field updates
+-  **Automatic Unique Index Validation** - Instance-scoped unique indexes now validate automatically in ``add_to_*`` methods, with transaction detection to prevent ``save()`` calls within MULTI/EXEC blocks
 
 Changed
 -------
 
--  **Connection Architecture Refactored** - The ``Horreum::Connection`` module now includes ``Familia::Connection::Behavior``, eliminating code duplication by sharing URI normalization and connection creation methods between Horreum and DataType. DataType objects with ``logical_database`` settings now return clean URIs without custom port information (e.g., ``redis://127.0.0.1/3`` instead of ``redis://127.0.0.1:2525/3``), ensuring consistent URI representation across the library.
+-  **Connection Architecture** - Refactored to share ``Familia::Connection::Behavior`` between Horreum and DataType, with cleaner URI construction for logical databases
 
--  **BREAKING**: Renamed ``Management.create`` to ``create!`` to follow Rails conventions and indicate potential exceptions
--  **BREAKING**: Updated ``save_if_not_exists`` to ``save_if_not_exists!`` with optimistic locking and automatic retry logic (up to 3 attempts)
--  Improved ``save`` method to use single atomic transaction encompassing field updates, expiration setting, index updates, and instance collection management
--  Enhanced ``delete!`` methods to work correctly within Redis transactions
--  Updated timestamp fields (``created``, ``updated``) to use float values instead of integers for higher precision
--  Refined log message formatting for better readability and debugging
--  Removed deprecated Connection instance methods for Horreum models in favor of class-level database operations
--  Clarified "pipelined" terminology throughout codebase (renamed from "pipeline" for consistency with Redis documentation)
+-  **Indexing Terminology** - Renamed internal ``target_class`` to ``scope_class`` throughout to clarify semantic role. Added explicit ``:within`` field to IndexingRelationship for clearer instance-scoped index handling
 
 Fixed
 -----
 
--  Resolved atomicity issues and race conditions in save operations by consolidating all related operations into single Redis transaction with proper watch/multi/exec pattern and optimistic locking
--  Corrected transaction handling to ensure proper cleanup and error propagation
+-  URI formatting for DataType objects with logical database settings
+-  Transaction detection and validation flow for unique index operations
 
 Documentation
 -------------
 
--  Added comprehensive parameter documentation for database command methods including return value specifications and usage examples
+-  Enhanced ``save()`` method documentation with transaction restrictions
+-  Updated indexing and relationship cheatsheets with improved terminology
+-  Added comprehensive test coverage (48 new tests) for transactions, pipelines, and validation
 
 AI Assistance
 -------------
 
-This feature was implemented with AI assistance from Claude Sonnet 4.5, Opus 4.1 (Anthropic).
-
-* Architectural design of the connection chain pattern and shared Behavior module
-* Implementation of DataType-specific connection handlers  (ParentDelegationHandler, StandaloneConnectionHandler) and comprehensive test coverage
-* Error hierarchy design and transaction atomicity optimization
-* Documentation enhancement and URI formatting debugging
+This release was implemented with assistance from Claude (Anthropic) for architectural design, test coverage, and systematic refactoring of terminology across the codebase.
 
 
 .. _changelog-2.0.0.pre18:
@@ -118,7 +104,7 @@ Documentation
 AI Assistance
 -------------
 
-- Claude Code (claude-sonnet-4-5) provided implementation guidance, identified the ``initialize_with_keyword_args`` falsy value bug, wrote comprehensive test suite, and coordinated multi-file changes across serialization, management, and base modules.
+- Claude Code (claude-sonnet-4-5) provided implementation guidance, identified the ``initialize_with_keyword_args`` falsy value bug, wrote test coverage, and coordinated multi-file changes across serialization, management, and base modules.
 
 - Issue analysis, implementation guidance, test verification, and documentation for JSON serialization changes and encrypted field security fix.
 
@@ -132,19 +118,17 @@ AI Assistance
 Added
 -----
 
-- **SortedSet#add**: Full ZADD option support (NX, XX, GT, LT, CH) for atomic conditional operations and accurate change tracking. This enables proper index management with timestamp preservation, update-only operations, conditional score updates, and analytics tracking. Closes issue #135.
+- **SortedSet#add** - Full ZADD option support (NX, XX, GT, LT, CH) for atomic conditional operations and accurate change tracking. Closes #135
 
 Fixed
 -----
 
-- Restored objid provenance tracking when loading objects from Redis. The ``ObjectIdentifier`` feature now infers the generator type (:uuid_v7, :uuid_v4, :hex) from the objid format, enabling dependent features like ``ExternalIdentifier`` to derive external identifiers from loaded objects. PR #131
+- Restored objid provenance tracking when loading objects from Redis, enabling dependent features to derive external identifiers. PR #131
 
 AI Assistance
 -------------
 
-- Claude Code assisted with implementing the ``infer_objid_generator`` method and updating the setter logic in ``lib/familia/features/object_identifier.rb``.
-
-- Claude Code assisted with Redis ZADD option semantics research, mutual exclusivity validation design, comprehensive test case matrix creation (50+ test cases), and YAML documentation examples.
+- Claude (Anthropic) assisted with objid generator inference implementation and ZADD option validation design.
 
 .. _changelog-2.0.0.pre16:
 
@@ -154,57 +138,29 @@ AI Assistance
 Added
 -----
 
-- Added support for instance-scoped unique indexes via ``unique_index`` with ``within:`` parameter. Issue #128
-
-  Example: ``unique_index :badge_number, :badge_index, within: Company`` creates per-company unique badge lookups using HashKey DataType.
+- **Instance-scoped unique indexes** via ``unique_index`` with ``within:`` parameter for per-scope unique lookups. Issue #128
 
 Changed
 -------
 
-- **BREAKING**: Consolidated relationships API by replacing ``tracked_in`` and ``member_of`` with unified ``participates_in`` method. PR #110
-- **BREAKING**: Renamed ``context_class`` terminology to ``target_class`` throughout relationships module for clarity
-- **BREAKING**: Removed ``tracking.rb`` and ``membership.rb`` modules, merged functionality into ``participation.rb``
-- **BREAKING**: Updated method names and configuration keys to use ``target`` instead of ``context`` terminology
-- Added ``bidirectional`` parameter to ``participates_in`` to control generation of convenience methods (default: true)
-- Added support for different collection types (sorted_set, set, list) in unified ``participates_in`` API
-- Renamed ``class_tracked_in`` to ``class_participates_in`` for consistency
+- **BREAKING**: Consolidated relationships API - replaced ``tracked_in`` and ``member_of`` with unified ``participates_in`` method. PR #110
 
-- Renamed DataType classes to avoid Ruby namespace confusion: ``Familia::String`` → ``Familia::StringKey``, ``Familia::List`` → ``Familia::ListKey``
-- Added dual registration for both traditional and explicit method names (``string``/``stringkey``, ``list``/``listkey``)
-- Updated ``Counter`` and ``Lock`` to inherit from ``StringKey`` instead of ``String``
+- **BREAKING**: Renamed indexing API methods for clarity. Issue #128
+  - ``class_indexed_by`` → ``unique_index``
+  - ``indexed_by`` → ``multi_index``
+  - Changed ``multi_index`` to use ``UnsortedSet`` instead of ``SortedSet``
 
-- **BREAKING:** Renamed indexing API methods for clarity. Issue #128
-
-  - ``class_indexed_by`` → ``unique_index`` (1:1 field-to-object mapping via HashKey)
-  - ``indexed_by`` → ``multi_index`` (1:many field-to-objects mapping via UnsortedSet)
-  - Parameter ``target:`` → ``within:`` for consistency across both index types
-
-- **BREAKING:** Changed ``multi_index`` to use ``UnsortedSet`` instead of ``SortedSet``. Issue #128
-
-  Multi-value indexes no longer include temporal scoring. This aligns with the design philosophy that indexing is for finding objects by attribute, not ordering them. Sort results in Ruby when needed: ``employees.sort_by(&:hire_date)``
+- **DataType class renaming** to avoid Ruby namespace conflicts: ``Familia::String`` → ``Familia::StringKey``, ``Familia::List`` → ``Familia::ListKey``, etc., with dual registration for compatibility
 
 Documentation
 -------------
 
-- Updated overview documentation to explain dual naming system and namespace safety benefits
-- Enhanced examples to demonstrate both traditional and explicit DataType method naming
-
-- Updated inline module documentation
-    - ``Familia::Features::Relationships::Indexing`` with comprehensive examples, terminology guide, and design philosophy.
-    - ``Familia::Features::Relationships::Participation`` to clarify differences from indexing module.
+- Updated indexing and participation module documentation with comprehensive examples and design philosophy
 
 AI Assistance
 -------------
 
-- Comprehensive analysis of existing ``tracked_in`` and ``member_of`` implementations
-- Design and implementation of unified ``participates_in`` API integrating both functionalities
-- Systematic refactoring of codebase terminology from context to target
-- Complete test suite updates to verify API consolidation and new functionality
-
-- DataType class renaming and dual registration system implementation designed and developed with Claude Code assistance
-- All test updates and documentation enhancements created with AI support
-
-- Architecture design, implementation, test updates, and documentation for indexing API refactoring completed with Claude Code assistance. Issue #128
+- Claude (Anthropic) assisted with relationship API consolidation, DataType renaming, and indexing API refactoring.
 
 .. _changelog-2.0.0.pre14:
 
@@ -214,19 +170,18 @@ AI Assistance
 Changed
 -------
 
-- **BREAKING CHANGE**: Renamed ``Familia::Refinements::TimeUtils`` to ``Familia::Refinements::TimeLiterals`` to better reflect the module's primary purpose of enabling numeric and string values to be treated as time unit literals (e.g., ``5.minutes``, ``"30m".in_seconds``). Functionality remains the same - only the module name has changed. Users must update their refinement usage from ``using Familia::Refinements::TimeUtils`` to ``using Familia::Refinements::TimeLiterals``.
+- **BREAKING**: Renamed ``TimeUtils`` to ``TimeLiterals`` to better reflect module purpose. PR #100
 
 Fixed
 -----
 
-- Fixed ExternalIdentifier HashKey method calls by replacing incorrect ``.del()`` calls with ``.remove_field()`` in three critical locations: extid setter (cleanup old mapping when changing value), find_by_extid (cleanup orphaned mapping when object not found), and destroy! (cleanup mapping when object is destroyed). Added comprehensive test coverage for all scenarios to prevent regression. PR #100
+- **CRITICAL**: Fixed Redis connection persistence for standalone DataType objects. PR #107
+- Fixed ExternalIdentifier HashKey cleanup using correct ``remove_field()`` method. PR #100
 
 AI Assistance
 -------------
 
-- Claude Code helped rename TimeUtils to TimeLiterals throughout the codebase, including module name, file path, all usage references, and updating existing documentation.
-- Gemini 2.5 Flash wrote the inline docs for TimeLiterals based on a discussion re: naming rationale.
-- Claude Code fixed the ExternalIdentifier HashKey method bug, replacing incorrect ``.del()`` calls with proper ``.remove_field()`` calls, and implemented test coverage for the affected scenarios.
+- Claude (Anthropic) and Gemini assisted with TimeLiterals refactoring and ExternalIdentifier fixes.
 
 .. _changelog-2.0.0.pre13:
 
@@ -236,61 +191,39 @@ AI Assistance
 Added
 -----
 
-- **Feature Autoloading System**: Features can now automatically discover and load extension files from your project directories. When you include a feature like ``safe_dump``, Familia searches for configuration files using conventional patterns like ``{model_name}/{feature_name}_*.rb``, enabling clean separation between core model definitions and feature-specific configurations. See ``docs/migrating/v2.0.0-pre13.md`` for migration details.
+- **Feature Autoloading System** - Features automatically discover and load extension files from project directories using conventional patterns. PR #97
 
-- **Consolidated autoloader architecture**: Introduced ``Familia::Features::Autoloader`` as a shared utility for consistent file loading patterns across the framework, supporting both general-purpose and feature-specific autoloading scenarios.
-
-- Added ``PER_MONTH`` constant (2,629,746 seconds = 30.437 days) derived from Gregorian year for consistent month calculations.
-- Added ``months``, ``month``, and ``in_months`` conversion methods to Numeric refinement.
-- Added month unit mappings (``'mo'``, ``'month'``, ``'months'``) to TimeLiterals ``UNIT_METHODS`` hash.
-
-- **Error Handling**: Added ``NotSupportedError`` for invalid serialization mode combinations in encryption subsystem. PR #97
+- **Month calculations** - Added ``PER_MONTH`` constant and month conversion methods to TimeLiterals refinement. Issue #94
 
 Changed
 -------
 
-- Refactored time and numeric extensions from global monkey patches to proper Ruby refinements for better encapsulation and reduced global namespace pollution
-- Updated all internal classes to use refinements via ``using Familia::Refinements::TimeLiterals`` statements
-- Added centralized ``RefinedContext`` module in test helpers to support refinement testing in tryouts files
-
-- Updated ``PER_YEAR`` constant to use Gregorian year (31,556,952 seconds = 365.2425 days) for calendar consistency.
-
-- **Performance**: Replaced stdlib JSON with OJ gem for 2-5x faster JSON operations and reduced memory allocation. All existing code remains compatible through mimic_JSON mode. PR #97
-
-- **Encryption**: Enhanced serialization safety for encrypted fields with improved ConcealedString handling across different JSON processing modes. Strengthened protection against accidental data exposure during serialization. PR #97
+- **Performance** - Replaced stdlib JSON with OJ gem for 2-5x faster operations. PR #97
+- Refactored time/numeric extensions from global monkey patches to Ruby refinements
+- Enhanced encryption serialization safety with improved ConcealedString handling
 
 Fixed
 -----
 
-- Fixed byte conversion logic in ``to_bytes`` method to correctly handle exact 1024-byte boundaries (``size >= 1024`` instead of ``size > 1024``)
-- Resolved refinement testing issues in tryouts by implementing ``eval``-based code execution within refined contexts
-
-- Fixed TimeLiterals refinement ``months_old`` and ``years_old`` methods returning incorrect values (raw seconds instead of months/years). The underlying ``age_in`` method now properly handles ``:months`` and ``:years`` units. Issue #94.
-- Fixed calendar consistency issue where ``12.months != 1.year`` by updating ``PER_YEAR`` to use Gregorian year (365.2425 days) and defining ``PER_MONTH`` as ``PER_YEAR / 12``.
+- Fixed ``months_old`` and ``years_old`` methods returning raw seconds instead of proper units. Issue #94
+- Fixed byte conversion boundary logic (``size >= 1024`` instead of ``size > 1024``)
+- Fixed calendar consistency where ``12.months != 1.year`` by using Gregorian year
 
 Security
 --------
 
-- **Encryption**: Improved concealed value protection during JSON serialization, ensuring encrypted data remains properly protected across all OJ serialization modes. PR #97
+- Improved concealed value protection during JSON serialization across all OJ modes. PR #97
 
 Documentation
 -------------
 
-- **Feature System Autoloading Guide**: Added comprehensive guide at ``docs/guides/Feature-System-Autoloading.md`` explaining the new autoloading system, including file naming conventions, directory patterns, and usage examples.
-- **Enhanced API documentation**: Added detailed YARD documentation for autoloading modules and methods.
+- Added Feature System Autoloading guide with conventions and usage examples
+- Enhanced YARD documentation for autoloading modules
 
 AI Assistance
 -------------
 
-- Provided comprehensive analysis of Ruby refinement scoping issues and designed the eval-based testing solution
-- Assisted with refactoring global extensions to proper refinements while maintaining backward compatibility
-- Helped debug and fix the byte conversion boundary condition bug
-
-- Significant AI assistance in architectural design and implementation of the feature-specific autoloading system, including pattern matching logic, Ruby introspection methods, and comprehensive debugging of edge cases and thread safety considerations.
-
-- Claude Code assisted with implementing the fix for broken ``months_old`` and ``years_old`` methods in the TimeLiterals refinement, including analysis, implementation, testing, and documentation.
-
-- Performance optimization research and OJ gem integration strategy, including compatibility analysis and testing approach for seamless stdlib JSON replacement. PR #97
+- Claude (Anthropic) assisted with refinement refactoring, autoloading system design, and OJ integration.
 
 2.0.0.pre12 — 2025-09-04
 ========================
