@@ -225,23 +225,43 @@ module Familia
         # Default values are intentionally NOT set here
       end
 
-      # Implementing classes can define an init method to do any
-      # additional initialization. Notice that this is called
-      # after the fields are set.
+      # Implementing classes can define an init method to do any additional
+      # initialization. Notice that this is called AFTER fields are set from
+      # kwargs, so kwargs have been consumed and are no longer available.
+      #
+      # IMPORTANT: Use ||= in init to apply defaults without overriding:
+      #   def init
+      #     @email ||= email               # Preserves value already set
+      #     @status ||= 'pending'          # Applies default if nil
+      #   end
+      #
       init
     end
 
-    # Override this method in subclasses for custom initialization logic.
-    # This is called AFTER fields are set and relatives are initialized.
+    # Initialization method called at the end of initialize
     #
-    # DO NOT override initialize() - use this init() hook instead.
+    # Override this method to apply defaults, run validations, or setup
+    # callbacks. It's recommended to call super as other modules like
+    # features can also override init.
     #
-    # Example:
-    #   def init(name = nil)
-    #     @name = name || SecureRandom.hex(4)
+    # IMPORTANT: The init method receieves no arguments. By the time this runs,
+    # all arguments to initialize have already been consumed and used to set
+    # fields. Use the ||= operator to preserve values already set:
+    #
+    #   def init(email: nil, user_id: nil, **kwargs)
+    #     @email ||= email                  # Preserves value from new()
+    #     @user_id ||= user_id              # Preserves value from new()
+    #     @created_at ||= Familia.now       # Applies default if not set
+    #
+    #     # Example of additional initialization logic
+    #     validate_email_format if @email
+    #     setup_callbacks
     #   end
-    def init(*args, **kwargs)
-      # Default no-op
+    #
+    # @return [void]
+    #
+    def init
+      # Default no-op - override in subclasses
     end
 
     # Sets up related Database objects for the instance

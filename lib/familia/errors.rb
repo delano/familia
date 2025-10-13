@@ -10,7 +10,8 @@ module Familia
   # Base exception class for Horreum models
   class HorreumError < Problem; end
 
-  # Raised when an object creation fails (e.g. the identifier is already in use)
+  # Raised when an object creation fails (e.g. the identifier
+  # is already in use)
   class CreationError < HorreumError; end
 
   # Raised when an object lacks a required identifier
@@ -19,7 +20,8 @@ module Familia
   # Raised when a key is expected to be unique but isn't
   class NonUniqueKey < PersistenceError; end
 
-  # Raised when watch failed (e.g. key was modified), typically retry
+  # Raised when watch failed (e.g. key was modified), typically
+  # retry
   class OptimisticLockError < PersistenceError; end
 
   # Raised when a field type is invalid or unexpected
@@ -31,13 +33,19 @@ module Familia
   # Raised when serialization or deserialization fails
   class SerializerError < HorreumError; end
 
-  # Raised when attempting to start transactions or pipelines on connection types that don't support them
+  # Raised when attempting to start transactions or pipelines on
+  # connection types that don't support them
   class OperationModeError < PersistenceError; end
+
+  # Raised when attempting to call a major method like save when
+  # inside a transaction or pipeline
+  class NestedTransactionError < OperationModeError; end
 
   # Raised when attempting to reference a field that doesn't exist
   class UnknownFieldError < HorreumError; end
 
-  # Raised when a value cannot be converted to a distinguishable string representation
+  # Raised when a value cannot be converted to a distinguishable
+  # string representation
   class NotDistinguishableError < HorreumError
     attr_reader :value
 
@@ -65,13 +73,15 @@ module Familia
     end
   end
 
-  # UnsortedSet Familia.connection_provider or use middleware to provide connections.
+  # UnsortedSet Familia.connection_provider or use middleware
+  # to provide connections.
   class NoConnectionAvailable < PersistenceError; end
 
   # Raised when a load method fails to find the requested object
   class NotFound < PersistenceError; end
 
-  # Raised when attempting to refresh an object whose key doesn't exist in the database
+  # Raised when attempting to refresh an object whose key
+  # doesn't exist in the database
   class KeyNotFoundError < NonUniqueKey
     attr_reader :key
 
@@ -85,7 +95,8 @@ module Familia
     end
   end
 
-  # Raised when attempting to create an object that already exists in the database
+  # Raised when attempting to create an object that already
+  # exists in the database
   class RecordExistsError < NonUniqueKey
     attr_reader :key
 

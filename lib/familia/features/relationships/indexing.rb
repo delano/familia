@@ -50,7 +50,7 @@ module Familia
       # Terminology:
       # - unique_index: 1:1 field-to-object mapping (HashKey)
       # - multi_index: 1:many field-to-objects mapping (UnsortedSet, no scores)
-      # - within: parent class for instance-scoped indexes
+      # - within: scope class providing uniqueness boundary for instance-scoped indexes
       # - query: whether to generate find_by_* methods (default: true)
       #
       # Key Patterns:
@@ -89,7 +89,7 @@ module Familia
           #
           # @param field [Symbol] The field to index on
           # @param index_name [Symbol] Name of the index
-          # @param within [Class, Symbol] The parent class that owns the index
+          # @param within [Class, Symbol] The scope class providing uniqueness context
           # @param query [Boolean] Whether to generate query methods
           #
           # @example Instance-scoped multi-value indexing
@@ -109,7 +109,7 @@ module Familia
           #
           # @param field [Symbol] The field to index on
           # @param index_name [Symbol] Name of the index hash
-          # @param within [Class, Symbol] Optional parent class for instance-scoped unique index
+          # @param within [Class, Symbol] Optional scope class for instance-scoped unique index
           # @param query [Boolean] Whether to generate query methods
           #
           # @example Class-level unique index
@@ -136,70 +136,68 @@ module Familia
 
           # Ensure proper DataType field is declared for index
           # Similar to ensure_collection_field in participation system
-          def ensure_index_field(target_class, index_name, field_type)
-            return if target_class.method_defined?(index_name) || target_class.respond_to?(index_name)
+          def ensure_index_field(scope_class, index_name, field_type)
+            return if scope_class.method_defined?(index_name) || scope_class.respond_to?(index_name)
 
-            target_class.send(field_type, index_name)
+            scope_class.send(field_type, index_name)
           end
         end
 
         # Instance methods for indexed objects
         module ModelInstanceMethods
-          # Update all indexes for a given parent context
-          # For class-level indexes (class_indexed_by), parent_context should be nil
-          # For relationship indexes (indexed_by), parent_context should be the parent instance
-          def update_all_indexes(old_values = {}, parent_context = nil)
+          # Update all indexes for a given scope context
+          # For class-level indexes (unique_index without within:), scope_context should be nil
+          # For instance-scoped indexes (with within:), scope_context should be the scope instance
+          def update_all_indexes(old_values = {}, scope_context = nil)
             return unless self.class.respond_to?(:indexing_relationships)
 
             self.class.indexing_relationships.each do |config|
               field = config.field
               index_name = config.index_name
-              target_class = config.target_class
               old_field_value = old_values[field]
 
               # Determine which update method to call
-              if target_class == self.class
+              if config.within.nil?
                 # Class-level index (unique_index without within:)
                 send("update_in_class_#{index_name}", old_field_value)
               else
-                # Relationship index (unique_index or multi_index with within:) - requires parent context
-                next unless parent_context
+                # Instance-scoped index (unique_index or multi_index with within:) - requires scope context
+                next unless scope_context
 
                 # Use config_name for method naming
-                target_class_config = Familia.resolve_class(config.target_class).config_name
-                send("update_in_#{target_class_config}_#{index_name}", parent_context, old_field_value)
+                scope_class_config = Familia.resolve_class(config.scope_class).config_name
+                send("update_in_#{scope_class_config}_#{index_name}", scope_context, old_field_value)
               end
             end
           end
 
-          # Remove from all indexes for a given parent context
-          # For class-level indexes (class_indexed_by), parent_context should be nil
-          # For relationship indexes (indexed_by), parent_context should be the parent instance
-          def remove_from_all_indexes(parent_context = nil)
+          # Remove from all indexes for a given scope context
+          # For class-level indexes (unique_index without within:), scope_context should be nil
+          # For instance-scoped indexes (with within:), scope_context should be the scope instance
+          def remove_from_all_indexes(scope_context = nil)
             return unless self.class.respond_to?(:indexing_relationships)
 
             self.class.indexing_relationships.each do |config|
               index_name = config.index_name
-              target_class = config.target_class
 
               # Determine which remove method to call
-              if target_class == self.class
+              if config.within.nil?
                 # Class-level index (unique_index without within:)
                 send("remove_from_class_#{index_name}")
               else
-                # Relationship index (unique_index or multi_index with within:) - requires parent context
-                next unless parent_context
+                # Instance-scoped index (unique_index or multi_index with within:) - requires scope context
+                next unless scope_context
 
                 # Use config_name for method naming
-                target_class_config = Familia.resolve_class(config.target_class).config_name
-                send("remove_from_#{target_class_config}_#{index_name}", parent_context)
+                scope_class_config = Familia.resolve_class(config.scope_class).config_name
+                send("remove_from_#{scope_class_config}_#{index_name}", scope_context)
               end
             end
           end
 
           # Get all indexes this object appears in
-          # Note: For target-scoped indexes, this only shows class-level indexes
-          # since target-scoped indexes require a specific target instance
+          # Note: For instance-scoped indexes, this only shows class-level indexes
+          # since instance-scoped indexes require a specific scope instance
           #
           # @return [Array<Hash>] Array of index information
           def current_indexings
@@ -210,19 +208,18 @@ module Familia
             self.class.indexing_relationships.each do |config|
               field = config.field
               index_name = config.index_name
-              target_class = config.target_class
               cardinality = config.cardinality
               field_value = send(field)
 
               next unless field_value
 
-              if target_class == self.class
+              if config.within.nil?
                 # Class-level index (unique_index without within:) - check hash key using DataType
                 index_hash = self.class.send(index_name)
                 next unless index_hash.key?(field_value.to_s)
 
                 memberships << {
-                  target_class: 'class',
+                  scope_class: 'class',
                   index_name: index_name,
                   field: field,
                   field_value: field_value,
@@ -231,17 +228,17 @@ module Familia
                   type: 'unique_index',
                 }
               else
-                # Instance-scoped index (unique_index or multi_index with within:) - cannot check without target instance
-                # This would require scanning all possible target instances
+                # Instance-scoped index (unique_index or multi_index with within:) - cannot check without scope instance
+                # This would require scanning all possible scope instances
                 memberships << {
-                  target_class: config.target_class_config_name,
+                  scope_class: config.scope_class_config_name,
                   index_name: index_name,
                   field: field,
                   field_value: field_value,
-                  index_key: 'target_dependent',
+                  index_key: 'scope_dependent',
                   cardinality: cardinality,
                   type: cardinality == :unique ? 'unique_index' : 'multi_index',
-                  note: 'Requires target instance for verification',
+                  note: 'Requires scope instance for verification',
                 }
               end
             end
@@ -249,9 +246,9 @@ module Familia
             memberships
           end
 
-          # Check if this object is indexed in a specific target
+          # Check if this object is indexed in a specific scope
           # For class-level indexes, checks the hash key
-          # For target-scoped indexes, returns false (requires target instance)
+          # For instance-scoped indexes, returns false (requires scope instance)
           def indexed_in?(index_name)
             return false unless self.class.respond_to?(:indexing_relationships)
 
@@ -262,14 +259,12 @@ module Familia
             field_value = send(field)
             return false unless field_value
 
-            target_class = config.target_class
-
-            if target_class == self.class
+            if config.within.nil?
               # Class-level index (class_indexed_by) - check hash key using DataType
               index_hash = self.class.send(index_name)
               index_hash.key?(field_value.to_s)
             else
-              # Target-scoped index (indexed_by) - cannot verify without target instance
+              # Instance-scoped index (with within:) - cannot verify without scope instance
               false
             end
           end

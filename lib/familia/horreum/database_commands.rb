@@ -44,7 +44,18 @@ module Familia
         key_exists = self.class.exists?(identifier)
         return key_exists unless check_size
 
-        key_exists && !size.zero?
+        # Handle Redis::Future in transactions - skip size check
+        if key_exists.is_a?(Redis::Future)
+          return key_exists
+        end
+
+        current_size = size
+        # Handle Redis::Future from size call too
+        if current_size.is_a?(Redis::Future)
+          return current_size
+        end
+
+        key_exists && !current_size.zero?
       end
 
       # Returns the number of fields in the main object hash

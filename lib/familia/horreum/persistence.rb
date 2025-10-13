@@ -35,16 +35,22 @@ module Familia
     # Handles conversion between Ruby objects and Valkey hash storage
     #
     module Persistence
-      # Persists the object to Valkey storage with automatic timestamping.
+      # Persists the object to Valkey storage with automatic timestamping and validation.
       #
       # Saves the current object state to Valkey storage, automatically setting
       # created and updated timestamps if the object supports them. The method
-      # commits all persistent fields and optionally updates the key's expiration.
+      # validates unique indexes before the transaction, commits all persistent
+      # fields, and optionally updates the key's expiration.
       #
       # @param update_expiration [Boolean] Whether to update the key's expiration
       #   time after saving. Defaults to true.
       #
       # @return [Boolean] true if the save operation was successful, false otherwise.
+      #
+      # @raise [Familia::OperationModeError] If called within an existing transaction.
+      #   Guards need to read current values, which is not possible inside MULTI/EXEC.
+      # @raise [Familia::RecordExistsError] If a unique index constraint is violated
+      #   for any class-level unique_index relationships.
       #
       # @example Save an object to Valkey
       #   user = User.new(name: "John", email: "john@example.com")
@@ -55,17 +61,37 @@ module Familia
       #   user.save(update_expiration: false)
       #   # => true
       #
+      # @example Handle duplicate unique index
+      #   user2 = User.new(name: "Jane", email: "john@example.com")
+      #   user2.save
+      #   # => raises Familia::RecordExistsError
+      #
+      # @note Cannot be called within a transaction. Call save first to start
+      #   the transaction, or use commit_fields/hmset for manual field updates
+      #   within transactions.
+      #
       # @note When Familia.debug? is enabled, this method will trace the save
       #   operation for debugging purposes.
       #
       # @see #commit_fields The underlying method that performs the field persistence
+      # @see #guard_unique_indexes! Automatic validation of class-level unique indexes
       #
       def save(update_expiration: true)
+        # Prevent save within transaction - unique index guards require read operations
+        # which are not available in Redis MULTI/EXEC blocks
+        if Fiber[:familia_transaction]
+          raise Familia::OperationModeError,
+            "Cannot call save within a transaction. Save operations must be called outside transactions to ensure unique constraints can be validated."
+        end
+
         Familia.trace :SAVE, nil, self.class.uri if Familia.debug?
 
         # Update timestamp fields before saving
         self.created ||= Familia.now if respond_to?(:created)
         self.updated = Familia.now if respond_to?(:updated)
+
+        # Validate unique indexes BEFORE the transaction
+        guard_unique_indexes!
 
         # Everything in ONE transaction for complete atomicity
         result = transaction do |_conn|
@@ -134,6 +160,12 @@ module Familia
       # If exists, raise Familia::RecordExistsError
       # If not exists, save
       def save_if_not_exists!(update_expiration: true)
+        # Prevent save_if_not_exists! within transaction - needs to read existence state
+        if Fiber[:familia_transaction]
+          raise Familia::OperationModeError,
+            "Cannot call save_if_not_exists! within a transaction. This method must be called outside transactions to properly check existence."
+        end
+
         identifier_field = self.class.identifier_field
 
         Familia.ld "[save_if_not_exists]: #{self.class} #{identifier_field}=#{identifier}"
@@ -461,12 +493,46 @@ module Familia
         end
       end
 
+      # Validates that unique index constraints are satisfied before saving
+      # This must be called OUTSIDE of transactions to allow reading current values
+      #
+      # @raise [Familia::RecordExistsError] If a unique index constraint is violated
+      #   for any class-level unique_index relationships
+      #
+      # @note Only validates class-level unique indexes (without within: parameter).
+      #   Instance-scoped indexes (with within:) are validated automatically when
+      #   calling add_to_*_index methods:
+      #
+      # @example Instance-scoped indexes need to be called explicitly but when
+      # called they will perform the validation automatically:
+      #   employee.add_to_company_badge_index(company) # raises on duplicate
+      #
+      # @return [void]
+      #
+      def guard_unique_indexes!
+        return unless self.class.respond_to?(:indexing_relationships)
+
+        self.class.indexing_relationships.each do |rel|
+          # Only validate unique indexes (not multi_index)
+          next unless rel.cardinality == :unique
+
+          # Only validate class-level indexes (skip instance-scoped)
+          next if rel.within
+
+          # Call the validation method if it exists
+          validate_method = :"guard_unique_#{rel.index_name}!"
+          send(validate_method) if respond_to?(validate_method)
+        end
+
+        nil # Explicit nil return as documented
+      end
+
       # Automatically update class-level indexes after save
       #
       # Iterates through class-level indexing relationships and calls their
       # corresponding add_to_class_* methods to populate indexes. Only processes
-      # class-level indexes (where target_class == self.class), skipping
-      # instance-scoped indexes which require parent context.
+      # class-level indexes (where within is nil), skipping instance-scoped
+      # indexes which require scope context.
       #
       # Uses idempotent Redis commands (HSET for unique_index) so repeated calls
       # are safe and have negligible performance overhead. Note that multi_index
@@ -493,12 +559,12 @@ module Familia
         return unless self.class.respond_to?(:indexing_relationships)
 
         self.class.indexing_relationships.each do |rel|
-          # Skip instance-scoped indexes (require parent context)
+          # Skip instance-scoped indexes (require scope context)
           # Instance-scoped indexes must be manually populated because they need
-          # the parent object reference (e.g., employee.add_to_company_badge_index(company))
-          unless rel.target_class == self.class
+          # the scope instance reference (e.g., employee.add_to_company_badge_index(company))
+          if rel.within
             Familia.ld <<~LOG_MESSAGE
-              [auto_update_class_indexes] Skipping #{rel.index_name} (requires parent context)
+              [auto_update_class_indexes] Skipping #{rel.index_name} (requires scope context)
             LOG_MESSAGE
             next
           end

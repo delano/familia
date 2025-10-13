@@ -143,7 +143,8 @@ module Familia
           val = args.first
 
           # If no value provided, return current stored value
-          return hget(field_name) if val.nil?
+          # Handle Redis::Future objects during transactions
+          return hget(field_name) if val.nil? || val.is_a?(Redis::Future)
 
           begin
             # Trace the operation if debugging is enabled

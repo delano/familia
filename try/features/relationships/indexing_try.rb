@@ -86,7 +86,7 @@ sample = @company.sample_from_department(@emp2.department)
 
 ## First indexing relationship has correct configuration
 config = @user1.class.indexing_relationships.first
-[config.field, config.index_name, config.target_class == TestUser, config.query]
+[config.field, config.index_name, config.scope_class == TestUser, config.query]
 #=> [:email, :email_lookup, true, true]
 
 ## Second indexing relationship has query disabled
@@ -189,7 +189,7 @@ TestUser.respond_to?(:find_by_username)
 
 ## Instance-scoped unique index has correct configuration
 config = @emp1.class.indexing_relationships.find { |r| r.field == :badge_number }
-[config.index_name, config.target_class, config.cardinality]
+[config.index_name, config.scope_class, config.cardinality]
 #=> [:badge_index, TestCompany, :unique]
 
 ## Target class gets finder method for unique index
@@ -251,6 +251,16 @@ found_emps = @company.find_all_by_badge_number('BADGE002')
 found_emps.map(&:emp_id)
 #=> ["emp_002"]
 
+## Instance-scoped bulk query filters nil inputs
+badges_with_nil = [nil, 'BADGE001', nil]
+found_emps = @company.find_all_by_badge_number(badges_with_nil)
+found_emps.map(&:emp_id)
+#=> ["emp_001"]
+
+## Instance-scoped bulk query with only nil returns empty
+@company.find_all_by_badge_number([nil, nil]).length
+#=> 0
+
 ## Update badge index entry
 old_badge = @emp1.badge_number
 @emp1.badge_number = 'BADGE001_NEW'
@@ -277,7 +287,7 @@ old_badge = @emp1.badge_number
 
 ## Context-scoped multi_index relationship has correct configuration
 config = @emp1.class.indexing_relationships.find { |r| r.field == :department }
-[config.field, config.index_name, config.target_class]
+[config.field, config.index_name, config.scope_class]
 #=> [:department, :dept_index, TestCompany]
 
 ## Context-scoped methods are generated with collision-free naming
@@ -419,6 +429,20 @@ emails = ['bob@example.com', 'nonexistent@example.com']
 found = TestUser.find_all_by_email(emails)
 found.map(&:user_id)
 #=> ["user_002"]
+
+## Bulk query filters nil inputs before querying
+emails_with_nil = [nil, 'bob@example.com', nil]
+found = TestUser.find_all_by_email(emails_with_nil)
+found.map(&:user_id)
+#=> ["user_002"]
+
+## Bulk query with only nil inputs returns empty array
+TestUser.find_all_by_email([nil, nil]).length
+#=> 0
+
+## Bulk query with nil as single value returns empty array
+TestUser.find_all_by_email(nil).length
+#=> 0
 
 ## Adding to index with nil field value does nothing
 @user_nil = TestUser.new(user_id: 'user_nil', email: nil)

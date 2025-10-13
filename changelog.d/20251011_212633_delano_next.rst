@@ -1,0 +1,13 @@
+
+Changed
+-------
+
+- **IndexingRelationship**: Added explicit ``:within`` field to preserve the original DSL parameter, replacing brittle ``target_class`` equality checks with clearer ``within.nil?`` checks. This makes the distinction between class-level and instance-scoped indexes more explicit and prevents potential issues with inheritance scenarios.
+
+AI Assistance
+-------------
+
+- Design review and architectural analysis by Claude Code (Sonnet 4.5) via second-opinion agent, identifying brittleness in class comparison logic and recommending explicit storage of the ``within`` parameter.
+- Implementation of the ``within`` field addition across IndexingRelationship, generators, and usage sites by Claude Code.
+- All tests verified passing with no behavioral changes.
+..

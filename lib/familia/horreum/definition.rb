@@ -467,7 +467,8 @@ module Familia
 
             # If no value is provided to this fast attribute method, make a call
             # to the db to return the current stored value of the hash field.
-            return hget field_name if val.nil?
+            # Handle Redis::Future objects during transactions
+            return hget field_name if val.nil? || val.is_a?(Redis::Future)
 
             begin
               # Trace the operation if debugging is enabled.
