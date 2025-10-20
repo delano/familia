@@ -152,10 +152,11 @@ module Familia
 
       # Non-raising variant of save_if_not_exists!
       #
-      # @return [Boolean] true on success, false if object exists or lock conflict
+      # @return [Boolean] true on success, false if object exists
+      # @raise [Familia::OptimisticLockError] If concurrency conflict persists after retries
       def save_if_not_exists(...)
         save_if_not_exists!(...)
-      rescue RecordExistsError, OptimisticLockError
+      rescue RecordExistsError
         false
       end
 
