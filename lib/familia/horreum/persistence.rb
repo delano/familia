@@ -81,7 +81,7 @@ module Familia
         # which are not available in Redis MULTI/EXEC blocks
         if Fiber[:familia_transaction]
           raise Familia::OperationModeError,
-            "Cannot call save within a transaction. Save operations must be called outside transactions to ensure unique constraints can be validated."
+            'Cannot call save within a transaction. Save operations must be called outside transactions to ensure unique constraints can be validated.'
         end
 
         Familia.trace :SAVE, nil, self.class.uri if Familia.debug?
@@ -162,8 +162,10 @@ module Familia
       def save_if_not_exists!(update_expiration: true)
         # Prevent save_if_not_exists! within transaction - needs to read existence state
         if Fiber[:familia_transaction]
-          raise Familia::OperationModeError,
-            "Cannot call save_if_not_exists! within a transaction. This method must be called outside transactions to properly check existence."
+          raise Familia::OperationModeError, <<~ERROR_MESSAGE
+            Cannot call save_if_not_exists! within a transaction. This method
+            must be called outside transactions to properly check existence.
+          ERROR_MESSAGE
         end
 
         identifier_field = self.class.identifier_field
