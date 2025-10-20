@@ -121,8 +121,13 @@ module Familia
       #
       # Conditionally persists the object to Valkey storage by first checking if the
       # identifier field already exists. If the object already exists in storage,
-      # raises an error. Otherwise, proceeds with a normal save operation including
-      # automatic timestamping.
+      # raises an error. Otherwise, performs the same operations as save:
+      # - Updates timestamp fields (created/updated)
+      # - Validates unique indexes
+      # - Saves all fields
+      # - Updates expiration
+      # - Updates class-level indexes
+      # - Adds to instances collection
       #
       # This method provides atomic conditional creation to prevent duplicate objects
       # from being saved when uniqueness is required based on the identifier field.
@@ -149,16 +154,13 @@ module Familia
       #   user.save_if_not_exists(update_expiration: false)
       #   # => true
       #
-      # @note This method uses HSETNX to atomically check and set the identifier
-      #   field, ensuring race-condition-free conditional creation.
+      # @note This method uses optimistic locking (WATCH) to ensure race-condition-free
+      #   conditional creation. The existence check and save happen atomically.
       #
-      # @see #save The underlying save method called when the object doesn't exist
+      # @note When an object doesn't exist, this method performs the same operations
+      #   as save, ensuring consistent behavior between the two methods.
       #
-      # Check if save_if_not_exists is implemented correctly. It should:
-      #
-      # Check if record exists
-      # If exists, raise Familia::RecordExistsError
-      # If not exists, save
+      # @see #save For the standard unconditional save operation
       def save_if_not_exists!(update_expiration: true)
         # Prevent save_if_not_exists! within transaction - needs to read existence state
         if Fiber[:familia_transaction]
@@ -172,6 +174,13 @@ module Familia
 
         Familia.ld "[save_if_not_exists]: #{self.class} #{identifier_field}=#{identifier}"
         Familia.trace :SAVE_IF_NOT_EXISTS, nil, self.class.uri if Familia.debug?
+
+        # Update timestamp fields before saving (same as save)
+        self.created ||= Familia.now if respond_to?(:created)
+        self.updated = Familia.now if respond_to?(:updated)
+
+        # Validate unique indexes BEFORE the transaction (same as save)
+        guard_unique_indexes!
 
         attempts = 0
         begin
@@ -187,6 +196,9 @@ module Familia
 
               # Auto-index for class-level indexes after successful save
               auto_update_class_indexes
+
+              # Add to instances collection if available (same as save)
+              self.class.instances.add(identifier, Familia.now) if self.class.respond_to?(:instances)
             end
 
             Familia.ld "[save_if_not_exists]: txn_result=#{txn_result.inspect}"
