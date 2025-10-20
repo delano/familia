@@ -130,7 +130,7 @@ module Familia
         begin
           attempts += 1
 
-          watch do
+          result = watch do
             raise Familia::RecordExistsError, dbkey if exists?
 
             txn_result = transaction do |_multi|
@@ -139,8 +139,13 @@ module Familia
 
             Familia.ld "[save_if_not_exists]: txn_result=#{txn_result.inspect}"
 
-            txn_result.successful?
+            txn_result
           end
+
+          Familia.ld "[save_if_not_exists]: result=#{result.inspect}"
+
+          # Return boolean indicating success (consistent with save method)
+          !result.nil?
         rescue OptimisticLockError => e
           Familia.ld "[save_if_not_exists]: OptimisticLockError (#{attempts}): #{e.message}"
           raise if attempts >= 3
