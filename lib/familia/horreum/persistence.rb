@@ -35,80 +35,43 @@ module Familia
     # Handles conversion between Ruby objects and Valkey hash storage
     #
     module Persistence
-      # Persists the object to Valkey storage with automatic timestamping and validation.
+      # Persists object state to storage with timestamps, validation, and indexing.
       #
-      # Saves the current object state to Valkey storage, automatically setting
-      # created and updated timestamps if the object supports them. The method
-      # validates unique indexes before the transaction, commits all persistent
-      # fields, and optionally updates the key's expiration.
+      # Performs a complete save operation in an atomic transaction:
+      # - Sets created/updated timestamps
+      # - Validates unique index constraints
+      # - Persists all fields
+      # - Updates expiration (optional)
+      # - Updates class-level indexes
+      # - Adds to instances collection
       #
-      # @param update_expiration [Boolean] Whether to update the key's expiration
-      #   time after saving. Defaults to true.
+      # @param update_expiration [Boolean] Whether to refresh key expiration (default: true)
+      # @return [Boolean] true on success
       #
-      # @return [Boolean] true if the save operation was successful, false otherwise.
+      # @raise [Familia::OperationModeError] If called within a transaction
+      # @raise [Familia::RecordExistsError] If unique index constraint violated
       #
-      # @raise [Familia::OperationModeError] If called within an existing transaction.
-      #   Guards need to read current values, which is not possible inside MULTI/EXEC.
-      # @raise [Familia::RecordExistsError] If a unique index constraint is violated
-      #   for any class-level unique_index relationships.
-      #
-      # @example Save an object to Valkey
-      #   user = User.new(name: "John", email: "john@example.com")
-      #   user.save
-      #   # => true
-      #
-      # @example Save without updating expiration
-      #   user.save(update_expiration: false)
-      #   # => true
-      #
-      # @example Handle duplicate unique index
-      #   user2 = User.new(name: "Jane", email: "john@example.com")
-      #   user2.save
-      #   # => raises Familia::RecordExistsError
-      #
-      # @note Cannot be called within a transaction. Call save first to start
-      #   the transaction, or use commit_fields/hmset for manual field updates
-      #   within transactions.
-      #
-      # @note When Familia.debug? is enabled, this method will trace the save
-      #   operation for debugging purposes.
-      #
-      # @see #commit_fields The underlying method that performs the field persistence
-      # @see #guard_unique_indexes! Automatic validation of class-level unique indexes
+      # @example
+      #   user = User.new(email: "john@example.com")
+      #   user.save  # => true
       #
       def save(update_expiration: true)
         # Prevent save within transaction - unique index guards require read operations
         # which are not available in Redis MULTI/EXEC blocks
         if Fiber[:familia_transaction]
-          raise Familia::OperationModeError,
+          raise Familia::OperationModeError, <<~ERROR_MESSAGE
             'Cannot call save within a transaction. Save operations must be called outside transactions to ensure unique constraints can be validated.'
+          ERROR_MESSAGE
         end
 
         Familia.trace :SAVE, nil, self.class.uri if Familia.debug?
 
-        # Update timestamp fields before saving
-        self.created ||= Familia.now if respond_to?(:created)
-        self.updated = Familia.now if respond_to?(:updated)
-
-        # Validate unique indexes BEFORE the transaction
-        guard_unique_indexes!
+        # Prepare object for persistence (timestamps, validation)
+        prepare_for_save
 
         # Everything in ONE transaction for complete atomicity
         result = transaction do |_conn|
-          # 1. Save all fields
-          prepared_h = to_h_for_storage
-          hmset_result = hmset(prepared_h)
-
-          # 2. Set expiration in same transaction
-          self.update_expiration if update_expiration
-
-          # 3. Update class-level indexes
-          auto_update_class_indexes
-
-          # 4. Add to instances collection if available
-          self.class.instances.add(identifier, Familia.now) if self.class.respond_to?(:instances)
-
-          hmset_result
+          persist_to_storage(update_expiration)
         end
 
         Familia.ld "[save] #{self.class} #{dbkey} #{result} (update_expiration: #{update_expiration})"
@@ -117,50 +80,35 @@ module Familia
         !result.nil?
       end
 
-      # Saves the object to Valkey storage only if it doesn't already exist.
+      # Conditionally persists object only if it doesn't already exist in storage.
       #
-      # Conditionally persists the object to Valkey storage by first checking if the
-      # identifier field already exists. If the object already exists in storage,
-      # raises an error. Otherwise, performs the same operations as save:
-      # - Updates timestamp fields (created/updated)
-      # - Validates unique indexes
-      # - Saves all fields
-      # - Updates expiration
-      # - Updates class-level indexes
-      # - Adds to instances collection
+      # Uses optimistic locking (WATCH) to atomically check existence and save.
+      # If the object doesn't exist, performs identical operations as save.
+      # If it exists, raises an error with retry logic for optimistic lock failures.
       #
-      # This method provides atomic conditional creation to prevent duplicate objects
-      # from being saved when uniqueness is required based on the identifier field.
+      # `save_if_not_exists` doesn't call save because of the gap between checking
+      # existence and persisting the data. We can't check for existence inside the
+      # transaction because commands are queued and not executed until EXEC
+      # is called (if you try you get a Redis::Future object). So here we use a
+      # WATCH + MULTI/EXEC pattern to fail the transaction if the key is created
+      # (or modified in any way) to avoid silent data corruption♀︎.
+
+      # ♀︎ Additional note about WATCH + MULTI/EXEC in Valkey/Redis or any two
+      # step existence check in any database: although it is more cautious,
+      # it is not atomic. The only way to do that is if the database process
+      # can determine itself whether the record already exists or not. For
+      # Valkey/Redis, that means writing the lua to do that.
       #
-      # @param update_expiration [Boolean] Whether to update the key's expiration
-      #   time after saving. Defaults to true.
+      # @param update_expiration [Boolean] Whether to refresh key expiration (default: true)
+      # @return [Boolean] true on successful save
       #
-      # @return [Boolean] true if the save operation was successful
+      # @raise [Familia::RecordExistsError] If object already exists
+      # @raise [Familia::OptimisticLockError] If retries exhausted (max 3 attempts)
+      # @raise [Familia::OperationModeError] If called within a transaction
       #
-      # @raise [Familia::RecordExistsError] If an object with the same identifier
-      #   already exists in Valkey storage
-      #
-      # @example Save a new user only if it doesn't exist
-      #   user = User.new(id: 123, name: "John")
-      #   user.save_if_not_exists
-      #   # => true (saved successfully)
-      #
-      # @example Attempting to save an existing object
-      #   existing_user = User.new(id: 123, name: "Jane")
-      #   existing_user.save_if_not_exists
-      #   # => raises Familia::RecordExistsError
-      #
-      # @example Save without updating expiration
-      #   user.save_if_not_exists(update_expiration: false)
-      #   # => true
-      #
-      # @note This method uses optimistic locking (WATCH) to ensure race-condition-free
-      #   conditional creation. The existence check and save happen atomically.
-      #
-      # @note When an object doesn't exist, this method performs the same operations
-      #   as save, ensuring consistent behavior between the two methods.
-      #
-      # @see #save For the standard unconditional save operation
+      # @example
+      #   user = User.new(id: 123)
+      #   user.save_if_not_exists!  # => true or raises
       def save_if_not_exists!(update_expiration: true)
         # Prevent save_if_not_exists! within transaction - needs to read existence state
         if Fiber[:familia_transaction]
@@ -175,12 +123,8 @@ module Familia
         Familia.ld "[save_if_not_exists]: #{self.class} #{identifier_field}=#{identifier}"
         Familia.trace :SAVE_IF_NOT_EXISTS, nil, self.class.uri if Familia.debug?
 
-        # Update timestamp fields before saving (same as save)
-        self.created ||= Familia.now if respond_to?(:created)
-        self.updated = Familia.now if respond_to?(:updated)
-
-        # Validate unique indexes BEFORE the transaction (same as save)
-        guard_unique_indexes!
+        # Prepare object for persistence (timestamps, validation)
+        prepare_for_save
 
         attempts = 0
         begin
@@ -190,15 +134,7 @@ module Familia
             raise Familia::RecordExistsError, dbkey if exists?
 
             txn_result = transaction do |_multi|
-              hmset(to_h_for_storage)
-
-              self.update_expiration if update_expiration
-
-              # Auto-index for class-level indexes after successful save
-              auto_update_class_indexes
-
-              # Add to instances collection if available (same as save)
-              self.class.instances.add(identifier, Familia.now) if self.class.respond_to?(:instances)
+              persist_to_storage(update_expiration)
             end
 
             Familia.ld "[save_if_not_exists]: txn_result=#{txn_result.inspect}"
@@ -214,6 +150,9 @@ module Familia
         end
       end
 
+      # Non-raising variant of save_if_not_exists!
+      #
+      # @return [Boolean] true on success, false if object exists or lock conflict
       def save_if_not_exists(...)
         save_if_not_exists!(...)
       rescue RecordExistsError, OptimisticLockError
@@ -588,6 +527,50 @@ module Familia
           send(add_method) if respond_to?(add_method)
         end
       end
+
+      # Prepares the object for persistence by setting timestamps and validating constraints
+      #
+      # This method is called by both save and save_if_not_exists to ensure consistent
+      # preparation logic. It updates created/updated timestamps and validates unique
+      # indexes before the transaction begins.
+      #
+      # @return [void]
+      #
+      def prepare_for_save
+        # Update timestamp fields before saving
+        self.created ||= Familia.now if respond_to?(:created)
+        self.updated = Familia.now if respond_to?(:updated)
+
+        # Validate unique indexes BEFORE the transaction
+        guard_unique_indexes!
+      end
+      private :prepare_for_save
+
+      # Persists the object's data to storage within a transaction
+      #
+      # This method contains the core persistence logic shared by both save and
+      # save_if_not_exists. It must be called within a transaction block.
+      #
+      # @param update_expiration [Boolean] Whether to update the key's expiration
+      # @return [Object] The result of the hmset operation
+      #
+      def persist_to_storage(update_expiration)
+        # 1. Save all fields to haskhey at once
+        prepared_h = to_h_for_storage
+        hmset_result = hmset(prepared_h)
+
+        # 2. Set expiration in same transaction
+        self.update_expiration if update_expiration
+
+        # 3. Update class-level indexes
+        auto_update_class_indexes
+
+        # 4. Add to instances collection if available
+        self.class.instances.add(identifier, Familia.now) if self.class.respond_to?(:instances)
+
+        hmset_result
+      end
+      private :persist_to_storage
     end
   end
 end
