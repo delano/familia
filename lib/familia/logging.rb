@@ -117,7 +117,7 @@ module Familia
       'ERROR' => 'E',
       'FATAL' => 'F',
       'UNKNOWN' => 'U',
-      'ANY' => 'T'  # ANY is Logger's label for severity < 0, treat as TRACE
+      'ANY' => 'T', # ANY is Logger's label for severity < 0, treat as TRACE
     }.freeze
 
     # Format a log message with severity, timestamp, and context.
