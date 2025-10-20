@@ -60,7 +60,7 @@ module Familia
         # which are not available in Redis MULTI/EXEC blocks
         if Fiber[:familia_transaction]
           raise Familia::OperationModeError, <<~ERROR_MESSAGE
-            'Cannot call save within a transaction. Save operations must be called outside transactions to ensure unique constraints can be validated.'
+            Cannot call save within a transaction. Save operations must be called outside transactions to ensure unique constraints can be validated.
           ERROR_MESSAGE
         end
 
@@ -561,7 +561,7 @@ module Familia
       # @return [Object] The result of the hmset operation
       #
       def persist_to_storage(update_expiration)
-        # 1. Save all fields to haskhey at once
+        # 1. Save all fields to hashkey at once
         prepared_h = to_h_for_storage
         hmset_result = hmset(prepared_h)
 
