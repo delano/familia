@@ -1,10 +1,11 @@
 # .reek.yml
-# Reek configuration for Familia
+#
+# Reek configuration for Rhales
 #
 # Basic commands:
 #   bundle exec reek                           # Analyze all Ruby files
 #   bundle exec reek lib/                      # Analyze specific directory
-#   bundle exec reek lib/familia/horreum.rb    # Analyze specific file
+#   bundle exec reek lib/rhales.rb             # Analyze specific file
 #   bundle exec reek --help                    # Show all options
 #   bundle exec reek --docs                    # Open documentation
 #
@@ -60,16 +61,16 @@ detectors:
   UncommunicativeParameterName:
     enabled: true
     reject:
-      - '/^.$/' # Single letter names
-      - '/[0-9]$/' # Names ending in numbers
-      - '/^_/' # Names starting with underscore (common Ruby pattern)
+      - "/^.$/" # Single letter names
+      - "/[0-9]$/" # Names ending in numbers
+      - "/^_/" # Names starting with underscore (common Ruby pattern)
     accept: []
 
   UncommunicativeVariableName:
     enabled: true
     reject:
-      - '/^.$/' # Single letter names
-      - '/[0-9]$/' # Names ending in numbers
+      - "/^.$/" # Single letter names
+      - "/[0-9]$/" # Names ending in numbers
     accept:
       - e # Exception variable
       - id # Common identifier
@@ -80,8 +81,8 @@ detectors:
   UncommunicativeMethodName:
     enabled: true
     reject:
-      - '/^.$/' # Single letter method names
-      - '/[0-9]$/' # Methods ending in numbers
+      - "/^.$/" # Single letter method names
+      - "/[0-9]$/" # Methods ending in numbers
     accept:
       - "<<" # Common Ruby operator overload
 
