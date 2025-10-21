@@ -252,13 +252,13 @@ module Familia
 
         # Handle cascading expiration to related data structures
         if self.class.relations?
-          Familia.ld "[update_expiration] #{self.class} has relations: #{self.class.related_fields.keys}"
+          Familia.debug "[update_expiration] #{self.class} has relations: #{self.class.related_fields.keys}"
           self.class.related_fields.each do |name, definition|
             # Skip relations that don't have their own expiration settings
             next if definition.opts[:default_expiration].nil?
 
             obj = send(name)
-            Familia.ld "[update_expiration] Updating expiration for #{name} (#{obj.dbkey}) to #{expiration}"
+            Familia.debug "[update_expiration] Updating expiration for #{name} (#{obj.dbkey}) to #{expiration}"
             obj.update_expiration(expiration: expiration)
           end
         end
@@ -280,11 +280,17 @@ module Familia
         # If zero, simply skip setting an expiry for this key. If we were to set
         # 0, Valkey/Redis would drop the key immediately.
         if expiration.zero?
-          Familia.ld "[update_expiration] No expiration for #{self.class} (#{dbkey})"
+          Familia.debug "[update_expiration] No expiration for #{self.class} (#{dbkey})"
           return true
         end
 
-        Familia.ld "[update_expiration] Expires #{dbkey} in #{expiration} seconds"
+        # Structured TTL operation logging
+        Familia.debug "TTL updated",
+          operation: :expire,
+          key: dbkey,
+          ttl_seconds: expiration,
+          class: self.class.name,
+          identifier: (identifier rescue nil)
 
         # The Valkey/Redis' EXPIRE command returns 1 if the timeout was set, 0
         # if key does not exist or the timeout could not be set. Via redis-rb,

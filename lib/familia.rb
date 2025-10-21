@@ -39,7 +39,7 @@ module Familia
   using Refinements::StylizeWords
 
   class << self
-    attr_accessor :debug
+    attr_writer :debug
     attr_reader :members
 
     def included(member)
@@ -87,7 +87,7 @@ module Familia
     # @param klass [Class] The class to remove from members
     # @return [Class, nil] The removed class or nil if not found
     def unload_member(klass)
-      Familia.ld "[unload_member] Removing #{klass} from members"
+      Familia.debug "[unload_member] Removing #{klass} from members"
       @members.delete(klass)
     end
 
@@ -97,7 +97,7 @@ module Familia
     # @return [Array<Class>] The removed anonymous classes
     def clear_anonymous_members
       anonymous_classes = @members.select { |m| m.name.nil? }
-      Familia.ld "[clear_anonymous_members] Removing #{anonymous_classes.size} anonymous classes"
+      Familia.debug "[clear_anonymous_members] Removing #{anonymous_classes.size} anonymous classes"
       @members.reject! { |m| m.name.nil? }
       anonymous_classes
     end
@@ -128,7 +128,7 @@ module Familia
     #   Familia.member_by_config_name(:nonexistent) # => nil
     #
     def member_by_config_name(config_name)
-      Familia.ld "[member_by_config_name] #{members.map(&:config_name)} #{config_name}"
+      Familia.debug "[member_by_config_name] #{members.map(&:config_name)} #{config_name}"
 
       members.find { |m| m.config_name.to_s.eql?(config_name.to_s) }
     end
@@ -149,6 +149,7 @@ module Familia
   extend Utils
 end
 
+require_relative 'familia/instrumentation'
 require_relative 'familia/base'
 require_relative 'familia/features'
 require_relative 'familia/data_type'

@@ -135,7 +135,7 @@ module Familia
         # full key and not just the identifier.
         does_exist = dbclient.exists(objkey).positive?
 
-        Familia.ld "[find_by_key] #{self} from key #{objkey} (exists: #{does_exist})"
+        Familia.debug "[find_by_key] #{self} from key #{objkey} (exists: #{does_exist})"
         Familia.trace :FIND_BY_DBKEY_KEY, nil, objkey
 
         # This is the reason for calling exists first. We want to definitively
@@ -182,7 +182,7 @@ module Familia
 
         objkey = dbkey(identifier, suffix)
 
-        Familia.ld "[find_by_id] #{self} from key #{objkey})"
+        Familia.debug "[find_by_id] #{self} from key #{objkey})"
         Familia.trace :FIND_BY_ID, nil, objkey if Familia.debug?
         find_by_dbkey objkey
       end

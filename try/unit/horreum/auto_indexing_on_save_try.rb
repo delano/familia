@@ -182,7 +182,7 @@ AutoIndexWithTransient.find_by_email(@transient_email)&.id
 begin
   @transient_dup.save
 rescue Familia::RecordExistsError => ex
-  Familia.ld ex.backtrace.join("\n")
+  Familia.debug ex.backtrace.join("\n")
   ex.message
 end
 #=:> String

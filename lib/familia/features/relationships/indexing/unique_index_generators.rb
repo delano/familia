@@ -175,7 +175,7 @@ module Familia
             scope_class_config = scope_class.config_name
             indexed_class.class_eval do
               method_name = :"add_to_#{scope_class_config}_#{index_name}"
-              Familia.ld("[UniqueIndexGenerators] #{name} method #{method_name}")
+              Familia.debug("[UniqueIndexGenerators] #{name} method #{method_name}")
 
               define_method(method_name) do |scope_instance|
                 return unless scope_instance
@@ -209,7 +209,7 @@ module Familia
               #   employee.guard_unique_company_badge_index!(company)
               #
               method_name = :"guard_unique_#{scope_class_config}_#{index_name}!"
-              Familia.ld("[UniqueIndexGenerators] #{name} method #{method_name}")
+              Familia.debug("[UniqueIndexGenerators] #{name} method #{method_name}")
 
               define_method(method_name) do |scope_instance|
                 return unless scope_instance
@@ -228,7 +228,7 @@ module Familia
               end
 
               method_name = :"remove_from_#{scope_class_config}_#{index_name}"
-              Familia.ld("[UniqueIndexGenerators] #{name} method #{method_name}")
+              Familia.debug("[UniqueIndexGenerators] #{name} method #{method_name}")
 
               define_method(method_name) do |scope_instance|
                 return unless scope_instance
@@ -244,7 +244,7 @@ module Familia
               end
 
               method_name = :"update_in_#{scope_class_config}_#{index_name}"
-              Familia.ld("[UniqueIndexGenerators] #{name} method #{method_name}")
+              Familia.debug("[UniqueIndexGenerators] #{name} method #{method_name}")
 
               define_method(method_name) do |scope_instance, old_field_value = nil|
                 return unless scope_instance
