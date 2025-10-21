@@ -32,13 +32,13 @@ module Familia
 
         if opts[:class]
           prepared = Familia.identifier_extractor(opts[:class])
-          Familia.ld "  from opts[class] <#{opts[:class]}>: #{prepared || '<nil>'}"
+          Familia.debug "  from opts[class] <#{opts[:class]}>: #{prepared || '<nil>'}"
         end
 
         if prepared.nil?
           # Enforce strict values when no class option is specified
           prepared = Familia.identifier_extractor(val)
-          Familia.ld "  from <#{val.class}> => <#{prepared.class}>"
+          Familia.debug "  from <#{val.class}> => <#{prepared.class}>"
         end
 
         if Familia.debug?
@@ -77,7 +77,7 @@ module Familia
       #   replaced with nil.
       #
       def deserialize_values_with_nil(*values)
-        Familia.ld "deserialize_values: (#{@opts}) #{values}"
+        Familia.debug "deserialize_values: (#{@opts}) #{values}"
         return [] if values.empty?
         return values.flatten unless @opts[:class]
 
@@ -89,7 +89,7 @@ module Familia
           next if obj.nil?
 
           val = @opts[:class].send load_method, obj
-          Familia.ld "[#{self.class}#deserialize_values] nil returned for #{@opts[:class]}##{name}" if val.nil?
+          Familia.debug "[#{self.class}#deserialize_values] nil returned for #{@opts[:class]}##{name}" if val.nil?
 
           val
         rescue StandardError => e

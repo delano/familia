@@ -607,7 +607,7 @@ module Familia
 
                 memberships << membership_data
               rescue StandardError => e
-                Familia.ld "[#{collection_key}] Error checking membership: #{e.message}"
+                Familia.debug "[#{collection_key}] Error checking membership: #{e.message}"
                 next
               end
             end

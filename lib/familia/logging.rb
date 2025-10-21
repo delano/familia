@@ -195,6 +195,9 @@ module Familia
     # Allows replacing the default FamiliaLogger with any Logger-compatible
     # object. Useful for integrating with application logging frameworks.
     #
+    # Automatically synchronizes the logger to DatabaseLogger if it's loaded,
+    # ensuring consistent logging across Familia's middleware stack.
+    #
     # @param new_logger [Logger] The logger to use
     # @return [Logger] The logger that was set
     #
@@ -208,19 +211,11 @@ module Familia
     #
     def logger=(new_logger)
       @logger = new_logger
+      # Auto-sync to DatabaseLogger if loaded
+      DatabaseLogger.logger = new_logger if defined?(DatabaseLogger)
+      new_logger
     end
 
-    # Log an informational message.
-    #
-    # @param msg [String] The message to log
-    # @return [true]
-    #
-    # @example
-    #   Familia.info "Redis connection established"
-    #
-    def info(msg)
-      logger.info(msg)
-    end
 
     # Log a warning message.
     #
@@ -234,34 +229,58 @@ module Familia
       logger.warn(msg)
     end
 
-    # Log a debug message (only when Familia.debug? is true).
+    # Log a debug message with optional structured context.
     #
-    # Short for "log debug". Only outputs when FAMILIA_DEBUG environment
-    # variable is set to '1' or 'true'.
+    # Only outputs when FAMILIA_DEBUG environment variable is enabled.
+    # Supports both simple string messages and structured logging with
+    # keyword context for operational observability.
     #
-    # @param msg [String] The message to log
+    # @param message [String, nil] The message to log
+    # @param context [Hash] Structured context (key-value pairs)
     # @return [true, nil] Returns true if logged, nil if debug disabled
     #
-    # @example
-    #   Familia.ld "Cache lookup for user:123"
-    #   # Only outputs when FAMILIA_DEBUG=true
+    # @example Simple message
+    #   Familia.debug "Cache lookup for user:123"
     #
-    def ld(msg)
-      logger.debug(msg) if Familia.debug?
+    # @example Structured context
+    #   Familia.debug "Horreum saved", class: "User", identifier: "user_123", duration_ms: 1.23
+    #   # => "Horreum saved class=User identifier=user_123 duration_ms=1.23"
+    #
+    def debug(message = nil, **context)
+      return unless Familia.debug?
+      logger.debug(format_log(message, context))
     end
 
-    # Log an error message.
+    # Log an informational message with optional structured context.
     #
-    # Short for "log error".
-    #
-    # @param msg [String] The message to log
+    # @param message [String, nil] The message to log
+    # @param context [Hash] Structured context (key-value pairs)
     # @return [true]
     #
-    # @example
-    #   Familia.le "Failed to deserialize value: #{e.message}"
+    # @example Simple message
+    #   Familia.info "Connection pool initialized"
     #
-    def le(msg)
-      logger.error(msg)
+    # @example Structured context
+    #   Familia.info "Pipeline executed", commands: 5, duration_ms: 2.34
+    #
+    def info(message = nil, **context)
+      logger.info(format_log(message, context))
+    end
+
+    # Log an error message with optional structured context.
+    #
+    # @param message [String, nil] The message to log
+    # @param context [Hash] Structured context (key-value pairs)
+    # @return [true]
+    #
+    # @example Simple message
+    #   Familia.error "Failed to deserialize value"
+    #
+    # @example Structured context
+    #   Familia.error "Serialization failed", field: :email, error: e.message, class: "User"
+    #
+    def error(message = nil, **context)
+      logger.error(format_log(message, context))
     end
 
     # Logs a structured trace message for debugging Familia operations.
@@ -292,6 +311,27 @@ module Familia
     end
 
     private
+
+    # Format a log message with optional structured context.
+    #
+    # Combines a message string with key-value context into a single
+    # log line. Empty context returns the message unchanged.
+    #
+    # @param message [String, nil] The message to log
+    # @param context [Hash] Structured context (key-value pairs)
+    # @return [String] Formatted log message
+    # @api private
+    #
+    # @example
+    #   format_log("User saved", id: 123, duration: 1.5)
+    #   # => "User saved id=123 duration=1.5"
+    #
+    def format_log(message, context)
+      return message if context.empty?
+      parts = [message]
+      parts << context.map { |k, v| "#{k}=#{v}" }.join(' ')
+      parts.compact.join(' ')
+    end
 
     # Check if trace logging is enabled via FAMILIA_TRACE environment variable.
     #

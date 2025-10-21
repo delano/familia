@@ -24,7 +24,7 @@ module Familia
     # @example MyModel.new.update_expiration(expiration: 3600) # => nothing happens
     #
     def update_expiration(expiration: nil)
-      Familia.ld <<~LOG
+      Familia.debug <<~LOG
         [update_expiration] Expiration feature not enabled for #{self.class}.
         Key: #{dbkey} Arg: #{expiration} (caller: #{caller(1..1)})
       LOG

@@ -30,7 +30,7 @@ module Familia
           next unless field_type.loggable
 
           val = send(field_type.method_name)
-          Familia.ld " [to_h] field: #{field} val: #{val.class}"
+          Familia.debug " [to_h] field: #{field} val: #{val.class}"
 
           # Use string key for external API compatibility
           # Return Ruby values, not JSON-encoded strings
@@ -63,7 +63,7 @@ module Familia
           prepared = serialize_value(val)
 
           if Familia.debug?
-            Familia.ld " [to_h_for_storage] field: #{field} val: #{val.class} prepared: #{prepared&.class || '[nil]'}"
+            Familia.debug " [to_h_for_storage] field: #{field} val: #{val.class} prepared: #{prepared&.class || '[nil]'}"
           end
 
           # Use string key for database compatibility
@@ -96,7 +96,7 @@ module Familia
 
           method_name = field_type.method_name
           val = send(method_name)
-          Familia.ld " [to_a] field: #{field} method: #{method_name} val: #{val.class}"
+          Familia.debug " [to_a] field: #{field} method: #{method_name} val: #{val.class}"
 
           # Return actual Ruby values, including nil to maintain array positions
           val
@@ -182,7 +182,24 @@ module Familia
           "Legacy plain string in #{context}: #{val.inspect} (#{dbkey_info})"
         end
 
-        Familia.le(msg)
+        # Structured error logging with instrumentation
+        error_type = looks_like_json?(val) ? :corrupted_json : :legacy_string
+        Familia.error msg,
+          error_type: error_type,
+          field: field_name,
+          value_preview: val.to_s[0...50],
+          object_class: self.class.name,
+          identifier: (identifier rescue nil),
+          key: dbkey_info
+
+        # Notify instrumentation hooks
+        Familia::Instrumentation.notify_error(
+          StandardError.new(msg),
+          operation: :deserialization,
+          error_type: error_type,
+          field: field_name,
+          object_class: self.class.name
+        )
       end
 
       def looks_like_json?(val)

@@ -22,8 +22,8 @@ module Familia
       update_expiration
       ret
     rescue TypeError => e
-      Familia.le "[hset]= #{e.message}"
-      Familia.ld "[hset]= #{dbkey} #{field}=#{val}" if Familia.debug
+      Familia.error "[hset]= #{e.message}"
+      Familia.debug "[hset]= #{dbkey} #{field}=#{val}"
       echo :hset, Familia.pretty_stack(limit: 1) if Familia.debug # logs via echo to the db and back
       klass = val.class
       msg = "Cannot store #{field} => #{val.inspect} (#{klass}) in #{dbkey}"
@@ -74,8 +74,8 @@ module Familia
       update_expiration if ret == 1
       ret
     rescue TypeError => e
-      Familia.le "[hsetnx] #{e.message}"
-      Familia.ld "[hsetnx] #{dbkey} #{field}=#{val}" if Familia.debug
+      Familia.error "[hsetnx] #{e.message}"
+      Familia.debug "[hsetnx] #{dbkey} #{field}=#{val}"
       echo :hsetnx, Familia.pretty_stack(limit: 1) if Familia.debug # logs via echo to the db and back
       klass = val.class
       msg = "Cannot store #{field} => #{val.inspect} (#{klass}) in #{dbkey}"
@@ -156,7 +156,7 @@ module Familia
       raise Familia::KeyNotFoundError, dbkey unless dbclient.exists(dbkey)
 
       fields = hgetall
-      Familia.ld "[refresh!] #{self.class} #{dbkey} #{fields.keys}"
+      Familia.debug "[refresh!] #{self.class} #{dbkey} #{fields.keys}"
 
       # For HashKey, we update by merging the fresh data
       update(fields)

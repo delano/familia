@@ -15,10 +15,10 @@ module Familia
           # Check for required fields
           required_fields = %i[algorithm nonce ciphertext auth_tag key_version]
           result = required_fields.all? { |field| parsed.key?(field) }
-          Familia.ld "[valid?] result: #{result}, parsed: #{parsed}, required: #{required_fields}"
+          Familia.debug "[valid?] result: #{result}, parsed: #{parsed}, required: #{required_fields}"
           result
         rescue Familia::SerializerError => e
-          Familia.ld "[valid?] JSON error: #{e.message}"
+          Familia.debug "[valid?] JSON error: #{e.message}"
           false
         end
       end

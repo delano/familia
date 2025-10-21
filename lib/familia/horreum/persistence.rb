@@ -56,6 +56,8 @@ module Familia
       #   user.save  # => true
       #
       def save(update_expiration: true)
+        start_time = Process.clock_gettime(Process::CLOCK_MONOTONIC, :microsecond) if Familia.debug?
+
         # Prevent save within transaction - unique index guards require read operations
         # which are not available in Redis MULTI/EXEC blocks
         if Fiber[:familia_transaction]
@@ -74,7 +76,33 @@ module Familia
           persist_to_storage(update_expiration)
         end
 
-        Familia.ld "[save] #{self.class} #{dbkey} #{result} (update_expiration: #{update_expiration})"
+        # Structured lifecycle logging and instrumentation
+        if Familia.debug? && start_time
+          duration_ms = ((Process.clock_gettime(Process::CLOCK_MONOTONIC, :microsecond) - start_time) / 1000.0).round(2)
+
+          begin
+            fields_count = to_h_for_storage.size
+          rescue => e
+            Familia.error "Failed to serialize fields for logging",
+              error: e.message,
+              class: self.class.name,
+              identifier: (identifier rescue nil)
+            fields_count = 0
+          end
+
+          Familia.debug "Horreum saved",
+            class: self.class.name,
+            identifier: identifier,
+            duration_ms: duration_ms,
+            fields_count: fields_count,
+            update_expiration: update_expiration
+
+          Familia::Instrumentation.notify_lifecycle(:save, self,
+            duration_ms: duration_ms,
+            update_expiration: update_expiration,
+            fields_count: fields_count
+          )
+        end
 
         # Return boolean indicating success
         !result.nil?
@@ -120,7 +148,7 @@ module Familia
 
         identifier_field = self.class.identifier_field
 
-        Familia.ld "[save_if_not_exists]: #{self.class} #{identifier_field}=#{identifier}"
+        Familia.debug "[save_if_not_exists]: #{self.class} #{identifier_field}=#{identifier}"
         Familia.trace :SAVE_IF_NOT_EXISTS, nil, self.class.uri if Familia.debug?
 
         # Prepare object for persistence (timestamps, validation)
@@ -137,17 +165,17 @@ module Familia
               persist_to_storage(update_expiration)
             end
 
-            Familia.ld "[save_if_not_exists]: txn_result=#{txn_result.inspect}"
+            Familia.debug "[save_if_not_exists]: txn_result=#{txn_result.inspect}"
 
             txn_result
           end
 
-          Familia.ld "[save_if_not_exists]: result=#{result.inspect}"
+          Familia.debug "[save_if_not_exists]: result=#{result.inspect}"
 
           # Return boolean indicating success (consistent with save method)
           !result.nil?
         rescue OptimisticLockError => e
-          Familia.ld "[save_if_not_exists]: OptimisticLockError (#{attempts}): #{e.message}"
+          Familia.debug "[save_if_not_exists]: OptimisticLockError (#{attempts}): #{e.message}"
           raise if attempts >= 3
 
           sleep(0.001 * (2**attempts))
@@ -192,7 +220,7 @@ module Familia
       #
       def commit_fields(update_expiration: true)
         prepared_value = to_h_for_storage
-        Familia.ld "[commit_fields] Begin #{self.class} #{dbkey} #{prepared_value} (exp: #{update_expiration})"
+        Familia.debug "[commit_fields] Begin #{self.class} #{dbkey} #{prepared_value} (exp: #{update_expiration})"
 
         transaction do |_conn|
           # Set all fields atomically
@@ -326,7 +354,7 @@ module Familia
         Familia.trace :DESTROY!, dbkey, self.class.uri
 
         # Execute all deletion operations within a transaction
-        transaction do |_conn|
+        result = transaction do |_conn|
           # Delete the main object key
           delete!
 
@@ -342,6 +370,16 @@ module Familia
             end
           end
         end
+
+        # Structured lifecycle logging and instrumentation
+        Familia.debug "Horreum destroyed",
+          class: self.class.name,
+          identifier: identifier,
+          key: dbkey
+
+        Familia::Instrumentation.notify_lifecycle(:destroy, self, key: dbkey)
+
+        result
       end
 
       # Clears all fields by setting them to nil.
@@ -392,7 +430,7 @@ module Familia
         raise Familia::KeyNotFoundError, dbkey unless dbclient.exists(dbkey)
 
         fields = hgetall
-        Familia.ld "[refresh!] #{self.class} #{dbkey} fields:#{fields.keys}"
+        Familia.debug "[refresh!] #{self.class} #{dbkey} fields:#{fields.keys}"
 
         # Reset transient fields to nil for semantic clarity and ORM consistency
         # Transient fields have no authoritative source, so they should return to
@@ -448,7 +486,7 @@ module Familia
 
           # UnsortedSet the transient field back to nil
           send("#{field_type.method_name}=", nil)
-          Familia.ld "[reset_transient_fields!] Reset #{field_name} to nil"
+          Familia.debug "[reset_transient_fields!] Reset #{field_name} to nil"
         end
       end
 
@@ -522,7 +560,7 @@ module Familia
           # Instance-scoped indexes must be manually populated because they need
           # the scope instance reference (e.g., employee.add_to_company_badge_index(company))
           if rel.within
-            Familia.ld <<~LOG_MESSAGE
+            Familia.debug <<~LOG_MESSAGE
               [auto_update_class_indexes] Skipping #{rel.index_name} (requires scope context)
             LOG_MESSAGE
             next

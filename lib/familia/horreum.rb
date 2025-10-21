@@ -186,6 +186,7 @@ module Familia
     #   `Session.new({sessid: "abc123", custid: "user456"})` # legacy hash (robust)
     #
     def initialize(*args, **kwargs)
+      start_time = Process.clock_gettime(Process::CLOCK_MONOTONIC, :microsecond) if Familia.debug?
       Familia.trace :INITIALIZE, nil, "Initializing #{self.class}" if Familia.debug?
       initialize_relatives
 
@@ -236,6 +237,17 @@ module Familia
       #   end
       #
       init
+
+      # Structured lifecycle logging and instrumentation
+      if Familia.debug? && start_time
+        duration_ms = ((Process.clock_gettime(Process::CLOCK_MONOTONIC, :microsecond) - start_time) / 1000.0).round(2)
+        Familia.debug "Horreum initialized",
+          class: self.class.name,
+          duration_ms: duration_ms,
+          identifier: (identifier rescue nil)
+
+        Familia::Instrumentation.notify_lifecycle(:initialize, self, duration_ms: duration_ms)
+      end
     end
 
     # Initialization method called at the end of initialize
@@ -338,7 +350,7 @@ module Familia
     #   the object with.
     # @return [Array] The list of field names that were updated.
     def naive_refresh(**fields)
-      Familia.ld "[naive_refresh] #{self.class} #{dbkey} #{fields.keys}"
+      Familia.debug "[naive_refresh] #{self.class} #{dbkey} #{fields.keys}"
       initialize_with_keyword_args_deserialize_value(**fields)
     end
 

@@ -152,7 +152,7 @@ module Familia
 
             # Convert value for database storage
             prepared = serialize_value(val)
-            Familia.ld "[FieldType#define_fast_writer] #{fast_method_name} val: #{val.class} prepared: #{prepared.class}"
+            Familia.debug "[FieldType#define_fast_writer] #{fast_method_name} val: #{val.class} prepared: #{prepared.class}"
 
             # Use the setter method to update instance variable
             send(:"#{method_name}=", val) if method_name

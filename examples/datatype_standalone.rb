@@ -146,7 +146,7 @@ class SecureSessionStore < Rack::Session::Abstract::PersistedSecure
       [sid, session_data]
     rescue Familia::PersistenceError => e
       # Log error in development/debugging
-      Familia.ld "[Session] Error reading session #{sid_string}: #{e.message}"
+      Familia.debug "[Session] Error reading session #{sid_string}: #{e.message}"
 
       # Return new session on any error
       [generate_sid, {}]
@@ -196,7 +196,7 @@ class SecureSessionStore < Rack::Session::Abstract::PersistedSecure
     sid
   rescue Familia::PersistenceError => e
     # Log error in development/debugging
-    Familia.ld "[Session] Error writing session #{sid_string}: #{e.message}"
+    Familia.debug "[Session] Error writing session #{sid_string}: #{e.message}"
 
     # Return false to indicate failure
     false

@@ -365,7 +365,7 @@ module Familia
         # Validation and setup
         validate_environment!(base)
 
-        Familia.ld "[#{base}] Loading #{self} v#{FEATURE_VERSION}"
+        Familia.debug "[#{base}] Loading #{self} v#{FEATURE_VERSION}"
 
         # Module inclusion
         base.extend ClassMethods
@@ -775,13 +775,13 @@ module Familia::Features::DebugLogging
     original_feature_method = base.method(:feature)
 
     base.define_singleton_method(:feature) do |name|
-      Familia.ld "[DEBUG] Loading feature #{name} on #{self}"
+      Familia.debug "[DEBUG] Loading feature #{name} on #{self}"
       start_time = Familia.now
 
       result = original_feature_method.call(name)
 
       load_time = (Familia.now - start_time) * 1000
-      Familia.ld "[DEBUG] Feature #{name} loaded in #{load_time.round(2)}ms"
+      Familia.debug "[DEBUG] Feature #{name} loaded in #{load_time.round(2)}ms"
 
       result
     end
@@ -791,13 +791,13 @@ module Familia::Features::DebugLogging
     def log_feature_method_call(method_name, &block)
       return block.call unless Familia.debug?
 
-      Familia.ld "[DEBUG] Calling #{method_name} on #{self}"
+      Familia.debug "[DEBUG] Calling #{method_name} on #{self}"
       start_time = Familia.now
 
       result = block.call
 
       duration = (Familia.now - start_time) * 1000
-      Familia.ld "[DEBUG] #{method_name} completed in #{duration.round(2)}ms"
+      Familia.debug "[DEBUG] #{method_name} completed in #{duration.round(2)}ms"
 
       result
     end

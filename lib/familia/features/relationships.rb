@@ -84,7 +84,7 @@ module Familia
 
       # Feature initialization
       def self.included(base)
-        Familia.ld "[#{base}] Relationships included"
+        Familia.debug "[#{base}] Relationships included"
         base.extend ModelClassMethods
         base.include ModelInstanceMethods
 
