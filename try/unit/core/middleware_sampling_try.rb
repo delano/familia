@@ -195,7 +195,7 @@ commands = DatabaseLogger.capture_commands do
 end
 
 # 4 pipeline operations captured (CommandMessage uses Data.define)
-pipeline_count = commands.select { |cmd| cmd.command.include?(' | ') }.count
+pipeline_count = commands.compact.select { |cmd| cmd.command.include?(' | ') }.count
 log_lines = log_output.string.lines.count
 DatabaseLogger.logger = original_logger
 [pipeline_count, log_lines <= 2]
@@ -223,8 +223,8 @@ commands = DatabaseLogger.capture_commands do
 end
 
 # CommandMessage uses Data.define with named accessors
-cmd = commands.first
-[cmd.command.class, cmd.μs.class, cmd.timeline.class]
+cmd = commands&.first
+cmd ? [cmd.command.class, cmd.μs.class, cmd.timeline.class] : [NilClass, NilClass, NilClass]
 ##=> [String, Integer, Float]
 
 ## Multiple sample rates work correctly in sequence
@@ -314,8 +314,8 @@ dbclient = Familia.dbclient
 commands = DatabaseLogger.capture_commands do
   dbclient.set("test_key", "test_value")
 end
-first_cmd = commands.first
-[first_cmd.command.is_a?(String), first_cmd.μs.is_a?(Integer), first_cmd.timeline.is_a?(Float)]
+first_cmd = commands&.first
+first_cmd ? [first_cmd.command.is_a?(String), first_cmd.μs.is_a?(Integer), first_cmd.timeline.is_a?(Float)] : [false, false, false]
 ##=> [true, true, true]
 
 ## Commands array never contains nil elements after operations
