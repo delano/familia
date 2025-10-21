@@ -9,7 +9,7 @@ group :test do
   gem 'ruby-prof'
   gem 'stackprof'
   gem 'timecop', require: false
-  gem 'tryouts', '~> 3.6.0', require: false
+  gem 'tryouts', '~> 3.7.1', require: false
 end
 
 group :development, :test do

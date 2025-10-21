@@ -230,7 +230,7 @@ module DatabaseLogger
         duration_ms,
         full_command: command,
         db: db_num,
-        connection_id: conn_id
+        connection_id: conn_id,
       )
     end
 

@@ -243,8 +243,8 @@ module Familia
     #   Familia.debug "Cache lookup for user:123"
     #
     # @example Structured context
-    #   Familia.debug "Horreum saved", class: "User", identifier: "user_123", duration_ms: 1.23
-    #   # => "Horreum saved class=User identifier=user_123 duration_ms=1.23"
+    #   Familia.debug "Horreum saved", class: "User", identifier: "user_123", duration: 1234
+    #   # => "Horreum saved class=User identifier=user_123 duration=1234"
     #
     def debug(message = nil, **context)
       return unless Familia.debug?
@@ -261,7 +261,7 @@ module Familia
     #   Familia.info "Connection pool initialized"
     #
     # @example Structured context
-    #   Familia.info "Pipeline executed", commands: 5, duration_ms: 2.34
+    #   Familia.info "Pipeline executed", commands: 5, duration: 2340
     #
     def info(message = nil, **context)
       logger.info(format_log(message, context))

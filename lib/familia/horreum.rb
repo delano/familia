@@ -186,7 +186,7 @@ module Familia
     #   `Session.new({sessid: "abc123", custid: "user456"})` # legacy hash (robust)
     #
     def initialize(*args, **kwargs)
-      start_time = Process.clock_gettime(Process::CLOCK_MONOTONIC, :microsecond) if Familia.debug?
+      start_time = Familia.now_in_μs if Familia.debug?
       Familia.trace :INITIALIZE, nil, "Initializing #{self.class}" if Familia.debug?
       initialize_relatives
 
@@ -240,13 +240,13 @@ module Familia
 
       # Structured lifecycle logging and instrumentation
       if Familia.debug? && start_time
-        duration_ms = ((Process.clock_gettime(Process::CLOCK_MONOTONIC, :microsecond) - start_time) / 1000.0).round(2)
+        duration = Familia.now_in_μs - start_time
         Familia.debug "Horreum initialized",
           class: self.class.name,
-          duration_ms: duration_ms,
+          duration: duration,
           identifier: (identifier rescue nil)
 
-        Familia::Instrumentation.notify_lifecycle(:initialize, self, duration_ms: duration_ms)
+        Familia::Instrumentation.notify_lifecycle(:initialize, self, duration: duration)
       end
     end
 

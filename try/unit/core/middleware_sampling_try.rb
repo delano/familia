@@ -298,6 +298,35 @@ DatabaseLogger.logger = original_logger
 commands.count >= 20 && log_lines <= commands.count
 ##=> true
 
+## clear_commands handles empty and populated command arrays safely
+DatabaseLogger.clear_commands
+DatabaseLogger.commands.empty?
+##=> true
+
+## clear_commands is idempotent and doesn't error on repeated calls
+DatabaseLogger.clear_commands
+DatabaseLogger.clear_commands
+DatabaseLogger.commands.empty?
+##=> true
+
+## CommandMessage objects have all required fields
+dbclient = Familia.dbclient
+commands = DatabaseLogger.capture_commands do
+  dbclient.set("test_key", "test_value")
+end
+first_cmd = commands.first
+[first_cmd.command.is_a?(String), first_cmd.μs.is_a?(Integer), first_cmd.timeline.is_a?(Float)]
+##=> [true, true, true]
+
+## Commands array never contains nil elements after operations
+DatabaseLogger.clear_commands
+commands = DatabaseLogger.capture_commands do
+  dbclient.set("key1", "value1")
+  dbclient.get("key1")
+end
+[commands.any?(nil), commands.all? { |cmd| cmd.respond_to?(:command) }]
+##=> [false, true]
+
 # Teardown: Reset to defaults
 DatabaseLogger.sample_rate = nil
 DatabaseLogger.structured_logging = false

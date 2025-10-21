@@ -85,6 +85,39 @@ rescue Familia::NotDistinguishableError => e
 end
 #=> Familia::NotDistinguishableError
 
+##
+## Time utilities
+##
+
+## now returns Float timestamp in seconds
+time_result = Familia.now
+[time_result.is_a?(Float), time_result > 0]
+#=> [true, true]
+
+## now accepts Time argument
+test_time = Time.utc(2023, 6, 15, 14, 30, 0)
+result_time = Familia.now(test_time)
+[result_time.is_a?(Float), result_time == test_time.utc.to_f]
+#=> [true, true]
+
+## now_in_μs returns Integer microseconds
+μs_result = Familia.now_in_μs
+[μs_result.is_a?(Integer), μs_result > 0]
+#=> [true, true]
+
+## now_in_microseconds is an alias for now_in_μs
+alias_result = Familia.now_in_microseconds
+[alias_result.is_a?(Integer), alias_result > 0]
+#=> [true, true]
+
+## now_in_μs returns monotonic time suitable for duration measurement
+start = Familia.now_in_μs
+sleep 0.001  # Sleep for at least 1ms
+finish = Familia.now_in_μs
+duration = finish - start
+[duration.is_a?(Integer), duration >= 1000]  # At least 1000 microseconds (1ms)
+#=> [true, true]
+
 # Cleanup - restore defaults, leave nothing but footprints
 Familia.delim(':')
 Familia.suffix(:object)

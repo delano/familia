@@ -56,7 +56,7 @@ module Familia
       #   user.save  # => true
       #
       def save(update_expiration: true)
-        start_time = Process.clock_gettime(Process::CLOCK_MONOTONIC, :microsecond) if Familia.debug?
+        start_time = Familia.now_in_μs if Familia.debug?
 
         # Prevent save within transaction - unique index guards require read operations
         # which are not available in Redis MULTI/EXEC blocks
@@ -78,7 +78,7 @@ module Familia
 
         # Structured lifecycle logging and instrumentation
         if Familia.debug? && start_time
-          duration_ms = ((Process.clock_gettime(Process::CLOCK_MONOTONIC, :microsecond) - start_time) / 1000.0).round(2)
+          duration = Familia.now_in_μs - start_time
 
           begin
             fields_count = to_h_for_storage.size
@@ -93,12 +93,12 @@ module Familia
           Familia.debug "Horreum saved",
             class: self.class.name,
             identifier: identifier,
-            duration_ms: duration_ms,
+            duration: duration,
             fields_count: fields_count,
             update_expiration: update_expiration
 
           Familia::Instrumentation.notify_lifecycle(:save, self,
-            duration_ms: duration_ms,
+            duration: duration,
             update_expiration: update_expiration,
             fields_count: fields_count
           )

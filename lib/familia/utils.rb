@@ -42,6 +42,17 @@ module Familia
       current_time.utc.to_f
     end
 
+    # Returns the current time in microseconds.
+    # This is used to measure the duration of Database commands.
+    #
+    # Alias: now_in_microseconds
+    #
+    # @return [Integer] The current time in microseconds.
+    def now_in_μs
+      Process.clock_gettime(Process::CLOCK_MONOTONIC, :microsecond)
+    end
+    alias now_in_microseconds now_in_μs
+
     # A quantized timestamp
     #
     # @param quantum [Integer] The time quantum in seconds (default: 10 minutes).
