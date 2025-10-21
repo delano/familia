@@ -8,9 +8,10 @@
 require_relative '../lib/familia'
 require 'logger'
 
-# Enable logging to see the effect
-DatabaseLogger.logger = Logger.new($stdout)
-DatabaseLogger.logger.level = Logger::TRACE
+# Register DatabaseLogger middleware and enable logging
+RedisClient.register(DatabaseLogger)
+DatabaseLogger.logger = Familia::FamiliaLogger.new($stdout)
+DatabaseLogger.logger.level = Familia::FamiliaLogger::TRACE
 
 # Scenario 1: No sampling (default) - logs every command
 puts "\n=== Scenario 1: No Sampling (logs all 100 commands) ==="
