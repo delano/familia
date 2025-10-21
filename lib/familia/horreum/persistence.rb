@@ -79,7 +79,17 @@ module Familia
         # Structured lifecycle logging and instrumentation
         if Familia.debug? && start_time
           duration_ms = ((Process.clock_gettime(Process::CLOCK_MONOTONIC, :microsecond) - start_time) / 1000.0).round(2)
-          fields_count = to_h_for_storage.size rescue 0
+
+          begin
+            fields_count = to_h_for_storage.size
+          rescue => e
+            Familia.error "Failed to serialize fields for logging",
+              error: e.message,
+              class: self.class.name,
+              identifier: (identifier rescue nil)
+            fields_count = 0
+          end
+
           Familia.debug "Horreum saved",
             class: self.class.name,
             identifier: identifier,

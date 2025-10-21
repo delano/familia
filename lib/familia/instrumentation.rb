@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'concurrent-ruby'
+
 module Familia
   # Provides instrumentation hooks for observability into Familia operations.
   #
@@ -26,10 +28,10 @@ module Familia
   #
   module Instrumentation
     @hooks = {
-      command: [],
-      pipeline: [],
-      lifecycle: [],
-      error: []
+      command: Concurrent::Array.new,
+      pipeline: Concurrent::Array.new,
+      lifecycle: Concurrent::Array.new,
+      error: Concurrent::Array.new
     }
 
     class << self

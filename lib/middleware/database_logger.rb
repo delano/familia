@@ -193,7 +193,11 @@ module DatabaseLogger
     if DatabaseLogger.should_log?
       if DatabaseLogger.structured_logging && DatabaseLogger.logger
         duration_ms = (block_duration / 1000.0).round(2)
-        db_num = config.respond_to?(:db) ? config.db : (config[:db] rescue nil)
+        db_num = if config.respond_to?(:db)
+                   config.db
+                 elsif config.is_a?(Hash)
+                   config[:db]
+                 end
         DatabaseLogger.logger.trace(
           "Redis command cmd=#{command.first} args=#{command[1..-1].inspect} " \
           "duration_μs=#{block_duration} duration_ms=#{duration_ms} " \
@@ -209,8 +213,16 @@ module DatabaseLogger
     # Notify instrumentation hooks
     if defined?(Familia::Instrumentation)
       duration_ms = (block_duration / 1000.0).round(2)
-      db_num = config.respond_to?(:db) ? config.db : (config[:db] rescue nil)
-      conn_id = config.respond_to?(:custom) ? config.custom&.dig(:id) : (config.dig(:custom, :id) rescue nil)
+      db_num = if config.respond_to?(:db)
+                   config.db
+                 elsif config.is_a?(Hash)
+                   config[:db]
+                 end
+      conn_id = if config.respond_to?(:custom)
+                   config.custom&.dig(:id)
+                 elsif config.is_a?(Hash)
+                   config.dig(:custom, :id)
+                 end
       Familia::Instrumentation.notify_command(
         command.first,
         duration_ms,
@@ -243,7 +255,11 @@ module DatabaseLogger
     if DatabaseLogger.should_log?
       if DatabaseLogger.structured_logging && DatabaseLogger.logger
         duration_ms = (block_duration / 1000.0).round(2)
-        db_num = config.respond_to?(:db) ? config.db : (config[:db] rescue nil)
+        db_num = if config.respond_to?(:db)
+                   config.db
+                 elsif config.is_a?(Hash)
+                   config[:db]
+                 end
         DatabaseLogger.logger.trace(
           "Redis pipeline commands=#{commands.size} duration_μs=#{block_duration} " \
           "duration_ms=#{duration_ms} timeline=#{lifetime_duration} " \
@@ -258,8 +274,16 @@ module DatabaseLogger
     # Notify instrumentation hooks
     if defined?(Familia::Instrumentation)
       duration_ms = (block_duration / 1000.0).round(2)
-      db_num = config.respond_to?(:db) ? config.db : (config[:db] rescue nil)
-      conn_id = config.respond_to?(:custom) ? config.custom&.dig(:id) : (config.dig(:custom, :id) rescue nil)
+      db_num = if config.respond_to?(:db)
+                   config.db
+                 elsif config.is_a?(Hash)
+                   config[:db]
+                 end
+      conn_id = if config.respond_to?(:custom)
+                   config.custom&.dig(:id)
+                 elsif config.is_a?(Hash)
+                   config.dig(:custom, :id)
+                 end
       Familia::Instrumentation.notify_pipeline(
         commands.size,
         duration_ms,
@@ -291,7 +315,11 @@ module DatabaseLogger
     if DatabaseLogger.should_log?
       if DatabaseLogger.structured_logging && DatabaseLogger.logger
         duration_ms = (block_duration / 1000.0).round(2)
-        db_num = config.respond_to?(:db) ? config.db : (config[:db] rescue nil)
+        db_num = if config.respond_to?(:db)
+                   config.db
+                 elsif config.is_a?(Hash)
+                   config[:db]
+                 end
         DatabaseLogger.logger.trace(
           "Redis command_once cmd=#{command.first} args=#{command[1..-1].inspect} " \
           "duration_μs=#{block_duration} duration_ms=#{duration_ms} " \
