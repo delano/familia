@@ -63,7 +63,7 @@ module DatabaseLogger
     #
     # @example Enable structured logging
     #   DatabaseLogger.structured_logging = true
-    #   # Outputs: "Redis command cmd=SET args=[key, value] duration=420 db=0"
+    #   # Outputs: "Redis command cmd=SET args=[key, value] duration_ms=0.42 db=0"
     #
     # @example Disable (default formatted output)
     #   DatabaseLogger.structured_logging = false
@@ -144,7 +144,7 @@ module DatabaseLogger
     #
     # @return [Integer] The current time in microseconds.
     def now_in_μs
-      Familia.now_in_μs
+      Process.clock_gettime(Process::CLOCK_MONOTONIC, :microsecond)
     end
     alias now_in_microseconds now_in_μs
 
@@ -194,6 +194,7 @@ module DatabaseLogger
     # Dual-mode logging with sampling
     if DatabaseLogger.should_log?
       if DatabaseLogger.structured_logging && DatabaseLogger.logger
+        duration_ms = (block_duration / 1000.0).round(2)
         db_num = if config.respond_to?(:db)
                    config.db
                  elsif config.is_a?(Hash)
@@ -201,7 +202,7 @@ module DatabaseLogger
                  end
         DatabaseLogger.logger.trace(
           "Redis command cmd=#{command.first} args=#{command[1..-1].inspect} " \
-          "duration=#{block_duration} " \
+          "duration_μs=#{block_duration} duration_ms=#{duration_ms} " \
           "timeline=#{lifetime_duration} db=#{db_num} index=#{DatabaseLogger.index}"
         )
       elsif DatabaseLogger.logger
@@ -213,6 +214,7 @@ module DatabaseLogger
 
     # Notify instrumentation hooks
     if defined?(Familia::Instrumentation)
+      duration_ms = (block_duration / 1000.0).round(2)
       db_num = if config.respond_to?(:db)
                    config.db
                  elsif config.is_a?(Hash)
@@ -225,10 +227,10 @@ module DatabaseLogger
                  end
       Familia::Instrumentation.notify_command(
         command.first,
-        block_duration,
+        duration_ms,
         full_command: command,
         db: db_num,
-        connection_id: conn_id
+        connection_id: conn_id,
       )
     end
 
@@ -254,14 +256,15 @@ module DatabaseLogger
     # Dual-mode logging with sampling
     if DatabaseLogger.should_log?
       if DatabaseLogger.structured_logging && DatabaseLogger.logger
+        duration_ms = (block_duration / 1000.0).round(2)
         db_num = if config.respond_to?(:db)
                    config.db
                  elsif config.is_a?(Hash)
                    config[:db]
                  end
         DatabaseLogger.logger.trace(
-          "Redis pipeline commands=#{commands.size} duration=#{block_duration} " \
-          "timeline=#{lifetime_duration} " \
+          "Redis pipeline commands=#{commands.size} duration_μs=#{block_duration} " \
+          "duration_ms=#{duration_ms} timeline=#{lifetime_duration} " \
           "db=#{db_num} index=#{DatabaseLogger.index}"
         )
       elsif DatabaseLogger.logger
@@ -272,6 +275,7 @@ module DatabaseLogger
 
     # Notify instrumentation hooks
     if defined?(Familia::Instrumentation)
+      duration_ms = (block_duration / 1000.0).round(2)
       db_num = if config.respond_to?(:db)
                    config.db
                  elsif config.is_a?(Hash)
@@ -284,7 +288,7 @@ module DatabaseLogger
                  end
       Familia::Instrumentation.notify_pipeline(
         commands.size,
-        block_duration,
+        duration_ms,
         db: db_num,
         connection_id: conn_id
       )
@@ -312,6 +316,7 @@ module DatabaseLogger
     # Dual-mode logging with sampling
     if DatabaseLogger.should_log?
       if DatabaseLogger.structured_logging && DatabaseLogger.logger
+        duration_ms = (block_duration / 1000.0).round(2)
         db_num = if config.respond_to?(:db)
                    config.db
                  elsif config.is_a?(Hash)
@@ -319,7 +324,7 @@ module DatabaseLogger
                  end
         DatabaseLogger.logger.trace(
           "Redis command_once cmd=#{command.first} args=#{command[1..-1].inspect} " \
-          "duration=#{block_duration} " \
+          "duration_μs=#{block_duration} duration_ms=#{duration_ms} " \
           "timeline=#{lifetime_duration} db=#{db_num} index=#{DatabaseLogger.index}"
         )
       elsif DatabaseLogger.logger
