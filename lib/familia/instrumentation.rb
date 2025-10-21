@@ -10,8 +10,8 @@ module Familia
   # and operational observability.
   #
   # @example Basic usage
-  #   Familia.on_command do |cmd, duration_ms, context|
-  #     puts "Redis command: #{cmd} (#{duration_ms}ms)"
+  #   Familia.on_command do |cmd, duration, context|
+  #     puts "Redis command: #{cmd} (#{duration}μs)"
   #   end
   #
   # @example Audit trail for secrets service
@@ -37,17 +37,17 @@ module Familia
     class << self
       # Register a callback for Redis command execution.
       #
-      # @yield [cmd, duration_ms, context] Callback block
+      # @yield [cmd, duration, context] Callback block
       # @yieldparam cmd [String] The Redis command name (e.g., "SET", "ZADD")
-      # @yieldparam duration_ms [Float] Command execution duration in milliseconds
+      # @yieldparam duration [Integer] Command execution duration in microseconds
       # @yieldparam context [Hash] Additional context including:
       #   - :full_command [Array] Complete command with arguments
       #   - :db [Integer] Database number
       #   - :connection_id [String] Connection identifier
       #
       # @example
-      #   Familia.on_command do |cmd, duration_ms, ctx|
-      #     StatsD.timing("familia.command.#{cmd.downcase}", duration_ms)
+      #   Familia.on_command do |cmd, duration, ctx|
+      #     StatsD.timing("familia.command.#{cmd.downcase}", duration / 1000.0)
       #   end
       #
       def on_command(&block)
@@ -56,14 +56,14 @@ module Familia
 
       # Register a callback for pipelined Redis operations.
       #
-      # @yield [command_count, duration_ms, context] Callback block
+      # @yield [command_count, duration, context] Callback block
       # @yieldparam command_count [Integer] Number of commands in the pipeline
-      # @yieldparam duration_ms [Float] Pipeline execution duration in milliseconds
+      # @yieldparam duration [Integer] Pipeline execution duration in microseconds
       # @yieldparam context [Hash] Additional context
       #
       # @example
-      #   Familia.on_pipeline do |count, duration_ms, ctx|
-      #     StatsD.timing("familia.pipeline", duration_ms)
+      #   Familia.on_pipeline do |count, duration, ctx|
+      #     StatsD.timing("familia.pipeline", duration / 1000.0)
       #     StatsD.gauge("familia.pipeline.commands", count)
       #   end
       #
@@ -77,7 +77,7 @@ module Familia
       # @yieldparam event [Symbol] Lifecycle event (:initialize, :save, :destroy)
       # @yieldparam instance [Familia::Horreum] The object instance
       # @yieldparam context [Hash] Additional context including:
-      #   - :duration_ms [Float] Operation duration (for initialize/save)
+      #   - :duration [Integer] Operation duration in microseconds (for initialize/save)
       #   - :update_expiration [Boolean] Whether TTL was updated (for save)
       #
       # @example
@@ -112,9 +112,9 @@ module Familia
 
       # Notify all registered command hooks.
       # @api private
-      def notify_command(cmd, duration_ms, context = {})
+      def notify_command(cmd, duration, context = {})
         @hooks[:command].each do |hook|
-          hook.call(cmd, duration_ms, context)
+          hook.call(cmd, duration, context)
         rescue => e
           Familia.error("Instrumentation hook failed", error: e.message, hook_type: :command)
         end
@@ -122,9 +122,9 @@ module Familia
 
       # Notify all registered pipeline hooks.
       # @api private
-      def notify_pipeline(command_count, duration_ms, context = {})
+      def notify_pipeline(command_count, duration, context = {})
         @hooks[:pipeline].each do |hook|
-          hook.call(command_count, duration_ms, context)
+          hook.call(command_count, duration, context)
         rescue => e
           Familia.error("Instrumentation hook failed", error: e.message, hook_type: :pipeline)
         end
