@@ -33,6 +33,8 @@ module DatabaseLogger
   @max_commands = 10_000
   @process_start = Time.now.to_f.freeze
   @structured_logging = false
+  @sample_rate = nil  # nil = log everything, 0.1 = 10%, 0.01 = 1%
+  @sample_counter = Concurrent::AtomicFixnum.new(0)
 
   CommandMessage = Data.define(:command, :μs, :timeline) do
     alias_method :to_a, :deconstruct
@@ -65,6 +67,24 @@ module DatabaseLogger
     #   DatabaseLogger.structured_logging = false
     #   # Outputs: "[123] 0.001234 567μs > SET key value"
     attr_accessor :structured_logging
+
+    # Gets/sets the sampling rate for logging.
+    # Controls what percentage of commands are logged to reduce noise.
+    #
+    # @return [Float, nil] Sample rate (0.0-1.0) or nil for no sampling
+    #
+    # @example Log 10% of commands
+    #   DatabaseLogger.sample_rate = 0.1
+    #
+    # @example Log 1% of commands (high-traffic production)
+    #   DatabaseLogger.sample_rate = 0.01
+    #
+    # @example Disable sampling (log everything)
+    #   DatabaseLogger.sample_rate = nil
+    #
+    # @note Command capture is unaffected - only logger output is sampled.
+    #   This means tests can still verify commands while production logs stay clean.
+    attr_accessor :sample_rate
 
     # Gets the captured commands for testing purposes.
     # @return [Array] Array of command hashes with :command, :duration, :timeline
@@ -125,6 +145,23 @@ module DatabaseLogger
       Process.clock_gettime(Process::CLOCK_MONOTONIC, :microsecond)
     end
     alias now_in_microseconds now_in_μs
+
+    # Determines if this command should be logged based on sampling rate.
+    #
+    # Uses deterministic modulo-based sampling for consistent behavior.
+    # Thread-safe via atomic counter increment.
+    #
+    # @return [Boolean] true if command should be logged
+    # @api private
+    def should_log?
+      return true if @sample_rate.nil?
+      return false if @logger.nil?
+
+      # Deterministic sampling: every Nth command where N = 1/sample_rate
+      # e.g., 0.1 = every 10th, 0.01 = every 100th
+      sample_interval = (1.0 / @sample_rate).to_i
+      (@sample_counter.increment % sample_interval).zero?
+    end
   end
 
   # Logs the Database command and its execution time.
@@ -152,19 +189,21 @@ module DatabaseLogger
     msgpack = CommandMessage.new(command.join(' '), block_duration, lifetime_duration)
     DatabaseLogger.append_command(msgpack)
 
-    # Dual-mode logging
-    if DatabaseLogger.structured_logging && DatabaseLogger.logger
-      duration_ms = (block_duration / 1000.0).round(2)
-      db_num = config.respond_to?(:db) ? config.db : (config[:db] rescue nil)
-      DatabaseLogger.logger.trace(
-        "Redis command cmd=#{command.first} args=#{command[1..-1].inspect} " \
-        "duration_μs=#{block_duration} duration_ms=#{duration_ms} " \
-        "timeline=#{lifetime_duration} db=#{db_num} index=#{DatabaseLogger.index}"
-      )
-    elsif DatabaseLogger.logger
-      # Existing formatted output
-      message = format('[%s] %s', DatabaseLogger.index, msgpack.inspect)
-      DatabaseLogger.logger.trace(message)
+    # Dual-mode logging with sampling
+    if DatabaseLogger.should_log?
+      if DatabaseLogger.structured_logging && DatabaseLogger.logger
+        duration_ms = (block_duration / 1000.0).round(2)
+        db_num = config.respond_to?(:db) ? config.db : (config[:db] rescue nil)
+        DatabaseLogger.logger.trace(
+          "Redis command cmd=#{command.first} args=#{command[1..-1].inspect} " \
+          "duration_μs=#{block_duration} duration_ms=#{duration_ms} " \
+          "timeline=#{lifetime_duration} db=#{db_num} index=#{DatabaseLogger.index}"
+        )
+      elsif DatabaseLogger.logger
+        # Existing formatted output
+        message = format('[%s] %s', DatabaseLogger.index, msgpack.inspect)
+        DatabaseLogger.logger.trace(message)
+      end
     end
 
     # Notify instrumentation hooks
@@ -200,18 +239,20 @@ module DatabaseLogger
     msgpack = CommandMessage.new(cmd_string, block_duration, lifetime_duration)
     DatabaseLogger.append_command(msgpack)
 
-    # Dual-mode logging
-    if DatabaseLogger.structured_logging && DatabaseLogger.logger
-      duration_ms = (block_duration / 1000.0).round(2)
-      db_num = config.respond_to?(:db) ? config.db : (config[:db] rescue nil)
-      DatabaseLogger.logger.trace(
-        "Redis pipeline commands=#{commands.size} duration_μs=#{block_duration} " \
-        "duration_ms=#{duration_ms} timeline=#{lifetime_duration} " \
-        "db=#{db_num} index=#{DatabaseLogger.index}"
-      )
-    elsif DatabaseLogger.logger
-      message = format('[%s] %s', DatabaseLogger.index, msgpack.inspect)
-      DatabaseLogger.logger.trace(message)
+    # Dual-mode logging with sampling
+    if DatabaseLogger.should_log?
+      if DatabaseLogger.structured_logging && DatabaseLogger.logger
+        duration_ms = (block_duration / 1000.0).round(2)
+        db_num = config.respond_to?(:db) ? config.db : (config[:db] rescue nil)
+        DatabaseLogger.logger.trace(
+          "Redis pipeline commands=#{commands.size} duration_μs=#{block_duration} " \
+          "duration_ms=#{duration_ms} timeline=#{lifetime_duration} " \
+          "db=#{db_num} index=#{DatabaseLogger.index}"
+        )
+      elsif DatabaseLogger.logger
+        message = format('[%s] %s', DatabaseLogger.index, msgpack.inspect)
+        DatabaseLogger.logger.trace(message)
+      end
     end
 
     # Notify instrumentation hooks
@@ -246,18 +287,20 @@ module DatabaseLogger
     msgpack = CommandMessage.new(command.join(' '), block_duration, lifetime_duration)
     DatabaseLogger.append_command(msgpack)
 
-    # Dual-mode logging
-    if DatabaseLogger.structured_logging && DatabaseLogger.logger
-      duration_ms = (block_duration / 1000.0).round(2)
-      db_num = config.respond_to?(:db) ? config.db : (config[:db] rescue nil)
-      DatabaseLogger.logger.trace(
-        "Redis command_once cmd=#{command.first} args=#{command[1..-1].inspect} " \
-        "duration_μs=#{block_duration} duration_ms=#{duration_ms} " \
-        "timeline=#{lifetime_duration} db=#{db_num} index=#{DatabaseLogger.index}"
-      )
-    elsif DatabaseLogger.logger
-      message = format('[%s] %s', DatabaseLogger.index, msgpack.inspect)
-      DatabaseLogger.logger.trace(message)
+    # Dual-mode logging with sampling
+    if DatabaseLogger.should_log?
+      if DatabaseLogger.structured_logging && DatabaseLogger.logger
+        duration_ms = (block_duration / 1000.0).round(2)
+        db_num = config.respond_to?(:db) ? config.db : (config[:db] rescue nil)
+        DatabaseLogger.logger.trace(
+          "Redis command_once cmd=#{command.first} args=#{command[1..-1].inspect} " \
+          "duration_μs=#{block_duration} duration_ms=#{duration_ms} " \
+          "timeline=#{lifetime_duration} db=#{db_num} index=#{DatabaseLogger.index}"
+        )
+      elsif DatabaseLogger.logger
+        message = format('[%s] %s', DatabaseLogger.index, msgpack.inspect)
+        DatabaseLogger.logger.trace(message)
+      end
     end
 
     result

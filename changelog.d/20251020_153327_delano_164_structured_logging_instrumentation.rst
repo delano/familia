@@ -10,6 +10,8 @@ Added
 
 - **DatabaseLogger Structured Mode**: Added ``DatabaseLogger.structured_logging`` mode that outputs Redis commands with structured key=value context instead of formatted string output.
 
+- **DatabaseLogger Sampling**: Added ``DatabaseLogger.sample_rate`` for controlling log volume in high-traffic scenarios. Set to 0.1 for 10% sampling, 0.01 for 1% sampling, or nil to disable. Command capture for testing remains unaffected.
+
 - **Lifecycle Logging**: Horreum initialize, save, and destroy operations now log with timing and structured context when ``FAMILIA_DEBUG`` is enabled.
 
 - **Operational Logging**: TTL operations and serialization errors now include structured context for better debugging.
@@ -30,9 +32,10 @@ This is a clean break for v2.0 with no deprecation warnings, as the removed meth
 
 .. code-block:: ruby
 
-   # Enable structured logging
+   # Enable structured logging with 10% sampling for production
    Familia.logger = Rails.logger
    DatabaseLogger.structured_logging = true
+   DatabaseLogger.sample_rate = 0.1  # Log 10% of commands
 
    # Register hooks for audit trails
    Familia.on_command do |cmd, duration_ms, context|
