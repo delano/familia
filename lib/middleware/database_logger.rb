@@ -36,11 +36,13 @@ module DatabaseLogger
   @sample_rate = nil  # nil = log everything, 0.1 = 10%, 0.01 = 1%
   @sample_counter = Concurrent::AtomicFixnum.new(0)
 
-  CommandMessage = Data.define(:command, :μs, :timeline) do
-    alias_method :to_a, :deconstruct
-    def inspect
-      cmd, duration, timeline = to_a
-      format('%.6f %4dμs > %s', timeline, duration, cmd)
+  unless defined?(CommandMessage)
+    CommandMessage = Data.define(:command, :μs, :timeline) do
+      alias_method :to_a, :deconstruct
+      def inspect
+        cmd, duration, timeline = to_a
+        format('%.6f %4dμs > %s', timeline, duration, cmd)
+      end
     end
   end
 
