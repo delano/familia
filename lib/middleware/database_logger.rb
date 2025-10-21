@@ -35,6 +35,7 @@ module DatabaseLogger
   @structured_logging = false
   @sample_rate = nil  # nil = log everything, 0.1 = 10%, 0.01 = 1%
   @sample_counter = Concurrent::AtomicFixnum.new(0)
+  @commands_mutex = Mutex.new  # Protects compound operations on @commands
 
   unless defined?(CommandMessage)
     CommandMessage = Data.define(:command, :μs, :timeline) do
@@ -97,9 +98,14 @@ module DatabaseLogger
     attr_reader :process_start
 
     # Clears the captured commands array.
-    # @return [Array] Empty array
+    #
+    # Synchronized to prevent race conditions with concurrent append_command calls.
+    #
+    # @return [nil]
     def clear_commands
-      @commands.clear
+      @commands_mutex.synchronize do
+        @commands.clear
+      end
       nil
     end
 
@@ -130,11 +136,16 @@ module DatabaseLogger
 
     # Thread-safe append with bounded size
     #
-    # @param message [String] The message to append.
+    # Synchronizes the check-shift-append sequence to prevent race conditions
+    # that could lead to nil entries when multiple threads access near capacity.
+    #
+    # @param message [CommandMessage] The message to append.
     # @return [Array] The updated array of commands.
     def append_command(message)
-      @commands.shift if @commands.size >= @max_commands
-      @commands << message
+      @commands_mutex.synchronize do
+        @commands.shift if @commands.size >= @max_commands
+        @commands << message
+      end
     end
 
     # Returns the current time in microseconds.
