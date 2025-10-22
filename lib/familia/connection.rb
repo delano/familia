@@ -19,6 +19,7 @@ module Familia
   @logger_registered = false
   @counter_registered = false
   @middleware_version = 0
+  @connection_chain_mutex = Mutex.new  # Thread-safe connection chain initialization
 
   # The Connection module provides Database connection management for Familia.
   # It allows easy setup and access to Database clients across different URIs
@@ -88,11 +89,16 @@ module Familia
     # Retrieves a Database connection using the Chain of Responsibility pattern.
     # Handles DB selection automatically based on the URI.
     #
+    # Thread-safe: Uses Mutex to protect connection chain lazy initialization
+    # and ensure singleton property under concurrent access.
+    #
     # @return [Redis] The Database client for the specified URI
     # @example Familia.dbclient('redis://localhost:6379/1')
     #   Familia.dbclient(2)  # Use DB 2 with default server
     def dbclient(uri = nil)
-      @connection_chain ||= build_connection_chain
+      @connection_chain_mutex.synchronize do
+        @connection_chain ||= build_connection_chain
+      end
       @connection_chain.handle(uri)
     end
 

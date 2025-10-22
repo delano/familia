@@ -21,21 +21,21 @@ require_relative '../support/helpers/test_helpers'
 ## Concurrent connection chain initialization builds only one chain
 Familia.instance_variable_set(:@connection_chain, nil)
 barrier = Concurrent::CyclicBarrier.new(50)
-chains = Concurrent::Array.new
+chain_ids = Concurrent::Array.new
 
 threads = 50.times.map do
   Thread.new do
     barrier.wait
-    chain = Familia.dbclient('redis://127.0.0.1:6379')
-    chains << chain.object_id  # Store object identity to detect singleton violations
+    Familia.dbclient('redis://127.0.0.1:6379')  # Trigger chain initialization
+    chain_ids << Familia.instance_variable_get(:@connection_chain).object_id
   end
 end
 
 threads.each(&:join)
 # Test multiple invariants:
 # - No nil entries (array corruption check from middleware tests)
-# - All chains are same object (singleton property)
-[chains.any?(nil), chains.uniq.size]
+# - All threads see same connection chain object (singleton property)
+[chain_ids.any?(nil), chain_ids.uniq.size]
 #=> [false, 1]
 
 ## Connection chain remains functional after concurrent access
@@ -117,9 +117,9 @@ end
 threads.each(&:join)
 # Test multiple invariants:
 # - No nil entries from concurrent chain rebuilding
-# - All got valid RedisClient instances (will FAIL until Mutex added)
+# - All got valid Redis instances (protected by Mutex)
 # - All are actually instances, not errors
-[results.any?(nil), results.all? { |r| r == 'RedisClient' }, results.size]
+[results.any?(nil), results.all? { |r| r == 'Redis' }, results.size]
 #=> [false, true, 40]
 
 ## Rapid sequential reconnects from multiple threads

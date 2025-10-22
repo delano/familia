@@ -82,20 +82,23 @@ module Familia
       #   Familia.reconnect!  # Force new connections with middleware
       #
       def reconnect!
-        # Allow middleware to be re-registered by resetting all flags
-        @middleware_registered = false
-        @logger_registered = false
-        @counter_registered = false
-        register_middleware_once
+        # Thread-safe: Use same mutex as dbclient to protect @connection_chain
+        @connection_chain_mutex.synchronize do
+          # Allow middleware to be re-registered by resetting all flags
+          @middleware_registered = false
+          @logger_registered = false
+          @counter_registered = false
+          register_middleware_once
 
-        # Clear connection chain to force rebuild
-        @connection_chain = nil
+          # Clear connection chain to force rebuild
+          @connection_chain = nil
 
-        # Increment version to invalidate all cached connections
-        increment_middleware_version!
+          # Increment version to invalidate all cached connections
+          increment_middleware_version!
 
-        # Clear fiber-local connections
-        clear_fiber_connection!
+          # Clear fiber-local connections
+          clear_fiber_connection!
+        end
 
         Familia.trace :RECONNECT, nil, 'Connection chain cleared, will rebuild with current middleware on next use'
       end
