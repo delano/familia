@@ -15,37 +15,34 @@ The format is based on `Keep a Changelog <https://keepachangelog.com/en/1.1.0/>`
 Added
 -----
 
-- Middleware command tracking tests for ``clear_commands`` operations
+- Pipeline Routing Investigation: Created 7 diagnostic testcases in ``try/investigation/pipeline_routing/`` to investigate suspected middleware routing issue. Investigation revealed single-command pipelines don't have ' | ' separator (expected Array#join behavior), confirming no routing bug exists. Full analysis documented in ``CONCLUSION.md``.
 
 Changed
 -------
 
-- Durations: All duration measurements now use integer microseconds consistently throughout Familia. Previously mixed microsecond precision with millisecond display units, creating confusion in logs and instrumentation. PR #167
+- **BREAKING**: Duration measurements now use integer microseconds instead of milliseconds. Instrumentation hooks and logging output have changed format:
 
-  - Added ``Familia.now_in_μs`` utility method (with ``now_in_microseconds`` alias) wrapping ``Process.clock_gettime(Process::CLOCK_MONOTONIC, :microsecond)``
-  - Replaced direct ``Process.clock_gettime`` calls throughout codebase with new utility
-  - Eliminated redundant millisecond conversion calculations (``/ 1000.0``)
+  - ``Familia.on_command`` receives ``duration`` in microseconds (was ``duration_ms`` in milliseconds)
+  - ``Familia.on_pipeline`` receives ``duration`` in microseconds (was ``duration_ms`` in milliseconds)
+  - ``Familia.on_lifecycle`` uses ``duration`` key in microseconds (was ``duration_ms`` in milliseconds)
+  - Log messages show ``duration=1234`` (microseconds) instead of ``duration_ms=1.23`` (milliseconds)
 
-- Instrumentation API Changes: Hook parameters renamed from ``duration_ms`` (Float milliseconds) to ``duration`` (Integer microseconds) for honesty and precision:
+- Migration: Convert to milliseconds when needed: ``duration / 1000.0``
 
-  - ``Familia.on_command`` now receives ``duration`` in microseconds
-  - ``Familia.on_pipeline`` now receives ``duration`` in microseconds
-  - ``Familia.on_lifecycle`` context hash uses ``duration`` key in microseconds
-  - Consumer code should convert to milliseconds when needed: ``duration / 1000.0``
+Fixed
+-----
 
-- Logging Format Updates: Log messages now show ``duration=1234`` (microseconds) instead of ``duration_ms=1.23`` (milliseconds) for clearer, more precise performance analysis
+- Connection Chain Race Condition: Fixed race condition in connection chain initialization where concurrent calls could create multiple instances. Added thread-safe protection to ensure proper singleton behavior.
 
-- Affected Components:
+- Thread Safety Test Suite: Corrected test assertions to properly verify thread safety invariants.
 
-  - ``Familia::Horreum`` initialization and persistence lifecycle
-  - ``Familia::Instrumentation`` command, pipeline, and lifecycle hooks
-  - ``DatabaseLogger`` middleware structured logging output
-  - Documentation and examples updated throughout
 
 AI Assistance
 -------------
 
-- Claude Code assisted with PR review and changelog fragment authoring
+- Claude Code assisted with analyzing test failures, identifying and fixing the connection chain race condition with Mutex protection, correcting test assertions to verify proper thread safety invariants, and creating diagnostic testcases to investigate pipeline routing behavior.
+
+
 
 .. _changelog-2.0.0.pre20:
 
