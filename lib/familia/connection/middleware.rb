@@ -1,6 +1,7 @@
 # lib/familia/connection/middleware.rb
 
 require_relative '../../middleware/database_logger'
+require_relative '../../middleware/database_command_counter'
 
 module Familia
   module Connection
