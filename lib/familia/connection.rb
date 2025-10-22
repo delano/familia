@@ -16,7 +16,10 @@ require_relative 'connection/pipelined_core'
 module Familia
   @uri = URI.parse 'redis://127.0.0.1:6379'
   @middleware_registered = false
+  @logger_registered = false
+  @counter_registered = false
   @middleware_version = 0
+  @connection_chain_mutex = Mutex.new  # Thread-safe connection chain initialization
 
   # The Connection module provides Database connection management for Familia.
   # It allows easy setup and access to Database clients across different URIs
@@ -86,12 +89,22 @@ module Familia
     # Retrieves a Database connection using the Chain of Responsibility pattern.
     # Handles DB selection automatically based on the URI.
     #
+    # Thread-safe: Uses double-checked locking pattern to avoid mutex overhead
+    # on the hot path. Only acquires mutex during initial lazy initialization.
+    # MRI's GIL provides implicit memory barriers making this pattern safe.
+    #
     # @return [Redis] The Database client for the specified URI
     # @example Familia.dbclient('redis://localhost:6379/1')
     #   Familia.dbclient(2)  # Use DB 2 with default server
     def dbclient(uri = nil)
-      @connection_chain ||= build_connection_chain
-      @connection_chain.handle(uri)
+      # Fast path - read with local variable to ensure single read
+      chain = @connection_chain
+      return chain.handle(uri) if chain
+
+      # Slow path - initialization only
+      @connection_chain_mutex.synchronize do
+        @connection_chain ||= build_connection_chain
+      end.handle(uri)
     end
 
     # Builds the connection chain with handlers in priority order
