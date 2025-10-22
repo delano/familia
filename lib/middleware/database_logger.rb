@@ -1,10 +1,6 @@
-# frozen_string_literal: true
-
 # lib/middleware/database_logger.rb
 
 require 'concurrent-ruby'
-
-# rubocop:disable ThreadSafety/ClassInstanceVariable
 
 # DatabaseLogger is RedisClient middleware for command logging and capture.
 #
@@ -95,6 +91,7 @@ require 'concurrent-ruby'
 #   when logging is disabled, and the benefits during development and debugging
 #   often outweigh the slight performance cost when enabled.
 #
+# rubocop:disable ThreadSafety/ClassInstanceVariable
 module DatabaseLogger
   # Data structure for captured command metadata
   CommandMessage = Data.define(:command, :μs, :timeline) do
@@ -167,8 +164,11 @@ module DatabaseLogger
 
     # Clears the captured commands array.
     #
-    # Thread-safe operation that synchronizes access to prevent race conditions
-    # with concurrent append_command calls.
+    # Uses Mutex synchronization to ensure test isolation. While append_command
+    # accepts relaxed precision for buffer trimming (+/- a few commands is fine),
+    # clear_commands needs to be precise to prevent test flakiness. Without the
+    # Mutex, a command from another thread could arrive mid-clear and leak into
+    # the next capture_commands block, causing confusing test failures.
     #
     # @return [nil]
     def clear_commands
@@ -204,18 +204,19 @@ module DatabaseLogger
 
     # Appends a command message to the captured commands array.
     #
-    # Thread-safe operation that synchronizes the check-shift-append sequence
-    # to prevent race conditions. When the array reaches max_commands capacity,
-    # the oldest command is removed before adding the new one.
+    # When the array reaches max_commands capacity, the oldest command is
+    # removed before adding the new one.
     #
     # @param message [CommandMessage] The command message to append
     # @return [Array<CommandMessage>] The updated array of commands
     # @api private
     def append_command(message)
-      @commands_mutex.synchronize do
-        @commands.shift if @commands.size >= @max_commands
-        @commands << message
-      end
+      # We can throw away commands and not worry about thread race conditions
+      # since no one is going to mind if the command list is +/- a few
+      # commands. Unlike how we care about the order that the commands
+      # appear in the list, we don't care about exact count when trimming.
+      @commands.shift if @commands.size >= @max_commands
+      @commands << message # this is threadsafe thanks to Concurrent::Array
     end
 
     # Returns the current time in microseconds.
