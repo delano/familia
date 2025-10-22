@@ -7,6 +7,46 @@ The format is based on `Keep a Changelog <https://keepachangelog.com/en/1.1.0/>`
 
    <!--scriv-insert-here-->
 
+.. _changelog-2.0.0.pre21:
+
+2.0.0.pre21 — 2025-10-21
+========================
+
+Added
+-----
+
+- Middleware command tracking tests for ``clear_commands`` operations
+
+Changed
+-------
+
+- Durations: All duration measurements now use integer microseconds consistently throughout Familia. Previously mixed microsecond precision with millisecond display units, creating confusion in logs and instrumentation. PR #167
+
+  - Added ``Familia.now_in_μs`` utility method (with ``now_in_microseconds`` alias) wrapping ``Process.clock_gettime(Process::CLOCK_MONOTONIC, :microsecond)``
+  - Replaced direct ``Process.clock_gettime`` calls throughout codebase with new utility
+  - Eliminated redundant millisecond conversion calculations (``/ 1000.0``)
+
+- Instrumentation API Changes: Hook parameters renamed from ``duration_ms`` (Float milliseconds) to ``duration`` (Integer microseconds) for honesty and precision:
+
+  - ``Familia.on_command`` now receives ``duration`` in microseconds
+  - ``Familia.on_pipeline`` now receives ``duration`` in microseconds
+  - ``Familia.on_lifecycle`` context hash uses ``duration`` key in microseconds
+  - Consumer code should convert to milliseconds when needed: ``duration / 1000.0``
+
+- Logging Format Updates: Log messages now show ``duration=1234`` (microseconds) instead of ``duration_ms=1.23`` (milliseconds) for clearer, more precise performance analysis
+
+- Affected Components:
+
+  - ``Familia::Horreum`` initialization and persistence lifecycle
+  - ``Familia::Instrumentation`` command, pipeline, and lifecycle hooks
+  - ``DatabaseLogger`` middleware structured logging output
+  - Documentation and examples updated throughout
+
+AI Assistance
+-------------
+
+- Claude Code assisted with PR review and changelog fragment authoring
+
 .. _changelog-2.0.0.pre20:
 
 2.0.0.pre20 — 2025-10-20
