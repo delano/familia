@@ -16,6 +16,8 @@ require_relative 'connection/pipelined_core'
 module Familia
   @uri = URI.parse 'redis://127.0.0.1:6379'
   @middleware_registered = false
+  @logger_registered = false
+  @counter_registered = false
   @middleware_version = 0
 
   # The Connection module provides Database connection management for Familia.

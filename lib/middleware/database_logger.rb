@@ -191,7 +191,7 @@ module DatabaseLogger
   #   Logging only occurs when DatabaseLogger.logger is set.
   def call(command, config)
     block_start = DatabaseLogger.now_in_μs
-    result = yield
+    result = super
     block_duration = DatabaseLogger.now_in_μs - block_start
 
     # We intentionally use two different codepaths for getting the
@@ -437,7 +437,7 @@ module DatabaseCommandCounter
   # @return [Object] The result of the Database command execution.
   def call(command, _config)
     klass.increment unless klass.skip_command?(command)
-    yield
+    super
   end
 
   def call_pipelined(commands, _config)
@@ -445,12 +445,12 @@ module DatabaseCommandCounter
     commands.each do |command|
       klass.increment unless klass.skip_command?(command)
     end
-    yield
+    super
   end
 
   def call_once(command, _config)
     klass.increment unless klass.skip_command?(command)
-    yield
+    super
   end
 end
 # rubocop:enable ThreadSafety/ClassInstanceVariable

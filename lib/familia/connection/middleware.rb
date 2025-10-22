@@ -81,8 +81,10 @@ module Familia
       #   Familia.reconnect!  # Force new connections with middleware
       #
       def reconnect!
-        # Allow middleware to be re-registered
+        # Allow middleware to be re-registered by resetting all flags
         @middleware_registered = false
+        @logger_registered = false
+        @counter_registered = false
         register_middleware_once
 
         # Clear connection chain to force rebuild
@@ -102,27 +104,28 @@ module Familia
       # Registers middleware once globally, regardless of when clients are created.
       # This prevents duplicate middleware registration and ensures all clients get middleware.
       def register_middleware_once
-        # Skip if already registered
-        return if @middleware_registered
-
         # Check if any middleware is enabled
         return unless Familia.enable_database_logging || Familia.enable_database_counter
 
-        if Familia.enable_database_logging
+        # Register each middleware independently to avoid early return bug
+        # where enabling one middleware prevents the other from being registered
+        if Familia.enable_database_logging && !@logger_registered
           DatabaseLogger.logger = Familia.logger
           RedisClient.register(DatabaseLogger)
           Familia.trace :MIDDLEWARE_REGISTERED, nil, 'Registered DatabaseLogger'
+          @logger_registered = true
         end
 
-        if Familia.enable_database_counter
+        if Familia.enable_database_counter && !@counter_registered
           # NOTE: This middleware uses AtomicFixnum from concurrent-ruby which is
           # less contentious than Mutex-based counters. Safe for production.
           RedisClient.register(DatabaseCommandCounter)
           Familia.trace :MIDDLEWARE_REGISTERED, nil, 'Registered DatabaseCommandCounter'
+          @counter_registered = true
         end
 
-        # Set flag after successful registration
-        @middleware_registered = true
+        # Set global flag when any middleware is registered
+        @middleware_registered = @logger_registered || @counter_registered
       end
     end
   end
