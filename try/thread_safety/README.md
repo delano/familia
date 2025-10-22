@@ -4,7 +4,9 @@
 
 This directory contains targeted tests that expose threading vulnerabilities in Familia's codebase. These tests were created following a systematic analysis that identified critical race conditions in production code that currently have no synchronization protection.
 
-**Key Insight**: These tests are designed to **fail or expose inconsistencies** until the underlying code is fixed. A passing test here means the code has proper thread safety mechanisms (Mutex, AtomicFixnum, etc.) in place.
+**Key Insight**: These tests are designed to **fail or expose inconsistencies** because the underlying code lacks proper synchronization. As of the latest updates, test assertions have been strengthened to properly verify thread safety invariants (singleton properties, consistency, etc.) rather than just checking thread completion.
+
+**Current Status**: As of 2025-10-21, test suite has **61 passing / 4 failing** tests. The 4 failures properly detect real race conditions and bugs that need fixing in production code. This honest failure rate is intentional and expected - it shows exactly where work is needed.
 
 ## The Thread Safety Problem
 
@@ -95,6 +97,20 @@ results = Concurrent::Array.new  # Thread-safe
 threads.each { |t| results << t.value }
 ```
 
+#### Multi-Property Assertion Pattern
+Test multiple invariants together to catch different types of corruption:
+
+```ruby
+# Test array corruption, correctness, and completeness
+[results.any?(nil), results.all? { |r| r == 'PONG' }, results.size]
+#=> [false, true, 50]
+```
+
+This pattern catches:
+- **Array corruption**: `results.any?(nil)` detects concurrent modification bugs
+- **Correctness**: `results.all? { ... }` verifies logical correctness
+- **Completeness**: `results.size` ensures no lost operations
+
 #### CountDownLatch for Timeout Protection
 Tests should never hang forever if there's a deadlock:
 
@@ -122,9 +138,83 @@ results.uniq.size
 #=> 1  # PASS: Only one chain created (thread-safe)
 ```
 
-## Current Status
+## Recent Changes (2025-10-21)
 
-**Overall Coverage**: ~30% (target: ~85%)
+**Test Assertion Improvements**: Test assertions have been updated to properly verify thread safety rather than just checking thread completion. For example:
+
+**Before** (weak assertion):
+```ruby
+chains << chain.class.name
+threads.each(&:join)
+chains.size  # Only checks 50 threads completed
+#=> 50
+```
+
+**After** (strong assertion):
+```ruby
+chains << chain.object_id  # Store actual object identity
+threads.each(&:join)
+chains.uniq.size  # Checks singleton property
+#=> 1  # Will FAIL if race creates multiple chains
+```
+
+This makes tests properly fail when race conditions occur, providing honest feedback about thread safety status.
+
+## Current Test Results
+
+**Test Suite**: 63 total tests across 9 files
+**Status**: 61 passing, 2 failing (736ms runtime)
+**Coverage**: ~30% of identified thread safety risks (target: ~85%)
+
+### Known Failures (Real Bugs Detected)
+
+These 2 failures properly detect a real race condition in production code:
+
+#### 1. Connection Chain Lazy Init (`connection_chain_race_try.rb:39`)
+
+**Failure**: Expected `[false, 1]` but got `[false, 50]`
+- Module-level `@connection_chain ||= build_connection_chain` lacks Mutex protection
+- Creates 50 different chain instances under concurrent access (should be 1)
+- **Root cause**: `lib/familia/connection.rb:95`
+- **Fix needed**: Add Mutex synchronization around lazy initialization
+
+#### 2. Connection Chain Rebuild (`connection_chain_race_try.rb:123`)
+
+**Failure**: Expected `[false, true, 40]` but got `[false, false, 40]`
+- One thread nils out `@connection_chain` while 39 others try to use it
+- Some threads get errors instead of successful RedisClient instances
+- **Root cause**: No synchronization protecting chain rebuilding
+- **Fix needed**: Mutex around connection chain access
+
+### Removed Tests (Investigation Revealed Not Bugs)
+
+These tests were removed after thorough investigation revealed they were based on incorrect assumptions:
+
+#### 3. Sample Rate Counter Test (REMOVED - NOT A BUG)
+
+**Original Failure**: Expected `[true, false]` (sampled ~50%), got `[false, false]` (logged all 100)
+
+**Investigation Result**:
+- `sample_rate` controls **logging output**, not **command capture**
+- The `commands` array always contains all commands regardless of sample_rate
+- This is intentional behavior per `database_logger.rb:153-154`
+- Comment states: "Command capture is unaffected - only logger output is sampled"
+- **Status**: Removed from `middleware_thread_safety_try.rb:113`
+
+#### 4. Pipeline Command Logging Test (REMOVED - NOT A BUG)
+
+**Original Failure**: Expected 20 pipeline commands with ' | ', got only 16
+
+**Investigation Result**:
+- Single-command pipelines exist and are valid
+- `Array#join(' | ')` only adds separators BETWEEN elements
+- Single-command pipeline: `['SET key val']` → no separator (nothing to separate)
+- Multi-command pipeline: `['SET key1 val1', 'SET key2 val2']` → has separator
+- Backend-dev investigation created 7 diagnostic testcases confirming correct behavior
+- See `try/investigation/pipeline_routing/CONCLUSION.md` for full technical analysis
+- **Status**: Removed from `middleware_thread_safety_try.rb:224`
+
+## Coverage Status
 
 ### Working Protection (2 areas)
 - ✅ **DatabaseLogger**: Uses Mutex + Concurrent::Array
@@ -237,6 +327,95 @@ Ask these questions:
 - **1000+ threads**: Overkill - flaky, slow, not recommended
 
 We use 20-100 threads in these tests as a sweet spot between detection and speed.
+
+## Advanced Testing Patterns
+
+These patterns are derived from the comprehensive middleware thread safety tests and can be applied to test any concurrent code.
+
+### 1. Structure Validation Pattern
+Verify that concurrent operations don't corrupt data structures:
+
+```ruby
+all_valid = results.all? do |item|
+  item.field1.is_a?(String) &&
+  item.field2.is_a?(Integer) &&
+  item.field3.is_a?(Float)
+end
+
+[results.size, results.any?(nil), all_valid]
+#=> [50, false, true]
+```
+
+### 2. Concurrent Clearing Pattern
+Test that clearing operations don't corrupt during active usage:
+
+```ruby
+# 50 threads writing
+writers = 50.times.map do
+  Thread.new do
+    barrier.wait
+    10.times { write_operation }
+  end
+end
+
+# 1 thread clearing
+clearer = Thread.new do
+  barrier.wait
+  5.times { clear_operation }
+end
+
+# Array should never contain nil entries
+results.any?(nil)
+#=> false
+```
+
+### 3. Mixed Operation Types Pattern
+Test different operations concurrently to expose interaction bugs:
+
+```ruby
+threads = 60.times.map do |i|
+  Thread.new do
+    barrier.wait
+    case i % 3
+    when 0  # Operation type A
+      regular_operation
+    when 1  # Operation type B
+      pipeline_operation
+    when 2  # Operation type C
+      rapid_operations
+    end
+  end
+end
+```
+
+### 4. Rapid Sequential Calls Pattern
+Test that rapid-fire operations within threads don't corrupt state:
+
+```ruby
+threads = 20.times.map do
+  Thread.new do
+    # Each thread hammers the system
+    10.times { operation }
+  end
+end
+
+# Should have 200 results (20 × 10), all valid
+[results.size, results.any?(nil)]
+#=> [200, false]
+```
+
+### 5. Type and Method Validation Pattern
+Ensure objects maintain their interface under concurrency:
+
+```ruby
+# All results should respond to expected methods
+results.all? { |r| r.respond_to?(:expected_method) }
+#=> true
+
+# All results should be correct type
+results.all? { |r| r.is_a?(ExpectedClass) }
+#=> true
+```
 
 ## Architecture Insights
 

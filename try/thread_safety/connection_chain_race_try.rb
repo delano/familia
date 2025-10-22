@@ -27,13 +27,16 @@ threads = 50.times.map do
   Thread.new do
     barrier.wait
     chain = Familia.dbclient('redis://127.0.0.1:6379')
-    chains << chain.class.name
+    chains << chain.object_id  # Store object identity to detect singleton violations
   end
 end
 
 threads.each(&:join)
-chains.size
-#=> 50
+# Test multiple invariants:
+# - No nil entries (array corruption check from middleware tests)
+# - All chains are same object (singleton property)
+[chains.any?(nil), chains.uniq.size]
+#=> [false, 1]
 
 ## Connection chain remains functional after concurrent access
 Familia.instance_variable_set(:@connection_chain, nil)
@@ -54,8 +57,11 @@ threads = 30.times.map do
 end
 
 threads.each(&:join)
-results.size
-#=> 30
+# Test multiple invariants (pattern from middleware tests):
+# - No nil entries (corruption check)
+# - All successful PONG responses (correctness check)
+[results.any?(nil), results.all? { |r| r == 'PONG' }]
+#=> [false, true]
 
 ## Concurrent reconnect calls maintain chain consistency
 barrier = Concurrent::CyclicBarrier.new(20)
@@ -109,8 +115,12 @@ threads = 40.times.map do |i|
 end
 
 threads.each(&:join)
-results.size
-#=> 40
+# Test multiple invariants:
+# - No nil entries from concurrent chain rebuilding
+# - All got valid RedisClient instances (will FAIL until Mutex added)
+# - All are actually instances, not errors
+[results.any?(nil), results.all? { |r| r == 'RedisClient' }, results.size]
+#=> [false, true, 40]
 
 ## Rapid sequential reconnects from multiple threads
 barrier = Concurrent::CyclicBarrier.new(10)

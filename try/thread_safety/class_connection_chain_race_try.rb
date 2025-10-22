@@ -33,13 +33,18 @@ threads = 50.times.map do
   Thread.new do
     barrier.wait
     client = TestModel1.dbclient
-    chains << client.class.name
+    # Store the actual connection chain object ID to detect singleton violations
+    chains << TestModel1.instance_variable_get(:@connection_chain).object_id
   end
 end
 
 threads.each(&:join)
-chains.size
-#=> 50
+# Test multiple invariants (pattern from middleware tests):
+# - No nil entries (corruption check)
+# - All chains are same object (singleton property)
+# - Got expected number of results
+[chains.any?(nil), chains.uniq.size, chains.size]
+#=> [false, 1, 50]
 
 
 ## Multiple model classes initialized concurrently
