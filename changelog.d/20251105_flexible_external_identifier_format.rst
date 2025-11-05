@@ -4,7 +4,7 @@
 .. Changed
 .. -------
 
-- **ExternalIdentifier Format Flexibility**: The `external_identifier` feature now supports customizable format templates via the `format` option. This allows you to control the separator and overall format of generated external IDs beyond just the prefix.
+- **ExternalIdentifier Format Flexibility**: The `external_identifier` feature now supports customizable format templates via the `format` option. This allows you to control the entire format of generated external IDs, including the prefix, separator, and overall structure.
 
   **Default format** (unchanged behavior):
 
@@ -15,30 +15,34 @@
      end
      user.extid  # => "ext_abc123def456ghi789"
 
-  **Custom separator** (using prefix only):
+  **Custom format with different prefix**:
 
   .. code-block:: ruby
 
      class Customer < Familia::Horreum
-       feature :external_identifier, prefix: 'cust'
+       feature :external_identifier, format: 'cust_%{id}'
      end
      customer.extid  # => "cust_abc123def456ghi789"
 
-  **Custom format template** (full control):
+  **Custom format with different separator**:
 
   .. code-block:: ruby
 
      class APIKey < Familia::Horreum
-       feature :external_identifier, format: '%{prefix}-%{id}'
+       feature :external_identifier, format: 'api-%{id}'
      end
-     key.extid  # => "ext-abc123def456ghi789"
+     key.extid  # => "api-abc123def456ghi789"
+
+  **Custom format without traditional prefix**:
+
+  .. code-block:: ruby
 
      class Resource < Familia::Horreum
-       feature :external_identifier, format: 'api/%{id}'
+       feature :external_identifier, format: 'v2/%{id}'
      end
-     resource.extid  # => "api/abc123def456ghi789"
+     resource.extid  # => "v2/abc123def456ghi789"
 
-  The `format` option accepts a Ruby format string with two placeholders: `%{prefix}` for the configured prefix (default: "ext") and `%{id}` for the generated identifier. This provides flexibility for various ID formatting needs including URL paths, different separators (hyphen, slash, etc.), or no separator at all.
+  The `format` option accepts a Ruby format string with the `%{id}` placeholder for the generated identifier. The default format is `'ext_%{id}'`. This provides complete flexibility for various ID formatting needs including different prefixes, separators (underscore, hyphen, slash), URL paths, or no prefix at all.
 
 .. Deprecated
 .. ----------

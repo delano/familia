@@ -15,25 +15,25 @@ class ExternalIdTest < Familia::Horreum
   field :name
 end
 
-# Class with custom prefix (uses default format template)
+# Class with custom format using different prefix
 class CustomPrefixTest < Familia::Horreum
   feature :object_identifier
-  feature :external_identifier, prefix: 'cust'
+  feature :external_identifier, format: 'cust_%{id}'
   identifier_field :id
   field :id
   field :name
 end
 
-# Class with custom format template (no underscore)
+# Class with custom format template using hyphen separator
 class CustomFormatTest < Familia::Horreum
   feature :object_identifier
-  feature :external_identifier, format: '%{prefix}-%{id}'
+  feature :external_identifier, format: 'ext-%{id}'
   identifier_field :id
   field :id
   field :name
 end
 
-# Class with format template without prefix placeholder
+# Class with format template without traditional prefix
 class NoPrefixFormatTest < Familia::Horreum
   feature :object_identifier
   feature :external_identifier, format: 'api/%{id}'
@@ -194,23 +194,19 @@ obj1.extid != obj2.extid
 ExternalIdTest.field_types[:extid]
 #=:> Familia::Features::ExternalIdentifier::ExternalIdentifierFieldType
 
-## Feature options contain correct prefix
-ExternalIdTest.feature_options(:external_identifier)[:prefix]
-#=> "ext"
-
 ## Feature options contain default format
 ExternalIdTest.feature_options(:external_identifier)[:format]
-#=> "%{prefix}_%{id}"
+#=> "ext_%{id}"
 
-## Custom prefix feature options
-CustomPrefixTest.feature_options(:external_identifier)[:prefix]
-#=> "cust"
+## Custom prefix format options
+CustomPrefixTest.feature_options(:external_identifier)[:format]
+#=> "cust_%{id}"
 
-## Custom format feature options
+## Custom format with hyphen options
 CustomFormatTest.feature_options(:external_identifier)[:format]
-#=> "%{prefix}-%{id}"
+#=> "ext-%{id}"
 
-## No prefix format feature options
+## No traditional prefix format options
 NoPrefixFormatTest.feature_options(:external_identifier)[:format]
 #=> "api/%{id}"
 

@@ -12,8 +12,8 @@ module Familia
         base.extend ModelClassMethods
         base.include ModelInstanceMethods
 
-        # Ensure default format and prefix are set in feature options
-        base.add_feature_options(:external_identifier, format: '%{prefix}_%{id}', prefix: 'ext')
+        # Ensure default format is set in feature options
+        base.add_feature_options(:external_identifier, format: 'ext_%{id}')
 
         # Add class-level mapping for extid -> id lookups
         base.class_hashkey :extid_lookup
@@ -51,7 +51,7 @@ module Familia
       #   user2 = User.new(objid: user.objid, email: 'user@example.com')
       #   user2.extid  # => "ext_abc123def456ghi789" (identical to user.extid)
       #
-      # @example Using custom format template
+      # @example Using custom format template with hyphen separator
       #   class APIKey < Familia::Horreum
       #     feature :object_identifier
       #     feature :external_identifier, format: 'api-%{id}'
@@ -59,13 +59,21 @@ module Familia
       #   key = APIKey.new
       #   key.extid  # => "api-abc123def456ghi789"
       #
-      # @example Using custom prefix with default separator
+      # @example Using custom format template with custom prefix
       #   class Customer < Familia::Horreum
       #     feature :object_identifier
-      #     feature :external_identifier, prefix: 'cust'
+      #     feature :external_identifier, format: 'cust_%{id}'
       #   end
       #   customer = Customer.new
       #   customer.extid  # => "cust_abc123def456ghi789"
+      #
+      # @example Using format template without prefix
+      #   class Resource < Familia::Horreum
+      #     feature :object_identifier
+      #     feature :external_identifier, format: 'v2/%{id}'
+      #   end
+      #   resource = Resource.new
+      #   resource.extid  # => "v2/abc123def456ghi789"
       #
       class ExternalIdentifierFieldType < Familia::FieldType
         # Override getter to provide lazy generation from objid
@@ -268,12 +276,11 @@ module Familia
         # 128 bits is approximately 25 characters in base36.
         external_part = random_bytes.unpack1('H*').to_i(16).to_s(36).rjust(25, '0')
 
-        # Get format and prefix from feature options
+        # Get format from feature options and interpolate the ID
         options = self.class.feature_options(:external_identifier)
-        format = options[:format] || '%{prefix}_%{id}'
-        prefix = options[:prefix] || 'ext'
+        format = options[:format] || 'ext_%{id}'
 
-        format % { prefix: prefix, id: external_part }
+        format % { id: external_part }
       end
 
       # Full-length alias for extid for clarity when needed
