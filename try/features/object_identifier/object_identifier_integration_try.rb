@@ -19,7 +19,7 @@ end
 # Class with custom configurations for both features
 class ::CustomIntegrationTest < Familia::Horreum
   feature :object_identifier, generator: :hex
-  feature :external_identifier, prefix: 'custom'
+  feature :external_identifier, format: 'custom_%{id}'
   identifier_field :id
   field :id
   field :name
@@ -169,17 +169,17 @@ opts.key?(:external_identifier)
 IntegrationTest.feature_options(:object_identifier)[:generator]
 #=> :uuid_v7
 
-## Prefix default configuration is applied correctly
-IntegrationTest.feature_options(:external_identifier)[:prefix]
-#=> "ext"
+## Format default configuration is applied correctly
+IntegrationTest.feature_options(:external_identifier)[:format]
+#=> "ext_%{id}"
 
 ## Custom generator configuration is applied correctly
 CustomIntegrationTest.feature_options(:object_identifier)[:generator]
 #=> :hex
 
-## Custom prefix configuration is applied correctly
-CustomIntegrationTest.feature_options(:external_identifier)[:prefix]
-#=> "custom"
+## Custom format configuration is applied correctly
+CustomIntegrationTest.feature_options(:external_identifier)[:format]
+#=> "custom_%{id}"
 
 ## objid is URL-safe (UUID format)
 obj = IntegrationTest.new
