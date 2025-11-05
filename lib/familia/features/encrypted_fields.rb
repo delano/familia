@@ -341,8 +341,6 @@ module Familia
       # Check if this instance has any encrypted fields with values
       #
       # @return [Boolean] true if any encrypted fields have values
-      #
-      # TODO: Missing test coverage
       def encrypted_data?
         self.class.encrypted_fields.any? do |field_name|
           field_value = instance_variable_get("@#{field_name}")

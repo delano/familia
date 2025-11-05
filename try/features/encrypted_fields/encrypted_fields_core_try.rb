@@ -122,4 +122,33 @@ end
 @user2.api_key.reveal { |decrypted| decrypted }
 #=> 'secret-key-123'
 
+## encrypted_data? returns false when no encrypted fields have values
+class SecureUser6 < Familia::Horreum
+  feature :encrypted_fields
+  identifier_field :user_id
+  field :user_id
+  encrypted_field :ssn
+  encrypted_field :api_key
+end
+
+@user3 = SecureUser6.new(user_id: 'test-user-006')
+@user3.encrypted_data?
+#=> false
+
+## encrypted_data? returns true when at least one encrypted field has a value
+@user3.ssn = '123-45-6789'
+@user3.encrypted_data?
+#=> true
+
+## encrypted_data? returns true with multiple encrypted fields set
+@user3.api_key = 'secret-key-456'
+@user3.encrypted_data?
+#=> true
+
+## encrypted_data? returns false after clearing encrypted fields
+@user3.ssn = nil
+@user3.api_key = nil
+@user3.encrypted_data?
+#=> false
+
 Fiber[:familia_key_cache]&.clear if Fiber[:familia_key_cache]
