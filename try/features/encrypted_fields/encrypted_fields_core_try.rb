@@ -123,10 +123,6 @@ end
 #=> 'secret-key-123'
 
 ## encrypted_data? returns false when no encrypted fields have values
-test_keys = { v1: Base64.strict_encode64('a' * 32) }
-Familia.config.encryption_keys = test_keys
-Familia.config.current_key_version = :v1
-
 class SecureUser6 < Familia::Horreum
   feature :encrypted_fields
   identifier_field :user_id
