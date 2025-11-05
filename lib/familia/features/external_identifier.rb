@@ -12,8 +12,8 @@ module Familia
         base.extend ModelClassMethods
         base.include ModelInstanceMethods
 
-        # Ensure default prefix is set in feature options
-        base.add_feature_options(:external_identifier, prefix: 'ext')
+        # Ensure default format and prefix are set in feature options
+        base.add_feature_options(:external_identifier, format: '%{prefix}_%{id}', prefix: 'ext')
 
         # Add class-level mapping for extid -> id lookups
         base.class_hashkey :extid_lookup
@@ -35,10 +35,10 @@ module Familia
       # - Deterministic generation from objid ensures consistency
       # - Shorter than objid (128-bit vs 256-bit) for external use
       # - Base-36 encoding for URL-safe identifiers
-      # - 'ext_' prefix for clear identification as external IDs
+      # - Customizable format template (default: 'ext_' prefix)
       # - Lazy generation preserves values from initialization
       #
-      # @example Using external identifier fields
+      # @example Using external identifier fields with default format
       #   class User < Familia::Horreum
       #     feature :object_identifier
       #     feature :external_identifier
@@ -50,6 +50,22 @@ module Familia
       #   # Same objid always produces same extid
       #   user2 = User.new(objid: user.objid, email: 'user@example.com')
       #   user2.extid  # => "ext_abc123def456ghi789" (identical to user.extid)
+      #
+      # @example Using custom format template
+      #   class APIKey < Familia::Horreum
+      #     feature :object_identifier
+      #     feature :external_identifier, format: 'api-%{id}'
+      #   end
+      #   key = APIKey.new
+      #   key.extid  # => "api-abc123def456ghi789"
+      #
+      # @example Using custom prefix with default separator
+      #   class Customer < Familia::Horreum
+      #     feature :object_identifier
+      #     feature :external_identifier, prefix: 'cust'
+      #   end
+      #   customer = Customer.new
+      #   customer.extid  # => "cust_abc123def456ghi789"
       #
       class ExternalIdentifierFieldType < Familia::FieldType
         # Override getter to provide lazy generation from objid
@@ -252,11 +268,12 @@ module Familia
         # 128 bits is approximately 25 characters in base36.
         external_part = random_bytes.unpack1('H*').to_i(16).to_s(36).rjust(25, '0')
 
-        # Get prefix from feature options, default to "ext"
+        # Get format and prefix from feature options
         options = self.class.feature_options(:external_identifier)
+        format = options[:format] || '%{prefix}_%{id}'
         prefix = options[:prefix] || 'ext'
 
-        "#{prefix}_#{external_part}"
+        format % { prefix: prefix, id: external_part }
       end
 
       # Full-length alias for extid for clarity when needed

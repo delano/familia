@@ -15,10 +15,28 @@ class ExternalIdTest < Familia::Horreum
   field :name
 end
 
-# Class with custom prefix
+# Class with custom prefix (uses default format template)
 class CustomPrefixTest < Familia::Horreum
   feature :object_identifier
   feature :external_identifier, prefix: 'cust'
+  identifier_field :id
+  field :id
+  field :name
+end
+
+# Class with custom format template (no underscore)
+class CustomFormatTest < Familia::Horreum
+  feature :object_identifier
+  feature :external_identifier, format: '%{prefix}-%{id}'
+  identifier_field :id
+  field :id
+  field :name
+end
+
+# Class with format template without prefix placeholder
+class NoPrefixFormatTest < Familia::Horreum
+  feature :object_identifier
+  feature :external_identifier, format: 'api/%{id}'
   identifier_field :id
   field :id
   field :name
@@ -75,6 +93,28 @@ obj.extid.start_with?('ext_')
 ## Custom prefix class uses specified prefix
 custom_obj = CustomPrefixTest.new
 custom_obj.extid.start_with?('cust_')
+#==> true
+
+## Custom format with hyphen separator
+format_obj = CustomFormatTest.new
+format_obj.extid.start_with?('ext-')
+#==> true
+
+## Custom format uses hyphen not underscore
+format_obj = CustomFormatTest.new
+extid = format_obj.extid
+extid.include?('-') && !extid.include?('_')
+#==> true
+
+## Format without prefix placeholder uses literal format
+no_prefix_obj = NoPrefixFormatTest.new
+no_prefix_obj.extid.start_with?('api/')
+#==> true
+
+## Format without prefix does not include underscore
+no_prefix_obj = NoPrefixFormatTest.new
+extid = no_prefix_obj.extid
+!extid.include?('_') && !extid.include?('ext')
 #==> true
 
 ## External ID is URL-safe base-36 format
@@ -158,9 +198,21 @@ ExternalIdTest.field_types[:extid]
 ExternalIdTest.feature_options(:external_identifier)[:prefix]
 #=> "ext"
 
+## Feature options contain default format
+ExternalIdTest.feature_options(:external_identifier)[:format]
+#=> "%{prefix}_%{id}"
+
 ## Custom prefix feature options
 CustomPrefixTest.feature_options(:external_identifier)[:prefix]
 #=> "cust"
+
+## Custom format feature options
+CustomFormatTest.feature_options(:external_identifier)[:format]
+#=> "%{prefix}-%{id}"
+
+## No prefix format feature options
+NoPrefixFormatTest.feature_options(:external_identifier)[:format]
+#=> "api/%{id}"
 
 ## External ID is shorter than UUID objid
 obj = ExternalIdTest.new
