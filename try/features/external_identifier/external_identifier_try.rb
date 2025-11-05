@@ -272,3 +272,116 @@ destroy_test_obj.destroy!
 # Verify mapping was cleaned up
 ExternalIdTest.extid_lookup.key?(destroy_extid)
 #=> false
+
+# ========================================
+# Comprehensive Format Option Test Coverage
+# ========================================
+
+## Format option: default format produces ext_ prefix
+default_obj = ExternalIdTest.new
+default_obj.extid.start_with?('ext_')
+#==> true
+
+## Format option: custom format with different prefix works
+custom_prefix_obj = CustomPrefixTest.new
+custom_prefix_obj.extid.start_with?('cust_')
+#==> true
+
+## Format option: custom format with hyphen separator works
+hyphen_obj = CustomFormatTest.new
+hyphen_obj.extid.start_with?('ext-')
+#==> true
+
+## Format option: hyphen format does not contain underscore
+hyphen_obj = CustomFormatTest.new
+!hyphen_obj.extid.include?('_')
+#==> true
+
+## Format option: format without prefix works
+no_prefix_obj = NoPrefixFormatTest.new
+no_prefix_obj.extid.start_with?('api/')
+#==> true
+
+## Format option: no prefix format uses slash separator
+no_prefix_obj = NoPrefixFormatTest.new
+no_prefix_obj.extid.include?('/')
+#==> true
+
+## Format option: %{id} placeholder is properly interpolated
+obj = ExternalIdTest.new
+# The extid should not contain the literal string '%{id}'
+!obj.extid.include?('%{id}')
+#==> true
+
+## Format option: generated ID part is base36 alphanumeric
+obj = ExternalIdTest.new
+extid = obj.extid
+id_part = extid.gsub(/^ext_/, '')
+id_part.match?(/\A[0-9a-z]+\z/)
+#==> true
+
+## Format option: hyphen format ID part is base36 alphanumeric
+hyphen_obj = CustomFormatTest.new
+extid = hyphen_obj.extid
+id_part = extid.gsub(/^ext-/, '')
+id_part.match?(/\A[0-9a-z]+\z/)
+#==> true
+
+## Format option: no prefix format ID part is base36 alphanumeric
+no_prefix_obj = NoPrefixFormatTest.new
+extid = no_prefix_obj.extid
+id_part = extid.gsub(/^api\//, '')
+id_part.match?(/\A[0-9a-z]+\z/)
+#==> true
+
+## Format option: different formats produce different prefixes but same ID length
+default_obj = ExternalIdTest.new
+custom_obj = CustomPrefixTest.new
+hyphen_obj = CustomFormatTest.new
+# All should have similar length IDs (within a few characters due to prefix differences)
+default_id_len = default_obj.extid.length
+custom_id_len = custom_obj.extid.length
+hyphen_id_len = hyphen_obj.extid.length
+(default_id_len - custom_id_len).abs <= 5 && (default_id_len - hyphen_id_len).abs <= 5
+#==> true
+
+## Format option: custom formats maintain determinism
+obj = CustomPrefixTest.new
+first_extid = obj.extid
+second_extid = obj.extid
+first_extid == second_extid
+#==> true
+
+## Format option: formats work correctly with save/load cycle
+format_save_obj = CustomFormatTest.new(id: 'format_save_test', name: 'Format Save Test')
+original_extid = format_save_obj.extid
+format_save_obj.save
+loaded_obj = CustomFormatTest.new(id: 'format_save_test')
+loaded_obj.extid == original_extid
+#==> true
+
+## Format option: find_by_extid works with custom formats
+findable_custom = CustomPrefixTest.new(id: 'findable_custom', name: 'Findable Custom')
+findable_custom.save
+found_custom = CustomPrefixTest.find_by_extid(findable_custom.extid)
+found_custom&.id
+#=> "findable_custom"
+
+## Format option: find_by_extid works with hyphen format
+findable_hyphen = CustomFormatTest.new(id: 'findable_hyphen', name: 'Findable Hyphen')
+findable_hyphen.save
+found_hyphen = CustomFormatTest.find_by_extid(findable_hyphen.extid)
+found_hyphen&.id
+#=> "findable_hyphen"
+
+## Format option: find_by_extid works with no-prefix format
+findable_no_prefix = NoPrefixFormatTest.new(id: 'findable_no_prefix', name: 'Findable No Prefix')
+findable_no_prefix.save
+found_no_prefix = NoPrefixFormatTest.find_by_extid(findable_no_prefix.extid)
+found_no_prefix&.id
+#=> "findable_no_prefix"
+
+# Cleanup format test objects
+findable_custom.destroy! rescue nil
+findable_hyphen.destroy! rescue nil
+findable_no_prefix.destroy! rescue nil
