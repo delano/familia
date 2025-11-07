@@ -4,6 +4,7 @@ require 'oj'
 require 'redis'
 require 'uri/valkey'
 require 'connection_pool'
+require 'concurrent-ruby'
 
 # OJ configuration is handled internally by Familia::JsonSerializer
 
@@ -11,6 +12,8 @@ require_relative 'multi_result'
 require_relative 'familia/refinements'
 require_relative 'familia/errors'
 require_relative 'familia/version'
+require_relative 'familia/thread_safety/monitor'
+require_relative 'familia/thread_safety/instrumented_mutex'
 
 # Familia - A family warehouse for Valkey/Redis
 #
@@ -41,6 +44,27 @@ module Familia
   class << self
     attr_writer :debug
     attr_reader :members
+
+    # Thread safety monitoring controls
+    def thread_safety_monitor
+      ThreadSafety::Monitor.instance
+    end
+
+    def start_monitoring!
+      thread_safety_monitor.start!
+    end
+
+    def stop_monitoring!
+      thread_safety_monitor.stop!
+    end
+
+    def thread_safety_report
+      thread_safety_monitor.report
+    end
+
+    def thread_safety_metrics
+      thread_safety_monitor.export_metrics
+    end
 
     def included(member)
       raise Problem, "#{member} should subclass Familia::Horreum"

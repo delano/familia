@@ -124,7 +124,7 @@ module Familia
       #   ]
       #
       def field_groups
-        @field_groups_mutex ||= Mutex.new
+        @field_groups_mutex ||= Familia::ThreadSafety::InstrumentedMutex.new('field_groups')
         @field_groups || @field_groups_mutex.synchronize do
           @field_groups ||= {}
         end
@@ -218,7 +218,7 @@ module Familia
       # Returns the list of field names defined for the class in the order
       # that they were defined. i.e. `field :a; field :b; fields => [:a, :b]`.
       def fields
-        @fields_mutex ||= Mutex.new
+        @fields_mutex ||= Familia::ThreadSafety::InstrumentedMutex.new('fields')
         @fields || @fields_mutex.synchronize do
           @fields ||= []
         end
@@ -240,7 +240,7 @@ module Familia
 
       # Storage for field type instances
       def field_types
-        @field_types_mutex ||= Mutex.new
+        @field_types_mutex ||= Familia::ThreadSafety::InstrumentedMutex.new('field_types')
         @field_types || @field_types_mutex.synchronize do
           @field_types ||= {}
         end
