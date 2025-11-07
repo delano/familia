@@ -88,6 +88,10 @@ Layout/EndAlignment:
 Layout/FirstArgumentIndentation:
   EnforcedStyle: consistent
 
+Layout/ExtraSpacing:
+  Enabled: true
+  AllowBeforeTrailingComments: true
+
 Metrics/AbcSize:
   Enabled: false
   Max: 20
