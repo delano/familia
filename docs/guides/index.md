@@ -40,6 +40,7 @@ Welcome to the comprehensive documentation for Familia v2.0. This guide collecti
 ### 🛠️ Implementation & Usage
 
 15. **[Implementation Guide](implementation.md)** - Advanced configuration and usage patterns
+16. **[Optimized Loading](optimized-loading.md)** - Reduce Redis commands by 50-96% for bulk object loading _(new!)_
 
 ## 🚀 Quick Start Examples
 
@@ -166,6 +167,22 @@ end
 
 # Automatic time bucketing for analytics
 MetricsBucket.record_event("page_view")  # Groups into 10-min buckets
+```
+
+### Optimized Loading (Performance)
+```ruby
+# Skip EXISTS check (50% reduction)
+user = User.find_by_id(123, check_exists: false)
+
+# Pipelined bulk loading (96% reduction for N objects)
+metadata_ids = customer.metadata.rangebyscore(start_time, end_time)
+# => ["id1", "id2", ..., "id14"]  # 14 metadata objects
+
+# Traditional: 28 Redis commands (14 EXISTS + 14 HGETALL)
+metadata = metadata_ids.map { |id| Metadata.find_by_id(id) }
+
+# Optimized: 1 pipelined batch with 14 HGETALL commands
+metadata = Metadata.load_multi(metadata_ids).compact
 ```
 
 
