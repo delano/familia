@@ -444,12 +444,10 @@ module Familia
       alias size matching_keys_count
       alias length matching_keys_count
 
-      private
-
       # Instantiates an object from a hash of field values.
       #
-      # This is a shared helper method used by find_by_dbkey, load_multi, and
-      # load_multi_by_keys to eliminate code duplication.
+      # This is an internal helper method used by find_by_dbkey, load_multi, and
+      # load_multi_by_keys to eliminate code duplication. Not intended for direct use.
       #
       # @param obj_hash [Hash] Hash of field names to serialized values from Redis
       # @return [Object] Instantiated object with deserialized fields
@@ -459,6 +457,7 @@ module Familia
       #   2. Initializes related DataType fields
       #   3. Deserializes and assigns field values from the hash
       #
+      # @api private
       def instantiate_from_hash(obj_hash)
         instance = allocate
         instance.send(:initialize_relatives)
