@@ -51,7 +51,7 @@ end
 #=> true
 
 ## Test add domain creates reverse index tracking 1 of 2
-@customer.add_domain(@domain)
+@customer.add_domains_instance(@domain)
 @reverse_index_key = "#{@domain.dbkey}:participations"
 @tracked_collections = Familia.dbclient.smembers(@reverse_index_key) # TODO: Do not use keys directly
 @tracked_collections.length
@@ -64,13 +64,13 @@ end
 ##=> true
 
 ## Test remove domain cleans up reverse index tracking
-@customer.remove_domain(@domain)
+@customer.remove_domains_instance(@domain)
 @tracked_collections_after_remove = Familia.dbclient.smembers(@reverse_index_key) # TODO: Do not use keys directly
 @tracked_collections_after_remove.include?(@collection_key)
 ##=> false
 
 ## Test robust type comparison in score calculation works with Class
-@customer.add_domain(@domain)
+@customer.add_domains_instance(@domain)
 @score_with_class = @domain.calculate_participation_score(PerfTestCustomer, :domains)
 @score_with_class.is_a?(Numeric)
 #=> true
@@ -112,7 +112,7 @@ end
 ##=> true
 
 ## Test domain is removed from customer collection
-@customer.remove_domain(@domain)
+@customer.remove_domains_instance(@domain)
 @customer.domains.include?(@domain)
 #=> false
 

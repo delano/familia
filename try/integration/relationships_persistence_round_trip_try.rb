@@ -113,22 +113,23 @@ class ::RTPDomain < Familia::Horreum
 end
 
 # Setup - create test data with known values
-@test_user_id = "rtp_user_#{Familia.now.to_i}"
-@test_email = "roundtrip@example.com"
-@test_name = "Alice Roundtrip"
+@test_run_id = Familia.now.to_i
+@test_user_id = "rtp_user_#{@test_run_id}"
+@test_email = "roundtrip-#{@test_run_id}@example.com"
+@test_name = "Alice Roundtrip #{@test_run_id}"
 @test_age = 30
 
-@test_company_id = "rtp_comp_#{Familia.now.to_i}"
+@test_company_id = "rtp_comp_#{@test_run_id}"
 @test_company_name = "Acme Corp"
 @test_industry = "Technology"
 
-@test_emp_id = "rtp_emp_#{Familia.now.to_i}"
-@test_emp_email = "employee@acme.com"
+@test_emp_id = "rtp_emp_#{@test_run_id}"
+@test_emp_email = "employee-#{@test_run_id}@acme.com"
 @test_department = "engineering"
-@test_badge = "BADGE_RTP_001"
+@test_badge = "BADGE_RTP_#{@test_run_id}"
 @test_hire_date = Time.now.to_i
 
-@test_domain_id = "rtp_dom_#{Familia.now.to_i}"
+@test_domain_id = "rtp_dom_#{@test_run_id}"
 @test_domain_name = "example.com"
 @test_domain_created = Familia.now.to_i
 
@@ -291,10 +292,10 @@ RTPEmployee.exists?(@test_emp_id)
 
 ## Multiple employees in same department
 @emp2_id = "rtp_emp2_#{Familia.now.to_i}"
-@emp2_badge = "BADGE_RTP_002"
+@emp2_badge = "BADGE_RTP_002_#{@test_run_id}"
 @emp2 = RTPEmployee.new(
   emp_id: @emp2_id,
-  email: "emp2@acme.com",
+  email: "emp2-#{@test_run_id}@acme.com",
   department: @test_department,
   badge_number: @emp2_badge
 )
@@ -323,7 +324,7 @@ RTPDomain.exists?(@test_domain_id)
 #=> true
 
 ## Add domain to company participation collection
-@company.add_domain(@domain)
+@company.add_domains_instance(@domain)
 @company.domains.size
 #=> 1
 
@@ -377,7 +378,7 @@ RTPDomain.all_domains.size
 #=> @new_age
 
 ## Update email and verify index updates
-@new_email = "newemail@example.com"
+@new_email = "newemail-#{@test_run_id}@example.com"
 @old_email = @user.email
 @user.email = @new_email
 @user.save
@@ -396,8 +397,8 @@ RTPUser.find_by_email(@old_email)
 ## User with nil field saves correctly
 @user_nil_age = RTPUser.new(
   user_id: "rtp_nil_#{Familia.now.to_i}",
-  email: "nil@example.com",
-  name: "Nil Tester",
+  email: "nil-#{@test_run_id}@example.com",
+  name: "Nil Tester #{@test_run_id}",
   age: nil
 )
 @user_nil_age.save
