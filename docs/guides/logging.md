@@ -101,10 +101,14 @@ Familia.error "Serialization failed", field: :email, error: e.message
 Familia includes `DatabaseLogger` middleware for Redis command logging:
 
 ```ruby
-# Enable command logging
-RedisClient.register(DatabaseLogger)
+# Enable command logging (uses redis-rb middleware internally)
+Familia.enable_database_logging = true
+
+# Optional: Configure logger (uses Familia.logger by default)
 DatabaseLogger.logger = Familia.logger
 ```
+
+**Note**: Familia automatically registers the middleware with redis-rb when enabled. You work with `Redis.new` connections - the underlying `RedisClient` middleware registration is handled internally.
 
 ### Output Formats
 
