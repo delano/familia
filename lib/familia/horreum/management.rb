@@ -104,56 +104,71 @@ module Familia
       # key.
       #
       # @param objkey [String] The full dbkey for the object.
+      # @param check_exists [Boolean] Whether to check key existence before HGETALL
+      #   (default: true). When false, skips EXISTS check for better performance
+      #   but still returns nil for non-existent keys (detected via empty hash).
       # @return [Object, nil] An instance of the class if the key exists, nil
       #   otherwise.
       # @raise [ArgumentError] If the provided key is empty.
       #
-      # This method performs a two-step process to safely retrieve and
-      # instantiate objects:
+      # This method can operate in two modes:
       #
-      # 1. It first checks if the key exists in the database. This is crucial because:
-      #    - It provides a definitive answer about the object's existence.
-      #    - It prevents ambiguity that could arise from `hgetall` returning an
-      #      empty hash for non-existent keys, which could lead to the creation
-      #      of "empty" objects.
+      # **Safe mode (check_exists: true, default):**
+      # 1. First checks if the key exists with EXISTS command
+      # 2. Returns nil immediately if key doesn't exist
+      # 3. If exists, retrieves data with HGETALL and instantiates object
+      # - Best for: Single object lookups, defensive code
+      # - Commands: 2 per object (EXISTS + HGETALL)
       #
-      # 2. If the key exists, it retrieves the object's data and instantiates
-      #    it.
+      # **Optimized mode (check_exists: false):**
+      # 1. Directly calls HGETALL without EXISTS check
+      # 2. Returns nil if HGETALL returns empty hash (key doesn't exist)
+      # 3. Otherwise instantiates object with returned data
+      # - Best for: Bulk operations, performance-critical paths, when keys likely exist
+      # - Commands: 1 per object (HGETALL only)
+      # - Reduction: 50% fewer Redis commands
       #
-      # This approach ensures that we only attempt to instantiate objects that
-      # actually exist in Valkey/Redis, improving reliability and simplifying
-      # debugging.
+      # @example Safe mode (default)
+      #   User.find_by_key("user:123")  # 2 commands: EXISTS + HGETALL
       #
-      # @example
-      #   User.find_by_key("user:123")  # Returns a User instance if it exists,
-      #   nil otherwise
+      # @example Optimized mode (skip existence check)
+      #   User.find_by_key("user:123", check_exists: false)  # 1 command: HGETALL
       #
-      def find_by_dbkey(objkey)
+      # @note When check_exists: false, HGETALL on non-existent keys returns {}
+      #   which we detect and return nil (not an empty object instance).
+      #
+      def find_by_dbkey(objkey, check_exists: true)
         raise ArgumentError, 'Empty key' if objkey.to_s.empty?
 
-        # We use a lower-level method here b/c we're working with the
-        # full key and not just the identifier.
-        does_exist = dbclient.exists(objkey).positive?
+        if check_exists
+          # Safe mode: Check existence first (original behavior)
+          # We use a lower-level method here b/c we're working with the
+          # full key and not just the identifier.
+          does_exist = dbclient.exists(objkey).positive?
 
-        Familia.debug "[find_by_key] #{self} from key #{objkey} (exists: #{does_exist})"
-        Familia.trace :FIND_BY_DBKEY_KEY, nil, objkey
+          Familia.debug "[find_by_key] #{self} from key #{objkey} (exists: #{does_exist})"
+          Familia.trace :FIND_BY_DBKEY_KEY, nil, objkey
 
-        # This is the reason for calling exists first. We want to definitively
-        # and without any ambiguity know if the object exists in the database. If it
-        # doesn't, we return nil. If it does, we proceed to load the object.
-        # Otherwise, hgetall will return an empty hash, which will be passed to
-        # the constructor, which will then be annoying to debug.
-        return unless does_exist
+          # This is the reason for calling exists first. We want to definitively
+          # and without any ambiguity know if the object exists in the database. If it
+          # doesn't, we return nil. If it does, we proceed to load the object.
+          # Otherwise, hgetall will return an empty hash, which will be passed to
+          # the constructor, which will then be annoying to debug.
+          return unless does_exist
+        else
+          # Optimized mode: Skip existence check
+          Familia.debug "[find_by_key] #{self} from key #{objkey} (check_exists: false)"
+          Familia.trace :FIND_BY_DBKEY_KEY, nil, objkey
+        end
 
         obj = dbclient.hgetall(objkey) # horreum objects are persisted as database hashes
         Familia.trace :FIND_BY_DBKEY_INSPECT, nil, "#{objkey}: #{obj.inspect}"
 
-        # Create instance and deserialize fields using existing helper method
-        # This avoids duplicating deserialization logic and keeps field-by-field processing
-        instance = allocate
-        instance.send(:initialize_relatives)
-        instance.send(:initialize_with_keyword_args_deserialize_value, **obj)
-        instance
+        # If we skipped existence check and got empty hash, key doesn't exist
+        return nil if !check_exists && obj.empty?
+
+        # Create instance and deserialize fields using shared helper method
+        instantiate_from_hash(obj)
       end
       alias find_by_key find_by_dbkey
 
@@ -161,8 +176,10 @@ module Familia
       #
       # @param identifier [String, Integer] The unique identifier for the
       #   object.
-      # @param suffix [Symbol] The suffix to use in the dbkey (default:
-      #   :object).
+      # @param suffix [Symbol, nil] The suffix to use in the dbkey (default:
+      #   class suffix). Keyword parameter for consistency with check_exists.
+      # @param check_exists [Boolean] Whether to check key existence before HGETALL
+      #   (default: true). See find_by_dbkey for details.
       # @return [Object, nil] An instance of the class if found, nil otherwise.
       #
       # This method constructs the full dbkey using the provided identifier
@@ -173,10 +190,16 @@ module Familia
       # making it easier to retrieve objects when you only have their
       # identifier.
       #
-      # @example
-      #   User.find_by_id(123)  # Equivalent to User.find_by_key("user:123:object")
+      # @example Safe mode (default)
+      #   User.find_by_id(123)  # 2 commands: EXISTS + HGETALL
       #
-      def find_by_identifier(identifier, suffix = nil)
+      # @example Optimized mode
+      #   User.find_by_id(123, check_exists: false)  # 1 command: HGETALL
+      #
+      # @example Custom suffix
+      #   Session.find_by_id('abc', suffix: :session)
+      #
+      def find_by_identifier(identifier, suffix: nil, check_exists: true)
         suffix ||= self.suffix
         return nil if identifier.to_s.empty?
 
@@ -184,11 +207,135 @@ module Familia
 
         Familia.debug "[find_by_id] #{self} from key #{objkey})"
         Familia.trace :FIND_BY_ID, nil, objkey if Familia.debug?
-        find_by_dbkey objkey
+        find_by_dbkey objkey, check_exists: check_exists
       end
       alias find_by_id find_by_identifier
       alias find find_by_id
       alias load find_by_id
+
+      # Loads multiple objects by their identifiers using pipelined HGETALL commands.
+      #
+      # This method provides significant performance improvements for bulk loading by:
+      # 1. Batching all HGETALL commands into a single Redis pipeline
+      # 2. Eliminating network round-trip overhead
+      # 3. Skipping individual EXISTS checks (like check_exists: false)
+      #
+      # @param identifiers [Array<String, Integer>] Array of identifiers to load
+      # @param suffix [Symbol, nil] The suffix to use in dbkeys (default: class suffix)
+      # @return [Array<Object>] Array of instantiated objects (nils for non-existent)
+      #
+      # Performance characteristics:
+      # - Standard approach: N objects × 2 commands (EXISTS + HGETALL) = 2N round trips
+      # - check_exists: false: N objects × 1 command (HGETALL) = N round trips
+      # - load_multi: 1 pipeline with N commands = 1 round trip
+      # - Improvement: Up to 2N× faster for bulk operations
+      #
+      # @example Load multiple users efficiently
+      #   users = User.load_multi([123, 456, 789])
+      #   # 1 pipeline with 3 HGETALL commands instead of 6 individual commands
+      #
+      # @example Filter out nils
+      #   existing_users = User.load_multi(ids).compact
+      #
+      # @note Returns nil for non-existent keys (maintains same contract as find_by_id)
+      # @note Objects are returned in the same order as input identifiers
+      # @note Empty/nil identifiers are skipped and return nil in result array
+      #
+      def load_multi(identifiers, suffix = nil)
+        suffix ||= self.suffix
+        return [] if identifiers.empty?
+
+        # Build list of valid keys and track their original positions
+        valid_keys = []
+        valid_positions = []
+
+        identifiers.each_with_index do |identifier, idx|
+          next if identifier.to_s.empty?
+
+          valid_keys << dbkey(identifier, suffix)
+          valid_positions << idx
+        end
+
+        Familia.trace :LOAD_MULTI, nil, "Loading #{identifiers.size} objects" if Familia.debug?
+
+        # Pipeline all HGETALL commands
+        multi_result = pipelined do |pipeline|
+          valid_keys.each do |objkey|
+            pipeline.hgetall(objkey)
+          end
+        end
+
+        # Extract results array from MultiResult
+        results = multi_result.results
+
+        # Map results back to original positions
+        objects = Array.new(identifiers.size)
+        valid_positions.each_with_index do |pos, result_idx|
+          obj_hash = results[result_idx]
+
+          # Skip empty hashes (non-existent keys)
+          next if obj_hash.nil? || obj_hash.empty?
+
+          # Instantiate object using shared helper method
+          objects[pos] = instantiate_from_hash(obj_hash)
+        end
+
+        objects
+      end
+      alias load_batch load_multi
+
+      # Loads multiple objects by their full dbkeys using pipelined HGETALL commands.
+      #
+      # This is a lower-level variant of load_multi that works directly with dbkeys
+      # instead of identifiers. Useful when you already have the full keys.
+      #
+      # @param objkeys [Array<String>] Array of full dbkeys to load
+      # @return [Array<Object>] Array of instantiated objects (nils for non-existent)
+      #
+      # @example Load objects by full keys
+      #   keys = ["user:123:object", "user:456:object"]
+      #   users = User.load_multi_by_keys(keys)
+      #
+      # @note Returns nil for empty/nil keys, maintaining position alignment with input array
+      #
+      # @see load_multi For loading by identifiers
+      #
+      def load_multi_by_keys(objkeys)
+        return [] if objkeys.empty?
+
+        Familia.trace :LOAD_MULTI_BY_KEYS, nil, "Loading #{objkeys.size} objects" if Familia.debug?
+
+        # Track which positions have valid keys to maintain result array alignment
+        valid_positions = []
+        objkeys.each_with_index do |objkey, idx|
+          valid_positions << idx unless objkey.to_s.empty?
+        end
+
+        # Pipeline all HGETALL commands for valid keys
+        multi_result = pipelined do |pipeline|
+          objkeys.each do |objkey|
+            next if objkey.to_s.empty?
+            pipeline.hgetall(objkey)
+          end
+        end
+
+        # Extract results array from MultiResult
+        results = multi_result.results
+
+        # Map results back to original positions
+        objects = Array.new(objkeys.size)
+        valid_positions.each_with_index do |pos, result_idx|
+          obj_hash = results[result_idx]
+
+          # Skip empty hashes (non-existent keys)
+          next if obj_hash.nil? || obj_hash.empty?
+
+          # Instantiate object using shared helper method
+          objects[pos] = instantiate_from_hash(obj_hash)
+        end
+
+        objects
+      end
 
       # Checks if an object with the given identifier exists in the database.
       #
@@ -317,6 +464,27 @@ module Familia
       end
       alias size matching_keys_count
       alias length matching_keys_count
+
+      # Instantiates an object from a hash of field values.
+      #
+      # This is an internal helper method used by find_by_dbkey, load_multi, and
+      # load_multi_by_keys to eliminate code duplication. Not intended for direct use.
+      #
+      # @param obj_hash [Hash] Hash of field names to serialized values from Redis
+      # @return [Object] Instantiated object with deserialized fields
+      #
+      # @note This method:
+      #   1. Allocates a new instance without calling initialize
+      #   2. Initializes related DataType fields
+      #   3. Deserializes and assigns field values from the hash
+      #
+      # @api private
+      def instantiate_from_hash(obj_hash)
+        instance = allocate
+        instance.send(:initialize_relatives)
+        instance.send(:initialize_with_keyword_args_deserialize_value, **obj_hash)
+        instance
+      end
     end
   end
 end
