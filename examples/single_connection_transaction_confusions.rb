@@ -1,12 +1,9 @@
+#!/usr/bin/env ruby
 # examples/single_connection_transaction_confusions.rb
 #
 # frozen_string_literal: true
 
-#!/usr/bin/env ruby
-# examples/single_connection_transaction_confusions.rb
-
 # Redis Single Connection Mode Confusions
-#
 # This file demonstrates why mixing Redis operation modes on a single connection
 # causes subtle but critical failures in production applications.
 #

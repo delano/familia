@@ -1,12 +1,10 @@
+#!/usr/bin/env ruby
 # try/support/prototypes/pooling/pool_siege.rb
 #
 # frozen_string_literal: true
 
-#!/usr/bin/env ruby
 # pool_siege.rb
-#
 # Simple Connection Pool Load Tester - Like siege, but for Database connection pools
-#
 # Usage:
 #   ruby pool_siege.rb -t 20 -p 5 -o 100    # 20 threads, 5 pool size, 100 ops each
 #   ruby pool_siege.rb --stress              # Find breaking point

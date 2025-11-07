@@ -1,12 +1,10 @@
+#!/usr/bin/env ruby
 # try/support/prototypes/pooling/run_stress_tests.rb
 #
 # frozen_string_literal: true
 
-#!/usr/bin/env ruby
 # try/prototypes/run_stress_tests.rb
-#
 # Main Test Runner for Connection Pool Stress Tests
-#
 # This script orchestrates comprehensive stress testing of the connection pool
 # implementation across different scenarios, threading models, and configurations.
 # It generates detailed reports and comparisons to identify bottlenecks and

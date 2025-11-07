@@ -1,8 +1,7 @@
+#!/usr/bin/env ruby
 # examples/relationships.rb
 #
 # frozen_string_literal: true
-
-#!/usr/bin/env ruby
 
 # Basic Relationships Example
 # This example demonstrates the core features of Familia's relationships system

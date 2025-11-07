@@ -1,12 +1,10 @@
+#!/usr/bin/env ruby
 # try/support/prototypes/pooling/lib/visualize_stress_results.rb
 #
 # frozen_string_literal: true
 
-#!/usr/bin/env ruby
 # try/prototypes/visualize_stress_results.rb
-#
 # Simple Visualization Tool for Connection Pool Stress Test Results
-#
 # This script reads CSV output from stress tests and generates:
 # - ASCII charts for terminal display
 # - Markdown-formatted reports

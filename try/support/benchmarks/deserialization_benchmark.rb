@@ -1,11 +1,9 @@
+#!/usr/bin/env ruby
 # try/support/benchmarks/deserialization_benchmark.rb
 #
 # frozen_string_literal: true
 
-#!/usr/bin/env ruby
-
 # Benchmark: Field deserialization strategies in find_by_dbkey
-#
 # Compares different approaches to deserializing Redis hash values
 # when loading Horreum objects from the database.
 #
