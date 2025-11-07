@@ -622,9 +622,8 @@ end
 Monitor all Redis commands with DatabaseLogger middleware.
 
 ```ruby
-# Enable command logging
-RedisClient.register(DatabaseLogger)
-DatabaseLogger.logger = Familia.logger
+# Enable command logging (middleware registered automatically)
+Familia.enable_database_logging = true
 
 # Capture commands in tests
 commands = DatabaseLogger.capture_commands do

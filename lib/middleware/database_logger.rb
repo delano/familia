@@ -5,22 +5,31 @@ require 'concurrent-ruby'
 # DatabaseLogger is redis-rb middleware for command logging and capture.
 #
 # Provides detailed Redis command logging for development and debugging.
-# Uses the redis-rb middleware system (via RedisClient.register).
+# Familia uses the redis-rb gem (v4.8.1 to <6.0), which internally uses
+# RedisClient infrastructure for middleware. Users work with Redis.new
+# connections and Redis:: exceptions - RedisClient is an implementation detail.
+#
+# ## User-Facing API
+#
+# Enable via Familia configuration:
+#   Familia.enable_database_logging = true
+#
+# Familia automatically calls RedisClient.register(DatabaseLogger) internally.
 #
 # ## Critical: Uses `super` not `yield` for middleware chaining
 # @see https://github.com/redis-rb/redis-client#instrumentation-and-middlewares
-# ## RedisClient Middleware Architecture
+# ## Internal: RedisClient Middleware Architecture
 #
 # RedisClient middlewares are modules that are `include`d into the
 # `RedisClient::Middlewares` class, which inherits from `BasicMiddleware`.
 # The middleware chain works through Ruby's method lookup and `super`.
 #
-# ### Middleware Chain Flow
+# ### Middleware Chain Flow (Internal)
 #
 # ```ruby
-# # Registration order (last registered is called first):
-# RedisClient.register(DatabaseLogger)         # Called second
-# RedisClient.register(DatabaseCommandCounter)  # Called first
+# # Internal registration order (last registered is called first):
+# RedisClient.register(DatabaseLogger)         # Called second (internal)
+# RedisClient.register(DatabaseCommandCounter)  # Called first (internal)
 #
 # # Execution flow when client.call('SET', 'key', 'value') is invoked:
 # DatabaseCommandCounter.call(cmd, config) { |result| ... }
@@ -65,9 +74,8 @@ require 'concurrent-ruby'
 #
 # ## Usage Examples
 #
-# @example Enable Redis command logging
-#   DatabaseLogger.logger = Logger.new(STDOUT)
-#   RedisClient.register(DatabaseLogger)
+# @example Enable Redis command logging (recommended user-facing API)
+#   Familia.enable_database_logging = true
 #
 # @example Capture commands for testing
 #   commands = DatabaseLogger.capture_commands do
@@ -77,9 +85,9 @@ require 'concurrent-ruby'
 #   puts commands.first.command  # => "SET key value"
 #
 # @example Use with DatabaseCommandCounter
-#   RedisClient.register(DatabaseLogger)
-#   RedisClient.register(DatabaseCommandCounter)
-#   # Both middlewares execute correctly in sequence
+#   Familia.enable_database_logging = true
+#   Familia.enable_database_counter = true
+#   # Both middlewares registered automatically and execute correctly in sequence
 #
 # rubocop:disable ThreadSafety/ClassInstanceVariable
 module DatabaseLogger

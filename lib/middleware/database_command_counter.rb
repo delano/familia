@@ -2,11 +2,22 @@
 
 require 'concurrent-ruby'
 
-# DatabaseCommandCounter is RedisClient middleware for counting commands.
+# DatabaseCommandCounter is redis-rb middleware for counting commands.
 #
 # This middleware counts the number of Redis commands executed. It can be
 # useful for performance monitoring and debugging, allowing you to track
 # the volume of Redis operations in your application.
+#
+# Familia uses the redis-rb gem (v4.8.1 to <6.0), which internally uses
+# RedisClient infrastructure. Users work with Redis.new connections - the
+# RedisClient middleware registration is handled automatically by Familia.
+#
+# ## User-Facing API
+#
+# Enable via Familia configuration:
+#   Familia.enable_database_counter = true
+#
+# Familia automatically calls RedisClient.register(DatabaseCommandCounter) internally.
 #
 # ## Middleware Chaining
 #
@@ -14,14 +25,14 @@ require 'concurrent-ruby'
 # `super` to properly chain method calls. See {DatabaseLogger} for detailed
 # explanation of middleware chaining mechanics.
 #
-# @example Enable Redis command counting
+# @example Enable Redis command counting (recommended user-facing API)
 #   DatabaseCommandCounter.reset
-#   RedisClient.register(DatabaseCommandCounter)
+#   Familia.enable_database_counter = true
 #
 # @example Use with DatabaseLogger
-#   RedisClient.register(DatabaseLogger)
-#   RedisClient.register(DatabaseCommandCounter)
-#   # Both middlewares execute correctly in sequence
+#   Familia.enable_database_logging = true
+#   Familia.enable_database_counter = true
+#   # Both middlewares registered automatically and execute correctly in sequence
 #
 # @see https://github.com/redis-rb/redis-client?tab=readme-ov-file#instrumentation-and-middlewares
 # @see DatabaseLogger For middleware chain architecture details
