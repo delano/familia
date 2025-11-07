@@ -116,7 +116,6 @@ end
 #=> true
 
 ## Test domain score matches created_at field
-p [:PLOP, (@score - @domain.created_at).abs]
 (@score - @domain.created_at).abs < 0.001
 #=> true
 

@@ -231,10 +231,12 @@ module Familia
           #        different scores (default)
           #   - +:set+: Unordered unique membership
           #   - +:list+: Ordered sequence, allows duplicates
-          # @param bidirectional [Boolean, Symbol] Whether to generate convenience
-          #        methods on participant class. When a Symbol is passed, it is
-          #        used as the name of the method to be generated. Otherwise the
-          #        name of the target class is used. (default: +true+)
+          # @param bidirectional [Boolean] Whether to generate reverse collection
+          #        methods on participant class. If true, methods are generated using the
+          #        name of the target class. (default: +true+)
+          # @param as [Symbol, nil] Custom name for reverse collection methods
+          #        (e.g., +as: :contracting_orgs+). When provided, overrides the default
+          #        method name derived from the target class.
           #
           # @example Basic domain-employee relationship
           #
@@ -298,7 +300,7 @@ module Familia
 
                 Current registered classes: #{Familia.members.filter_map(&:name).sort.join(', ')}
 
-                Solution: Ensure #{target_class} is defined and loaded before #{name}
+                Solution: Ensure #{target} is defined and loaded before #{self.name}
               ERROR
             end
 

@@ -54,10 +54,12 @@ module Familia
           return nil unless target_class
 
           # Resolve class from string name
-          klass = Object.const_get(target_class) rescue nil
-          return nil unless klass
-
+          # Only rescue NameError (class doesn't exist), not all exceptions
+          klass = Object.const_get(target_class)
           klass.find_by_id(target_id)
+        rescue NameError
+          # Target class doesn't exist or isn't loaded
+          nil
         end
       end
     end
