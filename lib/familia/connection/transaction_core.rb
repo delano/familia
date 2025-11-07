@@ -8,10 +8,61 @@ module Familia
     # behavior when transactions are unavailable due to connection handler constraints.
     # Eliminates code duplication between Operations and Horreum Connection modules.
     #
+    # ## Transaction Safety Rules
+    #
+    # ### Rule 1: No Save Operations Inside Transactions
+    # The following methods CANNOT be called within a transaction context:
+    # - `save`, `save!`, `save_if_not_exists!`, `create!`
+    # These methods require reading current state for validation, which would
+    # return uninspectable Redis::Future objects inside transactions.
+    #
+    # ### Rule 2: Reentrant Transaction Behavior
+    # Nested transaction calls reuse the same connection and do not create new
+    # MULTI/EXEC blocks. This ensures atomicity across nested operations.
+    #
+    # ### Rule 3: Read Operations Return Futures
+    # Inside transactions, read operations return Redis::Future objects that
+    # cannot be inspected until the transaction completes. Always check conditions
+    # before entering the transaction.
+    #
+    # ### Rule 4: Connection Handler Compatibility
+    # - **FiberTransactionHandler**: Supports reentrant transactions
+    # - **ProviderConnectionHandler**: Full transaction support
+    # - **CreateConnectionHandler**: Full transaction support
+    # - **FiberConnectionHandler**: Blocked (raises OperationModeError)
+    # - **DefaultConnectionHandler**: Blocked (raises OperationModeError)
+    #
+    # @example Correct Pattern: Save Before Transaction
+    #   customer = Customer.new(email: 'test@example.com')
+    #   customer.save  # Validates unique constraints here
+    #
+    #   customer.transaction do
+    #     customer.increment(:login_count)
+    #     customer.hset(:last_login, Time.now.to_i)
+    #   end
+    #
+    # @example Incorrect Pattern: Save Inside Transaction
+    #   Customer.transaction do
+    #     customer = Customer.new(email: 'test@example.com')
+    #     customer.save  # Raises Familia::OperationModeError
+    #   end
+    #
+    # @example Reentrant Transactions
+    #   Customer.transaction do |outer_conn|
+    #     outer_conn.set('key1', 'value1')
+    #
+    #     # Nested call reuses same connection - no new MULTI/EXEC
+    #     Customer.transaction do |inner_conn|
+    #       inner_conn.set('key2', 'value2')  # Same connection as outer
+    #     end
+    #   end
+    #
     # @example Usage in transaction methods
     #   def transaction(&block)
     #     TransactionCore.execute_transaction(-> { dbclient }, &block)
     #   end
+    #
+    # @see docs/transaction_safety.md for complete safety guidelines
     #
     module TransactionCore
       # Executes a transaction with configurable fallback behavior
@@ -20,6 +71,11 @@ module Familia
       # 1. Normal transaction (MULTI/EXEC) when handler supports transactions
       # 2. Reentrant transaction when already within a transaction context
       # 3. Individual command execution with configurable error/warn/silent modes
+      #
+      # ## Safety Mechanisms
+      # - Fiber-local storage tracks transaction state across nested calls
+      # - Connection handler validation prevents unsafe transaction usage
+      # - Automatic cleanup ensures proper state management even on exceptions
       #
       # @param dbclient_proc [Proc] Lambda that returns the Redis connection
       # @param block [Proc] Block containing Redis commands to execute
@@ -71,6 +127,16 @@ module Familia
       #
       # Handles the standard transaction flow including nested transaction detection,
       # proper Fiber-local state management, and cleanup in ensure blocks.
+      #
+      # ## Implementation Details
+      # - Uses Fiber[:familia_transaction] to track active transaction connection
+      # - Reentrant behavior: yields existing connection if already in transaction
+      # - All commands queued and executed atomically on EXEC
+      # - Returns MultiResult with success status and command results
+      #
+      # ## Thread Safety
+      # Each thread has its own root fiber with isolated fiber-local storage,
+      # ensuring transactions don't interfere across threads.
       #
       # @param dbclient_proc [Proc] Lambda that returns the Redis connection
       # @param block [Proc] Block containing Redis commands to execute
