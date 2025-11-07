@@ -281,7 +281,7 @@ module Familia
           #
           def participates_in(target, collection_name, score: nil, type: :sorted_set, bidirectional: true, as: nil)
 
-            # Normalize the
+            # Normalize the target class parameter
             target_class = Familia.resolve_class(target)
 
             # Raise helpful error if target class can't be resolved
