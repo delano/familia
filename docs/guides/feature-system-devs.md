@@ -2,29 +2,29 @@
 
 ## Overview
 
-This developer guide covers the internal architecture of Familia's feature system, including feature registration, dependency resolution, loading mechanisms, and best practices for creating robust, maintainable features.
+The Familia Features system provides a simple, modular way to add optional functionality to Familia classes. Features are Ruby modules that get included into classes, extending them with additional methods and capabilities.
 
-## Architecture Deep Dive
+## Architecture
 
 ### Core Components
 
 #### 1. Feature Registration (`Familia::Base`)
 
-```ruby
-# lib/familia/base.rb
-module Familia::Base
-  @features_available = {}     # Registry of available features
-  @feature_definitions = {}    # Feature metadata and dependencies
+Features are registered using the `add_feature` method:
 
-  def self.add_feature(klass, feature_name, depends_on: [])
+```ruby
+module Familia::Base
+  def self.add_feature(klass, feature_name, depends_on: [], field_group: nil)
     @features_available ||= {}
 
-    # Create feature definition with metadata
+    # Create simple feature definition
     feature_def = FeatureDefinition.new(
       name: feature_name,
       depends_on: depends_on,
+      field_group: field_group
     )
 
+    # Track feature definitions and availability
     @feature_definitions ||= {}
     @feature_definitions[feature_name] = feature_def
     features_available[feature_name] = klass
@@ -34,507 +34,216 @@ end
 
 #### 2. Feature Activation (Horreum Classes)
 
+Features are activated using the `feature` method:
+
 ```ruby
-# When a class declares `feature :name`
-module Familia::Horreum::ClassMethods
-  def feature(name)
-    # 1. Validate feature exists
-    feature_klass = Familia::Base.features_available[name]
-    raise Familia::Problem, "Unknown feature: #{name}" unless feature_klass
-
-    # 2. Check dependencies
-    validate_feature_dependencies(name)
-
-    # 3. Include the feature module
-    include feature_klass
-
-    # 4. Track enabled features
-    @features_enabled ||= Set.new
-    @features_enabled.add(name)
-  end
-
-  private
-
-  def validate_feature_dependencies(feature_name)
-    feature_def = Familia::Base.feature_definitions[feature_name]
-    return unless feature_def&.depends_on&.any?
-
-    missing_deps = feature_def.depends_on - features_enabled.to_a
-    if missing_deps.any?
-      raise Familia::Problem,
-        "Feature #{feature_name} requires: #{missing_deps.join(', ')}"
-    end
-  end
+class MyModel < Familia::Horreum
+  feature :expiration
+  feature :encrypted_fields
+  feature :safe_dump
 end
 ```
 
 #### 3. Feature Definition Structure
 
+Features are defined using a simple Data class:
+
 ```ruby
-class FeatureDefinition
-  attr_reader :name, :depends_on, :conflicts_with, :provides
-
-  def initialize(name:, depends_on: [], conflicts_with: [], provides: [])
-    @name = name.to_sym
-    @depends_on = Array(depends_on).map(&:to_sym)
-    @conflicts_with = Array(conflicts_with).map(&:to_sym)
-    @provides = Array(provides).map(&:to_sym)
-  end
-
-  def compatible_with?(other_feature)
-    !conflicts_with.include?(other_feature.name)
-  end
-
-  def dependencies_satisfied?(enabled_features)
-    depends_on.all? { |dep| enabled_features.include?(dep) }
-  end
-end
+FeatureDefinition = Data.define(:name, :depends_on, :field_group)
 ```
 
 ### Feature Loading Lifecycle
 
-#### 1. Automatic Discovery
+#### 1. Feature Self-Registration
+
+Each feature module registers itself:
 
 ```ruby
-# lib/familia/features.rb - loads all features automatically
-features_dir = File.join(__dir__, 'features')
-Dir.glob(File.join(features_dir, '*.rb')).sort.each do |feature_file|
-  begin
-    require_relative feature_file
-  rescue LoadError => e
-    Familia.logger.warn "Failed to load feature #{feature_file}: #{e.message}"
-  end
-end
-```
-
-#### 2. Feature Self-Registration
-
-```ruby
-# Each feature registers itself when loaded
 module Familia::Features::MyFeature
   def self.included(base)
     base.extend ClassMethods
-    base.prepend InstanceMethods
+    base.include InstanceMethods
   end
 
   module ClassMethods
-    # Class-level functionality
+    def my_feature_config
+      # Class-level functionality
+    end
   end
 
   module InstanceMethods
-    # Instance-level functionality
+    def my_feature_method
+      # Instance-level functionality
+    end
   end
 
-  # Self-registration at module definition time
-  Familia::Base.add_feature self, :my_feature, depends_on: [:other_feature]
+  # Self-register with the feature system
+  Familia::Base.add_feature self, :my_feature, depends_on: []
 end
 ```
 
-#### 3. Runtime Inclusion
+#### 2. Runtime Inclusion
+
+When `feature` is called, the system:
+
+1. Validates the feature exists
+2. Checks dependencies are satisfied
+3. Includes the feature module into the class
+4. Stores feature options if provided
 
 ```ruby
-# When a class declares a feature
-class MyModel < Familia::Horreum
-  feature :expiration      # 1. Validation and dependency check
-  feature :encrypted_fields # 2. Module inclusion
-  feature :safe_dump        # 3. Method definition and setup
-end
-```
+def feature(feature_name = nil, **options)
+  @features_enabled ||= []
 
-## Advanced Feature Patterns
+  return features_enabled if feature_name.nil?
 
-### Conditional Feature Loading
+  feature_name = feature_name.to_sym
+  feature_module = Familia::Base.find_feature(feature_name, self)
+  raise Familia::Problem, "Unsupported feature: #{feature_name}" unless feature_module
 
-```ruby
-module Familia::Features::ConditionalFeature
-  def self.included(base)
-    # Only add functionality if conditions are met
-    if defined?(Rails) && Rails.env.production?
-      base.extend ProductionMethods
-    else
-      base.extend DevelopmentMethods
-    end
-
-    # Conditional method definitions based on available libraries
-    if defined?(Sidekiq)
-      base.include BackgroundJobIntegration
-    end
-
-    if defined?(ActiveRecord)
-      base.include ActiveRecordCompatibility
-    end
-  end
-
-  module ProductionMethods
-    def production_only_method
-      # Implementation only available in production
-    end
-  end
-
-  module DevelopmentMethods
-    def debug_helper_method
-      # Development and test helper methods
-    end
-  end
-
-  # Register with environment-specific dependencies
-  dependencies = []
-  dependencies << :logging if defined?(Rails)
-  dependencies << :metrics if ENV['ENABLE_METRICS']
-
-  Familia::Base.add_feature self, :conditional_feature, depends_on: dependencies
-end
-```
-
-### Feature Conflicts and Compatibility
-
-```ruby
-# Feature that conflicts with others
-module Familia::Features::AlternativeImplementation
-  def self.included(base)
-    # Check for conflicting features
-    conflicting_features = [:original_implementation, :legacy_mode]
-    enabled_conflicts = conflicting_features & base.features_enabled.to_a
-
-    if enabled_conflicts.any?
+  # Check dependencies
+  feature_def = Familia::Base.feature_definitions[feature_name]
+  if feature_def&.depends_on&.any?
+    missing = feature_def.depends_on - features_enabled
+    if missing.any?
       raise Familia::Problem,
-        "#{self} conflicts with: #{enabled_conflicts.join(', ')}"
-    end
-
-    base.extend ClassMethods
-  end
-
-  module ClassMethods
-    def alternative_method
-      # Different implementation approach
+            "Feature #{feature_name} requires missing dependencies: #{missing.join(', ')}"
     end
   end
 
-  Familia::Base.add_feature self, :alternative_implementation,
-    conflicts_with: [:original_implementation, :legacy_mode]
+  features_enabled << feature_name
+  include feature_module
 end
 ```
 
-### Feature Capability Flags
-
-```ruby
-module Familia::Features::CapabilityProvider
-  def self.included(base)
-    base.extend ClassMethods
-
-    # Add capability flags to the class
-    base.instance_variable_set(:@capabilities, Set.new)
-    base.capabilities.merge([:search, :indexing, :full_text])
-  end
-
-  module ClassMethods
-    attr_reader :capabilities
-
-    def has_capability?(capability)
-      capabilities.include?(capability.to_sym)
-    end
-
-    def requires_capability(capability)
-      unless has_capability?(capability)
-        raise Familia::Problem,
-          "#{self} requires #{capability} capability"
-      end
-    end
-  end
-
-  # Feature provides capabilities that other features can depend on
-  Familia::Base.add_feature self, :capability_provider, provides: [:search, :indexing]
-end
-
-# Feature that requires specific capabilities
-module Familia::Features::SearchDependent
-  def self.included(base)
-    # Check that required capabilities are available
-    base.requires_capability(:search)
-    base.requires_capability(:indexing)
-
-    base.extend ClassMethods
-  end
-
-  module ClassMethods
-    def search_by_field(field, query)
-      # Implementation that uses search capabilities
-    end
-  end
-
-  Familia::Base.add_feature self, :search_dependent,
-    depends_on: [:capability_provider]
-end
-```
-
-### Dynamic Feature Configuration
-
-```ruby
-module Familia::Features::ConfigurableFeature
-  def self.included(base)
-    base.extend ClassMethods
-
-    # Initialize configuration
-    config = base.feature_config(:configurable_feature)
-
-    if config[:enable_caching]
-      base.include CachingMethods
-    end
-
-    if config[:enable_logging]
-      base.include LoggingMethods
-    end
-
-    # Configure behavior based on settings
-    base.instance_variable_set(:@batch_size, config[:batch_size] || 100)
-  end
-
-  module ClassMethods
-    def feature_config(feature_name)
-      @feature_configs ||= {}
-      @feature_configs[feature_name] ||= load_feature_config(feature_name)
-    end
-
-    private
-
-    def load_feature_config(feature_name)
-      # Load from various sources
-      config = {}
-
-      # 1. Default configuration
-      config.merge!(default_config_for(feature_name))
-
-      # 2. Environment variables
-      env_config = ENV.select { |k, v| k.start_with?("FAMILIA_#{feature_name.upcase}_") }
-      env_config.each { |k, v| config[k.split('_').last.downcase.to_sym] = v }
-
-      # 3. Configuration files
-      if defined?(Rails)
-        rails_config = Rails.application.config.familia&.features&.dig(feature_name)
-        config.merge!(rails_config) if rails_config
-      end
-
-      config
-    end
-
-    def default_config_for(feature_name)
-      case feature_name
-      when :configurable_feature
-        {
-          enable_caching: true,
-          enable_logging: Rails.env.development?,
-          batch_size: 100,
-          timeout: 30
-        }
-      else
-        {}
-      end
-    end
-  end
-
-  module CachingMethods
-    def cached_operation(&block)
-      # Caching implementation
-    end
-  end
-
-  module LoggingMethods
-    def log_operation(operation, &block)
-      # Logging implementation
-    end
-  end
-
-  Familia::Base.add_feature self, :configurable_feature
-end
-```
-
-## Feature Development Best Practices
+## Basic Feature Development
 
 ### 1. Feature Structure Template
 
 ```ruby
-# lib/familia/features/my_feature.rb
 module Familia
   module Features
     module MyFeature
-      # Feature metadata
-      FEATURE_VERSION = '1.0.0'
-      REQUIRED_FAMILIA_VERSION = '>= 2.0.0'
-
       def self.included(base)
-        # Validation and setup
-        validate_environment!(base)
-
-        Familia.debug "[#{base}] Loading #{self} v#{FEATURE_VERSION}"
-
-        # Module inclusion
         base.extend ClassMethods
-        base.prepend InstanceMethods  # Use prepend for method interception
-        base.include HelperMethods    # Use include for utility methods
-
-        # Post-inclusion setup
-        configure_feature(base)
+        base.include InstanceMethods
       end
 
-      def self.validate_environment!(base)
-        # Check Familia version compatibility
-        familia_version = Gem::Version.new(Familia::VERSION)
-        required_version = Gem::Requirement.new(REQUIRED_FAMILIA_VERSION)
-
-        unless required_version.satisfied_by?(familia_version)
-          raise Familia::Problem,
-            "#{self} requires Familia #{REQUIRED_FAMILIA_VERSION}, " \
-            "got #{familia_version}"
-        end
-
-        # Check for required methods/capabilities on the base class
-        required_methods = [:identifier_field, :field]
-        missing_methods = required_methods.reject { |m| base.respond_to?(m) }
-
-        if missing_methods.any?
-          raise Familia::Problem,
-            "#{base} missing required methods: #{missing_methods.join(', ')}"
-        end
-      end
-
-      def self.configure_feature(base)
-        # Feature-specific initialization
-        base.instance_variable_set(:@my_feature_config, {
-          enabled: true,
-          options: {}
-        })
-
-        # Set up feature-specific data structures
-        base.class_eval do
-          @my_feature_data ||= {}
-        end
-      end
-
-      # Class-level methods added to including class
       module ClassMethods
         def my_feature_config
-          @my_feature_config ||= { enabled: true, options: {} }
+          @my_feature_config ||= {}
         end
 
         def configure_my_feature(**options)
-          my_feature_config[:options].merge!(options)
+          my_feature_config.merge!(options)
         end
 
         def my_feature_enabled?
-          my_feature_config[:enabled]
+          features_enabled.include?(:my_feature)
         end
       end
 
-      # Instance methods that intercept/override existing methods
       module InstanceMethods
         def save
-          # Pre-processing
           before_my_feature_save if respond_to?(:before_my_feature_save, true)
-
-          # Call original save
           result = super
-
-          # Post-processing
           after_my_feature_save if respond_to?(:after_my_feature_save, true)
-
           result
         end
 
         private
 
         def before_my_feature_save
-          # Feature-specific pre-save logic
+          # Pre-save logic
         end
 
         def after_my_feature_save
-          # Feature-specific post-save logic
-        end
-      end
-
-      # Utility methods that don't override existing functionality
-      module HelperMethods
-        def my_feature_helper
-          return unless self.class.my_feature_enabled?
-          # Helper implementation
+          # Post-save logic
         end
       end
 
       # Register the feature
-      Familia::Base.add_feature self, :my_feature, depends_on: [:required_feature]
+      Familia::Base.add_feature self, :my_feature
     end
   end
 end
 ```
 
-### 2. Robust Error Handling
+### 2. Feature with Dependencies
 
 ```ruby
-module Familia::Features::RobustFeature
-  class FeatureError < Familia::Problem; end
-  class ConfigurationError < FeatureError; end
-  class DependencyError < FeatureError; end
-
+module Familia::Features::AdvancedFeature
   def self.included(base)
-    begin
-      validate_dependencies!(base)
-      configure_feature_safely(base)
-    rescue => e
-      handle_inclusion_error(base, e)
-    end
-  end
-
-  def self.validate_dependencies!(base)
-    # Check external dependencies
-    unless defined?(SomeGem)
-      raise DependencyError, "#{self} requires 'some_gem' gem"
-    end
-
-    # Check feature dependencies
-    required_features = [:base_feature]
-    missing_features = required_features - base.features_enabled.to_a
-
-    if missing_features.any?
-      raise DependencyError,
-        "#{self} requires features: #{missing_features.join(', ')}"
-    end
-  end
-
-  def self.configure_feature_safely(base)
-    # Safely configure with fallbacks
-    config = load_configuration
-    apply_configuration(base, config)
-  rescue => e
-    Familia.logger.warn "Feature configuration failed: #{e.message}"
-    apply_default_configuration(base)
-  end
-
-  def self.handle_inclusion_error(base, error)
-    case error
-    when DependencyError
-      # Log dependency issues and disable feature
-      Familia.logger.error "Feature #{self} disabled: #{error.message}"
-      base.instance_variable_set(:@robust_feature_disabled, true)
-    when ConfigurationError
-      # Try default configuration
-      Familia.logger.warn "Using default configuration: #{error.message}"
-      apply_default_configuration(base)
-    else
-      # Re-raise unexpected errors
-      raise
-    end
+    base.extend ClassMethods
   end
 
   module ClassMethods
-    def robust_feature_enabled?
-      !@robust_feature_disabled
+    def advanced_method
+      # This feature requires :basic_feature to be enabled
+      raise "Basic feature required" unless features_enabled.include?(:basic_feature)
+      # Advanced functionality here
+    end
+  end
+
+  # Register with dependency
+  Familia::Base.add_feature self, :advanced_feature, depends_on: [:basic_feature]
+end
+```
+
+### 3. Feature with Field Groups
+
+```ruby
+module Familia::Features::FieldGroupFeature
+  def self.included(base)
+    base.extend ClassMethods
+  end
+
+  module ClassMethods
+    def special_field(name, **options)
+      # Define fields that belong to this feature
+      field(name, **options)
+    end
+  end
+
+  # Register with field group
+  Familia::Base.add_feature self, :field_group_feature, field_group: :special_fields
+end
+```
+
+## Feature Development Best Practices
+
+### 1. Naming Conventions
+
+- Feature names should be symbols (`:my_feature`)
+- Module names should match: `Familia::Features::MyFeature`
+- Method names should be prefixed with feature name to avoid conflicts
+
+### 2. Error Handling
+
+```ruby
+module Familia::Features::RobustFeature
+  class FeatureError < StandardError; end
+
+  def self.included(base)
+    validate_environment!
+    base.extend ClassMethods
+  end
+
+  def self.validate_environment!
+    raise FeatureError, "Ruby 3.0+ required" if RUBY_VERSION < "3.0"
+  end
+
+  module ClassMethods
+    def robust_feature_method
+      raise FeatureError, "Feature not properly configured" unless configured?
+      # Feature logic here
     end
 
-    def with_robust_feature(&block)
-      return unless robust_feature_enabled?
-      block.call
-    rescue => e
-      Familia.logger.error "Robust feature operation failed: #{e.message}"
-      nil
+    private
+
+    def configured?
+      # Check if feature is properly set up
+      true
     end
   end
 
@@ -542,351 +251,125 @@ module Familia::Features::RobustFeature
 end
 ```
 
-### 3. Feature Testing Infrastructure
+### 3. Feature Options
+
+Features can accept configuration options:
 
 ```ruby
-# Test helpers for feature development
+class MyModel < Familia::Horreum
+  feature :my_feature, timeout: 30, retries: 3
+end
+
+# Access options in the feature
+module Familia::Features::MyFeature
+  module ClassMethods
+    def my_feature_timeout
+      feature_options(:my_feature)[:timeout] || 60
+    end
+  end
+end
+```
+
+## Testing Features
+
+### Feature Testing Helpers
+
+```ruby
 module FeatureTestHelpers
-  def with_feature(feature_name, config = {})
-    # Create temporary test class with feature
-    test_class = Class.new(Familia::Horreum) do
-      def self.name
-        'FeatureTestClass'
-      end
+  def with_feature(klass, feature_name, **options)
+    original_features = klass.features_enabled.dup
 
-      identifier_field :test_id
-      field :test_id
+    begin
+      klass.feature(feature_name, **options)
+      yield
+    ensure
+      # Reset features (note: this is simplified - actual reset is more complex)
+      klass.instance_variable_set(:@features_enabled, original_features)
     end
-
-    # Configure feature if needed
-    if config.any?
-      test_class.define_singleton_method(:feature_config) do |name|
-        config
-      end
-    end
-
-    # Enable the feature
-    test_class.feature feature_name
-
-    yield test_class
   end
 
   def feature_enabled?(klass, feature_name)
     klass.features_enabled.include?(feature_name)
   end
-
-  def assert_feature_methods(klass, expected_methods)
-    expected_methods.each do |method|
-      assert klass.method_defined?(method),
-        "Expected #{klass} to have method #{method}"
-    end
-  end
 end
 
-# RSpec helper
-RSpec.configure do |config|
-  config.include FeatureTestHelpers
-end
+# Test example
+describe Familia::Features::MyFeature do
+  include FeatureTestHelpers
 
-# Feature test example
-RSpec.describe Familia::Features::MyFeature do
   it "adds expected methods to class" do
-    with_feature(:my_feature) do |test_class|
-      expect(test_class).to respond_to(:my_feature_config)
-      expect(test_class.new).to respond_to(:my_feature_helper)
-    end
-  end
-
-  it "respects feature configuration" do
-    config = { enabled: false }
-
-    with_feature(:my_feature, config) do |test_class|
-      expect(test_class.my_feature_enabled?).to be false
+    with_feature(MyModel, :my_feature) do
+      expect(MyModel).to respond_to(:my_feature_config)
+      expect(MyModel.new).to respond_to(:my_feature_method)
     end
   end
 
   it "validates dependencies" do
     expect {
-      Class.new(Familia::Horreum) do
-        feature :my_feature  # Missing :required_feature dependency
-      end
-    }.to raise_error(Familia::Problem, /requires.*required_feature/)
+      MyModel.feature(:advanced_feature) # requires :basic_feature
+    }.to raise_error(Familia::Problem, /requires missing dependencies/)
   end
 end
 ```
 
-## Performance Optimization
+## Existing Features Overview
 
-### 1. Lazy Feature Loading
+### Core Features
 
-```ruby
-module Familia::Features::LazyFeature
-  def self.included(base)
-    # Minimal setup at include time
-    base.extend ClassMethods
+- **`:expiration`** - TTL management for objects and fields
+- **`:encrypted_fields`** - Encrypt sensitive fields before storage
+- **`:safe_dump`** - API-safe serialization excluding sensitive fields
+- **`:relationships`** - Object associations and indexing
+- **`:transient_fields`** - Runtime-only fields that aren't persisted
+- **`:quantization`** - Score quantization for sorted sets
+- **`:object_identifier`** - Flexible object identification strategies
+- **`:external_identifier`** - External system ID management
 
-    # Defer expensive setup until first use
-    @setup_complete = false
-  end
+### Feature Dependencies
 
-  module ClassMethods
-    def ensure_lazy_feature_setup!
-      return if @setup_complete
-
-      # Expensive setup operations
-      perform_expensive_setup
-      @setup_complete = true
-    end
-
-    def lazy_feature_method
-      ensure_lazy_feature_setup!
-      # Method implementation
-    end
-
-    private
-
-    def perform_expensive_setup
-      # Heavy initialization work
-      @expensive_data = load_expensive_data
-      @compiled_templates = compile_templates
-    end
-  end
-
-  Familia::Base.add_feature self, :lazy_feature
-end
-```
-
-### 2. Feature Method Caching
+Most features are independent, but some have dependencies:
 
 ```ruby
-module Familia::Features::CachedFeature
-  def self.included(base)
-    base.extend ClassMethods
-  end
+# relationships feature has no dependencies
+Familia::Base.add_feature Relationships, :relationships
 
-  module ClassMethods
-    def cached_feature_method(key)
-      @method_cache ||= {}
-      @method_cache[key] ||= expensive_computation(key)
-    end
-
-    def clear_feature_cache!
-      @method_cache = {}
-    end
-
-    private
-
-    def expensive_computation(key)
-      # Expensive operation
-      sleep 0.1  # Simulate work
-      "computed_#{key}"
-    end
-  end
-
-  Familia::Base.add_feature self, :cached_feature
-end
+# No complex dependency chains in current implementation
 ```
 
 ## Debugging Features
 
-### 1. Feature Introspection
+### Feature Introspection
 
 ```ruby
-module Familia::Features::Introspection
-  def self.included(base)
-    base.extend ClassMethods
-  end
+# Check what features are available
+Familia::Base.features_available.keys
+# => [:expiration, :encrypted_fields, :safe_dump, :relationships, ...]
 
-  module ClassMethods
-    def feature_info
-      {
-        enabled_features: features_enabled.to_a,
-        feature_dependencies: feature_dependency_graph,
-        feature_conflicts: feature_conflict_map,
-        feature_load_order: feature_load_order
-      }
-    end
+# Check what features are enabled on a class
+MyModel.features_enabled
+# => [:expiration, :safe_dump]
 
-    def feature_dependency_graph
-      graph = {}
-      features_enabled.each do |feature|
-        definition = Familia::Base.feature_definitions[feature]
-        graph[feature] = definition&.depends_on || []
-      end
-      graph
-    end
+# Check feature definitions
+Familia::Base.feature_definitions[:expiration]
+# => #<data FeatureDefinition name=:expiration, depends_on=[], field_group=nil>
 
-    def feature_conflict_map
-      conflicts = {}
-      features_enabled.each do |feature|
-        definition = Familia::Base.feature_definitions[feature]
-        conflicts[feature] = definition&.conflicts_with || []
-      end
-      conflicts
-    end
-
-    def feature_load_order
-      # Return the order features were loaded
-      @feature_load_order ||= []
-    end
-
-    def debug_feature_issues
-      issues = []
-
-      # Check for circular dependencies
-      issues.concat(detect_circular_dependencies)
-
-      # Check for method conflicts
-      issues.concat(detect_method_conflicts)
-
-      # Check for missing dependencies
-      issues.concat(detect_missing_dependencies)
-
-      issues
-    end
-
-    private
-
-    def detect_circular_dependencies
-      # Implementation for circular dependency detection
-    end
-
-    def detect_method_conflicts
-      # Implementation for method conflict detection
-    end
-
-    def detect_missing_dependencies
-      # Implementation for missing dependency detection
-    end
-  end
-
-  Familia::Base.add_feature self, :introspection
-end
+# Check if a specific feature is enabled
+MyModel.features_enabled.include?(:expiration)
+# => true
 ```
 
-### 2. Feature Debug Logging
+### Common Issues
 
-```ruby
-module Familia::Features::DebugLogging
-  def self.included(base)
-    return unless Familia.debug?
+1. **Feature not found**: Ensure the feature module is loaded and registered
+2. **Dependency errors**: Check that required features are enabled first
+3. **Method conflicts**: Features that define the same methods will override each other
 
-    base.extend ClassMethods
-    original_feature_method = base.method(:feature)
+## Migration Notes
 
-    base.define_singleton_method(:feature) do |name|
-      Familia.debug "[DEBUG] Loading feature #{name} on #{self}"
-      start_time = Familia.now
+The feature system is intentionally simple in the current implementation. More complex features like conflict resolution, versioning, and capability flags are not currently implemented but could be added in future versions if needed.
 
-      result = original_feature_method.call(name)
-
-      load_time = (Familia.now - start_time) * 1000
-      Familia.debug "[DEBUG] Feature #{name} loaded in #{load_time.round(2)}ms"
-
-      result
-    end
-  end
-
-  module ClassMethods
-    def log_feature_method_call(method_name, &block)
-      return block.call unless Familia.debug?
-
-      Familia.debug "[DEBUG] Calling #{method_name} on #{self}"
-      start_time = Familia.now
-
-      result = block.call
-
-      duration = (Familia.now - start_time) * 1000
-      Familia.debug "[DEBUG] #{method_name} completed in #{duration.round(2)}ms"
-
-      result
-    end
-  end
-
-  Familia::Base.add_feature self, :debug_logging
-end
-```
-
-## Migration and Versioning
-
-### Feature Versioning
-
-```ruby
-module Familia::Features::VersionedFeature
-  VERSION = '2.1.0'
-  MIGRATION_PATH = [
-    { from: '1.0.0', to: '1.1.0', migration: :migrate_1_0_to_1_1 },
-    { from: '1.1.0', to: '2.0.0', migration: :migrate_1_1_to_2_0 },
-    { from: '2.0.0', to: '2.1.0', migration: :migrate_2_0_to_2_1 }
-  ].freeze
-
-  def self.included(base)
-    check_and_migrate_version(base)
-    base.extend ClassMethods
-  end
-
-  def self.check_and_migrate_version(base)
-    current_version = get_current_version(base)
-    return if current_version == VERSION
-
-    if current_version.nil?
-      # First installation
-      set_version(base, VERSION)
-      return
-    end
-
-    # Perform migration
-    migrate_from_version(base, current_version, VERSION)
-  end
-
-  def self.migrate_from_version(base, from_version, to_version)
-    migration_steps = find_migration_path(from_version, to_version)
-
-    migration_steps.each do |step|
-      Familia.logger.info "Migrating #{base} from #{step[:from]} to #{step[:to]}"
-      send(step[:migration], base)
-    end
-
-    set_version(base, to_version)
-  end
-
-  def self.find_migration_path(from, to)
-    # Find path through migration steps
-    current = from
-    path = []
-
-    while current != to
-      step = MIGRATION_PATH.find { |s| s[:from] == current }
-      break unless step
-
-      path << step
-      current = step[:to]
-    end
-
-    path
-  end
-
-  # Migration methods
-  def self.migrate_1_0_to_1_1(base)
-    # Migration logic for 1.0 -> 1.1
-  end
-
-  def self.migrate_1_1_to_2_0(base)
-    # Migration logic for 1.1 -> 2.0
-  end
-
-  def self.migrate_2_0_to_2_1(base)
-    # Migration logic for 2.0 -> 2.1
-  end
-
-  module ClassMethods
-    def feature_version
-      self.class.instance_variable_get(:@versioned_feature_version) || VERSION
-    end
-  end
-
-  Familia::Base.add_feature self, :versioned_feature
-end
-```
-
-This developer guide provides the foundation for creating robust, maintainable features that integrate seamlessly with Familia's architecture while following best practices for error handling, performance, and maintainability.
+For now, feature developers should:
+- Keep features focused and independent
+- Use clear naming to avoid method conflicts
+- Test features thoroughly in isolation
+- Document any dependencies clearly

@@ -12,424 +12,555 @@
 
 ## Overview
 
-The Object Identifier feature provides automatic generation of unique identifiers for Familia objects. Instead of manually creating identifiers, you can configure different generation strategies that suit your application's needs - from globally unique UUIDs to compact hexadecimal strings.
+The Object Identifier feature provides automatic generation of unique identifiers for Familia objects. Instead of manually creating identifiers, you can configure different generation strategies that suit your application's needs - from globally unique UUIDs to high-entropy hexadecimal strings.
 
 ## Why Use Object Identifiers?
 
-**Consistency**: Ensures all objects have properly formatted, unique identifiers without manual management.
+**Automatic Generation**: No manual ID management - identifiers are generated lazily when first accessed.
 
-**Flexibility**: Different applications need different ID formats - UUIDs for distributed systems, short hex strings for internal tools, or custom formats for specific business requirements.
+**Configurable Strategies**: Choose from UUID v7 (timestamped), UUID v4 (random), hex (high-entropy), or custom generators.
 
-**Collision Avoidance**: Built-in collision detection and retry logic ensures identifier uniqueness even under high concurrency.
+**Provenance Tracking**: System tracks which generator created each ID for security and debugging.
 
-**Integration Ready**: Generated IDs work seamlessly with external APIs, logging systems, and database relationships.
+**Data Integrity**: Preserves existing IDs during initialization - never overwrites loaded data.
 
-## Quick Start
+**Lookup Support**: Automatic bidirectional mapping enables finding objects by their objid.
 
-### Basic UUID Generation
+## Generation Strategies
+
+### UUID v7 (Default)
+
+UUID version 7 with embedded timestamp for natural sorting:
 
 ```ruby
 class User < Familia::Horreum
-  feature :object_identifier, generator: :uuid_v4
+  feature :object_identifier  # Uses :uuid_v7 by default
 
-  field :name, :email, :created_at
+  field :email, :name
 end
 
-# Automatic ID generation on creation
-user = User.create(name: "Alice", email: "alice@example.com")
-puts user.objid  # => "f47ac10b-58cc-4372-a567-0e02b2c3d479"
-```
-
-### Compact Hex Identifiers
-
-```ruby
-class Session < Familia::Horreum
-  feature :object_identifier, generator: :hex, length: 16
-
-  field :user_id, :data, :expires_at
-end
-
-session = Session.create(user_id: "user123")
-puts session.objid  # => "a1b2c3d4e5f67890"
-```
-
-## Generator Types
-
-### UUID v4 Generator
-
-Standard UUID format providing global uniqueness across distributed systems.
-
-```ruby
-class Document < Familia::Horreum
-  feature :object_identifier, generator: :uuid_v4
-  field :title, :content
-end
-
-doc = Document.create(title: "My Document")
-doc.objid  # => "550e8400-e29b-41d4-a716-446655440000"
+user = User.new(email: 'alice@example.com')
+user.objid  # => "01234567-89ab-7def-8000-123456789abc"
 ```
 
 **Characteristics:**
-- **Format**: 36 characters (8-4-4-4-12 hex pattern)
-- **Uniqueness**: Globally unique across time and space
-- **Performance**: Good for distributed systems
-- **Use Cases**: Public APIs, microservices, external integrations
+- 128-bit identifier with embedded timestamp
+- Naturally sortable by creation time
+- Globally unique across distributed systems
+- May leak timing information (consider for security-sensitive apps)
 
-> **💡 Best Practice**
->
-> Use UUID v4 for objects that will be exposed externally or across service boundaries.
+### UUID v4 (Random)
 
-### Hex Generator
-
-Compact hexadecimal strings ideal for internal use and high-volume scenarios.
+UUID version 4 for legacy compatibility and maximum randomness:
 
 ```ruby
-class ApiKey < Familia::Horreum
-  feature :object_identifier, generator: :hex, length: 24
-  field :name, :permissions, :created_at
+class LegacyUser < Familia::Horreum
+  feature :object_identifier, generator: :uuid_v4
+
+  field :email, :username
 end
 
-key = ApiKey.create(name: "Production API")
-key.objid  # => "1a2b3c4d5e6f7890abcdef12"
-```
-
-**Configuration Options:**
-- `length`: Number of hex characters (default: 12)
-- `prefix`: Optional prefix for the identifier
-- `charset`: Custom character set (default: hex digits)
-
-```ruby
-class InternalToken < Familia::Horreum
-  feature :object_identifier,
-          generator: :hex,
-          length: 16,
-          prefix: "tk_"
-
-  field :scope, :issued_at
-end
-
-token = InternalToken.create(scope: "read:users")
-token.objid  # => "tk_a1b2c3d4e5f67890"
+user = LegacyUser.new(email: 'bob@example.com')
+user.objid  # => "f47ac10b-58cc-4372-a567-0e02b2c3d479"
 ```
 
 **Characteristics:**
-- **Format**: Configurable length hexadecimal string
-- **Performance**: Very fast generation
-- **Storage**: Compact representation
-- **Use Cases**: Internal IDs, tokens, session identifiers
+- 122-bit random identifier (6 bits for version/variant)
+- No timing correlation for enhanced security
+- Widely supported format
+- Compatible with existing UUID systems
 
-> **⚠️ Important**
->
-> Hex generators provide good uniqueness but aren't globally unique like UUIDs. Use appropriate length for your collision tolerance.
+### High-Entropy Hex
+
+256-bit hexadecimal for security-critical applications:
+
+```ruby
+class SecureDocument < Familia::Horreum
+  feature :object_identifier, generator: :hex
+
+  field :title, :classification
+end
+
+doc = SecureDocument.new(title: 'Classified Report')
+doc.objid  # => "a1b2c3d4e5f6789012345678901234567890abcdef..." (64 chars)
+```
+
+**Characteristics:**
+- Maximum entropy (256 bits of randomness)
+- No structure or timing information
+- Compact representation without hyphens
+- Ideal for security-sensitive applications
 
 ### Custom Generator
 
-Define your own identifier generation logic for business-specific requirements.
+Provide your own generation logic:
 
 ```ruby
-class OrderNumber < Familia::Horreum
-  feature :object_identifier, generator: :custom
+class TimestampedItem < Familia::Horreum
+  feature :object_identifier,
+          generator: -> { "item_#{Familia.now.to_i}_#{SecureRandom.hex(4)}" }
 
-  field :customer_id, :amount, :created_at
-
-  # Custom generator implementation
-  def self.generate_identifier
-    timestamp = Time.now.strftime('%Y%m%d')
-    sequence = Redis.current.incr("order_sequence:#{timestamp}")
-    "ORD-#{timestamp}-#{sequence.to_s.rjust(6, '0')}"
-  end
+  field :data, :category
 end
 
-order = OrderNumber.create(customer_id: "cust123", amount: 99.99)
-order.objid  # => "ORD-20241215-000001"
+item = TimestampedItem.new(data: 'test')
+item.objid  # => "item_1693857600_a1b2c3d4"
 ```
 
-**Implementation Requirements:**
-- Must define `self.generate_identifier` class method
-- Should return a string identifier
-- Must handle uniqueness and collision scenarios
-- Consider thread safety for concurrent access
+**Custom Generator Requirements:**
+- Must be callable (Proc, lambda, or respond to `call`)
+- Should return unique strings
+- Avoid collision-prone patterns
 
-> **🔧 Advanced Pattern**
->
-> Custom generators can integrate with external services, database sequences, or business rules for sophisticated ID schemes.
+## Basic Usage
 
-## Advanced Configuration
+### Lazy Generation
 
-### Collision Detection
+Object identifiers are only generated when first accessed:
 
-Enable automatic collision detection and retry logic:
+```ruby
+user = User.new(email: 'test@example.com')
+
+# No objid generated yet
+user.instance_variable_get(:@objid)  # => nil
+
+# First access triggers generation
+user.objid  # => "01234567-89ab-7def-8000-123456789abc"
+
+# Subsequent access returns cached value
+user.objid  # => "01234567-89ab-7def-8000-123456789abc" (same)
+```
+
+### Preserved During Initialization
+
+Existing IDs are never overwritten:
+
+```ruby
+# Loading existing object from database
+existing_user = User.new(
+  objid: '01234567-89ab-7def-8000-existing123',
+  email: 'existing@example.com'
+)
+
+# Existing ID is preserved, not regenerated
+existing_user.objid  # => "01234567-89ab-7def-8000-existing123"
+```
+
+### Finding by Object ID
+
+```ruby
+# Save user first
+user = User.new(email: 'findme@example.com')
+user.save
+puts user.objid  # => "01234567-89ab-7def-8000-123456789abc"
+
+# Find by object identifier
+found = User.find_by_objid('01234567-89ab-7def-8000-123456789abc')
+found.email  # => "findme@example.com"
+
+# Returns nil if not found
+missing = User.find_by_objid('nonexistent')  # => nil
+```
+
+### Long-form Methods
+
+```ruby
+user.object_identifier           # Same as user.objid
+user.object_identifier = 'new'   # Same as user.objid = 'new'
+```
+
+## Provenance Tracking
+
+The system tracks which generator created each objid:
+
+```ruby
+# Generated by the system
+user = User.new
+user.objid                      # Triggers generation
+user.objid_generator_used       # => :uuid_v7
+
+# Loaded from database (provenance inferred from format)
+loaded = User.new(objid: 'f47ac10b-58cc-4372-a567-0e02b2c3d479')
+loaded.objid_generator_used     # => :uuid_v4 (inferred from format)
+
+# Unknown format
+custom = User.new(objid: 'custom-format-id')
+custom.objid_generator_used     # => nil (unknown provenance)
+```
+
+**Why Provenance Matters:**
+- Security features like ExternalIdentifier require known provenance
+- Debugging and auditing benefit from generator tracking
+- Format validation can be performed based on expected generator
+
+## Lookup Management
+
+### Automatic Mapping
+
+The feature maintains lookup tables for objid-to-primary-key mapping:
 
 ```ruby
 class Product < Familia::Horreum
-  feature :object_identifier,
-          generator: :hex,
-          collision_check: true,
-          max_retries: 5
+  feature :object_identifier
+  identifier_field :product_code  # Different from objid
 
-  field :name, :price, :sku
+  field :product_code, :name, :price
+end
+
+product = Product.new(product_code: 'PROD123', name: 'Widget')
+product.save
+
+# Lookup table maps objid to primary key
+Product.objid_lookup.class       # => Familia::DataType::HashKey
+Product.objid_lookup[product.objid]  # => "PROD123"
+```
+
+### Cleanup on Destroy
+
+```ruby
+product.destroy!
+
+# Lookup entry is automatically cleaned up
+Product.objid_lookup[product.objid]  # => nil
+```
+
+## Integration Patterns
+
+### Using objid as Primary Key
+
+```ruby
+class SimpleModel < Familia::Horreum
+  feature :object_identifier
+  identifier_field :objid  # Use objid as the primary key
+
+  field :data, :status
+end
+
+model = SimpleModel.new(data: 'test')
+model.save
+
+# No separate lookup needed - objid is the primary key
+SimpleModel.find_by_objid(model.objid) == SimpleModel.find(model.objid)  # => true
+```
+
+### Combining with External Identifiers
+
+```ruby
+class User < Familia::Horreum
+  feature :object_identifier    # Provides internal objid
+  feature :external_identifier # Derives public extid from objid
+
+  field :email, :name
+end
+
+user = User.new(email: 'test@example.com')
+user.save
+
+user.objid  # => "01234567-89ab-7def-8000-123456789abc" (internal)
+user.extid  # => "ext_abc123def456ghi789jkl" (public-facing)
+```
+
+### API Design Patterns
+
+```ruby
+# Internal operations use objid
+def sync_user_data(objid)
+  user = User.find_by_objid(objid)
+  # ... sync logic
+end
+
+# Public APIs use external identifiers
+class UsersController
+  def show
+    @user = User.find_by_extid(params[:id])  # Public ID
+    render json: {
+      id: @user.extid,     # Hide internal objid
+      email: @user.email,
+      name: @user.name
+    }
+  end
 end
 ```
 
-**Configuration Options:**
-- `collision_check`: Enable/disable collision detection (default: true)
-- `max_retries`: Maximum retry attempts on collision (default: 3)
-- `retry_delay`: Delay between retries in seconds (default: 0.001)
+## Error Handling
 
-### Identifier Validation
-
-Add custom validation logic for generated identifiers:
+### Invalid Generator Configuration
 
 ```ruby
-class SecureToken < Familia::Horreum
-  feature :object_identifier, generator: :custom
+# ❌ Invalid generator type
+class BadModel < Familia::Horreum
+  feature :object_identifier, generator: :invalid_type
+end
 
-  def self.generate_identifier
-    loop do
-      candidate = SecureRandom.alphanumeric(32)
-      # Ensure no ambiguous characters
-      next if candidate.match?(/[0O1lI]/)
-      return "st_#{candidate.downcase}"
-    end
+model = BadModel.new
+model.objid
+# => Familia::Problem: Invalid object identifier generator: :invalid_type
+```
+
+### Custom Generator Errors
+
+```ruby
+# ❌ Non-callable generator
+class BadCustomModel < Familia::Horreum
+  feature :object_identifier, generator: "not_callable"
+end
+
+model = BadCustomModel.new
+model.objid
+# => Familia::Problem: Invalid object identifier generator: "not_callable"
+```
+
+## Testing Strategies
+
+### Basic Generation Testing
+
+```ruby
+class ObjectIdentifierTest < Minitest::Test
+  def test_lazy_generation
+    user = User.new(email: 'test@example.com')
+
+    # No objid until first access
+    assert_nil user.instance_variable_get(:@objid)
+
+    # First access generates ID
+    objid = user.objid
+    assert_match UUID_V7_PATTERN, objid
+
+    # Subsequent access returns same ID
+    assert_equal objid, user.objid
   end
 
-  def self.valid_identifier?(id)
-    id.match?(/^st_[a-z0-9]{32}$/) && !id.match?(/[0O1lI]/)
+  def test_preserves_existing_objid
+    existing_id = '01234567-89ab-7def-8000-existing123'
+    user = User.new(objid: existing_id, email: 'test@example.com')
+
+    assert_equal existing_id, user.objid
+  end
+
+  def test_find_by_objid
+    user = User.new(email: 'findme@example.com')
+    user.save
+
+    found = User.find_by_objid(user.objid)
+    assert_equal user.email, found.email
+  end
+end
+```
+
+### Generator Strategy Testing
+
+```ruby
+class GeneratorTest < Minitest::Test
+  def test_uuid_v7_format
+    user = User.new  # Uses default :uuid_v7
+    objid = user.objid
+
+    assert_match(/\A[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\z/, objid)
+    assert_equal :uuid_v7, user.objid_generator_used
+  end
+
+  def test_uuid_v4_format
+    user = LegacyUser.new  # Uses :uuid_v4
+    objid = user.objid
+
+    assert_match(/\A[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\z/, objid)
+    assert_equal :uuid_v4, user.objid_generator_used
+  end
+
+  def test_hex_format
+    doc = SecureDocument.new  # Uses :hex
+    objid = doc.objid
+
+    assert_match(/\A[0-9a-f]{64}\z/, objid)  # 256 bits = 64 hex chars
+    assert_equal :hex, doc.objid_generator_used
+  end
+
+  def test_custom_generator
+    item = TimestampedItem.new
+    objid = item.objid
+
+    assert_match(/\Aitem_\d+_[0-9a-f]{8}\z/, objid)
+  end
+end
+```
+
+### Provenance Testing
+
+```ruby
+class ProvenanceTest < Minitest::Test
+  def test_provenance_inference
+    # UUID v7 format
+    user = User.new(objid: '01234567-89ab-7def-8000-123456789abc')
+    assert_equal :uuid_v7, user.objid_generator_used
+
+    # UUID v4 format
+    user = User.new(objid: 'f47ac10b-58cc-4372-a567-0e02b2c3d479')
+    assert_equal :uuid_v4, user.objid_generator_used
+
+    # Hex format
+    user = User.new(objid: 'a1b2c3d4e5f6789012345678901234567890abcdef1234567890123456789012')
+    assert_equal :hex, user.objid_generator_used
+
+    # Unknown format
+    user = User.new(objid: 'custom-format-id')
+    assert_nil user.objid_generator_used
   end
 end
 ```
 
 ## Performance Considerations
 
-### Generation Speed Benchmarks
+### Lookup Table Growth
 
-Different generators have varying performance characteristics:
+Each class maintains its own lookup table:
 
 ```ruby
-# Benchmark different generators
-require 'benchmark'
+# Monitor table sizes
+puts User.objid_lookup.length          # Number of objid mappings
+puts Product.objid_lookup.length       # Separate table per class
 
-Benchmark.bm(10) do |x|
-  x.report("UUID v4:")    { 10_000.times { SecureRandom.uuid } }
-  x.report("Hex 12:")     { 10_000.times { SecureRandom.hex(6) } }
-  x.report("Hex 24:")     { 10_000.times { SecureRandom.hex(12) } }
-  x.report("Custom:")     { 10_000.times { MyClass.generate_identifier } }
-end
+# Consider cleanup for large datasets
+User.objid_lookup.clear if rebuilding_data
+```
+
+### Lazy Generation Benefits
+
+```ruby
+# ✅ Efficient - objid only generated if needed
+users = 1000.times.map { User.new(email: "user#{_1}@example.com") }
+# No objids generated yet
+
+# objids generated only on access
+users.each { |user| puts user.objid }  # Now generated
 ```
 
 ### Memory Usage
 
-- **UUID v4**: 36 bytes per identifier
-- **Hex**: Variable based on length (2 bytes per hex character)
-- **Custom**: Depends on implementation
-
-### Collision Probability
-
-For hex generators, collision probability depends on length and volume:
-
 ```ruby
-# Approximate collision probability for hex identifiers
-def collision_probability(length, count)
-  total_space = 16 ** length
-  1 - Math.exp(-(count * (count - 1)) / (2.0 * total_space))
-end
+# Each objid uses approximately:
+# - UUID: 36 bytes (with hyphens)
+# - Hex: 64 bytes (256-bit)
+# - Custom: varies by format
 
-# Examples:
-collision_probability(12, 1_000_000)   # Very low
-collision_probability(8, 100_000)      # Consider longer length
+# Plus lookup table overhead per class
 ```
 
-> **📊 Sizing Guidance**
->
-> - **8 hex chars**: Good for < 10K objects
-> - **12 hex chars**: Good for < 1M objects
-> - **16 hex chars**: Good for < 100M objects
-> - **UUID v4**: Suitable for any scale
+## Best Practices
 
-## Integration Patterns
-
-### External API Integration
+### Choose Appropriate Generator
 
 ```ruby
-class ExternalReference < Familia::Horreum
+# ✅ UUID v7 for distributed systems needing sortability
+class DistributedEvent < Familia::Horreum
+  feature :object_identifier  # Default :uuid_v7
+end
+
+# ✅ UUID v4 for legacy system compatibility
+class LegacyRecord < Familia::Horreum
   feature :object_identifier, generator: :uuid_v4
-  field :external_id, :sync_status, :last_sync
-
-  def sync_to_external_api
-    response = ExternalAPI.create_record(
-      id: self.objid,  # Use generated ID
-      data: self.to_h
-    )
-
-    self.external_id = response['id']
-    self.sync_status = 'synced'
-    self.last_sync = Familia.now.to_i
-    save
-  end
-end
-```
-
-### Database Relationships
-
-```ruby
-class Order < Familia::Horreum
-  feature :object_identifier, generator: :custom
-  field :customer_id, :total_amount
-
-  def self.generate_identifier
-    "ORD-#{SecureRandom.hex(8).upcase}"
-  end
 end
 
-class OrderItem < Familia::Horreum
+# ✅ Hex for maximum security
+class CryptographicKey < Familia::Horreum
   feature :object_identifier, generator: :hex
-  field :order_id, :product_id, :quantity
-
-  def order
-    Order.load(order_id)
-  end
-end
-
-# Usage
-order = Order.create(customer_id: "cust123", total_amount: 299.99)
-item = OrderItem.create(
-  order_id: order.objid,  # Reference by generated ID
-  product_id: "prod456",
-  quantity: 2
-)
-```
-
-### Logging and Debugging
-
-Generated identifiers provide excellent debugging context:
-
-```ruby
-class UserSession < Familia::Horreum
-  feature :object_identifier, generator: :hex, length: 16
-  field :user_id, :ip_address, :user_agent
-
-  def log_activity(action)
-    logger.info(
-      "Session #{objid}: User #{user_id} performed #{action}",
-      session_id: objid,
-      user_id: user_id,
-      action: action,
-      timestamp: Familia.now.to_i
-    )
-  end
 end
 ```
 
-## Testing Strategies
-
-### Test Identifier Generation
+### Consistent Strategy Per Application
 
 ```ruby
-# test/models/user_test.rb
-require 'test_helper'
+# Define a base class with consistent strategy
+class ApplicationRecord < Familia::Horreum
+  feature :object_identifier, generator: :uuid_v7
+end
 
-class UserTest < Minitest::Test
-  def test_uuid_generation
-    user = User.create(name: "Test User")
+class User < ApplicationRecord
+  field :email, :name
+end
 
-    # Verify UUID format
-    assert_match(
-      /\A[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\z/i,
-      user.objid
-    )
-  end
-
-  def test_hex_generation
-    session = Session.create(user_id: "123")
-
-    # Verify hex format and length
-    assert_match(/\A[0-9a-f]{16}\z/i, session.objid)
-    assert_equal 16, session.objid.length
-  end
-
-  def test_custom_identifier_format
-    order = OrderNumber.create(customer_id: "cust123")
-
-    # Verify custom format
-    assert_match(/\AORD-\d{8}-\d{6}\z/, order.objid)
-  end
+class Order < ApplicationRecord
+  field :total, :status
 end
 ```
 
-### Mock Generators for Testing
+### Use objid for Internal Operations
 
 ```ruby
-# test/test_helper.rb
-class TestIdentifierGenerator
-  def self.generate_test_uuid
-    "test-#{Time.now.to_f}-#{rand(1000)}"
-  end
+# ✅ Internal APIs use objid
+def process_user(user_objid)
+  user = User.find_by_objid(user_objid)
+  # ... processing logic
 end
 
-# In tests
-class User < Familia::Horreum
-  feature :object_identifier, generator: :custom
-
-  def self.generate_identifier
-    if Rails.env.test?
-      TestIdentifierGenerator.generate_test_uuid
-    else
-      SecureRandom.uuid
-    end
-  end
+# ✅ Public APIs use external identifiers
+def public_user_profile(user_extid)
+  user = User.find_by_extid(user_extid)
+  # ... public profile logic
 end
 ```
 
 ## Troubleshooting
 
-### Common Issues
+### objid Returns Nil
 
-**Identifier Not Generated**
+Check that object has been properly initialized:
+
 ```ruby
-# Ensure feature is enabled
-class MyModel < Familia::Horreum
-  feature :object_identifier  # This line is required!
-  field :name
+user = User.new
+# Missing feature configuration?
+user.class.features_enabled.include?(:object_identifier)  # => Should be true
+
+# Access objid to trigger generation
+user.objid  # Should generate and return ID
+```
+
+### Lookup Not Working
+
+Ensure object was saved to populate lookup table:
+
+```ruby
+user = User.new(email: 'test@example.com')
+objid = user.objid  # Generates objid but doesn't save lookup
+
+User.find_by_objid(objid)  # => nil (lookup not saved)
+
+user.save  # Saves lookup mapping
+User.find_by_objid(objid)  # => user (now works)
+```
+
+### Generator Not Applied
+
+Check feature options syntax:
+
+```ruby
+# ❌ Wrong - hash instead of keyword arguments
+class User < Familia::Horreum
+  feature :object_identifier, { generator: :uuid_v4 }
+end
+
+# ✅ Correct - keyword arguments
+class User < Familia::Horreum
+  feature :object_identifier, generator: :uuid_v4
 end
 ```
 
-**Custom Generator Not Called**
+### Custom Generator Errors
+
 ```ruby
-# Verify method signature
-def self.generate_identifier  # Must be class method
-  # Implementation here
+# ✅ Valid custom generator
+class Model < Familia::Horreum
+  feature :object_identifier,
+          generator: -> { "prefix_#{SecureRandom.hex(8)}" }
+end
+
+# ❌ Invalid - not callable
+class Model < Familia::Horreum
+  feature :object_identifier, generator: "not_a_proc"
 end
 ```
-
-**Collision Detection Failing**
-```ruby
-# Check Valkey/Redis connectivity and permissions
-begin
-  MyModel.create(name: "test")
-rescue Familia::Problem => e
-  puts "Identifier collision: #{e.message}"
-end
-```
-
-### Debug Identifier Generation
-
-```ruby
-# Enable debug logging
-Familia.debug = true
-
-# Check feature configuration
-MyModel.feature_options(:object_identifier)
-#=> {generator: :uuid_v4, collision_check: true, max_retries: 3}
-
-# Verify generation manually
-MyModel.generate_identifier  # Should return new identifier
-```
-
----
 
 ## See Also
 
-- **[Technical Reference](../reference/api-technical.md#object-identifier-feature-v200-pre7)** - Implementation details and advanced patterns
-- **[External Identifiers Guide](feature-external-identifiers.md)** - Integration with external systems
-- **[Feature System Guide](feature-system.md)** - Understanding the feature architecture
-- **[Implementation Guide](implementation.md)** - Advanced configuration patterns
+- [External Identifiers](feature-external-identifiers.md) - Public-facing IDs derived from objid
+- [Feature System](feature-system.md) - Understanding Familia's feature architecture
+- [Relationships](feature-relationships.md) - Using object identifiers in relationships

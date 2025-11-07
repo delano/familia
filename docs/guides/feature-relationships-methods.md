@@ -25,27 +25,37 @@ end
 ### Generated Instance Methods
 
 **On Domain instances:**
-- **`add_to_customer_domains(customer_obj_or_id)`** - Add this domain to customer's domains collection
-- **`remove_from_customer_domains(customer_obj_or_id)`** - Remove this domain from customer's domains collection
-- **`in_customer_domains?(customer_obj_or_id)`** - Check if this domain is in customer's domains collection
+- **`add_to_customer_domains(customer, score = nil)`** - Add this domain to customer's domains collection
+- **`remove_from_customer_domains(customer)`** - Remove this domain from customer's domains collection
+- **`in_customer_domains?(customer)`** - Check if this domain is in customer's domains collection
+
+**For sorted_set collections:**
+- **`score_in_customer_domains(customer)`** - Get this domain's score in customer's domains collection
+
+**For list collections:**
+- **`position_in_customer_domains(customer)`** - Get this domain's position in customer's domains list
 
 ```ruby
 domain = Domain.new(name: "example.com")
 customer = Customer.new(name: "Acme Corp")
 
 # Explicit method calls
-domain.add_to_customer_domains(customer)
-domain.in_customer_domains?(customer)        # => true
+domain.add_to_customer_domains(customer)           # Uses calculated score
+domain.add_to_customer_domains(customer, 100.0)    # Uses explicit score
+domain.in_customer_domains?(customer)              # => true
+domain.score_in_customer_domains(customer)         # => 100.0 (for sorted_set)
 domain.remove_from_customer_domains(customer)
-domain.in_customer_domains?(customer)        # => false
+domain.in_customer_domains?(customer)              # => false
 ```
 
-### Collection Operator Support
+### Direct Collection Access
 
-**Ruby-like syntax with automatic bidirectional updates:**
+**Access the underlying DataType collection:**
 ```ruby
-customer.domains << domain                    # Equivalent to domain.add_to_customer_domains(customer)
-customer.domains.delete(domain.identifier)   # Removes relationship bidirectionally
+# Direct access to the collection (DataType object)
+customer.domains                              # Returns Familia::SortedSet/Set/List
+customer.domains.add(domain.identifier, 50.0) # Direct DataType operations
+customer.domains.remove(domain.identifier)    # Direct removal
 ```
 
 ### Method Naming Pattern
@@ -60,7 +70,7 @@ class Customer < Familia::Horreum
   class_participates_in :all_customers, score: :created_at
   class_participates_in :active_customers, score: ->(customer) {
     customer.status == 'active' ? customer.last_activity : 0
-  }
+  }, type: :sorted_set, bidirectional: true
 end
 ```
 
@@ -71,8 +81,16 @@ end
 - **`Customer.active_customers`** - Returns the active customers sorted set
 
 **Manual management (rarely needed):**
-- **`Customer.add_to_all_customers(customer)`** - Manually add customer to tracking
+- **`Customer.add_to_all_customers(customer, score = nil)`** - Manually add customer to tracking
 - **`Customer.remove_from_all_customers(customer)`** - Manually remove customer from tracking
+
+### Generated Instance Methods (when bidirectional: true)
+
+**On Customer instances:**
+- **`add_to_class_all_customers(score = nil)`** - Add this customer to the class-level collection
+- **`remove_from_class_all_customers`** - Remove this customer from the class-level collection
+- **`in_class_all_customers?`** - Check if this customer is in the class-level collection
+- **`score_in_class_all_customers`** - Get this customer's score in the class-level collection (sorted_set only)
 
 ### Collection Operations
 
@@ -131,55 +149,105 @@ recently_active = team.active_users.range_by_score(
 )
 ```
 
-## Indexing Methods (`indexed_by`)
+## Indexing Methods (`unique_index` and `multi_index`)
 
-The `indexed_by` declaration creates Valkey/Redis hash-based indexes for O(1) field lookups with automatic management.
+The indexing system provides two types of indexes for O(1) field lookups with automatic management.
 
-### Class-Level Indexing (`class_indexed_by`)
+### Class-Level Unique Indexing (`unique_index`)
+
+Creates 1:1 field-to-object mappings using Valkey/Redis HashKey structures.
 
 ```ruby
 class Customer < Familia::Horreum
   feature :relationships
   field :email, :username, :api_key
 
-  class_indexed_by :email, :email_lookup
-  class_indexed_by :username, :username_lookup
-  class_indexed_by :api_key, :api_key_lookup
+  unique_index :email, :email_lookup
+  unique_index :username, :username_lookup
+  unique_index :api_key, :api_key_lookup, query: false  # Skip find_by_* methods
 end
 ```
 
-### Generated Class Methods
+### Generated Class Methods (unique_index)
 
 **Index access:**
-- **`Customer.email_lookup`** - Returns the hash index directly
-- **`Customer.username_lookup`** - Returns the username hash index
-- **`Customer.api_key_lookup`** - Returns the API key hash index
+- **`Customer.email_lookup`** - Returns the HashKey index directly
+- **`Customer.username_lookup`** - Returns the username HashKey index
+- **`Customer.api_key_lookup`** - Returns the API key HashKey index
 
-**Convenience lookup methods:**
-- **`Customer.find_by_email(email)`** - Find customer ID by email (O(1) lookup)
-- **`Customer.find_by_username(username)`** - Find customer ID by username
-- **`Customer.find_by_api_key(api_key)`** - Find customer ID by API key
+**Convenience lookup methods (when query: true, default):**
+- **`Customer.find_by_email(email)`** - Find customer by email (O(1) lookup)
+- **`Customer.find_by_username(username)`** - Find customer by username
+- **`Customer.find_all_by_email([emails])`** - Bulk lookup by multiple emails
+- **`Customer.rebuild_email_lookup`** - Rebuild the email index
 
-### Generated Instance Methods (rarely used manually)
+### Instance-Scoped Unique Indexing
 
-**Index management:**
-- **`customer.add_to_class_email_lookup`** - Manually add to email index
-- **`customer.remove_from_class_email_lookup`** - Manually remove from email index
-- **`customer.update_class_email_lookup(old_email)`** - Update index when email changes
+Creates unique indexes within a parent object's scope:
+
+```ruby
+class Employee < Familia::Horreum
+  feature :relationships
+  field :badge_number
+
+  unique_index :badge_number, :badge_index, within: Company
+end
+```
+
+**Generated methods on Company:**
+- **`company.find_by_badge_number(badge)`** - Find employee by badge within company
+- **`company.find_all_by_badge_number([badges])`** - Bulk lookup within company
+
+**Generated methods on Employee:**
+- **`employee.add_to_company_badge_index(company)`** - Add to company's badge index
+- **`employee.remove_from_company_badge_index(company)`** - Remove from company's badge index
+- **`employee.update_in_company_badge_index(company, old_badge)`** - Update badge in index
+
+### Multi-Value Indexing (`multi_index`)
+
+Creates 1:many field-to-objects mappings using UnsortedSet structures:
+
+```ruby
+class Employee < Familia::Horreum
+  feature :relationships
+  field :department
+
+  multi_index :department, :dept_index, within: Company
+end
+```
+
+**Generated methods on Company:**
+- **`company.find_all_by_department(dept)`** - Find all employees in department
+- **`company.dept_index`** - Access the multi-index structure
+
+**Generated methods on Employee:**
+- **`employee.add_to_company_dept_index(company)`** - Add to company's department index
+- **`employee.remove_from_company_dept_index(company)`** - Remove from company's department index
 
 ### Usage Examples
 
 ```ruby
-# Automatic indexing on save
+# Automatic indexing on save (class-level unique indexes only)
 customer = Customer.new(
   email: "alice@example.com",
   username: "alice123",
   api_key: "ak_abcd1234"
 )
-customer.save  # Automatically added to all indexes
+customer.save  # Automatically added to class-level indexes
 
 # O(1) lookups
-customer_id = Customer.find_by_email("alice@example.com")
+customer = Customer.find_by_email("alice@example.com")
+customers = Customer.find_all_by_email(["alice@example.com", "bob@example.com"])
+
+# Instance-scoped indexing (manual)
+company = Company.new(name: "Acme Corp")
+employee = Employee.new(badge_number: "12345", department: "engineering")
+employee.add_to_company_badge_index(company)
+employee.add_to_company_dept_index(company)
+
+# Scoped lookups
+found_employee = company.find_by_badge_number("12345")
+eng_employees = company.find_all_by_department("engineering")
 customer = Customer.load(customer_id) if customer_id
 
 # Direct index access
