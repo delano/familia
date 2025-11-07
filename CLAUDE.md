@@ -198,23 +198,9 @@ end
 
 Familia has **good thread safety** for standard multi-threaded environments:
 
-#### ✅ Thread-Safe Components
-- **DataType Immutability**: All DataType instances (List, Set, SortedSet, HashKey) are frozen after creation
-- **DatabaseLogger**: Uses Mutex protection for command buffer
-- **DatabaseCommandCounter**: Uses AtomicFixnum for atomic counter operations
-- **Field Registration**: Generally safe due to Ruby GIL protection during class modification
-- **Module Configuration**: Eventually consistent (reads during writes may see intermediate state)
-- **Transactions/Pipelines**: Work correctly in multi-threaded environments - each thread has its own root fiber with isolated fiber-local storage
-
-#### ⚠️ Partially Safe Components (Tested, Works Due to Ruby GIL)
-- **Connection Chain Lazy Initialization**: No explicit synchronization, relies on Ruby GIL
-- **Field Collections Lazy Initialization**: No explicit synchronization, relies on Ruby GIL
-- **Middleware Registration**: Version increment not atomic, but appears to work in practice
-- **Feature Registry**: No explicit synchronization for concurrent feature registration
-
 ### Testing Thread Safety
 
-Comprehensive thread safety tests are available in `try/thread_safety/`:
+Thread safety tests are available in `try/thread_safety/`:
 - **100% passing** (56/56 tests)
 - **CyclicBarrier pattern** for maximum contention testing
 - **Test execution**: ~300ms for full suite with 1,000+ concurrent operations
@@ -232,51 +218,3 @@ bundle exec try --agent try/unit/thread_safety_monitor_try.rb
 2. **Use Immutable DataTypes**: Leverage the fact that DataType instances are frozen
 3. **Test Under Concurrency**: Use the patterns in `try/thread_safety/` to verify thread safety
 4. **Enable Production Monitoring**: Use `Familia.start_monitoring!` to track contention in production
-
-### Deployment Recommendations
-
-**Multi-Threaded Servers** (✅ Tested Compatible):
-- Puma with multiple threads - verified with concurrent thread tests
-- Standard Ruby threading (Thread.new) - extensively tested
-- Concurrent Ruby primitives - tested with CyclicBarrier, CountDownLatch
-
-**Multi-Threaded Servers** (⚠️ Theoretically Compatible, Not Yet Tested):
-- Sidekiq (background jobs) - uses Ruby threads, should work but not integration-tested
-- Other thread-based job processors - likely compatible but verify with testing
-
-**Note**: Transactions and pipelines use fiber-local storage which is isolated per-thread. Thread safety tests verify correct behavior with 10-100 concurrent Ruby threads. Integration testing recommended for specific frameworks like Sidekiq.
-
-### Production Monitoring
-
-Familia includes built-in thread safety monitoring with microsecond precision:
-
-```ruby
-# Enable monitoring
-Familia.start_monitoring!
-
-# ... application runs ...
-
-# Get comprehensive report with microsecond precision
-report = Familia.thread_safety_report
-puts "Health Score: #{report[:health]}/100"
-puts "Contentions: #{report[:summary][:mutex_contentions]}"
-puts "Hot spots:"
-report[:hot_spots].each do |spot|
-  puts "  #{spot[:location]}: #{spot[:contentions]} contentions, avg wait: #{spot[:avg_wait_μs]}μs"
-end
-
-# Export metrics for APM tools
-metrics = Familia.thread_safety_metrics
-# Returns: { 'familia.thread_safety.mutex_contentions' => 42, ... }
-
-# Stop monitoring
-Familia.stop_monitoring!
-```
-
-**Key Features:**
-- **Microsecond-native precision**: All timing stored as integers in microseconds (μs) for maximum precision
-- **Contention tracking**: Identifies hot spots with microsecond-level wait time analysis
-- **Health scoring**: 0-100 scale with automated recommendations based on contention patterns
-- **APM integration**: Export format compatible with DataDog, NewRelic, etc.
-- **Zero overhead when disabled**: No performance impact until `start_monitoring!` is called
-- **Consistent timing**: Uses same `Familia.now_in_μs` standard as DatabaseLogger
