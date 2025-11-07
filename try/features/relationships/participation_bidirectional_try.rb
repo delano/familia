@@ -42,12 +42,12 @@ class ProjectUser < Familia::Horreum
   field :role
 
   # Define bidirectional participation relationships
-  # These will auto-generate reverse collection methods
-  participates_in ProjectTeam, :members          # Generates: user.project_teams (pluralized)
-  participates_in ProjectTeam, :admins           # Also adds to user.project_teams (union)
-  participates_in ProjectOrganization, :employees # Generates: user.project_organizations (pluralized)
+  # These will auto-generate reverse collection methods with _instances suffix
+  participates_in ProjectTeam, :members          # Generates: user.project_team_instances
+  participates_in ProjectTeam, :admins           # Also adds to user.project_team_instances (union)
+  participates_in ProjectOrganization, :employees # Generates: user.project_organization_instances
 
-  # Custom reverse method name
+  # Custom reverse method name (user chooses the base name)
   participates_in ProjectOrganization, :contractors, as: :contracting_orgs
 
   def init
@@ -101,7 +101,7 @@ old_way_teams.map(&:name).sort
 #=> ["Backend Team", "Frontend Team"]
 
 ## Debug - Check if methods are defined
-@user1.respond_to?(:project_teams)
+@user1.respond_to?(:project_team_instances)
 #=> true
 
 ## Debug - Check participations data
@@ -123,72 +123,72 @@ ProjectTeam.load_multi(test_ids).compact.map(&:name).sort
 #=> ["Backend Team", "Frontend Team"]
 
 ## Debug - Check what project_teams method returns
-result = @user1.project_teams
+result = @user1.project_team_instances
 puts "project_teams method returns: #{result.inspect}"
 result.map(&:name).sort
 #=> ["Backend Team", "Frontend Team"]
 
 ## Test NEW way - clean and intuitive reverse collection method
-user_teams = @user1.project_teams  # Auto-generated pluralized from ProjectTeam class name
+user_teams = @user1.project_team_instances  # Auto-generated pluralized from ProjectTeam class name
 user_teams.map(&:name).sort
 #=> ["Backend Team", "Frontend Team"]
 
 ## Test that both users and admins collections are included (union behavior)
-all_team_participations = @user1.project_teams  # Should include both members and admins
+all_team_participations = @user1.project_team_instances  # Should include both members and admins
 all_team_participations.map(&:name).sort
 #=> ["Backend Team", "Frontend Team"]
 
 ## Test IDs-only method (efficient, no object loading)
-user_team_ids = @user1.project_teams_ids
+user_team_ids = @user1.project_team_ids
 user_team_ids.sort
 #=> [@team1.identifier, @team2.identifier].sort
 
 ## Test boolean check method
-@user1.project_teams?
+@user1.project_team?
 #=> true
 
 ## Test count method returns correct number
-@user1.project_teams_count
+@user1.project_team_count
 #=> 2
 
 ## Test organizations (different target class)
-user_orgs = @user1.project_organizations
+user_orgs = @user1.project_organization_instances
 user_orgs.map(&:name).sort
 #=> ["FreelanceCorp", "TechCorp Inc"]
 
 ## Test custom reverse method name
-contracting_orgs = @user1.contracting_orgs
-contracting_orgs.map(&:name)
+contracting_orgs_instances = @user1.contracting_orgs_instances
+contracting_orgs_instances.map(&:name)
 #=> ["FreelanceCorp"]
 
 ## Test user with fewer relationships
-@user2.project_teams.map(&:name)
+@user2.project_team_instances.map(&:name)
 #=> ["Design Team"]
 
 ## Test user2 count
-@user2.project_teams_count
+@user2.project_team_count
 #=> 1
 
 ## Test user2 organizations
-@user2.project_organizations.map(&:name)
+@user2.project_organization_instances.map(&:name)
 #=> ["TechCorp Inc"]
 
 ## Test create empty user with no memberships
 @user3 = ProjectUser.new(email: 'charlie@example.com', name: 'Charlie')
 @user3.save
-@user3.project_teams
+@user3.project_team_instances
 #=> []
 
 ## Test empty user with IDs, check and count
-@user3.project_teams_ids
+@user3.project_team_ids
 #=> []
 
 ## Test empty user boolean check
-@user3.project_teams?
+@user3.project_team?
 #=> false
 
 ## Test empty user count
-@user3.project_teams_count
+@user3.project_team_count
 #=> 0
 
 ## Test that forward direction still works (backwards compatibility)
@@ -206,7 +206,7 @@ team1_members.map(&:name)
 #=> ["Alice"]
 
 ## Test bidirectional consistency - reverse direction
-user1_teams = @user1.project_teams
+user1_teams = @user1.project_team_instances
 user1_team_ids = user1_teams.map(&:identifier)
 user1_team_ids.include?(@team1.identifier)
 #=> true
@@ -219,11 +219,11 @@ team1_all_members = @team1.members.to_a.sort
 #=> [@user1.identifier, @user2.identifier].sort
 
 ## Test both users show up in team1 - user1
-@user1.project_teams.map(&:name).include?("Frontend Team")
+@user1.project_team_instances.map(&:name).include?("Frontend Team")
 #=> true
 
 ## Test both users show up in team1 - user2
-@user2.project_teams.map(&:name).include?("Frontend Team")
+@user2.project_team_instances.map(&:name).include?("Frontend Team")
 #=> true
 
 ## Test cleanup - remove relationships
@@ -231,10 +231,10 @@ team1_all_members = @team1.members.to_a.sort
 
 ## Test cache invalidation on removal
 @user1.instance_variable_set(:@reverse_collections_cache, nil)
-updated_teams = @user1.project_teams.map(&:name).sort
+updated_teams = @user1.project_team_instances.map(&:name).sort
 updated_teams.include?("Frontend Team")
 #=> false
 
 ## Test still admin of team1 after member removal
-@user1.project_teams.map(&:name).include?("Frontend Team")
+@user1.project_team_instances.map(&:name).include?("Frontend Team")
 #=> true

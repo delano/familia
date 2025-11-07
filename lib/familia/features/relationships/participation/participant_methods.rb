@@ -1,7 +1,6 @@
 # lib/familia/features/relationships/participation/participant_methods.rb
 
 require_relative '../collection_operations'
-require 'dry/inflector'
 
 module Familia
   module Features
@@ -86,53 +85,52 @@ module Familia
           # Generate reverse collection methods on participant class for bidirectional access
           #
           # Creates methods like:
-          # - user.teams (returns Array of Team instances)
-          # - user.team_ids (returns Array of team IDs)
-          # - user.teams? (returns Boolean)
-          # - user.teams_count (returns Integer)
+          # - user.team_instances (returns Array of Team instances)
+          # - user.team_ids (returns Array of IDs)
+          # - user.team? (returns Boolean)
+          # - user.team_count (returns Integer)
           #
           # @param participant_class [Class] The participant class (e.g., User)
           # @param target_class [Class] The target class (e.g., Team)
-          # @param custom_name [Symbol, nil] Custom method name override
+          # @param custom_name [Symbol, nil] Custom method name override (base name without suffix)
           # @param collection_names [Array<Symbol>, nil] Specific collections to include (nil = all)
           #
           def self.build_reverse_collection_methods(participant_class, target_class, custom_name = nil, collection_names = nil)
-            # Initialize inflector for pluralization
-            inflector = Dry::Inflector.new
-
-            # Determine method name - either custom or pluralized target class name
-            method_name = if custom_name
+            # Determine base method name - either custom or target class config_name
+            # e.g., "project_team" or "contracting_org"
+            base_name = if custom_name
               custom_name.to_s
             else
-              # Use config_name and pluralize it (e.g., "project_team" -> "project_teams")
-              inflector.pluralize(target_class.config_name)
+              # Use config_name as-is (e.g., "project_team")
+              target_class.config_name
             end
 
             # Store collection names as string array for matching
             collections_filter = collection_names&.map(&:to_s)
 
-            # Generate the main collection method (e.g., user.teams)
-            participant_class.define_method(method_name) do
+            # Generate the main collection method (e.g., user.project_team_instances)
+            participant_class.define_method("#{base_name}_instances") do
               @reverse_collections_cache ||= {}
-              @reverse_collections_cache[method_name] ||= begin
+              cache_key = "#{base_name}_instances"
+              @reverse_collections_cache[cache_key] ||= begin
                 ids = participating_ids_for_target(target_class, collections_filter)
                 # Use load_multi for Horreum objects (stored as Redis hashes)
                 target_class.load_multi(ids).compact
               end
             end
 
-            # Generate the IDs-only method (e.g., user.team_ids)
-            participant_class.define_method("#{method_name}_ids") do
+            # Generate the IDs-only method (e.g., user.project_team_ids)
+            participant_class.define_method("#{base_name}_ids") do
               participating_ids_for_target(target_class, collections_filter)
             end
 
-            # Generate the boolean check method (e.g., user.teams?)
-            participant_class.define_method("#{method_name}?") do
+            # Generate the boolean check method (e.g., user.project_team?)
+            participant_class.define_method("#{base_name}?") do
               !participating_ids_for_target(target_class, collections_filter).empty?
             end
 
-            # Generate the count method (e.g., user.teams_count)
-            participant_class.define_method("#{method_name}_count") do
+            # Generate the count method (e.g., user.project_team_count)
+            participant_class.define_method("#{base_name}_count") do
               participating_ids_for_target(target_class, collections_filter).size
             end
           end
