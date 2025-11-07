@@ -45,15 +45,40 @@ module Familia
       # - Updates class-level indexes
       # - Adds to instances collection
       #
+      # ## Transaction Safety
+      #
+      # This method CANNOT be called within a transaction context. The save process
+      # requires reading current state to validate unique constraints, which would
+      # return uninspectable Redis::Future objects inside transactions.
+      #
+      # ### Correct Pattern:
+      #     customer = Customer.new(email: 'test@example.com')
+      #     customer.save  # Validates unique constraints here
+      #
+      #     customer.transaction do
+      #       # Perform other atomic operations
+      #       customer.increment(:login_count)
+      #       customer.hset(:last_login, Time.now.to_i)
+      #     end
+      #
+      # ### Incorrect Pattern:
+      #     Customer.transaction do
+      #       customer = Customer.new(email: 'test@example.com')
+      #       customer.save  # Raises Familia::OperationModeError
+      #     end
+      #
       # @param update_expiration [Boolean] Whether to refresh key expiration (default: true)
       # @return [Boolean] true on success
       #
       # @raise [Familia::OperationModeError] If called within a transaction
       # @raise [Familia::RecordExistsError] If unique index constraint violated
       #
-      # @example
+      # @example Basic usage
       #   user = User.new(email: "john@example.com")
       #   user.save  # => true
+      #
+      # @see #save_if_not_exists! For conditional saves
+      # @see #transaction For atomic operations after save
       #
       def save(update_expiration: true)
         start_time = Familia.now_in_μs if Familia.debug?
