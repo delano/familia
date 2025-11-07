@@ -169,7 +169,7 @@ p [:PLOP, (@score - @domain.created_at).abs]
 
 ## Test participation data includes correct target class
 @domain_participation = @domain_participations.first
-@domain_participation[:target_class] == SymbolResolutionCustomer
+@domain_participation.target_class == 'SymbolResolutionCustomer'
 #=> true
 
 ## Test current_participations works with String target class
@@ -179,7 +179,7 @@ p [:PLOP, (@score - @domain.created_at).abs]
 
 ## Test participation data includes correct collection name
 @tag_participation = @tag_participations.first
-@tag_participation[:collection_name] == :tags
+@tag_participation.collection_name == :tags
 #=> true
 
 ## Test removal works correctly with Symbol target class

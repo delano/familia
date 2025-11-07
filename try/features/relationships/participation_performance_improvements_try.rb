@@ -93,17 +93,16 @@ end
 ## Test membership contains expected target class
 @memberships = @domain.current_participations
 @membership = @memberships.first
-p [:PLOP, @membership[:target_class], @membership[:target_class]]
-@membership[:target_class] == ::PerfTestCustomer
+@membership.target_class == 'PerfTestCustomer'
 #=> true
 
 ## Test membership contains collection name
 @memberships = @domain.current_participations
-@membership[:collection_name] == :domains
+@membership.collection_name == :domains
 #=> true
 
 ## Test membership contains type information
-@membership[:type] == :sorted_set
+@membership.type == :sorted_set
 #=> true
 
 ## Test remove from all participation collections works efficiently

@@ -1,6 +1,7 @@
 # lib/familia/features/relationships/participation.rb
 
 require_relative 'participation_relationship'
+require_relative 'participation_membership'
 require_relative 'collection_operations'
 require_relative 'participation/participant_methods'
 require_relative 'participation/target_methods'
@@ -427,21 +428,9 @@ module Familia
           # @see #track_participation_in for reverse index management
           # @since 1.0.0
           def calculate_participation_score(target_class, collection_name)
-            # Find the participation configuration
-            # details.target_class is always a resolved Class object now
+            # Find the participation configuration using the new matches? method
             participation_config = self.class.participation_relationships.find do |details|
-              # Normalize the passed target_class to match our stored Class
-              comparison_target = target_class
-              comparison_target = comparison_target.name if comparison_target.is_a?(Class)
-              comparison_target = comparison_target.to_s
-
-              # Compare base class names (without namespace) to handle anonymous class wrappers
-              # e.g., "#<Class:0x123>::SymbolResolutionCustomer" vs "SymbolResolutionCustomer"
-              stored_class_base = details.target_class.name.split('::').last
-              comparison_target_base = comparison_target.split('::').last
-
-              stored_class_base == comparison_target_base &&
-                details.collection_name == collection_name
+              details.matches?(target_class, collection_name)
             end
 
             return current_score unless participation_config
@@ -671,33 +660,38 @@ module Familia
                 # Use Horreum's DataType accessor to get the collection
                 collection = target_instance.send(config.collection_name)
 
-                # Check membership using DataType methods
-                membership_data = {
-                  _original_target: config._original_target,
-                  target_class: config.target_class,
-                  target_id: target_id,
-                  collection_name: config.collection_name,
-                  type: config.type,
-                }
+                # Check membership using DataType methods and build ParticipationMembership
+                score = nil
+                decoded_score = nil
+                position = nil
 
                 case config.type
                 when :sorted_set
                   score = collection.score(identifier)
                   next unless score
 
-                  membership_data[:score] = score
-                  membership_data[:decoded_score] = decode_score(score) if respond_to?(:decode_score)
+                  decoded_score = decode_score(score) if respond_to?(:decode_score)
                 when :set
                   is_member = collection.member?(identifier)
                   next unless is_member
                 when :list
                   position = collection.to_a.index(identifier)
                   next unless position
-
-                  membership_data[:position] = position
                 end
 
-                memberships << membership_data
+                # Create ParticipationMembership instance
+                # Use target_class_base to get clean class name without namespace
+                membership = ParticipationMembership.new(
+                  target_class: config.target_class_base,
+                  target_id: target_id,
+                  collection_name: config.collection_name,
+                  type: config.type,
+                  score: score,
+                  decoded_score: decoded_score,
+                  position: position
+                )
+
+                memberships << membership
               rescue StandardError => e
                 Familia.debug "[#{collection_key}] Error checking membership: #{e.message}"
                 next

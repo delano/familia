@@ -120,12 +120,12 @@ end
 #=> true
 
 ## Test membership includes target information
-@customer_membership = @domain2_memberships.find { |m| m[:target_id] == @customer.identifier }
-@customer_membership.is_a?(Hash) || @customer_membership.nil?
+@customer_membership = @domain2_memberships.find { |m| m.target_id == @customer.identifier }
+@customer_membership.is_a?(Familia::Features::Relationships::ParticipationMembership) || @customer_membership.nil?
 #=> true
 
 ## Test membership includes collection name
-@customer_membership && @customer_membership[:collection_name] == :domains || true
+@customer_membership && @customer_membership.collection_name == :domains || true
 #=> true
 
 ## Test score type comparison works with different types
