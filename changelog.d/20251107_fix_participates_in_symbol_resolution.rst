@@ -13,7 +13,11 @@
 .. Fixed
 .. -----
 
-- **Participation Relationships with Symbol/String Target Classes**: Fixed a NoMethodError that occurred when calling `participates_in` with a Symbol or String target class instead of a Class object. The error was: ``private method 'member_by_config_name' called for module Familia``.
+- **Participation Relationships with Symbol/String Target Classes**: Fixed two bugs that occurred when calling `participates_in` with a Symbol or String target class instead of a Class object.
+
+  **Bug 1 - NoMethodError during relationship definition**:
+
+  The error was: ``private method 'member_by_config_name' called for module Familia``.
 
   **Background**: The `participates_in` method supports flexible target class specifications:
 
@@ -30,7 +34,15 @@
 
   **Solution**: Removed the redundant resolution code and now uses the already-resolved class from the public API, simplifying the implementation and fixing the visibility issue.
 
-  **Impact**: Projects using Symbol or String target classes in `participates_in` declarations will now work correctly. This pattern is common when avoiding circular dependencies or when target classes are defined in different files.
+  **Bug 2 - NoMethodError in current_participations**:
+
+  When calling `current_participations` on objects that used Symbol/String target classes, it would fail with ``undefined method 'familia_name' for Symbol``.
+
+  **Root Cause**: The `current_participations` method was calling `.familia_name` on `config.target_class`, which stores the original Symbol/String value passed to `participates_in`.
+
+  **Solution**: Use the resolved `target_class` variable instead of the stored config value. The resolved class is already available from the `Familia.resolve_class` call earlier in the method.
+
+  **Impact**: Projects using Symbol or String target classes in `participates_in` declarations will now work correctly throughout the entire lifecycle, including relationship definition, method generation, and participation queries. This pattern is common when avoiding circular dependencies or when target classes are defined in different files.
 
 .. Security
 .. --------
@@ -41,10 +53,12 @@
 .. AI Assistance
 .. -------------
 
-- **Root Cause Analysis**: Claude Code analyzed the error stack trace and identified that a private method was being called as a public method from outside the Familia module.
+- **Root Cause Analysis**: Claude Code analyzed the error stack trace from the implementing project and identified that a private method was being called as a public method from outside the Familia module.
 - **Fix Implementation**: Claude Code identified redundant class resolution code and simplified it to use the already-resolved class from the public API.
 - **Test Coverage**: Claude Code created comprehensive regression tests including:
 
   - Feature-level tests for Symbol/String target class resolution in participation relationships
   - Unit tests for the `Familia.resolve_class` public API
   - Edge case coverage for case-insensitive resolution and modularized classes
+
+- **Second Bug Discovery**: During test execution, Claude Code discovered a related bug in `current_participations` that was also failing with Symbol/String target classes. The test coverage revealed that `.familia_name` was being called on the unresolved config value instead of the resolved class instance. This bug was fixed in the same session, ensuring complete Symbol/String target class support.
