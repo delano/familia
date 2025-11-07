@@ -11,7 +11,7 @@ module Familia
       # and class_participates_in declarations.
       #
       ParticipationRelationship = Data.define(
-        :target_class,        # Class object that owns the collection
+        :target_class,        # Class object OR Symbol/String that resolves to the collection owner
         :collection_name,     # Symbol name of the collection (e.g., :members, :domains)
         :score,               # Proc/Symbol/nil - score calculator for sorted sets
         :type,                # Symbol - collection type (:sorted_set, :set, :list)
@@ -20,10 +20,13 @@ module Familia
         #
         # Get the normalized config name for the target class
         #
-        # @return [String] The config name (e.g., "user", "perf_test_customer")
+        # Handles Symbol/String target classes by resolving them first
+        #
+        # @return [String, nil] The config name (e.g., "user", "perf_test_customer")
         #
         def target_class_config_name
-          target_class.config_name
+          resolved = Familia.resolve_class(target_class)
+          resolved&.config_name
         end
       end
     end

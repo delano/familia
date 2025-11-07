@@ -283,12 +283,8 @@ module Familia
               bidirectional: bidirectional,
             )
 
-            # Resolve target class if it's a symbol/string
-            actual_target_class = if target_class.is_a?(Class)
-              target_class
-            else
-              Familia.member_by_config_name(target_class)
-            end
+            # Use the already-resolved class (no need to resolve again)
+            actual_target_class = resolved_class
 
             # STEP 0: Add participations tracking field to PARTICIPANT class (Domain)
             # This creates the proper key: "domain:123:participations" (not "domain:123:object:participations")
@@ -582,7 +578,7 @@ module Familia
 
                 # Check membership using DataType methods
                 membership_data = {
-                  target_class: config.target_class.familia_name,
+                  target_class: target_class.familia_name,
                   target_id: target_id,
                   collection_name: config.collection_name,
                   type: config.type,
