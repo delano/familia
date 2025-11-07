@@ -18,6 +18,7 @@ participates_in Organization, :members, score: :joined_at, bidirectional: true
 
 **unique_index** - Fast unique lookups ("find object by unique field value")
 ```ruby
+unique_index :email, :email_index                        # Class-level: User.find_by_email()
 unique_index :email, :email_index, within: Organization  # Scoped: org.find_by_email()
 ```
 
@@ -89,7 +90,8 @@ class Customer < Familia::Horreum
   feature :relationships
 
   participates_in Organization, :members    # Customer belongs to org
-  unique_index :email, :email_index, within: Organization  # Find by unique email
+  unique_index :email, :email_index        # Class-level: Customer.find_by_email()
+  multi_index :status, :status_index, within: Organization  # Scoped: org.find_all_by_status()
 end
 ```
 
