@@ -1,3 +1,7 @@
+# examples/datatype_standalone.rb
+#
+# frozen_string_literal: true
+
 #!/usr/bin/env ruby
 # examples/datatype_standalone.rb
 

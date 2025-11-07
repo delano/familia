@@ -1,3 +1,7 @@
+# try/features/encrypted_fields/fresh_key_derivation_try.rb
+#
+# frozen_string_literal: true
+
 # try/features/encryption_fields/fresh_key_derivation_try.rb
 
 require 'base64'

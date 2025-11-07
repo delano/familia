@@ -1,3 +1,7 @@
+# try/features/encryption/config_persistence_try.rb
+#
+# frozen_string_literal: true
+
 # try/encryption/debug2_try.rb
 
 # - Tests configuration persistence between test sections

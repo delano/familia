@@ -1,4 +1,6 @@
 # lib/familia/connection/transaction_core.rb
+#
+# frozen_string_literal: true
 
 module Familia
   module Connection

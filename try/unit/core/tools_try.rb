@@ -1,3 +1,7 @@
+# try/unit/core/tools_try.rb
+#
+# frozen_string_literal: true
+
 # try/core/tools_try.rb
 
 # Test Familia::Tools - key migration and utility functions

@@ -1,4 +1,6 @@
 # lib/familia/json_serializer.rb
+#
+# frozen_string_literal: true
 
 module Familia
   # JsonSerializer provides a high-performance JSON interface using OJ

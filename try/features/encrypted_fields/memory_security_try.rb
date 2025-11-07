@@ -1,3 +1,7 @@
+# try/features/encrypted_fields/memory_security_try.rb
+#
+# frozen_string_literal: true
+
 # try/features/encryption_fields/memory_security_try.rb
 
 require 'base64'

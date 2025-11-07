@@ -1,3 +1,7 @@
+# try/features/encrypted_fields/secure_by_default_behavior_try.rb
+#
+# frozen_string_literal: true
+
 # try/features/encryption_fields/secure_by_default_behavior_try.rb
 
 require_relative '../../support/helpers/test_helpers'

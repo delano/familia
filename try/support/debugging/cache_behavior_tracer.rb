@@ -1,3 +1,7 @@
+# try/support/debugging/cache_behavior_tracer.rb
+#
+# frozen_string_literal: true
+
 #!/usr/bin/env ruby
 # Debug script to trace encryption cache behavior and key derivation
 

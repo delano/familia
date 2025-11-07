@@ -1,3 +1,7 @@
+# try/integration/models/customer_try.rb
+#
+# frozen_string_literal: true
+
 # try/models/customer_try.rb
 
 # Customer Tryouts

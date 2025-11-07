@@ -1,3 +1,7 @@
+# try/integration/conventional_inheritance_try.rb
+#
+# frozen_string_literal: true
+
 require_relative '../support/helpers/test_helpers'
 
 # Define test classes in global namespace

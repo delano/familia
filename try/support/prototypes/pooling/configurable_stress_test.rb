@@ -1,3 +1,7 @@
+# try/support/prototypes/pooling/configurable_stress_test.rb
+#
+# frozen_string_literal: true
+
 # try/pooling/configurable_stress_test.rb
 #
 # Configurable Stress Test - Systematic testing using StressTestConfig

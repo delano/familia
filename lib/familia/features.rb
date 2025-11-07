@@ -1,4 +1,6 @@
 # lib/familia/features.rb
+#
+# frozen_string_literal: true
 
 # Load the Autoloader first, then use it to load all other features
 require_relative 'features/autoloader'

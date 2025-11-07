@@ -1,4 +1,6 @@
 # lib/familia/features/relationships/indexing/unique_index_generators.rb
+#
+# frozen_string_literal: true
 
 module Familia
   module Features

@@ -1,3 +1,7 @@
+# try/unit/core/middleware_thread_safety_try.rb
+#
+# frozen_string_literal: true
+
 # Thread Safety Tests for DatabaseLogger Middleware
 #
 # These tests specifically target potential race conditions and concurrency issues

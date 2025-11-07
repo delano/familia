@@ -1,5 +1,7 @@
 # try/integration/relationships_persistence_round_trip_try.rb
 #
+# frozen_string_literal: true
+
 # CRITICAL PRIORITY: Full Persistence Round-Trip Testing for Relationships
 #
 # PURPOSE:

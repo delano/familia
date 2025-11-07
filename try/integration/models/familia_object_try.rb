@@ -1,3 +1,7 @@
+# try/integration/models/familia_object_try.rb
+#
+# frozen_string_literal: true
+
 # try/models/familia_object_try.rb
 
 require_relative '../../support/helpers/test_helpers'

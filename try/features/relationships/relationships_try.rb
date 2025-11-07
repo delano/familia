@@ -1,5 +1,7 @@
 # try/features/relationships/relationships_try.rb
 #
+# frozen_string_literal: true
+
 # Simplified Familia v2 relationship functionality tests - focusing on core working features
 #
 

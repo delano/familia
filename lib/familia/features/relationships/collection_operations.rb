@@ -1,4 +1,6 @@
 # lib/familia/features/relationships/collection_operations.rb
+#
+# frozen_string_literal: true
 
 module Familia
   module Features

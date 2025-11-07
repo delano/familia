@@ -1,3 +1,7 @@
+# try/support/debugging/debug_provider.rb
+#
+# frozen_string_literal: true
+
 #!/usr/bin/env ruby
 
 $LOAD_PATH.unshift(File.expand_path('lib', __dir__))

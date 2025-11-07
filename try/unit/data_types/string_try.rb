@@ -1,3 +1,7 @@
+# try/unit/data_types/string_try.rb
+#
+# frozen_string_literal: true
+
 # try/data_types/string_try.rb
 
 require_relative '../../support/helpers/test_helpers'

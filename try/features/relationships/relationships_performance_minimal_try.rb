@@ -1,3 +1,7 @@
+# try/features/relationships/relationships_performance_minimal_try.rb
+#
+# frozen_string_literal: true
+
 # Minimal performance testing focusing on core Familia functionality
 
 require_relative '../../support/helpers/test_helpers'

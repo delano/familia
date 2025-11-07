@@ -1,3 +1,7 @@
+# try/features/encrypted_fields/aad_protection_try.rb
+#
+# frozen_string_literal: true
+
 # try/features/encryption_fields/aad_protection_try.rb
 
 require 'concurrent'

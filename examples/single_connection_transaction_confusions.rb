@@ -1,3 +1,7 @@
+# examples/single_connection_transaction_confusions.rb
+#
+# frozen_string_literal: true
+
 #!/usr/bin/env ruby
 # examples/single_connection_transaction_confusions.rb
 

@@ -1,3 +1,7 @@
+# try/features/encrypted_fields/universal_serialization_safety_try.rb
+#
+# frozen_string_literal: true
+
 # try/features/encryption_fields/universal_serialization_safety_try.rb
 
 require_relative '../../support/helpers/test_helpers'

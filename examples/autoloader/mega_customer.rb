@@ -1,4 +1,6 @@
 # examples/autoloader/mega_customer.rb
+#
+# frozen_string_literal: true
 
 require_relative '../../lib/familia'
 

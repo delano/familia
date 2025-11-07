@@ -1,3 +1,5 @@
+# try/thread_safety/middleware_registration_race_try.rb
+#
 # frozen_string_literal: true
 
 require_relative '../support/helpers/test_helpers'

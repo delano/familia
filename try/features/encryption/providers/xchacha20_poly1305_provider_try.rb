@@ -1,3 +1,7 @@
+# try/features/encryption/providers/xchacha20_poly1305_provider_try.rb
+#
+# frozen_string_literal: true
+
 # try/encryption/providers/xchacha20_poly1305_provider_try.rb
 
 require_relative '../../../support/helpers/test_helpers'

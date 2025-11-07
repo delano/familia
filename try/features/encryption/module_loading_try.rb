@@ -1,3 +1,7 @@
+# try/features/encryption/module_loading_try.rb
+#
+# frozen_string_literal: true
+
 # try/encryption/debug_try.rb
 
 # - Tests that the encryption module loads correctly

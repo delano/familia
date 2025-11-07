@@ -1,4 +1,6 @@
 # lib/familia/data_type/types/listkey.rb
+#
+# frozen_string_literal: true
 
 module Familia
   class ListKey < DataType

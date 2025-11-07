@@ -1,5 +1,7 @@
 # try/features/relationships/relationships_api_changes_try.rb
 #
+# frozen_string_literal: true
+
 # Test coverage for Familia v2 relationships API changes
 # Testing new class_participates_in and unique_index methods
 # Testing breaking changes and argument validation

@@ -1,5 +1,8 @@
-#!/usr/bin/env ruby
+# examples/sampling_demo.rb
+#
 # frozen_string_literal: true
+
+#!/usr/bin/env ruby
 
 # Demonstrates DatabaseLogger sampling to reduce log volume in high-traffic scenarios.
 #

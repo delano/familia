@@ -1,4 +1,6 @@
 # lib/multi_result.rb
+#
+# frozen_string_literal: true
 
 # Represents the result of a Valkey/Redis transaction operation.
 #

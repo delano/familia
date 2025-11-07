@@ -1,4 +1,6 @@
 # lib/familia/data_type.rb
+#
+# frozen_string_literal: true
 
 require_relative 'data_type/class_methods'
 require_relative 'data_type/settings'

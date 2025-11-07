@@ -1,3 +1,7 @@
+# try/unit/data_types/sorted_set_zadd_options_try.rb
+#
+# frozen_string_literal: true
+
 # try/features/data_type/sorted_set_zadd_options_try.rb
 
 require_relative '../../support/helpers/test_helpers'

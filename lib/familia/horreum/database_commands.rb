@@ -1,4 +1,6 @@
 # lib/familia/horreum/database_commands.rb
+#
+# frozen_string_literal: true
 
 module Familia
   # Familia::Horreum

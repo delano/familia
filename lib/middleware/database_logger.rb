@@ -1,4 +1,6 @@
 # lib/middleware/database_logger.rb
+#
+# frozen_string_literal: true
 
 require 'concurrent-ruby'
 

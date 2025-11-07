@@ -1,3 +1,7 @@
+# try/features/encrypted_fields/missing_current_key_version_try.rb
+#
+# frozen_string_literal: true
+
 # try/features/encryption_fields/missing_current_key_version_try.rb
 
 require 'base64'

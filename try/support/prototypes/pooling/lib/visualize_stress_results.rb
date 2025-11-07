@@ -1,3 +1,7 @@
+# try/support/prototypes/pooling/lib/visualize_stress_results.rb
+#
+# frozen_string_literal: true
+
 #!/usr/bin/env ruby
 # try/prototypes/visualize_stress_results.rb
 #

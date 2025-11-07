@@ -1,4 +1,6 @@
 # try/unit/middleware/database_logger_methods_try.rb
+#
+# frozen_string_literal: true
 
 # Test DatabaseLogger non-command methods and utilities
 #

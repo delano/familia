@@ -1,3 +1,7 @@
+# try/integration/secure_identifier_try.rb
+#
+# frozen_string_literal: true
+
 # try/core/secure_identifier_try.rb
 
 # Test Familia::SecureIdentifier methods

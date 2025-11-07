@@ -1,3 +1,7 @@
+# try/features/encrypted_fields/nonce_uniqueness_try.rb
+#
+# frozen_string_literal: true
+
 # try/features/encryption_fields/nonce_uniqueness_try.rb
 
 require 'base64'

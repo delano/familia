@@ -1,5 +1,7 @@
 # try/integration/connection/middleware_reconnect_try.rb
 #
+# frozen_string_literal: true
+
 # Tests for Familia.reconnect! method that refreshes connection pools
 # with current middleware configuration
 

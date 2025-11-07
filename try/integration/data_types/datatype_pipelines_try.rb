@@ -1,3 +1,7 @@
+# try/integration/data_types/datatype_pipelines_try.rb
+#
+# frozen_string_literal: true
+
 # DataType Pipeline Support Tryouts
 #
 # Tests pipeline support for DataType objects. Pipelines provide performance

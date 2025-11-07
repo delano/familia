@@ -1,4 +1,6 @@
 # try/unit/core/middleware_test_helpers_bug_try.rb
+#
+# frozen_string_literal: true
 
 # Minimal reproduction of middleware registration bug
 #

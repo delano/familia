@@ -1,3 +1,7 @@
+# try/support/prototypes/lib/atomic_saves_v3_connection_pool_helpers.rb
+#
+# frozen_string_literal: true
+
 # try/prototypes/lib/atomic_saves_v3_connection_pool_helpers.rb
 
 ##

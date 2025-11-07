@@ -1,4 +1,6 @@
 # lib/familia/features/relationships/participation_relationship.rb
+#
+# frozen_string_literal: true
 
 module Familia
   module Features

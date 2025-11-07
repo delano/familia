@@ -1,3 +1,7 @@
+# try/support/benchmarks/deserialization_correctness_test.rb
+#
+# frozen_string_literal: true
+
 #!/usr/bin/env ruby
 
 # Correctness Test: Field deserialization strategies

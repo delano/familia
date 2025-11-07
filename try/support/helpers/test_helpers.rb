@@ -1,3 +1,7 @@
+# try/support/helpers/test_helpers.rb
+#
+# frozen_string_literal: true
+
 # try/helpers/test_helpers.rb
 
 # To enable tracing and debug mode, run with the env vars set.

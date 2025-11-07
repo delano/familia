@@ -1,4 +1,6 @@
 # try/unit/horreum/optimized_loading_try.rb
+#
+# frozen_string_literal: true
 
 # Test optimized loading methods with check_exists parameter and pipelined bulk loading
 

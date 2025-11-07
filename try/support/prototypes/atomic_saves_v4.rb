@@ -1,3 +1,7 @@
+# try/support/prototypes/atomic_saves_v4.rb
+#
+# frozen_string_literal: true
+
 # try/prototypes/atomic_saves_v4.rb
 
 class BankAccount < Familia::Horreum

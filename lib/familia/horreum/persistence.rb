@@ -1,4 +1,6 @@
 # lib/familia/horreum/persistence.rb
+#
+# frozen_string_literal: true
 
 module Familia
   # Familia::Horreum

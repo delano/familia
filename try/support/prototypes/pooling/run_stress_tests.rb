@@ -1,3 +1,7 @@
+# try/support/prototypes/pooling/run_stress_tests.rb
+#
+# frozen_string_literal: true
+
 #!/usr/bin/env ruby
 # try/prototypes/run_stress_tests.rb
 #

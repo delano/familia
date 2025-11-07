@@ -1,4 +1,6 @@
 # lib/familia/features/transient_fields.rb
+#
+# frozen_string_literal: true
 
 require_relative 'transient_fields/redacted_string'
 require_relative 'transient_fields/transient_field_type'

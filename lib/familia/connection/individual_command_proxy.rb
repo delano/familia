@@ -1,4 +1,6 @@
 # lib/familia/connection/individual_command_proxy.rb
+#
+# frozen_string_literal: true
 
 module Familia
   module Connection

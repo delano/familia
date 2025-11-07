@@ -1,4 +1,6 @@
 # lib/familia/features/autoloader.rb
+#
+# frozen_string_literal: true
 
 # rubocop:disable Style/ClassAndModuleChildren
 module Familia::Features

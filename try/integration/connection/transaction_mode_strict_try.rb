@@ -1,3 +1,7 @@
+# try/integration/connection/transaction_mode_strict_try.rb
+#
+# frozen_string_literal: true
+
 # Transaction Mode: Strict Tryouts
 #
 # Tests strict transaction mode behavior where operations fail fast

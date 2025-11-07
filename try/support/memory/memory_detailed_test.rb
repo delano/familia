@@ -1,3 +1,7 @@
+# try/support/memory/memory_detailed_test.rb
+#
+# frozen_string_literal: true
+
 # try/edge_cases/memory_detailed_test_try.rb
 
 require 'objspace'

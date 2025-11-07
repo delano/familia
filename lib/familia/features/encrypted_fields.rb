@@ -1,4 +1,6 @@
 # lib/familia/features/encrypted_fields.rb
+#
+# frozen_string_literal: true
 
 require_relative 'encrypted_fields/encrypted_field_type'
 

@@ -1,3 +1,7 @@
+# try/support/memory/memory_basic_test.rb
+#
+# frozen_string_literal: true
+
 # try/edge_cases/memory_try.rb
 
 require 'tempfile'

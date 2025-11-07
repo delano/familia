@@ -1,5 +1,7 @@
 # examples/json_usage_patterns.rb
 #
+# frozen_string_literal: true
+
 # This file demonstrates the JSON serialization patterns available in Familia,
 # showing both the secure defaults and optional developer convenience features.
 

@@ -1,4 +1,6 @@
 # lib/familia/horreum.rb
+#
+# frozen_string_literal: true
 
 require_relative 'horreum/settings'
 require_relative 'horreum/connection'

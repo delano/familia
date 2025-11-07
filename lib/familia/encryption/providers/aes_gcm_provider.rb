@@ -1,4 +1,6 @@
 # lib/familia/encryption/providers/aes_gcm_provider.rb
+#
+# frozen_string_literal: true
 
 # ⚠️  RUBY MEMORY SAFETY WARNING ⚠️
 #

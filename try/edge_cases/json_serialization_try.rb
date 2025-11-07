@@ -1,4 +1,6 @@
 # try/edge_cases/json_serialization_try.rb
+#
+# frozen_string_literal: true
 
 require_relative '../support/helpers/test_helpers'
 

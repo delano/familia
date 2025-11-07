@@ -1,5 +1,7 @@
 # lib/familia/errors.rb
 #
+# frozen_string_literal: true
+
 module Familia
   # Base exception class for all Familia errors
   class Problem < RuntimeError; end

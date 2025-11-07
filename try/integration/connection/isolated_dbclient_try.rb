@@ -1,3 +1,7 @@
+# try/integration/connection/isolated_dbclient_try.rb
+#
+# frozen_string_literal: true
+
 # try/core/isolated_dbclient_try.rb
 
 # Tryouts: Isolated connection functionality

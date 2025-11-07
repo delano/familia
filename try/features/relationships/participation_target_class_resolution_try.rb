@@ -1,5 +1,7 @@
 # try/features/relationships/participation_target_class_resolution_try.rb
 #
+# frozen_string_literal: true
+
 # Regression test for Symbol/String target class resolution in participates_in
 #
 # This test verifies the fix for the NoMethodError that occurred when

@@ -1,4 +1,6 @@
 # lib/familia/features/transient_fields/single_use_redacted_string.rb
+#
+# frozen_string_literal: true
 
 require_relative 'redacted_string'
 

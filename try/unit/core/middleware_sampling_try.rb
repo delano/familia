@@ -1,4 +1,6 @@
 # try/unit/core/middleware_sampling_try.rb
+#
+# frozen_string_literal: true
 
 # Test DatabaseLogger sampling functionality
 #

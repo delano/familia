@@ -1,5 +1,7 @@
 # try/features/relationships/participation_reverse_index_try.rb
 #
+# frozen_string_literal: true
+
 # Tests for participation reverse index functionality
 # Verifies performance improvements and correct behavior
 

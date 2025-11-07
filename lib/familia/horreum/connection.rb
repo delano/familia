@@ -1,4 +1,6 @@
 # lib/familia/horreum/connection.rb
+#
+# frozen_string_literal: true
 
 module Familia
   class Horreum

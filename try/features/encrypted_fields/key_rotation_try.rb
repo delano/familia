@@ -1,3 +1,7 @@
+# try/features/encrypted_fields/key_rotation_try.rb
+#
+# frozen_string_literal: true
+
 # try/features/encryption_fields/key_rotation_try.rb
 
 require 'base64'

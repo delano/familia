@@ -1,4 +1,6 @@
 # lib/familia/data_type/types/lock.rb
+#
+# frozen_string_literal: true
 
 module Familia
   class Lock < StringKey

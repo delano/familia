@@ -1,3 +1,7 @@
+# try/unit/horreum/unique_index_edge_cases_try.rb
+#
+# frozen_string_literal: true
+
 # Testing edge cases for unique index validation
 # lib/familia/features/relationships/indexing/unique_index_generators.rb
 # lib/familia/horreum/persistence.rb

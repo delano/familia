@@ -1,3 +1,7 @@
+# try/unit/refinements/dear_json_hash_methods_try.rb
+#
+# frozen_string_literal: true
+
 # try/refinements/dear_json_hash_methods_try.rb
 
 require_relative '../../support/helpers/test_helpers'

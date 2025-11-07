@@ -1,4 +1,6 @@
 # lib/familia/features/relationships/participation.rb
+#
+# frozen_string_literal: true
 
 require_relative 'participation_relationship'
 require_relative 'participation_membership'

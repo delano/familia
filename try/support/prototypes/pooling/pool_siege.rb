@@ -1,3 +1,7 @@
+# try/support/prototypes/pooling/pool_siege.rb
+#
+# frozen_string_literal: true
+
 #!/usr/bin/env ruby
 # pool_siege.rb
 #

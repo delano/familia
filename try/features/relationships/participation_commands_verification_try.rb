@@ -1,5 +1,7 @@
 # try/features/relationships/participation_commands_verification_try.rb
 #
+# frozen_string_literal: true
+
 # Based on participation reverse index functionality tests.
 # Validates participation functionality and command isolation
 #

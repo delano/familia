@@ -1,3 +1,5 @@
+# lib/familia/features/relationships/indexing_relationship.rb
+#
 # frozen_string_literal: true
 
 module Familia

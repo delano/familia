@@ -1,3 +1,7 @@
+# try/support/prototypes/pooling/lib/connection_pool_threading_models.rb
+#
+# frozen_string_literal: true
+
 # try/pooling/lib/connection_pool_threading_models.rb
 #
 # Different Threading Models for Connection Pool Stress Testing

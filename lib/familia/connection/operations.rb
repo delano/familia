@@ -1,4 +1,6 @@
 # lib/familia/connection/operations.rb
+#
+# frozen_string_literal: true
 
 # Familia
 #

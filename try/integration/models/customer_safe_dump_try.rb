@@ -1,3 +1,7 @@
+# try/integration/models/customer_safe_dump_try.rb
+#
+# frozen_string_literal: true
+
 # try/models/customer_safedump_try.rb
 
 require_relative '../../support/helpers/test_helpers'

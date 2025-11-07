@@ -1,3 +1,7 @@
+# examples/relationships.rb
+#
+# frozen_string_literal: true
+
 #!/usr/bin/env ruby
 
 # Basic Relationships Example

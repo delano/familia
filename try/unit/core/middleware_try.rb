@@ -1,3 +1,7 @@
+# try/unit/core/middleware_try.rb
+#
+# frozen_string_literal: true
+
 # try/core/middleware_try.rb
 
 # Test Valkey/Redis middleware components

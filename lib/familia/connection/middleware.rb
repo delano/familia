@@ -1,4 +1,6 @@
 # lib/familia/connection/middleware.rb
+#
+# frozen_string_literal: true
 
 require_relative '../../middleware/database_logger'
 require_relative '../../middleware/database_command_counter'

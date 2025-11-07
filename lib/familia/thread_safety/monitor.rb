@@ -1,3 +1,5 @@
+# lib/familia/thread_safety/monitor.rb
+#
 # frozen_string_literal: true
 
 require 'concurrent-ruby'

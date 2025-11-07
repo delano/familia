@@ -1,4 +1,6 @@
 # lib/familia/refinements/dear_json.rb
+#
+# frozen_string_literal: true
 
 require 'familia/json_serializer'
 

@@ -1,3 +1,7 @@
+# try/features/encryption/roundtrip_validation_try.rb
+#
+# frozen_string_literal: true
+
 # try/encryption/debug4_try.rb
 
 # - Tests full encryption/decryption round trips

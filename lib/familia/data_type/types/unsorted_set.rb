@@ -1,4 +1,6 @@
 # lib/familia/data_type/types/unsorted_set.rb
+#
+# frozen_string_literal: true
 
 module Familia
   # Familia::UnsortedSet

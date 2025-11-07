@@ -1,3 +1,7 @@
+# try/support/prototypes/atomic_saves_v1_context_proxy.rb
+#
+# frozen_string_literal: true
+
 # try/prototypes/atomic_saves_v1_target_proxy.rb
 
 # try -vf try/prototypes/atomic_saves_v1_target_proxy.rb

@@ -1,5 +1,7 @@
 # try/performance/transaction_safety_benchmark_try.rb
 #
+# frozen_string_literal: true
+
 # Transaction Safety Performance Benchmarks
 #
 # Measures the performance impact of transaction safety mechanisms

@@ -1,3 +1,7 @@
+# try/integration/connection/transaction_fallback_integration_try.rb
+#
+# frozen_string_literal: true
+
 # Transaction Fallback Integration Tryouts
 #
 # Tests real-world scenarios where transaction fallback is needed, particularly

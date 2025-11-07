@@ -1,5 +1,7 @@
 # try/integration/save_methods_consistency_try.rb
 #
+# frozen_string_literal: true
+
 # Test coverage for save and save_if_not_exists consistency improvements
 #
 # This test verifies that both save and save_if_not_exists! produce identical

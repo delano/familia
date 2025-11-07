@@ -1,4 +1,6 @@
 # lib/familia/features/relationships/score_encoding.rb
+#
+# frozen_string_literal: true
 
 module Familia
   module Features

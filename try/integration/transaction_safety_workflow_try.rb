@@ -1,5 +1,7 @@
 # try/integration/transaction_safety_workflow_try.rb
 #
+# frozen_string_literal: true
+
 # Transaction Safety Workflow Integration Test
 #
 # Demonstrates the complete transaction safety workflow with realistic

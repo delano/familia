@@ -1,3 +1,7 @@
+# try/features/relationships/participation_commands_verification_spec.rb
+#
+# frozen_string_literal: true
+
 # Generated rspec code for /Users/d/Projects/opensource/d/familia/try/features/relationships/participation_commands_verification_try.rb
 # Updated: 2025-09-26 21:27:49 -0700
 

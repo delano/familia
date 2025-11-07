@@ -1,3 +1,5 @@
+# lib/familia/thread_safety/instrumented_mutex.rb
+#
 # frozen_string_literal: true
 
 require_relative 'monitor'

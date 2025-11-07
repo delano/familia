@@ -1,3 +1,7 @@
+# examples/encrypted_fields.rb
+#
+# frozen_string_literal: true
+
 #!/usr/bin/env ruby
 
 # examples/encrypted_fields.rb

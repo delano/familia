@@ -1,3 +1,7 @@
+# lib/familia/features/encrypted_fields/encrypted_field_type.rb
+#
+# frozen_string_literal: true
+
 # lib/familia/field_types/encrypted_field_type.rb
 
 require_relative '../../field_type'

@@ -1,4 +1,6 @@
 # try/features/relationships/participation_bidirectional_try.rb
+#
+# frozen_string_literal: true
 
 require_relative '../../../lib/familia'
 

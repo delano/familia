@@ -1,3 +1,7 @@
+# try/support/memory/test_actual_redactedstring_protection.rb
+#
+# frozen_string_literal: true
+
 # try/memory/test_actual_redactedstring_protection.rb
 
 require_relative '../helpers/test_helpers'

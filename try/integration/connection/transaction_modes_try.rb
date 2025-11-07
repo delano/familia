@@ -1,3 +1,7 @@
+# try/integration/connection/transaction_modes_try.rb
+#
+# frozen_string_literal: true
+
 # Transaction Modes Tryouts
 #
 # Tests the configurable transaction mode system that provides graceful fallback

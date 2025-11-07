@@ -1,4 +1,6 @@
 # lib/familia/features/relationships/participation/participant_methods.rb
+#
+# frozen_string_literal: true
 
 require_relative '../collection_operations'
 

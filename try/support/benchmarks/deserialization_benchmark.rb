@@ -1,3 +1,7 @@
+# try/support/benchmarks/deserialization_benchmark.rb
+#
+# frozen_string_literal: true
+
 #!/usr/bin/env ruby
 
 # Benchmark: Field deserialization strategies in find_by_dbkey

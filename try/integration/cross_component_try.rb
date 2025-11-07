@@ -1,3 +1,7 @@
+# try/integration/cross_component_try.rb
+#
+# frozen_string_literal: true
+
 # Test cross-component integration scenarios
 
 require_relative '../support/helpers/test_helpers'

@@ -1,4 +1,6 @@
 # lib/familia/features/expiration.rb
+#
+# frozen_string_literal: true
 
 require_relative 'expiration/extensions'
 

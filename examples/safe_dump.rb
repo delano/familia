@@ -1,3 +1,7 @@
+# examples/safe_dump.rb
+#
+# frozen_string_literal: true
+
 #!/usr/bin/env ruby
 
 # examples/safe_dump.rb

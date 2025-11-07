@@ -1,5 +1,7 @@
 # lib/familia/encryption/request_cache.rb
 #
+# frozen_string_literal: true
+
 # Request-scoped caching for encryption keys (if needed for performance)
 # This should ONLY be enabled if performance testing shows it's necessary
 #

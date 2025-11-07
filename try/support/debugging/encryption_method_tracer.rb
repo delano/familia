@@ -1,3 +1,7 @@
+# try/support/debugging/encryption_method_tracer.rb
+#
+# frozen_string_literal: true
+
 #!/usr/bin/env ruby
 # Debug script to trace encryption method calls and data flow
 

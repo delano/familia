@@ -1,3 +1,6 @@
+# try/features/transient_fields/simple_refresh_test.rb
+#
+# frozen_string_literal: true
 
 require_relative '../../helpers/test_helpers'
 

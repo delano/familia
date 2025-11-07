@@ -1,3 +1,7 @@
+# try/support/helpers/test_cleanup.rb
+#
+# frozen_string_literal: true
+
 # Test cleanup helper for managing anonymous classes and test isolation
 #
 # This module provides utilities to create and cleanup test classes that

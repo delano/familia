@@ -1,4 +1,6 @@
 # lib/familia/features/relationships.rb
+#
+# frozen_string_literal: true
 
 require 'securerandom'
 require_relative 'relationships/score_encoding'

@@ -1,3 +1,7 @@
+# try/support/prototypes/pooling/lib/connection_pool_stress_test.rb
+#
+# frozen_string_literal: true
+
 # try/pooling/lib/connection_pool_stress_test.rb
 #
 # Connection Pool Stress Test Framework

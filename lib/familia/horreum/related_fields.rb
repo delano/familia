@@ -1,4 +1,6 @@
 # lib/familia/horreum/related_fields.rb
+#
+# frozen_string_literal: true
 
 module Familia
 

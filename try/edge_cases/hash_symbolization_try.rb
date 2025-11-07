@@ -1,4 +1,6 @@
 # try/edge_cases/hash_symbolization_try.rb
+#
+# frozen_string_literal: true
 
 # NOTE: These testcases are disabled b/c there's a shared context
 # bug in Tryouts 3.1 that prevents the setup instance vars from
