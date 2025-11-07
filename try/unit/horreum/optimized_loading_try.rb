@@ -124,6 +124,12 @@ keyed_mixed = OptimizedUser.load_multi_by_keys(keys_mixed)
 OptimizedUser.load_multi_by_keys([])
 #=> []
 
+## load_multi_by_keys handles empty/nil keys and maintains position alignment
+keys_with_empty = ['optimizeduser:opt_user_1:object', '', 'optimizeduser:opt_user_2:object', nil]
+mixed_keys = OptimizedUser.load_multi_by_keys(keys_with_empty)
+[mixed_keys[0]&.name, mixed_keys[1], mixed_keys[2]&.name, mixed_keys[3]]
+#=> ['Alice', nil, 'Bob', nil]
+
 ## load_multi handles nil identifiers gracefully
 users_with_nils = OptimizedUser.load_multi(['opt_user_1', nil, 'opt_user_2'])
 [users_with_nils[0]&.name, users_with_nils[1], users_with_nils[2]&.name]
@@ -133,6 +139,14 @@ users_with_nils = OptimizedUser.load_multi(['opt_user_1', nil, 'opt_user_2'])
 users_with_empty = OptimizedUser.load_multi(['opt_user_1', '', 'opt_user_2'])
 [users_with_empty[0]&.name, users_with_empty[1], users_with_empty[2]&.name]
 #=> ['Alice', nil, 'Bob']
+
+## find_by_identifier works with suffix as keyword parameter
+OptimizedUser.find_by_identifier('opt_user_1', suffix: :object)&.name
+#=> 'Alice'
+
+## find_by_identifier works with both keyword parameters
+OptimizedUser.find_by_identifier('opt_user_1', suffix: :object, check_exists: false)&.name
+#=> 'Alice'
 
 # Teardown: Clean up test data
 OptimizedUser.destroy!('opt_user_1')

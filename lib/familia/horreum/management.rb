@@ -176,8 +176,8 @@ module Familia
       #
       # @param identifier [String, Integer] The unique identifier for the
       #   object.
-      # @param suffix [Symbol] The suffix to use in the dbkey (default:
-      #   :object).
+      # @param suffix [Symbol, nil] The suffix to use in the dbkey (default:
+      #   class suffix). Keyword parameter for consistency with check_exists.
       # @param check_exists [Boolean] Whether to check key existence before HGETALL
       #   (default: true). See find_by_dbkey for details.
       # @return [Object, nil] An instance of the class if found, nil otherwise.
@@ -196,7 +196,10 @@ module Familia
       # @example Optimized mode
       #   User.find_by_id(123, check_exists: false)  # 1 command: HGETALL
       #
-      def find_by_identifier(identifier, suffix = nil, check_exists: true)
+      # @example Custom suffix
+      #   Session.find_by_id('abc', suffix: :session)
+      #
+      def find_by_identifier(identifier, suffix: nil, check_exists: true)
         suffix ||= self.suffix
         return nil if identifier.to_s.empty?
 
@@ -292,6 +295,8 @@ module Familia
       #   keys = ["user:123:object", "user:456:object"]
       #   users = User.load_multi_by_keys(keys)
       #
+      # @note Returns nil for empty/nil keys, maintaining position alignment with input array
+      #
       # @see load_multi For loading by identifiers
       #
       def load_multi_by_keys(objkeys)
@@ -299,7 +304,13 @@ module Familia
 
         Familia.trace :LOAD_MULTI_BY_KEYS, nil, "Loading #{objkeys.size} objects" if Familia.debug?
 
-        # Pipeline all HGETALL commands
+        # Track which positions have valid keys to maintain result array alignment
+        valid_positions = []
+        objkeys.each_with_index do |objkey, idx|
+          valid_positions << idx unless objkey.to_s.empty?
+        end
+
+        # Pipeline all HGETALL commands for valid keys
         results = pipelined do |pipeline|
           objkeys.each do |objkey|
             next if objkey.to_s.empty?
@@ -307,13 +318,19 @@ module Familia
           end
         end
 
-        # Convert results to objects using shared helper method
-        results.map do |obj_hash|
+        # Map results back to original positions
+        objects = Array.new(objkeys.size)
+        valid_positions.each_with_index do |pos, result_idx|
+          obj_hash = results[result_idx]
+
           # Skip empty hashes (non-existent keys)
           next if obj_hash.nil? || obj_hash.empty?
 
-          instantiate_from_hash(obj_hash)
+          # Instantiate object using shared helper method
+          objects[pos] = instantiate_from_hash(obj_hash)
         end
+
+        objects
       end
 
       # Checks if an object with the given identifier exists in the database.
