@@ -568,24 +568,35 @@ module Familia
           # @since 1.0.0
           # Get all IDs where this instance participates for a specific target class
           #
+          # Optimized to iterate through keys once and use Set for efficient uniqueness,
+          # reducing string operations and object allocations.
+          #
           # @param target_class [Class] The target class to filter by
-          # @return [Array<String>] Array of target instance IDs
+          # @param collection_names [Array<String>, nil] Optional collection name filter
+          # @return [Array<String>] Array of unique target instance IDs
           def participating_ids_for_target(target_class, collection_names = nil)
+            require 'set'
+
             # Use config_name to get the proper snake_case format (e.g., "project_team")
             target_prefix = "#{target_class.config_name}:"
+            ids = Set.new
 
-            keys = participations.members.select { |key| key.start_with?(target_prefix) }
+            participations.members.each do |key|
+              next unless key.start_with?(target_prefix)
 
-            # If specific collection names provided, filter by those
-            if collection_names && !collection_names.empty?
-              keys = keys.select do |key|
-                collection = key.split(':')[2]  # Extract collection name from "targetclass:id:collection"
-                collection_names.include?(collection)
+              parts = key.split(':', 3)  # Split into ["targetclass", "id", "collection"]
+              id = parts[1]
+
+              # If filtering by collection names, check before adding
+              if collection_names && !collection_names.empty?
+                collection = parts[2]
+                ids << id if collection_names.include?(collection)
+              else
+                ids << id
               end
             end
 
-            keys.map { |key| key.split(':')[1] }  # Extract ID from format
-                .uniq
+            ids.to_a
           end
 
           def current_participations

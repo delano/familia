@@ -122,8 +122,21 @@ module Familia
             end
 
             # Generate the boolean check method (e.g., user.project_team?)
+            # Optimized to stop scanning as soon as a match is found
             participant_class.define_method("#{base_name}?") do
-              !participating_ids_for_target(target_class, collections_filter).empty?
+              target_prefix = "#{target_class.config_name}:"
+
+              participations.members.any? do |key|
+                next false unless key.start_with?(target_prefix)
+
+                # If filtering by specific collections, check the collection name
+                if collections_filter && !collections_filter.empty?
+                  collection = key.split(':')[2]
+                  collections_filter.include?(collection)
+                else
+                  true
+                end
+              end
             end
 
             # Generate the count method (e.g., user.project_team_count)
