@@ -53,8 +53,7 @@ module Familia
         # Track contention points with counts
         @contention_points = Concurrent::Map.new
 
-        # Track wait times for critical sections
-        @wait_times = Concurrent::Map.new
+        # Track wait time aggregates for critical sections (removed @wait_times to prevent memory leak)
         @wait_time_totals = Concurrent::Map.new
         @wait_time_counts = Concurrent::Map.new
 
@@ -94,7 +93,7 @@ module Familia
         @critical_sections.value = 0
         @deadlock_checks.value = 0
         @contention_points.clear
-        @wait_times.clear
+        # @wait_times.clear - removed to prevent memory leak
         @wait_time_totals.clear
         @wait_time_counts.clear
         @thread_state.clear
@@ -119,9 +118,8 @@ module Familia
 
       # Record wait time for a location
       def record_wait_time(location, wait_time)
-        @wait_times[location] ||= []
-        @wait_times[location] << wait_time
-
+        # Note: @wait_times was removed to prevent memory leak from unbounded array growth
+        # We only need the aggregated totals and counts for calculations
         @wait_time_totals[location] = @wait_time_totals.fetch(location, 0.0) + wait_time
         @wait_time_counts[location] = @wait_time_counts.fetch(location, 0) + 1
       end
@@ -172,31 +170,9 @@ module Familia
         result
       end
 
-      # Monitor a mutex with wait time tracking
-      def monitor_mutex(mutex, location)
-        return yield(mutex) unless @enabled
-
-        acquired = false
-        wait_start = Familia.now_in_μs
-
-        # Try to acquire without blocking first
-        if mutex.try_lock
-          acquired = true
-          wait_time = 0
-        else
-          # Now we know there's contention
-          record_contention(location)
-          mutex.lock
-          acquired = true
-          wait_end = Familia.now_in_μs
-          wait_time_μs = wait_end - wait_start
-          record_wait_time(location, wait_time_μs)
-        end
-
-        yield(mutex)
-      ensure
-        mutex.unlock if acquired
-      end
+      # NOTE: monitor_mutex method was removed as it was unused and had flawed
+      # exception handling that could lead to deadlocks. The InstrumentedMutex
+      # class should be used instead for mutex monitoring.
 
       # Check for potential deadlocks
       def check_deadlock
@@ -283,7 +259,7 @@ module Familia
         races_per_hour = (@race_detections.value / duration) * 3600
 
         score = 100
-        score -= [contentions_per_hour / 10, 30].min  # -3 points per 100 contentions/hour, max -30
+        score -= [contentions_per_hour / 10.0, 30].min  # -3 points per 100 contentions/hour, max -30
         score -= [races_per_hour * 10, 50].min  # -10 points per race/hour, max -50
 
         [score, 0].max.round
