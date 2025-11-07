@@ -16,7 +16,7 @@ Familia uses a three-tier expiration system:
 
 ### Cascading Expiration
 
-When a Horreum object has related fields (DataTypes), the expiration feature automatically cascades TTL updates to all related objects, ensuring consistent data lifecycle management.
+When a Horreum object has related fields (DataTypes), the expiration feature automatically cascades TTL updates to related objects that have their own `default_expiration` settings defined. This ensures consistent data lifecycle management while respecting per-field expiration policies.
 
 ## Basic Usage
 
@@ -103,21 +103,60 @@ class Customer < Familia::Horreum
 
   identifier_field :customer_id
   field :customer_id, :name, :email
-  list :recent_orders        # Will get same TTL
-  set :favorite_categories   # Will get same TTL
-  hashkey :preferences       # Will get same TTL
+  list :recent_orders, default_expiration: 12.hours        # Will cascade
+  set :favorite_categories   # Will NOT cascade (no default_expiration)
+  hashkey :preferences, default_expiration: 6.hours       # Will cascade
 end
 
 customer = Customer.new(customer_id: 'cust_123')
 customer.save
 
-# This will set TTL on the main object AND all related fields
+# This will set TTL on the main object AND related fields with default_expiration
 customer.update_expiration(expiration: 12.hours)
 # Sets expiration on:
-# - customer:cust_123 (main hash)
-# - customer:cust_123:recent_orders (list)
-# - customer:cust_123:favorite_categories (set)
-# - customer:cust_123:preferences (hashkey)
+# - customer:cust_123 (main hash) - 12 hours
+# - customer:cust_123:recent_orders (list) - 12 hours
+# - customer:cust_123:preferences (hashkey) - 12 hours
+# - customer:cust_123:favorite_categories (set) - NO expiration (no default_expiration)
+```
+
+### TTL Status Checking
+
+```ruby
+session = UserSession.find('session_123')
+
+# Check remaining TTL (returns seconds or special values)
+ttl_seconds = session.ttl
+case ttl_seconds
+when -1
+  puts "Session never expires (no TTL set)"
+when -2
+  puts "Session key doesn't exist"
+when 0
+  puts "Session has expired"
+else
+  puts "Session expires in #{ttl_seconds} seconds"
+end
+
+# Convenience methods for TTL status
+session.expires?           # => true if TTL is set
+session.expired?           # => true if TTL <= 0
+session.expired?(5.minutes) # => true if TTL <= 300 seconds
+```
+
+### Expiration Extension and Removal
+
+```ruby
+session = UserSession.find('active_session')
+
+# Extend current expiration by additional time
+session.extend_expiration(15.minutes)  # Adds 15 minutes to current TTL
+
+# Remove expiration entirely (persist indefinitely)
+session.persist!  # Removes TTL, data won't expire
+
+# Zero expiration also persists data (equivalent to persist!)
+session.update_expiration(expiration: 0)  # No expiration set
 ```
 
 ### Conditional Expiration
@@ -143,21 +182,6 @@ class AnalyticsEvent < Familia::Horreum
     end
   end
 end
-```
-
-### Zero Expiration (Persistent Data)
-
-```ruby
-class PermanentRecord < Familia::Horreum
-  feature :expiration
-  default_expiration 0  # Never expires
-
-  field :permanent_data
-end
-
-# Zero expiration means data persists indefinitely
-record = PermanentRecord.new
-record.update_expiration  # No-op, data won't expire
 ```
 
 ## Integration Patterns
@@ -255,6 +279,8 @@ when -1
   puts "Session never expires"
 when -2
   puts "Session key doesn't exist"
+when 0
+  puts "Session has expired"
 when 0..3600
   puts "Session expires in #{ttl_seconds / 60} minutes"
 else
@@ -282,7 +308,7 @@ class SessionManager
   def self.make_sessions_permanent
     # Remove expiration from all sessions
     UserSession.all.each do |session|
-      session.persist  # Remove TTL entirely
+      session.persist!  # Remove TTL entirely
     end
   end
 end
@@ -333,7 +359,9 @@ pipeline = redis.pipelined do |pipe|
     pipe.expire(session.dbkey, 3600)
 
     # Also expire related fields if needed
-    session.class.related_fields.each do |name, _|
+    session.class.related_fields.each do |name, definition|
+      next if definition.opts[:default_expiration].nil?
+
       related_key = "#{session.dbkey}:#{name}"
       pipe.expire(related_key, 3600)
     end
@@ -367,9 +395,26 @@ class ResilientSession < Familia::Horreum
 end
 ```
 
-## Debugging and Troubleshooting
+## Error Handling and Validation
 
-### Debug Expiration Issues
+### Expiration Value Validation
+
+```ruby
+session = UserSession.new(session_token: 'test')
+
+# Invalid expiration type
+session.update_expiration(expiration: "invalid")
+# => Familia::Problem: Default expiration must be a number (String given for UserSession)
+
+# Negative expiration
+session.update_expiration(expiration: -1)
+# => Familia::Problem: Default expiration must be non-negative (-1 given for UserSession)
+
+# Valid expiration
+session.update_expiration(expiration: 3600)  # => true
+```
+
+### Debug Logging
 
 ```ruby
 # Enable debug logging to see expiration operations
@@ -378,9 +423,11 @@ Familia.debug = true
 session = UserSession.new(session_token: 'debug_session')
 session.save
 session.update_expiration(expiration: 5.minutes)
-# Logs will show:
-# [update_expiration] Expires session:debug_session in 300.0 seconds
+# Structured logging output:
+# TTL updated operation=expire key=user_session:debug_session ttl_seconds=300.0 class=UserSession identifier=debug_session
 ```
+
+## Debugging and Troubleshooting
 
 ### Common Issues
 
@@ -401,23 +448,16 @@ class Customer < Familia::Horreum
   feature :expiration
 
   field :name
-  list :orders  # ❌ Won't cascade without proper relation definition
+  list :orders  # ❌ Won't cascade - no default_expiration defined
 end
 
-# ✅ Fix: Ensure relations are properly tracked
+# ✅ Fix: Define default_expiration for fields that should cascade
 class Customer < Familia::Horreum
   feature :expiration
+  default_expiration 1.day
 
   field :name
-  list :orders
-
-  # Explicitly track relation if needed
-  def update_expiration(**opts)
-    super(**opts)
-
-    # Manually cascade to specific fields if needed
-    orders.expire(opts[:default_expiration] || default_expiration)
-  end
+  list :orders, default_expiration: 12.hours  # Will cascade
 end
 ```
 
@@ -437,6 +477,20 @@ class BaseModel < Familia::Horreum
   feature :expiration
   default_expiration 1.hour
 end
+```
+
+**4. No-Op Behavior Without Feature**
+```ruby
+class BasicModel < Familia::Horreum
+  # No expiration feature enabled
+  field :data
+end
+
+basic = BasicModel.new
+basic.update_expiration(expiration: 1.hour)  # No-op, returns nil
+basic.ttl                                    # Returns -1
+basic.expires?                              # Returns false
+basic.expired?                              # Returns false
 ```
 
 ## Testing TTL Behavior
@@ -466,9 +520,28 @@ RSpec.describe UserSession do
       expect(ttl).to be <= 600
     end
 
-    it "cascades expiration to related fields" do
+    it "provides TTL status methods" do
       session.save
-      session.activity_log.push('login')  # Assume activity_log is a list
+      session.update_expiration(expiration: 5.minutes)
+
+      expect(session.expires?).to be true
+      expect(session.expired?).to be false
+      expect(session.expired?(10.minutes)).to be true  # Expiring within 10 minutes
+    end
+
+    it "supports expiration extension" do
+      session.save
+      session.update_expiration(expiration: 5.minutes)
+
+      initial_ttl = session.ttl
+      session.extend_expiration(5.minutes)
+
+      expect(session.ttl).to be > initial_ttl
+    end
+
+    it "cascades expiration to related fields with default_expiration" do
+      session.save
+      session.activity_log.push('login')  # Assume activity_log has default_expiration
 
       session.update_expiration(expiration: 5.minutes)
 
@@ -506,92 +579,63 @@ class SessionExpirationTest < ActionDispatch::IntegrationTest
 end
 ```
 
-## Best Practices
+## API Reference
 
-### 1. Set Appropriate Defaults
+### Instance Methods
 
-```ruby
-class SessionStore < Familia::Horreum
-  feature :expiration
+#### `update_expiration(expiration: nil)`
+Sets TTL for the object and cascades to related fields with `default_expiration`.
 
-  # Choose TTL based on security requirements
-  case Rails.env
-  when 'development'
-    default_expiration 8.hours    # Convenience for debugging
-  when 'test'
-    default_expiration 1.minute   # Fast cleanup in tests
-  when 'production'
-    default_expiration 30.minutes # Security-focused
-  end
-end
-```
+**Parameters:**
+- `expiration` (Numeric, nil) - TTL in seconds. Uses `default_expiration` if nil.
 
-### 2. Monitor TTL Health
+**Returns:** Boolean indicating success
 
-```ruby
-class TTLHealthCheck
-  def self.check_session_health
-    expired_count = 0
-    total_count = 0
+**Raises:** `Familia::Problem` for invalid expiration values
 
-    UserSession.all.each do |session|
-      total_count += 1
+#### `ttl`
+Get remaining TTL for this object.
 
-      ttl = session.ttl
-      if ttl == -2  # Key doesn't exist
-        expired_count += 1
-      elsif ttl < 300  # Less than 5 minutes remaining
-        # Extend TTL for active sessions
-        session.update_expiration(expiration: 30.minutes) if session.active?
-      end
-    end
+**Returns:**
+- Integer > 0: Seconds remaining
+- -1: No TTL set (persistent)
+- -2: Key doesn't exist
 
-    {
-      total_sessions: total_count,
-      expired_sessions: expired_count,
-      expiration_rate: expired_count.to_f / total_count
-    }
-  end
-end
-```
+#### `expires?`
+Check if object has TTL set.
 
-### 3. Graceful Degradation
+**Returns:** Boolean - true if TTL is set
 
-```ruby
-class RobustSessionManager
-  def self.get_or_create_session(session_token)
-    session = UserSession.find(session_token)
+#### `expired?(threshold = 0)`
+Check if object is expired or expiring soon.
 
-    # Check if session exists and hasn't expired
-    if session&.ttl&.positive?
-      # Extend TTL on access
-      session.update_expiration(expiration: 30.minutes)
-      session
-    else
-      # Create new session if old one expired
-      create_new_session
-    end
-  rescue => e
-    # Fallback: create new session on any error
-    Rails.logger.warn "Session retrieval failed: #{e.message}"
-    create_new_session
-  end
-end
-```
+**Parameters:**
+- `threshold` (Numeric) - Consider expired if TTL <= threshold
 
-### 4. Environment-Specific Configuration
+**Returns:** Boolean - true if expired/expiring
 
-```ruby
-# config/initializers/familia_expiration.rb
-Familia.configure do |config|
-  # Set global default based on environment
-  config.default_expiration = case Rails.env
-                               when 'development' then 0        # No expiration for debugging
-                               when 'test' then 1.minute       # Quick cleanup
-                               when 'production' then 1.hour   # Reasonable default
-                               end
-end
-```
+#### `extend_expiration(duration)`
+Extend current TTL by additional time.
+
+**Parameters:**
+- `duration` (Numeric) - Additional seconds to add
+
+**Returns:** Boolean indicating success
+
+#### `persist!`
+Remove TTL, making object persistent.
+
+**Returns:** Boolean indicating success
+
+### Class Methods
+
+#### `default_expiration(num = nil)`
+Get/set class-level default expiration.
+
+**Parameters:**
+- `num` (Numeric, nil) - Set expiration if provided
+
+**Returns:** Float - current default expiration in seconds
 
 ---
 
@@ -602,4 +646,4 @@ end
 - **[Feature System Guide](feature-system.md)** - Understanding Familia's feature architecture
 - **[Implementation Guide](implementation.md)** - Production deployment and configuration patterns
 
-The Expiration feature provides a robust foundation for managing data lifecycle in Familia applications, with flexible configuration options and automatic cascading to related objects.
+The Expiration feature provides a robust foundation for managing data lifecycle in Familia applications, with flexible configuration options, automatic cascading to related objects, and comprehensive TTL monitoring capabilities.

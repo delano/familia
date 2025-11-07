@@ -28,7 +28,8 @@ end
 
 **Key Methods:**
 - `save` - Persist object to Valkey/Redis
-- `save_if_not_exists` - Conditional persistence (v2.0.0-pre6)
+- `save_if_not_exists` - Conditional persistence, returns false if exists
+- `save_if_not_exists!` - Conditional persistence, raises RecordExistsError if exists
 - `load` - Load object from Valkey/Redis
 - `exists?` - Check if object exists in Valkey/Redis
 - `destroy` - Remove object from Valkey/Redis
@@ -103,7 +104,7 @@ user = User.new(name: "Alice", email: "alice@example.com", password_hash: "secre
 user.safe_dump  # => {"name" => "Alice", "email" => "alice@example.com"}
 ```
 
-#### 3. Encrypted Fields Feature (v2.0.0-pre5)
+#### 3. Encrypted Fields Feature
 Transparent field-level encryption with multiple providers.
 
 ```ruby
@@ -146,13 +147,9 @@ vault.secret_key  # => "super-secret-123" (decrypted on access)
 class CriticalData < Familia::Horreum
   feature :encrypted_fields
 
-  # Configure encryption provider preference
-  set_encryption_provider :xchacha20_poly1305  # Preferred
-  set_fallback_provider :aes_gcm               # Fallback
-
-  encrypted_field :credit_card, aad_fields: [:user_id, :created_at]
-  encrypted_field :ssn, provider: :xchacha20_poly1305  # Force specific provider
-  encrypted_field :notes  # Uses default provider
+  encrypted_field :credit_card
+  encrypted_field :ssn
+  encrypted_field :notes
 end
 
 # Key versioning and rotation
@@ -163,44 +160,20 @@ Familia.configure do |config|
     v3: ENV['NEW_KEY']       # New key for rotation
   }
   config.current_key_version = :v2
-
-  # Provider configuration
-  config.encryption_providers = {
-    xchacha20_poly1305: {
-      key_size: 32,
-      nonce_size: 24,
-      require_gem: 'rbnacl'
-    },
-    aes_gcm: {
-      key_size: 32,
-      iv_size: 12,
-      tag_size: 16
-    }
-  }
+  config.encryption_personalization = 'MyApp-2024'  # Optional (XChaCha20 only)
 end
 
-# Request-level key caching for performance
-Familia::Encryption.with_request_cache do
-  1000.times do |i|
-    record = CriticalData.new(
-      credit_card: "4111-1111-1111-#{i.to_s.rjust(4, '0')}",
-      ssn: "123-45-#{i.to_s.rjust(4, '0')}",
-      notes: "Customer record #{i}"
-    )
-    record.save  # Reuses derived keys for performance
-  end
-end
+# Operations with encrypted fields
+record = CriticalData.new(
+  credit_card: "4111-1111-1111-1234",
+  ssn: "123-45-6789",
+  notes: "Customer notes"
+)
+record.save
 
-# Key rotation procedures
-CriticalData.all.each do |record|
-  # Re-encrypt with current key version
-  record.re_encrypt_fields!
-
-  # Verify encryption status
-  status = record.encrypted_fields_status
-  puts "Record #{record.identifier}: #{status}"
-  # => {credit_card: {encrypted: true, key_version: :v2, provider: :xchacha20_poly1305}}
-end
+# Verify encryption status
+puts "Record #{record.identifier}: #{status}"
+# => {credit_card: {encrypted: true, algorithm: "xchacha20poly1305", cleared: false}}
 ```
 
 **ConcealedString Security Features:**
@@ -226,7 +199,7 @@ user_data = user.to_json
 # All encrypted fields show as "[CONCEALED]" in JSON
 ```
 
-#### 4. Transient Fields Feature (v2.0.0-pre5)
+#### 4. Transient Fields Feature
 Non-persistent fields with memory-safe handling.
 
 ```ruby
@@ -252,7 +225,7 @@ form.password.reveal # => "secret123" (explicit access)
 - `reveal` method for explicit access
 - Safe for logging and serialization
 
-#### 5. Relationships Feature (v2.0.0-pre7)
+#### 5. Relationships Feature
 Comprehensive object relationship system with automatic management, clean Ruby-idiomatic syntax, and simplified method generation.
 
 ```ruby
@@ -329,12 +302,14 @@ active_domains = Domain.active_domains.members
 - **Performance**: O(1) hash lookups and efficient sorted set operations
 - **Flexibility**: Supports class-level and relationship-scoped indexing patterns
 
-#### 6. Object Identifier Feature (v2.0.0-pre7)
+#### 6. Object Identifier Feature
 Automatic generation of unique object identifiers with configurable strategies.
+
+Default generator is `:uuid_v7` (UUID version 7 with embedded timestamp).
 
 ```ruby
 class Document < Familia::Horreum
-  feature :object_identifier, generator: :uuid_v4
+  feature :object_identifier  # Uses default :uuid_v7
 
   field :title, :content, :created_at
 end
@@ -358,91 +333,69 @@ end
 ```
 
 **Generator Types:**
+- `:uuid_v7` - UUID version 7 with embedded timestamp (default, 36 characters)
 - `:uuid_v4` - Standard UUID v4 format (36 characters)
-- `:hex` - Hexadecimal strings (configurable length, default 12)
-- `:custom` - User-defined generator method
+- `:hex` - High-entropy hexadecimal strings (256-bit via SecureIdentifier)
+- Proc/Lambda - Custom generation logic provided as a callable
 
 **Technical Implementation:**
 ```ruby
 # Auto-generated on object creation
 doc = Document.create(title: "My Document")
-doc.objid  # => "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+doc.objid  # => "01234567-89ab-7def-8000-123456789abc"  # UUID v7 format
 
 session = Session.create(user_id: "123")
 session.objid  # => "a1b2c3d4e5f67890"
 
-# Custom identifier validation
+# Custom identifier with proc
 api_key = ApiKey.create(name: "Production API")
 api_key.objid  # => "ak_Xy9ZaBcD3fG8HjKlMnOpQrStUvWxYz12"
 
-# Collision detection and retry logic
+# Feature options per-class isolation
 Document.feature_options(:object_identifier)
-#=> {generator: :uuid_v4, max_retries: 3, collision_check: true}
+#=> {generator: :uuid_v7}
 ```
 
-#### 7. External Identifier Feature (v2.0.0-pre7)
-Integration patterns for external system identifiers with validation and mapping.
+#### 7. External Identifier Feature
+Derives deterministic external identifiers from object identifiers.
 
 ```ruby
 class ExternalUser < Familia::Horreum
   feature :external_identifier
 
-  identifier_field :internal_id
-  field :internal_id, :external_id, :name, :sync_status, :last_sync_at
+  identifier_field :id
+  field :id, :name
 
-  # External system validation (custom implementation)
-  def valid_external_id?
-    external_id.present? && external_id.match?(/^ext_\d{6,}$/)
-  end
+  # External ID is automatically derived from objid
+  # Format: 'ext_' + base36(truncated_hash(objid))
 end
 
-class LegacyAccount < Familia::Horreum
-  feature :external_identifier, prefix: "legacy"
+class APIKey < Familia::Horreum
+  feature :external_identifier, format: 'api-%{id}'
 
-  field :legacy_account_id, :migrated_at, :migration_status
-
-  # Custom validation logic
-  def valid_external_id?
-    legacy_account_id.present? &&
-    legacy_account_id.match?(/^LAC[A-Z]{2}\d{8}$/)
-  end
-
-  # Bidirectional mapping
-  def self.find_by_legacy_id(legacy_id)
-    mapping = external_id_mapping.get(legacy_id)
-    mapping ? load(mapping) : nil
-  end
+  field :name, :permissions
 end
 ```
 
 **External ID Management:**
 ```ruby
-# Create with external mapping
-user = ExternalUser.new(
-  internal_id: SecureRandom.uuid,
-  external_id: "ext_123456",
-  name: "John Doe"
-)
-user.save  # Automatically creates bidirectional mapping
-
-# Lookup by external ID (custom implementation)
-found_user = nil
-ExternalUser.all.each do |user|
-  if user.external_id == "ext_123456"
-    found_user = user
-    break
-  end
-end
-
-# Sync status tracking (custom implementation)
-user.sync_status = "pending"
+# External ID is deterministically derived from objid
+user = ExternalUser.new(name: "John Doe")
 user.save
-user.sync_status = "completed"
-user.save
+user.objid  # => "01234567-89ab-7def-8000-123456789abc"
+user.extid  # => "ext_abc123def456ghi789"  # Deterministic from objid
+
+# Same objid always produces same extid
+user2 = ExternalUser.new(objid: user.objid, name: "John Doe")
+user2.extid  # => "ext_abc123def456ghi789"  # Identical
+
+# Custom format with APIKey
+key = APIKey.new(name: "Production")
+key.extid  # => "api-xyz789abc123"
 ```
 
-#### 8. Quantization Feature (v2.0.0-pre7)
-Advanced time-based data bucketing with configurable strategies and analytics integration.
+#### 8. Quantization Feature
+Time-based data bucketing for analytics and caching.
 
 ```ruby
 class DailyMetric < Familia::Horreum
@@ -473,26 +426,24 @@ metric.counter.increment
 
 ---
 
-## Advanced Feature System Architecture (v2.0.0-pre7)
+## Advanced Feature System Architecture
 
-### Feature Autoloader for Complex Projects
-Organize features into modular files for large applications.
+### Feature Autoloader for Project Organization
+Automatically load features from directory structure.
 
 ```ruby
 # app/models/customer.rb - Main model file
 class Customer < Familia::Horreum
-  module Features
-    include Familia::Features::Autoloader
-    # Automatically loads all .rb files from app/models/customer/features/
-  end
+  include Familia::Features::Autoloader
+  # Automatically loads all .rb files from app/models/customer/*.rb
 
   # Core model definition
   identifier_field :custid
   field :custid, :name, :email, :created_at
 end
 
-# app/models/customer/features/notifications.rb
-module Customer::Features::Notifications
+# app/models/customer/notifications.rb
+class Customer < Familia::Horreum
   def send_welcome_email
     NotificationService.send_template(
       email: email,
@@ -510,16 +461,9 @@ module Customer::Features::Notifications
   end
 end
 
-# app/models/customer/features/analytics.rb
-module Customer::Features::Analytics
-  extend ActiveSupport::Concern
-
-  included do
-    # Add analytics tracking to core model
-    feature :relationships
-    class_participates_in :customer_analytics, score: :created_at
-  end
-
+# app/models/customer/analytics.rb
+class Customer < Familia::Horreum
+  # Analytics methods added to Customer
   def track_activity(activity_type, metadata = {})
     activity_data = {
       custid: custid,
@@ -539,56 +483,20 @@ module Customer::Features::Analytics
 end
 ```
 
-### Feature Dependencies and Loading Order
-Control feature loading sequence with dependency declarations.
+### Feature Dependencies
+Features can declare dependencies that are automatically resolved.
 
 ```ruby
-# lib/features/advanced_encryption.rb
-module AdvancedEncryption
-  extend Familia::Features::Autoloadable
-
-  def self.depends_on
-    [:encrypted_fields, :safe_dump]  # Required features
-  end
-
-  def self.included(base)
-    base.extend ClassMethods
-  end
-
-  module ClassMethods
-    def encrypt_all_fields!
-      # Batch encrypt all existing records
-      all_records.each(&:re_encrypt_fields!)
-    end
-
-    def encryption_health_check
-      # Validate encryption across all records
-      failed_records = []
-      all_records.each do |record|
-        unless record.encrypted_fields_status.all? { |_, status| status[:encrypted] }
-          failed_records << record.identifier
-        end
-      end
-      failed_records
-    end
-  end
-
-  def secure_export
-    # Combine safe_dump with additional security
-    exported = safe_dump
-    exported[:export_timestamp] = Familia.now.to_i
-    exported[:checksum] = Digest::SHA256.hexdigest(exported.to_json)
-    exported
-  end
+# External identifier depends on object_identifier
+class User < Familia::Horreum
+  feature :external_identifier  # Automatically includes :object_identifier
+  field :name
 end
 
-# Usage with automatic dependency resolution
-class SecureCustomer < Familia::Horreum
-  feature :advanced_encryption  # Automatically includes dependencies
+# Feature dependency resolution
+Familia::Base.add_feature ExternalIdentifier, :external_identifier, depends_on: [:object_identifier]
 
-  field :name, :email
-  encrypted_field :api_key, :private_notes
-  safe_dump_field :name, :email
+# When external_identifier is included, object_identifier is automatically loaded first
 end
 ```
 
@@ -597,82 +505,64 @@ Each class maintains independent feature options.
 
 ```ruby
 class PrimaryCache < Familia::Horreum
-  feature :expiration, cascade_to: [:secondary_cache]
-  feature :quantization, time_buckets: [1.hour, 6.hours, 1.day]
+  feature :expiration
+  feature :object_identifier, generator: :uuid_v7
 
   field :cache_key, :value, :hit_count
   default_expiration 24.hours
 end
 
 class SecondaryCache < Familia::Horreum
-  feature :expiration, cascade_to: []  # No further cascading
-  feature :quantization, time_buckets: [1.day, 1.week]  # Different buckets
+  feature :expiration
+  feature :object_identifier, generator: :hex  # Different generator
 
   field :cache_key, :backup_value, :backup_timestamp
   default_expiration 7.days
 end
 
 # Feature options are completely isolated
-PrimaryCache.feature_options(:expiration)
-#=> {cascade_to: [:secondary_cache]}
+PrimaryCache.feature_options(:object_identifier)
+#=> {generator: :uuid_v7}
 
-SecondaryCache.feature_options(:expiration)
-#=> {cascade_to: []}
-
-PrimaryCache.feature_options(:quantization)
-#=> {time_buckets: [3600, 21600, 86400]}
-
-SecondaryCache.feature_options(:quantization)
-#=> {time_buckets: [86400, 604800]}
+SecondaryCache.feature_options(:object_identifier)
+#=> {generator: :hex}
 ```
 
-### Runtime Feature Management
-Add, remove, and configure features dynamically.
+### Runtime Feature Checking
+Check which features are enabled on a class.
 
 ```ruby
-class DynamicModel < Familia::Horreum
+class SecureModel < Familia::Horreum
+  feature :expiration
+  feature :encrypted_fields
+  feature :safe_dump
+
   field :name, :status
-
-  def self.enable_feature_set(feature_set)
-    case feature_set
-    when :basic
-      feature :expiration
-      feature :safe_dump
-    when :secure
-      feature :expiration
-      feature :encrypted_fields
-      feature :safe_dump
-    when :analytics
-      feature :expiration
-      feature :relationships
-      feature :quantization
-    end
-  end
-
-  def self.feature_enabled?(feature_name)
-    features_enabled.include?(feature_name.to_sym)
-  end
-
-  def self.disable_feature(feature_name)
-    # Remove feature from enabled list (affects new instances)
-    features_enabled.delete(feature_name.to_sym)
-    remove_feature_options(feature_name)
-  end
+  encrypted_field :api_key
+  safe_dump_field :name
 end
 
-# Runtime configuration
-DynamicModel.enable_feature_set(:analytics)
-DynamicModel.feature_enabled?(:relationships)  # => true
+# Check enabled features
+SecureModel.features_enabled
+#=> [:expiration, :encrypted_fields, :safe_dump]
 
-# Conditional feature usage
-if DynamicModel.feature_enabled?(:encrypted_fields)
-  DynamicModel.encrypted_field :sensitive_data
+# Check feature options
+SecureModel.feature_options(:encrypted_fields)
+#=> {} # Default options
+
+# Each class tracks its own features
+class BasicModel < Familia::Horreum
+  feature :expiration
+  field :name
 end
+
+BasicModel.features_enabled
+#=> [:expiration]
 ```
 
 ---
 
-## Connection Management (v2.0.0-pre+)
+## Connection Management
 
 ### Connection Provider Pattern
 Flexible connection pooling with provider-based architecture.
@@ -680,13 +570,14 @@ Flexible connection pooling with provider-based architecture.
 ```ruby
 # Basic Valkey/Redis connection
 Familia.configure do |config|
-  config.redis_uri = "redis://localhost:6379/0"
+  config.uri = "redis://localhost:6379/0"
 end
 
-# Connection pooling with ConnectionPool gem
+# Custom connection provider with pooling
 require 'connection_pool'
 
 Familia.connection_provider = lambda do |uri|
+  # Provider MUST return connection already on correct database
   parsed = URI.parse(uri)
   pool_key = "#{parsed.host}:#{parsed.port}/#{parsed.db || 0}"
 
@@ -695,14 +586,11 @@ Familia.connection_provider = lambda do |uri|
     Redis.new(
       host: parsed.host,
       port: parsed.port,
-      db: parsed.db || 0,
-      connect_timeout: 1,
-      read_timeout: 1,
-      write_timeout: 1
+      db: parsed.db || 0
     )
   end
 
-  @pools[pool_key].with { |conn| yield conn if block_given?; conn }
+  @pools[pool_key].with { |conn| conn }
 end
 ```
 
@@ -728,68 +616,130 @@ end
 
 ---
 
-## Advanced Relationship Patterns
+## Testing and Debugging
 
-### Permission-Encoded Relationships (v2.0.0-pre7)
-Combine timestamps with permission bits for access control.
+### Database Command Logging
+Monitor all Redis commands with DatabaseLogger middleware.
 
 ```ruby
-class Document < Familia::Horreum
-  feature :relationships
+# Enable command logging
+RedisClient.register(DatabaseLogger)
+DatabaseLogger.logger = Familia.logger
 
-  identifier_field :doc_id
-  field :doc_id, :title, :content
-
-  # Permission constants (bit flags)
-  READ    = 1   # 001
-  WRITE   = 2   # 010
-  DELETE  = 4   # 100
-  ADMIN   = 8   # 1000
+# Capture commands in tests
+commands = DatabaseLogger.capture_commands do
+  user = User.create(name: "Test User")
+  user.save
 end
 
-class UserDocumentAccess
-  # Encode timestamp + permissions into sorted set score
-  def self.encode_score(timestamp, permissions)
-    "#{timestamp}.#{permissions}".to_f
-  end
+puts commands.first.command  # => "SET user:123 {...}"
+puts commands.first.μs       # => 567 (microseconds)
 
-  def self.decode_score(score)
-    parts = score.to_s.split('.')
-    timestamp = parts[0].to_i
-    permissions = parts[1] ? parts[1].to_i : 0
-    [timestamp, permissions]
-  end
+# Enable sampling for production
+DatabaseLogger.sample_rate = 0.01  # Log 1% of commands
 
-  # Check if user has specific permission
-  def self.has_permission?(permissions, required)
-    (permissions & required) != 0
-  end
+# Structured logging format
+DatabaseLogger.structured_logging = true
+# => "Redis command cmd=SET args=[key, value] duration_ms=0.42 db=0"
+```
+
+### Debug Mode
+Enable comprehensive debugging output.
+
+```ruby
+# Via environment variable
+ENV['FAMILIA_DEBUG'] = '1'
+ENV['FAMILIA_TRACE'] = '1'
+
+# Via configuration
+Familia.configure do |config|
+  config.debug = true
 end
 
-# Usage example
-user_id = "user123"
-doc_id = "doc456"
-timestamp = Familia.now.to_i
+# Check database contents
+Familia.dbclient.keys('user:*')
 
-# Grant read + write permissions
-permissions = Document::READ | Document::WRITE  # 3
-score = UserDocumentAccess.encode_score(timestamp, permissions)
+# Trace specific operations
+Familia.trace :LOAD, redis_client, "user:123", "from cache"
+```
 
-# Store in sorted set (user_id -> score with permissions)
-user_documents = Familia::DataType::SortedSet.new("user:#{user_id}:documents")
-user_documents.add(doc_id, score)
+### Connection Chain Debugging
+Understand connection resolution order.
 
-# Query with permission filtering
-docs_with_write = user_documents.select do |doc_id, score|
-  _, permissions = UserDocumentAccess.decode_score(score)
-  UserDocumentAccess.has_permission?(permissions, Document::WRITE)
+```ruby
+# Connection resolution order:
+# 1. Instance @dbclient if set
+# 2. Class logical_database if configured
+# 3. Connection provider if set
+# 4. Global Familia connection
+
+class DebugModel < Familia::Horreum
+  logical_database 3
+  field :name
+end
+
+model = DebugModel.new(name: "test")
+# Uses database 3 from logical_database
+
+model.dbclient = custom_connection
+# Now uses custom_connection instead
+```
+
+## Performance Considerations
+
+### Encryption Performance
+- XChaCha20-Poly1305 is ~2x faster than AES-256-GCM
+- Key derivation is NOT cached by default for security
+- Use request-level caching for bulk operations:
+
+```ruby
+Familia::Encryption.with_request_cache do
+  # Bulk operations with cached key derivation
+  1000.times do |i|
+    User.create(email: "user#{i}@example.com")
+  end
 end
 ```
 
-### Time-Series Relationships with Automatic Management
-Track relationships over time with timestamp-based scoring and automatic updates.
+### Connection Pooling
+- Use connection_provider for multi-threaded environments
+- Pool size should match thread count
+- Connections are thread-safe when using provider pattern
 
-```ruby
+### Feature Performance Impact
+- **Encryption**: ~10-20% overhead for field access
+- **Relationships**: O(1) for indexed lookups
+- **Quantization**: Minimal overhead, improves storage efficiency
+- **Safe Dump**: Lazy evaluation, only computed when called
+
+---
+
+## Migration Guide
+
+### From Familia v1.x to v2.0
+- Replace `redis_uri` with `uri` in configuration
+- Update feature syntax from mixins to `feature` declarations
+- Migrate from `global_` prefix to `class_` for class-level methods
+- Update encryption configuration to new provider system
+
+### Connection Provider Pattern
+- Familia v2.0 uses redis-rb gem internally
+- Connection providers must return Redis connections
+- Uses RedisClient middleware architecture internally via redis-rb
+
+---
+
+## Summary
+
+Familia v2.0.0-pre series provides a comprehensive ORM for Valkey/Redis with:
+- **Modular Feature System**: Isolated, configurable features per class
+- **Advanced Security**: Field-level encryption with multiple providers
+- **Flexible Relationships**: Automatic management with clean Ruby syntax
+- **Performance Optimized**: Connection pooling, sampling, and caching
+- **Production Ready**: Debug logging, monitoring, and thread safety
+
+For additional documentation and examples, see the [Familia GitHub repository](https://github.com/delano/familia).
+
 class ActivityTracker < Familia::Horreum
   feature :relationships
 
@@ -799,7 +749,7 @@ class ActivityTracker < Familia::Horreum
   # Class-level tracking with automatic management
   class_participates_in :user_activities, score: :created_at
   class_participates_in :activity_by_type,
-                   score: ->(activity) { "#{activity.activity_type}:#{activity.created_at}".hash }
+                   score: -> { "#{activity_type}:#{created_at}".hash }
 end
 
 # Create and save activity (automatic tracking)
@@ -814,12 +764,14 @@ activity.save  # Automatically added to both tracking collections
 # Query recent activities (last hour)
 hour_ago = (Familia.now - 1.hour).to_i
 recent_activities = ActivityTracker.user_activities.range_by_score(
-  hour_ago, '+inf', limit: [0, 50]
+  hour_ago, '+inf'
 )
 
 # Get activities by type in time range
+login_hash_start = "login:#{hour_ago}".hash
+login_hash_end = "login:#{Familia.now.to_i}".hash
 login_activities = ActivityTracker.activity_by_type.range_by_score(
-  "login:#{hour_ago}".hash, "login:#{Familia.now.to_i}".hash
+  login_hash_start, login_hash_end
 )
 ```
 
@@ -827,7 +779,7 @@ login_activities = ActivityTracker.activity_by_type.range_by_score(
 
 ## Data Type Usage Patterns
 
-### Advanced Sorted UnsortedSet Operations
+### Advanced Sorted Set Operations
 Leverage Valkey/Redis sorted sets for rankings, time series, and scored data.
 
 ```ruby
@@ -840,19 +792,20 @@ end
 leaderboard = Leaderboard.new(game_id: "game1", name: "Daily Challenge")
 
 # Add player scores
-leaderboard.scores.add("player1", 1500)
-leaderboard.scores.add("player2", 2300)
-leaderboard.scores.add("player3", 1800)
+leaderboard.scores.add(1500, "player1")
+leaderboard.scores.add(2300, "player2")
+leaderboard.scores.add(1800, "player3")
 
-# Get top 10 players
-top_players = leaderboard.scores.range(0, 9, with_scores: true, order: 'DESC')
+# Get top 10 players (highest scores first)
+top_players = leaderboard.scores.revrange(0, 9, withscores: true)
 # => [["player2", 2300.0], ["player3", 1800.0], ["player1", 1500.0]]
 
-# Get player rank
-rank = leaderboard.scores.rank("player1", order: 'DESC')  # => 2 (0-indexed)
+# Get player rank (0-indexed, lower scores = lower rank)
+rank = leaderboard.scores.rank("player1")  # => 0
+rev_rank = leaderboard.scores.revrank("player1")  # => 2 (highest to lowest)
 
 # Get score range
-mid_tier = leaderboard.scores.range_by_score(1000, 2000, with_scores: true)
+mid_tier = leaderboard.scores.rangebyscore(1000, 2000, withscores: true)
 
 # Increment score atomically
 leaderboard.scores.increment("player1", 100)  # Add 100 to existing score
@@ -913,23 +866,23 @@ end
 prefs = UserPreferences.new(user_id: "user123")
 
 # UnsortedSet individual preferences
-prefs.settings.set("theme", "dark")
-prefs.settings.set("notifications", "true")
-prefs.settings.set("timezone", "UTC-5")
+prefs.settings["theme"] = "dark"
+prefs.settings["notifications"] = "true"
+prefs.settings["timezone"] = "UTC-5"
 
 # Batch set multiple values
-prefs.feature_flags.update({
+prefs.feature_flags.update(
   "beta_ui" => "true",
   "new_dashboard" => "false",
   "advanced_features" => "true"
-})
+)
 
 # Get preferences
-theme = prefs.settings.get("theme")  # => "dark"
-all_settings = prefs.settings.all    # => Hash of all settings
+theme = prefs.settings["theme"]     # => "dark"
+all_settings = prefs.settings.to_h  # => Hash of all settings
 
 # Check feature flags
-beta_enabled = prefs.feature_flags.get("beta_ui") == "true"
+beta_enabled = prefs.feature_flags["beta_ui"] == "true"
 ```
 
 ---
@@ -953,7 +906,7 @@ class ResilientService < Familia::Horreum
         sleep(0.1 * (4 - retries))  # Exponential backoff
         retry
       else
-        Familia.warn "Redis operation failed after retries: #{e.message}"
+        Familia.warn "Database operation failed after retries: #{e.message}"
         nil  # Return nil or handle gracefully
       end
     end
@@ -1029,12 +982,11 @@ users = []
   users << user
 end
 
-# Use Valkey/Redis pipelining for batch saves
-User.transaction do |redis|
+# Use transactions for batch saves
+User.pipelined do
   users.each do |user|
-    # All operations batched in transaction
-    user.object.set_all(user.to_hash)
-    User.email_index.set(user.email, user.identifier)
+    # All operations batched in pipeline
+    user.save
   end
 end
 ```
@@ -1073,15 +1025,15 @@ Configure connection pools based on application needs.
 # High-throughput application
 Familia.connection_provider = lambda do |uri|
   ConnectionPool.new(size: 25, timeout: 5) do
-    Redis.new(uri, connect_timeout: 0.1, read_timeout: 1, write_timeout: 1)
-  end.with { |conn| yield conn if block_given?; conn }
+    Redis.new(url: uri)
+  end.with { |conn| conn }
 end
 
 # Memory-constrained environment
 Familia.connection_provider = lambda do |uri|
   ConnectionPool.new(size: 5, timeout: 10) do
-    Redis.new(uri, connect_timeout: 2, read_timeout: 5, write_timeout: 5)
-  end.with { |conn| yield conn if block_given?; conn }
+    Redis.new(url: uri)
+  end.with { |conn| conn }
 end
 ```
 
@@ -1142,16 +1094,16 @@ class User < Familia::Horreum
 
   # Temporary migration method
   def migrate_api_key!
-    if raw_api_key = object.get("api_key")  # Read old plaintext
-      self.api_key = raw_api_key             # Write as encrypted
-      object.delete("api_key")               # Remove plaintext
+    if raw_api_key = dbclient.hget(dbkey, "api_key")  # Read old plaintext
+      self.api_key = raw_api_key                       # Write as encrypted
+      dbclient.hdel(dbkey, "api_key")                 # Remove plaintext
       save
     end
   end
 end
 
-# Step 3: Run migration for all users
-User.all.each(&:migrate_api_key!)
+# Step 3: Run migration for existing users
+User.instances.each(&:migrate_api_key!)
 ```
 
 ---
@@ -1167,17 +1119,17 @@ require 'familia'
 
 # Use separate Valkey/Redis database for tests
 Familia.configure do |config|
-  config.redis_uri = ENV.fetch('REDIS_TEST_URI', 'redis://localhost:2525/3')
+  config.uri = ENV.fetch('REDIS_TEST_URI', 'redis://localhost:2525/3')
 end
 
 module TestHelpers
   def setup_redis
     # Clear test database
-    Familia.connection.flushdb
+    Familia.dbclient.flushdb
   end
 
   def teardown_redis
-    Familia.connection.flushdb
+    Familia.dbclient.flushdb
   end
 
   def create_test_user(**attrs)
@@ -1208,9 +1160,11 @@ class UserTest < Minitest::Test
     assert user.exists?
     assert_equal "Alice", user.name
 
-    # Test automatic indexing
-    found_id = User.email_lookup.get(user.email)
-    assert_equal user.identifier, found_id
+    # Test automatic indexing (if using unique_index)
+    if User.respond_to?(:find_by_email)
+      found_user = User.find_by_email(user.email)
+      assert_equal user.identifier, found_user.identifier
+    end
   end
 
   def test_relationships_with_clean_syntax
@@ -1285,23 +1239,17 @@ class UserTest < Minitest::Test
   end
 
   def test_external_identifier_mapping
-    user = ExternalUser.new(
-      internal_id: SecureRandom.uuid,
-      external_id: "ext_123456",
-      name: "External User"
-    )
+    user = ExternalUser.new(name: "External User")
     user.save
 
-    # Test bidirectional mapping
-    found_by_external = ExternalUser.find_by_external_id("ext_123456")
-    assert_equal user.internal_id, found_by_external.internal_id
+    # Test external ID is derived from objid
+    assert_not_nil user.objid
+    assert_not_nil user.extid
+    assert user.extid.start_with?("ext_")
 
-    # Test sync status tracking
-    user.mark_sync_pending
-    assert_equal "pending", user.sync_status
-
-    user.mark_sync_completed
-    assert_equal "completed", user.sync_status
+    # Test deterministic generation
+    user2 = ExternalUser.new(objid: user.objid, name: "External User")
+    assert_equal user.extid, user2.extid
   end
 
   private
@@ -1330,7 +1278,7 @@ Essential configuration options for Familia v2.0.0-pre.
 ```ruby
 Familia.configure do |config|
   # Basic Valkey/Redis connection
-  config.redis_uri = ENV['REDIS_URL'] || 'redis://localhost:6379/0'
+  config.uri = ENV['REDIS_URL'] || 'redis://localhost:6379/0'
 
   # Connection provider for pooling (optional)
   config.connection_provider = MyConnectionProvider

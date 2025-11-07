@@ -9,8 +9,8 @@ The `Familia::Refinements::TimeLiterals` module extends Ruby's built-in classes 
 ```ruby
 using Familia::Refinements::TimeLiterals
 
-2.hours        #=> 7200 (seconds)
-"30m".in_seconds  #=> 1800
+2.hours        #=> 7200.0 (seconds)
+"30m".in_seconds  #=> 1800.0
 timestamp.days_old  #=> 5.2
 ```
 
@@ -45,12 +45,12 @@ using Familia::Refinements::TimeLiterals
 # Singular and plural forms work identically
 1.second   #=> 1
 30.seconds #=> 30
-5.minutes  #=> 300
-2.hours    #=> 7200
-3.days     #=> 259200
-1.week     #=> 604800
-2.months   #=> 5259492
-1.year     #=> 31556952
+5.minutes  #=> 300.0
+2.hours    #=> 7200.0
+3.days     #=> 259200.0
+1.week     #=> 604800.0
+2.months   #=> 5259492.0
+1.year     #=> 31556952.0
 ```
 
 ### Converting Time Units Back
@@ -80,9 +80,9 @@ Parse human-readable time strings:
 
 | Unit | Abbreviations | Example |
 |------|---------------|---------|
-| Microseconds | `us`, `μs`, `microsecond`, `microseconds` | `"500us"` |
+| Microseconds | `us`, `μs`, `microsecond`, `microseconds` | `"500μs"` |
 | Milliseconds | `ms`, `millisecond`, `milliseconds` | `"250ms"` |
-| Seconds | `s`, `second`, `seconds` | `"30s"` |
+| Seconds | (no unit) | `"30"` |
 | Minutes | `m`, `minute`, `minutes` | `"15m"` |
 | Hours | `h`, `hour`, `hours` | `"2h"` |
 | Days | `d`, `day`, `days` | `"7d"` |
@@ -90,7 +90,7 @@ Parse human-readable time strings:
 | Months | `mo`, `month`, `months` | `"6mo"` |
 | Years | `y`, `year`, `years` | `"1y"` |
 
-**Note**: Use `"mo"` for months to avoid confusion with `"m"` (minutes).
+**Note**: Use `"mo"` for months to avoid confusion with `"m"` (minutes). Seconds don't require a unit suffix.
 
 ## Age Calculations
 
@@ -215,7 +215,7 @@ If upgrading from earlier versions:
 12.months != 1.year  # Different values
 
 # New behavior (consistent)
-12.months == 1.year  # Same value: 31,556,952 seconds
+12.months == 1.year  # Same value: 31,556,952.0 seconds
 ```
 
 Update any code that relied on the old 365-day year constant to expect the new Gregorian year values.

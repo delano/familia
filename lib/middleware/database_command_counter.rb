@@ -1,10 +1,6 @@
-# frozen_string_literal: true
-
 # lib/middleware/database_command_counter.rb
 
 require 'concurrent-ruby'
-
-# rubocop:disable ThreadSafety/ClassInstanceVariable
 
 # DatabaseCommandCounter is RedisClient middleware for counting commands.
 #
@@ -141,5 +137,3 @@ module DatabaseCommandCounter
     super  # CRITICAL: Must use super, not yield, to chain middlewares
   end
 end
-
-# rubocop:enable ThreadSafety/ClassInstanceVariable

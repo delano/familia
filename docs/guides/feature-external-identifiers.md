@@ -2,636 +2,608 @@
 
 > **💡 Quick Reference**
 >
-> Enable integration with external systems and legacy databases:
+> Generate deterministic, public-facing identifiers from internal objid:
 > ```ruby
-> class ExternalUser < Familia::Horreum
+> class User < Familia::Horreum
+>   feature :object_identifier
 >   feature :external_identifier
->   field :internal_id, :external_id, :name, :sync_status
+>   field :email, :name
 > end
 > ```
 
 ## Overview
 
-The External Identifier feature provides seamless integration between Familia objects and external systems. Whether you're migrating from a legacy database, integrating with third-party APIs, or maintaining bidirectional synchronization with external services, this feature handles identifier mapping, validation, and sync status tracking.
+The External Identifier feature provides deterministic, public-facing identifiers that are securely derived from internal `objid` values. These shorter, URL-safe identifiers are perfect for APIs, public URLs, and external integrations where you want to hide internal implementation details while maintaining deterministic lookups.
 
 ## Why Use External Identifiers?
 
-**Legacy Integration**: Migrate existing systems while maintaining references to original identifiers.
+**Security Through Obscurity**: Hide internal UUID structure and potential timestamp information from public interfaces.
 
-**API Synchronization**: Keep local objects synchronized with external services using their native identifiers.
+**URL-Friendly**: Generate compact, base36-encoded identifiers safe for use in URLs and APIs.
 
-**Dual-Key Strategy**: Maintain both internal Familia identifiers and external system identifiers for robust integration.
+**Deterministic Generation**: Same `objid` always produces the same `extid` for reliable lookups.
 
-**Sync Tracking**: Built-in status tracking for synchronization operations and failure handling.
+**Bidirectional Mapping**: Automatic lookup tables enable finding objects by external ID.
 
-**Validation**: Ensure external identifiers meet format requirements and business rules.
+**Customizable Format**: Configure prefix and format patterns to match your naming conventions.
 
-## Quick Start
+## Dependencies
 
-### Basic External ID Mapping
+External identifiers require the Object Identifier feature:
+
+```ruby
+class MyModel < Familia::Horreum
+  feature :object_identifier    # Required first
+  feature :external_identifier # Then enable external IDs
+end
+```
+
+## Basic Usage
+
+### Default External Identifier
+
+```ruby
+class User < Familia::Horreum
+  feature :object_identifier
+  feature :external_identifier
+
+  field :email, :name
+end
+
+user = User.new(email: 'alice@example.com', name: 'Alice')
+user.save
+
+# Internal identifier (long, detailed)
+user.objid  # => "01234567-89ab-cdef-1234-567890abcdef"
+
+# External identifier (short, public-safe, 29 chars total: 4 prefix + 25 ID)
+user.extid  # => "ext_abc123def456ghi789jkl012" (deterministic from objid)
+
+# Always produces the same extid from the same objid
+user2 = User.new(objid: user.objid, email: 'alice@example.com')
+user2.extid  # => "ext_abc123def456ghi789jkl012" (identical)
+```
+
+### Finding by External ID
+
+```ruby
+# Create and save user
+user = User.new(email: 'bob@example.com')
+user.save
+puts user.extid  # => "ext_xyz789abc123def456ghi123"
+
+# Find by external identifier
+found_user = User.find_by_extid('ext_xyz789abc123def456ghi123')
+found_user.email  # => "bob@example.com"
+
+# Returns nil if not found
+missing = User.find_by_extid('ext_nonexistent')  # => nil
+```
+
+### Long-form Methods
+
+```ruby
+# Aliases for clarity
+user.external_identifier           # Same as user.extid
+user.external_identifier = 'new'   # Same as user.extid = 'new'
+```
+
+## Custom Format Templates
+
+### Custom Prefix
 
 ```ruby
 class Customer < Familia::Horreum
-  feature :external_identifier
+  feature :object_identifier
+  feature :external_identifier, format: 'cust_%{id}'
 
-  identifier_field :internal_id
-  field :internal_id, :external_id, :name, :email, :sync_status
+  field :company_name, :email
 end
 
-# Create with external mapping
-customer = Customer.new(
-  internal_id: SecureRandom.uuid,
-  external_id: "ext_customer_12345",
-  name: "Acme Corporation",
-  email: "contact@acme.com"
-)
-customer.save  # Automatically creates bidirectional mapping
-
-# Find by external ID
-found_customer = Customer.find_by_external_id("ext_customer_12345")
-puts found_customer.name  # => "Acme Corporation"
+customer = Customer.new(company_name: 'Acme Corp')
+customer.save
+customer.extid  # => "cust_abc123def456ghi789jkl012" (30 chars: 5 prefix + 25 ID)
 ```
 
-### Legacy Database Migration
+### Hyphen Separator
 
 ```ruby
-class LegacyAccount < Familia::Horreum
-  feature :external_identifier, prefix: "legacy"
+class APIKey < Familia::Horreum
+  feature :object_identifier
+  feature :external_identifier, format: 'api-%{id}'
 
-  identifier_field :familia_id
-  field :familia_id, :legacy_account_id, :username, :migration_status
-
-  # External ID validation
-  def valid_external_id?
-    legacy_account_id.present? &&
-    legacy_account_id.match?(/^LAC[A-Z]{2}\d{8}$/)
-  end
+  field :name, :permissions
 end
 
-# Migrate legacy data
-legacy_user = LegacyAccount.new(
-  familia_id: SecureRandom.uuid,
-  legacy_account_id: "LACUS12345678",
-  username: "john_doe"
-)
-
-if legacy_user.valid_external_id?
-  legacy_user.save
-  legacy_user.mark_migration_completed
-end
+key = APIKey.new(name: 'Production API Key')
+key.save
+key.extid  # => "api-abc123def456ghi789jkl012" (29 chars: 4 prefix + 25 ID)
 ```
 
-## Configuration Options
-
-### Basic Configuration
+### Version Prefix
 
 ```ruby
-class ExternalResource < Familia::Horreum
-  feature :external_identifier,
-          validation_pattern: /^ext_\d{6,}$/,
-          source_system: "CustomerAPI",
-          bidirectional: true  # Default
+class Resource < Familia::Horreum
+  feature :object_identifier
+  feature :external_identifier, format: 'v2/%{id}'
 
-  field :resource_id, :external_id, :data
+  field :resource_type, :data
 end
+
+resource = Resource.new(resource_type: 'document')
+resource.save
+resource.extid  # => "v2/abc123def456ghi789jkl012" (28 chars: 3 prefix + 25 ID)
 ```
 
-**Configuration Parameters:**
-- `validation_pattern`: Regex pattern for external ID validation
-- `source_system`: Name of the external system (for logging/debugging)
-- `bidirectional`: Enable bidirectional mapping (default: true)
-- `prefix`: Optional prefix for mapping keys
-
-### Advanced Validation
+### No Prefix
 
 ```ruby
-class StrictExternalUser < Familia::Horreum
-  feature :external_identifier,
-          validation_pattern: /^user_[a-z0-9]{8,16}$/,
-          source_system: "AuthService"
+class SimpleModel < Familia::Horreum
+  feature :object_identifier
+  feature :external_identifier, format: '%{id}'
 
-  field :user_id, :external_id, :username, :permissions
-
-  # Custom validation beyond pattern matching
-  def validate_external_id!
-    return false unless valid_external_id_format?
-
-    # Check against blacklist
-    blacklisted_ids = ["user_test", "user_admin", "user_system"]
-    return false if blacklisted_ids.include?(external_id)
-
-    # Verify with external service
-    external_service_response = AuthService.verify_user_id(external_id)
-    external_service_response['valid'] == true
-  end
-
-  private
-
-  def valid_external_id_format?
-    external_id.present? && external_id.match?(self.class.validation_pattern)
-  end
+  field :data
 end
+
+model = SimpleModel.new(data: 'test')
+model.save
+model.extid  # => "abc123def456ghi789jkl012" (25 chars: just the ID)
 ```
 
-## Mapping and Lookup Operations
+## Security Model
+
+### Deterministic but Obscured
+
+External identifiers use cryptographic techniques to obscure the relationship between `objid` and `extid`:
+
+1. **SHA-256 Seeding**: The `objid` is hashed to create a uniform seed
+2. **PRNG Function**: A pseudorandom number generator acts as a deterministic transformation
+3. **Base36 Encoding**: Result is encoded as URL-safe, compact string
+
+This ensures:
+- Same `objid` always produces same `extid` (deterministic)
+- No discernible mathematical correlation between `objid` and `extid` (secure)
+- Cannot reverse-engineer `objid` from `extid` (one-way)
+
+### Generated Format Details
+
+The ID portion (after any prefix) is always:
+- **Length**: Exactly 25 characters
+- **Characters**: Lowercase alphanumeric only (`0-9a-z`)
+- **Encoding**: Base36 representation of 128-bit random data
+- **Pattern**: `/[0-9a-z]{25}/`
+
+### Provenance Validation
+
+External identifiers can only be derived from `objid` values with known provenance:
+
+```ruby
+# ✅ Valid - objid from ObjectIdentifier feature
+user = User.new  # objid generated by UUID v7
+user.extid       # => Works fine
+
+# ❌ Invalid - objid of unknown origin
+user = User.new
+user.instance_variable_set(:@objid, 'unknown-source-id')
+user.extid  # => ExternalIdentifierError: objid provenance unknown
+```
+
+## Automatic Lookup Management
 
 ### Bidirectional Mapping
 
-External identifiers automatically maintain bidirectional mappings for efficient lookups:
+The feature automatically maintains lookup tables:
 
 ```ruby
 class Product < Familia::Horreum
+  feature :object_identifier
   feature :external_identifier
-  field :product_id, :external_sku, :name, :price
+
+  field :name, :price
 end
 
-product = Product.create(
-  product_id: "familia_prod_123",
-  external_sku: "SKU-ABC-789",
-  name: "Widget Pro"
+product = Product.new(name: 'Widget', price: 29.99)
+product.save
+
+# Lookup table is automatically updated
+Product.extid_lookup.class    # => Familia::DataType::HashKey
+Product.extid_lookup.length   # => 1
+
+# Mapping: extid -> objid
+extid = product.extid
+Product.extid_lookup[extid]   # => product.objid
+```
+
+### Cleanup on Destroy
+
+```ruby
+product.destroy!
+
+# Lookup entry is automatically cleaned up
+Product.extid_lookup[extid]   # => nil
+```
+
+## Implementation Details
+
+### Lazy Generation
+
+External identifiers are generated lazily when first accessed:
+
+```ruby
+user = User.new(email: 'test@example.com')
+
+# extid is not generated until accessed
+user.instance_variable_get(:@extid)  # => nil
+
+# First access triggers generation
+user.extid  # => "ext_abc123..." (generated from objid)
+
+# Subsequent access returns cached value
+user.extid  # => "ext_abc123..." (same value)
+```
+
+### Preservation During Initialization
+
+Values provided during initialization are preserved:
+
+```ruby
+# Loading from database with existing extid
+user = User.new(
+  objid: existing_objid,
+  extid: existing_extid,
+  email: 'test@example.com'
 )
 
-# Automatic bidirectional mapping is created:
-# external_id_mapping["SKU-ABC-789"] = "familia_prod_123"
-# internal_id_mapping["familia_prod_123"] = "SKU-ABC-789"
-
-# Fast lookups in both directions
-by_external = Product.find_by_external_id("SKU-ABC-789")
-by_internal = Product.load("familia_prod_123")
-
-# Both return the same object
-by_external.product_id == by_internal.product_id  # => true
+# Existing extid is preserved, not regenerated
+user.extid  # => existing_extid (not derived)
 ```
 
-### Batch Operations
+### Database Persistence
 
-Efficiently handle multiple external identifier operations:
+External identifiers are automatically stored in the object's hash:
 
 ```ruby
-class BulkImporter
-  def self.import_external_users(external_data_array)
-    external_ids = external_data_array.map { |data| data['external_id'] }
+user = User.new(email: 'test@example.com')
+user.save
 
-    # Batch lookup existing users
-    existing_users = ExternalUser.multiget_by_external_ids(external_ids)
-    existing_external_ids = existing_users.compact.map(&:external_id)
+# extid is stored alongside other fields
+user.to_h  # => { objid: "...", extid: "ext_abc123...", email: "..." }
+```
 
-    # Process only new users
-    new_data = external_data_array.reject do |data|
-      existing_external_ids.include?(data['external_id'])
-    end
+## Error Handling
 
-    # Batch create new users
-    new_users = new_data.map do |data|
-      ExternalUser.new(
-        internal_id: SecureRandom.uuid,
-        external_id: data['external_id'],
-        name: data['name'],
-        email: data['email']
-      )
-    end
+### Missing ObjectIdentifier Feature
 
-    # Batch save with transaction
-    ExternalUser.transaction do |redis|
-      new_users.each(&:save)
-    end
+```ruby
+class BadModel < Familia::Horreum
+  feature :external_identifier  # Missing :object_identifier dependency
+end
 
-    new_users
+# => Error during class definition
+```
+
+### Unknown Provenance
+
+```ruby
+user = User.new
+# Manually set objid with unknown provenance
+user.instance_variable_set(:@objid, 'manual-id')
+
+user.extid
+# => ExternalIdentifierError: Cannot derive external identifier: objid provenance unknown
+```
+
+### Invalid Objid Format
+
+```ruby
+# For custom generators, objid must be hexadecimal
+user.instance_variable_set(:@objid, 'not-hex-format!')
+user.extid
+# => ExternalIdentifierError: Cannot normalize objid from custom generator
+```
+
+## Testing Strategies
+
+### Basic Functionality
+
+```ruby
+class ExternalIdentifierTest < Minitest::Test
+  def setup
+    @user = User.new(email: 'test@example.com')
+    @user.save
+  end
+
+  def test_deterministic_generation
+    extid1 = @user.extid
+    extid2 = @user.extid
+
+    assert_equal extid1, extid2
+  end
+
+  def test_same_objid_produces_same_extid
+    user2 = User.new(objid: @user.objid, email: 'other@example.com')
+
+    assert_equal @user.extid, user2.extid
+  end
+
+  def test_find_by_extid
+    found_user = User.find_by_extid(@user.extid)
+
+    assert_equal @user.objid, found_user.objid
+    assert_equal @user.email, found_user.email
+  end
+
+  def test_format_validation
+    # Default format: 'ext_' prefix + 25 character base36 ID
+    assert_match(/\Aext_[0-9a-z]{25}\z/, @user.extid)
   end
 end
 ```
 
-## Synchronization Status Tracking
-
-### Built-in Sync Status Management
+### Custom Format Testing
 
 ```ruby
-class SyncableResource < Familia::Horreum
-  feature :external_identifier
+class CustomFormatTest < Minitest::Test
+  def test_custom_prefix
+    customer = Customer.new(company_name: 'Test Corp')
+    customer.save
 
-  field :resource_id, :external_id, :data, :sync_status, :last_sync_at, :sync_error
-
-  def sync_to_external!
-    mark_sync_pending
-
-    begin
-      # Simulate external API call
-      response = ExternalAPI.update_resource(external_id, data: self.data)
-
-      if response.success?
-        mark_sync_completed
-        self.last_sync_at = Familia.now.to_i
-        save
-      else
-        mark_sync_failed(response.error_message)
-      end
-    rescue => e
-      mark_sync_failed(e.message)
-      raise
-    end
+    # Custom format: 'cust_' prefix + 25 character base36 ID
+    assert_match(/\Acust_[0-9a-z]{25}\z/, customer.extid)
   end
 
-  def sync_from_external!
-    mark_sync_pending
+  def test_no_prefix_format
+    model = SimpleModel.new(data: 'test')
+    model.save
 
-    begin
-      external_data = ExternalAPI.get_resource(external_id)
-      self.data = external_data['data']
-      mark_sync_completed
-      save
-    rescue => e
-      mark_sync_failed(e.message)
-      raise
-    end
+    # No prefix format: just 25 character base36 ID
+    assert_match(/\A[0-9a-z]{25}\z/, model.extid)
   end
 
-  def needs_sync?
-    sync_status != 'completed' ||
-    (last_sync_at && (Familia.now.to_i - last_sync_at) > 1.hour)
-  end
-end
+  def test_hyphen_separator
+    key = APIKey.new(name: 'Test Key')
+    key.save
 
-# Usage
-resource = SyncableResource.find_by_external_id("ext_123")
-
-if resource.needs_sync?
-  resource.sync_from_external!
-end
-
-puts resource.sync_status  # => "completed", "pending", "failed"
-```
-
-### Sync Status Methods
-
-The external identifier feature provides these built-in status methods:
-
-```ruby
-# Status management
-object.mark_sync_pending
-object.mark_sync_completed
-object.mark_sync_failed(error_message)
-
-# Status checking
-object.sync_pending?        # => true/false
-object.sync_completed?      # => true/false
-object.sync_failed?         # => true/false
-
-# Error handling
-object.sync_error           # => error message if failed
-object.clear_sync_error     # Reset error state
-```
-
-## Integration Patterns
-
-### API Integration with Webhooks
-
-```ruby
-class WebhookHandler
-  def self.handle_external_update(webhook_data)
-    external_id = webhook_data['resource_id']
-    resource = ExternalResource.find_by_external_id(external_id)
-
-    if resource
-      # Update existing resource
-      resource.data = webhook_data['data']
-      resource.mark_sync_completed
-      resource.save
-    else
-      # Create new resource from webhook
-      resource = ExternalResource.create(
-        internal_id: SecureRandom.uuid,
-        external_id: external_id,
-        data: webhook_data['data']
-      )
-      resource.mark_sync_completed
-    end
-
-    resource
-  end
-end
-
-# Webhook endpoint
-post '/webhook/external_updates' do
-  webhook_data = JSON.parse(request.body.read)
-  WebhookHandler.handle_external_update(webhook_data)
-  status 200
-end
-```
-
-### Legacy Database Migration
-
-```ruby
-class LegacyMigration
-  def self.migrate_customers_from_legacy_db
-    # Connect to legacy database
-    legacy_db = Sequel.connect(ENV['LEGACY_DATABASE_URL'])
-
-    legacy_db[:customers].each do |legacy_row|
-      # Check if already migrated
-      existing = Customer.find_by_external_id(legacy_row[:customer_id])
-      next if existing
-
-      # Create new Familia object
-      customer = Customer.new(
-        internal_id: SecureRandom.uuid,
-        external_id: legacy_row[:customer_id].to_s,
-        name: legacy_row[:company_name],
-        email: legacy_row[:email],
-        created_at: legacy_row[:created_at].to_i
-      )
-
-      if customer.valid_external_id?
-        customer.save
-        customer.mark_migration_completed
-        puts "Migrated customer: #{customer.external_id}"
-      else
-        puts "Invalid external ID: #{legacy_row[:customer_id]}"
-      end
-    end
+    # Hyphen format: 'api-' prefix + 25 character base36 ID
+    assert_match(/\Aapi-[0-9a-z]{25}\z/, key.extid)
   end
 end
 ```
 
-### Multi-System Integration
+### Security Testing
 
 ```ruby
-class MultiSystemResource < Familia::Horreum
-  feature :external_identifier
-
-  field :internal_id, :crm_id, :billing_id, :support_id, :name
-
-  # Multiple external system mappings
-  def crm_mapping
-    @crm_mapping ||= ExternalIdMapping.new(self, :crm_id, "CRM_System")
-  end
-
-  def billing_mapping
-    @billing_mapping ||= ExternalIdMapping.new(self, :billing_id, "Billing_System")
-  end
-
-  def support_mapping
-    @support_mapping ||= ExternalIdMapping.new(self, :support_id, "Support_System")
-  end
-
-  def sync_to_all_systems!
-    [crm_mapping, billing_mapping, support_mapping].each do |mapping|
-      mapping.sync_to_external!
-    end
-  end
-
-  class ExternalIdMapping
-    def initialize(resource, id_field, system_name)
-      @resource = resource
-      @id_field = id_field
-      @system_name = system_name
+class SecurityTest < Minitest::Test
+  def test_no_correlation_between_objid_and_extid
+    users = 10.times.map do
+      User.new(email: "user#{rand(1000)}@example.com").tap(&:save)
     end
 
-    def sync_to_external!
-      external_id = @resource.send(@id_field)
-      return unless external_id
+    objids = users.map(&:objid).sort
+    extids = users.map(&:extid).sort
 
-      case @system_name
-      when "CRM_System"
-        CRMApi.update_contact(external_id, @resource.to_crm_format)
-      when "Billing_System"
-        BillingApi.update_customer(external_id, @resource.to_billing_format)
-      when "Support_System"
-        SupportApi.update_user(external_id, @resource.to_support_format)
-      end
-    end
+    # Sorting should not preserve any correlation
+    # (This is a statistical test - might rarely fail by chance)
+    correlations = objids.zip(extids).count { |objid, extid|
+      objid[0..2] == extid[-3..-1] # Check if patterns match
+    }
+
+    assert correlations < 3, "Too many correlations detected: #{correlations}"
+  end
+
+  def test_cannot_reverse_engineer_objid
+    user = User.new(email: 'test@example.com')
+    user.save
+
+    # Should not be able to derive objid from extid
+    # This test ensures no obvious mathematical relationship
+    refute_match user.objid[0..8], user.extid
+  end
+
+  def test_base36_format_consistency
+    user = User.new(email: 'test@example.com')
+    user.save
+
+    extid_suffix = user.extid.sub(/^ext_/, '')
+
+    # Must be exactly 25 characters of base36
+    assert_equal 25, extid_suffix.length
+    assert_match(/\A[0-9a-z]{25}\z/, extid_suffix)
   end
 end
 ```
 
 ## Performance Considerations
 
-### Efficient Batch Lookups
+### Lookup Table Size
+
+Each class with external identifiers maintains its own lookup table:
 
 ```ruby
-# Instead of individual lookups
-external_ids = ["ext_1", "ext_2", "ext_3"]
-users = external_ids.map { |id| User.find_by_external_id(id) }
-
-# Use batch operations
-users = User.multiget_by_external_ids(external_ids)
+# Monitor lookup table growth
+puts User.extid_lookup.length        # Number of extid mappings
+puts Customer.extid_lookup.length    # Separate table per class
 ```
 
-### Caching Strategies
+### Batch Operations
+
+For bulk operations, consider the lookup table overhead:
 
 ```ruby
-class CachedExternalResource < Familia::Horreum
-  feature :external_identifier
-
-  # Cache external ID mappings
-  def self.find_by_external_id_cached(external_id)
-    cache_key = "external_id_mapping:#{external_id}"
-
-    cached_internal_id = Familia.redis.get(cache_key)
-    if cached_internal_id
-      return load(cached_internal_id)
-    end
-
-    # Fallback to database lookup
-    resource = find_by_external_id(external_id)
-    if resource
-      Familia.redis.setex(cache_key, 300, resource.identifier)
-    end
-
-    resource
-  end
+# Each save updates the lookup table
+1000.times do |i|
+  User.new(email: "user#{i}@example.com").save
 end
+
+# Consider batch cleanup if needed
+# User.extid_lookup.clear if rebuilding from scratch
 ```
 
-### Index Optimization
+## Integration Patterns
+
+### API Controllers
 
 ```ruby
-class OptimizedExternalResource < Familia::Horreum
-  feature :external_identifier
+class UsersController < ApplicationController
+  # Use external IDs in URLs
+  def show
+    @user = User.find_by_extid(params[:id])
 
-  # Use dedicated sorted sets for each status with timestamp scores
-  sorted_set :pending_sync_resources,
-             score: ->(obj) { obj.last_sync_at&.to_i || 0 }
-  sorted_set :completed_sync_resources,
-             score: ->(obj) { obj.last_sync_at&.to_i || 0 }
-  sorted_set :failed_sync_resources,
-             score: ->(obj) { obj.last_sync_at&.to_i || 0 }
-
-  def self.pending_sync_resources(limit: 100)
-    # Query resources that need syncing, ordered by oldest first
-    pending_sync_resources.range(0, limit - 1).map { |id| load(id) }.compact
-  end
-
-  def self.recently_synced(status:, limit: 100)
-    # Get recently synced resources by status, newest first
-    case status.to_s
-    when 'pending'
-      pending_sync_resources.revrange(0, limit - 1).map { |id| load(id) }.compact
-    when 'completed'
-      completed_sync_resources.revrange(0, limit - 1).map { |id| load(id) }.compact
-    when 'failed'
-      failed_sync_resources.revrange(0, limit - 1).map { |id| load(id) }.compact
+    if @user.nil?
+      render json: { error: 'User not found' }, status: 404
     else
-      []
+      render json: user_json(@user)
     end
   end
-end
-```
 
-## Testing Strategies
+  private
 
-### Test External ID Integration
-
-```ruby
-# test/models/external_user_test.rb
-require 'test_helper'
-
-class ExternalUserTest < Minitest::Test
-  def test_bidirectional_mapping
-    user = ExternalUser.create(
-      internal_id: "test_123",
-      external_id: "ext_456",
-      name: "Test User"
-    )
-
-    # Test lookup by external ID
-    found_by_external = ExternalUser.find_by_external_id("ext_456")
-    assert_equal user.internal_id, found_by_external.internal_id
-
-    # Test lookup by internal ID
-    found_by_internal = ExternalUser.load("test_123")
-    assert_equal user.external_id, found_by_internal.external_id
-  end
-
-  def test_sync_status_tracking
-    user = ExternalUser.create(
-      internal_id: "test_123",
-      external_id: "ext_456",
-      name: "Test User"
-    )
-
-    # Test status transitions
-    user.mark_sync_pending
-    assert user.sync_pending?
-    refute user.sync_completed?
-
-    user.mark_sync_completed
-    assert user.sync_completed?
-    refute user.sync_pending?
-
-    user.mark_sync_failed("Network error")
-    assert user.sync_failed?
-    assert_equal "Network error", user.sync_error
-  end
-
-  def test_external_id_validation
-    user = StrictExternalUser.new(
-      user_id: "test_123",
-      external_id: "invalid_format"
-    )
-
-    refute user.valid_external_id_format?
-
-    user.external_id = "user_validformat123"
-    assert user.valid_external_id_format?
+  def user_json(user)
+    {
+      id: user.extid,  # Use extid in API responses
+      email: user.email,
+      name: user.name
+    }
   end
 end
 ```
 
-### Mock External Services
+### URL Generation
 
 ```ruby
-# test/support/external_service_mock.rb
-class ExternalServiceMock
-  def self.setup_mocks
-    # Mock successful API responses
-    stub_request(:get, /external-api\.com\/resource\/ext_\d+/)
-      .to_return(
-        status: 200,
-        body: { data: "mocked_data", updated_at: Time.now.iso8601 }.to_json
-      )
+# In views/helpers
+def user_path(user)
+  "/users/#{user.extid}"  # Short, clean URLs
+end
 
-    stub_request(:post, /external-api\.com\/resource/)
-      .to_return(
-        status: 201,
-        body: { id: "ext_#{rand(1000)}", status: "created" }.to_json
-      )
-  end
+# Instead of:
+# "/users/01234567-89ab-cdef-1234-567890abcdef"
+#
+# Generate:
+# "/users/ext_abc123def456ghi789jkl012"
+```
 
-  def self.setup_error_mocks
-    # Mock API errors for testing error handling
-    stub_request(:get, /external-api\.com\/resource\/ext_error/)
-      .to_return(status: 500, body: "Internal Server Error")
+### External System Integration
+
+```ruby
+class WebhookHandler
+  def handle_external_callback(payload)
+    external_id = payload['user_id']  # From external system
+
+    user = User.find_by_extid(external_id)
+    return unless user
+
+    # Process callback for identified user
+    process_user_event(user, payload)
   end
+end
+```
+
+## Best Practices
+
+### Use in Public APIs
+
+```ruby
+# ✅ Good - external IDs in public API
+GET /api/users/ext_abc123def456ghi789jkl012
+
+# ❌ Avoid - internal UUIDs in public API
+GET /api/users/01234567-89ab-cdef-1234-567890abcdef
+```
+
+### Consistent Format Across Models
+
+```ruby
+class User < Familia::Horreum
+  feature :object_identifier
+  feature :external_identifier, format: 'user_%{id}'
+end
+
+class Order < Familia::Horreum
+  feature :object_identifier
+  feature :external_identifier, format: 'order_%{id}'
+end
+
+class Product < Familia::Horreum
+  feature :object_identifier
+  feature :external_identifier, format: 'prod_%{id}'
+end
+```
+
+### Error Handling in Controllers
+
+```ruby
+def find_user_by_external_id(extid)
+  User.find_by_extid(extid) || raise(ActiveRecord::RecordNotFound)
+rescue Familia::ExternalIdentifierError => e
+  Rails.logger.warn "Invalid external ID format for '#{extid}': #{e.message}"
+  raise(ActiveRecord::RecordNotFound)
 end
 ```
 
 ## Troubleshooting
 
-### Common Issues
+### Extid Returns Nil
 
-**External ID Not Found**
+Check that object has valid objid and required features:
+
 ```ruby
-# Debug external ID mappings
-puts ExternalUser.external_id_mapping.hgetall
-# Shows all external_id -> internal_id mappings
+user = User.new(email: 'test@example.com')
 
-# Check reverse mapping
-puts ExternalUser.internal_id_mapping.hgetall
-# Shows all internal_id -> external_id mappings
+# ❌ No objid yet - extid will be nil
+user.extid  # => nil
+
+# ✅ Save first to generate objid
+user.save
+user.extid  # => "ext_abc123..."
 ```
 
-**Sync Status Issues**
-```ruby
-# Check sync status for all objects of a type
-ExternalUser.all.each do |user|
-  puts "#{user.external_id}: #{user.sync_status} (#{user.sync_error})"
-end
+### Lookup Not Working
 
-# Reset failed sync statuses
-ExternalUser.all.select(&:sync_failed?).each(&:clear_sync_error)
+Ensure object was saved to populate lookup table:
+
+```ruby
+user = User.new(email: 'test@example.com')
+extid = user.extid  # Generates extid but doesn't save lookup
+
+User.find_by_extid(extid)  # => nil (lookup not saved)
+
+user.save  # Saves lookup mapping
+User.find_by_extid(extid)  # => user (now works)
 ```
 
-**Validation Failures**
-```ruby
-user = ExternalUser.new(external_id: "invalid")
+### Format Not Applied
 
-unless user.valid_external_id?
-  puts "Validation failed for: #{user.external_id}"
-  puts "Expected pattern: #{ExternalUser.validation_pattern}"
-end
-```
-
-### Performance Debugging
+Check feature options syntax:
 
 ```ruby
-# Monitor external ID lookup performance
-def benchmark_external_lookups(external_ids)
-  require 'benchmark'
-
-  Benchmark.bm(20) do |x|
-    x.report("Individual lookups:") do
-      external_ids.each { |id| ExternalUser.find_by_external_id(id) }
-    end
-
-    x.report("Batch lookups:") do
-      ExternalUser.multiget_by_external_ids(external_ids)
-    end
-  end
+# ❌ Wrong - options after comma
+class User < Familia::Horreum
+  feature :object_identifier
+  feature :external_identifier, { format: 'user_%{id}' }
 end
 
-# Check mapping Valkey/Redis key sizes
-mapping_keys = Familia.redis.keys("*external_id_mapping*")
-mapping_keys.each do |key|
-  size = Familia.redis.hlen(key)
-  puts "#{key}: #{size} mappings"
+# ✅ Correct - options as keyword arguments
+class User < Familia::Horreum
+  feature :object_identifier
+  feature :external_identifier, format: 'user_%{id}'
 end
 ```
 
----
+### Invalid Format Regex
+
+When testing external ID format, use exact character counts:
+
+```ruby
+# ❌ Wrong - uses + quantifier
+extid.match(/\Aext_[0-9a-z]+\z/)
+
+# ✅ Correct - uses exact count {25}
+extid.match(/\Aext_[0-9a-z]{25}\z/)
+```
 
 ## See Also
 
-- **[Technical Reference](../reference/api-technical.md#external-identifier-feature-v200-pre7)** - Implementation details and advanced patterns
-- **[Object Identifiers Guide](feature-object-identifiers.md)** - Automatic ID generation strategies
-- **[Feature System Guide](feature-system.md)** - Understanding the feature architecture
-- **[Implementation Guide](implementation.md)** - Advanced configuration and migration patterns
+- [Object Identifiers](feature-object-identifiers.md) - Required dependency for external identifiers
+- [Feature System](feature-system.md) - Understanding Familia's feature architecture
+- [Relationships](feature-relationships.md) - Using external IDs with relationships

@@ -266,6 +266,87 @@ class ApiSyncJob
 end
 ```
 
+## API Reference
+
+### Class Methods
+
+#### `transient_field(name, as: name, **kwargs)`
+Define a transient field that automatically wraps values in RedactedString.
+
+**Parameters:**
+- `name` (Symbol) - The field name
+- `as` (Symbol) - The method name (defaults to field name)
+- `kwargs` (Hash) - Additional field options
+
+**Examples:**
+```ruby
+transient_field :api_key                    # Standard field
+transient_field :secret, as: :api_secret    # Custom accessor name
+```
+
+#### `transient_fields`
+Returns list of transient field names defined on this class.
+
+**Returns:** Array<Symbol>
+
+#### `transient_field?(field_name)`
+Check if a field is transient.
+
+**Parameters:**
+- `field_name` (Symbol) - The field name to check
+
+**Returns:** Boolean
+
+### Instance Methods
+
+#### `clear_transient_fields!`
+Clear all transient fields for this instance.
+
+```ruby
+client.clear_transient_fields!
+client.transient_fields_cleared?  # => true
+```
+
+#### `transient_fields_cleared?`
+Check if all transient fields have been cleared.
+
+**Returns:** Boolean
+
+#### `transient_fields_summary`
+Returns a hash of transient field names and their status for debugging.
+
+**Returns:** Hash with field names as keys
+
+**Example:**
+```ruby
+client.transient_fields_summary
+# => { token: "[REDACTED]", api_key: "[CLEARED]" }
+```
+
+### RedactedString Methods
+
+#### `expose { |value| ... }`
+Primary API for accessing the actual value within a controlled block.
+
+```ruby
+token.expose do |actual_token|
+  HTTP.post('/api', headers: { 'X-Token' => actual_token })
+end
+```
+
+#### `value`
+Direct access to the wrapped value (use with caution).
+
+**Returns:** String or raises SecurityError if cleared
+
+#### `clear!` and `cleared?`
+Memory management for sensitive data.
+
+```ruby
+token.clear!
+token.cleared?  # => true
+```
+
 ## Comparison with Encrypted Fields
 
 | Feature | Encrypted Fields | Transient Fields |

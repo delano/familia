@@ -17,7 +17,7 @@ customer.domain_ids.add(domain.identifier)
 domain.customer_id = customer.identifier
 
 # With relationships - automatic and clean
-customer.domains << domain  # Updates both sides automatically
+customer.add_domain(domain)  # Updates both sides automatically
 ```
 
 **Key Benefits:**
@@ -35,32 +35,34 @@ Connect objects with automatic synchronization:
 ```ruby
 class User < Familia::Horreum
   feature :relationships
-  set :teams  # Collection holder
+  # No collection declaration needed - participates_in creates it automatically
 end
 
 class Team < Familia::Horreum
   feature :relationships
-  participates_in User, :teams  # Declares participation
+  participates_in User, :teams  # Automatically creates User.set :teams
 end
 
 # Usage - automatic bidirectional updates
-user.teams << team
+user.add_team(team)
 team.in_user_teams?(user)  # => true
 ```
 
 **Many-to-Many Example:**
 ```ruby
 class Project < Familia::Horreum
-  set :contributors, :reviewers
+  feature :relationships
+  # Collections created automatically by participates_in
 end
 
 class Developer < Familia::Horreum
+  feature :relationships
   participates_in Project, :contributors
   participates_in Project, :reviewers
 end
 
-project.contributors << alice  # Alice contributes
-project.reviewers << bob       # Bob reviews
+project.add_contributor(alice)  # Alice contributes
+project.add_reviewer(bob)       # Bob reviews
 ```
 
 ### 2. Indexing - Automatic Object Tracking
@@ -73,7 +75,7 @@ class User < Familia::Horreum
   field :email, :created_at
 
   # Global unique lookups
-  class_indexed_by :email, :email_lookup
+  unique_index :email, :email_lookup
 
   # Scored tracking collections
   class_participates_in :all_users, score: :created_at
@@ -88,7 +90,7 @@ User.all_users.range(0, 9)                 # Most recent 10 users
 ```ruby
 class Domain < Familia::Horreum
   participates_in Customer, :domains
-  indexed_by :name, :domain_index, target: Customer  # Unique per customer
+  unique_index :name, :domain_index, within: Customer  # Unique per customer
 end
 
 customer.find_by_name("example.com")  # Find domain within this customer
@@ -100,14 +102,15 @@ Work with relationships like standard Ruby collections:
 
 ```ruby
 # Standard collection operations
-org.members << alice                    # Add relationship
-org.members.merge([id1, id2, id3])     # Bulk additions
-org.members.size                       # Count relationships
-org.members.empty?                     # Check if any exist
+org.add_member(alice)                   # Add relationship
+org.add_members([alice, bob, charlie])  # Bulk additions
+org.members.size                        # Count relationships
+org.members.empty?                      # Check if any exist
 
-# Set operations
-common = org1.members & org2.members   # Intersection
-all = org1.members | org2.members      # Union
+# Direct DataType operations
+org.members.merge([id1, id2, id3])      # Bulk merge identifiers
+common = org1.members & org2.members    # Intersection
+all = org1.members | org2.members       # Union
 
 # Load actual objects when needed
 member_ids = org.members.to_a
@@ -124,7 +127,7 @@ Use scores for time-based tracking and priority systems:
 ```ruby
 class Timeline < Familia::Horreum
   feature :relationships
-  sorted_set :events  # Scored collection
+  # sorted_set :events created automatically by participates_in
 end
 
 class Event < Familia::Horreum
@@ -134,7 +137,7 @@ class Event < Familia::Horreum
 end
 
 # Automatic scoring when relationships established
-timeline.events << event  # Uses event.timestamp as score
+timeline.add_event(event)  # Uses event.timestamp as score
 
 # Time-based and priority queries
 recent = timeline.events.range_by_score((Time.now - 1.hour).to_i, '+inf')
@@ -150,7 +153,8 @@ top_priority = project.tasks.range(0, 4, order: 'DESC')  # Highest priority firs
 ## Best Practices
 
 **Performance:**
-- Use `merge([id1, id2, id3])` for bulk additions
+- Use `add_members([obj1, obj2, obj3])` for bulk additions via generated methods
+- Use `collection.merge([id1, id2, id3])` for bulk identifier operations
 - Use `multiget(*ids)` for efficient bulk loading
 - Use pagination: `collection.range(0, 9)` instead of loading all
 
@@ -181,7 +185,7 @@ class_participates_in :active_users,
 **Bidirectional Updates:**
 ```ruby
 # ✅ Automatic bidirectional
-customer.domains << domain
+customer.add_domain(domain)
 
 # ❌ Manual (avoid)
 customer.domains.add(domain.identifier)

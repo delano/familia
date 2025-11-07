@@ -87,7 +87,7 @@ The quantization feature integrates seamlessly with your existing Familia models
 ```ruby
 class AnalyticsEvent < Familia::Horreum
   feature :quantization
-  default_expiration 300  # 5 minutes (also used as default quantum)
+  default_expiration 1.hour  # Used as default quantum
 
   identifier_field :event_id
   field :event_id, :event_type, :user_id, :data, :timestamp
@@ -95,7 +95,7 @@ end
 ```
 
 > [!TIP]
-> If you set `default_expiration`, it automatically becomes your default quantum for `qstamp` calls without an explicit interval.
+> If you set `default_expiration`, it automatically becomes your default quantum for `qstamp` calls without an explicit interval. If no `default_expiration` is set, the fallback is 10 minutes.
 
 ### Your First Quantized Timestamps
 
@@ -104,9 +104,9 @@ The `qstamp` method is your main tool for creating consistent time buckets:
 ```ruby
 event = AnalyticsEvent.new
 
-# Using default quantum (from default_expiration: 300 seconds)
+# Using default quantum (from default_expiration: 1 hour)
 timestamp = event.qstamp
-# => 1687276800 (Unix timestamp rounded to 5-minute boundary)
+# => 1687276800 (Unix timestamp rounded to hour boundary)
 
 # Using custom quantum
 hourly_timestamp = event.qstamp(1.hour)
@@ -132,6 +132,10 @@ daily_key = AnalyticsEvent.qstamp(1.day, pattern: '%Y-%m-%d')
 
 weekly_key = AnalyticsEvent.qstamp(1.week, pattern: '%Y-W%U')
 # => "2023-W24" (Year-Week format)
+
+# Array syntax for convenience
+compact_key = AnalyticsEvent.qstamp([1.hour, '%Y%m%d%H'])
+# => "2023061514" (same as above)
 ```
 
 ### Specifying Custom Time
@@ -654,7 +658,7 @@ RSpec.describe AnalyticsEvent do
     end
 
     it "uses default quantum from default_expiration" do
-      allow(described_class).to receive(:default_expiration).and_return(300)
+      allow(described_class).to receive(:default_expiration).and_return(3600)
 
       stamp = described_class.qstamp
 
@@ -740,7 +744,7 @@ class RobustQuantization < Familia::Horreum
   rescue => e
     # Fallback to current time with default quantum
     Rails.logger.warn "Quantization failed: #{e.message}"
-    qstamp(300)  # 5-minute fallback
+    qstamp(10.minutes)  # 10-minute fallback
   end
 end
 ```
@@ -771,6 +775,116 @@ class QuantizationMonitor
     }
   end
 end
+```
+
+## API Reference
+
+### Class Methods
+
+#### `qstamp(quantum = nil, pattern: nil, time: nil)`
+Generate a quantized timestamp for the current or specified time.
+
+**Parameters:**
+- `quantum` (Numeric, Array, nil) - Time quantum in seconds or `[quantum, pattern]` array
+- `pattern` (String, nil) - Optional strftime format pattern
+- `time` (Time, nil) - Reference time (defaults to current time)
+
+**Returns:** Integer timestamp or formatted string
+
+**Examples:**
+```ruby
+User.qstamp(1.hour)                          # => 1672531200
+User.qstamp(1.hour, pattern: '%Y%m%d%H')     # => "2023010114"
+User.qstamp([1.hour, '%Y%m%d%H'])            # => "2023010114" (array syntax)
+```
+
+#### `qstamp_range(start_time, end_time, quantum, pattern: nil)`
+Generate multiple quantized timestamps for a time range.
+
+**Parameters:**
+- `start_time` (Time) - Start of time range
+- `end_time` (Time) - End of time range
+- `quantum` (Numeric) - Time quantum in seconds
+- `pattern` (String, nil) - Optional strftime format pattern
+
+**Returns:** Array of quantized timestamps
+
+**Example:**
+```ruby
+start_time = Time.parse('2023-01-01 00:00:00')
+end_time = Time.parse('2023-01-01 23:59:59')
+User.qstamp_range(start_time, end_time, 1.hour)
+# => [1672531200, 1672534800, 1672538400, ...] (24 hourly buckets)
+```
+
+#### `in_bucket?(timestamp, quantum, bucket_time)`
+Check if a timestamp falls within a quantized bucket.
+
+**Parameters:**
+- `timestamp` (Time, Integer) - The timestamp to check
+- `quantum` (Numeric) - The quantum interval
+- `bucket_time` (Time, Integer) - The bucket reference time
+
+**Returns:** Boolean
+
+**Example:**
+```ruby
+event_time = Time.parse('2023-01-01 14:37:42')
+bucket_time = Time.parse('2023-01-01 14:00:00')
+User.in_bucket?(event_time, 1.hour, bucket_time)  # => true
+```
+
+### Instance Methods
+
+#### `qstamp(quantum = nil, pattern: nil, time: nil)`
+Instance version of qstamp that can use instance-specific default expiration.
+
+#### `quantized_identifier(quantum, pattern: nil, separator: ':')`
+Generate a quantized identifier combining instance identifier with timestamp.
+
+**Parameters:**
+- `quantum` (Numeric) - Time quantum in seconds
+- `pattern` (String, nil) - Optional strftime format pattern
+- `separator` (String) - Separator between identifier and timestamp
+
+**Returns:** String identifier with quantized timestamp
+
+**Example:**
+```ruby
+user = User.new(id: 123)
+user.quantized_identifier(1.hour)                        # => "123:1672531200"
+user.quantized_identifier(1.hour, pattern: '%Y%m%d%H')   # => "123:2023010114"
+```
+
+### Error Handling
+
+The feature validates quantum values:
+
+```ruby
+User.qstamp(0)         # => ArgumentError: Quantum must be positive
+User.qstamp(-5)        # => ArgumentError: Quantum must be positive
+User.qstamp("invalid") # => ArgumentError: Quantum must be positive
+```
+
+### Default Quantum Behavior
+
+When no quantum is specified:
+1. Uses class `default_expiration` if available
+2. Falls back to `10.minutes` if no default expiration set
+
+```ruby
+class TimedModel < Familia::Horreum
+  feature :quantization
+  default_expiration 1.hour
+end
+
+TimedModel.qstamp()  # Uses 1.hour as quantum
+
+class BasicModel < Familia::Horreum
+  feature :quantization
+end
+
+BasicModel.qstamp()  # Uses 10.minutes fallback (600 seconds)
 ```
 
 ---

@@ -33,7 +33,7 @@ module Familia
     #        $ openssl rand -hex 32
     #        > cafef00dcafef00dcafef00dcafef00dcafef00dcafef00d
     #
-    #     2. UnsortedSet it as an environment variable in your production environment:
+    #     2. Set it as an environment variable in your production environment:
     #        export VERIFIABLE_ID_HMAC_SECRET="cafef00dcafef00dcafef00dcafef00dcafef00dcafef00d"
     #
     SECRET_KEY = ENV.fetch('VERIFIABLE_ID_HMAC_SECRET', 'cafef00dcafef00dcafef00dcafef00dcafef00dcafef00d')
