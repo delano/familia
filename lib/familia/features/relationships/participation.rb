@@ -568,6 +568,10 @@ module Familia
           # @since 1.0.0
           # Get all IDs where this instance participates for a specific target class
           #
+          # This is a shallow check - it extracts IDs from the participation index without
+          # verifying that the target Redis keys actually exist. Use this for fast ID
+          # enumeration; use *_instances methods if you need existence verification.
+          #
           # Optimized to iterate through keys once and use Set for efficient uniqueness,
           # reducing string operations and object allocations.
           #
@@ -575,7 +579,6 @@ module Familia
           # @param collection_names [Array<String>, nil] Optional collection name filter
           # @return [Array<String>] Array of unique target instance IDs
           def participating_ids_for_target(target_class, collection_names = nil)
-            require 'set'
 
             # Use config_name to get the proper snake_case format (e.g., "project_team")
             target_prefix = "#{target_class.config_name}:"
@@ -597,6 +600,33 @@ module Familia
             end
 
             ids.to_a
+          end
+
+          # Check if this instance participates in any target of a specific class
+          #
+          # This is a shallow check - it only verifies that participation entries exist
+          # in the participation index. It does NOT verify that the target Redis keys
+          # actually exist. Use this for fast membership checks.
+          #
+          # Optimized to stop scanning as soon as a match is found.
+          #
+          # @param target_class [Class] The target class to check
+          # @param collection_names [Array<String>, nil] Optional collection name filter
+          # @return [Boolean] true if any matching participation exists
+          def participating_in_target?(target_class, collection_names = nil)
+            target_prefix = "#{target_class.config_name}:"
+
+            participations.members.any? do |key|
+              next false unless key.start_with?(target_prefix)
+
+              # If filtering by specific collections, check the collection name
+              if collection_names && !collection_names.empty?
+                collection = key.split(':')[2]
+                collection_names.include?(collection)
+              else
+                true
+              end
+            end
           end
 
           def current_participations

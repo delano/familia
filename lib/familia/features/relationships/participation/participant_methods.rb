@@ -109,6 +109,7 @@ module Familia
             collections_filter = collection_names&.map(&:to_s)
 
             # Generate the main collection method (e.g., user.project_team_instances)
+            # Loads actual objects - verifies Redis key existence via load_multi
             # No caching - load_multi is efficient enough and avoids stale data
             participant_class.define_method("#{base_name}_instances") do
               ids = participating_ids_for_target(target_class, collections_filter)
@@ -117,29 +118,19 @@ module Familia
             end
 
             # Generate the IDs-only method (e.g., user.project_team_ids)
+            # Shallow - returns IDs from participation index without verifying key existence
             participant_class.define_method("#{base_name}_ids") do
               participating_ids_for_target(target_class, collections_filter)
             end
 
             # Generate the boolean check method (e.g., user.project_team?)
-            # Optimized to stop scanning as soon as a match is found
+            # Shallow check - verifies participation index membership, not Redis key existence
             participant_class.define_method("#{base_name}?") do
-              target_prefix = "#{target_class.config_name}:"
-
-              participations.members.any? do |key|
-                next false unless key.start_with?(target_prefix)
-
-                # If filtering by specific collections, check the collection name
-                if collections_filter && !collections_filter.empty?
-                  collection = key.split(':')[2]
-                  collections_filter.include?(collection)
-                else
-                  true
-                end
-              end
+              participating_in_target?(target_class, collections_filter)
             end
 
             # Generate the count method (e.g., user.project_team_count)
+            # Shallow - counts IDs from participation index without verifying key existence
             participant_class.define_method("#{base_name}_count") do
               participating_ids_for_target(target_class, collections_filter).size
             end
