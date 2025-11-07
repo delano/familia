@@ -289,13 +289,11 @@ class SecureModel < Familia::Horreum
   # → password, password= (no fast writer method)
   # → Values wrapped in RedactedString
 
-  # Redacted fields are persisted but return [REDACTED] in logs
-  redacted_field :security_question
-  # → security_question, security_question=, security_question!
+  # Note: All transient field values are automatically wrapped in RedactedString
+  # for security - they never persist to the database
 
-  # Object identifier fields auto-generate unique IDs
+  # Object identifier fields auto-generate unique IDs when using the feature
   # → objid, objid= (lazy generation, preserves initialization values)
-  # → objid_generator_used (provenance tracking)
 end
 
 # Usage examples
@@ -856,7 +854,7 @@ Familia.debug = true  # Shows feature loading sequence
 Familia.debug = true
 
 # Check what's in Valkey
-Familia.redis.keys('*')  # List all keys (use carefully in production)
+Familia.dbclient.keys('*')  # List all keys (use carefully in production)
 ```
 
 ## Testing
@@ -880,7 +878,7 @@ Familia.config.current_key_version = :v1
 
 # Clear data between tests
 def clear_redis
-  Familia.redis.flushdb
+  Familia.dbclient.flushdb
 end
 
 # Feature-specific testing patterns
@@ -898,8 +896,8 @@ end
 
 def test_relationships_cleanup
   # Clean up relationship indexes
-  Familia.redis.keys('*:relationships:*').each do |key|
-    Familia.redis.del(key)
+  Familia.dbclient.keys('*:relationships:*').each do |key|
+    Familia.dbclient.del(key)
   end
 end
 ```

@@ -11,35 +11,31 @@ Welcome to the comprehensive documentation for Familia v2.0. This guide collecti
 
 ### 🏗️ Architecture & System Design
 
-4. **[Feature System](feature-system.md)** - Modular architecture with dependencies and autoloader patterns
-5. **[Feature System for Developers](feature-system-devs.md)** - Advanced feature development patterns
-3. **[Security Model](security-model.md)** - Cryptographic design and Ruby memory considerations
-6. **[Connection Pooling](config-connection-pooling.md)** - Provider pattern for efficient Redis/Valkey pooling
-7. **[Core Field System](core-field-system.md)** - Field definitions and data type mappings
+1. **[Feature System](feature-system.md)** - Modular architecture with dependencies and autoloader patterns
+2. **[Feature System for Developers](feature-system-devs.md)** - Advanced feature development patterns
+3. **[Field System](field-system.md)** - Field definitions and data type mappings
+4. **[Logging](logging.md)** - Logger configuration and database command logging
 
 
-### 🔐 Special Field Types
+### 🔐 Security & Special Fields
 
-1. **[Encrypted Fields](feature-encrypted-fields.md)** - Persistent encrypted storage with modular providers
-2. **[Transient Fields](feature-transient-fields.md)** - Non-persistent secure data handling with RedactedString
-10. **[Object Identifiers](feature-object-identifiers.md)** - Automatic ID generation with configurable strategies _(new!)_
-11. **[External Identifiers](feature-external-identifiers.md)** - Integration with external systems and legacy data _(new!)_
+5. **[Encrypted Fields](feature-encrypted-fields.md)** - Persistent encrypted storage with modular providers
+6. **[Transient Fields](feature-transient-fields.md)** - Non-persistent secure data handling with RedactedString
+7. **[Encryption Guide](encryption.md)** - Legacy encryption documentation
+8. **[Object Identifiers](feature-object-identifiers.md)** - Automatic ID generation with configurable strategies
+9. **[External Identifiers](feature-external-identifiers.md)** - Integration with external systems and legacy data
 
 
-### 🔗 Object Relationships & Identifiers
+### 🔗 Object Relationships
 
-8. **[Relationships](feature-relationships.md)** - Object relationships and membership system
-9. **[Relationship Methods](feature-relationships-methods.md)** - Detailed method reference for relationships
+10. **[Relationships](feature-relationships.md)** - Object relationships and membership system
+11. **[Relationship Methods](feature-relationships-methods.md)** - Detailed method reference for relationships
 
 ### ⏱️ Time & Analytics Features
 
 12. **[Expiration](feature-expiration.md)** - TTL management and cascading expiration
 13. **[Quantization](feature-quantization.md)** - Time-based data bucketing for analytics
-14. **[Time Utilities](time-utilities.md)** - Time manipulation and formatting utilities
-
-### 🛠️ Implementation & Usage
-
-15. **[Implementation Guide](implementation.md)** - Advanced configuration and usage patterns
+14. **[Time Literals](time-literals.md)** - Time manipulation and formatting utilities
 
 ## 🚀 Quick Start Examples
 
