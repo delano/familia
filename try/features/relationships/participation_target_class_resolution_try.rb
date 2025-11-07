@@ -116,6 +116,7 @@ end
 #=> true
 
 ## Test domain score matches created_at field
+p [:PLOP, (@score - @domain.created_at).abs]
 (@score - @domain.created_at).abs < 0.001
 #=> true
 
@@ -168,7 +169,7 @@ end
 
 ## Test participation data includes correct target class
 @domain_participation = @domain_participations.first
-@domain_participation[:target_class] == 'SymbolResolutionCustomer'
+@domain_participation[:target_class] == SymbolResolutionCustomer
 #=> true
 
 ## Test current_participations works with String target class

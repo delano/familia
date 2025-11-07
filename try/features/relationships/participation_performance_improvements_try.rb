@@ -6,7 +6,7 @@
 require_relative '../../support/helpers/test_helpers'
 
 # Test classes for performance improvements
-class PerfTestCustomer < Familia::Horreum
+class ::PerfTestCustomer < Familia::Horreum
   feature :relationships
 
   identifier_field :customer_id
@@ -16,7 +16,7 @@ class PerfTestCustomer < Familia::Horreum
   sorted_set :domains
 end
 
-class PerfTestDomain < Familia::Horreum
+class ::PerfTestDomain < Familia::Horreum
   feature :relationships
 
   identifier_field :domain_id
@@ -93,7 +93,8 @@ end
 ## Test membership contains expected target class
 @memberships = @domain.current_participations
 @membership = @memberships.first
-@membership[:target_class] == 'PerfTestCustomer'
+p [:PLOP, @membership[:target_class], @membership[:target_class]]
+@membership[:target_class] == ::PerfTestCustomer
 #=> true
 
 ## Test membership contains collection name

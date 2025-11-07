@@ -160,10 +160,10 @@ module Familia
                                     type: :sorted_set, bidirectional: true)
             # Store metadata for this participation relationship
             participation_relationships << ParticipationRelationship.new(
-              target_class: self,
+              _original_target: self,   # For class-level, original and resolved are the same
+              target_class: self,       # The class itself
               collection_name: collection_name,
               score: score,
-
               type: type,
               bidirectional: bidirectional,
             )
@@ -303,7 +303,8 @@ module Familia
 
             # Store metadata for this participation relationship
             participation_relationships << ParticipationRelationship.new(
-              target_class: target, # as passed to `participates_in`
+              _original_target: target,      # Original value as passed (Symbol/String/Class)
+              target_class: target_class,    # Resolved Class object
               collection_name: collection_name,
               score: score,
               type: type,
@@ -426,18 +427,21 @@ module Familia
           # @see #track_participation_in for reverse index management
           # @since 1.0.0
           def calculate_participation_score(target_class, collection_name)
-            # Find the participation configuration with robust type comparison
+            # Find the participation configuration
+            # details.target_class is always a resolved Class object now
             participation_config = self.class.participation_relationships.find do |details|
-              # Normalize both sides for comparison to handle Class, Symbol, and String types
-              config_target = details.target_class
-              config_target = config_target.name if config_target.is_a?(Class)
-              config_target = config_target.to_s
-
+              # Normalize the passed target_class to match our stored Class
               comparison_target = target_class
               comparison_target = comparison_target.name if comparison_target.is_a?(Class)
               comparison_target = comparison_target.to_s
 
-              config_target == comparison_target && details.collection_name == collection_name
+              # Compare base class names (without namespace) to handle anonymous class wrappers
+              # e.g., "#<Class:0x123>::SymbolResolutionCustomer" vs "SymbolResolutionCustomer"
+              stored_class_base = details.target_class.name.split('::').last
+              comparison_target_base = comparison_target.split('::').last
+
+              stored_class_base == comparison_target_base &&
+                details.collection_name == collection_name
             end
 
             return current_score unless participation_config
@@ -652,16 +656,16 @@ module Familia
               # Find the matching participation configuration
               # Note: target_class_config from key is snake_case
               config = self.class.participation_relationships.find do |cfg|
-                cfg.target_class_config_name == target_class_config &&
+                cfg.target_class.config_name == target_class_config &&
                   cfg.collection_name.to_s == collection_name_from_key
               end
 
               next unless config
 
               # Find the target instance and check membership using Horreum DataTypes
+              # config.target_class is already a resolved Class object
               begin
-                target_class = Familia.resolve_class(config.target_class)
-                target_instance = target_class.find_by_id(target_id)
+                target_instance = config.target_class.find_by_id(target_id)
                 next unless target_instance
 
                 # Use Horreum's DataType accessor to get the collection
@@ -669,7 +673,8 @@ module Familia
 
                 # Check membership using DataType methods
                 membership_data = {
-                  target_class: target_class.familia_name,
+                  _original_target: config._original_target,
+                  target_class: config.target_class,
                   target_id: target_id,
                   collection_name: config.collection_name,
                   type: config.type,

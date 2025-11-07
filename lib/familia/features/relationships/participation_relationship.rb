@@ -10,25 +10,17 @@ module Familia
       # Used to configure code generation and runtime behavior for participates_in
       # and class_participates_in declarations.
       #
+      # @note target_class is resolved once at definition time for performance.
+      #   Use _original_target for debugging/introspection to see what was passed.
+      #
       ParticipationRelationship = Data.define(
-        :target_class,        # Class object OR Symbol/String that resolves to the collection owner
+        :_original_target,    # Original Symbol/String/Class as passed to participates_in
+        :target_class,        # Resolved Class object (e.g., User class, not :User symbol)
         :collection_name,     # Symbol name of the collection (e.g., :members, :domains)
         :score,               # Proc/Symbol/nil - score calculator for sorted sets
         :type,                # Symbol - collection type (:sorted_set, :set, :list)
         :bidirectional,       # Boolean/Symbol - whether to generate reverse methods
-      ) do
-        #
-        # Get the normalized config name for the target class
-        #
-        # Handles Symbol/String target classes by resolving them first
-        #
-        # @return [String, nil] The config name (e.g., "user", "perf_test_customer")
-        #
-        def target_class_config_name
-          resolved = Familia.resolve_class(target_class)
-          resolved&.config_name
-        end
-      end
+      )
     end
   end
 end
