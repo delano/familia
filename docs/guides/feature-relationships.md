@@ -35,12 +35,12 @@ Connect objects with automatic synchronization:
 ```ruby
 class User < Familia::Horreum
   feature :relationships
-  set :teams  # Collection holder
+  # No collection declaration needed - participates_in creates it automatically
 end
 
 class Team < Familia::Horreum
   feature :relationships
-  participates_in User, :teams  # Declares participation
+  participates_in User, :teams  # Automatically creates User.set :teams
 end
 
 # Usage - automatic bidirectional updates
@@ -51,10 +51,12 @@ team.in_user_teams?(user)  # => true
 **Many-to-Many Example:**
 ```ruby
 class Project < Familia::Horreum
-  set :contributors, :reviewers
+  feature :relationships
+  # Collections created automatically by participates_in
 end
 
 class Developer < Familia::Horreum
+  feature :relationships
   participates_in Project, :contributors
   participates_in Project, :reviewers
 end
@@ -125,7 +127,7 @@ Use scores for time-based tracking and priority systems:
 ```ruby
 class Timeline < Familia::Horreum
   feature :relationships
-  sorted_set :events  # Scored collection
+  # sorted_set :events created automatically by participates_in
 end
 
 class Event < Familia::Horreum

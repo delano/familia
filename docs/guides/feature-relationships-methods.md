@@ -18,7 +18,7 @@ end
 
 class Customer < Familia::Horreum
   feature :relationships
-  set :domains  # Must define the collection
+  # No collection declaration needed - participates_in creates it automatically
 end
 ```
 
@@ -127,7 +127,7 @@ end
 
 class Team < Familia::Horreum
   feature :relationships
-  sorted_set :active_users, :top_performers
+  # Collections created automatically by participates_in
 end
 ```
 
@@ -273,7 +273,7 @@ Customer.email_lookup.set("new@example.com", "customer_3")
 class Customer < Familia::Horreum
   feature :relationships
   field :name
-  set :domains
+  # set :domains created automatically by participates_in
 end
 
 class Domain < Familia::Horreum
@@ -439,7 +439,7 @@ end
 ```ruby
 class Customer < Familia::Horreum
   feature :relationships
-  set :domains
+  # Assumes Domain.participates_in Customer, :domains
 
   # Memoized relationship loading
   def domain_objects
@@ -468,7 +468,7 @@ end
 ```ruby
 class Team < Familia::Horreum
   feature :relationships
-  set :members
+  # Assumes User.participates_in Team, :members
 
   def bulk_add_members(user_ids)
     # Validate all IDs exist first
@@ -543,7 +543,7 @@ end
 ```ruby
 class Organization < Familia::Horreum
   feature :relationships
-  set :departments
+  # Assumes Department.participates_in Organization, :departments
 
   # Find all users across all departments
   def all_users
@@ -692,8 +692,10 @@ class Customer < Familia::Horreum
   class_participates_in :premium_customers,
     score: ->(c) { c.tier == 'premium' ? c.last_activity : 0 }
 
-  # Relationships
-  set :orders, :addresses, :payment_methods
+  # Relationships - collections created automatically by participates_in
+  # Order.participates_in Customer, :orders
+  # Address.participates_in Customer, :addresses
+  # PaymentMethod.participates_in Customer, :payment_methods
 
   def recent_orders(limit = 10)
     order_ids = orders.range(0, limit - 1)
@@ -713,7 +715,7 @@ class Order < Familia::Horreum
   indexed_by :order_number, :order_lookup, target: Customer
   indexed_by :status, :status_lookup, target: Customer
 
-  set :line_items
+  # line_items collection created automatically by LineItem.participates_in Order, :line_items
 end
 
 class Address < Familia::Horreum
