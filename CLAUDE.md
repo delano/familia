@@ -218,10 +218,12 @@ Comprehensive thread safety tests are available in `try/thread_safety/`:
 - **100% passing** (56/56 tests)
 - **CyclicBarrier pattern** for maximum contention testing
 - **Test execution**: ~300ms for full suite with 1,000+ concurrent operations
+- **Production monitoring**: 10/10 monitoring tests passing
 
 Run thread safety tests:
 ```bash
 bundle exec try --agent try/thread_safety/
+bundle exec try --agent try/unit/thread_safety_monitor_try.rb
 ```
 
 ### Best Practices for Thread-Safe Usage
@@ -229,6 +231,7 @@ bundle exec try --agent try/thread_safety/
 1. **Configure Once at Startup**: Module-level configuration should be set before threads spawn
 2. **Use Immutable DataTypes**: Leverage the fact that DataType instances are frozen
 3. **Test Under Concurrency**: Use the patterns in `try/thread_safety/` to verify thread safety
+4. **Enable Production Monitoring**: Use `Familia.start_monitoring!` to track contention in production
 
 ### Deployment Recommendations
 
@@ -242,3 +245,38 @@ bundle exec try --agent try/thread_safety/
 - Other thread-based job processors - likely compatible but verify with testing
 
 **Note**: Transactions and pipelines use fiber-local storage which is isolated per-thread. Thread safety tests verify correct behavior with 10-100 concurrent Ruby threads. Integration testing recommended for specific frameworks like Sidekiq.
+
+### Production Monitoring
+
+Familia includes built-in thread safety monitoring with microsecond precision:
+
+```ruby
+# Enable monitoring
+Familia.start_monitoring!
+
+# ... application runs ...
+
+# Get comprehensive report with microsecond precision
+report = Familia.thread_safety_report
+puts "Health Score: #{report[:health]}/100"
+puts "Contentions: #{report[:summary][:mutex_contentions]}"
+puts "Hot spots:"
+report[:hot_spots].each do |spot|
+  puts "  #{spot[:location]}: #{spot[:contentions]} contentions, avg wait: #{spot[:avg_wait_μs]}μs"
+end
+
+# Export metrics for APM tools
+metrics = Familia.thread_safety_metrics
+# Returns: { 'familia.thread_safety.mutex_contentions' => 42, ... }
+
+# Stop monitoring
+Familia.stop_monitoring!
+```
+
+**Key Features:**
+- **Microsecond-native precision**: All timing stored as integers in microseconds (μs) for maximum precision
+- **Contention tracking**: Identifies hot spots with microsecond-level wait time analysis
+- **Health scoring**: 0-100 scale with automated recommendations based on contention patterns
+- **APM integration**: Export format compatible with DataDog, NewRelic, etc.
+- **Zero overhead when disabled**: No performance impact until `start_monitoring!` is called
+- **Consistent timing**: Uses same `Familia.now_in_μs` standard as DatabaseLogger
