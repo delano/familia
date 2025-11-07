@@ -10,11 +10,13 @@ Familia's Field System provides a flexible, extensible architecture for defining
 
 The Field System is built around the `FieldType` class hierarchy:
 
-```ruby
-FieldType                    # Base class for all field types
-├── TransientFieldType      # Non-persistent fields (memory only)
-├── EncryptedFieldType      # Encrypted storage fields
-└── Custom field types      # User-defined field behaviors
+```
+FieldType                        # Base class for all field types
+├── TransientFieldType           # Non-persistent fields (memory only)
+├── EncryptedFieldType           # Encrypted storage fields
+├── ExternalIdentifierFieldType  # External ID fields
+├── ObjectIdentifierFieldType    # Object ID fields
+└── Custom field types           # User-defined field behaviors
 ```
 
 ### Field Definition Flow
@@ -50,26 +52,9 @@ customer.email = "admin@acme.com"     # Custom method name
 customer.name!("Updated Corp")        # Fast writer (immediate DB persistence)
 ```
 
-### Special Field Types
-
-Use dedicated field methods provided by features for special field behaviors:
-
-```ruby
-class Document < Familia::Horreum
-  feature :encrypted_fields
-  feature :transient_fields
-
-  field :title                    # Regular persistent field
-  encrypted_field :content        # Encrypted storage
-  transient_field :api_key        # Non-persistent (memory only)
-  field :tags                     # Regular field
-  field :metadata                 # Regular field
-end
-```
-
 ### Method Conflict Resolution
 
-The Field System provides multiple strategies for handling method name conflicts:
+Familia provides several strategies for handling method name conflicts:
 
 ```ruby
 class Customer < Familia::Horreum
@@ -87,30 +72,100 @@ class Customer < Familia::Horreum
 end
 ```
 
+## Special Field Types
+
+### Transient Fields
+
+Transient fields exist only in memory and are never persisted to the database. Values are automatically wrapped in `RedactedString` objects for security:
+
+```ruby
+class SecretService < Familia::Horreum
+  feature :transient_fields
+
+  field :name                    # Regular persistent field
+  transient_field :api_key       # Wrapped in RedactedString
+  transient_field :password      # Not persisted to database
+end
+
+service = SecretService.new
+service.api_key = "sk-1234567890"
+service.api_key.class           #=> RedactedString
+puts service.api_key            #=> "[REDACTED]"
+
+# Safe access pattern
+service.api_key.expose do |key|
+  HTTP.post(url, headers: { 'Authorization' => "Bearer #{key}" })
+end
+```
+
+### Encrypted Fields
+
+Encrypted fields provide transparent encryption/decryption with strong cryptographic protection:
+
+```ruby
+class Document < Familia::Horreum
+  feature :encrypted_fields
+
+  field :title                           # Plaintext
+  encrypted_field :content               # Encrypted storage
+  encrypted_field :api_key, aad_fields: [:title]  # With additional authentication
+end
+
+doc = Document.new(title: "Secret", content: "classified info")
+doc.content.class               #=> ConcealedString
+puts doc.content                #=> "[CONCEALED]"
+
+# Explicit access required
+doc.content.reveal do |plaintext|
+  puts plaintext                # => "classified info"
+end
+```
+
+## Data Type Fields
+
+Familia provides Redis/Valkey data structure fields through the related fields system:
+
+```ruby
+class User < Familia::Horreum
+  identifier_field :user_id
+  field :user_id, :name, :email
+
+  # Redis data structure fields
+  list :activity_log           # Redis LIST
+  set :permissions             # Redis SET
+  sorted_set :scores           # Redis ZSET
+  hashkey :preferences         # Redis HASH
+  counter :login_count         # Redis counter
+end
+
+user = User.new(user_id: 'u123')
+user.activity_log << "logged in"
+user.permissions.add("read")
+user.scores.add("quiz1", 95)
+user.preferences["theme"] = "dark"
+user.login_count.increment
+```
+
 ## Advanced Field Types
 
 ### Creating Custom Field Types
 
-```ruby
-# Custom field type for timestamps
-class TimestampFieldType < Familia::FieldType
-  def category
-    :timestamp
-  end
+Custom field types allow you to define specialized behavior for your fields:
 
+```ruby
+class TimestampFieldType < Familia::FieldType
   def define_setter(klass)
     field_name = @name
     method_name = @method_name
 
     handle_method_conflict(klass, :"#{method_name}=") do
       klass.define_method :"#{method_name}=" do |value|
-        # Convert various formats to Unix timestamp
         timestamp = case value
-                   when Time then value.to_i
-                   when String then Time.parse(value).to_i
-                   when Numeric then value.to_i
-                   else raise ArgumentError, "Invalid timestamp: #{value}"
-                   end
+                    when Time then value.to_i
+                    when String then Time.parse(value).to_i
+                    when Numeric then value.to_i
+                    else nil
+                    end
         instance_variable_set(:"@#{field_name}", timestamp)
       end
     end
@@ -129,15 +184,18 @@ class TimestampFieldType < Familia::FieldType
   end
 
   def serialize(value, _record = nil)
-    value.respond_to?(:to_i) ? value.to_i : value
+    value&.to_i
   end
 
   def deserialize(value, _record = nil)
     value ? Time.at(value.to_i) : nil
   end
+
+  def category
+    :timestamp
+  end
 end
 
-# Register and use the custom field type
 class Event < Familia::Horreum
   def self.timestamp_field(name, **options)
     field_type = TimestampFieldType.new(name, **options)
@@ -150,81 +208,21 @@ class Event < Familia::Horreum
   timestamp_field :updated_at
 end
 
-# Usage
-event = Event.new(event_id: 'evt_123')
-event.created_at = "2023-06-15 14:30:00"  # String input
-puts event.created_at.class               # => Time
-puts event.created_at                     # => 2023-06-15 14:30:00 UTC
-```
-
-### JSON Field Type
-
-```ruby
-class JsonFieldType < Familia::FieldType
-  def category
-    :json
-  end
-
-  def define_setter(klass)
-    field_name = @name
-    method_name = @method_name
-
-    handle_method_conflict(klass, :"#{method_name}=") do
-      klass.define_method :"#{method_name}=" do |value|
-        # Store as parsed JSON for manipulation
-        parsed_value = case value
-                      when String then JSON.parse(value)
-                      when Hash, Array then value
-                      else raise ArgumentError, "Value must be JSON string, Hash, or Array"
-                      end
-        instance_variable_set(:"@#{field_name}", parsed_value)
-      end
-    end
-  end
-
-  def serialize(value, _record = nil)
-    value.to_json if value
-  end
-
-  def deserialize(value, _record = nil)
-    value ? JSON.parse(value) : nil
-  end
-end
-
-class Configuration < Familia::Horreum
-  def self.json_field(name, **options)
-    field_type = JsonFieldType.new(name, **options)
-    register_field_type(field_type)
-  end
-
-  identifier_field :config_id
-  field :config_id, :name
-  json_field :settings
-  json_field :metadata
-end
-
-# Usage
-config = Configuration.new(config_id: 'app_config')
-config.settings = { theme: 'dark', notifications: true }
-config.settings['api_timeout'] = 30
-
-# Automatically serialized to JSON in database
-config.save
-# Database stores: {"theme":"dark","notifications":true,"api_timeout":30}
+event = Event.new(event_id: 'e123')
+event.created_at = "2024-01-01 12:00:00 UTC"
+event.created_at.class        #=> Time
+event.created_at.to_s         #=> "2024-01-01 12:00:00 UTC"
 ```
 
 ### Enum Field Type
+
+Create fields with restricted values and validation:
 
 ```ruby
 class EnumFieldType < Familia::FieldType
   def initialize(name, values:, **options)
     super(name, **options)
-    @valid_values = values.map(&:to_s).to_set
-    @default_value = values.first
-  end
-
-  def category
-    :enum
+    @valid_values = Array(values).map(&:to_s).freeze
   end
 
   def define_setter(klass)
@@ -234,27 +232,25 @@ class EnumFieldType < Familia::FieldType
 
     handle_method_conflict(klass, :"#{method_name}=") do
       klass.define_method :"#{method_name}=" do |value|
-        value_str = value.to_s
-        unless valid_values.include?(value_str)
-          raise ArgumentError, "Invalid #{field_name}: #{value}. Valid values: #{valid_values.to_a.join(', ')}"
+        unless valid_values.include?(value.to_s)
+          raise ArgumentError, "Invalid #{field_name}: #{value}. Valid values: #{valid_values.join(', ')}"
         end
-        instance_variable_set(:"@#{field_name}", value_str)
+        instance_variable_set(:"@#{field_name}", value.to_s)
       end
     end
   end
 
-  # Add predicate methods for each enum value
   def install(klass)
-    super(klass)
-
+    super
+    # Add constants for enum values
     @valid_values.each do |value|
-      predicate_method = :"#{@method_name}_#{value}?"
-      field_name = @name
-
-      klass.define_method predicate_method do
-        instance_variable_get(:"@#{field_name}") == value
-      end
+      const_name = "#{@name.to_s.upcase}_#{value.upcase}"
+      klass.const_set(const_name, value) unless klass.const_defined?(const_name)
     end
+  end
+
+  def category
+    :enum
   end
 end
 
@@ -266,20 +262,17 @@ class Order < Familia::Horreum
 
   identifier_field :order_id
   field :order_id, :customer_id
-  enum_field :status, values: [:pending, :processing, :shipped, :delivered, :cancelled]
+  enum_field :status, values: [:pending, :processing, :shipped, :delivered]
   enum_field :priority, values: [:low, :normal, :high, :urgent]
 end
 
-# Usage
-order = Order.new(order_id: 'ord_123')
-order.status = :pending
-order.priority = 'high'
+order = Order.new(order_id: 'o123')
+order.status = :pending              # Valid
+order.status = "processing"          # Valid (string converted)
+order.priority = Order::PRIORITY_HIGH  # Using generated constant
 
-# Predicate methods automatically available
-order.status_pending?    # => true
-order.status_shipped?    # => false
-order.priority_high?     # => true
-order.priority_urgent?   # => false
+# This raises ArgumentError
+order.status = :invalid              # Invalid value
 ```
 
 ## Field Metadata and Introspection
@@ -297,73 +290,35 @@ class Product < Familia::Horreum
 end
 
 # Get all field names
-Product.fields
-# => [:name, :price, :description, :temp_data]
+Product.fields                    #=> [:name, :price, :description, :temp_data]
 
-# Get field types registry
-Product.field_types
-# => { name: #<FieldType...>, price: #<FieldType...>, ... }
-
-# Get fields by category (read-only introspection)
-Product.fields.select { |f| Product.field_types[f].category == :transient }
-# => [:temp_data]
+# Get field types
+Product.field_types               #=> { name: FieldType, price: FieldType, ... }
 
 # Get persistent vs transient fields
-Product.persistent_fields  # => [:name, :price, :description]
-Product.transient_fields   # => [:temp_data]
+Product.persistent_fields         #=> [:name, :price, :description]
+Product.transient_fields          #=> [:temp_data]
 
-# Field method mapping (for backward compatibility)
-Product.field_method_map
-# => { name: :name, price: :price, secret_key: :secret_key, temp_data: :temp_data }
+# Check field properties
+product = Product.new
+field_type = Product.field_types[:temp_data]
+field_type.persistent?            #=> false
+field_type.transient?             #=> true
+field_type.category               #=> :transient
 ```
 
-### Using Field Type Category for Introspection
+### Field Categories and Filtering
 
-The `category` method on FieldType provides read-only metadata for introspection:
+Field types can specify categories for grouping and filtering:
 
 ```ruby
-# Custom field type with category metadata
 class SearchableFieldType < Familia::FieldType
   def category
     :searchable
   end
 end
 
-# Features can process fields by inspecting their category
-module SearchableFieldsFeature
-  def self.included(base)
-    base.extend ClassMethods
-
-    # Find all searchable fields by inspecting field type category
-    searchable_fields = base.fields.select do |field|
-      base.field_types[field].category == :searchable
-    end
-
-    searchable_fields.each do |field|
-      create_search_index_for(base, field)
-    end
-  end
-
-  module ClassMethods
-    def search_by_field(field_name, query)
-      # Implementation for field-specific search
-    end
-  end
-
-  private
-
-  def self.create_search_index_for(klass, field_name)
-    # Create search index methods
-    klass.define_singleton_method :"search_by_#{field_name}" do |query|
-      # Search implementation
-    end
-  end
-end
-
 class Product < Familia::Horreum
-  feature :searchable_fields
-
-  # Use custom field type with searchable category
   def self.searchable_field(name, **options)
     field_type = SearchableFieldType.new(name, **options)
     register_field_type(field_type)
@@ -372,18 +327,20 @@ class Product < Familia::Horreum
   searchable_field :name
   searchable_field :description
   field :internal_id
+
+  def self.searchable_fields
+    field_types.select { |_, ft| ft.category == :searchable }.keys
+  end
 end
 
-# Auto-generated search methods available
-Product.search_by_name("laptop")
-Product.search_by_description("gaming")
+Product.searchable_fields         #=> [:name, :description]
 ```
 
 ## Fast Methods and Database Operations
 
 ### Fast Method Behavior
 
-Fast methods provide immediate database persistence without affecting other object state:
+Fast methods (ending with `!`) provide immediate database persistence without requiring a separate `save` call:
 
 ```ruby
 class UserProfile < Familia::Horreum
@@ -391,26 +348,22 @@ class UserProfile < Familia::Horreum
   field :user_id, :name, :email, :last_login_at
 end
 
-profile = UserProfile.new(user_id: 'user_123')
-profile.save
+profile = UserProfile.new(user_id: 'u123')
+profile.name!("John Doe")         # Immediately persists to database
+profile.email!("john@example.com") # No save() needed
 
-# Regular setter: updates instance variable only
-profile.last_login_at = Familia.now  # Not yet in database
-
-# Fast method: immediate database write
-profile.last_login_at!(Familia.now)  # Written to database immediately
-
-# Reading from database
-profile.last_login_at   # => reads from instance variable
-profile.last_login_at!  # => reads directly from database
+# Reading with fast method returns current database value
+current_name = profile.name!      # Reads from database
 ```
 
 ### Custom Fast Method Behavior
 
+Override fast method behavior for specialized use cases:
+
 ```ruby
 class AuditedFieldType < Familia::FieldType
   def define_fast_writer(klass)
-    return unless @fast_method_name
+    return unless @fast_method_name&.to_s&.end_with?('!')
 
     field_name = @name
     method_name = @method_name
@@ -418,35 +371,21 @@ class AuditedFieldType < Familia::FieldType
 
     handle_method_conflict(klass, fast_method_name) do
       klass.define_method fast_method_name do |*args|
-        if args.empty?
-          # Read from database
-          hget(field_name)
-        else
-          # Write to database with audit trail
-          value = args.first
-          old_value = hget(field_name)
+        val = args.first
+        return hget(field_name) if val.nil?
 
-          # Update the field
-          prepared = serialize_value(value)
-          send(:"#{method_name}=", value) if method_name
-          result = hset(field_name, prepared)
+        # Audit the change
+        old_value = hget(field_name)
+        timestamp = Time.now.to_i
 
-          # Create audit entry
-          audit_entry = {
-            field: field_name,
-            old_value: old_value,
-            new_value: value,
-            changed_at: Familia.now,
-            changed_by: Fiber[:current_user]&.id
-          }
+        # Log the change
+        puts "AUDIT: #{field_name} changed from #{old_value} to #{val} at #{timestamp}"
 
-          # Store audit trail
-          audit_key = "#{dbkey}:audit"
-          Familia.dbclient.lpush(audit_key, audit_entry.to_json)
-          Familia.dbclient.ltrim(audit_key, 0, 99)  # Keep last 100 changes
+        # Update instance variable
+        send(:"#{method_name}=", val) if method_name
 
-          result
-        end
+        # Persist to database
+        hset(field_name, serialize_value(val))
       end
     end
   end
@@ -463,74 +402,87 @@ class AuditedDocument < Familia::Horreum
   audited_field :content
   audited_field :status
 end
-
-# Usage creates audit trail
-doc = AuditedDocument.new(doc_id: 'doc_123')
-doc.save
-
-Fiber[:current_user] = OpenStruct.new(id: 'user_456')
-doc.content!("Initial content")    # Audited change
-doc.status!("draft")               # Audited change
-
-# View audit trail
-audit_key = "#{doc.dbkey}:audit"
-audit_entries = Familia.dbclient.lrange(audit_key, 0, -1)
-audit_entries.map { |entry| JSON.parse(entry) }
 ```
+
+## Field Options and Configuration
+
+### Available Options
+
+```ruby
+field :name,
+  as: :display_name,           # Custom method name
+  fast_method: :name_now!,     # Custom fast method name
+  fast_method: false,          # Disable fast method
+  on_conflict: :skip,          # Conflict resolution strategy
+  loggable: false             # Exclude from serialization
+```
+
+### Conflict Resolution Strategies
+
+- `:raise` - Raise error if method exists (default)
+- `:skip` - Skip field definition if method exists
+- `:warn` - Warn but proceed with definition
+- `:overwrite` - Silently overwrite existing method
 
 ## Integration Patterns
 
 ### Rails Integration
 
 ```ruby
-# app/models/concerns/familia_fields.rb
 module FamiliaFields
   extend ActiveSupport::Concern
 
   class_methods do
-    # Rails-style field definitions
-    def string_field(name, **options)
-      field(name, **options)
+    def string_field(*names, **options)
+      names.each { |name| field(name, **options) }
     end
 
-    def integer_field(name, **options)
+    def integer_field(*names, **options)
       field_type = Class.new(Familia::FieldType) do
         def serialize(value, _record = nil)
-          value.to_i if value
+          value&.to_i
         end
 
         def deserialize(value, _record = nil)
-          value.to_i if value
+          value&.to_i
         end
       end
 
-      register_field_type(field_type.new(name, **options))
+      names.each do |name|
+        register_field_type(field_type.new(name, **options))
+      end
     end
 
-    def boolean_field(name, **options)
+    def boolean_field(*names, **options)
       field_type = Class.new(Familia::FieldType) do
         def serialize(value, _record = nil)
           !!value
         end
 
         def deserialize(value, _record = nil)
-          value == true || value == 'true' || value == '1'
+          case value.to_s.downcase
+          when 'true', '1', 'yes', 'on' then true
+          when 'false', '0', 'no', 'off' then false
+          else nil
+          end
         end
 
         def define_getter(klass)
-          super(klass)
-
-          # Add predicate method
-          predicate_method = :"#{@method_name}?"
           field_name = @name
+          method_name = @method_name
 
-          klass.define_method predicate_method do
-            !!instance_variable_get(:"@#{field_name}")
+          handle_method_conflict(klass, method_name) do
+            klass.define_method method_name do
+              value = instance_variable_get(:"@#{field_name}")
+              !!value
+            end
           end
         end
       end
 
-      register_field_type(field_type.new(name, **options))
+      names.each do |name|
+        register_field_type(field_type.new(name, **options))
+      end
     end
   end
 end
@@ -543,11 +495,6 @@ class User < Familia::Horreum
   integer_field :age, :login_count
   boolean_field :active, :verified
 end
-
-user = User.new(user_id: 'user_123')
-user.age = "25"          # Automatically converted to integer
-user.active = "true"     # Automatically converted to boolean
-user.verified?           # => false (predicate method)
 ```
 
 ### Validation Integration
@@ -567,26 +514,20 @@ class ValidatedFieldType < Familia::FieldType
     handle_method_conflict(klass, :"#{method_name}=") do
       klass.define_method :"#{method_name}=" do |value|
         # Run validations
-        validations.each do |validator, constraint|
-          case validator
+        validations.each do |type, constraint|
+          case type
           when :presence
-            if constraint && (value.nil? || value.to_s.strip.empty?)
-              raise ArgumentError, "#{field_name} cannot be blank"
-            end
+            raise ArgumentError, "#{field_name} cannot be blank" if constraint && value.to_s.strip.empty?
           when :length
-            if constraint.is_a?(Hash) && constraint[:minimum]
-              if value.to_s.length < constraint[:minimum]
-                raise ArgumentError, "#{field_name} is too short (minimum #{constraint[:minimum]} characters)"
-              end
+            if constraint.is_a?(Hash)
+              min = constraint[:minimum] || constraint[:min]
+              max = constraint[:maximum] || constraint[:max]
+              len = value.to_s.length
+              raise ArgumentError, "#{field_name} too short (minimum: #{min})" if min && len < min
+              raise ArgumentError, "#{field_name} too long (maximum: #{max})" if max && len > max
             end
           when :format
-            if constraint.is_a?(Regexp) && !value.to_s.match?(constraint)
-              raise ArgumentError, "#{field_name} format is invalid"
-            end
-          when :inclusion
-            if constraint.is_a?(Array) && !constraint.include?(value)
-              raise ArgumentError, "#{field_name} must be one of: #{constraint.join(', ')}"
-            end
+            raise ArgumentError, "#{field_name} format invalid" if constraint && !value.to_s.match?(constraint)
           end
         end
 
@@ -606,22 +547,16 @@ class User < Familia::Horreum
   validated_field :user_id, validations: { presence: true }
   validated_field :email, validations: {
     presence: true,
-    format: /\A[\w+\-.]+@[a-z\d\-]+(\.[a-z\d\-]+)*\.[a-z]+\z/i
+    format: /\A[^@\s]+@[^@\s]+\z/
   }
   validated_field :status, validations: {
-    inclusion: %w[active inactive suspended]
+    presence: true,
+    format: /\A(active|inactive|pending)\z/
   }
   validated_field :name, validations: {
-    presence: true,
-    length: { minimum: 2 }
+    length: { minimum: 2, maximum: 50 }
   }
 end
-
-# Usage with validation
-user = User.new
-user.email = "invalid-email"     # Raises ArgumentError
-user.status = "unknown"          # Raises ArgumentError
-user.name = "A"                  # Raises ArgumentError (too short)
 ```
 
 ## Performance Considerations
@@ -629,40 +564,16 @@ user.name = "A"                  # Raises ArgumentError (too short)
 ### Efficient Field Operations
 
 ```ruby
-class OptimizedFieldAccess < Familia::Horreum
-  # Cache field type lookups
-  def self.field_type_for(field_name)
-    @field_type_cache ||= {}
-    @field_type_cache[field_name] ||= field_types[field_name]
-  end
+# Batch updates using fast methods
+user.name!("John")
+user.email!("john@example.com")
+user.status!("active")
 
-  # Batch field updates
-  def batch_update(field_values)
-    # Update instance variables
-    field_values.each do |field, value|
-      setter_method = :"#{field}="
-      send(setter_method, value) if respond_to?(setter_method)
-    end
-
-    # Single database call for persistence
-    serialized_values = field_values.transform_values do |value|
-      serialize_value(value)
-    end
-
-    hmset(serialized_values)
-  end
-
-  # Lazy field loading
-  def lazy_load_field(field_name)
-    return instance_variable_get(:"@#{field_name}") if instance_variable_defined?(:"@#{field_name}")
-
-    value = hget(field_name)
-    field_type = self.class.field_type_for(field_name)
-    deserialized = field_type&.deserialize(value, self) || value
-
-    instance_variable_set(:"@#{field_name}", deserialized)
-    deserialized
-  end
+# Use transactions for multiple operations
+redis.multi do
+  user.name!("John")
+  user.email!("john@example.com")
+  user.status!("active")
 end
 ```
 
@@ -673,12 +584,14 @@ class CompactFieldType < Familia::FieldType
   def serialize(value, _record = nil)
     case value
     when String
-      # Compress strings longer than 100 characters
-      if value.length > 100
-        Base64.encode64(Zlib::Deflate.deflate(value))
-      else
-        value
-      end
+      # Compress long strings
+      value.length > 100 ? Zlib::Deflate.deflate(value) : value
+    when Hash
+      # Use more compact JSON representation
+      value.to_json
+    when Array
+      # Join simple arrays
+      value.all? { |v| v.is_a?(String) } ? value.join('|') : value.to_json
     else
       value
     end
@@ -687,16 +600,18 @@ class CompactFieldType < Familia::FieldType
   def deserialize(value, _record = nil)
     return value unless value.is_a?(String)
 
-    # Check if it's base64 encoded compressed data
-    if value.length > 100 && value.match?(/\A[A-Za-z0-9+\/]*={0,2}\z/)
-      begin
-        Zlib::Inflate.inflate(Base64.decode64(value))
-      rescue
-        value  # Return as-is if decompression fails
-      end
+    # Try to decompress
+    if value.start_with?("\x78\x9C") # zlib magic bytes
+      Zlib::Inflate.inflate(value)
+    elsif value.start_with?('{', '[')
+      JSON.parse(value)
+    elsif value.include?('|')
+      value.split('|')
     else
       value
     end
+  rescue JSON::ParserError, Zlib::Error
+    value # Return original if parsing fails
   end
 end
 ```
@@ -706,11 +621,12 @@ end
 ### RSpec Testing
 
 ```ruby
-RSpec.describe TimestampFieldType do
-  let(:field_type) { described_class.new(:created_at) }
+describe TimestampFieldType do
+  let(:field_type) { TimestampFieldType.new(:created_at) }
   let(:test_class) do
-    Class.new(Familia::Horreum) do
+    Class.new do
       def self.name; 'TestClass'; end
+      include Familia::Horreum
     end
   end
 
@@ -720,29 +636,24 @@ RSpec.describe TimestampFieldType do
 
   it "converts various time formats" do
     instance = test_class.new
-
-    instance.created_at = "2023-06-15 14:30:00"
+    instance.created_at = "2024-01-01 12:00:00 UTC"
     expect(instance.created_at).to be_a(Time)
+    expect(instance.created_at.to_s).to include("2024-01-01 12:00:00")
 
-    instance.created_at = Familia.now
-    expect(instance.created_at).to be_a(Time)
-
-    instance.created_at = Familia.now.to_i
+    instance.created_at = Time.now
     expect(instance.created_at).to be_a(Time)
   end
 
   it "serializes to integer" do
-    time_value = Familia.now
-    serialized = field_type.serialize(time_value)
-    expect(serialized).to be_a(Integer)
-    expect(serialized).to eq(time_value.to_i)
+    time = Time.parse("2024-01-01 12:00:00 UTC")
+    expect(field_type.serialize(time)).to eq(time.to_i)
   end
 
   it "deserializes from integer" do
-    timestamp = Familia.now.to_i
-    deserialized = field_type.deserialize(timestamp)
-    expect(deserialized).to be_a(Time)
-    expect(deserialized.to_i).to eq(timestamp)
+    timestamp = Time.parse("2024-01-01 12:00:00 UTC").to_i
+    result = field_type.deserialize(timestamp)
+    expect(result).to be_a(Time)
+    expect(result.to_i).to eq(timestamp)
   end
 end
 ```
@@ -752,20 +663,19 @@ end
 ### 1. Choose Appropriate Field Types
 
 ```ruby
-# Use dedicated field methods provided by features
 class User < Familia::Horreum
   feature :transient_fields
   feature :encrypted_fields
 
-  field :name                    # Simple persistent field
-  field :metadata                # For complex data
-  transient_field :temp_token    # For runtime-only data
-  encrypted_field :api_key       # For sensitive data
+  field :name                    # Regular field for non-sensitive data
+  field :metadata                # JSON data can be stored as regular field
+  transient_field :temp_token    # Sensitive temporary data
+  encrypted_field :api_key       # Sensitive persistent data
 end
 
-# Create custom types for specialized behavior
+# Use specialized field types for domain-specific data
 class GeoLocation < Familia::Horreum
-  coordinate_field :latitude     # Custom validation and formatting
+  coordinate_field :latitude     # Custom validation for coordinates
   coordinate_field :longitude
 end
 ```
@@ -774,14 +684,9 @@ end
 
 ```ruby
 class SafeFieldDefinition < Familia::Horreum
-  # Check for conflicts before defining fields
+  # Always use skip strategy for potentially conflicting names
   def self.safe_field(name, **options)
-    if method_defined?(name) || method_defined?(:"#{name}=")
-      Rails.logger.warn "Method conflict for field #{name}, using alternative name"
-      options[:as] = :"#{name}_value"
-    end
-
-    field(name, **options)
+    field(name, on_conflict: :skip, **options)
   end
 end
 ```
@@ -789,18 +694,85 @@ end
 ### 3. Optimize for Common Use Cases
 
 ```ruby
-# Provide convenience methods for common patterns
 class BaseModel < Familia::Horreum
   def self.timestamps
-    timestamp_field :created_at, as: :created_at
-    timestamp_field :updated_at, as: :updated_at
+    timestamp_field :created_at
+    timestamp_field :updated_at
   end
 
   def self.soft_delete
-    boolean_field :deleted, as: :deleted
-    timestamp_field :deleted_at, as: :deleted_at
+    boolean_field :deleted
+    timestamp_field :deleted_at
   end
+end
+
+class User < BaseModel
+  timestamps
+  soft_delete
+
+  field :name, :email
 end
 ```
 
-The Field System provides a powerful foundation for defining flexible, extensible object attributes with customizable behavior, validation, and serialization capabilities.
+### 4. Use Field Groups for Organization
+
+```ruby
+class User < Familia::Horreum
+  field_group :identity do
+    field :user_id
+    field :email
+    field :username
+  end
+
+  field_group :profile do
+    field :first_name
+    field :last_name
+    field :avatar_url
+  end
+
+  field_group :preferences do
+    field :theme
+    field :language
+    field :timezone
+  end
+end
+
+# Access grouped fields
+User.field_groups[:identity]     #=> [:user_id, :email, :username]
+User.field_groups[:profile]      #=> [:first_name, :last_name, :avatar_url]
+```
+
+## API Reference
+
+### FieldType Class
+
+```ruby
+# Constructor
+FieldType.new(name, as: name, fast_method: :"#{name}!", on_conflict: :raise, loggable: true, **options)
+
+# Key methods
+field_type.install(klass)              # Install on class
+field_type.define_getter(klass)        # Define getter method
+field_type.define_setter(klass)        # Define setter method
+field_type.define_fast_writer(klass)   # Define fast writer method
+field_type.serialize(value, record)    # Serialize for storage
+field_type.deserialize(value, record)  # Deserialize from storage
+field_type.persistent?                 # Check if persisted
+field_type.category                    # Get field category
+field_type.generated_methods           # Get all generated method names
+```
+
+### Class Methods
+
+```ruby
+# Field definition
+field(name, **options)                 # Define a field
+register_field_type(field_type)        # Register custom field type
+
+# Introspection
+fields                                 # Get all field names
+field_types                           # Get all field types
+persistent_fields                     # Get persistent field names
+transient_fields                      # Get transient field names
+field_method_map                      # Get field name to method mappings
+```

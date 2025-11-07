@@ -17,7 +17,7 @@ Valkey/Redis → Algorithm Detection → Decryption → Field Getter → User Ou
 │                 │    │                  │    │                 │
 │ - encrypt()     │───→│ - get()          │───→│ XChaCha20Poly   │
 │ - decrypt()     │    │ - register()     │    │ AES-GCM         │
-│ - derive_key()  │    │ - priority       │    │ (Future: More)  │
+│ - derive_key()  │    │ - available()    │    │                 │
 └─────────────────┘    └──────────────────┘    └─────────────────┘
 ```
 
@@ -37,6 +37,9 @@ module Familia::Encryption::Registry
 
   # Get highest-priority available provider
   def self.default_provider
+
+  # Get available algorithm names
+  def self.available_algorithms
 end
 ```
 
@@ -64,13 +67,15 @@ All providers implement a common interface:
 ```ruby
 class Provider
   ALGORITHM = 'algorithm-name'
+  NONCE_SIZE = 12  # or 24 for XChaCha20
+  AUTH_TAG_SIZE = 16
 
   def self.available?        # Check if dependencies are met
   def self.priority          # Higher = preferred (XChaCha20: 100, AES: 50)
 
   def encrypt(plaintext, key, additional_data)
   def decrypt(ciphertext, key, nonce, auth_tag, additional_data)
-  def derive_key(master_key, context)
+  def derive_key(master_key, context, personal: nil)
   def generate_nonce
 end
 ```
@@ -92,8 +97,8 @@ AES-256-GCM:        HKDF-SHA256
 
 ```ruby
 class MyModel < Familia::Horreum
-  # Add the feature (optional if globally enabled)
-  feature :encryption
+  # Add the feature
+  feature :encrypted_fields
 
   # Define encrypted fields
   encrypted_field :sensitive_data
@@ -110,6 +115,7 @@ Familia.configure do |config|
     v1: ENV['FAMILIA_ENCRYPTION_KEY_V1']
   }
   config.current_key_version = :v1
+  config.encryption_personalization = 'MyApp-2024'  # Optional
 end
 
 # Validate configuration at startup
@@ -143,33 +149,55 @@ Without RbNaCl, Familia falls back to OpenSSL AES-256-GCM (still secure but lowe
 
 ## Advanced Usage
 
-### Custom Field Names
+### Additional Authenticated Data (AAD)
 
 ```ruby
-encrypted_field :favorite_snack, as: :top_secret_snack_preference
-```
+class SecureDocument < Familia::Horreum
+  feature :encrypted_fields
 
-### Passphrase Protection
-
-```ruby
-class Vault < Familia::Horreum
-  encrypted_field :secret
-
-  def unlock(passphrase)
-    # Passphrase becomes part of encryption context
-    self.secret(passphrase_value: passphrase)
-  end
+  field :doc_id, :owner_id, :classification
+  encrypted_field :content, aad_fields: [:doc_id, :owner_id, :classification]
 end
+
+# The content can only be decrypted if doc_id, owner_id, and classification
+# values match those used during encryption
 ```
 
-### Batch Operations
+### Request-Level Caching
 
 ```ruby
-# Efficient bulk encryption
-customers = Customer.batch_create([
-  { email: 'user1@example.com', favorite_snack: 'chocolate chip cookies' },
-  { email: 'user2@example.com', favorite_snack: 'leftover pizza' }
-])
+# For performance optimization
+Familia::Encryption.with_request_cache do
+  vault.secret_key = "value1"
+  vault.api_token = "value2"
+  vault.save  # Reuses derived keys within this block
+end
+
+# Cache is automatically cleared when block exits
+# Or manually: Familia::Encryption.clear_request_cache!
+```
+
+### ConcealedString Objects
+
+Encrypted fields return ConcealedString objects to prevent accidental exposure:
+
+```ruby
+secret = vault.secret_key
+secret.class               # => ConcealedString
+puts secret                # => "[CONCEALED]" (automatic redaction)
+secret.inspect             # => "[CONCEALED]" (automatic redaction)
+
+# Safe access pattern - requires explicit reveal
+secret.reveal do |raw_value|
+  # Use raw_value carefully - avoid creating copies
+  HTTP.post('/api', headers: { 'X-Token' => raw_value })
+end
+
+# Check if cleared from memory
+secret.cleared?            # Returns true if wiped
+
+# Explicit cleanup
+secret.clear!              # Best-effort memory wiping
 ```
 
 ## Provider-Specific Features
@@ -191,7 +219,7 @@ gem 'rbnacl', '~> 7.1'
 
 ```ruby
 # Always available with OpenSSL
-# - 256-bit keys, 96-bit nonces
+# - 256-bit keys, 96-bit nonces (12 bytes)
 # - HKDF-SHA256 key derivation
 # - Priority: 50
 # - Good compatibility, proven security
@@ -211,7 +239,7 @@ puts results
 # }
 ```
 
-### Key Derivation Monitoring
+### Monitoring Key Derivation
 
 ```ruby
 # Monitor key derivations (should increment with each operation)
@@ -222,36 +250,195 @@ puts Familia::Encryption.derivation_count.value
 Familia::Encryption.reset_derivation_count!
 ```
 
-### Memory Management
+### Encryption Status
 
-**⚠️ Important**: Ruby provides no memory safety guarantees. See security warnings in provider files.
+```ruby
+# Get current encryption setup info
+status = Familia::Encryption.status
+# => {
+#   default_algorithm: "xchacha20poly1305",
+#   available_algorithms: ["xchacha20poly1305", "aes-256-gcm"],
+#   preferred_available: "Familia::Encryption::Providers::XChaCha20Poly1305Provider",
+#   using_hardware: false,
+#   key_versions: [:v1, :v2],
+#   current_version: :v2
+# }
+```
 
-- Keys are cleared from variables after use (best effort)
-- No protection against memory dumps or GC copying
-- Plaintext exists in Ruby strings during processing
+## Field-Level Features
+
+### Instance Methods
+
+```ruby
+vault = Vault.new(secret_key: 'secret', api_token: 'token123')
+
+# Check if any encrypted fields have values
+vault.encrypted_data?           # => true
+
+# Clear all encrypted field values from memory
+vault.clear_encrypted_fields!
+
+# Check if all encrypted fields have been cleared
+vault.encrypted_fields_cleared? # => true
+
+# Re-encrypt all fields with current settings (for key rotation)
+vault.re_encrypt_fields!
+vault.save
+
+# Get encryption status for all encrypted fields
+status = vault.encrypted_fields_status
+# => {
+#   secret_key: { encrypted: true, algorithm: "xchacha20poly1305", cleared: false },
+#   api_token: { encrypted: true, cleared: true }
+# }
+```
+
+### Class Methods
+
+```ruby
+class Vault < Familia::Horreum
+  feature :encrypted_fields
+  encrypted_field :secret_key
+  encrypted_field :api_token
+end
+
+# Get list of encrypted field names
+Vault.encrypted_fields          # => [:secret_key, :api_token]
+
+# Check if a field is encrypted
+Vault.encrypted_field?(:secret_key)  # => true
+Vault.encrypted_field?(:name)        # => false
+```
+
+## Key Rotation
+
+The feature supports key versioning for seamless key rotation:
+
+```ruby
+# Step 1: Add new key version while keeping old keys
+Familia.configure do |config|
+  config.encryption_keys = {
+    v1: old_key,
+    v2: new_key
+  }
+  config.current_key_version = :v2
+end
+
+# Step 2: Objects decrypt with any valid key, encrypt with current key
+vault.secret_key = "new-secret"  # Encrypted with v2 key
+vault.save
+
+# Step 3: Re-encrypt existing records
+vault.re_encrypt_fields!  # Uses current key version
+vault.save
+
+# Step 4: After all data is re-encrypted, remove old key
+```
+
+## Error Handling
+
+The feature provides specific error types for different failure modes:
+
+```ruby
+# Invalid ciphertext or tampering
+begin
+  vault.secret_key.reveal { |s| s }
+rescue Familia::EncryptionError => e
+  # "Decryption failed - invalid key or corrupted data"
+end
+
+# Missing encryption configuration
+Familia.config.encryption_keys = {}
+begin
+  vault.secret_key.reveal { |s| s }
+rescue Familia::EncryptionError => e
+  # "No encryption keys configured"
+end
+
+# Invalid key version
+begin
+  vault.secret_key.reveal { |s| s }
+rescue Familia::EncryptionError => e
+  # "No key for version: v1"
+end
+```
 
 ## Testing
 
 ```ruby
-# Test helper
-RSpec.configure do |config|
-  config.include Familia::EncryptionTestHelpers
-
-  config.around(:each, :encryption) do |example|
-    with_test_encryption_keys { example.run }
-  end
-end
+# Test helper setup
+Familia.config.encryption_keys = { v1: Base64.strict_encode64('a' * 32) }
+Familia.config.current_key_version = :v1
 
 # In tests
-it "encrypts sensitive fields", :encryption do
-  user = User.create(favorite_snack: "leftover pizza")
+it "encrypts sensitive fields" do
+  user = User.create(api_token: "secret-token")
 
   # Verify encryption in Redis
-  raw_value = redis.hget(user.dbkey, "favorite_snack")
-  expect(raw_value).not_to include("leftover pizza")
-  expect(JSON.parse(raw_value)).to have_key("ciphertext")
+  raw_value = redis.hget(user.dbkey, "api_token")
+  expect(raw_value).not_to include("secret-token")
+
+  encrypted_data = JSON.parse(raw_value)
+  expect(encrypted_data).to have_key("ciphertext")
+  expect(encrypted_data).to have_key("algorithm")
+end
+
+it "provides concealed string access" do
+  user = User.create(api_token: "secret-token")
+  concealed = user.api_token
+
+  expect(concealed).to be_a(ConcealedString)
+  expect(concealed.to_s).to eq("[CONCEALED]")
+
+  concealed.reveal do |token|
+    expect(token).to eq("secret-token")
+  end
 end
 ```
+
+## Security Model
+
+### Ciphertext Format
+
+Encrypted data is stored as JSON with algorithm-specific metadata:
+
+```json
+{
+  "algorithm": "xchacha20poly1305",
+  "nonce": "base64_encoded_nonce",
+  "ciphertext": "base64_encoded_data",
+  "auth_tag": "base64_encoded_tag",
+  "key_version": "v1"
+}
+```
+
+### Memory Safety Limitations
+
+⚠️ **Important**: Ruby provides NO memory safety guarantees:
+- No secure memory wiping (best-effort only)
+- Garbage collector may copy secrets
+- String operations create uncontrolled copies
+- Memory dumps may contain plaintext secrets
+
+For highly sensitive applications, consider:
+- External key management (HashiCorp Vault, AWS KMS)
+- Hardware Security Modules (HSMs)
+- Languages with secure memory handling
+- Dedicated cryptographic appliances
+
+### Threat Model
+
+✅ **Protected Against:**
+- Database compromise (encrypted data only)
+- Field value swapping (field-specific keys)
+- Cross-record attacks (record-specific keys)
+- Tampering (authenticated encryption)
+
+❌ **Not Protected Against:**
+- Master key compromise (all data compromised)
+- Application memory compromise (plaintext in RAM)
+- Side-channel attacks (timing, power analysis)
+- Insider threats with application access
 
 ## Troubleshooting
 
@@ -264,13 +451,36 @@ end
 2. **"Decryption failed"**
    - Verify correct key version
    - Check if data was encrypted with different key
+   - Ensure AAD fields haven't changed
 
 3. **Performance degradation**
-   - Enable key caching
-   - Consider installing libsodium gem
+   - Enable request-level caching with `with_request_cache`
+   - Consider installing RbNaCl gem for XChaCha20
 
-## Next Steps
+4. **Provider not available**
+   - Install RbNaCl for XChaCha20: `gem install rbnacl`
+   - Falls back to AES-256-GCM automatically
 
-- [Security Model](Security-Model) - Understand the cryptographic design
-- [Key Management](Key-Management) - Rotation and best practices
-- [Migrating Guide](Migrating-Guide) - Upgrade existing fields
+## API Reference
+
+### Module Methods
+
+```ruby
+# Main encryption/decryption
+Familia::Encryption.encrypt(plaintext, context:, additional_data: nil)
+Familia::Encryption.decrypt(encrypted_json, context:, additional_data: nil)
+Familia::Encryption.encrypt_with(algorithm, plaintext, context:, additional_data: nil)
+
+# Configuration and status
+Familia::Encryption.validate_configuration!
+Familia::Encryption.status
+Familia::Encryption.benchmark(iterations: 1000)
+
+# Request caching
+Familia::Encryption.with_request_cache { block }
+Familia::Encryption.clear_request_cache!
+
+# Monitoring
+Familia::Encryption.derivation_count
+Familia::Encryption.reset_derivation_count!
+```
