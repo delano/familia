@@ -578,7 +578,7 @@ module Familia
 
                 # Check membership using DataType methods
                 membership_data = {
-                  target_class: config.target_class.familia_name,
+                  target_class: target_class.familia_name,
                   target_id: target_id,
                   collection_name: config.collection_name,
                   type: config.type,

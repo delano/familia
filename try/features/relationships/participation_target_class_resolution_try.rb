@@ -96,16 +96,16 @@ end
 #=> true
 
 ## Test domain bidirectional methods were created correctly
-@domain.respond_to?(:in_symbolresolutioncustomer_domains?)
+@domain.respond_to?(:in_symbol_resolution_customer_domains?)
 #=> true
 
 ## Test domain can check membership using generated method
-@domain.in_symbolresolutioncustomer_domains?(@customer)
+@domain.in_symbol_resolution_customer_domains?(@customer)
 #=> true
 
 ## Test domain can add itself using generated method
 @customer.domains.remove(@domain)
-@domain.add_to_symbolresolutioncustomer_domains(@customer)
+@domain.add_to_symbol_resolution_customer_domains(@customer)
 @customer.domains.member?(@domain.identifier)
 #=> true
 
@@ -125,16 +125,16 @@ end
 #=> true
 
 ## Test tag bidirectional methods were created correctly
-@tag.respond_to?(:in_symbolresolutioncustomer_tags?)
+@tag.respond_to?(:in_symbol_resolution_customer_tags?)
 #=> true
 
 ## Test tag can check membership using generated method
-@tag.in_symbolresolutioncustomer_tags?(@customer)
+@tag.in_symbol_resolution_customer_tags?(@customer)
 #=> true
 
 ## Test tag can add itself using generated method
 @customer.tags.remove(@tag)
-@tag.add_to_symbolresolutioncustomer_tags(@customer)
+@tag.add_to_symbol_resolution_customer_tags(@customer)
 @customer.tags.member?(@tag.identifier)
 #=> true
 
@@ -168,7 +168,7 @@ end
 
 ## Test participation data includes correct target class
 @domain_participation = @domain_participations.first
-@domain_participation[:target_class] == 'symbolresolutioncustomer'
+@domain_participation[:target_class] == 'SymbolResolutionCustomer'
 #=> true
 
 ## Test current_participations works with String target class
