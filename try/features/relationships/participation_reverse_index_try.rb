@@ -52,7 +52,7 @@ end
 @domain2.save
 
 ## Test reverse index tracking is created when adding to sorted set
-@customer.add_domain(@domain1)
+@customer.add_domains_instance(@domain1)
 @ri_members1 = @domain1.participations.members
 @ri_members1.is_a?(Array)
 #=> true
@@ -63,7 +63,7 @@ end
 #=> true
 
 ## Test adding to set collection also creates tracking
-@customer.add_preferred_domain(@domain1)
+@customer.add_preferred_domains_instance(@domain1)
 @ri_members1_updated = @domain1.participations.members
 @ri_members1_updated.length > 1
 #=> true
@@ -81,7 +81,7 @@ end
 #=> true
 
 ## Test multiple domains can be tracked
-@customer.add_domain(@domain2)
+@customer.add_domains_instance(@domain2)
 @ri_members2_updated = @domain2.participations.members
 @ri_members2_updated.length >= 1
 #=> true
@@ -94,8 +94,8 @@ end
 
 ## Test remove_from_all_participations uses reverse index
 # NOTE: This method was removed - cleanup happens via individual remove operations
-@customer.remove_domain(@domain1)
-@customer.remove_preferred_domain(@domain1)
+@customer.remove_domains_instance(@domain1)
+@customer.remove_preferred_domains_instance(@domain1)
 @domain1_collections_after = @domain1.participations.members
 @domain1_collections_after.empty?
 #=> true
@@ -106,7 +106,7 @@ end
 #=> false
 
 ## Test domain was removed from set
-@customer.remove_preferred_domain(@domain1)
+@customer.remove_preferred_domains_instance(@domain1)
 @customer.preferred_domains.include?(@domain1)
 #=> false
 
@@ -151,7 +151,7 @@ puts "Before add_preferred_domain - domain2 participations: #{@domain2.participa
 puts "Before add_preferred_domain - domain2 in domains?: #{@customer.domains.member?(@domain2.identifier)}"
 
 # Add domain to multiple collections
-@customer.add_preferred_domain(@domain2)
+@customer.add_preferred_domains_instance(@domain2)
 
 # Debug: Check what participations we actually have after
 puts "After add_preferred_domain - domain2 participations: #{@domain2.participations.members.inspect}"
@@ -172,14 +172,14 @@ puts "Domain2 participations length: #{@domain2_final_memberships.length}"
 ## Test cleanup removes all participations
 # Manual cleanup since remove_from_all_participations was removed
 # Remove from all collections domain2 participates in
-@customer.remove_domain(@domain2)
-@customer.remove_preferred_domain(@domain2) if @customer.preferred_domains.member?(@domain2.identifier)
+@customer.remove_domains_instance(@domain2)
+@customer.remove_preferred_domains_instance(@domain2) if @customer.preferred_domains.member?(@domain2.identifier)
 @ri_members2_final = @domain2.participations.members
 @ri_members2_final.empty?
 ##=> true
 
 ## Test domain2 removed from all collections
-@customer.remove_domain(@domain2)
+@customer.remove_domains_instance(@domain2)
 @customer.domains.include?(@domain2)
 #=> false
 

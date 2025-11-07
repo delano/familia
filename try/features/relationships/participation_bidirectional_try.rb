@@ -6,7 +6,7 @@ require_relative '../../../lib/familia'
 # This shows the improvement from asymmetric to symmetric relationship access
 
 # Setup test classes
-class ProjectTeam < Familia::Horreum
+class ::ProjectTeam < Familia::Horreum
   feature :relationships
 
   identifier_field :team_id
@@ -14,12 +14,16 @@ class ProjectTeam < Familia::Horreum
   field :name
   field :department
 
+  # Explicitly declare collections for participates_in
+  sorted_set :members
+  sorted_set :admins
+
   def init
     @team_id ||= "team_#{SecureRandom.hex(4)}"
   end
 end
 
-class ProjectOrganization < Familia::Horreum
+class ::ProjectOrganization < Familia::Horreum
   feature :relationships
 
   identifier_field :org_id
@@ -27,12 +31,16 @@ class ProjectOrganization < Familia::Horreum
   field :name
   field :type
 
+  # Explicitly declare collections for participates_in
+  sorted_set :employees
+  sorted_set :contractors
+
   def init
     @org_id ||= "org_#{SecureRandom.hex(4)}"
   end
 end
 
-class ProjectUser < Familia::Horreum
+class ::ProjectUser < Familia::Horreum
   feature :relationships
 
   identifier_field :user_id
@@ -69,28 +77,16 @@ end
 # Save all objects
 [@user1, @user2, @team1, @team2, @team3, @org1, @org2].each(&:save)
 
-# Set up relationships using forward direction (existing functionality)
-@team1.members.add(@user1.identifier)
-@team2.members.add(@user1.identifier)
-@team1.admins.add(@user1.identifier)
-@org1.employees.add(@user1.identifier)
-@org2.contractors.add(@user1.identifier)
-
-@team3.members.add(@user2.identifier)
-@org1.employees.add(@user2.identifier)
-
-# Track participations in reverse index using proper string keys
-@user1.track_participation_in("project_team:#{@team1.identifier}:members")
-@user1.track_participation_in("project_team:#{@team2.identifier}:members")
-@user1.track_participation_in("project_team:#{@team1.identifier}:admins")
-@user1.track_participation_in("project_organization:#{@org1.identifier}:employees")
-@user1.track_participation_in("project_organization:#{@org2.identifier}:contractors")
+# Set up relationships using generated methods (automatic participation tracking)
+@team1.add_members_instance(@user1)
+@team2.add_members_instance(@user1)
+@team1.add_admins_instance(@user1)
+@org1.add_employees_instance(@user1)
+@org2.add_contractors_instance(@user1)
 
 # Set up user2 in fewer relationships
-@team3.members.add(@user2.identifier)
-@org1.employees.add(@user2.identifier)
-@user2.track_participation_in("project_team:#{@team3.identifier}:members")
-@user2.track_participation_in("project_organization:#{@org1.identifier}:employees")
+@team3.add_members_instance(@user2)
+@org1.add_employees_instance(@user2)
 
 ## Test the OLD way - difficult and verbose
 # Before: Getting teams for a user required manual parsing
@@ -211,12 +207,15 @@ user1_team_ids = user1_teams.map(&:identifier)
 user1_team_ids.include?(@team1.identifier)
 #=> true
 
-## Test multiple users in same team
-@team1.add_member(@user2)
+## Test multiple users in same team - add user2
+@team1.add_members_instance(@user2)
+@team1.members.member?(@user2.identifier)
+#=> true
 
 ## Test team1 now has two members
 team1_all_members = @team1.members.to_a.sort
-#=> [@user1.identifier, @user2.identifier].sort
+team1_all_members == [@user1.identifier, @user2.identifier].sort
+#=> true
 
 ## Test both users show up in team1 - user1
 @user1.project_team_instances.map(&:name).include?("Frontend Team")
@@ -226,15 +225,16 @@ team1_all_members = @team1.members.to_a.sort
 @user2.project_team_instances.map(&:name).include?("Frontend Team")
 #=> true
 
-## Test cleanup - remove relationships
-@user1.untrack_participation_in("project_team:#{@team1.identifier}:members")
+## Test cleanup - remove relationships using generated method
+@team1.remove_members_instance(@user1)
 
-## Test cache invalidation on removal
-@user1.instance_variable_set(:@reverse_collections_cache, nil)
+## Test that removal from members is reflected (no caching)
+# User1 was removed from :members but is still in :admins
+# So they should STILL appear in project_team_instances (union behavior)
 updated_teams = @user1.project_team_instances.map(&:name).sort
 updated_teams.include?("Frontend Team")
-#=> false
+#=> true
 
-## Test still admin of team1 after member removal
+## Test still admin of team1 after member removal (confirms union behavior)
 @user1.project_team_instances.map(&:name).include?("Frontend Team")
 #=> true

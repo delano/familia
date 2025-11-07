@@ -16,20 +16,6 @@ module Familia
           .downcase
       end
 
-      # Convert from plural to singular form using basic English rules
-      def singularize
-        word = to_s
-        if word.end_with?('ies')
-          "#{word[0..-4]}y"
-        elsif word.end_with?('es') && word.length > 3
-          word[0..-3]
-        elsif word.end_with?('s') && word.length > 1
-          word[0..-2]
-        else
-          word
-        end
-      end
-
       # Convert to camelCase
       def camelize
         _ize(:lower)
