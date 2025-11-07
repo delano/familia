@@ -245,24 +245,22 @@ module Familia
         suffix ||= self.suffix
         return [] if identifiers.empty?
 
-        # Build dbkeys for all identifiers, tracking which positions had valid identifiers
-        objkeys = []
+        # Build list of valid keys and track their original positions
+        valid_keys = []
         valid_positions = []
 
         identifiers.each_with_index do |identifier, idx|
-          if identifier.to_s.empty?
-            objkeys << nil
-          else
-            objkeys << dbkey(identifier, suffix)
-            valid_positions << idx
-          end
+          next if identifier.to_s.empty?
+
+          valid_keys << dbkey(identifier, suffix)
+          valid_positions << idx
         end
 
         Familia.trace :LOAD_MULTI, nil, "Loading #{identifiers.size} objects" if Familia.debug?
 
         # Pipeline all HGETALL commands
         multi_result = pipelined do |pipeline|
-          objkeys.compact.each do |objkey|
+          valid_keys.each do |objkey|
             pipeline.hgetall(objkey)
           end
         end
