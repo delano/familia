@@ -29,7 +29,7 @@ module Familia
         :scope_class,        # Class/Symbol - scope class for instance-scoped indexes (within:)
         :within,             # Class/Symbol/nil - within: parameter (nil for class-level, Class for instance-scoped)
         :cardinality,        # Symbol - :unique (1:1) or :multi (1:many)
-        :query               # Boolean - whether to generate query  methods
+        :query,              # Boolean - whether to generate query  methods
       ) do
         #
         # Get the normalized config name for the scope class

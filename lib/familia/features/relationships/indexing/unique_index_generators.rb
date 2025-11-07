@@ -1,4 +1,4 @@
-# frozen_string_literal: true
+# lib/familia/features/relationships/indexing/unique_index_generators.rb
 
 module Familia
   module Features
@@ -149,7 +149,8 @@ module Familia
                 # Use declared field accessor instead of manual instantiation
                 index_hash = send(index_name)
 
-                # Clear existing index using DataType method
+                # Clear existing index using DataType method which executes the
+                # appropriate command for the given valkey/redis key type.
                 index_hash.clear
 
                 # Rebuild from all existing objects

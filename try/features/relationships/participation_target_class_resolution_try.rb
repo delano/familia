@@ -92,7 +92,7 @@ end
 
 ## Test Symbol target class resolution works
 # This is the primary regression test - it should not raise NoMethodError
-@customer.add_domain(@domain)
+@customer.add_domains_instance(@domain)
 @customer.domains.member?(@domain.identifier)
 #=> true
 
@@ -121,7 +121,7 @@ end
 
 ## Test String target class resolution works
 # This is the secondary regression test
-@customer.add_tag(@tag)
+@customer.add_tags_instance(@tag)
 @customer.tags.member?(@tag.identifier)
 #=> true
 
@@ -168,7 +168,7 @@ end
 
 ## Test participation data includes correct target class
 @domain_participation = @domain_participations.first
-@domain_participation[:target_class] == 'SymbolResolutionCustomer'
+@domain_participation.target_class == 'SymbolResolutionCustomer'
 #=> true
 
 ## Test current_participations works with String target class
@@ -178,11 +178,11 @@ end
 
 ## Test participation data includes correct collection name
 @tag_participation = @tag_participations.first
-@tag_participation[:collection_name] == :tags
+@tag_participation.collection_name == :tags
 #=> true
 
 ## Test removal works correctly with Symbol target class
-@customer.remove_domain(@domain)
+@customer.remove_domains_instance(@domain)
 @customer.domains.member?(@domain.identifier)
 #=> false
 
@@ -191,7 +191,7 @@ end
 #=> true
 
 ## Test removal works correctly with String target class
-@customer.remove_tag(@tag)
+@customer.remove_tags_instance(@tag)
 @customer.tags.member?(@tag.identifier)
 #=> false
 

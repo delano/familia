@@ -72,10 +72,9 @@ module Familia
           end
 
           # Build method to add an item to the collection
-          # Creates: customer.add_domain(domain, score)
+          # Creates: customer.add_domains_instance(domain, score)
           def self.build_add_item(target_class, collection_name, type)
-            singular_name = collection_name.to_s.singularize
-            method_name = "add_#{singular_name}"
+            method_name = "add_#{collection_name}_instance"
 
             target_class.define_method(method_name) do |item, score = nil|
               collection = send(collection_name)
@@ -105,10 +104,9 @@ module Familia
           end
 
           # Build method to remove an item from the collection
-          # Creates: customer.remove_domain(domain)
+          # Creates: customer.remove_domains_instance(domain)
           def self.build_remove_item(target_class, collection_name, type)
-            singular_name = collection_name.to_s.singularize
-            method_name = "remove_#{singular_name}"
+            method_name = "remove_#{collection_name}_instance"
 
             target_class.define_method(method_name) do |item|
               collection = send(collection_name)

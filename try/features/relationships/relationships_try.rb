@@ -113,12 +113,12 @@ decoded[:permission_list].include?(:write)
 @customer.domains.class.name
 #=> "Familia::SortedSet"
 
-## Customer can add domains (generated method)
-@customer.respond_to?(:add_domain)
+## Customer can add domains (generated method with _instance suffix)
+@customer.respond_to?(:add_domains_instance)
 #=> true
 
-## Customer can remove domains (generated method)
-@customer.respond_to?(:remove_domain)
+## Customer can remove domains (generated method with _instance suffix)
+@customer.respond_to?(:remove_domains_instance)
 #=> true
 
 ## Domain can check membership in customer domains (collision-free naming)

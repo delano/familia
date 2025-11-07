@@ -6,7 +6,7 @@
 require_relative '../../support/helpers/test_helpers'
 
 # Test classes for performance improvements
-class PerfTestCustomer < Familia::Horreum
+class ::PerfTestCustomer < Familia::Horreum
   feature :relationships
 
   identifier_field :customer_id
@@ -16,7 +16,7 @@ class PerfTestCustomer < Familia::Horreum
   sorted_set :domains
 end
 
-class PerfTestDomain < Familia::Horreum
+class ::PerfTestDomain < Familia::Horreum
   feature :relationships
 
   identifier_field :domain_id
@@ -51,7 +51,7 @@ end
 #=> true
 
 ## Test add domain creates reverse index tracking 1 of 2
-@customer.add_domain(@domain)
+@customer.add_domains_instance(@domain)
 @reverse_index_key = "#{@domain.dbkey}:participations"
 @tracked_collections = Familia.dbclient.smembers(@reverse_index_key) # TODO: Do not use keys directly
 @tracked_collections.length
@@ -64,13 +64,13 @@ end
 ##=> true
 
 ## Test remove domain cleans up reverse index tracking
-@customer.remove_domain(@domain)
+@customer.remove_domains_instance(@domain)
 @tracked_collections_after_remove = Familia.dbclient.smembers(@reverse_index_key) # TODO: Do not use keys directly
 @tracked_collections_after_remove.include?(@collection_key)
 ##=> false
 
 ## Test robust type comparison in score calculation works with Class
-@customer.add_domain(@domain)
+@customer.add_domains_instance(@domain)
 @score_with_class = @domain.calculate_participation_score(PerfTestCustomer, :domains)
 @score_with_class.is_a?(Numeric)
 #=> true
@@ -93,16 +93,16 @@ end
 ## Test membership contains expected target class
 @memberships = @domain.current_participations
 @membership = @memberships.first
-@membership[:target_class] == 'PerfTestCustomer'
+@membership.target_class == 'PerfTestCustomer'
 #=> true
 
 ## Test membership contains collection name
 @memberships = @domain.current_participations
-@membership[:collection_name] == :domains
+@membership.collection_name == :domains
 #=> true
 
 ## Test membership contains type information
-@membership[:type] == :sorted_set
+@membership.type == :sorted_set
 #=> true
 
 ## Test remove from all participation collections works efficiently
@@ -112,7 +112,7 @@ end
 ##=> true
 
 ## Test domain is removed from customer collection
-@customer.remove_domain(@domain)
+@customer.remove_domains_instance(@domain)
 @customer.domains.include?(@domain)
 #=> false
 
