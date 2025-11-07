@@ -2,13 +2,13 @@
 
 require 'concurrent-ruby'
 
-# DatabaseLogger is RedisClient middleware for command logging and capture.
+# DatabaseLogger is redis-rb middleware for command logging and capture.
 #
-# This middleware addresses the need for detailed Redis command logging, which
-# was removed from the redis-rb gem due to performance concerns. However, in
-# many development and debugging scenarios, the ability to log Redis commands
-# can be invaluable.
+# Provides detailed Redis command logging for development and debugging.
+# Uses the redis-rb middleware system (via RedisClient.register).
 #
+# ## Critical: Uses `super` not `yield` for middleware chaining
+# @see https://github.com/redis-rb/redis-client#instrumentation-and-middlewares
 # ## RedisClient Middleware Architecture
 #
 # RedisClient middlewares are modules that are `include`d into the
@@ -77,19 +77,9 @@ require 'concurrent-ruby'
 #   puts commands.first.command  # => "SET key value"
 #
 # @example Use with DatabaseCommandCounter
-#   # Both middlewares work together correctly
 #   RedisClient.register(DatabaseLogger)
 #   RedisClient.register(DatabaseCommandCounter)
-#   # DatabaseCommandCounter called first, DatabaseLogger second
-#
-# @see https://github.com/redis-rb/redis-client?tab=readme-ov-file#instrumentation-and-middlewares
-# @see RedisClient::BasicMiddleware The base middleware all middlewares inherit from
-#
-# @note While there were concerns about the performance impact of logging in
-#   the redis-rb gem, this middleware is designed to be optional and can be
-#   easily enabled or disabled as needed. The performance impact is minimal
-#   when logging is disabled, and the benefits during development and debugging
-#   often outweigh the slight performance cost when enabled.
+#   # Both middlewares execute correctly in sequence
 #
 # rubocop:disable ThreadSafety/ClassInstanceVariable
 module DatabaseLogger
@@ -164,11 +154,7 @@ module DatabaseLogger
 
     # Clears the captured commands array.
     #
-    # Uses Mutex synchronization to ensure test isolation. While append_command
-    # accepts relaxed precision for buffer trimming (+/- a few commands is fine),
-    # clear_commands needs to be precise to prevent test flakiness. Without the
-    # Mutex, a command from another thread could arrive mid-clear and leak into
-    # the next capture_commands block, causing confusing test failures.
+    # Thread-safe via mutex to ensure test isolation.
     #
     # @return [nil]
     def clear_commands
@@ -422,5 +408,4 @@ module DatabaseLogger
     result
   end
 end
-
 # rubocop:enable ThreadSafety/ClassInstanceVariable
