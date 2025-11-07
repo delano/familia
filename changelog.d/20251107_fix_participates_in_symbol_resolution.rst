@@ -13,7 +13,7 @@
 .. Fixed
 .. -----
 
-- **Participation Relationships with Symbol/String Target Classes**: Fixed two bugs that occurred when calling `participates_in` with a Symbol or String target class instead of a Class object.
+- **Participation Relationships with Symbol/String Target Classes**: Fixed three bugs that occurred when calling `participates_in` with a Symbol or String target class instead of a Class object.
 
   **Bug 1 - NoMethodError during relationship definition**:
 
@@ -42,6 +42,14 @@
 
   **Solution**: Use the resolved `target_class` variable instead of the stored config value. The resolved class is already available from the `Familia.resolve_class` call earlier in the method.
 
+  **Bug 3 - NoMethodError in target_class_config_name**:
+
+  When calling `current_participations`, the internal `target_class_config_name` method would fail with ``undefined method 'config_name' for Symbol``.
+
+  **Root Cause**: The `ParticipationRelationship.target_class_config_name` method was calling `.config_name` directly on the stored `target_class` value, which could be a Symbol or String.
+
+  **Solution**: Resolve the target class before calling `config_name` by using `Familia.resolve_class(target_class)`, which handles all input types (Class, Symbol, String) correctly.
+
   **Impact**: Projects using Symbol or String target classes in `participates_in` declarations will now work correctly throughout the entire lifecycle, including relationship definition, method generation, and participation queries. This pattern is common when avoiding circular dependencies or when target classes are defined in different files.
 
 .. Security
@@ -61,4 +69,8 @@
   - Unit tests for the `Familia.resolve_class` public API
   - Edge case coverage for case-insensitive resolution and modularized classes
 
-- **Second Bug Discovery**: During test execution, Claude Code discovered a related bug in `current_participations` that was also failing with Symbol/String target classes. The test coverage revealed that `.familia_name` was being called on the unresolved config value instead of the resolved class instance. This bug was fixed in the same session, ensuring complete Symbol/String target class support.
+- **Second Bug Discovery**: During test execution, Claude Code discovered a related bug in `current_participations` that was also failing with Symbol/String target classes. The test coverage revealed that `.familia_name` was being called on the unresolved config value instead of the resolved class instance.
+
+- **Third Bug Discovery**: Further test execution revealed another Symbol/String bug in `target_class_config_name`, where `.config_name` was being called directly on Symbol/String values. This was fixed by resolving the class first using `Familia.resolve_class`.
+
+- **Test Coverage Refinement**: Claude Code identified and removed unrealistic test cases (all-uppercase, all-lowercase class names) that don't occur in real Ruby code and don't work with the `snake_case` method's design. Updated tests to focus on realistic naming conventions: PascalCase and snake_case, with clear documentation explaining why certain formats aren't supported.
