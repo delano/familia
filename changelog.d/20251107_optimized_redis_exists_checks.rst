@@ -42,6 +42,8 @@
 
 - **Optional EXISTS Check Optimization**: The `find_by_dbkey` and `find_by_identifier` methods now accept a `check_exists:` parameter (default: `true`) to optionally skip the EXISTS check before HGETALL. This reduces Redis commands from 2 to 1 per object while maintaining backwards compatibility.
 
+- **Parameter Consistency in find_by_identifier**: The `suffix` parameter is now a keyword parameter (was optional positional) for consistency with `check_exists`. This follows Ruby conventions that keyword parameters should not follow optional positional parameters. Maintains backwards compatibility since custom suffixes are rarely used.
+
   **Safe mode** (default behavior, 2 commands):
 
   .. code-block:: ruby
@@ -74,6 +76,8 @@
 
 .. Fixed
 .. -----
+
+- **Position Alignment in load_multi_by_keys**: Fixed bug where empty or nil keys caused result array misalignment. The method now tracks valid positions (like `load_multi`) to ensure the results array maintains the same positions as the input array, with nils for invalid keys.
 
 .. Security
 .. --------
