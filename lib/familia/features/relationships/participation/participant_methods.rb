@@ -109,14 +109,11 @@ module Familia
             collections_filter = collection_names&.map(&:to_s)
 
             # Generate the main collection method (e.g., user.project_team_instances)
+            # No caching - load_multi is efficient enough and avoids stale data
             participant_class.define_method("#{base_name}_instances") do
-              @reverse_collections_cache ||= {}
-              cache_key = "#{base_name}_instances"
-              @reverse_collections_cache[cache_key] ||= begin
-                ids = participating_ids_for_target(target_class, collections_filter)
-                # Use load_multi for Horreum objects (stored as Redis hashes)
-                target_class.load_multi(ids).compact
-              end
+              ids = participating_ids_for_target(target_class, collections_filter)
+              # Use load_multi for Horreum objects (stored as Redis hashes)
+              target_class.load_multi(ids).compact
             end
 
             # Generate the IDs-only method (e.g., user.project_team_ids)
