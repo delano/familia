@@ -536,7 +536,7 @@ end
 def find_user_by_external_id(extid)
   User.find_by_extid(extid) || raise(ActiveRecord::RecordNotFound)
 rescue Familia::ExternalIdentifierError => e
-  Rails.logger.warn "Invalid external ID format: #{extid}"
+  Rails.logger.warn "Invalid external ID format for '#{extid}': #{e.message}"
   raise(ActiveRecord::RecordNotFound)
 end
 ```
