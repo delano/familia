@@ -296,8 +296,11 @@ logger.info("User key: #{user.api_key}")  # => "User key: [CONCEALED]"
 user_json = user.to_json
 # All encrypted fields appear as "[CONCEALED]" in JSON
 
-# Explicit access when needed
-actual_key = user.api_key.reveal          # => "sk-1234567890abcdef"
+# Explicit access when needed (requires block)
+user.api_key.reveal do |actual_key|
+  # Use actual_key here: "sk-1234567890abcdef"
+  process_key(actual_key)
+end
 ```
 
 ### String Operations
@@ -313,15 +316,16 @@ api_key.size          # => 11
 api_key == "[CONCEALED]"              # => true
 api_key.start_with?("[CONCEALED]")    # => true
 
-# Reveal for actual operations
-actual_key = api_key.reveal
-actual_key.length     # => 17 (actual key length)
-actual_key.start_with?("sk-")         # => true
+# Reveal for actual operations (requires block)
+api_key.reveal do |actual_key|
+  actual_key.length                   # => 17 (actual key length)
+  actual_key.start_with?("sk-")       # => true
+end
 ```
 
 > **⚠️ Important**
 >
-> Always use `.reveal` explicitly when you need the actual value. This makes it obvious in code reviews where sensitive data is being accessed.
+> Always use `.reveal { |value| ... }` with a block when you need the actual value. This makes it obvious in code reviews where sensitive data is being accessed and prevents accidental copies.
 
 ## Performance Optimization
 
@@ -683,6 +687,97 @@ class FastEncryptedModelTest < Minitest::Test
 end
 ```
 
+## Instance Methods
+
+### Core Encrypted Field Methods
+
+#### `encrypted_data?`
+Check if instance has any encrypted fields with values.
+
+```ruby
+vault = Vault.new(secret_key: "value")
+vault.encrypted_data?  # => true
+
+empty_vault = Vault.new
+empty_vault.encrypted_data?  # => false
+```
+
+#### `clear_encrypted_fields!`
+Clear all encrypted field values from memory.
+
+```ruby
+vault.clear_encrypted_fields!
+vault.encrypted_fields_cleared?  # => true
+```
+
+#### `re_encrypt_fields!`
+Re-encrypt all encrypted fields with current encryption settings (useful for key rotation).
+
+```ruby
+vault.re_encrypt_fields!
+vault.save  # Persists re-encrypted data
+```
+
+#### `encrypted_fields_status`
+Get encryption status for all encrypted fields.
+
+```ruby
+vault.encrypted_fields_status
+# => {
+#   secret_key: { encrypted: true, algorithm: "xchacha20poly1305", cleared: false },
+#   api_token: { encrypted: true, cleared: true }
+# }
+```
+
+### Class Methods
+
+#### `encrypted_field?(field_name)`
+Check if a field is encrypted.
+
+```ruby
+Vault.encrypted_field?(:secret_key)  # => true
+Vault.encrypted_field?(:name)        # => false
+```
+
+#### `encryption_info`
+Get encryption algorithm information.
+
+```ruby
+Vault.encryption_info
+# => {
+#   algorithm: "xchacha20poly1305",
+#   key_size: 32,
+#   nonce_size: 24,
+#   tag_size: 16
+# }
+```
+
+### ConcealedString Methods
+
+#### `reveal { |plaintext| ... }`
+Primary API for accessing decrypted values (requires block).
+
+```ruby
+user.api_token.reveal do |token|
+  HTTP.post('/api', headers: { 'X-Token' => token })
+end
+```
+
+#### `belongs_to_context?(record, field_name)`
+Validate that ConcealedString belongs to the given record context.
+
+```ruby
+concealed.belongs_to_context?(user, :api_token)  # => true/false
+```
+
+#### `cleared?` and `clear!`
+Memory management for encrypted data.
+
+```ruby
+concealed.clear!
+concealed.cleared?  # => true
+```
+
 ## Production Considerations
 
 ### Monitoring and Alerting
@@ -775,6 +870,27 @@ end
 ```
 
 ---
+
+## Configuration Reference
+
+### Additional Configuration Options
+
+```ruby
+Familia.configure do |config|
+  config.encryption_keys = { v1: key, v2: new_key }
+  config.current_key_version = :v2
+  config.encryption_personalization = 'MyApp-2024'  # XChaCha20 only
+end
+
+# Validate configuration
+Familia::Encryption.validate_configuration!
+```
+
+### Error Types
+
+- `Familia::EncryptionError` - General encryption/decryption failures
+- `Familia::SerializerError` - Serialization safety violations
+- `SecurityError` - Context validation or cleared data access
 
 ## See Also
 

@@ -145,15 +145,16 @@ domain.in_customer_domains?(customer.custid)  # => true
 class Metric < Familia::Horreum
   feature :quantization
 
-  field :value
-  quantized_field :hourly_stats, interval: 1.hour
-  quantized_field :daily_stats, interval: 1.day
+  field :value, :timestamp
 end
 
-# Automatically buckets data by time intervals
+# Generate quantized timestamps for time bucketing
 metric = Metric.new(value: 42)
-metric.hourly_stats   # Bucketed by hour
-metric.daily_stats    # Bucketed by day
+hourly_bucket = metric.qstamp(1.hour)    # Rounded to hour boundary
+daily_bucket = metric.qstamp(1.day)      # Rounded to day boundary
+
+# Create time-based keys
+hourly_key = Metric.qstamp(1.hour, pattern: '%Y%m%d%H')  # "2023010114"
 ```
 
 ## Creating Custom Features
@@ -612,5 +613,117 @@ end
 2. **Caching**: Cache computed values appropriately
 3. **Method Interception**: Use prepend sparingly for performance-critical methods
 4. **Field Processing**: Minimize overhead in field serialization/deserialization
+
+## API Reference
+
+### Class Methods
+
+#### `feature(feature_name = nil, **options)`
+Enable a feature for the current class with optional configuration.
+
+**Parameters:**
+- `feature_name` (Symbol, String, nil) - The feature name to enable. Returns enabled features list if nil.
+- `options` (Hash) - Configuration options stored per-class
+
+**Returns:** Array of enabled features if `feature_name` is nil, otherwise nil
+
+**Raises:** `Familia::Problem` if feature is unsupported or dependencies missing
+
+#### `features_enabled`
+Returns array of enabled feature names for this class.
+
+#### `feature_options(feature_name)`
+Get stored options for a specific feature (Horreum classes only).
+
+**Parameters:**
+- `feature_name` (Symbol) - The feature name
+
+**Returns:** Hash of stored options for the feature
+
+#### `field_group(group_name)`
+Define a field group that features can populate automatically.
+
+**Parameters:**
+- `group_name` (Symbol) - The group name
+
+### Feature Registration Methods
+
+#### `Familia::Base.add_feature(klass, feature_name, depends_on: [], field_group: nil)`
+Register a feature module for use with Familia classes.
+
+**Parameters:**
+- `klass` (Module) - The feature module
+- `feature_name` (Symbol) - The feature identifier
+- `depends_on` (Array) - Array of required dependency feature names
+- `field_group` (Symbol, nil) - Optional field group to create automatically
+
+#### `Familia::Base.find_feature(feature_name, starting_class = self)`
+Find a feature by name, traversing the ancestry chain.
+
+**Parameters:**
+- `feature_name` (Symbol) - The feature name
+- `starting_class` (Class) - Class to start searching from
+
+**Returns:** Feature module class or nil if not found
+
+### FeatureDefinition Structure
+
+Features are tracked using a `FeatureDefinition` data structure:
+
+```ruby
+FeatureDefinition = Data.define(:name, :depends_on, :field_group)
+```
+
+- `name` (Symbol) - The feature identifier
+- `depends_on` (Array) - Required dependency features
+- `field_group` (Symbol) - Optional field group name
+
+### Feature Implementation Template
+
+```ruby
+module Familia
+  module Features
+    module MyFeature
+      def self.included(base)
+        Familia.trace :LOADED, self, base if Familia.debug?
+        base.extend ClassMethods
+      end
+
+      module ClassMethods
+        # Class-level feature methods
+      end
+
+      # Register with explicit dependencies and field group
+      Familia::Base.add_feature self, :my_feature,
+        depends_on: [:safe_dump],
+        field_group: :my_fields
+    end
+  end
+end
+```
+
+### Dependency Validation
+
+The system validates dependencies when features are enabled:
+
+```ruby
+# This validates that safe_dump is already enabled
+feature :advanced_audit  # depends_on: [:safe_dump]
+
+# Error if dependencies missing:
+# => Familia::Problem: Feature advanced_audit requires missing dependencies: safe_dump
+```
+
+### Feature Options Storage
+
+Feature options are stored **per-class** using class-level instance variables:
+
+```ruby
+class User < Familia::Horreum
+  feature :object_identifier, generator: :uuid_v4
+end
+
+User.feature_options(:object_identifier)  # => {generator: :uuid_v4}
+```
 
 The feature system provides a powerful foundation for extending Familia with reusable, composable functionality while maintaining clean separation of concerns and explicit dependency management.
