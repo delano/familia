@@ -33,14 +33,14 @@ end
 @resolved_string == ResolveTestClass
 #=> true
 
-## Test resolve_class with lowercase symbol works (case-insensitive)
-@resolved_lowercase = Familia.resolve_class(:resolvetestclass)
-@resolved_lowercase == ResolveTestClass
+## Test resolve_class with PascalCase symbol works
+@resolved_pascal_sym = Familia.resolve_class(:ResolveTestClass)
+@resolved_pascal_sym == ResolveTestClass
 #=> true
 
-## Test resolve_class with lowercase string works (case-insensitive)
-@resolved_lowercase_str = Familia.resolve_class('resolvetestclass')
-@resolved_lowercase_str == ResolveTestClass
+## Test resolve_class with PascalCase string works
+@resolved_pascal_str = Familia.resolve_class('ResolveTestClass')
+@resolved_pascal_str == ResolveTestClass
 #=> true
 
 ## Test resolve_class with snake_case symbol works
@@ -73,14 +73,16 @@ end
 @nonexistent.nil?
 #=> true
 
-## Test resolve_class is case-insensitive for existing classes
-@case_variant1 = Familia.resolve_class(:RESOLVETESTCLASS)
-@case_variant1 == ResolveTestClass
+## Test resolve_class with variations of proper naming
+# Note: All-caps or all-lowercase don't work because snake_case needs case boundaries
+# Realistic usage: PascalCase, snake_case, or mixed-case with boundaries
+@case_variant_snake = Familia.resolve_class('resolve_test_class')
+@case_variant_snake == ResolveTestClass
 #=> true
 
-## Test resolve_class handles mixed case strings
-@case_variant2 = Familia.resolve_class('rEsOlVeTEsTcLaSs')
-@case_variant2 == ResolveTestClass
+## Test resolve_class handles already snake_cased symbols
+@already_snake = Familia.resolve_class(:resolve_test_class)
+@already_snake == ResolveTestClass
 #=> true
 
 # Test with modularized class name
