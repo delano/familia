@@ -1,6 +1,7 @@
 # lib/familia/features/relationships/participation/participant_methods.rb
 
 require_relative '../collection_operations'
+require 'dry/inflector'
 
 module Familia
   module Features
@@ -8,37 +9,48 @@ module Familia
       # Methods added to PARTICIPANT classes (the ones calling participates_in)
       # These methods allow participant instances to manage their membership in target collections
       #
-      # Example: When Domain calls `participates_in Customer, :domains`
-      # Domain instances get methods to check/manage their presence in Customer collections
+      # Example: When Domain calls `participates_in Employee, :domains`
+      # Domain instances get methods to check/manage their presence in Employee collections
       module ParticipantMethods
         using Familia::Refinements::StylizeWords
         extend CollectionOperations
 
         # Visual Guide for methods added to PARTICIPANT instances:
         # =========================================================
-        # When Domain calls: participates_in Customer, :domains
+        # When Domain calls: participates_in Employee, :domains
         #
         # Domain instances (PARTICIPANT) get these methods:
-        # ├── in_customer_domains?(customer)              # Check if I'm in this customer's domains
-        # ├── add_to_customer_domains(customer, score)    # Add myself to customer's domains
-        # ├── remove_from_customer_domains(customer)      # Remove myself from customer's domains
-        # ├── score_in_customer_domains(customer)         # Get my score (sorted_set only)
-        # └── position_in_customer_domains(customer)      # Get my position (list only)
+        # ├── in_employee_domains?(employee)              # Check if I'm in this employee's domains
+        # ├── add_to_employee_domains(employee, score)    # Add myself to employee's domains
+        # ├── remove_from_employee_domains(employee)      # Remove myself from employee's domains
+        # ├── score_in_employee_domains(employee)         # Get my score (sorted_set only)
+        # └── position_in_employee_domains(employee)      # Get my position (list only)
         #
         # Note: To update scores, use the DataType API directly:
-        #   customer.domains.add(domain.identifier, new_score, xx: true)
-
+        #   employee.domains.add(domain.identifier, new_score, xx: true)
+        #
         module Builder
           extend CollectionOperations
 
           # Build all participant methods for a participation relationship
+          #
           # @param participant_class [Class] The class receiving these methods (e.g., Domain)
-          # @param target_class_name [String] Name of the target class (e.g., "Customer")
+          # @param target_class_name [String] Name of the target class (e.g., "Employee")
           # @param collection_name [Symbol] Name of the collection (e.g., :domains)
           # @param type [Symbol] Collection type (:sorted_set, :set, :list)
-          def self.build(participant_class, target_class_name, collection_name, type)
-            # Convert to snake_case once for consistency (target_class_name is PascalCase)
-            target_name = target_class_name.to_s.snake_case
+          # @param as [Symbol] Name of the relationship (e.g., :employees)
+          #
+          def self.build(participant_class, target_class, collection_name, type, as)
+            # Determine target name based on participation context:
+            # - Instance-level: target_class is a Class object (e.g., Team) → use config_name ("project_team")
+            # - Class-level: target_class is the string 'class' (from class_participates_in) → use as-is
+            # The string 'class' is passed from TargetMethods.build_class_add_method when calling
+            # calculate_participation_score('class', collection_name) for class-level scoring
+            target_name = if target_class.is_a?(String)
+              target_class  # 'class' for class-level participation
+            else
+              target_class.config_name  # snake_case class name for instance-level
+            end
 
             # Core participant methods
             build_membership_check(participant_class, target_name, collection_name, type)
@@ -51,6 +63,77 @@ module Familia
               build_score_methods(participant_class, target_name, collection_name)
             when :list
               build_position_method(participant_class, target_name, collection_name)
+            end
+
+            # Build reverse collection methods on PARTICIPANT class for instance-level participation
+            # Skip for class-level participation because:
+            # - Class-level uses class_participates_in (e.g., User.all_users)
+            # - Bidirectional methods don't make sense: an individual User can't have "all_users"
+            # - Class-level collections are accessed directly on the class (User.all_users)
+            return if target_class.is_a?(String)  # 'class' indicates class-level participation
+
+            # If `as` is specified, create a custom method for just this collection
+            # Otherwise, add to the default pluralized method that unions all collections
+            if as
+              # Custom method for just this specific collection
+              build_reverse_collection_methods(participant_class, target_class, as, [collection_name])
+            else
+              # Default pluralized method - will include ALL collections for this target
+              build_reverse_collection_methods(participant_class, target_class, nil, nil)
+            end
+          end
+
+          # Generate reverse collection methods on participant class for bidirectional access
+          #
+          # Creates methods like:
+          # - user.teams (returns Array of Team instances)
+          # - user.team_ids (returns Array of team IDs)
+          # - user.teams? (returns Boolean)
+          # - user.teams_count (returns Integer)
+          #
+          # @param participant_class [Class] The participant class (e.g., User)
+          # @param target_class [Class] The target class (e.g., Team)
+          # @param custom_name [Symbol, nil] Custom method name override
+          # @param collection_names [Array<Symbol>, nil] Specific collections to include (nil = all)
+          #
+          def self.build_reverse_collection_methods(participant_class, target_class, custom_name = nil, collection_names = nil)
+            # Initialize inflector for pluralization
+            inflector = Dry::Inflector.new
+
+            # Determine method name - either custom or pluralized target class name
+            method_name = if custom_name
+              custom_name.to_s
+            else
+              # Use config_name and pluralize it (e.g., "project_team" -> "project_teams")
+              inflector.pluralize(target_class.config_name)
+            end
+
+            # Store collection names as string array for matching
+            collections_filter = collection_names&.map(&:to_s)
+
+            # Generate the main collection method (e.g., user.teams)
+            participant_class.define_method(method_name) do
+              @reverse_collections_cache ||= {}
+              @reverse_collections_cache[method_name] ||= begin
+                ids = participating_ids_for_target(target_class, collections_filter)
+                # Use load_multi for Horreum objects (stored as Redis hashes)
+                target_class.load_multi(ids).compact
+              end
+            end
+
+            # Generate the IDs-only method (e.g., user.team_ids)
+            participant_class.define_method("#{method_name}_ids") do
+              participating_ids_for_target(target_class, collections_filter)
+            end
+
+            # Generate the boolean check method (e.g., user.teams?)
+            participant_class.define_method("#{method_name}?") do
+              !participating_ids_for_target(target_class, collections_filter).empty?
+            end
+
+            # Generate the count method (e.g., user.teams_count)
+            participant_class.define_method("#{method_name}_count") do
+              participating_ids_for_target(target_class, collections_filter).size
             end
           end
 

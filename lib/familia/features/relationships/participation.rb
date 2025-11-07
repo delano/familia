@@ -176,7 +176,10 @@ module Familia
             # e.g., user.in_class_all_users?, user.add_to_class_all_users
             return unless bidirectional
 
-            ParticipantMethods::Builder.build(self, 'class', collection_name, type)
+            # Pass the string 'class' as target to distinguish class-level from instance-level
+            # This prevents generating reverse collection methods (user can't have "all_users")
+            # See ParticipantMethods::Builder.build for handling of this special case
+            ParticipantMethods::Builder.build(self, 'class', collection_name, type, nil)
           end
 
           # Define an instance-level participation relationship between two classes.
@@ -208,12 +211,14 @@ module Familia
           # all collections the instance belongs to. This enables efficient membership queries
           # and cleanup operations without scanning all possible collections.
           #
-          # @param target_class [Class, Symbol, String] The class that owns the collection. Can be:
-          #   - +Class+ object (e.g., +Customer+)
-          #   - +Symbol+ referencing class name (e.g., +:customer+, +:Customer+)
-          #   - +String+ class name (e.g., +"Customer"+)
-          # @param collection_name [Symbol] Name of the collection on the target class (e.g., +:domains+, +:members+)
-          # @param score [Symbol, Proc, Numeric, nil] Scoring strategy for sorted collections:
+          # @param target [Class, Symbol, String] The class that owns the collection. Can be:
+          #   - +Class+ object (e.g., +Employee+)
+          #   - +Symbol+ referencing class name (e.g., +:employee+, +:Employee+)
+          #   - +String+ class name (e.g., +"Employee"+)
+          # @param collection_name [Symbol] Name of the collection on the
+          #        target class (e.g., +:domains+, +:members+)
+          # @param score [Symbol, Proc, Numeric, nil] Scoring strategy for
+          #        sorted collections:
           #   - +Symbol+: Field name or method name (e.g., +:priority+, +:created_at+)
           #   - +Proc+: Dynamic calculation executed in participant instance context
           #   - +Numeric+: Static score applied to all participants
@@ -221,17 +226,22 @@ module Familia
           #   - +:remove+: Remove from all collections on destruction (default)
           #   - +:ignore+: Leave in collections when destroyed
           # @param type [Symbol] Valkey/Redis collection type:
-          #   - +:sorted_set+: Ordered by score, allows duplicates with different scores (default)
+          #   - +:sorted_set+: Ordered by score, allows duplicates with
+          #        different scores (default)
           #   - +:set+: Unordered unique membership
           #   - +:list+: Ordered sequence, allows duplicates
-          # @param bidirectional [Boolean] Whether to generate convenience methods on participant class (default: +true+)
+          # @param bidirectional [Boolean, Symbol] Whether to generate convenience
+          #        methods on participant class. When a Symbol is passed, it is
+          #        used as the name of the method to be generated. Otherwise the
+          #        name of the target class is used. (default: +true+)
           #
-          # @example Basic domain-customer relationship
+          # @example Basic domain-employee relationship
+          #
           #   class Domain < Familia::Horreum
           #     field :name
           #     field :created_at
           #
-          #     participates_in Customer, :domains, score: :created_at
+          #     participates_in Employee, :domains, score: :created_at
           #   end
           #
           #   # Usage:
@@ -241,6 +251,7 @@ module Familia
           #   domain.current_participations             # All collections domain belongs to
           #
           # @example Multi-collection participation with different types
+          #
           #   class Employee < Familia::Horreum
           #     field :hire_date
           #     field :skill_level
@@ -267,55 +278,53 @@ module Familia
           # @see #class_participates_in for class-level participation
           # @see ModelInstanceMethods#current_participations for membership queries
           # @see ModelInstanceMethods#calculate_participation_score for scoring details
-          # @since 1.0.0
-          def participates_in(target_class, collection_name, score: nil,
-                              type: :sorted_set, bidirectional: true)
-            # Handle class target using Familia.resolve_class
-            resolved_class = Familia.resolve_class(target_class)
+          #
+          def participates_in(target, collection_name, score: nil, type: :sorted_set, bidirectional: true, as: nil)
+
+            # Normalize the
+            target_class = Familia.resolve_class(target)
 
             # Raise helpful error if target class can't be resolved
-            if resolved_class.nil?
+            if target_class.nil?
               raise ArgumentError, <<~ERROR
-                Cannot resolve target class: #{target_class.inspect}
+                Cannot resolve target class: #{target.inspect}
 
-                The target class '#{target_class}' could not be found in Familia.members.
+                The target class '#{target}' could not be found in Familia.members.
                 This usually means:
                 1. The target class hasn't been loaded/required yet (load order issue)
                 2. The target class name is misspelled
                 3. The target class doesn't inherit from Familia::Horreum
 
-                Current registered classes: #{Familia.members.map(&:name).compact.sort.join(', ')}
+                Current registered classes: #{Familia.members.filter_map(&:name).sort.join(', ')}
 
-                Solution: Ensure #{target_class} is defined and loaded before #{self.name}
+                Solution: Ensure #{target_class} is defined and loaded before #{name}
               ERROR
             end
 
             # Store metadata for this participation relationship
             participation_relationships << ParticipationRelationship.new(
-              target_class: target_class, # as passed to `participates_in`
+              target_class: target, # as passed to `participates_in`
               collection_name: collection_name,
               score: score,
-
               type: type,
               bidirectional: bidirectional,
             )
 
-            # Use the already-resolved class (no need to resolve again)
-            actual_target_class = resolved_class
-
             # STEP 0: Add participations tracking field to PARTICIPANT class (Domain)
-            # This creates the proper key: "domain:123:participations" (not "domain:123:object:participations")
+            # This creates the proper key: "domain:123:participations"
             set :participations unless method_defined?(:participations)
 
-            # STEP 1: Add collection management methods to TARGET class (Customer)
-            # Customer gets: domains, add_domain, remove_domain, etc.
-            TargetMethods::Builder.build(actual_target_class, collection_name, type)
+            # STEP 1: Add collection management methods to TARGET class (Employee)
+            # Employee gets: domains, add_domain, remove_domain, etc.
+            TargetMethods::Builder.build(target_class, collection_name, type)
 
-            # STEP 2: Add participation methods to PARTICIPANT class (Domain) - only if bidirectional
-            # Domain gets: in_customer_domains?, add_to_customer_domains, etc.
-            return unless bidirectional
-
-            ParticipantMethods::Builder.build(self, resolved_class.familia_name, collection_name, type)
+            # STEP 2: Add participation methods to PARTICIPANT class (Domain) - only if
+            # bidirectional. e.g. in_employee_domains?, add_to_employee_domains, etc.
+            if bidirectional
+              # `as` parameter allows custom naming for reverse collections
+              # If not provided, we'll let the builder use the pluralized target class name
+              ParticipantMethods::Builder.build(self, target_class, collection_name, type, as)
+            end
           end
 
           # Get all participation relationships defined for this class.
@@ -378,6 +387,8 @@ module Familia
           # within scoring Procs.
           #
           # @param target_class [Class, Symbol, String] The target class containing the collection
+          #   - For instance-level participation: Class object (e.g., +Project+, +Team+)
+          #   - For class-level participation: The string +'class'+ (from +class_participates_in+)
           # @param collection_name [Symbol] The collection name within the target class
           # @return [Float] Calculated score for sorted set positioning, falls back to current_score
           #
@@ -555,6 +566,28 @@ module Familia
           # @see #track_participation_in for reverse index management
           # @see #calculate_participation_score for scoring details
           # @since 1.0.0
+          # Get all IDs where this instance participates for a specific target class
+          #
+          # @param target_class [Class] The target class to filter by
+          # @return [Array<String>] Array of target instance IDs
+          def participating_ids_for_target(target_class, collection_names = nil)
+            # Use config_name to get the proper snake_case format (e.g., "project_team")
+            target_prefix = "#{target_class.config_name}:"
+
+            keys = participations.members.select { |key| key.start_with?(target_prefix) }
+
+            # If specific collection names provided, filter by those
+            if collection_names && !collection_names.empty?
+              keys = keys.select do |key|
+                collection = key.split(':')[2]  # Extract collection name from "targetclass:id:collection"
+                collection_names.include?(collection)
+              end
+            end
+
+            keys.map { |key| key.split(':')[1] }  # Extract ID from format
+                .uniq
+          end
+
           def current_participations
             return [] unless self.class.respond_to?(:participation_relationships)
 
