@@ -14,19 +14,20 @@ module Familia
 
       # @return [Integer] Current middleware version for cache invalidation
       def middleware_version
-        @middleware_version
+        @middleware_version.value
       end
 
       # Increments the middleware version, invalidating all cached connections
       def increment_middleware_version!
-        @middleware_version += 1
-        Familia.trace :MIDDLEWARE_VERSION, nil, "Incremented to #{@middleware_version}"
+        new_version = @middleware_version.increment
+        Familia.trace :MIDDLEWARE_VERSION, nil, "Incremented to #{new_version}"
       end
 
       # Sets a versioned fiber-local connection
       def fiber_connection=(connection)
-        Fiber[:familia_connection] = [connection, middleware_version]
-        Familia.trace :FIBER_CONNECTION, nil, "Set with version #{middleware_version}"
+        current_version = middleware_version
+        Fiber[:familia_connection] = [connection, current_version]
+        Familia.trace :FIBER_CONNECTION, nil, "Set with version #{current_version}"
       end
 
       # Clears the fiber-local connection

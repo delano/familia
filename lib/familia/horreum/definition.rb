@@ -124,7 +124,10 @@ module Familia
       #   ]
       #
       def field_groups
-        @field_groups ||= {}
+        @field_groups_mutex ||= Mutex.new
+        @field_groups || @field_groups_mutex.synchronize do
+          @field_groups ||= {}
+        end
       end
 
       # Sets or retrieves the unique identifier field for the class.
@@ -215,8 +218,10 @@ module Familia
       # Returns the list of field names defined for the class in the order
       # that they were defined. i.e. `field :a; field :b; fields => [:a, :b]`.
       def fields
-        @fields ||= []
-        @fields
+        @fields_mutex ||= Mutex.new
+        @fields || @fields_mutex.synchronize do
+          @fields ||= []
+        end
       end
 
       def class_related_fields
@@ -235,7 +240,10 @@ module Familia
 
       # Storage for field type instances
       def field_types
-        @field_types ||= {}
+        @field_types_mutex ||= Mutex.new
+        @field_types || @field_types_mutex.synchronize do
+          @field_types ||= {}
+        end
       end
 
       # Returns a hash mapping field names to method names for backward compatibility

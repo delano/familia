@@ -18,7 +18,7 @@ module Familia
   @middleware_registered = false
   @logger_registered = false
   @counter_registered = false
-  @middleware_version = 0
+  @middleware_version = Concurrent::AtomicFixnum.new(0)
   @connection_chain_mutex = Mutex.new  # Thread-safe connection chain initialization
 
   # The Connection module provides Database connection management for Familia.
