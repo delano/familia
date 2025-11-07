@@ -1,8 +1,8 @@
-# Features System Developer Guide
+# Feature System Developer Guide
 
 ## Overview
 
-The Familia Features system provides a simple, modular way to add optional functionality to Familia classes. Features are Ruby modules that get included into classes, extending them with additional methods and capabilities.
+The Familia Feature system provides a simple, modular way to add optional functionality to Familia classes. Features are Ruby modules that get included into classes, extending them with additional methods and capabilities.
 
 ## Architecture
 
