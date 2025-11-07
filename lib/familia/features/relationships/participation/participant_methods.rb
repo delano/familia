@@ -109,8 +109,29 @@ module Familia
             collections_filter = collection_names&.map(&:to_s)
 
             # Generate the main collection method (e.g., user.project_team_instances)
-            # Loads actual objects - verifies Redis key existence via load_multi
-            # No caching - load_multi is efficient enough and avoids stale data
+            #
+            # Loads actual objects - verifies Redis key existence via load_multi.
+            # No caching - load_multi is efficient enough and avoids stale data.
+            #
+            # @note Error Handling: This method lets database errors bubble up to the
+            #   application layer, consistent with Familia's error handling pattern.
+            #   Potential failures include:
+            #   - Familia::NotConnected - Redis connection unavailable
+            #   - Redis::TimeoutError - Operation timed out
+            #   - Redis::ConnectionError - Network/connection issues
+            #
+            #   For production environments, consider wrapping calls in application-level
+            #   error handling:
+            #
+            #   @example Application-level error handling
+            #     begin
+            #       teams = user.project_team_instances
+            #     rescue Familia::PersistenceError => e
+            #       # Handle database failure (log, fallback, retry, etc.)
+            #       Rails.logger.error("Failed to load teams: #{e.message}")
+            #       []  # Return empty array or other fallback
+            #     end
+            #
             participant_class.define_method("#{base_name}_instances") do
               ids = participating_ids_for_target(target_class, collections_filter)
               # Use load_multi for Horreum objects (stored as Redis hashes)
@@ -118,19 +139,31 @@ module Familia
             end
 
             # Generate the IDs-only method (e.g., user.project_team_ids)
-            # Shallow - returns IDs from participation index without verifying key existence
+            #
+            # Shallow - returns IDs from participation index without verifying key existence.
+            #
+            # @note Database errors (connection, timeout) will bubble up to caller.
+            #
             participant_class.define_method("#{base_name}_ids") do
               participating_ids_for_target(target_class, collections_filter)
             end
 
             # Generate the boolean check method (e.g., user.project_team?)
-            # Shallow check - verifies participation index membership, not Redis key existence
+            #
+            # Shallow check - verifies participation index membership, not Redis key existence.
+            #
+            # @note Database errors (connection, timeout) will bubble up to caller.
+            #
             participant_class.define_method("#{base_name}?") do
               participating_in_target?(target_class, collections_filter)
             end
 
             # Generate the count method (e.g., user.project_team_count)
-            # Shallow - counts IDs from participation index without verifying key existence
+            #
+            # Shallow - counts IDs from participation index without verifying key existence.
+            #
+            # @note Database errors (connection, timeout) will bubble up to caller.
+            #
             participant_class.define_method("#{base_name}_count") do
               participating_ids_for_target(target_class, collections_filter).size
             end
