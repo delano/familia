@@ -34,10 +34,10 @@ module Familia
           # Build all participant methods for a participation relationship
           #
           # @param participant_class [Class] The class receiving these methods (e.g., Domain)
-          # @param target_class [String] Name of the target class (e.g., "Employee")
+          # @param target_class [Class, String] Target class object or 'class' for class-level participation (e.g., Employee or 'class')
           # @param collection_name [Symbol] Name of the collection (e.g., :domains)
           # @param type [Symbol] Collection type (:sorted_set, :set, :list)
-          # @param as [Symbol] Name of the relationship (e.g., :employees)
+          # @param as [Symbol, nil] Optional custom name for relationship methods (e.g., :employees)
           #
           def self.build(participant_class, target_class, collection_name, type, as)
             # Determine target name based on participation context:
