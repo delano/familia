@@ -167,12 +167,8 @@ module Familia
         # If we skipped existence check and got empty hash, key doesn't exist
         return nil if !check_exists && obj.empty?
 
-        # Create instance and deserialize fields using existing helper method
-        # This avoids duplicating deserialization logic and keeps field-by-field processing
-        instance = allocate
-        instance.send(:initialize_relatives)
-        instance.send(:initialize_with_keyword_args_deserialize_value, **obj)
-        instance
+        # Create instance and deserialize fields using shared helper method
+        instantiate_from_hash(obj)
       end
       alias find_by_key find_by_dbkey
 
@@ -276,11 +272,8 @@ module Familia
           # Skip empty hashes (non-existent keys)
           next if obj_hash.nil? || obj_hash.empty?
 
-          # Instantiate object
-          instance = allocate
-          instance.send(:initialize_relatives)
-          instance.send(:initialize_with_keyword_args_deserialize_value, **obj_hash)
-          objects[pos] = instance
+          # Instantiate object using shared helper method
+          objects[pos] = instantiate_from_hash(obj_hash)
         end
 
         objects
@@ -314,16 +307,12 @@ module Familia
           end
         end
 
-        # Convert results to objects
+        # Convert results to objects using shared helper method
         results.map do |obj_hash|
           # Skip empty hashes (non-existent keys)
           next if obj_hash.nil? || obj_hash.empty?
 
-          # Instantiate object
-          instance = allocate
-          instance.send(:initialize_relatives)
-          instance.send(:initialize_with_keyword_args_deserialize_value, **obj_hash)
-          instance
+          instantiate_from_hash(obj_hash)
         end
       end
 
@@ -454,6 +443,28 @@ module Familia
       end
       alias size matching_keys_count
       alias length matching_keys_count
+
+      private
+
+      # Instantiates an object from a hash of field values.
+      #
+      # This is a shared helper method used by find_by_dbkey, load_multi, and
+      # load_multi_by_keys to eliminate code duplication.
+      #
+      # @param obj_hash [Hash] Hash of field names to serialized values from Redis
+      # @return [Object] Instantiated object with deserialized fields
+      #
+      # @note This method:
+      #   1. Allocates a new instance without calling initialize
+      #   2. Initializes related DataType fields
+      #   3. Deserializes and assigns field values from the hash
+      #
+      def instantiate_from_hash(obj_hash)
+        instance = allocate
+        instance.send(:initialize_relatives)
+        instance.send(:initialize_with_keyword_args_deserialize_value, **obj_hash)
+        instance
+      end
     end
   end
 end
