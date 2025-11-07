@@ -13,7 +13,7 @@
 .. Fixed
 .. -----
 
-- **Participation Relationships with Symbol/String Target Classes**: Fixed three bugs that occurred when calling `participates_in` with a Symbol or String target class instead of a Class object.
+- **Participation Relationships with Symbol/String Target Classes**: Fixed four bugs that occurred when calling `participates_in` with a Symbol or String target class instead of a Class object.
 
   **Bug 1 - NoMethodError during relationship definition**:
 
@@ -50,7 +50,20 @@
 
   **Solution**: Resolve the target class before calling `config_name` by using `Familia.resolve_class(target_class)`, which handles all input types (Class, Symbol, String) correctly.
 
-  **Impact**: Projects using Symbol or String target classes in `participates_in` declarations will now work correctly throughout the entire lifecycle, including relationship definition, method generation, and participation queries. This pattern is common when avoiding circular dependencies or when target classes are defined in different files.
+  **Bug 4 - Confusing error when target class not loaded**:
+
+  When the target class hasn't been loaded yet (load order issue), the error was: ``undefined method 'method_defined?' for nil``.
+
+  **Root Cause**: When `Familia.resolve_class` returns `nil` (because the target class isn't registered in `Familia.members` yet), the code would pass `nil` to `TargetMethods::Builder.build`, which then failed with a confusing error message that didn't explain the actual problem.
+
+  **Solution**: Added explicit nil check after `resolve_class` with a detailed ArgumentError that:
+
+  - Clearly states which target class couldn't be resolved
+  - Lists the three most common causes (load order, typo, not inheriting from Horreum)
+  - Shows all currently registered Familia classes for debugging
+  - Provides a clear solution for fixing the load order
+
+  **Impact**: Projects using Symbol or String target classes in `participates_in` declarations will now work correctly throughout the entire lifecycle, including relationship definition, method generation, and participation queries. When there's a load order issue or typo, developers get a clear, actionable error message instead of a confusing nil error. This pattern is common when avoiding circular dependencies or when target classes are defined in different files.
 
 .. Security
 .. --------
@@ -74,3 +87,5 @@
 - **Third Bug Discovery**: Further test execution revealed another Symbol/String bug in `target_class_config_name`, where `.config_name` was being called directly on Symbol/String values. This was fixed by resolving the class first using `Familia.resolve_class`.
 
 - **Test Coverage Refinement**: Claude Code identified and removed unrealistic test cases (all-uppercase, all-lowercase class names) that don't occur in real Ruby code and don't work with the `snake_case` method's design. Updated tests to focus on realistic naming conventions: PascalCase and snake_case, with clear documentation explaining why certain formats aren't supported.
+
+- **Fourth Bug Discovery**: After merging to main, the implementing project revealed a load order issue where `Familia.resolve_class` returned `nil`, causing a confusing "undefined method for nil" error. Claude Code added explicit error handling with a detailed, actionable error message that helps developers quickly identify and fix load order issues, typos, or inheritance problems.

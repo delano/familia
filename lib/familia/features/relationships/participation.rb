@@ -273,6 +273,23 @@ module Familia
             # Handle class target using Familia.resolve_class
             resolved_class = Familia.resolve_class(target_class)
 
+            # Raise helpful error if target class can't be resolved
+            if resolved_class.nil?
+              raise ArgumentError, <<~ERROR
+                Cannot resolve target class: #{target_class.inspect}
+
+                The target class '#{target_class}' could not be found in Familia.members.
+                This usually means:
+                1. The target class hasn't been loaded/required yet (load order issue)
+                2. The target class name is misspelled
+                3. The target class doesn't inherit from Familia::Horreum
+
+                Current registered classes: #{Familia.members.map(&:name).compact.sort.join(', ')}
+
+                Solution: Ensure #{target_class} is defined and loaded before #{self.name}
+              ERROR
+            end
+
             # Store metadata for this participation relationship
             participation_relationships << ParticipationRelationship.new(
               target_class: target_class, # as passed to `participates_in`
