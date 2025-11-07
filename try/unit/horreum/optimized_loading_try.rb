@@ -23,25 +23,25 @@ setup_user3 = OptimizedUser.new(user_id: 'opt_user_3', name: 'Charlie', email: '
 setup_user3.save
 
 ## find_by_dbkey with check_exists: true (default) returns object for existing key
-found_user = OptimizedUser.find_by_dbkey("optimizeduser:opt_user_1:object")
+found_user = OptimizedUser.find_by_dbkey(OptimizedUser.dbkey('opt_user_1'))
 found_user.name
 #=> 'Alice'
 
 ## find_by_dbkey with check_exists: true (default) returns nil for non-existent key
-OptimizedUser.find_by_dbkey("optimizeduser:nonexistent:object")
+OptimizedUser.find_by_dbkey(OptimizedUser.dbkey('nonexistent'))
 #=> nil
 
 ## find_by_dbkey with check_exists: false returns object for existing key
-found_user_fast = OptimizedUser.find_by_dbkey("optimizeduser:opt_user_1:object", check_exists: false)
+found_user_fast = OptimizedUser.find_by_dbkey(OptimizedUser.dbkey('opt_user_1'), check_exists: false)
 found_user_fast.name
 #=> 'Alice'
 
 ## find_by_dbkey with check_exists: false returns nil for non-existent key
-OptimizedUser.find_by_dbkey("optimizeduser:nonexistent:object", check_exists: false)
+OptimizedUser.find_by_dbkey(OptimizedUser.dbkey('nonexistent'), check_exists: false)
 #=> nil
 
 ## find_by_dbkey with check_exists: false correctly deserializes all fields
-fast_loaded = OptimizedUser.find_by_dbkey("optimizeduser:opt_user_2:object", check_exists: false)
+fast_loaded = OptimizedUser.find_by_dbkey(OptimizedUser.dbkey('opt_user_2'), check_exists: false)
 [fast_loaded.user_id, fast_loaded.name, fast_loaded.email, fast_loaded.age]
 #=> ['opt_user_2', 'Bob', 'bob@example.com', 25]
 
@@ -109,13 +109,13 @@ batch_users.map(&:name)
 #=> ['Alice', 'Bob']
 
 ## load_multi_by_keys loads by full dbkeys
-keys = ['optimizeduser:opt_user_1:object', 'optimizeduser:opt_user_2:object']
+keys = [OptimizedUser.dbkey('opt_user_1'), OptimizedUser.dbkey('opt_user_2')]
 keyed_users = OptimizedUser.load_multi_by_keys(keys)
 keyed_users.map(&:name)
 #=> ['Alice', 'Bob']
 
 ## load_multi_by_keys returns nil for non-existent keys
-keys_mixed = ['optimizeduser:opt_user_1:object', 'optimizeduser:nonexistent:object']
+keys_mixed = [OptimizedUser.dbkey('opt_user_1'), OptimizedUser.dbkey('nonexistent')]
 keyed_mixed = OptimizedUser.load_multi_by_keys(keys_mixed)
 [keyed_mixed[0]&.name, keyed_mixed[1]]
 #=> ['Alice', nil]
@@ -125,7 +125,7 @@ OptimizedUser.load_multi_by_keys([])
 #=> []
 
 ## load_multi_by_keys handles empty/nil keys and maintains position alignment
-keys_with_empty = ['optimizeduser:opt_user_1:object', '', 'optimizeduser:opt_user_2:object', nil]
+keys_with_empty = [OptimizedUser.dbkey('opt_user_1'), '', OptimizedUser.dbkey('opt_user_2'), nil]
 mixed_keys = OptimizedUser.load_multi_by_keys(keys_with_empty)
 [mixed_keys[0]&.name, mixed_keys[1], mixed_keys[2]&.name, mixed_keys[3]]
 #=> ['Alice', nil, 'Bob', nil]

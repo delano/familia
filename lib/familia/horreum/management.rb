@@ -261,11 +261,14 @@ module Familia
         Familia.trace :LOAD_MULTI, nil, "Loading #{identifiers.size} objects" if Familia.debug?
 
         # Pipeline all HGETALL commands
-        results = pipelined do |pipeline|
+        multi_result = pipelined do |pipeline|
           objkeys.compact.each do |objkey|
             pipeline.hgetall(objkey)
           end
         end
+
+        # Extract results array from MultiResult
+        results = multi_result.results
 
         # Map results back to original positions
         objects = Array.new(identifiers.size)
@@ -311,12 +314,15 @@ module Familia
         end
 
         # Pipeline all HGETALL commands for valid keys
-        results = pipelined do |pipeline|
+        multi_result = pipelined do |pipeline|
           objkeys.each do |objkey|
             next if objkey.to_s.empty?
             pipeline.hgetall(objkey)
           end
         end
+
+        # Extract results array from MultiResult
+        results = multi_result.results
 
         # Map results back to original positions
         objects = Array.new(objkeys.size)
