@@ -18,6 +18,14 @@ class ResolveTestClass < Familia::Horreum
   field :name
 end
 
+# Test class in module for modularized class resolution
+module ResolveTestModule
+  class ModularClass < Familia::Horreum
+    identifier_field :id
+    field :id
+  end
+end
+
 ## Test resolve_class with Class object returns the class unchanged
 @resolved_class = Familia.resolve_class(ResolveTestClass)
 @resolved_class == ResolveTestClass
@@ -84,14 +92,6 @@ end
 @already_snake = Familia.resolve_class(:resolve_test_class)
 @already_snake == ResolveTestClass
 #=> true
-
-# Test with modularized class name
-module ResolveTestModule
-  class ModularClass < Familia::Horreum
-    identifier_field :id
-    field :id
-  end
-end
 
 ## Test resolve_class with modularized Symbol (without module prefix)
 @modular_resolved = Familia.resolve_class(:ModularClass)

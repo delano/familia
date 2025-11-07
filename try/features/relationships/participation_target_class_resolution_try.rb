@@ -48,7 +48,8 @@ class StringResolutionTag < Familia::Horreum
 
   # TEST CASE 2: String target class
   # This was also causing the same NoMethodError
-  participates_in 'SymbolResolutionCustomer', :tags, score: :created_at
+  # Note: Customer's tags is a set (not sorted_set), so specify type: :set
+  participates_in 'SymbolResolutionCustomer', :tags, type: :set
 end
 
 class ClassResolutionItem < Familia::Horreum
@@ -138,9 +139,8 @@ end
 @customer.tags.member?(@tag.identifier)
 #=> true
 
-## Test tag score calculation works with String target class
-@tag_score = @tag.calculate_participation_score('SymbolResolutionCustomer', :tags)
-@tag_score.is_a?(Numeric)
+## Test tag membership check works with String target class (sets don't have scores)
+@tag.in_symbol_resolution_customer_tags?(@customer)
 #=> true
 
 ## Test reverse index tracking works with Symbol target class
