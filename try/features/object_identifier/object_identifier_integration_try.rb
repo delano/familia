@@ -96,7 +96,7 @@ original_extid = persistence_obj.extid
 persistence_obj.save
 
 # Load from Valkey/Redis
-loaded_obj = PersistenceTest.load(id: 'persistence_test')
+loaded_obj = PersistenceTest.load('persistence_test')
 #=> nil
 
 ## objid persists after save/load
