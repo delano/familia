@@ -8,8 +8,8 @@
 require_relative '../lib/familia'
 require 'logger'
 
-# Register DatabaseLogger middleware and enable logging
-RedisClient.register(DatabaseLogger)
+# Enable database command logging (middleware registered automatically)
+Familia.enable_database_logging = true
 DatabaseLogger.logger = Familia::FamiliaLogger.new($stdout)
 DatabaseLogger.logger.level = Familia::FamiliaLogger::TRACE
 
