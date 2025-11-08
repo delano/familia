@@ -3,6 +3,7 @@
 require_relative 'indexing_relationship'
 require_relative 'indexing/multi_index_generators'
 require_relative 'indexing/unique_index_generators'
+require_relative 'indexing/rebuild_strategies'
 
 module Familia
   module Features
