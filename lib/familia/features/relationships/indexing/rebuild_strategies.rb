@@ -401,6 +401,21 @@ module Familia
             # Load objects by keys
             objects = indexed_class.load_multi_by_keys(keys).compact
 
+            # For instance-scoped indexes, filter objects by scope
+            if scope_instance
+              # Get the participation collection for this scope
+              participation = indexed_class.participation_relationships.find do |rel|
+                rel.target_class == scope_instance.class
+              end
+
+              if participation
+                collection_name = participation.collection_name
+                scope_collection = scope_instance.send(collection_name)
+                # Filter to only objects that belong to this scope
+                objects = objects.select { |obj| scope_collection.member?(obj.identifier) }
+              end
+            end
+
             # Transaction per batch
             batch_indexed = 0
             indexed_class.transaction do |tx|
@@ -452,19 +467,21 @@ module Familia
               return
             end
 
-            # Atomic swap via Lua: DEL final, RENAME temp -> final
-            swap_script = <<~LUA
-              redis.call('DEL', KEYS[2])
-              redis.call('RENAME', KEYS[1], KEYS[2])
-              return 'OK'
-            LUA
-
-            redis.eval(swap_script, keys: [temp_key, final_key])
+            # Atomic swap: DEL final key, then RENAME temp -> final
+            # RENAME is already atomic, so we just need to clear the final key first
+            redis.del(final_key)
+            redis.rename(temp_key, final_key)
             Familia.info "[Rebuild] Atomic swap completed: #{temp_key} -> #{final_key}"
           rescue Redis::CommandError => e
+            # If temp key doesn't exist, just log and return (already handled above)
+            if e.message.include?("no such key")
+              Familia.info "[Rebuild] Temp key vanished during swap (concurrent operation?)"
+              return
+            end
+
+            # For other errors, preserve temp key for debugging
             Familia.warn "[Rebuild] Atomic swap failed: #{e.message}"
-            # Clean up temp key on failure
-            redis.del(temp_key)
+            Familia.warn "[Rebuild] Temp key preserved for debugging: #{temp_key}"
             raise
           end
 

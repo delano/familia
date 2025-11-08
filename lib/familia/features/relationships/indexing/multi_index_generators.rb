@@ -152,16 +152,7 @@ module Familia
                 # Look for a participation relationship where indexed_class participates in this scope_class
                 collection_name = nil
 
-                if self.class.respond_to?(:participation_relationships)
-                  # Find participation where indexed_class is the participant and this is the target
-                  participation = self.class.participation_relationships.find do |rel|
-                    # Check if any class participates as indexed_class
-                    # This works because participation_relationships are stored on the target class
-                    false # Participation relationships are stored on participant, not target
-                  end
-                end
-
-                # Alternatively, check if indexed_class has participation to this scope_class
+                # Check if indexed_class has participation to this scope_class
                 if indexed_class.respond_to?(:participation_relationships)
                   participation = indexed_class.participation_relationships.find do |rel|
                     rel.target_class == self.class
@@ -194,14 +185,19 @@ module Familia
                   end
 
                   # PHASE 3: Clear all existing field-value-specific index sets
+                  # Use SCAN to find all existing index keys (including orphaned ones from deleted field values)
                   progress_block&.call(phase: :clearing, current: 0, total: field_values.size)
 
-                  transaction do |_tx|
-                    field_values.each_with_index do |value, idx|
-                      index_set = send(:"#{index_name}_for", value)
-                      index_set.clear
-                      progress_block&.call(phase: :clearing, current: idx + 1, total: field_values.size, field_value: value)
-                    end
+                  # Get the base pattern for this index by creating a sample index set
+                  sample_index = send(:"#{index_name}_for", "*")
+                  index_pattern = sample_index.dbkey.gsub(":*:", ":*:")
+
+                  # Find all existing index keys using SCAN
+                  cleared_count = 0
+                  dbclient.scan_each(match: index_pattern) do |key|
+                    dbclient.del(key)
+                    cleared_count += 1
+                    progress_block&.call(phase: :clearing, current: cleared_count, total: field_values.size, key: key)
                   end
 
                   # PHASE 4: Rebuild index from current collection membership
