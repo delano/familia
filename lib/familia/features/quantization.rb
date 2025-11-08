@@ -391,7 +391,7 @@ module Familia
       #   user.quantized_identifier(1.hour)  # => "123:1672531200"
       #   user.quantized_identifier(1.hour, pattern: '%Y%m%d%H')  # => "123:2023010114"
       #
-      def quantized_identifier(quantum, pattern: nil, separator: ':')
+      def quantized_identifier(quantum, pattern: nil, separator: Familia.delim)
         timestamp = qstamp(quantum, pattern: pattern)
         base_id = respond_to?(:identifier) ? identifier : object_id
         "#{base_id}#{separator}#{timestamp}"

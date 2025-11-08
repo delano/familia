@@ -159,7 +159,7 @@ module Familia
         def create_temp_key(base_name, ttl = 300)
           timestamp = Familia.now.to_i
           random_suffix = SecureRandom.hex(3)
-          temp_key = "temp:#{base_name}:#{timestamp}:#{random_suffix}"
+          temp_key = Familia.join('temp', base_name, timestamp, random_suffix)
 
           # UnsortedSet immediate expiry to ensure cleanup even if operation fails
           if respond_to?(:dbclient)
@@ -258,7 +258,7 @@ module Familia
         def create_temp_key(base_name, ttl = 300)
           timestamp = Familia.now.to_i
           random_suffix = SecureRandom.hex(3)
-          temp_key = "temp:#{base_name}:#{timestamp}:#{random_suffix}"
+          temp_key = Familia.join('temp', base_name, timestamp, random_suffix)
 
           # UnsortedSet immediate expiry to ensure cleanup even if operation fails
           dbclient.expire(temp_key, ttl)

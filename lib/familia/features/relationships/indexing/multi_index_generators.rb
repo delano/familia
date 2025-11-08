@@ -80,7 +80,7 @@ module Familia
               # This acts as a factory for field-value-specific DataTypes
               define_method(:"#{index_name}_for") do |field_value|
                 # Return properly managed DataType instance with parameterized key
-                index_key = "#{index_name}:#{field_value}"
+                index_key = Familia.join(index_name, field_value)
                 Familia::UnsortedSet.new(index_key, parent: self)
               end
             end

@@ -28,7 +28,7 @@ module Familia
         #
         # @return [String] unique identifier in format "TargetClass:collection_name"
         def unique_key
-          "#{target_class_base}:#{collection_name}"
+          Familia.join(target_class_base, collection_name)
         end
 
         # Get the base class name without namespace

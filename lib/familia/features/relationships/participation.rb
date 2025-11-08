@@ -578,13 +578,13 @@ module Familia
           def participating_ids_for_target(target_class, collection_names = nil)
 
             # Use config_name to get the proper snake_case format (e.g., "project_team")
-            target_prefix = "#{target_class.config_name}:"
+            target_prefix = "#{target_class.config_name}#{Familia.delim}"
             ids = Set.new
 
             participations.members.each do |key|
               next unless key.start_with?(target_prefix)
 
-              parts = key.split(':', 3)  # Split into ["targetclass", "id", "collection"]
+              parts = key.split(Familia.delim, 3)  # Split into ["targetclass", "id", "collection"]
               id = parts[1]
 
               # If filtering by collection names, check before adding
@@ -611,14 +611,14 @@ module Familia
           # @param collection_names [Array<String>, nil] Optional collection name filter
           # @return [Boolean] true if any matching participation exists
           def participating_in_target?(target_class, collection_names = nil)
-            target_prefix = "#{target_class.config_name}:"
+            target_prefix = "#{target_class.config_name}#{Familia.delim}"
 
             participations.members.any? do |key|
               next false unless key.start_with?(target_prefix)
 
               # If filtering by specific collections, check the collection name
               if collection_names && !collection_names.empty?
-                collection = key.split(':')[2]
+                collection = key.split(Familia.delim, 3)[2]
                 collection_names.include?(collection)
               else
                 true
@@ -639,12 +639,8 @@ module Familia
             collection_keys.each do |collection_key|
               # Parse the collection key to extract target info
               # Expected format: "targetclass:targetid:collectionname"
-              key_parts = collection_key.split(':')
-              next unless key_parts.length >= 3
-
-              target_class_config = key_parts[0]
-              target_id = key_parts[1]
-              collection_name_from_key = key_parts[2]
+              target_class_config, target_id, collection_name_from_key = collection_key.split(Familia.delim, 3)
+              next unless target_class_config && target_id && collection_name_from_key
 
               # Find the matching participation configuration
               # Note: target_class_config from key is snake_case
