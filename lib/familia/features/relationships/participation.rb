@@ -616,7 +616,7 @@ module Familia
 
               # If filtering by specific collections, check the collection name
               if collection_names && !collection_names.empty?
-                collection = key.split(Familia.delim)[2]
+                collection = key.split(Familia.delim, 3)[2]
                 collection_names.include?(collection)
               else
                 true
@@ -637,12 +637,8 @@ module Familia
             collection_keys.each do |collection_key|
               # Parse the collection key to extract target info
               # Expected format: "targetclass:targetid:collectionname"
-              key_parts = collection_key.split(Familia.delim)
-              next unless key_parts.length >= 3
-
-              target_class_config = key_parts[0]
-              target_id = key_parts[1]
-              collection_name_from_key = key_parts[2]
+              target_class_config, target_id, collection_name_from_key = collection_key.split(Familia.delim, 3)
+              next unless target_class_config && target_id && collection_name_from_key
 
               # Find the matching participation configuration
               # Note: target_class_config from key is snake_case
