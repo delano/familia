@@ -97,6 +97,9 @@ module Familia
             # Resolve scope class using Familia pattern
             actual_scope_class = Familia.resolve_class(scope_class)
 
+            # Get scope_class_config for method naming (needed for rebuild methods)
+            scope_class_config = actual_scope_class.config_name
+
             # Generate instance sampling method (e.g., company.sample_from_department)
             actual_scope_class.class_eval do
 
@@ -118,11 +121,130 @@ module Familia
                 index_set.members.map { |id| indexed_class.find_by_identifier(id) }
               end
 
-              # Generate method to rebuild the index for this parent instance
-              define_method(:"rebuild_#{index_name}") do
-                # This would need to be implemented based on how you track which
-                # objects belong to this parent instance
-                # For now, just a placeholder
+              # Generate method to rebuild the multi-value index for this parent instance
+              #
+              # Multi-indexes create separate sets for each field value, requiring a two-phase approach:
+              # 1. Discovery: Find all unique field values by loading objects
+              # 2. Clear & Rebuild: Remove old index sets and rebuild from current objects
+              #
+              # @param batch_size [Integer] Number of identifiers to process per batch
+              # @yield [progress] Optional block called with progress updates
+              # @yieldparam progress [Hash] Progress information with keys:
+              #   - :phase [Symbol] Current phase (:discovering, :clearing, :rebuilding)
+              #   - :current [Integer] Current item count
+              #   - :total [Integer] Total items (when known)
+              #   - :field_value [String] Current field value being processed
+              #
+              # @example Basic rebuild
+              #   company.rebuild_dept_index
+              #
+              # @example With progress monitoring
+              #   company.rebuild_dept_index do |progress|
+              #     puts "#{progress[:phase]}: #{progress[:current]}/#{progress[:total]}"
+              #   end
+              #
+              # @note This method requires loading all objects to discover field values.
+              #   For large collections (>10k objects), consider using SCAN approach or
+              #   maintaining a separate field-value index.
+              #
+              define_method(:"rebuild_#{index_name}") do |batch_size: 100, &progress_block|
+                # PHASE 1: Find the collection containing the indexed objects
+                # Look for a participation relationship where indexed_class participates in this scope_class
+                collection_name = nil
+
+                if self.class.respond_to?(:participation_relationships)
+                  # Find participation where indexed_class is the participant and this is the target
+                  participation = self.class.participation_relationships.find do |rel|
+                    # Check if any class participates as indexed_class
+                    # This works because participation_relationships are stored on the target class
+                    false # Participation relationships are stored on participant, not target
+                  end
+                end
+
+                # Alternatively, check if indexed_class has participation to this scope_class
+                if indexed_class.respond_to?(:participation_relationships)
+                  participation = indexed_class.participation_relationships.find do |rel|
+                    rel.target_class == self.class
+                  end
+                  collection_name = participation&.collection_name if participation
+                end
+
+                # Get the collection DataType if we found a participation relationship
+                collection = collection_name ? send(collection_name) : nil
+
+                if collection
+                  # PHASE 2: Discover all unique field values by loading objects
+                  progress_block&.call(phase: :discovering, current: 0, total: collection.size)
+
+                  field_values = Set.new
+                  processed = 0
+
+                  collection.members.each_slice(batch_size) do |identifiers|
+                    # Load objects in batches to discover field values
+                    objects = indexed_class.load_multi(identifiers).compact
+
+                    objects.each do |obj|
+                      value = obj.send(field)
+                      # Only track non-nil, non-empty field values
+                      field_values << value.to_s if value && !value.to_s.strip.empty?
+                    end
+
+                    processed += identifiers.size
+                    progress_block&.call(phase: :discovering, current: processed, total: collection.size)
+                  end
+
+                  # PHASE 3: Clear all existing field-value-specific index sets
+                  progress_block&.call(phase: :clearing, current: 0, total: field_values.size)
+
+                  transaction do |_tx|
+                    field_values.each_with_index do |value, idx|
+                      index_set = send(:"#{index_name}_for", value)
+                      index_set.clear
+                      progress_block&.call(phase: :clearing, current: idx + 1, total: field_values.size, field_value: value)
+                    end
+                  end
+
+                  # PHASE 4: Rebuild index from current collection membership
+                  progress_block&.call(phase: :rebuilding, current: 0, total: collection.size)
+
+                  processed = 0
+                  collection.members.each_slice(batch_size) do |identifiers|
+                    # Load objects and add to appropriate field-value sets
+                    objects = indexed_class.load_multi(identifiers).compact
+
+                    transaction do |_tx|
+                      objects.each do |obj|
+                        # Use the generated add_to method to maintain consistency
+                        # This ensures the same logic is used as during normal operation
+                        obj.send(:"add_to_#{scope_class_config}_#{index_name}", self)
+                      end
+                    end
+
+                    processed += identifiers.size
+                    progress_block&.call(phase: :rebuilding, current: processed, total: collection.size)
+                  end
+
+                  Familia.info "[Rebuild] Multi-index #{index_name} rebuilt: #{field_values.size} field values, #{processed} objects"
+
+                  processed  # Return count of processed objects
+
+                else
+                  # No participation relationship found - warn and suggest alternative
+                  Familia.warn <<~WARNING
+                    [Rebuild] Cannot rebuild multi-index #{index_name}: no participation relationship found
+
+                    Multi-index rebuild requires a participation relationship to find objects.
+                    Add a participation relationship to #{indexed_class.name}:
+
+                      class #{indexed_class.name} < Familia::Horreum
+                        participates_in #{self.class.name}, :collection_name, score: :field
+                      end
+
+                    Then access the collection via: #{self.class.config_name}.collection_name
+                  WARNING
+
+                  nil
+                end
               end
             end
           end
