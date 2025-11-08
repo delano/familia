@@ -65,13 +65,15 @@ repos:
         env:
           TALISMAN_SCAN_MODE: CI
 
-  - repo: https://github.com/avilaton/add-msg-issue-prefix-hook
-    rev: v0.0.11
+  # Commit message issue tracking integration
+  - repo: https://github.com/delano/add-msg-issue-prefix-hook
+    rev: v0.0.14-fork
     hooks:
       - id: add-msg-issue-prefix
         stages: [prepare-commit-msg]
-        name: Link commit to Github issue
+        description: Automatically prefix commits with issue numbers
         args:
-          - "--default="
-          - "--pattern=[a-zA-Z0-9]{0,10}-?[0-9]{1,5}"
-          - "--template=[#{}]"
+          - '--default='
+          - '--exclude-pattern=^(dependabot|renovate|claude)/'
+          - '--pattern=(i18n(?=/)|([a-zA-Z0-9]{0,10}-?[0-9]{1,5}))'
+          - '--template=[#{}]'
