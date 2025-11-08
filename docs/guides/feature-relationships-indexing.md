@@ -39,7 +39,7 @@ User.find_by_email('alice@example.com')  # => user (O(1) lookup)
 user.update(email: 'alice.smith@example.com')
 User.find_by_email('alice.smith@example.com')  # => user
 
-# Automatic removal on destroy
+# Automatic cleanup on destroy
 user.destroy
 User.find_by_email('alice.smith@example.com')  # => nil
 ```
@@ -212,6 +212,28 @@ todays_events = user.find_all_by_daily_partition(today)
 - 1:many field-to-objects mapping
 - Returns array of objects
 - Allows duplicate values
+
+## Rebuilding Indexes
+
+Indexes can be automatically rebuilt from source data using auto-generated rebuild methods:
+
+```ruby
+# Class-level indexes
+User.rebuild_email_lookup      # Rebuilds from all User.email values
+User.rebuild_username_lookup   # Rebuilds from all User.username values
+
+# Instance-scoped indexes
+company.rebuild_badge_index    # Rebuilds from all Employee.badge_number values
+```
+
+These methods work because **indexes are derived data** - they're computed from object field values.
+
+> **Important:** Participation data (like `@team.members`) cannot be rebuilt automatically because participations represent business decisions, not derived data. See [Why Participations Can't Be Rebuilt](../../lib/familia/features/relationships/participation/rebuild_strategies.md) for the critical distinction between indexes and participations.
+
+**When to rebuild indexes:**
+- After data migrations or bulk imports
+- Recovering from index corruption
+- Adding indexes to existing data
 
 ## Performance Tips
 
