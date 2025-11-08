@@ -431,13 +431,13 @@ module Familia
             "#{base_key}:rebuild:#{timestamp}"
           end
 
-          # Performs atomic swap of temp key to final key via Lua script.
+          # Performs atomic swap of temp key to final key.
           #
           # This ensures zero downtime during rebuild:
           # 1. DEL final_key (remove old index)
           # 2. RENAME temp_key final_key (atomically replace)
           #
-          # Both operations execute atomically in Lua, preventing:
+          # RENAME is atomic, so the old index remains queryable until replaced:
           # - Partial updates
           # - Race conditions
           # - Stale data visibility
@@ -471,17 +471,6 @@ module Familia
             Familia.warn "[Rebuild] Atomic swap failed: #{e.message}"
             Familia.warn "[Rebuild] Temp key preserved for debugging: #{temp_key}"
             raise
-          end
-
-          # Calculates processing rate in objects per second
-          #
-          # @param completed [Integer] Number of objects processed
-          # @param elapsed [Float] Time elapsed in seconds
-          # @return [Float] Processing rate (objects/second)
-          #
-          def calculate_rate(completed, elapsed)
-            return 0.0 if elapsed.zero?
-            (completed / elapsed).round(2)
           end
         end
       end

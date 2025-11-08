@@ -164,15 +164,18 @@ module Familia
                 collection = collection_name ? send(collection_name) : nil
 
                 if collection
-                  # PHASE 2: Discover all unique field values by loading objects
-                  progress_block&.call(phase: :discovering, current: 0, total: collection.size)
+                  # PHASE 2: Load objects once and cache them for both discovery and rebuilding
+                  # This avoids duplicate load_multi calls (previous approach loaded twice)
+                  progress_block&.call(phase: :loading, current: 0, total: collection.size)
 
                   field_values = Set.new
+                  cached_objects = []
                   processed = 0
 
                   collection.members.each_slice(batch_size) do |identifiers|
-                    # Load objects in batches to discover field values
+                    # Load objects in batches - SINGLE LOAD for both phases
                     objects = indexed_class.load_multi(identifiers).compact
+                    cached_objects.concat(objects)
 
                     objects.each do |obj|
                       value = obj.send(field)
@@ -181,7 +184,7 @@ module Familia
                     end
 
                     processed += identifiers.size
-                    progress_block&.call(phase: :discovering, current: processed, total: collection.size)
+                    progress_block&.call(phase: :loading, current: processed, total: collection.size)
                   end
 
                   # PHASE 3: Clear all existing field-value-specific index sets
@@ -189,8 +192,9 @@ module Familia
                   progress_block&.call(phase: :clearing, current: 0, total: field_values.size)
 
                   # Get the base pattern for this index by creating a sample index set
+                  # The "*" creates a wildcard pattern like "company:123:dept_index:*" for SCAN
                   sample_index = send(:"#{index_name}_for", "*")
-                  index_pattern = sample_index.dbkey.gsub(":*:", ":*:")
+                  index_pattern = sample_index.dbkey
 
                   # Find all existing index keys using SCAN
                   cleared_count = 0
@@ -200,14 +204,11 @@ module Familia
                     progress_block&.call(phase: :clearing, current: cleared_count, total: field_values.size, key: key)
                   end
 
-                  # PHASE 4: Rebuild index from current collection membership
-                  progress_block&.call(phase: :rebuilding, current: 0, total: collection.size)
+                  # PHASE 4: Rebuild index from cached objects (no reload needed)
+                  progress_block&.call(phase: :rebuilding, current: 0, total: cached_objects.size)
 
                   processed = 0
-                  collection.members.each_slice(batch_size) do |identifiers|
-                    # Load objects and add to appropriate field-value sets
-                    objects = indexed_class.load_multi(identifiers).compact
-
+                  cached_objects.each_slice(batch_size) do |objects|
                     transaction do |_tx|
                       objects.each do |obj|
                         # Use the generated add_to method to maintain consistency
@@ -216,8 +217,8 @@ module Familia
                       end
                     end
 
-                    processed += identifiers.size
-                    progress_block&.call(phase: :rebuilding, current: processed, total: collection.size)
+                    processed += objects.size
+                    progress_block&.call(phase: :rebuilding, current: processed, total: cached_objects.size)
                   end
 
                   Familia.info "[Rebuild] Multi-index #{index_name} rebuilt: #{field_values.size} field values, #{processed} objects"
