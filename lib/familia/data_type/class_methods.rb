@@ -2,8 +2,6 @@
 #
 # frozen_string_literal: true
 
-# lib/familia/data_type/definition.rb
-
 module Familia
   class DataType
     # ClassMethods - Class-level DSL methods for defining DataType behavior
