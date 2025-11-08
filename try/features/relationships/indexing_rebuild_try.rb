@@ -491,8 +491,9 @@ end
 @company.dept_index_for("marketing").size
 #=> 2
 
-## Rebuild via participation collection
+## Rebuild via participation collection processes 3 employees
 @company.rebuild_dept_index
+#=> 3
 
 ## After rebuild: Current engineering dept correctly has both emp1 and emp3
 @company.dept_index_for("engineering").size
@@ -502,15 +503,13 @@ end
 @company.dept_index_for("sales").size
 #=> 1
 
-## TODO: SCAN cleanup should remove orphaned finance keys (bug in pattern matching)
-# Bug: multi_index_generators.rb:193 - SCAN pattern doesn't match correctly
+## SCAN cleanup removes orphaned finance keys
 @company.dept_index_for("finance").size
-##=> 0
+#=> 0
 
-## TODO: SCAN cleanup should remove orphaned marketing keys (bug in pattern matching)
-# Bug: multi_index_generators.rb:193 - SCAN pattern doesn't match correctly
+## SCAN cleanup removes orphaned marketing keys
 @company.dept_index_for("marketing").size
-##=> 0
+#=> 0
 
 # =============================================
 # 10. Scope Filtering (SCAN Strategy)
