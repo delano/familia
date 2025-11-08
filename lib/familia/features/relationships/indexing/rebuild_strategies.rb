@@ -382,7 +382,7 @@ module Familia
           # @param indexed_class [Class] The model class
           # @param field [Symbol] The field to index
           # @param temp_key [String] The temporary index key
-          # @param scope_instance [Object, nil] Optional scope instance (currently unused)
+          # @param scope_instance [Object, nil] Optional scope instance. If provided, only objects belonging to this scope will be indexed.
           # @return [Integer] Number of objects indexed in this batch
           #
           def process_scan_batch(keys, indexed_class, field, temp_key, scope_instance)
