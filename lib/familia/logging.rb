@@ -177,6 +177,9 @@ module Familia
   module Logging
     # Get the logger instance, initializing with defaults if not yet set
     #
+    # Thread-safe lazy initialization using double-checked locking to ensure
+    # only a single logger instance is created even under concurrent logging calls.
+    #
     # @return [FamiliaLogger] the logger instance
     #
     # @example Set a custom logger
@@ -186,9 +189,16 @@ module Familia
     #   Familia.logger.info "Connection established"
     #
     def logger
-      @logger ||= FamiliaLogger.new($stderr).tap do |log|
-        log.progname = name
-        log.formatter = LogFormatter.new
+      # Fast path: return existing logger if already initialized
+      return @logger if @logger
+
+      # Slow path: thread-safe initialization
+      @logger_mutex ||= Mutex.new
+      @logger_mutex.synchronize do
+        @logger ||= FamiliaLogger.new($stderr).tap do |log|
+          log.progname = name
+          log.formatter = LogFormatter.new
+        end
       end
     end
 
@@ -212,7 +222,10 @@ module Familia
     #   end
     #
     def logger=(new_logger)
-      @logger = new_logger
+      @logger_mutex ||= Mutex.new
+      @logger_mutex.synchronize do
+        @logger = new_logger
+      end
       # Auto-sync to DatabaseLogger if loaded
       DatabaseLogger.logger = new_logger if defined?(DatabaseLogger)
       new_logger
