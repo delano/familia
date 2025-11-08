@@ -26,10 +26,20 @@ module Familia
       # 2. DefaultConnectionHandler - Horreum model class-level @dbclient
       # 3. GlobalFallbackHandler - Familia.dbclient(uri || logical_database) (global fallback)
       #
+      # Thread-safe lazy initialization using double-checked locking to ensure
+      # only a single connection chain is built even under high concurrent load.
+      #
       # @return [Redis] the Database connection instance.
       #
       def dbclient(uri = nil)
-        @class_connection_chain ||= build_connection_chain
+        # Fast path: return existing chain if already initialized
+        return @class_connection_chain.handle(uri) if @class_connection_chain
+
+        # Slow path: thread-safe initialization
+        @class_connection_chain_mutex ||= Mutex.new
+        @class_connection_chain_mutex.synchronize do
+          @class_connection_chain ||= build_connection_chain
+        end
         @class_connection_chain.handle(uri)
       end
 
