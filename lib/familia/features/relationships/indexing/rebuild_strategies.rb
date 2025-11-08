@@ -182,32 +182,7 @@ module Familia
             scope_class = scope_instance.class.name
             Familia.info "[Rebuild] Starting via_participation for #{scope_class}##{indexed_class.name}.#{field} (#{total} objects)"
 
-            # Determine the final index key pattern from the collection
-            # For multi-index, we need to discover field values and rebuild each set
-            # For unique index, we build a single HashKey
-            # We'll use a simplified approach: call the add_method once to discover the pattern
-            temp_sample = indexed_class.new
-
-            # For multi-index, discover unique field values first
-            # Use membersraw to get raw identifiers without deserialization
-            field_values = Set.new
-            collection.membersraw.each_slice(batch_size) do |identifiers|
-              objects = indexed_class.load_multi(identifiers).compact
-              objects.each do |obj|
-                value = obj.send(field)
-                field_values << value.to_s if value && !value.to_s.strip.empty?
-              end
-            end
-
-            # For multi-index, we need to rebuild each field-value-specific set
-            # This is complex - delegate to the index-specific rebuild logic
-            # For now, log a warning if this is a multi-index
-            if field_values.size > 1
-              Familia.warn "[Rebuild] Multi-index via_participation requires field-value-specific keys"
-              Familia.warn "[Rebuild] Discovered #{field_values.size} unique values for #{field}"
-            end
-
-            # Build temp key for the base index.
+            # Build temp key for the unique index.
             #
             # Extract index name from add_method. The add_method follows the pattern:
             #   add_to_{scope_class_config}_{index_name}
