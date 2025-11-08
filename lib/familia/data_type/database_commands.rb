@@ -1,4 +1,6 @@
 # lib/familia/data_type/database_commands.rb
+#
+# frozen_string_literal: true
 
 module Familia
   class DataType

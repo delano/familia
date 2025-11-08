@@ -1,7 +1,9 @@
 #!/usr/bin/env ruby
+# try/support/benchmarks/deserialization_correctness_test.rb
+#
+# frozen_string_literal: true
 
 # Correctness Test: Field deserialization strategies
-#
 # Verifies that different deserialization approaches produce identical
 # results for all field types (strings, numbers, JSON, nested structures).
 #

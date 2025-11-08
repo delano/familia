@@ -1,3 +1,7 @@
+# try/integration/database_consistency_try.rb
+#
+# frozen_string_literal: true
+
 # try/core/database_consistency_try.rb
 #
 # Database consistency verification and edge case testing

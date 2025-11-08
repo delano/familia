@@ -1,5 +1,7 @@
 # lib/familia/horreum/utils.rb
 #
+# frozen_string_literal: true
+
 module Familia
   # InstanceMethods - Module containing instance-level methods for Familia
   #

@@ -1,3 +1,7 @@
+# try/features/encrypted_fields/error_conditions_try.rb
+#
+# frozen_string_literal: true
+
 # try/features/encryption_fields/error_conditions_try.rb
 
 require 'base64'

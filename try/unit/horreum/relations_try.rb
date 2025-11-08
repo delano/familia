@@ -1,3 +1,7 @@
+# try/unit/horreum/relations_try.rb
+#
+# frozen_string_literal: true
+
 # try/horreum/relations_try.rb
 # Test Horreum Database type relations functionality
 

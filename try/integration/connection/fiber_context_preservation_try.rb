@@ -1,3 +1,7 @@
+# try/integration/connection/fiber_context_preservation_try.rb
+#
+# frozen_string_literal: true
+
 # Fiber Context Preservation Tryouts
 #
 # Tests that verify the removal of previous_conn preservation logic

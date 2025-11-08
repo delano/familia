@@ -1,4 +1,8 @@
 #!/usr/bin/env ruby
+# try/support/debugging/provider_diagnostics.rb
+#
+# frozen_string_literal: true
+
 # Debug script for testing encryption providers and diagnosing issues
 
 require 'base64'

@@ -1,5 +1,7 @@
 # try/features/relationships/indexing_commands_verification_try.rb
 #
+# frozen_string_literal: true
+
 # Verification of proper Redis command generation for indexing operations
 # This test ensures the indexing system uses proper DataType methods instead of direct Redis calls
 #

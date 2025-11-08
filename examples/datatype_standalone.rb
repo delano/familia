@@ -1,8 +1,9 @@
 #!/usr/bin/env ruby
 # examples/datatype_standalone.rb
+#
+# frozen_string_literal: true
 
 # Demonstration: Familia::StringKey for Session Storage with Atomic Transactions
-#
 # This example shows how to use Familia's DataType classes independently
 # without inheriting from Familia::Horreum. It implements a Rack-compatible
 # session store using Familia::StringKey for secure, TTL-managed storage.

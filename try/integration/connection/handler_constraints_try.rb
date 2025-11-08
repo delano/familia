@@ -1,3 +1,7 @@
+# try/integration/connection/handler_constraints_try.rb
+#
+# frozen_string_literal: true
+
 # Handler Constraint Methods Tryouts
 #
 # Tests that each connection handler class correctly defines its operation

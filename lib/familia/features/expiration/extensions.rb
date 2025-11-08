@@ -1,4 +1,6 @@
 # lib/familia/features/expiration/extensions.rb
+#
+# frozen_string_literal: true
 
 module Familia
   # Add a default update_expiration method for all classes that include

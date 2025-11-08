@@ -1,3 +1,7 @@
+# try/unit/core/time_utils_try.rb
+#
+# frozen_string_literal: true
+
 require_relative '../../support/helpers/test_helpers'
 
 module RefinedContext

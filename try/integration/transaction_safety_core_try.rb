@@ -1,5 +1,7 @@
 # try/integration/transaction_safety_core_try.rb
 #
+# frozen_string_literal: true
+
 # Core Transaction Safety Tests
 #
 # Tests the fundamental transaction safety rules from docs/transaction_safety.md

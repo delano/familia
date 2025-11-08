@@ -1,4 +1,6 @@
 # lib/familia.rb
+#
+# frozen_string_literal: true
 
 require 'oj'
 require 'redis'

@@ -1,4 +1,6 @@
 # lib/familia/features/transient_fields/redacted_string.rb
+#
+# frozen_string_literal: true
 
 # RedactedString
 #

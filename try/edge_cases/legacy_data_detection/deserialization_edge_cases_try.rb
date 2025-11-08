@@ -1,3 +1,7 @@
+# try/edge_cases/legacy_data_detection/deserialization_edge_cases_try.rb
+#
+# frozen_string_literal: true
+
 # Edge case tests for deserialize_value with legacy data detection
 #
 # Tests the nuanced deserialization that distinguishes between:

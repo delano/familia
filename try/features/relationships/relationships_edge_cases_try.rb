@@ -1,3 +1,7 @@
+# try/features/relationships/relationships_edge_cases_try.rb
+#
+# frozen_string_literal: true
+
 # Simplified edge case testing for Relationships v2 - focusing on core functionality
 
 require_relative '../../support/helpers/test_helpers'

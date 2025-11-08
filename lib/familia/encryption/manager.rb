@@ -1,4 +1,6 @@
 # lib/familia/encryption/manager.rb
+#
+# frozen_string_literal: true
 
 module Familia
   module Encryption

@@ -1,3 +1,7 @@
+# try/edge_cases/ttl_side_effects_try.rb
+#
+# frozen_string_literal: true
+
 # Test TTL side effects
 
 require_relative '../support/helpers/test_helpers'

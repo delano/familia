@@ -1,3 +1,7 @@
+# try/features/encryption/instance_variable_scope_try.rb
+#
+# frozen_string_literal: true
+
 # try/encryption/debug3_try.rb
 
 # - Tests instance variable scoping in tryouts framework

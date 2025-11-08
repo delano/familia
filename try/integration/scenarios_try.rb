@@ -1,3 +1,7 @@
+# try/integration/scenarios_try.rb
+#
+# frozen_string_literal: true
+
 # Comprehensive configuration scenarios
 
 require_relative '../support/helpers/test_helpers'

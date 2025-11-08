@@ -1,4 +1,7 @@
 # try/features/transient_fields/refresh_reset_try.rb
+#
+# frozen_string_literal: true
+
 # Test that refresh! properly resets transient fields to nil
 
 require_relative '../../support/helpers/test_helpers'

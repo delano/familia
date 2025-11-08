@@ -1,4 +1,6 @@
 # try/unit/horreum/unique_index_guard_validation_try.rb
+#
+# frozen_string_literal: true
 
 #
 # Unique index guard validation tests

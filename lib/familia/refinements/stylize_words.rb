@@ -1,4 +1,6 @@
 # lib/familia/refinements/stylize_words.rb
+#
+# frozen_string_literal: true
 
 module Familia
   module Refinements

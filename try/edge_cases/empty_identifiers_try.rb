@@ -1,4 +1,6 @@
 # try/edge_cases/empty_identifiers_try.rb
+#
+# frozen_string_literal: true
 
 # Test empty identifier edge cases
 

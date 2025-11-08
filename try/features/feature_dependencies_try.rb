@@ -1,4 +1,6 @@
 # try/features/feature_dependencies_try.rb
+#
+# frozen_string_literal: true
 
 require_relative '../support/helpers/test_helpers'
 

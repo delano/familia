@@ -1,3 +1,7 @@
+# try/features/quantization/quantization_try.rb
+#
+# frozen_string_literal: true
+
 # try/features/quantization_try.rb
 
 require_relative '../../support/helpers/test_helpers'

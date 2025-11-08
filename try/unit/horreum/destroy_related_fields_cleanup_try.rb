@@ -1,3 +1,7 @@
+# try/unit/horreum/destroy_related_fields_cleanup_try.rb
+#
+# frozen_string_literal: true
+
 # try/horreum/destroy_related_fields_cleanup_try.rb
 
 # Horreum destroy! Related Fields Cleanup Tryouts

@@ -1,4 +1,7 @@
 #!/usr/bin/env ruby
+# try/support/debugging/debug_context_aad.rb
+#
+# frozen_string_literal: true
 
 $LOAD_PATH.unshift(File.expand_path('lib', __dir__))
 ENV['TEST'] = 'true'

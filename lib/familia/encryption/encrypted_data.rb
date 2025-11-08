@@ -1,4 +1,6 @@
 # lib/familia/encryption/encrypted_data.rb
+#
+# frozen_string_literal: true
 
 module Familia
   module Encryption

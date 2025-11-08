@@ -1,3 +1,7 @@
+# try/integration/familia_members_methods_try.rb
+#
+# frozen_string_literal: true
+
 # try/core/familia_members_methods_try.rb
 
 require_relative '../support/helpers/test_helpers'

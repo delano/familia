@@ -1,3 +1,7 @@
+# try/edge_cases/reserved_keywords_try.rb
+#
+# frozen_string_literal: true
+
 # Test reserved keyword handling
 
 require_relative '../support/helpers/test_helpers'

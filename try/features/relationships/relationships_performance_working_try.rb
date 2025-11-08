@@ -1,3 +1,7 @@
+# try/features/relationships/relationships_performance_working_try.rb
+#
+# frozen_string_literal: true
+
 # try/features/relationships_performance_working_try.rb
 #
 # Working performance test focusing on basic functionality

@@ -1,3 +1,7 @@
+# try/integration/connection/pools_try.rb
+#
+# frozen_string_literal: true
+
 # try/pooling/connection_pool_test_try.rb
 
 # USAGE: FAMILIA_TRACE=1 FAMILIA_DEBUG=1 bundle exec tryouts try/pooling/connection_pool_test_try.rb

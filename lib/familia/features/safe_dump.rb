@@ -1,4 +1,6 @@
 # lib/familia/features/safe_dump.rb
+#
+# frozen_string_literal: true
 
 #
 # Class instance variables are used here for configuration. These are set

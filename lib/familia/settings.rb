@@ -1,4 +1,6 @@
 # lib/familia/settings.rb
+#
+# frozen_string_literal: true
 
 # Familia
 #

@@ -1,4 +1,6 @@
 # lib/familia/base.rb
+#
+# frozen_string_literal: true
 
 module Familia
   # A common module for Familia::DataType and Familia::Horreum to include.

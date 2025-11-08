@@ -1,4 +1,6 @@
 # lib/familia/verifiable_identifier.rb
+#
+# frozen_string_literal: true
 
 require 'openssl'
 require_relative 'secure_identifier'

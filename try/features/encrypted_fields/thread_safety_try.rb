@@ -1,3 +1,7 @@
+# try/features/encrypted_fields/thread_safety_try.rb
+#
+# frozen_string_literal: true
+
 # try/features/encryption_fields/thread_safety_try.rb
 
 require 'concurrent'

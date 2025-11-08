@@ -1,4 +1,6 @@
 # lib/familia/features/relationships/indexing.rb
+#
+# frozen_string_literal: true
 
 require_relative 'indexing_relationship'
 require_relative 'indexing/multi_index_generators'

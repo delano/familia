@@ -1,4 +1,6 @@
 # lib/familia/logging.rb
+#
+# frozen_string_literal: true
 
 require 'pathname'
 require 'logger'

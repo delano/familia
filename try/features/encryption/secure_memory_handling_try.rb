@@ -1,3 +1,7 @@
+# try/features/encryption/secure_memory_handling_try.rb
+#
+# frozen_string_literal: true
+
 # try/encryption/secure_memory_handling_try.rb
 
 require_relative '../../support/helpers/test_helpers'

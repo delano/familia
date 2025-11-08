@@ -1,7 +1,8 @@
 #!/usr/bin/env ruby
-
 # examples/safe_dump.rb
 #
+# frozen_string_literal: true
+
 # Demonstrates the SafeDump feature with the new DSL methods.
 # SafeDump allows you to control which fields are exposed when
 # serializing objects, preventing accidental exposure of sensitive data.

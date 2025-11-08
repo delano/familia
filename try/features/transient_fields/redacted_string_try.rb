@@ -1,4 +1,6 @@
 # try/features/transient_fields/redacted_string_try.rb
+#
+# frozen_string_literal: true
 
 require_relative '../../support/helpers/test_helpers'
 

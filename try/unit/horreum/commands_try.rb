@@ -1,3 +1,7 @@
+# try/unit/horreum/commands_try.rb
+#
+# frozen_string_literal: true
+
 # try/horreum/commands_try.rb
 
 # Test Horreum Valkey/Redis commands

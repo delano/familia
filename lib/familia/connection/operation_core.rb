@@ -1,3 +1,5 @@
+# lib/familia/connection/operation_core.rb
+#
 # frozen_string_literal: true
 
 module Familia

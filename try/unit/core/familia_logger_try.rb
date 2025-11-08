@@ -1,4 +1,6 @@
 # try/unit/core/familia_logger_try.rb
+#
+# frozen_string_literal: true
 
 require_relative '../../support/helpers/test_helpers'
 require 'logger'

@@ -1,3 +1,7 @@
+# try/support/prototypes/atomic_saves_v3_connection_pool.rb
+#
+# frozen_string_literal: true
+
 # try/prototypes/atomic_saves_v3_connection_pool.rb
 
 # try -vf try/prototypes/atomic_saves_v3_connection_pool.rb

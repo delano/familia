@@ -1,5 +1,7 @@
 # try/features/relationships/participation_performance_improvements_try.rb
 #
+# frozen_string_literal: true
+
 # Tests for performance improvements in participation functionality
 # Verifies reverse index functionality and robust type comparison
 

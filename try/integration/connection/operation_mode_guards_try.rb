@@ -1,3 +1,7 @@
+# try/integration/connection/operation_mode_guards_try.rb
+#
+# frozen_string_literal: true
+
 # Operation Mode Guards Tryouts
 #
 # Tests the connection handler operation mode enforcement that prevents Redis

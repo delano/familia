@@ -1,5 +1,7 @@
 # try/features/relationships/indexing_try.rb
 #
+# frozen_string_literal: true
+
 # Comprehensive tests for Familia indexing relationships functionality
 # Tests both multi_index (parent-context) and unique_index (class-level) indexing
 #

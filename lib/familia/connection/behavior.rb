@@ -1,3 +1,5 @@
+# lib/familia/connection/behavior.rb
+#
 # frozen_string_literal: true
 
 # lib/familia/connection/behavior.rb

@@ -1,4 +1,6 @@
 # lib/familia/data_type/types/sorted_set.rb
+#
+# frozen_string_literal: true
 
 module Familia
   class SortedSet < DataType

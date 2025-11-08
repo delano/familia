@@ -1,3 +1,7 @@
+# try/integration/connection/transaction_mode_warn_try.rb
+#
+# frozen_string_literal: true
+
 # Transaction Mode: Warn Tryouts
 #
 # Tests warn transaction mode behavior where operations log a warning

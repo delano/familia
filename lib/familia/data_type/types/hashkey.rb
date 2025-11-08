@@ -1,4 +1,6 @@
 # lib/familia/data_type/types/hashkey.rb
+#
+# frozen_string_literal: true
 
 module Familia
   class HashKey < DataType

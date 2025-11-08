@@ -1,3 +1,7 @@
+# try/features/encrypted_fields/context_isolation_try.rb
+#
+# frozen_string_literal: true
+
 # try/features/encryption_fields/context_isolation_try.rb
 
 require 'base64'

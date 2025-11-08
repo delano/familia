@@ -1,3 +1,7 @@
+# try/unit/horreum/field_definition_try.rb
+#
+# frozen_string_literal: true
+
 # try/horreum/field_definition_try.rb
 
 require_relative '../../support/helpers/test_helpers'

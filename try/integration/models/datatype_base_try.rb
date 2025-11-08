@@ -1,3 +1,7 @@
+# try/integration/models/datatype_base_try.rb
+#
+# frozen_string_literal: true
+
 # try/data_types/data_type_base_try.rb
 
 # Test DataType base functionality

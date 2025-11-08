@@ -1,3 +1,7 @@
+# try/unit/core/base_enhancements_try.rb
+#
+# frozen_string_literal: true
+
 # try/core/base_enhancements_try.rb
 
 require_relative '../../support/helpers/test_helpers'

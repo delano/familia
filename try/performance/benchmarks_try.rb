@@ -1,3 +1,7 @@
+# try/performance/benchmarks_try.rb
+#
+# frozen_string_literal: true
+
 # Performance benchmarks separate from stress tests
 
 require_relative '../support/helpers/test_helpers'

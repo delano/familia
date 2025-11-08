@@ -1,4 +1,6 @@
 # lib/familia/utils.rb
+#
+# frozen_string_literal: true
 
 module Familia
   # Family-related utility methods

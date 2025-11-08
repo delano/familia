@@ -1,3 +1,7 @@
+# try/features/expiration/expiration_try.rb
+#
+# frozen_string_literal: true
+
 # try/features/expiration_try.rb
 
 require_relative '../../support/helpers/test_helpers'

@@ -1,3 +1,7 @@
+# try/features/safe_dump/safe_dump_advanced_try.rb
+#
+# frozen_string_literal: true
+
 # try/features/safe_dump_extended_try.rb
 
 # These tryouts test the safe dumping functionality.

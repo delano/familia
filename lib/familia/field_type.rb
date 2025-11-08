@@ -1,4 +1,6 @@
 # lib/familia/field_type.rb
+#
+# frozen_string_literal: true
 
 module Familia
   # Base class for all field types in Familia

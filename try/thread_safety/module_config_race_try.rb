@@ -1,3 +1,5 @@
+# try/thread_safety/module_config_race_try.rb
+#
 # frozen_string_literal: true
 
 require_relative '../support/helpers/test_helpers'

@@ -1,5 +1,7 @@
 # try/unit/familia_resolve_class_try.rb
 #
+# frozen_string_literal: true
+
 # Unit tests for Familia.resolve_class method
 #
 # This test ensures the public API for resolving class references works

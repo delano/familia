@@ -1,3 +1,5 @@
+# lib/familia/connection/pipelined_core.rb
+#
 # frozen_string_literal: true
 
 module Familia

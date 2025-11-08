@@ -1,4 +1,8 @@
 #!/usr/bin/env ruby
+# try/support/debugging/cache_behavior_tracer.rb
+#
+# frozen_string_literal: true
+
 # Debug script to trace encryption cache behavior and key derivation
 
 require 'base64'

@@ -1,4 +1,6 @@
 # lib/familia/horreum/serialization.rb
+#
+# frozen_string_literal: true
 
 module Familia
   class Horreum

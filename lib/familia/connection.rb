@@ -1,4 +1,6 @@
 # lib/familia/connection.rb
+#
+# frozen_string_literal: true
 
 require_relative 'connection/behavior'
 require_relative 'connection/handlers'

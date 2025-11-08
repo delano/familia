@@ -1,3 +1,7 @@
+# try/integration/data_types/datatype_transactions_try.rb
+#
+# frozen_string_literal: true
+
 # DataType Transaction Support Tryouts
 #
 # Tests transaction support for DataType objects, covering both parent-owned

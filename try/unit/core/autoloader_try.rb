@@ -1,3 +1,7 @@
+# try/unit/core/autoloader_try.rb
+#
+# frozen_string_literal: true
+
 # try/core/autoloader_try.rb
 
 # Tests for Familia::Features::Autoloader

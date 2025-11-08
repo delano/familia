@@ -1,4 +1,8 @@
 #!/usr/bin/env ruby
+# try/support/debugging/encryption_method_tracer.rb
+#
+# frozen_string_literal: true
+
 # Debug script to trace encryption method calls and data flow
 
 require 'base64'

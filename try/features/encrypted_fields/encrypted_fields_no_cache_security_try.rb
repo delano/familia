@@ -1,3 +1,7 @@
+# try/features/encrypted_fields/encrypted_fields_no_cache_security_try.rb
+#
+# frozen_string_literal: true
+
 # try/features/encrypted_fields_no_cache_security_try.rb
 #
 # Security tests for the no-cache encryption strategy

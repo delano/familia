@@ -1,3 +1,7 @@
+# try/integration/create_method_try.rb
+#
+# frozen_string_literal: true
+
 # try/core/create_method_try.rb
 #
 # Comprehensive test coverage for the create method

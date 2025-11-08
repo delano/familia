@@ -1,3 +1,7 @@
+# try/unit/horreum/class_methods_try.rb
+#
+# frozen_string_literal: true
+
 # try/horreum/class_methods_try.rb
 
 # Test Horreum class methods

@@ -1,3 +1,7 @@
+# try/integration/connection/transaction_mode_permissive_try.rb
+#
+# frozen_string_literal: true
+
 # Transaction Mode: Permissive Tryouts
 #
 # Tests permissive transaction mode behavior where operations silently

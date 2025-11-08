@@ -1,4 +1,6 @@
 # lib/familia/encryption/providers/xchacha20_poly1305_provider.rb
+#
+# frozen_string_literal: true
 
 # ⚠️  RUBY MEMORY SAFETY WARNING ⚠️
 #

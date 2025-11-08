@@ -1,3 +1,7 @@
+# try/integration/persistence_operations_try.rb
+#
+# frozen_string_literal: true
+
 # try/core/persistence_operations_try.rb
 #
 # Comprehensive test coverage for core persistence methods: exists?, save, save_if_not_exists, create

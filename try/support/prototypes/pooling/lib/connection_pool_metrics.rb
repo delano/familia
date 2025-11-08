@@ -1,3 +1,7 @@
+# try/support/prototypes/pooling/lib/connection_pool_metrics.rb
+#
+# frozen_string_literal: true
+
 # try/pooling/lib/connection_pool_metrics.rb
 #
 # Enhanced Metrics Collection and Reporting for Connection Pool Stress Tests

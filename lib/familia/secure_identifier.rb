@@ -1,4 +1,6 @@
 # lib/familia/secure_identifier.rb
+#
+# frozen_string_literal: true
 
 require 'securerandom'
 

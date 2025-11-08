@@ -1,3 +1,7 @@
+# try/features/encrypted_fields/fresh_key_try.rb
+#
+# frozen_string_literal: true
+
 require_relative '../../support/helpers/test_helpers'
 require 'base64'
 

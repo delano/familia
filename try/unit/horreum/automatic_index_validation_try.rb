@@ -1,4 +1,6 @@
 # try/unit/horreum/automatic_index_validation_try.rb
+#
+# frozen_string_literal: true
 
 #
 # Automatic index validation tests

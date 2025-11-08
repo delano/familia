@@ -1,4 +1,6 @@
 # lib/familia/features/encrypted_fields/concealed_string.rb
+#
+# frozen_string_literal: true
 
 # ConcealedString
 #

@@ -1,4 +1,6 @@
 # lib/familia/identifier_extractor.rb
+#
+# frozen_string_literal: true
 
 module Familia
   # IdentifierExtractor - Extracts identifiers from Familia objects for storage

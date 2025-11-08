@@ -1,3 +1,7 @@
+# try/integration/connection/responsibility_chain_tracking_try.rb
+#
+# frozen_string_literal: true
+
 # ResponsibilityChain Handler Tracking Tryouts
 #
 # Tests that the ResponsibilityChain correctly tracks which handler provided

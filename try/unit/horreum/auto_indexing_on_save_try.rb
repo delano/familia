@@ -1,3 +1,7 @@
+# try/unit/horreum/auto_indexing_on_save_try.rb
+#
+# frozen_string_literal: true
+
 # try/horreum/auto_indexing_on_save_try.rb
 
 #

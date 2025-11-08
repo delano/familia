@@ -1,3 +1,7 @@
+# try/features/encrypted_fields/encrypted_fields_integration_try.rb
+#
+# frozen_string_literal: true
+
 # try/features/encrypted_fields_integration_try.rb
 
 # Test constants will be redefined in each test since variables don't persist

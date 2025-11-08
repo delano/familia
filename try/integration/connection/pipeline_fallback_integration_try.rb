@@ -1,4 +1,7 @@
+# try/integration/connection/pipeline_fallback_integration_try.rb
 #
+# frozen_string_literal: true
+
 # Tests pipeline fallback modes when connection handlers don't support pipelines.
 # Validates that pipelined_mode configuration works correctly with cached connections
 # and that the fallback behavior matches transaction fallback patterns.

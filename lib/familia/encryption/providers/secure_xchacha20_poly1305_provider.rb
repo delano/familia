@@ -1,4 +1,6 @@
 # lib/familia/encryption/providers/secure_xchacha20_poly1305_provider.rb
+#
+# frozen_string_literal: true
 
 # ⚠️  PROTOTYPE IMPLEMENTATION - NOT FOR PRODUCTION USE ⚠️
 #

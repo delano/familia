@@ -1,3 +1,7 @@
+# try/unit/horreum/base_try.rb
+#
+# frozen_string_literal: true
+
 # try/horreum/base_try.rb
 
 require_relative '../../support/helpers/test_helpers'

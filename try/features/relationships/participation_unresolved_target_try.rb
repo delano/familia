@@ -1,5 +1,7 @@
 # try/features/relationships/participation_unresolved_target_try.rb
 #
+# frozen_string_literal: true
+
 # Test for proper error handling when target class cannot be resolved
 #
 # This test verifies that participates_in raises a helpful error when

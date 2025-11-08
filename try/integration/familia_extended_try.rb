@@ -1,3 +1,7 @@
+# try/integration/familia_extended_try.rb
+#
+# frozen_string_literal: true
+
 # try/core/familia_extended_try.rb
 
 require 'time'

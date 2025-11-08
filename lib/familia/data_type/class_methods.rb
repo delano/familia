@@ -1,4 +1,6 @@
-# lib/familia/data_type/definition.rb
+# lib/familia/data_type/class_methods.rb
+#
+# frozen_string_literal: true
 
 module Familia
   class DataType

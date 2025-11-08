@@ -1,3 +1,7 @@
+# try/unit/refinements/time_literals_string_methods_try.rb
+#
+# frozen_string_literal: true
+
 # try/refinements/time_literals_string_methods_try.rb
 
 require_relative '../../support/helpers/test_helpers'

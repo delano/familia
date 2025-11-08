@@ -1,3 +1,7 @@
+# try/unit/horreum/settings_try.rb
+#
+# frozen_string_literal: true
+
 # try/horreum/settings_try.rb
 
 # Test Horreum settings

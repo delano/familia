@@ -1,4 +1,6 @@
 # try/unit/middleware/database_command_counter_methods_try.rb
+#
+# frozen_string_literal: true
 
 # Test DatabaseCommandCounter non-command methods and utilities
 #

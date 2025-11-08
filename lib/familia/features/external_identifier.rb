@@ -1,4 +1,6 @@
 # lib/familia/features/external_identifier.rb
+#
+# frozen_string_literal: true
 
 module Familia
   module Features

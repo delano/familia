@@ -1,7 +1,8 @@
 #!/usr/bin/env ruby
-
 # examples/encrypted_fields.rb
 #
+# frozen_string_literal: true
+
 # Demonstrates the EncryptedFields feature for protecting sensitive data.
 # This feature provides transparent encryption/decryption of sensitive fields
 # using strong cryptographic algorithms with field-specific key derivation.

@@ -1,3 +1,7 @@
+# try/edge_cases/race_conditions_try.rb
+#
+# frozen_string_literal: true
+
 # Test connection race conditions
 
 require_relative '../support/helpers/test_helpers'

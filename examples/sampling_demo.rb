@@ -1,8 +1,9 @@
 #!/usr/bin/env ruby
+# examples/sampling_demo.rb
+#
 # frozen_string_literal: true
 
 # Demonstrates DatabaseLogger sampling to reduce log volume in high-traffic scenarios.
-#
 # Run with: bundle exec ruby examples/sampling_demo.rb
 
 require_relative '../lib/familia'
