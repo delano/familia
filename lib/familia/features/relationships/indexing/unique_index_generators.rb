@@ -185,6 +185,9 @@ module Familia
                 end
 
                 if collection
+                  # Find the IndexingRelationship to get cardinality metadata
+                  index_config = indexed_class.indexing_relationships.find { |rel| rel.index_name == index_name }
+
                   # Strategy 2: Use participation-based rebuild
                   Familia::Features::Relationships::Indexing::RebuildStrategies.rebuild_via_participation(
                     self,                                      # scope_instance (e.g., company)
@@ -192,6 +195,7 @@ module Familia
                     field,                                     # e.g., :badge_number
                     :"add_to_#{scope_class_config}_#{index_name}",  # e.g., :add_to_company_badge_index
                     collection,
+                    index_config.cardinality,                  # :unique or :multi
                     batch_size: batch_size,
                     &progress_block
                   )

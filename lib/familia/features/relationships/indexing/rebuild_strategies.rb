@@ -158,29 +158,42 @@ module Familia
           #
           # @param scope_instance [Object] The parent instance providing scope (e.g., company)
           # @param indexed_class [Class] The model class being indexed (e.g., Employee)
-          # @param field [Symbol] The field to index (e.g., :department)
-          # @param add_method [Symbol] The mutation method (e.g., :add_to_company_dept_index)
+          # @param field [Symbol] The field to index (e.g., :badge_number)
+          # @param add_method [Symbol] The mutation method (e.g., :add_to_company_badge_index)
           # @param collection [DataType] The collection containing members (SortedSet/UnsortedSet/ListKey)
+          # @param cardinality [Symbol] The index cardinality (:unique or :multi) - must be :unique
           # @param batch_size [Integer] Number of objects per batch (default: 100)
           # @yield [Hash] Progress info: {completed:, total:, rate:, elapsed:}
           # @return [Integer] Number of objects processed
           #
-          # @example Rebuild company department index
+          # @example Rebuild company badge index
           #   count = RebuildStrategies.rebuild_via_participation(
           #     company,
           #     Employee,
-          #     :department,
-          #     :add_to_company_dept_index,
+          #     :badge_number,
+          #     :add_to_company_badge_index,
           #     company.employees_collection,
+          #     :unique,
           #     batch_size: 100
           #   )
           #
-          def rebuild_via_participation(scope_instance, indexed_class, field, add_method, collection, batch_size: 100, &progress)
+          def rebuild_via_participation(scope_instance, indexed_class, field, add_method, collection, cardinality, batch_size: 100, &progress)
             total = collection.size
             start_time = Familia.now
 
             scope_class = scope_instance.class.name
             Familia.info "[Rebuild] Starting via_participation for #{scope_class}##{indexed_class.name}.#{field} (#{total} objects)"
+
+            # Guard: This method only supports unique indexes
+            if cardinality != :unique
+              raise ArgumentError, <<~ERROR.strip
+                rebuild_via_participation only supports unique indexes (cardinality: :unique)
+                Received cardinality: #{cardinality.inspect} for field: #{field}
+
+                Multi-indexes require field-value-specific keys and use specialized 4-phase rebuild logic.
+                Use the dedicated rebuild method generated on the scope instance instead.
+              ERROR
+            end
 
             # Build temp key for the unique index.
             #
