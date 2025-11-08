@@ -1,5 +1,7 @@
 # lib/familia/features/relationships/indexing/unique_index_generators.rb
 
+require_relative 'rebuild_strategies'
+
 module Familia
   module Features
     module Relationships
@@ -104,6 +106,9 @@ module Familia
             # Ensure the index field is declared (creates accessor that returns DataType)
             actual_scope_class.send(:ensure_index_field, actual_scope_class, index_name, :hashkey)
 
+            # Get scope_class_config for method naming (needed for rebuild methods)
+            scope_class_config = actual_scope_class.config_name
+
             # Generate instance query method (e.g., company.find_by_badge_number)
             actual_scope_class.class_eval do
               define_method(:"find_by_#{field}") do |provided_value|
@@ -145,17 +150,66 @@ module Familia
               # No need to manually define it here
 
               # Generate method to rebuild the unique index for this parent instance
-              define_method(:"rebuild_#{index_name}") do
-                # Use declared field accessor instead of manual instantiation
-                index_hash = send(index_name)
+              define_method(:"rebuild_#{index_name}") do |batch_size: 100, &progress_block|
+                # Find the collection containing the indexed class.
+                #
+                # Strategy 1: Check if indexed_class has a participation relationship
+                # pointing back to this scope class. Participation relationships are
+                # stored on the PARTICIPANT class (indexed_class), not the target.
+                #
+                # Example: When RebuildTestEmployee.participates_in(RebuildTestCompany, :employees),
+                # the relationship is stored on RebuildTestEmployee, and we need to find it
+                # by matching target_class (RebuildTestCompany) with self.class.
+                collection = nil
+                if indexed_class.respond_to?(:participation_relationships)
+                  participation = indexed_class.participation_relationships.find do |rel|
+                    rel.target_class == self.class
+                  end
 
-                # Clear existing index using DataType method which executes the
-                # appropriate command for the given valkey/redis key type.
-                index_hash.clear
+                  if participation
+                    collection = send(participation.collection_name)
+                  end
+                end
 
-                # Rebuild from all existing objects
-                # This would need to scan through all objects belonging to this parent
-                # Implementation depends on how objects are stored/tracked
+                # Strategy 2: Fallback to checking related_fields for explicit class: option
+                unless collection
+                  if self.class.respond_to?(:related_fields)
+                    self.class.related_fields&.each do |name, field_def|
+                      # Check if this DataType's class option matches the indexed class
+                      if field_def.opts[:class] == indexed_class
+                        collection = send(name)
+                        break
+                      end
+                    end
+                  end
+                end
+
+                if collection
+                  # Find the IndexingRelationship to get cardinality metadata
+                  index_config = indexed_class.indexing_relationships.find { |rel| rel.index_name == index_name }
+
+                  # Strategy 2: Use participation-based rebuild
+                  Familia::Features::Relationships::Indexing::RebuildStrategies.rebuild_via_participation(
+                    self,                                      # scope_instance (e.g., company)
+                    indexed_class,                             # e.g., Employee
+                    field,                                     # e.g., :badge_number
+                    :"add_to_#{scope_class_config}_#{index_name}",  # e.g., :add_to_company_badge_index
+                    collection,
+                    index_config.cardinality,                  # :unique or :multi
+                    batch_size: batch_size,
+                    &progress_block
+                  )
+                else
+                  # Strategy 3: Fall back to SCAN with filtering
+                  Familia::Features::Relationships::Indexing::RebuildStrategies.rebuild_via_scan(
+                    indexed_class,
+                    field,
+                    :"add_to_#{scope_class_config}_#{index_name}",
+                    scope_instance: self,
+                    batch_size: batch_size,
+                    &progress_block
+                  )
+                end
               end
             end
           end
@@ -314,15 +368,26 @@ module Familia
             # No need to manually create it - Horreum handles this automatically
 
             # Generate method to rebuild the class-level index
-            indexed_class.define_singleton_method(:"rebuild_#{index_name}") do
-              index_hash = send(index_name) # Access the class-level hashkey DataType
-
-              # Clear existing index using DataType method
-              index_hash.clear
-
-              # Rebuild from all existing objects
-              # This would need to scan through all objects of this class
-              # Implementation depends on how objects are stored/tracked
+            indexed_class.define_singleton_method(:"rebuild_#{index_name}") do |batch_size: 100, &progress_block|
+              if respond_to?(:instances)
+                # Strategy 1: Use instances collection (fastest)
+                Familia::Features::Relationships::Indexing::RebuildStrategies.rebuild_via_instances(
+                  self,                                 # indexed_class (e.g., User)
+                  field,                                # e.g., :email
+                  :"add_to_class_#{index_name}",       # e.g., :add_to_class_email_lookup
+                  batch_size: batch_size,
+                  &progress_block
+                )
+              else
+                # Strategy 3: Fall back to SCAN
+                Familia::Features::Relationships::Indexing::RebuildStrategies.rebuild_via_scan(
+                  self,
+                  field,
+                  :"add_to_class_#{index_name}",
+                  batch_size: batch_size,
+                  &progress_block
+                )
+              end
             end
           end
 

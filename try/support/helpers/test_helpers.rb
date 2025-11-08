@@ -10,6 +10,7 @@ require_relative '../../../lib/familia'
 
 Familia.enable_database_logging = true
 Familia.enable_database_counter = true
+DatabaseLogger.structured_logging = true
 Familia.uri = 'redis://127.0.0.1:2525'
 
 def generate_random_email
