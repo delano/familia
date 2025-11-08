@@ -123,14 +123,15 @@ module Familia
 
               # Generate method to rebuild the multi-value index for this parent instance
               #
-              # Multi-indexes create separate sets for each field value, requiring a two-phase approach:
-              # 1. Discovery: Find all unique field values by loading objects
-              # 2. Clear & Rebuild: Remove old index sets and rebuild from current objects
+              # Multi-indexes create separate sets for each field value, requiring a three-phase approach:
+              # 1. Loading: Load all objects once and cache them (discovers field values simultaneously)
+              # 2. Clearing: Remove all existing index sets using SCAN
+              # 3. Rebuilding: Rebuild index from cached objects (no reload needed)
               #
               # @param batch_size [Integer] Number of identifiers to process per batch
               # @yield [progress] Optional block called with progress updates
               # @yieldparam progress [Hash] Progress information with keys:
-              #   - :phase [Symbol] Current phase (:discovering, :clearing, :rebuilding)
+              #   - :phase [Symbol] Current phase (:loading, :clearing, :rebuilding)
               #   - :current [Integer] Current item count
               #   - :total [Integer] Total items (when known)
               #   - :field_value [String] Current field value being processed
@@ -143,9 +144,16 @@ module Familia
               #     puts "#{progress[:phase]}: #{progress[:current]}/#{progress[:total]}"
               #   end
               #
-              # @note This method requires loading all objects to discover field values.
-              #   For large collections (>10k objects), consider using SCAN approach or
-              #   maintaining a separate field-value index.
+              # @example Memory-conscious rebuild for large collections
+              #   # Process in smaller batches to reduce memory footprint
+              #   company.rebuild_dept_index(batch_size: 50)
+              #
+              # @note Memory Considerations:
+              #   This method caches all objects in memory during rebuild to avoid duplicate
+              #   database loads. For very large collections (>100k objects), monitor memory usage
+              #   and consider processing in chunks or using a streaming approach if memory
+              #   constraints are encountered. The batch_size parameter controls Redis I/O
+              #   batching but does not affect memory usage since all objects are cached.
               #
               define_method(:"rebuild_#{index_name}") do |batch_size: 100, &progress_block|
                 # PHASE 1: Find the collection containing the indexed objects
