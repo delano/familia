@@ -175,7 +175,15 @@ module Familia
   #   Familia.trace :LOAD, redis_client, "user:123", "from cache"
   #
   module Logging
+    # Thread-safe mutex initialization when module is extended
+    def self.extended(base)
+      base.instance_variable_set(:@logger_mutex, Mutex.new)
+    end
+
     # Get the logger instance, initializing with defaults if not yet set
+    #
+    # Thread-safe lazy initialization using double-checked locking to ensure
+    # only a single logger instance is created even under concurrent logging calls.
     #
     # @return [FamiliaLogger] the logger instance
     #
@@ -186,10 +194,18 @@ module Familia
     #   Familia.logger.info "Connection established"
     #
     def logger
-      @logger ||= FamiliaLogger.new($stderr).tap do |log|
-        log.progname = name
-        log.formatter = LogFormatter.new
+      # Fast path: return existing logger if already initialized
+      return @logger if @logger
+
+      # Slow path: thread-safe initialization
+      @logger_mutex.synchronize do
+        @logger ||= FamiliaLogger.new($stderr).tap do |log|
+          log.progname = name
+          log.formatter = LogFormatter.new
+        end
       end
+
+      @logger
     end
 
     # Set a custom logger instance.
@@ -212,10 +228,12 @@ module Familia
     #   end
     #
     def logger=(new_logger)
-      @logger = new_logger
-      # Auto-sync to DatabaseLogger if loaded
-      DatabaseLogger.logger = new_logger if defined?(DatabaseLogger)
-      new_logger
+      @logger_mutex.synchronize do
+        @logger = new_logger
+        # Auto-sync to DatabaseLogger if loaded (inside mutex for atomicity)
+        DatabaseLogger.logger = new_logger if defined?(DatabaseLogger)
+      end
+      @logger
     end
 
 

@@ -28,6 +28,7 @@ class TestModel1 < Familia::Horreum
 end
 
 TestModel1.instance_variable_set(:@class_connection_chain, nil)
+# Mutex is now initialized eagerly in Connection.included hook
 barrier = Concurrent::CyclicBarrier.new(50)
 chains = Concurrent::Array.new
 
@@ -36,7 +37,8 @@ threads = 50.times.map do
     barrier.wait
     client = TestModel1.dbclient
     # Store the actual connection chain object ID to detect singleton violations
-    chains << TestModel1.instance_variable_get(:@connection_chain).object_id
+    chain = TestModel1.instance_variable_get(:@class_connection_chain)
+    chains << chain.object_id
   end
 end
 
@@ -102,7 +104,9 @@ class TestModel3 < Familia::Horreum
 end
 
 TestModel2.instance_variable_set(:@class_connection_chain, nil)
+# Mutex is now initialized eagerly in Connection.included hook
 TestModel3.instance_variable_set(:@class_connection_chain, nil)
+# Mutex is now initialized eagerly in Connection.included hook
 
 barrier = Concurrent::CyclicBarrier.new(20)
 results = Concurrent::Array.new
@@ -145,7 +149,9 @@ class ChildModel2 < BaseModel
 end
 
 ChildModel1.instance_variable_set(:@class_connection_chain, nil)
+# Mutex is now initialized eagerly in Connection.included hook
 ChildModel2.instance_variable_set(:@class_connection_chain, nil)
+# Mutex is now initialized eagerly in Connection.included hook
 
 barrier = Concurrent::CyclicBarrier.new(30)
 chains = Concurrent::Array.new
@@ -206,6 +212,7 @@ class ReconnectTestModel < Familia::Horreum
 end
 
 ReconnectTestModel.instance_variable_set(:@class_connection_chain, nil)
+# Mutex is now initialized eagerly in Connection.included hook
 barrier = Concurrent::CyclicBarrier.new(20)
 results = Concurrent::Array.new
 

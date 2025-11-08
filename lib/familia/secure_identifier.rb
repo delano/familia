@@ -120,6 +120,10 @@ module Familia
 
     # @private
     #
+    # Thread-safe lazy initialization using Concurrent::Map to ensure
+    # atomic cache population and consistent calculations across all
+    # concurrent ID generation requests.
+    #
     # @param bits [Integer] The number of bits of entropy.
     # @param base [Integer] The numeric base (2-36).
     # @return [Integer] The minimum string length required.
@@ -132,8 +136,10 @@ module Familia
       }.freeze
       return hex_lengths[bits] if base == 16 && hex_lengths.key?(bits)
 
-      @min_length_for_bits_cache ||= {}
-      @min_length_for_bits_cache[[bits, base]] ||= (bits * Math.log(2) / Math.log(base)).ceil
+      @min_length_for_bits_cache ||= Concurrent::Map.new
+      @min_length_for_bits_cache.fetch_or_store([bits, base]) do
+        (bits * Math.log(2) / Math.log(base)).ceil
+      end
     end
   end
 end

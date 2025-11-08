@@ -62,9 +62,14 @@ module Familia
     #   end
     class << self
       # Get or create a manager with specific algorithm
+      #
+      # Thread-safe lazy initialization using Concurrent::Map to ensure
+      # only a single Manager instance is created per algorithm even under
+      # concurrent encryption/decryption requests.
+      #
       def manager(algorithm: nil)
-        @managers ||= {}
-        @managers[algorithm] ||= Manager.new(algorithm: algorithm)
+        @managers ||= Concurrent::Map.new
+        @managers.fetch_or_store(algorithm) { Manager.new(algorithm: algorithm) }
       end
 
       # Quick encryption with auto-selected best provider

@@ -20,6 +20,7 @@ Gem::Specification.new do |spec|
   spec.required_ruby_version = Gem::Requirement.new('>= 3.4')
 
   spec.add_dependency 'benchmark', '~> 0.4'
+  spec.add_dependency 'concurrent-ruby', '~> 1.3'
   spec.add_dependency 'connection_pool', '~> 2.5'
   spec.add_dependency 'csv', '~> 3.3'
   spec.add_dependency 'logger', '~> 1.7'
