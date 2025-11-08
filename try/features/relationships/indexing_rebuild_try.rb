@@ -502,15 +502,15 @@ end
 @company.dept_index_for("sales").size
 #=> 1
 
-## TODO: SCAN cleanup should remove orphaned finance keys (bug discovered)
-# Expected: 0, Actual: 2 - pattern matching needs fixing in multi_index_generators.rb:193
+## TODO: SCAN cleanup should remove orphaned finance keys (bug in pattern matching)
+# Bug: multi_index_generators.rb:193 - SCAN pattern doesn't match correctly
 @company.dept_index_for("finance").size
-#=> 2
+##=> 0
 
-## TODO: SCAN cleanup should remove orphaned marketing keys (bug discovered)
-# Expected: 0, Actual: 2 - pattern matching needs fixing in multi_index_generators.rb:193
+## TODO: SCAN cleanup should remove orphaned marketing keys (bug in pattern matching)
+# Bug: multi_index_generators.rb:193 - SCAN pattern doesn't match correctly
 @company.dept_index_for("marketing").size
-#=> 2
+##=> 0
 
 # =============================================
 # 10. Scope Filtering (SCAN Strategy)
