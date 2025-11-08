@@ -17,7 +17,7 @@ require_relative '../support/helpers/test_helpers'
 ## Concurrent logger initialization with 50 threads
 # Reset the logger and mutex to simulate first access
 Familia.instance_variable_set(:@logger, nil)
-Familia.instance_variable_set(:@logger_mutex, nil)
+# Mutex is now initialized eagerly in Logging.extended hook
 
 barrier = Concurrent::CyclicBarrier.new(50)
 loggers = Concurrent::Array.new
@@ -40,7 +40,7 @@ threads.each(&:join)
 
 ## Logger is instance of FamiliaLogger
 Familia.instance_variable_set(:@logger, nil)
-Familia.instance_variable_set(:@logger_mutex, nil)
+# Mutex is now initialized eagerly in Logging.extended hook
 
 logger = Familia.logger
 logger.class.name
@@ -49,7 +49,7 @@ logger.class.name
 
 ## Logger has correct progname set
 Familia.instance_variable_set(:@logger, nil)
-Familia.instance_variable_set(:@logger_mutex, nil)
+# Mutex is now initialized eagerly in Logging.extended hook
 
 logger = Familia.logger
 logger.progname
@@ -58,7 +58,7 @@ logger.progname
 
 ## Logger has correct formatter set
 Familia.instance_variable_set(:@logger, nil)
-Familia.instance_variable_set(:@logger_mutex, nil)
+# Mutex is now initialized eagerly in Logging.extended hook
 
 logger = Familia.logger
 logger.formatter.class.name
@@ -68,7 +68,7 @@ logger.formatter.class.name
 ## Maximum contention with concurrent logging operations
 # Reset logger and test actual logging under concurrent load
 Familia.instance_variable_set(:@logger, nil)
-Familia.instance_variable_set(:@logger_mutex, nil)
+# Mutex is now initialized eagerly in Logging.extended hook
 
 barrier = Concurrent::CyclicBarrier.new(50)
 logger_ids = Concurrent::Array.new
@@ -116,7 +116,7 @@ retrieved_logger = Familia.logger
 ## Setting logger multiple times is thread-safe
 # Reset to default logger first
 Familia.instance_variable_set(:@logger, nil)
-Familia.instance_variable_set(:@logger_mutex, nil)
+# Mutex is now initialized eagerly in Logging.extended hook
 Familia.logger  # Initialize default
 
 barrier = Concurrent::CyclicBarrier.new(20)
@@ -146,7 +146,7 @@ final_logger.class
 
 ## Rapid sequential access maintains singleton
 Familia.instance_variable_set(:@logger, nil)
-Familia.instance_variable_set(:@logger_mutex, nil)
+# Mutex is now initialized eagerly in Logging.extended hook
 
 logger_ids = []
 100.times do
@@ -159,7 +159,7 @@ logger_ids.uniq.size
 
 ## Mutex is used for thread safety
 Familia.instance_variable_set(:@logger, nil)
-Familia.instance_variable_set(:@logger_mutex, nil)
+# Mutex is now initialized eagerly in Logging.extended hook
 
 # Trigger lazy initialization
 Familia.logger

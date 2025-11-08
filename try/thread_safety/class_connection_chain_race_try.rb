@@ -28,7 +28,7 @@ class TestModel1 < Familia::Horreum
 end
 
 TestModel1.instance_variable_set(:@class_connection_chain, nil)
-TestModel1.instance_variable_set(:@class_connection_chain_mutex, nil)
+# Mutex is now initialized eagerly in Connection.included hook
 barrier = Concurrent::CyclicBarrier.new(50)
 chains = Concurrent::Array.new
 
@@ -104,9 +104,9 @@ class TestModel3 < Familia::Horreum
 end
 
 TestModel2.instance_variable_set(:@class_connection_chain, nil)
-TestModel2.instance_variable_set(:@class_connection_chain_mutex, nil)
+# Mutex is now initialized eagerly in Connection.included hook
 TestModel3.instance_variable_set(:@class_connection_chain, nil)
-TestModel3.instance_variable_set(:@class_connection_chain_mutex, nil)
+# Mutex is now initialized eagerly in Connection.included hook
 
 barrier = Concurrent::CyclicBarrier.new(20)
 results = Concurrent::Array.new
@@ -149,9 +149,9 @@ class ChildModel2 < BaseModel
 end
 
 ChildModel1.instance_variable_set(:@class_connection_chain, nil)
-ChildModel1.instance_variable_set(:@class_connection_chain_mutex, nil)
+# Mutex is now initialized eagerly in Connection.included hook
 ChildModel2.instance_variable_set(:@class_connection_chain, nil)
-ChildModel2.instance_variable_set(:@class_connection_chain_mutex, nil)
+# Mutex is now initialized eagerly in Connection.included hook
 
 barrier = Concurrent::CyclicBarrier.new(30)
 chains = Concurrent::Array.new
@@ -212,7 +212,7 @@ class ReconnectTestModel < Familia::Horreum
 end
 
 ReconnectTestModel.instance_variable_set(:@class_connection_chain, nil)
-ReconnectTestModel.instance_variable_set(:@class_connection_chain_mutex, nil)
+# Mutex is now initialized eagerly in Connection.included hook
 barrier = Concurrent::CyclicBarrier.new(20)
 results = Concurrent::Array.new
 

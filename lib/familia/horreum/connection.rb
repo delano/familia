@@ -36,7 +36,6 @@ module Familia
         return @class_connection_chain.handle(uri) if @class_connection_chain
 
         # Slow path: thread-safe initialization
-        @class_connection_chain_mutex ||= Mutex.new
         @class_connection_chain_mutex.synchronize do
           @class_connection_chain ||= build_connection_chain
         end
@@ -279,6 +278,11 @@ module Familia
           .add_handler(@provider_connection_handler)
           .add_handler(@cached_connection_handler)
           .add_handler(@create_connection_handler)
+      end
+
+      # Thread-safe mutex initialization when module is extended
+      def self.extended(base)
+        base.instance_variable_set(:@class_connection_chain_mutex, Mutex.new)
       end
     end
   end
