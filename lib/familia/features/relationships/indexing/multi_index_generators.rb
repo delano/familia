@@ -144,9 +144,10 @@ module Familia
               #     puts "#{progress[:phase]}: #{progress[:current]}/#{progress[:total]}"
               #   end
               #
-              # @example Memory-conscious rebuild for large collections
-              #   # Process in smaller batches to reduce memory footprint
-              #   company.rebuild_dept_index(batch_size: 50)
+              # @example Rebuild with progress tracking and custom batch size
+              #   company.rebuild_dept_index(batch_size: 100) do |progress|
+              #     puts "#{progress[:phase]}: #{progress[:current]}/#{progress[:total]}"
+              #   end
               #
               # @note Memory Considerations:
               #   This method caches all objects in memory during rebuild to avoid duplicate
