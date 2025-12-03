@@ -8,4 +8,6 @@ threshold: medium
 fileignoreconfig:
   - filename: try/features/external_identifier/external_identifier_try.rb
     checksum: ed9a8ffca9aa7e92f43c1abe0c4f79aef5c603e1ed33e79f2c7a0d5632a2d996
+  - filename: try/features/object_identifier/object_identifier_try.rb
+    checksum: 10c94f802b2fa3a39fa33bf7dc34dac2ecaa2dd453ff97a19313f96a32fadeff
 version: ""

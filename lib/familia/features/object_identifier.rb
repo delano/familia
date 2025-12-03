@@ -279,6 +279,41 @@ module Familia
           # objid_lookup.remove_field(objid)
           nil
         end
+
+        # Check if a string matches the objid format for the Horreum class. The specific
+        # class is important b/c each one can have it's own type of objid generator.
+        #
+        # @param guess [String] The string to check
+        # @return [Boolean] true if the guess matches the objid format, false otherwise
+        def objid?(guess)
+          return false if guess.to_s.empty?
+
+          options = feature_options(:object_identifier)
+          generator = options[:generator] || DEFAULT_GENERATOR
+
+          case generator
+          when :uuid_v7, :uuid_v4
+            # UUID format: xxxxxxxx-xxxx-Vxxx-xxxx-xxxxxxxxxxxx (36 chars with hyphens)
+            if guess.length == 36 && guess[8] == '-' && guess[13] == '-' && guess[18] == '-' && guess[23] == '-'
+              version_char = guess[14]
+              case generator
+              when :uuid_v7
+                version_char == '7'
+              when :uuid_v4
+                version_char == '4'
+              else
+                false
+              end
+            else
+              false
+            end
+          when :hex
+            # Hex format: pure hexadecimal without hyphens
+            !!(guess =~ /\A[0-9a-fA-F]+\z/)
+          else
+            false
+          end
+        end
       end
 
       # Instance methods for object identifier management
