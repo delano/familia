@@ -176,6 +176,26 @@ module Familia
           # extid_lookup.remove_field(extid)
           nil
         end
+
+        # Check if a string matches the extid format for the Horreum class. The specific
+        # class is important b/c each one can have it's own custom prefix, like `ext_`.
+        #
+        # @param guess [String] The string to check
+        # @return [Boolean] true if the guess matches the extid format, false otherwise
+        def extid?(guess)
+          return false if guess.to_s.empty?
+
+          options = feature_options(:external_identifier)
+          format = options[:format] || 'ext_%{id}'
+
+          # Extract prefix and suffix from format
+          prefix, suffix = format.split('%{id}', 2)
+
+          # Build regex pattern to match the extid format
+          pattern = /\A#{Regexp.escape(prefix)}[0-9a-zA-Z]{25}#{Regexp.escape(suffix)}\z/
+
+          !!(guess =~ pattern)
+        end
       end
 
       # Instance methods for external identifier management

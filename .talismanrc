@@ -5,5 +5,7 @@
 # https://thoughtworks.github.io/talisman/docs/configuring-talisman/severity-threshold/
 #
 threshold: medium
-fileignoreconfig: []
+fileignoreconfig:
+  - filename: try/features/external_identifier/external_identifier_try.rb
+    checksum: ed9a8ffca9aa7e92f43c1abe0c4f79aef5c603e1ed33e79f2c7a0d5632a2d996
 version: ""
