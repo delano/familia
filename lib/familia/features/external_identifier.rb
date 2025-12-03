@@ -180,6 +180,12 @@ module Familia
         # Check if a string matches the extid format for the Horreum class. The specific
         # class is important b/c each one can have its own custom prefix, like `ext_`.
         #
+        # The validator accepts a reasonable range of ID lengths (20-32 characters) to
+        # accommodate potential changes to the entropy or encoding while maintaining
+        # security. The current implementation generates exactly 25 base36 characters
+        # from 16 bytes (128 bits), but this flexibility allows for future adjustments
+        # without breaking validation.
+        #
         # @param guess [String] The string to check
         # @return [Boolean] true if the guess matches the extid format, false otherwise
         def extid?(guess)
@@ -193,7 +199,9 @@ module Familia
           prefix, suffix = format.split('%{id}', 2)
 
           # Build regex pattern to match the extid format
-          pattern = /\A#{Regexp.escape(prefix)}[0-9a-zA-Z]{25}#{Regexp.escape(suffix)}\z/
+          # Accept 20-32 base36 characters to allow for entropy/encoding variations
+          # Current generation: 16 bytes -> base36 -> 25 chars (rjust with '0')
+          pattern = /\A#{Regexp.escape(prefix)}[0-9a-z]{20,32}#{Regexp.escape(suffix)}\z/i
 
           !!(guess =~ pattern)
         end

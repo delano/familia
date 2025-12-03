@@ -431,12 +431,20 @@ ExternalIdTest.extid?('xxx_0123456789abcdefghijklmno')
 ExternalIdTest.extid?('0123456789abcdefghijklmno')
 #=> false
 
-## extid? returns false for ID part too short (24 chars)
+## extid? accepts ID part with 24 chars (within 20-32 range)
 ExternalIdTest.extid?('ext_0123456789abcdefghijklmn')
+#=> true
+
+## extid? accepts ID part with 26 chars (within 20-32 range)
+ExternalIdTest.extid?('ext_0123456789abcdefghijklmnop')
+#=> true
+
+## extid? returns false for ID part too short (19 chars, below minimum)
+ExternalIdTest.extid?('ext_0123456789abcdefghi')
 #=> false
 
-## extid? returns false for ID part too long (26 chars)
-ExternalIdTest.extid?('ext_0123456789abcdefghijklmnop')
+## extid? returns false for ID part too long (33 chars, above maximum)
+ExternalIdTest.extid?('ext_0123456789abcdefghijklmnopqrstuvw')
 #=> false
 
 ## extid? returns false for invalid characters in ID (underscore)
