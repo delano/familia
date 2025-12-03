@@ -474,6 +474,8 @@ module Familia
       def count
         instances.count
       end
+      alias size count
+      alias length count
 
       # Returns authoritative count using blocking KEYS command (production-dangerous).
       #
@@ -490,10 +492,9 @@ module Familia
       # @note For production-safe authoritative count, use {#scan_count}
       # @see #scan_count Production-safe alternative using SCAN
       # @see #count Fast count from instances sorted set
-      # @see #matching_keys_count Underlying implementation
       #
       def keys_count(filter = '*')
-        matching_keys_count(filter)
+        dbclient.keys(dbkey(filter)).compact.size
       end
 
       # Returns authoritative count using non-blocking SCAN command (production-safe).
@@ -564,7 +565,7 @@ module Familia
       # @see #any? Fast existence check from instances sorted set
       #
       def keys_any?(filter = '*')
-        matching_keys_count(filter).positive?
+        keys_count(filter).positive?
       end
 
       # Checks if any objects exist using non-blocking SCAN command (production-safe).
@@ -596,24 +597,6 @@ module Familia
         false
       end
       alias any! scan_any?
-
-      # Returns the number of dbkeys matching the given filter pattern using KEYS command.
-      #
-      # ⚠️ WARNING: This method uses the KEYS command which is O(n) where n = total keys
-      # in the database and blocks Redis during execution. Use sparingly in production.
-      #
-      # @param filter [String] dbkey pattern to match (default: '*')
-      # @return [Integer] Number of matching keys
-      #
-      # @see #keys_count Preferred wrapper with better docs
-      # @see #scan_count Production-safe alternative using SCAN
-      # @see #count Fast alternative using instances sorted set
-      #
-      def matching_keys_count(filter = '*')
-        dbclient.keys(dbkey(filter)).compact.size
-      end
-      alias size count
-      alias length count
 
       # Instantiates an object from a hash of field values.
       #
