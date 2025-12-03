@@ -183,14 +183,14 @@ CountTestCustomer.scan_any?
 CountTestCustomer.any!
 #=> false
 
-## size alias works correctly (uses matching_keys_count)
+## size alias works correctly (aliases to count, not matching_keys_count)
 @cust4 = CountTestCustomer.create!(custid: 'charlie', name: 'Charlie')
-CountTestCustomer.size
-#=> 1
+CountTestCustomer.size == CountTestCustomer.count
+#=> true
 
-## length alias works correctly (uses matching_keys_count)
-CountTestCustomer.length
-#=> 1
+## length alias works correctly (aliases to count, not matching_keys_count)
+CountTestCustomer.length == CountTestCustomer.count
+#=> true
 
 # Cleanup
 CountTestCustomer.instances.clear

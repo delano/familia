@@ -612,8 +612,8 @@ module Familia
       def matching_keys_count(filter = '*')
         dbclient.keys(dbkey(filter)).compact.size
       end
-      alias size matching_keys_count
-      alias length matching_keys_count
+      alias size count
+      alias length count
 
       # Instantiates an object from a hash of field values.
       #
