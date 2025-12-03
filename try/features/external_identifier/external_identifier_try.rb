@@ -387,3 +387,137 @@ found_no_prefix&.id
 findable_custom.destroy! rescue nil
 findable_hyphen.destroy! rescue nil
 findable_no_prefix.destroy! rescue nil
+
+# ========================================
+# extid? Method Test Coverage
+# ========================================
+
+## extid? returns false for nil
+ExternalIdTest.extid?(nil)
+#=> false
+
+## extid? returns false for empty string
+ExternalIdTest.extid?('')
+#=> false
+
+## extid? returns false for whitespace-only string
+ExternalIdTest.extid?('   ')
+#=> false
+
+## extid? returns true for valid extid with default format
+# Valid format: ext_ prefix + exactly 25 alphanumeric characters
+ExternalIdTest.extid?('ext_0123456789abcdefghijklmno')
+#=> true
+
+## extid? returns true for valid extid with uppercase characters
+# The pattern allows [0-9a-zA-Z] for the ID part
+ExternalIdTest.extid?('ext_0123456789ABCDEFGHIJKLMNO')
+#=> true
+
+## extid? returns true for valid extid with mixed case
+ExternalIdTest.extid?('ext_0123456789AbCdEfGhIjKlMnO')
+#=> true
+
+## extid? returns true for generated extid
+obj = ExternalIdTest.new
+ExternalIdTest.extid?(obj.extid)
+#=> true
+
+## extid? returns false for wrong prefix
+ExternalIdTest.extid?('xxx_0123456789abcdefghijklmno')
+#=> false
+
+## extid? returns false for missing prefix
+ExternalIdTest.extid?('0123456789abcdefghijklmno')
+#=> false
+
+## extid? accepts ID part with 24 chars (within 20-32 range)
+ExternalIdTest.extid?('ext_0123456789abcdefghijklmn')
+#=> true
+
+## extid? accepts ID part with 26 chars (within 20-32 range)
+ExternalIdTest.extid?('ext_0123456789abcdefghijklmnop')
+#=> true
+
+## extid? returns false for ID part too short (19 chars, below minimum)
+ExternalIdTest.extid?('ext_0123456789abcdefghi')
+#=> false
+
+## extid? returns false for ID part too long (33 chars, above maximum)
+ExternalIdTest.extid?('ext_0123456789abcdefghijklmnopqrstuvw')
+#=> false
+
+## extid? returns false for invalid characters in ID (underscore)
+ExternalIdTest.extid?('ext_0123456789abcdefghij_lmno')
+#=> false
+
+## extid? returns false for invalid characters in ID (hyphen)
+ExternalIdTest.extid?('ext_0123456789abcdefghij-lmno')
+#=> false
+
+## extid? returns false for invalid characters in ID (special chars)
+ExternalIdTest.extid?('ext_0123456789abcdefghij!@#$%')
+#=> false
+
+## extid? with custom prefix format returns true for valid extid
+CustomPrefixTest.extid?('cust_0123456789abcdefghijklmno')
+#=> true
+
+## extid? with custom prefix format returns false for default prefix
+CustomPrefixTest.extid?('ext_0123456789abcdefghijklmno')
+#=> false
+
+## extid? with custom prefix format returns true for generated extid
+custom_obj = CustomPrefixTest.new
+CustomPrefixTest.extid?(custom_obj.extid)
+#=> true
+
+## extid? with hyphen format returns true for valid extid
+CustomFormatTest.extid?('ext-0123456789abcdefghijklmno')
+#=> true
+
+## extid? with hyphen format returns false for underscore format
+CustomFormatTest.extid?('ext_0123456789abcdefghijklmno')
+#=> false
+
+## extid? with hyphen format returns true for generated extid
+hyphen_obj = CustomFormatTest.new
+CustomFormatTest.extid?(hyphen_obj.extid)
+#=> true
+
+## extid? with no-prefix format returns true for valid extid
+NoPrefixFormatTest.extid?('api/0123456789abcdefghijklmno')
+#=> true
+
+## extid? with no-prefix format returns false for default format
+NoPrefixFormatTest.extid?('ext_0123456789abcdefghijklmno')
+#=> false
+
+## extid? with no-prefix format returns true for generated extid
+no_prefix_obj = NoPrefixFormatTest.new
+NoPrefixFormatTest.extid?(no_prefix_obj.extid)
+#=> true
+
+## extid? returns false for partial match at start
+ExternalIdTest.extid?('ext_0123456789abcdefghijklmno_extra')
+#=> false
+
+## extid? returns false for partial match with leading chars
+ExternalIdTest.extid?('prefix_ext_0123456789abcdefghijklmno')
+#=> false
+
+## extid? returns false for spaces in ID
+ExternalIdTest.extid?('ext_0123456789 bcdefghijklmno')
+#=> false
+
+## extid? returns false for just the prefix
+ExternalIdTest.extid?('ext_')
+#=> false
+
+## extid? with Symbol input (symbols support =~ matching)
+ExternalIdTest.extid?(:ext_0123456789abcdefghijklmno)
+#=> true
+
+## extid? with Symbol input returns false for invalid format
+ExternalIdTest.extid?(:invalid_symbol)
+#=> false

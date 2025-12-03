@@ -191,6 +191,7 @@ module Familia
                   index_config = indexed_class.indexing_relationships.find { |rel| rel.index_name == index_name }
 
                   # Strategy 2: Use participation-based rebuild
+                  index_hashkey = send(index_name)  # Get the index HashKey for serialization
                   Familia::Features::Relationships::Indexing::RebuildStrategies.rebuild_via_participation(
                     self,                                      # scope_instance (e.g., company)
                     indexed_class,                             # e.g., Employee
@@ -198,15 +199,18 @@ module Familia
                     :"add_to_#{scope_class_config}_#{index_name}",  # e.g., :add_to_company_badge_index
                     collection,
                     index_config.cardinality,                  # :unique or :multi
+                    index_hashkey,                             # Pass index for serialization
                     batch_size: batch_size,
                     &progress_block
                   )
                 else
                   # Strategy 3: Fall back to SCAN with filtering
+                  index_hashkey = send(index_name)  # Get the index HashKey for serialization
                   Familia::Features::Relationships::Indexing::RebuildStrategies.rebuild_via_scan(
                     indexed_class,
                     field,
                     :"add_to_#{scope_class_config}_#{index_name}",
+                    index_hashkey,                             # Pass index for serialization
                     scope_instance: self,
                     batch_size: batch_size,
                     &progress_block
@@ -373,19 +377,23 @@ module Familia
             indexed_class.define_singleton_method(:"rebuild_#{index_name}") do |batch_size: 100, &progress_block|
               if respond_to?(:instances)
                 # Strategy 1: Use instances collection (fastest)
+                index_hashkey = send(index_name)  # Get the index HashKey for serialization
                 Familia::Features::Relationships::Indexing::RebuildStrategies.rebuild_via_instances(
                   self,                                 # indexed_class (e.g., User)
                   field,                                # e.g., :email
                   :"add_to_class_#{index_name}",       # e.g., :add_to_class_email_lookup
+                  index_hashkey,                        # Pass index for serialization
                   batch_size: batch_size,
                   &progress_block
                 )
               else
                 # Strategy 3: Fall back to SCAN
+                index_hashkey = send(index_name)  # Get the index HashKey for serialization
                 Familia::Features::Relationships::Indexing::RebuildStrategies.rebuild_via_scan(
                   self,
                   field,
                   :"add_to_class_#{index_name}",
+                  index_hashkey,                        # Pass index for serialization
                   batch_size: batch_size,
                   &progress_block
                 )

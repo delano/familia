@@ -553,6 +553,9 @@ found3 = @company.find_by_badge_number("BADGE003")
 # The architecture prevents this via factory pattern, but guard provides explicit protection
 begin
   # Simulate calling rebuild_via_participation with multi-index cardinality
+  # Note: dept_index is a multi-index, so we need to use dept_index_for to get a DataType instance
+  # But for this test, we just need any HashKey-like object to pass for serialization
+  index_hashkey = @company.badge_index  # Use a valid HashKey index
   Familia::Features::Relationships::Indexing::RebuildStrategies.rebuild_via_participation(
     @company,
     RebuildTestEmployee,
@@ -560,6 +563,7 @@ begin
     :add_to_rebuild_test_company_dept_index,
     @company.employees,
     :multi,  # Wrong cardinality!
+    index_hashkey,  # Added required parameter
     batch_size: 100
   )
   "should have raised"
@@ -571,6 +575,7 @@ end
 ## Guard accepts correct cardinality (:unique)
 begin
   index_config = RebuildTestEmployee.indexing_relationships.find { |r| r.index_name == :badge_index }
+  index_hashkey = @company.badge_index  # Get the index HashKey for serialization
   Familia::Features::Relationships::Indexing::RebuildStrategies.rebuild_via_participation(
     @company,
     RebuildTestEmployee,
@@ -578,6 +583,7 @@ begin
     :add_to_rebuild_test_company_badge_index,
     @company.employees,
     :unique,  # Correct cardinality
+    index_hashkey,  # Added required parameter
     batch_size: 100
   )
   "no error"

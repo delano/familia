@@ -73,7 +73,8 @@ Customer.find_by_id(ident).planid
 #=> true
 
 ## Customer can be added to class-level sorted set
-Customer.instances.add(@customer.identifier)
+# Note: Add the object directly so identifier extraction is consistent
+Customer.instances.add(@customer)
 Customer.instances.member?(@customer)
 #=> true
 

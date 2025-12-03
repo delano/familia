@@ -279,6 +279,53 @@ module Familia
           # objid_lookup.remove_field(objid)
           nil
         end
+
+        # Check if a string matches the objid format for the Horreum class. The specific
+        # class is important b/c each one can have its own type of objid generator.
+        #
+        # @param guess [String] The string to check
+        # @return [Boolean] true if the guess matches the objid format, false otherwise
+        def objid?(guess)
+          return false if guess.to_s.empty?
+
+          options = feature_options(:object_identifier)
+          generator = options[:generator] || DEFAULT_GENERATOR
+
+          case generator
+          when :uuid_v7, :uuid_v4
+            # UUID format: xxxxxxxx-xxxx-Vxxx-xxxx-xxxxxxxxxxxx (36 chars with hyphens)
+            # Validate structure and that all characters are valid hex digits
+            guess_str = guess.to_s
+            return false unless guess_str.length == 36
+            return false unless guess_str[8] == '-' && guess_str[13] == '-' && guess_str[18] == '-' && guess_str[23] == '-'
+
+            # Extract segments and validate each is valid hex
+            segments = guess_str.split('-')
+            return false unless segments.length == 5
+            return false unless segments[0] =~ /\A[0-9a-fA-F]{8}\z/  # 8 hex chars
+            return false unless segments[1] =~ /\A[0-9a-fA-F]{4}\z/  # 4 hex chars
+            return false unless segments[2] =~ /\A[0-9a-fA-F]{4}\z/  # 4 hex chars (includes version)
+            return false unless segments[3] =~ /\A[0-9a-fA-F]{4}\z/  # 4 hex chars
+            return false unless segments[4] =~ /\A[0-9a-fA-F]{12}\z/ # 12 hex chars
+
+            # Validate version character
+            version_char = guess_str[14]
+            if generator == :uuid_v7
+              version_char == '7'
+            else # generator == :uuid_v4
+              version_char == '4'
+            end
+          when :hex
+            # Hex format: pure hexadecimal without hyphens
+            !!(guess =~ /\A[0-9a-fA-F]+\z/)
+          when Proc
+            # Cannot determine format for custom Proc generators
+            Familia.warn "[objid?] Validation not supported for custom Proc generators on #{name}" if Familia.debug?
+            false
+          else
+            false
+          end
+        end
       end
 
       # Instance methods for object identifier management

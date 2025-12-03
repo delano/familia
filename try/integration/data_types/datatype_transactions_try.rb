@@ -152,6 +152,8 @@ conn_class
 #=> "Redis::MultiConnection"
 
 ## Transaction with direct_access works correctly
+# Note: direct_access bypasses serialize_value, so raw 'true' string
+# gets parsed as JSON boolean true on retrieval (Issue #190 behavior)
 result = @user.profile.transaction do |trans_conn|
   trans_conn.hset(@user.profile.dbkey, 'status', 'active')
 
@@ -162,7 +164,7 @@ result = @user.profile.transaction do |trans_conn|
   end
 end
 [@user.profile['status'], @user.profile['verified']]
-#=> ["active", "true"]
+#=> ["active", true]
 
 ## Transaction atomicity - all commands succeed or none
 test_zset = Familia::SortedSet.new('atomic:test')
@@ -182,11 +184,13 @@ end
 #=> ["initial"]
 
 ## Nested transactions with parent-owned DataTypes work
+# Note: Raw Redis commands bypass Familia's JSON serialization.
+# Use serialize_value or check raw members for consistency.
 outer_result = @user.scores.transaction do |outer_conn|
-  outer_conn.zadd(@user.scores.dbkey, 999, 'outer_member')
+  outer_conn.zadd(@user.scores.dbkey, 999, @user.scores.serialize_value('outer_member'))
 
   inner_result = @user.tags.transaction do |inner_conn|
-    inner_conn.sadd(@user.tags.dbkey, 'nested_tag')
+    inner_conn.sadd(@user.tags.dbkey, @user.tags.serialize_value('nested_tag'))
   end
 
   inner_result.is_a?(MultiResult)
@@ -231,12 +235,14 @@ TransactionTestUser.logical_database
 #=> 2
 
 ## Multiple DataType types in single transaction
+# Note: Raw Redis commands bypass Familia's JSON serialization.
+# Use serialize_value for values that will be looked up via Familia methods.
 result = @user.scores.transaction do |conn|
   # Can operate on different DataTypes using same connection
-  conn.zadd(@user.scores.dbkey, 777, 'multi_test')
-  conn.hset(@user.profile.dbkey, 'multi', 'yes')
-  conn.sadd(@user.tags.dbkey, 'multi_tag')
-  conn.rpush(@user.activity.dbkey, 'multi_action')
+  conn.zadd(@user.scores.dbkey, 777, @user.scores.serialize_value('multi_test'))
+  conn.hset(@user.profile.dbkey, 'multi', @user.profile.serialize_value('yes'))
+  conn.sadd(@user.tags.dbkey, @user.tags.serialize_value('multi_tag'))
+  conn.rpush(@user.activity.dbkey, @user.activity.serialize_value('multi_action'))
 end
 [
   result.is_a?(MultiResult),

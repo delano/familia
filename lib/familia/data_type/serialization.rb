@@ -8,46 +8,45 @@ module Familia
       # Serializes a value for storage in the database.
       #
       # @param val [Object] The value to be serialized.
-      # @param strict_values [Boolean] Whether to enforce strict value
-      #   serialization (default: true).
-      # @return [String, nil] The serialized representation of the value, or nil
-      #   if serialization fails.
+      # @return [String] The JSON-serialized representation of the value.
       #
-      # @note When a class option is specified, it uses Familia.identifier_extractor
-      #   to extract the identifier from objects. Otherwise, it extracts identifiers
-      #   from Familia::Base instances or class names.
+      # Serialization priority:
+      # 1. Familia objects (Base instances or classes) → extract identifier
+      # 2. All other values → JSON serialize for type preservation
       #
-      # @example With a class option
-      #   serialize_value(User.new(name: "Cloe"), strict_values: false) #=> '{"name":"Cloe"}'
+      # This unifies behavior with Horreum fields (Issue #190), ensuring
+      # consistent type preservation across DataType and Horreum.
       #
-      # @example Without a class option
-      #   serialize_value(123) #=> "123"
-      #   serialize_value("hello") #=> "hello"
+      # @example Familia object reference
+      #   serialize_value(customer_obj) #=> "customer_123" (identifier)
       #
-      # @raise [Familia::NotDistinguishableError] If serialization fails under strict
-      #   mode.
+      # @example Primitive values (JSON encoded)
+      #   serialize_value(42)          #=> "42"
+      #   serialize_value("hello")     #=> '"hello"'
+      #   serialize_value(true)        #=> "true"
+      #   serialize_value(nil)         #=> "null"
+      #   serialize_value([1, 2, 3])   #=> "[1,2,3]"
       #
-      def serialize_value(val, strict_values: true)
-        prepared = nil
-
+      def serialize_value(val)
         Familia.trace :TOREDIS, nil, "#{val}<#{val.class}|#{opts[:class]}>" if Familia.debug?
 
-        if opts[:class]
-          prepared = Familia.identifier_extractor(opts[:class])
-          Familia.debug "  from opts[class] <#{opts[:class]}>: #{prepared || '<nil>'}"
+        # Priority 1: Handle Familia object references - extract identifier
+        # This preserves the existing behavior for storing object references
+        if val.is_a?(Familia::Base) || (val.is_a?(Class) && val.ancestors.include?(Familia::Base))
+          prepared = val.is_a?(Class) ? val.name : val.identifier
+          Familia.debug "  Familia object: #{val.class} => #{prepared}"
+          return prepared
         end
 
-        if prepared.nil?
-          # Enforce strict values when no class option is specified
-          prepared = Familia.identifier_extractor(val)
-          Familia.debug "  from <#{val.class}> => <#{prepared.class}>"
-        end
+        # Priority 2: Everything else gets JSON serialized for type preservation
+        # This unifies behavior with Horreum fields (Issue #190)
+        prepared = Familia::JsonSerializer.dump(val)
+        Familia.debug "  JSON serialized: #{val.class} => #{prepared}"
 
         if Familia.debug?
-          Familia.trace :TOREDIS, nil, "#{val}<#{val.class}|#{opts[:class]}> => #{prepared}<#{prepared.class}>"
+          Familia.trace :TOREDIS, nil, "#{val}<#{val.class}> => #{prepared}<#{prepared.class}>"
         end
 
-        Familia.warn "[#{self.class}#serialize_value] nil returned for #{opts[:class]}##{name}" if prepared.nil?
         prepared
       end
 
@@ -81,27 +80,41 @@ module Familia
       def deserialize_values_with_nil(*values)
         Familia.debug "deserialize_values: (#{@opts}) #{values}"
         return [] if values.empty?
-        return values.flatten unless @opts[:class]
 
-        unless @opts[:class].respond_to?(load_method)
-          raise Familia::Problem, "No such method: #{@opts[:class]}##{load_method}"
+        # If a class option is specified, use class-based deserialization
+        if @opts[:class]
+          unless @opts[:class].respond_to?(load_method)
+            raise Familia::Problem, "No such method: #{@opts[:class]}##{load_method}"
+          end
+
+          values.collect! do |obj|
+            next if obj.nil?
+
+            val = @opts[:class].send load_method, obj
+            Familia.debug "[#{self.class}#deserialize_values] nil returned for #{@opts[:class]}##{name}" if val.nil?
+
+            val
+          rescue StandardError => e
+            Familia.info val
+            Familia.info "Parse error for #{dbkey} (#{load_method}): #{e.message}"
+            Familia.info e.backtrace
+            nil
+          end
+
+          return values
         end
 
-        values.collect! do |obj|
+        # No class option: JSON deserialize each value for type preservation (Issue #190)
+        values.flatten.collect do |obj|
           next if obj.nil?
 
-          val = @opts[:class].send load_method, obj
-          Familia.debug "[#{self.class}#deserialize_values] nil returned for #{@opts[:class]}##{name}" if val.nil?
-
-          val
-        rescue StandardError => e
-          Familia.info val
-          Familia.info "Parse error for #{dbkey} (#{load_method}): #{e.message}"
-          Familia.info e.backtrace
-          nil
+          begin
+            Familia::JsonSerializer.parse(obj)
+          rescue Familia::SerializerError
+            # Fallback for legacy data stored without JSON encoding
+            obj
+          end
         end
-
-        values
       end
 
       # Deserializes a single value from the database.
@@ -110,13 +123,15 @@ module Familia
       # @return [Object, nil] The deserialized object, the default value if
       #   val is nil, or nil if deserialization fails.
       #
-      # @note If no class option is specified, the original value is
-      #   returned unchanged.
+      # Deserialization priority:
+      # 1. Redis::Future objects → return as-is (transaction handling)
+      # 2. nil values → return default option value
+      # 3. Class option specified → use class-based deserialization
+      # 4. No class option → JSON parse for type preservation
       #
-      # NOTE: Currently only the DataType class uses this method. Horreum
-      # fields are a newer addition and don't support the full range of
-      # deserialization options that DataType supports. It uses serialize_value
-      # for serialization since everything becomes a string in Valkey.
+      # This unifies behavior with Horreum fields (Issue #190), ensuring
+      # consistent type preservation. Legacy data stored without JSON
+      # encoding is returned as-is.
       #
       def deserialize_value(val)
         # Handle Redis::Future objects during transactions first
@@ -124,10 +139,20 @@ module Familia
 
         return @opts[:default] if val.nil?
 
-        return val unless @opts[:class]
+        # If a class option is specified, use the existing class-based deserialization
+        if @opts[:class]
+          ret = deserialize_values val
+          return ret&.first # return the object or nil
+        end
 
-        ret = deserialize_values val
-        ret&.first # return the object or nil
+        # No class option: JSON deserialize for type preservation (Issue #190)
+        # This unifies behavior with Horreum fields
+        begin
+          Familia::JsonSerializer.parse(val)
+        rescue Familia::SerializerError
+          # Fallback for legacy data stored without JSON encoding
+          val
+        end
       end
     end
   end

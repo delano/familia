@@ -29,7 +29,7 @@ module Familia
     # @return [String] The extracted identifier or class name
     # @raise [Familia::NotDistinguishableError] If value is not a Class or Familia::Base
     #
-    def identifier_extractor(value, strict_values: true)
+    def identifier_extractor(value)
       case value
       when ::Symbol, ::String, ::Integer, ::Float
         Familia.trace :IDENTIFIER_EXTRACTOR, nil, 'simple_value' if Familia.debug?

@@ -81,10 +81,12 @@ result = @user.scores.pipelined { |pipe| }
 #=> [true, true]
 
 ## Multiple DataType operations in single pipeline
+# Note: Raw Redis commands bypass Familia's JSON serialization.
+# Use serialize_value for values that will be looked up via Familia methods.
 result = @user.scores.pipelined do |pipe|
-  pipe.zadd(@user.scores.dbkey, 500, 'multi')
-  pipe.hset(@user.profile.dbkey, 'multi', 'pipeline')
-  pipe.sadd(@user.tags.dbkey, 'multi_tag')
+  pipe.zadd(@user.scores.dbkey, 500, @user.scores.serialize_value('multi'))
+  pipe.hset(@user.profile.dbkey, 'multi', @user.profile.serialize_value('pipeline'))
+  pipe.sadd(@user.tags.dbkey, @user.tags.serialize_value('multi_tag'))
 end
 [
   result.is_a?(MultiResult),

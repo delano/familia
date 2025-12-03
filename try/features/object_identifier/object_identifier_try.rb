@@ -201,3 +201,141 @@ race_obj.save                                # Save so find_by_objid can locate 
 found = BasicObjectTest.find_by_objid(generated_objid)
 found && found.id == "race_test_123"
 #=> true
+
+# ========================================
+# objid? Method Test Coverage
+# ========================================
+
+## objid? returns false for nil
+BasicObjectTest.objid?(nil)
+#=> false
+
+## objid? returns false for empty string
+BasicObjectTest.objid?('')
+#=> false
+
+## objid? returns false for whitespace-only string
+BasicObjectTest.objid?('   ')
+#=> false
+
+## objid? returns true for valid UUID v7 format
+# UUID v7 format: xxxxxxxx-xxxx-7xxx-xxxx-xxxxxxxxxxxx (version char is '7')
+BasicObjectTest.objid?('01234567-89ab-7def-89ab-0123456789ab')
+#=> true
+
+## objid? returns true for generated UUID v7 objid
+obj = BasicObjectTest.new
+BasicObjectTest.objid?(obj.objid)
+#=> true
+
+## objid? returns false for UUID v4 in UUID v7 class
+# Version char is '4' instead of '7'
+BasicObjectTest.objid?('01234567-89ab-4def-89ab-0123456789ab')
+#=> false
+
+## objid? returns false for wrong version char
+BasicObjectTest.objid?('01234567-89ab-5def-89ab-0123456789ab')
+#=> false
+
+## objid? returns false for missing hyphens
+BasicObjectTest.objid?('0123456789ab7def89ab0123456789ab')
+#=> false
+
+## objid? returns false for wrong length (too short)
+BasicObjectTest.objid?('01234567-89ab-7def-89ab-012345678')
+#=> false
+
+## objid? returns false for wrong length (too long)
+BasicObjectTest.objid?('01234567-89ab-7def-89ab-0123456789abcd')
+#=> false
+
+## objid? returns false for hyphens in wrong positions
+BasicObjectTest.objid?('0123456-789ab-7def-89ab-0123456789ab')
+#=> false
+
+## objid? returns false for UUID with non-hex characters
+# Validates that all characters are valid hexadecimal digits
+BasicObjectTest.objid?('gggggggg-gggg-7ggg-gggg-gggggggggggg')
+#=> false
+
+## objid? with UUID v4 generator returns true for valid v4 format
+UuidV4Test.objid?('01234567-89ab-4def-89ab-0123456789ab')
+#=> true
+
+## objid? with UUID v4 generator returns true for generated objid
+v4_obj = UuidV4Test.new
+UuidV4Test.objid?(v4_obj.objid)
+#=> true
+
+## objid? with UUID v4 generator returns false for v7 format
+UuidV4Test.objid?('01234567-89ab-7def-89ab-0123456789ab')
+#=> false
+
+## objid? with hex generator returns true for valid hex string
+HexTest.objid?('0123456789abcdef')
+#=> true
+
+## objid? with hex generator returns true for generated hex objid
+hex_obj = HexTest.new
+HexTest.objid?(hex_obj.objid)
+#=> true
+
+## objid? with hex generator returns true for uppercase hex
+HexTest.objid?('0123456789ABCDEF')
+#=> true
+
+## objid? with hex generator returns true for mixed case hex
+HexTest.objid?('0123456789AbCdEf')
+#=> true
+
+## objid? with hex generator returns false for non-hex chars
+HexTest.objid?('0123456789ghijkl')
+#=> false
+
+## objid? with hex generator returns false for UUID format
+HexTest.objid?('01234567-89ab-7def-89ab-0123456789ab')
+#=> false
+
+## objid? with hex generator returns true for short hex
+HexTest.objid?('abc')
+#=> true
+
+## objid? with hex generator returns true for long hex
+HexTest.objid?('0123456789abcdef0123456789abcdef')
+#=> true
+
+## objid? with custom proc generator returns false (unsupported)
+CustomProcTest.objid?('custom_12345678')
+#=> false
+
+## objid? with custom proc generator returns false for any input
+CustomProcTest.objid?('anything')
+#=> false
+
+## objid? UUID validation checks position 8 for hyphen
+BasicObjectTest.objid?('01234567X89ab-7def-89ab-0123456789ab')
+#=> false
+
+## objid? UUID validation checks position 13 for hyphen
+BasicObjectTest.objid?('01234567-89abX7def-89ab-0123456789ab')
+#=> false
+
+## objid? UUID validation checks position 18 for hyphen
+BasicObjectTest.objid?('01234567-89ab-7defX89ab-0123456789ab')
+#=> false
+
+## objid? UUID validation checks position 23 for hyphen
+BasicObjectTest.objid?('01234567-89ab-7def-89abX0123456789ab')
+#=> false
+
+## objid? returns false for partial UUID match
+BasicObjectTest.objid?('01234567-89ab-7def')
+#=> false
+
+## objid? with Symbol input for UUID v7 (symbols support string comparison)
+BasicObjectTest.objid?(:'01234567-89ab-7def-89ab-0123456789ab')
+#=> true
+
+## objid? with Symbol input returns false for invalid format
+BasicObjectTest.objid?(:invalid_objid)
+#=> false
