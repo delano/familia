@@ -189,6 +189,7 @@ module Familia
           format = options[:format] || 'ext_%{id}'
 
           # Extract prefix and suffix from format
+          return false unless format.include?('%{id}')
           prefix, suffix = format.split('%{id}', 2)
 
           # Build regex pattern to match the extid format

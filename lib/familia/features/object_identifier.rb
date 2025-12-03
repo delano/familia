@@ -310,6 +310,10 @@ module Familia
           when :hex
             # Hex format: pure hexadecimal without hyphens
             !!(guess =~ /\A[0-9a-fA-F]+\z/)
+          when Proc
+            # Cannot determine format for custom Proc generators
+            Familia.warn "[objid?] Validation not supported for custom Proc generators on #{name}" if Familia.debug?
+            false
           else
             false
           end
