@@ -118,7 +118,7 @@ module Familia
                   next unless value && !value.to_s.strip.empty?
 
                   # For class-level indexes, use HSET with serialized value for consistency
-                  tx.hset(temp_key, value.to_s, index_hashkey.serialize_value(obj.identifier))
+                  tx.hset(temp_key, value.to_s, index_hashkey.serialize_value(obj))
                   batch_indexed += 1
                 end
               end
@@ -235,7 +235,7 @@ module Familia
 
                   # For unique index: HSET temp_key field_value serialized_identifier
                   # For multi-index: SADD temp_key:field_value identifier
-                  tx.hset(temp_key, value.to_s, index_hashkey.serialize_value(obj.identifier))
+                  tx.hset(temp_key, value.to_s, index_hashkey.serialize_value(obj))
                   batch_indexed += 1
                 end
               end
@@ -411,7 +411,7 @@ module Familia
                 value = obj.send(field)
                 next unless value && !value.to_s.strip.empty?
 
-                tx.hset(temp_key, value.to_s, index_hashkey.serialize_value(obj.identifier))
+                tx.hset(temp_key, value.to_s, index_hashkey.serialize_value(obj))
                 batch_indexed += 1
               end
             end

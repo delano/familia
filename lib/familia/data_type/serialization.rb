@@ -38,14 +38,7 @@ module Familia
           return prepared
         end
 
-        # Priority 2: Check if value's class inherits from Familia::Base
-        if val.class.ancestors.member?(Familia::Base)
-          prepared = val.identifier
-          Familia.debug "  Familia ancestor: #{val.class} => #{prepared}"
-          return prepared
-        end
-
-        # Priority 3: Everything else gets JSON serialized for type preservation
+        # Priority 2: Everything else gets JSON serialized for type preservation
         # This unifies behavior with Horreum fields (Issue #190)
         prepared = Familia::JsonSerializer.dump(val)
         Familia.debug "  JSON serialized: #{val.class} => #{prepared}"
