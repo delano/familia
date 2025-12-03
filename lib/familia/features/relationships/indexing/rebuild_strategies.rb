@@ -76,7 +76,7 @@ module Familia
           #     batch_size: 100
           #   ) { |p| puts "#{p[:completed]}/#{p[:total]} (#{p[:rate]}/s)" }
           #
-          def rebuild_via_instances(indexed_class, field, add_method, batch_size: 100, &progress)
+          def rebuild_via_instances(indexed_class, field, add_method, index_hashkey, batch_size: 100, &progress)
             unless indexed_class.respond_to?(:instances)
               raise ArgumentError, "#{indexed_class.name} does not have an instances collection"
             end
@@ -104,8 +104,8 @@ module Familia
             processed = 0
             indexed_count = 0
 
-            # Process in batches - use membersraw to get raw identifiers without deserialization
-            instances.membersraw.each_slice(batch_size) do |identifiers|
+            # Process in batches - use members to get deserialized identifiers
+            instances.members.each_slice(batch_size) do |identifiers|
               # Bulk load objects, filtering out nils (deleted/missing objects)
               objects = indexed_class.load_multi(identifiers).compact
 
@@ -117,8 +117,8 @@ module Familia
                   # Skip nil/empty field values gracefully
                   next unless value && !value.to_s.strip.empty?
 
-                  # For class-level indexes, use HSET directly into temp key
-                  tx.hset(temp_key, value.to_s, obj.identifier.to_s)
+                  # For class-level indexes, use HSET with serialized value for consistency
+                  tx.hset(temp_key, value.to_s, index_hashkey.serialize_value(obj.identifier))
                   batch_indexed += 1
                 end
               end
@@ -177,7 +177,7 @@ module Familia
           #     batch_size: 100
           #   )
           #
-          def rebuild_via_participation(scope_instance, indexed_class, field, add_method, collection, cardinality, batch_size: 100, &progress)
+          def rebuild_via_participation(scope_instance, indexed_class, field, add_method, collection, cardinality, index_hashkey, batch_size: 100, &progress)
             total = collection.size
             start_time = Familia.now
 
@@ -222,8 +222,8 @@ module Familia
             processed = 0
             indexed_count = 0
 
-            # Process in batches - use membersraw to get raw identifiers
-            collection.membersraw.each_slice(batch_size) do |identifiers|
+            # Process in batches - use members to get deserialized identifiers
+            collection.members.each_slice(batch_size) do |identifiers|
               objects = indexed_class.load_multi(identifiers).compact
 
               # Transaction per batch
@@ -233,9 +233,9 @@ module Familia
                   value = obj.send(field)
                   next unless value && !value.to_s.strip.empty?
 
-                  # For unique index: HSET temp_key field_value identifier
+                  # For unique index: HSET temp_key field_value serialized_identifier
                   # For multi-index: SADD temp_key:field_value identifier
-                  tx.hset(temp_key, value.to_s, obj.identifier.to_s)
+                  tx.hset(temp_key, value.to_s, index_hashkey.serialize_value(obj.identifier))
                   batch_indexed += 1
                 end
               end
@@ -295,7 +295,7 @@ module Familia
           #     batch_size: 100
           #   )
           #
-          def rebuild_via_scan(indexed_class, field, add_method, scope_instance: nil, batch_size: 100, &progress)
+          def rebuild_via_scan(indexed_class, field, add_method, index_hashkey, scope_instance: nil, batch_size: 100, &progress)
             start_time = Familia.now
 
             # Build key pattern for SCAN
@@ -342,7 +342,7 @@ module Familia
 
               # Process in batches
               if batch.size >= batch_size
-                batch_indexed = RebuildStrategies.process_scan_batch(batch, indexed_class, field, temp_key, scope_instance)
+                batch_indexed = RebuildStrategies.process_scan_batch(batch, indexed_class, field, temp_key, index_hashkey, scope_instance)
                 processed += batch.size
                 indexed_count += batch_indexed
 
@@ -362,7 +362,7 @@ module Familia
 
             # Process remaining batch
             unless batch.empty?
-              batch_indexed = RebuildStrategies.process_scan_batch(batch, indexed_class, field, temp_key, scope_instance)
+              batch_indexed = RebuildStrategies.process_scan_batch(batch, indexed_class, field, temp_key, index_hashkey, scope_instance)
               processed += batch.size
               indexed_count += batch_indexed
             end
@@ -385,7 +385,7 @@ module Familia
           # @param scope_instance [Object, nil] Optional scope instance. If provided, only objects belonging to this scope will be indexed.
           # @return [Integer] Number of objects indexed in this batch
           #
-          def process_scan_batch(keys, indexed_class, field, temp_key, scope_instance)
+          def process_scan_batch(keys, indexed_class, field, temp_key, index_hashkey, scope_instance)
             # Load objects by keys
             objects = indexed_class.load_multi_by_keys(keys).compact
 
@@ -411,7 +411,7 @@ module Familia
                 value = obj.send(field)
                 next unless value && !value.to_s.strip.empty?
 
-                tx.hset(temp_key, value.to_s, obj.identifier.to_s)
+                tx.hset(temp_key, value.to_s, index_hashkey.serialize_value(obj.identifier))
                 batch_indexed += 1
               end
             end

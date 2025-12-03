@@ -129,7 +129,7 @@ module Familia
     alias add_element add
 
     def score(val)
-      ret = dbclient.zscore dbkey, serialize_value(val, strict_values: false)
+      ret = dbclient.zscore dbkey, serialize_value(val)
       ret&.to_f
     end
     alias [] score
@@ -142,13 +142,13 @@ module Familia
 
     # rank of member +v+ when ordered lowest to highest (starts at 0)
     def rank(v)
-      ret = dbclient.zrank dbkey, serialize_value(v, strict_values: false)
+      ret = dbclient.zrank dbkey, serialize_value(v)
       ret&.to_i
     end
 
     # rank of member +v+ when ordered highest to lowest (starts at 0)
     def revrank(v)
-      ret = dbclient.zrevrank dbkey, serialize_value(v, strict_values: false)
+      ret = dbclient.zrevrank dbkey, serialize_value(v)
       ret&.to_i
     end
 
@@ -269,7 +269,7 @@ module Familia
     end
 
     def increment(val, by = 1)
-      dbclient.zincrby(dbkey, by, val).to_i
+      dbclient.zincrby(dbkey, by, serialize_value(val)).to_i
     end
     alias incr increment
     alias incrby increment
@@ -285,12 +285,7 @@ module Familia
     # @return [Integer] The number of members that were removed (0 or 1)
     def remove_element(value)
       Familia.trace :REMOVE_ELEMENT, nil, "#{value}<#{value.class}>" if Familia.debug?
-      # We use `strict_values: false` here to allow for the deletion of values
-      # that are in the sorted set. If it's a horreum object, the value is
-      # the identifier and not a serialized version of the object. So either
-      # the value exists in the sorted set or it doesn't -- we don't need to
-      # raise an error if it's not found.
-      dbclient.zrem dbkey, serialize_value(value, strict_values: false)
+      dbclient.zrem dbkey, serialize_value(value)
     end
     alias remove remove_element # deprecated
 

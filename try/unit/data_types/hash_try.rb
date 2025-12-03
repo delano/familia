@@ -50,8 +50,8 @@ require_relative '../../support/helpers/test_helpers'
 @a.props.decrement 'counter', 60
 #=> 40
 
-## Familia::HashKey#values_at
+## Familia::HashKey#values_at (counter is integer from HINCRBY, others are strings)
 @a.props.values_at 'fieldA', 'counter', 'fieldC'
-#=> ['1', '40', '3']
+#=> ['1', 40, '3']
 
 @a.props.delete!

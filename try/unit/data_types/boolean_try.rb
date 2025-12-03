@@ -3,6 +3,7 @@
 # frozen_string_literal: true
 
 # try/data_types/boolean_try.rb
+# Issue #190: Updated to reflect JSON serialization with type preservation
 
 require_relative '../../support/helpers/test_helpers'
 
@@ -10,37 +11,49 @@ Familia.debug = false
 
 @hashkey = Familia::HashKey.new 'key'
 
-## Boolean values are returned as strings, on assignment as string
+## String 'true' is stored and returned as string
 @hashkey['test'] = 'true'
 #=> "true"
 
-## Boolean values are returned as strings
+## String values are returned as strings
 @hashkey['test']
 #=> "true"
 
-## Trying to store a boolean value to a hash key raises an exception
-begin
-  @hashkey['test'] = true
-rescue Familia::NotDistinguishableError => e
-  e.message
-end
-#=> "Cannot represent true<TrueClass> as a string"
+## Boolean true is now stored with type preservation (Issue #190)
+@hashkey['bool_true'] = true
+#=> true
 
-## Boolean values are returned as strings
-@hashkey['test']
-#=> "true"
+## Boolean true is returned as TrueClass
+@hashkey['bool_true']
+#=> true
 
-## Trying to store a nil value to a hash key raises an exception
-begin
-  @hashkey['test'] = nil
-rescue Familia::NotDistinguishableError => e
-  e.message
-end
-#=> "Cannot represent <NilClass> as a string"
+## Boolean true has correct class
+@hashkey['bool_true'].class
+#=> TrueClass
 
-## The exceptions prevented the hash from being updated
-@hashkey['test']
-#=> "true"
+## Boolean false is stored with type preservation
+@hashkey['bool_false'] = false
+#=> false
+
+## Boolean false is returned as FalseClass
+@hashkey['bool_false']
+#=> false
+
+## Boolean false has correct class
+@hashkey['bool_false'].class
+#=> FalseClass
+
+## nil is stored with type preservation
+@hashkey['nil_value'] = nil
+#=> nil
+
+## nil is returned as nil
+@hashkey['nil_value']
+#=> nil
+
+## nil has correct class
+@hashkey['nil_value'].class
+#=> NilClass
 
 ## Clear the hash key
 @hashkey.delete!

@@ -13,8 +13,8 @@ Familia.debug = false
 @bone = Bone.new('serialize_test_token')
 
 # ========================================
-# Current DataType Serialization Behavior
-# (Documents behavior BEFORE #190 changes)
+# DataType Serialization Behavior (Issue #190)
+# Now uses JSON serialization for type preservation
 # ========================================
 
 ## HashKey stores string values correctly
@@ -22,65 +22,53 @@ Familia.debug = false
 @bone.props['string_field']
 #=> 'hello'
 
-## HashKey stores integer as string (no type preservation)
+## HashKey stores integer with type preservation
 @bone.props['int_field'] = 42
 @bone.props['int_field']
-#=> '42'
+#=> 42
 
-## HashKey stores float as string (no type preservation)
+## HashKey stores float with type preservation
 @bone.props['float_field'] = 3.14
 @bone.props['float_field']
-#=> '3.14'
+#=> 3.14
 
-## HashKey stores symbol as string
+## HashKey stores symbol as string (symbols serialize to strings in JSON)
 @bone.props['symbol_field'] = :active
 @bone.props['symbol_field']
 #=> 'active'
 
-## HashKey raises NotDistinguishableError for boolean true
-begin
-  @bone.props['bool_true'] = true
-  false # Should not reach here
-rescue Familia::NotDistinguishableError
-  true
-end
+## HashKey stores boolean true with type preservation
+@bone.props['bool_true'] = true
+@bone.props['bool_true']
 #=> true
 
-## HashKey raises NotDistinguishableError for boolean false
-begin
-  @bone.props['bool_false'] = false
-  false # Should not reach here
-rescue Familia::NotDistinguishableError
-  true
-end
-#=> true
+## HashKey stores boolean true as TrueClass
+@bone.props['bool_true'].class
+#=> TrueClass
 
-## HashKey raises NotDistinguishableError for nil
-begin
-  @bone.props['nil_field'] = nil
-  false # Should not reach here
-rescue Familia::NotDistinguishableError
-  true
-end
-#=> true
+## HashKey stores boolean false with type preservation
+@bone.props['bool_false'] = false
+@bone.props['bool_false']
+#=> false
 
-## HashKey raises NotDistinguishableError for hash
-begin
-  @bone.props['hash_field'] = { key: 'value' }
-  false # Should not reach here
-rescue Familia::NotDistinguishableError
-  true
-end
-#=> true
+## HashKey stores boolean false as FalseClass
+@bone.props['bool_false'].class
+#=> FalseClass
 
-## HashKey raises NotDistinguishableError for array
-begin
-  @bone.props['array_field'] = [1, 2, 3]
-  false # Should not reach here
-rescue Familia::NotDistinguishableError
-  true
-end
-#=> true
+## HashKey stores nil with type preservation
+@bone.props['nil_field'] = nil
+@bone.props['nil_field']
+#=> nil
+
+## HashKey stores hash with type preservation
+@bone.props['hash_field'] = { 'key' => 'value' }
+@bone.props['hash_field']
+#=> {'key'=>'value'}
+
+## HashKey stores array with type preservation
+@bone.props['array_field'] = [1, 2, 3]
+@bone.props['array_field']
+#=> [1, 2, 3]
 
 # ========================================
 # List Serialization Behavior
@@ -92,24 +80,19 @@ end
 @bone.owners.first
 #=> 'owner1'
 
-## List stores integer as string
+## List stores integer with type preservation
 @bone.owners.delete!
 @bone.owners.push(123)
 @bone.owners.first
-#=> '123'
+#=> 123
 
-## List raises NotDistinguishableError for boolean
+## List stores boolean with type preservation
 @bone.owners.delete!
-begin
-  @bone.owners.push(true)
-  false
-rescue Familia::NotDistinguishableError
-  true
-end
+@bone.owners.push(true)
+@bone.owners.first
 #=> true
 
-## List push with nil results in nil stored (no error raised)
-# Note: This is inconsistent with HashKey which raises NotDistinguishableError
+## List stores nil with type preservation
 @bone.owners.delete!
 @bone.owners.push(nil)
 @bone.owners.first
@@ -125,20 +108,16 @@ end
 @bone.tags.members.include?('tag1')
 #=> true
 
-## Set stores integer as string
+## Set stores integer with type preservation
 @bone.tags.delete!
 @bone.tags.add(42)
-@bone.tags.members.include?('42')
+@bone.tags.members.include?(42)
 #=> true
 
-## Set raises NotDistinguishableError for boolean
+## Set stores boolean with type preservation
 @bone.tags.delete!
-begin
-  @bone.tags.add(true)
-  false
-rescue Familia::NotDistinguishableError
-  true
-end
+@bone.tags.add(true)
+@bone.tags.members.include?(true)
 #=> true
 
 # ========================================
@@ -151,20 +130,16 @@ end
 @bone.metrics.members.include?('metric1')
 #=> true
 
-## SortedSet stores integer member as string
+## SortedSet stores integer member with type preservation
 @bone.metrics.delete!
 @bone.metrics.add(999, 1.0)
-@bone.metrics.members.include?('999')
+@bone.metrics.members.include?(999)
 #=> true
 
-## SortedSet raises NotDistinguishableError for boolean member
+## SortedSet stores boolean member with type preservation
 @bone.metrics.delete!
-begin
-  @bone.metrics.add(true, 1.0)
-  false
-rescue Familia::NotDistinguishableError
-  true
-end
+@bone.metrics.add(true, 1.0)
+@bone.metrics.members.include?(true)
 #=> true
 
 # ========================================
@@ -204,20 +179,24 @@ loaded.role
 #=> FalseClass
 
 # ========================================
-# Type Round-Trip Comparison
+# Type Round-Trip Comparison (Unified Behavior)
 # ========================================
 
-## Integer round-trip in HashKey loses type
+## Integer round-trip in HashKey now preserves type (Issue #190)
 @bone.props['roundtrip_int'] = 100
 retrieved = @bone.props['roundtrip_int']
 retrieved.class
-#=> String
+#=> Integer
 
-## Integer round-trip in Horreum preserves type (via JSON)
+## Boolean round-trip in HashKey preserves type
+@bone.props['roundtrip_bool'] = true
+@bone.props['roundtrip_bool'].class
+#=> TrueClass
+
+## DataType and Horreum now use same JSON serialization
 @session = Session.new
 @session.sessid = 'roundtrip_test'
-# Session doesn't have integer fields, but Customer.created could be used
-# This test documents the expected behavior
+# Both DataType and Horreum fields now preserve types consistently
 
 # ========================================
 # Horreum serialize_value Comprehensive Tests

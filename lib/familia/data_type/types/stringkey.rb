@@ -6,6 +6,32 @@ module Familia
   class StringKey < DataType
     def init; end
 
+    # StringKey uses raw string serialization (not JSON) because Redis string
+    # operations like INCR, DECR, APPEND operate on raw values.
+    # This overrides the base JSON serialization from DataType.
+    def serialize_value(val)
+      Familia.trace :TOREDIS, nil, "#{val}<#{val.class}>" if Familia.debug?
+
+      # Handle Familia object references - extract identifier
+      if val.is_a?(Familia::Base) || (val.is_a?(Class) && val.ancestors.include?(Familia::Base))
+        return val.is_a?(Class) ? val.name : val.identifier
+      end
+
+      if val.class.ancestors.member?(Familia::Base)
+        return val.identifier
+      end
+
+      # StringKey uses raw string conversion for Redis compatibility
+      val.to_s
+    end
+
+    # StringKey returns raw values (not JSON parsed)
+    def deserialize_value(val)
+      return val if val.is_a?(Redis::Future)
+      return @opts[:default] if val.nil?
+      val
+    end
+
     # Returns the number of elements in the list
     # @return [Integer] number of elements
     def char_count
