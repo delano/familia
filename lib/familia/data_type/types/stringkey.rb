@@ -17,10 +17,6 @@ module Familia
         return val.is_a?(Class) ? val.name : val.identifier
       end
 
-      if val.class.ancestors.member?(Familia::Base)
-        return val.identifier
-      end
-
       # StringKey uses raw string conversion for Redis compatibility
       val.to_s
     end
