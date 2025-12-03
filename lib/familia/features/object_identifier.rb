@@ -294,15 +294,26 @@ module Familia
           case generator
           when :uuid_v7, :uuid_v4
             # UUID format: xxxxxxxx-xxxx-Vxxx-xxxx-xxxxxxxxxxxx (36 chars with hyphens)
-            if guess.length == 36 && guess[8] == '-' && guess[13] == '-' && guess[18] == '-' && guess[23] == '-'
-              version_char = guess[14]
-              if generator == :uuid_v7
-                version_char == '7'
-              else # generator == :uuid_v4
-                version_char == '4'
-              end
-            else
-              false
+            # Validate structure and that all characters are valid hex digits
+            guess_str = guess.to_s
+            return false unless guess_str.length == 36
+            return false unless guess_str[8] == '-' && guess_str[13] == '-' && guess_str[18] == '-' && guess_str[23] == '-'
+
+            # Extract segments and validate each is valid hex
+            segments = guess_str.split('-')
+            return false unless segments.length == 5
+            return false unless segments[0] =~ /\A[0-9a-fA-F]{8}\z/  # 8 hex chars
+            return false unless segments[1] =~ /\A[0-9a-fA-F]{4}\z/  # 4 hex chars
+            return false unless segments[2] =~ /\A[0-9a-fA-F]{4}\z/  # 4 hex chars (includes version)
+            return false unless segments[3] =~ /\A[0-9a-fA-F]{4}\z/  # 4 hex chars
+            return false unless segments[4] =~ /\A[0-9a-fA-F]{12}\z/ # 12 hex chars
+
+            # Validate version character
+            version_char = guess_str[14]
+            if generator == :uuid_v7
+              version_char == '7'
+            else # generator == :uuid_v4
+              version_char == '4'
             end
           when :hex
             # Hex format: pure hexadecimal without hyphens

@@ -253,6 +253,11 @@ BasicObjectTest.objid?('01234567-89ab-7def-89ab-0123456789abcd')
 BasicObjectTest.objid?('0123456-789ab-7def-89ab-0123456789ab')
 #=> false
 
+## objid? returns false for UUID with non-hex characters
+# Validates that all characters are valid hexadecimal digits
+BasicObjectTest.objid?('gggggggg-gggg-7ggg-gggg-gggggggggggg')
+#=> false
+
 ## objid? with UUID v4 generator returns true for valid v4 format
 UuidV4Test.objid?('01234567-89ab-4def-89ab-0123456789ab')
 #=> true

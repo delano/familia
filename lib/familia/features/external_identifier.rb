@@ -178,7 +178,7 @@ module Familia
         end
 
         # Check if a string matches the extid format for the Horreum class. The specific
-        # class is important b/c each one can have it's own custom prefix, like `ext_`.
+        # class is important b/c each one can have its own custom prefix, like `ext_`.
         #
         # @param guess [String] The string to check
         # @return [Boolean] true if the guess matches the extid format, false otherwise
