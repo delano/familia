@@ -263,14 +263,19 @@ module Familia
       #
       #   | Scenario | Use | Why |
       #   |----------|-----|-----|
-      #   | Check if exists, then create | WATCH | Must prevent duplicate creation |
+      #   | First-one-wins / idempotency | SET NX | Atomic claim, no read needed |
+      #   | Distributed lock acquisition | SET NX EX | Claim with automatic expiry |
       #   | Read value, update conditionally | WATCH | Decision depends on current state |
       #   | Compare-and-swap operations | WATCH | Need optimistic locking |
       #   | Version-based updates | WATCH | Must detect concurrent changes |
+      #   | Status transitions (pending→processing) | WATCH | Must verify current state |
       #   | Batch field updates | MULTI only | No conditional logic |
       #   | Increment + timestamp together | MULTI only | Concurrent increments OK |
       #   | Save object atomically | MULTI only | Just need atomicity |
       #   | Update indexes with save | MULTI only | No state checking needed |
+      #
+      #    If you don't need to read before deciding, WATCH adds complexity
+      #    without benefit. SET NX handles the "claim" pattern in one atomic shot.
       #
       # @param suffix_override [String, nil] Optional suffix override
       # @return [String] 'OK' on success
