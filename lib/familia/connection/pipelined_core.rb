@@ -80,9 +80,7 @@ module Familia
         end
 
         # Return same MultiResult format as other methods
-        # Pipeline success is true if no exceptions occurred (all commands executed)
-        summary_boolean = command_return_values.none? { |ret| ret.is_a?(Exception) }
-        MultiResult.new(summary_boolean, command_return_values)
+        MultiResult.new(command_return_values)
       end
     end
   end

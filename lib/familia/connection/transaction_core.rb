@@ -158,8 +158,7 @@ module Familia
         end
 
         # Return same MultiResult format as other methods
-        summary_boolean = command_return_values.all? { |ret| %w[OK 0 1].include?(ret.to_s) }
-        MultiResult.new(summary_boolean, command_return_values)
+        MultiResult.new(command_return_values)
       end
     end
   end

@@ -383,7 +383,7 @@ module Familia
       #
       def destroy!(identifier, suffix = nil)
         suffix ||= self.suffix
-        return MultiResult.new(false, []) if identifier.to_s.empty?
+        raise Familia::NoIdentifier, "#{self} requires non-empty identifier" if identifier.to_s.empty?
 
         objkey = dbkey identifier, suffix
 
