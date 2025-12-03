@@ -450,20 +450,107 @@ module Familia
       def all(suffix = nil)
         suffix ||= self.suffix
         # objects that could not be parsed will be nil
-        keys(suffix).filter_map { |k| find_by_key(k) }
+        find_keys(suffix).filter_map { |k| find_by_key(k) }
       end
 
-      def any?(filter = '*')
+      # Returns the number of tracked instances (fast, from instances sorted set).
+      #
+      # This method provides O(1) performance by querying the `instances` sorted set,
+      # which is automatically maintained when objects are created/destroyed through
+      # Familia. However, objects deleted outside Familia (e.g., direct Redis commands)
+      # may leave stale entries.
+      #
+      # @return [Integer] Number of instances in the instances sorted set
+      #
+      # @example
+      #   User.create(email: 'test@example.com')
+      #   User.count  #=> 1
+      #
+      # @note For authoritative count (slower, scans all keys), use {#count!}
+      # @see #count! Authoritative count via Redis KEYS scan
+      # @see #instances The underlying sorted set
+      #
+      def count
+        instances.count
+      end
+
+      # Returns authoritative count of objects by scanning Redis keys (slow).
+      #
+      # This method performs a blocking KEYS scan to count all matching object keys
+      # in Redis. While authoritative, it's O(n) where n = total keys in database
+      # and blocks Redis during execution.
+      #
+      # @param filter [String] Key pattern to match (default: '*')
+      # @return [Integer] Number of matching keys in Redis
+      #
+      # @example
+      #   User.count!       #=> 1  (all User objects)
+      #   User.count!('a*') #=> 1  (Users with IDs starting with 'a')
+      #
+      # @note For fast count (potentially stale), use {#count}
+      # @see #count Fast count from instances sorted set
+      # @see #matching_keys_count Alias for this method
+      #
+      def count!(filter = '*')
+        matching_keys_count(filter)
+      end
+
+      # Checks if any tracked instances exist (fast, from instances sorted set).
+      #
+      # This method provides O(1) performance by querying the `instances` sorted set.
+      # However, objects deleted outside Familia may leave stale entries.
+      #
+      # @return [Boolean] true if instances sorted set is non-empty
+      #
+      # @example
+      #   User.create(email: 'test@example.com')
+      #   User.any?  #=> true
+      #
+      # @note For authoritative check (slower, scans keys), use {#any!}
+      # @see #any! Authoritative existence check via Redis KEYS scan
+      # @see #count Fast count of instances
+      #
+      def any?
+        count.positive?
+      end
+
+      # Checks if any objects exist by scanning Redis keys (slow, authoritative).
+      #
+      # This method performs a blocking KEYS scan to check for matching object keys.
+      # While authoritative, it's O(n) where n = total keys in database and blocks
+      # Redis during execution.
+      #
+      # @param filter [String] Key pattern to match (default: '*')
+      # @return [Boolean] true if any matching keys exist in Redis
+      #
+      # @example
+      #   User.any!       #=> true  (any User objects)
+      #   User.any!('a*') #=> true  (Users with IDs starting with 'a')
+      #
+      # @note For fast check (potentially stale), use {#any?}
+      # @see #any? Fast existence check from instances sorted set
+      # @see #count! Authoritative count via KEYS scan
+      #
+      def any!(filter = '*')
         matching_keys_count(filter).positive?
       end
 
-      # Returns the number of dbkeys matching the given filter pattern
+      # Returns the number of dbkeys matching the given filter pattern.
+      #
+      # This method performs a blocking KEYS scan which is O(n) where n = total keys
+      # in the database. Use sparingly in production environments.
+      #
       # @param filter [String] dbkey pattern to match (default: '*')
       # @return [Integer] Number of matching keys
+      #
+      # @see #count! Preferred alias for clarity
+      # @see #scan_count More explicit alias
+      # @see #count Fast alternative using instances sorted set
       #
       def matching_keys_count(filter = '*')
         dbclient.keys(dbkey(filter)).compact.size
       end
+      alias scan_count matching_keys_count
       alias size matching_keys_count
       alias length matching_keys_count
 
