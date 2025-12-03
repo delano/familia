@@ -324,12 +324,13 @@ retrieved.class
 # Familia Object Serialization (shared behavior)
 # ========================================
 
-## Horreum serialize_value: Familia object extracts identifier
-# When storing a reference to another Familia object
+## Horreum serialize_value: string value gets JSON encoded
+# When storing a value from another Familia object's field
 @ref_customer = Customer.new('reference_test@example.com')
 @ref_customer.custid = 'reference_test@example.com'
-# Note: Horreum.serialize_value uses JsonSerializer.dump, not identifier extraction
-# This is different from DataType which uses identifier_extractor for Familia objects
+# Note: Horreum.serialize_value uses JsonSerializer.dump, which JSON-encodes
+# all values, including strings. This is different from DataType#serialize_value,
+# which has special handling for Familia objects.
 @customer.serialize_value(@ref_customer.custid)
 #=> '"reference_test@example.com"'
 
