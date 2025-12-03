@@ -15,7 +15,15 @@ CountTestCustomer.all.each(&:destroy!)
 CountTestCustomer.count
 #=> 0
 
-## count! returns 0 when no instances exist
+## keys_count returns 0 when no instances exist (KEYS command)
+CountTestCustomer.keys_count
+#=> 0
+
+## scan_count returns 0 when no instances exist (SCAN command)
+CountTestCustomer.scan_count
+#=> 0
+
+## count! returns 0 when no instances exist (alias to scan_count)
 CountTestCustomer.count!
 #=> 0
 
@@ -23,7 +31,15 @@ CountTestCustomer.count!
 CountTestCustomer.any?
 #=> false
 
-## any! returns false when no instances exist
+## keys_any? returns false when no instances exist (KEYS command)
+CountTestCustomer.keys_any?
+#=> false
+
+## scan_any? returns false when no instances exist (SCAN command)
+CountTestCustomer.scan_any?
+#=> false
+
+## any! returns false when no instances exist (alias to scan_any?)
 CountTestCustomer.any!
 #=> false
 
@@ -32,12 +48,28 @@ CountTestCustomer.any!
 CountTestCustomer.count
 #=> 1
 
+## keys_count returns 1 after creating an instance
+CountTestCustomer.keys_count
+#=> 1
+
+## scan_count returns 1 after creating an instance
+CountTestCustomer.scan_count
+#=> 1
+
 ## count! returns 1 after creating an instance
 CountTestCustomer.count!
 #=> 1
 
 ## any? returns true after creating an instance
 CountTestCustomer.any?
+#=> true
+
+## keys_any? returns true after creating an instance
+CountTestCustomer.keys_any?
+#=> true
+
+## scan_any? returns true after creating an instance
+CountTestCustomer.scan_any?
 #=> true
 
 ## any! returns true after creating an instance
@@ -49,18 +81,50 @@ CountTestCustomer.any!
 CountTestCustomer.count
 #=> 2
 
+## keys_count also shows 2 instances
+CountTestCustomer.keys_count
+#=> 2
+
+## scan_count also shows 2 instances
+CountTestCustomer.scan_count
+#=> 2
+
 ## count! also shows 2 instances
 CountTestCustomer.count!
 #=> 2
 
-## count! with filter matches specific patterns
+## keys_count with filter matches specific patterns
 @cust3 = CountTestCustomer.create!(custid: 'alice2', name: 'Alice2')
+CountTestCustomer.keys_count('alice*')
+#=> 2
+
+## scan_count with filter matches specific patterns
+CountTestCustomer.scan_count('alice*')
+#=> 2
+
+## count! with filter matches specific patterns
 CountTestCustomer.count!('alice*')
 #=> 2
+
+## keys_any? with filter detects matching patterns
+CountTestCustomer.keys_any?('alice*')
+#=> true
+
+## scan_any? with filter detects matching patterns
+CountTestCustomer.scan_any?('alice*')
+#=> true
 
 ## any! with filter detects matching patterns
 CountTestCustomer.any!('alice*')
 #=> true
+
+## keys_any? with filter returns false for non-matching patterns
+CountTestCustomer.keys_any?('nonexistent*')
+#=> false
+
+## scan_any? with filter returns false for non-matching patterns
+CountTestCustomer.scan_any?('nonexistent*')
+#=> false
 
 ## any! with filter returns false for non-matching patterns
 CountTestCustomer.any!('nonexistent*')
@@ -69,6 +133,14 @@ CountTestCustomer.any!('nonexistent*')
 ## count reflects deletion when object is destroyed via Familia
 @cust1.destroy!
 CountTestCustomer.count
+#=> 2
+
+## keys_count also reflects the deletion
+CountTestCustomer.keys_count
+#=> 2
+
+## scan_count also reflects the deletion
+CountTestCustomer.scan_count
 #=> 2
 
 ## count! also reflects the deletion
@@ -81,6 +153,14 @@ CountTestCustomer.dbclient.del(@cust2.dbkey)
 CountTestCustomer.count
 #=> 2
 
+## keys_count shows authoritative data after direct deletion
+CountTestCustomer.keys_count
+#=> 1
+
+## scan_count shows authoritative data after direct deletion
+CountTestCustomer.scan_count
+#=> 1
+
 ## count! shows authoritative data after direct deletion
 CountTestCustomer.count!
 #=> 1
@@ -90,17 +170,21 @@ CountTestCustomer.count!
 CountTestCustomer.any?
 #=> true
 
-## any! returns false when no actual keys exist
+## keys_any? returns false when no actual keys exist
 CountTestCustomer.dbclient.del(@cust3.dbkey)
+CountTestCustomer.keys_any?
+#=> false
+
+## scan_any? returns false when no actual keys exist
+CountTestCustomer.scan_any?
+#=> false
+
+## any! returns false when no actual keys exist
 CountTestCustomer.any!
 #=> false
 
-## scan_count alias works correctly
-@cust4 = CountTestCustomer.create!(custid: 'charlie', name: 'Charlie')
-CountTestCustomer.scan_count
-#=> 1
-
 ## size alias works correctly (uses matching_keys_count)
+@cust4 = CountTestCustomer.create!(custid: 'charlie', name: 'Charlie')
 CountTestCustomer.size
 #=> 1
 
