@@ -281,7 +281,7 @@ module Familia
         end
 
         # Check if a string matches the objid format for the Horreum class. The specific
-        # class is important b/c each one can have it's own type of objid generator.
+        # class is important b/c each one can have its own type of objid generator.
         #
         # @param guess [String] The string to check
         # @return [Boolean] true if the guess matches the objid format, false otherwise
@@ -296,13 +296,10 @@ module Familia
             # UUID format: xxxxxxxx-xxxx-Vxxx-xxxx-xxxxxxxxxxxx (36 chars with hyphens)
             if guess.length == 36 && guess[8] == '-' && guess[13] == '-' && guess[18] == '-' && guess[23] == '-'
               version_char = guess[14]
-              case generator
-              when :uuid_v7
+              if generator == :uuid_v7
                 version_char == '7'
-              when :uuid_v4
+              else # generator == :uuid_v4
                 version_char == '4'
-              else
-                false
               end
             else
               false
