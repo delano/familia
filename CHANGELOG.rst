@@ -7,6 +7,49 @@ The format is based on `Keep a Changelog <https://keepachangelog.com/en/1.1.0/>`
 
    <!--scriv-insert-here-->
 
+.. _changelog-2.0.0.pre22:
+
+2.0.0.pre22 — 2025-12-03
+========================
+
+- **ExternalIdentifier Format Flexibility**: The `external_identifier` feature now supports customizable format templates via the `format` option (e.g., `format: 'cust_%{id}'` or `format: 'api-%{id}'`). Default format remains `'ext_%{id}'`. Provides complete flexibility for various ID formatting needs including different prefixes, separators, URL paths, or no prefix at all.
+
+- **Participation Relationships with Symbol/String Target Classes**: Fixed four bugs that occurred when calling `participates_in` with Symbol/String target class instead of Class object. Issues included NoMethodError during relationship definition (private method call), failures in `current_participations` (undefined `familia_name`), errors in `target_class_config_name` (undefined `config_name`), and confusing error messages for load order issues. All now properly resolve using `Familia.resolve_class` API with clear error messages for common issues.
+
+- **Pipelined Bulk Loading Methods**: New `load_multi` and `load_multi_by_keys` methods enable efficient bulk object loading using Redis pipelining, reducing network round trips from N×2 commands to a single batch (up to 2× performance improvement). Methods maintain nil-return contract for missing objects and preserve input order.
+
+- **Optional EXISTS Check Optimization**: The `find_by_dbkey` and `find_by_identifier` methods now accept `check_exists:` parameter (default: `true`) to optionally skip EXISTS check, reducing Redis commands from 2 to 1 per object. Maintains backwards compatibility and same nil-return behavior.
+
+- **Parameter Consistency**: The `suffix` parameter in `find_by_identifier` is now a keyword parameter (was optional positional) for consistency with `check_exists`, following Ruby conventions.
+
+Added
+-----
+
+- Bidirectional reverse collection methods for ``participates_in`` with ``_instances`` suffix (e.g., ``user.project_team_instances``, ``user.project_team_ids``). Supports union behavior for multiple collections and custom naming via ``as:`` parameter. Closes #179.
+
+Changed
+-------
+
+- All Ruby files now include consistent headers with ``frozen_string_literal: true`` pragma for improved performance and memory efficiency. Headers follow the format: filename comment, blank comment line, frozen string literal pragma. Executable scripts properly place shebang first.
+
+- Standardized DataType serialization to use JSON encoding for type preservation, matching Horreum field behavior. All primitive values (Integer, Boolean, String, Float, Hash, Array, nil) are now consistently serialized through JSON, ensuring types are preserved across the Redis storage boundary. Familia object references continue to use identifier extraction. Issue #190.
+
+Fixed
+-----
+
+- Fixed critical race condition in mutex initialization for connection chain lazy loading. The mutex itself was being lazily initialized with ``||=``, which is not atomic and could result in multiple threads creating different mutex instances, defeating synchronization. Changed to eager initialization via ``Connection.included`` hook. (`lib/familia/horreum/connection.rb`)
+
+- Fixed critical race condition in mutex initialization for logger lazy loading. Similar to connection chain issue, the logger mutex was lazily initialized with ``||=``. Changed to eager initialization at module definition time. (`lib/familia/logging.rb`)
+
+- Fixed logger assignment atomicity issue where ``Familia.logger=`` set ``DatabaseLogger.logger`` outside the mutex synchronization block, potentially causing ``Familia.logger`` and ``DatabaseLogger.logger`` to be temporarily out of sync during concurrent access. Moved ``DatabaseLogger.logger`` assignment inside the synchronization block. (`lib/familia/logging.rb`)
+
+- Added explicit return statement to ``Familia.logger`` method for robustness against future refactoring. (`lib/familia/logging.rb`)
+
+AI Assistance
+-------------
+
+- Claude Code (Opus 4, Sonnet 4.5): Implementation of bidirectional participation relationships, external identifier format flexibility, bulk loading optimization with pipelining, race condition fixes in mutex initialization, frozen string literal pragma automation (308 files), and DataType serialization standardization. Comprehensive test coverage and documentation throughout.
+
 .. _changelog-2.0.0.pre21:
 
 2.0.0.pre21 — 2025-10-21
