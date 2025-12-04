@@ -383,7 +383,7 @@ module Familia
       #
       def destroy!(identifier, suffix = nil)
         suffix ||= self.suffix
-        return MultiResult.new(false, []) if identifier.to_s.empty?
+        raise Familia::NoIdentifier, "#{self} requires non-empty identifier" if identifier.to_s.empty?
 
         objkey = dbkey identifier, suffix
 
@@ -450,22 +450,153 @@ module Familia
       def all(suffix = nil)
         suffix ||= self.suffix
         # objects that could not be parsed will be nil
-        keys(suffix).filter_map { |k| find_by_key(k) }
+        find_keys(suffix).filter_map { |k| find_by_key(k) }
       end
 
-      def any?(filter = '*')
-        matching_keys_count(filter).positive?
-      end
-
-      # Returns the number of dbkeys matching the given filter pattern
-      # @param filter [String] dbkey pattern to match (default: '*')
-      # @return [Integer] Number of matching keys
+      # Returns the number of tracked instances (fast, from instances sorted set).
       #
-      def matching_keys_count(filter = '*')
+      # This method provides O(1) performance by querying the `instances` sorted set,
+      # which is automatically maintained when objects are created/destroyed through
+      # Familia. However, objects deleted outside Familia (e.g., direct Redis commands)
+      # may leave stale entries.
+      #
+      # @return [Integer] Number of instances in the instances sorted set
+      #
+      # @example
+      #   User.create(email: 'test@example.com')
+      #   User.count  #=> 1
+      #
+      # @note For authoritative count, use {#scan_count} (production-safe) or {#keys_count} (blocking)
+      # @see #scan_count Production-safe authoritative count via SCAN
+      # @see #keys_count Blocking authoritative count via KEYS
+      # @see #instances The underlying sorted set
+      #
+      def count
+        instances.count
+      end
+      alias size count
+      alias length count
+
+      # Returns authoritative count using blocking KEYS command (production-dangerous).
+      #
+      # ⚠️ WARNING: This method uses the KEYS command which blocks Redis during execution.
+      # It scans ALL keys in the database and should NEVER be used in production.
+      #
+      # @param filter [String] Key pattern to match (default: '*')
+      # @return [Integer] Number of matching keys in Redis
+      #
+      # @example
+      #   User.keys_count       #=> 1  (all User objects)
+      #   User.keys_count('a*') #=> 1  (Users with IDs starting with 'a')
+      #
+      # @note For production-safe authoritative count, use {#scan_count}
+      # @see #scan_count Production-safe alternative using SCAN
+      # @see #count Fast count from instances sorted set
+      #
+      def keys_count(filter = '*')
         dbclient.keys(dbkey(filter)).compact.size
       end
-      alias size matching_keys_count
-      alias length matching_keys_count
+
+      # Returns authoritative count using non-blocking SCAN command (production-safe).
+      #
+      # This method uses cursor-based SCAN iteration to count matching keys without
+      # blocking Redis. Safe for production use as it processes keys in chunks.
+      #
+      # @param filter [String] Key pattern to match (default: '*')
+      # @return [Integer] Number of matching keys in Redis
+      #
+      # @example
+      #   User.scan_count       #=> 1  (all User objects)
+      #   User.scan_count('a*') #=> 1  (Users with IDs starting with 'a')
+      #
+      # @note For fast count (potentially stale), use {#count}
+      # @see #count Fast count from instances sorted set
+      # @see #keys_count Blocking alternative (production-dangerous)
+      #
+      def scan_count(filter = '*')
+        pattern = dbkey(filter)
+        count = 0
+        cursor = "0"
+
+        loop do
+          cursor, keys = dbclient.scan(cursor, match: pattern, count: 1000)
+          count += keys.size
+          break if cursor == "0"
+        end
+
+        count
+      end
+      alias count! scan_count
+
+      # Checks if any tracked instances exist (fast, from instances sorted set).
+      #
+      # This method provides O(1) performance by querying the `instances` sorted set.
+      # However, objects deleted outside Familia may leave stale entries.
+      #
+      # @return [Boolean] true if instances sorted set is non-empty
+      #
+      # @example
+      #   User.create(email: 'test@example.com')
+      #   User.any?  #=> true
+      #
+      # @note For authoritative check, use {#scan_any?} (production-safe) or {#keys_any?} (blocking)
+      # @see #scan_any? Production-safe authoritative check via SCAN
+      # @see #keys_any? Blocking authoritative check via KEYS
+      # @see #count Fast count of instances
+      #
+      def any?
+        count.positive?
+      end
+
+      # Checks if any objects exist using blocking KEYS command (production-dangerous).
+      #
+      # ⚠️ WARNING: This method uses the KEYS command which blocks Redis during execution.
+      # It scans ALL keys in the database and should NEVER be used in production.
+      #
+      # @param filter [String] Key pattern to match (default: '*')
+      # @return [Boolean] true if any matching keys exist in Redis
+      #
+      # @example
+      #   User.keys_any?       #=> true  (any User objects)
+      #   User.keys_any?('a*') #=> true  (Users with IDs starting with 'a')
+      #
+      # @note For production-safe authoritative check, use {#scan_any?}
+      # @see #scan_any? Production-safe alternative using SCAN
+      # @see #any? Fast existence check from instances sorted set
+      #
+      def keys_any?(filter = '*')
+        keys_count(filter).positive?
+      end
+
+      # Checks if any objects exist using non-blocking SCAN command (production-safe).
+      #
+      # This method uses cursor-based SCAN iteration to check for matching keys without
+      # blocking Redis. Safe for production use and returns early on first match.
+      #
+      # @param filter [String] Key pattern to match (default: '*')
+      # @return [Boolean] true if any matching keys exist in Redis
+      #
+      # @example
+      #   User.scan_any?       #=> true  (any User objects)
+      #   User.scan_any?('a*') #=> true  (Users with IDs starting with 'a')
+      #
+      # @note For fast check (potentially stale), use {#any?}
+      # @see #any? Fast existence check from instances sorted set
+      # @see #keys_any? Blocking alternative (production-dangerous)
+      #
+      def scan_any?(filter = '*')
+        pattern = dbkey(filter)
+        cursor = "0"
+
+        loop do
+          cursor, keys = dbclient.scan(cursor, match: pattern, count: 100)
+          return true unless keys.empty?
+          break if cursor == "0"
+        end
+
+        false
+      end
+      alias any! scan_any?
 
       # Instantiates an object from a hash of field values.
       #

@@ -87,8 +87,7 @@ module Familia
 
         # Return MultiResult format for consistency
         results = proxy.collected_results
-        summary_boolean = results.all? { |ret| !ret.is_a?(Exception) }
-        MultiResult.new(summary_boolean, results)
+        MultiResult.new(results)
       end
     end
   end

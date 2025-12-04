@@ -396,6 +396,9 @@ module Familia
               obj.delete!
             end
           end
+
+          # Remove from instances collection if available
+          self.class.instances.remove(identifier) if self.class.respond_to?(:instances)
         end
 
         # Structured lifecycle logging and instrumentation
