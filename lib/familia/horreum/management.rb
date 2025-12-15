@@ -65,10 +65,53 @@ module Familia
         hobj
       end
 
+      # Retrieves and deserializes multiple objects by their identifiers using MGET.
+      #
+      # @param hids [Array<String, Integer>] Variable number of object identifiers to retrieve.
+      # @return [Array<Object>] Array of deserialized objects, with nils filtered out.
+      #
+      # This method fetches multiple JSON-serialized values from Redis in a single MGET
+      # command and deserializes them. It's useful for bulk retrieval of simple string
+      # values (not hashes) stored as JSON.
+      #
+      # @example Retrieve multiple objects by ID
+      #   Customer.multiget('cust_123', 'cust_456', 'cust_789')
+      #   #=> [<Customer>, <Customer>, <Customer>]
+      #
+      # @note This method filters out nil values from the result. If you need to preserve
+      #   position alignment with input identifiers, use {#rawmultiget} instead.
+      # @note This is for string values stored as JSON, not hash objects. For hash objects,
+      #   use {#load_multi} instead.
+      #
+      # @see #rawmultiget For raw JSON strings without deserialization
+      # @see #load_multi For loading hash-based Horreum objects
+      #
       def multiget(...)
         rawmultiget(...).filter_map { |json| Familia::JsonSerializer.parse(json) }
       end
 
+      # Retrieves raw JSON strings for multiple objects by their identifiers using MGET.
+      #
+      # @param hids [Array<String, Integer>] Variable number of object identifiers to retrieve.
+      # @return [Array<String, nil>] Array of raw JSON strings (or nils for non-existent keys).
+      #
+      # This is a lower-level method that fetches multiple values from Redis without
+      # deserializing them. It converts identifiers to full dbkeys and executes a single
+      # MGET command.
+      #
+      # @example Retrieve raw JSON for multiple objects
+      #   Customer.rawmultiget('cust_123', 'cust_456')
+      #   #=> ['{"name":"Alice"}', '{"name":"Bob"}']
+      #
+      # @example Handle non-existent keys
+      #   Customer.rawmultiget('exists', 'missing')
+      #   #=> ['{"name":"Alice"}', nil]
+      #
+      # @note Returns an empty array if all identifiers are empty or nil.
+      # @note Position in result array corresponds to position in input array.
+      #
+      # @see #multiget For deserialized objects with nils filtered out
+      #
       def rawmultiget(*hids)
         hids.collect! { |hobjid| dbkey(hobjid) }
         return [] if hids.compact.empty?
@@ -317,6 +360,7 @@ module Familia
         multi_result = pipelined do |pipeline|
           objkeys.each do |objkey|
             next if objkey.to_s.empty?
+
             pipeline.hgetall(objkey)
           end
         end
@@ -395,7 +439,7 @@ module Familia
 
             # Create a temporary instance to access related fields.
             # Pass identifier in constructor so init() sees it and can set dependent fields.
-            identifier_field_name = self.identifier_field
+            identifier_field_name = identifier_field
             temp_instance = identifier_field_name ? new(identifier_field_name => identifier.to_s) : new
 
             related_fields.each do |name, _definition|
@@ -516,12 +560,12 @@ module Familia
       def scan_count(filter = '*')
         pattern = dbkey(filter)
         count = 0
-        cursor = "0"
+        cursor = '0'
 
         loop do
           cursor, keys = dbclient.scan(cursor, match: pattern, count: 1000)
           count += keys.size
-          break if cursor == "0"
+          break if cursor == '0'
         end
 
         count
@@ -586,12 +630,12 @@ module Familia
       #
       def scan_any?(filter = '*')
         pattern = dbkey(filter)
-        cursor = "0"
+        cursor = '0'
 
         loop do
           cursor, keys = dbclient.scan(cursor, match: pattern, count: 100)
           return true unless keys.empty?
-          break if cursor == "0"
+          break if cursor == '0'
         end
 
         false
