@@ -163,7 +163,11 @@ module Familia
         begin
           Base64.strict_decode64(current_key)
         rescue ArgumentError
-          raise EncryptionError, 'Current encryption key is not valid Base64'
+          raise EncryptionError, <<~MSG
+            Current encryption key is not valid Base64.
+            Generate a proper key with:
+              ruby -rsecurerandom -rbase64 -e "puts Base64.strict_encode64(SecureRandom.random_bytes(32))"
+          MSG
         end
 
         Registry.setup!
