@@ -65,6 +65,7 @@ module Familia
       end
     end
     alias all hgetall
+    alias to_h hgetall
 
     # Sets field in the hash stored at key to value, only if field does not yet exist.
     # If field already exists, this operation has no effect.
