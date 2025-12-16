@@ -5,6 +5,7 @@
 .history
 .devcontainer
 .vscode
+.serena
 *.env
 *.log
 *.md
@@ -19,3 +20,4 @@ tmp
 vendor
 *.gem
 .yardoc
+public
