@@ -68,7 +68,7 @@ module Familia
     #   Familia.redis('redis://localhost:6379')
     def redis(uri = nil)
       if uri.is_a?(Integer)
-        tmp = Familia.uri
+        tmp = Familia.uri.dup
         tmp.db = uri
         uri = tmp
       elsif uri.is_a?(String)
@@ -94,7 +94,7 @@ module Familia
     # @example
     #   Familia.uri = 'redis://localhost:6379'
     def uri=(val)
-      @uri = val.is_a?(URI) ? v : URI.parse(val)
+      @uri = val.is_a?(URI) ? val : URI.parse(val)
     end
 
     alias url uri
