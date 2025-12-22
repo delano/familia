@@ -121,8 +121,8 @@ module Familia
           def find_and_destroy(through_class:, target:, participant:)
             key = build_key(target: target, participant: participant, through_class: through_class)
             existing = through_class.load(key)
-            # Check if object was loaded successfully (has objid set)
-            existing&.destroy! if existing && !existing.instance_variable_get(:@objid).nil?
+            # Use the public exists? method for a more robust check
+            existing&.destroy! if existing&.exists?
           end
         end
       end
