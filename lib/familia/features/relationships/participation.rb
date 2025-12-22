@@ -136,6 +136,8 @@ module Familia
           #   - +:set+: Unordered unique membership
           #   - +:list+: Ordered sequence allowing duplicates
           # @param bidirectional [Boolean] Whether to generate convenience methods on instances (default: +true+)
+          # @param through [Class, Symbol, String, nil] Optional join model class for
+          #        storing additional attributes. See +participates_in+ for details.
           #
           # @example Simple priority-based global collection
           #   class User < Familia::Horreum
@@ -241,6 +243,12 @@ module Familia
           # @param as [Symbol, nil] Custom name for reverse collection methods
           #        (e.g., +as: :contracting_orgs+). When provided, overrides the default
           #        method name derived from the target class.
+          # @param through [Class, Symbol, String, nil] Optional join model class for
+          #        storing additional attributes on the relationship. The through model:
+          #   - Must use +feature :object_identifier+
+          #   - Gets auto-created when adding to collection (via +through_attrs:+ param)
+          #   - Gets auto-destroyed when removing from collection
+          #   - Uses deterministic keys: +{target}:{id}:{participant}:{id}:{through}+
           #
           # @example Basic domain-employee relationship
           #

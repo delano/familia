@@ -122,7 +122,7 @@ module Familia
               #
               # If Familia's transaction handling changes in the future, revisit this boundary.
               through_model = if through_class
-                Familia::Features::Relationships::Participation::ThroughModelOperations.find_or_create(
+                Participation::ThroughModelOperations.find_or_create(
                   through_class: through_class,
                   target: self,
                   participant: item,
@@ -160,7 +160,7 @@ module Familia
               # the transaction block. See build_add_item for detailed rationale.
               # The core removal is atomic; through model cleanup is a separate operation.
               if through_class
-                Familia::Features::Relationships::Participation::ThroughModelOperations.find_and_destroy(
+                Participation::ThroughModelOperations.find_and_destroy(
                   through_class: through_class,
                   target: self,
                   participant: item

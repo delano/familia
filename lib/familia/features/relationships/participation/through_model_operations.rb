@@ -77,21 +77,23 @@ module Familia
             # Try to load existing model - load returns nil if key doesn't exist
             existing = through_class.load(key)
 
-            # Check if we got a valid loaded object by checking if fields are populated
-            # We can't use exists? here because we may be inside a transaction
-            if existing && !existing.instance_variable_get(:@objid).nil?
-              # Update existing through model
-              attrs.each { |k, v| existing.send("#{k}=", v) }
+            # Check if we got a valid loaded object using the public API
+            # This is called outside transaction boundaries (see participant_methods.rb
+            # and target_methods.rb for the transaction boundary documentation)
+            if existing&.exists?
+              # Update existing through model with validated attributes
+              safe_attrs = validated_attrs(through_class, attrs)
+              safe_attrs.each { |k, v| existing.send("#{k}=", v) }
               existing.updated_at = Familia.now.to_f if existing.respond_to?(:updated_at=)
               # Save returns boolean, but we want to return the model instance
-              existing.save if attrs.any? || existing.respond_to?(:updated_at=)
+              existing.save if safe_attrs.any? || existing.respond_to?(:updated_at=)
               existing  # Return the model, not the save result
             else
               # Create new through model with our deterministic key as objid
               # Pass objid during initialization to prevent auto-generation
               inst = through_class.new(objid: key)
 
-              # Set foreign key fields if they exist
+              # Set foreign key fields if they exist (validated via respond_to?)
               target_field = "#{target.class.config_name}_objid"
               participant_field = "#{participant.class.config_name}_objid"
               inst.send("#{target_field}=", target.objid) if inst.respond_to?("#{target_field}=")
@@ -100,8 +102,9 @@ module Familia
               # Set updated_at for cache invalidation
               inst.updated_at = Familia.now.to_f if inst.respond_to?(:updated_at=)
 
-              # Set custom attributes
-              attrs.each { |k, v| inst.send("#{k}=", v) }
+              # Set custom attributes (validated against field schema)
+              safe_attrs = validated_attrs(through_class, attrs)
+              safe_attrs.each { |k, v| inst.send("#{k}=", v) }
 
               # Save returns boolean, but we want to return the model instance
               inst.save
@@ -123,6 +126,22 @@ module Familia
             existing = through_class.load(key)
             # Use the public exists? method for a more robust check
             existing&.destroy! if existing&.exists?
+          end
+
+          # Validate attribute keys against the through model's field schema
+          #
+          # This prevents arbitrary method invocation by ensuring only defined
+          # fields can be set via the attrs hash.
+          #
+          # @param through_class [Class] The through model class
+          # @param attrs [Hash] Attributes to validate
+          # @return [Hash] Only attributes whose keys match defined fields
+          #
+          def validated_attrs(through_class, attrs)
+            return {} if attrs.nil? || attrs.empty?
+
+            valid_fields = through_class.fields.map(&:to_sym)
+            attrs.select { |k, _v| valid_fields.include?(k.to_sym) }
           end
         end
       end
