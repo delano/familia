@@ -226,8 +226,16 @@ module Familia
                 track_participation_in(collection.dbkey) if respond_to?(:track_participation_in)
               end
 
-              # Create or update through model AFTER transaction completes
-              # This avoids Redis::Future issues with load operations inside transactions
+              # TRANSACTION BOUNDARY: Through model operations intentionally happen AFTER
+              # the transaction block closes. This is a deliberate design decision because:
+              #
+              # 1. ThroughModelOperations.find_or_create performs load operations that would
+              #    return Redis::Future objects inside a transaction, breaking the flow
+              # 2. The core participation (collection add + tracking) is atomic within the tx
+              # 3. Through model creation is logically separate - if it fails, the participation
+              #    itself succeeded and can be cleaned up or retried independently
+              #
+              # If Familia's transaction handling changes in the future, revisit this boundary.
               through_model = if through_class
                 Familia::Features::Relationships::Participation::ThroughModelOperations.find_or_create(
                   through_class: through_class,
@@ -266,8 +274,9 @@ module Familia
                 untrack_participation_in(collection.dbkey) if respond_to?(:untrack_participation_in)
               end
 
-              # Destroy through model AFTER transaction completes
-              # This avoids Redis::Future issues with load operations inside transactions
+              # TRANSACTION BOUNDARY: Through model destruction intentionally happens AFTER
+              # the transaction block. See build_add_to_target for detailed rationale.
+              # The core removal is atomic; through model cleanup is a separate operation.
               if through_class
                 Familia::Features::Relationships::Participation::ThroughModelOperations.find_and_destroy(
                   through_class: through_class,
