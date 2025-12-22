@@ -7,6 +7,39 @@ The format is based on `Keep a Changelog <https://keepachangelog.com/en/1.1.0/>`
 
    <!--scriv-insert-here-->
 
+.. _changelog-2.0.0.pre23:
+
+2.0.0.pre23 — 2025-12-22
+========================
+
+Added
+-----
+
+- Add ``:through`` option to ``participates_in`` for join model support.
+  Enables storing additional attributes (role, permissions, metadata) on
+  participation relationships via an intermediate model. The through model
+  uses deterministic keys and supports idempotent operations - adding an
+  existing participant updates rather than duplicates.
+
+Security
+--------
+
+- Add validation for through model attributes to prevent arbitrary method
+  invocation. Only fields defined on the through model schema can be set
+  via the ``through_attrs`` parameter.
+
+Documentation
+-------------
+
+- Add YARD documentation for the ``:through`` parameter on both
+  ``participates_in`` and ``class_participates_in`` methods.
+
+AI Assistance
+-------------
+
+- Implementation design and code review assistance provided by Claude.
+  Security hardening for attribute validation added based on Qodo review.
+
 .. _changelog-2.0.0.pre22:
 
 2.0.0.pre22 — 2025-12-03
