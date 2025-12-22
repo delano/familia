@@ -118,7 +118,7 @@ module Familia
           # - +ClassName.add_to_collection_name(instance)+ - Add instance to collection
           # - +ClassName.remove_from_collection_name(instance)+ - Remove instance from collection
           #
-          # ==== On Instances (Participant Methods, if bidirectional)
+          # ==== On Instances (Participant Methods, if generate_participant_methods)
           # - +instance.in_class_collection_name?+ - Check membership in class collection
           # - +instance.add_to_class_collection_name+ - Add self to class collection
           # - +instance.remove_from_class_collection_name+ - Remove self from class collection
@@ -135,7 +135,7 @@ module Familia
           #   - +:sorted_set+: Ordered by score (default)
           #   - +:set+: Unordered unique membership
           #   - +:list+: Ordered sequence allowing duplicates
-          # @param bidirectional [Boolean] Whether to generate convenience methods on instances (default: +true+)
+          # @param generate_participant_methods [Boolean] Whether to generate convenience methods on instances (default: +true+)
           # @param through [Class, Symbol, String, nil] Optional join model class for
           #        storing additional attributes. See +participates_in+ for details.
           #
@@ -163,7 +163,7 @@ module Familia
           # @see #participates_in for instance-level participation relationships
           # @since 1.0.0
           def class_participates_in(collection_name, score: nil,
-                                    type: :sorted_set, bidirectional: true, through: nil)
+                                    type: :sorted_set, generate_participant_methods: true, through: nil)
             # Store metadata for this participation relationship
             participation_relationships << ParticipationRelationship.new(
               _original_target: self,   # For class-level, original and resolved are the same
@@ -171,7 +171,7 @@ module Familia
               collection_name: collection_name,
               score: score,
               type: type,
-              bidirectional: bidirectional,
+              generate_participant_methods: generate_participant_methods,
               through: through,
             )
 
@@ -179,9 +179,9 @@ module Familia
             # e.g., User.all_users, User.add_to_all_users(user)
             TargetMethods::Builder.build_class_level(self, collection_name, type)
 
-            # STEP 2: Add participation methods to instances (if bidirectional)
+            # STEP 2: Add participation methods to instances (if generate_participant_methods)
             # e.g., user.in_class_all_users?, user.add_to_class_all_users
-            return unless bidirectional
+            return unless generate_participant_methods
 
             # Pass the string 'class' as target to distinguish class-level from instance-level
             # This prevents generating reverse collection methods (user can't have "all_users")
@@ -207,7 +207,7 @@ module Familia
           # - +target.remove_participant_class_name(participant)+ - Remove participant from collection
           # - +target.add_participant_class_names([participants])+ - Bulk add multiple participants
           #
-          # ==== On Participant Class (if bidirectional)
+          # ==== On Participant Class (if generate_participant_methods)
           # - +participant.in_target_collection_name?(target)+ - Check membership in target's collection
           # - +participant.add_to_target_collection_name(target)+ - Add self to target's collection
           # - +participant.remove_from_target_collection_name(target)+ - Remove self from target's collection
@@ -237,7 +237,7 @@ module Familia
           #        different scores (default)
           #   - +:set+: Unordered unique membership
           #   - +:list+: Ordered sequence, allows duplicates
-          # @param bidirectional [Boolean] Whether to generate reverse collection
+          # @param generate_participant_methods [Boolean] Whether to generate reverse collection
           #        methods on participant class. If true, methods are generated using the
           #        name of the target class. (default: +true+)
           # @param as [Symbol, nil] Custom name for reverse collection methods
@@ -294,7 +294,7 @@ module Familia
           # @see ModelInstanceMethods#current_participations for membership queries
           # @see ModelInstanceMethods#calculate_participation_score for scoring details
           #
-          def participates_in(target, collection_name, score: nil, type: :sorted_set, bidirectional: true, as: nil, through: nil)
+          def participates_in(target, collection_name, score: nil, type: :sorted_set, generate_participant_methods: true, as: nil, through: nil)
 
             # Normalize the target class parameter
             target_class = Familia.resolve_class(target)
@@ -334,7 +334,7 @@ module Familia
               collection_name: collection_name,
               score: score,
               type: type,
-              bidirectional: bidirectional,
+              generate_participant_methods: generate_participant_methods,
               through: through,
             )
 
@@ -347,8 +347,8 @@ module Familia
             TargetMethods::Builder.build(target_class, collection_name, type, through)
 
             # STEP 2: Add participation methods to PARTICIPANT class (Domain) - only if
-            # bidirectional. e.g. in_employee_domains?, add_to_employee_domains, etc.
-            if bidirectional
+            # generate_participant_methods. e.g. in_employee_domains?, add_to_employee_domains, etc.
+            if generate_participant_methods
               # `as` parameter allows custom naming for reverse collections
               # If not provided, we'll let the builder use the pluralized target class name
               ParticipantMethods::Builder.build(self, target_class, collection_name, type, as, through)

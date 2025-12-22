@@ -38,7 +38,7 @@ module Familia
     #
     #     # Participation with bidirectional control (no method collisions)
     #     participates_in Customer, :domains
-    #     participates_in Team, :domains, bidirectional: false
+    #     participates_in Team, :domains, generate_participant_methods: false
     #     participates_in Organization, :domains, type: :set
     #   end
     #

@@ -3,12 +3,14 @@
 > **Document Status**: Updated 2025-12 to reflect current implementation including
 > `:through` option and `config_name`-based method naming.
 
-## The Original Naming Problem
+## The Original Naming Problem (Now Resolved)
+
+The parameter was renamed from `bidirectional:` to `generate_participant_methods:`.
 
 `bidirectional: true` was misleading because:
 
 1. It's not truly bidirectional - It only helps you manage membership in specific instances, not query all memberships
-2. Better name would be: `generate_participant_methods: true`
+2. Better name: `generate_participant_methods: true` (**now implemented**)
 3. True bidirectionality would mean both sides can easily query their relationships
 
 ## What True Bidirectionality Should Look Like
