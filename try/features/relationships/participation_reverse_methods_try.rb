@@ -1,10 +1,10 @@
-# try/features/relationships/participation_bidirectional_try.rb
+# try/features/relationships/participation_reverse_methods_try.rb
 #
 # frozen_string_literal: true
 
 require_relative '../../../lib/familia'
 
-# Test demonstrating true bidirectional participation functionality
+# Test demonstrating reverse collection methods (generate_participant_methods: true)
 # This shows the improvement from asymmetric to symmetric relationship access
 
 # Setup test classes
@@ -51,8 +51,8 @@ class ::ProjectUser < Familia::Horreum
   field :name
   field :role
 
-  # Define bidirectional participation relationships
-  # These will auto-generate reverse collection methods with _instances suffix
+  # Define participation relationships with reverse collection methods
+  # These auto-generate methods like user.project_team_instances (when generate_participant_methods: true)
   participates_in ProjectTeam, :members          # Generates: user.project_team_instances
   participates_in ProjectTeam, :admins           # Also adds to user.project_team_instances (union)
   participates_in ProjectOrganization, :employees # Generates: user.project_organization_instances
@@ -197,13 +197,13 @@ contracting_orgs_instances.map(&:name)
 @team1.admins.to_a
 #=> [@user1.identifier]
 
-## Test bidirectional consistency - forward direction
+## Test symmetric consistency - forward direction
 team1_member_ids = @team1.members.to_a
 team1_members = ProjectUser.load_multi(team1_member_ids).compact
 team1_members.map(&:name)
 #=> ["Alice"]
 
-## Test bidirectional consistency - reverse direction
+## Test symmetric consistency - reverse direction
 user1_teams = @user1.project_team_instances
 user1_team_ids = user1_teams.map(&:identifier)
 user1_team_ids.include?(@team1.identifier)

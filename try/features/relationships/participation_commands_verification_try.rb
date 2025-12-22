@@ -49,7 +49,7 @@ class ReverseIndexDomain < Familia::Horreum
   field :created_at
 
   participates_in ReverseIndexCustomer, :domains, score: :created_at
-  participates_in ReverseIndexCustomer, :preferred_domains, bidirectional: true
+  participates_in ReverseIndexCustomer, :preferred_domains, generate_participant_methods: true
   class_participates_in :all_domains, score: :created_at
 end
 

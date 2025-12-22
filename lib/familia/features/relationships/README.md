@@ -12,7 +12,7 @@
 
 **participates_in** - Collection membership ("this object belongs in that collection")
 ```ruby
-participates_in Organization, :members, score: :joined_at, bidirectional: true
+participates_in Organization, :members, score: :joined_at, generate_participant_methods: true
 # Creates: org.members, org.add_member(), customer.add_to_organization_members()
 ```
 

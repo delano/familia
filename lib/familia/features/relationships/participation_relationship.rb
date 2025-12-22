@@ -21,7 +21,7 @@ module Familia
         :collection_name,     # Symbol name of the collection (e.g., :members, :domains)
         :score,               # Proc/Symbol/nil - score calculator for sorted sets
         :type,                # Symbol - collection type (:sorted_set, :set, :list)
-        :bidirectional,       # Boolean/Symbol - whether to generate reverse methods
+        :generate_participant_methods,  # Boolean - whether to generate participant methods
         :through,             # Symbol/Class/nil - through model class for join table pattern
       ) do
         # Get a unique key for this participation relationship

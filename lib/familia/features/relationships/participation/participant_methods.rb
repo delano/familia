@@ -89,7 +89,7 @@ module Familia
             end
           end
 
-          # Generate reverse collection methods on participant class for bidirectional access
+          # Generate reverse collection methods on participant class for symmetric access
           #
           # Creates methods like:
           # - user.team_instances (returns Array of Team instances)
