@@ -66,7 +66,7 @@ class ::MethodPrefixDefaultUser < Familia::Horreum
   field :user_id
   field :email
 
-  # Default: uses config_name (admin_method_prefix_team)
+  # Default: uses config_name (method_prefix_team - demodularized, no namespace)
   participates_in Admin::MethodPrefixTeam, :members
 
   def init
