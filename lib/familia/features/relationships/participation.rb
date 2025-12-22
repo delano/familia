@@ -173,6 +173,7 @@ module Familia
               type: type,
               generate_participant_methods: generate_participant_methods,
               through: through,
+              method_prefix: nil,       # Not applicable for class-level participation
             )
 
             # STEP 1: Add collection management methods to the class itself
@@ -186,7 +187,7 @@ module Familia
             # Pass the string 'class' as target to distinguish class-level from instance-level
             # This prevents generating reverse collection methods (user can't have "all_users")
             # See ParticipantMethods::Builder.build for handling of this special case
-            ParticipantMethods::Builder.build(self, 'class', collection_name, type, nil)
+            ParticipantMethods::Builder.build(self, 'class', collection_name, type, nil, through, nil)
           end
 
           # Define an instance-level participation relationship between two classes.
@@ -294,7 +295,7 @@ module Familia
           # @see ModelInstanceMethods#current_participations for membership queries
           # @see ModelInstanceMethods#calculate_participation_score for scoring details
           #
-          def participates_in(target, collection_name, score: nil, type: :sorted_set, generate_participant_methods: true, as: nil, through: nil)
+          def participates_in(target, collection_name, score: nil, type: :sorted_set, generate_participant_methods: true, as: nil, through: nil, method_prefix: nil)
 
             # Normalize the target class parameter
             target_class = Familia.resolve_class(target)
@@ -336,6 +337,7 @@ module Familia
               type: type,
               generate_participant_methods: generate_participant_methods,
               through: through,
+              method_prefix: method_prefix,
             )
 
             # STEP 0: Add participations tracking field to PARTICIPANT class (Domain)
@@ -351,7 +353,7 @@ module Familia
             if generate_participant_methods
               # `as` parameter allows custom naming for reverse collections
               # If not provided, we'll let the builder use the pluralized target class name
-              ParticipantMethods::Builder.build(self, target_class, collection_name, type, as, through)
+              ParticipantMethods::Builder.build(self, target_class, collection_name, type, as, through, method_prefix)
             end
           end
 

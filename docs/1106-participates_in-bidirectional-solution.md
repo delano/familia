@@ -208,20 +208,49 @@ The implementation uses an `_instance` suffix pattern instead of pluralization/s
 
 ---
 
-## Future Consideration: `method_prefix:` Option
+## The `method_prefix:` Option
 
-The current implementation uses `config_name` which can be verbose for namespaced
-classes (e.g., `admin_project_team_instances`). A future enhancement could add
-explicit control:
+The default implementation uses `config_name` which can be verbose for namespaced
+classes (e.g., `admin_project_team_instances`). The `method_prefix:` option provides
+explicit control over reverse method naming:
 
 ```ruby
-# Potential future API (not yet implemented)
 participates_in Admin::ProjectTeam, :members, method_prefix: :team
-# Would generate: user.team_instances instead of user.admin_project_team_instances
+# Generates: user.team_instances instead of user.admin_project_team_instances
 ```
 
-This would give developers explicit control over method naming while maintaining
-the predictability of the current system.
+### Parameter Priority
+
+When multiple naming options are provided, the most specific wins:
+
+| Parameter | Scope | Priority |
+|-----------|-------|----------|
+| `as:` | Single collection only | 1 (highest) |
+| `method_prefix:` | All collections for target class | 2 |
+| (default) | Uses `config_name` | 3 (lowest) |
+
+### Examples
+
+```ruby
+# Default: uses config_name
+participates_in Admin::ProjectTeam, :members
+# → user.admin_project_team_instances, user.admin_project_team_ids, etc.
+
+# With method_prefix: shorter, cleaner names
+participates_in Admin::ProjectTeam, :members, method_prefix: :team
+# → user.team_instances, user.team_ids, user.team?, user.team_count
+
+# With as: overrides for specific collection only
+participates_in Admin::ProjectTeam, :members, as: :my_teams
+# → user.my_teams_instances, user.my_teams_ids, etc.
+
+# Both as: and method_prefix: - as: wins (more specific)
+participates_in Admin::ProjectTeam, :members, method_prefix: :team, as: :my_teams
+# → user.my_teams_instances (as: takes precedence)
+```
+
+This gives developers explicit control over method naming while maintaining
+the predictability of the default system.
 
 ---
 
@@ -230,7 +259,7 @@ the predictability of the current system.
 1. **Automatic generation** - No manual method definitions needed ✓
 2. **Multiple collections** - Union of all collections to same target class ✓
 3. **Performance** - Efficient ID-only access without loading objects ✓
-4. **Custom naming** - Override auto-generated names via `as:` parameter ✓
+4. **Custom naming** - Override auto-generated names via `as:` or `method_prefix:` parameters ✓
 5. **Thread-safe** - No caching means no stale data or cache invalidation complexity ✓
 6. **Through models** - Rich join data via `:through` option ✓
 
