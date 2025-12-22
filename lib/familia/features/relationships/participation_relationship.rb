@@ -22,6 +22,7 @@ module Familia
         :score,               # Proc/Symbol/nil - score calculator for sorted sets
         :type,                # Symbol - collection type (:sorted_set, :set, :list)
         :bidirectional,       # Boolean/Symbol - whether to generate reverse methods
+        :through,             # Symbol/Class/nil - through model class for join table pattern
       ) do
         # Get a unique key for this participation relationship
         # Useful for comparisons and hash keys
@@ -52,6 +53,22 @@ module Familia
 
           target_class_base == comparison_target_base &&
             collection_name == comparison_collection.to_sym
+        end
+
+        # Check if this relationship uses a through model
+        #
+        # @return [Boolean] true if through model is configured
+        def through_model?
+          !through.nil?
+        end
+
+        # Resolve the through class to an actual Class object
+        #
+        # @return [Class, nil] The resolved through class or nil
+        def resolved_through_class
+          return nil unless through
+
+          through.is_a?(Class) ? through : Familia.resolve_class(through)
         end
       end
     end

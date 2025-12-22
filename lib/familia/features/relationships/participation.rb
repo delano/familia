@@ -7,6 +7,7 @@ require_relative 'participation_membership'
 require_relative 'collection_operations'
 require_relative 'participation/participant_methods'
 require_relative 'participation/target_methods'
+require_relative 'participation/through_model_operations'
 
 module Familia
   module Features
@@ -160,7 +161,7 @@ module Familia
           # @see #participates_in for instance-level participation relationships
           # @since 1.0.0
           def class_participates_in(collection_name, score: nil,
-                                    type: :sorted_set, bidirectional: true)
+                                    type: :sorted_set, bidirectional: true, through: nil)
             # Store metadata for this participation relationship
             participation_relationships << ParticipationRelationship.new(
               _original_target: self,   # For class-level, original and resolved are the same
@@ -169,6 +170,7 @@ module Familia
               score: score,
               type: type,
               bidirectional: bidirectional,
+              through: through,
             )
 
             # STEP 1: Add collection management methods to the class itself
@@ -284,7 +286,7 @@ module Familia
           # @see ModelInstanceMethods#current_participations for membership queries
           # @see ModelInstanceMethods#calculate_participation_score for scoring details
           #
-          def participates_in(target, collection_name, score: nil, type: :sorted_set, bidirectional: true, as: nil)
+          def participates_in(target, collection_name, score: nil, type: :sorted_set, bidirectional: true, as: nil, through: nil)
 
             # Normalize the target class parameter
             target_class = Familia.resolve_class(target)
@@ -306,6 +308,17 @@ module Familia
               ERROR
             end
 
+            # Validate through class if provided
+            if through
+              through_class = Familia.resolve_class(through)
+              raise ArgumentError, "Cannot resolve through class: #{through.inspect}" unless through_class
+
+              unless through_class.respond_to?(:features_enabled) &&
+                     through_class.features_enabled.include?(:object_identifier)
+                raise ArgumentError, "Through model #{through_class} must use `feature :object_identifier`"
+              end
+            end
+
             # Store metadata for this participation relationship
             participation_relationships << ParticipationRelationship.new(
               _original_target: target,      # Original value as passed (Symbol/String/Class)
@@ -314,6 +327,7 @@ module Familia
               score: score,
               type: type,
               bidirectional: bidirectional,
+              through: through,
             )
 
             # STEP 0: Add participations tracking field to PARTICIPANT class (Domain)
@@ -322,14 +336,14 @@ module Familia
 
             # STEP 1: Add collection management methods to TARGET class (Employee)
             # Employee gets: domains, add_domain, remove_domain, etc.
-            TargetMethods::Builder.build(target_class, collection_name, type)
+            TargetMethods::Builder.build(target_class, collection_name, type, through)
 
             # STEP 2: Add participation methods to PARTICIPANT class (Domain) - only if
             # bidirectional. e.g. in_employee_domains?, add_to_employee_domains, etc.
             if bidirectional
               # `as` parameter allows custom naming for reverse collections
               # If not provided, we'll let the builder use the pluralized target class name
-              ParticipantMethods::Builder.build(self, target_class, collection_name, type, as)
+              ParticipantMethods::Builder.build(self, target_class, collection_name, type, as, through)
             end
           end
 

@@ -3,6 +3,7 @@
 # frozen_string_literal: true
 
 require_relative '../collection_operations'
+require_relative 'through_model_operations'
 
 module Familia
   module Features
@@ -33,6 +34,9 @@ module Familia
         module Builder
           extend CollectionOperations
 
+          # Include ThroughModelOperations for through model lifecycle
+          extend Participation::ThroughModelOperations
+
           # Build all participant methods for a participation relationship
           #
           # @param participant_class [Class] The class receiving these methods (e.g., Domain)
@@ -40,8 +44,9 @@ module Familia
           # @param collection_name [Symbol] Name of the collection (e.g., :domains)
           # @param type [Symbol] Collection type (:sorted_set, :set, :list)
           # @param as [Symbol, nil] Optional custom name for relationship methods (e.g., :employees)
+          # @param through [Symbol, Class, nil] Through model class for join table pattern
           #
-          def self.build(participant_class, target_class, collection_name, type, as)
+          def self.build(participant_class, target_class, collection_name, type, as, through = nil)
             # Determine target name based on participation context:
             # - Instance-level: target_class is a Class object (e.g., Team) → use config_name ("project_team")
             # - Class-level: target_class is the string 'class' (from class_participates_in) → use as-is
@@ -55,8 +60,8 @@ module Familia
 
             # Core participant methods
             build_membership_check(participant_class, target_name, collection_name, type)
-            build_add_to_target(participant_class, target_name, collection_name, type)
-            build_remove_from_target(participant_class, target_name, collection_name, type)
+            build_add_to_target(participant_class, target_name, collection_name, type, through)
+            build_remove_from_target(participant_class, target_name, collection_name, type, through)
 
             # Type-specific methods
             case type
@@ -186,11 +191,11 @@ module Familia
           end
 
           # Build method to add self to target's collection
-          # Creates: domain.add_to_customer_domains(customer, score)
-          def self.build_add_to_target(participant_class, target_name, collection_name, type)
+          # Creates: domain.add_to_customer_domains(customer, score, through_attrs: {})
+          def self.build_add_to_target(participant_class, target_name, collection_name, type, through = nil)
             method_name = "add_to_#{target_name}_#{collection_name}"
 
-            participant_class.define_method(method_name) do |target_instance, score = nil|
+            participant_class.define_method(method_name) do |target_instance, score = nil, through_attrs: {}|
               return unless target_instance&.identifier
 
               # Use Horreum's DataType accessor instead of manual creation
@@ -200,6 +205,9 @@ module Familia
               if type == :sorted_set && score.nil?
                 score = calculate_participation_score(target_instance.class, collection_name)
               end
+
+              # Resolve through class if specified
+              through_class = through ? Familia.resolve_class(through) : nil
 
               # Use transaction for atomicity between collection add and reverse index tracking
               # All operations use Horreum's DataType methods (not direct Redis calls)
@@ -217,12 +225,26 @@ module Familia
                 # Track participation for efficient cleanup using DataType method (SADD)
                 track_participation_in(collection.dbkey) if respond_to?(:track_participation_in)
               end
+
+              # Create or update through model AFTER transaction completes
+              # This avoids Redis::Future issues with load operations inside transactions
+              through_model = if through_class
+                Familia::Features::Relationships::Participation::ThroughModelOperations.find_or_create(
+                  through_class: through_class,
+                  target: target_instance,
+                  participant: self,
+                  attrs: through_attrs
+                )
+              end
+
+              # Return through model if using :through, otherwise self for backward compat
+              through_model || self
             end
           end
 
           # Build method to remove self from target's collection
           # Creates: domain.remove_from_customer_domains(customer)
-          def self.build_remove_from_target(participant_class, target_name, collection_name, type)
+          def self.build_remove_from_target(participant_class, target_name, collection_name, type, through = nil)
             method_name = "remove_from_#{target_name}_#{collection_name}"
 
             participant_class.define_method(method_name) do |target_instance|
@@ -230,6 +252,9 @@ module Familia
 
               # Use Horreum's DataType accessor instead of manual creation
               collection = target_instance.send(collection_name)
+
+              # Resolve through class if specified
+              through_class = through ? Familia.resolve_class(through) : nil
 
               # Use transaction for atomicity between collection remove and reverse index untracking
               # All operations use Horreum's DataType methods (not direct Redis calls)
@@ -239,6 +264,16 @@ module Familia
 
                 # Remove from participation tracking using DataType method (SREM)
                 untrack_participation_in(collection.dbkey) if respond_to?(:untrack_participation_in)
+              end
+
+              # Destroy through model AFTER transaction completes
+              # This avoids Redis::Future issues with load operations inside transactions
+              if through_class
+                Familia::Features::Relationships::Participation::ThroughModelOperations.find_and_destroy(
+                  through_class: through_class,
+                  target: target_instance,
+                  participant: self
+                )
               end
             end
           end
