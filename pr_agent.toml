@@ -9,11 +9,16 @@ response_language = "en"
 # Enable RAG context enrichment for codebase duplication compliance checks
 enable_rag = true
 # Include related repositories for comprehensive context
-rag_repo_list = ['delano/familia', 'delano/tryouts', 'delano/otto']
+rag_repo_list = ['onetimesecret/onetimesecret', 'delano/tryouts']
 
 [compliance]
 # Reference custom compliance checklist for project-specific rules
 custom_compliance_path = "pr_compliance_checklist.yaml"
+
+[pr_reviewer]
+# Disable automatic label additions (triggers Claude review workflow noise)
+enable_review_labels_security = false
+enable_review_labels_effort = false
 
 [ignore]
 # Reduce noise by excluding generated files and build artifacts

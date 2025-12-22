@@ -7,11 +7,11 @@ on:
 
 jobs:
   claude-review:
-    # Optional: Filter by PR author
-    # if: |
-    #   github.event.pull_request.user.login == 'external-contributor' ||
-    #   github.event.pull_request.user.login == 'new-developer' ||
-    #   github.event.pull_request.author_association == 'FIRST_TIME_CONTRIBUTOR'
+    # Run on opened/synchronize, but only on 'labeled' if label is 'claude-review'
+    if: |
+      github.event.action == 'opened' ||
+      github.event.action == 'synchronize' ||
+      (github.event.action == 'labeled' && github.event.label.name == 'claude-review')
 
     runs-on: ubuntu-latest
     permissions:
@@ -50,3 +50,6 @@ jobs:
           # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
           # or https://docs.anthropic.com/en/docs/claude-code/sdk#command-line for available options
           allowed_tools: "Bash(gh issue view:*),Bash(gh search:*),Bash(gh issue list:*),Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr list:*)"
+
+          # Allow bot-initiated workflows (e.g., qodo, dependabot)
+          allowed_bots: "*"

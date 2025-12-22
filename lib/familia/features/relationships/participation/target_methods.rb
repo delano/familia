@@ -3,6 +3,7 @@
 # frozen_string_literal: true
 
 require_relative '../collection_operations'
+require_relative 'through_model_operations'
 
 module Familia
   module Features
@@ -30,18 +31,22 @@ module Familia
         module Builder
           extend CollectionOperations
 
+          # Include ThroughModelOperations for through model lifecycle
+          extend Participation::ThroughModelOperations
+
           # Build all target methods for a participation relationship
           # @param target_class [Class] The class receiving these methods (e.g., Customer)
           # @param collection_name [Symbol] Name of the collection (e.g., :domains)
           # @param type [Symbol] Collection type (:sorted_set, :set, :list)
-          def self.build(target_class, collection_name, type)
+          # @param through [Symbol, Class, nil] Through model class for join table pattern
+          def self.build(target_class, collection_name, type, through = nil)
             # FIRST: Ensure the DataType field is defined on the target class
             TargetMethods::Builder.ensure_collection_field(target_class, collection_name, type)
 
             # Core target methods
             build_collection_getter(target_class, collection_name, type)
-            build_add_item(target_class, collection_name, type)
-            build_remove_item(target_class, collection_name, type)
+            build_add_item(target_class, collection_name, type, through)
+            build_remove_item(target_class, collection_name, type, through)
             build_bulk_add(target_class, collection_name, type)
 
             # Type-specific methods
@@ -74,17 +79,20 @@ module Familia
           end
 
           # Build method to add an item to the collection
-          # Creates: customer.add_domains_instance(domain, score)
-          def self.build_add_item(target_class, collection_name, type)
+          # Creates: customer.add_domains_instance(domain, score, through_attrs: {})
+          def self.build_add_item(target_class, collection_name, type, through = nil)
             method_name = "add_#{collection_name}_instance"
 
-            target_class.define_method(method_name) do |item, score = nil|
+            target_class.define_method(method_name) do |item, score = nil, through_attrs: {}|
               collection = send(collection_name)
 
               # Calculate score if needed and not provided
               if type == :sorted_set && score.nil? && item.respond_to?(:calculate_participation_score)
                 score = item.calculate_participation_score(self.class, collection_name)
               end
+
+              # Resolve through class if specified
+              through_class = through ? Familia.resolve_class(through) : nil
 
               # Use transaction for atomicity between collection add and reverse index tracking
               # All operations use Horreum's DataType methods (not direct Redis calls)
@@ -102,16 +110,41 @@ module Familia
                 # Track participation in reverse index using DataType method (SADD)
                 item.track_participation_in(collection.dbkey) if item.respond_to?(:track_participation_in)
               end
+
+              # TRANSACTION BOUNDARY: Through model operations intentionally happen AFTER
+              # the transaction block closes. This is a deliberate design decision because:
+              #
+              # 1. ThroughModelOperations.find_or_create performs load operations that would
+              #    return Redis::Future objects inside a transaction, breaking the flow
+              # 2. The core participation (collection add + tracking) is atomic within the tx
+              # 3. Through model creation is logically separate - if it fails, the participation
+              #    itself succeeded and can be cleaned up or retried independently
+              #
+              # If Familia's transaction handling changes in the future, revisit this boundary.
+              through_model = if through_class
+                Participation::ThroughModelOperations.find_or_create(
+                  through_class: through_class,
+                  target: self,
+                  participant: item,
+                  attrs: through_attrs
+                )
+              end
+
+              # Return through model if using :through, otherwise self for backward compat
+              through_model || self
             end
           end
 
           # Build method to remove an item from the collection
           # Creates: customer.remove_domains_instance(domain)
-          def self.build_remove_item(target_class, collection_name, type)
+          def self.build_remove_item(target_class, collection_name, type, through = nil)
             method_name = "remove_#{collection_name}_instance"
 
             target_class.define_method(method_name) do |item|
               collection = send(collection_name)
+
+              # Resolve through class if specified
+              through_class = through ? Familia.resolve_class(through) : nil
 
               # Use transaction for atomicity between collection remove and reverse index untracking
               # All operations use Horreum's DataType methods (not direct Redis calls)
@@ -121,6 +154,17 @@ module Familia
 
                 # Remove from participation tracking using DataType method (SREM)
                 item.untrack_participation_in(collection.dbkey) if item.respond_to?(:untrack_participation_in)
+              end
+
+              # TRANSACTION BOUNDARY: Through model destruction intentionally happens AFTER
+              # the transaction block. See build_add_item for detailed rationale.
+              # The core removal is atomic; through model cleanup is a separate operation.
+              if through_class
+                Participation::ThroughModelOperations.find_and_destroy(
+                  through_class: through_class,
+                  target: self,
+                  participant: item
+                )
               end
             end
           end
