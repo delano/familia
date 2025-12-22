@@ -46,7 +46,7 @@ module Familia
           # @param as [Symbol, nil] Optional custom name for relationship methods (e.g., :employees)
           # @param through [Symbol, Class, nil] Through model class for join table pattern
           #
-          def self.build(participant_class, target_class, collection_name, type, as, through = nil)
+          def self.build(participant_class, target_class, collection_name, type, as, through = nil, method_prefix = nil)
             # Determine target name based on participation context:
             # - Instance-level: target_class is a Class object (e.g., Team) → use config_name ("project_team")
             # - Class-level: target_class is the string 'class' (from class_participates_in) → use as-is
@@ -78,11 +78,16 @@ module Familia
             # - Class-level collections are accessed directly on the class (User.all_users)
             return if target_class.is_a?(String)  # 'class' indicates class-level participation
 
-            # If `as` is specified, create a custom method for just this collection
-            # Otherwise, add to the default pluralized method that unions all collections
+            # Priority for method naming:
+            # 1. `as:` - most specific, applies to just this collection
+            # 2. `method_prefix:` - applies to all collections for this target class
+            # 3. Default - uses target_class.config_name
             if as
               # Custom method for just this specific collection
               build_reverse_collection_methods(participant_class, target_class, as, [collection_name])
+            elsif method_prefix
+              # Custom prefix for all methods related to this target class
+              build_reverse_collection_methods(participant_class, target_class, method_prefix, nil)
             else
               # Default pluralized method - will include ALL collections for this target
               build_reverse_collection_methods(participant_class, target_class, nil, nil)

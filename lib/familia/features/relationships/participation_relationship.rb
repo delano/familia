@@ -23,6 +23,7 @@ module Familia
         :type,                # Symbol - collection type (:sorted_set, :set, :list)
         :generate_participant_methods,  # Boolean - whether to generate participant methods
         :through,             # Symbol/Class/nil - through model class for join table pattern
+        :method_prefix,       # Symbol/nil - custom prefix for reverse method names (e.g., :team)
       ) do
         # Get a unique key for this participation relationship
         # Useful for comparisons and hash keys
