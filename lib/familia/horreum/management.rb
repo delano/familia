@@ -156,7 +156,10 @@ module Familia
           # doesn't, we return nil. If it does, we proceed to load the object.
           # Otherwise, hgetall will return an empty hash, which will be passed to
           # the constructor, which will then be annoying to debug.
-          return unless does_exist
+          unless does_exist
+            cleanup_stale_instance_entry(objkey)
+            return nil
+          end
         else
           # Optimized mode: Skip existence check
           Familia.debug "[find_by_key] #{self} from key #{objkey} (check_exists: false)"
@@ -166,12 +169,42 @@ module Familia
         obj = dbclient.hgetall(objkey) # horreum objects are persisted as database hashes
         Familia.trace :FIND_BY_DBKEY_INSPECT, nil, "#{objkey}: #{obj.inspect}"
 
-        # If we skipped existence check and got empty hash, key doesn't exist
-        return nil if !check_exists && obj.empty?
+        # Always check for empty hash to handle race conditions where the key
+        # expires between EXISTS check and HGETALL (when check_exists: true),
+        # or simply doesn't exist (when check_exists: false).
+        if obj.empty?
+          cleanup_stale_instance_entry(objkey)
+          return nil
+        end
 
         # Create instance and deserialize fields using shared helper method
         instantiate_from_hash(obj)
       end
+
+      # Removes a stale entry from the instances sorted set.
+      # Called when find_by_dbkey detects that an object no longer exists
+      # (either EXISTS returned false, or HGETALL returned empty hash).
+      #
+      # This provides lazy cleanup of phantom instance entries that can
+      # accumulate when objects expire via TTL without explicit destroy!
+      #
+      # @param objkey [String] The full database key (prefix:identifier:suffix)
+      # @return [void]
+      # @api private
+      def cleanup_stale_instance_entry(objkey)
+        return unless respond_to?(:instances)
+
+        # Key format is prefix:identifier:suffix, so identifier is at index 1
+        parts = Familia.split(objkey)
+        return unless parts.length >= 2
+
+        identifier = parts[1]
+        return if identifier.nil? || identifier.empty?
+
+        instances.remove(identifier)
+        Familia.debug "[find_by_dbkey] Removed stale instance entry: #{identifier}"
+      end
+      private :cleanup_stale_instance_entry
       alias find_by_key find_by_dbkey
 
       # Retrieves and instantiates an object from Database using its identifier.
