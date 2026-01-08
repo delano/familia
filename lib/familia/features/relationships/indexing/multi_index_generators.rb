@@ -37,32 +37,36 @@ module Familia
           # @param within [Class, Symbol] Scope class for instance-scoped index (required)
           # @param query [Boolean] Whether to generate query methods
           def setup(indexed_class:, field:, index_name:, within:, query:)
-            # Multi-index always requires a scope context
-            scope_class = within
-            resolved_class = Familia.resolve_class(scope_class)
+            # Determine scope type: class-level or instance-scoped
+            scope_class, scope_type = if within == :class
+              [indexed_class, :class]
+            else
+              k = Familia.resolve_class(within)
+              [k, :instance]
+            end
 
             # Store metadata for this indexing relationship
             indexed_class.indexing_relationships << IndexingRelationship.new(
               field:             field,
               scope_class:       scope_class,
-              within:            within,
+              within:            within,  # Preserve original (:class or actual class)
               index_name:        index_name,
               query:            query,
               cardinality:       :multi,
             )
 
-            # Always generate the factory method - required by mutation methods
-            if scope_class.is_a?(Class)
-              generate_factory_method(resolved_class, index_name)
+            case scope_type
+            when :instance
+              # Instance-scoped multi-index (existing behavior)
+              generate_factory_method(scope_class, index_name)
+              generate_query_methods_destination(indexed_class, field, scope_class, index_name) if query
+              generate_mutation_methods_self(indexed_class, field, scope_class, index_name)
+            when :class
+              # Class-level multi-index (new behavior)
+              generate_factory_method_class(indexed_class, index_name)
+              generate_query_methods_class(indexed_class, field, index_name) if query
+              generate_mutation_methods_class(indexed_class, field, index_name)
             end
-
-            # Generate query methods on the scope class (optional)
-            if query && scope_class.is_a?(Class)
-              generate_query_methods_destination(indexed_class, field, resolved_class, index_name)
-            end
-
-            # Generate mutation methods on the indexed class
-            generate_mutation_methods_self(indexed_class, field, resolved_class, index_name)
           end
 
           # Generates the factory method ON THE SCOPE CLASS (Company when within: Company):
@@ -321,6 +325,191 @@ module Familia
                     new_index_set = scope_instance.send("#{index_name}_for", new_field_value)
                     new_index_set.add(identifier)
                   end
+                end
+              end
+            end
+          end
+
+          # =========================================================================
+          # CLASS-LEVEL MULTI-INDEX GENERATORS
+          # =========================================================================
+          #
+          # When within: :class is used, these generators create class-level methods
+          # instead of instance-scoped methods.
+          #
+          # Example:
+          #   multi_index :role, :role_index  # within: :class is default
+          #
+          # Generates on Customer (class methods):
+          #   - Customer.role_index_for('colonel')   -> UnsortedSet factory
+          #   - Customer.find_all_by_role('colonel') -> [Customer, ...]
+          #   - Customer.sample_from_role('colonel', 3) -> random sample
+          #   - Customer.rebuild_role_index          -> rebuild index
+          #
+          # Generates on Customer (instance methods, auto-called on save):
+          #   - customer.add_to_class_role_index
+          #   - customer.remove_from_class_role_index
+          #   - customer.update_in_class_role_index(old_value)
+
+          # Generates class-level factory method:
+          # - Customer.role_index_for(field_value) -> UnsortedSet
+          #
+          # @param indexed_class [Class] The class being indexed (e.g., Customer)
+          # @param index_name [Symbol] Name of the index (e.g., :role_index)
+          def generate_factory_method_class(indexed_class, index_name)
+            indexed_class.define_singleton_method(:"#{index_name}_for") do |field_value|
+              index_key = Familia.join(index_name, field_value)
+              Familia::UnsortedSet.new(index_key, parent: self)
+            end
+          end
+
+          # Generates class-level query methods:
+          # - Customer.find_all_by_role(value) -> [Customer, ...]
+          # - Customer.sample_from_role(value, count) -> random sample
+          # - Customer.rebuild_role_index -> rebuild index
+          #
+          # @param indexed_class [Class] The class being indexed (e.g., Customer)
+          # @param field [Symbol] The field to index (e.g., :role)
+          # @param index_name [Symbol] Name of the index (e.g., :role_index)
+          def generate_query_methods_class(indexed_class, field, index_name)
+            # find_all_by_role(value)
+            indexed_class.define_singleton_method(:"find_all_by_#{field}") do |field_value|
+              index_set = send("#{index_name}_for", field_value)
+              index_set.members.map { |id| find_by_identifier(id) }.compact
+            end
+
+            # sample_from_role(value, count)
+            indexed_class.define_singleton_method(:"sample_from_#{field}") do |field_value, count = 1|
+              index_set = send("#{index_name}_for", field_value)
+              index_set.sample(count).map { |id| find_by_identifier(id) }.compact
+            end
+
+            # rebuild_role_index(batch_size:, &progress)
+            # For class-level indexes, we iterate all instances of the class
+            indexed_class.define_singleton_method(:"rebuild_#{index_name}") do |batch_size: 100, &progress_block|
+              # PHASE 1: Discover all field values and collect objects
+              progress_block&.call(phase: :discovering, current: 0, total: 0)
+
+              # Use class-level instances collection if available
+              unless respond_to?(:instances) && instances.respond_to?(:members)
+                Familia.warn "[Rebuild] Cannot rebuild class-level multi-index #{index_name}: " \
+                             "no instances collection found. " \
+                             "Ensure #{name} has class_sorted_set :instances or similar."
+                return nil
+              end
+
+              field_values = Set.new
+              cached_objects = []
+              processed = 0
+              total_count = instances.size
+
+              progress_block&.call(phase: :loading, current: 0, total: total_count)
+
+              instances.members.each_slice(batch_size) do |identifiers|
+                objects = load_multi(identifiers).compact
+                cached_objects.concat(objects)
+
+                objects.each do |obj|
+                  value = obj.send(field)
+                  field_values << value.to_s if value && !value.to_s.strip.empty?
+                end
+
+                processed += identifiers.size
+                progress_block&.call(phase: :loading, current: processed, total: total_count)
+              end
+
+              # PHASE 2: Clear existing index sets using SCAN
+              progress_block&.call(phase: :clearing, current: 0, total: field_values.size)
+
+              # Get pattern for all index keys: "customer:role_index:*"
+              sample_index = send(:"#{index_name}_for", "*")
+              index_pattern = sample_index.dbkey
+
+              cleared_count = 0
+              dbclient.scan_each(match: index_pattern) do |key|
+                dbclient.del(key)
+                cleared_count += 1
+                progress_block&.call(phase: :clearing, current: cleared_count, total: field_values.size, key: key)
+              end
+
+              # PHASE 3: Rebuild from cached objects
+              progress_block&.call(phase: :rebuilding, current: 0, total: cached_objects.size)
+
+              processed = 0
+              cached_objects.each_slice(batch_size) do |objects|
+                dbclient.multi do |conn|
+                  objects.each do |obj|
+                    field_value = obj.send(field)
+                    next unless field_value && !field_value.to_s.strip.empty?
+
+                    index_set = send("#{index_name}_for", field_value)
+                    conn.sadd(index_set.dbkey, obj.identifier)
+                  end
+                end
+
+                processed += objects.size
+                progress_block&.call(phase: :rebuilding, current: processed, total: cached_objects.size)
+              end
+
+              Familia.info "[Rebuild] Class-level multi-index #{index_name} rebuilt: " \
+                           "#{field_values.size} field values, #{processed} objects"
+
+              processed
+            end
+          end
+
+          # Generates instance mutation methods for class-level indexes:
+          # - customer.add_to_class_role_index
+          # - customer.remove_from_class_role_index
+          # - customer.update_in_class_role_index(old_value)
+          #
+          # These are auto-called on save/destroy when auto-indexing is enabled.
+          #
+          # @param indexed_class [Class] The class being indexed (e.g., Customer)
+          # @param field [Symbol] The field to index (e.g., :role)
+          # @param index_name [Symbol] Name of the index (e.g., :role_index)
+          def generate_mutation_methods_class(indexed_class, field, index_name)
+            indexed_class.class_eval do
+              method_name = :"add_to_class_#{index_name}"
+              Familia.debug("[MultiIndexGenerators] #{name} class method #{method_name}")
+
+              define_method(method_name) do
+                field_value = send(field)
+                return unless field_value && !field_value.to_s.strip.empty?
+
+                index_set = self.class.send("#{index_name}_for", field_value)
+                index_set.add(identifier)
+              end
+
+              method_name = :"remove_from_class_#{index_name}"
+              Familia.debug("[MultiIndexGenerators] #{name} class method #{method_name}")
+
+              define_method(method_name) do
+                field_value = send(field)
+                return unless field_value && !field_value.to_s.strip.empty?
+
+                index_set = self.class.send("#{index_name}_for", field_value)
+                index_set.remove(identifier)
+              end
+
+              method_name = :"update_in_class_#{index_name}"
+              Familia.debug("[MultiIndexGenerators] #{name} class method #{method_name}")
+
+              define_method(method_name) do |old_field_value|
+                return unless old_field_value
+
+                new_field_value = send(field)
+                return if old_field_value == new_field_value
+
+                # Use DataType methods for consistent serialization
+                # Remove from old index
+                old_set = self.class.send("#{index_name}_for", old_field_value)
+                old_set.remove(identifier)
+
+                # Add to new index if present
+                if new_field_value && !new_field_value.to_s.strip.empty?
+                  new_set = self.class.send("#{index_name}_for", new_field_value)
+                  new_set.add(identifier)
                 end
               end
             end

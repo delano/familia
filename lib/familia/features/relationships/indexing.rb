@@ -98,7 +98,7 @@ module Familia
           # @example Instance-scoped multi-value indexing
           #   multi_index :department, :dept_index, within: Company
           #
-          def multi_index(field, index_name, within:, query: true)
+          def multi_index(field, index_name, within: :class, query: true)
             MultiIndexGenerators.setup(
               indexed_class: self,
               field: field,
@@ -159,12 +159,14 @@ module Familia
               index_name = config.index_name
               old_field_value = old_values[field]
 
-              # Determine which update method to call
-              if config.within.nil?
-                # Class-level index (unique_index without within:)
+              # Determine which update method to call based on scope type
+              # Class-level: within is nil (unique_index default) or :class (multi_index default)
+              # Instance-scoped: within is a specific class
+              if config.within.nil? || config.within == :class
+                # Class-level index (auto-indexed on save)
                 send("update_in_class_#{index_name}", old_field_value)
               else
-                # Instance-scoped index (unique_index or multi_index with within:) - requires scope context
+                # Instance-scoped index - requires explicit scope context
                 next unless scope_context
 
                 # Use config_name for method naming
@@ -183,12 +185,14 @@ module Familia
             self.class.indexing_relationships.each do |config|
               index_name = config.index_name
 
-              # Determine which remove method to call
-              if config.within.nil?
-                # Class-level index (unique_index without within:)
+              # Determine which remove method to call based on scope type
+              # Class-level: within is nil (unique_index default) or :class (multi_index default)
+              # Instance-scoped: within is a specific class
+              if config.within.nil? || config.within == :class
+                # Class-level index (auto-indexed on save)
                 send("remove_from_class_#{index_name}")
               else
-                # Instance-scoped index (unique_index or multi_index with within:) - requires scope context
+                # Instance-scoped index - requires explicit scope context
                 next unless scope_context
 
                 # Use config_name for method naming
