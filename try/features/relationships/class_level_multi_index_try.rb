@@ -224,24 +224,23 @@ region_config = ClassLevelCustomer.indexing_relationships.find { |c| c.index_nam
 [region_config.field, region_config.index_name, region_config.cardinality]
 #=> [:region, :region_index, :multi]
 
-## Add to region index via generated method for cust1
-@cust1.add_to_class_region_index
-ClassLevelCustomer.region_index_for('west').members
-#=> ["cust_001"]
-
-## Add for cust2 and check
-@cust2.add_to_class_region_index
-ClassLevelCustomer.region_index_for('east').members
-#=> ["cust_002"]
-
-## Add for cust3 and check
-@cust3.add_to_class_region_index
+## Region index is auto-populated on save (cust1 and cust3 are 'west')
+# Note: Auto-indexing is now enabled for class-level multi_index
 ClassLevelCustomer.region_index_for('west').members.sort
 #=> ["cust_001", "cust_003"]
 
-## Verify all region indexes
-[ClassLevelCustomer.region_index_for('west').members.sort, ClassLevelCustomer.region_index_for('east').members]
-#=> [["cust_001", "cust_003"], ["cust_002"]]
+## East region is also auto-populated (cust2 and cust4 are 'east')
+ClassLevelCustomer.region_index_for('east').members.sort
+#=> ["cust_002", "cust_004"]
+
+## Manual add_to is idempotent (no duplicate entries)
+@cust1.add_to_class_region_index
+ClassLevelCustomer.region_index_for('west').members.sort
+#=> ["cust_001", "cust_003"]
+
+## Verify all region indexes after auto-indexing
+[ClassLevelCustomer.region_index_for('west').members.sort, ClassLevelCustomer.region_index_for('east').members.sort]
+#=> [["cust_001", "cust_003"], ["cust_002", "cust_004"]]
 
 ## Query by region works
 west_customers = ClassLevelCustomer.find_all_by_region('west')
@@ -250,17 +249,101 @@ west_customers.map(&:custid).sort
 
 ## East region also works
 east_customers = ClassLevelCustomer.find_all_by_region('east')
-east_customers.map(&:custid)
-#=> ["cust_002"]
+east_customers.map(&:custid).sort
+#=> ["cust_002", "cust_004"]
+
+# =============================================
+# 10. Edge Cases and Nil Handling
+# =============================================
+
+## Adding to index with nil field value does nothing (no error)
+@cust_nil = ClassLevelCustomer.new(custid: 'cust_nil', name: 'NilRole', role: nil, region: 'west')
+@cust_nil.save
+result = @cust_nil.add_to_class_role_index
+result.nil?
+#=> true
+
+## Nil role customer is not in any role index
+ClassLevelCustomer.role_index_for('').members.include?('cust_nil')
+#=> false
+
+## Adding to index with empty string field value does nothing
+@cust_empty = ClassLevelCustomer.new(custid: 'cust_empty', name: 'EmptyRole', role: '', region: 'east')
+@cust_empty.save
+result = @cust_empty.add_to_class_role_index
+result.nil?
+#=> true
+
+## Adding to index with whitespace-only field value does nothing
+@cust_whitespace = ClassLevelCustomer.new(custid: 'cust_ws', name: 'WhitespaceRole', role: '   ', region: 'east')
+@cust_whitespace.save
+result = @cust_whitespace.add_to_class_role_index
+result.nil?
+#=> true
+
+## find_all_by_* with nil value returns empty array
+ClassLevelCustomer.find_all_by_role(nil)
+#=> []
+
+## find_all_by_* with empty string returns empty array
+ClassLevelCustomer.find_all_by_role('')
+#=> []
+
+## sample_from_* with nil value returns empty array
+ClassLevelCustomer.sample_from_role(nil, 1)
+#=> []
+
+## sample_from_* with empty string returns empty array
+ClassLevelCustomer.sample_from_role('', 1)
+#=> []
+
+## sample_from_* with count=0 returns empty array
+ClassLevelCustomer.sample_from_role('admin', 0)
+#=> []
+
+## Update with same old and new value does nothing (no-op)
+# First ensure cust3 is in the admin index
+@cust3.role = 'admin'
+@cust3.add_to_class_role_index
+admin_count_before = ClassLevelCustomer.role_index_for('admin').size
+@cust3.update_in_class_role_index('admin')  # same value
+admin_count_after = ClassLevelCustomer.role_index_for('admin').size
+admin_count_before == admin_count_after
+#=> true
+
+## Update when field becomes nil removes from old index only
+@cust_update = ClassLevelCustomer.new(custid: 'cust_update', name: 'WillBeNil', role: 'tempuser', region: 'west')
+@cust_update.save
+@cust_update.add_to_class_role_index
+ClassLevelCustomer.role_index_for('tempuser').members.include?('cust_update')
+#=> true
+
+## After setting role to nil and updating, customer is removed from old index
+old_role = @cust_update.role
+@cust_update.role = nil
+@cust_update.update_in_class_role_index(old_role)
+ClassLevelCustomer.role_index_for('tempuser').members.include?('cust_update')
+#=> false
+
+## Update with nil old_value returns early (no-op)
+@cust3.role = 'admin'
+result = @cust3.update_in_class_role_index(nil)
+result.nil?
+#=> true
 
 # Teardown
 @cust1.delete!
 @cust2.delete!
 @cust3.delete!
 @cust4.delete!
+@cust_nil&.delete!
+@cust_empty&.delete!
+@cust_whitespace&.delete!
+@cust_update&.delete!
 # Clean up index keys
 ClassLevelCustomer.dbclient.del(ClassLevelCustomer.role_index_for('admin').dbkey)
 ClassLevelCustomer.dbclient.del(ClassLevelCustomer.role_index_for('user').dbkey)
 ClassLevelCustomer.dbclient.del(ClassLevelCustomer.role_index_for('superadmin').dbkey)
+ClassLevelCustomer.dbclient.del(ClassLevelCustomer.role_index_for('tempuser').dbkey)
 ClassLevelCustomer.dbclient.del(ClassLevelCustomer.region_index_for('west').dbkey)
 ClassLevelCustomer.dbclient.del(ClassLevelCustomer.region_index_for('east').dbkey)
