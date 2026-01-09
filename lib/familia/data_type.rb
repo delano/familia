@@ -88,4 +88,5 @@ module Familia
   require_relative 'data_type/types/sorted_set'
   require_relative 'data_type/types/hashkey'
   require_relative 'data_type/types/stringkey'
+  require_relative 'data_type/types/json_stringkey'
 end
