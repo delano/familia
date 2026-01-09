@@ -76,6 +76,10 @@ class Product < Familia::Horreum
   string :view_count, default: '0'
   # Usage: view_count.increment (atomic increment)
 
+  # JSON string fields (type-preserving storage)
+  json_string :last_synced_at, default: 0.0
+  # Usage: last_synced_at stores Float, retrieves Float (not String)
+
   # Lists (ordered, allows duplicates)
   list :categories
   # Usage: categories.push('fruit'), categories.pop
@@ -110,6 +114,10 @@ class Product < Familia::Horreum
   stringkey :description # Creates StringKey instance
   listkey :history       # Creates ListKey instance
 
+  # JSON string (type-preserving alternative to StringKey)
+  json_string :metadata  # Creates JsonStringKey instance
+  json_stringkey :config # Creates JsonStringKey instance
+
   # Both work identically - choose based on preference
   set :tags              # UnsortedSet (unchanged)
   sorted_set :ratings    # SortedSet (unchanged)
@@ -119,6 +127,7 @@ end
 # Access patterns are identical
 product.view_count.class        # => Familia::StringKey
 product.description.class       # => Familia::StringKey
+product.metadata.class          # => Familia::JsonStringKey
 product.categories.class        # => Familia::ListKey
 product.history.class           # => Familia::ListKey
 ```

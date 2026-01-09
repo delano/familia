@@ -14,7 +14,7 @@ module Familia
   # DataType - Base class for Database data type wrappers
   #
   # This class provides common functionality for various Database data types
-  # such as String, List, UnsortedSet, SortedSet, and HashKey.
+  # such as String, JsonStringKey, List, UnsortedSet, SortedSet, and HashKey.
   #
   # @abstract Subclass and implement Database data type specific methods
   class DataType
@@ -88,4 +88,5 @@ module Familia
   require_relative 'data_type/types/sorted_set'
   require_relative 'data_type/types/hashkey'
   require_relative 'data_type/types/stringkey'
+  require_relative 'data_type/types/json_stringkey'
 end
