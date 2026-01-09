@@ -10,10 +10,10 @@ module Familia
   #
   class Horreum
     # Settings - Instance-level configuration methods for Horreum models
-    # Provides per-instance settings like logical_database, dump_method, load_method, suffix
+    # Provides per-instance settings like logical_database, suffix
     #
     module Settings
-      attr_writer :dump_method, :load_method, :suffix
+      attr_writer :suffix
 
       def opts
         @opts ||= {}
@@ -39,14 +39,6 @@ module Familia
 
       def suffix
         @suffix || self.class.suffix
-      end
-
-      def dump_method
-        @dump_method || self.class.dump_method
-      end
-
-      def load_method
-        @load_method || self.class.load_method
       end
     end
   end

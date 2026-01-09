@@ -80,13 +80,12 @@ module Familia
     # Class-Level Attributes:
     # * @parent - Parent object reference for nested relationships
     # * @dbclient - Database connection override for this class
-    # * @dump_method/@load_method - Serialization method configuration
     # * @has_related_fields - Flag indicating if DataType relationships are defined
     #
     class << self
       attr_accessor :parent
       # TODO: Where are we calling dbclient= from now with connection pool?
-      attr_writer :dbclient, :dump_method, :load_method
+      attr_writer :dbclient
       attr_reader :has_related_fields
 
       # Extends ClassMethods to subclasses and tracks Familia members

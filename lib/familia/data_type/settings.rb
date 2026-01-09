@@ -85,14 +85,6 @@ module Familia
       def uri=(value)
         @uri = value
       end
-
-      def dump_method
-        self.class.dump_method
-      end
-
-      def load_method
-        self.class.load_method
-      end
     end
   end
 end

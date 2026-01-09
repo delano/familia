@@ -65,7 +65,7 @@ rescue StandardError => e
 end
 #=> false
 
-## serialization method configuration methods exist
+## JSON serialization is hard-coded for consistency
 begin
   custom_class = Class.new(Familia::Horreum) do
     identifier_field :id
@@ -73,8 +73,9 @@ begin
     field :data
   end
 
-  # Check if these methods exist
-  custom_class.respond_to?(:dump_method) && custom_class.respond_to?(:load_method)
+  # Verify that custom serialization methods have been removed
+  # dump_method and load_method are no longer available
+  !custom_class.respond_to?(:dump_method) && !custom_class.respond_to?(:load_method)
 rescue StandardError => e
   false
 end

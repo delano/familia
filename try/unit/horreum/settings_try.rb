@@ -19,17 +19,6 @@ end
 user_class.new(email: "test@example.com")
 #==> _.logical_database == 5
 
-## custom serialization methods
-user_class = Class.new(Familia::Horreum) do
-  identifier_field :email
-  field :email
-  field :name
-end
-
-user_class.new(email: "test@example.com")
-#==> _.respond_to?(:dump_method)
-#==> _.respond_to?(:load_method)
-
 ## redisuri generation with suffix
 user_class = Class.new(Familia::Horreum) do
   identifier_field :email

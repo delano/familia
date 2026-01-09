@@ -29,7 +29,6 @@ module Familia
     #
     module ClassMethods
       attr_reader :features_available, :feature_definitions
-      attr_accessor :dump_method, :load_method
 
       def add_feature(klass, feature_name, depends_on: [], field_group: nil)
         @features_available ||= {}
@@ -111,7 +110,6 @@ module Familia
     # Module-level methods for Familia::Base itself
     class << self
       attr_reader :features_available, :feature_definitions
-      attr_accessor :dump_method, :load_method
 
       def add_feature(klass, feature_name, depends_on: [], field_group: nil)
         @features_available ||= {}

@@ -46,9 +46,6 @@ module Familia
 
       using Familia::Refinements::StylizeWords
 
-      @dump_method = :to_json
-      @load_method = :from_json
-
       def self.included(base)
         Familia.trace(:LOADED, self, base) if Familia.debug?
         base.extend ModelClassMethods
