@@ -220,20 +220,38 @@ module Familia
 
               next unless field_value
 
-              if config.within.nil?
-                # Class-level index (unique_index without within:) - check hash key using DataType
-                index_hash = self.class.send(index_name)
-                next unless index_hash.key?(field_value.to_s)
+              # Class-level indexes have within: nil (unique_index) or within: :class (multi_index)
+              # Instance-scoped indexes have within: SomeClass (a specific class)
+              if config.within.nil? || config.within == :class
+                if cardinality == :unique
+                  # Class-level unique index - check hash key using DataType
+                  index_hash = self.class.send(index_name)
+                  next unless index_hash.key?(field_value.to_s)
 
-                memberships << {
-                  scope_class: 'class',
-                  index_name: index_name,
-                  field: field,
-                  field_value: field_value,
-                  index_key: index_hash.dbkey,
-                  cardinality: cardinality,
-                  type: 'unique_index',
-                }
+                  memberships << {
+                    scope_class: 'class',
+                    index_name: index_name,
+                    field: field,
+                    field_value: field_value,
+                    index_key: index_hash.dbkey,
+                    cardinality: cardinality,
+                    type: 'unique_index',
+                  }
+                else
+                  # Class-level multi index - check set membership using factory method
+                  index_set = self.class.send("#{index_name}_for", field_value)
+                  next unless index_set.member?(identifier)
+
+                  memberships << {
+                    scope_class: 'class',
+                    index_name: index_name,
+                    field: field,
+                    field_value: field_value,
+                    index_key: index_set.dbkey,
+                    cardinality: cardinality,
+                    type: 'multi_index',
+                  }
+                end
               else
                 # Instance-scoped index (unique_index or multi_index with within:) - cannot check without scope instance
                 # This would require scanning all possible scope instances
@@ -254,7 +272,7 @@ module Familia
           end
 
           # Check if this object is indexed in a specific scope
-          # For class-level indexes, checks the hash key
+          # For class-level indexes, checks the hash key (unique) or set membership (multi)
           # For instance-scoped indexes, returns false (requires scope instance)
           def indexed_in?(index_name)
             return false unless self.class.respond_to?(:indexing_relationships)
@@ -266,10 +284,18 @@ module Familia
             field_value = send(field)
             return false unless field_value
 
-            if config.within.nil?
-              # Class-level index (class_indexed_by) - check hash key using DataType
-              index_hash = self.class.send(index_name)
-              index_hash.key?(field_value.to_s)
+            # Class-level indexes have within: nil (unique_index) or within: :class (multi_index)
+            # Instance-scoped indexes have within: SomeClass (a specific class)
+            if config.within.nil? || config.within == :class
+              if config.cardinality == :unique
+                # Class-level unique index - check hash key using DataType
+                index_hash = self.class.send(index_name)
+                index_hash.key?(field_value.to_s)
+              else
+                # Class-level multi index - check set membership using factory method
+                index_set = self.class.send("#{index_name}_for", field_value)
+                index_set.member?(identifier)
+              end
             else
               # Instance-scoped index (with within:) - cannot verify without scope instance
               false
