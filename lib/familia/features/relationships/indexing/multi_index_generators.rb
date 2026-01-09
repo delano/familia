@@ -507,7 +507,9 @@ module Familia
                     next unless field_value && !field_value.to_s.strip.empty?
 
                     index_set = send("#{index_name}_for", field_value)
-                    conn.sadd(index_set.dbkey, obj.identifier)
+                    # Use JsonSerializer for consistent serialization with update method
+                    serialized_id = Familia::JsonSerializer.dump(obj.identifier)
+                    conn.sadd(index_set.dbkey, serialized_id)
                   end
                 end
 
