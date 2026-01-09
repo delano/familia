@@ -132,5 +132,6 @@ module Familia
 
     Familia::DataType.register self, :json_string
     Familia::DataType.register self, :json_stringkey
+    Familia::DataType.register self, :jsonkey
   end
 end

@@ -349,6 +349,10 @@ Familia::DataType.registered_types[:json_string]
 Familia::DataType.registered_types[:json_stringkey]
 #=> Familia::JsonStringKey
 
+## JsonStringKey is registered as :jsonkey (alias like hashkey)
+Familia::DataType.registered_types[:jsonkey]
+#=> Familia::JsonStringKey
+
 # ========================================
 # Familia Object Reference Tests
 # ========================================
