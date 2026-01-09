@@ -573,8 +573,9 @@ module Familia
                 # Get the index sets for old and new values
                 old_set = self.class.send("#{index_name}_for", old_field_value)
 
-                # Serialize identifier for consistent storage (JSON encoded)
-                serialized_id = Familia::JsonSerializer.dump(identifier)
+                # Use DataType's serialize_value for consistency with add/remove methods.
+                # This ensures the same serialization path is used across all index operations.
+                serialized_id = old_set.serialize_value(identifier)
 
                 # Use transaction for atomic remove + add to prevent data inconsistency
                 transaction do |conn|
