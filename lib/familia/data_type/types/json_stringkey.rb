@@ -49,7 +49,7 @@ module Familia
     # @return [Integer] number of characters
     #
     def char_count
-      to_s.size
+      to_s&.size || 0
     end
     alias size char_count
     alias length char_count
@@ -63,7 +63,10 @@ module Familia
     #
     def value
       echo :value, Familia.pretty_stack(limit: 1) if Familia.debug
-      dbclient.setnx dbkey, serialize_value(@opts[:default]) if @opts[:default]
+      if @opts.key?(:default)
+        was_set = dbclient.setnx(dbkey, serialize_value(@opts[:default]))
+        update_expiration if was_set
+      end
       deserialize_value dbclient.get(dbkey)
     end
     alias content value
@@ -91,7 +94,7 @@ module Familia
     #
     def setnx(val)
       ret = dbclient.setnx(dbkey, serialize_value(val))
-      update_expiration
+      update_expiration if ret
       ret
     end
 
