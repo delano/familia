@@ -406,9 +406,12 @@ module Familia
             # Capture index_name for use in validation context
             idx_name = index_name
             indexed_class.define_singleton_method(:"#{index_name}_for") do |field_value|
-              # Validate field value for data quality (warns on suspicious patterns)
-              MultiIndexGenerators.validate_field_value(field_value, context: "#{name}.#{idx_name}")
-              index_key = Familia.join(index_name, field_value)
+              # Validate field value and use the validated string for consistent key format.
+              # Validation returns nil for nil/empty values, string otherwise.
+              # We allow nil through (creates a "null" index key) but use the validated
+              # string to ensure consistent type handling in key construction.
+              validated = MultiIndexGenerators.validate_field_value(field_value, context: "#{name}.#{idx_name}")
+              index_key = Familia.join(index_name, validated)
               Familia::UnsortedSet.new(index_key, parent: self)
             end
           end
