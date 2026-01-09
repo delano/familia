@@ -18,9 +18,9 @@ module Familia
   #   MyIndex.last_synced_at  #=> 1704067200.123 (Float preserved)
   #
   # @example Type preservation
-  #   json_str.value = 42        # Stored as JSON: "42", retrieved as Integer
-  #   json_str.value = true      # Stored as JSON: "true", retrieved as Boolean
-  #   json_str.value = [1, 2, 3] # Stored as JSON: "[1,2,3]", retrieved as Array
+  #   json_str.value = 42        # Stored in Redis as: 42 (JSON number)
+  #   json_str.value = true      # Stored in Redis as: true (JSON boolean)
+  #   json_str.value = [1, 2, 3] # Stored in Redis as: [1,2,3] (JSON array)
   #
   # @note This class intentionally does NOT include increment/decrement or other
   #   raw string operations that are incompatible with JSON serialization.

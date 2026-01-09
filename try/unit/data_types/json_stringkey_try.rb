@@ -79,7 +79,7 @@ Familia.debug = false
 ## JsonStringKey stores and retrieves nil values
 @nil_key = Familia::JsonStringKey.new 'test:json_string:nil_val'
 @nil_key.value = nil
-# After setting nil, the key is deleted so it returns the default (nil)
+# nil is stored as JSON "null" and deserialized back to Ruby nil
 @nil_key.value
 #=> nil
 
