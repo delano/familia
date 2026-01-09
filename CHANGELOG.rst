@@ -7,6 +7,43 @@ The format is based on `Keep a Changelog <https://keepachangelog.com/en/1.1.0/>`
 
    <!--scriv-insert-here-->
 
+.. _changelog-2.0.0.pre25:
+
+2.0.0.pre25 — 2026-01-08
+========================
+
+Added
+-----
+
+- Class-level multi-value indexing with ``multi_index :field, :index_name`` (``within: :class`` is now the default). Creates class methods like ``Model.find_all_by_field(value)`` and ``Model.sample_from_field(value, count)`` for grouping objects by field values at the class level.
+
+- New ``JsonStringKey`` DataType for type-preserving string storage. Unlike
+  ``StringKey`` which uses raw strings (for INCR/DECR support), ``JsonStringKey``
+  uses JSON serialization to preserve Ruby types (Integer, Float, Boolean, Hash,
+  Array) across the Redis storage boundary. Registered as ``:json_string`` and
+  ``:json_stringkey``, enabling DSL methods like ``json_string :metadata`` and
+  ``class_json_string :last_synced_at``.
+
+Changed
+-------
+
+- ``multi_index`` now defaults to ``within: :class`` instead of requiring a scope class. Existing instance-scoped indexes (``within: SomeClass``) continue to work unchanged.
+
+Removed
+-------
+
+- **BREAKING**: Removed ``dump_method`` and ``load_method`` configuration options
+  from ``Familia::Base``, ``Familia::Horreum``, and ``Familia::DataType``. JSON
+  serialization via ``to_json``/``from_json`` is now hard-coded for consistency
+  and type safety. Custom serialization methods are no longer supported.
+
+AI Assistance
+-------------
+
+- Claude Opus 4.5 assisted with design, implementation, and testing of serialization consistency, the JsonStringKey feature, and multi_index :class mode.
+- Gemini 3 Flash assisted with editing and trimming this section.
+
+
 .. _changelog-2.0.0.pre24:
 
 2.0.0.pre24 — 2026-01-07
