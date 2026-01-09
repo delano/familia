@@ -70,11 +70,10 @@ module Familia
       # @param values [Array<String>] The values to deserialize.
       # @return [Array<Object, nil>] Deserialized objects, including nil values.
       #
-      # @raise [Familia::Problem] If the specified class doesn't respond to the
-      #   load method.
+      # @raise [Familia::Problem] If the specified class doesn't respond to from_json.
       #
       # @note This method attempts to deserialize each value using the specified
-      #   class's load method. If deserialization fails for a value, it's
+      #   class's from_json method. If deserialization fails for a value, it's
       #   replaced with nil.
       #
       def deserialize_values_with_nil(*values)
@@ -83,20 +82,20 @@ module Familia
 
         # If a class option is specified, use class-based deserialization
         if @opts[:class]
-          unless @opts[:class].respond_to?(load_method)
-            raise Familia::Problem, "No such method: #{@opts[:class]}##{load_method}"
+          unless @opts[:class].respond_to?(:from_json)
+            raise Familia::Problem, "No such method: #{@opts[:class]}.from_json"
           end
 
           values.collect! do |obj|
             next if obj.nil?
 
-            val = @opts[:class].send load_method, obj
-            Familia.debug "[#{self.class}#deserialize_values] nil returned for #{@opts[:class]}##{name}" if val.nil?
+            val = @opts[:class].from_json(obj)
+            Familia.debug "[#{self.class}#deserialize_values] nil returned for #{@opts[:class]}.from_json" if val.nil?
 
             val
           rescue StandardError => e
-            Familia.info val
-            Familia.info "Parse error for #{dbkey} (#{load_method}): #{e.message}"
+            Familia.info obj
+            Familia.info "Parse error for #{dbkey} (from_json): #{e.message}"
             Familia.info e.backtrace
             nil
           end

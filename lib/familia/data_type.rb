@@ -41,9 +41,9 @@ module Familia
     #
     # Options:
     #
-    # :class => A class that responds to Familia.load_method and
-    # Familia.dump_method. These will be used when loading and
-    # saving data from/to the database to unmarshal/marshal the class.
+    # :class => A class that responds to from_json. This will be used
+    # when loading data from the database to unmarshal the class.
+    # JSON serialization is used for all data storage.
     #
     # :parent => The Familia object that this datatype object belongs
     # to. This can be a class that includes Familia or an instance.
