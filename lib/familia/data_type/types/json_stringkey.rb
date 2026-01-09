@@ -25,6 +25,21 @@ module Familia
   # @note This class intentionally does NOT include increment/decrement or other
   #   raw string operations that are incompatible with JSON serialization.
   #
+  # @note Performance: Each call to value, to_s, to_i, to_f makes a Redis
+  #   roundtrip. If you need the value multiple times and don't expect it to
+  #   change, store it in a local variable:
+  #
+  #   # Inefficient (3 Redis calls):
+  #   puts json_str.to_s
+  #   puts json_str.to_i
+  #   puts json_str.to_f
+  #
+  #   # Efficient (1 Redis call):
+  #   val = json_str.value
+  #   puts val.to_s
+  #   puts val.to_i
+  #   puts val.to_f
+  #
   class JsonStringKey < DataType
     # Initialization hook (required by DataType contract)
     def init; end
