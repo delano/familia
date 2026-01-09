@@ -29,6 +29,48 @@ module Familia
 
           using Familia::Refinements::StylizeWords
 
+          # Maximum recommended length for field values used in index keys.
+          # Longer values are allowed but will trigger a warning.
+          MAX_FIELD_VALUE_LENGTH = 256
+
+          # Validates a field value for use in index key construction.
+          # This is primarily for data quality and debugging clarity, not security.
+          #
+          # Security note: Redis SCAN patterns use the namespace prefix (e.g.,
+          # "customer:role_index:") which is derived from class/index metadata,
+          # not user input. Glob characters in stored field values are treated
+          # as literal characters in key names, not as pattern wildcards.
+          #
+          # @param field_value [Object] The field value to validate
+          # @param context [String] Description for warning messages
+          # @return [String, nil] The validated string value, or nil if invalid
+          def validate_field_value(field_value, context: 'index')
+            return nil if field_value.nil?
+
+            str_value = field_value.to_s
+            return nil if str_value.strip.empty?
+
+            # Warn on values containing Redis glob pattern characters
+            # These are legal but can be confusing when debugging key patterns
+            if str_value.match?(/[*?\[\]]/)
+              Familia.warn "[#{context}] Field value contains glob pattern characters: #{str_value.inspect}. " \
+                           'These are stored as literal characters but may be confusing during debugging.'
+            end
+
+            # Warn on control characters (except common whitespace)
+            if str_value.match?(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/)
+              Familia.warn "[#{context}] Field value contains control characters: #{str_value.inspect}"
+            end
+
+            # Warn on excessively long values
+            if str_value.length > MAX_FIELD_VALUE_LENGTH
+              Familia.warn "[#{context}] Field value exceeds #{MAX_FIELD_VALUE_LENGTH} characters " \
+                           "(#{str_value.length} chars): #{str_value[0..50]}..."
+            end
+
+            str_value
+          end
+
           # Main setup method that orchestrates multi-value index creation
           #
           # @param indexed_class [Class] The class being indexed (e.g., Employee)
@@ -354,10 +396,18 @@ module Familia
           # Generates class-level factory method:
           # - Customer.role_index_for(field_value) -> UnsortedSet
           #
+          # The factory validates field values for data quality. Glob pattern
+          # characters (*, ?, [, ]) in field values are allowed but trigger
+          # warnings since they can be confusing during debugging.
+          #
           # @param indexed_class [Class] The class being indexed (e.g., Customer)
           # @param index_name [Symbol] Name of the index (e.g., :role_index)
           def generate_factory_method_class(indexed_class, index_name)
+            # Capture index_name for use in validation context
+            idx_name = index_name
             indexed_class.define_singleton_method(:"#{index_name}_for") do |field_value|
+              # Validate field value for data quality (warns on suspicious patterns)
+              MultiIndexGenerators.validate_field_value(field_value, context: "#{name}.#{idx_name}")
               index_key = Familia.join(index_name, field_value)
               Familia::UnsortedSet.new(index_key, parent: self)
             end
@@ -373,15 +423,21 @@ module Familia
           # @param index_name [Symbol] Name of the index (e.g., :role_index)
           def generate_query_methods_class(indexed_class, field, index_name)
             # find_all_by_role(value)
+            # Uses load_multi for efficient batch loading (avoids N+1 queries)
             indexed_class.define_singleton_method(:"find_all_by_#{field}") do |field_value|
               index_set = send("#{index_name}_for", field_value)
-              index_set.members.map { |id| find_by_identifier(id) }.compact
+              identifiers = index_set.members
+              load_multi(identifiers).compact
             end
 
             # sample_from_role(value, count)
+            # Uses load_multi for efficient batch loading (avoids N+1 queries)
             indexed_class.define_singleton_method(:"sample_from_#{field}") do |field_value, count = 1|
+              return [] if field_value.nil? || field_value.to_s.strip.empty?
+
               index_set = send("#{index_name}_for", field_value)
-              index_set.sample(count).map { |id| find_by_identifier(id) }.compact
+              identifiers = index_set.sample(count)
+              load_multi(identifiers).compact
             end
 
             # rebuild_role_index(batch_size:, &progress)
@@ -422,6 +478,14 @@ module Familia
               progress_block&.call(phase: :clearing, current: 0, total: field_values.size)
 
               # Get pattern for all index keys: "customer:role_index:*"
+              #
+              # Security note: The SCAN pattern is safe because:
+              # 1. The namespace prefix (e.g., "customer:role_index:") is derived from
+              #    class metadata and index name, not user input
+              # 2. The "*" wildcard only matches keys within this namespace
+              # 3. Glob characters stored IN field values (e.g., a role named "admin*")
+              #    are literal characters in the key name, not SCAN wildcards
+              # 4. SCAN cannot match keys outside the namespace prefix
               sample_index = send(:"#{index_name}_for", "*")
               index_pattern = sample_index.dbkey
 
@@ -501,15 +565,22 @@ module Familia
                 new_field_value = send(field)
                 return if old_field_value == new_field_value
 
-                # Use DataType methods for consistent serialization
-                # Remove from old index
+                # Get the index sets for old and new values
                 old_set = self.class.send("#{index_name}_for", old_field_value)
-                old_set.remove(identifier)
 
-                # Add to new index if present
-                if new_field_value && !new_field_value.to_s.strip.empty?
-                  new_set = self.class.send("#{index_name}_for", new_field_value)
-                  new_set.add(identifier)
+                # Serialize identifier for consistent storage (JSON encoded)
+                serialized_id = Familia::JsonSerializer.dump(identifier)
+
+                # Use transaction for atomic remove + add to prevent data inconsistency
+                transaction do |conn|
+                  # Remove from old index
+                  conn.srem(old_set.dbkey, serialized_id)
+
+                  # Add to new index if present
+                  if new_field_value && !new_field_value.to_s.strip.empty?
+                    new_set = self.class.send("#{index_name}_for", new_field_value)
+                    conn.sadd(new_set.dbkey, serialized_id)
+                  end
                 end
               end
             end
