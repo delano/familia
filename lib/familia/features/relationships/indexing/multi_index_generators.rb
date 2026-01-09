@@ -383,9 +383,9 @@ module Familia
           #   multi_index :role, :role_index  # within: :class is default
           #
           # Generates on Customer (class methods):
-          #   - Customer.role_index_for('colonel')   -> UnsortedSet factory
-          #   - Customer.find_all_by_role('colonel') -> [Customer, ...]
-          #   - Customer.sample_from_role('colonel', 3) -> random sample
+          #   - Customer.role_index_for('admin')   -> UnsortedSet factory
+          #   - Customer.find_all_by_role('admin') -> [Customer, ...]
+          #   - Customer.sample_from_role('admin', 3) -> random sample
           #   - Customer.rebuild_role_index          -> rebuild index
           #
           # Generates on Customer (instance methods, auto-called on save):
