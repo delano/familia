@@ -16,7 +16,8 @@ Indexing creates fast lookups for finding objects by field values:
 |------|-------|----------|-----------|
 | `unique_index` | Class | Global unique fields | Redis HashKey |
 | `unique_index` | Instance | Parent-scoped unique | Redis HashKey |
-| `multi_index` | Instance | Non-unique groupings | Redis Set |
+| `multi_index` | Class (default) | Global non-unique groupings | Redis Set per value |
+| `multi_index` | Instance | Parent-scoped groupings | Redis Set per value |
 
 ## Class-Level Unique Indexing
 
@@ -96,9 +97,80 @@ company2.find_by_badge_number('12345')  # => emp2
 | `remove_from_company_badge_index(company)` | Remove from index |
 | `in_company_badge_index?(company)` | Check if indexed |
 
-## Multi-Value Indexing
+## Class-Level Multi-Value Indexing
 
-One-to-many mappings for non-unique field values:
+Class-level multi-value indexes group objects by field values at the class level. This is the default behavior when no `within:` parameter is specified.
+
+```ruby
+class Customer < Familia::Horreum
+  feature :relationships
+  field :role
+
+  # Class-level multi_index (within: :class is the default)
+  multi_index :role, :role_index
+end
+
+# Create customers with various roles
+alice = Customer.create(custid: 'cust_001', role: 'admin')
+bob = Customer.create(custid: 'cust_002', role: 'user')
+charlie = Customer.create(custid: 'cust_003', role: 'admin')
+
+# Manually add to index (or use auto-indexing via save hooks)
+alice.add_to_class_role_index
+bob.add_to_class_role_index
+charlie.add_to_class_role_index
+
+# Query all customers with a specific role
+admins = Customer.find_all_by_role('admin')  # => [alice, charlie]
+users = Customer.find_all_by_role('user')    # => [bob]
+
+# Random sampling
+sample = Customer.sample_from_role('admin', 1)  # => [random admin]
+```
+
+### Redis Key Pattern
+
+Class-level multi-indexes use the pattern: `{classname}:{index_name}:{field_value}`
+
+```ruby
+Customer.role_index_for('admin').dbkey  # => "customer:role_index:admin"
+Customer.role_index_for('user').dbkey   # => "customer:role_index:user"
+```
+
+### Generated Class Methods
+
+| Method | Description |
+|--------|-------------|
+| `Customer.role_index_for(value)` | Factory returning `Familia::UnsortedSet` for the field value |
+| `Customer.find_all_by_role(value)` | Find all objects with that field value |
+| `Customer.sample_from_role(value, count)` | Random sample of objects |
+| `Customer.rebuild_role_index` | Rebuild the entire index from source data |
+
+### Generated Instance Methods
+
+| Method | Description |
+|--------|-------------|
+| `customer.add_to_class_role_index` | Add this object to its field value's index |
+| `customer.remove_from_class_role_index` | Remove this object from its field value's index |
+| `customer.update_in_class_role_index(old_value)` | Move object from old index to new index |
+
+### Update Operations
+
+When a field value changes, use the update method to atomically move the object between indexes:
+
+```ruby
+old_role = customer.role
+customer.role = 'superadmin'
+customer.update_in_class_role_index(old_role)
+
+# Customer is now in 'superadmin' index, removed from old 'admin' index
+Customer.find_all_by_role('superadmin')  # => includes customer
+Customer.find_all_by_role('admin')       # => no longer includes customer
+```
+
+## Instance-Scoped Multi-Value Indexing
+
+For indexes scoped to a parent object, use `within:` to specify the scope class. This allows the same field values across different parent contexts.
 
 ```ruby
 class Employee < Familia::Horreum
@@ -125,13 +197,22 @@ sales_team = company.find_all_by_department('sales')       # => [emp3]
 sample = company.sample_from_department('engineering', 1)  # => [random engineer]
 ```
 
-### Generated Methods
+### Generated Methods (Instance-Scoped)
 
-**On scope class:**
+**On scope class (Company):**
 | Method | Description |
 |--------|-------------|
-| `find_all_by_department(dept)` | Find all in department |
-| `sample_from_department(dept, count)` | Random sample |
+| `company.dept_index_for(value)` | Factory returning UnsortedSet for value |
+| `company.find_all_by_department(dept)` | Find all in department |
+| `company.sample_from_department(dept, count)` | Random sample |
+| `company.rebuild_dept_index` | Rebuild index from participation |
+
+**On indexed class (Employee):**
+| Method | Description |
+|--------|-------------|
+| `employee.add_to_company_dept_index(company)` | Add to company's index |
+| `employee.remove_from_company_dept_index(company)` | Remove from index |
+| `employee.update_in_company_dept_index(company, old_dept)` | Move between indexes |
 
 ## Advanced Patterns
 
@@ -189,17 +270,29 @@ todays_events = user.find_all_by_daily_partition(today)
 
 ### Class vs Instance Scoping
 
-**Class-level (`unique_index :email, :email_lookup`):**
+**Class-level unique (`unique_index :email, :email_lookup`):**
 - Automatic indexing on save/destroy
 - System-wide uniqueness
 - No parent context needed
 - Examples: emails, usernames, API keys
+
+**Class-level multi (`multi_index :role, :role_index`):**
+- Default behavior (no `within:` needed)
+- Groups all objects by field value at class level
+- Manual indexing via instance methods
+- Examples: roles, categories, statuses
 
 **Instance-scoped (`unique_index :badge, :badge_index, within: Company`):**
 - Manual indexing required
 - Unique within parent only
 - Requires parent context
 - Examples: employee IDs, project names per team
+
+**Instance-scoped multi (`multi_index :dept, :dept_index, within: Company`):**
+- Groups objects by field value within parent scope
+- Same field value allowed across different parents
+- Manual indexing with parent context
+- Examples: departments per company, tags per project
 
 ### Unique vs Multi Indexing
 
@@ -212,6 +305,7 @@ todays_events = user.find_all_by_daily_partition(today)
 - 1:many field-to-objects mapping
 - Returns array of objects
 - Allows duplicate values
+- Default: class-level scope (use `within:` for instance scope)
 
 ## Rebuilding Indexes
 
@@ -277,8 +371,9 @@ end
 | Type | Pattern | Example |
 |------|---------|---------|
 | Class unique | `{class}:{index_name}` | `user:email_lookup` |
+| Class multi | `{class}:{index_name}:{value}` | `customer:role_index:admin` |
 | Instance unique | `{scope}:{id}:{index_name}` | `company:123:badge_index` |
-| Multi-value | `{scope}:{id}:{index_name}:{value}` | `company:123:dept_index:engineering` |
+| Instance multi | `{scope}:{id}:{index_name}:{value}` | `company:123:dept_index:engineering` |
 
 ## Troubleshooting
 
