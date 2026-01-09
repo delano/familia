@@ -134,7 +134,30 @@ end
 | `employee.remove_from_company_badge_index(company)` | Remove from index |
 | `employee.in_company_badge_index?(company)` | Check if indexed |
 
-### Multi-Value Index
+### Class-Level Multi-Value Index
+
+```ruby
+class Customer < Familia::Horreum
+  multi_index :role, :role_index  # within: :class is the default
+end
+```
+
+**Class methods on indexed class (Customer):**
+| Method | Description |
+|--------|-------------|
+| `Customer.role_index_for(value)` | Factory returning UnsortedSet for value |
+| `Customer.find_all_by_role(role)` | Find all with that role |
+| `Customer.sample_from_role(role, count)` | Random sample |
+| `Customer.rebuild_role_index` | Rebuild index from instances |
+
+**Instance methods on indexed class (Customer):**
+| Method | Description |
+|--------|-------------|
+| `customer.add_to_class_role_index` | Add to index |
+| `customer.remove_from_class_role_index` | Remove from index |
+| `customer.update_in_class_role_index(old_value)` | Move between indexes |
+
+### Instance-Scoped Multi-Value Index
 
 ```ruby
 class Employee < Familia::Horreum
@@ -145,14 +168,17 @@ end
 **Methods on scope class (Company):**
 | Method | Description |
 |--------|-------------|
+| `company.dept_index_for(value)` | Factory returning UnsortedSet for value |
 | `company.find_all_by_department(dept)` | Find all in department |
 | `company.sample_from_department(dept, count)` | Random sample |
+| `company.rebuild_dept_index` | Rebuild index from participation |
 
 **Methods on indexed class (Employee):**
 | Method | Description |
 |--------|-------------|
 | `employee.add_to_company_dept_index(company)` | Add to index |
 | `employee.remove_from_company_dept_index(company)` | Remove from index |
+| `employee.update_in_company_dept_index(company, old_dept)` | Move between indexes |
 
 ## Method Naming Patterns
 
@@ -165,8 +191,9 @@ end
 ### Indexing
 
 - **Class unique**: `find_by_{field}`, `index_{field}_for`, `unindex_{field}_for`
+- **Class multi**: `{Class}.find_all_by_{field}`, `{Class}.sample_from_{field}`, `{item}.add_to_class_{index}`
 - **Scoped unique**: `{scope}.find_by_{field}`, `{item}.add_to_{scope}_{index}`
-- **Multi-value**: `{scope}.find_all_by_{field}`, `{scope}.sample_from_{field}`
+- **Scoped multi**: `{scope}.find_all_by_{field}`, `{scope}.sample_from_{field}`, `{item}.add_to_{scope}_{index}`
 
 ## Common Usage Examples
 
@@ -206,15 +233,20 @@ customer.domains.range(0, 9)  # First 10
 ### Working with Indexes
 
 ```ruby
-# Automatic class-level indexing
+# Automatic class-level unique indexing
 user = User.create(email: 'alice@example.com')
 User.find_by_email('alice@example.com')  # => user
 
-# Manual scoped indexing
+# Class-level multi-value indexing
+customer.add_to_class_role_index
+Customer.find_all_by_role('admin')       # => [customer, ...]
+Customer.sample_from_role('admin', 2)    # => random sample
+
+# Manual scoped unique indexing
 employee.add_to_company_badge_index(company)
 company.find_by_badge_number('12345')    # => employee
 
-# Multi-value indexing
+# Scoped multi-value indexing
 employee.add_to_company_dept_index(company)
 engineers = company.find_all_by_department('engineering')
 ```

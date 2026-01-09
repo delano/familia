@@ -589,7 +589,10 @@ module Familia
           # Skip instance-scoped indexes (require scope context)
           # Instance-scoped indexes must be manually populated because they need
           # the scope instance reference (e.g., employee.add_to_company_badge_index(company))
-          if rel.within
+          #
+          # Class-level indexes have within: nil (unique_index) or within: :class (multi_index)
+          # Instance-scoped indexes have within: SomeClass (a specific class)
+          if rel.within && rel.within != :class
             Familia.debug <<~LOG_MESSAGE
               [auto_update_class_indexes] Skipping #{rel.index_name} (requires scope context)
             LOG_MESSAGE

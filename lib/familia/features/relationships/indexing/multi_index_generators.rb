@@ -29,6 +29,48 @@ module Familia
 
           using Familia::Refinements::StylizeWords
 
+          # Maximum recommended length for field values used in index keys.
+          # Longer values are allowed but will trigger a warning.
+          MAX_FIELD_VALUE_LENGTH = 256
+
+          # Validates a field value for use in index key construction.
+          # This is primarily for data quality and debugging clarity, not security.
+          #
+          # Security note: Redis SCAN patterns use the namespace prefix (e.g.,
+          # "customer:role_index:") which is derived from class/index metadata,
+          # not user input. Glob characters in stored field values are treated
+          # as literal characters in key names, not as pattern wildcards.
+          #
+          # @param field_value [Object] The field value to validate
+          # @param context [String] Description for warning messages
+          # @return [String, nil] The validated string value, or nil if invalid
+          def validate_field_value(field_value, context: 'index')
+            return nil if field_value.nil?
+
+            str_value = field_value.to_s
+            return nil if str_value.strip.empty?
+
+            # Warn on values containing Redis glob pattern characters
+            # These are legal but can be confusing when debugging key patterns
+            if str_value.match?(/[*?\[\]]/)
+              Familia.warn "[#{context}] Field value contains glob pattern characters: #{str_value.inspect}. " \
+                           'These are stored as literal characters but may be confusing during debugging.'
+            end
+
+            # Warn on control characters (except common whitespace)
+            if str_value.match?(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/)
+              Familia.warn "[#{context}] Field value contains control characters: #{str_value.inspect}"
+            end
+
+            # Warn on excessively long values
+            if str_value.length > MAX_FIELD_VALUE_LENGTH
+              Familia.warn "[#{context}] Field value exceeds #{MAX_FIELD_VALUE_LENGTH} characters " \
+                           "(#{str_value.length} chars): #{str_value[0..50]}..."
+            end
+
+            str_value
+          end
+
           # Main setup method that orchestrates multi-value index creation
           #
           # @param indexed_class [Class] The class being indexed (e.g., Employee)
@@ -37,32 +79,36 @@ module Familia
           # @param within [Class, Symbol] Scope class for instance-scoped index (required)
           # @param query [Boolean] Whether to generate query methods
           def setup(indexed_class:, field:, index_name:, within:, query:)
-            # Multi-index always requires a scope context
-            scope_class = within
-            resolved_class = Familia.resolve_class(scope_class)
+            # Determine scope type: class-level or instance-scoped
+            scope_class, scope_type = if within == :class
+              [indexed_class, :class]
+            else
+              k = Familia.resolve_class(within)
+              [k, :instance]
+            end
 
             # Store metadata for this indexing relationship
             indexed_class.indexing_relationships << IndexingRelationship.new(
               field:             field,
               scope_class:       scope_class,
-              within:            within,
+              within:            within,  # Preserve original (:class or actual class)
               index_name:        index_name,
               query:            query,
               cardinality:       :multi,
             )
 
-            # Always generate the factory method - required by mutation methods
-            if scope_class.is_a?(Class)
-              generate_factory_method(resolved_class, index_name)
+            case scope_type
+            when :instance
+              # Instance-scoped multi-index (existing behavior)
+              generate_factory_method(scope_class, index_name)
+              generate_query_methods_destination(indexed_class, field, scope_class, index_name) if query
+              generate_mutation_methods_self(indexed_class, field, scope_class, index_name)
+            when :class
+              # Class-level multi-index (new behavior)
+              generate_factory_method_class(indexed_class, index_name)
+              generate_query_methods_class(indexed_class, field, index_name) if query
+              generate_mutation_methods_class(indexed_class, field, index_name)
             end
-
-            # Generate query methods on the scope class (optional)
-            if query && scope_class.is_a?(Class)
-              generate_query_methods_destination(indexed_class, field, resolved_class, index_name)
-            end
-
-            # Generate mutation methods on the indexed class
-            generate_mutation_methods_self(indexed_class, field, resolved_class, index_name)
           end
 
           # Generates the factory method ON THE SCOPE CLASS (Company when within: Company):
@@ -320,6 +366,226 @@ module Familia
                   if new_field_value
                     new_index_set = scope_instance.send("#{index_name}_for", new_field_value)
                     new_index_set.add(identifier)
+                  end
+                end
+              end
+            end
+          end
+
+          # =========================================================================
+          # CLASS-LEVEL MULTI-INDEX GENERATORS
+          # =========================================================================
+          #
+          # When within: :class is used, these generators create class-level methods
+          # instead of instance-scoped methods.
+          #
+          # Example:
+          #   multi_index :role, :role_index  # within: :class is default
+          #
+          # Generates on Customer (class methods):
+          #   - Customer.role_index_for('admin')   -> UnsortedSet factory
+          #   - Customer.find_all_by_role('admin') -> [Customer, ...]
+          #   - Customer.sample_from_role('admin', 3) -> random sample
+          #   - Customer.rebuild_role_index          -> rebuild index
+          #
+          # Generates on Customer (instance methods, auto-called on save):
+          #   - customer.add_to_class_role_index
+          #   - customer.remove_from_class_role_index
+          #   - customer.update_in_class_role_index(old_value)
+
+          # Generates class-level factory method:
+          # - Customer.role_index_for(field_value) -> UnsortedSet
+          #
+          # The factory validates field values for data quality. Glob pattern
+          # characters (*, ?, [, ]) in field values are allowed but trigger
+          # warnings since they can be confusing during debugging.
+          #
+          # @param indexed_class [Class] The class being indexed (e.g., Customer)
+          # @param index_name [Symbol] Name of the index (e.g., :role_index)
+          def generate_factory_method_class(indexed_class, index_name)
+            # Capture index_name for use in validation context
+            idx_name = index_name
+            indexed_class.define_singleton_method(:"#{index_name}_for") do |field_value|
+              # Validate field value and use the validated string for consistent key format.
+              # Validation returns nil for nil/empty values, string otherwise.
+              # We allow nil through (creates a "null" index key) but use the validated
+              # string to ensure consistent type handling in key construction.
+              validated = MultiIndexGenerators.validate_field_value(field_value, context: "#{name}.#{idx_name}")
+              index_key = Familia.join(index_name, validated)
+              Familia::UnsortedSet.new(index_key, parent: self)
+            end
+          end
+
+          # Generates class-level query methods:
+          # - Customer.find_all_by_role(value) -> [Customer, ...]
+          # - Customer.sample_from_role(value, count) -> random sample
+          # - Customer.rebuild_role_index -> rebuild index
+          #
+          # @param indexed_class [Class] The class being indexed (e.g., Customer)
+          # @param field [Symbol] The field to index (e.g., :role)
+          # @param index_name [Symbol] Name of the index (e.g., :role_index)
+          def generate_query_methods_class(indexed_class, field, index_name)
+            # find_all_by_role(value)
+            # Uses load_multi for efficient batch loading (avoids N+1 queries)
+            indexed_class.define_singleton_method(:"find_all_by_#{field}") do |field_value|
+              index_set = send("#{index_name}_for", field_value)
+              identifiers = index_set.members
+              load_multi(identifiers).compact
+            end
+
+            # sample_from_role(value, count)
+            # Uses load_multi for efficient batch loading (avoids N+1 queries)
+            indexed_class.define_singleton_method(:"sample_from_#{field}") do |field_value, count = 1|
+              return [] if field_value.nil? || field_value.to_s.strip.empty?
+
+              index_set = send("#{index_name}_for", field_value)
+              identifiers = index_set.sample(count)
+              load_multi(identifiers).compact
+            end
+
+            # rebuild_role_index(batch_size:, &progress)
+            # For class-level indexes, we iterate all instances of the class
+            indexed_class.define_singleton_method(:"rebuild_#{index_name}") do |batch_size: 100, &progress_block|
+              # PHASE 1: Discover all field values and collect objects
+              progress_block&.call(phase: :discovering, current: 0, total: 0)
+
+              # Use class-level instances collection if available
+              unless respond_to?(:instances) && instances.respond_to?(:members)
+                Familia.warn "[Rebuild] Cannot rebuild class-level multi-index #{index_name}: " \
+                             "no instances collection found. " \
+                             "Ensure #{name} has class_sorted_set :instances or similar."
+                return 0  # Return 0 for consistency - always return integer count
+              end
+
+              field_values = Set.new
+              cached_objects = []
+              processed = 0
+              total_count = instances.size
+
+              progress_block&.call(phase: :loading, current: 0, total: total_count)
+
+              instances.members.each_slice(batch_size) do |identifiers|
+                objects = load_multi(identifiers).compact
+                cached_objects.concat(objects)
+
+                objects.each do |obj|
+                  value = obj.send(field)
+                  field_values << value.to_s if value && !value.to_s.strip.empty?
+                end
+
+                processed += identifiers.size
+                progress_block&.call(phase: :loading, current: processed, total: total_count)
+              end
+
+              # PHASE 2: Clear existing index sets using SCAN
+              progress_block&.call(phase: :clearing, current: 0, total: field_values.size)
+
+              # Get pattern for all index keys: "customer:role_index:*"
+              #
+              # Security note: The SCAN pattern is safe because:
+              # 1. The namespace prefix (e.g., "customer:role_index:") is derived from
+              #    class metadata and index name, not user input
+              # 2. The "*" wildcard only matches keys within this namespace
+              # 3. Glob characters stored IN field values (e.g., a role named "admin*")
+              #    are literal characters in the key name, not SCAN wildcards
+              # 4. SCAN cannot match keys outside the namespace prefix
+              sample_index = send(:"#{index_name}_for", "*")
+              index_pattern = sample_index.dbkey
+
+              cleared_count = 0
+              dbclient.scan_each(match: index_pattern) do |key|
+                dbclient.del(key)
+                cleared_count += 1
+                progress_block&.call(phase: :clearing, current: cleared_count, total: field_values.size, key: key)
+              end
+
+              # PHASE 3: Rebuild from cached objects
+              progress_block&.call(phase: :rebuilding, current: 0, total: cached_objects.size)
+
+              processed = 0
+              cached_objects.each_slice(batch_size) do |objects|
+                dbclient.multi do |conn|
+                  objects.each do |obj|
+                    field_value = obj.send(field)
+                    next unless field_value && !field_value.to_s.strip.empty?
+
+                    index_set = send("#{index_name}_for", field_value)
+                    # Use JsonSerializer for consistent serialization with update method
+                    serialized_id = Familia::JsonSerializer.dump(obj.identifier)
+                    conn.sadd(index_set.dbkey, serialized_id)
+                  end
+                end
+
+                processed += objects.size
+                progress_block&.call(phase: :rebuilding, current: processed, total: cached_objects.size)
+              end
+
+              Familia.info "[Rebuild] Class-level multi-index #{index_name} rebuilt: " \
+                           "#{field_values.size} field values, #{processed} objects"
+
+              processed
+            end
+          end
+
+          # Generates instance mutation methods for class-level indexes:
+          # - customer.add_to_class_role_index
+          # - customer.remove_from_class_role_index
+          # - customer.update_in_class_role_index(old_value)
+          #
+          # These are auto-called on save/destroy when auto-indexing is enabled.
+          #
+          # @param indexed_class [Class] The class being indexed (e.g., Customer)
+          # @param field [Symbol] The field to index (e.g., :role)
+          # @param index_name [Symbol] Name of the index (e.g., :role_index)
+          def generate_mutation_methods_class(indexed_class, field, index_name)
+            indexed_class.class_eval do
+              method_name = :"add_to_class_#{index_name}"
+              Familia.debug("[MultiIndexGenerators] #{name} class method #{method_name}")
+
+              define_method(method_name) do
+                field_value = send(field)
+                return unless field_value && !field_value.to_s.strip.empty?
+
+                index_set = self.class.send("#{index_name}_for", field_value)
+                index_set.add(identifier)
+              end
+
+              method_name = :"remove_from_class_#{index_name}"
+              Familia.debug("[MultiIndexGenerators] #{name} class method #{method_name}")
+
+              define_method(method_name) do
+                field_value = send(field)
+                return unless field_value && !field_value.to_s.strip.empty?
+
+                index_set = self.class.send("#{index_name}_for", field_value)
+                index_set.remove(identifier)
+              end
+
+              method_name = :"update_in_class_#{index_name}"
+              Familia.debug("[MultiIndexGenerators] #{name} class method #{method_name}")
+
+              define_method(method_name) do |old_field_value|
+                return unless old_field_value
+
+                new_field_value = send(field)
+                return if old_field_value == new_field_value
+
+                # Get the index sets for old and new values
+                old_set = self.class.send("#{index_name}_for", old_field_value)
+
+                # Use DataType's serialize_value for consistency with add/remove methods.
+                # This ensures the same serialization path is used across all index operations.
+                serialized_id = old_set.serialize_value(identifier)
+
+                # Use transaction for atomic remove + add to prevent data inconsistency
+                transaction do |conn|
+                  # Remove from old index
+                  conn.srem(old_set.dbkey, serialized_id)
+
+                  # Add to new index if present
+                  if new_field_value && !new_field_value.to_s.strip.empty?
+                    new_set = self.class.send("#{index_name}_for", new_field_value)
+                    conn.sadd(new_set.dbkey, serialized_id)
                   end
                 end
               end
