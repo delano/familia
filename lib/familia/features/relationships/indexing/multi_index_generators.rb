@@ -451,7 +451,7 @@ module Familia
                 Familia.warn "[Rebuild] Cannot rebuild class-level multi-index #{index_name}: " \
                              "no instances collection found. " \
                              "Ensure #{name} has class_sorted_set :instances or similar."
-                return nil
+                return 0  # Return 0 for consistency - always return integer count
               end
 
               field_values = Set.new
