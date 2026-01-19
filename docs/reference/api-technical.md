@@ -500,6 +500,39 @@ Familia::Base.add_feature ExternalIdentifier, :external_identifier, depends_on: 
 end
 ```
 
+### Per-Class Feature Registration
+
+Register custom features for specific model classes with ancestry chain lookup.
+
+```ruby
+# Define a custom feature module
+module CustomerAnalytics
+  def track_purchase(amount)
+    purchases.increment(amount)
+  end
+end
+
+# Register feature only for Customer and its subclasses
+Customer.add_feature CustomerAnalytics, :customer_analytics
+
+class Customer < Familia::Horreum
+  feature :customer_analytics  # Available via Customer's registry
+end
+
+class PremiumCustomer < Customer
+  feature :customer_analytics  # Inherited via ancestry chain
+end
+
+class Session < Familia::Horreum
+  # feature :customer_analytics  # Not available - would raise error
+end
+```
+
+**Benefits:**
+- Features can have the same name across different model hierarchies
+- Natural inheritance through Ruby's class hierarchy
+- Better namespace management for large applications
+
 ### Per-Class Feature Configuration Isolation
 Each class maintains independent feature options.
 
@@ -970,6 +1003,43 @@ end
 
 ## Performance Optimization
 
+### Pipelined Bulk Loading
+
+Load multiple objects efficiently with a single pipelined Redis batch.
+
+```ruby
+# Before: N×2 commands (EXISTS + HGETALL per object)
+users = ids.map { |id| User.find_by_id(id) }
+# For 14 objects: 28 Redis commands
+
+# After: 1 pipelined batch
+users = User.load_multi(ids)
+# For 14 objects: 1 batch with 14 HGETALL commands (2× faster)
+
+# Load by full dbkeys
+users = User.load_multi_by_keys(['user:123:object', 'user:456:object'])
+
+# Filter out nils for missing objects
+existing_users = User.load_multi(ids).compact
+```
+
+### Optional EXISTS Check Optimization
+
+Skip the EXISTS check for 50% reduction in Redis commands when keys are known to exist.
+
+```ruby
+# Default behavior (2 commands: EXISTS + HGETALL)
+user = User.find_by_id(123)
+
+# Optimized (1 command: HGETALL only)
+user = User.find_by_id(123, check_exists: false)
+```
+
+**When to use `check_exists: false`:**
+- Loading from sorted set results (keys guaranteed to exist)
+- High-throughput API endpoints
+- Bulk operations with known-existing keys
+
 ### Batch Operations
 Minimize Valkey/Redis round trips with batch operations.
 
@@ -989,6 +1059,33 @@ User.pipelined do
   end
 end
 ```
+
+### Index Rebuilding
+
+Auto-generated rebuild methods for unique and multi indexes with zero downtime.
+
+```ruby
+class User < Familia::Horreum
+  feature :relationships
+  unique_index :email, :email_lookup
+end
+
+# Rebuild class-level unique index
+User.rebuild_email_lookup
+
+# With progress tracking
+User.rebuild_email_lookup(batch_size: 100) do |progress|
+  puts "#{progress[:completed]}/#{progress[:total]}"
+end
+
+# Instance-scoped index rebuild
+company.rebuild_badge_index
+```
+
+**When to use:**
+- After data migrations or bulk imports
+- Recovering from index corruption
+- Adding indexes to existing data
 
 ### Memory Optimization
 Efficient memory usage patterns.
