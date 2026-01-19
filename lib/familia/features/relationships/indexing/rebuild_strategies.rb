@@ -301,7 +301,8 @@ module Familia
             # Build key pattern for SCAN
             # For instance-scoped indexes, we still scan all objects of indexed_class
             # (not scoped under parent), then filter by scope during processing
-            pattern = "#{indexed_class.config_name}:*:object"
+            # Use centralized scan_pattern method for consistent key generation
+            pattern = indexed_class.scan_pattern
 
             Familia.info "[Rebuild] Starting via_scan for #{indexed_class.name}.#{field} (pattern: #{pattern})"
             Familia.warn "[Rebuild] Using SCAN fallback - consider adding instances collection for better performance"

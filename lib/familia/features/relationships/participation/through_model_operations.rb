@@ -51,9 +51,10 @@ module Familia
           # @return [String] Deterministic key for the through model
           #
           def build_key(target:, participant:, through_class:)
-            "#{target.class.config_name}:#{target.objid}:" \
-            "#{participant.class.config_name}:#{participant.objid}:" \
-            "#{through_class.config_name}"
+            # Use prefix for Redis key construction (prefix may differ from config_name if explicitly set)
+            "#{target.class.prefix}:#{target.objid}:" \
+            "#{participant.class.prefix}:#{participant.objid}:" \
+            "#{through_class.prefix}"
           end
 
           # Find or create a through model instance

@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    familia (2.0.0.pre25)
+    familia (2.0.0.pre26)
       benchmark (~> 0.4)
       concurrent-ruby (~> 1.3)
       connection_pool (~> 2.5)

@@ -600,9 +600,8 @@ module Familia
           # @param collection_names [Array<String>, nil] Optional collection name filter
           # @return [Array<String>] Array of unique target instance IDs
           def participating_ids_for_target(target_class, collection_names = nil)
-
-            # Use config_name to get the proper snake_case format (e.g., "project_team")
-            target_prefix = "#{target_class.config_name}#{Familia.delim}"
+            # Use centralized key_prefix method for consistent key generation
+            target_prefix = target_class.key_prefix
             ids = Set.new
 
             participations.members.each do |key|
@@ -635,7 +634,8 @@ module Familia
           # @param collection_names [Array<String>, nil] Optional collection name filter
           # @return [Boolean] true if any matching participation exists
           def participating_in_target?(target_class, collection_names = nil)
-            target_prefix = "#{target_class.config_name}#{Familia.delim}"
+            # Use centralized key_prefix method for consistent key generation
+            target_prefix = target_class.key_prefix
 
             participations.members.any? do |key|
               next false unless key.start_with?(target_prefix)
@@ -667,9 +667,9 @@ module Familia
               next unless target_class_config && target_id && collection_name_from_key
 
               # Find the matching participation configuration
-              # Note: target_class_config from key is snake_case
+              # Note: target_class_config from key uses prefix (may differ from config_name)
               config = self.class.participation_relationships.find do |cfg|
-                cfg.target_class.config_name == target_class_config &&
+                cfg.target_class.prefix.to_s == target_class_config &&
                   cfg.collection_name.to_s == collection_name_from_key
               end
 

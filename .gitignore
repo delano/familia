@@ -10,6 +10,7 @@
 .claude
 .yardoc
 .*.json
+.env*
 *.env
 *.log
 *.txt
