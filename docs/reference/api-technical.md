@@ -48,7 +48,7 @@ Base class for Valkey/Redis data type implementations.
 
 ---
 
-## Feature System (v2.0.0-pre5+)
+## Feature System
 
 ### Feature Architecture
 Modular system for extending Horreum classes with reusable functionality.
@@ -1040,7 +1040,7 @@ end
 
 ## Migration and Upgrading
 
-### From v1.x to v2.0.0-pre
+### From v1.x to v2.0
 Key changes and migration steps.
 
 ```ruby
@@ -1051,7 +1051,7 @@ class User < Familia
   list :sessions
 end
 
-# NEW v2.0.0-pre syntax
+# NEW v2.0 syntax
 class User < Familia::Horreum
   identifier_field :email  # Updated method name
   field :name              # Generic field method
@@ -1304,9 +1304,8 @@ end
 - [Connection Pooling Guide](../guides/Connection-Pooling-Guide.md)
 
 ### Version Information
-- **Current Version**: v2.0.0.pre6 (as of version.rb)
-- **Target Version**: v2.0.0.pre7 (relationships release)
-- **Ruby Compatibility**: 3.0+ (3.4+ recommended for optimal threading)
+- **Current Version**: v2.0.0
+- **Ruby Compatibility**: 3.3+ (3.4+ recommended for optimal threading)
 - **Redis Compatibility**: 6.0+ (Valkey compatible)
 
-This technical reference covers the major components and usage patterns available in Familia v2.0.0-pre series. For complete API documentation, see the generated YARD docs and wiki guides.
+This technical reference covers the major components and usage patterns available in Familia v2.0. For complete API documentation, see the generated YARD docs and wiki guides.

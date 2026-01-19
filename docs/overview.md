@@ -242,7 +242,7 @@ This automatically groups metrics into 10-minute intervals formatted as "HH:MM",
 - **Reduced Storage**: Aggregate similar data points to optimize memory usage
 - **Analytics Ready**: Perfect for dashboards and time-series data visualization
 
-> For advanced quantization strategies, value bucketing, geographic quantization, and performance patterns, see the [Technical Reference](reference/api-technical.md#quantization-feature-v200-pre7).
+> For advanced quantization strategies, value bucketing, geographic quantization, and performance patterns, see the [Technical Reference](reference/api-technical.md#feature-system).
 
 ### Object Identifiers
 
@@ -273,7 +273,7 @@ session.objid  # => "a1b2c3d4e5f6" (hex)
 - `:uuid_v4` - Standard UUID format for global uniqueness
 - `:hex` - Compact hexadecimal identifiers for internal use
 
-> For custom generators, collision detection, and advanced identifier patterns, see the [Technical Reference](reference/api-technical.md#object-identifier-feature-v200-pre7).
+> For custom generators, collision detection, and advanced identifier patterns, see the [Technical Reference](reference/api-technical.md#feature-system).
 
 ### Specialized Field Types
 
@@ -354,7 +354,7 @@ user = ExternalUser.create(external_id: "ext_12345", name: "Alice")
 
 This feature helps maintain consistency when integrating with external APIs or legacy systems.
 
-> For advanced external identifier patterns, batch operations, and sync status management, see the [Technical Reference](reference/api-technical.md#external-identifier-feature-v200-pre7).
+> For advanced external identifier patterns, batch operations, and sync status management, see the [Technical Reference](reference/api-technical.md#feature-system).
 
 ### Relationships
 
@@ -435,7 +435,7 @@ Team.email_index_for("alice@example.com")      # Direct index access
 - **Automatic Indexing**: Efficient O(1) lookups with automatic index maintenance
 - **Performance Optimized**: Bulk operations and efficient sorted set operations
 
-> For advanced relationship patterns, permission-encoded relationships, time-series tracking, and performance optimization, see the [Technical Reference](reference/api-technical.md#relationships-feature-v200-pre7).
+> For advanced relationship patterns, permission-encoded relationships, time-series tracking, and performance optimization, see the [Technical Reference](reference/api-technical.md#feature-system).
 
 ### Transient Fields
 
@@ -472,7 +472,7 @@ attempt.security_token.reveal   # => "sensitive_data"
 - **Transient Fields**: Exist only in memory, never persisted
 - **Redacted Fields**: Return `[REDACTED]` when converted to strings for logging safety
 
-> For RedactedString implementation details, single-use patterns, and security considerations, see the [Technical Reference](reference/api-technical.md#transient-fields-feature-v200-pre5).
+> For RedactedString implementation details, single-use patterns, and security considerations, see the [Technical Reference](reference/api-technical.md#feature-system).
 
 ### Permission Management
 
@@ -638,7 +638,7 @@ user.encrypted_fields_status  # Check encryption status
 - **Key Rotation**: Seamless updates with backward compatibility
 - **Multiple Algorithms**: XChaCha20-Poly1305 (preferred) with AES-256-GCM fallback
 
-> For advanced encryption configuration, multiple providers, request caching, and key rotation procedures, see the [Technical Reference](reference/api-technical.md#encrypted-fields-feature-v200-pre5).
+> For advanced encryption configuration, multiple providers, request caching, and key rotation procedures, see the [Technical Reference](reference/api-technical.md#feature-system).
 
 ### Open-ended Serialization
 
@@ -772,7 +772,7 @@ Familia.configure do |config|
 end
 ```
 
-> For production configuration patterns, advanced connection pooling, multi-database setup, and environment-based configuration, see the [Technical Reference](reference/api-technical.md#connection-management-v200-pre).
+> For production configuration patterns, advanced connection pooling, multi-database setup, and environment-based configuration, see the [Technical Reference](reference/api-technical.md#connection-management).
 
 ## Common Patterns
 
