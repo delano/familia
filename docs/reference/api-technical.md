@@ -1402,7 +1402,7 @@ end
 
 ### Version Information
 - **Current Version**: v2.0.0
-- **Ruby Compatibility**: 3.3+ (3.4+ recommended for optimal threading)
+- **Ruby Compatibility**: 3.2+
 - **Redis Compatibility**: 6.0+ (Valkey compatible)
 
 This technical reference covers the major components and usage patterns available in Familia v2.0. For complete API documentation, see the generated YARD docs and wiki guides.

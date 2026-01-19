@@ -138,7 +138,7 @@ user.tags?                       # Check if it's a Set type
 
 ## Prerequisites
 
-- **Ruby**: 3.4+ (3.4+ recommended)
+- **Ruby**: 3.2+
 - **Valkey/Redis**: 6.0+
 - **Gems**: `redis` (automatically installed)
 
