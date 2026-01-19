@@ -600,9 +600,8 @@ module Familia
           # @param collection_names [Array<String>, nil] Optional collection name filter
           # @return [Array<String>] Array of unique target instance IDs
           def participating_ids_for_target(target_class, collection_names = nil)
-
-            # Use prefix to match Redis keys (prefix may differ from config_name if explicitly set)
-            target_prefix = "#{target_class.prefix}#{Familia.delim}"
+            # Use centralized key_prefix method for consistent key generation
+            target_prefix = target_class.key_prefix
             ids = Set.new
 
             participations.members.each do |key|
@@ -635,8 +634,8 @@ module Familia
           # @param collection_names [Array<String>, nil] Optional collection name filter
           # @return [Boolean] true if any matching participation exists
           def participating_in_target?(target_class, collection_names = nil)
-            # Use prefix to match Redis keys (prefix may differ from config_name if explicitly set)
-            target_prefix = "#{target_class.prefix}#{Familia.delim}"
+            # Use centralized key_prefix method for consistent key generation
+            target_prefix = target_class.key_prefix
 
             participations.members.any? do |key|
               next false unless key.start_with?(target_prefix)

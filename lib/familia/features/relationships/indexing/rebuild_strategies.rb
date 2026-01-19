@@ -301,8 +301,8 @@ module Familia
             # Build key pattern for SCAN
             # For instance-scoped indexes, we still scan all objects of indexed_class
             # (not scoped under parent), then filter by scope during processing
-            # Use prefix for Redis key pattern (prefix may differ from config_name if explicitly set)
-            pattern = "#{indexed_class.prefix}:*:object"
+            # Use centralized scan_pattern method for consistent key generation
+            pattern = indexed_class.scan_pattern
 
             Familia.info "[Rebuild] Starting via_scan for #{indexed_class.name}.#{field} (pattern: #{pattern})"
             Familia.warn "[Rebuild] Using SCAN fallback - consider adding instances collection for better performance"

@@ -471,6 +471,35 @@ module Familia
       # at the class level are created without the global default 'object'
       # suffix. See DataType#dbkey "parent_class?" for more details.
       #
+
+      # Returns the key prefix for this class including the delimiter.
+      #
+      # Centralizes key prefix generation to prevent bugs from manual
+      # string interpolation across the codebase.
+      #
+      # @return [String] The prefix with delimiter (e.g., "customer:")
+      # @example
+      #   User.key_prefix  #=> "user:"
+      #
+      def key_prefix
+        "#{prefix}#{Familia.delim}"
+      end
+
+      # Returns the SCAN pattern for finding all objects of this class.
+      #
+      # Centralizes SCAN pattern generation to ensure consistency across
+      # rebuild strategies and other key enumeration operations.
+      #
+      # @param match_suffix [String] The suffix to match (default: class suffix)
+      # @return [String] The SCAN pattern (e.g., "customer:*:object")
+      # @example
+      #   User.scan_pattern           #=> "user:*:object"
+      #   User.scan_pattern('active') #=> "user:*:active"
+      #
+      def scan_pattern(match_suffix = suffix)
+        "#{prefix}:*:#{match_suffix}"
+      end
+
       def dbkey(identifier, suffix = self.suffix)
         if identifier.to_s.empty?
           raise NoIdentifier, "#{self} requires non-empty identifier, got: #{identifier.inspect}"
