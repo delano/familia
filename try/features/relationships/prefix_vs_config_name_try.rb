@@ -413,10 +413,6 @@ PrefixTestOAuthProvider.prefix.to_s != PrefixTestOAuthProvider.config_name
 ## Cleanup test data completes without errors
 [@simple_model, @simple_participant, @matching_team, @matching_member,
  @mismatched_domain, @api_key, @api_resource, @ns_domain,
- @oauth_provider, @oauth_user].each do |obj|
-  obj.destroy if obj&.respond_to?(:destroy) && obj&.respond_to?(:exists?) && obj.exists?
-rescue => e
-  # Ignore cleanup errors
-end
+ @oauth_provider, @oauth_user].compact.each { |obj| obj.destroy if obj.respond_to?(:destroy) && obj.exists? }
 true
 #=> true
