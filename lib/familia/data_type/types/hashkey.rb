@@ -240,8 +240,7 @@ module Familia
     # @example Set 1 hour TTL on specific fields
     #   my_hash.expire_fields(3600, 'session_token', 'temp_data')
     def expire_fields(seconds, *fields)
-      string_fields = fields.flatten.compact.map(&:to_s)
-      dbclient.call('HEXPIRE', dbkey, seconds, 'FIELDS', string_fields.size, *string_fields)
+      call_hash_field_command('HEXPIRE', seconds, fields: fields)
     end
     alias hexpire expire_fields
 
@@ -255,8 +254,7 @@ module Familia
     # @example Set 500ms TTL on a field
     #   my_hash.pexpire_fields(500, 'rate_limit_counter')
     def pexpire_fields(milliseconds, *fields)
-      string_fields = fields.flatten.compact.map(&:to_s)
-      dbclient.call('HPEXPIRE', dbkey, milliseconds, 'FIELDS', string_fields.size, *string_fields)
+      call_hash_field_command('HPEXPIRE', milliseconds, fields: fields)
     end
     alias hpexpire pexpire_fields
 
@@ -271,8 +269,7 @@ module Familia
     #   midnight = Time.now.to_i + (24 * 60 * 60)
     #   my_hash.expireat_fields(midnight, 'daily_counter')
     def expireat_fields(unix_time, *fields)
-      string_fields = fields.flatten.compact.map(&:to_s)
-      dbclient.call('HEXPIREAT', dbkey, unix_time, 'FIELDS', string_fields.size, *string_fields)
+      call_hash_field_command('HEXPIREAT', unix_time, fields: fields)
     end
     alias hexpireat expireat_fields
 
@@ -286,8 +283,7 @@ module Familia
     # @example Expire field at a precise millisecond
     #   my_hash.pexpireat_fields(1700000000000, 'precise_data')
     def pexpireat_fields(unix_time_ms, *fields)
-      string_fields = fields.flatten.compact.map(&:to_s)
-      dbclient.call('HPEXPIREAT', dbkey, unix_time_ms, 'FIELDS', string_fields.size, *string_fields)
+      call_hash_field_command('HPEXPIREAT', unix_time_ms, fields: fields)
     end
     alias hpexpireat pexpireat_fields
 
@@ -302,8 +298,7 @@ module Familia
     # @example Check remaining TTL on fields
     #   my_hash.ttl_fields('session_token', 'temp_data')  #=> [3600, -1]
     def ttl_fields(*fields)
-      string_fields = fields.flatten.compact.map(&:to_s)
-      dbclient.call('HTTL', dbkey, 'FIELDS', string_fields.size, *string_fields)
+      call_hash_field_command('HTTL', fields: fields)
     end
     alias httl ttl_fields
 
@@ -316,8 +311,7 @@ module Familia
     # @example Check remaining TTL in milliseconds
     #   my_hash.pttl_fields('rate_limit')  #=> [450]
     def pttl_fields(*fields)
-      string_fields = fields.flatten.compact.map(&:to_s)
-      dbclient.call('HPTTL', dbkey, 'FIELDS', string_fields.size, *string_fields)
+      call_hash_field_command('HPTTL', fields: fields)
     end
     alias hpttl pttl_fields
 
@@ -332,8 +326,7 @@ module Familia
     # @example Remove expiration from fields
     #   my_hash.persist_fields('important_data')  #=> [1]
     def persist_fields(*fields)
-      string_fields = fields.flatten.compact.map(&:to_s)
-      dbclient.call('HPERSIST', dbkey, 'FIELDS', string_fields.size, *string_fields)
+      call_hash_field_command('HPERSIST', fields: fields)
     end
     alias hpersist persist_fields
 
@@ -348,8 +341,7 @@ module Familia
     # @example Get expiration timestamp
     #   my_hash.expiretime_fields('session')  #=> [1700000000]
     def expiretime_fields(*fields)
-      string_fields = fields.flatten.compact.map(&:to_s)
-      dbclient.call('HEXPIRETIME', dbkey, 'FIELDS', string_fields.size, *string_fields)
+      call_hash_field_command('HEXPIRETIME', fields: fields)
     end
     alias hexpiretime expiretime_fields
 
@@ -362,10 +354,25 @@ module Familia
     # @example Get precise expiration timestamp
     #   my_hash.pexpiretime_fields('session')  #=> [1700000000000]
     def pexpiretime_fields(*fields)
-      string_fields = fields.flatten.compact.map(&:to_s)
-      dbclient.call('HPEXPIRETIME', dbkey, 'FIELDS', string_fields.size, *string_fields)
+      call_hash_field_command('HPEXPIRETIME', fields: fields)
     end
     alias hpexpiretime pexpiretime_fields
+
+    private
+
+    # Executes a hash field command with the FIELDS syntax.
+    # Used internally by field-level TTL methods (Redis 7.4+).
+    #
+    # @param command [String] Redis command name (e.g., 'HEXPIRE', 'HTTL')
+    # @param prefix_args [Array] Arguments to place before 'FIELDS' (e.g., TTL value)
+    # @param fields [Array<String>] Field names
+    # @return [Array] Command result
+    def call_hash_field_command(command, *prefix_args, fields:)
+      string_fields = fields.flatten.compact.map(&:to_s)
+      dbclient.call(command, dbkey, *prefix_args, 'FIELDS', string_fields.size, *string_fields)
+    end
+
+    public
 
     # The Great Database Refresh-o-matic 3000 for HashKey!
     #
