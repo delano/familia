@@ -4,5 +4,5 @@
 
 module Familia
   # Version information for the Familia
-  VERSION = '2.0.0.pre26' unless defined?(Familia::VERSION)
+  VERSION = '2.0.0' unless defined?(Familia::VERSION)
 end

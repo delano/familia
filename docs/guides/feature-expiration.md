@@ -641,7 +641,7 @@ Get/set class-level default expiration.
 
 ## See Also
 
-- **[Technical Reference](../reference/api-technical.md#expiration-feature-v200-pre5)** - Implementation details and advanced patterns
+- **[Technical Reference](../reference/api-technical.md#feature-system)** - Implementation details and advanced patterns
 - **[Overview](../overview.md#automatic-expiration)** - Conceptual introduction to expiration
 - **[Feature System Guide](feature-system.md)** - Understanding Familia's feature architecture
 - **[Implementation Guide](implementation.md)** - Production deployment and configuration patterns

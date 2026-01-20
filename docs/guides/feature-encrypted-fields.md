@@ -895,7 +895,7 @@ Familia::Encryption.validate_configuration!
 ## See Also
 
 - **[Overview](../overview.md#encrypted-fields)** - Conceptual introduction to encrypted fields
-- **[Technical Reference](../reference/api-technical.md#encrypted-fields-feature-v200-pre5)** - Implementation details and advanced patterns
+- **[Technical Reference](../reference/api-technical.md#feature-system)** - Implementation details and advanced patterns
 - **[Security Model Guide](security-model.md)** - Cryptographic design and threat model considerations
 - **[Feature System Guide](feature-system.md)** - Understanding Familia's feature architecture
 - **[Implementation Guide](implementation.md)** - Production deployment and configuration patterns

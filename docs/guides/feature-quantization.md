@@ -891,7 +891,7 @@ BasicModel.qstamp()  # Uses 10.minutes fallback (600 seconds)
 
 ## See Also
 
-- **[Technical Reference](../reference/api-technical.md#quantization-feature-v200-pre7)** - Implementation details and advanced patterns
+- **[Technical Reference](../reference/api-technical.md#feature-system)** - Implementation details and advanced patterns
 - **[Overview](../overview.md#time-based-quantization)** - Conceptual introduction to quantization
 - **[Time Utilities Guide](time-utilities.md)** - Time manipulation and formatting utilities
 - **[Feature System Guide](feature-system.md)** - Understanding Familia's feature architecture
