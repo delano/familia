@@ -149,11 +149,11 @@ module Familia
     # @example With pattern matching
     #   cursor, results = my_hash.scan(0, match: "user:*", count: 100)
     def scan(cursor = 0, match: nil, count: nil)
-      args = [dbkey, cursor]
-      args += ['MATCH', match] if match
-      args += ['COUNT', count] if count
+      opts = {}
+      opts[:match] = match if match
+      opts[:count] = count if count
 
-      new_cursor, pairs = dbclient.hscan(*args)
+      new_cursor, pairs = dbclient.hscan(dbkey, cursor, **opts)
 
       # pairs is an array of [field, value] pairs, convert to hash with deserialization
       result_hash = pairs.to_h.transform_values { |v| deserialize_value(v) }
@@ -211,7 +211,7 @@ module Familia
       if count.nil?
         dbclient.hrandfield(dbkey)
       elsif withvalues
-        pairs = dbclient.hrandfield(dbkey, count, 'WITHVALUES')
+        pairs = dbclient.hrandfield(dbkey, count, withvalues: true)
         # pairs is array of [field, value, field, value, ...]
         # Convert to array of [field, deserialized_value] pairs
         pairs.each_slice(2).map { |field, val| [field, deserialize_value(val)] }

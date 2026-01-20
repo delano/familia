@@ -190,6 +190,8 @@ module Familia
     def bitcount(start_pos = nil, end_pos = nil)
       if start_pos && end_pos
         dbclient.bitcount(dbkey, start_pos, end_pos)
+      elsif start_pos
+        dbclient.bitcount(dbkey, start_pos)
       else
         dbclient.bitcount(dbkey)
       end

@@ -219,9 +219,10 @@ module Familia
     def pushx(*values)
       return 0 if values.empty?
 
-      result = values.flatten.compact.reduce(0) do |len, v|
-        dbclient.rpushx dbkey, serialize_value(v)
-      end
+      serialized_values = values.flatten.compact.map { |v| serialize_value(v) }
+      return 0 if serialized_values.empty?
+
+      result = dbclient.rpushx(dbkey, serialized_values)
       update_expiration if result.positive?
       result
     end
@@ -233,9 +234,10 @@ module Familia
     def unshiftx(*values)
       return 0 if values.empty?
 
-      result = values.flatten.compact.reduce(0) do |len, v|
-        dbclient.lpushx dbkey, serialize_value(v)
-      end
+      serialized_values = values.flatten.compact.map { |v| serialize_value(v) }
+      return 0 if serialized_values.empty?
+
+      result = dbclient.lpushx(dbkey, serialized_values)
       update_expiration if result.positive?
       result
     end

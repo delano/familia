@@ -446,10 +446,7 @@ module Familia
     #   zset.rangebylex('[a', '(b', limit: [0, 10])
     #
     def rangebylex(min, max, limit: nil)
-      args = [dbkey, min, max]
-      args.push(:limit, *limit) if limit
-
-      result = dbclient.zrangebylex(*args)
+      result = dbclient.zrangebylex(dbkey, min, max, limit: limit)
       deserialize_values(*result)
     end
 
@@ -461,10 +458,7 @@ module Familia
     # @return [Array] Members in reverse lexicographical range
     #
     def revrangebylex(max, min, limit: nil)
-      args = [dbkey, max, min]
-      args.push(:limit, *limit) if limit
-
-      result = dbclient.zrevrangebylex(*args)
+      result = dbclient.zrevrangebylex(dbkey, max, min, limit: limit)
       deserialize_values(*result)
     end
 

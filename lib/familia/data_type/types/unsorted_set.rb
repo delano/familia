@@ -122,7 +122,7 @@ module Familia
     def member_any?(*values)
       values = values.flatten
       serialized = values.map { |v| serialize_value(v) }
-      dbclient.smismember(dbkey, *serialized)
+      dbclient.smismember(dbkey, serialized)
     end
     alias members? member_any?
 
