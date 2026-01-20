@@ -651,7 +651,7 @@ module Familia
       opts = {}
       opts[:weights] = weights if weights
       opts[:aggregate] = aggregate.to_s.upcase if aggregate
-      opts[:withscores] = true if withscores
+      opts[:with_scores] = true if withscores
       opts
     end
 
