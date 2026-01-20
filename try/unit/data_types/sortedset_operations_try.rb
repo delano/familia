@@ -5,9 +5,9 @@
 # Tests for SortedSet operations beyond basic add/members.
 # Focus: Familia-specific behavior - score handling, deserialization, withscores option.
 #
-# NOTE: Tests for union/inter/diff with withscores option are omitted because
-# the current Familia implementation uses :withscores but redis-rb requires
-# :with_scores. See build_set_operation_opts in sorted_set.rb.
+# NOTE: Tests for union/inter/diff with withscores option verify that Familia's
+# public API accepts :withscores while correctly passing :with_scores to redis-rb.
+# See build_set_operation_opts in sorted_set.rb.
 
 require_relative '../../support/helpers/test_helpers'
 
