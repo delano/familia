@@ -27,7 +27,7 @@ Added
     ``pexpireat_fields``, ``ttl_fields``, ``pttl_fields``, ``persist_fields``,
     ``expiretime_fields``, ``pexpiretime_fields``.
 
-- Added 156 new tests across 5 test files covering all new methods.
+- Added 158 new tests across 5 test files covering all new methods.
 
 AI Assistance
 -------------
