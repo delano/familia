@@ -41,12 +41,32 @@ module Familia
     end
     alias prepend unshift
 
-    def pop
-      deserialize_value dbclient.rpop(dbkey)
+    # Removes and returns the last element(s) from the list
+    # @param count [Integer, nil] Number of elements to pop (Redis 6.2+)
+    # @return [Object, Array<Object>, nil] Single element or array if count specified
+    def pop(count = nil)
+      if count
+        result = dbclient.rpop(dbkey, count)
+        return nil if result.nil?
+
+        deserialize_values(*result)
+      else
+        deserialize_value dbclient.rpop(dbkey)
+      end
     end
 
-    def shift
-      deserialize_value dbclient.lpop(dbkey)
+    # Removes and returns the first element(s) from the list
+    # @param count [Integer, nil] Number of elements to shift (Redis 6.2+)
+    # @return [Object, Array<Object>, nil] Single element or array if count specified
+    def shift(count = nil)
+      if count
+        result = dbclient.lpop(dbkey, count)
+        return nil if result.nil?
+
+        deserialize_values(*result)
+      else
+        deserialize_value dbclient.lpop(dbkey)
+      end
     end
 
     def [](idx, count = nil)
@@ -134,6 +154,92 @@ module Familia
     def at(idx)
       deserialize_value dbclient.lindex(dbkey, idx)
     end
+
+    # Trims the list to the specified range
+    # @param start [Integer] Start index (0-based, negative counts from end)
+    # @param stop [Integer] End index (inclusive, negative counts from end)
+    # @return [String] "OK" on success
+    def trim(start, stop)
+      dbclient.ltrim dbkey, start, stop
+    end
+    alias ltrim trim
+
+    # Sets the element at the specified index
+    # @param index [Integer] Index to set (0-based, negative counts from end)
+    # @param value The value to set
+    # @return [String] "OK" on success
+    # @raise [Redis::CommandError] if index is out of range
+    def set(index, value)
+      result = dbclient.lset dbkey, index, serialize_value(value)
+      update_expiration
+      result
+    end
+    alias lset set
+
+    # Inserts an element before or after a pivot element
+    # @param position [:before, :after] Where to insert relative to pivot
+    # @param pivot The pivot element to search for
+    # @param value The value to insert
+    # @return [Integer] Length of list after insert, or -1 if pivot not found
+    def insert(position, pivot, value)
+      pos = case position
+            when :before, 'BEFORE' then 'BEFORE'
+            when :after, 'AFTER' then 'AFTER'
+            else
+              raise ArgumentError, "position must be :before or :after, got #{position.inspect}"
+            end
+      result = dbclient.linsert dbkey, pos, serialize_value(pivot), serialize_value(value)
+      update_expiration if result.positive?
+      result
+    end
+    alias linsert insert
+
+    # Moves an element from this list to another list atomically
+    # @param destination [ListKey, String] Destination list (ListKey or key string)
+    # @param wherefrom [:left, :right] Which end to pop from source
+    # @param whereto [:left, :right] Which end to push to destination
+    # @return [Object, nil] The moved element, or nil if source is empty
+    def move(destination, wherefrom, whereto)
+      dest_key = destination.respond_to?(:dbkey) ? destination.dbkey : destination
+      from = wherefrom.to_s.upcase
+      to = whereto.to_s.upcase
+
+      unless %w[LEFT RIGHT].include?(from) && %w[LEFT RIGHT].include?(to)
+        raise ArgumentError, 'wherefrom and whereto must be :left or :right'
+      end
+
+      result = dbclient.lmove dbkey, dest_key, from, to
+      deserialize_value result
+    end
+    alias lmove move
+
+    # Pushes values only if the list already exists
+    # @param values Values to push to the tail of the list
+    # @return [Integer] Length of list after push, or 0 if list doesn't exist
+    def pushx(*values)
+      return 0 if values.empty?
+
+      result = values.flatten.compact.reduce(0) do |len, v|
+        dbclient.rpushx dbkey, serialize_value(v)
+      end
+      update_expiration if result.positive?
+      result
+    end
+    alias rpushx pushx
+
+    # Pushes values to the head only if the list already exists
+    # @param values Values to push to the head of the list
+    # @return [Integer] Length of list after push, or 0 if list doesn't exist
+    def unshiftx(*values)
+      return 0 if values.empty?
+
+      result = values.flatten.compact.reduce(0) do |len, v|
+        dbclient.lpushx dbkey, serialize_value(v)
+      end
+      update_expiration if result.positive?
+      result
+    end
+    alias lpushx unshiftx
 
     def first
       at 0

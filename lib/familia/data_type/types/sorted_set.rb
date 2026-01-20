@@ -303,8 +303,373 @@ module Familia
       at(-1)
     end
 
+    # Removes and returns the member(s) with the lowest score(s).
+    #
+    # @param count [Integer] Number of members to pop (default: 1)
+    # @return [Array, nil] Array of [member, score] pairs, or single pair if count=1,
+    #   or nil if set is empty
+    #
+    # @example Pop single lowest-scoring member
+    #   zset.popmin  #=> ["member1", 1.0]
+    #
+    # @example Pop multiple lowest-scoring members
+    #   zset.popmin(3)  #=> [["member1", 1.0], ["member2", 2.0], ["member3", 3.0]]
+    #
+    def popmin(count = 1)
+      result = dbclient.zpopmin(dbkey, count)
+      return nil if result.nil? || result.empty?
+
+      update_expiration
+
+      if count == 1 && result.is_a?(Array) && result.length == 2 && !result[0].is_a?(Array)
+        # Single result: [member, score]
+        [deserialize_value(result[0]), result[1].to_f]
+      else
+        # Multiple results: [[member, score], ...]
+        result.map { |member, score| [deserialize_value(member), score.to_f] }
+      end
+    end
+
+    # Removes and returns the member(s) with the highest score(s).
+    #
+    # @param count [Integer] Number of members to pop (default: 1)
+    # @return [Array, nil] Array of [member, score] pairs, or single pair if count=1,
+    #   or nil if set is empty
+    #
+    # @example Pop single highest-scoring member
+    #   zset.popmax  #=> ["member1", 100.0]
+    #
+    # @example Pop multiple highest-scoring members
+    #   zset.popmax(3)  #=> [["member3", 100.0], ["member2", 90.0], ["member1", 80.0]]
+    #
+    def popmax(count = 1)
+      result = dbclient.zpopmax(dbkey, count)
+      return nil if result.nil? || result.empty?
+
+      update_expiration
+
+      if count == 1 && result.is_a?(Array) && result.length == 2 && !result[0].is_a?(Array)
+        # Single result: [member, score]
+        [deserialize_value(result[0]), result[1].to_f]
+      else
+        # Multiple results: [[member, score], ...]
+        result.map { |member, score| [deserialize_value(member), score.to_f] }
+      end
+    end
+
+    # Counts members within a score range.
+    #
+    # @param min [Numeric, String] Minimum score (use '-inf' for unbounded)
+    # @param max [Numeric, String] Maximum score (use '+inf' for unbounded)
+    # @return [Integer] Number of members with scores in the range
+    #
+    # @example Count members with scores between 10 and 100
+    #   zset.score_count(10, 100)  #=> 5
+    #
+    # @example Count members with scores up to 50
+    #   zset.score_count('-inf', 50)  #=> 3
+    #
+    def score_count(min, max)
+      dbclient.zcount(dbkey, min, max)
+    end
+    alias zcount score_count
+
+    # Gets scores for multiple members at once.
+    #
+    # @param members [Array<Object>] Members to get scores for
+    # @return [Array<Float, nil>] Scores for each member (nil if member doesn't exist)
+    #
+    # @example Get scores for multiple members
+    #   zset.mscore('member1', 'member2', 'member3')  #=> [1.0, 2.0, nil]
+    #
+    def mscore(*members)
+      return [] if members.empty?
+
+      serialized = members.map { |m| serialize_value(m) }
+      result = dbclient.zmscore(dbkey, *serialized)
+      result.map { |s| s&.to_f }
+    end
+
+    # Returns the union of this sorted set with other sorted sets.
+    #
+    # @param other_sets [Array<SortedSet, String>] Other sorted sets or key names
+    # @param weights [Array<Numeric>, nil] Multiplication factors for each set's scores
+    # @param aggregate [Symbol, nil] How to aggregate scores (:sum, :min, :max)
+    # @return [Array] Array of members (or [member, score] pairs with withscores)
+    #
+    # @example Union of two sorted sets
+    #   zset.union(other_zset)  #=> ["member1", "member2", "member3"]
+    #
+    # @example Union with weighted scores
+    #   zset.union(other_zset, weights: [1, 2])
+    #
+    # @example Union with score aggregation
+    #   zset.union(other_zset, aggregate: :max)
+    #
+    def union(*other_sets, weights: nil, aggregate: nil, withscores: false)
+      keys = [dbkey] + resolve_set_keys(other_sets)
+      opts = build_set_operation_opts(weights: weights, aggregate: aggregate, withscores: withscores)
+
+      result = dbclient.zunion(*keys, **opts)
+      process_set_operation_result(result, withscores: withscores)
+    end
+
+    # Returns the intersection of this sorted set with other sorted sets.
+    #
+    # @param other_sets [Array<SortedSet, String>] Other sorted sets or key names
+    # @param weights [Array<Numeric>, nil] Multiplication factors for each set's scores
+    # @param aggregate [Symbol, nil] How to aggregate scores (:sum, :min, :max)
+    # @return [Array] Array of members (or [member, score] pairs with withscores)
+    #
+    # @example Intersection of two sorted sets
+    #   zset.inter(other_zset)  #=> ["common_member"]
+    #
+    def inter(*other_sets, weights: nil, aggregate: nil, withscores: false)
+      keys = [dbkey] + resolve_set_keys(other_sets)
+      opts = build_set_operation_opts(weights: weights, aggregate: aggregate, withscores: withscores)
+
+      result = dbclient.zinter(*keys, **opts)
+      process_set_operation_result(result, withscores: withscores)
+    end
+
+    # Returns members in a lexicographical range (requires all members have same score).
+    #
+    # @param min [String] Minimum lex value (use '-' for unbounded, '[' or '(' prefix for inclusive/exclusive)
+    # @param max [String] Maximum lex value (use '+' for unbounded, '[' or '(' prefix for inclusive/exclusive)
+    # @param limit [Array<Integer>, nil] [offset, count] for pagination
+    # @return [Array] Members in the lexicographical range
+    #
+    # @example Get members between 'a' and 'z' (inclusive)
+    #   zset.rangebylex('[a', '[z')  #=> ["apple", "banana", "cherry"]
+    #
+    # @example Get first 10 members starting with 'a'
+    #   zset.rangebylex('[a', '(b', limit: [0, 10])
+    #
+    def rangebylex(min, max, limit: nil)
+      args = [dbkey, min, max]
+      args.push(:limit, *limit) if limit
+
+      result = dbclient.zrangebylex(*args)
+      deserialize_values(*result)
+    end
+
+    # Returns members in reverse lexicographical range.
+    #
+    # @param max [String] Maximum lex value (use '+' for unbounded)
+    # @param min [String] Minimum lex value (use '-' for unbounded)
+    # @param limit [Array<Integer>, nil] [offset, count] for pagination
+    # @return [Array] Members in reverse lexicographical range
+    #
+    def revrangebylex(max, min, limit: nil)
+      args = [dbkey, max, min]
+      args.push(:limit, *limit) if limit
+
+      result = dbclient.zrevrangebylex(*args)
+      deserialize_values(*result)
+    end
+
+    # Removes members in a lexicographical range.
+    #
+    # @param min [String] Minimum lex value
+    # @param max [String] Maximum lex value
+    # @return [Integer] Number of members removed
+    #
+    def remrangebylex(min, max)
+      result = dbclient.zremrangebylex(dbkey, min, max)
+      update_expiration
+      result
+    end
+
+    # Counts members in a lexicographical range.
+    #
+    # @param min [String] Minimum lex value
+    # @param max [String] Maximum lex value
+    # @return [Integer] Number of members in the range
+    #
+    def lexcount(min, max)
+      dbclient.zlexcount(dbkey, min, max)
+    end
+
+    # Returns random member(s) from the sorted set.
+    #
+    # @param count [Integer, nil] Number of members to return (nil for single member)
+    # @param withscores [Boolean] Whether to include scores in result
+    # @return [Object, Array, nil] Random member(s), or nil if set is empty
+    #
+    # @example Get single random member
+    #   zset.randmember  #=> "member1"
+    #
+    # @example Get 3 random members
+    #   zset.randmember(3)  #=> ["member1", "member2", "member3"]
+    #
+    # @example Get random member with score
+    #   zset.randmember(1, withscores: true)  #=> [["member1", 1.0]]
+    #
+    def randmember(count = nil, withscores: false)
+      if count.nil?
+        result = dbclient.zrandmember(dbkey)
+        return nil if result.nil?
+
+        deserialize_value(result)
+      else
+        result = if withscores
+          dbclient.zrandmember(dbkey, count, withscores: true)
+        else
+          dbclient.zrandmember(dbkey, count)
+        end
+
+        return [] if result.nil? || result.empty?
+
+        if withscores
+          result.map { |member, score| [deserialize_value(member), score.to_f] }
+        else
+          deserialize_values(*result)
+        end
+      end
+    end
+
+    # Iterates over members using cursor-based scanning.
+    #
+    # @param cursor [Integer] Cursor position (0 to start)
+    # @param match [String, nil] Pattern to match member names
+    # @param count [Integer, nil] Hint for number of elements to return per call
+    # @return [Array] [new_cursor, [[member, score], ...]]
+    #
+    # @example Scan all members
+    #   cursor = 0
+    #   loop do
+    #     cursor, members = zset.scan(cursor)
+    #     members.each { |member, score| puts "#{member}: #{score}" }
+    #     break if cursor == 0
+    #   end
+    #
+    # @example Scan with pattern matching
+    #   cursor, members = zset.scan(0, match: 'user:*', count: 100)
+    #
+    def scan(cursor = 0, match: nil, count: nil)
+      opts = {}
+      opts[:match] = match if match
+      opts[:count] = count if count
+
+      new_cursor, result = dbclient.zscan(dbkey, cursor, **opts)
+
+      members = result.map { |member, score| [deserialize_value(member), score.to_f] }
+      [new_cursor.to_i, members]
+    end
+
+    # Stores the union of sorted sets into a destination key.
+    #
+    # @param destination [String] Destination key name
+    # @param other_sets [Array<SortedSet, String>] Other sorted sets or key names
+    # @param weights [Array<Numeric>, nil] Multiplication factors for each set's scores
+    # @param aggregate [Symbol, nil] How to aggregate scores (:sum, :min, :max)
+    # @return [Integer] Number of elements in the resulting sorted set
+    #
+    def unionstore(destination, *other_sets, weights: nil, aggregate: nil)
+      keys = [dbkey] + resolve_set_keys(other_sets)
+      opts = build_set_operation_opts(weights: weights, aggregate: aggregate)
+
+      dbclient.zunionstore(destination, keys, **opts)
+    end
+
+    # Stores the intersection of sorted sets into a destination key.
+    #
+    # @param destination [String] Destination key name
+    # @param other_sets [Array<SortedSet, String>] Other sorted sets or key names
+    # @param weights [Array<Numeric>, nil] Multiplication factors for each set's scores
+    # @param aggregate [Symbol, nil] How to aggregate scores (:sum, :min, :max)
+    # @return [Integer] Number of elements in the resulting sorted set
+    #
+    def interstore(destination, *other_sets, weights: nil, aggregate: nil)
+      keys = [dbkey] + resolve_set_keys(other_sets)
+      opts = build_set_operation_opts(weights: weights, aggregate: aggregate)
+
+      dbclient.zinterstore(destination, keys, **opts)
+    end
+
+    # Returns the difference between this sorted set and other sorted sets.
+    #
+    # @param other_sets [Array<SortedSet, String>] Other sorted sets or key names
+    # @param withscores [Boolean] Whether to include scores in result
+    # @return [Array] Members in this set but not in other sets
+    #
+    # @example Difference of two sorted sets
+    #   zset.diff(other_zset)  #=> ["unique_member"]
+    #
+    def diff(*other_sets, withscores: false)
+      keys = [dbkey] + resolve_set_keys(other_sets)
+
+      result = if withscores
+        dbclient.zdiff(*keys, withscores: true)
+      else
+        dbclient.zdiff(*keys)
+      end
+
+      process_set_operation_result(result, withscores: withscores)
+    end
+
+    # Stores the difference of sorted sets into a destination key.
+    #
+    # @param destination [String] Destination key name
+    # @param other_sets [Array<SortedSet, String>] Other sorted sets or key names
+    # @return [Integer] Number of elements in the resulting sorted set
+    #
+    def diffstore(destination, *other_sets)
+      keys = [dbkey] + resolve_set_keys(other_sets)
+      dbclient.zdiffstore(destination, keys)
+    end
+
 
     private
+
+    # Resolves sorted set arguments to their Redis key names.
+    #
+    # @param sets [Array<SortedSet, String>] Sorted sets or key names
+    # @return [Array<String>] Array of Redis key names
+    #
+    def resolve_set_keys(sets)
+      sets.map do |s|
+        case s
+        when Familia::SortedSet
+          s.dbkey
+        when String
+          s
+        else
+          raise ArgumentError, "Expected SortedSet or String key, got #{s.class}"
+        end
+      end
+    end
+
+    # Builds options hash for set operations (union, inter, diff).
+    #
+    # @param weights [Array<Numeric>, nil] Score multiplication factors
+    # @param aggregate [Symbol, nil] Score aggregation method
+    # @param withscores [Boolean] Whether to include scores
+    # @return [Hash] Options hash for Redis command
+    #
+    def build_set_operation_opts(weights: nil, aggregate: nil, withscores: false)
+      opts = {}
+      opts[:weights] = weights if weights
+      opts[:aggregate] = aggregate.to_s.upcase if aggregate
+      opts[:withscores] = true if withscores
+      opts
+    end
+
+    # Processes the result of set operations, deserializing values.
+    #
+    # @param result [Array] Raw result from Redis
+    # @param withscores [Boolean] Whether result includes scores
+    # @return [Array] Deserialized result
+    #
+    def process_set_operation_result(result, withscores: false)
+      return [] if result.nil? || result.empty?
+
+      if withscores
+        result.map { |member, score| [deserialize_value(member), score.to_f] }
+      else
+        deserialize_values(*result)
+      end
+    end
 
     # Validates that mutually exclusive ZADD options are not specified together.
     #
