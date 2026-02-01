@@ -28,5 +28,7 @@ Gem::Specification.new do |spec|
   spec.add_dependency 'stringio', '~> 3.1.1'
   spec.add_dependency 'uri-valkey', '~> 1.4'
 
+  spec.add_development_dependency 'json_schemer', '~> 2.0'
+
   spec.metadata['rubygems_mfa_required'] = 'true'
 end
