@@ -87,6 +87,7 @@ GEM
       stringio
     racc (1.8.1)
     rainbow (3.1.1)
+    rake (13.3.1)
     rbnacl (7.1.2)
       ffi (~> 1)
     rbs (3.9.5)
@@ -185,6 +186,7 @@ DEPENDENCIES
   debug
   familia!
   irb (~> 1.15.2)
+  rake (~> 13.0)
   rbnacl (~> 7.1, >= 7.1.1)
   redcarpet
   reek
