@@ -15,11 +15,17 @@ module Familia
   @encryption_personalization = 'FamilialMatters'.freeze
   @pipelined_mode = :warn
 
+  # Schema validation configuration
+  @schema_path = nil      # Directory containing schema files (String or Pathname)
+  @schemas = {}           # Hash mapping class names to schema file paths
+  @schema_validator = :json_schemer # Validator type (:json_schemer, :none, or custom)
+
   # Familia::Settings
   #
   module Settings
     attr_writer :delim, :suffix, :default_expiration, :logical_database, :prefix, :encryption_keys,
-                :current_key_version, :encryption_personalization, :transaction_mode
+                :current_key_version, :encryption_personalization, :transaction_mode,
+                :schema_path, :schemas, :schema_validator
 
     def delim(val = nil)
       @delim = val if val
@@ -138,6 +144,62 @@ module Familia
         raise ArgumentError, 'Pipeline mode must be :strict, :warn, or :permissive'
       end
       @pipelined_mode = val
+    end
+
+    # Directory containing schema files for JSON Schema validation.
+    # When set, schema files are discovered by convention using the
+    # underscored class name (e.g., Customer -> customer.json).
+    #
+    # @param val [String, Pathname, nil] The schema directory path, or nil to get current value
+    # @return [String, Pathname, nil] Current schema path
+    #
+    # @example Convention-based schema discovery
+    #   Familia.configure do |config|
+    #     config.schema_path = 'schemas/models'
+    #   end
+    #
+    def schema_path(val = nil)
+      @schema_path = val if val
+      @schema_path
+    end
+
+    # Hash mapping class names to their schema file paths.
+    # Takes precedence over convention-based discovery via schema_path.
+    #
+    # @param val [Hash, nil] A hash of class name => schema path mappings, or nil to get current
+    # @return [Hash] Current schema mappings
+    #
+    # @example Explicit schema mapping
+    #   Familia.configure do |config|
+    #     config.schemas = {
+    #       'Customer' => 'schemas/customer.json',
+    #       'Session'  => 'schemas/session.json'
+    #     }
+    #   end
+    #
+    def schemas(val = nil)
+      @schemas = val if val
+      @schemas || {}
+    end
+
+    # Validator type for JSON Schema validation.
+    #
+    # @param val [Symbol, Object, nil] The validator type or instance, or nil to get current
+    # @return [Symbol, Object] Current validator setting
+    #
+    # Available options:
+    # - :json_schemer (default): Use the json_schemer gem for validation
+    # - :none: Disable schema validation entirely
+    # - Custom instance: Any object responding to #validate
+    #
+    # @example Disable validation
+    #   Familia.configure do |config|
+    #     config.schema_validator = :none
+    #   end
+    #
+    def schema_validator(val = nil)
+      @schema_validator = val if val
+      @schema_validator || :json_schemer
     end
 
     # Configure Familia settings
