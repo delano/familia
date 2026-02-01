@@ -378,7 +378,10 @@ module Familia
       end
 
       def print_error_guidance
-        info('', 'Check logs for error details') if @error_count > 0
+        return unless @error_count > 0
+
+        info('')
+        info('Check logs for error details')
       end
 
       def print_dry_run_guidance
