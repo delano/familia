@@ -53,14 +53,19 @@ module Familia
       #   - :reversible [Boolean] Whether the migration has a down method
       #
       def status
+        # Batch fetch all applied migrations with timestamps in a single Redis call
+        applied_info = @registry.all_applied.each_with_object({}) do |entry, hash|
+          hash[entry[:migration_id]] = entry[:applied_at]
+        end
+
         @migrations.map do |klass|
           id = klass.migration_id
-          applied = @registry.applied?(id)
+          applied_at = applied_info[id]
           {
             migration_id: id,
             description: klass.description,
-            status: applied ? :applied : :pending,
-            applied_at: applied ? @registry.applied_at(id) : nil,
+            status: applied_at ? :applied : :pending,
+            applied_at: applied_at,
             reversible: klass.new.reversible?,
           }
         end
@@ -198,9 +203,12 @@ module Familia
                 "Migration #{migration_id} is not applied"
         end
 
+        # Batch fetch all applied migrations to check for dependents
+        applied_ids = @registry.all_applied.map { |e| e[:migration_id] }.to_set
+
         # Check no dependents are applied
         @migrations.each do |m|
-          if (m.dependencies || []).include?(migration_id) && @registry.applied?(m.migration_id)
+          if (m.dependencies || []).include?(migration_id) && applied_ids.include?(m.migration_id)
             raise Familia::Migration::Errors::HasDependents,
                   "Cannot rollback: #{m.migration_id} depends on #{migration_id}"
           end

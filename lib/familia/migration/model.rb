@@ -337,8 +337,12 @@ module Familia
         # actually made.
         @records_needing_update += 1
 
-        # Call the subclass implementation
-        process_record(obj, key)
+        # Call the subclass implementation, with optional schema validation
+        if validate_before_transform? || validate_after_transform?
+          process_record_with_validation(obj, key)
+        else
+          process_record(obj, key)
+        end
       rescue StandardError => ex
         handle_record_error(key, ex)
       end

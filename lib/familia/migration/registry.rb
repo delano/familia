@@ -89,9 +89,12 @@ module Familia
       def pending(all_migrations)
         return [] if all_migrations.nil? || all_migrations.empty?
 
+        # Batch fetch all applied migration IDs in a single Redis call
+        applied_ids = client.zrange(applied_key, 0, -1).to_set
+
         all_migrations.reject do |migration|
           migration_id = extract_migration_id(migration)
-          applied?(migration_id)
+          applied_ids.include?(migration_id)
         end
       end
 
@@ -115,9 +118,14 @@ module Familia
       def status(all_migrations)
         return [] if all_migrations.nil? || all_migrations.empty?
 
+        # Batch fetch all applied migrations with timestamps in a single Redis call
+        applied_info = all_applied.each_with_object({}) do |entry, hash|
+          hash[entry[:migration_id]] = entry[:applied_at]
+        end
+
         all_migrations.map do |migration|
           migration_id = extract_migration_id(migration)
-          timestamp = applied_at(migration_id)
+          timestamp = applied_info[migration_id]
 
           {
             migration_id: migration_id,
