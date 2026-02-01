@@ -16,6 +16,11 @@ Added
   with centralized SchemaRegistry supporting convention-based and explicit schema
   discovery using the json_schemer gem.
 
+- V1 to V2 serialization migration example at ``examples/migrations/v1_to_v2_serialization_migration.rb``
+  demonstrating how to upgrade Horreum objects from v1.x format (selective serialization
+  with type information loss) to v2.0 format (universal JSON encoding with type preservation).
+  Includes type detection heuristics, field type declarations, and batch processing.
+
 Documentation
 -------------
 
