@@ -66,6 +66,49 @@ end
 
 @test_migrations = [RunnerTestMigrationA, RunnerTestMigrationB, RunnerTestReversible]
 
+# Circular dependency test migrations
+class CircularMigrationA < Familia::Migration::Base
+  self.migration_id = 'circular_a'
+  self.dependencies = ['circular_b']
+  def migration_needed?; true; end
+  def migrate; end
+end
+
+class CircularMigrationB < Familia::Migration::Base
+  self.migration_id = 'circular_b'
+  self.dependencies = ['circular_a']
+  def migration_needed?; true; end
+  def migrate; end
+end
+
+class CircularMigrationC < Familia::Migration::Base
+  self.migration_id = 'circular_c'
+  self.dependencies = ['circular_d']
+  def migration_needed?; true; end
+  def migrate; end
+end
+
+class CircularMigrationD < Familia::Migration::Base
+  self.migration_id = 'circular_d'
+  self.dependencies = ['circular_e']
+  def migration_needed?; true; end
+  def migrate; end
+end
+
+class CircularMigrationE < Familia::Migration::Base
+  self.migration_id = 'circular_e'
+  self.dependencies = ['circular_c']
+  def migration_needed?; true; end
+  def migrate; end
+end
+
+class SelfRefMigration < Familia::Migration::Base
+  self.migration_id = 'self_ref'
+  self.dependencies = ['self_ref']
+  def migration_needed?; true; end
+  def migrate; end
+end
+
 ## Runner initializes with default values
 runner = Familia::Migration::Runner.new(migrations: @test_migrations, registry: @registry)
 runner.is_a?(Familia::Migration::Runner)
@@ -215,7 +258,54 @@ rescue Familia::Migration::Errors::NotFound
 end
 #=> true
 
+## validate detects simple circular dependency (A -> B -> A)
+runner = Familia::Migration::Runner.new(
+  migrations: [CircularMigrationA, CircularMigrationB],
+  registry: @registry
+)
+issues = runner.validate
+issues.any? { |i| i[:type] == :circular_dependency }
+#=> true
+
+## validate detects complex circular dependency (C -> D -> E -> C)
+runner = Familia::Migration::Runner.new(
+  migrations: [CircularMigrationC, CircularMigrationD, CircularMigrationE],
+  registry: @registry
+)
+issues = runner.validate
+issues.any? { |i| i[:type] == :circular_dependency }
+#=> true
+
+## run raises CircularDependency for circular dependencies
+@redis.keys("#{@prefix}:*").each { |k| @redis.del(k) }
+runner = Familia::Migration::Runner.new(
+  migrations: [CircularMigrationA, CircularMigrationB],
+  registry: @registry
+)
+begin
+  runner.run(dry_run: false)
+  false
+rescue Familia::Migration::Errors::CircularDependency
+  true
+end
+#=> true
+
+## Self-referencing dependency is detected
+runner = Familia::Migration::Runner.new(
+  migrations: [SelfRefMigration],
+  registry: @registry
+)
+issues = runner.validate
+issues.any? { |i| i[:type] == :circular_dependency }
+#=> true
+
 # Teardown
 @redis.keys("#{@prefix}:*").each { |k| @redis.del(k) }
 Familia::Migration.migrations.replace(@initial_migrations)
 Familia::Migration.migrations.delete(MissingDepMigration)
+Familia::Migration.migrations.delete(CircularMigrationA)
+Familia::Migration.migrations.delete(CircularMigrationB)
+Familia::Migration.migrations.delete(CircularMigrationC)
+Familia::Migration.migrations.delete(CircularMigrationD)
+Familia::Migration.migrations.delete(CircularMigrationE)
+Familia::Migration.migrations.delete(SelfRefMigration)

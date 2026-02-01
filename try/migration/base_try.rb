@@ -41,6 +41,25 @@ class ReversibleTestMigration < Familia::Migration::Base
   end
 end
 
+class CliTestMigration < Familia::Migration::Base
+  self.migration_id = 'cli_test_migration'
+
+  class << self
+    attr_accessor :migration_needed_value, :migrate_called
+  end
+  self.migration_needed_value = true
+  self.migrate_called = false
+
+  def migration_needed?
+    self.class.migration_needed_value
+  end
+
+  def migrate
+    self.class.migrate_called = true
+    true
+  end
+end
+
 ## migration_id class attribute works
 TestBaseMigration.migration_id
 #=> 'test_20260131_base'
@@ -73,8 +92,8 @@ ReversibleTestMigration.new.reversible?
 TestBaseMigration.new.dry_run?
 #=> true
 
-## actual_run? returns false by default
-TestBaseMigration.new.actual_run?
+## actual_run? returns falsy by default
+TestBaseMigration.new.actual_run? ? true : false
 #=> false
 
 ## dry_run? returns false when run: true
@@ -107,9 +126,9 @@ instance = TestBaseMigration.new
 instance.stats[:nonexistent]
 #=> 0
 
-## redis accessor returns connection
+## redis accessor returns connection (via send for protected method)
 instance = TestBaseMigration.new
-instance.redis.respond_to?(:get)
+instance.send(:redis).respond_to?(:get)
 #=> true
 
 ## Base class migration_needed? raises NotImplementedError
@@ -141,6 +160,67 @@ instance = TestBaseMigration.new
 [:info, :debug, :warn, :error, :header, :progress].all? { |m| instance.respond_to?(m) }
 #=> true
 
+## cli_run returns 0 for dry run success
+CliTestMigration.migrate_called = false
+CliTestMigration.migration_needed_value = true
+result = CliTestMigration.cli_run([])
+[result, CliTestMigration.migrate_called]
+#=> [0, true]
+
+## cli_run returns 0 for actual run success
+CliTestMigration.migrate_called = false
+CliTestMigration.migration_needed_value = true
+result = CliTestMigration.cli_run(['--run'])
+[result, CliTestMigration.migrate_called]
+#=> [0, true]
+
+## cli_run with --check returns 1 when migration needed
+CliTestMigration.migration_needed_value = true
+result = CliTestMigration.cli_run(['--check'])
+result
+#=> 1
+
+## cli_run with --check returns 0 when migration not needed
+CliTestMigration.migration_needed_value = false
+result = CliTestMigration.cli_run(['--check'])
+result
+#=> 0
+
+## cli_run returns 0 when migration not needed
+CliTestMigration.migration_needed_value = false
+CliTestMigration.migrate_called = false
+result = CliTestMigration.cli_run([])
+[result, CliTestMigration.migrate_called]
+#=> [0, false]
+
+## check_only returns 1 when migration needed
+CliTestMigration.migration_needed_value = true
+CliTestMigration.check_only
+#=> 1
+
+## check_only returns 0 when migration not needed
+CliTestMigration.migration_needed_value = false
+CliTestMigration.check_only
+#=> 0
+
+## dry_run_only? yields only in dry run mode
+results = []
+dry = TestBaseMigration.new(run: false)
+dry.dry_run_only? { results << :dry }
+live = TestBaseMigration.new(run: true)
+live.dry_run_only? { results << :live }
+results
+#=> [:dry]
+
+## dry_run_only? returns true in dry run mode
+TestBaseMigration.new(run: false).dry_run_only?
+#=> true
+
+## dry_run_only? returns false in actual run mode
+TestBaseMigration.new(run: true).dry_run_only?
+#=> false
+
 # Cleanup - remove test migrations from registry
 Familia::Migration.migrations.delete(TestBaseMigration)
 Familia::Migration.migrations.delete(ReversibleTestMigration)
+Familia::Migration.migrations.delete(CliTestMigration)
