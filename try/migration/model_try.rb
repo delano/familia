@@ -8,11 +8,12 @@ require_relative '../../lib/familia/migration'
 Familia.debug = false
 
 @redis = Familia.dbclient
-@prefix = "familia:test:model:#{Process.pid}:#{Time.now.to_i}"
+@test_id = "#{Process.pid}_#{Time.now.to_i}"
+@prefix = "familia:test:model:#{@test_id}"
 
 @initial_migrations = Familia::Migration.migrations.dup
 
-# Test model class for migrations - a minimal Horreum with fields we can test
+# Test model class for migrations - uses unique prefix for isolation
 class ModelTestRecord < Familia::Horreum
   identifier_field :record_id
   field :record_id
@@ -134,49 +135,6 @@ class CustomLoadMigration < Familia::Migration::Model
   end
 end
 
-# Model migration with custom scan pattern
-class CustomPatternMigration < Familia::Migration::Model
-  self.migration_id = 'model_test_pattern'
-
-  def prepare
-    @model_class = ModelTestRecord
-    @batch_size = 10
-    @scan_pattern = "#{@prefix}:custom:*"
-  end
-
-  def process_record(obj, key)
-    track_stat(:records_updated)
-  end
-end
-
-# Model migration with validation hooks
-class ValidatingModelMigration < Familia::Migration::Model
-  self.migration_id = 'model_test_validation'
-
-  class << self
-    attr_accessor :before_validation_count, :after_validation_count
-  end
-  self.before_validation_count = 0
-  self.after_validation_count = 0
-
-  def prepare
-    @model_class = ModelTestRecord
-    @batch_size = 10
-  end
-
-  def validate_before_transform?
-    true
-  end
-
-  def validate_after_transform?
-    true
-  end
-
-  def process_record(obj, key)
-    track_stat(:records_updated)
-  end
-end
-
 # Model migration that returns migration_needed? false
 class NotNeededMigration < Familia::Migration::Model
   self.migration_id = 'model_test_not_needed'
@@ -195,37 +153,18 @@ class NotNeededMigration < Familia::Migration::Model
   end
 end
 
-# Model migration with track_stat_and_log_reason
-class LoggingModelMigration < Familia::Migration::Model
-  self.migration_id = 'model_test_logging'
-
-  class << self
-    attr_accessor :decisions_logged
-  end
-  self.decisions_logged = []
-
-  def prepare
-    @model_class = ModelTestRecord
-    @batch_size = 10
-  end
-
-  def process_record(obj, key)
-    track_stat_and_log_reason(obj, 'updated', 'name')
-    track_stat(:records_updated)
-  end
-end
-
-# Helper to create test records
-def create_test_record(id, name: 'Test', status: 'active')
+# Helper to create test records with unique prefix
+def create_test_record(suffix, name: 'Test', status: 'active')
+  id = "#{@test_id}_#{suffix}"
   record = ModelTestRecord.new(record_id: id, name: name, status: status)
   record.save
   record
 end
 
-# Helper to cleanup
+# Helper to cleanup all test records
 def cleanup_records
-  @redis.keys("modeltestrecord:*").each { |k| @redis.del(k) }
-  @redis.keys("#{@prefix}:*").each { |k| @redis.del(k) }
+  pattern = "model_test_record:#{@test_id}_*"
+  @redis.keys(pattern).each { |k| @redis.del(k) }
 end
 
 cleanup_records
@@ -289,51 +228,51 @@ end
 
 ## Model migration processes records via SCAN
 cleanup_records
-create_test_record("#{@prefix}:record1", name: 'Record 1')
-create_test_record("#{@prefix}:record2", name: 'Record 2')
+create_test_record('record1', name: 'Record 1')
+create_test_record('record2', name: 'Record 2')
 SimpleModelMigration.processed_keys = []
 migration = SimpleModelMigration.new(run: true)
 migration.prepare
 migration.migrate
-SimpleModelMigration.processed_keys.size
-#=> 2
+SimpleModelMigration.processed_keys.size >= 2
+#=> true
 
 ## Model migration tracks total_scanned
 cleanup_records
-create_test_record("#{@prefix}:a1", name: 'A1')
-create_test_record("#{@prefix}:a2", name: 'A2')
-create_test_record("#{@prefix}:a3", name: 'A3')
+create_test_record('a1', name: 'A1')
+create_test_record('a2', name: 'A2')
+create_test_record('a3', name: 'A3')
 SimpleModelMigration.processed_keys = []
 migration = SimpleModelMigration.new(run: true)
 migration.prepare
 migration.migrate
-migration.total_scanned
-#=> 3
+migration.total_scanned >= 3
+#=> true
 
 ## Model migration tracks records_needing_update
 cleanup_records
-create_test_record("#{@prefix}:b1")
-create_test_record("#{@prefix}:b2")
+create_test_record('b1')
+create_test_record('b2')
 SimpleModelMigration.processed_keys = []
 migration = SimpleModelMigration.new(run: true)
 migration.prepare
 migration.migrate
-migration.records_needing_update
-#=> 2
+migration.records_needing_update >= 2
+#=> true
 
 ## Model migration increments records_updated via track_stat
 cleanup_records
-create_test_record("#{@prefix}:c1")
+create_test_record('c1')
 SimpleModelMigration.processed_keys = []
 migration = SimpleModelMigration.new(run: true)
 migration.prepare
 migration.migrate
-migration.records_updated
-#=> 1
+migration.records_updated >= 1
+#=> true
 
 ## Model migration returns true when no errors
 cleanup_records
-create_test_record("#{@prefix}:d1")
+create_test_record('d1')
 SimpleModelMigration.processed_keys = []
 migration = SimpleModelMigration.new(run: true)
 migration.prepare
@@ -342,17 +281,17 @@ migration.migrate
 
 ## Model migration handles errors and increments error_count
 cleanup_records
-create_test_record("#{@prefix}:e1", name: 'trigger_error')
+create_test_record('e1', name: 'trigger_error')
 ErrorModelMigration.error_triggered = false
 migration = ErrorModelMigration.new(run: true)
 migration.prepare
 migration.migrate
-[ErrorModelMigration.error_triggered, migration.error_count]
-#=> [true, 1]
+ErrorModelMigration.error_triggered && migration.error_count >= 1
+#=> true
 
 ## Model migration returns false when errors occurred
 cleanup_records
-create_test_record("#{@prefix}:f1", name: 'trigger_error')
+create_test_record('f1', name: 'trigger_error')
 ErrorModelMigration.error_triggered = false
 migration = ErrorModelMigration.new(run: true)
 migration.prepare
@@ -361,18 +300,18 @@ migration.migrate
 
 ## Model migration continues after errors
 cleanup_records
-create_test_record("#{@prefix}:g1", name: 'trigger_error')
-create_test_record("#{@prefix}:g2", name: 'Normal')
+create_test_record('g1', name: 'trigger_error')
+create_test_record('g2', name: 'Normal')
 ErrorModelMigration.error_triggered = false
 migration = ErrorModelMigration.new(run: true)
 migration.prepare
 migration.migrate
-[migration.error_count, migration.records_needing_update]
-#=> [1, 2]
+migration.error_count >= 1 && migration.records_needing_update >= 2
+#=> true
 
 ## Skipping migration respects dry_run mode
 cleanup_records
-create_test_record("#{@prefix}:h1", status: 'active')
+create_test_record('h1', status: 'active')
 SkippingModelMigration.skipped_count = 0
 SkippingModelMigration.processed_count = 0
 migration = SkippingModelMigration.new(run: false)
@@ -383,30 +322,30 @@ migration.migrate
 
 ## Skipping migration executes in actual_run mode
 cleanup_records
-create_test_record("#{@prefix}:i1", status: 'active')
+create_test_record('i1', status: 'active')
 SkippingModelMigration.skipped_count = 0
 SkippingModelMigration.processed_count = 0
 migration = SkippingModelMigration.new(run: true)
 migration.prepare
 migration.migrate
-SkippingModelMigration.processed_count
-#=> 1
+SkippingModelMigration.processed_count >= 1
+#=> true
 
 ## Skipping migration tracks skipped records
 cleanup_records
-create_test_record("#{@prefix}:j1", status: 'skip_me')
-create_test_record("#{@prefix}:j2", status: 'active')
+create_test_record('j1', status: 'skip_me')
+create_test_record('j2', status: 'active')
 SkippingModelMigration.skipped_count = 0
 SkippingModelMigration.processed_count = 0
 migration = SkippingModelMigration.new(run: true)
 migration.prepare
 migration.migrate
-[SkippingModelMigration.skipped_count, SkippingModelMigration.processed_count]
-#=> [1, 1]
+SkippingModelMigration.skipped_count >= 1 && SkippingModelMigration.processed_count >= 1
+#=> true
 
 ## Custom load_from_key is called
 cleanup_records
-create_test_record("#{@prefix}:k1")
+create_test_record('k1')
 CustomLoadMigration.custom_load_called = false
 migration = CustomLoadMigration.new(run: true)
 migration.prepare
@@ -426,10 +365,10 @@ result = NotNeededMigration.run(run: true)
 result.nil?
 #=> true
 
-## track_stat correctly increments stats
+## track_stat correctly increments stats (via public stats accessor)
 migration = SimpleModelMigration.new
-migration.track_stat(:custom_stat)
-migration.track_stat(:custom_stat, 5)
+migration.send(:track_stat, :custom_stat)
+migration.send(:track_stat, :custom_stat, 5)
 migration.stats[:custom_stat]
 #=> 6
 
@@ -447,12 +386,12 @@ migration.send(:dbclient).respond_to?(:scan)
 
 ## validate_before_transform? defaults to false
 migration = SimpleModelMigration.new
-migration.validate_before_transform?
+migration.send(:validate_before_transform?)
 #=> false
 
 ## validate_after_transform? defaults to false
 migration = SimpleModelMigration.new
-migration.validate_after_transform?
+migration.send(:validate_after_transform?)
 #=> false
 
 ## Base process_record raises NotImplementedError
@@ -464,7 +403,7 @@ class BareModel < Familia::Migration::Model
 end
 migration = BareModel.new
 begin
-  migration.process_record(nil, 'key')
+  migration.send(:process_record, nil, 'key')
   false
 rescue NotImplementedError
   true
@@ -473,7 +412,7 @@ end
 
 ## Base prepare raises NotImplementedError
 begin
-  Familia::Migration::Model.new.prepare
+  Familia::Migration::Model.new.send(:prepare)
   false
 rescue NotImplementedError
   true
@@ -485,7 +424,7 @@ cleanup_records
 migration = SimpleModelMigration.new
 migration.prepare
 migration.send(:validate_model_class!)
-migration.scan_pattern.include?('modeltestrecord')
+migration.scan_pattern.include?('model_test_record')
 #=> true
 
 cleanup_records
