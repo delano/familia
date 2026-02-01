@@ -107,11 +107,9 @@ module Familia
       def load_schema_file(path)
         JSON.parse(File.read(path))
       rescue JSON::ParserError => e
-        warn "Failed to parse schema file #{path}: #{e.message}"
-        nil
-      rescue Errno::ENOENT => e
-        warn "Schema file not found: #{path}"
-        nil
+        raise ArgumentError, "Failed to parse schema file #{path}: #{e.message}"
+      rescue Errno::ENOENT
+        raise ArgumentError, "Schema file not found: #{path}"
       end
 
       def validator
