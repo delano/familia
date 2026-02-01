@@ -15,6 +15,8 @@ end
 group :development, :test do
   gem 'benchmark', '~> 0.4', require: false
   gem 'debug', require: false
+  gem 'json_schemer', '~> 2.0', require: false
+  gem 'rake', '~> 13.0', require: false
   gem 'irb', '~> 1.15.2', require: false
   gem 'redcarpet', require: false
   gem 'reek', require: false
