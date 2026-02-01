@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/schemas/session.json",
+  "title": "Session",
+  "description": "User session model schema",
+  "type": "object",
+  "properties": {
+    "sessid": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{32}$",
+      "description": "32-character hex session ID"
+    },
+    "customer_id": {
+      "type": "string"
+    },
+    "expires_at": {
+      "type": "number",
+      "description": "Unix timestamp when session expires"
+    },
+    "data": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Arbitrary session data"
+    }
+  },
+  "required": ["sessid"]
+}

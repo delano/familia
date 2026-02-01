@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/schemas/customer.json",
+  "title": "Customer",
+  "description": "Customer model schema for Familia ORM",
+  "type": "object",
+  "properties": {
+    "custid": {
+      "type": "string",
+      "description": "Unique customer identifier"
+    },
+    "email": {
+      "type": "string",
+      "format": "email",
+      "description": "Customer email address"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255
+    },
+    "status": {
+      "type": "string",
+      "enum": ["active", "inactive", "pending"],
+      "default": "pending"
+    },
+    "created_at": {
+      "type": "number",
+      "description": "Unix timestamp"
+    }
+  },
+  "required": ["custid", "email"]
+}
