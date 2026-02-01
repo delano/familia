@@ -220,6 +220,53 @@ module Familia
         nil
       end
 
+      # === Schema Validation Hooks ===
+
+      # Override in subclass to enable pre-transform validation
+      #
+      # When enabled, validates each record against its schema before
+      # {#process_record} is called. Validation failures are tracked
+      # via the :schema_errors_before stat.
+      #
+      # @return [Boolean] true to validate before transform
+      def validate_before_transform?
+        false
+      end
+
+      # Override in subclass to enable post-transform validation
+      #
+      # When enabled, validates each record against its schema after
+      # {#process_record} completes. Validation failures are tracked
+      # via the :schema_errors_after stat.
+      #
+      # @return [Boolean] true to validate after transform
+      def validate_after_transform?
+        false
+      end
+
+      # Wrapper that applies validation hooks around process_record
+      #
+      # Called internally by {#process_single_record} when validation
+      # is enabled. Validates the object before and/or after the transform
+      # based on {#validate_before_transform?} and {#validate_after_transform?}.
+      #
+      # @param obj [Familia::Horreum] the object to process
+      # @param key [String] the database key of the record
+      # @return [void]
+      def process_record_with_validation(obj, key)
+        if validate_before_transform?
+          result = validate_schema(obj, context: 'before transform')
+          track_stat(:schema_errors_before) unless result[:valid]
+        end
+
+        process_record(obj, key)
+
+        if validate_after_transform?
+          result = validate_schema(obj, context: 'after transform')
+          track_stat(:schema_errors_after) unless result[:valid]
+        end
+      end
+
       private
 
       def reset_counters
@@ -247,7 +294,7 @@ module Familia
         end
 
         @total_records  = @model_class.respond_to?(:instances) ? @model_class.instances.size : 0
-        @dbclient     ||= @model_class.respond_to?(:redis) ? @model_class.redis : Familia.redis
+        @dbclient     ||= @model_class.respond_to?(:dbclient) ? @model_class.dbclient : Familia.dbclient
         @scan_pattern ||= "#{@model_class.prefix}:*:object"
         nil
       end

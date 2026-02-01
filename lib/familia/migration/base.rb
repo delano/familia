@@ -360,6 +360,74 @@ module Familia
         nil
       end
 
+      # === Schema Validation ===
+
+      # Validate an object against its schema
+      #
+      # Uses the SchemaRegistry to validate an object's data against
+      # its registered JSON schema. Returns validation results without
+      # raising exceptions.
+      #
+      # @param obj [Object] object with to_h method
+      # @param context [String, nil] context for error messages (e.g., 'before transform')
+      # @return [Hash] { valid: Boolean, errors: Array }
+      def validate_schema(obj, context: nil)
+        return { valid: true, errors: [] } unless schema_validation_enabled?
+
+        klass_name = obj.class.name
+        data = obj.respond_to?(:to_h) ? obj.to_h : obj
+
+        result = Familia::SchemaRegistry.validate(klass_name, data)
+
+        unless result[:valid]
+          context_msg = context ? " (#{context})" : ''
+          warn "Schema validation failed for #{klass_name}#{context_msg}: #{result[:errors].size} error(s)"
+          result[:errors].first(3).each do |e|
+            debug "  - #{e['type'] || 'error'}: #{e['data_pointer'] || '/'}"
+          end
+        end
+
+        result
+      end
+
+      # Validate an object or raise SchemaValidationError
+      #
+      # Uses the SchemaRegistry to validate an object's data against
+      # its registered JSON schema. Raises an exception if validation fails.
+      #
+      # @param obj [Object] object with to_h method
+      # @param context [String, nil] context for error messages
+      # @return [true] if valid
+      # @raise [Familia::SchemaValidationError] if validation fails
+      def validate_schema!(obj, context: nil)
+        result = validate_schema(obj, context: context)
+        unless result[:valid]
+          raise Familia::SchemaValidationError.new(result[:errors])
+        end
+
+        true
+      end
+
+      # Check if schema validation is enabled for this migration
+      #
+      # Schema validation is enabled by default when SchemaRegistry is loaded.
+      # Use {#skip_schema_validation!} to disable for this migration instance.
+      #
+      # @return [Boolean]
+      def schema_validation_enabled?
+        @schema_validation != false && Familia::SchemaRegistry.loaded?
+      end
+
+      # Disable schema validation for this migration
+      #
+      # Call this in {#prepare} or at any point before validation to
+      # skip all schema validation for this migration run.
+      #
+      # @return [void]
+      def skip_schema_validation!
+        @schema_validation = false
+      end
+
       protected
 
       # Access to database client
@@ -369,7 +437,7 @@ module Familia
       #
       # @return [Redis] configured Redis connection
       def dbclient
-        @dbclient ||= Familia.redis
+        @dbclient ||= Familia.dbclient
       end
 
       # Alias for dbclient for convenience
