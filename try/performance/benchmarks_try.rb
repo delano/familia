@@ -8,12 +8,6 @@ require_relative '../support/helpers/test_helpers'
 require 'benchmark'
 
 ## serialization performance comparison
-user_class = Class.new(Familia::Horreum) do
-  identifier_field :email
-  field :name
-  field :data
-end
-
 large_data = { metadata: "x" * 1000, items: (1..1000).to_a }
 
 json_time = Benchmark.realtime do
@@ -25,11 +19,13 @@ familia_time = Benchmark.realtime do
 end
 
 json_time > 0 && familia_time > 0
-#=!> StandardError
+#=> true
 
 ## bulk operations vs individual saves
 user_class = Class.new(Familia::Horreum) do
+  prefix :benchuser1
   identifier_field :email
+  field :email
   field :name
   field :data
 end
@@ -46,23 +42,26 @@ end
 users.each(&:delete!)
 
 individual_time > 0
-#=!> StandardError
+#=> true
 
 ## Valkey/Redis type access performance
-user_class = Class.new(Familia::Horreum) do
+user_class2 = Class.new(Familia::Horreum) do
+  prefix :benchuser2
   identifier_field :email
+  field :email
   field :name
   field :data
+  set :tags
 end
 
-user = user_class.new(email: "perf@example.com")
+user = user_class2.new(email: "perf@example.com")
 user.save
 
 access_time = Benchmark.realtime do
-  1000.times { user.set(:tags) }
+  1000.times { user.tags }
 end
 
 result = access_time > 0
 user.delete!
 result
-#=!> StandardError
+#=> true
