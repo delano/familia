@@ -282,7 +282,7 @@ begin
   @owner.members_list.delete!
   # Then destroy objects
   [@owner, @member1, @member2].each do |obj|
-    obj.destroy if obj&.respond_to?(:destroy) && obj&.respond_to?(:exists?) && obj.exists?
+    obj.destroy if obj.respond_to?(:destroy) && obj.exists?
   end
   true
 rescue => e
