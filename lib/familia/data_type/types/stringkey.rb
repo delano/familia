@@ -243,7 +243,9 @@ module Familia
         client.mget(*keys)
       end
 
-      # Set multiple keys atomically
+      # Set multiple keys atomically.
+      # Keys and values are extracted from the hash for the Redis MSET command.
+      #
       # @param hash [Hash] Key-value pairs to set
       # @param client [Redis, nil] Optional Redis client (uses Familia.dbclient if nil)
       # @return [String] "OK" on success
@@ -254,7 +256,9 @@ module Familia
         client.mset(*hash.flatten)
       end
 
-      # Set multiple keys only if none of them exist
+      # Set multiple keys only if none of them exist.
+      # Keys and values are extracted from the hash for the Redis MSETNX command.
+      #
       # @param hash [Hash] Key-value pairs to set
       # @param client [Redis, nil] Optional Redis client (uses Familia.dbclient if nil)
       # @return [Boolean] true if all keys were set, false if none were set
