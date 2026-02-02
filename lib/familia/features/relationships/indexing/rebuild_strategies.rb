@@ -401,7 +401,7 @@ module Familia
                 collection_name = participation.collection_name
                 scope_collection = scope_instance.send(collection_name)
                 # Filter to only objects that belong to this scope
-                objects = objects.select { |obj| scope_collection.member?(obj.identifier) }
+                objects = objects.select { |obj| scope_collection.member?(obj) }
               end
             end
 

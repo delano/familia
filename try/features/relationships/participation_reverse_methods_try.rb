@@ -210,8 +210,9 @@ user1_team_ids.include?(@team1.identifier)
 #=> true
 
 ## Test multiple users in same team - add user2
+# Use object, not string identifier, for correct serialization (see issue #212)
 @team1.add_members_instance(@user2)
-@team1.members.member?(@user2.identifier)
+@team1.members.member?(@user2)
 #=> true
 
 ## Test team1 now has two members

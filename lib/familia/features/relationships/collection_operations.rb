@@ -31,13 +31,13 @@ module Familia
           when :sorted_set
             # Ensure score is never nil for sorted sets
             score ||= calculate_item_score(item, target_class, collection_name)
-            collection.add(item.identifier, score)
+            collection.add(item, score)
           when :list
             # Lists use push/unshift operations
-            collection.add(item.identifier)
+            collection.add(item)
           when :set
             # Sets use simple add
-            collection.add(item.identifier)
+            collection.add(item)
           else
             raise ArgumentError, "Unknown collection type: #{type}"
           end
@@ -49,7 +49,7 @@ module Familia
         # @param type [Symbol] Collection type
         def remove_from_collection(collection, item, type: nil)
           # All collection types support remove/delete
-          collection.remove(item.identifier)
+          collection.remove(item)
         end
 
         # Check if an item is a member of a collection
@@ -57,7 +57,7 @@ module Familia
         # @param item [Object] The item to check (must respond to identifier)
         # @return [Boolean] True if item is in collection
         def member_of_collection?(collection, item)
-          collection.member?(item.identifier)
+          collection.member?(item)
         end
 
         # Bulk add items to a collection using DataType methods
@@ -72,12 +72,12 @@ module Familia
             # Add items one by one for sorted sets to ensure proper scoring
             items.each do |item|
               score = calculate_item_score(item, target_class, collection_name)
-              collection.add(item.identifier, score)
+              collection.add(item, score)
             end
           when :set, :list
             # For sets and lists, add items one by one using DataType methods
             items.each do |item|
-              collection.add(item.identifier)
+              collection.add(item)
             end
           else
             raise ArgumentError, "Unknown collection type: #{type}"

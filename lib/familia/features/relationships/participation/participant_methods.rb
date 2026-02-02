@@ -29,7 +29,7 @@ module Familia
         # └── position_in_employee_domains(employee)      # Get my position (list only)
         #
         # Note: To update scores, use the DataType API directly:
-        #   employee.domains.add(domain.identifier, new_score, xx: true)
+        #   employee.domains.add(domain, new_score, xx: true)
         #
         module Builder
           extend CollectionOperations
@@ -296,7 +296,7 @@ module Familia
           # Creates: domain.score_in_customer_domains(customer)
           #
           # Note: Score updates use DataType API directly:
-          #   customer.domains.add(domain.identifier, new_score, xx: true)
+          #   customer.domains.add(domain, new_score, xx: true)
           def self.build_score_methods(participant_class, target_name, collection_name)
             # Get score method
             score_method = "score_in_#{target_name}_#{collection_name}"
@@ -305,7 +305,9 @@ module Familia
 
               # Use Horreum's DataType accessor instead of manual key construction
               collection = target_instance.send(collection_name)
-              collection.score(identifier)
+              # Pass self (Familia object) not identifier (string) for correct serialization
+              # See GitHub issue #212: serialize_value handles objects vs strings differently
+              collection.score(self)
             end
           end
 
