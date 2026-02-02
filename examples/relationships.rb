@@ -186,7 +186,7 @@ domain1.remove_from_customer_domains(customer)
 puts "✓ Removed #{domain1.name} from customer domains"
 
 # Remove from tracking collections
-Domain.active_domains.remove(domain2.identifier)
+Domain.active_domains.remove(domain2)
 puts "✓ Removed #{domain2.name} from active domains"
 
 # Verify cleanup

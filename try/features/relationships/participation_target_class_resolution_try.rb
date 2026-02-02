@@ -94,8 +94,9 @@ end
 
 ## Test Symbol target class resolution works
 # This is the primary regression test - it should not raise NoMethodError
+# Use object, not string identifier, for correct serialization (see issue #212)
 @customer.add_domains_instance(@domain)
-@customer.domains.member?(@domain.identifier)
+@customer.domains.member?(@domain)
 #=> true
 
 ## Test domain bidirectional methods were created correctly
@@ -109,7 +110,7 @@ end
 ## Test domain can add itself using generated method
 @customer.domains.remove(@domain)
 @domain.add_to_symbol_resolution_customer_domains(@customer)
-@customer.domains.member?(@domain.identifier)
+@customer.domains.member?(@domain)
 #=> true
 
 ## Test domain score calculation works with Symbol target class
@@ -124,7 +125,7 @@ end
 ## Test String target class resolution works
 # This is the secondary regression test
 @customer.add_tags_instance(@tag)
-@customer.tags.member?(@tag.identifier)
+@customer.tags.member?(@tag)
 #=> true
 
 ## Test tag bidirectional methods were created correctly
@@ -138,7 +139,7 @@ end
 ## Test tag can add itself using generated method
 @customer.tags.remove(@tag)
 @tag.add_to_symbol_resolution_customer_tags(@customer)
-@customer.tags.member?(@tag.identifier)
+@customer.tags.member?(@tag)
 #=> true
 
 ## Test tag membership check works with String target class (sets don't have scores)

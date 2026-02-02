@@ -691,14 +691,18 @@ module Familia
 
                 case config.type
                 when :sorted_set
-                  score = collection.score(identifier)
+                  # Pass self (Familia object) not identifier (string) for correct serialization
+                  # See GitHub issue #212: serialize_value handles objects vs strings differently
+                  score = collection.score(self)
                   next unless score
 
                   decoded_score = decode_score(score) if respond_to?(:decode_score)
                 when :set
-                  is_member = collection.member?(identifier)
+                  # Pass self (Familia object) not identifier (string) for correct serialization
+                  is_member = collection.member?(self)
                   next unless is_member
                 when :list
+                  # List uses to_a which returns deserialized values, so identifier is correct here
                   position = collection.to_a.index(identifier)
                   next unless position
                 end

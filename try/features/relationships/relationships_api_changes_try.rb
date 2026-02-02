@@ -123,23 +123,24 @@ ApiTestUser.all_users.class.name
 
 ## Automatic tracking addition works on save
 @user.save
-ApiTestUser.all_users.member?(@user.identifier)
+ApiTestUser.all_users.member?(@user)
 #=> true
 
 ## Score calculation works for simple field scores
-score = ApiTestUser.all_users.score(@user.identifier)
+# Use object, not string identifier, for correct serialization (see issue #212)
+score = ApiTestUser.all_users.score(@user)
 score.is_a?(Float) && score > 0
 #=> true
 
 ## Score calculation works for lambda scores with active user
 ApiTestUser.add_to_active_users(@user)  # Explicit addition to active_users collection
-active_score = ApiTestUser.active_users.score(@user.identifier)
+active_score = ApiTestUser.active_users.score(@user)
 active_score > 0
 #=> true
 
 ## Score calculation works for lambda scores with inactive user
 ApiTestUser.add_to_active_users(@inactive_user)  # Explicit addition to active_users collection
-ApiTestUser.active_users.member?(@inactive_user.identifier)
+ApiTestUser.active_users.member?(@inactive_user)
 #=> true
 
 # =============================================
@@ -285,7 +286,8 @@ membership_meta.scope_class
 
 ## Class tracking and indexing work together automatically on save
 @user.save  # Should automatically update both tracking and indexing
-ApiTestUser.all_users.member?(@user.identifier) && ApiTestUser.email_lookup.get(@user.email) == @user.user_id
+# Use object for member?, not string identifier (see issue #212)
+ApiTestUser.all_users.member?(@user) && ApiTestUser.email_lookup.get(@user.email) == @user.user_id
 #=> true
 
 ## Parent-based relationships work with tracking
