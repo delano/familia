@@ -133,9 +133,154 @@ module Familia
       ret
     end
 
+    # Atomically get and delete the value
+    # @return [String, nil] The value before deletion, or nil if key didn't exist
+    def getdel
+      dbclient.getdel(dbkey)
+    end
+
+    # Get value and optionally set expiration atomically
+    # @param ex [Integer, nil] Set expiration in seconds
+    # @param px [Integer, nil] Set expiration in milliseconds
+    # @param exat [Integer, nil] Set expiration at Unix timestamp (seconds)
+    # @param pxat [Integer, nil] Set expiration at Unix timestamp (milliseconds)
+    # @param persist [Boolean] Remove existing expiration
+    # @return [String, nil] The value
+    def getex(ex: nil, px: nil, exat: nil, pxat: nil, persist: false)
+      options = {}
+      options[:ex] = ex if ex
+      options[:px] = px if px
+      options[:exat] = exat if exat
+      options[:pxat] = pxat if pxat
+      options[:persist] = persist if persist
+
+      dbclient.getex(dbkey, **options)
+    end
+
+    # Increment value by a float amount
+    # @param val [Float, Numeric] The amount to increment by
+    # @return [Float] The new value after increment
+    def incrbyfloat(val)
+      ret = dbclient.incrbyfloat(dbkey, val.to_f)
+      update_expiration
+      ret
+    end
+    alias incrfloat incrbyfloat
+
+    # Set value with expiration in seconds
+    # @param seconds [Integer] Expiration time in seconds
+    # @param val [Object] The value to set
+    # @return [String] "OK" on success
+    def setex(seconds, val)
+      dbclient.setex(dbkey, seconds.to_i, serialize_value(val))
+    end
+
+    # Set value with expiration in milliseconds
+    # @param milliseconds [Integer] Expiration time in milliseconds
+    # @param val [Object] The value to set
+    # @return [String] "OK" on success
+    def psetex(milliseconds, val)
+      dbclient.psetex(dbkey, milliseconds.to_i, serialize_value(val))
+    end
+
+    # Count the number of set bits (population counting)
+    # @param start_pos [Integer, nil] Start byte position (optional)
+    # @param end_pos [Integer, nil] End byte position (optional)
+    # @return [Integer] Number of bits set to 1
+    def bitcount(start_pos = nil, end_pos = nil)
+      if start_pos && end_pos
+        dbclient.bitcount(dbkey, start_pos, end_pos)
+      elsif start_pos
+        dbclient.bitcount(dbkey, start_pos)
+      else
+        dbclient.bitcount(dbkey)
+      end
+    end
+
+    # Find the position of the first bit set to 0 or 1
+    # @param bit [Integer] The bit value to search for (0 or 1)
+    # @param start_pos [Integer, nil] Start byte position (optional)
+    # @param end_pos [Integer, nil] End byte position (optional)
+    # @return [Integer] Position of the first bit, or -1 if not found
+    def bitpos(bit, start_pos = nil, end_pos = nil)
+      if start_pos && end_pos
+        dbclient.bitpos(dbkey, bit, start_pos, end_pos)
+      elsif start_pos
+        dbclient.bitpos(dbkey, bit, start_pos)
+      else
+        dbclient.bitpos(dbkey, bit)
+      end
+    end
+
+    # Perform bitfield operations on this string
+    # @param args [Array] Bitfield subcommands and arguments
+    # @return [Array] Results of the bitfield operations
+    # @example Get an unsigned 8-bit integer at offset 0
+    #   str.bitfield('GET', 'u8', 0)
+    # @example Set and increment
+    #   str.bitfield('SET', 'u8', 0, 100, 'INCRBY', 'i5', 100, 1)
+    def bitfield(*args)
+      ret = dbclient.bitfield(dbkey, *args)
+      update_expiration
+      ret
+    end
+
     def del
       ret = dbclient.del dbkey
       ret.positive?
+    end
+
+    # Class methods for multi-key operations
+    class << self
+      # Get values for multiple keys
+      # @param keys [Array<String>] Full Redis key names
+      # @param client [Redis, nil] Optional Redis client (uses Familia.dbclient if nil)
+      # @return [Array] Values for each key (nil for non-existent keys)
+      # @example
+      #   StringKey.mget('user:1:name', 'user:2:name')
+      def mget(*keys, client: nil)
+        client ||= Familia.dbclient
+        client.mget(*keys)
+      end
+
+      # Set multiple keys atomically.
+      # Keys and values are extracted from the hash for the Redis MSET command.
+      #
+      # @param hash [Hash] Key-value pairs to set
+      # @param client [Redis, nil] Optional Redis client (uses Familia.dbclient if nil)
+      # @return [String] "OK" on success
+      # @example
+      #   StringKey.mset('user:1:name' => 'Alice', 'user:2:name' => 'Bob')
+      def mset(hash, client: nil)
+        client ||= Familia.dbclient
+        client.mset(*hash.flatten)
+      end
+
+      # Set multiple keys only if none of them exist.
+      # Keys and values are extracted from the hash for the Redis MSETNX command.
+      #
+      # @param hash [Hash] Key-value pairs to set
+      # @param client [Redis, nil] Optional Redis client (uses Familia.dbclient if nil)
+      # @return [Boolean] true if all keys were set, false if none were set
+      # @example
+      #   StringKey.msetnx('user:1:name' => 'Alice', 'user:2:name' => 'Bob')
+      def msetnx(hash, client: nil)
+        client ||= Familia.dbclient
+        client.msetnx(*hash.flatten)
+      end
+
+      # Perform bitwise operations between strings and store result
+      # @param operation [String, Symbol] Bitwise operation: AND, OR, XOR, NOT
+      # @param destkey [String] Destination key to store result
+      # @param keys [Array<String>] Source keys for the operation
+      # @param client [Redis, nil] Optional Redis client (uses Familia.dbclient if nil)
+      # @return [Integer] Size of the resulting string in bytes
+      # @example
+      #   StringKey.bitop(:and, 'result', 'key1', 'key2')
+      def bitop(operation, destkey, *keys, client: nil)
+        client ||= Familia.dbclient
+        client.bitop(operation.to_s.upcase, destkey, *keys)
+      end
     end
 
     Familia::DataType.register self, :string

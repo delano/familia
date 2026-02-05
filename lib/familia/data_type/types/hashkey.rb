@@ -129,6 +129,251 @@ module Familia
       deserialize_values(*elements)
     end
 
+    # Incrementally iterates over fields in the hash using cursor-based iteration.
+    # This is more memory-efficient than `hgetall` for large hashes.
+    #
+    # @param cursor [Integer] The cursor position to start from (0 for initial call)
+    # @param match [String, nil] Optional glob-style pattern to filter field names
+    # @param count [Integer, nil] Optional hint for number of elements to return per call
+    # @return [Array<String, Hash>] A two-element array: [new_cursor, {field => value, ...}]
+    #   When new_cursor is "0", iteration is complete.
+    #
+    # @example Basic iteration
+    #   cursor = 0
+    #   loop do
+    #     cursor, results = my_hash.scan(cursor)
+    #     results.each { |field, value| puts "#{field}: #{value}" }
+    #     break if cursor == "0"
+    #   end
+    #
+    # @example With pattern matching
+    #   cursor, results = my_hash.scan(0, match: "user:*", count: 100)
+    def scan(cursor = 0, match: nil, count: nil)
+      opts = {}
+      opts[:match] = match if match
+      opts[:count] = count if count
+
+      new_cursor, pairs = dbclient.hscan(dbkey, cursor, **opts)
+
+      # pairs is an array of [field, value] pairs, convert to hash with deserialization
+      result_hash = pairs.to_h.transform_values { |v| deserialize_value(v) }
+
+      [new_cursor, result_hash]
+    end
+    alias hscan scan
+
+    # Increments the float value of a hash field by the given amount.
+    #
+    # @param field [String] The field name
+    # @param by [Float, Integer] The amount to increment by (can be negative)
+    # @return [Float] The new value after incrementing
+    #
+    # @example
+    #   my_hash.incrbyfloat('temperature', 0.5)  #=> 23.5
+    #   my_hash.incrbyfloat('temperature', -1.2) #=> 22.3
+    def incrbyfloat(field, by)
+      dbclient.hincrbyfloat(dbkey, field.to_s, by).to_f
+    end
+    alias incrfloat incrbyfloat
+
+    # Returns the string length of the value associated with field.
+    #
+    # @param field [String] The field name
+    # @return [Integer] The length of the value in bytes, or 0 if field does not exist
+    #
+    # @example
+    #   my_hash['name'] = 'Alice'
+    #   my_hash.strlen('name')  #=> 7 (includes JSON quotes: "Alice")
+    def strlen(field)
+      dbclient.hstrlen(dbkey, field.to_s)
+    end
+    alias hstrlen strlen
+
+    # Returns one or more random fields from the hash.
+    #
+    # @param count [Integer, nil] Number of fields to return. If nil, returns a single field.
+    #   If positive, returns distinct fields. If negative, allows duplicates.
+    # @param withvalues [Boolean] If true, returns fields with their values
+    # @return [String, Array<String>, Array<Array>] Depending on arguments:
+    #   - No count: single field name (or nil if hash is empty)
+    #   - With count: array of field names
+    #   - With count and withvalues: array of [field, value] pairs
+    #
+    # @example Get a single random field
+    #   my_hash.randfield  #=> "some_field"
+    #
+    # @example Get 3 distinct random fields
+    #   my_hash.randfield(3)  #=> ["field1", "field2", "field3"]
+    #
+    # @example Get 2 random fields with values
+    #   my_hash.randfield(2, withvalues: true)  #=> [["field1", value1], ["field2", value2]]
+    def randfield(count = nil, withvalues: false)
+      if count.nil?
+        dbclient.hrandfield(dbkey)
+      elsif withvalues
+        pairs = dbclient.hrandfield(dbkey, count, withvalues: true)
+        # pairs is array of [field, value, field, value, ...]
+        # Convert to array of [field, deserialized_value] pairs
+        pairs.each_slice(2).map { |field, val| [field, deserialize_value(val)] }
+      else
+        dbclient.hrandfield(dbkey, count)
+      end
+    end
+    alias hrandfield randfield
+
+    # -----------------------------------------------------------------------
+    # Field-Level Expiration Methods (Redis 7.4+)
+    #
+    # These methods require Redis/Valkey 7.4 or later. They allow setting
+    # TTL on individual hash fields rather than the entire key.
+    # -----------------------------------------------------------------------
+
+    # Sets expiration time in seconds on one or more hash fields.
+    # @note Requires Redis 7.4+
+    #
+    # @param seconds [Integer] TTL in seconds
+    # @param fields [Array<String>] One or more field names
+    # @return [Array<Integer>] Array of results for each field:
+    #   -2 if field does not exist, 1 if expiration was set,
+    #   0 if expiration was not set (e.g., field has no expiration)
+    #
+    # @example Set 1 hour TTL on specific fields
+    #   my_hash.expire_fields(3600, 'session_token', 'temp_data')
+    def expire_fields(seconds, *fields)
+      call_hash_field_command('HEXPIRE', seconds, fields: fields)
+    end
+    alias hexpire expire_fields
+
+    # Sets expiration time in milliseconds on one or more hash fields.
+    # @note Requires Redis 7.4+
+    #
+    # @param milliseconds [Integer] TTL in milliseconds
+    # @param fields [Array<String>] One or more field names
+    # @return [Array<Integer>] Array of results for each field
+    #
+    # @example Set 500ms TTL on a field
+    #   my_hash.pexpire_fields(500, 'rate_limit_counter')
+    def pexpire_fields(milliseconds, *fields)
+      call_hash_field_command('HPEXPIRE', milliseconds, fields: fields)
+    end
+    alias hpexpire pexpire_fields
+
+    # Sets absolute expiration time (Unix timestamp in seconds) on hash fields.
+    # @note Requires Redis 7.4+
+    #
+    # @param unix_time [Integer] Absolute Unix timestamp in seconds
+    # @param fields [Array<String>] One or more field names
+    # @return [Array<Integer>] Array of results for each field
+    #
+    # @example Expire fields at midnight tonight
+    #   midnight = Time.now.to_i + (24 * 60 * 60)
+    #   my_hash.expireat_fields(midnight, 'daily_counter')
+    def expireat_fields(unix_time, *fields)
+      call_hash_field_command('HEXPIREAT', unix_time, fields: fields)
+    end
+    alias hexpireat expireat_fields
+
+    # Sets absolute expiration time (Unix timestamp in milliseconds) on hash fields.
+    # @note Requires Redis 7.4+
+    #
+    # @param unix_time_ms [Integer] Absolute Unix timestamp in milliseconds
+    # @param fields [Array<String>] One or more field names
+    # @return [Array<Integer>] Array of results for each field
+    #
+    # @example Expire field at a precise millisecond
+    #   my_hash.pexpireat_fields(1700000000000, 'precise_data')
+    def pexpireat_fields(unix_time_ms, *fields)
+      call_hash_field_command('HPEXPIREAT', unix_time_ms, fields: fields)
+    end
+    alias hpexpireat pexpireat_fields
+
+    # Returns the remaining TTL in seconds for one or more hash fields.
+    # @note Requires Redis 7.4+
+    #
+    # @param fields [Array<String>] One or more field names
+    # @return [Array<Integer>] Array of TTL values for each field:
+    #   -2 if field does not exist, -1 if field has no expiration,
+    #   otherwise the TTL in seconds
+    #
+    # @example Check remaining TTL on fields
+    #   my_hash.ttl_fields('session_token', 'temp_data')  #=> [3600, -1]
+    def ttl_fields(*fields)
+      call_hash_field_command('HTTL', fields: fields)
+    end
+    alias httl ttl_fields
+
+    # Returns the remaining TTL in milliseconds for one or more hash fields.
+    # @note Requires Redis 7.4+
+    #
+    # @param fields [Array<String>] One or more field names
+    # @return [Array<Integer>] Array of TTL values in milliseconds
+    #
+    # @example Check remaining TTL in milliseconds
+    #   my_hash.pttl_fields('rate_limit')  #=> [450]
+    def pttl_fields(*fields)
+      call_hash_field_command('HPTTL', fields: fields)
+    end
+    alias hpttl pttl_fields
+
+    # Removes expiration from one or more hash fields.
+    # @note Requires Redis 7.4+
+    #
+    # @param fields [Array<String>] One or more field names
+    # @return [Array<Integer>] Array of results for each field:
+    #   -2 if field does not exist, -1 if field has no expiration,
+    #   1 if expiration was removed
+    #
+    # @example Remove expiration from fields
+    #   my_hash.persist_fields('important_data')  #=> [1]
+    def persist_fields(*fields)
+      call_hash_field_command('HPERSIST', fields: fields)
+    end
+    alias hpersist persist_fields
+
+    # Returns the absolute Unix expiration timestamp in seconds for hash fields.
+    # @note Requires Redis 7.4+
+    #
+    # @param fields [Array<String>] One or more field names
+    # @return [Array<Integer>] Array of timestamps for each field:
+    #   -2 if field does not exist, -1 if field has no expiration,
+    #   otherwise the absolute Unix timestamp in seconds
+    #
+    # @example Get expiration timestamp
+    #   my_hash.expiretime_fields('session')  #=> [1700000000]
+    def expiretime_fields(*fields)
+      call_hash_field_command('HEXPIRETIME', fields: fields)
+    end
+    alias hexpiretime expiretime_fields
+
+    # Returns the absolute Unix expiration timestamp in milliseconds for hash fields.
+    # @note Requires Redis 7.4+
+    #
+    # @param fields [Array<String>] One or more field names
+    # @return [Array<Integer>] Array of timestamps in milliseconds
+    #
+    # @example Get precise expiration timestamp
+    #   my_hash.pexpiretime_fields('session')  #=> [1700000000000]
+    def pexpiretime_fields(*fields)
+      call_hash_field_command('HPEXPIRETIME', fields: fields)
+    end
+    alias hpexpiretime pexpiretime_fields
+
+    private
+
+    # Executes a hash field command with the FIELDS syntax.
+    # Used internally by field-level TTL methods (Redis 7.4+).
+    #
+    # @param command [String] Redis command name (e.g., 'HEXPIRE', 'HTTL')
+    # @param prefix_args [Array] Arguments to place before 'FIELDS' (e.g., TTL value)
+    # @param fields [Array<String>] Field names
+    # @return [Array] Command result
+    def call_hash_field_command(command, *prefix_args, fields:)
+      string_fields = fields.flatten.compact.map(&:to_s)
+      dbclient.call(command, dbkey, *prefix_args, 'FIELDS', string_fields.size, *string_fields)
+    end
+
+    public
+
     # The Great Database Refresh-o-matic 3000 for HashKey!
     #
     # This method performs a complete refresh of the hash's state from the database.
