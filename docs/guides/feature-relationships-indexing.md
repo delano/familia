@@ -366,6 +366,10 @@ company.badge_index.to_h.each do |badge, emp_id|
 end
 ```
 
+## Index Storage Format
+
+Index values (the object identifiers stored in hash keys and sets) are raw strings, not JSON-encoded. This is a deliberate design choice shared across all Familia collections that store object references — it ensures that lookups, membership checks, and key construction all operate on the same byte representation. See [Collection Member Serialization](field-system.md#collection-member-serialization) for the underlying serialization rules.
+
 ## Redis Key Patterns
 
 | Type | Pattern | Example |

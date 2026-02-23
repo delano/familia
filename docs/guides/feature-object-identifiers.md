@@ -193,6 +193,10 @@ custom.objid_generator_used     # => nil (unknown provenance)
 - Debugging and auditing benefit from generator tracking
 - Format validation can be performed based on expected generator
 
+## Identifiers in Collections
+
+When object identifiers are stored in DataType collections (sorted sets, sets, lists), they are stored as **raw strings** — not JSON-encoded. This is critical for consistent membership checks and lookups. Collections that hold object references must be declared with `class:` and `reference: true` options so that `serialize_value` treats both Familia objects and plain identifier strings identically. See [Collection Member Serialization](field-system.md#collection-member-serialization) for the full explanation of why this distinction exists.
+
 ## Lookup Management
 
 ### Automatic Mapping

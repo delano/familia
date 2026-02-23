@@ -146,6 +146,43 @@ user.preferences["theme"] = "dark"
 user.login_count.increment
 ```
 
+## Collection Member Serialization
+
+DataType collections (lists, sets, sorted sets, hash keys) and hashkey fields use different serialization strategies based on what they store.
+
+### Fields: JSON Serialization for Type Preservation
+
+Hashkey fields store arbitrary Ruby values — integers, booleans, hashes, nil. All values are JSON-encoded so types survive the Redis round-trip. An Integer `35` stores as `"35"` and loads back as Integer `35`, not String `"35"`.
+
+### Collections: Raw Identifiers for Object References
+
+When a collection's members represent references to Familia objects, those members must be stored as **raw identifier strings** — not JSON-encoded. Identifiers are lookup keys: they're matched against, compared with, and used to construct Redis keys (e.g. `customer:abc-def-123:object`). JSON-encoding an identifier produces a different byte sequence (`"\"abc-def-123\""` vs `abc-def-123`), which causes silent duplicates and broken membership checks.
+
+The `class:` and `reference: true` options on a collection declaration tell `serialize_value` that members are object references, not arbitrary values:
+
+```ruby
+class Customer < Familia::Horreum
+  # Members are object references — stored as raw identifiers
+  class_sorted_set :instances, class: self, reference: true
+
+  # Members are arbitrary values — stored as JSON
+  list :activity_log
+end
+```
+
+With these options set, `serialize_value` normalizes both code paths:
+- Passing a Familia object extracts `.identifier` and stores it raw
+- Passing a String identifier for a Familia class stores it raw (same result)
+- Passing any other value JSON-encodes it for type preservation
+
+Without `class:` metadata, a collection has no way to distinguish "this string is an identifier" from "this string is an arbitrary value" — and the two paths silently diverge.
+
+### The `instances` Sorted Set
+
+Every Horreum subclass automatically gets a `class_sorted_set :instances` — a class-level registry of persisted objects. Members are raw identifier strings; scores are timestamps of when each object was last saved. This is the index used to enumerate all known instances of a class, check persistence, or clean up stale entries.
+
+Because `instances` stores object references, it is declared with `class:` and `reference: true` to ensure consistent serialization regardless of whether callers pass an object or a string identifier.
+
 ## Advanced Field Types
 
 ### Creating Custom Field Types
