@@ -643,7 +643,7 @@ module Familia
         auto_update_class_indexes
 
         # 4. Add to instances collection if available
-        self.class.instances.add(identifier, Familia.now) if self.class.respond_to?(:instances)
+        self.class.instances.add(self, Familia.now) if self.class.respond_to?(:instances)
 
         hmset_result
       end

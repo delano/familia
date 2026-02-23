@@ -269,7 +269,7 @@ module Familia
     end
 
     def increment(val, by = 1)
-      dbclient.zincrby(dbkey, by, serialize_value(val)).to_i
+      dbclient.zincrby(dbkey, by, serialize_value(val)).to_f
     end
     alias incr increment
     alias incrby increment

@@ -167,6 +167,10 @@ team.members.to_a                         # Just IDs
 team.member_instances                     # Load objects
 ```
 
+## Serialization of Collection Members
+
+Relationship collections (participation sorted sets, index hash keys, instance-scoped sets) store object identifiers as raw strings. When adding objects to these collections, `serialize_value` extracts the `.identifier` from Familia objects and stores it without JSON encoding. This ensures consistent membership checks regardless of whether code passes an object reference or a string identifier. See [Collection Member Serialization](field-system.md#collection-member-serialization) for the authoritative explanation of why reference collections use raw identifiers while value fields use JSON.
+
 ## Best Practices
 
 1. **Use bulk methods** for multiple additions: `add_domains([d1, d2, d3])`

@@ -169,7 +169,7 @@ module Familia
         Familia.members << member
 
         # Set up automatic instance tracking using built-in class_sorted_set
-        member.class_sorted_set :instances
+        member.class_sorted_set :instances, class: member, reference: true
 
         super
       end

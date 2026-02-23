@@ -38,6 +38,15 @@ module Familia
           return prepared
         end
 
+        # Priority 1b: If this collection stores object references (reference: true)
+        # and the value is a String, treat it as a raw identifier. This prevents
+        # mismatches when callers pass identifier strings directly instead of
+        # Familia objects.
+        if val.is_a?(String) && opts[:reference]
+          Familia.debug "  String identifier (reference): #{val}"
+          return val
+        end
+
         # Priority 2: Everything else gets JSON serialized for type preservation
         # This unifies behavior with Horreum fields (Issue #190)
         prepared = Familia::JsonSerializer.dump(val)
@@ -80,6 +89,11 @@ module Familia
         Familia.debug "deserialize_values: (#{@opts}) #{values}"
         return [] if values.empty?
 
+        # Reference collections store raw identifiers — return as-is
+        if @opts[:reference]
+          return values.flatten
+        end
+
         # If a class option is specified, use class-based deserialization
         if @opts[:class]
           unless @opts[:class].respond_to?(:from_json)
@@ -94,9 +108,9 @@ module Familia
 
             val
           rescue StandardError => e
-            Familia.info obj
-            Familia.info "Parse error for #{dbkey} (from_json): #{e.message}"
-            Familia.info e.backtrace
+            Familia.debug "[deserialize] from_json error in #{dbkey}: #{e.message}"
+            Familia.debug "  raw value: #{obj.inspect[0..80]}"
+            Familia.trace :DESERIALIZE_ERROR, dbkey, e.message if Familia.debug?
             nil
           end
 
@@ -110,7 +124,7 @@ module Familia
           begin
             Familia::JsonSerializer.parse(obj)
           rescue Familia::SerializerError
-            # Fallback for legacy data stored without JSON encoding
+            Familia.debug "[deserialize] Raw fallback in #{dbkey}: #{obj.inspect[0..80]}"
             obj
           end
         end
@@ -138,6 +152,9 @@ module Familia
 
         return @opts[:default] if val.nil?
 
+        # Reference collections store raw identifiers — return as-is
+        return val if @opts[:reference]
+
         # If a class option is specified, use the existing class-based deserialization
         if @opts[:class]
           ret = deserialize_values val
@@ -149,7 +166,7 @@ module Familia
         begin
           Familia::JsonSerializer.parse(val)
         rescue Familia::SerializerError
-          # Fallback for legacy data stored without JSON encoding
+          Familia.debug "[deserialize] Raw fallback in #{dbkey}: #{val.inspect[0..80]}"
           val
         end
       end

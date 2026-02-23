@@ -25,7 +25,7 @@ module Familia
     using Familia::Refinements::TimeLiterals
 
     @registered_types = {}
-    @valid_options = %i[class parent default_expiration default logical_database dbkey dbclient suffix prefix].freeze
+    @valid_options = %i[class parent default_expiration default logical_database dbkey dbclient suffix prefix reference].freeze
     @logical_database = nil
 
     feature :expiration
