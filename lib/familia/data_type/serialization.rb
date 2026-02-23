@@ -91,7 +91,7 @@ module Familia
 
         # Reference collections store raw identifiers — return as-is
         if @opts[:reference]
-          return values.flatten.collect { |obj| obj unless obj.nil? }
+          return values.flatten
         end
 
         # If a class option is specified, use class-based deserialization
