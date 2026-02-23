@@ -92,11 +92,11 @@ module Familia
     end
 
     def pop
-      dbclient.spop dbkey
+      deserialize_value(dbclient.spop(dbkey))
     end
 
     def move(dstkey, val)
-      dbclient.smove dbkey, dstkey, val
+      dbclient.smove dbkey, dstkey, serialize_value(val)
     end
 
     # Get one or more random members from the set
