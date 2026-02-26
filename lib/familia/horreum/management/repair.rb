@@ -21,18 +21,33 @@ module Familia
         phantoms_removed = 0
         missing_added = 0
 
-        # Remove phantoms (in timeline but key expired/deleted)
-        audit_result[:phantoms].each do |identifier|
-          instances.remove(identifier)
-          phantoms_removed += 1
+        # Remove phantoms (in timeline but key expired/deleted).
+        # Batch all ZREMs in a single pipeline to avoid N round-trips.
+        phantoms = audit_result[:phantoms]
+        unless phantoms.empty?
+          instances_key = instances.dbkey
+          pipelined do |pipe|
+            phantoms.each do |identifier|
+              pipe.zrem(instances_key, identifier)
+            end
+          end
+          phantoms_removed = phantoms.size
         end
 
-        # Add missing (key exists but not in timeline)
-        audit_result[:missing].each do |identifier|
-          obj = find_by_id(identifier, check_exists: false)
-          score = extract_timestamp_score(obj)
-          instances.add(identifier, score)
-          missing_added += 1
+        # Add missing (key exists but not in timeline).
+        # Batch-load all objects via load_multi, then batch ZADDs in a pipeline.
+        missing = audit_result[:missing]
+        unless missing.empty?
+          objects = load_multi(missing)
+          instances_key = instances.dbkey
+          pipelined do |pipe|
+            missing.each_with_index do |identifier, idx|
+              obj = objects[idx]
+              score = extract_timestamp_score(obj)
+              pipe.zadd(instances_key, score, identifier)
+            end
+          end
+          missing_added = missing.size
         end
 
         { phantoms_removed: phantoms_removed, missing_added: missing_added }
@@ -200,15 +215,16 @@ module Familia
         identifiers = batch.map { |b| b[:identifier] }
         objects = load_multi(identifiers)
 
-        added = 0
-        batch.each_with_index do |entry, idx|
-          obj = objects[idx]
-          score = extract_timestamp_score(obj)
-          dbclient.zadd(temp_key, score, entry[:identifier])
-          added += 1
+        # Batch all ZADDs in a single pipeline instead of N individual round-trips.
+        pipelined do |pipe|
+          batch.each_with_index do |entry, idx|
+            obj = objects[idx]
+            score = extract_timestamp_score(obj)
+            pipe.zadd(temp_key, score, entry[:identifier])
+          end
         end
 
-        added
+        batch.size
       end
 
       # Extracts a timestamp score from an object for the instances sorted set.
@@ -219,13 +235,17 @@ module Familia
       # @return [Float] Timestamp score
       #
       def extract_timestamp_score(obj)
-        return Familia.now unless obj
+        unless obj
+          Familia.debug "[extract_timestamp_score] obj is nil, falling back to Familia.now"
+          return Familia.now
+        end
 
         if obj.respond_to?(:updated) && obj.updated
           obj.updated.to_f
         elsif obj.respond_to?(:created) && obj.created
           obj.created.to_f
         else
+          Familia.debug "[extract_timestamp_score] #{obj.class}##{obj.identifier} has no timestamp fields, falling back to Familia.now"
           Familia.now
         end
       end

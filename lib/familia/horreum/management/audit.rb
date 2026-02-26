@@ -160,34 +160,44 @@ module Familia
         index_hashkey = send(index_name)
         entries = index_hashkey.hgetall # {field_value => deserialized_value}
 
-        # Check each index entry
+        # Extract identifiers from all index entries for batch loading.
         # hgetall on HashKey already deserializes values, so we work with
-        # Ruby objects here (strings or Horreum instances depending on storage)
-        entries.each do |field_value, deserialized_id|
-          identifier = deserialized_id
-          identifier = identifier.identifier if identifier.respond_to?(:identifier)
-          identifier = identifier.to_s
+        # Ruby objects here (strings or Horreum instances depending on storage).
+        entry_identifiers = entries.map do |_field_value, deserialized_id|
+          id = deserialized_id
+          id = id.identifier if id.respond_to?(:identifier)
+          id.to_s
+        end
 
-          unless exists?(identifier)
+        # Batch-load all indexed objects in a single pipelined HGETALL round-trip
+        # instead of N individual exists? + find_by_id calls.
+        entry_objects = load_multi(entry_identifiers)
+
+        entries.each_with_index do |(field_value, _deserialized_id), idx|
+          identifier = entry_identifiers[idx]
+          obj = entry_objects[idx]
+
+          unless obj
             stale << { field_value: field_value, indexed_id: identifier, reason: :object_missing }
             next
           end
 
           # Verify field value still matches
-          obj = find_by_id(identifier, check_exists: false)
-          if obj
-            current_value = obj.send(field).to_s
-            unless current_value == field_value
-              stale << { field_value: field_value, indexed_id: identifier, reason: :value_mismatch,
-                         current_value: current_value }
-            end
+          current_value = obj.send(field).to_s
+          unless current_value == field_value
+            stale << { field_value: field_value, indexed_id: identifier, reason: :value_mismatch,
+                       current_value: current_value }
           end
         end
 
-        # Check for objects that should be indexed but aren't
+        # Check for objects that should be indexed but aren't.
+        # Batch-load all instance objects instead of individual find_by_id calls.
         indexed_values = entries.keys.to_set
-        instances.members.each do |identifier|
-          obj = find_by_id(identifier, check_exists: false)
+        all_identifiers = instances.members
+        all_objects = load_multi(all_identifiers)
+
+        all_identifiers.each_with_index do |identifier, idx|
+          obj = all_objects[idx]
           next unless obj
 
           value = obj.send(field)
@@ -214,12 +224,15 @@ module Familia
 
         # Multi-indexes require a scope, use within to determine the scope class
         scope_class = rel.within
-        return { index_name: index_name, stale_members: stale_members, orphaned_keys: orphaned_keys } if scope_class.nil? || scope_class == :class
+        if scope_class.nil? || scope_class == :class
+          return { index_name: index_name, stale_members: stale_members, orphaned_keys: orphaned_keys }
+        end
 
-        # Multi-index audit is complex because it needs scope instances.
-        # For now, return empty results for multi-indexes as they require
-        # iterating all scope instances which is expensive.
-        { index_name: index_name, stale_members: stale_members, orphaned_keys: orphaned_keys }
+        # Multi-index audit requires enumerating all scope instances to discover
+        # per-value set keys, which is expensive. Return empty results with a
+        # status flag so callers know this dimension was not actually checked.
+        Familia.debug "[audit_multi_indexes] #{name}##{index_name}: not_implemented (requires scope instance enumeration)"
+        { index_name: index_name, stale_members: stale_members, orphaned_keys: orphaned_keys, status: :not_implemented }
       end
 
       # Audit a class-level participation collection (from class_participates_in).
