@@ -43,11 +43,13 @@ module Familia
           pipelined do |pipe|
             missing.each_with_index do |identifier, idx|
               obj = objects[idx]
+              next unless obj # Key expired between SCAN and load
+
               score = extract_timestamp_score(obj)
               pipe.zadd(instances_key, score, identifier)
+              missing_added += 1
             end
           end
-          missing_added = missing.size
         end
 
         { phantoms_removed: phantoms_removed, missing_added: missing_added }
@@ -76,7 +78,7 @@ module Familia
 
           keys.each do |key|
             identifier = extract_identifier_from_key(key)
-            next unless identifier
+            next if identifier.nil? || identifier.empty?
 
             batch << { key: key, identifier: identifier }
           end
@@ -147,22 +149,35 @@ module Familia
       def repair_participations!(audit_results = nil)
         audit_results ||= audit_participations
 
+        # Build a lookup from collection_name to the target class's dbclient.
+        # The audit reads collections using target_class.dbclient, so repairs
+        # must use the same client (critical in multi-database setups).
+        client_by_name = {}
+        if respond_to?(:participation_relationships)
+          participation_relationships.each do |rel|
+            client_by_name[rel.collection_name.to_s] = rel.target_class.dbclient
+          end
+        end
+
         # Collect all valid stale entries and group by collection_key
         # so we can batch Redis operations instead of 2N round-trips.
         grouped = Hash.new { |h, k| h[k] = [] }
+        key_clients = {}
         audit_results.each do |part_result|
           part_result[:stale_members].each do |entry|
             identifier = entry[:identifier]
             collection_key = entry[:collection_key]
+            collection_name = entry[:collection_name]
             next unless collection_key && identifier
 
             grouped[collection_key] << identifier
+            key_clients[collection_key] ||= client_by_name[collection_name.to_s]
           end
         end
 
         return { stale_removed: 0 } if grouped.empty?
 
-        stale_removed = batch_remove_stale_members(grouped)
+        stale_removed = batch_remove_stale_members(grouped, key_clients)
         { stale_removed: stale_removed }
       end
 
@@ -220,15 +235,19 @@ module Familia
 
         # Batch all ZADDs in a single transaction for atomicity per batch,
         # consistent with RebuildStrategies which uses transaction for index rebuilds.
+        added = 0
         transaction do |tx|
           batch.each_with_index do |entry, idx|
             obj = objects[idx]
+            next unless obj # Key expired between SCAN and load
+
             score = extract_timestamp_score(obj)
             tx.zadd(temp_key, score, entry[:identifier])
+            added += 1
           end
         end
 
-        batch.size
+        added
       end
 
       # Extracts a timestamp score from an object for the instances sorted set.
@@ -256,53 +275,62 @@ module Familia
 
       # Batch-removes stale members grouped by collection key.
       #
-      # Resolves all key types in a single pipeline, then performs all
-      # removals in a second pipeline. Reduces 2N round-trips to 2 pipelines.
+      # Groups collection keys by their Redis client, then runs TYPE checks
+      # and removals per-client. This ensures correct behavior in multi-database
+      # setups where different target classes use different logical databases.
       #
       # @param grouped [Hash{String => Array<String>>}] collection_key => [identifiers]
+      # @param key_clients [Hash{String => Redis}] collection_key => dbclient (optional)
       # @return [Integer] Total number of members removed
       #
-      def batch_remove_stale_members(grouped)
-        client = dbclient
-        collection_keys = grouped.keys
+      def batch_remove_stale_members(grouped, key_clients = {})
+        total_removed = 0
 
-        # Phase 1: Batch all TYPE checks in one pipeline
-        type_results = client.pipelined do |pipe|
-          collection_keys.each { |key| pipe.type(key) }
+        # Group collection keys by Redis client so we pipeline per-client.
+        by_client = Hash.new { |h, k| h[k] = {} }
+        grouped.each do |collection_key, identifiers|
+          client = key_clients[collection_key] || dbclient
+          by_client[client][collection_key] = identifiers
         end
 
-        # Build a mapping of collection_key => resolved type
-        key_types = {}
-        collection_keys.each_with_index do |key, idx|
-          key_types[key] = type_results[idx]
-        end
+        by_client.each do |client, client_grouped|
+          collection_keys = client_grouped.keys
 
-        # Phase 2: Batch all removals in one pipeline. The pipeline
-        # returns an array of results (integers) in submission order.
-        # Sum them after the pipeline completes for an accurate count.
-        results = client.pipelined do |pipe|
-          grouped.each do |collection_key, identifiers|
-            key_type = key_types[collection_key]
+          # Phase 1: Batch all TYPE checks in one pipeline
+          type_results = client.pipelined do |pipe|
+            collection_keys.each { |key| pipe.type(key) }
+          end
 
-            case key_type
-            when 'zset'
-              identifiers.each { |id| pipe.zrem(collection_key, id) }
-            when 'set'
-              identifiers.each { |id| pipe.srem(collection_key, id) }
-            when 'list'
-              identifiers.each { |id| pipe.lrem(collection_key, 0, id) }
-            when 'none'
-              # Key no longer exists, skip all members
-              Familia.debug "[batch_remove_stale_members] Key gone: #{collection_key}, skipping #{identifiers.size} members"
-            else
-              Familia.debug "[batch_remove_stale_members] Unknown key type '#{key_type}' for #{collection_key}"
+          # Build a mapping of collection_key => resolved type
+          key_types = {}
+          collection_keys.each_with_index do |key, idx|
+            key_types[key] = type_results[idx]
+          end
+
+          # Phase 2: Batch all removals in one pipeline
+          results = client.pipelined do |pipe|
+            client_grouped.each do |collection_key, identifiers|
+              key_type = key_types[collection_key]
+
+              case key_type
+              when 'zset'
+                identifiers.each { |id| pipe.zrem(collection_key, id) }
+              when 'set'
+                identifiers.each { |id| pipe.srem(collection_key, id) }
+              when 'list'
+                identifiers.each { |id| pipe.lrem(collection_key, 0, id) }
+              when 'none'
+                Familia.debug "[batch_remove_stale_members] Key gone: #{collection_key}, skipping #{identifiers.size} members"
+              else
+                Familia.debug "[batch_remove_stale_members] Unknown key type '#{key_type}' for #{collection_key}"
+              end
             end
           end
+
+          total_removed += Array(results).count { |r| r.is_a?(Integer) ? r.positive? : r }
         end
 
-        # Results are integers (lrem) or booleans (zrem/srem with a
-        # single element). Count truthy values as successful removals.
-        Array(results).count { |r| r.is_a?(Integer) ? r.positive? : r }
+        total_removed
       end
 
       # Removes a stale member from a collection using raw Redis commands.
@@ -317,12 +345,14 @@ module Familia
       #
       # @param collection_key [String] Full Redis key of the collection
       # @param raw_member [String] The raw member value to remove
+      # @param client [Redis, nil] Redis client to use (default: self.dbclient).
+      #   Pass target_class.dbclient in multi-database setups.
       # @return [Boolean, Integer] For zsets/sets: true if removed, false
       #   otherwise (redis-rb single-element semantics). For lists: integer
       #   count of elements removed. Returns 0 for missing/unknown key types.
       #
-      def remove_stale_collection_member(collection_key, raw_member)
-        client = dbclient
+      def remove_stale_collection_member(collection_key, raw_member, client: nil)
+        client ||= dbclient
         key_type = client.type(collection_key)
 
         case key_type
