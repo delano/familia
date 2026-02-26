@@ -175,7 +175,7 @@ active_tasks = project.tasks.range_by_score(1, '+inf')
 participates_in User, :sessions, score: :expires_at
 
 # Query active sessions
-now = Time.now.to_i
+now = Familia.now.to_i
 active = user.sessions.range_by_score(now, '+inf')
 ```
 

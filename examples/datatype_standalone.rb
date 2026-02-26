@@ -232,7 +232,7 @@ class DemoApp
     session_data = {
       'user_id' => '12345',
       'username' => 'demo_user',
-      'login_time' => Time.now.to_i,
+      'login_time' => Familia.now.to_i,
       'preferences' => { 'theme' => 'dark', 'lang' => 'en' },
     }
 

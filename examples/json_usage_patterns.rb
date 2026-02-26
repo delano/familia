@@ -58,7 +58,7 @@ mixed_data = {
   user: user.as_json,
   tags: user.tags.as_json,
   permissions: user.permissions.as_json,
-  meta: { timestamp: Time.now.to_i }
+  meta: { timestamp: Familia.now.to_i }
 }
 puts "   Manual preparation + JsonSerializer.dump:"
 puts Familia::JsonSerializer.dump(mixed_data)
@@ -77,7 +77,7 @@ using Familia::Refinements::DearJson
 mixed_hash = {
   user: user,                    # Familia object (will call as_json)
   tags: user.tags,              # Familia DataType (will call as_json)
-  meta: { timestamp: Time.now.to_i }  # Plain hash (passes through)
+  meta: { timestamp: Familia.now.to_i }  # Plain hash (passes through)
 }
 
 mixed_array = [

@@ -245,7 +245,7 @@ module Familia
             field: field,
             old_value: instance_variable_was(field),
             new_value: instance_variable_get("@#{field}"),
-            timestamp: Time.now.to_f
+            timestamp: Familia.now.to_f
           }
 
           self.class.audit_log.append(change_record.to_json)

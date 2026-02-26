@@ -466,9 +466,9 @@ domains = Domain.load_multi(domain_ids).compact
 **Step 3**: Profile the change
 ```ruby
 # Add logging temporarily
-start = Time.now
+start = Familia.now
 domains = Domain.load_multi(domain_ids).compact
-duration = Time.now - start
+duration = Familia.now - start
 Rails.logger.info "Loaded #{domains.size} domains in #{duration}s"
 ```
 
