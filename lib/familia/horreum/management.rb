@@ -2,6 +2,10 @@
 #
 # frozen_string_literal: true
 
+require_relative 'management/audit_report'
+require_relative 'management/audit'
+require_relative 'management/repair'
+
 module Familia
   class Horreum
     # ManagementMethods - Class-level methods for Horreum model management
@@ -12,10 +16,14 @@ module Familia
     #
     # # Key features:
     # * Includes RelatedFieldsManagement for DataType field handling
+    # * Includes AuditMethods for proactive consistency detection
+    # * Includes RepairMethods for repair and rebuild operations
     # * Provides utility methods for working with Database objects
     #
     module ManagementMethods
       include Familia::Horreum::RelatedFieldsManagement # Provides DataType query methods
+      include Familia::Horreum::AuditMethods            # Provides audit_instances, health_check, etc.
+      include Familia::Horreum::RepairMethods           # Provides repair_instances!, rebuild_instances, etc.
 
       using Familia::Refinements::StylizeWords
 
@@ -148,7 +156,7 @@ module Familia
       # @note When check_exists: false, HGETALL on non-existent keys returns {}
       #   which we detect and return nil (not an empty object instance).
       #
-      def find_by_dbkey(objkey, check_exists: true)
+      def find_by_dbkey(objkey, check_exists: true, cleanup: true)
         raise ArgumentError, 'Empty key' if objkey.to_s.empty?
 
         if check_exists
@@ -166,7 +174,7 @@ module Familia
           # Otherwise, hgetall will return an empty hash, which will be passed to
           # the constructor, which will then be annoying to debug.
           unless does_exist
-            cleanup_stale_instance_entry(objkey)
+            cleanup_stale_instance_entry(objkey) if cleanup
             return nil
           end
         else
@@ -182,7 +190,7 @@ module Familia
         # expires between EXISTS check and HGETALL (when check_exists: true),
         # or simply doesn't exist (when check_exists: false).
         if obj.empty?
-          cleanup_stale_instance_entry(objkey)
+          cleanup_stale_instance_entry(objkey) if cleanup
           return nil
         end
 
@@ -258,7 +266,7 @@ module Familia
       # @see #in_instances? For a fast check against the instances timeline
       # @see #exists? For checking the database key directly
       #
-      def find_by_identifier(identifier, suffix: nil, check_exists: true)
+      def find_by_identifier(identifier, suffix: nil, check_exists: true, cleanup: true)
         suffix ||= self.suffix
         return nil if identifier.to_s.empty?
 
@@ -266,7 +274,7 @@ module Familia
 
         Familia.debug "[find_by_id] #{self} from key #{objkey})"
         Familia.trace :FIND_BY_ID, nil, objkey if Familia.debug?
-        find_by_dbkey objkey, check_exists: check_exists
+        find_by_dbkey objkey, check_exists: check_exists, cleanup: cleanup
       end
       alias find_by_id find_by_identifier
       alias find find_by_id
