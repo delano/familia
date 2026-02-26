@@ -10,6 +10,7 @@ require_relative 'horreum/definition'
 require_relative 'horreum/management'
 require_relative 'horreum/persistence'
 require_relative 'horreum/serialization'
+require_relative 'horreum/dirty_tracking'
 require_relative 'horreum/utils'
 
 module Familia
@@ -54,6 +55,7 @@ module Familia
     include Familia::Horreum::Persistence
     include Familia::Horreum::Serialization
     include Familia::Horreum::DatabaseCommands
+    include Familia::Horreum::DirtyTracking
     include Familia::Horreum::Settings
     include Familia::Horreum::Utils
 
@@ -238,6 +240,10 @@ module Familia
       #   end
       #
       init
+
+      # A freshly constructed object has no unsaved changes relative to its
+      # initial state. Clear any dirty flags set during field assignment above.
+      clear_dirty!
 
       # Structured lifecycle logging and instrumentation
       if Familia.debug? && start_time

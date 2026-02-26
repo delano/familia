@@ -37,7 +37,7 @@ Customer.safe_dump_fields
 end.sort
 
 (@all_non_safe_fields - Customer.safe_dump_fields).sort
-#=> [:custom_domains, :email, :password_reset, :sessions, :stripe_customer, :timeline]
+#=> [:custom_domains, :dirty_fields, :email, :password_reset, :sessions, :stripe_customer, :timeline]
 
 ## Implementing models like Customer can rest assured knowing
 ## any other field not in the safe list will not be dumped.

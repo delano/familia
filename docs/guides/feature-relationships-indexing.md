@@ -262,7 +262,7 @@ class Event < Familia::Horreum
   end
 end
 
-today = Time.now.strftime('%Y%m%d')
+today = Familia.now.strftime('%Y%m%d')
 todays_events = user.find_all_by_daily_partition(today)
 ```
 

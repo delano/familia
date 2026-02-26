@@ -19,7 +19,11 @@ module Familia
       element_count.zero?
     end
 
+    # @note This method executes a Redis SADD immediately, unlike scalar field
+    #   setters which are deferred until save. If the parent object has unsaved
+    #   scalar field changes, consider calling save first to avoid split-brain state.
     def add *values
+      warn_if_dirty!
       values.flatten.compact.each { |v| dbclient.sadd? dbkey, serialize_value(v) }
       update_expiration
       self
@@ -83,7 +87,9 @@ module Familia
     # @param value The value to remove from the set
     # @return [Integer] The number of members that were removed (0 or 1)
     def remove_element(value)
-      dbclient.srem dbkey, serialize_value(value)
+      ret = dbclient.srem dbkey, serialize_value(value)
+      update_expiration
+      ret
     end
     alias remove remove_element # deprecated
 
@@ -92,11 +98,15 @@ module Familia
     end
 
     def pop
-      deserialize_value(dbclient.spop(dbkey))
+      ret = deserialize_value(dbclient.spop(dbkey))
+      update_expiration
+      ret
     end
 
     def move(dstkey, val)
-      dbclient.smove dbkey, dstkey, serialize_value(val)
+      ret = dbclient.smove dbkey, dstkey, serialize_value(val)
+      update_expiration
+      ret
     end
 
     # Get one or more random members from the set

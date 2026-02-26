@@ -8,7 +8,7 @@ require_relative '../../lib/familia/migration'
 Familia.debug = false
 
 @redis = Familia.dbclient
-@test_id = "#{Process.pid}_#{Time.now.to_i}"
+@test_id = "#{Process.pid}_#{Familia.now.to_i}"
 @prefix = "familia:test:pipeline:#{@test_id}"
 
 @initial_migrations = Familia::Migration.migrations.dup
@@ -75,7 +75,7 @@ class FilteringPipelineMigration < Familia::Migration::Pipeline
   end
 
   def build_update_fields(obj)
-    { new_field: 'filtered_update', migrated_at: Time.now.to_i.to_s }
+    { new_field: 'filtered_update', migrated_at: Familia.now.to_i.to_s }
   end
 end
 

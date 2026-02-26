@@ -73,7 +73,7 @@ module Familia
       # Start monitoring
       def start!
         @enabled = true
-        @started_at = Time.now
+        @started_at = Familia.now
         reset_metrics
         Familia.info("[ThreadSafety] Monitoring started")
         true
@@ -82,7 +82,7 @@ module Familia
       # Stop monitoring
       def stop!
         @enabled = false
-        duration = @started_at ? Time.now - @started_at : 0
+        duration = @started_at ? Familia.now - @started_at : 0
         Familia.info("[ThreadSafety] Monitoring stopped after #{duration.round(2)}s")
         @started_at = nil
         true
@@ -199,7 +199,7 @@ module Familia
       def report
         return { enabled: false, message: "Monitoring not enabled" } unless @started_at
 
-        duration = Time.now - @started_at
+        duration = Familia.now - @started_at
 
         # Calculate hot spots
         hot_spots = []
@@ -254,7 +254,7 @@ module Familia
       def calculate_health_score
         return 100 unless @started_at
 
-        duration = Time.now - @started_at
+        duration = Familia.now - @started_at
         return 100 if duration < 60  # Need at least 1 minute of data
 
         contentions_per_hour = (@mutex_contentions.value / duration) * 3600

@@ -75,12 +75,12 @@ end
 @domain = SymbolResolutionDomain.new(
   domain_id: 'symbol_res_dom_1',
   name: 'example.com',
-  created_at: Time.now.to_f
+  created_at: Familia.now.to_f
 )
 @tag = StringResolutionTag.new(
   tag_id: 'string_res_tag_1',
   name: 'important',
-  created_at: Time.now.to_f
+  created_at: Familia.now.to_f
 )
 
 # Ensure clean state

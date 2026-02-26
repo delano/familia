@@ -186,11 +186,95 @@ end
 - `active: true` (Boolean) stores as `"true"` in Redis and loads back as Boolean `true`
 - `metadata: {key: "value"}` (Hash) stores as JSON and loads back as Hash with proper types
 
+**Serialization by Type** (what you see in `redis-cli HGETALL` or `GET`):
+
+| Context | Serialize method | Ruby `"UK"` in Redis | Ruby `123` in Redis | Deserialize method |
+|---|---|---|---|---|
+| Horreum `field` | `serialize_value` (JSON) | `"\"UK\""` | `"123"` | `deserialize_value` (JSON parse) |
+| `StringKey` | `.to_s` (raw) | `"UK"` | `"123"` | raw string (no parse) |
+| `JsonStringKey` | JSON dump | `"\"UK\""` | `"123"` | JSON parse |
+| `List/Set/SortedSet/HashKey` values | `serialize_value` (JSON) | `"\"UK\""` | `"123"` | `deserialize_value` (JSON parse) |
+
+Key distinction: `StringKey` uses raw `.to_s` serialization (not JSON) to support Redis string operations like `INCR`, `DECR`, and `APPEND`. All other types use JSON encoding. When inspecting raw Redis output, a Horreum string field storing `"UK"` appears as `"\"UK\""` (double-quoted), while a `StringKey` storing `"UK"` appears as `"UK"` (no extra quotes).
+
+Use `debug_fields` on a Horreum instance to see Ruby values vs stored JSON side-by-side:
+```ruby
+user.debug_fields
+# => {"country" => {ruby: "UK", stored: "\"UK\"", type: "String"},
+#     "age"     => {ruby: 30,   stored: "30",      type: "Integer"}}
+```
+
 **Database Key Generation**: Automatic key generation using class name, identifier, and field/type names (aka dbkey). Pattern: `classname:identifier:fieldname`
 
 **Memory Efficiency**: Only non-nil values are stored in keystore database to optimize memory usage.
 
 **Thread Safety**: Data types are frozen after instantiation to ensure immutability.
+
+### Write Model: Deferred vs Immediate
+
+Familia has a two-tier write model. Understanding when data hits Redis is critical for avoiding inconsistencies.
+
+**Scalar fields** (defined with `field`) use deferred writes:
+- Normal setters (`user.name = "Alice"`) only update the in-memory instance variable. Nothing is written to Redis until `save`, `commit_fields`, or `batch_update` is called.
+- Fast writers (`user.name! "Alice"`) perform an immediate `HSET` on the object's hash key. Use these when you need a single field persisted without a full save cycle.
+
+**Collection fields** (defined with `list`, `set`, `zset`, `hashkey`) use immediate writes:
+- Every mutating method (`add`, `push`, `remove`, `clear`, `[]=`) executes the corresponding Redis command (SADD, RPUSH, ZREM, DEL, etc.) right away.
+- Collection fields live on separate Redis keys from the object's hash, so they cannot participate in the same MULTI/EXEC transaction as scalar fields.
+
+**Safe pattern -- scalars first, then collections:**
+```ruby
+plan.name = "Premium"
+plan.region = "US"
+plan.save  # HMSET for all scalar fields
+
+# Collections mutated AFTER scalars are committed
+plan.features.clear
+plan.features.add("sso")
+plan.features.add("priority_support")
+
+# Or use the convenience wrapper:
+plan.save_with_collections do
+  plan.features.clear
+  plan.features.add("sso")
+end
+```
+
+**Unsafe pattern -- collections before save:**
+```ruby
+plan.name = "Premium"
+plan.features.clear           # Immediate: Redis DEL
+plan.features.add("sso")     # Immediate: Redis SADD
+plan.save                     # If this raises, features are already mutated
+```
+
+**Cross-database limitation**: MULTI/EXEC transactions only work within a single Redis database number. If scalar fields and a collection use different `logical_database` values, they cannot share a transaction. The `save_with_collections` pattern handles this by sequencing the operations rather than wrapping them in MULTI.
+
+**Instances timeline**: The class-level `instances` sorted set is a timeline of last-modified times, not a registry. `persist_to_storage` (called by `save`) and `commit_fields`/`batch_update` all call `touch_instances!` to update the timestamp. Use `in_instances?(identifier)` for fast O(log N) checks without loading the object.
+
+### Instances Timeline Lifecycle
+
+Every Horreum subclass has a class-level `instances` sorted set (a `class_sorted_set` with `reference: true`). This timeline maps identifiers to their last-write timestamp (ZADD score).
+
+**Write paths that touch instances** (call `touch_instances!`):
+- `save` / `save_if_not_exists!` (via `persist_to_storage`)
+- `commit_fields`
+- `batch_update`
+- `save_fields`
+- Fast writers (`field_name!`) via `FieldType` and `DefinitionMethods`
+
+**Write paths that remove from instances**:
+- Instance-level `destroy!` (via `remove_from_instances!`)
+- Class-level `destroy!(identifier)` (direct `instances.remove`)
+- `cleanup_stale_instance_entry` in `find_by_dbkey` (lazy, on-access pruning)
+
+**Ghost objects**: When a hash key expires via TTL but the identifier still lingers in `instances`, enumerating `instances.to_a` returns identifiers for objects that no longer exist. These are cleaned lazily: `find_by_dbkey` detects the missing key and calls `cleanup_stale_instance_entry`. Code that enumerates without loading (e.g. `instances.members`) will still see ghosts.
+
+**`in_instances?` vs `exists?`**:
+- `in_instances?(id)` checks the `instances` sorted set -- fast O(log N), but may return true for expired keys (ghost entries) or false for objects created outside Familia
+- `exists?(id)` checks the actual Redis hash key -- authoritative but requires a round-trip
+
+**`load` / `find_by_id` bypasses instances**: These methods read directly from the hash key via HGETALL. They do not consult `instances`. A key can exist in Redis without being in instances (e.g. created by `commit_fields` in an older version), and vice versa.
 
 ## Thread Safety Considerations
 

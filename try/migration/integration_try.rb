@@ -11,7 +11,7 @@ Familia.debug = false
 
 # Setup - unique prefix for this test run
 @redis = Familia.dbclient
-@prefix = "familia:test:integration:#{Process.pid}:#{Time.now.to_i}"
+@prefix = "familia:test:integration:#{Process.pid}:#{Familia.now.to_i}"
 @registry = Familia::Migration::Registry.new(redis: @redis, prefix: @prefix)
 
 # Store initial migrations

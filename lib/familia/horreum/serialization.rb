@@ -73,6 +73,40 @@ module Familia
         end
       end
 
+      # Returns a diagnostic hash showing Ruby values vs stored JSON side-by-side.
+      #
+      # Useful for debugging double-encoding issues or understanding the
+      # serialization boundary. Each field maps to a hash showing the Ruby
+      # value, the JSON string that would be stored, and the Ruby type.
+      #
+      # @return [Hash{String => Hash}] Each field name maps to:
+      #   - :ruby [Object] the current in-memory Ruby value
+      #   - :stored [String] the JSON-encoded string for Redis storage
+      #   - :type [String] the Ruby class name of the value
+      #
+      # @example
+      #   user.debug_fields
+      #   # => {
+      #   #   "name"    => { ruby: "UK",  stored: "\"UK\"",  type: "String"  },
+      #   #   "age"     => { ruby: 30,    stored: "30",      type: "Integer" },
+      #   #   "active"  => { ruby: true,  stored: "true",    type: "TrueClass" },
+      #   #   "email"   => { ruby: nil,   stored: nil,       type: "NilClass" }
+      #   # }
+      #
+      def debug_fields
+        self.class.persistent_fields.each_with_object({}) do |field, hsh|
+          field_type = self.class.field_types[field]
+          val = send(field_type.method_name)
+          stored = serialize_value(val)
+
+          hsh[field.to_s] = {
+            ruby: val,
+            stored: stored,
+            type: val.class.name,
+          }
+        end
+      end
+
       # Converts the object's persistent fields to an array.
       #
       # Serializes all persistent field values in field definition order,

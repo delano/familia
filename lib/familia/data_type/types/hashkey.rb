@@ -19,7 +19,12 @@ module Familia
 
     # +return+ [Integer] Returns 1 if the field is new and added, 0 if the
     #  field already existed and the value was updated.
+    #
+    # @note This method executes a Redis HSET immediately, unlike scalar field
+    #   setters which are deferred until save. If the parent object has unsaved
+    #   scalar field changes, consider calling save first to avoid split-brain state.
     def []=(field, val)
+      warn_if_dirty!
       ret = dbclient.hset dbkey, field.to_s, serialize_value(val)
       update_expiration
       ret
@@ -95,13 +100,17 @@ module Familia
     # @param field [String] The field to remove
     # @return [Integer] The number of fields that were removed (0 or 1)
     def remove_field(field)
-      dbclient.hdel dbkey, field.to_s
+      ret = dbclient.hdel dbkey, field.to_s
+      update_expiration
+      ret
     end
     alias remove remove_field
     alias remove_element remove_field
 
     def increment(field, by = 1)
-      dbclient.hincrby(dbkey, field.to_s, by).to_i
+      ret = dbclient.hincrby(dbkey, field.to_s, by).to_i
+      update_expiration
+      ret
     end
     alias incr increment
     alias incrby increment

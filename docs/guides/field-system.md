@@ -413,7 +413,7 @@ class AuditedFieldType < Familia::FieldType
 
         # Audit the change
         old_value = hget(field_name)
-        timestamp = Time.now.to_i
+        timestamp = Familia.now.to_i
 
         # Log the change
         puts "AUDIT: #{field_name} changed from #{old_value} to #{val} at #{timestamp}"
@@ -677,8 +677,8 @@ describe TimestampFieldType do
     expect(instance.created_at).to be_a(Time)
     expect(instance.created_at.to_s).to include("2024-01-01 12:00:00")
 
-    instance.created_at = Time.now
-    expect(instance.created_at).to be_a(Time)
+    instance.created_at = Familia.now
+    expect(instance.created_at).to be_a(Familia)
   end
 
   it "serializes to integer" do

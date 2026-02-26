@@ -17,7 +17,11 @@ module Familia
       element_count.zero?
     end
 
+    # @note This method executes a Redis RPUSH immediately, unlike scalar field
+    #   setters which are deferred until save. If the parent object has unsaved
+    #   scalar field changes, consider calling save first to avoid split-brain state.
     def push *values
+      warn_if_dirty!
       echo :push, Familia.pretty_stack(limit: 1) if Familia.debug
       values.flatten.compact.each { |v| dbclient.rpush dbkey, serialize_value(v) }
       dbclient.ltrim dbkey, -@opts[:maxlength], -1 if @opts[:maxlength]
@@ -32,7 +36,11 @@ module Familia
     alias add_element <<
     alias add <<
 
+    # @note This method executes a Redis LPUSH immediately, unlike scalar field
+    #   setters which are deferred until save. If the parent object has unsaved
+    #   scalar field changes, consider calling save first to avoid split-brain state.
     def unshift *values
+      warn_if_dirty!
       values.flatten.compact.each { |v| dbclient.lpush dbkey, serialize_value(v) }
       # TODO: test maxlength
       dbclient.ltrim dbkey, 0, @opts[:maxlength] - 1 if @opts[:maxlength]
@@ -42,11 +50,15 @@ module Familia
     alias prepend unshift
 
     def pop
-      deserialize_value dbclient.rpop(dbkey)
+      ret = deserialize_value dbclient.rpop(dbkey)
+      update_expiration
+      ret
     end
 
     def shift
-      deserialize_value dbclient.lpop(dbkey)
+      ret = deserialize_value dbclient.lpop(dbkey)
+      update_expiration
+      ret
     end
 
     def [](idx, count = nil)
@@ -73,7 +85,9 @@ module Familia
     # @param count [Integer] Number of elements to remove (0 means all)
     # @return [Integer] The number of removed elements
     def remove_element(value, count = 0)
-      dbclient.lrem dbkey, count, serialize_value(value)
+      ret = dbclient.lrem dbkey, count, serialize_value(value)
+      update_expiration
+      ret
     end
     alias remove remove_element
 

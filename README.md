@@ -92,7 +92,7 @@ end
 
 ```ruby
 # Create and save
-user = User.create(email: 'alice@example.com', name: 'Alice', created_at: Time.now.to_i)
+user = User.create(email: 'alice@example.com', name: 'Alice', created_at: Familia.now)
 
 # Find by identifier
 user = User.load('alice@example.com')

@@ -217,7 +217,7 @@ module Familia
       #   obj.pipelined do |conn|
       #     conn.hmset(obj.dbkey, obj.to_h)
       #     conn.hincrby(obj.dbkey, 'count', 1)
-      #     conn.hset(obj.dbkey, 'updated_at', Time.now.to_i)
+      #     conn.hset(obj.dbkey, 'updated_at', Familia.now.to_i)
       #   end
       #
       # @note Connection Inheritance:

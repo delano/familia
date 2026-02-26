@@ -241,7 +241,7 @@ doc = SecureDocument.new(
   document_id: 'doc123',
   owner_id: 'user456',
   content: 'Sensitive document content',
-  created_at: Time.now.to_i
+  created_at: Familia.now.to_i
 )
 
 doc.save
@@ -551,9 +551,9 @@ class EncryptionMonitor
     total_time = 0
 
     Familia::Encryption.define_singleton_method(:encrypt) do |data, **opts|
-      start_time = Time.now
+      start_time = Familia.now
       result = original_encrypt.call(data, **opts)
-      total_time += (Time.now - start_time)
+      total_time += (Familia.now - start_time)
       call_count += 1
 
       if call_count % 100 == 0
@@ -813,7 +813,7 @@ class EncryptionHealthCheck
       end
 
       # Test encrypt/decrypt cycle
-      test_data = "health_check_#{Time.now.to_i}"
+      test_data = "health_check_#{Familia.now.to_i}"
       encrypted = Familia::Encryption.encrypt(test_data)
       decrypted = Familia::Encryption.decrypt(encrypted)
       results[:sample_encrypt_decrypt] = (decrypted == test_data)

@@ -129,7 +129,7 @@ end
 @test_emp_email = "employee-#{@test_run_id}@acme.com"
 @test_department = "engineering"
 @test_badge = "BADGE_RTP_#{@test_run_id}"
-@test_hire_date = Time.now.to_i
+@test_hire_date = Familia.now.to_i
 
 @test_domain_id = "rtp_dom_#{@test_run_id}"
 @test_domain_name = "example.com"

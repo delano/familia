@@ -126,7 +126,7 @@ puts 'Example 3: Performance optimization with request caching'
 entries = []
 
 # Without caching - each field derives keys independently
-start_time = Time.now
+start_time = Familia.now
 5.times do |i|
   private_key_pem = <<~PEM
     -----BEGIN PRIVATE KEY-----
@@ -145,10 +145,10 @@ start_time = Time.now
   entry.save
   entries << entry
 end
-no_cache_time = Time.now - start_time
+no_cache_time = Familia.now - start_time
 
 # With caching - reuses derived keys within the block
-start_time = Time.now
+start_time = Familia.now
 Familia::Encryption.with_request_cache do
   5.times do |i|
     private_key_pem = <<~PEM
@@ -169,7 +169,7 @@ Familia::Encryption.with_request_cache do
     entries << entry
   end
 end
-cached_time = Time.now - start_time
+cached_time = Familia.now - start_time
 
 puts "Encryption without caching: #{(no_cache_time * 1000).round(2)}ms"
 puts "Encryption with caching: #{(cached_time * 1000).round(2)}ms"

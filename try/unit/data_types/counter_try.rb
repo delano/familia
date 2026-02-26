@@ -58,9 +58,9 @@ require_relative '../../support/helpers/test_helpers'
 @a.counter.atomic_increment_and_get(25)
 #=> 25
 
-## Familia::Counter#increment_if_less_than (success case)
+## Familia::Counter#increment_if_less_than (success case, returns new value)
 @a.counter.increment_if_less_than(50, 10)
-#=> true
+#=> 35
 
 ## Familia::Counter#value after conditional increment
 @a.counter.to_i

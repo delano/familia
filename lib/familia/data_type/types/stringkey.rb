@@ -58,7 +58,11 @@ module Familia
       value.to_i
     end
 
+    # @note This method executes a Redis SET immediately, unlike scalar field
+    #   setters which are deferred until save. If the parent object has unsaved
+    #   scalar field changes, consider calling save first to avoid split-brain state.
     def value=(val)
+      warn_if_dirty!
       ret = dbclient.set(dbkey, serialize_value(val))
       update_expiration
       ret

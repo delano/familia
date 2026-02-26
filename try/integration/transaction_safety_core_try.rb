@@ -22,7 +22,7 @@ end
 
 # Helper for unique test IDs
 def safety_test_id(prefix = 'test')
-  "#{prefix}_#{Time.now.to_i}_#{rand(1000000)}"
+  "#{prefix}_#{Familia.now.to_i}_#{rand(1000000)}"
 end
 
 ## save raises OperationModeError inside transaction

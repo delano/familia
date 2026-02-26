@@ -40,7 +40,7 @@ module Familia
     #
     #   customer.transaction do
     #     customer.increment(:login_count)
-    #     customer.hset(:last_login, Time.now.to_i)
+    #     customer.hset(:last_login, Familia.now.to_i)
     #   end
     #
     # @example Incorrect Pattern: Save Inside Transaction

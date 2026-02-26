@@ -8,7 +8,7 @@ require_relative '../../lib/familia/migration'
 Familia.debug = false
 
 @redis = Familia.dbclient
-@test_id = "#{Process.pid}_#{Time.now.to_i}"
+@test_id = "#{Process.pid}_#{Familia.now.to_i}"
 @prefix = "familia:test:model:#{@test_id}"
 
 @initial_migrations = Familia::Migration.migrations.dup

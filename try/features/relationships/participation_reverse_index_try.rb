@@ -37,12 +37,12 @@ end
 @domain1 = ReverseIndexDomain.new(
   domain_id: 'ri_dom_1',
   display_domain: 'example1.com',
-  created_at: Time.now.to_f
+  created_at: Familia.now.to_f
 )
 @domain2 = ReverseIndexDomain.new(
   domain_id: 'ri_dom_2',
   display_domain: 'example2.com',
-  created_at: Time.now.to_f + 1
+  created_at: Familia.now.to_f + 1
 )
 
 # Ensure clean state

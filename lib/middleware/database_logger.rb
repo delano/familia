@@ -106,7 +106,7 @@ module DatabaseLogger
   @logger = nil
   @commands = Concurrent::Array.new
   @max_commands = 10_000
-  @process_start = Time.now.to_f.freeze
+  @process_start = Time.now.utc.to_f.freeze
   @structured_logging = false
   @sample_rate = nil  # nil = log everything, 0.1 = 10%, 0.01 = 1%
   @sample_counter = Concurrent::AtomicFixnum.new(0)
@@ -261,7 +261,7 @@ module DatabaseLogger
     # We intentionally use two different codepaths for getting the
     # time, although they will almost always be so similar that the
     # difference is negligible.
-    lifetime_duration = (Time.now.to_f - DatabaseLogger.process_start).round(6)
+    lifetime_duration = (Familia.now.to_f - DatabaseLogger.process_start).round(6)
 
     msgpack = CommandMessage.new(command.join(' '), block_duration, lifetime_duration)
     DatabaseLogger.append_command(msgpack)
@@ -325,7 +325,7 @@ module DatabaseLogger
     block_start = DatabaseLogger.now_in_μs
     results = yield  # CRITICAL: For call_pipelined, yield is correct (not chaining)
     block_duration = DatabaseLogger.now_in_μs - block_start
-    lifetime_duration = (Time.now.to_f - DatabaseLogger.process_start).round(6)
+    lifetime_duration = (Familia.now.to_f - DatabaseLogger.process_start).round(6)
 
     # Log the entire pipeline as a single operation
     cmd_string = commands.map { |cmd| cmd.join(' ') }.join(' | ')
@@ -390,7 +390,7 @@ module DatabaseLogger
     block_start = DatabaseLogger.now_in_μs
     result = yield  # CRITICAL: For call_once, yield is correct (not chaining)
     block_duration = DatabaseLogger.now_in_μs - block_start
-    lifetime_duration = (Time.now.to_f - DatabaseLogger.process_start).round(6)
+    lifetime_duration = (Familia.now.to_f - DatabaseLogger.process_start).round(6)
 
     msgpack = CommandMessage.new(command.join(' '), block_duration, lifetime_duration)
     DatabaseLogger.append_command(msgpack)

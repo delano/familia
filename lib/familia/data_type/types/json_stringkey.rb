@@ -14,7 +14,7 @@ module Familia
   #     class_json_string :last_synced_at, default: 0.0
   #   end
   #
-  #   MyIndex.last_synced_at = Time.now.to_f  # Stored as JSON number
+  #   MyIndex.last_synced_at = Familia.now.to_f  # Stored as JSON number
   #   MyIndex.last_synced_at  #=> 1704067200.123 (Float preserved)
   #
   # @example Type preservation

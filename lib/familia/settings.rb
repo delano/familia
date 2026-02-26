@@ -14,6 +14,7 @@ module Familia
   @current_key_version = nil
   @encryption_personalization = 'FamilialMatters'.freeze
   @pipelined_mode = :warn
+  @strict_write_order = false
 
   # Schema validation configuration
   @schema_path = nil      # Directory containing schema files (String or Pathname)
@@ -25,7 +26,7 @@ module Familia
   module Settings
     attr_writer :delim, :suffix, :default_expiration, :logical_database, :prefix, :encryption_keys,
                 :current_key_version, :encryption_personalization, :transaction_mode,
-                :schema_path, :schemas, :schema_validator
+                :schema_path, :schemas, :schema_validator, :strict_write_order
 
     def delim(val = nil)
       @delim = val if val
@@ -144,6 +145,25 @@ module Familia
         raise ArgumentError, 'Pipeline mode must be :strict, :warn, or :permissive'
       end
       @pipelined_mode = val
+    end
+
+    # Controls whether collection writes on a DataType raise an error
+    # when the parent Horreum object has unsaved scalar field changes.
+    #
+    # When false (default), a warning is emitted via Familia.warn.
+    # When true, a Familia::Problem exception is raised.
+    #
+    # @param val [Boolean, nil] The setting value, or nil to get current value
+    # @return [Boolean] Current strict_write_order setting
+    #
+    # @example Enable strict mode
+    #   Familia.configure do |config|
+    #     config.strict_write_order = true
+    #   end
+    #
+    def strict_write_order(val = nil)
+      @strict_write_order = val unless val.nil?
+      @strict_write_order || false
     end
 
     # Directory containing schema files for JSON Schema validation.

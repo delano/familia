@@ -91,7 +91,7 @@ class Task < Familia::Horreum
 
   # Lambda-based scoring
   participates_in Sprint, :tasks, score: -> {
-    priority * 100 + (Time.now - created_at) / 3600
+    priority * 100 + (Familia.now - created_at) / 3600
   }
 end
 

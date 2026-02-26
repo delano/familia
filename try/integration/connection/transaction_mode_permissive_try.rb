@@ -84,7 +84,7 @@ begin
   result = customer.transaction do |conn|
     # Multiple operations that would normally be atomic
     conn.hset(customer.dbkey, 'status', 'processing')
-    conn.hset(customer.dbkey, 'updated_at', Time.now.to_i)
+    conn.hset(customer.dbkey, 'updated_at', Familia.now.to_i)
     conn.hset(customer.dbkey, 'version', '1.0')
     conn.hget(customer.dbkey, 'status')
   end

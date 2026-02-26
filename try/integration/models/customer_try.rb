@@ -8,15 +8,15 @@
 require_relative '../../support/helpers/test_helpers'
 
 # Setup
-@now = Time.now.to_f
+@now = Familia.now.to_f
 @customer = Customer.new
 @customer.custid = 'test@example.com'
 @customer.email = 'test@example.com'
 @customer.role = 'user'
 # No longer need to set key field - identifier computed from custid
 @customer.planid = 'basic'
-@customer.created = Time.now.to_i
-@customer.updated = Time.now.to_i
+@customer.created = Familia.now.to_i
+@customer.updated = Familia.now.to_i
 
 ## Customer can be saved
 @customer.save
@@ -98,7 +98,7 @@ multi_result = @customer.destroy!
 cust = Customer.find_by_id('test@example.com')
 exists = Customer.exists?('test@example.com')
 [multi_result.results, cust.nil?, exists]
-#=> [[1, 0, 1, 1, 1, 1, 1, false], true, false]
+#=> [[1, 0, 1, 1, 1, 1, 1, false, true], true, false]
 
 ## Customer.destroy! can be called on an already destroyed object
 @customer.destroy!

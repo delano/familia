@@ -130,6 +130,15 @@ module Familia
       # - Commands: 1 per object (HGETALL only)
       # - Reduction: 50% fewer Redis commands
       #
+      # **Ghost object cleanup:** When a key is not found (either via EXISTS
+      # returning false or HGETALL returning {}), this method calls
+      # +cleanup_stale_instance_entry+ to remove any stale entry from the
+      # +instances+ sorted set. This provides lazy, on-access pruning of
+      # ghost entries — objects whose hash keys have expired or been deleted
+      # but whose identifiers still linger in +instances+. Code that
+      # enumerates via +instances.to_a+ without loading each object will
+      # still see ghosts until they are accessed through this method.
+      #
       # @example Safe mode (default)
       #   User.find_by_key("user:123")  # 2 commands: EXISTS + HGETALL
       #
@@ -209,13 +218,20 @@ module Familia
 
       # Retrieves and instantiates an object from Database using its identifier.
       #
+      # Returns a fully-hydrated instance if the key exists, or +nil+ if it
+      # does not. This method never returns a "shell" object with empty fields.
+      # If you need an in-memory placeholder without loading from the database,
+      # use +new(identifier)+ instead -- but be aware that such an object has
+      # no persisted field values and will overwrite existing data if saved.
+      #
       # @param identifier [String, Integer] The unique identifier for the
       #   object.
       # @param suffix [Symbol, nil] The suffix to use in the dbkey (default:
       #   class suffix). Keyword parameter for consistency with check_exists.
       # @param check_exists [Boolean] Whether to check key existence before HGETALL
       #   (default: true). See find_by_dbkey for details.
-      # @return [Object, nil] An instance of the class if found, nil otherwise.
+      # @return [Object, nil] An instance of the class if found, +nil+ if the
+      #   key does not exist in the database.
       #
       # This method constructs the full dbkey using the provided identifier
       # and suffix, then delegates to `find_by_key` for the actual retrieval and
@@ -226,13 +242,21 @@ module Familia
       # identifier.
       #
       # @example Safe mode (default)
-      #   User.find_by_id(123)  # 2 commands: EXISTS + HGETALL
+      #   user = User.find_by_id(123)  # 2 commands: EXISTS + HGETALL
+      #   user  # => #<User ...> or nil
       #
       # @example Optimized mode
       #   User.find_by_id(123, check_exists: false)  # 1 command: HGETALL
       #
       # @example Custom suffix
       #   Session.find_by_id('abc', suffix: :session)
+      #
+      # @example Common pitfall: new() vs load()
+      #   User.load('nonexistent')  # => nil (key does not exist)
+      #   User.new('nonexistent')   # => #<User> (in-memory shell, no DB data)
+      #
+      # @see #in_instances? For a fast check against the instances timeline
+      # @see #exists? For checking the database key directly
       #
       def find_by_identifier(identifier, suffix: nil, check_exists: true)
         suffix ||= self.suffix
@@ -372,6 +396,29 @@ module Familia
         objects
       end
 
+      # Checks whether the given identifier appears in the +instances+ sorted set.
+      #
+      # This is a fast O(log N) ZSCORE lookup. It does NOT verify that the
+      # underlying hash key still exists in the database -- use {#exists?}
+      # for that. A true result means the object was persisted through
+      # Familia at some point and has not been removed from instances since.
+      #
+      # @param identifier [String, Integer] The unique identifier to check.
+      # @return [Boolean] true if the identifier is present in the instances
+      #   sorted set, false otherwise.
+      #
+      # @example Quick instances check without hitting HGETALL
+      #   User.in_instances?('cust_abc123')  # => true
+      #
+      # @see #exists? For checking the actual database key
+      # @see #find_by_id For loading the full object
+      #
+      def in_instances?(identifier)
+        return false if identifier.to_s.empty?
+
+        instances.member?(identifier)
+      end
+
       # Checks if an object with the given identifier exists in the database.
       #
       # @param identifier [String, Integer] The unique identifier for the object.
@@ -401,6 +448,10 @@ module Familia
       end
 
       # Destroys an object in Database with the given identifier.
+      #
+      # Deletes the main hash key, all related fields, and removes the
+      # identifier from the +instances+ sorted set. This is the class-level
+      # counterpart to the instance method of the same name.
       #
       # @param identifier [String, Integer] The unique identifier for the object to destroy.
       # @param suffix [Symbol, nil] The suffix to use in the dbkey (default: class suffix).
@@ -441,6 +492,9 @@ module Familia
           # Delete the main object key
           ret = conn.del(objkey)
           Familia.trace :DESTROY!, nil, "#{objkey} #{ret.inspect}" if Familia.debug?
+
+          # Remove from instances collection to avoid ghost entries
+          instances.remove(identifier) if respond_to?(:instances)
         end
       end
 
@@ -679,6 +733,59 @@ module Familia
         instance.send(:initialize_relatives)
         instance.send(:initialize_with_keyword_args_deserialize_value, **obj_hash)
         instance
+      end
+
+      # Decodes raw HGETALL output for debugging purposes.
+      #
+      # When inspecting data from redis-cli, field values appear as raw
+      # JSON-encoded strings (e.g. +"\\"UK\\""+ for the string +"UK"+).
+      # This method retrieves the hash, deserializes each value, and returns
+      # a diagnostic hash showing the raw stored form, decoded Ruby value,
+      # and Ruby type for every field.
+      #
+      # Accepts either an identifier (resolved via +dbkey+) or a full database
+      # key (detected by the presence of the class delimiter).
+      #
+      # @param identifier_or_key [String] An identifier or full database key
+      # @return [Hash{String => Hash}] Diagnostic hash per field:
+      #   - +:raw+ [String] The raw string stored in Redis
+      #   - +:decoded+ [Object] The deserialized Ruby value
+      #   - +:type+ [String] The Ruby class name of the decoded value
+      # @return [nil] If the key does not exist
+      #
+      # @example Inspect a stored object by identifier
+      #   Customer.storage_inspect('cust_abc123')
+      #   # => {"email" => {raw: "\"test@example.com\"", decoded: "test@example.com", type: "String"},
+      #   #     "plan_id" => {raw: "42", decoded: 42, type: "Integer"}}
+      #
+      # @example Inspect by full key
+      #   Customer.storage_inspect('customer:cust_abc123:object')
+      #
+      # @see #find_by_id For loading a full object instance
+      #
+      def storage_inspect(identifier_or_key)
+        # Determine if this is a full key or an identifier
+        objkey = if identifier_or_key.to_s.include?(Familia.delim)
+          identifier_or_key.to_s
+        else
+          dbkey(identifier_or_key)
+        end
+
+        raw_hash = dbclient.hgetall(objkey)
+        return nil if raw_hash.empty?
+
+        # Use a temporary instance for deserialization (needs serialize_value/deserialize_value)
+        temp = allocate
+        temp.send(:initialize_relatives)
+
+        raw_hash.each_with_object({}) do |(field, raw_val), result|
+          decoded = temp.send(:deserialize_value, raw_val, field_name: field.to_sym)
+          result[field] = {
+            raw: raw_val,
+            decoded: decoded,
+            type: decoded.class.name
+          }
+        end
       end
     end
   end

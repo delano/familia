@@ -281,7 +281,7 @@ module Familia
           #     # Complex scoring for project assignments
           #     participates_in Project, :assignees, score: -> {
           #       base_score = skill_level * 100
-          #       seniority = (Time.now - hire_date) / 1.year
+          #       seniority = (Familia.now - hire_date) / 1.year
           #       base_score + seniority * 10
           #     }
           #   end
@@ -438,7 +438,7 @@ module Familia
           #     field :salary
           #
           #     participates_in Department, :members, score: -> {
-          #       tenure_months = (Time.now - hire_date) / 1.month
+          #       tenure_months = (Familia.now - hire_date) / 1.month
           #       base_score = tenure_months * 10
           #       performance_bonus = performance_rating * 100
           #       salary_factor = salary / 1000.0

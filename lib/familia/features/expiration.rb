@@ -61,30 +61,41 @@ module Familia
     # Cascading Expiration:
     #
     # When an object has related data structures (lists, sets, etc.), the
-    # expiration feature automatically applies TTL to all related structures:
+    # expiration feature cascades TTL to all related structures during
+    # +update_expiration+ (which is called automatically by +save+). Each
+    # relation receives either its own +default_expiration+ or the parent
+    # value as a fallback. Relations with +no_expiration: true+ are
+    # excluded from cascade entirely.
     #
     #   class User < Familia::Horreum
     #     feature :expiration
     #     default_expiration 30.days
     #
     #     field :email, :name
-    #     list :sessions        # Will also expire in 30 days
-    #     set :permissions      # Will also expire in 30 days
-    #     hashkey :preferences  # Will also expire in 30 days
+    #     list :sessions        # Inherits parent TTL (30 days) via cascade
+    #     set :permissions      # Inherits parent TTL (30 days) via cascade
+    #     hashkey :preferences  # Inherits parent TTL (30 days) via cascade
     #   end
+    #
+    # Note: cascade applies EXPIRE to the relation's key, so the key must
+    # already exist in the database. Relations populated after +save+ will
+    # receive TTL from their own write methods (if they have
+    # +default_expiration+) or from a subsequent +update_expiration+ call.
     #
     # Fine-Grained Control:
     #
-    # Related structures can have their own expiration settings:
+    # Related structures can have their own expiration settings, or opt out
+    # of expiration cascade entirely:
     #
     #   class Analytics < Familia::Horreum
     #     feature :expiration
     #     default_expiration 1.year
     #
     #     field :metric_name
-    #     list :hourly_data, default_expiration: 1.week    # Shorter TTL
-    #     list :daily_data, default_expiration: 1.month    # Medium TTL
-    #     list :monthly_data  # Uses class default (1.year)
+    #     list :hourly_data, default_expiration: 1.week    # Own TTL (1 week)
+    #     list :daily_data, default_expiration: 1.month    # Own TTL (1 month)
+    #     list :monthly_data                               # Inherits class TTL (1 year) via cascade
+    #     hashkey :permanent_config, no_expiration: true   # Excluded from cascade
     #   end
     #
     # Zero Expiration:
@@ -252,16 +263,27 @@ module Familia
       def update_expiration(expiration: nil)
         expiration ||= default_expiration
 
-        # Handle cascading expiration to related data structures
+        # Handle cascading expiration to related data structures.
+        #
+        # By default, all relations inherit the parent object's expiration.
+        # Relations with an explicit `default_expiration:` option use that
+        # value instead. Relations with `no_expiration: true` are excluded
+        # from cascade entirely and persist independently.
         if self.class.relations?
           Familia.debug "[update_expiration] #{self.class} has relations: #{self.class.related_fields.keys}"
           self.class.related_fields.each do |name, definition|
-            # Skip relations that don't have their own expiration settings
-            next if definition.opts[:default_expiration].nil?
+            # Skip relations explicitly excluded from expiration cascade
+            next if definition.opts[:no_expiration]
+
+            # Use the relation's own default_expiration when defined,
+            # falling back to the parent expiration value. This allows
+            # per-relation TTL (e.g. list :hourly_data, default_expiration: 1.week)
+            # to take precedence over the class-level default_expiration.
+            rel_expiration = definition.opts[:default_expiration] || expiration
 
             obj = send(name)
-            Familia.debug "[update_expiration] Updating expiration for #{name} (#{obj.dbkey}) to #{expiration}"
-            obj.update_expiration(expiration: expiration)
+            Familia.debug "[update_expiration] Updating expiration for #{name} (#{obj.dbkey}) to #{rel_expiration}"
+            obj.update_expiration(expiration: rel_expiration)
           end
         end
 
@@ -370,6 +392,56 @@ module Familia
       #
       def persist!
         dbclient.persist(dbkey)
+      end
+
+      # Returns a report of TTL values for the main key and all relation keys.
+      #
+      # This is useful for detecting TTL drift where the main hash has a TTL
+      # but one or more relation keys do not (or vice versa). Queries all
+      # keys using pipelined TTL calls for efficiency.
+      #
+      # @return [Hash] A hash with :main and :relations keys
+      #   - :main [Hash] { key: String, ttl: Integer }
+      #   - :relations [Hash{Symbol => Hash}] Each relation name maps to
+      #     { key: String, ttl: Integer }
+      #
+      # TTL values follow Redis conventions:
+      #   - Positive integer: seconds remaining
+      #   - -1: key exists but has no expiration
+      #   - -2: key does not exist
+      #
+      # @example Inspect TTL across all keys
+      #   session.ttl_report
+      #   # => {
+      #   #      main: { key: "session:abc123:object", ttl: 3599 },
+      #   #      relations: {
+      #   #        sessions: { key: "session:abc123:sessions", ttl: -1 },
+      #   #        tags:     { key: "session:abc123:tags", ttl: 3598 }
+      #   #      }
+      #   #    }
+      #
+      # @example Detect TTL drift
+      #   report = user.ttl_report
+      #   drifted = report[:relations].select { |_, v| v[:ttl] == -1 }
+      #   warn "TTL drift detected: #{drifted.keys}" if drifted.any?
+      #
+      def ttl_report
+        report = {
+          main: { key: dbkey, ttl: dbclient.ttl(dbkey) },
+          relations: {},
+        }
+
+        return report unless self.class.relations?
+
+        self.class.related_fields.each_key do |name|
+          obj = send(name)
+          report[:relations][name] = {
+            key: obj.dbkey,
+            ttl: dbclient.ttl(obj.dbkey),
+          }
+        end
+
+        report
       end
     end
   end

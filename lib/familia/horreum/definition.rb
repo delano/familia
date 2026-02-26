@@ -493,6 +493,11 @@ module Familia
 
               # Persist the value to Database immediately using the hset command.
               ret = hset field_name, prepared
+
+              # Touch instances timeline so the object is visible
+              # to list-based enumeration (instances.to_a, count, etc.)
+              touch_instances! if respond_to?(:touch_instances!)
+
               ret.zero? || ret.positive?
             rescue Familia::Problem => e
               # Raise a custom error message if an exception occurs during the execution of the method.

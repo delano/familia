@@ -132,7 +132,7 @@ module Familia
     #
     # @example
     #   formatter = Familia::LogFormatter.new
-    #   formatter.call("INFO", Time.now, nil, "Test message")
+    #   formatter.call("INFO", Familia.now, nil, "Test message")
     #   # => "I, 10-05 20:43:09.843 pid:12345 [67890/54321]: Test message\n"
     #
     def call(severity, datetime, _progname, msg)

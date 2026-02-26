@@ -68,7 +68,7 @@ Familia.dbclient.set('debug:ending_save_if_not_exists_tests', Familia.now.to_s)
 ## batch_update can update multiple fields atomically, to_h
 @result = @customer.batch_update(name: 'Jane Windows', email: 'jane@example.com')
 @result.to_h
-#=> {:success=>true, :results=>[0, 0]}
+#=> {:success=>true, :results=>[0, 0, false, true]}
 
 ## batch_update returns successful result, successful?
 @result.successful?
@@ -76,11 +76,11 @@ Familia.dbclient.set('debug:ending_save_if_not_exists_tests', Familia.now.to_s)
 
 ## batch_update returns successful result, tuple
 @result.tuple
-#=> [true, [0, 0]]
+#=> [true, [0, 0, false, true]]
 
 ## batch_update returns successful result, to_a
 @result.to_a
-#=> [true, [0, 0]]
+#=> [true, [0, 0, false, true]]
 
 ## batch_update updates object fields in memory, confirm fields changed
 [@customer.name, @customer.email]
@@ -182,7 +182,7 @@ result.successful?
 @fresh_customer.remove_field('planid')
 @fresh_result = @fresh_customer.batch_update(role: 'admin', planid: 'premium')
 @fresh_result.to_h
-#=> {:success=>true, :results=>[1, 1]}
+#=> {:success=>true, :results=>[1, 1, true, true]}
 
 ## Fresh customer fields are set correctly
 [@fresh_customer.role, @fresh_customer.planid]
