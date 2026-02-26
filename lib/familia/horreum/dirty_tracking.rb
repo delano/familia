@@ -87,14 +87,22 @@ module Familia
         end
       end
 
-      # Clears all dirty tracking state.
+      # Clears dirty tracking state for all or specific fields.
       #
       # Called automatically after save, commit_fields, and refresh.
+      # When field names are provided, only those fields are cleared,
+      # preserving dirty state for fields that were not persisted.
       #
+      # @param field_names [Array<Symbol, String>] optional field names to clear.
+      #   When empty, clears all dirty state (blanket reset).
       # @return [void]
       #
-      def clear_dirty!
-        @dirty_fields = {}
+      def clear_dirty!(*field_names)
+        if field_names.empty?
+          @dirty_fields = {}
+        else
+          field_names.each { |f| @dirty_fields.delete(f.to_sym) }
+        end
       end
     end
   end

@@ -362,7 +362,7 @@ module Familia
           touch_instances!
         end
 
-        clear_dirty! unless result.nil?
+        clear_dirty!(*fields.keys) unless result.nil?
 
         result
       end
@@ -412,7 +412,7 @@ module Familia
           touch_instances!
         end
 
-        clear_dirty! unless result.nil?
+        clear_dirty!(*fields.keys) unless result.nil?
 
         self
       end
@@ -457,7 +457,7 @@ module Familia
           touch_instances!
         end
 
-        clear_dirty! unless result.nil?
+        clear_dirty!(*field_names) unless result.nil?
 
         self
       end

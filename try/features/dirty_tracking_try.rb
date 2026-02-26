@@ -181,6 +181,322 @@ end
 @wp.dirty?
 #=> false
 
+# Known bug: clear_dirty! blanket-resets all dirty state
+#
+# Every write path calls clear_dirty! after persisting, but partial write
+# paths (fast writers, save_fields, batch_update) only persist a subset of
+# fields. The blanket reset incorrectly clears dirty state for fields that
+# were NOT persisted, causing the object to report as clean when it still
+# has unsaved changes.
+#
+# These tests document the correct behavior. They are expected to FAIL
+# with the current implementation until clear_dirty! is fixed to only
+# clear the fields that were actually written.
+
+## Fast writer clears unrelated dirty fields (BUG: should preserve them)
+# When fields A and B are both dirty and only A is fast-written,
+# field B should still be marked dirty because it was not persisted.
+@bug1 = DirtyTrackUser.new(email: 'bug1@example.com', name: 'Original', age: 20)
+@bug1.save
+@bug1.clear_dirty!
+@bug1.name = 'Changed'
+@bug1.age = 99
+@bug1.name!('Changed')
+@bug1.dirty?(:age)
+#=> true
+
+## Fast writer should leave object dirty when unwritten fields remain
+@bug1.dirty?
+#=> true
+
+## Fast writer should not report written field as dirty
+@bug1.dirty?(:name)
+#=> false
+
+## dirty_fields after fast writer should list only unwritten fields
+@bug1.dirty_fields
+#=> [:age]
+
+## save_fields clears unrelated dirty fields (BUG: should preserve them)
+# When fields A and B are both dirty and only A is saved via save_fields,
+# field B should still be marked dirty because it was not persisted.
+@bug2 = DirtyTrackUser.new(email: 'bug2@example.com', name: 'Original', age: 20)
+@bug2.save
+@bug2.clear_dirty!
+@bug2.name = 'Changed'
+@bug2.age = 99
+@bug2.save_fields(:name)
+@bug2.dirty?(:age)
+#=> true
+
+## save_fields should leave object dirty when unwritten fields remain
+@bug2.dirty?
+#=> true
+
+## save_fields should not report written field as dirty
+@bug2.dirty?(:name)
+#=> false
+
+## dirty_fields after save_fields should list only unwritten fields
+@bug2.dirty_fields
+#=> [:age]
+
+## batch_update clears unrelated dirty fields (BUG: should preserve them)
+# When fields A and B are both dirty and only A is batch-updated,
+# field B should still be marked dirty because it was not persisted.
+@bug3 = DirtyTrackUser.new(email: 'bug3@example.com', name: 'Original', age: 20)
+@bug3.save
+@bug3.clear_dirty!
+@bug3.name = 'Changed'
+@bug3.age = 99
+@bug3.batch_update(name: 'Changed')
+@bug3.dirty?(:age)
+#=> true
+
+## batch_update should leave object dirty when unwritten fields remain
+@bug3.dirty?
+#=> true
+
+## batch_update should not report written field as dirty
+@bug3.dirty?(:name)
+#=> false
+
+## dirty_fields after batch_update should list only unwritten fields
+@bug3.dirty_fields
+#=> [:age]
+
+## dirty? returns false with unsaved changes after partial write (BUG)
+# This is the high-level scenario: after any partial write, the object
+# should still be dirty if any fields remain unpersisted.
+@bug4 = DirtyTrackUser.new(email: 'bug4@example.com', name: 'Original', age: 20, active: true)
+@bug4.save
+@bug4.clear_dirty!
+@bug4.name = 'NewName'
+@bug4.age = 50
+@bug4.active = false
+@bug4.save_fields(:name, :age)
+@bug4.dirty?
+#=> true
+
+## After partial write of two of three dirty fields, only unwritten field remains dirty
+@bug4.dirty?(:active)
+#=> true
+
+## After partial write, written fields should not be dirty
+@bug4.dirty?(:name)
+#=> false
+
+## After partial write, second written field should not be dirty either
+@bug4.dirty?(:age)
+#=> false
+
+## dirty_fields after partial write should list only unwritten fields
+@bug4.dirty_fields
+#=> [:active]
+
+## changed_fields after partial write should show only unwritten field changes
+@bug4.changed_fields[:active]
+#=> [true, false]
+
+# P0: Direct unit tests for clear_dirty! selective API
+# These test the selective signature of clear_dirty! directly,
+# independent of any write path.
+
+## clear_dirty! with one field name clears only that field
+@sel = DirtyTrackUser.new(email: 'selective@example.com', name: 'Sel', age: 40, active: true)
+@sel.save
+@sel.clear_dirty!
+@sel.name = 'NewSel'
+@sel.age = 41
+@sel.clear_dirty!(:name)
+@sel.dirty?(:name)
+#=> false
+
+## clear_dirty! with one field name leaves other fields dirty
+@sel.dirty?(:age)
+#=> true
+
+## clear_dirty! with one field name leaves object dirty overall
+@sel.dirty?
+#=> true
+
+## clear_dirty! with multiple field names clears all specified
+@sel.clear_dirty!
+@sel.name = 'A'
+@sel.age = 42
+@sel.active = false
+@sel.clear_dirty!(:name, :age)
+@sel.dirty?(:name)
+#=> false
+
+## clear_dirty! with multiple field names leaves unspecified fields dirty
+@sel.dirty?(:active)
+#=> true
+
+## clear_dirty! with all dirty field names results in clean object
+@sel.clear_dirty!
+@sel.name = 'B'
+@sel.age = 43
+@sel.clear_dirty!(:name, :age)
+@sel.dirty?
+#=> false
+
+## clear_dirty! with all dirty field names yields empty dirty_fields
+@sel.dirty_fields
+#=> []
+
+## clear_dirty! with nonexistent field does not crash
+@sel.clear_dirty!
+@sel.name = 'C'
+@sel.clear_dirty!(:nonexistent_field)
+@sel.dirty?(:name)
+#=> true
+
+## clear_dirty! with duplicate field names is harmless
+@sel.clear_dirty!
+@sel.name = 'D'
+@sel.clear_dirty!(:name, :name)
+@sel.dirty?(:name)
+#=> false
+
+## clear_dirty! with string field name coerces to symbol
+@sel.clear_dirty!
+@sel.name = 'E'
+@sel.clear_dirty!('name')
+@sel.dirty?(:name)
+#=> false
+
+## changed_fields after selective clear omits cleared field
+@sel.clear_dirty!
+@sel.name = 'F'
+@sel.age = 44
+@sel.clear_dirty!(:name)
+@sel.changed_fields.key?(:name)
+#=> false
+
+## changed_fields after selective clear retains uncleared field
+@sel.changed_fields.key?(:age)
+#=> true
+
+# P0: batch_update with ALL dirty fields clears everything
+
+## batch_update with all dirty fields clears everything
+@ba = DirtyTrackUser.new(email: 'batch-all@example.com', name: 'BA', age: 50, active: true)
+@ba.save
+@ba.clear_dirty!
+@ba.name = 'BA2'
+@ba.age = 51
+@ba.batch_update(name: 'BA2', age: 51)
+@ba.dirty?
+#=> false
+
+## batch_update with all dirty fields yields empty dirty_fields
+@ba.dirty_fields
+#=> []
+
+# P1: batch_fast_write partial clear behavior
+
+## batch_fast_write with subset preserves unwritten dirty field
+@bfw = DirtyTrackUser.new(email: 'bfw@example.com', name: 'BFW', age: 60, active: true)
+@bfw.save
+@bfw.clear_dirty!
+@bfw.name = 'BFW2'
+@bfw.age = 61
+@bfw.batch_fast_write(name: 'BFW2')
+@bfw.dirty?(:age)
+#=> true
+
+## batch_fast_write with subset clears written field
+@bfw.dirty?(:name)
+#=> false
+
+## batch_fast_write with subset leaves object dirty overall
+@bfw.dirty?
+#=> true
+
+## batch_fast_write with all dirty fields clears everything
+@bfw.clear_dirty!
+@bfw.name = 'BFW3'
+@bfw.age = 62
+@bfw.batch_fast_write(name: 'BFW3', age: 62)
+@bfw.dirty?
+#=> false
+
+# P1: commit_fields blanket clear
+
+## commit_fields clears all dirty state
+@cf = DirtyTrackUser.new(email: 'cf@example.com', name: 'CF', age: 70, active: true)
+@cf.save
+@cf.clear_dirty!
+@cf.name = 'CF2'
+@cf.age = 71
+@cf.commit_fields
+@cf.dirty?
+#=> false
+
+## commit_fields yields empty dirty_fields
+@cf.dirty_fields
+#=> []
+
+# P1: Mixed scenarios -- partial write then full save
+
+## Partial save_fields then full save: partial preserves unwritten dirty state
+@mx = DirtyTrackUser.new(email: 'mixed@example.com', name: 'MX', age: 80, active: true)
+@mx.save
+@mx.clear_dirty!
+@mx.name = 'MX2'
+@mx.age = 81
+@mx.active = false
+@mx.save_fields(:name)
+@mx.dirty?(:age)
+#=> true
+
+## Partial save_fields then full save: full save clears remaining dirty state
+@mx.save
+@mx.dirty?
+#=> false
+
+## Fast writer then full save: fast writer preserves unwritten dirty state
+@mx.clear_dirty!
+@mx.name = 'MX3'
+@mx.age = 82
+@mx.name!('MX3')
+@mx.dirty?(:age)
+#=> true
+
+## Fast writer then full save: full save clears remaining dirty state
+@mx.save
+@mx.dirty?
+#=> false
+
+## Two sequential save_fields covering all dirty fields
+@mx.clear_dirty!
+@mx.name = 'MX4'
+@mx.age = 83
+@mx.save_fields(:name)
+@mx.dirty?(:age)
+#=> true
+
+## Second save_fields clears remaining dirty field
+@mx.save_fields(:age)
+@mx.dirty?
+#=> false
+
+# P2: Edge cases -- clear_dirty! on clean objects
+
+## Blanket clear_dirty! on already-clean object is a no-op
+@clean = DirtyTrackUser.new(email: 'clean@example.com', name: 'Clean', age: 90, active: true)
+@clean.save
+@clean.clear_dirty!
+@clean.clear_dirty!
+@clean.dirty?
+#=> false
+
+## Selective clear_dirty! on already-clean object is a no-op
+@clean.clear_dirty!(:name)
+@clean.dirty?
+#=> false
+
 ## Teardown
 DirtyTrackUser.instances.members.each do |id|
   obj = DirtyTrackUser.new(id)
