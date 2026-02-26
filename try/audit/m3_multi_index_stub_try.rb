@@ -108,10 +108,10 @@ M3PlainModel.audit_multi_indexes.is_a?(Array)
 @class_results.size
 #=> 1
 
-## Class-scoped multi-index result does not have status: :not_implemented
-# Class-scoped indexes use the early-return path (scope is :class)
+## Class-scoped multi-index result also has status: :not_implemented
+# Both class-scoped and instance-scoped paths return the status marker
 @class_results.first[:status]
-#=> nil
+#=> :not_implemented
 
 ## Class-scoped multi-index result has empty stale_members
 @class_results.first[:stale_members]
@@ -138,6 +138,27 @@ M3PlainModel.audit_multi_indexes.is_a?(Array)
 ## health_check to_s includes multi_index information
 @report.to_s.include?('multi_index')
 #=> true
+
+## health_check to_s shows not_implemented for stubbed multi-index
+@report.to_s.include?('not_implemented')
+#=> true
+
+## health_check complete? returns false with not_implemented stub
+@report.complete?
+#=> false
+
+## health_check on class with no multi-indexes is complete
+@plain_report = M3PlainModel.health_check
+@plain_report.complete?
+#=> true
+
+## health_check to_h includes complete key
+@report.to_h[:complete]
+#=> false
+
+## health_check to_h multi_indexes entry includes status
+@report.to_h[:multi_indexes].first[:status]
+#=> :not_implemented
 
 # Teardown
 begin

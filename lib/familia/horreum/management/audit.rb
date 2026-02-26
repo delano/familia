@@ -241,12 +241,16 @@ module Familia
         # Multi-indexes require a scope, use within to determine the scope class
         scope_class = rel.within
         if scope_class.nil? || scope_class == :class
-          return { index_name: index_name, stale_members: stale_members, orphaned_keys: orphaned_keys }
+          # Class-scoped multi-indexes also require scope instance enumeration.
+          # Mark as not_implemented so callers can distinguish from a clean audit.
+          Familia.debug "[audit_multi_indexes] #{name}##{index_name}: not_implemented (class-scoped, requires scope instance enumeration)"
+          return { index_name: index_name, stale_members: stale_members, orphaned_keys: orphaned_keys, status: :not_implemented }
         end
 
-        # Multi-index audit requires enumerating all scope instances to discover
-        # per-value set keys, which is expensive. Return empty results with a
-        # status flag so callers know this dimension was not actually checked.
+        # Instance-scoped multi-index audit requires enumerating all scope
+        # instances to discover per-value set keys, which is expensive. Return
+        # empty results with a status flag so callers know this dimension was
+        # not actually checked.
         Familia.debug "[audit_multi_indexes] #{name}##{index_name}: not_implemented (requires scope instance enumeration)"
         { index_name: index_name, stale_members: stale_members, orphaned_keys: orphaned_keys, status: :not_implemented }
       end

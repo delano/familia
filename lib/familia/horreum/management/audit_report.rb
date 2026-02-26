@@ -20,12 +20,28 @@ module Familia
       :duration            # Float - seconds elapsed
     ) do
       # Returns true when every audit dimension is clean.
+      #
+      # Multi-indexes with status :not_implemented are skipped — they cannot
+      # be assessed, so they neither pass nor fail the health check.
       def healthy?
         instances[:phantoms].empty? &&
           instances[:missing].empty? &&
           unique_indexes.all? { |idx| idx[:stale].empty? && idx[:missing].empty? } &&
-          multi_indexes.all? { |idx| idx[:stale_members].empty? && idx[:orphaned_keys].empty? } &&
+          multi_indexes.all? { |idx|
+            next true if idx[:status] == :not_implemented
+
+            idx[:stale_members].empty? && idx[:orphaned_keys].empty?
+          } &&
           participations.all? { |p| p[:stale_members].empty? }
+      end
+
+      # Returns true when every audit dimension was actually checked.
+      #
+      # A report can be healthy but incomplete when stub dimensions (like
+      # multi-indexes) return :not_implemented. This lets callers distinguish
+      # "everything checked and clean" from "some dimensions were skipped".
+      def complete?
+        multi_indexes.none? { |idx| idx[:status] == :not_implemented }
       end
 
       # Summary counts for quick inspection.
@@ -34,6 +50,7 @@ module Familia
           model_class: model_class,
           audited_at: audited_at,
           healthy: healthy?,
+          complete: complete?,
           duration: duration,
           instances: {
             count_timeline: instances[:count_timeline],
@@ -45,7 +62,9 @@ module Familia
             { index_name: idx[:index_name], stale: idx[:stale].size, missing: idx[:missing].size }
           },
           multi_indexes: multi_indexes.map { |idx|
-            { index_name: idx[:index_name], stale_members: idx[:stale_members].size, orphaned_keys: idx[:orphaned_keys].size }
+            entry = { index_name: idx[:index_name], stale_members: idx[:stale_members].size, orphaned_keys: idx[:orphaned_keys].size }
+            entry[:status] = idx[:status] if idx[:status]
+            entry
           },
           participations: participations.map { |p|
             { collection_name: p[:collection_name], stale_members: p[:stale_members].size }
@@ -66,8 +85,12 @@ module Familia
         end
 
         multi_indexes.each do |idx|
-          lines << "  multi_index :#{idx[:index_name]}: stale_members=#{idx[:stale_members].size}" \
-                   " orphaned_keys=#{idx[:orphaned_keys].size}"
+          if idx[:status] == :not_implemented
+            lines << "  multi_index :#{idx[:index_name]}: not_implemented"
+          else
+            lines << "  multi_index :#{idx[:index_name]}: stale_members=#{idx[:stale_members].size}" \
+                     " orphaned_keys=#{idx[:orphaned_keys].size}"
+          end
         end
 
         participations.each do |p|

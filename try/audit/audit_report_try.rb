@@ -105,3 +105,78 @@ h[:healthy]
 ## to_s includes duration
 @healthy_report.to_s.include?('0.123')
 #=> true
+
+## complete? returns true when no multi-indexes have not_implemented status
+@healthy_report.complete?
+#=> true
+
+## complete? returns true when multi-indexes exist but none are not_implemented
+@fully_audited_report = Familia::Horreum::AuditReport.new(
+  model_class: 'TestModel',
+  audited_at: Familia.now,
+  instances: { phantoms: [], missing: [], count_timeline: 5, count_scan: 5 },
+  unique_indexes: [],
+  multi_indexes: [{ index_name: :role_index, stale_members: [], orphaned_keys: [] }],
+  participations: [],
+  duration: 0.05
+)
+@fully_audited_report.complete?
+#=> true
+
+## complete? returns false when any multi-index has status: :not_implemented
+@stub_report = Familia::Horreum::AuditReport.new(
+  model_class: 'TestModel',
+  audited_at: Familia.now,
+  instances: { phantoms: [], missing: [], count_timeline: 5, count_scan: 5 },
+  unique_indexes: [],
+  multi_indexes: [{ index_name: :category_index, stale_members: [], orphaned_keys: [], status: :not_implemented }],
+  participations: [],
+  duration: 0.05
+)
+@stub_report.complete?
+#=> false
+
+## healthy? and complete? are independent: healthy but not complete
+@stub_report.healthy?
+#=> true
+
+## healthy? and complete? are independent: complete but not healthy
+@unhealthy_complete_report = Familia::Horreum::AuditReport.new(
+  model_class: 'TestModel',
+  audited_at: Familia.now,
+  instances: { phantoms: ['ghost-1'], missing: [], count_timeline: 6, count_scan: 5 },
+  unique_indexes: [],
+  multi_indexes: [{ index_name: :role_index, stale_members: [], orphaned_keys: [] }],
+  participations: [],
+  duration: 0.05
+)
+@unhealthy_complete_report.healthy?
+#=> false
+
+## complete but not healthy: complete? still returns true
+@unhealthy_complete_report.complete?
+#=> true
+
+## to_s shows not_implemented for stubbed multi-index
+@stub_report.to_s.include?('not_implemented')
+#=> true
+
+## to_s does not show not_implemented for fully audited multi-index
+@fully_audited_report.to_s.include?('not_implemented')
+#=> false
+
+## to_h includes complete key
+@stub_report.to_h[:complete]
+#=> false
+
+## to_h includes complete: true for fully audited report
+@fully_audited_report.to_h[:complete]
+#=> true
+
+## to_h includes status in multi_indexes entry for not_implemented stub
+@stub_report.to_h[:multi_indexes].first[:status]
+#=> :not_implemented
+
+## to_h omits status key for fully audited multi-index
+@fully_audited_report.to_h[:multi_indexes].first.key?(:status)
+#=> false

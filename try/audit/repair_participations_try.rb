@@ -137,6 +137,40 @@ Familia.dbclient.type(@collection_key)
 @result[:stale_removed]
 #=> 0
 
+## Nil collection_key in stale entry is skipped
+@nil_key_audit = [{
+  collection_name: :all_repair_participants,
+  stale_members: [
+    { identifier: 'rp-fake', collection_key: nil, reason: :object_missing }
+  ]
+}]
+@result = RepairParticipant.repair_participations!(@nil_key_audit)
+@result[:stale_removed]
+#=> 0
+
+## Nil identifier in stale entry is skipped
+@nil_id_audit = [{
+  collection_name: :all_repair_participants,
+  stale_members: [
+    { identifier: nil, collection_key: 'repair_participant:all_repair_participants', reason: :object_missing }
+  ]
+}]
+@result = RepairParticipant.repair_participations!(@nil_id_audit)
+@result[:stale_removed]
+#=> 0
+
+## Both nil collection_key and nil identifier are skipped in mixed input
+@mixed_nil_audit = [{
+  collection_name: :all_repair_participants,
+  stale_members: [
+    { identifier: 'rp-fake', collection_key: nil, reason: :object_missing },
+    { identifier: nil, collection_key: 'repair_participant:all_repair_participants', reason: :object_missing }
+  ]
+}]
+@result = RepairParticipant.repair_participations!(@mixed_nil_audit)
+@result[:stale_removed]
+#=> 0
+
 # Teardown
 begin
   existing = Familia.dbclient.keys('repair_participant:*')

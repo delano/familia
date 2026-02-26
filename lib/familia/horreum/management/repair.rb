@@ -147,19 +147,22 @@ module Familia
       def repair_participations!(audit_results = nil)
         audit_results ||= audit_participations
 
-        stale_removed = 0
-
+        # Collect all valid stale entries and group by collection_key
+        # so we can batch Redis operations instead of 2N round-trips.
+        grouped = Hash.new { |h, k| h[k] = [] }
         audit_results.each do |part_result|
           part_result[:stale_members].each do |entry|
             identifier = entry[:identifier]
             collection_key = entry[:collection_key]
             next unless collection_key && identifier
 
-            removed = remove_stale_collection_member(collection_key, identifier)
-            stale_removed += 1 if removed
+            grouped[collection_key] << identifier
           end
         end
 
+        return { stale_removed: 0 } if grouped.empty?
+
+        stale_removed = batch_remove_stale_members(grouped)
         { stale_removed: stale_removed }
       end
 
@@ -215,12 +218,13 @@ module Familia
         identifiers = batch.map { |b| b[:identifier] }
         objects = load_multi(identifiers)
 
-        # Batch all ZADDs in a single pipeline instead of N individual round-trips.
-        pipelined do |pipe|
+        # Batch all ZADDs in a single transaction for atomicity per batch,
+        # consistent with RebuildStrategies which uses transaction for index rebuilds.
+        transaction do |tx|
           batch.each_with_index do |entry, idx|
             obj = objects[idx]
             score = extract_timestamp_score(obj)
-            pipe.zadd(temp_key, score, entry[:identifier])
+            tx.zadd(temp_key, score, entry[:identifier])
           end
         end
 
@@ -248,6 +252,63 @@ module Familia
           Familia.debug "[extract_timestamp_score] #{obj.class}##{obj.identifier} has no timestamp fields, falling back to Familia.now"
           Familia.now
         end
+      end
+
+      # Batch-removes stale members grouped by collection key.
+      #
+      # Resolves all key types in a single pipeline, then performs all
+      # removals in a second pipeline. Reduces 2N round-trips to 2 pipelines.
+      #
+      # @param grouped [Hash{String => Array<String>>}] collection_key => [identifiers]
+      # @return [Integer] Total number of members removed
+      #
+      def batch_remove_stale_members(grouped)
+        client = dbclient
+        collection_keys = grouped.keys
+
+        # Phase 1: Batch all TYPE checks in one pipeline
+        type_results = client.pipelined do |pipe|
+          collection_keys.each { |key| pipe.type(key) }
+        end
+
+        # Build a mapping of collection_key => resolved type
+        key_types = {}
+        collection_keys.each_with_index do |key, idx|
+          key_types[key] = type_results[idx]
+        end
+
+        # Phase 2: Batch all removals in one pipeline
+        removal_count = 0
+        client.pipelined do |pipe|
+          grouped.each do |collection_key, identifiers|
+            key_type = key_types[collection_key]
+
+            case key_type
+            when 'zset'
+              identifiers.each do |id|
+                pipe.zrem(collection_key, id)
+                removal_count += 1
+              end
+            when 'set'
+              identifiers.each do |id|
+                pipe.srem(collection_key, id)
+                removal_count += 1
+              end
+            when 'list'
+              identifiers.each do |id|
+                pipe.lrem(collection_key, 0, id)
+                removal_count += 1
+              end
+            when 'none'
+              # Key no longer exists, skip all members
+              Familia.debug "[batch_remove_stale_members] Key gone: #{collection_key}, skipping #{identifiers.size} members"
+            else
+              Familia.debug "[batch_remove_stale_members] Unknown key type '#{key_type}' for #{collection_key}"
+            end
+          end
+        end
+
+        removal_count
       end
 
       # Removes a stale member from a collection using raw Redis commands.
