@@ -111,15 +111,21 @@ module Familia
     #
     # @param klass [Class] The class to define the method on
     #
+    # @note This setter only updates the in-memory instance variable. Call
+    #   +save+, +commit_fields+, or use the fast_writer (+field_name!+) to
+    #   persist to Redis.
+    #
     def define_setter(klass)
       field_name = @name
       method_name = @method_name
 
       handle_method_conflict(klass, :"#{method_name}=") do
         klass.define_method :"#{method_name}=" do |value|
+          old_value = instance_variable_get(:"@#{field_name}")
           instance_variable_set(:"@#{field_name}", value)
 
-
+          # Track the change for dirty-tracking (only for Horreum instances)
+          mark_dirty!(field_name, old_value) if respond_to?(:mark_dirty!)
         end
       end
     end
@@ -161,6 +167,11 @@ module Familia
 
             # Persist to database immediately
             ret = hset(field_name, prepared)
+
+            # Register in instances sorted set so the object is visible
+            # to list-based enumeration (instances.to_a, count, etc.)
+            ensure_registered! if respond_to?(:ensure_registered!)
+
             ret.zero? || ret.positive?
           rescue Familia::Problem => e
             raise "#{fast_method_name} method failed: #{e.message}", e.backtrace

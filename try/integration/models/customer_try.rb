@@ -98,7 +98,7 @@ multi_result = @customer.destroy!
 cust = Customer.find_by_id('test@example.com')
 exists = Customer.exists?('test@example.com')
 [multi_result.results, cust.nil?, exists]
-#=> [[1, 0, 1, 1, 1, 1, 1, false], true, false]
+#=> [[1, 0, 1, 1, 1, 1, 1, false, true], true, false]
 
 ## Customer.destroy! can be called on an already destroyed object
 @customer.destroy!

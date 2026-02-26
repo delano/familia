@@ -131,8 +131,54 @@ module Familia
           )
         end
 
+        # Clear dirty tracking after successful save
+        clear_dirty! unless result.nil?
+
         # Return boolean indicating success
         !result.nil?
+      end
+
+      # Saves scalar fields first, then executes collection operations in the block.
+      #
+      # This method enforces the ordering invariant that scalar fields (stored
+      # in the object's hash key via HMSET) are committed before any collection
+      # operations (SADD, ZADD, RPUSH, etc.) run. If +save+ raises, the block
+      # is never executed, preventing orphaned collection data.
+      #
+      # Because scalar fields and collection fields typically live on different
+      # Redis keys, they cannot share a single MULTI/EXEC transaction. This
+      # method provides a safe sequential alternative: scalars commit first,
+      # then collections execute. If a collection operation fails after save
+      # succeeds, the scalar data remains persisted (no automatic rollback of
+      # the save).
+      #
+      # @param update_expiration [Boolean] Passed through to +save+ (default: true)
+      # @yield Block containing collection operations to execute after save
+      # @return [Boolean] true if save succeeded and block completed
+      #
+      # @raise [Familia::OperationModeError] If called within a transaction
+      # @raise [Familia::RecordExistsError] If unique index constraint violated
+      #
+      # @example Save a plan then update its feature set
+      #   plan.name = 'Premium'
+      #   plan.save_with_collections do
+      #     plan.features.clear
+      #     plan.features.add('premium')
+      #     plan.features.add('priority_support')
+      #   end
+      #
+      # @example Block is skipped when save fails
+      #   plan.save_with_collections do
+      #     plan.features.add('premium')  # never runs if save raises
+      #   end
+      #
+      # @see #save For the underlying scalar persistence
+      # @see #transaction For atomic operations on same-key commands
+      #
+      def save_with_collections(update_expiration: true)
+        saved = save(update_expiration: update_expiration)
+        yield if saved && block_given?
+        saved
       end
 
       # Conditionally persists object only if it doesn't already exist in storage.
@@ -199,6 +245,9 @@ module Familia
 
           Familia.debug "[save_if_not_exists]: result=#{result.inspect}"
 
+          # Clear dirty tracking after successful save
+          clear_dirty! unless result.nil?
+
           # Return boolean indicating success (consistent with save method)
           !result.nil?
         rescue OptimisticLockError => e
@@ -258,15 +307,24 @@ module Familia
         prepared_value = to_h_for_storage
         Familia.debug "[commit_fields] Begin #{self.class} #{dbkey} #{prepared_value} (exp: #{update_expiration})"
 
-        transaction do |_conn|
+        result = transaction do |_conn|
           # Set all fields atomically
           result = hmset(prepared_value)
 
           # Update expiration in same transaction to ensure atomicity
           self.update_expiration if result && update_expiration
 
+          # Register in instances sorted set so the object is visible
+          # to list-based enumeration (instances.to_a, count, etc.)
+          ensure_registered! if result
+
           result
         end
+
+        # Clear dirty tracking after successful commit
+        clear_dirty! unless result.nil?
+
+        result
       end
 
       # Updates multiple fields atomically in a Database transaction.
@@ -298,7 +356,59 @@ module Familia
 
           # 2. Update expiration in same transaction
           self.update_expiration if update_expiration
+
+          # 3. Register in instances sorted set so the object is visible
+          # to list-based enumeration (instances.to_a, count, etc.)
+          ensure_registered!
         end
+      end
+
+      # Atomically writes multiple fields to the database using a single HMSET.
+      #
+      # This is the multi-field equivalent of the fast_writer (!) methods.
+      # It sets all instance variables, serializes the values, and persists
+      # them in one HMSET command within a transaction. More efficient than
+      # batch_update (which does individual HSET per field) when writing
+      # several fields at once.
+      #
+      # @param kwargs [Hash] Field names and values to write. Special key
+      #   :update_expiration controls whether to refresh key expiration
+      #   (default: true).
+      # @return [self] Returns self for method chaining
+      #
+      # @example Persist multiple fields atomically
+      #   user.batch_fast_write(name: "Jane", email: "jane@example.com")
+      #
+      # @example Without updating expiration
+      #   user.batch_fast_write(status: "active", update_expiration: false)
+      #
+      # @see #batch_update Similar but uses individual HSET per field
+      # @see #save_fields Persists current in-memory values of named fields
+      #
+      def batch_fast_write(**kwargs)
+        update_exp = kwargs.delete(:update_expiration) { true }
+        fields = kwargs
+
+        raise ArgumentError, 'No fields specified' if fields.empty?
+
+        Familia.trace :BATCH_FAST_WRITE, nil, fields.keys if Familia.debug?
+
+        # Build serialized hash and update instance variables
+        serialized = {}
+        fields.each do |field, value|
+          send(:"#{field}=", value) if respond_to?(:"#{field}=")
+          serialized[field] = serialize_value(value)
+        end
+
+        transaction do |_conn|
+          hmset(serialized)
+
+          self.update_expiration if update_exp
+
+          ensure_registered!
+        end
+
+        self
       end
 
       # Persists only the specified fields to Redis.
@@ -335,6 +445,10 @@ module Familia
 
           # Update expiration in same transaction
           self.update_expiration if update_expiration
+
+          # Register in instances sorted set so the object is visible
+          # to list-based enumeration (instances.to_a, count, etc.)
+          ensure_registered!
         end
 
         self
@@ -410,8 +524,8 @@ module Familia
             end
           end
 
-          # Remove from instances collection if available
-          self.class.instances.remove(identifier) if self.class.respond_to?(:instances)
+          # Remove from instances collection
+          unregister!
         end
 
         # Structured lifecycle logging and instrumentation
@@ -480,7 +594,12 @@ module Familia
         # their uninitialized state during refresh operations
         reset_transient_fields!
 
-        naive_refresh(**fields)
+        result = naive_refresh(**fields)
+
+        # Clear dirty tracking since object now matches DB state
+        clear_dirty!
+
+        result
       end
 
       # Refreshes object state from the DB and returns self for method chaining.
@@ -502,6 +621,63 @@ module Familia
       def refresh
         refresh!
         self
+      end
+
+      # Ensures this object is registered in the class-level instances sorted set.
+      #
+      # This is the foundational primitive for all registry-aware code paths.
+      # It delegates to ZADD which is naturally idempotent: if the identifier
+      # is already present the score (timestamp) is updated; if absent, it is
+      # added. No preliminary member? check is performed, making this safe to
+      # call inside MULTI/EXEC transactions where read operations return
+      # uninspectable Future objects.
+      #
+      # @return [Object] The return value of the ZADD command (boolean or
+      #   Redis::Future inside a transaction)
+      #
+      # @raise [Familia::NoIdentifier] if the identifier is nil or empty
+      #
+      # @example Register an object that was created via commit_fields
+      #   user.commit_fields
+      #   user.ensure_registered!  # now visible in User.instances
+      #
+      # @example Safe to call multiple times (updates timestamp)
+      #   user.ensure_registered!
+      #   user.ensure_registered!  # score updated, no duplicate
+      #
+      def ensure_registered!
+        ident = identifier
+        raise Familia::NoIdentifier, "No identifier for #{self.class}" if ident.nil? || ident.to_s.empty?
+
+        self.class.instances.add(self, Familia.now)
+      end
+
+      # Removes this object from the class-level instances sorted set.
+      #
+      # Symmetric counterpart to {#ensure_registered!}. After calling this
+      # method the object will no longer appear in +instances.to_a+ listings
+      # or be counted by +instances.count+. The underlying database hash key
+      # is NOT deleted -- use {#destroy!} for full removal.
+      #
+      # Safe to call inside MULTI/EXEC transactions (no read-before-write).
+      #
+      # @return [Object] The return value of the ZREM command (integer or
+      #   Redis::Future inside a transaction)
+      #
+      # @raise [Familia::NoIdentifier] if the identifier is nil or empty
+      #
+      # @example Remove from registry without deleting data
+      #   user.unregister!  # no longer in User.instances
+      #   user.exists?      # => true (hash key still present)
+      #
+      # @see #ensure_registered! The symmetric add operation
+      # @see #destroy! Full object removal (data + registry)
+      #
+      def unregister!
+        ident = identifier
+        raise Familia::NoIdentifier, "No identifier for #{self.class}" if ident.nil? || ident.to_s.empty?
+
+        self.class.instances.remove(ident)
       end
 
       # Convenience methods that forward to the class method of the same name
@@ -638,11 +814,12 @@ module Familia
 
       # Persists the object's data to storage within a transaction.
       #
-      # This is the sole code path that adds an object to the class-level
-      # +instances+ sorted set (step 4). Any persistence that bypasses this
-      # method (e.g. +commit_fields+, +update_fields+, or raw +hmset+) will
-      # create a hash key in the DB that is invisible to +instances.to_a+
-      # and any code that enumerates via the instances collection.
+      # This is the primary code path that adds an object to the class-level
+      # +instances+ sorted set (step 4). The +commit_fields+ method also
+      # registers via +ensure_registered!+. Any persistence that bypasses
+      # both of these (e.g. +update_fields+, or raw +hmset+) will create a
+      # hash key in the DB that is invisible to +instances.to_a+ and any
+      # code that enumerates via the instances collection.
       #
       # This method contains the core persistence logic shared by both save and
       # save_if_not_exists. It must be called within a transaction block.
@@ -661,8 +838,8 @@ module Familia
         # 3. Update class-level indexes
         auto_update_class_indexes
 
-        # 4. Add to instances collection if available
-        self.class.instances.add(self, Familia.now) if self.class.respond_to?(:instances)
+        # 4. Register in instances collection (delegates to ensure_registered!)
+        ensure_registered!
 
         hmset_result
       end
