@@ -426,18 +426,37 @@ module Familia
       #   warn "TTL drift detected: #{drifted.keys}" if drifted.any?
       #
       def ttl_report
+        # Collect all keys upfront: main key first, then relation keys
+        main_key = dbkey
+        relation_names = []
+        relation_keys = []
+
+        if self.class.relations?
+          self.class.related_fields.each_key do |name|
+            relation_names << name
+            relation_keys << send(name).dbkey
+          end
+        end
+
+        all_keys = [main_key, *relation_keys]
+
+        # Batch all TTL queries into a single round-trip
+        multi_result = pipelined do |pipe|
+          all_keys.each { |key| pipe.ttl(key) }
+        end
+
+        ttl_values = multi_result.results
+
+        # Build report from pipelined results
         report = {
-          main: { key: dbkey, ttl: dbclient.ttl(dbkey) },
+          main: { key: main_key, ttl: ttl_values[0] },
           relations: {},
         }
 
-        return report unless self.class.relations?
-
-        self.class.related_fields.each_key do |name|
-          obj = send(name)
+        relation_names.each_with_index do |name, idx|
           report[:relations][name] = {
-            key: obj.dbkey,
-            ttl: dbclient.ttl(obj.dbkey),
+            key: relation_keys[idx],
+            ttl: ttl_values[idx + 1],
           }
         end
 

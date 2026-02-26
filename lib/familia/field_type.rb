@@ -172,6 +172,8 @@ module Familia
             # to list-based enumeration (instances.to_a, count, etc.)
             touch_instances! if respond_to?(:touch_instances!)
 
+            clear_dirty!(field_name) if respond_to?(:clear_dirty!)
+
             ret.zero? || ret.positive?
           rescue Familia::Problem => e
             raise "#{fast_method_name} method failed: #{e.message}", e.backtrace

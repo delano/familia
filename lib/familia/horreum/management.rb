@@ -2,6 +2,10 @@
 #
 # frozen_string_literal: true
 
+require_relative 'management/audit_report'
+require_relative 'management/audit'
+require_relative 'management/repair'
+
 module Familia
   class Horreum
     # ManagementMethods - Class-level methods for Horreum model management
@@ -12,10 +16,14 @@ module Familia
     #
     # # Key features:
     # * Includes RelatedFieldsManagement for DataType field handling
+    # * Includes AuditMethods for proactive consistency detection
+    # * Includes RepairMethods for repair and rebuild operations
     # * Provides utility methods for working with Database objects
     #
     module ManagementMethods
       include Familia::Horreum::RelatedFieldsManagement # Provides DataType query methods
+      include Familia::Horreum::AuditMethods            # Provides audit_instances, health_check, etc.
+      include Familia::Horreum::RepairMethods           # Provides repair_instances!, rebuild_instances, etc.
 
       using Familia::Refinements::StylizeWords
 
@@ -130,14 +138,9 @@ module Familia
       # - Commands: 1 per object (HGETALL only)
       # - Reduction: 50% fewer Redis commands
       #
-      # **Ghost object cleanup:** When a key is not found (either via EXISTS
-      # returning false or HGETALL returning {}), this method calls
-      # +cleanup_stale_instance_entry+ to remove any stale entry from the
-      # +instances+ sorted set. This provides lazy, on-access pruning of
-      # ghost entries — objects whose hash keys have expired or been deleted
-      # but whose identifiers still linger in +instances+. Code that
-      # enumerates via +instances.to_a+ without loading each object will
-      # still see ghosts until they are accessed through this method.
+      # @note This method is read-only. Ghost entries (identifiers lingering
+      #   in +instances+ after their hash key expires) are not cleaned up here.
+      #   Use +cleanup_stale_instance_entry+ explicitly when cleanup is desired.
       #
       # @example Safe mode (default)
       #   User.find_by_key("user:123")  # 2 commands: EXISTS + HGETALL
@@ -165,10 +168,7 @@ module Familia
           # doesn't, we return nil. If it does, we proceed to load the object.
           # Otherwise, hgetall will return an empty hash, which will be passed to
           # the constructor, which will then be annoying to debug.
-          unless does_exist
-            cleanup_stale_instance_entry(objkey)
-            return nil
-          end
+          return nil unless does_exist
         else
           # Optimized mode: Skip existence check
           Familia.debug "[find_by_key] #{self} from key #{objkey} (check_exists: false)"
@@ -181,39 +181,32 @@ module Familia
         # Always check for empty hash to handle race conditions where the key
         # expires between EXISTS check and HGETALL (when check_exists: true),
         # or simply doesn't exist (when check_exists: false).
-        if obj.empty?
-          cleanup_stale_instance_entry(objkey)
-          return nil
-        end
+        return nil if obj.empty?
 
         # Create instance and deserialize fields using shared helper method
         instantiate_from_hash(obj)
       end
 
       # Removes a stale entry from the instances sorted set.
-      # Called when find_by_dbkey detects that an object no longer exists
-      # (either EXISTS returned false, or HGETALL returned empty hash).
       #
-      # This provides lazy cleanup of phantom instance entries that can
-      # accumulate when objects expire via TTL without explicit destroy!
+      # Call this explicitly when you detect that an object no longer exists
+      # and want to prune its ghost entry from the instances timeline. Finder
+      # methods (find_by_dbkey, find_by_id, load) are read-only and will not
+      # call this automatically.
       #
       # @param objkey [String] The full database key (prefix:identifier:suffix)
       # @return [void]
-      # @api private
       def cleanup_stale_instance_entry(objkey)
         return unless respond_to?(:instances)
 
-        # Key format is prefix:identifier:suffix, so identifier is at index 1
-        parts = Familia.split(objkey)
-        return unless parts.length >= 2
-
-        identifier = parts[1]
+        # Key format is prefix:identifier:suffix. Use extract_identifier_from_key
+        # to correctly handle compound identifiers containing the delimiter.
+        identifier = extract_identifier_from_key(objkey)
         return if identifier.nil? || identifier.empty?
 
         instances.remove(identifier)
-        Familia.debug "[find_by_dbkey] Removed stale instance entry: #{identifier}"
+        Familia.debug "[cleanup_stale_instance_entry] Removed stale entry: #{identifier}"
       end
-      private :cleanup_stale_instance_entry
       alias find_by_key find_by_dbkey
 
       # Retrieves and instantiates an object from Database using its identifier.
@@ -552,6 +545,31 @@ module Familia
       #
       def scan_pattern(match_suffix = suffix)
         "#{prefix}:*:#{match_suffix}"
+      end
+
+      # Extracts the identifier from a full Redis key by stripping the
+      # known prefix and suffix.
+      #
+      # This is safe for compound identifiers that contain the delimiter
+      # character (e.g., "mymodel:foo:bar:object" where the identifier is
+      # "foo:bar"). A naive split on the delimiter would truncate these.
+      #
+      # @param key [String] Full Redis key (e.g., "user:alice:object")
+      # @param key_suffix [String] The suffix to strip (default: class suffix)
+      # @return [String, nil] The extracted identifier, or nil if the key
+      #   does not match the expected prefix/suffix structure
+      # @example
+      #   User.extract_identifier_from_key("user:alice:object")       #=> "alice"
+      #   User.extract_identifier_from_key("user:foo:bar:object")    #=> "foo:bar"
+      #
+      def extract_identifier_from_key(key, key_suffix = suffix)
+        d = Familia.delim
+        pfx = "#{prefix}#{d}"
+        sfx = "#{d}#{key_suffix}"
+
+        return nil unless key.start_with?(pfx) && key.end_with?(sfx)
+
+        key[pfx.length..-(sfx.length + 1)]
       end
 
       def dbkey(identifier, suffix = self.suffix)

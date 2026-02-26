@@ -345,7 +345,7 @@ module Familia
 
         Familia.trace :BATCH_UPDATE, nil, fields.keys if Familia.debug?
 
-        transaction do |_conn|
+        result = transaction do |_conn|
           # 1. Update all fields atomically
           fields.each do |field, value|
             prepared_value = serialize_value(value)
@@ -361,6 +361,10 @@ module Familia
           # to list-based enumeration (instances.to_a, count, etc.)
           touch_instances!
         end
+
+        clear_dirty!(*fields.keys) unless result.nil?
+
+        result
       end
 
       # Atomically writes multiple fields to the database using a single HMSET.
@@ -400,13 +404,15 @@ module Familia
           serialized[field] = serialize_value(value)
         end
 
-        transaction do |_conn|
+        result = transaction do |_conn|
           hmset(serialized)
 
           self.update_expiration if update_exp
 
           touch_instances!
         end
+
+        clear_dirty!(*fields.keys) unless result.nil?
 
         self
       end
@@ -428,7 +434,7 @@ module Familia
 
         Familia.trace :SAVE_FIELDS, nil, field_names if Familia.debug?
 
-        transaction do |_conn|
+        result = transaction do |_conn|
           # Build hash of field names to serialized values
           fields_hash = {}
           field_names.each do |field|
@@ -450,6 +456,8 @@ module Familia
           # to list-based enumeration (instances.to_a, count, etc.)
           touch_instances!
         end
+
+        clear_dirty!(*field_names) unless result.nil?
 
         self
       end
