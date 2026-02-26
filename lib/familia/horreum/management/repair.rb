@@ -277,28 +277,20 @@ module Familia
           key_types[key] = type_results[idx]
         end
 
-        # Phase 2: Batch all removals in one pipeline
-        removal_count = 0
-        client.pipelined do |pipe|
+        # Phase 2: Batch all removals in one pipeline. The pipeline
+        # returns an array of results (integers) in submission order.
+        # Sum them after the pipeline completes for an accurate count.
+        results = client.pipelined do |pipe|
           grouped.each do |collection_key, identifiers|
             key_type = key_types[collection_key]
 
             case key_type
             when 'zset'
-              identifiers.each do |id|
-                pipe.zrem(collection_key, id)
-                removal_count += 1
-              end
+              identifiers.each { |id| pipe.zrem(collection_key, id) }
             when 'set'
-              identifiers.each do |id|
-                pipe.srem(collection_key, id)
-                removal_count += 1
-              end
+              identifiers.each { |id| pipe.srem(collection_key, id) }
             when 'list'
-              identifiers.each do |id|
-                pipe.lrem(collection_key, 0, id)
-                removal_count += 1
-              end
+              identifiers.each { |id| pipe.lrem(collection_key, 0, id) }
             when 'none'
               # Key no longer exists, skip all members
               Familia.debug "[batch_remove_stale_members] Key gone: #{collection_key}, skipping #{identifiers.size} members"
@@ -308,7 +300,9 @@ module Familia
           end
         end
 
-        removal_count
+        # Results are integers (lrem) or booleans (zrem/srem with a
+        # single element). Count truthy values as successful removals.
+        Array(results).count { |r| r.is_a?(Integer) ? r.positive? : r }
       end
 
       # Removes a stale member from a collection using raw Redis commands.
@@ -323,7 +317,9 @@ module Familia
       #
       # @param collection_key [String] Full Redis key of the collection
       # @param raw_member [String] The raw member value to remove
-      # @return [Boolean] true if removal succeeded
+      # @return [Boolean, Integer] For zsets/sets: true if removed, false
+      #   otherwise (redis-rb single-element semantics). For lists: integer
+      #   count of elements removed. Returns 0 for missing/unknown key types.
       #
       def remove_stale_collection_member(collection_key, raw_member)
         client = dbclient
@@ -339,10 +335,10 @@ module Familia
           client.lrem(collection_key, 0, raw_member)
         when 'none'
           # Key no longer exists, nothing to remove
-          false
+          0
         else
           Familia.debug "[repair_participations!] Unknown key type '#{key_type}' for #{collection_key}"
-          false
+          0
         end
       end
     end
