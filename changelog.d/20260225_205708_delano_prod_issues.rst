@@ -5,8 +5,8 @@ Fixed
 -----
 
 - ``commit_fields``, ``batch_update``, ``save_fields``, and fast writers now
-  register objects in the ``instances`` sorted set via ``ensure_registered!``.
-  Previously, only ``save`` added to the registry, leaving objects created
+  touch the ``instances`` sorted set via ``touch_instances!``.
+  Previously, only ``save`` updated the timeline, leaving objects created
   through other write paths invisible to ``instances.to_a`` enumeration.
 
 - Class-level ``destroy!`` now removes the identifier from the ``instances``
@@ -18,11 +18,11 @@ Fixed
 Added
 -----
 
-- ``ensure_registered!`` and ``unregister!`` instance methods for explicit
-  registry management. ``ensure_registered!`` is idempotent (ZADD updates
-  the timestamp without duplicating).
+- ``touch_instances!`` and ``remove_from_instances!`` instance methods for
+  explicit instances timeline management. ``touch_instances!`` is idempotent
+  (ZADD updates the timestamp without duplicating).
 
-- ``registered?(identifier)`` class method for O(log N) membership checks
+- ``in_instances?(identifier)`` class method for O(log N) membership checks
   against the ``instances`` sorted set without loading the object.
 
 - Dirty tracking for scalar fields: ``dirty?``, ``dirty_fields``,

@@ -82,23 +82,23 @@ RegistryTestModel.destroy!('reg-cls-destroy-1')
 RegistryTestModel.instances.member?('reg-cls-destroy-1')
 #=> false
 
-## ensure_registered! is idempotent (does not duplicate)
+## touch_instances! is idempotent (does not duplicate)
 @obj9 = RegistryTestModel.new(rid: 'reg-idempotent-1', name: 'Idempotent Test')
 @obj9.save
 count_before = RegistryTestModel.instances.size
-@obj9.ensure_registered!
-@obj9.ensure_registered!
+@obj9.touch_instances!
+@obj9.touch_instances!
 RegistryTestModel.instances.size == count_before
 #=> true
 
-## unregister! removes from instances without deleting data
+## remove_from_instances! removes from instances without deleting data
 @obj10 = RegistryTestModel.new(rid: 'reg-unreg-1', name: 'Unregister Test')
 @obj10.save
-@obj10.unregister!
+@obj10.remove_from_instances!
 RegistryTestModel.instances.member?('reg-unreg-1')
 #=> false
 
-## After unregister!, the hash key still exists in Redis
+## After remove_from_instances!, the hash key still exists in Redis
 @obj10.exists?
 #=> true
 

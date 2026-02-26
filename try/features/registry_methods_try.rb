@@ -13,110 +13,110 @@ end
 RegistryTestWidget.instances.clear
 RegistryTestWidget.all.each(&:destroy!)
 
-## ensure_registered! adds object to instances sorted set
+## touch_instances! adds object to instances sorted set
 @w1 = RegistryTestWidget.new(widget_id: 'reg_w1', label: 'Alpha')
 @w1.commit_fields
 RegistryTestWidget.instances.member?('reg_w1')
 #=> true
 
-## ensure_registered! is idempotent -- calling twice does not duplicate
-@w1.ensure_registered!
-@w1.ensure_registered!
+## touch_instances! is idempotent -- calling twice does not duplicate
+@w1.touch_instances!
+@w1.touch_instances!
 RegistryTestWidget.instances.members.count { |m| m == 'reg_w1' }
 #=> 1
 
-## ensure_registered! updates timestamp but maintains single entry
+## touch_instances! updates timestamp but maintains single entry
 @score_before = RegistryTestWidget.instances.score('reg_w1')
 sleep 0.01
-@w1.ensure_registered!
+@w1.touch_instances!
 @score_after = RegistryTestWidget.instances.score('reg_w1')
 [@score_after >= @score_before, RegistryTestWidget.instances.members.count { |m| m == 'reg_w1' }]
 #=> [true, 1]
 
-## ensure_registered! raises NoIdentifier for nil identifier
+## touch_instances! raises NoIdentifier for nil identifier
 @empty = RegistryTestWidget.new
 begin
-  @empty.ensure_registered!
+  @empty.touch_instances!
   false
 rescue Familia::NoIdentifier
   true
 end
 #=> true
 
-## ensure_registered! raises NoIdentifier for empty string identifier
+## touch_instances! raises NoIdentifier for empty string identifier
 @blank = RegistryTestWidget.new(widget_id: '')
 begin
-  @blank.ensure_registered!
+  @blank.touch_instances!
   false
 rescue Familia::NoIdentifier
   true
 end
 #=> true
 
-## unregister! removes entry from instances sorted set
+## remove_from_instances! removes entry from instances sorted set
 @w2 = RegistryTestWidget.new(widget_id: 'reg_w2', label: 'Beta')
 @w2.save
 @before = RegistryTestWidget.instances.member?('reg_w2')
-@w2.unregister!
+@w2.remove_from_instances!
 @after = RegistryTestWidget.instances.member?('reg_w2')
 [@before, @after]
 #=> [true, false]
 
-## unregister! is idempotent -- calling on unregistered object is no-op
-@w2.unregister!
-@w2.unregister!
+## remove_from_instances! is idempotent -- calling on unregistered object is no-op
+@w2.remove_from_instances!
+@w2.remove_from_instances!
 RegistryTestWidget.instances.member?('reg_w2')
 #=> false
 
-## unregister! raises NoIdentifier for nil identifier
+## remove_from_instances! raises NoIdentifier for nil identifier
 @empty2 = RegistryTestWidget.new
 begin
-  @empty2.unregister!
+  @empty2.remove_from_instances!
   false
 rescue Familia::NoIdentifier
   true
 end
 #=> true
 
-## unregister! raises NoIdentifier for empty string identifier
+## remove_from_instances! raises NoIdentifier for empty string identifier
 @blank2 = RegistryTestWidget.new(widget_id: '')
 begin
-  @blank2.unregister!
+  @blank2.remove_from_instances!
   false
 rescue Familia::NoIdentifier
   true
 end
 #=> true
 
-## registered? returns true after ensure_registered!
+## in_instances? returns true after touch_instances!
 @w3 = RegistryTestWidget.new(widget_id: 'reg_w3', label: 'Gamma')
-@w3.ensure_registered!
-RegistryTestWidget.registered?('reg_w3')
+@w3.touch_instances!
+RegistryTestWidget.in_instances?('reg_w3')
 #=> true
 
-## registered? returns false after unregister!
-@w3.unregister!
-RegistryTestWidget.registered?('reg_w3')
+## in_instances? returns false after remove_from_instances!
+@w3.remove_from_instances!
+RegistryTestWidget.in_instances?('reg_w3')
 #=> false
 
-## registered? returns false for empty string
-RegistryTestWidget.registered?('')
+## in_instances? returns false for empty string
+RegistryTestWidget.in_instances?('')
 #=> false
 
-## registered? returns false for nil
-RegistryTestWidget.registered?(nil)
+## in_instances? returns false for nil
+RegistryTestWidget.in_instances?(nil)
 #=> false
 
-## registered? returns false for never-saved identifier
-RegistryTestWidget.registered?('never_existed_xyz')
+## in_instances? returns false for never-saved identifier
+RegistryTestWidget.in_instances?('never_existed_xyz')
 #=> false
 
-## destroy! calls unregister! -- object removed from instances
+## destroy! calls remove_from_instances! -- object removed from instances
 @w4 = RegistryTestWidget.new(widget_id: 'reg_w4', label: 'Delta')
 @w4.save
-@before_destroy = RegistryTestWidget.registered?('reg_w4')
+@before_destroy = RegistryTestWidget.in_instances?('reg_w4')
 @w4.destroy!
-@after_destroy = RegistryTestWidget.registered?('reg_w4')
+@after_destroy = RegistryTestWidget.in_instances?('reg_w4')
 [@before_destroy, @after_destroy]
 #=> [true, false]
 

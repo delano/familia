@@ -494,9 +494,9 @@ module Familia
               # Persist the value to Database immediately using the hset command.
               ret = hset field_name, prepared
 
-              # Register in instances sorted set so the object is visible
+              # Touch instances timeline so the object is visible
               # to list-based enumeration (instances.to_a, count, etc.)
-              ensure_registered! if respond_to?(:ensure_registered!)
+              touch_instances! if respond_to?(:touch_instances!)
 
               ret.zero? || ret.positive?
             rescue Familia::Problem => e

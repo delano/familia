@@ -250,31 +250,31 @@ plan.save                     # If this raises, features are already mutated
 
 **Cross-database limitation**: MULTI/EXEC transactions only work within a single Redis database number. If scalar fields and a collection use different `logical_database` values, they cannot share a transaction. The `save_with_collections` pattern handles this by sequencing the operations rather than wrapping them in MULTI.
 
-**Instance registry**: The class-level `instances` sorted set tracks all saved objects. `persist_to_storage` (called by `save`) and `commit_fields`/`batch_update` all call `ensure_registered!` to keep the registry in sync. Use `registered?(identifier)` for fast O(log N) checks against the index without loading the object.
+**Instances timeline**: The class-level `instances` sorted set is a timeline of last-modified times, not a registry. `persist_to_storage` (called by `save`) and `commit_fields`/`batch_update` all call `touch_instances!` to update the timestamp. Use `in_instances?(identifier)` for fast O(log N) checks without loading the object.
 
-### Instance Registry Lifecycle
+### Instances Timeline Lifecycle
 
-Every Horreum subclass has a class-level `instances` sorted set (a `class_sorted_set` with `reference: true`). This index maps identifiers to their last-write timestamp.
+Every Horreum subclass has a class-level `instances` sorted set (a `class_sorted_set` with `reference: true`). This timeline maps identifiers to their last-write timestamp (ZADD score).
 
-**Write paths that register** (call `ensure_registered!`):
+**Write paths that touch instances** (call `touch_instances!`):
 - `save` / `save_if_not_exists!` (via `persist_to_storage`)
 - `commit_fields`
 - `batch_update`
 - `save_fields`
 - Fast writers (`field_name!`) via `FieldType` and `DefinitionMethods`
 
-**Write paths that unregister** (call `instances.remove`):
-- Instance-level `destroy!` (via `unregister!`)
+**Write paths that remove from instances**:
+- Instance-level `destroy!` (via `remove_from_instances!`)
 - Class-level `destroy!(identifier)` (direct `instances.remove`)
 - `cleanup_stale_instance_entry` in `find_by_dbkey` (lazy, on-access pruning)
 
 **Ghost objects**: When a hash key expires via TTL but the identifier still lingers in `instances`, enumerating `instances.to_a` returns identifiers for objects that no longer exist. These are cleaned lazily: `find_by_dbkey` detects the missing key and calls `cleanup_stale_instance_entry`. Code that enumerates without loading (e.g. `instances.members`) will still see ghosts.
 
-**`registered?` vs `exists?`**:
-- `registered?(id)` checks the `instances` sorted set -- fast O(log N), but may return true for expired keys (ghost entries) or false for objects created outside Familia
+**`in_instances?` vs `exists?`**:
+- `in_instances?(id)` checks the `instances` sorted set -- fast O(log N), but may return true for expired keys (ghost entries) or false for objects created outside Familia
 - `exists?(id)` checks the actual Redis hash key -- authoritative but requires a round-trip
 
-**`load` / `find_by_id` bypasses the registry**: These methods read directly from the hash key via HGETALL. They do not consult `instances`. A key can exist in Redis without being registered (e.g. created by `commit_fields` in an older version), and vice versa.
+**`load` / `find_by_id` bypasses instances**: These methods read directly from the hash key via HGETALL. They do not consult `instances`. A key can exist in Redis without being in instances (e.g. created by `commit_fields` in an older version), and vice versa.
 
 ## Thread Safety Considerations
 

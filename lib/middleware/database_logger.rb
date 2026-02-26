@@ -106,7 +106,7 @@ module DatabaseLogger
   @logger = nil
   @commands = Concurrent::Array.new
   @max_commands = 10_000
-  @process_start = Familia.now.to_f.freeze
+  @process_start = Time.now.utc.to_f.freeze
   @structured_logging = false
   @sample_rate = nil  # nil = log everything, 0.1 = 10%, 0.01 = 1%
   @sample_counter = Concurrent::AtomicFixnum.new(0)

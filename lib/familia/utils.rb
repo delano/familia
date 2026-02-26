@@ -40,7 +40,7 @@ module Familia
     # Returns current time in UTC as a float
     # @param current_time [Time] time object (default: current time)
     # @return [Float] time in seconds since epoch
-    def now(current_time = Familia.now)
+    def now(current_time = Time.now)
       current_time.utc.to_f
     end
 

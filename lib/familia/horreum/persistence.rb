@@ -314,9 +314,9 @@ module Familia
           # Update expiration in same transaction to ensure atomicity
           self.update_expiration if result && update_expiration
 
-          # Register in instances sorted set so the object is visible
+          # Touch instances timeline so the object is visible
           # to list-based enumeration (instances.to_a, count, etc.)
-          ensure_registered! if result
+          touch_instances! if result
 
           result
         end
@@ -359,7 +359,7 @@ module Familia
 
           # 3. Register in instances sorted set so the object is visible
           # to list-based enumeration (instances.to_a, count, etc.)
-          ensure_registered!
+          touch_instances!
         end
       end
 
@@ -405,7 +405,7 @@ module Familia
 
           self.update_expiration if update_exp
 
-          ensure_registered!
+          touch_instances!
         end
 
         self
@@ -446,9 +446,9 @@ module Familia
           # Update expiration in same transaction
           self.update_expiration if update_expiration
 
-          # Register in instances sorted set so the object is visible
+          # Touch instances timeline so the object is visible
           # to list-based enumeration (instances.to_a, count, etc.)
-          ensure_registered!
+          touch_instances!
         end
 
         self
@@ -525,7 +525,7 @@ module Familia
           end
 
           # Remove from instances collection
-          unregister!
+          remove_from_instances!
         end
 
         # Structured lifecycle logging and instrumentation
@@ -623,29 +623,29 @@ module Familia
         self
       end
 
-      # Ensures this object is registered in the class-level instances sorted set.
+      # Updates this object's timestamp in the class-level instances sorted set.
       #
-      # This is the foundational primitive for all registry-aware code paths.
-      # It delegates to ZADD which is naturally idempotent: if the identifier
-      # is already present the score (timestamp) is updated; if absent, it is
-      # added. No preliminary member? check is performed, making this safe to
-      # call inside MULTI/EXEC transactions where read operations return
-      # uninspectable Future objects.
+      # The instances sorted set is a timeline of last-modified times, not
+      # a registry. This method performs a ZADD with the current timestamp as
+      # score: if the identifier is already present the score is updated;
+      # if absent, it is added. No preliminary member? check is performed,
+      # making this safe to call inside MULTI/EXEC transactions where read
+      # operations return uninspectable Future objects.
       #
       # @return [Object] The return value of the ZADD command (boolean or
       #   Redis::Future inside a transaction)
       #
       # @raise [Familia::NoIdentifier] if the identifier is nil or empty
       #
-      # @example Register an object that was created via commit_fields
+      # @example Touch after commit_fields
       #   user.commit_fields
-      #   user.ensure_registered!  # now visible in User.instances
+      #   user.touch_instances!  # now visible in User.instances
       #
       # @example Safe to call multiple times (updates timestamp)
-      #   user.ensure_registered!
-      #   user.ensure_registered!  # score updated, no duplicate
+      #   user.touch_instances!
+      #   user.touch_instances!  # score updated, no duplicate
       #
-      def ensure_registered!
+      def touch_instances!
         ident = identifier
         raise Familia::NoIdentifier, "No identifier for #{self.class}" if ident.nil? || ident.to_s.empty?
 
@@ -654,7 +654,7 @@ module Familia
 
       # Removes this object from the class-level instances sorted set.
       #
-      # Symmetric counterpart to {#ensure_registered!}. After calling this
+      # Symmetric counterpart to {#touch_instances!}. After calling this
       # method the object will no longer appear in +instances.to_a+ listings
       # or be counted by +instances.count+. The underlying database hash key
       # is NOT deleted -- use {#destroy!} for full removal.
@@ -666,14 +666,14 @@ module Familia
       #
       # @raise [Familia::NoIdentifier] if the identifier is nil or empty
       #
-      # @example Remove from registry without deleting data
-      #   user.unregister!  # no longer in User.instances
-      #   user.exists?      # => true (hash key still present)
+      # @example Remove from instances without deleting data
+      #   user.remove_from_instances!  # no longer in User.instances
+      #   user.exists?                 # => true (hash key still present)
       #
-      # @see #ensure_registered! The symmetric add operation
-      # @see #destroy! Full object removal (data + registry)
+      # @see #touch_instances! The symmetric add operation
+      # @see #destroy! Full object removal (data + instances)
       #
-      def unregister!
+      def remove_from_instances!
         ident = identifier
         raise Familia::NoIdentifier, "No identifier for #{self.class}" if ident.nil? || ident.to_s.empty?
 
@@ -816,7 +816,7 @@ module Familia
       #
       # This is the primary code path that adds an object to the class-level
       # +instances+ sorted set (step 4). The +commit_fields+ method also
-      # registers via +ensure_registered!+. Any persistence that bypasses
+      # touches instances via +touch_instances!+. Any persistence that bypasses
       # both of these (e.g. +update_fields+, or raw +hmset+) will create a
       # hash key in the DB that is invisible to +instances.to_a+ and any
       # code that enumerates via the instances collection.
@@ -838,8 +838,8 @@ module Familia
         # 3. Update class-level indexes
         auto_update_class_indexes
 
-        # 4. Register in instances collection (delegates to ensure_registered!)
-        ensure_registered!
+        # 4. Touch instances timeline (delegates to touch_instances!)
+        touch_instances!
 
         hmset_result
       end

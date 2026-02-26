@@ -255,7 +255,7 @@ module Familia
       #   User.load('nonexistent')  # => nil (key does not exist)
       #   User.new('nonexistent')   # => #<User> (in-memory shell, no DB data)
       #
-      # @see #registered? For a fast check against the instances index
+      # @see #in_instances? For a fast check against the instances timeline
       # @see #exists? For checking the database key directly
       #
       def find_by_identifier(identifier, suffix: nil, check_exists: true)
@@ -396,25 +396,24 @@ module Familia
         objects
       end
 
-      # Checks whether the given identifier is tracked in the +instances+ sorted set.
+      # Checks whether the given identifier appears in the +instances+ sorted set.
       #
-      # This is a fast O(log N) lookup against the in-memory instances index.
-      # It does NOT verify that the underlying hash key still exists in the
-      # database -- use {#exists?} for that. A true result means the object was
-      # saved through Familia at some point; a false result means it was never
-      # saved, or has been explicitly destroyed.
+      # This is a fast O(log N) ZSCORE lookup. It does NOT verify that the
+      # underlying hash key still exists in the database -- use {#exists?}
+      # for that. A true result means the object was persisted through
+      # Familia at some point and has not been removed from instances since.
       #
       # @param identifier [String, Integer] The unique identifier to check.
       # @return [Boolean] true if the identifier is present in the instances
       #   sorted set, false otherwise.
       #
-      # @example Quick registry check without hitting HGETALL
-      #   User.registered?('cust_abc123')  # => true
+      # @example Quick instances check without hitting HGETALL
+      #   User.in_instances?('cust_abc123')  # => true
       #
       # @see #exists? For checking the actual database key
       # @see #find_by_id For loading the full object
       #
-      def registered?(identifier)
+      def in_instances?(identifier)
         return false if identifier.to_s.empty?
 
         instances.member?(identifier)

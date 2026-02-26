@@ -66,8 +66,8 @@ SaveCollTestItem.find_by_id('swc_item5').name
 @item6.save_with_collections(update_expiration: false)
 #=> true
 
-## object is registered in instances after save_with_collections
-SaveCollTestItem.registered?('swc_item1')
+## object is in instances after save_with_collections
+SaveCollTestItem.in_instances?('swc_item1')
 #=> true
 
 # Cleanup

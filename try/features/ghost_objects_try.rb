@@ -30,7 +30,7 @@ GhostTestModel.load('does-not-exist')
 ## Save an object so we can test ghost behavior
 @ghost_obj = GhostTestModel.new(gid: 'ghost-1', name: 'Ghost')
 @ghost_obj.save
-GhostTestModel.registered?('ghost-1')
+GhostTestModel.in_instances?('ghost-1')
 #=> true
 
 ## The hash key exists in Redis
@@ -74,22 +74,22 @@ GhostTestModel.exists?('unreg-1')
 @loaded.name
 #=> 'Unregistered'
 
-## registered? returns false for unregistered hashes
-GhostTestModel.registered?('unreg-1')
+## in_instances? returns false for unregistered hashes
+GhostTestModel.in_instances?('unreg-1')
 #=> false
 
-## registered? returns true for registered objects
+## in_instances? returns true for registered objects
 @registered = GhostTestModel.new(gid: 'reg-1', name: 'Registered')
 @registered.save
-GhostTestModel.registered?('reg-1')
+GhostTestModel.in_instances?('reg-1')
 #=> true
 
-## registered? returns false for empty identifier
-GhostTestModel.registered?('')
+## in_instances? returns false for empty identifier
+GhostTestModel.in_instances?('')
 #=> false
 
-## registered? returns false for nil identifier
-GhostTestModel.registered?(nil)
+## in_instances? returns false for nil identifier
+GhostTestModel.in_instances?(nil)
 #=> false
 
 ## instances.to_a includes ghost identifiers (not lazily cleaned)

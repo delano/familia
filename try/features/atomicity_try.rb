@@ -70,14 +70,14 @@ AtomicTestPlan.all.each(&:destroy!)
 [@stored6.region, @stored6.tier]
 #=> ['CA', 'gold']
 
-## commit_fields now registers via ensure_registered!
+## commit_fields now touches instances timeline
 @plan7 = AtomicTestPlan.new(planid: 'atom_plan7', region: 'AU')
 @plan7.commit_fields
 AtomicTestPlan.instances.member?('atom_plan7')
 #=> true
 
-## unregister! removes object from instances sorted set
-@plan7.unregister!
+## remove_from_instances! removes object from instances sorted set
+@plan7.remove_from_instances!
 AtomicTestPlan.instances.member?('atom_plan7')
 #=> false
 
@@ -117,20 +117,20 @@ end
 [@changes[:region][0], @changes[:region][1]]
 #=> ['KR', 'SG']
 
-## registered? class method checks instances sorted set
+## in_instances? checks instances sorted set
 @plan12 = AtomicTestPlan.new(planid: 'atom_plan12', region: 'NZ')
-@before = AtomicTestPlan.registered?('atom_plan12')
+@before = AtomicTestPlan.in_instances?('atom_plan12')
 @plan12.save
-@after = AtomicTestPlan.registered?('atom_plan12')
+@after = AtomicTestPlan.in_instances?('atom_plan12')
 [@before, @after]
 #=> [false, true]
 
-## batch_update registers in instances sorted set
+## batch_update touches instances timeline
 @plan13 = AtomicTestPlan.new(planid: 'atom_plan13', region: 'ZA')
 @plan13.save
 @plan13.batch_update(region: 'NG')
 @reloaded13 = AtomicTestPlan.find_by_id('atom_plan13')
-[@reloaded13.region, AtomicTestPlan.registered?('atom_plan13')]
+[@reloaded13.region, AtomicTestPlan.in_instances?('atom_plan13')]
 #=> ['NG', true]
 
 # Cleanup
