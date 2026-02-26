@@ -25,22 +25,8 @@ module Familia
         timeline_ids = Set.new(instances.members)
         progress&.call(phase: :timeline_collected, current: timeline_ids.size, total: nil)
 
-        # Phase 2: SCAN keys and extract identifiers
-        scan_ids = Set.new
-        pattern = scan_pattern
-        cursor = "0"
-
-        loop do
-          cursor, keys = dbclient.scan(cursor, match: pattern, count: batch_size)
-          keys.each do |key|
-            parts = Familia.split(key)
-            next unless parts.length >= 2
-
-            scan_ids << parts[1]
-          end
-          progress&.call(phase: :scanning, current: scan_ids.size, total: nil)
-          break if cursor == "0"
-        end
+        # Phase 2: SCAN keys and extract identifiers (source of truth)
+        scan_ids = scan_identifiers(batch_size: batch_size, &progress)
 
         # Phase 3: Set differences
         phantoms = (timeline_ids - scan_ids).to_a
@@ -143,6 +129,35 @@ module Familia
 
       private
 
+      # SCANs DB hash keys and extracts identifiers.
+      #
+      # This is the source of truth for what objects actually exist — it
+      # bypasses the instances timeline entirely.
+      #
+      # @param batch_size [Integer] SCAN cursor count hint (default: 100)
+      # @yield [Hash] Optional progress callback
+      # @return [Set<String>] Identifiers extracted from scanned keys
+      #
+      def scan_identifiers(batch_size: 100, &progress)
+        ids = Set.new
+        pattern = scan_pattern
+        cursor = "0"
+
+        loop do
+          cursor, keys = dbclient.scan(cursor, match: pattern, count: batch_size)
+          keys.each do |key|
+            parts = Familia.split(key)
+            next unless parts.length >= 2
+
+            ids << parts[1]
+          end
+          progress&.call(phase: :scanning, current: ids.size, total: nil)
+          break if cursor == "0"
+        end
+
+        ids
+      end
+
       # Audit a single unique index (class-level).
       #
       # @param rel [IndexingRelationship]
@@ -191,9 +206,10 @@ module Familia
         end
 
         # Check for objects that should be indexed but aren't.
-        # Batch-load all instance objects instead of individual find_by_id calls.
+        # SCAN for all hash keys (source of truth) instead of relying on
+        # the instances timeline, which may contain ghosts or miss entries.
         indexed_values = entries.keys.to_set
-        all_identifiers = instances.members
+        all_identifiers = scan_identifiers.to_a
         all_objects = load_multi(all_identifiers)
 
         all_identifiers.each_with_index do |identifier, idx|
