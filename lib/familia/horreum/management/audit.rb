@@ -90,20 +90,27 @@ module Familia
 
       # Audits participation collections for stale members.
       #
-      # For each participation relationship:
-      # - Enumerates collection members
-      # - Verifies each referenced object still exists
+      # For each participation relationship defined on this class:
+      # - Class-level: checks the single class collection directly
+      # - Instance-level: SCANs for collection keys on the target class
+      # - Enumerates raw members of each collection
+      # - Verifies each referenced participant object still exists
       #
-      # @param sample_size [Integer, nil] Limit members to check (nil = all)
-      # @return [Array<Hash>] [{collection_name:, stale_members: []}]
+      # @param sample_size [Integer, nil] Limit members to check per collection (nil = all)
+      # @return [Array<Hash>] [{collection_name:, stale_members: [{identifier:, collection_key:, reason:}]}]
       #
       def audit_participations(sample_size: nil)
         return [] unless respond_to?(:participation_relationships)
 
-        participation_relationships.select { |rel|
-          # Only audit class-level participations (class_participates_in)
-          rel.target_class == self
-        }.map { |rel| audit_single_participation(rel, sample_size: sample_size) }
+        participation_relationships.flat_map { |rel|
+          if rel.target_class == self
+            # Class-level participation (class_participates_in)
+            [audit_class_participation(rel, sample_size: sample_size)]
+          else
+            # Instance-level participation (participates_in TargetClass, :collection)
+            audit_instance_participations(rel, sample_size: sample_size)
+          end
+        }
       end
 
       # Runs all four audits and wraps results in an AuditReport.
@@ -167,7 +174,7 @@ module Familia
           end
 
           # Verify field value still matches
-          obj = find_by_id(identifier, check_exists: false, cleanup: false)
+          obj = find_by_id(identifier, check_exists: false)
           if obj
             current_value = obj.send(field).to_s
             unless current_value == field_value
@@ -180,7 +187,7 @@ module Familia
         # Check for objects that should be indexed but aren't
         indexed_values = entries.keys.to_set
         instances.members.each do |identifier|
-          obj = find_by_id(identifier, check_exists: false, cleanup: false)
+          obj = find_by_id(identifier, check_exists: false)
           next unless obj
 
           value = obj.send(field)
@@ -215,30 +222,138 @@ module Familia
         { index_name: index_name, stale_members: stale_members, orphaned_keys: orphaned_keys }
       end
 
-      # Audit a single participation collection.
+      # Audit a class-level participation collection (from class_participates_in).
+      #
+      # The collection lives on this class directly (e.g., Domain.all_domains).
+      # Enumerates raw members and checks if each participant object still
+      # exists in the database.
       #
       # @param rel [ParticipationRelationship]
       # @param sample_size [Integer, nil]
-      # @return [Hash] {collection_name:, stale_members: []}
+      # @return [Hash] {collection_name:, stale_members: [{identifier:, collection_key:, reason:}]}
       #
-      def audit_single_participation(rel, sample_size: nil)
+      def audit_class_participation(rel, sample_size: nil)
         collection_name = rel.collection_name
         stale = []
 
-        return { collection_name: collection_name, stale_members: stale } unless respond_to?(:instances)
+        return { collection_name: collection_name, stale_members: stale } unless respond_to?(collection_name)
 
-        # For class-level participations, check each instance's collection
-        # This is expensive, so we sample if requested
-        member_ids = instances.members
-        member_ids = member_ids.sample(sample_size) if sample_size
+        collection = send(collection_name)
+        collection_key = collection.dbkey
 
-        member_ids.each do |identifier|
-          unless exists?(identifier)
-            stale << { identifier: identifier, reason: :object_missing }
+        # Raw members are the serialized form stored in Redis. For Familia
+        # objects added to collections, this is the raw identifier string.
+        raw_members = collection.membersraw
+        raw_members = raw_members.sample(sample_size) if sample_size
+
+        raw_members.each do |raw_member|
+          unless exists?(raw_member)
+            stale << {
+              identifier: raw_member,
+              collection_key: collection_key,
+              collection_name: collection_name,
+              reason: :object_missing,
+            }
           end
         end
 
         { collection_name: collection_name, stale_members: stale }
+      end
+
+      # Audit instance-level participation collections (from participates_in).
+      #
+      # The collections live on individual target instances (e.g.,
+      # customer.domains for each Customer). SCANs Redis for all
+      # collection keys matching the target pattern and checks each
+      # collection's members for stale participant identifiers.
+      #
+      # @param rel [ParticipationRelationship]
+      # @param sample_size [Integer, nil]
+      # @return [Array<Hash>] One result per collection key found:
+      #   [{collection_name:, stale_members: [{identifier:, collection_key:, reason:}]}]
+      #
+      def audit_instance_participations(rel, sample_size: nil)
+        collection_name = rel.collection_name
+        target_class = rel.target_class
+        results = []
+
+        # SCAN for all collection keys matching target_prefix:*:collection_name
+        pattern = "#{target_class.prefix}:*:#{collection_name}"
+        collection_keys = scan_matching_keys(pattern, target_class.dbclient)
+
+        collection_keys.each do |collection_key|
+          stale = audit_collection_key_members(
+            collection_key, rel, sample_size: sample_size
+          )
+          results << { collection_name: collection_name, stale_members: stale }
+        end
+
+        # Return at least one entry even when no collection keys exist,
+        # so the report structure is always consistent.
+        results << { collection_name: collection_name, stale_members: [] } if results.empty?
+        results
+      end
+
+      # Check a single collection key for stale members.
+      #
+      # Uses raw Redis commands (SMEMBERS, ZRANGE, LRANGE) appropriate to
+      # the collection type, then verifies each member against EXISTS on
+      # the participant class (self).
+      #
+      # @param collection_key [String] Full Redis key (e.g. "customer:cust1:domains")
+      # @param rel [ParticipationRelationship]
+      # @param sample_size [Integer, nil]
+      # @return [Array<Hash>] Stale member entries
+      #
+      def audit_collection_key_members(collection_key, rel, sample_size: nil)
+        stale = []
+        client = rel.target_class.dbclient
+
+        raw_members = case rel.type
+                      when :sorted_set
+                        client.zrange(collection_key, 0, -1)
+                      when :set
+                        client.smembers(collection_key)
+                      when :list
+                        client.lrange(collection_key, 0, -1)
+                      else
+                        return stale
+                      end
+
+        raw_members = raw_members.sample(sample_size) if sample_size
+
+        raw_members.each do |raw_member|
+          unless exists?(raw_member)
+            stale << {
+              identifier: raw_member,
+              collection_key: collection_key,
+              collection_name: rel.collection_name,
+              reason: :object_missing,
+            }
+          end
+        end
+
+        stale
+      end
+
+      # SCAN helper for finding keys matching a pattern.
+      #
+      # @param pattern [String] Redis key pattern (e.g. "customer:*:domains")
+      # @param client [Redis] Redis client to use
+      # @param batch_size [Integer] SCAN cursor count hint
+      # @return [Array<String>] Matching keys
+      #
+      def scan_matching_keys(pattern, client, batch_size: 100)
+        keys = []
+        cursor = "0"
+
+        loop do
+          cursor, batch = client.scan(cursor, match: pattern, count: batch_size)
+          keys.concat(batch)
+          break if cursor == "0"
+        end
+
+        keys
       end
     end
   end

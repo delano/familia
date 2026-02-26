@@ -117,6 +117,15 @@ module Familia
 
       # Repairs participation collections by removing stale members.
       #
+      # Removes identifiers from the actual participation collections
+      # (not the instances timeline). Each stale entry from the audit
+      # carries a collection_key identifying the exact Redis key to
+      # remove from, plus the raw identifier string to remove.
+      #
+      # Uses raw Redis commands (ZREM/SREM/LREM) because the stored
+      # member values are raw identifier strings (not JSON-encoded),
+      # and the DataType#remove method would JSON-encode string args.
+      #
       # @param audit_results [Array<Hash>, nil] Results from audit_participations
       # @return [Hash] {stale_removed: N}
       #
@@ -128,8 +137,11 @@ module Familia
         audit_results.each do |part_result|
           part_result[:stale_members].each do |entry|
             identifier = entry[:identifier]
-            instances.remove(identifier)
-            stale_removed += 1
+            collection_key = entry[:collection_key]
+            next unless collection_key && identifier
+
+            removed = remove_stale_collection_member(collection_key, identifier)
+            stale_removed += 1 if removed
           end
         end
 
@@ -215,6 +227,41 @@ module Familia
           obj.created.to_f
         else
           Familia.now
+        end
+      end
+
+      # Removes a stale member from a collection using raw Redis commands.
+      #
+      # Detects the collection type via TYPE and uses the appropriate
+      # removal command (ZREM for sorted sets, SREM for sets, LREM for lists).
+      #
+      # Raw commands are necessary because DataType#remove calls
+      # serialize_value, which JSON-encodes strings. The stored member
+      # values are raw identifier strings (serialized from Familia objects),
+      # so we must match them exactly.
+      #
+      # @param collection_key [String] Full Redis key of the collection
+      # @param raw_member [String] The raw member value to remove
+      # @return [Boolean] true if removal succeeded
+      #
+      def remove_stale_collection_member(collection_key, raw_member)
+        client = dbclient
+        key_type = client.type(collection_key)
+
+        case key_type
+        when 'zset'
+          client.zrem(collection_key, raw_member)
+        when 'set'
+          client.srem(collection_key, raw_member)
+        when 'list'
+          # LREM count=0 removes all occurrences
+          client.lrem(collection_key, 0, raw_member)
+        when 'none'
+          # Key no longer exists, nothing to remove
+          false
+        else
+          Familia.debug "[repair_participations!] Unknown key type '#{key_type}' for #{collection_key}"
+          false
         end
       end
     end
