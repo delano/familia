@@ -149,6 +149,38 @@ end
 @user3.dirty?(:email)
 #=> true
 
+# Write-path dirty clearing tests
+# Each test starts from a saved (clean) object, modifies a field via the
+# normal setter (making the object dirty), then calls a specific write
+# method and asserts that dirty state is cleared afterward.
+
+## batch_update clears dirty state after successful write
+@wp = DirtyTrackUser.new(email: 'write-path@example.com', name: 'WritePath', age: 25, active: true)
+@wp.save
+@wp.clear_dirty!
+@wp.name = 'BatchUpdated'
+@wp.batch_update(name: 'BatchUpdated')
+@wp.dirty?
+#=> false
+
+## batch_fast_write clears dirty state after successful write
+@wp.name = 'FastWritten'
+@wp.batch_fast_write(name: 'FastWritten')
+@wp.dirty?
+#=> false
+
+## save_fields clears dirty state after successful write
+@wp.age = 99
+@wp.save_fields(:age)
+@wp.dirty?
+#=> false
+
+## fast writer clears dirty state for written field
+@wp.name = 'FastBang'
+@wp.name!('FastBang')
+@wp.dirty?
+#=> false
+
 ## Teardown
 DirtyTrackUser.instances.members.each do |id|
   obj = DirtyTrackUser.new(id)
