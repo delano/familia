@@ -199,11 +199,9 @@ module Familia
       def cleanup_stale_instance_entry(objkey)
         return unless respond_to?(:instances)
 
-        # Key format is prefix:identifier:suffix, so identifier is at index 1
-        parts = Familia.split(objkey)
-        return unless parts.length >= 2
-
-        identifier = parts[1]
+        # Key format is prefix:identifier:suffix. Use extract_identifier_from_key
+        # to correctly handle compound identifiers containing the delimiter.
+        identifier = extract_identifier_from_key(objkey)
         return if identifier.nil? || identifier.empty?
 
         instances.remove(identifier)
@@ -547,6 +545,31 @@ module Familia
       #
       def scan_pattern(match_suffix = suffix)
         "#{prefix}:*:#{match_suffix}"
+      end
+
+      # Extracts the identifier from a full Redis key by stripping the
+      # known prefix and suffix.
+      #
+      # This is safe for compound identifiers that contain the delimiter
+      # character (e.g., "mymodel:foo:bar:object" where the identifier is
+      # "foo:bar"). A naive split on the delimiter would truncate these.
+      #
+      # @param key [String] Full Redis key (e.g., "user:alice:object")
+      # @param key_suffix [String] The suffix to strip (default: class suffix)
+      # @return [String, nil] The extracted identifier, or nil if the key
+      #   does not match the expected prefix/suffix structure
+      # @example
+      #   User.extract_identifier_from_key("user:alice:object")       #=> "alice"
+      #   User.extract_identifier_from_key("user:foo:bar:object")    #=> "foo:bar"
+      #
+      def extract_identifier_from_key(key, key_suffix = suffix)
+        d = Familia.delim
+        pfx = "#{prefix}#{d}"
+        sfx = "#{d}#{key_suffix}"
+
+        return nil unless key.start_with?(pfx) && key.end_with?(sfx)
+
+        key[pfx.length..-(sfx.length + 1)]
       end
 
       def dbkey(identifier, suffix = self.suffix)

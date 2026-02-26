@@ -75,10 +75,10 @@ module Familia
           cursor, keys = dbclient.scan(cursor, match: pattern, count: batch_size)
 
           keys.each do |key|
-            parts = Familia.split(key)
-            next unless parts.length >= 2
+            identifier = extract_identifier_from_key(key)
+            next unless identifier
 
-            batch << { key: key, identifier: parts[1] }
+            batch << { key: key, identifier: identifier }
           end
 
           # Process batch when it reaches threshold

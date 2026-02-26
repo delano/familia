@@ -146,10 +146,10 @@ module Familia
         loop do
           cursor, keys = dbclient.scan(cursor, match: pattern, count: batch_size)
           keys.each do |key|
-            parts = Familia.split(key)
-            next unless parts.length >= 2
+            identifier = extract_identifier_from_key(key)
+            next unless identifier
 
-            ids << parts[1]
+            ids << identifier
           end
           progress&.call(phase: :scanning, current: ids.size, total: nil)
           break if cursor == "0"
