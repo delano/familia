@@ -102,7 +102,12 @@ module Familia
     #
     # @note INCR option is not supported. Use the increment method for ZINCRBY operations.
     #
+    # @note This method executes a Redis ZADD immediately, unlike scalar field
+    #   setters which are deferred until save. If the parent object has unsaved
+    #   scalar field changes, consider calling save first to avoid split-brain state.
+    #
     def add(val, score = nil, nx: false, xx: false, gt: false, lt: false, ch: false)
+      warn_if_dirty!
       score ||= Familia.now
 
       # Validate mutual exclusivity
@@ -261,15 +266,21 @@ module Familia
     end
 
     def remrangebyrank(srank, erank)
-      dbclient.zremrangebyrank dbkey, srank, erank
+      ret = dbclient.zremrangebyrank dbkey, srank, erank
+      update_expiration
+      ret
     end
 
     def remrangebyscore(sscore, escore)
-      dbclient.zremrangebyscore dbkey, sscore, escore
+      ret = dbclient.zremrangebyscore dbkey, sscore, escore
+      update_expiration
+      ret
     end
 
     def increment(val, by = 1)
-      dbclient.zincrby(dbkey, by, serialize_value(val)).to_f
+      ret = dbclient.zincrby(dbkey, by, serialize_value(val)).to_f
+      update_expiration
+      ret
     end
     alias incr increment
     alias incrby increment
@@ -285,7 +296,9 @@ module Familia
     # @return [Integer] The number of members that were removed (0 or 1)
     def remove_element(value)
       Familia.trace :REMOVE_ELEMENT, nil, "#{value}<#{value.class}>" if Familia.debug?
-      dbclient.zrem dbkey, serialize_value(value)
+      ret = dbclient.zrem dbkey, serialize_value(value)
+      update_expiration
+      ret
     end
     alias remove remove_element # deprecated
 
