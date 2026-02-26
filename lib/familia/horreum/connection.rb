@@ -116,7 +116,7 @@ module Familia
       #
       #     # This reuses the same transaction connection
       #     customer.transaction do |local_conn|
-      #       local_conn.hset(customer.dbkey, 'updated', Time.now.to_i)
+      #       local_conn.hset(customer.dbkey, 'updated', Familia.now.to_i)
       #       'local_return_value'  # Returned directly in nested context
       #     end
       #   end
@@ -157,7 +157,7 @@ module Familia
       # @example Basic instance pipeline
       #   customer = Customer.new(custid: 'cust_123')
       #   result = customer.pipelined do |conn|
-      #     conn.hset(customer.dbkey, 'last_login', Time.now.to_i)
+      #     conn.hset(customer.dbkey, 'last_login', Familia.now.to_i)
       #     conn.hincrby(customer.dbkey, 'login_count', 1)
       #     conn.sadd('recent_logins', customer.identifier)
       #     conn.hget(customer.dbkey, 'login_count')
@@ -206,7 +206,7 @@ module Familia
       #
       #     # This reuses the same pipeline connection
       #     customer.pipelined do |local_conn|
-      #       local_conn.hset(customer.dbkey, 'updated', Time.now.to_i)
+      #       local_conn.hset(customer.dbkey, 'updated', Familia.now.to_i)
       #       Redis::Future.new  # Returns Redis::Future in nested context
       #     end
       #   end

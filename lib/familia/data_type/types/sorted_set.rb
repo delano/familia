@@ -74,14 +74,14 @@ module Familia
     #   (NX+XX, GT+LT, NX+GT, NX+LT)
     #
     # @example Add new element with timestamp
-    #   metrics.add('pageview', Time.now.to_f)  #=> true
+    #   metrics.add('pageview', Familia.now.to_f)  #=> true
     #
     # @example Preserve original timestamp on subsequent saves
-    #   index.add(email, Time.now.to_f, nx: true)  #=> true
-    #   index.add(email, Time.now.to_f, nx: true)  #=> false (unchanged)
+    #   index.add(email, Familia.now.to_f, nx: true)  #=> true
+    #   index.add(email, Familia.now.to_f, nx: true)  #=> false (unchanged)
     #
     # @example Update timestamp only for existing entries
-    #   index.add(email, Time.now.to_f, xx: true)  #=> false (if doesn't exist)
+    #   index.add(email, Familia.now.to_f, xx: true)  #=> false (if doesn't exist)
     #
     # @example Only update if new score is higher (leaderboard)
     #   scores.add(player, 1000, gt: true)  #=> true (new entry)

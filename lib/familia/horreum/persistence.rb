@@ -60,7 +60,7 @@ module Familia
       #     customer.transaction do
       #       # Perform other atomic operations
       #       customer.increment(:login_count)
-      #       customer.hset(:last_login, Time.now.to_i)
+      #       customer.hset(:last_login, Familia.now.to_i)
       #     end
       #
       # ### Incorrect Pattern:
@@ -334,7 +334,7 @@ module Familia
       # @return [MultiResult] Transaction result
       #
       # @example Update multiple fields without affecting expiration
-      #   metadata.batch_update(viewed: 1, updated: Time.now.to_i, update_expiration: false)
+      #   metadata.batch_update(viewed: 1, updated: Familia.now.to_i, update_expiration: false)
       #
       # @example Update fields with expiration refresh
       #   user.batch_update(name: "John", email: "john@example.com")

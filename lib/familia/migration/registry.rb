@@ -149,7 +149,7 @@ module Familia
       #
       def record_applied(migration, stats = {})
         migration_id = extract_migration_id(migration)
-        now = Time.now
+        now = Familia.now
 
         # ZADD to applied set with current timestamp
         client.zadd(applied_key, now.to_f, migration_id)
@@ -183,7 +183,7 @@ module Familia
         existing = metadata(migration_id)
         meta = existing || {}
         meta[:status] = 'rolled_back'
-        meta[:rolled_back_at] = Time.now.iso8601
+        meta[:rolled_back_at] = Familia.now.iso8601
 
         client.hset(metadata_key, migration_id, JSON.generate(meta))
       end
