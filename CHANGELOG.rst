@@ -7,6 +7,98 @@ The format is based on `Keep a Changelog <https://keepachangelog.com/en/1.1.0/>`
 
    <!--scriv-insert-here-->
 
+.. _changelog-2.3.0:
+
+2.3.0 — 2026-02-26
+==================
+
+Added
+-----
+
+- ``touch_instances!`` and ``remove_from_instances!`` instance methods for
+  explicit instances timeline management. ``touch_instances!`` is idempotent
+  (ZADD updates the timestamp without duplicating).
+
+- ``in_instances?(identifier)`` class method for O(log N) membership checks
+  against the ``instances`` sorted set without loading the object.
+
+- Dirty tracking for scalar fields: ``dirty?``, ``dirty_fields``,
+  ``changed_fields``, ``clear_dirty!``. Setters automatically mark fields
+  dirty; state is cleared after ``save``, ``commit_fields``, and ``refresh!``.
+
+- ``warn_if_dirty!`` guard on collection write methods (``add``, ``push``,
+  ``[]=``, ``value=``). Warns when the parent Horreum has unsaved scalar
+  changes. Enable ``Familia.strict_write_order = true`` to raise instead.
+
+- ``ttl_report`` instance method on Expiration-enabled models. Returns a hash
+  showing TTL for the main key and all relation keys, useful for detecting
+  TTL drift.
+
+- ``debug_fields`` instance method on Horreum. Returns a diagnostic hash
+  showing Ruby value, stored JSON, and type for each persistent field.
+
+- Proactive consistency audit infrastructure for Horreum models. Every
+  subclass now has ``health_check``, ``audit_instances``,
+  ``audit_unique_indexes``, ``audit_multi_indexes``, and
+  ``audit_participations`` class methods to detect phantoms (timeline
+  entries without backing keys), missing entries (keys not in timeline),
+  stale index entries, and orphaned participation members. Issue #221.
+
+- ``AuditReport`` data structure (``Data.define``) that wraps audit
+  results with ``healthy?``, ``to_h`` (summary counts), and ``to_s``
+  (human-readable) methods for quick inspection and programmatic use.
+
+- Repair and rebuild operations: ``repair_instances!``,
+  ``rebuild_instances``, ``repair_indexes!``,
+  ``repair_participations!``, and ``repair_all!`` class methods.
+  ``rebuild_instances`` performs a full SCAN-based rebuild with atomic
+  swap via the existing ``RebuildStrategies`` infrastructure.
+
+- ``scan_keys`` helper on ManagementMethods for production-safe
+  enumeration of keys matching a class pattern via SCAN.
+
+- Participation audit reads actual collection contents (not the instances
+  timeline) and repairs use TYPE introspection to dispatch the correct
+  removal command per collection type.
+
+Changed
+-------
+
+- ``find_by_dbkey`` and ``find_by_identifier`` are now read-only.
+  They no longer call ``cleanup_stale_instance_entry`` as a side effect
+  when a key is missing. Ghost cleanup is the explicit responsibility
+  of the audit/repair layer or direct caller invocation.
+  ``cleanup_stale_instance_entry`` is now a public class method.
+
+- Fast writers (``field!``), ``batch_update``, ``batch_fast_write``,
+  and ``save_fields`` now clear dirty tracking state after a successful
+  database write, so ``dirty?`` accurately reflects unsaved changes.
+
+Fixed
+-----
+
+- ``commit_fields``, ``batch_update``, ``save_fields``, and fast writers now
+  touch the ``instances`` sorted set via ``touch_instances!``.
+  Previously, only ``save`` updated the timeline, leaving objects created
+  through other write paths invisible to ``instances.to_a`` enumeration.
+
+- Class-level ``destroy!`` now removes the identifier from the ``instances``
+  sorted set, preventing ghost entries after deletion.
+
+Documentation
+-------------
+
+- Added serialization encoding guide to CLAUDE.md showing how each DataType
+  serializes values and what raw Redis output looks like per type.
+
+AI Assistance
+-------------
+
+- Implementation, test authoring, and iterative debugging performed with
+  Claude Opus 4.6 assistance across dirty tracking, write-order guards,
+  TTL reporting, debug_fields, audit/repair infrastructure, and 211 test
+  cases across 14 audit files.
+
 .. _changelog-2.2.0:
 
 2.2.0 — 2026-02-23
