@@ -72,7 +72,10 @@ Changed
 
 - Fast writers (``field!``), ``batch_update``, ``batch_fast_write``,
   and ``save_fields`` now clear dirty tracking state after a successful
-  database write, so ``dirty?`` accurately reflects unsaved changes.
+  database write. Note: this currently clears all dirty flags, even for
+  fields that were not part of the partial write. This known limitation
+  is documented in ``try/features/dirty_tracking_try.rb`` and will be
+  addressed in a future release.
 
 Fixed
 -----
