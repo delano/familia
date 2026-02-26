@@ -226,6 +226,13 @@ module Familia
       # Optionally updates the key's expiration time if the feature is enabled
       # for the object's class.
       #
+      # Unlike +save+, this method does NOT add the object to the class-level
+      # +instances+ sorted set, does not run +prepare_for_save+ (timestamps,
+      # unique index guards), and does not update class indexes. Use this for
+      # updating fields on an object that is already persisted and tracked.
+      # If the object's hash key was created via +commit_fields+ alone, it
+      # will exist in the DB but won't appear in +instances.to_a+ listings.
+      #
       # @param update_expiration [Boolean] Whether to update the expiration time
       #   of the Valkey key. Defaults to true.
       #
@@ -244,6 +251,8 @@ module Familia
       #
       # @note This method performs debug logging of the object's class, dbkey,
       #   and current state before committing to the DB.
+      #
+      # @see #save Full persistence lifecycle (timestamps, indexes, instances)
       #
       def commit_fields(update_expiration: true)
         prepared_value = to_h_for_storage
@@ -355,10 +364,14 @@ module Familia
 
       # Permanently removes this object and its related fields from the DB.
       #
-      # Deletes the object's database key and all associated data. This operation
-      # is irreversible and will permanently destroy all stored information
-      # for this object instance and the additional list, set, hash, string
-      # etc fields defined for this class.
+      # Deletes the object's database key, all related fields (lists, sets,
+      # hashes, etc.), and removes the identifier from the class-level
+      # +instances+ sorted set. This operation is irreversible.
+      #
+      # This is the instance-level counterpart to the class method of the
+      # same name. Both clean up related fields and the main hash key, but
+      # only this instance method removes from +instances+. See the class
+      # method's documentation for that known gap.
       #
       # @return [void]
       #
@@ -623,7 +636,13 @@ module Familia
       end
       private :prepare_for_save
 
-      # Persists the object's data to storage within a transaction
+      # Persists the object's data to storage within a transaction.
+      #
+      # This is the sole code path that adds an object to the class-level
+      # +instances+ sorted set (step 4). Any persistence that bypasses this
+      # method (e.g. +commit_fields+, +update_fields+, or raw +hmset+) will
+      # create a hash key in the DB that is invisible to +instances.to_a+
+      # and any code that enumerates via the instances collection.
       #
       # This method contains the core persistence logic shared by both save and
       # save_if_not_exists. It must be called within a transaction block.

@@ -130,6 +130,15 @@ module Familia
       # - Commands: 1 per object (HGETALL only)
       # - Reduction: 50% fewer Redis commands
       #
+      # **Ghost object cleanup:** When a key is not found (either via EXISTS
+      # returning false or HGETALL returning {}), this method calls
+      # +cleanup_stale_instance_entry+ to remove any stale entry from the
+      # +instances+ sorted set. This provides lazy, on-access pruning of
+      # ghost entries — objects whose hash keys have expired or been deleted
+      # but whose identifiers still linger in +instances+. Code that
+      # enumerates via +instances.to_a+ without loading each object will
+      # still see ghosts until they are accessed through this method.
+      #
       # @example Safe mode (default)
       #   User.find_by_key("user:123")  # 2 commands: EXISTS + HGETALL
       #
@@ -402,6 +411,10 @@ module Familia
 
       # Destroys an object in Database with the given identifier.
       #
+      # Deletes the main hash key, all related fields, and removes the
+      # identifier from the +instances+ sorted set. This is the class-level
+      # counterpart to the instance method of the same name.
+      #
       # @param identifier [String, Integer] The unique identifier for the object to destroy.
       # @param suffix [Symbol, nil] The suffix to use in the dbkey (default: class suffix).
       # @return [Boolean] true if the object was successfully destroyed, false otherwise.
@@ -441,6 +454,9 @@ module Familia
           # Delete the main object key
           ret = conn.del(objkey)
           Familia.trace :DESTROY!, nil, "#{objkey} #{ret.inspect}" if Familia.debug?
+
+          # Remove from instances collection to avoid ghost entries
+          instances.remove(identifier) if respond_to?(:instances)
         end
       end
 
