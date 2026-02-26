@@ -2,8 +2,7 @@
 #
 # frozen_string_literal: true
 
-# Generated rspec code for /Users/d/Projects/opensource/d/familia/try/features/relationships/participation_commands_verification_try.rb
-# Updated: 2025-09-26 21:27:49 -0700
+require_relative '../../../lib/familia'
 
 RSpec.describe 'participation_commands_verification_try' do
   before(:all) do
@@ -12,7 +11,7 @@ RSpec.describe 'participation_commands_verification_try' do
     puts Familia.now  # Always returns 2024-01-15 10:30:00
     puts Date.today  # Always returns 2024-01-15
     require_relative '../../../lib/middleware/database_logger'
-    require_relative '../../../lib/familia'
+
     Familia.enable_database_logging = true
     Familia.enable_database_counter = true
     class ReverseIndexCustomer < Familia::Horreum
