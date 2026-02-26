@@ -42,7 +42,7 @@ end
 
 # Helper for unique IDs
 def workflow_id(prefix = 'wf')
-  "#{prefix}_#{Time.now.to_i}_#{rand(100000)}"
+  "#{prefix}_#{Familia.now.to_i}_#{rand(100000)}"
 end
 
 ## Complete customer registration workflow
@@ -82,7 +82,7 @@ end
   customer_id: @customer_id,
   amount: 99,
   status: 'pending',
-  created_at: Time.now.to_i
+  created_at: Familia.now.to_i
 )
 @order.save
 #=> true
@@ -91,7 +91,7 @@ end
 @processing_result = WorkflowCustomer.transaction do |conn|
   # Update customer
   conn.hset(@customer.dbkey, 'balance', '901')  # 1000 - 99
-  conn.hset(@customer.dbkey, 'last_login', Time.now.to_i.to_s)
+  conn.hset(@customer.dbkey, 'last_login', Familia.now.to_i.to_s)
   @customer.orders.push(@order_id)
 
   # Update order
@@ -112,7 +112,7 @@ end
 #=> [901, "confirmed", 49]
 
 ## Customer login tracking workflow with nested transactions
-@login_start = Time.now
+@login_start = Familia.now
 
 # Read current count outside transaction
 @current_count = @customer.hget('login_count').to_i
@@ -146,7 +146,7 @@ end
     customer_id: @customer_id,
     amount: 25,
     status: 'pending',
-    created_at: Time.now.to_i
+    created_at: Familia.now.to_i
   )
   order.save
   order
@@ -160,7 +160,7 @@ end
 @bulk_result = WorkflowOrder.transaction do |conn|
   @bulk_orders.each do |order|
     conn.hset(order.dbkey, 'status', 'fulfilled')
-    conn.hset(order.dbkey, 'fulfilled_at', Time.now.to_i.to_s)
+    conn.hset(order.dbkey, 'fulfilled_at', Familia.now.to_i.to_s)
     @customer.orders.push(order.order_id)
   end
 
@@ -225,22 +225,22 @@ end
 end
 
 # Individual transactions
-@individual_start = Time.now
+@individual_start = Familia.now
 @perf_customers.each do |customer|
   customer.transaction do |conn|
     conn.hset(customer.dbkey, 'status', 'updated_individual')
   end
 end
-@individual_duration = ((Time.now - @individual_start) * 1000).round(2)
+@individual_duration = ((Familia.now - @individual_start) * 1000).round(2)
 
 # Single batch transaction
-@batch_start = Time.now
+@batch_start = Familia.now
 WorkflowCustomer.transaction do |conn|
   @perf_customers.each do |customer|
     conn.hset(customer.dbkey, 'status', 'updated_batch')
   end
 end
-@batch_duration = ((Time.now - @batch_start) * 1000).round(2)
+@batch_duration = ((Familia.now - @batch_start) * 1000).round(2)
 
 # Batch should be faster or at least not significantly slower
 @efficiency_ratio = @individual_duration / @batch_duration
@@ -265,7 +265,7 @@ end
     @concurrent_customer.transaction do |conn|
       conn.hset(@concurrent_customer.dbkey, 'balance', (current_balance - 100).to_s)
       conn.hset(@concurrent_customer.dbkey, 'version', '2')
-      conn.hset(@concurrent_customer.dbkey, 'last_transaction', Time.now.to_i.to_s)
+      conn.hset(@concurrent_customer.dbkey, 'last_transaction', Familia.now.to_i.to_s)
     end
     true
   else

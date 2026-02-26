@@ -255,7 +255,7 @@ end
 #=> nil
 
 ## Guard must be called outside transaction (new rule)
-unique_timestamp = Time.now.to_i
+unique_timestamp = Familia.now.to_i
 unique_rand = rand(1000000)
 email = "tx_unique_#{unique_timestamp}_#{unique_rand}@example.com"
 @user_tx_unique = GuardUser.new(user_id: "user_tx_unique_#{unique_rand}", email: email, username: "txuser_#{unique_rand}")

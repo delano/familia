@@ -34,7 +34,7 @@ end
 @domain = PerfTestDomain.new(
   domain_id: 'perf_dom_1',
   display_domain: 'perf-example.com',
-  created_at: Time.now.to_f
+  created_at: Familia.now.to_f
 )
 
 # Ensure clean state

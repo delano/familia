@@ -8,8 +8,8 @@
 RSpec.describe 'participation_commands_verification_try' do
   before(:all) do
     require 'timecop'
-    Timecop.freeze(Time.parse("2024-01-15 10:30:00"))
-    puts Time.now  # Always returns 2024-01-15 10:30:00
+    Timecop.freeze(Familia.parse("2024-01-15 10:30:00"))
+    puts Familia.now  # Always returns 2024-01-15 10:30:00
     puts Date.today  # Always returns 2024-01-15
     require_relative '../../../lib/middleware/database_logger'
     require_relative '../../../lib/familia'
@@ -41,12 +41,12 @@ RSpec.describe 'participation_commands_verification_try' do
     @domain1 = ReverseIndexDomain.new(
       domain_id: 'ri_dom_1',
       display_domain: 'example1.com',
-      created_at: Time.now.to_f
+      created_at: Familia.now.to_f
     )
     @domain2 = ReverseIndexDomain.new(
       domain_id: 'ri_dom_2',
       display_domain: 'example2.com',
-      created_at: Time.now.to_f + 1
+      created_at: Familia.now.to_f + 1
     )
   end
 

@@ -81,7 +81,7 @@ class ChildModel < ParentModel
 end
 
 # Create instances for testing
-@user = MultiGroupUser.new(name: 'Alice', email: 'alice@example.com', created_at: Time.now.to_i)
+@user = MultiGroupUser.new(name: 'Alice', email: 'alice@example.com', created_at: Familia.now.to_i)
 @user2 = BasicUser.new(name: 'Bob', email: 'bob@example.com')
 
 ## Manual field groups - basic access via hash
@@ -101,7 +101,7 @@ MultiGroupUser.field_groups.keys.sort
 #=> [:metadata, :personal]
 
 ## Field groups - fields defined inside groups are tracked
-user = MultiGroupUser.new(name: 'Alice', email: 'alice@example.com', created_at: Time.now.to_i)
+user = MultiGroupUser.new(name: 'Alice', email: 'alice@example.com', created_at: Familia.now.to_i)
 
 ## Grouped fields - access name field
 @user.name

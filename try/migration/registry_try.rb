@@ -8,7 +8,7 @@ require_relative '../../lib/familia/migration'
 Familia.debug = false
 
 @redis = Familia.dbclient
-@prefix = "familia:test:registry:#{Process.pid}:#{Time.now.to_i}"
+@prefix = "familia:test:registry:#{Process.pid}:#{Familia.now.to_i}"
 @registry = Familia::Migration::Registry.new(redis: @redis, prefix: @prefix)
 
 # Clean any existing test keys
@@ -53,7 +53,7 @@ Familia::Migration::Registry.is_a?(Class)
 
 ## applied_at returns Time when applied
 result = @registry.applied_at('test_migration_1')
-result.is_a?(Time) && (Time.now - result) < 5
+result.is_a?(Time) && (Familia.now - result) < 5
 #=> true
 
 ## applied_at returns nil when not applied

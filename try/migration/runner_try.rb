@@ -8,7 +8,7 @@ require_relative '../../lib/familia/migration'
 Familia.debug = false
 
 @redis = Familia.dbclient
-@prefix = "familia:test:runner:#{Process.pid}:#{Time.now.to_i}"
+@prefix = "familia:test:runner:#{Process.pid}:#{Familia.now.to_i}"
 @registry = Familia::Migration::Registry.new(redis: @redis, prefix: @prefix)
 
 # Clean any existing test keys

@@ -54,7 +54,7 @@ sample_data = {
   'active' => 'true',
   'metadata' => '{"role":"admin","department":"engineering","level":5}',
   'tags' => '["ruby","redis","performance","optimization"]',
-  'created_at' => Time.now.to_i.to_s,
+  'created_at' => Familia.now.to_i.to_s,
   'score' => '98.7',
   'simple_string' => 'Just a plain string value',
 }

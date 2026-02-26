@@ -186,7 +186,7 @@ begin
   session = IntegrationTestSession.new(
     session_id: 'sess_mixed_001',
     user_id: 'mixed_test_001',
-    created_at: Time.now.to_i
+    created_at: Familia.now.to_i
   )
 
   # Both should save successfully despite different connection handlers

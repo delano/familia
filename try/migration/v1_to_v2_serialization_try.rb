@@ -14,7 +14,7 @@ require_relative '../../examples/migrations/v1_to_v2_serialization_migration'
 Familia.debug = false
 
 @redis = Familia.dbclient
-@test_id = "#{Process.pid}_#{Time.now.to_i}"
+@test_id = "#{Process.pid}_#{Familia.now.to_i}"
 @prefix = "familia:test:v1v2:#{@test_id}"
 
 @initial_migrations = Familia::Migration.migrations.dup
@@ -89,7 +89,7 @@ def create_v1_record(suffix, data = {})
 
   # Register in instances sorted set (zset) for migration to find
   # Familia uses zset for instances tracking with timestamp as score
-  @redis.zadd("#{prefix}:instances", Time.now.to_f, id)
+  @redis.zadd("#{prefix}:instances", Familia.now.to_f, id)
 
   { dbkey: dbkey, id: id }
 end

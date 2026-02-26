@@ -25,7 +25,7 @@ end
 
 # Helper for generating test data
 def benchmark_id(prefix = 'bench')
-  "#{prefix}_#{Time.now.to_i}_#{rand(100000)}"
+  "#{prefix}_#{Familia.now.to_i}_#{rand(100000)}"
 end
 
 # Setup test customers
@@ -41,19 +41,19 @@ end
 end
 
 ## Simple transaction performance baseline
-@start_time = Time.now
+@start_time = Familia.now
 @customers.first(10).each do |customer|
   customer.transaction do
     customer.hset(:login_count, '1')
     customer.hset(:status, 'updated')
   end
 end
-@simple_duration = ((Time.now - @start_time) * 1000).round(2)
+@simple_duration = ((Familia.now - @start_time) * 1000).round(2)
 @simple_duration < 100  # Should complete in under 100ms
 #=> true
 
 ## Nested transaction performance (reentrant)
-@start_time = Time.now
+@start_time = Familia.now
 @customers[10, 10].each do |customer|
   customer.transaction do
     customer.hset(:login_count, '1')
@@ -67,7 +67,7 @@ end
     customer.hset(:balance, '950')
   end
 end
-@nested_duration = ((Time.now - @start_time) * 1000).round(2)
+@nested_duration = ((Familia.now - @start_time) * 1000).round(2)
 @nested_duration < 150  # Should have minimal overhead
 #=> true
 
@@ -77,25 +77,25 @@ end
 #=> true
 
 ## Bulk operations in single transaction
-@start_time = Time.now
+@start_time = Familia.now
 BenchmarkCustomer.transaction do |conn|
   @customers[20, 20].each do |customer|
     conn.hset(customer.dbkey, 'bulk_status', 'processed')
-    conn.hset(customer.dbkey, 'bulk_timestamp', Time.now.to_i.to_s)
+    conn.hset(customer.dbkey, 'bulk_timestamp', Familia.now.to_i.to_s)
   end
 end
-@bulk_duration = ((Time.now - @start_time) * 1000).round(2)
+@bulk_duration = ((Familia.now - @start_time) * 1000).round(2)
 @bulk_duration < 50  # Bulk should be faster per operation
 #=> true
 
 ## Individual transactions vs bulk transaction efficiency
-@individual_start = Time.now
+@individual_start = Familia.now
 @customers[40, 10].each do |customer|
   customer.transaction do
     customer.hset(:individual_status, 'processed')
   end
 end
-@individual_duration = ((Time.now - @individual_start) * 1000).round(2)
+@individual_duration = ((Familia.now - @individual_start) * 1000).round(2)
 
 @bulk_per_op = @bulk_duration / 20
 @individual_per_op = @individual_duration / 10
@@ -121,7 +121,7 @@ end
 #=> true
 
 ## Memory usage with deep nesting
-@deep_nesting_start = Time.now
+@deep_nesting_start = Familia.now
 @test_customer = @customers[60]
 
 @result = @test_customer.transaction do
@@ -141,12 +141,12 @@ end
   end
 end
 
-@deep_nesting_duration = ((Time.now - @deep_nesting_start) * 1000).round(2)
+@deep_nesting_duration = ((Familia.now - @deep_nesting_start) * 1000).round(2)
 @deep_nesting_duration < 50  # Even deep nesting should be fast
 #=> true
 
 ## Error handling performance in transactions
-@error_handling_start = Time.now
+@error_handling_start = Familia.now
 @error_count = 0
 
 10.times do |i|
@@ -162,7 +162,7 @@ end
   end
 end
 
-@error_handling_duration = ((Time.now - @error_handling_start) * 1000).round(2)
+@error_handling_duration = ((Familia.now - @error_handling_start) * 1000).round(2)
 @error_handling_duration < 100  # Error handling shouldn't be too slow
 #=> true
 
@@ -171,7 +171,7 @@ end
 #=> true
 
 ## Fiber-local storage performance impact
-@fiber_storage_start = Time.now
+@fiber_storage_start = Familia.now
 
 10.times do |i|
   customer = @customers[80 + i]
@@ -184,12 +184,12 @@ end
   end
 end
 
-@fiber_storage_duration = ((Time.now - @fiber_storage_start) * 1000).round(2)
+@fiber_storage_duration = ((Familia.now - @fiber_storage_start) * 1000).round(2)
 @fiber_storage_duration < 75  # Fiber access should be fast
 #=> true
 
 ## Transaction vs pipeline performance comparison
-@transaction_start = Time.now
+@transaction_start = Familia.now
 @customers[90, 5].each do |customer|
   customer.transaction do |conn|
     conn.hset(customer.dbkey, 'txn_field1', 'value1')
@@ -197,9 +197,9 @@ end
     conn.hset(customer.dbkey, 'txn_field3', 'value3')
   end
 end
-@transaction_perf_duration = ((Time.now - @transaction_start) * 1000).round(2)
+@transaction_perf_duration = ((Familia.now - @transaction_start) * 1000).round(2)
 
-@pipeline_start = Time.now
+@pipeline_start = Familia.now
 @customers[95, 5].each do |customer|
   customer.dbclient.pipelined do |pipe|
     pipe.hset(customer.dbkey, 'pipe_field1', 'value1')
@@ -207,7 +207,7 @@ end
     pipe.hset(customer.dbkey, 'pipe_field3', 'value3')
   end
 end
-@pipeline_perf_duration = ((Time.now - @pipeline_start) * 1000).round(2)
+@pipeline_perf_duration = ((Familia.now - @pipeline_start) * 1000).round(2)
 
 # Pipeline should be faster or comparable
 @performance_difference = @transaction_perf_duration / @pipeline_perf_duration

@@ -21,7 +21,7 @@ end
 
 ## EDGE: Phantom instance - count shows stale entry
 # Manually add identifier to instances without creating object
-EdgeCaseCustomer.instances.add('phantom1', Time.now.to_i)
+EdgeCaseCustomer.instances.add('phantom1', Familia.now.to_i)
 EdgeCaseCustomer.count
 #=> 1
 
@@ -113,7 +113,7 @@ EdgeCaseCustomer.all.each(&:destroy!)
 @dup = EdgeCaseCustomer.create!(custid: 'dup1', name: 'Duplicate')
 # Manually add the same identifier again with different score
 # ZADD should just update the score, not create duplicate
-EdgeCaseCustomer.instances.add('dup1', Time.now.to_i + 1000)
+EdgeCaseCustomer.instances.add('dup1', Familia.now.to_i + 1000)
 EdgeCaseCustomer.count
 #=> 1
 
@@ -137,7 +137,7 @@ EdgeCaseCustomer.all.each(&:destroy!)
 # =============================================================================
 
 ## EDGE: Empty identifier - instances can store empty string
-EdgeCaseCustomer.instances.add('', Time.now.to_i)
+EdgeCaseCustomer.instances.add('', Familia.now.to_i)
 EdgeCaseCustomer.count
 #=> 1
 
@@ -164,7 +164,7 @@ EdgeCaseCustomer.all.each(&:destroy!)
 @valid1 = EdgeCaseCustomer.create!(custid: 'valid1', name: 'Valid 1')
 @valid2 = EdgeCaseCustomer.create!(custid: 'valid2', name: 'Valid 2')
 # Create phantom (in instances but no object)
-EdgeCaseCustomer.instances.add('phantom2', Time.now.to_i)
+EdgeCaseCustomer.instances.add('phantom2', Familia.now.to_i)
 # Create orphan (object but not in instances)
 @orphan2 = EdgeCaseCustomer.create!(custid: 'orphan2', name: 'Orphan 2')
 EdgeCaseCustomer.instances.remove('orphan2')
