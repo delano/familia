@@ -53,7 +53,7 @@ Familia::Migration::Registry.is_a?(Class)
 
 ## applied_at returns Time when applied
 result = @registry.applied_at('test_migration_1')
-result.is_a?(Time) && (Familia.now - result) < 5
+result.is_a?(Time) && (Time.now - result) < 5
 #=> true
 
 ## applied_at returns nil when not applied
