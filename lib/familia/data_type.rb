@@ -61,16 +61,15 @@ module Familia
   #   StringKey   | getset           | GETSET         | yes        | no
   #   StringKey   | del              | DEL            | no         | no
   #   Counter     | reset            | SET (via set)  | yes (via value=) | no
-  #   Counter     | incr_if_lt       | GET+INCRBY     | yes (via incrementby) | YES
+  #   Counter     | incr_if_lt       | EVAL (Lua)     | yes        | no (atomic Lua)
   #   Lock        | acquire          | SETNX(+EXPIRE) | yes (via setnx) | no
   #   Lock        | release          | EVAL (Lua)     | no (deletes key) | no (atomic Lua)
   #   Lock        | force_unlock!    | DEL            | no (deletes key) | no
   #
   # Notes:
-  # - Counter#increment_if_less_than does GET then conditional INCRBY,
-  #   which is a read-then-write pattern. Not atomic outside of a
-  #   transaction -- another client could increment between the read and
-  #   the conditional write. Use inside a transaction or accept the race.
+  # - Counter#increment_if_less_than uses a Lua script (EVAL) for atomic
+  #   threshold check + increment. Previously used GET then conditional
+  #   INCRBY which was not atomic outside of a transaction.
   # - Lock#release uses a Lua script (EVAL) which IS atomic on the server.
   # - StringKey#del and Lock methods that delete the key do not call
   #   update_expiration because the key no longer exists.

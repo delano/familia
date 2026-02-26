@@ -15,11 +15,20 @@ module Familia
     end
 
     def increment_if_less_than(threshold, amount = 1)
-      current = to_i
-      return false if current >= threshold
-
-      incrementby(amount)
-      true
+      lua = <<~LUA
+        local current = tonumber(redis.call('GET', KEYS[1]) or '0')
+        if current < tonumber(ARGV[1]) then
+          return redis.call('INCRBY', KEYS[1], ARGV[2])
+        end
+        return nil
+      LUA
+      result = dbclient.eval(lua, keys: [dbkey], argv: [threshold, amount])
+      if result
+        update_expiration
+        result.to_i
+      else
+        false
+      end
     end
 
     def atomic_increment_and_get(amount = 1)
