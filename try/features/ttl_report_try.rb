@@ -24,17 +24,28 @@ class NoExpirationModel < Familia::Horreum
   field :name
 end
 
+class FieldsOnlyExpiringModel < Familia::Horreum
+  feature :expiration
+  identifier_field :fid
+  field :fid
+  field :label
+  default_expiration 1800 # 30 minutes
+end
+
 # Clean up
 begin
   existing = Familia.dbclient.keys('ttlreportmodel:*')
   Familia.dbclient.del(*existing) if existing.any?
   existing = Familia.dbclient.keys('noexpirationmodel:*')
   Familia.dbclient.del(*existing) if existing.any?
+  existing = Familia.dbclient.keys('fieldsonlyexpiringmodel:*')
+  Familia.dbclient.del(*existing) if existing.any?
 rescue => e
   # Ignore
 end
 TTLReportModel.instances.clear
 NoExpirationModel.instances.clear
+FieldsOnlyExpiringModel.instances.clear
 
 ## ttl_report returns a hash with :main and :relations keys
 @obj = TTLReportModel.new(tid: 'ttl-report-1', name: 'TTL Test')
@@ -109,14 +120,64 @@ NoExpirationModel.instances.clear
 @no_exp.respond_to?(:ttl_report)
 #=> false
 
+## TTL values are integers (not Future objects or strings)
+@report[:main][:ttl].is_a?(Integer)
+#=> true
+
+## Relation TTL values are also integers
+@report[:relations][:tags][:ttl].is_a?(Integer)
+#=> true
+
+## Model with expiration but no relations returns empty relations hash
+@fields_only = FieldsOnlyExpiringModel.new(fid: 'fo-1', label: 'Fields Only')
+@fields_only.save
+@fo_report = @fields_only.ttl_report
+@fo_report[:relations]
+#=> {}
+
+## Fields-only model main TTL is close to its default (within 5 seconds of 1800)
+(@fo_report[:main][:ttl] - 1800).abs < 5
+#=> true
+
+## Fields-only model report has correct main dbkey
+@fo_report[:main][:key]
+#=> @fields_only.dbkey
+
+## Deleted key shows TTL of -2 in report
+@deleted_obj = TTLReportModel.new(tid: 'ttl-report-deleted', name: 'To Delete')
+@deleted_obj.save
+@deleted_obj.activity_log << 'event'
+@deleted_obj.update_expiration
+@deleted_obj.delete!
+@deleted_report = @deleted_obj.ttl_report
+@deleted_report[:main][:ttl]
+#=> -2
+
+## After delete!, relation keys survive (delete! only removes main key)
+# This demonstrates an orphaned relation scenario detectable via ttl_report
+@deleted_report[:relations][:activity_log][:ttl] > 0
+#=> true
+
+## Pipeline returns correct number of TTL values (1 main + N relations)
+@pipeline_check = TTLReportModel.new(tid: 'ttl-report-pipeline', name: 'Pipeline')
+@pipeline_check.save
+@pipeline_check.tags.add 'test'
+@pipeline_check.update_expiration
+@pc_report = @pipeline_check.ttl_report
+@pc_report[:relations].size
+#=> 5
+
 ## Teardown
 begin
   existing = Familia.dbclient.keys('ttlreportmodel:*')
   Familia.dbclient.del(*existing) if existing.any?
   existing = Familia.dbclient.keys('noexpirationmodel:*')
   Familia.dbclient.del(*existing) if existing.any?
+  existing = Familia.dbclient.keys('fieldsonlyexpiringmodel:*')
+  Familia.dbclient.del(*existing) if existing.any?
 rescue => e
   # Ignore
 end
 TTLReportModel.instances.clear
 NoExpirationModel.instances.clear
+FieldsOnlyExpiringModel.instances.clear
