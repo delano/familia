@@ -46,11 +46,16 @@ GhostTestModel.exists?('ghost-1')
 GhostTestModel.instances.member?('ghost-1')
 #=> true
 
-## load triggers cleanup_stale_instance_entry and returns nil
+## load returns nil for ghost objects (read-only, no side effects)
 GhostTestModel.load('ghost-1')
 #=> nil
 
-## After load, the ghost entry has been cleaned up
+## Ghost entry persists in instances (load does not clean up)
+GhostTestModel.instances.member?('ghost-1')
+#=> true
+
+## Explicit cleanup removes the ghost entry
+GhostTestModel.cleanup_stale_instance_entry(GhostTestModel.dbkey('ghost-1'))
 GhostTestModel.instances.member?('ghost-1')
 #=> false
 
@@ -99,8 +104,13 @@ Familia.dbclient.del(@ghost2.dbkey)
 GhostTestModel.instances.member?('ghost-2')
 #=> true
 
-## Loading the ghost triggers cleanup
+## Loading the ghost does not trigger cleanup (read-only)
 GhostTestModel.load('ghost-2')
+GhostTestModel.instances.member?('ghost-2')
+#=> true
+
+## Explicit cleanup removes it
+GhostTestModel.cleanup_stale_instance_entry(GhostTestModel.dbkey('ghost-2'))
 GhostTestModel.instances.member?('ghost-2')
 #=> false
 

@@ -98,14 +98,14 @@ LoadMissingTestUser.dbclient.del(@user3.dbkey)
 LoadMissingTestUser.find_by_id('testuser3', check_exists: false)
 #=> nil
 
-## ghost cleanup: stale instance entry removed on find miss
+## find_by_id is read-only: stale instance entry persists after find miss
 @user4 = LoadMissingTestUser.create!(userid: 'testuser4', name: 'Test4', email: 'test4@example.com')
 @had_entry = LoadMissingTestUser.instances.member?('testuser4')
 LoadMissingTestUser.dbclient.del(@user4.dbkey)
 LoadMissingTestUser.find_by_id('testuser4')
 @still_has_entry = LoadMissingTestUser.instances.member?('testuser4')
 [@had_entry, @still_has_entry]
-#=> [true, false]
+#=> [true, true]
 
 # Cleanup
 LoadMissingTestUser.instances.clear

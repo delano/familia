@@ -138,14 +138,9 @@ module Familia
       # - Commands: 1 per object (HGETALL only)
       # - Reduction: 50% fewer Redis commands
       #
-      # **Ghost object cleanup:** When a key is not found (either via EXISTS
-      # returning false or HGETALL returning {}), this method calls
-      # +cleanup_stale_instance_entry+ to remove any stale entry from the
-      # +instances+ sorted set. This provides lazy, on-access pruning of
-      # ghost entries — objects whose hash keys have expired or been deleted
-      # but whose identifiers still linger in +instances+. Code that
-      # enumerates via +instances.to_a+ without loading each object will
-      # still see ghosts until they are accessed through this method.
+      # @note This method is read-only. Ghost entries (identifiers lingering
+      #   in +instances+ after their hash key expires) are not cleaned up here.
+      #   Use +cleanup_stale_instance_entry+ explicitly when cleanup is desired.
       #
       # @example Safe mode (default)
       #   User.find_by_key("user:123")  # 2 commands: EXISTS + HGETALL
@@ -156,7 +151,7 @@ module Familia
       # @note When check_exists: false, HGETALL on non-existent keys returns {}
       #   which we detect and return nil (not an empty object instance).
       #
-      def find_by_dbkey(objkey, check_exists: true, cleanup: true)
+      def find_by_dbkey(objkey, check_exists: true)
         raise ArgumentError, 'Empty key' if objkey.to_s.empty?
 
         if check_exists
@@ -173,10 +168,7 @@ module Familia
           # doesn't, we return nil. If it does, we proceed to load the object.
           # Otherwise, hgetall will return an empty hash, which will be passed to
           # the constructor, which will then be annoying to debug.
-          unless does_exist
-            cleanup_stale_instance_entry(objkey) if cleanup
-            return nil
-          end
+          return nil unless does_exist
         else
           # Optimized mode: Skip existence check
           Familia.debug "[find_by_key] #{self} from key #{objkey} (check_exists: false)"
@@ -189,25 +181,21 @@ module Familia
         # Always check for empty hash to handle race conditions where the key
         # expires between EXISTS check and HGETALL (when check_exists: true),
         # or simply doesn't exist (when check_exists: false).
-        if obj.empty?
-          cleanup_stale_instance_entry(objkey) if cleanup
-          return nil
-        end
+        return nil if obj.empty?
 
         # Create instance and deserialize fields using shared helper method
         instantiate_from_hash(obj)
       end
 
       # Removes a stale entry from the instances sorted set.
-      # Called when find_by_dbkey detects that an object no longer exists
-      # (either EXISTS returned false, or HGETALL returned empty hash).
       #
-      # This provides lazy cleanup of phantom instance entries that can
-      # accumulate when objects expire via TTL without explicit destroy!
+      # Call this explicitly when you detect that an object no longer exists
+      # and want to prune its ghost entry from the instances timeline. Finder
+      # methods (find_by_dbkey, find_by_id, load) are read-only and will not
+      # call this automatically.
       #
       # @param objkey [String] The full database key (prefix:identifier:suffix)
       # @return [void]
-      # @api private
       def cleanup_stale_instance_entry(objkey)
         return unless respond_to?(:instances)
 
@@ -219,9 +207,8 @@ module Familia
         return if identifier.nil? || identifier.empty?
 
         instances.remove(identifier)
-        Familia.debug "[find_by_dbkey] Removed stale instance entry: #{identifier}"
+        Familia.debug "[cleanup_stale_instance_entry] Removed stale entry: #{identifier}"
       end
-      private :cleanup_stale_instance_entry
       alias find_by_key find_by_dbkey
 
       # Retrieves and instantiates an object from Database using its identifier.
@@ -266,7 +253,7 @@ module Familia
       # @see #in_instances? For a fast check against the instances timeline
       # @see #exists? For checking the database key directly
       #
-      def find_by_identifier(identifier, suffix: nil, check_exists: true, cleanup: true)
+      def find_by_identifier(identifier, suffix: nil, check_exists: true)
         suffix ||= self.suffix
         return nil if identifier.to_s.empty?
 
@@ -274,7 +261,7 @@ module Familia
 
         Familia.debug "[find_by_id] #{self} from key #{objkey})"
         Familia.trace :FIND_BY_ID, nil, objkey if Familia.debug?
-        find_by_dbkey objkey, check_exists: check_exists, cleanup: cleanup
+        find_by_dbkey objkey, check_exists: check_exists
       end
       alias find_by_id find_by_identifier
       alias find find_by_id
