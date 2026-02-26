@@ -2,6 +2,8 @@
 #
 # frozen_string_literal: true
 
+require 'set'
+
 module Familia
   class Horreum
     # AuditMethods provides proactive consistency detection for Horreum models.
@@ -147,7 +149,7 @@ module Familia
           cursor, keys = dbclient.scan(cursor, match: pattern, count: batch_size)
           keys.each do |key|
             identifier = extract_identifier_from_key(key)
-            next unless identifier
+            next if identifier.nil? || identifier.empty?
 
             ids << identifier
           end
