@@ -346,12 +346,10 @@ module Familia
         Familia.trace :BATCH_UPDATE, nil, fields.keys if Familia.debug?
 
         result = transaction do |_conn|
-          # 1. Update all fields atomically
+          # 1. Update all fields atomically (Redis only, no in-memory mutation)
           fields.each do |field, value|
             prepared_value = serialize_value(value)
             hset field, prepared_value
-            # Update instance variable to keep object in sync
-            send("#{field}=", value) if respond_to?("#{field}=")
           end
 
           # 2. Update expiration in same transaction
@@ -362,7 +360,14 @@ module Familia
           touch_instances!
         end
 
-        clear_dirty!(*fields.keys) unless result.nil?
+        # Update in-memory state only after transaction succeeds,
+        # so a failed transaction never leaves the object diverged.
+        unless result.nil?
+          fields.each do |field, value|
+            send("#{field}=", value) if respond_to?("#{field}=")
+          end
+          clear_dirty!(*fields.keys)
+        end
 
         result
       end
@@ -397,10 +402,9 @@ module Familia
 
         Familia.trace :BATCH_FAST_WRITE, nil, fields.keys if Familia.debug?
 
-        # Build serialized hash and update instance variables
+        # Serialize values before the transaction (read-only on instance)
         serialized = {}
         fields.each do |field, value|
-          send(:"#{field}=", value) if respond_to?(:"#{field}=")
           serialized[field] = serialize_value(value)
         end
 
@@ -412,7 +416,14 @@ module Familia
           touch_instances!
         end
 
-        clear_dirty!(*fields.keys) unless result.nil?
+        # Update in-memory state only after transaction succeeds,
+        # so a failed transaction never leaves the object diverged.
+        unless result.nil?
+          fields.each do |field, value|
+            send(:"#{field}=", value) if respond_to?(:"#{field}=")
+          end
+          clear_dirty!(*fields.keys)
+        end
 
         self
       end
