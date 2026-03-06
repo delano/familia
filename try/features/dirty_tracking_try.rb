@@ -3,6 +3,7 @@
 # frozen_string_literal: true
 
 require_relative '../support/helpers/test_helpers'
+require 'base64'
 
 class DirtyTrackUser < Familia::Horreum
   identifier_field :email
@@ -10,6 +11,19 @@ class DirtyTrackUser < Familia::Horreum
   field :name
   field :age
   field :active
+end
+
+# Encrypted field model for dirty tracking tests
+# Encryption keys must be configured before defining the class
+Familia.config.encryption_keys = { v1: Base64.strict_encode64('a' * 32) }
+Familia.config.current_key_version = :v1
+
+class DirtyTrackSecureUser < Familia::Horreum
+  feature :encrypted_fields
+  identifier_field :user_id
+  field :user_id
+  field :display_name
+  encrypted_field :secret_token
 end
 
 @user = DirtyTrackUser.new(email: 'alice@example.com', name: 'Alice', age: 30, active: true)
@@ -181,19 +195,13 @@ end
 @wp.dirty?
 #=> false
 
-# Known bug: clear_dirty! blanket-resets all dirty state
+# Selective clear_dirty! for partial write paths
 #
-# Every write path calls clear_dirty! after persisting, but partial write
-# paths (fast writers, save_fields, batch_update) only persist a subset of
-# fields. The blanket reset incorrectly clears dirty state for fields that
-# were NOT persisted, causing the object to report as clean when it still
-# has unsaved changes.
-#
-# These tests document the correct behavior. They are expected to FAIL
-# with the current implementation until clear_dirty! is fixed to only
-# clear the fields that were actually written.
+# Partial write paths (fast writers, save_fields, batch_update) only persist
+# a subset of fields. clear_dirty! selectively clears only the fields that
+# were actually written, preserving dirty state for unwritten fields.
 
-## Fast writer clears unrelated dirty fields (BUG: should preserve them)
+## Fast writer preserves dirty state for unwritten fields
 # When fields A and B are both dirty and only A is fast-written,
 # field B should still be marked dirty because it was not persisted.
 @bug1 = DirtyTrackUser.new(email: 'bug1@example.com', name: 'Original', age: 20)
@@ -217,7 +225,7 @@ end
 @bug1.dirty_fields
 #=> [:age]
 
-## save_fields clears unrelated dirty fields (BUG: should preserve them)
+## save_fields preserves dirty state for unwritten fields
 # When fields A and B are both dirty and only A is saved via save_fields,
 # field B should still be marked dirty because it was not persisted.
 @bug2 = DirtyTrackUser.new(email: 'bug2@example.com', name: 'Original', age: 20)
@@ -497,8 +505,91 @@ end
 @clean.dirty?
 #=> false
 
+# Issue #225: Objects loaded from Redis should not be dirty
+# instantiate_from_hash (used by load, find_by_dbkey) was missing
+# clear_dirty!, so loaded objects appeared dirty even though they matched DB state.
+
+## Object loaded via load should not be dirty
+@loaded_user = DirtyTrackUser.new(email: 'load-clean@example.com', name: 'LoadClean', age: 25, active: true)
+@loaded_user.save
+@reloaded = DirtyTrackUser.load('load-clean@example.com')
+@reloaded.dirty?
+#=> false
+
+## Loaded object should have empty dirty_fields
+@reloaded.dirty_fields
+#=> []
+
+## Loaded object should have empty changed_fields
+@reloaded.changed_fields
+#=> {}
+
+## Object loaded via find_by_dbkey should not be dirty
+@found = DirtyTrackUser.find_by_dbkey(DirtyTrackUser.dbkey('load-clean@example.com'))
+@found.dirty?
+#=> false
+
+## Modifying a loaded object marks it dirty as expected
+@reloaded.name = 'Modified'
+@reloaded.dirty?
+#=> true
+
+## Loaded object dirty_fields reflects the modification
+@reloaded.dirty_fields
+#=> [:name]
+
+# Encrypted field dirty tracking tests
+#
+# Encrypted field setters (EncryptedFieldType#define_setter) use
+# instance_variable_set directly without calling mark_dirty!. This means
+# setting an encrypted field does not mark the object as dirty, even though
+# encrypted fields ARE persisted to Redis just like regular fields.
+#
+# These tests document the correct behavior and should FAIL until
+# mark_dirty! is added to the encrypted field setter.
+
+## Setting an encrypted field should mark object as dirty
+@enc1 = DirtyTrackSecureUser.new(user_id: 'enc-dirty-1', display_name: 'EncUser1')
+@enc1.save
+@enc1 = DirtyTrackSecureUser.load('enc-dirty-1')
+@enc1.secret_token = 'my-secret-abc'
+@enc1.dirty?
+#=> true
+
+## Encrypted field should appear in dirty_fields
+@enc1.dirty_fields
+#=> [:secret_token]
+
+## Encrypted field should appear in changed_fields
+@enc1.changed_fields.key?(:secret_token)
+#=> true
+
+## Save should clear encrypted field dirty state
+@enc2 = DirtyTrackSecureUser.new(user_id: 'enc-dirty-2', display_name: 'EncUser2')
+@enc2.save
+@enc2 = DirtyTrackSecureUser.load('enc-dirty-2')
+@enc2.secret_token = 'another-secret'
+@enc2.save
+@enc2.dirty?
+#=> false
+
+## Mixed dirty tracking: both regular and encrypted fields appear in dirty_fields
+@enc3 = DirtyTrackSecureUser.new(user_id: 'enc-dirty-3', display_name: 'EncUser3')
+@enc3.save
+@enc3 = DirtyTrackSecureUser.load('enc-dirty-3')
+@enc3.display_name = 'UpdatedName'
+@enc3.secret_token = 'secret-xyz'
+@enc3.dirty_fields.sort
+#=> [:display_name, :secret_token]
+
 ## Teardown
 DirtyTrackUser.instances.members.each do |id|
   obj = DirtyTrackUser.new(id)
   obj.destroy! rescue nil
 end
+DirtyTrackSecureUser.instances.members.each do |id|
+  obj = DirtyTrackSecureUser.new(id)
+  obj.destroy! rescue nil
+end
+Familia.config.encryption_keys = nil
+Familia.config.current_key_version = nil

@@ -5,7 +5,7 @@ source 'https://rubygems.org'
 gemspec
 
 group :test do
-  gem 'concurrent-ruby', '~> 1.3.5', require: false
+  gem 'concurrent-ruby', '~> 1.3.6', require: false
   gem 'ruby-prof'
   gem 'stackprof'
   gem 'timecop', require: false
@@ -15,12 +15,12 @@ end
 group :development, :test do
   gem 'benchmark', '~> 0.4', require: false
   gem 'debug', require: false
+  gem 'irb', '~> 1.15.2', require: false
   gem 'json_schemer', '~> 2.0', require: false
   gem 'rake', '~> 13.0', require: false
-  gem 'irb', '~> 1.15.2', require: false
   gem 'redcarpet', require: false
   gem 'reek', require: false
-  gem 'rubocop', '~> 1.81.1', require: false
+  gem 'rubocop', '~> 1.85.1', require: false
   gem 'rubocop-performance', require: false
   gem 'rubocop-thread_safety', require: false
   gem 'ruby-lsp', require: false

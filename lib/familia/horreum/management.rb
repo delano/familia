@@ -748,8 +748,13 @@ module Familia
       # @api private
       def instantiate_from_hash(obj_hash)
         instance = allocate
+        instance.instance_variable_set(:@dirty_fields, Concurrent::Map.new)
         instance.send(:initialize_relatives)
         instance.send(:initialize_with_keyword_args_deserialize_value, **obj_hash)
+        # Object was just loaded from Redis, so it matches DB state exactly.
+        # Clear dirty flags set during field assignment above, mirroring what
+        # initialize (horreum.rb:246) and refresh! (persistence.rb:608) do.
+        instance.send(:clear_dirty!)
         instance
       end
 
@@ -794,6 +799,7 @@ module Familia
 
         # Use a temporary instance for deserialization (needs serialize_value/deserialize_value)
         temp = allocate
+        temp.instance_variable_set(:@dirty_fields, Concurrent::Map.new)
         temp.send(:initialize_relatives)
 
         raw_hash.each_with_object({}) do |(field, raw_val), result|

@@ -50,12 +50,14 @@ module Familia
     alias prepend unshift
 
     def pop
+      warn_if_dirty!
       ret = deserialize_value dbclient.rpop(dbkey)
       update_expiration
       ret
     end
 
     def shift
+      warn_if_dirty!
       ret = deserialize_value dbclient.lpop(dbkey)
       update_expiration
       ret
@@ -85,6 +87,7 @@ module Familia
     # @param count [Integer] Number of elements to remove (0 means all)
     # @return [Integer] The number of removed elements
     def remove_element(value, count = 0)
+      warn_if_dirty!
       ret = dbclient.lrem dbkey, count, serialize_value(value)
       update_expiration
       ret

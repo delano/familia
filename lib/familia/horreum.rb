@@ -189,6 +189,7 @@ module Familia
     #   `Session.new({sessid: "abc123", custid: "user456"})` # legacy hash (robust)
     #
     def initialize(*args, **kwargs)
+      @dirty_fields = Concurrent::Map.new
       start_time = Familia.now_in_μs if Familia.debug?
       Familia.trace :INITIALIZE, nil, "Initializing #{self.class}" if Familia.debug?
       initialize_relatives

@@ -343,15 +343,14 @@ module Familia
         update_expiration = kwargs.delete(:update_expiration) { true }
         fields = kwargs
 
+        guard_allowed_fields!(fields.keys)
         Familia.trace :BATCH_UPDATE, nil, fields.keys if Familia.debug?
 
         result = transaction do |_conn|
-          # 1. Update all fields atomically
+          # 1. Update all fields atomically (Redis only, no in-memory mutation)
           fields.each do |field, value|
             prepared_value = serialize_value(value)
             hset field, prepared_value
-            # Update instance variable to keep object in sync
-            send("#{field}=", value) if respond_to?("#{field}=")
           end
 
           # 2. Update expiration in same transaction
@@ -362,7 +361,14 @@ module Familia
           touch_instances!
         end
 
-        clear_dirty!(*fields.keys) unless result.nil?
+        # Update in-memory state only after transaction succeeds,
+        # so a failed transaction never leaves the object diverged.
+        if result.is_a?(MultiResult) && result.successful?
+          fields.each do |field, value|
+            send("#{field}=", value) if respond_to?("#{field}=")
+          end
+          clear_dirty!(*fields.keys)
+        end
 
         result
       end
@@ -394,13 +400,13 @@ module Familia
         fields = kwargs
 
         raise ArgumentError, 'No fields specified' if fields.empty?
+        guard_allowed_fields!(fields.keys)
 
         Familia.trace :BATCH_FAST_WRITE, nil, fields.keys if Familia.debug?
 
-        # Build serialized hash and update instance variables
+        # Serialize values before the transaction (read-only on instance)
         serialized = {}
         fields.each do |field, value|
-          send(:"#{field}=", value) if respond_to?(:"#{field}=")
           serialized[field] = serialize_value(value)
         end
 
@@ -412,7 +418,14 @@ module Familia
           touch_instances!
         end
 
-        clear_dirty!(*fields.keys) unless result.nil?
+        # Update in-memory state only after transaction succeeds,
+        # so a failed transaction never leaves the object diverged.
+        if result.is_a?(MultiResult) && result.successful?
+          fields.each do |field, value|
+            send(:"#{field}=", value) if respond_to?(:"#{field}=")
+          end
+          clear_dirty!(*fields.keys)
+        end
 
         self
       end
@@ -477,8 +490,8 @@ module Familia
       #   # => #<User:0x007f8a1c8b0a28 @name="John", @email="john@example.com", @age=30>
       #
       def apply_fields(**fields)
+        guard_allowed_fields!(fields.keys)
         fields.each do |field, value|
-          # Apply the field value if the setter method exists
           send("#{field}=", value) if respond_to?("#{field}=")
         end
         self
@@ -694,6 +707,27 @@ module Familia
       def dbclient(...) = self.class.dbclient(...)
 
       private
+
+      # Validates that all field names are declared Familia fields.
+      #
+      # Prevents mass-assignment of arbitrary setter methods (e.g. role=,
+      # admin=) that are not declared via the `field` or `transient` DSL.
+      # This is a defense-in-depth measure for downstream callers that may
+      # inadvertently pass unsanitized input to batch methods.
+      #
+      # @param names [Array<Symbol, String>] field names to validate
+      # @raise [ArgumentError] if any name is not a declared field
+      # @return [void]
+      #
+      def guard_allowed_fields!(names)
+        allowed = self.class.field_method_map.keys
+        unknown = names.map(&:to_sym) - allowed
+        return if unknown.empty?
+
+        raise ArgumentError,
+          "Undeclared fields for #{self.class}: #{unknown.join(', ')}. " \
+          "Only fields defined with `field` or `transient` are mass-assignable."
+      end
 
       # Reset all transient fields to nil
       #

@@ -7,6 +7,43 @@ The format is based on `Keep a Changelog <https://keepachangelog.com/en/1.1.0/>`
 
    <!--scriv-insert-here-->
 
+.. _changelog-2.3.1:
+
+2.3.1 — 2026-03-06
+==================
+
+Fixed
+-----
+
+- Objects loaded from Redis via ``load``, ``find``, ``find_by_id``, ``find_by_dbkey``,
+  and ``load_multi`` no longer appear dirty. The ``instantiate_from_hash`` factory
+  now calls ``clear_dirty!`` after field assignment, matching the behavior of
+  ``initialize`` and ``refresh!``. Previously, every loaded object had all fields
+  marked dirty, causing false ``warn_if_dirty!`` warnings on subsequent collection
+  writes. Fixes `#225 <https://github.com/delano/familia/issues/225>`_.
+
+- Added ``warn_if_dirty!`` to 14 secondary collection mutation methods that were
+  missing the write-order check: ``remove_element``, ``pop``, ``move`` (UnsortedSet);
+  ``remove_element``, ``remrangebyrank``, ``remrangebyscore`` (SortedSet); ``pop``,
+  ``shift``, ``remove_element`` (ListKey); ``hsetnx``, ``remove_field``,
+  ``update``/``merge!`` (HashKey); ``value=``, ``setnx`` (JsonStringKey). Counter and
+  increment methods are intentionally excluded as they operate independently of the
+  parent's scalar lifecycle.
+
+- ``batch_update`` and ``batch_fast_write`` now update in-memory field values only
+  after the MULTI/EXEC transaction succeeds. Previously, setters ran inside the
+  transaction block, so a failed transaction could leave the object's in-memory
+  state diverged from Redis.
+
+AI Assistance
+-------------
+
+- Claude identified the one-line fix in ``instantiate_from_hash``, audited all
+  collection mutation paths for missing ``warn_if_dirty!`` calls, and triaged
+  the 29 candidates into tiers based on write-order risk. Also caught the
+  transaction-safety issue in ``batch_update``/``batch_fast_write`` during the
+  broader audit.
+
 .. _changelog-2.3.0:
 
 2.3.0 — 2026-02-26
