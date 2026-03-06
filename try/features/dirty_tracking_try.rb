@@ -195,19 +195,13 @@ end
 @wp.dirty?
 #=> false
 
-# Known bug: clear_dirty! blanket-resets all dirty state
+# Selective clear_dirty! for partial write paths
 #
-# Every write path calls clear_dirty! after persisting, but partial write
-# paths (fast writers, save_fields, batch_update) only persist a subset of
-# fields. The blanket reset incorrectly clears dirty state for fields that
-# were NOT persisted, causing the object to report as clean when it still
-# has unsaved changes.
-#
-# These tests document the correct behavior. They are expected to FAIL
-# with the current implementation until clear_dirty! is fixed to only
-# clear the fields that were actually written.
+# Partial write paths (fast writers, save_fields, batch_update) only persist
+# a subset of fields. clear_dirty! selectively clears only the fields that
+# were actually written, preserving dirty state for unwritten fields.
 
-## Fast writer clears unrelated dirty fields (BUG: should preserve them)
+## Fast writer preserves dirty state for unwritten fields
 # When fields A and B are both dirty and only A is fast-written,
 # field B should still be marked dirty because it was not persisted.
 @bug1 = DirtyTrackUser.new(email: 'bug1@example.com', name: 'Original', age: 20)
@@ -231,7 +225,7 @@ end
 @bug1.dirty_fields
 #=> [:age]
 
-## save_fields clears unrelated dirty fields (BUG: should preserve them)
+## save_fields preserves dirty state for unwritten fields
 # When fields A and B are both dirty and only A is saved via save_fields,
 # field B should still be marked dirty because it was not persisted.
 @bug2 = DirtyTrackUser.new(email: 'bug2@example.com', name: 'Original', age: 20)
