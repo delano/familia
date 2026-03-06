@@ -2,6 +2,8 @@
 #
 # frozen_string_literal: true
 
+require 'concurrent/map'
+
 module Familia
   class Horreum
     # DirtyTracking - Tracks in-memory field changes since last save/refresh.
@@ -14,6 +16,9 @@ module Familia
     #
     # Fields are marked dirty automatically by the setter defined in FieldType.
     # Dirty state is cleared after save, commit_fields, and refresh operations.
+    #
+    # Uses Concurrent::Map for thread-safe access to the dirty fields tracker
+    # without requiring explicit mutex locks.
     #
     # @example
     #   user = User.new(name: "Alice")
@@ -37,15 +42,9 @@ module Familia
       # @return [void]
       #
       def mark_dirty!(field_name, old_value)
-        @dirty_fields ||= {}
-        field_sym = field_name.to_sym
-
-        # Only record the original old value on the first mutation.
-        # Subsequent changes keep the original baseline so changed_fields
-        # shows [original, current] rather than [previous, current].
-        unless @dirty_fields.key?(field_sym)
-          @dirty_fields[field_sym] = old_value
-        end
+        @dirty_fields ||= Concurrent::Map.new
+        # Atomic: only stores old_value if field_sym is not already tracked.
+        @dirty_fields.put_if_absent(field_name.to_sym, old_value)
       end
 
       # Whether any fields (or a specific field) have unsaved changes.
@@ -54,7 +53,7 @@ module Familia
       # @return [Boolean]
       #
       def dirty?(field = nil)
-        @dirty_fields ||= {}
+        @dirty_fields ||= Concurrent::Map.new
 
         if field
           @dirty_fields.key?(field.to_sym)
@@ -68,7 +67,7 @@ module Familia
       # @return [Array<Symbol>] field names with unsaved changes
       #
       def dirty_fields
-        @dirty_fields ||= {}
+        @dirty_fields ||= Concurrent::Map.new
         @dirty_fields.keys
       end
 
@@ -80,11 +79,13 @@ module Familia
       # @return [Hash{Symbol => Array(Object, Object)}]
       #
       def changed_fields
-        @dirty_fields ||= {}
-        @dirty_fields.each_with_object({}) do |(field_name, old_value), result|
+        @dirty_fields ||= Concurrent::Map.new
+        result = {}
+        @dirty_fields.each_pair do |field_name, old_value|
           current_value = instance_variable_get(:"@#{field_name}")
           result[field_name] = [old_value, current_value]
         end
+        result
       end
 
       # Clears dirty tracking state for all or specific fields.
@@ -98,8 +99,9 @@ module Familia
       # @return [void]
       #
       def clear_dirty!(*field_names)
+        @dirty_fields ||= Concurrent::Map.new
         if field_names.empty?
-          @dirty_fields = {}
+          @dirty_fields.clear
         else
           field_names.each { |f| @dirty_fields.delete(f.to_sym) }
         end
