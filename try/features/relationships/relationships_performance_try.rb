@@ -159,7 +159,8 @@ after_instances = ObjectSpace.count_objects[:T_OBJECT]
 # Should not have created excessive objects (relationship metadata is shared)
 # Threshold accommodates per-instance allocations (Concurrent::Map for dirty
 # tracking, DataType relatives, etc.) which vary across Ruby versions.
-(after_instances - before_instances) < 500
+# Ruby 3.5+ allocates more T_OBJECTs internally per instance.
+(after_instances - before_instances) < 800
 #=> true
 
 ## Class-level relationship metadata should be constant size
