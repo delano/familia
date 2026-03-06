@@ -497,6 +497,39 @@ end
 @clean.dirty?
 #=> false
 
+# Issue #225: Objects loaded from Redis should not be dirty
+# instantiate_from_hash (used by load, find_by_dbkey) was missing
+# clear_dirty!, so loaded objects appeared dirty even though they matched DB state.
+
+## Object loaded via load should not be dirty
+@loaded_user = DirtyTrackUser.new(email: 'load-clean@example.com', name: 'LoadClean', age: 25, active: true)
+@loaded_user.save
+@reloaded = DirtyTrackUser.load('load-clean@example.com')
+@reloaded.dirty?
+#=> false
+
+## Loaded object should have empty dirty_fields
+@reloaded.dirty_fields
+#=> []
+
+## Loaded object should have empty changed_fields
+@reloaded.changed_fields
+#=> {}
+
+## Object loaded via find_by_dbkey should not be dirty
+@found = DirtyTrackUser.find_by_dbkey(DirtyTrackUser.dbkey('load-clean@example.com'))
+@found.dirty?
+#=> false
+
+## Modifying a loaded object marks it dirty as expected
+@reloaded.name = 'Modified'
+@reloaded.dirty?
+#=> true
+
+## Loaded object dirty_fields reflects the modification
+@reloaded.dirty_fields
+#=> [:name]
+
 ## Teardown
 DirtyTrackUser.instances.members.each do |id|
   obj = DirtyTrackUser.new(id)
