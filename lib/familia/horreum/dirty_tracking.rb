@@ -18,7 +18,11 @@ module Familia
     # Dirty state is cleared after save, commit_fields, and refresh operations.
     #
     # Uses Concurrent::Map for thread-safe access to the dirty fields tracker
-    # without requiring explicit mutex locks.
+    # without requiring explicit mutex locks. The map is eagerly initialized
+    # in Horreum#initialize and the allocate-based load paths so that no
+    # lazy ||= race exists under normal usage. The ||= fallbacks in each
+    # method are a safety net for subclasses that override initialize
+    # without calling super (a documented anti-pattern).
     #
     # @example
     #   user = User.new(name: "Alice")
@@ -42,6 +46,7 @@ module Familia
       # @return [void]
       #
       def mark_dirty!(field_name, old_value)
+        # Safety net for subclasses that override initialize without calling super
         @dirty_fields ||= Concurrent::Map.new
         # Atomic: only stores old_value if field_sym is not already tracked.
         @dirty_fields.put_if_absent(field_name.to_sym, old_value)
@@ -54,7 +59,6 @@ module Familia
       #
       def dirty?(field = nil)
         @dirty_fields ||= Concurrent::Map.new
-
         if field
           @dirty_fields.key?(field.to_sym)
         else

@@ -591,3 +591,5 @@ DirtyTrackSecureUser.instances.members.each do |id|
   obj = DirtyTrackSecureUser.new(id)
   obj.destroy! rescue nil
 end
+Familia.config.encryption_keys = nil
+Familia.config.current_key_version = nil

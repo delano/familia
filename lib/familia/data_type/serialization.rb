@@ -166,7 +166,7 @@ module Familia
         begin
           Familia::JsonSerializer.parse(val)
         rescue Familia::SerializerError
-          Familia.warn "[deserialize] Raw fallback in #{dbkey}: #{val.inspect[0..80]}"
+          Familia.warn "[deserialize] Raw fallback in #{dbkey} (#{val.class}, #{val.respond_to?(:bytesize) ? val.bytesize : '?'} bytes)"
           val
         end
       end
