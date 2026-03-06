@@ -77,6 +77,7 @@ module Familia
     # @param val [Object] The value to set
     # @return [Integer] 1 if field is a new field and value was set, 0 if field already exists
     def hsetnx(field, val)
+      warn_if_dirty!
       ret = dbclient.hsetnx dbkey, field.to_s, serialize_value(val)
       update_expiration if ret == 1
       ret
@@ -100,6 +101,7 @@ module Familia
     # @param field [String] The field to remove
     # @return [Integer] The number of fields that were removed (0 or 1)
     def remove_field(field)
+      warn_if_dirty!
       ret = dbclient.hdel dbkey, field.to_s
       update_expiration
       ret
@@ -122,6 +124,7 @@ module Familia
     alias decrby decrement
 
     def update(hsh = {})
+      warn_if_dirty!
       raise ArgumentError, 'Argument to bulk_set must be a hash' unless hsh.is_a?(Hash)
 
       data = hsh.inject([]) { |ret, pair| ret << [pair[0], serialize_value(pair[1])] }.flatten

@@ -266,12 +266,14 @@ module Familia
     end
 
     def remrangebyrank(srank, erank)
+      warn_if_dirty!
       ret = dbclient.zremrangebyrank dbkey, srank, erank
       update_expiration
       ret
     end
 
     def remrangebyscore(sscore, escore)
+      warn_if_dirty!
       ret = dbclient.zremrangebyscore dbkey, sscore, escore
       update_expiration
       ret
@@ -295,6 +297,7 @@ module Familia
     # @param value The value to remove from the sorted set
     # @return [Integer] The number of members that were removed (0 or 1)
     def remove_element(value)
+      warn_if_dirty!
       Familia.trace :REMOVE_ELEMENT, nil, "#{value}<#{value.class}>" if Familia.debug?
       ret = dbclient.zrem dbkey, serialize_value(value)
       update_expiration

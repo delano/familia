@@ -87,6 +87,7 @@ module Familia
     # @param value The value to remove from the set
     # @return [Integer] The number of members that were removed (0 or 1)
     def remove_element(value)
+      warn_if_dirty!
       ret = dbclient.srem dbkey, serialize_value(value)
       update_expiration
       ret
@@ -98,12 +99,14 @@ module Familia
     end
 
     def pop
+      warn_if_dirty!
       ret = deserialize_value(dbclient.spop(dbkey))
       update_expiration
       ret
     end
 
     def move(dstkey, val)
+      warn_if_dirty!
       ret = dbclient.smove dbkey, dstkey, serialize_value(val)
       update_expiration
       ret

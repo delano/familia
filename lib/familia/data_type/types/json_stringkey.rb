@@ -80,6 +80,7 @@ module Familia
     # @return [String] "OK" on success
     #
     def value=(val)
+      warn_if_dirty!
       ret = dbclient.set(dbkey, serialize_value(val))
       update_expiration
       ret
@@ -93,6 +94,7 @@ module Familia
     # @return [Boolean] true if the key was set, false if it already existed
     #
     def setnx(val)
+      warn_if_dirty!
       ret = dbclient.setnx(dbkey, serialize_value(val))
       update_expiration if ret
       ret
