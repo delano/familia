@@ -1,0 +1,16 @@
+Fixed
+-----
+
+- Objects loaded from Redis via ``load``, ``find``, ``find_by_id``, ``find_by_dbkey``,
+  and ``load_multi`` no longer appear dirty. The ``instantiate_from_hash`` factory
+  now calls ``clear_dirty!`` after field assignment, matching the behavior of
+  ``initialize`` and ``refresh!``. Previously, every loaded object had all fields
+  marked dirty, causing false ``warn_if_dirty!`` warnings on subsequent collection
+  writes. Fixes `#225 <https://github.com/delano/familia/issues/225>`_.
+
+AI Assistance
+-------------
+
+- Claude identified the one-line fix in ``instantiate_from_hash`` and added 6 test
+  cases covering the ``load`` and ``find_by_dbkey`` paths, including verification
+  that modifying a loaded object still correctly marks it dirty.
