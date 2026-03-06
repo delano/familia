@@ -24,6 +24,8 @@ module Familia
 
       handle_method_conflict(klass, :"#{method_name}=") do
         klass.define_method :"#{method_name}=" do |value|
+          old_value = instance_variable_get(:"@#{field_name}")
+
           if value.nil?
             instance_variable_set(:"@#{field_name}", nil)
           elsif value.is_a?(::String) && value.empty?
@@ -44,6 +46,9 @@ module Familia
             concealed = ConcealedString.new(encrypted, self, field_type)
             instance_variable_set(:"@#{field_name}", concealed)
           end
+
+          # Track the change for dirty-tracking (only for Horreum instances)
+          mark_dirty!(field_name, old_value) if respond_to?(:mark_dirty!)
         end
       end
     end

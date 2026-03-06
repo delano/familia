@@ -3,6 +3,7 @@
 # frozen_string_literal: true
 
 require_relative '../support/helpers/test_helpers'
+require 'base64'
 
 class DirtyTrackUser < Familia::Horreum
   identifier_field :email
@@ -10,6 +11,19 @@ class DirtyTrackUser < Familia::Horreum
   field :name
   field :age
   field :active
+end
+
+# Encrypted field model for dirty tracking tests
+# Encryption keys must be configured before defining the class
+Familia.config.encryption_keys = { v1: Base64.strict_encode64('a' * 32) }
+Familia.config.current_key_version = :v1
+
+class DirtyTrackSecureUser < Familia::Horreum
+  feature :encrypted_fields
+  identifier_field :user_id
+  field :user_id
+  field :display_name
+  encrypted_field :secret_token
 end
 
 @user = DirtyTrackUser.new(email: 'alice@example.com', name: 'Alice', age: 30, active: true)
@@ -530,8 +544,56 @@ end
 @reloaded.dirty_fields
 #=> [:name]
 
+# Encrypted field dirty tracking tests
+#
+# Encrypted field setters (EncryptedFieldType#define_setter) use
+# instance_variable_set directly without calling mark_dirty!. This means
+# setting an encrypted field does not mark the object as dirty, even though
+# encrypted fields ARE persisted to Redis just like regular fields.
+#
+# These tests document the correct behavior and should FAIL until
+# mark_dirty! is added to the encrypted field setter.
+
+## Setting an encrypted field should mark object as dirty
+@enc1 = DirtyTrackSecureUser.new(user_id: 'enc-dirty-1', display_name: 'EncUser1')
+@enc1.save
+@enc1 = DirtyTrackSecureUser.load('enc-dirty-1')
+@enc1.secret_token = 'my-secret-abc'
+@enc1.dirty?
+#=> true
+
+## Encrypted field should appear in dirty_fields
+@enc1.dirty_fields
+#=> [:secret_token]
+
+## Encrypted field should appear in changed_fields
+@enc1.changed_fields.key?(:secret_token)
+#=> true
+
+## Save should clear encrypted field dirty state
+@enc2 = DirtyTrackSecureUser.new(user_id: 'enc-dirty-2', display_name: 'EncUser2')
+@enc2.save
+@enc2 = DirtyTrackSecureUser.load('enc-dirty-2')
+@enc2.secret_token = 'another-secret'
+@enc2.save
+@enc2.dirty?
+#=> false
+
+## Mixed dirty tracking: both regular and encrypted fields appear in dirty_fields
+@enc3 = DirtyTrackSecureUser.new(user_id: 'enc-dirty-3', display_name: 'EncUser3')
+@enc3.save
+@enc3 = DirtyTrackSecureUser.load('enc-dirty-3')
+@enc3.display_name = 'UpdatedName'
+@enc3.secret_token = 'secret-xyz'
+@enc3.dirty_fields.sort
+#=> [:display_name, :secret_token]
+
 ## Teardown
 DirtyTrackUser.instances.members.each do |id|
   obj = DirtyTrackUser.new(id)
+  obj.destroy! rescue nil
+end
+DirtyTrackSecureUser.instances.members.each do |id|
+  obj = DirtyTrackSecureUser.new(id)
   obj.destroy! rescue nil
 end
