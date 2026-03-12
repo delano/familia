@@ -4,5 +4,5 @@
 
 module Familia
   # Version information for the Familia
-  VERSION = '2.3.1'
+  VERSION = '2.3.2'
 end
