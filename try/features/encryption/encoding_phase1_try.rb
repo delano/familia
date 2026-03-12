@@ -72,16 +72,18 @@ data.algorithm
 ## from_json handles payloads missing the encoding key (backward compat)
 test_keys = { v1: Base64.strict_encode64('a' * 32) }
 context = "TestModel:secret_field:user123"
-plaintext = "backward compat test"
 
-Familia.config.encryption_keys = test_keys
-Familia.config.current_key_version = :v1
-encrypted = Familia::Encryption.encrypt(plaintext, context: context)
-
-# Verify the envelope does not contain encoding key
-parsed = Familia::JsonSerializer.parse(encrypted, symbolize_names: true)
-parsed.key?(:encoding)
-#=> false
+# Simulate a pre-Phase-2 envelope by constructing one without encoding
+legacy_hash = {
+  algorithm: "xchacha20poly1305",
+  nonce: Base64.strict_encode64('n' * 24),
+  ciphertext: Base64.strict_encode64('c' * 32),
+  auth_tag: Base64.strict_encode64('t' * 16),
+  key_version: "v1"
+}
+data = Familia::Encryption::EncryptedData.from_json(legacy_hash)
+data.encoding
+#=> nil
 
 ## Decryption of legacy envelope (no encoding key) defaults to UTF-8
 test_keys = { v1: Base64.strict_encode64('a' * 32) }
@@ -214,7 +216,7 @@ json_with_extras = Familia::JsonSerializer.dump(parsed)
 
 data = Familia::Encryption::EncryptedData.validate!(json_with_extras)
 [data.class, data.encoding]
-#=> [Familia::Encryption::EncryptedData, nil]
+#=> [Familia::Encryption::EncryptedData, "UTF-8"]
 
 ## from_json handles Hash with string keys and unknown extras
 test_keys = { v1: Base64.strict_encode64('a' * 32) }
@@ -233,17 +235,15 @@ data.algorithm
 #=> "xchacha20poly1305"
 
 ## from_json Hash path without encoding key defaults encoding to nil
-test_keys = { v1: Base64.strict_encode64('a' * 32) }
-context = "TestModel:secret_field:user123"
-plaintext = "hash backward compat"
-
-Familia.config.encryption_keys = test_keys
-Familia.config.current_key_version = :v1
-encrypted = Familia::Encryption.encrypt(plaintext, context: context)
-
-# Parse to hash, confirm no encoding, pass as hash
-parsed = Familia::JsonSerializer.parse(encrypted, symbolize_names: true)
-data = Familia::Encryption::EncryptedData.from_json(parsed)
+# Simulate a pre-Phase-2 envelope by constructing one without encoding
+legacy_hash = {
+  algorithm: "xchacha20poly1305",
+  nonce: Base64.strict_encode64('n' * 24),
+  ciphertext: Base64.strict_encode64('c' * 32),
+  auth_tag: Base64.strict_encode64('t' * 16),
+  key_version: "v1"
+}
+data = Familia::Encryption::EncryptedData.from_json(legacy_hash)
 data.encoding
 #=> nil
 
