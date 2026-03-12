@@ -274,6 +274,73 @@ Familia.config.current_key_version = :v1
 Familia::Encryption.decrypt("", context: context)
 #=> nil
 
+## Non-UTF-8 encoding in envelope is applied on decrypt
+test_keys = { v1: Base64.strict_encode64('a' * 32) }
+context = "TestModel:secret_field:user123"
+plaintext = "caf\u00e9"
+
+Familia.config.encryption_keys = test_keys
+Familia.config.current_key_version = :v1
+encrypted = Familia::Encryption.encrypt(plaintext, context: context)
+
+# Simulate a Phase 2 writer that records the original encoding
+parsed = Familia::JsonSerializer.parse(encrypted, symbolize_names: true)
+parsed[:encoding] = "ISO-8859-1"
+future_json = Familia::JsonSerializer.dump(parsed)
+
+decrypted = Familia::Encryption.decrypt(future_json, context: context)
+[decrypted.encoding.to_s, decrypted.bytes == plaintext.bytes]
+#=> ["ISO-8859-1", true]
+
+## Decrypt of nil returns nil without error
+test_keys = { v1: Base64.strict_encode64('a' * 32) }
+context = "TestModel:secret_field:user123"
+
+Familia.config.encryption_keys = test_keys
+Familia.config.current_key_version = :v1
+Familia::Encryption.decrypt(nil, context: context)
+#=> nil
+
+## Bogus encoding name in envelope raises EncryptionError
+test_keys = { v1: Base64.strict_encode64('a' * 32) }
+context = "TestModel:secret_field:user123"
+plaintext = "bad encoding test"
+
+Familia.config.encryption_keys = test_keys
+Familia.config.current_key_version = :v1
+encrypted = Familia::Encryption.encrypt(plaintext, context: context)
+
+# Inject an invalid encoding name into the envelope
+parsed = Familia::JsonSerializer.parse(encrypted, symbolize_names: true)
+parsed[:encoding] = "NOT-A-REAL-ENCODING"
+tampered_json = Familia::JsonSerializer.dump(parsed)
+
+begin
+  Familia::Encryption.decrypt(tampered_json, context: context)
+  "should have raised"
+rescue Familia::Encryption::EncryptionError => e
+  e.message
+end
+#=~ /Decryption failed/
+
+## Binary data round-trip preserves bytes when encoding is set to ASCII-8BIT
+test_keys = { v1: Base64.strict_encode64('a' * 32) }
+context = "TestModel:secret_field:user123"
+plaintext = "binary\x00payload\xFF".b
+
+Familia.config.encryption_keys = test_keys
+Familia.config.current_key_version = :v1
+encrypted = Familia::Encryption.encrypt(plaintext, context: context)
+
+# Simulate a Phase 2 writer that records ASCII-8BIT for binary content
+parsed = Familia::JsonSerializer.parse(encrypted, symbolize_names: true)
+parsed[:encoding] = "ASCII-8BIT"
+future_json = Familia::JsonSerializer.dump(parsed)
+
+decrypted = Familia::Encryption.decrypt(future_json, context: context)
+[decrypted.encoding.to_s, decrypted.bytes == plaintext.bytes]
+#=> ["ASCII-8BIT", true]
+
 ## Multibyte UTF-8 content round-trips with correct encoding and byte count
 test_keys = { v1: Base64.strict_encode64('a' * 32) }
 context = "TestModel:secret_field:user123"
