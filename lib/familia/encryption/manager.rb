@@ -60,7 +60,8 @@ module Familia
           ciphertext = decode_and_validate_ciphertext(data.ciphertext)
           auth_tag = decode_and_validate(data.auth_tag, provider.auth_tag_size, 'auth_tag')
 
-          provider.decrypt(ciphertext, key, nonce, auth_tag, additional_data)
+          plaintext = provider.decrypt(ciphertext, key, nonce, auth_tag, additional_data)
+          plaintext.force_encoding(data.encoding || 'UTF-8')
         rescue EncryptionError
           raise
         rescue Familia::SerializerError => e

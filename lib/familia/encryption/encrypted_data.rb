@@ -4,7 +4,18 @@
 
 module Familia
   module Encryption
-    EncryptedData = Data.define(:algorithm, :nonce, :ciphertext, :auth_tag, :key_version) do
+    EncryptedData = Data.define(:algorithm, :nonce, :ciphertext, :auth_tag, :key_version, :encoding) do
+      def initialize(algorithm:, nonce:, ciphertext:, auth_tag:, key_version:, encoding: nil)
+        super
+      end
+
+      # Omit nil-valued keys from the hash representation so that
+      # the encrypted envelope stays backward-compatible (no :encoding
+      # key unless explicitly set).
+      def to_h
+        super.compact
+      end
+
       # Class methods for parsing and validation
       def self.valid?(json_string)
         return true if json_string.nil? # Allow nil values
@@ -43,7 +54,7 @@ module Familia
 
         raise EncryptionError, "Missing required fields: #{missing_fields.join(', ')}" unless missing_fields.empty?
 
-        new(**parsed)
+        new(**parsed.slice(*members))
       end
 
       def self.from_json(json_string_or_hash)
@@ -53,7 +64,7 @@ module Familia
           parsed = json_string_or_hash
           # Symbolize keys if they're strings
           parsed = parsed.transform_keys(&:to_sym) if parsed.keys.first.is_a?(String)
-          new(**parsed)
+          new(**parsed.slice(*members))
         else
           # JSON string - validate and parse
           validate!(json_string_or_hash)
