@@ -15,7 +15,8 @@ module Familia
       end
 
       def encrypt(plaintext, context:, additional_data: nil)
-        return nil if plaintext.to_s.empty?
+        plaintext = plaintext.to_s
+        return nil if plaintext.empty?
 
         key = derive_key(context)
 
