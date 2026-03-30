@@ -28,16 +28,15 @@ Familia.dbclient.flushdb
 
 ## AAD prevents field substitution attacks - proper cross-record test
 @victim = AADProtectedModel.new(id: 'victim-1', email: 'victim@example.com')
-@victim.save  # Need to save first for AAD to be active
 @victim.api_key = 'victim-secret-key'
-@victim.save  # Save the encrypted value
+@victim.save
 
 # Extract the raw encrypted JSON data (not the ConcealedString object)
 @victim_encrypted_data = @victim.api_key.encrypted_value
 
 # Create an attacker record with different AAD context (different email)
 @attacker = AADProtectedModel.new(id: 'attacker-1', email: 'attacker@evil.com')
-@attacker.save  # Need to save for AAD to be active
+@attacker.save
 
 # Simulate database tampering: set attacker's field to victim's encrypted data
 # This simulates what an attacker with database access might try to do
@@ -67,7 +66,6 @@ end
 
 ## Cross-record attack with same email (should still fail due to different identifiers)
 victim2 = AADProtectedModel.new(id: 'victim-2', email: 'shared@example.com')
-victim2.save
 victim2.api_key = 'victim2-secret'
 victim2.save
 
@@ -89,21 +87,24 @@ end
 @result3
 #=> "Familia::EncryptionError"
 
-## Without saving, AAD is not enforced (no database context)
+## AAD fields are enforced on unsaved records - changing aad_field breaks reveal
 unsaved_model = AADProtectedModel.new(id: 'unsaved-1', email: 'test@example.com')
 unsaved_model.api_key = 'test-key'
 
-# Change email after encryption but before save - should still work
+# Change email after encryption - AAD mismatch should cause decryption failure
 unsaved_model.email = 'changed@example.com'
-decrypted = nil
-unsaved_model.api_key.reveal { |plaintext| decrypted = plaintext }
-decrypted
-#=> "test-key"
+@result_unsaved = begin
+  unsaved_model.api_key.reveal { |plaintext| plaintext }
+  "UNEXPECTED SUCCESS"
+rescue Familia::EncryptionError => error
+  error.class.name
+end
+@result_unsaved
+#=> "Familia::EncryptionError"
 
 ## Cross-model attack with raw encrypted JSON
 # Demonstrate that raw encrypted data can't be moved between models
 @json_victim = AADProtectedModel.new(id: 'json-victim-1', email: 'jsonvictim@example.com')
-@json_victim.save
 @json_victim.api_key = 'json-victim-secret'
 
 # Get the raw encrypted JSON and create a new ConcealedString for different record
@@ -126,7 +127,6 @@ end
 
 ## Successful decryption with correct context (control test)
 legitimate_user = AADProtectedModel.new(id: 'legitimate-1', email: 'legit@example.com')
-legitimate_user.save
 legitimate_user.api_key = 'legitimate-secret'
 legitimate_user.save
 
