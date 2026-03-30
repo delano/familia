@@ -5,6 +5,7 @@ Indexing provides O(1) field-to-object lookups using Redis data structures, enab
 ## Core Concepts
 
 Indexing creates fast lookups for finding objects by field values:
+
 - **O(1) performance** - Hash/Set-based constant-time access
 - **Automatic management** - Class indexes update on save/destroy
 - **Flexible scoping** - Global or parent-scoped uniqueness
@@ -12,12 +13,12 @@ Indexing creates fast lookups for finding objects by field values:
 
 ## Index Types
 
-| Type | Scope | Use Case | Structure |
-|------|-------|----------|-----------|
-| `unique_index` | Class | Global unique fields | Redis HashKey |
-| `unique_index` | Instance | Parent-scoped unique | Redis HashKey |
-| `multi_index` | Class (default) | Global non-unique groupings | Redis Set per value |
-| `multi_index` | Instance | Parent-scoped groupings | Redis Set per value |
+| Type           | Scope           | Use Case                    | Structure           |
+| -------------- | --------------- | --------------------------- | ------------------- |
+| `unique_index` | Class           | Global unique fields        | Redis HashKey       |
+| `unique_index` | Instance        | Parent-scoped unique        | Redis HashKey       |
+| `multi_index`  | Class (default) | Global non-unique groupings | Redis Set per value |
+| `multi_index`  | Instance        | Parent-scoped groupings     | Redis Set per value |
 
 ## Class-Level Unique Indexing
 
@@ -47,12 +48,12 @@ User.find_by_email('alice.smith@example.com')  # => nil
 
 ### Generated Methods
 
-| Method | Description |
-|--------|-------------|
-| `User.find_by_email(email)` | O(1) lookup |
-| `User.index_email_for(user)` | Manual index |
+| Method                         | Description       |
+| ------------------------------ | ----------------- |
+| `User.find_by_email(email)`    | O(1) lookup       |
+| `User.index_email_for(user)`   | Manual index      |
 | `User.unindex_email_for(user)` | Remove from index |
-| `User.reindex_email_for(user)` | Update index |
+| `User.reindex_email_for(user)` | Update index      |
 
 ## Instance-Scoped Unique Indexing
 
@@ -139,20 +140,20 @@ Customer.role_index_for('user').dbkey   # => "customer:role_index:user"
 
 ### Generated Class Methods
 
-| Method | Description |
-|--------|-------------|
-| `Customer.role_index_for(value)` | Factory returning `Familia::UnsortedSet` for the field value |
-| `Customer.find_all_by_role(value)` | Find all objects with that field value |
-| `Customer.sample_from_role(value, count)` | Random sample of objects |
-| `Customer.rebuild_role_index` | Rebuild the entire index from source data |
+| Method                                    | Description                                                  |
+| ----------------------------------------- | ------------------------------------------------------------ |
+| `Customer.role_index_for(value)`          | Factory returning `Familia::UnsortedSet` for the field value |
+| `Customer.find_all_by_role(value)`        | Find all objects with that field value                       |
+| `Customer.sample_from_role(value, count)` | Random sample of objects                                     |
+| `Customer.rebuild_role_index`             | Rebuild the entire index from source data                    |
 
 ### Generated Instance Methods
 
-| Method | Description |
-|--------|-------------|
-| `customer.add_to_class_role_index` | Add this object to its field value's index |
-| `customer.remove_from_class_role_index` | Remove this object from its field value's index |
-| `customer.update_in_class_role_index(old_value)` | Move object from old index to new index |
+| Method                                           | Description                                     |
+| ------------------------------------------------ | ----------------------------------------------- |
+| `customer.add_to_class_role_index`               | Add this object to its field value's index      |
+| `customer.remove_from_class_role_index`          | Remove this object from its field value's index |
+| `customer.update_in_class_role_index(old_value)` | Move object from old index to new index         |
 
 ### Update Operations
 
@@ -271,24 +272,28 @@ todays_events = user.find_all_by_daily_partition(today)
 ### Class vs Instance Scoping
 
 **Class-level unique (`unique_index :email, :email_lookup`):**
+
 - Automatic indexing on save/destroy
 - System-wide uniqueness
 - No parent context needed
 - Examples: emails, usernames, API keys
 
 **Class-level multi (`multi_index :role, :role_index`):**
+
 - Default behavior (no `within:` needed)
 - Groups all objects by field value at class level
 - Manual indexing via instance methods
 - Examples: roles, categories, statuses
 
 **Instance-scoped (`unique_index :badge, :badge_index, within: Company`):**
+
 - Manual indexing required
 - Unique within parent only
 - Requires parent context
 - Examples: employee IDs, project names per team
 
 **Instance-scoped multi (`multi_index :dept, :dept_index, within: Company`):**
+
 - Groups objects by field value within parent scope
 - Same field value allowed across different parents
 - Manual indexing with parent context
@@ -297,11 +302,13 @@ todays_events = user.find_all_by_daily_partition(today)
 ### Unique vs Multi Indexing
 
 **Unique index (`unique_index`):**
+
 - 1:1 field-to-object mapping
 - Returns single object or nil
 - Enforces uniqueness within scope
 
 **Multi index (`multi_index`):**
+
 - 1:many field-to-objects mapping
 - Returns array of objects
 - Allows duplicate values
@@ -325,6 +332,7 @@ These methods work because **indexes are derived data** - they're computed from 
 > **Important:** Participation data (like `@team.members`) cannot be rebuilt automatically because participations represent business decisions, not derived data. See [Why Participations Can't Be Rebuilt](../../lib/familia/features/relationships/participation/rebuild_strategies.md) for the critical distinction between indexes and participations.
 
 **When to rebuild indexes:**
+
 - After data migrations or bulk imports
 - Recovering from index corruption
 - Adding indexes to existing data
@@ -372,26 +380,29 @@ Index values (the object identifiers stored in hash keys and sets) are raw strin
 
 ## Redis Key Patterns
 
-| Type | Pattern | Example |
-|------|---------|---------|
-| Class unique | `{class}:{index_name}` | `user:email_lookup` |
-| Class multi | `{class}:{index_name}:{value}` | `customer:role_index:admin` |
-| Instance unique | `{scope}:{id}:{index_name}` | `company:123:badge_index` |
-| Instance multi | `{scope}:{id}:{index_name}:{value}` | `company:123:dept_index:engineering` |
+| Type            | Pattern                             | Example                              |
+| --------------- | ----------------------------------- | ------------------------------------ |
+| Class unique    | `{class}:{index_name}`              | `user:email_lookup`                  |
+| Class multi     | `{class}:{index_name}:{value}`      | `customer:role_index:admin`          |
+| Instance unique | `{scope}:{id}:{index_name}`         | `company:123:badge_index`            |
+| Instance multi  | `{scope}:{id}:{index_name}:{value}` | `company:123:dept_index:engineering` |
 
 ## Troubleshooting
 
 ### Common Issues
 
 **Query methods not generated:**
+
 - Check `query: true` (default) or explicitly set
 - Verify `feature :relationships` declared
 
 **Index not updating:**
+
 - Class indexes: automatic on save/destroy
 - Instance indexes: require manual `add_to_*` calls
 
 **Duplicate key errors:**
+
 - Use `multi_index` for non-unique values
 - Consider instance-scoped for contextual uniqueness
 
