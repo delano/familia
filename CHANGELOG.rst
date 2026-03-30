@@ -7,6 +7,41 @@ The format is based on `Keep a Changelog <https://keepachangelog.com/en/1.1.0/>`
 
    <!--scriv-insert-here-->
 
+.. _changelog-2.3.3:
+
+2.3.3 — 2026-03-30
+==================
+
+Added
+-----
+
+- Encrypt now records the original plaintext encoding in the EncryptedData
+  envelope (``encoding`` field), completing the Phase 2 encoding round-trip
+  fix. Decrypt (Phase 1, #228) already falls back to UTF-8 when the field
+  is absent, so this change is backward-compatible. PR #229
+
+Fixed
+-----
+
+- ``build_aad`` now produces consistent AAD (Additional Authenticated Data)
+  regardless of whether the record has been persisted. Previously, encrypted
+  fields with ``aad_fields`` used different AAD computation paths before and
+  after save, making ``reveal`` fail on any record created via ``create!``.
+  Issue #232, PR #234. No migration needed — the previous behavior was
+  broken (AAD mismatch prevented decryption), so no valid ciphertexts
+  exist under the old inconsistent paths.
+
+AI Assistance
+-------------
+
+- Implementation and test authoring delegated to backend-dev agents, with
+  orchestration and Phase 1 test fixups handled in the main session. Claude
+  Opus 4.6.
+
+- Claude assisted with implementing the fix, updating affected tests, and
+  writing the round-trip regression test. The issue analysis, root cause
+  identification, and suggested fix were provided in the issue by the author.
+
 .. _changelog-2.3.2:
 
 2.3.2 — 2026-03-12
