@@ -225,8 +225,13 @@ module Familia
         # Always include aad_field values regardless of persistence state.
         # The field values are available on the record before save and must
         # produce identical AAD at both encrypt and decrypt time.
-        values = @aad_fields.map { |field| record.send(field) }
-        all_components = [*base_components, *values].compact
+        #
+        # .to_s coerces nil to "" so that every declared AAD field occupies
+        # a fixed position in the join. Without this, a nil field would
+        # shift later values left and produce a different hash once the
+        # field is populated — making existing ciphertext undecryptable.
+        values = @aad_fields.map { |field| record.send(field).to_s }
+        all_components = [*base_components, *values]
         Digest::SHA256.hexdigest(all_components.join(':'))
       end
     end

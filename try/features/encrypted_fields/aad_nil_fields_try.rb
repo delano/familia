@@ -23,6 +23,17 @@ class AADNilFieldModel < Familia::Horreum
   encrypted_field :api_key, aad_fields: [:email]
 end
 
+# Model with multiple AAD fields to test positional stability
+class AADMultiFieldModel < Familia::Horreum
+  feature :encrypted_fields
+  identifier_field :id
+  field :id
+  field :org
+  field :role
+  field :region
+  encrypted_field :token, aad_fields: [:org, :role, :region]
+end
+
 Familia.dbclient.flushdb
 
 ## Encrypt with nil AAD field and reveal without changing it succeeds
@@ -69,13 +80,33 @@ record4.api_key.reveal { |pt| decrypted4 = pt }
 decrypted4
 #=> "empty-email-secret"
 
-## nil and empty string AAD fields produce different AAD values
+## nil and empty string AAD fields produce identical AAD (both are "no value")
 record_nil = AADNilFieldModel.new(id: 'aad-cmp-1')
 record_empty = AADNilFieldModel.new(id: 'aad-cmp-1', email: '')
 field_type = AADNilFieldModel.field_types[:api_key]
 aad_nil = field_type.send(:build_aad, record_nil)
 aad_empty = field_type.send(:build_aad, record_empty)
-aad_nil != aad_empty
+aad_nil == aad_empty
+#=> true
+
+## Nil AAD fields preserve position: [A, nil, C] differs from [A, C]
+# With the old .compact, a nil middle field would shift later values left,
+# producing the same hash as a model where that field never existed.
+# With .to_s, nil becomes "" and holds its position: "A::C" != "A:C".
+@ft = AADMultiFieldModel.field_types[:token]
+rec_nil_middle = AADMultiFieldModel.new(id: 'pos-1', org: 'acme', role: nil, region: 'us')
+rec_no_middle  = AADMultiFieldModel.new(id: 'pos-1', org: 'acme', role: 'us')
+aad_with_nil = @ft.send(:build_aad, rec_nil_middle)
+aad_shifted  = @ft.send(:build_aad, rec_no_middle)
+aad_with_nil != aad_shifted
+#=> true
+
+## Adjacent nil fields are distinguishable from a single nil
+rec_two_nils = AADMultiFieldModel.new(id: 'pos-2', org: 'acme')
+rec_one_nil  = AADMultiFieldModel.new(id: 'pos-2', org: 'acme', region: 'eu')
+aad_two = @ft.send(:build_aad, rec_two_nils)
+aad_one = @ft.send(:build_aad, rec_one_nil)
+aad_two != aad_one
 #=> true
 
 Familia.dbclient.flushdb
