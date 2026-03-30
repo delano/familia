@@ -23,6 +23,14 @@ class AADRoundtripModel < Familia::Horreum
   encrypted_field :api_key, aad_fields: [:domain_id]
 end
 
+class AADRoundtripEnforcementModel < Familia::Horreum
+  feature :encrypted_fields
+  identifier_field :id
+  field :id
+  field :email
+  encrypted_field :api_key, aad_fields: [:email]
+end
+
 Familia.dbclient.flushdb
 
 ## reveal succeeds on in-memory object after create! with aad_fields
@@ -68,13 +76,26 @@ reloaded2.api_key.reveal { |pt| decrypted4 = pt }
 decrypted4
 #=> "reload-secret"
 
-## AAD fields are enforced even on unsaved records
-unsaved2 = AADRoundtripModel.new(domain_id: 'dom-006', email: 'a@example.com')
+## AAD fields are enforced on unsaved records - unchanged field decrypts successfully
+unsaved2 = AADRoundtripEnforcementModel.new(id: 'enforce-1', email: 'stable@example.com')
 unsaved2.api_key = 'bound-secret'
 decrypted5 = nil
 unsaved2.api_key.reveal { |pt| decrypted5 = pt }
 decrypted5
 #=> "bound-secret"
+
+## AAD fields are enforced on unsaved records - changed field breaks reveal
+unsaved3 = AADRoundtripEnforcementModel.new(id: 'enforce-2', email: 'original@example.com')
+unsaved3.api_key = 'enforced-secret'
+unsaved3.email = 'tampered@example.com'
+result_enforced = begin
+  unsaved3.api_key.reveal { |pt| pt }
+  'UNEXPECTED SUCCESS'
+rescue Familia::EncryptionError
+  'Familia::EncryptionError'
+end
+result_enforced
+#=> "Familia::EncryptionError"
 
 Familia.dbclient.flushdb
 Familia.config.encryption_keys = nil

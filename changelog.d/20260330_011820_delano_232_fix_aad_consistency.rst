@@ -5,7 +5,9 @@ Fixed
   regardless of whether the record has been persisted. Previously, encrypted
   fields with ``aad_fields`` used different AAD computation paths before and
   after save, making ``reveal`` fail on any record created via ``create!``.
-  PR #232
+  Issue #232, PR #234. No migration needed — the previous behavior was
+  broken (AAD mismatch prevented decryption), so no valid ciphertexts
+  exist under the old inconsistent paths.
 
 AI Assistance
 -------------
