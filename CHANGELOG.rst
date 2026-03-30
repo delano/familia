@@ -31,6 +31,12 @@ Fixed
   broken (AAD mismatch prevented decryption), so no valid ciphertexts
   exist under the old inconsistent paths.
 
+- ``build_aad`` no longer uses ``.compact`` on AAD field values. Previously,
+  nil fields were silently dropped, shifting later values left and producing
+  a different hash once the field was populated. Now each field is coerced
+  via ``.to_s`` so that nil and empty string both occupy a fixed position
+  in the joined AAD string. Issue #232, PR #234.
+
 AI Assistance
 -------------
 
