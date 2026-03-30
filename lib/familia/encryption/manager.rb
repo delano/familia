@@ -15,7 +15,8 @@ module Familia
       end
 
       def encrypt(plaintext, context:, additional_data: nil)
-        return nil if plaintext.to_s.empty?
+        plaintext = plaintext.to_s
+        return nil if plaintext.empty?
 
         key = derive_key(context)
 
@@ -26,7 +27,8 @@ module Familia
           nonce: Base64.strict_encode64(result[:nonce]),
           ciphertext: Base64.strict_encode64(result[:ciphertext]),
           auth_tag: Base64.strict_encode64(result[:auth_tag]),
-          key_version: current_key_version
+          key_version: current_key_version,
+          encoding: plaintext.encoding.name,
         ).to_h
 
         Familia::JsonSerializer.dump(encrypted_data)
@@ -35,7 +37,9 @@ module Familia
       end
 
       def decrypt(encrypted_json_or_hash, context:, additional_data: nil)
-        return nil if encrypted_json_or_hash.nil? || (encrypted_json_or_hash.respond_to?(:empty?) && encrypted_json_or_hash.empty?)
+        if encrypted_json_or_hash.nil? || (encrypted_json_or_hash.respond_to?(:empty?) && encrypted_json_or_hash.empty?)
+          return nil
+        end
 
         # Increment counter immediately to track all decryption attempts, even failed ones
         Familia::Encryption.derivation_count.increment

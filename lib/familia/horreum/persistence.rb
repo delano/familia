@@ -275,12 +275,11 @@ module Familia
       # Optionally updates the key's expiration time if the feature is enabled
       # for the object's class.
       #
-      # Unlike +save+, this method does NOT add the object to the class-level
-      # +instances+ sorted set, does not run +prepare_for_save+ (timestamps,
-      # unique index guards), and does not update class indexes. Use this for
-      # updating fields on an object that is already persisted and tracked.
-      # If the object's hash key was created via +commit_fields+ alone, it
-      # will exist in the DB but won't appear in +instances.to_a+ listings.
+      # Unlike +save+, this method does not run +prepare_for_save+ (timestamps,
+      # unique index guards) and does not update class indexes. It does update
+      # the class-level +instances+ sorted set via +touch_instances!+, so the
+      # object will appear in +instances.to_a+ listings. Use this for updating
+      # fields on an object that is already persisted and tracked.
       #
       # @param update_expiration [Boolean] Whether to update the expiration time
       #   of the Valkey key. Defaults to true.
