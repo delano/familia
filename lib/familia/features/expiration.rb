@@ -389,10 +389,12 @@ module Familia
       #
       # @example Make session persistent
       #   session.persist!
+      #   session.clear_expiration!  # alias
       #
       def persist!
         dbclient.persist(dbkey)
       end
+      alias clear_expiration! persist!
 
       # Returns a report of TTL values for the main key and all relation keys.
       #

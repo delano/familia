@@ -622,7 +622,7 @@ Extend current TTL by additional time.
 
 **Returns:** Boolean indicating success
 
-#### `persist!`
+#### `persist!` / `clear_expiration!`
 Remove TTL, making object persistent.
 
 **Returns:** Boolean indicating success
