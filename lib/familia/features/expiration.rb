@@ -385,6 +385,10 @@ module Familia
 
       # Remove expiration, making the object persist indefinitely
       #
+      # Cascades to all related fields by default, following the same
+      # pattern as update_expiration. Relations with `no_expiration: true`
+      # are skipped (they already persist independently).
+      #
       # @return [Boolean] Success of the operation
       #
       # @example Make session persistent
@@ -392,6 +396,15 @@ module Familia
       #   session.clear_expiration!  # alias
       #
       def persist!
+        # Cascade to relations first, mirroring update_expiration behavior
+        if self.class.relations?
+          self.class.related_fields.each do |name, definition|
+            next if definition.opts[:no_expiration]
+
+            send(name).persist
+          end
+        end
+
         dbclient.persist(dbkey)
       end
       alias clear_expiration! persist!
