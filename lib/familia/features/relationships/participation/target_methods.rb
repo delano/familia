@@ -58,6 +58,8 @@ module Familia
               build_stage_method(target_class, collection_name, staged, through)
               build_activate_method(target_class, collection_name, staged, through)
               build_unstage_method(target_class, collection_name, staged, through)
+              build_bulk_stage_method(target_class, collection_name, staged, through)
+              build_bulk_unstage_method(target_class, collection_name, staged, through)
             end
 
             # Type-specific methods
@@ -340,6 +342,92 @@ collection_name: collection_name)
 
               # Destroy the through model
               Participation::StagedOperations.unstage(staged_model: staged_model)
+            end
+          end
+
+          # Build method to bulk stage multiple through models
+          # Creates: org.stage_members(through_attrs_list)
+          #
+          # Stages multiple invitations at once. Each entry in the list creates
+          # a UUID-keyed through model and adds it to the staging set.
+          #
+          # Uses two-phase approach for efficiency:
+          # - Phase 1: Create through models sequentially (save requires inspectable returns)
+          # - Phase 2: Pipeline all ZADD calls (reduces N round-trips to 1)
+          #
+          # @param target_class [Class] The target class
+          # @param collection_name [Symbol] Active collection name (for method naming)
+          # @param staged_name [Symbol] Staging collection name
+          # @param through [Symbol, Class] Through model class
+          def self.build_bulk_stage_method(target_class, collection_name, staged_name, through)
+            method_name = "stage_#{collection_name}"
+
+            target_class.define_method(method_name) do |through_attrs_list|
+              return [] if through_attrs_list.empty?
+
+              through_class = Familia.resolve_class(through)
+              staging_collection = send(staged_name)
+
+              # Phase 1: Create through models sequentially (save requires inspectable returns)
+              staged_models = through_attrs_list.map do |attrs|
+                Participation::StagedOperations.stage(
+                  through_class: through_class,
+                  target: self,
+                  attrs: attrs,
+                )
+              end
+
+              # Phase 2: Pipeline all ZADD calls (reduces N round-trips to 1)
+              pipelined do |_pipe|
+                now = Familia.now.to_f
+                staged_models.each { |m| staging_collection.add(m.objid, now) }
+              end
+
+              staged_models
+            end
+          end
+
+          # Build method to bulk unstage multiple through models
+          # Creates: org.unstage_members(staged_models_or_objids)
+          #
+          # Revokes multiple invitations at once. Accepts either staged model
+          # objects or their objids (flexible). Returns count of models destroyed.
+          #
+          # Uses two-phase approach for efficiency:
+          # - Phase 1: Pipeline all ZREM calls (reduces N round-trips to 1)
+          # - Phase 2: Destroy models sequentially (load/exists?/destroy! need inspectable returns)
+          #
+          # @param target_class [Class] The target class
+          # @param collection_name [Symbol] Active collection name (for method naming)
+          # @param staged_name [Symbol] Staging collection name
+          # @param through [Symbol, Class] Through model class
+          def self.build_bulk_unstage_method(target_class, collection_name, staged_name, through)
+            method_name = "unstage_#{collection_name}"
+
+            target_class.define_method(method_name) do |staged_models_or_objids|
+              return 0 if staged_models_or_objids.empty?
+
+              through_class = Familia.resolve_class(through)
+              staging_collection = send(staged_name)
+
+              # Phase 1: Pipeline all ZREM calls (reduces N round-trips to 1)
+              pipelined do |_pipe|
+                staged_models_or_objids.each do |item|
+                  objid = item.respond_to?(:objid) ? item.objid : item
+                  staging_collection.remove(objid)
+                end
+              end
+
+              # Phase 2: Destroy through models sequentially
+              # StagedOperations.unstage returns true on success, false if model didn't exist
+              staged_models_or_objids.count do |item|
+                model = if item.respond_to?(:exists?)
+                  item
+                else
+                  through_class.load(item.respond_to?(:objid) ? item.objid : item)
+                end
+                Participation::StagedOperations.unstage(staged_model: model) if model
+              end
             end
           end
 

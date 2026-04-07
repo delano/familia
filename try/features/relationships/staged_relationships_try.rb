@@ -477,9 +477,375 @@ loaded_ghost.nil?
 !@org.pending_members.member?(@load_staged_objid)
 #=> true
 
+# Bulk Staging Operations
+
+## Bulk stage: method exists on target class
+@org.respond_to?(:stage_members)
+#=> true
+
+## Bulk unstage: method exists on target class
+@org.respond_to?(:unstage_members)
+#=> true
+
+## Bulk stage: empty list returns empty array
+@org.stage_members([]).empty?
+#=> true
+
+## Bulk stage: create multiple invitations
+@bulk_staged = @org.stage_members([
+  { email: 'bulk1@example.com', role: 'viewer', status: 'pending', token: 'bulk_token_1' },
+  { email: 'bulk2@example.com', role: 'admin', status: 'pending', token: 'bulk_token_2' },
+  { email: 'bulk3@example.com', role: 'member', status: 'pending', token: 'bulk_token_3' }
+])
+@bulk_staged.size == 3
+#=> true
+
+## Bulk stage: all models are StagedTestMembership instances
+@bulk_staged.all? { |m| m.is_a?(StagedTestMembership) }
+#=> true
+
+## Bulk stage: all models have UUID keys (not composite)
+@bulk_staged.none? { |m| m.objid.include?('staged_test_organization') }
+#=> true
+
+## Bulk stage: all models added to staging collection
+@bulk_staged.all? { |m| @org.pending_members.member?(m.objid) }
+#=> true
+
+## Bulk stage: all models have correct target FK
+@bulk_staged.all? { |m| m.staged_test_organization_objid == @org.objid }
+#=> true
+
+## Bulk stage: all models preserve their unique attributes
+[@bulk_staged[0].email == 'bulk1@example.com',
+ @bulk_staged[1].email == 'bulk2@example.com',
+ @bulk_staged[2].email == 'bulk3@example.com'].all?
+#=> true
+
+## Bulk stage: models have different roles as specified
+[@bulk_staged[0].role == 'viewer',
+ @bulk_staged[1].role == 'admin',
+ @bulk_staged[2].role == 'member'].all?
+#=> true
+
+## Bulk unstage: empty list returns 0
+@org.unstage_members([]) == 0
+#=> true
+
+## Bulk unstage: with model objects
+@bulk_unstage_models = @org.stage_members([
+  { email: 'unstage1@example.com', role: 'viewer', status: 'pending', token: 'unstage_1' },
+  { email: 'unstage2@example.com', role: 'viewer', status: 'pending', token: 'unstage_2' }
+])
+@bulk_unstage_models.size == 2
+#=> true
+
+## Bulk unstage: unstage with model objects returns correct count
+count = @org.unstage_members(@bulk_unstage_models)
+count == 2
+#=> true
+
+## Bulk unstage: models removed from staging collection
+@bulk_unstage_models.none? { |m| @org.pending_members.member?(m.objid) }
+#=> true
+
+## Bulk unstage: models destroyed
+@bulk_unstage_models.none? { |m| m.exists? }
+#=> true
+
+## Bulk unstage with objids: setup - create new models
+@bulk_objid_models = @org.stage_members([
+  { email: 'objid1@example.com', role: 'viewer', status: 'pending', token: 'objid_1' },
+  { email: 'objid2@example.com', role: 'viewer', status: 'pending', token: 'objid_2' }
+])
+@bulk_objids = @bulk_objid_models.map(&:objid)
+@bulk_objids.size == 2
+#=> true
+
+## Bulk unstage with objids: unstage using objid strings
+count = @org.unstage_members(@bulk_objids)
+count == 2
+#=> true
+
+## Bulk unstage with objids: models destroyed via objid lookup
+@bulk_objid_models.none? { |m| m.exists? }
+#=> true
+
+## Bulk unstage with ghost entries: setup - create and manually destroy some
+@ghost_bulk_models = @org.stage_members([
+  { email: 'ghost_bulk1@example.com', role: 'viewer', status: 'pending', token: 'ghost_bulk_1' },
+  { email: 'ghost_bulk2@example.com', role: 'viewer', status: 'pending', token: 'ghost_bulk_2' }
+])
+# Manually destroy first model to create ghost entry
+@ghost_bulk_models[0].destroy!
+!@ghost_bulk_models[0].exists?
+#=> true
+
+## Bulk unstage with ghost entries: second model still exists
+@ghost_bulk_models[1].exists?
+#=> true
+
+## Bulk unstage with ghost entries: returns count of actually destroyed (1, not 2)
+count = @org.unstage_members(@ghost_bulk_models)
+count == 1
+#=> true
+
+## Bulk unstage with ghost entries: all removed from staging collection
+@ghost_bulk_models.none? { |m| @org.pending_members.member?(m.objid) }
+#=> true
+
+## Bulk stage cleanup: unstage remaining bulk_staged models
+@org.unstage_members(@bulk_staged)
+@bulk_staged.none? { |m| @org.pending_members.member?(m.objid) }
+#=> true
+
+# Additional Edge Case Tests
+
+## Mixed valid/invalid bulk unstage: setup - create models and one non-existent objid
+@mixed_unstage_models = @org.stage_members([
+  { email: 'mixed1@example.com', role: 'viewer', status: 'pending', token: 'mixed_1' },
+  { email: 'mixed2@example.com', role: 'viewer', status: 'pending', token: 'mixed_2' }
+])
+@mixed_unstage_models.size == 2
+#=> true
+
+## Mixed valid/invalid bulk unstage: mix model, objid string, and fake objid
+@mixed_items = [
+  @mixed_unstage_models[0],
+  @mixed_unstage_models[1].objid,
+  'nonexistent_objid_12345'
+]
+@mixed_items.size == 3
+#=> true
+
+## Mixed valid/invalid bulk unstage: returns count of actually destroyed (2, not 3)
+count = @org.unstage_members(@mixed_items)
+count == 2
+#=> true
+
+## Mixed valid/invalid bulk unstage: real models are destroyed
+@mixed_unstage_models.none? { |m| m.exists? }
+#=> true
+
+## Invalid attribute filtering: setup - stage with unknown attributes
+@invalid_attr_model = @org.stage_members_instance(
+  through_attrs: {
+    email: 'valid@example.com',
+    role: 'member',
+    unknown_field: 'should_be_ignored',
+    another_fake: 12345,
+    status: 'pending'
+  }
+)
+@invalid_attr_model.is_a?(StagedTestMembership)
+#=> true
+
+## Invalid attribute filtering: valid attributes are set
+[@invalid_attr_model.email == 'valid@example.com',
+ @invalid_attr_model.role == 'member',
+ @invalid_attr_model.status == 'pending'].all?
+#=> true
+
+## Invalid attribute filtering: model does not respond to unknown fields
+!@invalid_attr_model.respond_to?(:unknown_field) && !@invalid_attr_model.respond_to?(:another_fake)
+#=> true
+
+## Invalid attribute filtering: cleanup
+@org.unstage_members_instance(@invalid_attr_model)
+!@invalid_attr_model.exists?
+#=> true
+
+## Empty through_attrs activation: setup - stage a model
+@empty_attrs_staged = @org.stage_members_instance(
+  through_attrs: {
+    email: 'empty_attrs@example.com',
+    role: 'viewer',
+    status: 'pending',
+    token: 'empty_attrs_token'
+  }
+)
+@empty_attrs_staged.exists?
+#=> true
+
+## Empty through_attrs activation: create participant
+@empty_attrs_customer = StagedTestCustomer.new(
+  custid: 'empty_attrs_customer',
+  email: 'empty_attrs@example.com',
+  joined: Familia.now.to_f
+)
+@empty_attrs_customer.save
+@empty_attrs_customer.exists?
+#=> true
+
+## Empty through_attrs activation: activate with empty through_attrs hash
+@empty_attrs_activated = @org.activate_members_instance(
+  @empty_attrs_staged,
+  @empty_attrs_customer,
+  through_attrs: {}
+)
+@empty_attrs_activated.is_a?(StagedTestMembership)
+#=> true
+
+## Empty through_attrs activation: model has composite key
+@empty_attrs_activated.objid.include?('staged_test_organization')
+#=> true
+
+## Empty through_attrs activation: staged model destroyed
+!@empty_attrs_staged.exists?
+#=> true
+
+## Empty through_attrs activation: participant in active set
+@org.members.member?(@empty_attrs_customer)
+#=> true
+
+## Re-activation of existing member: setup - customer is already a member from previous test
+# @empty_attrs_customer is already in @org.members from the empty through_attrs activation test
+@org.members.member?(@empty_attrs_customer)
+#=> true
+
+## Re-activation of existing member: stage a new invitation for same org
+@reactivate_staged = @org.stage_members_instance(
+  through_attrs: {
+    email: 'empty_attrs@example.com',
+    role: 'admin',
+    status: 'pending',
+    token: 'reactivate_token'
+  }
+)
+@reactivate_staged.exists?
+#=> true
+
+## Re-activation of existing member: activate for existing member (should be idempotent)
+@reactivate_activated = @org.activate_members_instance(
+  @reactivate_staged,
+  @empty_attrs_customer,
+  through_attrs: {
+    role: 'admin',
+    status: 'upgraded'
+  }
+)
+@reactivate_activated.is_a?(StagedTestMembership)
+#=> true
+
+## Re-activation of existing member: staged model destroyed
+!@reactivate_staged.exists?
+#=> true
+
+## Re-activation of existing member: customer still in active set (idempotent)
+@org.members.member?(@empty_attrs_customer)
+#=> true
+
+## Re-activation of existing member: through model has updated attributes
+@reactivate_activated.role == 'admin' && @reactivate_activated.status == 'upgraded'
+#=> true
+
+## load_staged with nil staging_collection: setup - create and destroy a staged model
+@nil_staging_model = @org.stage_members_instance(
+  through_attrs: {
+    email: 'nil_staging@example.com',
+    role: 'viewer',
+    status: 'pending',
+    token: 'nil_staging_token'
+  }
+)
+@nil_staging_objid = @nil_staging_model.objid
+@nil_staging_model.exists?
+#=> true
+
+## load_staged with nil staging_collection: staging set has the entry
+@org.pending_members.member?(@nil_staging_objid)
+#=> true
+
+## load_staged with nil staging_collection: manually destroy to create ghost
+@nil_staging_model.destroy!
+!@nil_staging_model.exists?
+#=> true
+
+## load_staged with nil staging_collection: call load_staged with nil staging_collection
+loaded_nil = Familia::Features::Relationships::Participation::StagedOperations.load_staged(
+  through_class: StagedTestMembership,
+  staged_objid: @nil_staging_objid,
+  staging_collection: nil
+)
+loaded_nil.nil?
+#=> true
+
+## load_staged with nil staging_collection: ghost entry remains (no cleanup without collection)
+@org.pending_members.member?(@nil_staging_objid)
+#=> true
+
+## load_staged with nil staging_collection: cleanup ghost entry manually
+@org.pending_members.remove(@nil_staging_objid)
+!@org.pending_members.member?(@nil_staging_objid)
+#=> true
+
+# Return Type Consistency Tests
+#
+# API design note: Single-item operations (unstage_members_instance) return
+# boolean for success/failure semantics, while bulk operations (unstage_members)
+# return Integer count for progress feedback. This is intentional:
+# - Boolean: "Did this specific unstage succeed?" (yes/no)
+# - Integer: "How many of these N items were actually unstaged?" (feedback)
+
+## Return type: unstage_members_instance returns true when model destroyed
+@return_type_staged = @org.stage_members_instance(
+  through_attrs: {
+    email: 'return_type@example.com',
+    role: 'viewer',
+    status: 'pending',
+    token: 'return_type_token'
+  }
+)
+@return_type_staged.exists?
+#=> true
+
+## Return type: unstage_members_instance returns true on successful destroy
+result = @org.unstage_members_instance(@return_type_staged)
+result == true
+#=> true
+
+## Return type: unstage_members_instance returns false when model already destroyed (ghost)
+# Create a new staged model
+@ghost_return_staged = @org.stage_members_instance(
+  through_attrs: {
+    email: 'ghost_return@example.com',
+    role: 'viewer',
+    status: 'pending',
+    token: 'ghost_return_token'
+  }
+)
+# Manually destroy to simulate TTL expiration or external deletion
+@ghost_return_staged.destroy!
+!@ghost_return_staged.exists?
+#=> true
+
+## Return type: unstage_members_instance returns false for ghost (model doesn't exist)
+result = @org.unstage_members_instance(@ghost_return_staged)
+result == false
+#=> true
+
+## Return type: unstage_members returns Integer count
+@count_staged = @org.stage_members([
+  { email: 'count1@example.com', role: 'viewer', status: 'pending', token: 'count_1' },
+  { email: 'count2@example.com', role: 'viewer', status: 'pending', token: 'count_2' },
+  { email: 'count3@example.com', role: 'viewer', status: 'pending', token: 'count_3' }
+])
+@count_staged.size == 3
+#=> true
+
+## Return type: unstage_members returns Integer (not boolean)
+@unstage_count = @org.unstage_members(@count_staged)
+@unstage_count.is_a?(Integer)
+#=> true
+
+## Return type: unstage_members returns correct count value
+@unstage_count == 3
+#=> true
+
 ## Clean up test data
 [@org, @org2, @customer, @activated_membership, @double_customer, @double_activated,
- @cross_customer, @ns_org, @ns_domain, @ns_membership].each do |obj|
+ @cross_customer, @ns_org, @ns_domain, @ns_membership, @empty_attrs_customer,
+ @empty_attrs_activated, @reactivate_activated].each do |obj|
   obj.destroy! if obj&.respond_to?(:destroy!) && obj&.exists?
 end
 true
