@@ -84,6 +84,28 @@ end
 NoDefaultExpirationTest.default_expiration
 #=> 0.0
 
+## persist! removes TTL from saved object
+@persist_obj = ExpiringTest.new(id: 'persist_test_1', data: 'persist data')
+@persist_obj.save
+initial_ttl = @persist_obj.ttl
+@persist_obj.persist!
+[@persist_obj.ttl, initial_ttl > 0]
+#=> [-1, true]
+
+## clear_expiration! is an alias for persist!
+@clear_obj = ExpiringTest.new(id: 'clear_exp_test_1', data: 'clear data')
+@clear_obj.save
+initial_ttl = @clear_obj.ttl
+@clear_obj.clear_expiration!
+[@clear_obj.ttl, initial_ttl > 0]
+#=> [-1, true]
+
+## clear_expiration! and persist! are the same method
+ExpiringTest.instance_method(:clear_expiration!) == ExpiringTest.instance_method(:persist!)
+#=> true
+
 # Cleanup
 @test_obj.destroy!
+@persist_obj.destroy!
+@clear_obj.destroy!
 ExpiringTest.default_expiration(300) # Reset to original

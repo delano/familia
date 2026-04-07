@@ -24,6 +24,7 @@ module Familia
         :generate_participant_methods,  # Boolean - whether to generate participant methods
         :through,             # Symbol/Class/nil - through model class for join table pattern
         :method_prefix,       # Symbol/nil - custom prefix for reverse method names (e.g., :team)
+        :staged,              # Symbol/nil - staging set name for deferred relationship activation
       ) do
         # Get a unique key for this participation relationship
         # Useful for comparisons and hash keys
@@ -70,6 +71,20 @@ module Familia
           return nil unless through
 
           through.is_a?(Class) ? through : Familia.resolve_class(through)
+        end
+
+        # Check if this relationship uses staged activation
+        #
+        # @return [Boolean] true if staging set is configured
+        def staged?
+          !staged.nil?
+        end
+
+        # Get the staging collection name
+        #
+        # @return [Symbol, nil] The staging collection name or nil
+        def staging_collection_name
+          staged
         end
       end
     end

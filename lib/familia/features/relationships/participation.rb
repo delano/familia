@@ -174,6 +174,7 @@ module Familia
               generate_participant_methods: generate_participant_methods,
               through: through,
               method_prefix: nil,       # Not applicable for class-level participation
+              staged: nil,              # Not applicable for class-level participation
             )
 
             # STEP 1: Add collection management methods to the class itself
@@ -295,7 +296,7 @@ module Familia
           # @see ModelInstanceMethods#current_participations for membership queries
           # @see ModelInstanceMethods#calculate_participation_score for scoring details
           #
-          def participates_in(target, collection_name, score: nil, type: :sorted_set, generate_participant_methods: true, as: nil, through: nil, method_prefix: nil)
+          def participates_in(target, collection_name, score: nil, type: :sorted_set, generate_participant_methods: true, as: nil, through: nil, method_prefix: nil, staged: nil)
 
             # Normalize the target class parameter
             target_class = Familia.resolve_class(target)
@@ -328,6 +329,16 @@ module Familia
               end
             end
 
+            # Validate staged requires through
+            if staged && !through
+              raise ArgumentError, <<~ERROR
+                staged: requires through: option
+
+                The staging set holds through model objids. Without a through model,
+                there's nothing to stage. Add `through: YourMembershipClass` to use staging.
+              ERROR
+            end
+
             # Store metadata for this participation relationship
             participation_relationships << ParticipationRelationship.new(
               _original_target: target,      # Original value as passed (Symbol/String/Class)
@@ -338,6 +349,7 @@ module Familia
               generate_participant_methods: generate_participant_methods,
               through: through,
               method_prefix: method_prefix,
+              staged: staged,
             )
 
             # STEP 0: Add participations tracking field to PARTICIPANT class (Domain)
@@ -346,7 +358,8 @@ module Familia
 
             # STEP 1: Add collection management methods to TARGET class (Employee)
             # Employee gets: domains, add_domain, remove_domain, etc.
-            TargetMethods::Builder.build(target_class, collection_name, type, through)
+            # If staged: is provided, also creates staging set and stage/activate/unstage methods
+            TargetMethods::Builder.build(target_class, collection_name, type, through, staged)
 
             # STEP 2: Add participation methods to PARTICIPANT class (Domain) - only if
             # generate_participant_methods. e.g. in_employee_domains?, add_to_employee_domains, etc.

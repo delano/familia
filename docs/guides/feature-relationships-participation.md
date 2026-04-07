@@ -189,6 +189,80 @@ def add_members_instance(user, score = nil)
 end
 ```
 
+## Staged Relationships (Invitation Workflows)
+
+Staged relationships enable deferred activation where the through model exists before the participant. Common use case: invitations where a Membership record exists before the invited user accepts.
+
+### Setup
+
+```ruby
+class Membership < Familia::Horreum
+  feature :object_identifier  # Required for UUID-keyed staging
+  field :organization_objid
+  field :customer_objid
+  field :email               # Invitation email
+  field :role
+  field :status
+end
+
+class Customer < Familia::Horreum
+  participates_in Organization, :members,
+    through: Membership,
+    staged: :pending_members  # Enables staging API
+end
+```
+
+### Lifecycle
+
+```ruby
+# Stage (send invitation)
+membership = org.stage_members_instance(
+  through_attrs: { email: 'invite@example.com', role: 'viewer' }
+)
+# → UUID-keyed Membership in pending_members sorted set
+
+# Activate (accept invitation)
+activated = org.activate_members_instance(
+  membership, customer,
+  through_attrs: { status: 'active' }
+)
+# → Composite-keyed Membership, staged model destroyed
+
+# Unstage (revoke invitation)
+org.unstage_members_instance(membership)
+# → Membership destroyed, removed from staging set
+```
+
+### Attribute Handling on Activation
+
+Activation intentionally does **not** auto-merge attributes from the staged model. The application controls what data carries over:
+
+```ruby
+# Explicit attribute carryover
+activated = org.activate_members_instance(
+  staged, customer,
+  through_attrs: staged.to_h.slice(:role, :invited_by).merge(status: 'active')
+)
+```
+
+This design supports workflows where:
+- Staged data (invitation metadata) differs from activated data (membership settings)
+- Certain fields should reset on activation (e.g., `status`, timestamps)
+- Sensitive staging data should not leak to the activated record
+
+### Key Differences from Regular Participation
+
+| Aspect | Regular | Staged |
+|--------|---------|--------|
+| Key type | Composite (target+participant) | UUID during staging |
+| Participant | Required at creation | Set on activation |
+| Through model | Optional | Required |
+| Lifecycle | Single-phase | Two-phase (stage → activate) |
+
+### Ghost Entry Cleanup
+
+Staged models that expire via TTL or are manually deleted leave "ghost entries" in the staging set. These are cleaned lazily when accessed via `load_staged` or enumeration methods.
+
 ## Performance Best Practices
 
 ### Bulk Operations

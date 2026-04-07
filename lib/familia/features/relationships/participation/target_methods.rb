@@ -4,6 +4,7 @@
 
 require_relative '../collection_operations'
 require_relative 'through_model_operations'
+require_relative 'staged_operations'
 
 module Familia
   module Features
@@ -27,7 +28,6 @@ module Familia
         # ├── remove_domain(domain)            # Remove a domain from my collection
         # ├── add_domains([...])               # Bulk add domains
         # └── domains_with_permission(level)   # Query with score filtering (sorted_set only)
-
         module Builder
           extend CollectionOperations
 
@@ -39,15 +39,26 @@ module Familia
           # @param collection_name [Symbol] Name of the collection (e.g., :domains)
           # @param type [Symbol] Collection type (:sorted_set, :set, :list)
           # @param through [Symbol, Class, nil] Through model class for join table pattern
-          def self.build(target_class, collection_name, type, through = nil)
+          # @param staged [Symbol, nil] Staging set name for deferred activation
+          def self.build(target_class, collection_name, type, through = nil, staged = nil)
             # FIRST: Ensure the DataType field is defined on the target class
             TargetMethods::Builder.ensure_collection_field(target_class, collection_name, type)
+
+            # Create staging set if staged: option provided
+            TargetMethods::Builder.ensure_collection_field(target_class, staged, :sorted_set) if staged
 
             # Core target methods
             build_collection_getter(target_class, collection_name, type)
             build_add_item(target_class, collection_name, type, through)
             build_remove_item(target_class, collection_name, type, through)
             build_bulk_add(target_class, collection_name, type)
+
+            # Staged relationship methods (requires through model)
+            if staged && through
+              build_stage_method(target_class, collection_name, staged, through)
+              build_activate_method(target_class, collection_name, staged, through)
+              build_unstage_method(target_class, collection_name, staged, through)
+            end
 
             # Type-specific methods
             return unless type == :sorted_set
@@ -126,7 +137,7 @@ module Familia
                   through_class: through_class,
                   target: self,
                   participant: item,
-                  attrs: through_attrs
+                  attrs: through_attrs,
                 )
               end
 
@@ -159,13 +170,13 @@ module Familia
               # TRANSACTION BOUNDARY: Through model destruction intentionally happens AFTER
               # the transaction block. See build_add_item for detailed rationale.
               # The core removal is atomic; through model cleanup is a separate operation.
-              if through_class
-                Participation::ThroughModelOperations.find_and_destroy(
-                  through_class: through_class,
-                  target: self,
-                  participant: item
-                )
-              end
+              return unless through_class
+
+              Participation::ThroughModelOperations.find_and_destroy(
+                through_class: through_class,
+                target: self,
+                participant: item,
+              )
             end
           end
 
@@ -210,6 +221,125 @@ collection_name: collection_name)
                 # Fallback to all members if ScoreEncoding not available
                 collection.members(with_scores: true)
               end
+            end
+          end
+
+          # Build method to stage a through model for deferred activation
+          # Creates: org.stage_members_instance(through_attrs: {})
+          #
+          # Stage creates a UUID-keyed through model and adds it to the staging set.
+          # The participant doesn't exist yet (e.g., invitation sent but not accepted).
+          #
+          # @param target_class [Class] The target class (e.g., Organization)
+          # @param collection_name [Symbol] Active collection name (e.g., :members)
+          # @param staged_name [Symbol] Staging collection name (e.g., :pending_members)
+          # @param through [Symbol, Class] Through model class
+          def self.build_stage_method(target_class, collection_name, staged_name, through)
+            method_name = "stage_#{collection_name}_instance"
+
+            target_class.define_method(method_name) do |through_attrs: {}|
+              through_class = Familia.resolve_class(through)
+              staging_collection = send(staged_name)
+
+              # Create UUID-keyed staged model
+              staged_model = Participation::StagedOperations.stage(
+                through_class: through_class,
+                target: self,
+                attrs: through_attrs,
+              )
+
+              # Add to staging set with created_at as score
+              staging_collection.add(staged_model.objid, Familia.now.to_f)
+
+              staged_model
+            end
+          end
+
+          # Build method to activate a staged through model
+          # Creates: org.activate_members_instance(staged_model, participant, through_attrs: {})
+          #
+          # Activation completes the relationship:
+          # - ZADD to active collection with participant
+          # - SADD to participant's reverse index
+          # - ZREM from staging collection
+          # - Create composite-keyed through model
+          # - Destroy UUID-keyed staged model
+          #
+          # @param target_class [Class] The target class
+          # @param collection_name [Symbol] Active collection name
+          # @param staged_name [Symbol] Staging collection name
+          # @param through [Symbol, Class] Through model class
+          def self.build_activate_method(target_class, collection_name, staged_name, through)
+            method_name = "activate_#{collection_name}_instance"
+
+            target_class.define_method(method_name) do |staged_model, participant, through_attrs: {}|
+              through_class = Familia.resolve_class(through)
+              active_collection = send(collection_name)
+              staging_collection = send(staged_name)
+
+              # Calculate score for participant in active set
+              score = if participant.respond_to?(:calculate_participation_score)
+                participant.calculate_participation_score(self.class, collection_name)
+              else
+                Familia.now.to_f
+              end
+
+              # Transaction: sorted set operations (ZADD active + SADD participations + ZREM staging)
+              transaction do |_tx|
+                # Add to active collection
+                TargetMethods::Builder.add_to_collection(
+                  active_collection,
+                  participant,
+                  score: score,
+                  type: :sorted_set,
+                  target_class: self.class,
+                  collection_name: collection_name,
+                )
+
+                # Track participation in reverse index
+                if participant.respond_to?(:track_participation_in)
+                  participant.track_participation_in(active_collection.dbkey)
+                end
+
+                # Remove from staging set and log warning if entry not found
+                removed = staging_collection.remove(staged_model.objid)
+                Familia.debug "[activate] Staging entry not found for #{staged_model.objid}" if removed == 0
+              end
+
+              # TRANSACTION BOUNDARY: Through model operations happen outside transaction
+              # (same pattern as build_add_item - see that method for detailed rationale)
+              Participation::StagedOperations.activate(
+                through_class: through_class,
+                staged_model: staged_model,
+                target: self,
+                participant: participant,
+                attrs: through_attrs,
+              )
+            end
+          end
+
+          # Build method to unstage (revoke) a staged through model
+          # Creates: org.unstage_members_instance(staged_model)
+          #
+          # Unstaging removes the through model from staging and destroys it.
+          # Used when an invitation is revoked before acceptance.
+          #
+          # @param target_class [Class] The target class
+          # @param collection_name [Symbol] Active collection name (for method naming)
+          # @param staged_name [Symbol] Staging collection name
+          # @param _through [Symbol, Class] Through model class (unused - kept for signature
+          #   consistency with other builders like build_stage_method and build_activate_method)
+          def self.build_unstage_method(target_class, collection_name, staged_name, _through)
+            method_name = "unstage_#{collection_name}_instance"
+
+            target_class.define_method(method_name) do |staged_model|
+              staging_collection = send(staged_name)
+
+              # Remove from staging set
+              staging_collection.remove(staged_model.objid)
+
+              # Destroy the through model
+              Participation::StagedOperations.unstage(staged_model: staged_model)
             end
           end
 

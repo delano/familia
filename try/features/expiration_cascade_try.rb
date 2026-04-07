@@ -131,6 +131,42 @@ CascadeTestWidget.default_expiration
 [@w2_main > 3500, @w2_events > 7100, @w2_tags > 3500, @w2_metrics > 1700, @w2_config == -1]
 #=> [true, true, true, true, true]
 
+## persist! removes TTL from main key
+@w3 = CascadeTestWidget.new(widgetid: 'cascade_w3', name: 'Widget C')
+@w3.save
+@w3.events.push('started')
+@w3.tags.add('persistent')
+@w3.metrics.add('uptime', 100.0)
+@w3.status_msg.set('running')
+@w3.permanent_config['keep'] = 'forever'
+# Verify TTLs are set before persist
+@w3_main_before = CascadeTestWidget.dbclient.ttl(@w3.dbkey)
+@w3_main_before > 0
+#=> true
+
+## persist! cascades to relations (removes their TTL too)
+@w3.persist!
+@w3_main = CascadeTestWidget.dbclient.ttl(@w3.dbkey)
+@w3_events = CascadeTestWidget.dbclient.ttl(@w3.events.dbkey)
+@w3_tags = CascadeTestWidget.dbclient.ttl(@w3.tags.dbkey)
+@w3_metrics = CascadeTestWidget.dbclient.ttl(@w3.metrics.dbkey)
+@w3_status = CascadeTestWidget.dbclient.ttl(@w3.status_msg.dbkey)
+@w3_config = CascadeTestWidget.dbclient.ttl(@w3.permanent_config.dbkey)
+# Main and all cascading relations should have TTL removed (-1)
+# no_expiration relation was already -1 and remains -1
+[@w3_main, @w3_events, @w3_tags, @w3_metrics, @w3_status, @w3_config]
+#=> [-1, -1, -1, -1, -1, -1]
+
+## clear_expiration! also cascades (alias for persist!)
+@w4 = CascadeTestWidget.new(widgetid: 'cascade_w4', name: 'Widget D')
+@w4.save
+@w4.tags.add('alias-test')
+@w4.clear_expiration!
+@w4_main = CascadeTestWidget.dbclient.ttl(@w4.dbkey)
+@w4_tags = CascadeTestWidget.dbclient.ttl(@w4.tags.dbkey)
+[@w4_main, @w4_tags]
+#=> [-1, -1]
+
 # Cleanup
 CascadeTestWidget.instances.clear
 CascadeTestWidget.all.each(&:destroy!)
