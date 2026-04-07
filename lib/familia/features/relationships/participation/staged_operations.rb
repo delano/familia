@@ -59,6 +59,15 @@ module Familia
           # This is the key difference from ThroughModelOperations.find_or_create, which
           # uses build_key to create a composite key from target and participant.
           #
+          # @note Non-atomic operation: The through model is saved before being added to the
+          #   staging set (by the caller). If the staging set add fails (rare Redis failure),
+          #   an orphaned through model may exist. The lazy cleanup mechanism in `load_staged`
+          #   handles such orphans on subsequent access. This trade-off is acceptable for the
+          #   invitation use case where Redis failures are uncommon.
+          #
+          # @note The staging set score (set by the caller) represents the creation timestamp.
+          #   Retrieve via `staging_collection.score(objid)` if needed.
+          #
           # @param through_class [Class] The through model class (must have feature :object_identifier)
           # @param target [Object] The target instance (e.g., organization)
           # @param attrs [Hash] Attributes to set on the through model
@@ -88,8 +97,10 @@ module Familia
           # Activate a staged through model, completing the relationship.
           #
           # This operation:
-          # 1. Creates a new composite-keyed through model via ThroughModelOperations
-          # 2. Destroys the UUID-keyed staged model
+          # 1. Validates the staged model belongs to the correct target
+          # 2. Validates the staged model hasn't already been activated
+          # 3. Creates a new composite-keyed through model via ThroughModelOperations
+          # 4. Destroys the UUID-keyed staged model
           #
           # The caller is responsible for the sorted set operations (ZADD active,
           # SADD participations, ZREM staging) which happen in a transaction in
@@ -101,8 +112,35 @@ module Familia
           # @param participant [Object] The participant instance (now exists)
           # @param attrs [Hash] Attributes for the activated through model
           # @return [Object] The new composite-keyed through model
+          # @raise [ArgumentError] if staged model belongs to a different target
+          # @raise [ArgumentError] if staged model is already activated
+          # @raise [ArgumentError] if staged model does not exist (already destroyed)
           #
           def activate(through_class:, staged_model:, target:, participant:, attrs: {})
+            # Validate staged model still exists (may have been destroyed by previous activation or TTL)
+            unless staged_model.exists?
+              raise ArgumentError, 'Staged model does not exist (may have been already activated or expired)'
+            end
+
+            # Validate staged model belongs to this target
+            target_field = "#{target.class.config_name}_objid"
+            if staged_model.respond_to?(target_field)
+              staged_target_objid = staged_model.send(target_field)
+              if staged_target_objid && staged_target_objid != target.objid
+                raise ArgumentError,
+                      "Staged model belongs to different target (expected #{target.objid}, got #{staged_target_objid})"
+              end
+            end
+
+            # Validate staged model doesn't already have a participant (already activated)
+            participant_field = "#{participant.class.config_name}_objid"
+            if staged_model.respond_to?(participant_field)
+              existing_participant = staged_model.send(participant_field)
+              if existing_participant && !existing_participant.to_s.empty?
+                raise ArgumentError, 'Model already activated (participant_objid already set)'
+              end
+            end
+
             # Create composite-keyed through model via existing machinery
             activated_model = ThroughModelOperations.find_or_create(
               through_class: through_class,
@@ -123,10 +161,13 @@ module Familia
           # The caller handles ZREM from staging set.
           #
           # @param staged_model [Object] The staged through model to remove
-          # @return [void]
+          # @return [Boolean] true if destroyed, false if model didn't exist
           #
           def unstage(staged_model:)
+            return false unless staged_model.exists?
+
             staged_model.destroy!
+            true
           end
 
           # Clean up a stale staging set entry.

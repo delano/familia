@@ -302,8 +302,9 @@ collection_name: collection_name)
                 # Track participation in reverse index
                 participant.track_participation_in(active_collection.dbkey) if participant.respond_to?(:track_participation_in)
 
-                # Remove from staging set
-                staging_collection.remove(staged_model.objid)
+                # Remove from staging set and log warning if entry not found
+                removed = staging_collection.remove(staged_model.objid)
+                Familia.debug "[activate] Staging entry not found for #{staged_model.objid}" if removed == 0
               end
 
               # TRANSACTION BOUNDARY: Through model operations happen outside transaction
@@ -327,7 +328,8 @@ collection_name: collection_name)
           # @param target_class [Class] The target class
           # @param collection_name [Symbol] Active collection name (for method naming)
           # @param staged_name [Symbol] Staging collection name
-          # @param through [Symbol, Class] Through model class (unused but kept for consistency)
+          # @param _through [Symbol, Class] Through model class (unused - kept for signature
+          #   consistency with other builders like build_stage_method and build_activate_method)
           def self.build_unstage_method(target_class, collection_name, staged_name, _through)
             method_name = "unstage_#{collection_name}_instance"
 

@@ -309,8 +309,177 @@ NonStagedDomain.ancestors.include?(Familia::Horreum)
 !@ns_org.respond_to?(:unstage_domains_instance)
 #=> true
 
+# Edge Case Tests
+
+## Double activation: setup - create a new staged membership
+@double_staged = @org.stage_members_instance(
+  through_attrs: {
+    email: 'double@example.com',
+    role: 'member',
+    status: 'pending',
+    token: 'double_token'
+  }
+)
+@double_staged.exists?
+#=> true
+
+## Double activation: first activation succeeds
+@double_customer = StagedTestCustomer.new(
+  custid: 'double_test_customer',
+  email: 'double@example.com',
+  joined: Familia.now.to_f
+)
+@double_customer.save
+@double_activated = @org.activate_members_instance(
+  @double_staged,
+  @double_customer,
+  through_attrs: {
+    email: @double_staged.email,
+    role: @double_staged.role,
+    status: 'active',
+    token: nil
+  }
+)
+@double_activated.is_a?(StagedTestMembership)
+#=> true
+
+## Double activation: staged model no longer exists after first activation
+!@double_staged.exists?
+#=> true
+
+## Double activation: second activation raises error (requires exists? validation)
+# After the first activation, the staged model was destroyed.
+# Attempting to activate it again should raise an error because the staged model
+# no longer exists in Redis.
+# NOTE: This test requires validation that checks staged_model.exists? before activation.
+# Until that validation is added, this test will fail (the code will silently proceed).
+begin
+  @org.activate_members_instance(
+    @double_staged,
+    @double_customer,
+    through_attrs: { status: 'active' }
+  )
+  false # Should have raised
+rescue ArgumentError => e
+  e.message.include?('does not exist') || e.message.include?('staged model')
+end
+#=> true
+
+## Cross-target activation: setup - create a second organization
+@org2 = StagedTestOrganization.new(org_id: 'staged_test_org2', name: 'Second Organization')
+@org2.save
+@org2.exists?
+#=> true
+
+## Cross-target activation: stage membership on first org
+@cross_staged = @org.stage_members_instance(
+  through_attrs: {
+    email: 'cross@example.com',
+    role: 'admin',
+    status: 'pending',
+    token: 'cross_token'
+  }
+)
+@cross_staged.staged_test_organization_objid == @org.objid
+#=> true
+
+## Cross-target activation: attempt to activate on different org raises error
+@cross_customer = StagedTestCustomer.new(
+  custid: 'cross_test_customer',
+  email: 'cross@example.com',
+  joined: Familia.now.to_f
+)
+@cross_customer.save
+begin
+  @org2.activate_members_instance(
+    @cross_staged,
+    @cross_customer,
+    through_attrs: { status: 'active' }
+  )
+  false # Should have raised
+rescue ArgumentError => e
+  e.message.include?('different target')
+end
+#=> true
+
+## Cross-target activation: cleanup staged model
+@org.unstage_members_instance(@cross_staged)
+!@cross_staged.exists?
+#=> true
+
+## Unstage on already-destroyed model: setup - create and manually destroy
+@ghost_staged = @org.stage_members_instance(
+  through_attrs: {
+    email: 'ghost@example.com',
+    role: 'viewer',
+    status: 'pending',
+    token: 'ghost_token'
+  }
+)
+@ghost_objid = @ghost_staged.objid
+@org.pending_members.member?(@ghost_objid)
+#=> true
+
+## Unstage on already-destroyed model: manually destroy the model (simulate TTL expiration)
+@ghost_staged.destroy!
+!@ghost_staged.exists?
+#=> true
+
+## Unstage on already-destroyed model: unstage handles gracefully (returns false)
+# The model no longer exists, but we should be able to call unstage without error
+result = @org.unstage_members_instance(@ghost_staged)
+# The method should return false since the model doesn't exist
+result == false
+#=> true
+
+## Ghost entry cleanup via load_staged: setup - create a staged model
+@load_staged_model = @org.stage_members_instance(
+  through_attrs: {
+    email: 'load_staged@example.com',
+    role: 'member',
+    status: 'pending',
+    token: 'load_token'
+  }
+)
+@load_staged_objid = @load_staged_model.objid
+@load_staged_model.exists?
+#=> true
+
+## Ghost entry cleanup via load_staged: valid model returns the model
+loaded = Familia::Features::Relationships::Participation::StagedOperations.load_staged(
+  through_class: StagedTestMembership,
+  staged_objid: @load_staged_objid,
+  staging_collection: @org.pending_members
+)
+loaded.objid == @load_staged_objid
+#=> true
+
+## Ghost entry cleanup via load_staged: setup ghost entry
+# Manually destroy the model but leave entry in staging set
+@load_staged_model.destroy!
+!@load_staged_model.exists?
+#=> true
+
+## Ghost entry cleanup via load_staged: staging set still has the entry (ghost)
+@org.pending_members.member?(@load_staged_objid)
+#=> true
+
+## Ghost entry cleanup via load_staged: load_staged returns nil for ghost
+loaded_ghost = Familia::Features::Relationships::Participation::StagedOperations.load_staged(
+  through_class: StagedTestMembership,
+  staged_objid: @load_staged_objid,
+  staging_collection: @org.pending_members
+)
+loaded_ghost.nil?
+#=> true
+
+## Ghost entry cleanup via load_staged: ghost entry was cleaned up
+!@org.pending_members.member?(@load_staged_objid)
+#=> true
+
 ## Clean up test data
-[@org, @customer, @activated_membership, @ns_org, @ns_domain, @ns_membership].each do |obj|
+[@org, @org2, @customer, @activated_membership, @double_customer, @double_activated,
+ @cross_customer, @ns_org, @ns_domain, @ns_membership].each do |obj|
   obj.destroy! if obj&.respond_to?(:destroy!) && obj&.exists?
 end
 true
