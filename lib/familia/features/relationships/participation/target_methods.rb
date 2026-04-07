@@ -418,27 +418,16 @@ collection_name: collection_name)
                 end
               end
 
-              # Phase 2: Destroy through models sequentially (load/exists?/destroy! need inspectable returns)
-              destroyed_count = 0
-              staged_models_or_objids.each do |item|
-                if item.respond_to?(:exists?)
-                  # Model object passed
-                  if item.exists?
-                    item.destroy!
-                    destroyed_count += 1
-                  end
+              # Phase 2: Destroy through models sequentially
+              # StagedOperations.unstage returns true on success, false if model didn't exist
+              staged_models_or_objids.count do |item|
+                model = if item.respond_to?(:exists?)
+                  item
                 else
-                  # Objid string passed - load and destroy
-                  objid = item.respond_to?(:objid) ? item.objid : item
-                  model = through_class.load(objid)
-                  if model&.exists?
-                    model.destroy!
-                    destroyed_count += 1
-                  end
+                  through_class.load(item.respond_to?(:objid) ? item.objid : item)
                 end
+                Participation::StagedOperations.unstage(staged_model: model) if model
               end
-
-              destroyed_count
             end
           end
 
