@@ -58,6 +58,8 @@ module Familia
               build_stage_method(target_class, collection_name, staged, through)
               build_activate_method(target_class, collection_name, staged, through)
               build_unstage_method(target_class, collection_name, staged, through)
+              build_bulk_stage_method(target_class, collection_name, staged, through)
+              build_bulk_unstage_method(target_class, collection_name, staged, through)
             end
 
             # Type-specific methods
@@ -340,6 +342,82 @@ collection_name: collection_name)
 
               # Destroy the through model
               Participation::StagedOperations.unstage(staged_model: staged_model)
+            end
+          end
+
+          # Build method to bulk stage multiple through models
+          # Creates: org.stage_members(through_attrs_list)
+          #
+          # Stages multiple invitations at once. Each entry in the list creates
+          # a UUID-keyed through model and adds it to the staging set.
+          #
+          # @param target_class [Class] The target class
+          # @param collection_name [Symbol] Active collection name (for method naming)
+          # @param staged_name [Symbol] Staging collection name
+          # @param through [Symbol, Class] Through model class
+          def self.build_bulk_stage_method(target_class, collection_name, staged_name, through)
+            method_name = "stage_#{collection_name}"
+
+            target_class.define_method(method_name) do |through_attrs_list|
+              return [] if through_attrs_list.empty?
+
+              through_class = Familia.resolve_class(through)
+              staging_collection = send(staged_name)
+
+              through_attrs_list.map do |attrs|
+                staged_model = Participation::StagedOperations.stage(
+                  through_class: through_class,
+                  target: self,
+                  attrs: attrs,
+                )
+                staging_collection.add(staged_model.objid, Familia.now.to_f)
+                staged_model
+              end
+            end
+          end
+
+          # Build method to bulk unstage multiple through models
+          # Creates: org.unstage_members(staged_models_or_objids)
+          #
+          # Revokes multiple invitations at once. Accepts either staged model
+          # objects or their objids (flexible). Returns count of models destroyed.
+          #
+          # @param target_class [Class] The target class
+          # @param collection_name [Symbol] Active collection name (for method naming)
+          # @param staged_name [Symbol] Staging collection name
+          # @param through [Symbol, Class] Through model class
+          def self.build_bulk_unstage_method(target_class, collection_name, staged_name, through)
+            method_name = "unstage_#{collection_name}"
+
+            target_class.define_method(method_name) do |staged_models_or_objids|
+              return 0 if staged_models_or_objids.empty?
+
+              through_class = Familia.resolve_class(through)
+              staging_collection = send(staged_name)
+              destroyed_count = 0
+
+              staged_models_or_objids.each do |item|
+                objid = item.respond_to?(:objid) ? item.objid : item
+                staging_collection.remove(objid)
+
+                # Destroy the through model if it exists
+                if item.respond_to?(:exists?)
+                  # Model object passed
+                  if item.exists?
+                    item.destroy!
+                    destroyed_count += 1
+                  end
+                else
+                  # Objid string passed - load and destroy
+                  model = through_class.load(objid)
+                  if model&.exists?
+                    model.destroy!
+                    destroyed_count += 1
+                  end
+                end
+              end
+
+              destroyed_count
             end
           end
 
