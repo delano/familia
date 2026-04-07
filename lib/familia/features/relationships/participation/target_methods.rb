@@ -351,6 +351,10 @@ collection_name: collection_name)
           # Stages multiple invitations at once. Each entry in the list creates
           # a UUID-keyed through model and adds it to the staging set.
           #
+          # Uses two-phase approach for efficiency:
+          # - Phase 1: Create through models sequentially (save requires inspectable returns)
+          # - Phase 2: Pipeline all ZADD calls (reduces N round-trips to 1)
+          #
           # @param target_class [Class] The target class
           # @param collection_name [Symbol] Active collection name (for method naming)
           # @param staged_name [Symbol] Staging collection name
@@ -364,15 +368,22 @@ collection_name: collection_name)
               through_class = Familia.resolve_class(through)
               staging_collection = send(staged_name)
 
-              through_attrs_list.map do |attrs|
-                staged_model = Participation::StagedOperations.stage(
+              # Phase 1: Create through models sequentially (save requires inspectable returns)
+              staged_models = through_attrs_list.map do |attrs|
+                Participation::StagedOperations.stage(
                   through_class: through_class,
                   target: self,
                   attrs: attrs,
                 )
-                staging_collection.add(staged_model.objid, Familia.now.to_f)
-                staged_model
               end
+
+              # Phase 2: Pipeline all ZADD calls (reduces N round-trips to 1)
+              pipelined do |_pipe|
+                now = Familia.now.to_f
+                staged_models.each { |m| staging_collection.add(m.objid, now) }
+              end
+
+              staged_models
             end
           end
 
@@ -381,6 +392,10 @@ collection_name: collection_name)
           #
           # Revokes multiple invitations at once. Accepts either staged model
           # objects or their objids (flexible). Returns count of models destroyed.
+          #
+          # Uses two-phase approach for efficiency:
+          # - Phase 1: Pipeline all ZREM calls (reduces N round-trips to 1)
+          # - Phase 2: Destroy models sequentially (load/exists?/destroy! need inspectable returns)
           #
           # @param target_class [Class] The target class
           # @param collection_name [Symbol] Active collection name (for method naming)
@@ -394,13 +409,18 @@ collection_name: collection_name)
 
               through_class = Familia.resolve_class(through)
               staging_collection = send(staged_name)
+
+              # Phase 1: Pipeline all ZREM calls (reduces N round-trips to 1)
+              pipelined do |_pipe|
+                staged_models_or_objids.each do |item|
+                  objid = item.respond_to?(:objid) ? item.objid : item
+                  staging_collection.remove(objid)
+                end
+              end
+
+              # Phase 2: Destroy through models sequentially (load/exists?/destroy! need inspectable returns)
               destroyed_count = 0
-
               staged_models_or_objids.each do |item|
-                objid = item.respond_to?(:objid) ? item.objid : item
-                staging_collection.remove(objid)
-
-                # Destroy the through model if it exists
                 if item.respond_to?(:exists?)
                   # Model object passed
                   if item.exists?
@@ -409,6 +429,7 @@ collection_name: collection_name)
                   end
                 else
                   # Objid string passed - load and destroy
+                  objid = item.respond_to?(:objid) ? item.objid : item
                   model = through_class.load(objid)
                   if model&.exists?
                     model.destroy!
