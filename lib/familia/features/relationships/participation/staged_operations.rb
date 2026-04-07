@@ -42,10 +42,16 @@ module Familia
         #   end
         #
         #   # Stage (invitation sent)
-        #   membership = org.stage_members_instance(through_attrs: { email: 'invite@example.com' })
+        #   membership = org.stage_members_instance(
+        #     through_attrs: { email: 'invite@example.com', role: 'viewer' }
+        #   )
         #
-        #   # Activate (invitation accepted)
-        #   activated = org.activate_members_instance(membership, customer, through_attrs: { status: 'active' })
+        #   # Activate (invitation accepted) - explicitly carry over desired attributes
+        #   # Note: attrs are NOT auto-merged from staged model (intentional design)
+        #   activated = org.activate_members_instance(
+        #     membership, customer,
+        #     through_attrs: membership.to_h.slice(:role).merge(status: 'active')
+        #   )
         #
         module StagedOperations
           module_function
@@ -106,11 +112,23 @@ module Familia
           # SADD participations, ZREM staging) which happen in a transaction in
           # the target method builder.
           #
+          # @note Attribute handling: This method intentionally does NOT auto-merge
+          #   attributes from the staged model. The application controls what data
+          #   carries over by explicitly passing attrs. This design supports workflows
+          #   where staged data (e.g., invitation metadata) differs from activated data
+          #   (e.g., membership settings), and prevents accidental data leakage between
+          #   lifecycle phases. To carry over staged attributes:
+          #
+          #     activated = org.activate_members_instance(
+          #       staged, customer,
+          #       through_attrs: staged.to_h.slice(:role, :invited_by).merge(status: 'active')
+          #     )
+          #
           # @param through_class [Class] The through model class
           # @param staged_model [Object] The staged through model to activate
           # @param target [Object] The target instance
           # @param participant [Object] The participant instance (now exists)
-          # @param attrs [Hash] Attributes for the activated through model
+          # @param attrs [Hash] Attributes for the activated through model (not merged with staged)
           # @return [Object] The new composite-keyed through model
           # @raise [ArgumentError] if staged model belongs to a different target
           # @raise [ArgumentError] if staged model is already activated
@@ -146,7 +164,7 @@ module Familia
               through_class: through_class,
               target: target,
               participant: participant,
-              attrs: attrs
+              attrs: attrs,
             )
 
             # Destroy the UUID-keyed staged model
@@ -202,10 +220,12 @@ module Familia
             # Check if model actually exists (not just loaded with empty data)
             if model.nil? || !model.exists?
               # Clean up ghost entry if staging collection provided
-              cleanup_stale_staged_entry(
-                staging_collection: staging_collection,
-                staged_objid: staged_objid
-              ) if staging_collection
+              if staging_collection
+                cleanup_stale_staged_entry(
+                  staging_collection: staging_collection,
+                  staged_objid: staged_objid,
+                )
+              end
 
               return nil
             end

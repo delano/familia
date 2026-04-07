@@ -28,7 +28,6 @@ module Familia
         # ├── remove_domain(domain)            # Remove a domain from my collection
         # ├── add_domains([...])               # Bulk add domains
         # └── domains_with_permission(level)   # Query with score filtering (sorted_set only)
-
         module Builder
           extend CollectionOperations
 
@@ -46,9 +45,7 @@ module Familia
             TargetMethods::Builder.ensure_collection_field(target_class, collection_name, type)
 
             # Create staging set if staged: option provided
-            if staged
-              TargetMethods::Builder.ensure_collection_field(target_class, staged, :sorted_set)
-            end
+            TargetMethods::Builder.ensure_collection_field(target_class, staged, :sorted_set) if staged
 
             # Core target methods
             build_collection_getter(target_class, collection_name, type)
@@ -140,7 +137,7 @@ module Familia
                   through_class: through_class,
                   target: self,
                   participant: item,
-                  attrs: through_attrs
+                  attrs: through_attrs,
                 )
               end
 
@@ -173,13 +170,13 @@ module Familia
               # TRANSACTION BOUNDARY: Through model destruction intentionally happens AFTER
               # the transaction block. See build_add_item for detailed rationale.
               # The core removal is atomic; through model cleanup is a separate operation.
-              if through_class
-                Participation::ThroughModelOperations.find_and_destroy(
-                  through_class: through_class,
-                  target: self,
-                  participant: item
-                )
-              end
+              return unless through_class
+
+              Participation::ThroughModelOperations.find_and_destroy(
+                through_class: through_class,
+                target: self,
+                participant: item,
+              )
             end
           end
 
@@ -248,7 +245,7 @@ collection_name: collection_name)
               staged_model = Participation::StagedOperations.stage(
                 through_class: through_class,
                 target: self,
-                attrs: through_attrs
+                attrs: through_attrs,
               )
 
               # Add to staging set with created_at as score
@@ -296,11 +293,13 @@ collection_name: collection_name)
                   score: score,
                   type: :sorted_set,
                   target_class: self.class,
-                  collection_name: collection_name
+                  collection_name: collection_name,
                 )
 
                 # Track participation in reverse index
-                participant.track_participation_in(active_collection.dbkey) if participant.respond_to?(:track_participation_in)
+                if participant.respond_to?(:track_participation_in)
+                  participant.track_participation_in(active_collection.dbkey)
+                end
 
                 # Remove from staging set and log warning if entry not found
                 removed = staging_collection.remove(staged_model.objid)
@@ -314,7 +313,7 @@ collection_name: collection_name)
                 staged_model: staged_model,
                 target: self,
                 participant: participant,
-                attrs: through_attrs
+                attrs: through_attrs,
               )
             end
           end
