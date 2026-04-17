@@ -1,0 +1,18 @@
+Fixed
+-----
+
+- ``SortedSet#popmin`` and ``SortedSet#popmax`` now normalize an explicitly
+  passed ``nil`` count to the default of ``1``. Previously, calling
+  ``zset.popmin(nil)`` or ``zset.popmax(nil)`` would bypass the ``count == 1``
+  branch of the structural dispatch added in the prior commit, causing
+  redis-rb's flat ``[member, score]`` return shape to be iterated as if it
+  were a nested result — yielding a malformed pair. Omitting the argument
+  was and remains unaffected.
+
+AI Assistance
+-------------
+
+- Edge case identified by the Claude Code Review GitHub Action
+  (``.github/workflows/claude-code-review.yml``) when reviewing the
+  structural-dispatch change in commit ``010d5be``. Fix drafted and verified
+  by Claude Opus 4.7 under supervision.
