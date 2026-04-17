@@ -778,10 +778,7 @@ module Familia
           # Only validate unique indexes (not multi_index)
           next unless rel.cardinality == :unique
 
-          # Only validate class-level indexes (skip instance-scoped)
-          # Matches the filter used by auto_update_class_indexes and
-          # remove_from_class_indexes! so guard/update/cleanup stay symmetric.
-          next if rel.within && rel.within != :class
+          next unless rel.class_level?
 
           # Call the validation method if it exists
           validate_method = :"guard_unique_#{rel.index_name}!"
@@ -823,13 +820,7 @@ module Familia
         return unless self.class.respond_to?(:indexing_relationships)
 
         self.class.indexing_relationships.each do |rel|
-          # Skip instance-scoped indexes (require scope context)
-          # Instance-scoped indexes must be manually populated because they need
-          # the scope instance reference (e.g., employee.add_to_company_badge_index(company))
-          #
-          # Class-level indexes have within: nil (unique_index) or within: :class (multi_index)
-          # Instance-scoped indexes have within: SomeClass (a specific class)
-          if rel.within && rel.within != :class
+          unless rel.class_level?
             Familia.debug <<~LOG_MESSAGE
               [auto_update_class_indexes] Skipping #{rel.index_name} (requires scope context)
             LOG_MESSAGE
@@ -860,11 +851,16 @@ module Familia
         return unless self.class.respond_to?(:indexing_relationships)
 
         self.class.indexing_relationships.each do |rel|
-          # Skip instance-scoped indexes (require scope context unavailable here)
-          next if rel.within && rel.within != :class
+          next unless rel.class_level?
 
           remove_method = :"remove_from_class_#{rel.index_name}"
-          send(remove_method) if respond_to?(remove_method)
+          if respond_to?(remove_method)
+            send(remove_method)
+          else
+            Familia.debug <<~LOG_MESSAGE
+              [remove_from_class_indexes!] Missing #{remove_method} for #{self.class}##{rel.index_name}; stale index entries may remain
+            LOG_MESSAGE
+          end
         end
       end
 

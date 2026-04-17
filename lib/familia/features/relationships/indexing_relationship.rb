@@ -41,6 +41,19 @@ module Familia
         def scope_class_config_name
           scope_class.config_name
         end
+
+        # Whether this is a class-level index (as opposed to instance-scoped).
+        #
+        # Class-level indexes live under the class and use `within: nil`
+        # (unique_index default) or `within: :class` (multi_index class scope).
+        # Instance-scoped indexes use `within: SomeClass` and require a scope
+        # instance to populate or query.
+        #
+        # @return [Boolean]
+        #
+        def class_level?
+          within.nil? || within == :class
+        end
       end
     end
   end

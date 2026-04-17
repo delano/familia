@@ -110,6 +110,49 @@ rescue StandardError => e
 end
 #=> :no_raise
 
+## Regression: destroy! with mixed nil/non-nil indexed fields populates only non-nil index
+# A widget with `name` set but `category` nil populates only the unique_index --
+# the multi_index's generated add_to_class_* method short-circuits on nil.
+@mixed = Widget241.create!(objid: 'w241-mixed-001', name: 'mixed-alpha')
+Widget241.name_index.get('mixed-alpha')
+#=> 'w241-mixed-001'
+
+## Regression: destroy! with mixed nil/non-nil indexed fields does not raise
+# Cleanup must iterate every class-level index and short-circuit cleanly
+# when the field value is nil, without raising or leaving stale state.
+begin
+  @mixed.destroy!
+  :no_raise
+rescue StandardError => e
+  "raised: #{e.class.name}"
+end
+#=> :no_raise
+
+## Regression: destroy! with mixed fields removed the populated (name) entry
+Widget241.name_index.get('mixed-alpha')
+#=> nil
+
+## Regression: inverse mixed state -- category set, name nil (asymmetric iteration)
+# indexing_relationships.each walks in registration order (name_index first,
+# then category_index). This case hits the opposite ordering so the cleanup
+# loop exercises a nil unique_index followed by a populated multi_index.
+@inverse = Widget241.create!(objid: 'w241-mixed-002', category: 'asymm')
+Widget241.category_index_for('asymm').members.include?('w241-mixed-002')
+#=> true
+
+## Regression: inverse mixed state destroy! does not raise
+begin
+  @inverse.destroy!
+  :no_raise
+rescue StandardError => e
+  "raised: #{e.class.name}"
+end
+#=> :no_raise
+
+## Regression: inverse mixed state destroy! removed the populated (category) entry
+Widget241.category_index_for('asymm').members.include?('w241-mixed-002')
+#=> false
+
 ## Instance-scoped index cleanup is out of scope for #241 (documented limitation)
 # The fix in #241 covers only class-level indexes. Instance-scoped indexes
 # (`within: SomeClass`) require a parent context to resolve the set, so
