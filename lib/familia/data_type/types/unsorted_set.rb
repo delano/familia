@@ -148,11 +148,9 @@ module Familia
     def intercard(*other_sets, limit: 0)
       keys = extract_keys(other_sets)
       all_keys = [dbkey, *keys]
-      if limit.positive?
-        dbclient.sintercard(all_keys.size, *all_keys, limit: limit)
-      else
-        dbclient.sintercard(all_keys.size, *all_keys)
-      end
+      args = [:sintercard, all_keys.size, *all_keys]
+      args.push('LIMIT', limit) if limit.positive?
+      dbclient.call(*args)
     end
     alias intersection_cardinality intercard
 
@@ -217,7 +215,7 @@ module Familia
     def sampleraw(count = 1)
       dbclient.srandmember(dbkey, count) || []
     end
-    alias random sampleraw
+    alias randomraw sampleraw
 
     private
 
