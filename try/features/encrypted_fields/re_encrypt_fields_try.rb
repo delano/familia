@@ -46,6 +46,17 @@ class ReEncryptTarget < Familia::Horreum
   encrypted_field :token
 end
 
+# Mixed-field model: one encrypted, one plain, one transient.
+class ReEncryptMixed < Familia::Horreum
+  feature :encrypted_fields
+  feature :transient_fields
+  identifier_field :id
+  field :id
+  field :plain_label
+  encrypted_field :secret
+  transient_field :session_token
+end
+
 # Track identifiers so teardown can purge records.
 @created_ids = []
 
@@ -175,10 +186,116 @@ raw_secret_before_save = Familia.dbclient.hget(@contract_fresh.dbkey, 'secret')
 JSON.parse(raw_secret_before_save)['key_version']
 #=> 'v1'
 
+## successive re_encrypt_fields! calls produce fresh nonces
+Familia.config.encryption_keys = @test_keys
+Familia.config.current_key_version = :v2
+
+@nonce_obj = ReEncryptTarget.new(id: 're-enc-nonce', label: 'nonce')
+@nonce_obj.secret = 'nonce-secret'
+@nonce_obj.token  = 'nonce-token'
+@nonce_obj.save
+@created_ids << @nonce_obj.id
+
+@nonce_obj.re_encrypt_fields!
+@nonce_obj.save
+first_envelope = JSON.parse(Familia.dbclient.hget(@nonce_obj.dbkey, 'secret'))
+
+@nonce_reload = ReEncryptTarget.load('re-enc-nonce')
+@nonce_reload.re_encrypt_fields!
+@nonce_reload.save
+second_envelope = JSON.parse(Familia.dbclient.hget(@nonce_reload.dbkey, 'secret'))
+
+[
+  first_envelope['key_version'] == second_envelope['key_version'],
+  first_envelope['nonce'] != second_envelope['nonce'],
+  first_envelope['ciphertext'] != second_envelope['ciphertext'],
+]
+#=> [true, true, true]
+
+## raises when the old key version has been removed from the keyring
+Familia.config.encryption_keys = @test_keys
+Familia.config.current_key_version = :v1
+
+@orphan = ReEncryptTarget.new(id: 're-enc-orphan', label: 'orphan')
+@orphan.secret = 'orphan-secret'
+@orphan.token  = 'orphan-token'
+@orphan.save
+@created_ids << @orphan.id
+
+pre_block_keys = Familia.config.encryption_keys
+pre_block_version = Familia.config.current_key_version
+raised = begin
+  Familia.config.encryption_keys = { v2: @test_keys[:v2] }
+  Familia.config.current_key_version = :v2
+  orphan_fresh = ReEncryptTarget.load('re-enc-orphan')
+  orphan_fresh.re_encrypt_fields!
+  nil
+rescue Familia::EncryptionError => e
+  e.class
+ensure
+  Familia.config.encryption_keys = pre_block_keys
+  Familia.config.current_key_version = pre_block_version
+end
+raised
+#=> Familia::EncryptionError
+
+## raises EncryptionError when ivar holds a non-ConcealedString value
+Familia.config.encryption_keys = @test_keys
+Familia.config.current_key_version = :v2
+
+@bad_ivar = ReEncryptTarget.new(id: 're-enc-bad-ivar', label: 'bad-ivar')
+@bad_ivar.secret = 'bad-ivar-secret'
+@bad_ivar.save
+@created_ids << @bad_ivar.id
+
+@bad_ivar.instance_variable_set(:@secret, 42)
+err = begin
+  @bad_ivar.re_encrypt_fields!
+  nil
+rescue Familia::EncryptionError => e
+  e
+end
+[err.class, err.message.include?('Integer')]
+#=> [Familia::EncryptionError, true]
+
+## mixed-field model only rotates the encrypted field
+Familia.config.encryption_keys = @test_keys
+Familia.config.current_key_version = :v1
+
+@mixed = ReEncryptMixed.new(id: 're-enc-mixed')
+@mixed.plain_label = 'mixed-label'
+@mixed.secret = 'mixed-secret'
+@mixed.session_token = 'mixed-session'
+@mixed.save
+@mixed_created_id = @mixed.id
+
+Familia.config.current_key_version = :v2
+@mixed_fresh = ReEncryptMixed.load('re-enc-mixed')
+@mixed_fresh.session_token = 'mixed-session-reloaded'
+@mixed_fresh.re_encrypt_fields!
+@mixed_fresh.save
+
+raw_secret = JSON.parse(Familia.dbclient.hget(@mixed_fresh.dbkey, 'secret'))
+raw_label = Familia.dbclient.hget(@mixed_fresh.dbkey, 'plain_label')
+[
+  raw_secret['key_version'],
+  JSON.parse(raw_label),
+  ReEncryptMixed.encrypted_fields.include?(:session_token),
+]
+#=> ['v2', 'mixed-label', false]
+
 # Teardown: delete test records and restore original encryption config.
 @created_ids.uniq.each do |id|
   begin
     ReEncryptTarget.destroy!(id)
+  rescue StandardError
+    # best effort cleanup
+  end
+end
+
+if @mixed_created_id
+  begin
+    ReEncryptMixed.destroy!(@mixed_created_id)
   rescue StandardError
     # best effort cleanup
   end

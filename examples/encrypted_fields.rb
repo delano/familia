@@ -187,52 +187,57 @@ end
 
 puts 'Example 4: Key rotation demonstration'
 
-# Start with only v1 available so the initial save uses v1 as current.
-Familia.config.encryption_keys = {
-  v1: 'dGVzdGtleWZvcmV4YW1wbGVzMTIzNDU2Nzg5MA==',
-}
-Familia.config.current_key_version = :v1
+# Capture original encryption config so an abort mid-example does not leave
+# the process running under a rotated keyring.
+original_encryption_keys = Familia.config.encryption_keys
+original_current_key_version = Familia.config.current_key_version
 
-RotationTest.new(
-  test_id: 'rotation_test',
-  sensitive_data: 'Original sensitive data encrypted with v1 key'
-).save
+begin
+  # Start with only v1 available so the initial save uses v1 as current.
+  Familia.config.encryption_keys = {
+    v1: 'dGVzdGtleWZvcmV4YW1wbGVzMTIzNDU2Nzg5MA==',
+  }
+  Familia.config.current_key_version = :v1
 
-# Inspect raw storage to confirm encryption under v1.
-# e.g. redis-cli HGET rotationtest:rotation_test:object sensitive_data
-#   => {"algorithm":"...","key_version":"v1","nonce":"...","ciphertext":"..."}
+  RotationTest.new(
+    test_id: 'rotation_test',
+    sensitive_data: 'Original sensitive data encrypted with v1 key'
+  ).save
 
-# Rotate: add v2, promote v2 to current. v1 stays in the keyring so existing
-# ciphertext remains decryptable until it is re-encrypted.
-Familia.config.encryption_keys = {
-  v1: 'dGVzdGtleWZvcmV4YW1wbGVzMTIzNDU2Nzg5MA==',
-  v2: 'bmV3ZXJrZXlmb3JleGFtcGxlczEyMzQ1Njc4OTA=',
-}
-Familia.config.current_key_version = :v2
+  # Inspect raw storage to confirm encryption under v1.
+  # e.g. redis-cli HGET rotationtest:rotation_test:object sensitive_data
+  #   => {"algorithm":"...","key_version":"v1","nonce":"...","ciphertext":"..."}
 
-# Load a fresh copy -- do NOT touch plaintext. The field holds a
-# ConcealedString wrapping v1 ciphertext.
-reloaded = RotationTest.find_by_id('rotation_test')
-puts "Loaded record, current key version: #{Familia.config.current_key_version}"
+  # Rotate: add v2, promote v2 to current. v1 stays in the keyring so existing
+  # ciphertext remains decryptable until it is re-encrypted.
+  Familia.config.encryption_keys = {
+    v1: 'dGVzdGtleWZvcmV4YW1wbGVzMTIzNDU2Nzg5MA==',
+    v2: 'bmV3ZXJrZXlmb3JleGFtcGxlczEyMzQ1Njc4OTA=',
+  }
+  Familia.config.current_key_version = :v2
 
-# re_encrypt_fields! decrypts (using v1 from the keyring) and re-assigns
-# plaintext through the setter, which re-encrypts under v2. It only mutates
-# in-memory state; save is required to persist.
-reloaded.re_encrypt_fields!
-reloaded.save
+  # Load a fresh copy -- do NOT touch plaintext. The field holds a
+  # ConcealedString wrapping v1 ciphertext.
+  reloaded = RotationTest.find_by_id('rotation_test')
+  puts "Loaded record, current key version: #{Familia.config.current_key_version}"
 
-# Verify by loading again and inspecting. The stored ciphertext now has
-# key_version: "v2". Use debug_fields or inspect raw Redis to confirm:
-#   redis-cli HGET rotationtest:rotation_test:object sensitive_data
-verify = RotationTest.find_by_id('rotation_test')
-puts "After re-encrypt, status: #{verify.encrypted_fields_status}"
+  # re_encrypt_fields! decrypts (using v1 from the keyring) and re-assigns
+  # plaintext through the setter, which re-encrypts under v2. It only mutates
+  # in-memory state; save is required to persist.
+  reloaded.re_encrypt_fields!
+  reloaded.save
 
-# Restore the original key configuration for subsequent examples.
-Familia.config.encryption_keys = {
-  v1: 'dGVzdGtleWZvcmV4YW1wbGVzMTIzNDU2Nzg5MA==',
-  v2: 'bmV3ZXJrZXlmb3JleGFtcGxlczEyMzQ1Njc4OTA=',
-}
-Familia.config.current_key_version = :v2
+  # Verify by loading again and inspecting. The stored ciphertext now has
+  # key_version: "v2". Use debug_fields or inspect raw Redis to confirm:
+  #   redis-cli HGET rotationtest:rotation_test:object sensitive_data
+  verify = RotationTest.find_by_id('rotation_test')
+  puts "After re-encrypt, status: #{verify.encrypted_fields_status}"
+ensure
+  # Restore the original key configuration for subsequent examples, even if
+  # anything above raised.
+  Familia.config.encryption_keys = original_encryption_keys
+  Familia.config.current_key_version = original_current_key_version
+end
 puts
 
 # Example 5: Memory safety and cleanup

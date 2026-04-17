@@ -16,4 +16,4 @@ Documentation
 AI Assistance
 -------------
 
-- Bug diagnosis, fix implementation, example rework, and changelog drafting with Claude. Issue #235
+- Collaborated with Claude on isolating the no-op root cause (the setter's ConcealedString-preservation branch), drafting the raw-envelope regression canary that inspects ``key_version`` in stored JSON, reworking ``examples/encrypted_fields.rb`` to exercise the real rotation flow rather than pre-assigning plaintext, and adding edge-case coverage for nonce freshness, missing-old-key failures, type-guard assertions, and mixed encrypted/plain/transient field models. Issue #235
