@@ -102,6 +102,35 @@ end
 Familia::RecordExistsError.superclass
 #=> Familia::NonUniqueKey
 
+## RecordExistsError.existing_id defaults to nil when not provided
+Familia::RecordExistsError.new('my_key').existing_id
+#=> nil
+
+## RecordExistsError.existing_id is exposed when provided as kwarg
+Familia::RecordExistsError.new('my_key', existing_id: 'abc123').existing_id
+#=> "abc123"
+
+## RecordExistsError message format when existing_id is nil
+Familia::RecordExistsError.new('my_key').message
+#=> "Key already exists: my_key"
+
+## RecordExistsError message format when existing_id is set
+Familia::RecordExistsError.new('my_key', existing_id: 'abc123').message
+#=> "Key already exists: my_key (existing_id=abc123)"
+
+## Legacy call style (single positional arg via raise) still works - existing_id is nil
+begin
+  raise Familia::RecordExistsError, 'legacy:key'
+rescue Familia::RecordExistsError => e
+  [e.existing_id, e.message]
+end
+#=> [nil, "Key already exists: legacy:key"]
+
+## RecordExistsError#message is idempotent across repeated calls
+err = Familia::RecordExistsError.new('my_key', existing_id: 'abc123')
+[err.message, err.message, err.message].uniq
+#=> ["Key already exists: my_key (existing_id=abc123)"]
+
 ## All error classes inherit from Problem
 [
   Familia::NoIdentifier,
