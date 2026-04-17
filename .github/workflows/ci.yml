@@ -18,11 +18,16 @@ jobs:
 
     runs-on: ubuntu-24.04
 
+    continue-on-error: ${{ matrix.continue-on-error }}
+
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         ruby: ["3.4", "3.5"]
         continue-on-error: [false]
+        include:
+          - ruby: "4.0"
+            continue-on-error: true
 
     services:
       redis:
