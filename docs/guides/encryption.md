@@ -328,8 +328,11 @@ end
 vault.secret_key = "new-secret"  # Encrypted with v2 key
 vault.save
 
-# Step 3: Re-encrypt existing records
-vault.re_encrypt_fields!  # Uses current key version
+# Step 3: Re-encrypt existing records. re_encrypt_fields! rotates every
+# encrypted field on the instance to the current key version by decrypting
+# and re-assigning plaintext through the setter. It mutates in-memory state
+# only -- you MUST call save afterward to persist the new ciphertext.
+vault.re_encrypt_fields!
 vault.save
 
 # Step 4: After all data is re-encrypted, remove old key

@@ -385,7 +385,11 @@ module Familia
       #
       # This method is useful for key rotation or algorithm upgrades.
       # It decrypts all encrypted fields and re-encrypts them with the
-      # current encryption configuration.
+      # current encryption configuration (current key version and algorithm).
+      #
+      # This method mutates in-memory state only. The caller MUST call
+      # {#save} (or equivalent) afterward to persist the re-encrypted
+      # values to Redis.
       #
       # @return [Boolean] true if re-encryption succeeded
       #
@@ -398,12 +402,17 @@ module Familia
           current_value = send(field_name)
           next if current_value.nil?
 
-          # Force re-encryption by setting the value again
-          if current_value.respond_to?(:value)
-            send("#{field_name}=", current_value.value)
-          else
-            send("#{field_name}=", current_value)
+          # Extract plaintext from ConcealedString and re-assign. Re-assigning
+          # plaintext through the setter forces encryption under the current
+          # key version and algorithm. Passing the ConcealedString back to the
+          # setter is a no-op (the setter preserves existing ConcealedStrings
+          # for rehydration), so we must reveal first.
+          unless current_value.is_a?(ConcealedString)
+            raise Familia::EncryptionError,
+                  "re_encrypt_fields!: unexpected value type #{current_value.class} for encrypted field #{field_name} -- expected ConcealedString"
           end
+
+          current_value.reveal { |plaintext| send("#{field_name}=", plaintext) }
         end
         true
       end

@@ -254,6 +254,10 @@ doc.save
 >
 > AAD prevents encrypted fields from being moved between objects. Use it for high-security scenarios where data integrity is critical.
 
+> **⚠️ Key Rotation with AAD**
+>
+> Do not mutate any `aad_fields` value between `load` and `re_encrypt_fields!`. The old ciphertext's AAD is bound to the values present at encryption time; changing an AAD field first causes `reveal` inside the rotation loop to fail with `Familia::EncryptionError`, leaving the in-memory object partially rotated (some encrypted fields re-encrypted, others still under the old key). Either re-encrypt before mutating AAD fields, or mutate AAD fields, `save`, re-load, and re-encrypt.
+
 ### Per-Field Provider Selection
 
 ```ruby
@@ -444,6 +448,8 @@ class KeyRotationTask
       model_class.all.each_slice(100) do |batch|
         batch.each do |record|
           begin
+            # re_encrypt_fields! only mutates in-memory state; save is
+            # required to persist ciphertext under the current key version.
             record.re_encrypt_fields!
             record.save
           rescue => e
@@ -462,6 +468,10 @@ end
 
 # 4. Remove old key after migration
 ```
+
+> **🔑 Keyring Prerequisite**
+>
+> Every old key version that any record is currently encrypted under must remain in `Familia.config.encryption_keys` for the duration of the rotation. `re_encrypt_fields!` decrypts with the old key (looked up by `key_version` in the stored envelope) and re-encrypts with `current_key_version`. Records whose old key has been removed from the keyring will raise `Familia::EncryptionError` on both `load` and `re_encrypt_fields!`. Only drop an old key after every record has been re-encrypted and verified.
 
 ### Emergency Key Rotation
 
@@ -711,11 +721,14 @@ vault.encrypted_fields_cleared?  # => true
 ```
 
 #### `re_encrypt_fields!`
-Re-encrypt all encrypted fields with current encryption settings (useful for key rotation).
+Re-encrypt all encrypted fields with current encryption settings (useful for key rotation). The method rotates every encrypted field on the instance to the current key version and algorithm by decrypting existing ciphertext and re-assigning the plaintext through the setter.
+
+This mutates in-memory state only. The caller MUST call `save` (or equivalent) afterward to persist the re-encrypted values -- without `save`, the stored ciphertext remains under the old key version.
 
 ```ruby
-vault.re_encrypt_fields!
-vault.save  # Persists re-encrypted data
+vault = Vault.find_by_id(id)  # Loaded with v1 ciphertext
+vault.re_encrypt_fields!      # Decrypts with v1, re-encrypts with current (v2)
+vault.save                    # Persists v2 ciphertext -- required
 ```
 
 #### `encrypted_fields_status`

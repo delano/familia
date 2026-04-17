@@ -186,36 +186,58 @@ class RotationTest < Familia::Horreum
 end
 
 puts 'Example 4: Key rotation demonstration'
-rotation_obj = RotationTest.new(
-  test_id: 'rotation_test',
-  sensitive_data: 'Original sensitive data encrypted with v2 key'
-)
-rotation_obj.save
 
-puts "Original data encrypted with key version: #{Familia.config.current_key_version}"
-puts "Data: #{rotation_obj.sensitive_data.reveal}"
+# Capture original encryption config so an abort mid-example does not leave
+# the process running under a rotated keyring.
+original_encryption_keys = Familia.config.encryption_keys
+original_current_key_version = Familia.config.current_key_version
 
-# Check encryption status before rotation
-status_before = rotation_obj.encrypted_fields_status
-puts "Encryption status before rotation: #{status_before}"
+begin
+  # Start with only v1 available so the initial save uses v1 as current.
+  Familia.config.encryption_keys = {
+    v1: 'dGVzdGtleWZvcmV4YW1wbGVzMTIzNDU2Nzg5MA==',
+  }
+  Familia.config.current_key_version = :v1
 
-# Simulate key rotation - switch to v1 for demonstration
-Familia.config.current_key_version = :v1
+  RotationTest.new(
+    test_id: 'rotation_test',
+    sensitive_data: 'Original sensitive data encrypted with v1 key'
+  ).save
 
-# Re-encrypt with new current key
-rotation_obj.sensitive_data = 'Updated data encrypted with v1 key'
-rotation_obj.re_encrypt_fields!
-rotation_obj.save
+  # Inspect raw storage to confirm encryption under v1.
+  # e.g. redis-cli HGET rotationtest:rotation_test:object sensitive_data
+  #   => {"algorithm":"...","key_version":"v1","nonce":"...","ciphertext":"..."}
 
-puts "After rotation to key version: #{Familia.config.current_key_version}"
-puts "Data: #{rotation_obj.sensitive_data.reveal}"
+  # Rotate: add v2, promote v2 to current. v1 stays in the keyring so existing
+  # ciphertext remains decryptable until it is re-encrypted.
+  Familia.config.encryption_keys = {
+    v1: 'dGVzdGtleWZvcmV4YW1wbGVzMTIzNDU2Nzg5MA==',
+    v2: 'bmV3ZXJrZXlmb3JleGFtcGxlczEyMzQ1Njc4OTA=',
+  }
+  Familia.config.current_key_version = :v2
 
-# Check encryption status after rotation
-status_after = rotation_obj.encrypted_fields_status
-puts "Encryption status after rotation: #{status_after}"
+  # Load a fresh copy -- do NOT touch plaintext. The field holds a
+  # ConcealedString wrapping v1 ciphertext.
+  reloaded = RotationTest.find_by_id('rotation_test')
+  puts "Loaded record, current key version: #{Familia.config.current_key_version}"
 
-# Switch back to v2
-Familia.config.current_key_version = :v2
+  # re_encrypt_fields! decrypts (using v1 from the keyring) and re-assigns
+  # plaintext through the setter, which re-encrypts under v2. It only mutates
+  # in-memory state; save is required to persist.
+  reloaded.re_encrypt_fields!
+  reloaded.save
+
+  # Verify by loading again and inspecting. The stored ciphertext now has
+  # key_version: "v2". Use debug_fields or inspect raw Redis to confirm:
+  #   redis-cli HGET rotationtest:rotation_test:object sensitive_data
+  verify = RotationTest.find_by_id('rotation_test')
+  puts "After re-encrypt, status: #{verify.encrypted_fields_status}"
+ensure
+  # Restore the original key configuration for subsequent examples, even if
+  # anything above raised.
+  Familia.config.encryption_keys = original_encryption_keys
+  Familia.config.current_key_version = original_current_key_version
+end
 puts
 
 # Example 5: Memory safety and cleanup
