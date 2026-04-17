@@ -628,14 +628,27 @@ raise "reader shares client with dbclient (coupling regression)" if reader_redis
 missing_observations = Concurrent::AtomicFixnum.new(0)
 stop_flag = Concurrent::AtomicBoolean.new(false)
 reader = Thread.new do
+  iterations = 0
   until stop_flag.true?
     missing_observations.increment if reader_redis.exists(final_key) == 0
+    iterations += 1
+    # Yield periodically so the tight EXISTS loop doesn't starve the
+    # rebuild thread or burn a full CPU core during CI runs. The race
+    # window we're probing is created by the rebuild, not by the reader,
+    # so sampling at this rate is plenty sensitive.
+    Thread.pass if (iterations % 100).zero?
   end
 end
-200.times { RebuildTestUser.rebuild_email_lookup }
-stop_flag.make_true
-reader.join
-reader_redis.close
+begin
+  200.times { RebuildTestUser.rebuild_email_lookup }
+ensure
+  # Always stop/join the reader and release its socket, even if the rebuild
+  # loop raises. Otherwise a failure mid-rebuild leaves the reader spinning
+  # and the try run hangs on process exit.
+  stop_flag.make_true
+  reader.join
+  reader_redis.close
+end
 missing_observations.value
 #=> 0
 
