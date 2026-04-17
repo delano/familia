@@ -544,6 +544,11 @@ module Familia
             end
           end
 
+          # Clean up class-level index entries (see issue #241).
+          # Instance-scoped indexes require a scope instance unavailable here;
+          # tracked separately in issue #244.
+          remove_from_class_indexes!
+
           # Remove from instances collection
           remove_from_instances!
         end
@@ -773,8 +778,7 @@ module Familia
           # Only validate unique indexes (not multi_index)
           next unless rel.cardinality == :unique
 
-          # Only validate class-level indexes (skip instance-scoped)
-          next if rel.within
+          next unless rel.class_level?
 
           # Call the validation method if it exists
           validate_method = :"guard_unique_#{rel.index_name}!"
@@ -816,13 +820,7 @@ module Familia
         return unless self.class.respond_to?(:indexing_relationships)
 
         self.class.indexing_relationships.each do |rel|
-          # Skip instance-scoped indexes (require scope context)
-          # Instance-scoped indexes must be manually populated because they need
-          # the scope instance reference (e.g., employee.add_to_company_badge_index(company))
-          #
-          # Class-level indexes have within: nil (unique_index) or within: :class (multi_index)
-          # Instance-scoped indexes have within: SomeClass (a specific class)
-          if rel.within && rel.within != :class
+          unless rel.class_level?
             Familia.debug <<~LOG_MESSAGE
               [auto_update_class_indexes] Skipping #{rel.index_name} (requires scope context)
             LOG_MESSAGE
@@ -832,6 +830,37 @@ module Familia
           # Call the existing add_to_class_* methods
           add_method = :"add_to_class_#{rel.index_name}"
           send(add_method) if respond_to?(add_method)
+        end
+      end
+
+      # Remove class-level index entries during destroy!
+      #
+      # Iterates through class-level indexing relationships and calls their
+      # corresponding remove_from_class_* methods to purge stale entries.
+      # Only processes class-level indexes (where within is nil or :class),
+      # skipping instance-scoped indexes which require scope context that
+      # destroy! does not have. See issue #241 for the class-level fix;
+      # instance-scoped cleanup is tracked as a known limitation.
+      #
+      # Intended to be called from inside destroy!'s MULTI/EXEC transaction
+      # so index hash/set mutations are atomic with the object hash delete.
+      #
+      # @return [void]
+      #
+      def remove_from_class_indexes!
+        return unless self.class.respond_to?(:indexing_relationships)
+
+        self.class.indexing_relationships.each do |rel|
+          next unless rel.class_level?
+
+          remove_method = :"remove_from_class_#{rel.index_name}"
+          if respond_to?(remove_method)
+            send(remove_method)
+          else
+            Familia.debug <<~LOG_MESSAGE
+              [remove_from_class_indexes!] Missing #{remove_method} for #{self.class}##{rel.index_name}; stale index entries may remain
+            LOG_MESSAGE
+          end
         end
       end
 
