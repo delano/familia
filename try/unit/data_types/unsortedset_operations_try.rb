@@ -146,6 +146,27 @@ Familia.dbclient.del(raw_dest_key)
 result
 #=> [3, 4]
 
+## Familia::UnsortedSet#intercard with limit returns an Integer (not a Hash)
+result = @a.tags.intercard(@b.tags, limit: 5)
+[result.is_a?(Integer), result]
+#=> [true, 2]
+
+## Familia::UnsortedSet#random returns deserialized members matching #sample shape
+members = @a.tags.random(2)
+[members.is_a?(Array), members.length, members.all? { |m| [1, 2, 3, 4].include?(m) }]
+#=> [true, 2, true]
+
+## Familia::UnsortedSet#randomraw returns raw (undeserialized) members
+raw = @a.tags.randomraw(2)
+[raw.is_a?(Array), raw.length, raw.all? { |m| m.is_a?(String) }]
+#=> [true, 2, true]
+
+## Familia::UnsortedSet#random and #sample produce the same output shape
+sample_result = @a.tags.sample(1)
+random_result = @a.tags.random(1)
+[sample_result.class, random_result.class, sample_result.first.is_a?(Integer), random_result.first.is_a?(Integer)]
+#=> [Array, Array, true, true]
+
 # Teardown: Clean up test data
 @a.tags.delete!
 @b.tags.delete!
