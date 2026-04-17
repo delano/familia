@@ -126,6 +126,11 @@ rescue Familia::RecordExistsError => e
 end
 #=> [nil, "Key already exists: legacy:key"]
 
+## RecordExistsError#message is idempotent across repeated calls
+err = Familia::RecordExistsError.new('my_key', existing_id: 'abc123')
+[err.message, err.message, err.message].uniq
+#=> ["Key already exists: my_key (existing_id=abc123)"]
+
 ## All error classes inherit from Problem
 [
   Familia::NoIdentifier,

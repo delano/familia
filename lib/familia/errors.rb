@@ -105,15 +105,13 @@ module Familia
     def initialize(key, existing_id: nil)
       @existing_id = existing_id
       @key = key
-      super(message)
+      super(key)
     end
 
     def message
-      if existing_id.nil?
-        "Key already exists: #{key}"
-      else
-        "Key already exists: #{key} (existing_id=#{existing_id})"
-      end
+      msg = "Key already exists: #{key}"
+      msg << " (existing_id=#{existing_id})" unless existing_id.nil?
+      msg
     end
   end
 end
