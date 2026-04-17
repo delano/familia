@@ -264,12 +264,80 @@ email = "tx_unique_#{unique_timestamp}_#{unique_rand}@example.com"
 @user_tx_unique.send(:guard_unique_indexes!)
 #=> nil
 
+# =============================================
+# 6. Drift Scenarios - existing_id Exposure (Issue #242)
+# =============================================
+
+## Class-level guard exposes existing_id when drift is detected
+# Simulate drift: write a stale identifier directly into the class-level index hash
+@drift_email = "drift_#{rand(1000000)}@example.com"
+@drift_stale_id = "stale_user_#{rand(1000000)}"
+GuardUser.email_index[@drift_email] = @drift_stale_id
+@drift_user = GuardUser.new(user_id: "user_drift_#{rand(1000000)}", email: @drift_email, username: "driftuser_#{rand(1000000)}")
+begin
+  @drift_user.guard_unique_email_index!
+  nil
+rescue Familia::RecordExistsError => e
+  e.existing_id
+end
+#=> @drift_stale_id
+
+## Class-level guard message includes (existing_id=...) on drift
+begin
+  @drift_user.guard_unique_email_index!
+  nil
+rescue Familia::RecordExistsError => e
+  e.message.include?("(existing_id=#{@drift_stale_id})")
+end
+#=> true
+
+## Class-level guard error type and key on drift
+begin
+  @drift_user.guard_unique_email_index!
+  nil
+rescue Familia::RecordExistsError => e
+  [e.class, e.key.include?('GuardUser'), e.key.include?("email=#{@drift_email}")]
+end
+#=> [Familia::RecordExistsError, true, true]
+
+## Instance-scoped guard exposes existing_id when drift is detected
+# Simulate drift: write a stale identifier directly into the scope instance's index hash
+@drift_badge = "DRIFT_BADGE_#{rand(1000000)}"
+@drift_scope_stale_id = "stale_emp_#{rand(1000000)}"
+@company.badge_index[@drift_badge] = @drift_scope_stale_id
+@drift_emp = GuardEmployee.new(emp_id: "emp_drift_#{rand(1000000)}", badge_number: @drift_badge, email: "drift_emp_#{rand(1000000)}@example.com")
+begin
+  @drift_emp.guard_unique_guard_company_badge_index!(@company)
+  nil
+rescue Familia::RecordExistsError => e
+  e.existing_id
+end
+#=> @drift_scope_stale_id
+
+## Instance-scoped guard message includes (existing_id=...) on drift
+begin
+  @drift_emp.guard_unique_guard_company_badge_index!(@company)
+  nil
+rescue Familia::RecordExistsError => e
+  e.message.include?("(existing_id=#{@drift_scope_stale_id})")
+end
+#=> true
+
+## Instance-scoped guard error type and key on drift
+begin
+  @drift_emp.guard_unique_guard_company_badge_index!(@company)
+  nil
+rescue Familia::RecordExistsError => e
+  [e.class, e.key.include?('GuardEmployee'), e.key.include?('GuardCompany'), e.key.include?("badge_number=#{@drift_badge}")]
+end
+#=> [Familia::RecordExistsError, true, true, true]
+
 # Teardown - clean up test objects
-[@user1, @user2, @user_nil, @user_empty1, @user_empty2, @user_dup, @user_tx, @user_tx_unique].each do |obj|
+[@user1, @user2, @user_nil, @user_empty1, @user_empty2, @user_dup, @user_tx, @user_tx_unique, @drift_user].each do |obj|
   obj.destroy! if obj.respond_to?(:destroy!) && obj.respond_to?(:exists?) && obj.exists?
 end
 
-[@emp1, @emp2, @emp3, @emp_nil, @emp4, @emp5, @emp6].each do |obj|
+[@emp1, @emp2, @emp3, @emp_nil, @emp4, @emp5, @emp6, @drift_emp].each do |obj|
   obj.destroy! if obj.respond_to?(:destroy!) && obj.respond_to?(:exists?) && obj.exists?
 end
 

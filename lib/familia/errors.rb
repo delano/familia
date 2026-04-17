@@ -100,15 +100,20 @@ module Familia
   # Raised when attempting to create an object that already
   # exists in the database
   class RecordExistsError < NonUniqueKey
-    attr_reader :key
+    attr_reader :key, :existing_id
 
-    def initialize(key)
+    def initialize(key, existing_id: nil)
+      @existing_id = existing_id
       @key = key
-      super
+      super(message)
     end
 
     def message
-      "Key already exists: #{key}"
+      if existing_id.nil?
+        "Key already exists: #{key}"
+      else
+        "Key already exists: #{key} (existing_id=#{existing_id})"
+      end
     end
   end
 end

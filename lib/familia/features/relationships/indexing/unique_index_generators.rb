@@ -283,8 +283,10 @@ module Familia
                 existing_id = index_hash.get(field_value.to_s)
 
                 if existing_id && existing_id != identifier
-                  raise Familia::RecordExistsError,
-                    "#{self.class} exists in #{scope_instance.class} with #{field}=#{field_value}"
+                  raise Familia::RecordExistsError.new(
+                    "#{self.class} exists in #{scope_instance.class} with #{field}=#{field_value}",
+                    existing_id: existing_id,
+                  )
                 end
               end
 
@@ -432,7 +434,10 @@ module Familia
                 existing_id = index_hash.get(field_value.to_s)
 
                 if existing_id && existing_id != identifier
-                  raise Familia::RecordExistsError, "#{self.class} exists #{field}=#{field_value}"
+                  raise Familia::RecordExistsError.new(
+                    "#{self.class} exists #{field}=#{field_value}",
+                    existing_id: existing_id,
+                  )
                 end
               end
 
