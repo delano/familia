@@ -187,7 +187,7 @@ GEM
     tty-screen (0.8.2)
     unicode-display_width (3.2.0)
       unicode-emoji (~> 4.1)
-    unicode-emoji (4.1.0)
+    unicode-emoji (4.2.0)
     uri-valkey (1.4.0)
     yard (0.9.37)
     zeitwerk (2.7.3)
