@@ -97,6 +97,44 @@ result.map { |m, _s| m }
 @empty_zset.metrics.popmax
 #=> nil
 
+## Familia::SortedSet#popmin returns flat pair when member serializes to array-like string
+# An Array member JSON-serializes to a string starting with '['. The old
+# `!result[0].is_a?(Array)` heuristic could misidentify such cases. With
+# structural detection (`result.first.is_a?(Array)`), this must still
+# round-trip cleanly to [deserialized_array, Float].
+@array_member_pop = Bone.new 'zset_array_member_pop'
+@array_member_pop.metrics.add ['json', 'like', 'value'], 1
+result = @array_member_pop.metrics.popmin
+[result[0], result[1], result[0].is_a?(Array), result[1].is_a?(Float)]
+#=> [['json', 'like', 'value'], 1.0, true, true]
+
+## Familia::SortedSet#popmax returns flat pair when member serializes to array-like string
+@array_member_pop.metrics.add ['a', 'b'], 99
+result = @array_member_pop.metrics.popmax
+[result[0], result[1], result[0].is_a?(Array), result[1].is_a?(Float)]
+#=> [['a', 'b'], 99.0, true, true]
+
+## Familia::SortedSet#popmin(2) on exactly 2 members returns nested [[m,s],[m,s]]
+# Guards count>1 path: must always be an array of pairs, never collapsed
+# to a flat [m, s].
+@two_member_pop = Bone.new 'zset_two_member_pop'
+@two_member_pop.metrics.add 'first', 10
+@two_member_pop.metrics.add 'second', 20
+result = @two_member_pop.metrics.popmin(2)
+[result.length, result[0].is_a?(Array), result[1].is_a?(Array), result[0], result[1]]
+#=> [2, true, true, ['first', 10.0], ['second', 20.0]]
+
+## Familia::SortedSet#popmin(1) explicit vs default returns equivalent flat shape
+# Explicit count=1 and default count must both return a flat [member, Float]
+# pair (not a nested [[member, Float]] array).
+@explicit_count_pop = Bone.new 'zset_explicit_count_pop'
+@explicit_count_pop.metrics.add 'only', 7
+default_result = @explicit_count_pop.metrics.popmin
+@explicit_count_pop.metrics.add 'only', 7
+explicit_result = @explicit_count_pop.metrics.popmin(1)
+[default_result, explicit_result, default_result == explicit_result]
+#=> [['only', 7.0], ['only', 7.0], true]
+
 # ============================================================
 # score_count/zcount - Test score range counting
 # ============================================================
@@ -376,4 +414,7 @@ result = @symbol_test.metrics.popmin
 @scan_test.metrics.delete!
 @symbol_test.metrics.delete!
 @symbol_test2.metrics.delete!
+@array_member_pop.metrics.delete! if defined?(@array_member_pop) && @array_member_pop
+@two_member_pop.metrics.delete! if defined?(@two_member_pop) && @two_member_pop
+@explicit_count_pop.metrics.delete! if defined?(@explicit_count_pop) && @explicit_count_pop
 Familia.dbclient.del(@dest_key)

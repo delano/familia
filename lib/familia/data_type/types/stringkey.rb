@@ -236,6 +236,11 @@ module Familia
       # @param keys [Array<String>] Full Redis key names
       # @param client [Redis, nil] Optional Redis client (uses Familia.dbclient if nil)
       # @return [Array] Values for each key (nil for non-existent keys)
+      # @note This method is a raw Redis passthrough and does NOT apply Familia's
+      #   serialization pipeline. Keys are used as-is (no dbkey prefixing) and
+      #   returned values are raw Redis strings. If you need round-trip
+      #   compatibility with StringKey instances, read via the instance `#value`
+      #   getter or a `Familia.dbclient.get(instance.dbkey)` call.
       # @example
       #   StringKey.mget('user:1:name', 'user:2:name')
       def mget(*keys, client: nil)
@@ -249,6 +254,11 @@ module Familia
       # @param hash [Hash] Key-value pairs to set
       # @param client [Redis, nil] Optional Redis client (uses Familia.dbclient if nil)
       # @return [String] "OK" on success
+      # @note This method is a raw Redis passthrough and does NOT apply Familia's
+      #   serialization pipeline or expiration hooks. Keys are used as-is (no
+      #   dbkey prefixing) and values are written as-is. For round-trip
+      #   compatibility with StringKey instances, write via the instance
+      #   `#value=` setter (which calls `serialize_value` and `update_expiration`).
       # @example
       #   StringKey.mset('user:1:name' => 'Alice', 'user:2:name' => 'Bob')
       def mset(hash, client: nil)
@@ -262,6 +272,11 @@ module Familia
       # @param hash [Hash] Key-value pairs to set
       # @param client [Redis, nil] Optional Redis client (uses Familia.dbclient if nil)
       # @return [Boolean] true if all keys were set, false if none were set
+      # @note This method is a raw Redis passthrough and does NOT apply Familia's
+      #   serialization pipeline or expiration hooks. Keys are used as-is (no
+      #   dbkey prefixing) and values are written as-is. For round-trip
+      #   compatibility with StringKey instances, write via the instance
+      #   `#value=` setter (which calls `serialize_value` and `update_expiration`).
       # @example
       #   StringKey.msetnx('user:1:name' => 'Alice', 'user:2:name' => 'Bob')
       def msetnx(hash, client: nil)
@@ -275,6 +290,10 @@ module Familia
       # @param keys [Array<String>] Source keys for the operation
       # @param client [Redis, nil] Optional Redis client (uses Familia.dbclient if nil)
       # @return [Integer] Size of the resulting string in bytes
+      # @note This method is a raw Redis passthrough and does NOT apply Familia's
+      #   serialization pipeline or expiration hooks. All key arguments are used
+      #   as-is (no dbkey prefixing). The destination key will not have a TTL
+      #   applied automatically.
       # @example
       #   StringKey.bitop(:and, 'result', 'key1', 'key2')
       def bitop(operation, destkey, *keys, client: nil)

@@ -135,15 +135,15 @@ module Familia
     # @param cursor [Integer] The cursor position to start from (0 for initial call)
     # @param match [String, nil] Optional glob-style pattern to filter field names
     # @param count [Integer, nil] Optional hint for number of elements to return per call
-    # @return [Array<String, Hash>] A two-element array: [new_cursor, {field => value, ...}]
-    #   When new_cursor is "0", iteration is complete.
+    # @return [Array<Integer, Hash>] A two-element array: [new_cursor, {field => value, ...}]
+    #   When new_cursor is 0, iteration is complete.
     #
     # @example Basic iteration
     #   cursor = 0
     #   loop do
     #     cursor, results = my_hash.scan(cursor)
     #     results.each { |field, value| puts "#{field}: #{value}" }
-    #     break if cursor == "0"
+    #     break if cursor == 0
     #   end
     #
     # @example With pattern matching
@@ -158,7 +158,7 @@ module Familia
       # pairs is an array of [field, value] pairs, convert to hash with deserialization
       result_hash = pairs.to_h.transform_values { |v| deserialize_value(v) }
 
-      [new_cursor, result_hash]
+      [new_cursor.to_i, result_hash]
     end
     alias hscan scan
 

@@ -321,11 +321,15 @@ module Familia
 
       update_expiration
 
-      if count == 1 && result.is_a?(Array) && result.length == 2 && !result[0].is_a?(Array)
-        # Single result: [member, score]
-        [deserialize_value(result[0]), result[1].to_f]
+      # redis-rb returns a flat [member, score] pair when count <= 1, and a
+      # nested [[member, score], ...] array when count > 1. Normalize by
+      # inspecting the result's structure rather than relying on count alone,
+      # so that a redis-rb version change or a member that serializes to an
+      # array-like string cannot mislead the dispatch.
+      if count == 1
+        pair = result.first.is_a?(Array) ? result.first : result
+        [deserialize_value(pair[0]), pair[1].to_f]
       else
-        # Multiple results: [[member, score], ...]
         result.map { |member, score| [deserialize_value(member), score.to_f] }
       end
     end
@@ -348,11 +352,15 @@ module Familia
 
       update_expiration
 
-      if count == 1 && result.is_a?(Array) && result.length == 2 && !result[0].is_a?(Array)
-        # Single result: [member, score]
-        [deserialize_value(result[0]), result[1].to_f]
+      # redis-rb returns a flat [member, score] pair when count <= 1, and a
+      # nested [[member, score], ...] array when count > 1. Normalize by
+      # inspecting the result's structure rather than relying on count alone,
+      # so that a redis-rb version change or a member that serializes to an
+      # array-like string cannot mislead the dispatch.
+      if count == 1
+        pair = result.first.is_a?(Array) ? result.first : result
+        [deserialize_value(pair[0]), pair[1].to_f]
       else
-        # Multiple results: [[member, score], ...]
         result.map { |member, score| [deserialize_value(member), score.to_f] }
       end
     end

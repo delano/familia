@@ -36,9 +36,9 @@ end
 
 @redis_74_plus = redis_version_at_least?(7, 4)
 
-## scan returns cursor as String and results as Hash
+## scan returns cursor as Integer and results as Hash
 cursor, results = @bone.props.scan(0)
-[cursor.is_a?(String), results.is_a?(Hash)]
+[cursor.is_a?(Integer), results.is_a?(Hash)]
 #=> [true, true]
 
 ## scan deserializes integer values correctly
@@ -68,7 +68,33 @@ results['array_field']
 
 ## hscan alias works identically to scan
 cursor, results = @bone.props.hscan(0)
-[cursor.is_a?(String), results.is_a?(Hash)]
+[cursor.is_a?(Integer), results.is_a?(Hash)]
+#=> [true, true]
+
+## scan full iteration terminates via Integer cursor == 0 and visits every field
+# This pins the documented Integer cursor contract (see scan docstring example).
+# Use a dedicated hashkey populated with enough fields to potentially span
+# multiple scan batches when `count` is small.
+@iter_bone = Bone.new 'hashkey_scan_iter_test'
+20.times { |i| @iter_bone.props["field_#{i}"] = "value_#{i}" }
+seen = {}
+cursor = 0
+loop do
+  cursor, batch = @iter_bone.props.scan(cursor, count: 3)
+  seen.merge!(batch)
+  break if cursor == 0
+end
+[seen.size, seen['field_0'], seen['field_19']]
+#=> [20, 'value_0', 'value_19']
+
+## scan returns tuple with Integer cursor AND Hash results (shape contract)
+cursor, result_hash = @bone.props.scan(0)
+[cursor.is_a?(Integer), result_hash.is_a?(Hash)]
+#=> [true, true]
+
+## hscan alias returns tuple with the same shape as scan
+cursor, result_hash = @bone.props.hscan(0)
+[cursor.is_a?(Integer), result_hash.is_a?(Hash)]
 #=> [true, true]
 
 ## incrbyfloat returns Float type
@@ -244,3 +270,4 @@ end
 
 # Teardown: Clean up test data
 @bone.props.delete!
+@iter_bone.props.delete! if defined?(@iter_bone) && @iter_bone
