@@ -144,10 +144,63 @@ result_size
 Familia.dbclient.get('stringkey_ext:bitop:or_result')
 #=> "abc"
 
+## mset stores values raw (no JSON quoting) per documented passthrough contract
+# The class method does NOT apply serialize_value. A plain string "hello"
+# must land in Redis as "hello" (6 bytes with no surrounding quotes), not
+# as "\"hello\"" (7 bytes with JSON quoting).
+Familia.dbclient.del('passthrough:mset:testkey')
+Familia::StringKey.mset({ 'passthrough:mset:testkey' => 'hello' })
+raw = Familia.dbclient.get('passthrough:mset:testkey')
+Familia.dbclient.del('passthrough:mset:testkey')
+[raw, raw.bytesize]
+#=> ['hello', 5]
+
+## mget returns raw values as stored (no JSON deserialization)
+# If a caller stores a JSON-looking string via raw Redis SET, mget returns
+# that literal string, not a parsed Ruby object.
+Familia.dbclient.set('passthrough:mget:raw_json', '"quoted"')
+Familia.dbclient.set('passthrough:mget:literal', '42')
+result = Familia::StringKey.mget('passthrough:mget:raw_json', 'passthrough:mget:literal')
+Familia.dbclient.del('passthrough:mget:raw_json', 'passthrough:mget:literal')
+result
+#=> ['"quoted"', '42']
+
+## mset/mget round-trip with StringKey instance values
+# StringKey instances use raw .to_s serialization (per CLAUDE.md table), so
+# a value written via `instance.value=` can be read back raw via the class
+# mget passthrough without JSON mismatch.
+@pt_instance = Familia::StringKey.new 'passthrough:roundtrip:instance'
+@pt_instance.value = 'foo'
+via_class = Familia::StringKey.mget(@pt_instance.dbkey)
+[via_class, via_class.first == @pt_instance.value]
+#=> [['foo'], true]
+
+## msetnx stores values raw (no JSON quoting) per documented passthrough contract
+Familia.dbclient.del('passthrough:msetnx:k1', 'passthrough:msetnx:k2')
+Familia::StringKey.msetnx({ 'passthrough:msetnx:k1' => 'plain', 'passthrough:msetnx:k2' => 'text' })
+raws = [Familia.dbclient.get('passthrough:msetnx:k1'), Familia.dbclient.get('passthrough:msetnx:k2')]
+Familia.dbclient.del('passthrough:msetnx:k1', 'passthrough:msetnx:k2')
+raws
+#=> ['plain', 'text']
+
+## bitop uses key arguments as-is (no dbkey prefixing)
+# The passthrough contract requires the destination and source keys to be
+# used verbatim. Verify the destination key we supplied is the one Redis
+# actually wrote to.
+Familia.dbclient.del('passthrough:bitop:src1', 'passthrough:bitop:src2', 'passthrough:bitop:dest')
+Familia.dbclient.set('passthrough:bitop:src1', 'abc')
+Familia.dbclient.set('passthrough:bitop:src2', 'abc')
+size = Familia::StringKey.bitop(:and, 'passthrough:bitop:dest', 'passthrough:bitop:src1', 'passthrough:bitop:src2')
+dest_exists = Familia.dbclient.exists('passthrough:bitop:dest') > 0
+Familia.dbclient.del('passthrough:bitop:src1', 'passthrough:bitop:src2', 'passthrough:bitop:dest')
+[size, dest_exists]
+#=> [3, true]
+
 ## Teardown
 @str.delete!
 @str2.delete!
 @str3.delete!
+@pt_instance.delete! if defined?(@pt_instance) && @pt_instance
 Familia.dbclient.del('mget:test:1', 'mget:test:2')
 Familia.dbclient.del('mset:test:a', 'mset:test:b')
 Familia.dbclient.del('msetnx:test:1', 'msetnx:test:2', 'msetnx:test:3')
