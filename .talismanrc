@@ -10,4 +10,6 @@ fileignoreconfig:
     checksum: dcc0dd135cd8c569b096c922e6260e446d25b65b7b97b8a4cb4ccaac59325b38
   - filename: try/features/object_identifier/object_identifier_try.rb
     checksum: 10c94f802b2fa3a39fa33bf7dc34dac2ecaa2dd453ff97a19313f96a32fadeff
+  - filename: examples/encrypted_fields.rb
+    checksum: 1640217c71f194a28e4ca42d0a4dd9a772693cbeb945daa27b33d2ea1f548953
 version: ""

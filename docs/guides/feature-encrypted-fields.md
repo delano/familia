@@ -444,6 +444,8 @@ class KeyRotationTask
       model_class.all.each_slice(100) do |batch|
         batch.each do |record|
           begin
+            # re_encrypt_fields! only mutates in-memory state; save is
+            # required to persist ciphertext under the current key version.
             record.re_encrypt_fields!
             record.save
           rescue => e
@@ -711,11 +713,14 @@ vault.encrypted_fields_cleared?  # => true
 ```
 
 #### `re_encrypt_fields!`
-Re-encrypt all encrypted fields with current encryption settings (useful for key rotation).
+Re-encrypt all encrypted fields with current encryption settings (useful for key rotation). The method rotates every encrypted field on the instance to the current key version and algorithm by decrypting existing ciphertext and re-assigning the plaintext through the setter.
+
+This mutates in-memory state only. The caller MUST call `save` (or equivalent) afterward to persist the re-encrypted values -- without `save`, the stored ciphertext remains under the old key version.
 
 ```ruby
-vault.re_encrypt_fields!
-vault.save  # Persists re-encrypted data
+vault = Vault.find_by_id(id)  # Loaded with v1 ciphertext
+vault.re_encrypt_fields!      # Decrypts with v1, re-encrypts with current (v2)
+vault.save                    # Persists v2 ciphertext -- required
 ```
 
 #### `encrypted_fields_status`
