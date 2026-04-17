@@ -80,7 +80,7 @@ GEM
     logger (1.7.0)
     mcp (0.8.0)
       json-schema (>= 4.1)
-    minitest (5.26.0)
+    minitest (5.27.0)
     oj (3.16.13)
       bigdecimal (>= 3.0)
       ostruct (>= 0.2)
