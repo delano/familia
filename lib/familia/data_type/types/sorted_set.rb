@@ -316,6 +316,10 @@ module Familia
     #   zset.popmin(3)  #=> [["member1", 1.0], ["member2", 2.0], ["member3", 3.0]]
     #
     def popmin(count = 1)
+      # Normalize explicit nil to the default so the structural dispatch below
+      # behaves identically whether the arg is omitted or passed as nil.
+      # redis-rb treats nil as count <= 1 and returns a flat pair.
+      count = 1 if count.nil?
       result = dbclient.zpopmin(dbkey, count)
       return nil if result.nil? || result.empty?
 
@@ -347,6 +351,10 @@ module Familia
     #   zset.popmax(3)  #=> [["member3", 100.0], ["member2", 90.0], ["member1", 80.0]]
     #
     def popmax(count = 1)
+      # Normalize explicit nil to the default so the structural dispatch below
+      # behaves identically whether the arg is omitted or passed as nil.
+      # redis-rb treats nil as count <= 1 and returns a flat pair.
+      count = 1 if count.nil?
       result = dbclient.zpopmax(dbkey, count)
       return nil if result.nil? || result.empty?
 

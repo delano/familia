@@ -135,6 +135,44 @@ explicit_result = @explicit_count_pop.metrics.popmin(1)
 [default_result, explicit_result, default_result == explicit_result]
 #=> [['only', 7.0], ['only', 7.0], true]
 
+## Familia::SortedSet#popmin(nil) normalizes to count=1 and returns a flat pair
+# Passing nil explicitly must behave like the no-arg form, not fall through to
+# the multi-member branch (which misreads redis-rb's flat [member, score]
+# reply). Structural checks: 2-element flat array, deserialized member at [0],
+# Float score at [1].
+@nil_count_pop = Bone.new 'zset_nil_count_pop'
+@nil_count_pop.metrics.add 'solo_min', 3
+result = @nil_count_pop.metrics.popmin(nil)
+[result.length, result[0], result[1], result[0].is_a?(String), result[1].is_a?(Float)]
+#=> [2, 'solo_min', 3.0, true, true]
+
+## Familia::SortedSet#popmax(nil) normalizes to count=1 and returns a flat pair
+@nil_count_pop.metrics.add 'solo_max', 999
+result = @nil_count_pop.metrics.popmax(nil)
+[result.length, result[0], result[1], result[0].is_a?(String), result[1].is_a?(Float)]
+#=> [2, 'solo_max', 999.0, true, true]
+
+## Familia::SortedSet#popmin(nil) vs popmin and popmin(1) all equivalent
+# The three invocations must produce structurally identical flat pairs.
+@nil_equiv_pop = Bone.new 'zset_nil_equiv_pop'
+@nil_equiv_pop.metrics.add 'same', 42
+no_arg = @nil_equiv_pop.metrics.popmin
+@nil_equiv_pop.metrics.add 'same', 42
+explicit_one = @nil_equiv_pop.metrics.popmin(1)
+@nil_equiv_pop.metrics.add 'same', 42
+nil_arg = @nil_equiv_pop.metrics.popmin(nil)
+[no_arg, explicit_one, nil_arg, no_arg == explicit_one && explicit_one == nil_arg]
+#=> [['same', 42.0], ['same', 42.0], ['same', 42.0], true]
+
+## Familia::SortedSet#popmin(nil) on empty set returns nil
+# Consistency with popmin and popmin(1) empty-set behavior.
+@empty_zset.metrics.popmin(nil)
+#=> nil
+
+## Familia::SortedSet#popmax(nil) on empty set returns nil
+@empty_zset.metrics.popmax(nil)
+#=> nil
+
 # ============================================================
 # score_count/zcount - Test score range counting
 # ============================================================
@@ -417,4 +455,6 @@ result = @symbol_test.metrics.popmin
 @array_member_pop.metrics.delete! if defined?(@array_member_pop) && @array_member_pop
 @two_member_pop.metrics.delete! if defined?(@two_member_pop) && @two_member_pop
 @explicit_count_pop.metrics.delete! if defined?(@explicit_count_pop) && @explicit_count_pop
+@nil_count_pop.metrics.delete! if defined?(@nil_count_pop) && @nil_count_pop
+@nil_equiv_pop.metrics.delete! if defined?(@nil_equiv_pop) && @nil_equiv_pop
 Familia.dbclient.del(@dest_key)
