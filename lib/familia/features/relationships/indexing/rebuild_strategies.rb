@@ -434,14 +434,11 @@ module Familia
 
           # Performs atomic swap of temp key to final key.
           #
-          # This ensures zero downtime during rebuild:
-          # 1. DEL final_key (remove old index)
-          # 2. RENAME temp_key final_key (atomically replace)
-          #
-          # RENAME is atomic, so the old index remains queryable until replaced:
-          # - Partial updates
-          # - Race conditions
-          # - Stale data visibility
+          # Uses Redis RENAME (>= 2.6), which atomically replaces final_key if
+          # it exists. Readers observe either the old index or the new one;
+          # there is no window in which final_key is absent. This avoids the
+          # partial-update, race-condition, and stale-visibility problems of
+          # a two-step DEL+RENAME sequence.
           #
           # @param temp_key [String] The temporary key containing rebuilt index
           # @param final_key [String] The live index key
@@ -456,9 +453,9 @@ module Familia
               return
             end
 
-            # Atomic swap: DEL final key, then RENAME temp -> final
-            # RENAME is already atomic, so we just need to clear the final key first
-            redis.del(final_key)
+            # RENAME atomically replaces final_key if it exists (Redis >= 2.6),
+            # so readers never observe a missing final_key. A preceding DEL would
+            # open a gap where concurrent HGETs return nil.
             redis.rename(temp_key, final_key)
             Familia.info "[Rebuild] Atomic swap completed: #{temp_key} -> #{final_key}"
           rescue Redis::CommandError => e

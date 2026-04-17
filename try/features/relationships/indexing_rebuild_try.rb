@@ -592,6 +592,53 @@ rescue ArgumentError
 end
 #=> "no error"
 
+# =============================================
+# 12. Atomic Swap Race Condition (#247)
+# =============================================
+
+## Seed a clean state for the race test
+RebuildTestUser.instances.clear
+RebuildTestUser.instances.add("user_1")
+RebuildTestUser.instances.add("user_2")
+RebuildTestUser.instances.add("user_3")
+RebuildTestUser.email_lookup.clear
+RebuildTestUser.rebuild_email_lookup
+RebuildTestUser.email_lookup.size > 0
+#=> true
+
+## final_key is never observed missing during repeated rebuilds
+# Before the fix, atomic_swap did DEL+RENAME as two commands, creating
+# a window where EXISTS final_key returned 0. After the fix, RENAME
+# atomically replaces final_key, so the key is always present.
+#
+# The reader thread uses Familia.create_dbclient to get a bare, isolated
+# Redis connection. This is deliberate: it decouples the test from the
+# semantics of Familia.dbclient (which could grow pooling / thread-local
+# caching later and silently cause the reader to share a socket with the
+# rebuild thread, producing protocol-framing errors instead of the race
+# signal we want to observe). create_dbclient always returns a fresh
+# Redis.new(uri.conf), so the reader's socket is guaranteed independent.
+# Atomic primitives keep the shared counter/flag correct on non-MRI Ruby.
+final_key = RebuildTestUser.email_lookup.dbkey
+reader_redis = Familia.create_dbclient
+# Guard against future regressions: reader must not share a client object
+# with whatever the rebuild path fetches from dbclient. If create_dbclient
+# is ever aliased back to dbclient with caching, this assertion fires.
+raise "reader shares client with dbclient (coupling regression)" if reader_redis.equal?(Familia.dbclient)
+missing_observations = Concurrent::AtomicFixnum.new(0)
+stop_flag = Concurrent::AtomicBoolean.new(false)
+reader = Thread.new do
+  until stop_flag.true?
+    missing_observations.increment if reader_redis.exists(final_key) == 0
+  end
+end
+200.times { RebuildTestUser.rebuild_email_lookup }
+stop_flag.make_true
+reader.join
+reader_redis.close
+missing_observations.value
+#=> 0
+
 # Teardown
 RebuildTestUser.email_lookup.clear
 RebuildTestUser.username_lookup.clear
