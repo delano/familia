@@ -22,13 +22,13 @@ Gem::Specification.new do |spec|
   spec.add_dependency 'concurrent-ruby', '~> 1.3'
   spec.add_dependency 'connection_pool', '>= 2.4', '< 4.0'
   spec.add_dependency 'csv', '~> 3.3'
+  spec.add_dependency 'json_schemer', '~> 2.0'
   spec.add_dependency 'logger', '~> 1.7'
   spec.add_dependency 'oj', '~> 3.16'
   spec.add_dependency 'redis', '>= 4.8.1', '< 6.0'
   spec.add_dependency 'stringio', '~> 3.1.1'
   spec.add_dependency 'uri-valkey', '~> 1.4'
 
-  spec.add_development_dependency 'json_schemer', '~> 2.0'
 
   spec.metadata['rubygems_mfa_required'] = 'true'
 end

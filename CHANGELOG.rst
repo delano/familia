@@ -7,6 +7,92 @@ The format is based on `Keep a Changelog <https://keepachangelog.com/en/1.1.0/>`
 
    <!--scriv-insert-here-->
 
+.. _changelog-2.5.0:
+
+2.5.0 — 2026-04-17
+==================
+
+Changed
+-------
+
+- ``Familia::RecordExistsError`` now exposes ``#existing_id`` and appends
+  ``(existing_id=<id>)`` to its message when raised by the unique-index
+  guards in ``guard_unique_indexes!``. Diagnosing stale-index drift no
+  longer requires a secondary ``HGET`` to compare the drifted identifier
+  against the one on the record being saved. The attribute defaults to
+  ``nil`` and the message format is unchanged when absent, so existing
+  rescue patterns and the primary-key collision raised by
+  ``save_if_not_exists!`` are untouched. Issue #242.
+
+- Instance-scoped index entries (``unique_index`` / ``multi_index``
+  declared with ``within: SomeClass``) remain orphaned after ``destroy!``.
+  This is a known limitation carried over from prior releases and now
+  tracked separately as issue #244. Until that issue is closed, callers
+  using instance-scoped indexes should remove entries explicitly (e.g.,
+  ``employee.remove_from_company_badge_index(company)``) before
+  ``destroy!``.
+
+Fixed
+-----
+
+- **Encryption**: Fixed ``re_encrypt_fields!`` silently failing to re-encrypt fields under the current key version. Previously the method passed the existing ``ConcealedString`` back through the setter, which the setter preserves as-is for rehydration purposes, so no re-encryption occurred and the stored ciphertext retained its original ``key_version``. The method now reveals plaintext via ``ConcealedString#reveal`` and re-assigns it, forcing encryption under the current key version and algorithm. Issue #235
+
+- ``Horreum#destroy!`` now cleans up class-level ``unique_index`` and
+  ``multi_index`` entries within the same transaction that deletes the
+  object hash and removes it from the ``instances`` timeline. Previously,
+  stale entries remained and caused ``RecordExistsError`` on a subsequent
+  ``create!`` with the same indexed value. Issue #241.
+
+- Aligned ``guard_unique_indexes!`` with the ``within`` filter used by
+  ``auto_update_class_indexes`` and the new ``remove_from_class_indexes!``
+  helper, keeping validate/update/cleanup paths symmetric for any future
+  ``unique_index`` declared ``within: :class``.
+
+- Eliminated a transient read window during index rebuilds where concurrent
+  ``HGET`` on an index key could return ``nil``. ``RebuildStrategies.atomic_swap``
+  previously ran ``DEL`` followed by ``RENAME`` as two separate commands, leaving
+  the final key absent in between. It now relies on ``RENAME``'s native atomic
+  replacement, so readers never observe a missing index during rebuild. Issue #247
+
+Security
+--------
+
+- **Encryption**: Key rotation via ``re_encrypt_fields!`` was a silent no-op for fields already loaded as ``ConcealedString`` (the normal case for objects rehydrated from Redis). Callers who followed the documented rotation workflow -- load, ``re_encrypt_fields!``, ``save`` -- left data encrypted under old, potentially compromised keys while believing rotation had succeeded. The stored ciphertext's ``key_version`` remained unchanged. Issue #235
+
+Documentation
+-------------
+
+- Clarified in both ``docs/guides/encryption.md`` and ``docs/guides/feature-encrypted-fields.md`` that ``re_encrypt_fields!`` mutates in-memory state only and requires an explicit ``save`` to persist. Reworked the key rotation example in ``examples/encrypted_fields.rb`` to demonstrate the real rotation flow (save under v1, add v2, load fresh, re-encrypt, save) rather than pre-assigning plaintext (which masked the bug). Issue #235
+
+- Added a tryout covering the split-identifier unique index corruption case:
+  ``audit_unique_indexes`` surfacing the disagreement, ``rebuild_<name>_index``
+  repairing it, guard auto-validation on save, idempotent rebuilds, multi-index
+  isolation, phantom + missing combinations, dual disagreement via
+  ``:value_mismatch``, and nil/empty indexed-value handling. (#243)
+
+AI Assistance
+-------------
+
+- Collaborated with Claude on isolating the no-op root cause (the setter's ConcealedString-preservation branch), drafting the raw-envelope regression canary that inspects ``key_version`` in stored JSON, reworking ``examples/encrypted_fields.rb`` to exercise the real rotation flow rather than pre-assigning plaintext, and adding edge-case coverage for nonce freshness, missing-old-key failures, type-guard assertions, and mixed encrypted/plain/transient field models. Issue #235
+
+- Implementation and test coverage drafted with Claude Code
+  (backend-dev + qa-automation-engineer subagents), reviewed by
+  feature-dev:code-reviewer.
+
+- Claude Code (Opus 4.7) drafted the new ``unique_index_split_identifier_try.rb``
+  tryout, including scenario coverage and corruption-seeding helpers, and
+  iterated on the expectations against live behavior of ``audit_unique_indexes``
+  and ``rebuild_name_index``. (#243)
+
+- Issue triage, code review, failing-tryout authoring, and implementation
+  were coordinated across several specialized Claude Code agents
+  (qa-automation-engineer for test coverage, backend-dev for the fix,
+  feature-dev:code-reviewer for verification of transaction atomicity
+  and filter symmetry).
+
+- Issue triage, fix, and race-detection test authored with Claude Code
+  assistance. Issue #247
+
 .. _changelog-2.4.0:
 
 2.4.0 — 2026-04-06
