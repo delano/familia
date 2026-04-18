@@ -2,11 +2,6 @@ require_relative '../support/helpers/test_helpers'
 
 Familia.debug = false
 
-# TODO: Extend atomic_write coverage to these paths:
-#   - Encrypted fields (features/encrypted_fields) inside atomic_write
-#   - JsonStringKey values participating in the MULTI
-#   - String key type (StringKey, which uses raw-string serialization)
-
 # Primary test class for atomic_write behavior
 class AtomicWriteTestPlan < Familia::Horreum
   identifier_field :planid

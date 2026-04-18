@@ -128,6 +128,19 @@ module Familia
       # against dirty in-memory scalars inside an atomic_write block (the
       # scalars will be persisted by the same transaction).
       #
+      # This predicate is intended to be queried from the same Fiber/Thread
+      # that owns the active atomic_write block. The +@atomic_write_active+
+      # ivar is read without the +OWNER_STATE_MUTEX+ that guards
+      # {#acquire_atomic_write_ownership!}, so a query issued from a
+      # different Fiber or Thread is advisory and may observe stale state
+      # (either a +true+ that has just been cleared, or a +false+ that has
+      # just been set). This is by design: the sole intended caller --
+      # +Familia::DataType#warn_if_dirty!+ -- runs from the same Fiber that
+      # invoked +atomic_write+, so the read is always consistent in the
+      # cases that matter. Adding a lock on every collection mutation purely
+      # to make a single advisory log line precise across Fibers/Threads
+      # would be the wrong tradeoff.
+      #
       # @return [Boolean]
       #
       def atomic_write_mode?
