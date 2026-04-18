@@ -286,6 +286,132 @@ RRFWithCollections.repair_related_fields!
 RRFWithCollections.audit_related_fields.all? { |r| r[:orphaned_keys].empty? }
 #=> true
 
+## repair_all!(audit_collections: true) removes orphaned collection keys end-to-end
+rrf_reset_model(RRFWithCollections)
+(1..3).each do |i|
+  obj = RRFWithCollections.new(cid: "orphan-#{i}", name: "Orphan #{i}")
+  obj.save
+  obj.sessions.push("session-#{i}")
+  obj.tags.add("tag-#{i}")
+end
+@orphan_keys = (1..3).flat_map do |i|
+  o = RRFWithCollections.new(cid: "orphan-#{i}")
+  [o.sessions.dbkey, o.tags.dbkey]
+end
+# Crash parents: hashes gone, collection keys linger as orphans
+(1..3).each do |i|
+  Familia.dbclient.del(RRFWithCollections.new(cid: "orphan-#{i}").dbkey)
+end
+@result = RRFWithCollections.repair_all!(audit_collections: true)
+[
+  @result.key?(:related_fields),
+  @result[:related_fields][:removed_keys].sort == @orphan_keys.sort,
+  @orphan_keys.all? { |k| Familia.dbclient.exists(k) == 0 },
+  @result[:related_fields][:status],
+]
+#=> [true, true, true, :issues_found]
+
+## repair_related_fields! failure path: Redis::CommandError on one key is captured in failed_keys
+rrf_reset_model(RRFWithCollections)
+@obj_a = RRFWithCollections.new(cid: 'fail-a', name: 'A')
+@obj_a.save
+@obj_a.sessions.push('s-a')
+@obj_b = RRFWithCollections.new(cid: 'fail-b', name: 'B')
+@obj_b.save
+@obj_b.sessions.push('s-b')
+@fail_key = @obj_a.sessions.dbkey
+@ok_key = @obj_b.sessions.dbkey
+Familia.dbclient.del(@obj_a.dbkey)
+Familia.dbclient.del(@obj_b.dbkey)
+# Install a simple proxy client that raises Redis::CommandError on del()
+# for one specific key and delegates everything else to the real client.
+# Then redefine RRFWithCollections.dbclient at the class level to return
+# the proxy, so every call inside repair_related_fields! hits the stub.
+class RRFDelFailProxy
+  def initialize(real, fail_key)
+    @real = real
+    @fail_key = fail_key
+  end
+
+  def del(*keys)
+    flat = keys.flatten
+    raise Redis::CommandError, 'simulated del failure' if flat.include?(@fail_key)
+    @real.del(*flat)
+  end
+
+  def method_missing(name, *args, **kwargs, &block)
+    @real.public_send(name, *args, **kwargs, &block)
+  end
+
+  def respond_to_missing?(name, include_private = false)
+    @real.respond_to?(name, include_private)
+  end
+end
+
+@real_client = RRFWithCollections.dbclient
+@proxy_client = RRFDelFailProxy.new(@real_client, @fail_key)
+RRFWithCollections.define_singleton_method(:dbclient) { |*| @proxy_client_stub }
+RRFWithCollections.instance_variable_set(:@proxy_client_stub, @proxy_client)
+begin
+  @result = RRFWithCollections.repair_related_fields!
+ensure
+  RRFWithCollections.singleton_class.send(:remove_method, :dbclient)
+  RRFWithCollections.remove_instance_variable(:@proxy_client_stub)
+end
+[
+  @result[:failed_keys].any? { |entry| entry[:key] == @fail_key && entry[:error].include?('simulated del failure') },
+  @result[:removed_keys].include?(@fail_key),
+  @result[:removed_keys].include?(@ok_key),
+  @result[:status],
+  Familia.dbclient.exists(@fail_key),
+  Familia.dbclient.exists(@ok_key),
+]
+#=> [true, false, true, :issues_found, 1, 0]
+
+## repair_related_fields! side-effect isolation: instances timeline and indexes untouched
+class RRFIsolationModel < Familia::Horreum
+  feature :relationships
+  identifier_field :iid
+  field :iid
+  field :name
+  field :email
+  unique_index :email, :by_email
+  list :sessions
+  set :tags
+end
+
+rrf_reset_model(RRFIsolationModel)
+RRFIsolationModel.by_email.clear if RRFIsolationModel.respond_to?(:by_email)
+# Create 4 instances with related fields and unique_index-backed email field.
+(1..4).each do |i|
+  obj = RRFIsolationModel.new(iid: "iso-#{i}", name: "Iso #{i}", email: "iso#{i}@example.com")
+  obj.save
+  obj.sessions.push("session-#{i}")
+  obj.tags.add("tag-#{i}")
+end
+# Crash parents for instances 2 and 3 to create related_field orphans.
+Familia.dbclient.del(RRFIsolationModel.new(iid: 'iso-2').dbkey)
+Familia.dbclient.del(RRFIsolationModel.new(iid: 'iso-3').dbkey)
+@instances_before = RRFIsolationModel.instances.size
+@by_email_before = RRFIsolationModel.by_email.field_count
+@by_email_members_before = RRFIsolationModel.by_email.hgetall
+@instances_members_before = RRFIsolationModel.instances.members.sort
+@result = RRFIsolationModel.repair_related_fields!
+@instances_after = RRFIsolationModel.instances.size
+@by_email_after = RRFIsolationModel.by_email.field_count
+@by_email_members_after = RRFIsolationModel.by_email.hgetall
+@instances_members_after = RRFIsolationModel.instances.members.sort
+[
+  @result[:removed_keys].size >= 4,
+  @result[:status],
+  @instances_before == @instances_after,
+  @by_email_before == @by_email_after,
+  @instances_members_before == @instances_members_after,
+  @by_email_members_before == @by_email_members_after,
+]
+#=> [true, :issues_found, true, true, true, true]
+
 # Teardown
 rrf_reset_model(RRFPlainModel)
 rrf_reset_model(RRFWithCollections)
+rrf_reset_model(RRFIsolationModel) if defined?(RRFIsolationModel)

@@ -222,12 +222,33 @@ module Familia
 
       # Runs health_check then all repair methods.
       #
-      # @param batch_size [Integer] SCAN batch size
+      # By default this repairs the three always-on dimensions
+      # (instances, unique indexes, participations). The related_fields
+      # and cross_references dimensions are opt-in and must be enabled
+      # on the audit side for repair to consider them.
+      #
+      # @param batch_size [Integer] SCAN batch size passed to health_check
+      # @param audit_collections [Boolean] When true, health_check runs
+      #   audit_related_fields and repair_all! calls repair_related_fields!
+      #   with the result. When false (default), related_fields stays nil
+      #   in the report and is not repaired.
+      # @param check_cross_refs [Boolean] When true, health_check runs
+      #   audit_cross_references and the result is included in the returned
+      #   report for inspection. NOTE: no automatic repair is performed for
+      #   cross_reference drift; callers must inspect the audit report and
+      #   resolve the drift manually. The flag is accepted here for symmetry
+      #   with the audit side and so repair_all! can surface the dimension
+      #   through its returned report.
       # @yield [Hash] Progress callbacks
       # @return [Hash] Combined repair results plus the AuditReport
       #
-      def repair_all!(batch_size: 100, &progress)
-        report = health_check(batch_size: batch_size, &progress)
+      def repair_all!(batch_size: 100, audit_collections: false, check_cross_refs: false, &progress)
+        report = health_check(
+          batch_size: batch_size,
+          audit_collections: audit_collections,
+          check_cross_refs: check_cross_refs,
+          &progress
+        )
 
         instances_result = repair_instances!(report.instances)
         indexes_result = repair_indexes!(report.unique_indexes)
