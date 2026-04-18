@@ -31,6 +31,15 @@ Fixed
   audits continued to silently return no stale members under a
   non-default delim. PR #221
 
+- ``Horreum.scan_pattern`` now respects ``Familia.delim`` instead of
+  hardcoding ``:``. This pattern underlies ``scan_identifiers``, the
+  canonical "enumerate all live instances" helper used by
+  ``audit_instances``, the missing-phase of
+  ``audit_unique_indexes`` and ``audit_multi_indexes``, and
+  indirectly ``audit_cross_references``. Under a custom delim every
+  one of these audits silently saw zero live objects and reported
+  clean. PR #221
+
 AI Assistance
 -------------
 

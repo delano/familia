@@ -75,14 +75,13 @@ end
 # constant means tryouts shared-context cannot accidentally overwrite it.
 ORIGINAL_DELIM = Familia.delim
 
-## Multi-index: bucket SCAN finds the per-value keys created under custom delim
-# The bug in discover_multi_index_buckets was that the SCAN pattern
-# hardcoded ":" so no buckets were ever discovered under a custom delim.
-# This testcase proves the bucket discovery path works with "|" by
-# confirming that saved objects produce buckets visible to the audit.
-# We assert on the actual bucket keys found, not on :ok status - the
-# latter would depend on Horreum.scan_pattern (management.rb) which also
-# has a hardcoded ":" and is out of scope for this PR.
+## Multi-index: healthy baseline under custom delim has clean audit
+# Covers the full audit_multi_indexes flow under a non-default delim:
+# bucket SCAN discovers the per-value keys (discover_multi_index_buckets)
+# AND scan_identifiers (via Horreum.scan_pattern) returns the live objects
+# so the missing/orphaned phases can correlate buckets to real instances.
+# Three live objects across two distinct role values produce two buckets,
+# both of which correspond to live instances, so the audit should be clean.
 begin
   dadelim_full_cleanup
   Familia.delim = '|'
@@ -93,16 +92,12 @@ begin
   m3 = DelimAuditModel.new(oid: 'da-3', role: 'member', created_at: 3)
   m3.save
   result = DelimAuditModel.audit_multi_indexes.first
-  # Phase 1 discovery found both buckets by SCAN under the custom delim.
-  # Had the pattern still been hardcoded to ":", the orphaned_keys list
-  # would be empty (buckets unseen entirely) rather than populated.
-  bucket_keys = result[:orphaned_keys].map { |o| o[:key] }.sort
-  [result[:stale_members], bucket_keys]
+  [result[:status], result[:stale_members], result[:missing], result[:orphaned_keys]]
 ensure
   dadelim_full_cleanup
   Familia.delim = ORIGINAL_DELIM
 end
-#=> [[], ["delim_audit_model|role_index|admin", "delim_audit_model|role_index|member"]]
+#=> [:ok, [], [], []]
 
 ## Multi-index: orphaned bucket under custom delim is detected
 # Regression guard for discover_multi_index_buckets. Without the
