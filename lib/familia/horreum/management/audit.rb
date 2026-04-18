@@ -101,20 +101,47 @@ module Familia
         }
       end
 
-      # Runs all four audits and wraps results in an AuditReport.
+      # Audits instance-level related_fields (list/set/zset/hashkey) for
+      # orphaned collection keys whose parent Horreum hash no longer exists.
+      #
+      # destroy! cleans related fields inside a transaction, so orphans only
+      # arise when destroy! is interrupted (process crash, manual Redis
+      # tampering, bugs in older code paths). This audit surfaces those cases.
+      #
+      # Class-level related fields (class_list/class_set/class_hashkey) are
+      # intentionally skipped: their keys are {prefix}:{field_name} with no
+      # identifier segment, so they cannot be orphaned by instance destruction.
+      #
+      # @return [Array<Hash>] One entry per instance-level related field:
+      #   [{field_name:, klass:, orphaned_keys: [...], count:, status:}]
+      #
+      def audit_related_fields
+        return [] unless relations?
+
+        related_fields.values.map { |definition| audit_single_related_field(definition) }
+      end
+
+      # Runs all audits and wraps results in an AuditReport.
+      #
+      # The related_fields audit is opt-in via `audit_collections: true`
+      # because it performs an additional SCAN per instance-level field.
+      # When omitted (or false), AuditReport#related_fields is nil which
+      # signals "not checked" rather than "checked and clean".
       #
       # @param batch_size [Integer] SCAN batch size for instances audit
       # @param sample_size [Integer, nil] Sample size for participation audit
+      # @param audit_collections [Boolean] When true, also run audit_related_fields
       # @yield [Hash] Progress from audit_instances
       # @return [AuditReport]
       #
-      def health_check(batch_size: 100, sample_size: nil, &progress)
+      def health_check(batch_size: 100, sample_size: nil, audit_collections: false, &progress)
         start_time = Familia.now
 
         inst = audit_instances(batch_size: batch_size, &progress)
         uniq = audit_unique_indexes
         multi = audit_multi_indexes
         parts = audit_participations(sample_size: sample_size)
+        related = audit_collections ? audit_related_fields : nil
 
         duration = Familia.now - start_time
 
@@ -125,6 +152,7 @@ module Familia
           unique_indexes: uniq,
           multi_indexes: multi,
           participations: parts,
+          related_fields: related,
           duration: duration
         )
       end
@@ -528,6 +556,42 @@ module Familia
         end
 
         stale
+      end
+
+      # Audits a single instance-level related field for orphaned keys.
+      #
+      # SCAN pattern "{prefix}:*:{field_name}" discovers all existing
+      # collection keys for the field. For each match, extract the
+      # identifier and check whether the parent hash still exists.
+      # Matches with a missing parent are reported as orphaned.
+      #
+      # The SCAN pattern does not match class-level keys because those
+      # live at "{prefix}:{field_name}" (two segments, no middle wildcard).
+      #
+      # @param definition [RelatedFieldDefinition]
+      # @return [Hash] {field_name:, klass:, orphaned_keys: [], count:, status:}
+      #
+      def audit_single_related_field(definition)
+        field_name = definition.name
+        pattern = "#{prefix}#{Familia.delim}*#{Familia.delim}#{field_name}"
+        orphaned_keys = []
+
+        dbclient.scan_each(match: pattern) do |key|
+          identifier = extract_identifier_from_key(key, field_name.to_s)
+          next if identifier.nil? || identifier.empty?
+
+          orphaned_keys << key unless exists?(identifier)
+        end
+
+        status = orphaned_keys.empty? ? :ok : :issues_found
+
+        {
+          field_name: field_name,
+          klass: definition.klass.name,
+          orphaned_keys: orphaned_keys,
+          count: orphaned_keys.size,
+          status: status,
+        }
       end
 
       # Deserializes raw SMEMBERS output from a multi-index bucket.

@@ -121,8 +121,8 @@ M3PlainModel.audit_multi_indexes.is_a?(Array)
 @scoped_report.complete?
 #=> false
 
-## Plain-model health check is complete
-M3PlainModel.health_check.complete?
+## Plain-model health check is complete when audit_collections is enabled
+M3PlainModel.health_check(audit_collections: true).complete?
 #=> true
 
 ## Class-scoped multi-index audit returns one result on healthy baseline

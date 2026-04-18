@@ -16,6 +16,7 @@ defined?(Familia::Horreum::AuditReport)
   unique_indexes: [],
   multi_indexes: [],
   participations: [],
+  related_fields: [],
   duration: 0.123
 )
 @healthy_report.class.name
@@ -33,6 +34,7 @@ defined?(Familia::Horreum::AuditReport)
   unique_indexes: [],
   multi_indexes: [],
   participations: [],
+  related_fields: [],
   duration: 0.1
 )
 @phantom_report.healthy?
@@ -46,6 +48,7 @@ defined?(Familia::Horreum::AuditReport)
   unique_indexes: [],
   multi_indexes: [],
   participations: [],
+  related_fields: [],
   duration: 0.1
 )
 @missing_report.healthy?
@@ -59,6 +62,7 @@ defined?(Familia::Horreum::AuditReport)
   unique_indexes: [{ index_name: :email_lookup, stale: [{ field_value: 'old@test.com' }], missing: [] }],
   multi_indexes: [],
   participations: [],
+  related_fields: [],
   duration: 0.1
 )
 @stale_idx_report.healthy?
@@ -72,6 +76,7 @@ defined?(Familia::Horreum::AuditReport)
   unique_indexes: [],
   multi_indexes: [],
   participations: [{ collection_name: :members, stale_members: [{ identifier: 'gone' }] }],
+  related_fields: [],
   duration: 0.1
 )
 @stale_part_report.healthy?
@@ -118,6 +123,7 @@ h[:healthy]
   unique_indexes: [],
   multi_indexes: [{ index_name: :role_index, stale_members: [], orphaned_keys: [] }],
   participations: [],
+  related_fields: [],
   duration: 0.05
 )
 @fully_audited_report.complete?
@@ -131,6 +137,7 @@ h[:healthy]
   unique_indexes: [],
   multi_indexes: [{ index_name: :category_index, stale_members: [], orphaned_keys: [], status: :not_implemented }],
   participations: [],
+  related_fields: [],
   duration: 0.05
 )
 @stub_report.complete?
@@ -148,6 +155,7 @@ h[:healthy]
   unique_indexes: [],
   multi_indexes: [{ index_name: :role_index, stale_members: [], orphaned_keys: [] }],
   participations: [],
+  related_fields: [],
   duration: 0.05
 )
 @unhealthy_complete_report.healthy?
