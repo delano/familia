@@ -43,6 +43,27 @@ module Familia
   # inside a transaction or pipeline
   class NestedTransactionError < OperationModeError; end
 
+  # Raised when atomic_write cannot include all DataType fields because
+  # they span multiple Redis databases (MULTI/EXEC cannot cross databases).
+  class CrossDatabaseError < OperationModeError
+    attr_reader :field_name, :field_database, :horreum_database
+
+    def initialize(field_name, field_database, horreum_database)
+      @field_name = field_name
+      @field_database = field_database
+      @horreum_database = horreum_database
+      super(build_message)
+    end
+
+    private
+
+    def build_message
+      "Cannot include field #{field_name} (logical_database: #{field_database}) in " \
+      "atomic_write: parent Horreum uses logical_database #{horreum_database}. " \
+      "MULTI/EXEC cannot span multiple databases."
+    end
+  end
+
   # Raised when attempting to reference a field that doesn't exist
   class UnknownFieldError < HorreumError; end
 

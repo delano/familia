@@ -1,0 +1,463 @@
+require_relative '../support/helpers/test_helpers'
+
+Familia.debug = false
+
+# Primary test class for atomic_write behavior
+class AtomicWriteTestPlan < Familia::Horreum
+  identifier_field :planid
+  field :planid
+  field :name
+  field :region
+  field :tier
+  set :features
+  sorted_set :scores
+  hashkey :settings
+  list :audit_log
+end
+
+# Class with expiration feature for TTL test
+class AtomicWriteExpiringPlan < Familia::Horreum
+  feature :expiration
+  identifier_field :planid
+  field :planid
+  field :name
+  default_expiration 3600
+  set :tags
+end
+
+# Class with a cross-database collection for CrossDatabaseError test
+class AtomicWriteCrossDbPlan < Familia::Horreum
+  logical_database 0
+  identifier_field :planid
+  field :planid
+  field :name
+  list :items, logical_database: 5
+end
+
+# Class with a cross-database CLASS-LEVEL collection. Exercises the guard's
+# ability to catch class_related_fields (e.g. class_sorted_set, class_list)
+# on a different logical_database than the parent Horreum. This matters
+# because persist_to_storage writes to self.class.instances inside the MULTI.
+class AtomicWriteCrossDbClassPlan < Familia::Horreum
+  logical_database 0
+  identifier_field :planid
+  field :planid
+  field :name
+  class_sorted_set :leaderboard, logical_database: 6
+end
+
+# Horreum with no explicit logical_database and a related field that
+# explicitly sets logical_database: 0. Regression fixture for the false-
+# positive guard bug: both sides resolve to 0 at runtime, so
+# guard_atomic_write_database! must not raise.
+class AtomicWriteExplicitZeroPlan < Familia::Horreum
+  identifier_field :planid
+  field :planid
+  field :name
+  set :features, logical_database: 0
+end
+
+# Clean slate
+AtomicWriteTestPlan.instances.clear
+AtomicWriteTestPlan.all.each(&:destroy!)
+AtomicWriteExpiringPlan.instances.clear
+AtomicWriteExpiringPlan.all.each(&:destroy!)
+# CrossDb cleanup is best-effort; destroying is risky across DBs
+AtomicWriteCrossDbPlan.instances.clear rescue nil
+
+## atomic_write persists scalar and collection changes atomically
+@plan_a = AtomicWriteTestPlan.new(planid: 'aw_plan_a', name: 'Basic', region: 'US')
+@plan_a.save
+@plan_a.atomic_write do
+  @plan_a.name = 'Premium'
+  @plan_a.region = 'UK'
+  @plan_a.features.add('sso')
+  @plan_a.features.add('priority')
+  @plan_a.scores.add('metric_a', 42.0)
+  @plan_a.scores.add('metric_b', 99.5)
+  @plan_a.settings['theme'] = 'dark'
+  @plan_a.settings['lang'] = 'en'
+  @plan_a.audit_log.push('upgraded')
+end
+@reloaded_a = AtomicWriteTestPlan.find_by_id('aw_plan_a')
+[
+  @reloaded_a.name,
+  @reloaded_a.region,
+  @reloaded_a.features.members.sort,
+  @reloaded_a.scores.members.sort,
+  @reloaded_a.settings['theme'],
+  @reloaded_a.settings['lang'],
+  @reloaded_a.audit_log.members,
+]
+#=> ['Premium', 'UK', ['priority', 'sso'], ['metric_a', 'metric_b'], 'dark', 'en', ['upgraded']]
+
+## atomic_write with scalar-only block still saves
+@plan_b = AtomicWriteTestPlan.new(planid: 'aw_plan_b', name: 'Initial', region: 'EU')
+result_b = @plan_b.atomic_write do
+  @plan_b.name = 'Scalar-only Update'
+  @plan_b.region = 'JP'
+end
+@reloaded_b = AtomicWriteTestPlan.find_by_id('aw_plan_b')
+[result_b, @reloaded_b.name, @reloaded_b.region]
+#=> [true, 'Scalar-only Update', 'JP']
+
+## atomic_write with collections-only block (after prior save)
+@plan_c = AtomicWriteTestPlan.new(planid: 'aw_plan_c', name: 'Stable', region: 'US')
+@plan_c.save
+@plan_c.atomic_write do
+  @plan_c.features.add('analytics')
+  @plan_c.audit_log.push('collections_only')
+end
+@reloaded_c = AtomicWriteTestPlan.find_by_id('aw_plan_c')
+[@reloaded_c.name, @reloaded_c.features.members, @reloaded_c.audit_log.members]
+#=> ['Stable', ['analytics'], ['collections_only']]
+
+## atomic_write with empty block still persists current scalar state
+@plan_d = AtomicWriteTestPlan.new(planid: 'aw_plan_d', name: 'Old Name')
+@plan_d.save
+@plan_d.name = 'New Name'
+@plan_d.atomic_write { }
+AtomicWriteTestPlan.find_by_id('aw_plan_d').name
+#=> 'New Name'
+
+## atomic_write returns true on successful commit
+@plan_e = AtomicWriteTestPlan.new(planid: 'aw_plan_e', name: 'ReturnValueTest')
+@plan_e.atomic_write { @plan_e.features.add('x') }
+#=> true
+
+## atomic_write clear-then-add sequence executes atomically
+@plan_f = AtomicWriteTestPlan.new(planid: 'aw_plan_f', name: 'ClearThenAdd')
+@plan_f.save
+@plan_f.features.add('old_a')
+@plan_f.features.add('old_b')
+@plan_f.atomic_write do
+  @plan_f.features.clear
+  @plan_f.features.add('new_a')
+  @plan_f.features.add('new_b')
+end
+@reloaded_f = AtomicWriteTestPlan.find_by_id('aw_plan_f')
+@reloaded_f.features.members.sort
+#=> ['new_a', 'new_b']
+
+## dirty? is false after successful atomic_write
+@plan_g = AtomicWriteTestPlan.new(planid: 'aw_plan_g', name: 'DirtyCheck')
+@plan_g.save
+@plan_g.atomic_write do
+  @plan_g.name = 'Changed'
+  @plan_g.region = 'FR'
+end
+@plan_g.dirty?
+#=> false
+
+## atomic_write raises OperationModeError when nested inside transaction { }
+@plan_h = AtomicWriteTestPlan.new(planid: 'aw_plan_h', name: 'NestedInTxn')
+@plan_h.save
+begin
+  Familia.transaction do
+    @plan_h.atomic_write { @plan_h.name = 'Should fail' }
+  end
+  :no_raise
+rescue Familia::OperationModeError => e
+  :raised
+end
+#=> :raised
+
+## atomic_write raises OperationModeError when nested inside another atomic_write
+@plan_i = AtomicWriteTestPlan.new(planid: 'aw_plan_i', name: 'NestedInAtomic')
+@plan_i.save
+begin
+  @plan_i.atomic_write do
+    @plan_i.name = 'Outer'
+    @plan_i.atomic_write { @plan_i.name = 'Inner' }
+  end
+  :no_raise
+rescue Familia::OperationModeError => e
+  :raised
+end
+#=> :raised
+
+## atomic_write raises CrossDatabaseError for a field on a different logical_database
+@plan_j = AtomicWriteCrossDbPlan.new(planid: 'aw_plan_j', name: 'CrossDb')
+begin
+  @plan_j.atomic_write { @plan_j.name = 'Should fail' }
+  :no_raise
+rescue Familia::CrossDatabaseError => e
+  [:raised, e.field_name, e.field_database, e.horreum_database]
+end
+#=> [:raised, :items, 5, 0]
+
+## exception inside atomic_write block prevents commit
+@plan_k = AtomicWriteTestPlan.new(planid: 'aw_plan_k', name: 'Original', region: 'US')
+@plan_k.save
+@plan_k.features.add('keep_me')
+begin
+  @plan_k.atomic_write do
+    @plan_k.name = 'Should not persist'
+    @plan_k.features.add('should_not_persist')
+    raise 'boom'
+  end
+rescue RuntimeError
+  # expected
+end
+@reloaded_k = AtomicWriteTestPlan.find_by_id('aw_plan_k')
+[@reloaded_k.name, @reloaded_k.features.members.sort]
+#=> ['Original', ['keep_me']]
+
+## atomic_write raises ArgumentError when called without a block
+@plan_l = AtomicWriteTestPlan.new(planid: 'aw_plan_l', name: 'NoBlock')
+begin
+  @plan_l.atomic_write
+  :no_raise
+rescue ArgumentError
+  :raised
+end
+#=> :raised
+
+## update_expiration: false suppresses TTL command
+@plan_m = AtomicWriteExpiringPlan.new(planid: 'aw_plan_m', name: 'TtlTest')
+@plan_m.save
+# Explicitly remove any TTL so we can verify atomic_write(update_expiration: false)
+# does not set a new one.
+Familia.dbclient.persist(@plan_m.dbkey)
+ttl_before = Familia.dbclient.ttl(@plan_m.dbkey)
+@plan_m.atomic_write(update_expiration: false) do
+  @plan_m.name = 'NoTtlApplied'
+end
+ttl_after = Familia.dbclient.ttl(@plan_m.dbkey)
+# -1 means key exists with no expiration
+[ttl_before, ttl_after]
+#=> [-1, -1]
+
+## instances sorted set is updated after atomic_write
+@plan_n = AtomicWriteTestPlan.new(planid: 'aw_plan_n', name: 'InstancesTest')
+@plan_n.atomic_write { @plan_n.region = 'CA' }
+AtomicWriteTestPlan.in_instances?('aw_plan_n')
+#=> true
+
+## save_with_collections still works (regression)
+@plan_o = AtomicWriteTestPlan.new(planid: 'aw_plan_o', name: 'SaveWithColl')
+@plan_o.save_with_collections do
+  @plan_o.features.add('regression_a')
+  @plan_o.features.add('regression_b')
+end
+@reloaded_o = AtomicWriteTestPlan.find_by_id('aw_plan_o')
+[@reloaded_o.name, @reloaded_o.features.members.sort]
+#=> ['SaveWithColl', ['regression_a', 'regression_b']]
+
+## warn_if_dirty! is suppressed during atomic_write block
+@plan_p = AtomicWriteTestPlan.new(planid: 'aw_plan_p', name: 'Original')
+@plan_p.save
+# Capture warnings emitted via Familia.warn (goes to stderr by default)
+original_stderr = $stderr
+$stderr = StringIO.new
+begin
+  @plan_p.atomic_write do
+    @plan_p.name = 'Dirty!'           # Makes parent dirty
+    @plan_p.features.add('collection_while_dirty')  # Would normally warn
+    @plan_p.settings['k'] = 'v'       # Another warn_if_dirty! path
+    @plan_p.audit_log.push('entry')   # Another warn_if_dirty! path
+  end
+  captured = $stderr.string
+ensure
+  $stderr = original_stderr
+end
+# No warning should contain the "unsaved scalar fields" message
+captured.include?('unsaved scalar fields')
+#=> false
+
+## collection writes inside atomic_write land in the same MULTI/EXEC as scalars
+@plan_q = AtomicWriteTestPlan.new(planid: 'aw_plan_q', name: 'FutureTest')
+@plan_q.save
+@plan_q.features.add('outside_val')  # immediate, non-transaction
+@plan_q.atomic_write do
+  @plan_q.name = 'FutureTest-updated'
+  @plan_q.features.add('inside_val')
+end
+# Reload and confirm both the scalar change and the in-block collection mutation landed
+@plan_q_reloaded = AtomicWriteTestPlan.load('aw_plan_q')
+[@plan_q_reloaded.name, @plan_q_reloaded.features.members.sort]
+#=> ["FutureTest-updated", ["inside_val", "outside_val"]]
+
+## two Fibers running atomic_write on different instances do not cross-contaminate state
+@plan_r1 = AtomicWriteTestPlan.new(planid: 'aw_plan_r1', name: 'FiberA-Initial')
+@plan_r1.save
+@plan_r2 = AtomicWriteTestPlan.new(planid: 'aw_plan_r2', name: 'FiberB-Initial')
+@plan_r2.save
+
+@fiber_a = Fiber.new do
+  @plan_r1.atomic_write do
+    @plan_r1.name = 'FiberA-Final'
+    @plan_r1.features.add('a1')
+    Fiber.yield :a_paused
+    @plan_r1.features.add('a2')
+  end
+  :a_done
+end
+
+@fiber_b = Fiber.new do
+  @plan_r2.atomic_write do
+    @plan_r2.name = 'FiberB-Final'
+    @plan_r2.features.add('b1')
+    @plan_r2.features.add('b2')
+  end
+  :b_done
+end
+
+@fiber_a.resume          # starts A's atomic_write, pauses mid-block
+@fiber_b.resume          # runs B's atomic_write to completion
+@fiber_a.resume          # resumes A, completes atomic_write
+
+@r1_reloaded = AtomicWriteTestPlan.find_by_id('aw_plan_r1')
+@r2_reloaded = AtomicWriteTestPlan.find_by_id('aw_plan_r2')
+[
+  @r1_reloaded.name,
+  @r1_reloaded.features.members.sort,
+  @r2_reloaded.name,
+  @r2_reloaded.features.members.sort,
+]
+#=> ['FiberA-Final', ['a1', 'a2'], 'FiberB-Final', ['b1', 'b2']]
+
+## atomic_write raises CrossDatabaseError for a CLASS-LEVEL field on a different logical_database
+## Guard must inspect class_related_fields (e.g. class_sorted_set) in addition to related_fields,
+## because persist_to_storage writes to self.class.instances inside the MULTI.
+@plan_s = AtomicWriteCrossDbClassPlan.new(planid: 'aw_plan_s', name: 'ClassCrossDb')
+begin
+  @plan_s.atomic_write { @plan_s.name = 'Should fail' }
+  :no_raise
+rescue Familia::CrossDatabaseError => e
+  [:raised, e.field_name, e.field_database, e.horreum_database]
+end
+#=> [:raised, :leaderboard, 6, 0]
+
+## same-instance atomic_write across two Fibers: second Fiber raises OperationModeError
+## The instance tracks its owning Fiber; if Fiber A has an active atomic_write and Fiber B
+## tries to open one on the SAME instance, B raises. Without this guard, both Fibers would
+## open parallel MULTIs against shared scalar state (last-writer-wins HMSET) -- defeating
+## the atomicity contract from the caller's point of view.
+@plan_t = AtomicWriteTestPlan.new(planid: 'aw_plan_t', name: 'SameInstance-Initial')
+@plan_t.save
+
+@fiber_same_a = Fiber.new do
+  @plan_t.atomic_write do
+    @plan_t.name = 'FiberA-Wrote'
+    @plan_t.features.add('shared_a')
+    Fiber.yield :a_paused_inside_multi
+    @plan_t.features.add('shared_a2')
+  end
+  :a_done
+end
+
+@fiber_same_b = Fiber.new do
+  begin
+    @plan_t.atomic_write do
+      @plan_t.name = 'FiberB-Wrote'
+      @plan_t.features.add('shared_b')
+    end
+    :b_done
+  rescue Familia::OperationModeError => e
+    [:b_raised, e.message.include?('another Fiber or Thread')]
+  end
+end
+
+@fiber_same_a.resume  # A enters atomic_write, opens MULTI, yields mid-block (still owns instance)
+@fiber_b_result = @fiber_same_b.resume  # B tries to enter atomic_write on same instance: raises
+@fiber_a_result = @fiber_same_a.resume  # A resumes and completes its transaction cleanly
+
+@t_reloaded = AtomicWriteTestPlan.find_by_id('aw_plan_t')
+# B raised with the re-entrancy message. A's transaction still committed cleanly.
+# Only A's scalar update and features are present; B's work never ran.
+[
+  @fiber_a_result,
+  @fiber_b_result,
+  @t_reloaded.name,
+  @t_reloaded.features.members.sort,
+]
+#=> [:a_done, [:b_raised, true], "FiberA-Wrote", ["shared_a", "shared_a2"]]
+
+## atomic_write does NOT raise when a related field explicitly sets
+## logical_database: 0 and the Horreum has no explicit logical_database.
+## Regression test for the false-positive guard bug -- both sides must
+## resolve to concrete integers (default 0) before comparison so an
+## explicit "logical_database: 0" is recognised as a match.
+@plan_u = AtomicWriteExplicitZeroPlan.new(planid: 'aw_plan_u', name: 'ExplicitZero')
+@plan_u.save
+@plan_u.atomic_write do
+  @plan_u.name = 'ExplicitZeroUpdated'
+  @plan_u.features.add('zero_ok')
+end
+@u_reloaded = AtomicWriteExplicitZeroPlan.find_by_id('aw_plan_u')
+[@u_reloaded.name, @u_reloaded.features.members]
+#=> ["ExplicitZeroUpdated", ["zero_ok"]]
+
+## same-instance atomic_write across two Threads: second Thread raises
+## OperationModeError. OWNER_STATE_MUTEX serialises the ivar check-then-
+## set so two threads can't both observe a nil owner and simultaneously
+## claim ownership. Uses a Queue as a rendezvous so the threads reliably
+## overlap on @atomic_write_owner.
+@plan_v = AtomicWriteTestPlan.new(planid: 'aw_plan_v', name: 'ThreadSafety-Initial')
+@plan_v.save
+@enter_signal = Queue.new
+@exit_signal = Queue.new
+@thread_b_result = nil
+
+@thread_a = Thread.new do
+  @plan_v.atomic_write do
+    @plan_v.name = 'ThreadA-Wrote'
+    @plan_v.features.add('thread_a')
+    @enter_signal << :a_inside
+    @exit_signal.pop  # hold ownership until B has tried and failed
+  end
+  :a_done
+end
+
+@thread_b = Thread.new do
+  @enter_signal.pop  # wait until A owns the instance
+  begin
+    @plan_v.atomic_write do
+      @plan_v.name = 'ThreadB-Wrote'
+    end
+    :b_done
+  rescue Familia::OperationModeError => e
+    [:b_raised, e.message.include?('another Fiber or Thread')]
+  ensure
+    @exit_signal << :release
+  end
+end
+
+@thread_b_result = @thread_b.value
+@thread_a_result = @thread_a.value
+@v_reloaded = AtomicWriteTestPlan.find_by_id('aw_plan_v')
+[@thread_a_result, @thread_b_result, @v_reloaded.name]
+#=> [:a_done, [:b_raised, true], "ThreadA-Wrote"]
+
+## atomic_write returns false and leaves dirty state intact when the
+## transaction's MultiResult reports a failed command. MULTI/EXEC does not
+## raise for individual command errors -- the server returns an Exception
+## object in that slot -- so relying on `result.nil?` as a success proxy
+## would incorrectly clear_dirty! and flag an actually-failed write as
+## clean. We stub `transaction` on a single instance to deliver a canned
+## MultiResult containing a command-level error and verify:
+##   - atomic_write returns false
+##   - the dirty field is still marked dirty
+@plan_w = AtomicWriteTestPlan.new(planid: 'aw_plan_w', name: 'DirtyBefore')
+@plan_w.save
+@plan_w.name = 'DirtyAfter'  # marks :name dirty
+@failed_result = MultiResult.new(['OK', RuntimeError.new('simulated command failure')])
+@plan_w.define_singleton_method(:transaction) do |&blk|
+  blk.call(nil)  # run the block so scalars/collections are touched
+  @failed_result
+end
+@aw_return = @plan_w.atomic_write { @plan_w.name = 'DirtyAfter' }
+[@aw_return, @plan_w.dirty?, @plan_w.dirty?(:name)]
+#=> [false, true, true]
+
+# Cleanup
+AtomicWriteTestPlan.instances.clear
+AtomicWriteTestPlan.all.each(&:destroy!)
+AtomicWriteExplicitZeroPlan.instances.clear rescue nil
+AtomicWriteExplicitZeroPlan.all.each(&:destroy!) rescue nil
+AtomicWriteExpiringPlan.instances.clear
+AtomicWriteExpiringPlan.all.each(&:destroy!)
+AtomicWriteCrossDbPlan.instances.clear rescue nil
+AtomicWriteCrossDbClassPlan.instances.clear rescue nil
+AtomicWriteCrossDbClassPlan.leaderboard.clear rescue nil

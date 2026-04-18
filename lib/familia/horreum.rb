@@ -9,6 +9,7 @@ require_relative 'horreum/related_fields'
 require_relative 'horreum/definition'
 require_relative 'horreum/management'
 require_relative 'horreum/persistence'
+require_relative 'horreum/atomic_write'
 require_relative 'horreum/serialization'
 require_relative 'horreum/dirty_tracking'
 require_relative 'horreum/utils'
@@ -53,6 +54,7 @@ module Familia
   class Horreum
     include Familia::Base
     include Familia::Horreum::Persistence
+    include Familia::Horreum::AtomicWrite
     include Familia::Horreum::Serialization
     include Familia::Horreum::DatabaseCommands
     include Familia::Horreum::DirtyTracking
