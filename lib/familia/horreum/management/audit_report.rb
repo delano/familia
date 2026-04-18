@@ -15,14 +15,20 @@ module Familia
       :audited_at,         # Float - timestamp when audit started
       :instances,          # Hash {phantoms: [], missing: [], count_timeline: N, count_scan: N}
       :unique_indexes,     # Array<Hash> [{index_name:, stale: [], missing: []}]
-      :multi_indexes,      # Array<Hash> [{index_name:, stale_members: [], orphaned_keys: []}]
+      :multi_indexes,      # Array<Hash> [{index_name:, stale_members: [], orphaned_keys: [], missing: []}]
       :participations,     # Array<Hash> [{collection_name:, stale_members: []}]
+      # nil = not checked; [] = no fields; [{field_name:, klass:, orphaned_keys:, count:, status:}]
+      :related_fields,
+      # nil = not checked; {in_instances_missing_unique_index: [], index_points_to_wrong_identifier: [], status:}
+      :cross_references,
       :duration            # Float - seconds elapsed
     ) do
       # Returns true when every audit dimension is clean.
       #
       # Multi-indexes with status :not_implemented are skipped — they cannot
       # be assessed, so they neither pass nor fail the health check.
+      # A nil related_fields or cross_references means the dimension was
+      # not checked and does not affect health.
       def healthy?
         instances[:phantoms].empty? &&
           instances[:missing].empty? &&
@@ -30,23 +36,28 @@ module Familia
           multi_indexes.all? { |idx|
             next true if idx[:status] == :not_implemented
 
-            idx[:stale_members].empty? && idx[:orphaned_keys].empty?
+            idx[:stale_members].empty? && idx[:orphaned_keys].empty? && idx[:missing].empty?
           } &&
-          participations.all? { |p| p[:stale_members].empty? }
+          participations.all? { |p| p[:stale_members].empty? } &&
+          related_fields_healthy? &&
+          cross_references_healthy?
       end
 
       # Returns true when every audit dimension was actually checked.
       #
       # A report can be healthy but incomplete when stub dimensions (like
-      # multi-indexes) return :not_implemented. This lets callers distinguish
+      # multi-indexes) return :not_implemented, or when related_fields /
+      # cross_references were skipped (nil). This lets callers distinguish
       # "everything checked and clean" from "some dimensions were skipped".
       def complete?
-        multi_indexes.none? { |idx| idx[:status] == :not_implemented }
+        multi_indexes.none? { |idx| idx[:status] == :not_implemented } &&
+          !related_fields.nil? &&
+          !cross_references.nil?
       end
 
       # Summary counts for quick inspection.
       def to_h
-        {
+        hash = {
           model_class: model_class,
           audited_at: audited_at,
           healthy: healthy?,
@@ -62,7 +73,7 @@ module Familia
             { index_name: idx[:index_name], stale: idx[:stale].size, missing: idx[:missing].size }
           },
           multi_indexes: multi_indexes.map { |idx|
-            entry = { index_name: idx[:index_name], stale_members: idx[:stale_members].size, orphaned_keys: idx[:orphaned_keys].size }
+            entry = { index_name: idx[:index_name], stale_members: idx[:stale_members].size, orphaned_keys: idx[:orphaned_keys].size, missing: idx[:missing].size }
             entry[:status] = idx[:status] if idx[:status]
             entry
           },
@@ -70,6 +81,10 @@ module Familia
             { collection_name: p[:collection_name], stale_members: p[:stale_members].size }
           },
         }
+
+        hash[:related_fields] = related_fields_to_h
+        hash[:cross_references] = cross_references_to_h
+        hash
       end
 
       # Human-readable summary.
@@ -89,7 +104,7 @@ module Familia
             lines << "  multi_index :#{idx[:index_name]}: not_implemented"
           else
             lines << "  multi_index :#{idx[:index_name]}: stale_members=#{idx[:stale_members].size}" \
-                     " orphaned_keys=#{idx[:orphaned_keys].size}"
+                     " orphaned_keys=#{idx[:orphaned_keys].size} missing=#{idx[:missing].size}"
           end
         end
 
@@ -97,7 +112,83 @@ module Familia
           lines << "  participation :#{p[:collection_name]}: stale_members=#{p[:stale_members].size}"
         end
 
+        lines.concat(related_fields_lines)
+        lines.concat(cross_references_lines)
+
         lines.join("\n")
+      end
+
+      private
+
+      # A nil related_fields means the dimension was not checked, which
+      # does not count against health. Otherwise every field must have
+      # no orphaned_keys.
+      def related_fields_healthy?
+        return true if related_fields.nil?
+
+        related_fields.all? { |rf| rf[:orphaned_keys].empty? }
+      end
+
+      # Renders the related_fields section of the to_s output.
+      #
+      # @return [Array<String>]
+      def related_fields_lines
+        return ['  related_fields: not_checked'] if related_fields.nil?
+
+        related_fields.map do |rf|
+          "  related_field :#{rf[:field_name]} (#{rf[:klass]}): " \
+            "orphaned_keys=#{rf[:orphaned_keys].size}"
+        end
+      end
+
+      # Renders the related_fields entry for the to_h output.
+      #
+      # @return [Array<Hash>, nil]
+      def related_fields_to_h
+        return nil if related_fields.nil?
+
+        related_fields.map do |rf|
+          {
+            field_name: rf[:field_name],
+            klass: rf[:klass],
+            orphaned_keys: rf[:orphaned_keys].size,
+            status: rf[:status],
+          }
+        end
+      end
+
+      # A nil cross_references means the dimension was not checked, which
+      # does not count against health. Otherwise both drift arrays must
+      # be empty.
+      def cross_references_healthy?
+        return true if cross_references.nil?
+
+        cross_references[:in_instances_missing_unique_index].empty? &&
+          cross_references[:index_points_to_wrong_identifier].empty?
+      end
+
+      # Renders the cross_references section of the to_s output.
+      #
+      # @return [Array<String>]
+      def cross_references_lines
+        return ['  cross_references: not_checked'] if cross_references.nil?
+
+        missing_count = cross_references[:in_instances_missing_unique_index].size
+        wrong_count = cross_references[:index_points_to_wrong_identifier].size
+        ["  cross_references: missing_index_entries=#{missing_count} wrong_identifier=#{wrong_count}"]
+      end
+
+      # Renders the cross_references entry for the to_h output.
+      #
+      # @return [Hash, nil]
+      def cross_references_to_h
+        return nil if cross_references.nil?
+
+        {
+          in_instances_missing_unique_index: cross_references[:in_instances_missing_unique_index].size,
+          index_points_to_wrong_identifier: cross_references[:index_points_to_wrong_identifier].size,
+          status: cross_references[:status],
+        }
       end
     end
   end

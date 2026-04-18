@@ -99,7 +99,7 @@ module Familia
 
             index_hashkey = indexed_class.send(index_name)
             final_key = index_hashkey.dbkey
-            temp_key = RebuildStrategies.build_temp_key(final_key)
+            temp_key = Familia::AtomicOperations.build_temp_key(final_key)
 
             processed = 0
             indexed_count = 0
@@ -137,7 +137,7 @@ module Familia
             end
 
             # Atomic swap: temp -> final (ZERO DOWNTIME)
-            RebuildStrategies.atomic_swap(temp_key, final_key, indexed_class.dbclient)
+            Familia::AtomicOperations.atomic_swap(temp_key, final_key, indexed_class.dbclient)
 
             elapsed = Familia.now - start_time
             Familia.info "[Rebuild] Completed via_instances: #{indexed_count} indexed (#{processed} total) in #{elapsed.round(2)}s"
@@ -217,7 +217,7 @@ module Familia
 
             index_datatype = scope_instance.send(index_name)
             final_key = index_datatype.dbkey
-            temp_key = RebuildStrategies.build_temp_key(final_key)
+            temp_key = Familia::AtomicOperations.build_temp_key(final_key)
 
             processed = 0
             indexed_count = 0
@@ -254,7 +254,7 @@ module Familia
             end
 
             # Atomic swap
-            RebuildStrategies.atomic_swap(temp_key, final_key, scope_instance.dbclient)
+            Familia::AtomicOperations.atomic_swap(temp_key, final_key, scope_instance.dbclient)
 
             elapsed = Familia.now - start_time
             Familia.info "[Rebuild] Completed via_participation: #{indexed_count} indexed (#{processed} total) in #{elapsed.round(2)}s"
@@ -328,7 +328,7 @@ module Familia
 
             index_hashkey = index_owner.send(index_name)
             final_key = index_hashkey.dbkey
-            temp_key = RebuildStrategies.build_temp_key(final_key)
+            temp_key = Familia::AtomicOperations.build_temp_key(final_key)
 
             processed = 0
             indexed_count = 0
@@ -369,7 +369,7 @@ module Familia
             end
 
             # Atomic swap
-            RebuildStrategies.atomic_swap(temp_key, final_key, redis)
+            Familia::AtomicOperations.atomic_swap(temp_key, final_key, redis)
 
             elapsed = Familia.now - start_time
             Familia.info "[Rebuild] Completed via_scan: #{indexed_count} indexed (#{processed} total) in #{elapsed.round(2)}s (scanned: #{scanned})"
@@ -420,65 +420,6 @@ module Familia
           rescue StandardError => e
             Familia.warn "[Rebuild] Error processing batch: #{e.message}"
             0
-          end
-
-          # Builds a temporary key name for atomic swaps
-          #
-          # @param base_key [String] The final index key
-          # @return [String] Temporary key with timestamp suffix
-          #
-          def build_temp_key(base_key)
-            timestamp = Familia.now.to_i
-            "#{base_key}:rebuild:#{timestamp}"
-          end
-
-          # Performs atomic swap of temp key to final key.
-          #
-          # Non-empty rebuilds use Redis RENAME (>= 2.6), which atomically
-          # replaces final_key if it exists. Readers observe either the old
-          # index or the new one; there is no window in which final_key is
-          # absent. This avoids the partial-update, race-condition, and
-          # stale-visibility problems of a two-step DEL+RENAME sequence.
-          #
-          # Empty rebuilds (no temp key) intentionally DEL final_key so the
-          # live index reflects the empty result set. In that branch readers
-          # can observe final_key as absent -- this is the correct outcome for
-          # an index with zero members, not a transient gap.
-          #
-          # @param temp_key [String] The temporary key containing rebuilt index
-          # @param final_key [String] The live index key
-          # @param redis [Redis] The Redis connection
-          #
-          def atomic_swap(temp_key, final_key, redis)
-            # Check if temp key exists first - RENAME fails on non-existent keys.
-            # redis.exists returns Integer across all supported redis-rb versions;
-            # using > 0 also tolerates a future boolean return without breaking.
-            unless redis.exists(temp_key) > 0
-              Familia.info "[Rebuild] No temp key to swap (empty result set)"
-              # Empty rebuild: remove the live index so reads reflect zero members.
-              # This is the one path where readers can legitimately see final_key
-              # as absent -- the index genuinely has no entries.
-              redis.del(final_key)
-              return
-            end
-
-            # RENAME atomically replaces final_key if it exists (Redis >= 2.6),
-            # so readers never observe a missing final_key during a non-empty
-            # swap. A preceding DEL would open a gap where concurrent HGETs
-            # return nil.
-            redis.rename(temp_key, final_key)
-            Familia.info "[Rebuild] Atomic swap completed: #{temp_key} -> #{final_key}"
-          rescue Redis::CommandError => e
-            # If temp key doesn't exist, just log and return (already handled above)
-            if e.message.include?("no such key")
-              Familia.info "[Rebuild] Temp key vanished during swap (concurrent operation?)"
-              return
-            end
-
-            # For other errors, preserve temp key for debugging
-            Familia.warn "[Rebuild] Atomic swap failed: #{e.message}"
-            Familia.warn "[Rebuild] Temp key preserved for debugging: #{temp_key}"
-            raise
           end
         end
       end

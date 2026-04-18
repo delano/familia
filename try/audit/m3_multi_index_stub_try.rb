@@ -2,12 +2,13 @@
 #
 # frozen_string_literal: true
 
-# M3: audit_multi_indexes stub marker
+# M3: audit_multi_indexes behavior
 #
-# Verifies that audit_multi_indexes returns results with
-# status: :not_implemented and that health_check reflects it.
-# Tests both class-scoped multi-indexes (within: :class) and
-# instance-scoped multi-indexes (within: SomeClass).
+# Covers the real class-level multi-index audit implementation plus the
+# still-stubbed instance-scoped path. Class-level indexes are audited in
+# three phases (stale members, missing objects, orphaned buckets) while
+# instance-scoped indexes return status: :not_implemented with a clearer
+# diagnostic message.
 
 require_relative '../support/helpers/test_helpers'
 
@@ -33,8 +34,6 @@ class M3ScopedModel < Familia::Horreum
   field :category
   field :name
 
-  # Instance-scoped multi-index (within a non-:class scope)
-  # triggers the not_implemented code path in audit_single_multi_index
   multi_index :category, :category_index, within: M3ScopeTarget
 end
 
@@ -46,15 +45,13 @@ class M3ClassScopedModel < Familia::Horreum
   field :role
   field :name
 
-  # Class-scoped multi-index (within: :class is default)
-  # triggers the early-return code path (no status key)
   multi_index :role, :role_index
 end
 
 # Clean up
 begin
-  ['m3_plain_model', 'm3_scope_target', 'm3_scoped_model', 'm3_class_scoped_model'].each do |prefix|
-    existing = Familia.dbclient.keys("#{prefix}:*")
+  [M3PlainModel, M3ScopeTarget, M3ScopedModel, M3ClassScopedModel].each do |klass|
+    existing = Familia.dbclient.keys("#{klass.prefix}:*")
     Familia.dbclient.del(*existing) if existing.any?
   end
 rescue => e
@@ -64,6 +61,30 @@ M3PlainModel.instances.clear
 M3ScopeTarget.instances.clear
 M3ScopedModel.instances.clear
 M3ClassScopedModel.instances.clear
+
+# Reset helper for class-scoped testcases: wipes all M3ClassScopedModel keys
+# (hash keys plus role_index buckets) and clears the instances timeline, then
+# re-seeds the canonical baseline of three objects (two admins, one member)
+# into @cs1/@cs2/@cs3. Each class-scoped testcase invokes this at the top so
+# it runs correctly in isolation.
+def m3cs_reset_model
+  existing = Familia.dbclient.keys("#{M3ClassScopedModel.prefix}:*")
+  Familia.dbclient.del(*existing) if existing.any?
+rescue StandardError
+  # ignore cleanup errors
+ensure
+  M3ClassScopedModel.instances.clear if M3ClassScopedModel.respond_to?(:instances)
+end
+
+def m3cs_seed_baseline
+  m3cs_reset_model
+  @cs1 = M3ClassScopedModel.new(csid: 'csid-1', role: 'admin', name: 'One')
+  @cs1.save
+  @cs2 = M3ClassScopedModel.new(csid: 'csid-2', role: 'admin', name: 'Two')
+  @cs2.save
+  @cs3 = M3ClassScopedModel.new(csid: 'csid-3', role: 'member', name: 'Three')
+  @cs3.save
+end
 
 ## audit_multi_indexes on class without indexes returns empty array
 M3PlainModel.audit_multi_indexes
@@ -103,67 +124,224 @@ M3PlainModel.audit_multi_indexes.is_a?(Array)
 @results.first[:orphaned_keys]
 #=> []
 
-## Class-scoped multi-index audit returns one result
+## Instance-scoped multi-index result has a missing field too
+@results.first[:missing]
+#=> []
+
+## health_check with instance-scoped multi-index returns AuditReport
+@scoped_report = M3ScopedModel.health_check
+@scoped_report.class.name
+#=> "Familia::Horreum::AuditReport"
+
+## health_check includes multi_indexes with status marker
+@scoped_report.multi_indexes.any? { |idx| idx[:status] == :not_implemented }
+#=> true
+
+## health_check is still healthy with not_implemented stub (empty collections)
+@scoped_report.healthy?
+#=> true
+
+## health_check complete? is false when a stubbed index exists
+@scoped_report.complete?
+#=> false
+
+## Plain-model health check is complete when audit_collections is enabled
+M3PlainModel.health_check(audit_collections: true, check_cross_refs: true).complete?
+#=> true
+
+## Class-scoped multi-index audit returns one result on healthy baseline
+m3cs_seed_baseline
 @class_results = M3ClassScopedModel.audit_multi_indexes
 @class_results.size
 #=> 1
 
-## Class-scoped multi-index result also has status: :not_implemented
-# Both class-scoped and instance-scoped paths return the status marker
-@class_results.first[:status]
-#=> :not_implemented
+## Healthy baseline: status is :ok
+m3cs_seed_baseline
+M3ClassScopedModel.audit_multi_indexes.first[:status]
+#=> :ok
 
-## Class-scoped multi-index result has empty stale_members
-@class_results.first[:stale_members]
+## Healthy baseline: stale_members is empty
+m3cs_seed_baseline
+M3ClassScopedModel.audit_multi_indexes.first[:stale_members]
 #=> []
 
-## health_check with instance-scoped multi-index returns AuditReport
-@report = M3ScopedModel.health_check
-@report.class.name
-#=> "Familia::Horreum::AuditReport"
+## Healthy baseline: missing is empty
+m3cs_seed_baseline
+M3ClassScopedModel.audit_multi_indexes.first[:missing]
+#=> []
 
-## health_check includes multi_indexes with status marker
-@report.multi_indexes.any? { |idx| idx[:status] == :not_implemented }
+## Healthy baseline: orphaned_keys is empty
+m3cs_seed_baseline
+M3ClassScopedModel.audit_multi_indexes.first[:orphaned_keys]
+#=> []
+
+## Healthy baseline: index_name is correct
+m3cs_seed_baseline
+M3ClassScopedModel.audit_multi_indexes.first[:index_name]
+#=> :role_index
+
+## Stale (object_missing): delete hash key directly
+m3cs_seed_baseline
+M3ClassScopedModel.dbclient.del(M3ClassScopedModel.dbkey('csid-2'))
+@stale_result = M3ClassScopedModel.audit_multi_indexes.first
+@stale_result[:stale_members].any? { |m| m[:indexed_id] == 'csid-2' && m[:reason] == :object_missing }
 #=> true
 
-## health_check is still healthy with not_implemented stub (empty collections)
-@report.healthy?
+## Stale (object_missing): status transitions to :issues_found
+m3cs_seed_baseline
+M3ClassScopedModel.dbclient.del(M3ClassScopedModel.dbkey('csid-2'))
+M3ClassScopedModel.audit_multi_indexes.first[:status]
+#=> :issues_found
+
+## Stale (value_mismatch): mutate field directly via HSET
+m3cs_seed_baseline
+M3ClassScopedModel.dbclient.hset(M3ClassScopedModel.dbkey('csid-1'), 'role', '"manager"')
+@mm_result = M3ClassScopedModel.audit_multi_indexes.first
+@mismatch = @mm_result[:stale_members].find { |m| m[:indexed_id] == 'csid-1' }
+@mismatch[:reason]
+#=> :value_mismatch
+
+## Stale (value_mismatch): field_value reflects old bucket
+m3cs_seed_baseline
+M3ClassScopedModel.dbclient.hset(M3ClassScopedModel.dbkey('csid-1'), 'role', '"manager"')
+@mm_result = M3ClassScopedModel.audit_multi_indexes.first
+@mismatch = @mm_result[:stale_members].find { |m| m[:indexed_id] == 'csid-1' }
+@mismatch[:field_value]
+#=> "admin"
+
+## Stale (value_mismatch): current_value reflects new field value
+m3cs_seed_baseline
+M3ClassScopedModel.dbclient.hset(M3ClassScopedModel.dbkey('csid-1'), 'role', '"manager"')
+@mm_result = M3ClassScopedModel.audit_multi_indexes.first
+@mismatch = @mm_result[:stale_members].find { |m| m[:indexed_id] == 'csid-1' }
+@mismatch[:current_value]
+#=> "manager"
+
+## Stale (value_mismatch): missing entry added for new field value bucket
+m3cs_seed_baseline
+M3ClassScopedModel.dbclient.hset(M3ClassScopedModel.dbkey('csid-1'), 'role', '"manager"')
+@mm_result = M3ClassScopedModel.audit_multi_indexes.first
+@mm_result[:missing].any? { |m| m[:identifier] == 'csid-1' && m[:field_value] == 'manager' }
 #=> true
 
-## health_check to_h includes multi_indexes summary
-@h = @report.to_h
-@h[:multi_indexes].is_a?(Array) && @h[:multi_indexes].size == 1
+## Missing: create an object whose field value bucket does not exist
+m3cs_seed_baseline
+@raw_id = 'csid-raw-1'
+M3ClassScopedModel.dbclient.hset(
+  M3ClassScopedModel.dbkey(@raw_id),
+  'csid', '"csid-raw-1"',
+  'role', '"observer"',
+  'name', '"Raw"',
+)
+@missing_result = M3ClassScopedModel.audit_multi_indexes.first
+@missing_result[:missing].any? { |m| m[:identifier] == 'csid-raw-1' && m[:field_value] == 'observer' }
 #=> true
 
-## health_check to_s includes multi_index information
-@report.to_s.include?('multi_index')
+## Missing: status is :issues_found
+m3cs_seed_baseline
+@raw_id = 'csid-raw-1'
+M3ClassScopedModel.dbclient.hset(
+  M3ClassScopedModel.dbkey(@raw_id),
+  'csid', '"csid-raw-1"',
+  'role', '"observer"',
+  'name', '"Raw"',
+)
+M3ClassScopedModel.audit_multi_indexes.first[:status]
+#=> :issues_found
+
+## Orphaned: manually SADD a bucket that no object holds
+m3cs_seed_baseline
+@orphan_key = "#{M3ClassScopedModel.prefix}:role_index:ghost"
+M3ClassScopedModel.dbclient.sadd(@orphan_key, '"phantom"')
+@orphan_result = M3ClassScopedModel.audit_multi_indexes.first
+@orphan_result[:orphaned_keys].any? { |o| o[:field_value] == 'ghost' && o[:key] == @orphan_key }
 #=> true
 
-## health_check to_s shows not_implemented for stubbed multi-index
-@report.to_s.include?('not_implemented')
-#=> true
+## Orphaned: status is :issues_found
+m3cs_seed_baseline
+@orphan_key = "#{M3ClassScopedModel.prefix}:role_index:ghost"
+M3ClassScopedModel.dbclient.sadd(@orphan_key, '"phantom"')
+M3ClassScopedModel.audit_multi_indexes.first[:status]
+#=> :issues_found
 
-## health_check complete? returns false with not_implemented stub
-@report.complete?
+## Nil field value is skipped gracefully
+m3cs_seed_baseline
+@cs_nil = M3ClassScopedModel.new(csid: 'csid-nil', role: nil, name: 'Nil')
+@cs_nil.save
+@nil_result = M3ClassScopedModel.audit_multi_indexes.first
+@nil_result[:missing].any? { |m| m[:identifier] == 'csid-nil' }
 #=> false
 
-## health_check on class with no multi-indexes is complete
-@plain_report = M3PlainModel.health_check
-@plain_report.complete?
-#=> true
-
-## health_check to_h includes complete key
-@report.to_h[:complete]
+## Nil field value does not produce stale members either
+m3cs_seed_baseline
+@cs_nil = M3ClassScopedModel.new(csid: 'csid-nil', role: nil, name: 'Nil')
+@cs_nil.save
+M3ClassScopedModel.audit_multi_indexes.first[:stale_members].any? { |m| m[:indexed_id] == 'csid-nil' }
 #=> false
 
-## health_check to_h multi_indexes entry includes status
-@report.to_h[:multi_indexes].first[:status]
-#=> :not_implemented
+## Standalone call without scanned_identifiers cache still audits correctly
+# Guards the fallback path when audit_multi_indexes is called directly
+# (outside health_check) so the internal cache kwargs are nil.
+m3cs_seed_baseline
+@standalone_multi = M3ClassScopedModel.audit_multi_indexes
+[@standalone_multi.size, @standalone_multi.first[:index_name]]
+#=> [1, :role_index]
+
+## Missing entries on class-level multi-index make the report unhealthy and surface in to_h/to_s
+# Inline setup: fresh model and fresh state so the assertion does not depend on prior testcases.
+class M3MissingFlagModel < Familia::Horreum
+  feature :relationships
+  identifier_field :mfid
+  field :mfid
+  field :role
+  field :name
+  multi_index :role, :role_index
+end
+M3MissingFlagModel.instances.clear
+existing_mfm = Familia.dbclient.keys("#{M3MissingFlagModel.prefix}:*")
+Familia.dbclient.del(*existing_mfm) if existing_mfm.any?
+@mf1 = M3MissingFlagModel.new(mfid: 'mf-1', role: 'admin', name: 'One')
+@mf1.save
+# Inject a live object via direct HSET, bypassing the index-update write path.
+M3MissingFlagModel.dbclient.hset(
+  M3MissingFlagModel.dbkey('mf-raw'),
+  'mfid', '"mf-raw"',
+  'role', '"observer"',
+  'name', '"Raw"',
+)
+@mf_report = M3MissingFlagModel.health_check
+[@mf_report.healthy?,
+ @mf_report.to_h[:multi_indexes].first[:missing],
+ @mf_report.to_s.include?('missing=1')]
+#=> [false, 1, true]
+
+# Cleanup for the inline test
+existing_mfm_cleanup = Familia.dbclient.keys("#{M3MissingFlagModel.prefix}:*")
+Familia.dbclient.del(*existing_mfm_cleanup) if existing_mfm_cleanup.any?
+M3MissingFlagModel.instances.clear
+
+## Duplicate identifiers in same bucket: two admins are both valid, no drift reported
+m3cs_reset_model
+@dup1 = M3ClassScopedModel.new(csid: 'dup-1', role: 'admin', name: 'DupOne')
+@dup1.save
+@dup2 = M3ClassScopedModel.new(csid: 'dup-2', role: 'admin', name: 'DupTwo')
+@dup2.save
+@dup_result = M3ClassScopedModel.audit_multi_indexes.first
+[@dup_result[:stale_members], @dup_result[:missing]]
+#=> [[], []]
+
+## Malformed JSON in bucket is tolerated: audit completes and classifies as object_missing
+m3cs_seed_baseline
+@malformed_key = "#{M3ClassScopedModel.prefix}:role_index:admin"
+M3ClassScopedModel.dbclient.sadd(@malformed_key, 'raw-not-json')
+@malformed_result = M3ClassScopedModel.audit_multi_indexes.first
+@malformed_result[:stale_members].any? { |m| m[:indexed_id] == 'raw-not-json' && m[:reason] == :object_missing }
+#=> true
 
 # Teardown
 begin
-  ['m3_plain_model', 'm3_scope_target', 'm3_scoped_model', 'm3_class_scoped_model'].each do |prefix|
-    existing = Familia.dbclient.keys("#{prefix}:*")
+  [M3PlainModel, M3ScopeTarget, M3ScopedModel, M3ClassScopedModel].each do |klass|
+    existing = Familia.dbclient.keys("#{klass.prefix}:*")
     Familia.dbclient.del(*existing) if existing.any?
   end
 rescue => e

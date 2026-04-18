@@ -67,7 +67,7 @@ module Familia
       def rebuild_instances(batch_size: 100, &progress)
         pattern = scan_pattern
         final_key = instances.dbkey
-        temp_key = "#{final_key}:rebuild:#{Familia.now.to_i}"
+        temp_key = Familia::AtomicOperations.build_temp_key(final_key)
 
         count = 0
         cursor = "0"
@@ -100,9 +100,7 @@ module Familia
         end
 
         # Atomic swap
-        Familia::Features::Relationships::Indexing::RebuildStrategies.atomic_swap(
-          temp_key, final_key, dbclient
-        )
+        Familia::AtomicOperations.atomic_swap(temp_key, final_key, dbclient)
 
         progress&.call(phase: :completed, current: count, total: count)
         count
@@ -181,25 +179,96 @@ module Familia
         { stale_removed: stale_removed }
       end
 
+      # Removes orphaned collection keys detected by audit_related_fields.
+      #
+      # Each entry's orphaned_keys list contains full Redis keys whose
+      # parent Horreum hash no longer exists. This method DELs each of
+      # those keys, tracking successes and failures per key. A
+      # Redis::CommandError on any single DEL is captured in failed_keys
+      # so the rest of the batch can still be processed.
+      #
+      # @param audit_results [Array<Hash>, nil] Results from audit_related_fields
+      #   (runs a fresh audit when nil)
+      # @yield [Hash] Progress: {phase: :repair_related_fields, current:, total:}
+      # @return [Hash] {removed_keys: [key, ...], failed_keys: [{key:, error:}, ...], status:}
+      #
+      def repair_related_fields!(audit_results = nil, &progress)
+        audit_results ||= audit_related_fields
+
+        orphaned_keys = audit_results.flat_map { |entry| Array(entry[:orphaned_keys]) }
+        total = orphaned_keys.size
+
+        removed_keys = []
+        failed_keys = []
+
+        orphaned_keys.each_with_index do |key, idx|
+          begin
+            dbclient.del(key)
+            removed_keys << key
+          rescue Redis::CommandError => e
+            failed_keys << { key: key, error: e.message }
+          end
+          progress&.call(phase: :repair_related_fields, current: idx + 1, total: total)
+        end
+
+        status = removed_keys.empty? && failed_keys.empty? ? :ok : :issues_found
+
+        {
+          removed_keys: removed_keys,
+          failed_keys: failed_keys,
+          status: status,
+        }
+      end
+
       # Runs health_check then all repair methods.
       #
-      # @param batch_size [Integer] SCAN batch size
+      # By default this repairs the three always-on dimensions
+      # (instances, unique indexes, participations). The related_fields
+      # and cross_references dimensions are opt-in and must be enabled
+      # on the audit side for repair to consider them.
+      #
+      # @param batch_size [Integer] SCAN batch size passed to health_check
+      # @param audit_collections [Boolean] When true, health_check runs
+      #   audit_related_fields and repair_all! calls repair_related_fields!
+      #   with the result. When false (default), related_fields stays nil
+      #   in the report and is not repaired.
+      # @param check_cross_refs [Boolean] When true, health_check runs
+      #   audit_cross_references and the result is included in the returned
+      #   report for inspection. NOTE: no automatic repair is performed for
+      #   cross_reference drift; callers must inspect the audit report and
+      #   resolve the drift manually. The flag is accepted here for symmetry
+      #   with the audit side and so repair_all! can surface the dimension
+      #   through its returned report.
       # @yield [Hash] Progress callbacks
       # @return [Hash] Combined repair results plus the AuditReport
       #
-      def repair_all!(batch_size: 100, &progress)
-        report = health_check(batch_size: batch_size, &progress)
+      def repair_all!(batch_size: 100, audit_collections: false, check_cross_refs: false, &progress)
+        report = health_check(
+          batch_size: batch_size,
+          audit_collections: audit_collections,
+          check_cross_refs: check_cross_refs,
+          &progress
+        )
 
         instances_result = repair_instances!(report.instances)
         indexes_result = repair_indexes!(report.unique_indexes)
         participations_result = repair_participations!(report.participations)
 
-        {
+        result = {
           report: report,
           instances: instances_result,
           indexes: indexes_result,
           participations: participations_result,
         }
+
+        # Only repair related fields when the audit actually checked them.
+        # Nil means the caller did not pass audit_collections: true to
+        # health_check, so repair has nothing to act on.
+        unless report.related_fields.nil?
+          result[:related_fields] = repair_related_fields!(report.related_fields, &progress)
+        end
+
+        result
       end
 
       # SCAN helper for enumerating keys matching a pattern.

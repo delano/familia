@@ -49,14 +49,27 @@ module Familia
       # - Checks that each indexed object exists and its field value matches
       # - Checks for objects that should be indexed but aren't
       #
+      # @param scanned_identifiers [Array<String>, nil] Internal optimization
+      #   parameter; do not rely on this from external callers. When provided
+      #   (e.g. threaded through from health_check), skips the per-index SCAN
+      #   pass. When omitted, each index computes its own scan.
+      # @param loaded_objects [Array<Horreum>, nil] Internal optimization
+      #   parameter aligned with scanned_identifiers. When provided, skips
+      #   the per-index load_multi call.
       # @return [Array<Hash>] [{index_name:, stale: [...], missing: [...]}]
       #
-      def audit_unique_indexes
+      def audit_unique_indexes(scanned_identifiers: nil, loaded_objects: nil)
         return [] unless respond_to?(:indexing_relationships)
 
         indexing_relationships.select { |r|
           r.cardinality == :unique && r.within.nil?
-        }.map { |rel| audit_single_unique_index(rel) }
+        }.map { |rel|
+          audit_single_unique_index(
+            rel,
+            scanned_identifiers: scanned_identifiers,
+            loaded_objects: loaded_objects,
+          )
+        }
       end
 
       # Audits all multi indexes.
@@ -66,14 +79,25 @@ module Familia
       # - Checks that each member exists and field value matches
       # - Detects orphaned set keys (sets for values no object has)
       #
+      # @param scanned_identifiers [Array<String>, nil] Internal optimization
+      #   parameter; do not rely on this from external callers. When provided,
+      #   skips the per-index SCAN pass used to detect missing buckets.
+      # @param loaded_objects [Array<Horreum>, nil] Internal optimization
+      #   parameter aligned with scanned_identifiers.
       # @return [Array<Hash>] [{index_name:, stale_members: [], orphaned_keys: []}]
       #
-      def audit_multi_indexes
+      def audit_multi_indexes(scanned_identifiers: nil, loaded_objects: nil)
         return [] unless respond_to?(:indexing_relationships)
 
         indexing_relationships.select { |r|
           r.cardinality == :multi
-        }.map { |rel| audit_single_multi_index(rel) }
+        }.map { |rel|
+          audit_single_multi_index(
+            rel,
+            scanned_identifiers: scanned_identifiers,
+            loaded_objects: loaded_objects,
+          )
+        }
       end
 
       # Audits participation collections for stale members.
@@ -101,20 +125,182 @@ module Familia
         }
       end
 
-      # Runs all four audits and wraps results in an AuditReport.
+      # Audits instance-level related_fields (list/set/zset/hashkey) for
+      # orphaned collection keys whose parent Horreum hash no longer exists.
+      #
+      # destroy! cleans related fields inside a transaction, so orphans only
+      # arise when destroy! is interrupted (process crash, manual Redis
+      # tampering, bugs in older code paths). This audit surfaces those cases.
+      #
+      # Class-level related fields (class_list/class_set/class_hashkey) are
+      # intentionally skipped: their keys are {prefix}:{field_name} with no
+      # identifier segment, so they cannot be orphaned by instance destruction.
+      #
+      # @return [Array<Hash>] One entry per instance-level related field:
+      #   [{field_name:, klass:, orphaned_keys: [...], count:, status:}]
+      #
+      def audit_related_fields
+        return [] unless relations?
+
+        related_fields.values.map { |definition| audit_single_related_field(definition) }
+      end
+
+      # Audits drift between the `instances` ZSET and class-level unique
+      # indexes that per-registry audits cannot surface alone.
+      #
+      # For every live identifier in `instances`, verifies that each
+      # class-level unique index has an entry keyed by the object's current
+      # field value and that entry points back to the same identifier.
+      #
+      # Two failure modes are detected:
+      # - `in_instances_missing_unique_index`: live object has a populated
+      #   indexed field but no corresponding entry exists in the index.
+      # - `index_points_to_wrong_identifier`: entry exists but references a
+      #   different identifier (split-brain between two objects).
+      #
+      # Scope is limited to class-level unique indexes (`within` nil or
+      # `:class`). Multi-indexes are covered by audit_multi_indexes;
+      # instance-scoped unique indexes are out of scope for this audit.
+      #
+      # @param batch_size [Integer] load_multi batch size (default: 100)
+      # @yield [Hash] Progress: {phase: :cross_references, current:, total:}
+      # @return [Hash] {in_instances_missing_unique_index: [], index_points_to_wrong_identifier: [], status:}
+      #
+      def audit_cross_references(batch_size: 100, &progress)
+        empty_result = {
+          in_instances_missing_unique_index: [],
+          index_points_to_wrong_identifier: [],
+          status: :ok,
+        }
+
+        return empty_result unless respond_to?(:indexing_relationships)
+
+        class_unique_rels = indexing_relationships.select { |rel|
+          rel.cardinality == :unique && (rel.within.nil? || rel.within == :class)
+        }
+        return empty_result if class_unique_rels.empty?
+
+        instance_ids = instances.members
+        total = instance_ids.size
+        processed = 0
+
+        in_instances_missing_unique_index = []
+        index_points_to_wrong_identifier = []
+
+        instance_ids.each_slice(batch_size) do |batch|
+          objects = load_multi(batch)
+          processed += batch.size
+
+          # Per unique index, collect (identifier, field_value) pairs from live
+          # objects in this batch and resolve them with a single HMGET round
+          # trip instead of one HGET per (object x index) combination.
+          class_unique_rels.each do |rel|
+            next unless respond_to?(rel.index_name)
+
+            lookups = []
+            batch.zip(objects).each do |identifier, obj|
+              next unless obj
+
+              field_value = obj.send(rel.field)
+              next if field_value.nil? || field_value.to_s.strip.empty?
+
+              lookups << [identifier, field_value.to_s]
+            end
+            next if lookups.empty?
+
+            index_dbkey = send(rel.index_name).dbkey
+            raw_values = dbclient.hmget(index_dbkey, *lookups.map(&:last))
+
+            lookups.each_with_index do |(identifier, field_value_str), idx|
+              indexed_id = deserialize_index_value(raw_values[idx])
+
+              if indexed_id.nil?
+                in_instances_missing_unique_index << {
+                  identifier: identifier,
+                  index_name: rel.index_name,
+                  field_value: field_value_str,
+                  existing_index_value: nil,
+                }
+              elsif indexed_id != identifier
+                index_points_to_wrong_identifier << {
+                  index_name: rel.index_name,
+                  field_value: field_value_str,
+                  expected_id: identifier,
+                  index_id: indexed_id,
+                }
+              end
+            end
+          end
+
+          progress&.call(phase: :cross_references, current: processed, total: total)
+        end
+
+        status = if in_instances_missing_unique_index.empty? && index_points_to_wrong_identifier.empty?
+          :ok
+        else
+          :issues_found
+        end
+
+        {
+          in_instances_missing_unique_index: in_instances_missing_unique_index,
+          index_points_to_wrong_identifier: index_points_to_wrong_identifier,
+          status: status,
+        }
+      end
+
+      # Runs all audits and wraps results in an AuditReport.
+      #
+      # The related_fields audit is opt-in via `audit_collections: true`
+      # because it performs an additional SCAN per instance-level field.
+      # When omitted (or false), AuditReport#related_fields is nil which
+      # signals "not checked" rather than "checked and clean".
+      #
+      # The cross-references audit is opt-in via `check_cross_refs: true`.
+      # It walks every identifier in the instances ZSET and cross-checks
+      # each class-level unique index; skipping it keeps the default
+      # health_check fast. When omitted (or false), AuditReport#cross_references
+      # is nil, signalling "not checked".
       #
       # @param batch_size [Integer] SCAN batch size for instances audit
       # @param sample_size [Integer, nil] Sample size for participation audit
+      # @param audit_collections [Boolean] When true, also run audit_related_fields
+      # @param check_cross_refs [Boolean] When true, also run audit_cross_references
       # @yield [Hash] Progress from audit_instances
       # @return [AuditReport]
       #
-      def health_check(batch_size: 100, sample_size: nil, &progress)
+      def health_check(batch_size: 100, sample_size: nil, audit_collections: false,
+                       check_cross_refs: false, &progress)
         start_time = Familia.now
 
         inst = audit_instances(batch_size: batch_size, &progress)
-        uniq = audit_unique_indexes
-        multi = audit_multi_indexes
+
+        # Reuse the SCAN pass and the HGETALL pipeline across both index
+        # audits. Without this, a model with N unique indexes and M multi
+        # indexes would trigger N+M additional SCANs and load_multi round
+        # trips during their "missing" phases.
+        has_indexes = respond_to?(:indexing_relationships) && indexing_relationships.any? { |r|
+          (r.cardinality == :unique && r.within.nil?) || r.cardinality == :multi
+        }
+
+        if has_indexes
+          shared_ids = scan_identifiers(batch_size: batch_size).to_a
+          shared_objects = load_multi(shared_ids)
+        else
+          shared_ids = nil
+          shared_objects = nil
+        end
+
+        uniq = audit_unique_indexes(
+          scanned_identifiers: shared_ids,
+          loaded_objects: shared_objects,
+        )
+        multi = audit_multi_indexes(
+          scanned_identifiers: shared_ids,
+          loaded_objects: shared_objects,
+        )
         parts = audit_participations(sample_size: sample_size)
+        related = audit_collections ? audit_related_fields : nil
+        cross_refs = check_cross_refs ? audit_cross_references(batch_size: batch_size, &progress) : nil
 
         duration = Familia.now - start_time
 
@@ -125,6 +311,8 @@ module Familia
           unique_indexes: uniq,
           multi_indexes: multi,
           participations: parts,
+          related_fields: related,
+          cross_references: cross_refs,
           duration: duration
         )
       end
@@ -163,9 +351,13 @@ module Familia
       # Audit a single unique index (class-level).
       #
       # @param rel [IndexingRelationship]
+      # @param scanned_identifiers [Array<String>, nil] Optional cached SCAN
+      #   result; when provided, skips the per-index SCAN pass.
+      # @param loaded_objects [Array<Horreum>, nil] Optional cached load_multi
+      #   result aligned with scanned_identifiers.
       # @return [Hash] {index_name:, stale: [], missing: []}
       #
-      def audit_single_unique_index(rel)
+      def audit_single_unique_index(rel, scanned_identifiers: nil, loaded_objects: nil)
         index_name = rel.index_name
         field = rel.field
         stale = []
@@ -211,8 +403,8 @@ module Familia
         # SCAN for all hash keys (source of truth) instead of relying on
         # the instances timeline, which may contain ghosts or miss entries.
         indexed_values = entries.keys.to_set
-        all_identifiers = scan_identifiers.to_a
-        all_objects = load_multi(all_identifiers)
+        all_identifiers = scanned_identifiers || scan_identifiers.to_a
+        all_objects = loaded_objects || load_multi(all_identifiers)
 
         all_identifiers.each_with_index do |identifier, idx|
           obj = all_objects[idx]
@@ -231,30 +423,212 @@ module Familia
 
       # Audit a single multi index.
       #
-      # @param rel [IndexingRelationship]
-      # @return [Hash] {index_name:, stale_members: [], orphaned_keys: []}
+      # Class-level multi-indexes (within: nil or within: :class) are fully
+      # audited. Instance-scoped multi-indexes (within: SomeClass) require
+      # enumerating every scope instance to discover per-value set keys; that
+      # path is not implemented yet and returns status: :not_implemented.
       #
-      def audit_single_multi_index(rel)
+      # @param rel [IndexingRelationship]
+      # @param scanned_identifiers [Array<String>, nil] Optional cached SCAN result.
+      # @param loaded_objects [Array<Horreum>, nil] Optional cached load_multi result.
+      # @return [Hash] {index_name:, stale_members: [], missing: [], orphaned_keys: [], status:}
+      #
+      def audit_single_multi_index(rel, scanned_identifiers: nil, loaded_objects: nil)
         index_name = rel.index_name
-        field = rel.field
-        stale_members = []
-        orphaned_keys = []
 
-        # Multi-indexes require a scope, use within to determine the scope class
-        scope_class = rel.within
-        if scope_class.nil? || scope_class == :class
-          # Class-scoped multi-indexes also require scope instance enumeration.
-          # Mark as not_implemented so callers can distinguish from a clean audit.
-          Familia.debug "[audit_multi_indexes] #{name}##{index_name}: not_implemented (class-scoped, requires scope instance enumeration)"
-          return { index_name: index_name, stale_members: stale_members, orphaned_keys: orphaned_keys, status: :not_implemented }
+        unless rel.class_level?
+          Familia.debug "[audit_multi_indexes] #{name}##{index_name}: " \
+                        "instance-scoped audit (within: #{rel.within.inspect}) not implemented; " \
+                        'requires enumerating every scope instance to discover per-value set keys'
+          return {
+            index_name: index_name,
+            stale_members: [],
+            missing: [],
+            orphaned_keys: [],
+            status: :not_implemented,
+          }
         end
 
-        # Instance-scoped multi-index audit requires enumerating all scope
-        # instances to discover per-value set keys, which is expensive. Return
-        # empty results with a status flag so callers know this dimension was
-        # not actually checked.
-        Familia.debug "[audit_multi_indexes] #{name}##{index_name}: not_implemented (requires scope instance enumeration)"
-        { index_name: index_name, stale_members: stale_members, orphaned_keys: orphaned_keys, status: :not_implemented }
+        audit_class_level_multi_index(
+          rel,
+          scanned_identifiers: scanned_identifiers,
+          loaded_objects: loaded_objects,
+        )
+      end
+
+      # Audit a class-level multi index.
+      #
+      # Three-phase audit mirroring the rebuild flow:
+      #   1. SCAN for per-value set keys, inspect members for stale references
+      #   2. SCAN instance hash keys, detect objects whose field value has no bucket
+      #   3. Detect orphaned buckets whose field_value no live object holds
+      #
+      # Key layout: "{prefix}:{index_name}:{field_value}"
+      #
+      # @param rel [IndexingRelationship]
+      # @param scanned_identifiers [Array<String>, nil] Optional cached SCAN result.
+      # @param loaded_objects [Array<Horreum>, nil] Optional cached load_multi result.
+      # @return [Hash] {index_name:, stale_members:, missing:, orphaned_keys:, status:}
+      #
+      def audit_class_level_multi_index(rel, scanned_identifiers: nil, loaded_objects: nil)
+        bucket_entries = discover_multi_index_buckets(rel)
+        discovered_field_values = bucket_entries.keys.to_set
+
+        stale_members = detect_multi_index_stale_members(rel, bucket_entries)
+        missing, actual_field_values = detect_multi_index_missing(
+          rel,
+          discovered_field_values,
+          scanned_identifiers: scanned_identifiers,
+          loaded_objects: loaded_objects,
+        )
+        orphaned_keys = detect_multi_index_orphaned_keys(bucket_entries, actual_field_values)
+
+        status = if stale_members.empty? && missing.empty? && orphaned_keys.empty?
+          :ok
+        else
+          :issues_found
+        end
+
+        {
+          index_name: rel.index_name,
+          stale_members: stale_members,
+          missing: missing,
+          orphaned_keys: orphaned_keys,
+          status: status,
+        }
+      end
+
+      # Phase 1: SCAN for per-value set keys and load their raw members.
+      #
+      # @param rel [IndexingRelationship]
+      # @return [Hash{String => Hash}] field_value => {key:, identifiers: [...]}
+      #
+      def discover_multi_index_buckets(rel)
+        bucket_pattern = "#{prefix}#{Familia.delim}#{rel.index_name}#{Familia.delim}*"
+        bucket_prefix = "#{prefix}#{Familia.delim}#{rel.index_name}#{Familia.delim}"
+        bucket_entries = {}
+
+        # Batch SCAN results and pipeline SMEMBERS to collapse one round trip
+        # per bucket key into one round trip per slice of 100 keys.
+        dbclient.scan_each(match: bucket_pattern).each_slice(100) do |keys|
+          valid_keys = keys.select { |k| k.start_with?(bucket_prefix) }
+          next if valid_keys.empty?
+
+          members_batch = dbclient.pipelined do |pipe|
+            valid_keys.each { |k| pipe.smembers(k) }
+          end
+
+          valid_keys.each_with_index do |key, idx|
+            field_value = key[bucket_prefix.length..]
+            next if field_value.nil? || field_value.empty?
+
+            bucket_entries[field_value] = {
+              key: key,
+              identifiers: deserialize_index_members(members_batch[idx]),
+            }
+          end
+        end
+
+        bucket_entries
+      end
+
+      # Phase 1 continued: detect stale members (object missing or value mismatch).
+      #
+      # @param rel [IndexingRelationship]
+      # @param bucket_entries [Hash]
+      # @return [Array<Hash>]
+      #
+      def detect_multi_index_stale_members(rel, bucket_entries)
+        stale = []
+
+        bucket_entries.each do |field_value, entry|
+          identifiers = entry[:identifiers].map(&:to_s)
+          next if identifiers.empty?
+
+          objects = load_multi(identifiers)
+
+          identifiers.each_with_index do |identifier, idx|
+            stale << classify_multi_index_entry(rel, field_value, identifier, objects[idx])
+          end
+        end
+
+        stale.compact
+      end
+
+      # Classifies a single indexed entry as missing object, value mismatch, or valid.
+      #
+      # @return [Hash, nil] stale entry or nil when valid
+      #
+      def classify_multi_index_entry(rel, field_value, identifier, obj)
+        if obj.nil?
+          return {
+            field_value: field_value,
+            indexed_id: identifier,
+            reason: :object_missing,
+          }
+        end
+
+        current_value = obj.send(rel.field).to_s
+        return nil if current_value == field_value
+
+        {
+          field_value: field_value,
+          indexed_id: identifier,
+          reason: :value_mismatch,
+          current_value: current_value,
+        }
+      end
+
+      # Phase 2: SCAN instance hash keys, detect live objects whose field value
+      # has no bucket.
+      #
+      # @param rel [IndexingRelationship]
+      # @param discovered_field_values [Set<String>]
+      # @param scanned_identifiers [Array<String>, nil] Optional cached SCAN result.
+      # @param loaded_objects [Array<Horreum>, nil] Optional cached load_multi result.
+      # @return [Array(Array<Hash>, Set<String>)] missing entries and the set of
+      #   field values observed on live objects
+      #
+      def detect_multi_index_missing(rel, discovered_field_values, scanned_identifiers: nil, loaded_objects: nil)
+        all_identifiers = scanned_identifiers || scan_identifiers.to_a
+        all_objects = loaded_objects || load_multi(all_identifiers)
+        actual_field_values = Set.new
+        missing = []
+
+        all_identifiers.each_with_index do |identifier, idx|
+          obj = all_objects[idx]
+          next unless obj
+
+          value = obj.send(rel.field)
+          next if value.nil? || value.to_s.strip.empty?
+
+          expected_value = value.to_s
+          actual_field_values << expected_value
+
+          next if discovered_field_values.include?(expected_value)
+
+          missing << { identifier: identifier, field_value: expected_value }
+        end
+
+        [missing, actual_field_values]
+      end
+
+      # Phase 3: detect orphaned buckets whose field_value no live object holds.
+      #
+      # @param bucket_entries [Hash]
+      # @param actual_field_values [Set<String>]
+      # @return [Array<Hash>]
+      #
+      def detect_multi_index_orphaned_keys(bucket_entries, actual_field_values)
+        orphaned = []
+
+        bucket_entries.each do |field_value, entry|
+          next if actual_field_values.include?(field_value)
+
+          orphaned << { field_value: field_value, key: entry[:key] }
+        end
+
+        orphaned
       end
 
       # Audit a class-level participation collection (from class_participates_in).
@@ -312,8 +686,8 @@ module Familia
         target_class = rel.target_class
         results = []
 
-        # SCAN for all collection keys matching target_prefix:*:collection_name
-        pattern = "#{target_class.prefix}:*:#{collection_name}"
+        # SCAN for all collection keys matching target_prefix{delim}*{delim}collection_name
+        pattern = "#{target_class.prefix}#{Familia.delim}*#{Familia.delim}#{collection_name}"
         collection_keys = scan_matching_keys(pattern, target_class.dbclient)
 
         collection_keys.each do |collection_key|
@@ -369,6 +743,101 @@ module Familia
         end
 
         stale
+      end
+
+      # Audits a single instance-level related field for orphaned keys.
+      #
+      # SCAN pattern "{prefix}:*:{field_name}" discovers all existing
+      # collection keys for the field. For each match, extract the
+      # identifier and check whether the parent hash still exists.
+      # Matches with a missing parent are reported as orphaned.
+      #
+      # The SCAN pattern does not match class-level keys because those
+      # live at "{prefix}:{field_name}" (two segments, no middle wildcard).
+      #
+      # @param definition [RelatedFieldDefinition]
+      # @return [Hash] {field_name:, klass:, orphaned_keys: [], count:, status:}
+      #
+      def audit_single_related_field(definition)
+        field_name = definition.name
+        pattern = "#{prefix}#{Familia.delim}*#{Familia.delim}#{field_name}"
+        orphaned_keys = []
+
+        # Batch SCAN results and pipeline EXISTS checks. Note we use the raw
+        # integer EXISTS command here (not the exists? helper) so the result
+        # inside the pipeline is aligned positionally with batch_map.values.
+        dbclient.scan_each(match: pattern).each_slice(100) do |keys|
+          batch_map = keys.each_with_object({}) do |key, map|
+            id = extract_identifier_from_key(key, field_name.to_s)
+            map[key] = id if id && !id.empty?
+          end
+          next if batch_map.empty?
+
+          existing_flags = dbclient.pipelined do |pipe|
+            batch_map.values.each { |id| pipe.exists(dbkey(id)) }
+          end
+
+          batch_map.keys.each_with_index do |key, idx|
+            orphaned_keys << key if existing_flags[idx].to_i.zero?
+          end
+        end
+
+        status = orphaned_keys.empty? ? :ok : :issues_found
+
+        {
+          field_name: field_name,
+          klass: definition.klass.name,
+          orphaned_keys: orphaned_keys,
+          count: orphaned_keys.size,
+          status: status,
+        }
+      end
+
+      # Deserializes raw SMEMBERS output from a multi-index bucket.
+      #
+      # Members are stored via UnsortedSet#add which JSON-encodes values
+      # (e.g. "csid-1" -> "\"csid-1\""). Falls back to the raw value when
+      # a member cannot be parsed as JSON.
+      #
+      # @param raw_members [Array<String>] SMEMBERS output
+      # @return [Array<Object>] deserialized identifiers
+      #
+      def deserialize_index_members(raw_members)
+        raw_members.filter_map do |raw|
+          next if raw.nil?
+
+          begin
+            Familia::JsonSerializer.parse(raw)
+          rescue Familia::SerializerError
+            raw
+          end
+        end
+      end
+
+      # Deserializes a single raw HMGET value from a unique-index hashkey.
+      #
+      # Mirrors HashKey#[] semantics for a hashkey without :class or
+      # :reference options: nil stays nil, JSON parses to the original Ruby
+      # value, and a parse error falls back to the raw string. The result is
+      # coerced to a string identifier for comparison against live object IDs.
+      #
+      # Used by the batched cross-reference audit where raw HMGET is preferred
+      # over per-field HGET to reduce round trips.
+      #
+      # @param raw [String, nil] Single HMGET result value
+      # @return [String, nil] identifier string, or nil when raw is nil
+      #
+      def deserialize_index_value(raw)
+        return nil if raw.nil?
+
+        parsed = begin
+          Familia::JsonSerializer.parse(raw)
+        rescue Familia::SerializerError
+          raw
+        end
+
+        parsed = parsed.identifier if parsed.respond_to?(:identifier)
+        parsed&.to_s
       end
 
       # SCAN helper for finding keys matching a pattern.

@@ -81,6 +81,17 @@ AuditIndexedUser.dbclient.hset(AuditIndexedUser.email_lookup.dbkey, 'alice@test.
 @stale[:reason]
 #=> :value_mismatch
 
+## Standalone call without scanned_identifiers cache still detects missing entries
+# Guards the fallback path when audit_unique_indexes is called directly
+# (outside health_check) so the internal cache kwargs are nil.
+AuditIndexedUser.email_lookup.clear
+@u1.save
+@u2.save
+AuditIndexedUser.email_lookup.clear
+@standalone = AuditIndexedUser.audit_unique_indexes
+@standalone.first[:missing].map { |m| m[:identifier] }.sort
+#=> ['au-1', 'au-2']
+
 # Teardown
 begin
   existing = Familia.dbclient.keys('audit_indexed_user:*')

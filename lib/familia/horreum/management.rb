@@ -544,7 +544,7 @@ module Familia
       #   User.scan_pattern('active') #=> "user:*:active"
       #
       def scan_pattern(match_suffix = suffix)
-        "#{prefix}:*:#{match_suffix}"
+        "#{prefix}#{Familia.delim}*#{Familia.delim}#{match_suffix}"
       end
 
       # Extracts the identifier from a full Redis key by stripping the

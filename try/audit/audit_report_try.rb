@@ -16,6 +16,8 @@ defined?(Familia::Horreum::AuditReport)
   unique_indexes: [],
   multi_indexes: [],
   participations: [],
+  related_fields: [],
+  cross_references: { in_instances_missing_unique_index: [], index_points_to_wrong_identifier: [], status: :ok },
   duration: 0.123
 )
 @healthy_report.class.name
@@ -33,6 +35,8 @@ defined?(Familia::Horreum::AuditReport)
   unique_indexes: [],
   multi_indexes: [],
   participations: [],
+  related_fields: [],
+  cross_references: { in_instances_missing_unique_index: [], index_points_to_wrong_identifier: [], status: :ok },
   duration: 0.1
 )
 @phantom_report.healthy?
@@ -46,6 +50,8 @@ defined?(Familia::Horreum::AuditReport)
   unique_indexes: [],
   multi_indexes: [],
   participations: [],
+  related_fields: [],
+  cross_references: { in_instances_missing_unique_index: [], index_points_to_wrong_identifier: [], status: :ok },
   duration: 0.1
 )
 @missing_report.healthy?
@@ -59,6 +65,8 @@ defined?(Familia::Horreum::AuditReport)
   unique_indexes: [{ index_name: :email_lookup, stale: [{ field_value: 'old@test.com' }], missing: [] }],
   multi_indexes: [],
   participations: [],
+  related_fields: [],
+  cross_references: { in_instances_missing_unique_index: [], index_points_to_wrong_identifier: [], status: :ok },
   duration: 0.1
 )
 @stale_idx_report.healthy?
@@ -72,6 +80,8 @@ defined?(Familia::Horreum::AuditReport)
   unique_indexes: [],
   multi_indexes: [],
   participations: [{ collection_name: :members, stale_members: [{ identifier: 'gone' }] }],
+  related_fields: [],
+  cross_references: { in_instances_missing_unique_index: [], index_points_to_wrong_identifier: [], status: :ok },
   duration: 0.1
 )
 @stale_part_report.healthy?
@@ -116,8 +126,10 @@ h[:healthy]
   audited_at: Familia.now,
   instances: { phantoms: [], missing: [], count_timeline: 5, count_scan: 5 },
   unique_indexes: [],
-  multi_indexes: [{ index_name: :role_index, stale_members: [], orphaned_keys: [] }],
+  multi_indexes: [{ index_name: :role_index, stale_members: [], orphaned_keys: [], missing: [] }],
   participations: [],
+  related_fields: [],
+  cross_references: { in_instances_missing_unique_index: [], index_points_to_wrong_identifier: [], status: :ok },
   duration: 0.05
 )
 @fully_audited_report.complete?
@@ -129,8 +141,10 @@ h[:healthy]
   audited_at: Familia.now,
   instances: { phantoms: [], missing: [], count_timeline: 5, count_scan: 5 },
   unique_indexes: [],
-  multi_indexes: [{ index_name: :category_index, stale_members: [], orphaned_keys: [], status: :not_implemented }],
+  multi_indexes: [{ index_name: :category_index, stale_members: [], orphaned_keys: [], missing: [], status: :not_implemented }],
   participations: [],
+  related_fields: [],
+  cross_references: { in_instances_missing_unique_index: [], index_points_to_wrong_identifier: [], status: :ok },
   duration: 0.05
 )
 @stub_report.complete?
@@ -146,8 +160,10 @@ h[:healthy]
   audited_at: Familia.now,
   instances: { phantoms: ['ghost-1'], missing: [], count_timeline: 6, count_scan: 5 },
   unique_indexes: [],
-  multi_indexes: [{ index_name: :role_index, stale_members: [], orphaned_keys: [] }],
+  multi_indexes: [{ index_name: :role_index, stale_members: [], orphaned_keys: [], missing: [] }],
   participations: [],
+  related_fields: [],
+  cross_references: { in_instances_missing_unique_index: [], index_points_to_wrong_identifier: [], status: :ok },
   duration: 0.05
 )
 @unhealthy_complete_report.healthy?
@@ -179,4 +195,57 @@ h[:healthy]
 
 ## to_h omits status key for fully audited multi-index
 @fully_audited_report.to_h[:multi_indexes].first.key?(:status)
+#=> false
+
+## healthy? returns false when multi_index has missing entries (regression guard)
+@missing_multi_report = Familia::Horreum::AuditReport.new(
+  model_class: 'TestModel',
+  audited_at: Familia.now,
+  instances: { phantoms: [], missing: [], count_timeline: 5, count_scan: 5 },
+  unique_indexes: [],
+  multi_indexes: [{ index_name: :role_index, stale_members: [], orphaned_keys: [], missing: [{ identifier: 'foo', field_value: 'bar' }], status: :issues_found }],
+  participations: [],
+  related_fields: [],
+  cross_references: { in_instances_missing_unique_index: [], index_points_to_wrong_identifier: [], status: :ok },
+  duration: 0.05
+)
+@missing_multi_report.healthy?
+#=> false
+
+## to_h surfaces multi_index missing count
+@missing_multi_report.to_h[:multi_indexes].first[:missing]
+#=> 1
+
+## to_s includes missing token for multi_index
+@missing_multi_report.to_s.include?('missing=1')
+#=> true
+
+## related_fields nil makes complete? false even when cross_references present
+@nil_rf_report = Familia::Horreum::AuditReport.new(
+  model_class: 'TestModel',
+  audited_at: Familia.now,
+  instances: { phantoms: [], missing: [], count_timeline: 0, count_scan: 0 },
+  unique_indexes: [],
+  multi_indexes: [],
+  participations: [],
+  related_fields: nil,
+  cross_references: { in_instances_missing_unique_index: [], index_points_to_wrong_identifier: [], status: :ok },
+  duration: 0.05
+)
+@nil_rf_report.complete?
+#=> false
+
+## related_fields with orphans makes healthy? false
+@orphan_rf_report = Familia::Horreum::AuditReport.new(
+  model_class: 'TestModel',
+  audited_at: Familia.now,
+  instances: { phantoms: [], missing: [], count_timeline: 0, count_scan: 0 },
+  unique_indexes: [],
+  multi_indexes: [],
+  participations: [],
+  related_fields: [{ field_name: :sessions, klass: 'X', orphaned_keys: ['k'], count: 1, status: :issues_found }],
+  cross_references: { in_instances_missing_unique_index: [], index_points_to_wrong_identifier: [], status: :ok },
+  duration: 0.05
+)
+@orphan_rf_report.healthy?
 #=> false
