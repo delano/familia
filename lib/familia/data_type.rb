@@ -150,6 +150,10 @@ module Familia
     # @raise [Familia::Problem] if Familia.strict_write_order is true
     #
     def warn_if_dirty!
+      # Suppress warnings while parent is inside atomic_write — scalar setters in the block
+      # make the object dirty by design, so firing warnings for each collection call is noise.
+      return if @parent_ref.respond_to?(:atomic_write_mode?) && @parent_ref.atomic_write_mode?
+
       return unless @parent_ref.respond_to?(:dirty?) && @parent_ref.dirty?
 
       dirty = @parent_ref.dirty_fields

@@ -174,6 +174,8 @@ module Familia
       #
       # @see #save For the underlying scalar persistence
       # @see #transaction For atomic operations on same-key commands
+      # @see #atomic_write For true MULTI/EXEC atomicity spanning scalars and
+      #   collections (single-database only).
       #
       def save_with_collections(update_expiration: true)
         saved = save(update_expiration: update_expiration)

@@ -250,6 +250,24 @@ plan.save                     # If this raises, features are already mutated
 
 **Cross-database limitation**: MULTI/EXEC transactions only work within a single Redis database number. If scalar fields and a collection use different `logical_database` values, they cannot share a transaction. The `save_with_collections` pattern handles this by sequencing the operations rather than wrapping them in MULTI.
 
+**Atomic pattern -- scalars and collections in one MULTI/EXEC:**
+```ruby
+plan.atomic_write do
+  plan.name = "Premium"               # Deferred: queued as HMSET by persist_to_storage
+  plan.features.clear                 # Immediate: queued as DEL in the open MULTI
+  plan.features.add("sso")            # Immediate: queued as SADD in the open MULTI
+end
+# Block body runs first, then persist_to_storage queues HMSET + index updates
+# + touch_instances!, then EXEC fires. All-or-nothing.
+```
+
+Unlike `save_with_collections` (which sequences two separate writes and cannot roll back scalars if a collection operation fails), `atomic_write` composes the existing `transaction` infrastructure so every command lands in one MULTI/EXEC. Collection mutations auto-route into the open transaction because `DataType#dbclient` honours `Fiber[:familia_transaction]`.
+
+Constraints:
+- All related DataTypes (instance-level and class-level) must share the parent Horreum's `logical_database`. A mismatch raises `Familia::CrossDatabaseError` -- fall back to `save_with_collections` in that case.
+- Cannot nest inside another `transaction` or `atomic_write` (raises `Familia::OperationModeError`).
+- Collection method return values inside the block are `Redis::Future` objects (inherent to MULTI) -- do not inspect them before EXEC.
+
 **Instances timeline**: The class-level `instances` sorted set is a timeline of last-modified times, not a registry. `persist_to_storage` (called by `save`) and `commit_fields`/`batch_update` all call `touch_instances!` to update the timestamp. Use `in_instances?(identifier)` for fast O(log N) checks without loading the object.
 
 ### Instances Timeline Lifecycle
