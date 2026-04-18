@@ -318,14 +318,11 @@ rescue Familia::CrossDatabaseError => e
 end
 #=> [:raised, :leaderboard, 6, 0]
 
-## same-instance atomic_write across two Fibers: both proceed without a re-entrancy error
-## KNOWN LIMITATION: @atomic_write_active is an instance ivar shared across Fibers, but
-## Fiber[:familia_transaction] is Fiber-local. So Fiber B's nested-transaction guard does
-## not fire even though Fiber A has an active MULTI on the same instance. Each Fiber opens
-## its own MULTI/EXEC on its own pool connection. This test pins down the observable outcome:
-## both transactions commit, the last-writer-wins for scalar fields, and set members from
-## both Fibers accumulate on the shared Redis key. Documented here so any future change to
-## add re-entrancy protection will break this test intentionally.
+## same-instance atomic_write across two Fibers: second Fiber raises OperationModeError
+## The instance tracks its owning Fiber; if Fiber A has an active atomic_write and Fiber B
+## tries to open one on the SAME instance, B raises. Without this guard, both Fibers would
+## open parallel MULTIs against shared scalar state (last-writer-wins HMSET) -- defeating
+## the atomicity contract from the caller's point of view.
 @plan_t = AtomicWriteTestPlan.new(planid: 'aw_plan_t', name: 'SameInstance-Initial')
 @plan_t.save
 
@@ -346,24 +343,25 @@ end
       @plan_t.features.add('shared_b')
     end
     :b_done
-  rescue Familia::OperationModeError, Familia::PersistenceError => e
-    [:b_raised, e.class.name]
+  rescue Familia::OperationModeError => e
+    [:b_raised, e.message.include?('another Fiber or Thread')]
   end
 end
 
-@fiber_same_a.resume  # A enters atomic_write, opens MULTI, yields mid-block
-@fiber_b_result = @fiber_same_b.resume  # B enters atomic_write on same instance; current behavior: runs independently
-@fiber_a_result = @fiber_same_a.resume  # A resumes and completes
+@fiber_same_a.resume  # A enters atomic_write, opens MULTI, yields mid-block (still owns instance)
+@fiber_b_result = @fiber_same_b.resume  # B tries to enter atomic_write on same instance: raises
+@fiber_a_result = @fiber_same_a.resume  # A resumes and completes its transaction cleanly
 
 @t_reloaded = AtomicWriteTestPlan.find_by_id('aw_plan_t')
-# Both Fibers completed without raising (existing behavior, no same-instance re-entrancy guard).
-# Features from both Fibers are present on the shared key.
+# B raised with the re-entrancy message. A's transaction still committed cleanly.
+# Only A's scalar update and features are present; B's work never ran.
 [
   @fiber_a_result,
   @fiber_b_result,
-  ['shared_a', 'shared_a2', 'shared_b'].all? { |m| @t_reloaded.features.member?(m) },
+  @t_reloaded.name,
+  @t_reloaded.features.members.sort,
 ]
-#=> [:a_done, :b_done, true]
+#=> [:a_done, [:b_raised, true], "FiberA-Wrote", ["shared_a", "shared_a2"]]
 
 # Cleanup
 AtomicWriteTestPlan.instances.clear

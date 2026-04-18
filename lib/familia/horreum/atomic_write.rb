@@ -70,8 +70,21 @@ module Familia
           ERROR_MESSAGE
         end
 
+        # Same-instance re-entrancy guard. The Fiber[:familia_transaction]
+        # check above only protects the same Fiber; a second Fiber (or Thread)
+        # touching the same Horreum instance would otherwise open a parallel
+        # MULTI against shared scalar state and race HMSET -- defeating the
+        # "atomic" contract from the caller's point of view. We track the
+        # owning Fiber and raise if another Fiber enters while we own.
+        if @atomic_write_owner && @atomic_write_owner != Fiber.current
+          raise Familia::OperationModeError, <<~ERROR_MESSAGE
+            atomic_write is already active on this instance in another Fiber or Thread. Concurrent atomic_write on the same instance is not supported.
+          ERROR_MESSAGE
+        end
+
         guard_atomic_write_database!
 
+        @atomic_write_owner = Fiber.current
         @atomic_write_active = true
         begin
           # prepare_for_save must run OUTSIDE the transaction: guard_unique_indexes!
@@ -97,6 +110,7 @@ module Familia
           !result.nil?
         ensure
           @atomic_write_active = false
+          @atomic_write_owner = nil
         end
       end
 
