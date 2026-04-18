@@ -231,30 +231,189 @@ module Familia
 
       # Audit a single multi index.
       #
+      # Class-level multi-indexes (within: nil or within: :class) are fully
+      # audited. Instance-scoped multi-indexes (within: SomeClass) require
+      # enumerating every scope instance to discover per-value set keys; that
+      # path is not implemented yet and returns status: :not_implemented.
+      #
       # @param rel [IndexingRelationship]
-      # @return [Hash] {index_name:, stale_members: [], orphaned_keys: []}
+      # @return [Hash] {index_name:, stale_members: [], missing: [], orphaned_keys: [], status:}
       #
       def audit_single_multi_index(rel)
         index_name = rel.index_name
-        field = rel.field
-        stale_members = []
-        orphaned_keys = []
 
-        # Multi-indexes require a scope, use within to determine the scope class
-        scope_class = rel.within
-        if scope_class.nil? || scope_class == :class
-          # Class-scoped multi-indexes also require scope instance enumeration.
-          # Mark as not_implemented so callers can distinguish from a clean audit.
-          Familia.debug "[audit_multi_indexes] #{name}##{index_name}: not_implemented (class-scoped, requires scope instance enumeration)"
-          return { index_name: index_name, stale_members: stale_members, orphaned_keys: orphaned_keys, status: :not_implemented }
+        unless rel.class_level?
+          Familia.debug "[audit_multi_indexes] #{name}##{index_name}: " \
+                        "instance-scoped audit (within: #{rel.within.inspect}) not implemented; " \
+                        'requires enumerating every scope instance to discover per-value set keys'
+          return {
+            index_name: index_name,
+            stale_members: [],
+            missing: [],
+            orphaned_keys: [],
+            status: :not_implemented,
+          }
         end
 
-        # Instance-scoped multi-index audit requires enumerating all scope
-        # instances to discover per-value set keys, which is expensive. Return
-        # empty results with a status flag so callers know this dimension was
-        # not actually checked.
-        Familia.debug "[audit_multi_indexes] #{name}##{index_name}: not_implemented (requires scope instance enumeration)"
-        { index_name: index_name, stale_members: stale_members, orphaned_keys: orphaned_keys, status: :not_implemented }
+        audit_class_level_multi_index(rel)
+      end
+
+      # Audit a class-level multi index.
+      #
+      # Three-phase audit mirroring the rebuild flow:
+      #   1. SCAN for per-value set keys, inspect members for stale references
+      #   2. SCAN instance hash keys, detect objects whose field value has no bucket
+      #   3. Detect orphaned buckets whose field_value no live object holds
+      #
+      # Key layout: "{prefix}:{index_name}:{field_value}"
+      #
+      # @param rel [IndexingRelationship]
+      # @return [Hash] {index_name:, stale_members:, missing:, orphaned_keys:, status:}
+      #
+      def audit_class_level_multi_index(rel)
+        bucket_entries = discover_multi_index_buckets(rel)
+        discovered_field_values = bucket_entries.keys.to_set
+
+        stale_members = detect_multi_index_stale_members(rel, bucket_entries)
+        missing, actual_field_values = detect_multi_index_missing(rel, discovered_field_values)
+        orphaned_keys = detect_multi_index_orphaned_keys(bucket_entries, actual_field_values)
+
+        status = if stale_members.empty? && missing.empty? && orphaned_keys.empty?
+          :ok
+        else
+          :issues_found
+        end
+
+        {
+          index_name: rel.index_name,
+          stale_members: stale_members,
+          missing: missing,
+          orphaned_keys: orphaned_keys,
+          status: status,
+        }
+      end
+
+      # Phase 1: SCAN for per-value set keys and load their raw members.
+      #
+      # @param rel [IndexingRelationship]
+      # @return [Hash{String => Hash}] field_value => {key:, identifiers: [...]}
+      #
+      def discover_multi_index_buckets(rel)
+        bucket_pattern = "#{prefix}:#{rel.index_name}:*"
+        bucket_prefix = "#{prefix}:#{rel.index_name}:"
+        bucket_entries = {}
+
+        dbclient.scan_each(match: bucket_pattern) do |key|
+          next unless key.start_with?(bucket_prefix)
+
+          field_value = key[bucket_prefix.length..]
+          next if field_value.nil? || field_value.empty?
+
+          raw_members = dbclient.smembers(key)
+          bucket_entries[field_value] = {
+            key: key,
+            identifiers: deserialize_index_members(raw_members),
+          }
+        end
+
+        bucket_entries
+      end
+
+      # Phase 1 continued: detect stale members (object missing or value mismatch).
+      #
+      # @param rel [IndexingRelationship]
+      # @param bucket_entries [Hash]
+      # @return [Array<Hash>]
+      #
+      def detect_multi_index_stale_members(rel, bucket_entries)
+        stale = []
+
+        bucket_entries.each do |field_value, entry|
+          identifiers = entry[:identifiers].map(&:to_s)
+          next if identifiers.empty?
+
+          objects = load_multi(identifiers)
+
+          identifiers.each_with_index do |identifier, idx|
+            stale << classify_multi_index_entry(rel, field_value, identifier, objects[idx])
+          end
+        end
+
+        stale.compact
+      end
+
+      # Classifies a single indexed entry as missing object, value mismatch, or valid.
+      #
+      # @return [Hash, nil] stale entry or nil when valid
+      #
+      def classify_multi_index_entry(rel, field_value, identifier, obj)
+        if obj.nil?
+          return {
+            field_value: field_value,
+            indexed_id: identifier,
+            reason: :object_missing,
+          }
+        end
+
+        current_value = obj.send(rel.field).to_s
+        return nil if current_value == field_value
+
+        {
+          field_value: field_value,
+          indexed_id: identifier,
+          reason: :value_mismatch,
+          current_value: current_value,
+        }
+      end
+
+      # Phase 2: SCAN instance hash keys, detect live objects whose field value
+      # has no bucket.
+      #
+      # @param rel [IndexingRelationship]
+      # @param discovered_field_values [Set<String>]
+      # @return [Array(Array<Hash>, Set<String>)] missing entries and the set of
+      #   field values observed on live objects
+      #
+      def detect_multi_index_missing(rel, discovered_field_values)
+        all_identifiers = scan_identifiers.to_a
+        all_objects = load_multi(all_identifiers)
+        actual_field_values = Set.new
+        missing = []
+
+        all_identifiers.each_with_index do |identifier, idx|
+          obj = all_objects[idx]
+          next unless obj
+
+          value = obj.send(rel.field)
+          next if value.nil? || value.to_s.strip.empty?
+
+          expected_value = value.to_s
+          actual_field_values << expected_value
+
+          next if discovered_field_values.include?(expected_value)
+
+          missing << { identifier: identifier, field_value: expected_value }
+        end
+
+        [missing, actual_field_values]
+      end
+
+      # Phase 3: detect orphaned buckets whose field_value no live object holds.
+      #
+      # @param bucket_entries [Hash]
+      # @param actual_field_values [Set<String>]
+      # @return [Array<Hash>]
+      #
+      def detect_multi_index_orphaned_keys(bucket_entries, actual_field_values)
+        orphaned = []
+
+        bucket_entries.each do |field_value, entry|
+          next if actual_field_values.include?(field_value)
+
+          orphaned << { field_value: field_value, key: entry[:key] }
+        end
+
+        orphaned
       end
 
       # Audit a class-level participation collection (from class_participates_in).
@@ -369,6 +528,27 @@ module Familia
         end
 
         stale
+      end
+
+      # Deserializes raw SMEMBERS output from a multi-index bucket.
+      #
+      # Members are stored via UnsortedSet#add which JSON-encodes values
+      # (e.g. "csid-1" -> "\"csid-1\""). Falls back to the raw value when
+      # a member cannot be parsed as JSON.
+      #
+      # @param raw_members [Array<String>] SMEMBERS output
+      # @return [Array<Object>] deserialized identifiers
+      #
+      def deserialize_index_members(raw_members)
+        raw_members.filter_map do |raw|
+          next if raw.nil?
+
+          begin
+            Familia::JsonSerializer.parse(raw)
+          rescue Familia::SerializerError
+            raw
+          end
+        end
       end
 
       # SCAN helper for finding keys matching a pattern.
