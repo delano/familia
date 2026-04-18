@@ -67,7 +67,7 @@ module Familia
       def rebuild_instances(batch_size: 100, &progress)
         pattern = scan_pattern
         final_key = instances.dbkey
-        temp_key = "#{final_key}:rebuild:#{Familia.now.to_i}"
+        temp_key = Familia::AtomicOperations.build_temp_key(final_key)
 
         count = 0
         cursor = "0"
