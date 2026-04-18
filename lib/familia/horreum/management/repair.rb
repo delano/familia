@@ -100,9 +100,7 @@ module Familia
         end
 
         # Atomic swap
-        Familia::Features::Relationships::Indexing::RebuildStrategies.atomic_swap(
-          temp_key, final_key, dbclient
-        )
+        Familia::AtomicOperations.atomic_swap(temp_key, final_key, dbclient)
 
         progress&.call(phase: :completed, current: count, total: count)
         count

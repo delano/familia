@@ -165,6 +165,7 @@ module Familia
   require_relative 'familia/connection'
   require_relative 'familia/settings'
   require_relative 'familia/utils'
+  require_relative 'familia/atomic_operations'
   require_relative 'familia/identifier_extractor'
   require_relative 'familia/json_serializer'
 
