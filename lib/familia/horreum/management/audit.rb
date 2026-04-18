@@ -121,6 +121,99 @@ module Familia
         related_fields.values.map { |definition| audit_single_related_field(definition) }
       end
 
+      # Audits drift between the `instances` ZSET and class-level unique
+      # indexes that per-registry audits cannot surface alone.
+      #
+      # For every live identifier in `instances`, verifies that each
+      # class-level unique index has an entry keyed by the object's current
+      # field value and that entry points back to the same identifier.
+      #
+      # Two failure modes are detected:
+      # - `in_instances_missing_unique_index`: live object has a populated
+      #   indexed field but no corresponding entry exists in the index.
+      # - `index_points_to_wrong_identifier`: entry exists but references a
+      #   different identifier (split-brain between two objects).
+      #
+      # Scope is limited to class-level unique indexes (`within` nil or
+      # `:class`). Multi-indexes are covered by audit_multi_indexes;
+      # instance-scoped unique indexes are out of scope for this audit.
+      #
+      # @param batch_size [Integer] load_multi batch size (default: 100)
+      # @yield [Hash] Progress: {phase: :cross_references, current:, total:}
+      # @return [Hash] {in_instances_missing_unique_index: [], index_points_to_wrong_identifier: [], status:}
+      #
+      def audit_cross_references(batch_size: 100, &progress)
+        empty_result = {
+          in_instances_missing_unique_index: [],
+          index_points_to_wrong_identifier: [],
+          status: :ok,
+        }
+
+        return empty_result unless respond_to?(:indexing_relationships)
+
+        class_unique_rels = indexing_relationships.select { |rel|
+          rel.cardinality == :unique && (rel.within.nil? || rel.within == :class)
+        }
+        return empty_result if class_unique_rels.empty?
+
+        instance_ids = instances.members
+        total = instance_ids.size
+        processed = 0
+
+        in_instances_missing_unique_index = []
+        index_points_to_wrong_identifier = []
+
+        instance_ids.each_slice(batch_size) do |batch|
+          objects = load_multi(batch)
+          batch.zip(objects).each do |identifier, obj|
+            processed += 1
+            next unless obj
+
+            class_unique_rels.each do |rel|
+              field_value = obj.send(rel.field)
+              next if field_value.nil? || field_value.to_s.strip.empty?
+
+              field_value_str = field_value.to_s
+              next unless respond_to?(rel.index_name)
+
+              raw_indexed = send(rel.index_name)[field_value_str]
+              indexed_id = raw_indexed
+              indexed_id = indexed_id.identifier if indexed_id.respond_to?(:identifier)
+              indexed_id = indexed_id&.to_s
+
+              if indexed_id.nil?
+                in_instances_missing_unique_index << {
+                  identifier: identifier,
+                  index_name: rel.index_name,
+                  field_value: field_value_str,
+                  existing_index_value: nil,
+                }
+              elsif indexed_id != identifier
+                index_points_to_wrong_identifier << {
+                  index_name: rel.index_name,
+                  field_value: field_value_str,
+                  expected_id: identifier,
+                  index_id: indexed_id,
+                }
+              end
+            end
+          end
+          progress&.call(phase: :cross_references, current: processed, total: total)
+        end
+
+        status = if in_instances_missing_unique_index.empty? && index_points_to_wrong_identifier.empty?
+          :ok
+        else
+          :issues_found
+        end
+
+        {
+          in_instances_missing_unique_index: in_instances_missing_unique_index,
+          index_points_to_wrong_identifier: index_points_to_wrong_identifier,
+          status: status,
+        }
+      end
+
       # Runs all audits and wraps results in an AuditReport.
       #
       # The related_fields audit is opt-in via `audit_collections: true`
@@ -128,13 +221,21 @@ module Familia
       # When omitted (or false), AuditReport#related_fields is nil which
       # signals "not checked" rather than "checked and clean".
       #
+      # The cross-references audit is opt-in via `check_cross_refs: true`.
+      # It walks every identifier in the instances ZSET and cross-checks
+      # each class-level unique index; skipping it keeps the default
+      # health_check fast. When omitted (or false), AuditReport#cross_references
+      # is nil, signalling "not checked".
+      #
       # @param batch_size [Integer] SCAN batch size for instances audit
       # @param sample_size [Integer, nil] Sample size for participation audit
       # @param audit_collections [Boolean] When true, also run audit_related_fields
+      # @param check_cross_refs [Boolean] When true, also run audit_cross_references
       # @yield [Hash] Progress from audit_instances
       # @return [AuditReport]
       #
-      def health_check(batch_size: 100, sample_size: nil, audit_collections: false, &progress)
+      def health_check(batch_size: 100, sample_size: nil, audit_collections: false,
+                       check_cross_refs: false, &progress)
         start_time = Familia.now
 
         inst = audit_instances(batch_size: batch_size, &progress)
@@ -142,6 +243,7 @@ module Familia
         multi = audit_multi_indexes
         parts = audit_participations(sample_size: sample_size)
         related = audit_collections ? audit_related_fields : nil
+        cross_refs = check_cross_refs ? audit_cross_references(batch_size: batch_size, &progress) : nil
 
         duration = Familia.now - start_time
 
@@ -153,6 +255,7 @@ module Familia
           multi_indexes: multi,
           participations: parts,
           related_fields: related,
+          cross_references: cross_refs,
           duration: duration
         )
       end

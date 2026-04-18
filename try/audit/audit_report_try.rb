@@ -17,6 +17,7 @@ defined?(Familia::Horreum::AuditReport)
   multi_indexes: [],
   participations: [],
   related_fields: [],
+  cross_references: { in_instances_missing_unique_index: [], index_points_to_wrong_identifier: [], status: :ok },
   duration: 0.123
 )
 @healthy_report.class.name
@@ -35,6 +36,7 @@ defined?(Familia::Horreum::AuditReport)
   multi_indexes: [],
   participations: [],
   related_fields: [],
+  cross_references: { in_instances_missing_unique_index: [], index_points_to_wrong_identifier: [], status: :ok },
   duration: 0.1
 )
 @phantom_report.healthy?
@@ -49,6 +51,7 @@ defined?(Familia::Horreum::AuditReport)
   multi_indexes: [],
   participations: [],
   related_fields: [],
+  cross_references: { in_instances_missing_unique_index: [], index_points_to_wrong_identifier: [], status: :ok },
   duration: 0.1
 )
 @missing_report.healthy?
@@ -63,6 +66,7 @@ defined?(Familia::Horreum::AuditReport)
   multi_indexes: [],
   participations: [],
   related_fields: [],
+  cross_references: { in_instances_missing_unique_index: [], index_points_to_wrong_identifier: [], status: :ok },
   duration: 0.1
 )
 @stale_idx_report.healthy?
@@ -77,6 +81,7 @@ defined?(Familia::Horreum::AuditReport)
   multi_indexes: [],
   participations: [{ collection_name: :members, stale_members: [{ identifier: 'gone' }] }],
   related_fields: [],
+  cross_references: { in_instances_missing_unique_index: [], index_points_to_wrong_identifier: [], status: :ok },
   duration: 0.1
 )
 @stale_part_report.healthy?
@@ -124,6 +129,7 @@ h[:healthy]
   multi_indexes: [{ index_name: :role_index, stale_members: [], orphaned_keys: [] }],
   participations: [],
   related_fields: [],
+  cross_references: { in_instances_missing_unique_index: [], index_points_to_wrong_identifier: [], status: :ok },
   duration: 0.05
 )
 @fully_audited_report.complete?
@@ -138,6 +144,7 @@ h[:healthy]
   multi_indexes: [{ index_name: :category_index, stale_members: [], orphaned_keys: [], status: :not_implemented }],
   participations: [],
   related_fields: [],
+  cross_references: { in_instances_missing_unique_index: [], index_points_to_wrong_identifier: [], status: :ok },
   duration: 0.05
 )
 @stub_report.complete?
@@ -156,6 +163,7 @@ h[:healthy]
   multi_indexes: [{ index_name: :role_index, stale_members: [], orphaned_keys: [] }],
   participations: [],
   related_fields: [],
+  cross_references: { in_instances_missing_unique_index: [], index_points_to_wrong_identifier: [], status: :ok },
   duration: 0.05
 )
 @unhealthy_complete_report.healthy?

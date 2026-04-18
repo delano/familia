@@ -278,7 +278,7 @@ arf_reset_model(ARFWithCollections)
 @obj = ARFWithCollections.new(cid: 'clean', name: 'Clean')
 @obj.save
 @obj.sessions.push('s-1')
-ARFWithCollections.health_check(audit_collections: true).complete?
+ARFWithCollections.health_check(audit_collections: true, check_cross_refs: true).complete?
 #=> true
 
 ## health_check with audit_collections: true on clean state: healthy? is true
