@@ -2,6 +2,11 @@ require_relative '../support/helpers/test_helpers'
 
 Familia.debug = false
 
+# TODO: Extend atomic_write coverage to these paths:
+#   - Encrypted fields (features/encrypted_fields) inside atomic_write
+#   - JsonStringKey values participating in the MULTI
+#   - String key type (StringKey, which uses raw-string serialization)
+
 # Primary test class for atomic_write behavior
 class AtomicWriteTestPlan < Familia::Horreum
   identifier_field :planid
@@ -44,6 +49,17 @@ class AtomicWriteCrossDbClassPlan < Familia::Horreum
   field :planid
   field :name
   class_sorted_set :leaderboard, logical_database: 6
+end
+
+# Horreum with no explicit logical_database and a related field that
+# explicitly sets logical_database: 0. Regression fixture for the false-
+# positive guard bug: both sides resolve to 0 at runtime, so
+# guard_atomic_write_database! must not raise.
+class AtomicWriteExplicitZeroPlan < Familia::Horreum
+  identifier_field :planid
+  field :planid
+  field :name
+  set :features, logical_database: 0
 end
 
 # Clean slate
@@ -363,9 +379,88 @@ end
 ]
 #=> [:a_done, [:b_raised, true], "FiberA-Wrote", ["shared_a", "shared_a2"]]
 
+## atomic_write does NOT raise when a related field explicitly sets
+## logical_database: 0 and the Horreum has no explicit logical_database.
+## Regression test for the false-positive guard bug -- both sides must
+## resolve to concrete integers (default 0) before comparison so an
+## explicit "logical_database: 0" is recognised as a match.
+@plan_u = AtomicWriteExplicitZeroPlan.new(planid: 'aw_plan_u', name: 'ExplicitZero')
+@plan_u.save
+@plan_u.atomic_write do
+  @plan_u.name = 'ExplicitZeroUpdated'
+  @plan_u.features.add('zero_ok')
+end
+@u_reloaded = AtomicWriteExplicitZeroPlan.find_by_id('aw_plan_u')
+[@u_reloaded.name, @u_reloaded.features.members]
+#=> ["ExplicitZeroUpdated", ["zero_ok"]]
+
+## same-instance atomic_write across two Threads: second Thread raises
+## OperationModeError. OWNER_STATE_MUTEX serialises the ivar check-then-
+## set so two threads can't both observe a nil owner and simultaneously
+## claim ownership. Uses a Queue as a rendezvous so the threads reliably
+## overlap on @atomic_write_owner.
+@plan_v = AtomicWriteTestPlan.new(planid: 'aw_plan_v', name: 'ThreadSafety-Initial')
+@plan_v.save
+@enter_signal = Queue.new
+@exit_signal = Queue.new
+@thread_b_result = nil
+
+@thread_a = Thread.new do
+  @plan_v.atomic_write do
+    @plan_v.name = 'ThreadA-Wrote'
+    @plan_v.features.add('thread_a')
+    @enter_signal << :a_inside
+    @exit_signal.pop  # hold ownership until B has tried and failed
+  end
+  :a_done
+end
+
+@thread_b = Thread.new do
+  @enter_signal.pop  # wait until A owns the instance
+  begin
+    @plan_v.atomic_write do
+      @plan_v.name = 'ThreadB-Wrote'
+    end
+    :b_done
+  rescue Familia::OperationModeError => e
+    [:b_raised, e.message.include?('another Fiber or Thread')]
+  ensure
+    @exit_signal << :release
+  end
+end
+
+@thread_b_result = @thread_b.value
+@thread_a_result = @thread_a.value
+@v_reloaded = AtomicWriteTestPlan.find_by_id('aw_plan_v')
+[@thread_a_result, @thread_b_result, @v_reloaded.name]
+#=> [:a_done, [:b_raised, true], "ThreadA-Wrote"]
+
+## atomic_write returns false and leaves dirty state intact when the
+## transaction's MultiResult reports a failed command. MULTI/EXEC does not
+## raise for individual command errors -- the server returns an Exception
+## object in that slot -- so relying on `result.nil?` as a success proxy
+## would incorrectly clear_dirty! and flag an actually-failed write as
+## clean. We stub `transaction` on a single instance to deliver a canned
+## MultiResult containing a command-level error and verify:
+##   - atomic_write returns false
+##   - the dirty field is still marked dirty
+@plan_w = AtomicWriteTestPlan.new(planid: 'aw_plan_w', name: 'DirtyBefore')
+@plan_w.save
+@plan_w.name = 'DirtyAfter'  # marks :name dirty
+@failed_result = MultiResult.new(['OK', RuntimeError.new('simulated command failure')])
+@plan_w.define_singleton_method(:transaction) do |&blk|
+  blk.call(nil)  # run the block so scalars/collections are touched
+  @failed_result
+end
+@aw_return = @plan_w.atomic_write { @plan_w.name = 'DirtyAfter' }
+[@aw_return, @plan_w.dirty?, @plan_w.dirty?(:name)]
+#=> [false, true, true]
+
 # Cleanup
 AtomicWriteTestPlan.instances.clear
 AtomicWriteTestPlan.all.each(&:destroy!)
+AtomicWriteExplicitZeroPlan.instances.clear rescue nil
+AtomicWriteExplicitZeroPlan.all.each(&:destroy!) rescue nil
 AtomicWriteExpiringPlan.instances.clear
 AtomicWriteExpiringPlan.all.each(&:destroy!)
 AtomicWriteCrossDbPlan.instances.clear rescue nil

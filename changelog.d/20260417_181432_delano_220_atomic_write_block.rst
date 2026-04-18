@@ -12,6 +12,27 @@ Added
   ``logical_database``; mismatches raise ``Familia::CrossDatabaseError``, in
   which case ``save_with_collections`` remains the appropriate fallback. (#220)
 
+Fixed
+-----
+
+- ``atomic_write`` cross-database guard no longer raises a false positive when
+  a Horreum inherits its ``logical_database`` and a related field explicitly
+  sets ``logical_database: 0``; both sides are now resolved to concrete
+  integers (falling through ``Familia.logical_database`` to ``0``) before
+  comparison. (#220)
+
+- ``atomic_write`` same-instance re-entrancy guard now uses a module-level
+  ``Mutex`` to serialise the ``@atomic_write_owner`` check-then-set, closing
+  a narrow race where two threads entering ``atomic_write`` on the same
+  Horreum instance could both observe a nil owner and proceed into parallel
+  MULTI blocks. (#220)
+
+- ``atomic_write`` now clears the in-memory dirty flag only when the returned
+  ``MultiResult.successful?`` is true, not merely when the result is non-nil.
+  Previously a transaction whose individual commands returned exception
+  objects (which MULTI swallows rather than raising) could leave the object
+  marked clean despite the failed writes. (#220)
+
 AI Assistance
 -------------
 
@@ -21,4 +42,7 @@ AI Assistance
   ``qa-automation-engineer`` agent for the tryouts, and a
   ``feature-dev:code-reviewer`` agent that caught a silent-corruption gap in
   the cross-database guard where class-level related DataTypes were not being
-  inspected. (#220)
+  inspected. Follow-up review items (false-positive guard, re-entrancy race,
+  MultiResult success semantics) were surfaced by the ``gemini-code-assist``
+  review bot and verified by the ``qa-automation-engineer`` and
+  ``feature-dev:code-reviewer`` agents. (#220)
