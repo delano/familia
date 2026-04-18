@@ -179,6 +179,47 @@ module Familia
         { stale_removed: stale_removed }
       end
 
+      # Removes orphaned collection keys detected by audit_related_fields.
+      #
+      # Each entry's orphaned_keys list contains full Redis keys whose
+      # parent Horreum hash no longer exists. This method DELs each of
+      # those keys, tracking successes and failures per key. A
+      # Redis::CommandError on any single DEL is captured in failed_keys
+      # so the rest of the batch can still be processed.
+      #
+      # @param audit_results [Array<Hash>, nil] Results from audit_related_fields
+      #   (runs a fresh audit when nil)
+      # @yield [Hash] Progress: {phase: :repair_related_fields, current:, total:}
+      # @return [Hash] {removed_keys: [key, ...], failed_keys: [{key:, error:}, ...], status:}
+      #
+      def repair_related_fields!(audit_results = nil, &progress)
+        audit_results ||= audit_related_fields
+
+        orphaned_keys = audit_results.flat_map { |entry| Array(entry[:orphaned_keys]) }
+        total = orphaned_keys.size
+
+        removed_keys = []
+        failed_keys = []
+
+        orphaned_keys.each_with_index do |key, idx|
+          begin
+            dbclient.del(key)
+            removed_keys << key
+          rescue Redis::CommandError => e
+            failed_keys << { key: key, error: e.message }
+          end
+          progress&.call(phase: :repair_related_fields, current: idx + 1, total: total)
+        end
+
+        status = removed_keys.empty? && failed_keys.empty? ? :ok : :issues_found
+
+        {
+          removed_keys: removed_keys,
+          failed_keys: failed_keys,
+          status: status,
+        }
+      end
+
       # Runs health_check then all repair methods.
       #
       # @param batch_size [Integer] SCAN batch size
@@ -192,12 +233,21 @@ module Familia
         indexes_result = repair_indexes!(report.unique_indexes)
         participations_result = repair_participations!(report.participations)
 
-        {
+        result = {
           report: report,
           instances: instances_result,
           indexes: indexes_result,
           participations: participations_result,
         }
+
+        # Only repair related fields when the audit actually checked them.
+        # Nil means the caller did not pass audit_collections: true to
+        # health_check, so repair has nothing to act on.
+        unless report.related_fields.nil?
+          result[:related_fields] = repair_related_fields!(report.related_fields, &progress)
+        end
+
+        result
       end
 
       # SCAN helper for enumerating keys matching a pattern.
