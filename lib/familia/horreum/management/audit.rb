@@ -189,21 +189,30 @@ module Familia
 
         instance_ids.each_slice(batch_size) do |batch|
           objects = load_multi(batch)
-          batch.zip(objects).each do |identifier, obj|
-            processed += 1
-            next unless obj
+          processed += batch.size
 
-            class_unique_rels.each do |rel|
+          # Per unique index, collect (identifier, field_value) pairs from live
+          # objects in this batch and resolve them with a single HMGET round
+          # trip instead of one HGET per (object x index) combination.
+          class_unique_rels.each do |rel|
+            next unless respond_to?(rel.index_name)
+
+            lookups = []
+            batch.zip(objects).each do |identifier, obj|
+              next unless obj
+
               field_value = obj.send(rel.field)
               next if field_value.nil? || field_value.to_s.strip.empty?
 
-              field_value_str = field_value.to_s
-              next unless respond_to?(rel.index_name)
+              lookups << [identifier, field_value.to_s]
+            end
+            next if lookups.empty?
 
-              raw_indexed = send(rel.index_name)[field_value_str]
-              indexed_id = raw_indexed
-              indexed_id = indexed_id.identifier if indexed_id.respond_to?(:identifier)
-              indexed_id = indexed_id&.to_s
+            index_dbkey = send(rel.index_name).dbkey
+            raw_values = dbclient.hmget(index_dbkey, *lookups.map(&:last))
+
+            lookups.each_with_index do |(identifier, field_value_str), idx|
+              indexed_id = deserialize_index_value(raw_values[idx])
 
               if indexed_id.nil?
                 in_instances_missing_unique_index << {
@@ -222,6 +231,7 @@ module Familia
               end
             end
           end
+
           progress&.call(phase: :cross_references, current: processed, total: total)
         end
 
@@ -494,21 +504,29 @@ module Familia
       # @return [Hash{String => Hash}] field_value => {key:, identifiers: [...]}
       #
       def discover_multi_index_buckets(rel)
-        bucket_pattern = "#{prefix}:#{rel.index_name}:*"
-        bucket_prefix = "#{prefix}:#{rel.index_name}:"
+        bucket_pattern = "#{prefix}#{Familia.delim}#{rel.index_name}#{Familia.delim}*"
+        bucket_prefix = "#{prefix}#{Familia.delim}#{rel.index_name}#{Familia.delim}"
         bucket_entries = {}
 
-        dbclient.scan_each(match: bucket_pattern) do |key|
-          next unless key.start_with?(bucket_prefix)
+        # Batch SCAN results and pipeline SMEMBERS to collapse one round trip
+        # per bucket key into one round trip per slice of 100 keys.
+        dbclient.scan_each(match: bucket_pattern).each_slice(100) do |keys|
+          valid_keys = keys.select { |k| k.start_with?(bucket_prefix) }
+          next if valid_keys.empty?
 
-          field_value = key[bucket_prefix.length..]
-          next if field_value.nil? || field_value.empty?
+          members_batch = dbclient.pipelined do |pipe|
+            valid_keys.each { |k| pipe.smembers(k) }
+          end
 
-          raw_members = dbclient.smembers(key)
-          bucket_entries[field_value] = {
-            key: key,
-            identifiers: deserialize_index_members(raw_members),
-          }
+          valid_keys.each_with_index do |key, idx|
+            field_value = key[bucket_prefix.length..]
+            next if field_value.nil? || field_value.empty?
+
+            bucket_entries[field_value] = {
+              key: key,
+              identifiers: deserialize_index_members(members_batch[idx]),
+            }
+          end
         end
 
         bucket_entries
@@ -745,11 +763,23 @@ module Familia
         pattern = "#{prefix}#{Familia.delim}*#{Familia.delim}#{field_name}"
         orphaned_keys = []
 
-        dbclient.scan_each(match: pattern) do |key|
-          identifier = extract_identifier_from_key(key, field_name.to_s)
-          next if identifier.nil? || identifier.empty?
+        # Batch SCAN results and pipeline EXISTS checks. Note we use the raw
+        # integer EXISTS command here (not the exists? helper) so the result
+        # inside the pipeline is aligned positionally with batch_map.values.
+        dbclient.scan_each(match: pattern).each_slice(100) do |keys|
+          batch_map = keys.each_with_object({}) do |key, map|
+            id = extract_identifier_from_key(key, field_name.to_s)
+            map[key] = id if id && !id.empty?
+          end
+          next if batch_map.empty?
 
-          orphaned_keys << key unless exists?(identifier)
+          existing_flags = dbclient.pipelined do |pipe|
+            batch_map.values.each { |id| pipe.exists(dbkey(id)) }
+          end
+
+          batch_map.keys.each_with_index do |key, idx|
+            orphaned_keys << key if existing_flags[idx].to_i.zero?
+          end
         end
 
         status = orphaned_keys.empty? ? :ok : :issues_found
@@ -782,6 +812,32 @@ module Familia
             raw
           end
         end
+      end
+
+      # Deserializes a single raw HMGET value from a unique-index hashkey.
+      #
+      # Mirrors HashKey#[] semantics for a hashkey without :class or
+      # :reference options: nil stays nil, JSON parses to the original Ruby
+      # value, and a parse error falls back to the raw string. The result is
+      # coerced to a string identifier for comparison against live object IDs.
+      #
+      # Used by the batched cross-reference audit where raw HMGET is preferred
+      # over per-field HGET to reduce round trips.
+      #
+      # @param raw [String, nil] Single HMGET result value
+      # @return [String, nil] identifier string, or nil when raw is nil
+      #
+      def deserialize_index_value(raw)
+        return nil if raw.nil?
+
+        parsed = begin
+          Familia::JsonSerializer.parse(raw)
+        rescue Familia::SerializerError
+          raw
+        end
+
+        parsed = parsed.identifier if parsed.respond_to?(:identifier)
+        parsed&.to_s
       end
 
       # SCAN helper for finding keys matching a pattern.
