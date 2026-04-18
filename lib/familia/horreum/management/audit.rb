@@ -49,14 +49,27 @@ module Familia
       # - Checks that each indexed object exists and its field value matches
       # - Checks for objects that should be indexed but aren't
       #
+      # @param scanned_identifiers [Array<String>, nil] Internal optimization
+      #   parameter; do not rely on this from external callers. When provided
+      #   (e.g. threaded through from health_check), skips the per-index SCAN
+      #   pass. When omitted, each index computes its own scan.
+      # @param loaded_objects [Array<Horreum>, nil] Internal optimization
+      #   parameter aligned with scanned_identifiers. When provided, skips
+      #   the per-index load_multi call.
       # @return [Array<Hash>] [{index_name:, stale: [...], missing: [...]}]
       #
-      def audit_unique_indexes
+      def audit_unique_indexes(scanned_identifiers: nil, loaded_objects: nil)
         return [] unless respond_to?(:indexing_relationships)
 
         indexing_relationships.select { |r|
           r.cardinality == :unique && r.within.nil?
-        }.map { |rel| audit_single_unique_index(rel) }
+        }.map { |rel|
+          audit_single_unique_index(
+            rel,
+            scanned_identifiers: scanned_identifiers,
+            loaded_objects: loaded_objects,
+          )
+        }
       end
 
       # Audits all multi indexes.
@@ -66,14 +79,25 @@ module Familia
       # - Checks that each member exists and field value matches
       # - Detects orphaned set keys (sets for values no object has)
       #
+      # @param scanned_identifiers [Array<String>, nil] Internal optimization
+      #   parameter; do not rely on this from external callers. When provided,
+      #   skips the per-index SCAN pass used to detect missing buckets.
+      # @param loaded_objects [Array<Horreum>, nil] Internal optimization
+      #   parameter aligned with scanned_identifiers.
       # @return [Array<Hash>] [{index_name:, stale_members: [], orphaned_keys: []}]
       #
-      def audit_multi_indexes
+      def audit_multi_indexes(scanned_identifiers: nil, loaded_objects: nil)
         return [] unless respond_to?(:indexing_relationships)
 
         indexing_relationships.select { |r|
           r.cardinality == :multi
-        }.map { |rel| audit_single_multi_index(rel) }
+        }.map { |rel|
+          audit_single_multi_index(
+            rel,
+            scanned_identifiers: scanned_identifiers,
+            loaded_objects: loaded_objects,
+          )
+        }
       end
 
       # Audits participation collections for stale members.
@@ -239,8 +263,31 @@ module Familia
         start_time = Familia.now
 
         inst = audit_instances(batch_size: batch_size, &progress)
-        uniq = audit_unique_indexes
-        multi = audit_multi_indexes
+
+        # Reuse the SCAN pass and the HGETALL pipeline across both index
+        # audits. Without this, a model with N unique indexes and M multi
+        # indexes would trigger N+M additional SCANs and load_multi round
+        # trips during their "missing" phases.
+        has_indexes = respond_to?(:indexing_relationships) && indexing_relationships.any? { |r|
+          (r.cardinality == :unique && r.within.nil?) || r.cardinality == :multi
+        }
+
+        if has_indexes
+          shared_ids = scan_identifiers(batch_size: batch_size).to_a
+          shared_objects = load_multi(shared_ids)
+        else
+          shared_ids = nil
+          shared_objects = nil
+        end
+
+        uniq = audit_unique_indexes(
+          scanned_identifiers: shared_ids,
+          loaded_objects: shared_objects,
+        )
+        multi = audit_multi_indexes(
+          scanned_identifiers: shared_ids,
+          loaded_objects: shared_objects,
+        )
         parts = audit_participations(sample_size: sample_size)
         related = audit_collections ? audit_related_fields : nil
         cross_refs = check_cross_refs ? audit_cross_references(batch_size: batch_size, &progress) : nil
@@ -294,9 +341,13 @@ module Familia
       # Audit a single unique index (class-level).
       #
       # @param rel [IndexingRelationship]
+      # @param scanned_identifiers [Array<String>, nil] Optional cached SCAN
+      #   result; when provided, skips the per-index SCAN pass.
+      # @param loaded_objects [Array<Horreum>, nil] Optional cached load_multi
+      #   result aligned with scanned_identifiers.
       # @return [Hash] {index_name:, stale: [], missing: []}
       #
-      def audit_single_unique_index(rel)
+      def audit_single_unique_index(rel, scanned_identifiers: nil, loaded_objects: nil)
         index_name = rel.index_name
         field = rel.field
         stale = []
@@ -342,8 +393,8 @@ module Familia
         # SCAN for all hash keys (source of truth) instead of relying on
         # the instances timeline, which may contain ghosts or miss entries.
         indexed_values = entries.keys.to_set
-        all_identifiers = scan_identifiers.to_a
-        all_objects = load_multi(all_identifiers)
+        all_identifiers = scanned_identifiers || scan_identifiers.to_a
+        all_objects = loaded_objects || load_multi(all_identifiers)
 
         all_identifiers.each_with_index do |identifier, idx|
           obj = all_objects[idx]
@@ -368,9 +419,11 @@ module Familia
       # path is not implemented yet and returns status: :not_implemented.
       #
       # @param rel [IndexingRelationship]
+      # @param scanned_identifiers [Array<String>, nil] Optional cached SCAN result.
+      # @param loaded_objects [Array<Horreum>, nil] Optional cached load_multi result.
       # @return [Hash] {index_name:, stale_members: [], missing: [], orphaned_keys: [], status:}
       #
-      def audit_single_multi_index(rel)
+      def audit_single_multi_index(rel, scanned_identifiers: nil, loaded_objects: nil)
         index_name = rel.index_name
 
         unless rel.class_level?
@@ -386,7 +439,11 @@ module Familia
           }
         end
 
-        audit_class_level_multi_index(rel)
+        audit_class_level_multi_index(
+          rel,
+          scanned_identifiers: scanned_identifiers,
+          loaded_objects: loaded_objects,
+        )
       end
 
       # Audit a class-level multi index.
@@ -399,14 +456,21 @@ module Familia
       # Key layout: "{prefix}:{index_name}:{field_value}"
       #
       # @param rel [IndexingRelationship]
+      # @param scanned_identifiers [Array<String>, nil] Optional cached SCAN result.
+      # @param loaded_objects [Array<Horreum>, nil] Optional cached load_multi result.
       # @return [Hash] {index_name:, stale_members:, missing:, orphaned_keys:, status:}
       #
-      def audit_class_level_multi_index(rel)
+      def audit_class_level_multi_index(rel, scanned_identifiers: nil, loaded_objects: nil)
         bucket_entries = discover_multi_index_buckets(rel)
         discovered_field_values = bucket_entries.keys.to_set
 
         stale_members = detect_multi_index_stale_members(rel, bucket_entries)
-        missing, actual_field_values = detect_multi_index_missing(rel, discovered_field_values)
+        missing, actual_field_values = detect_multi_index_missing(
+          rel,
+          discovered_field_values,
+          scanned_identifiers: scanned_identifiers,
+          loaded_objects: loaded_objects,
+        )
         orphaned_keys = detect_multi_index_orphaned_keys(bucket_entries, actual_field_values)
 
         status = if stale_members.empty? && missing.empty? && orphaned_keys.empty?
@@ -502,12 +566,14 @@ module Familia
       #
       # @param rel [IndexingRelationship]
       # @param discovered_field_values [Set<String>]
+      # @param scanned_identifiers [Array<String>, nil] Optional cached SCAN result.
+      # @param loaded_objects [Array<Horreum>, nil] Optional cached load_multi result.
       # @return [Array(Array<Hash>, Set<String>)] missing entries and the set of
       #   field values observed on live objects
       #
-      def detect_multi_index_missing(rel, discovered_field_values)
-        all_identifiers = scan_identifiers.to_a
-        all_objects = load_multi(all_identifiers)
+      def detect_multi_index_missing(rel, discovered_field_values, scanned_identifiers: nil, loaded_objects: nil)
+        all_identifiers = scanned_identifiers || scan_identifiers.to_a
+        all_objects = loaded_objects || load_multi(all_identifiers)
         actual_field_values = Set.new
         missing = []
 

@@ -62,6 +62,30 @@ M3ScopeTarget.instances.clear
 M3ScopedModel.instances.clear
 M3ClassScopedModel.instances.clear
 
+# Reset helper for class-scoped testcases: wipes all M3ClassScopedModel keys
+# (hash keys plus role_index buckets) and clears the instances timeline, then
+# re-seeds the canonical baseline of three objects (two admins, one member)
+# into @cs1/@cs2/@cs3. Each class-scoped testcase invokes this at the top so
+# it runs correctly in isolation.
+def m3cs_reset_model
+  existing = Familia.dbclient.keys("#{M3ClassScopedModel.prefix}:*")
+  Familia.dbclient.del(*existing) if existing.any?
+rescue StandardError
+  # ignore cleanup errors
+ensure
+  M3ClassScopedModel.instances.clear if M3ClassScopedModel.respond_to?(:instances)
+end
+
+def m3cs_seed_baseline
+  m3cs_reset_model
+  @cs1 = M3ClassScopedModel.new(csid: 'csid-1', role: 'admin', name: 'One')
+  @cs1.save
+  @cs2 = M3ClassScopedModel.new(csid: 'csid-2', role: 'admin', name: 'Two')
+  @cs2.save
+  @cs3 = M3ClassScopedModel.new(csid: 'csid-3', role: 'member', name: 'Three')
+  @cs3.save
+end
+
 ## audit_multi_indexes on class without indexes returns empty array
 M3PlainModel.audit_multi_indexes
 #=> []
@@ -126,51 +150,51 @@ M3PlainModel.health_check(audit_collections: true, check_cross_refs: true).compl
 #=> true
 
 ## Class-scoped multi-index audit returns one result on healthy baseline
-M3ClassScopedModel.instances.clear
-existing = Familia.dbclient.keys("#{M3ClassScopedModel.prefix}:*")
-Familia.dbclient.del(*existing) if existing.any?
-@cs1 = M3ClassScopedModel.new(csid: 'csid-1', role: 'admin', name: 'One')
-@cs1.save
-@cs2 = M3ClassScopedModel.new(csid: 'csid-2', role: 'admin', name: 'Two')
-@cs2.save
-@cs3 = M3ClassScopedModel.new(csid: 'csid-3', role: 'member', name: 'Three')
-@cs3.save
+m3cs_seed_baseline
 @class_results = M3ClassScopedModel.audit_multi_indexes
 @class_results.size
 #=> 1
 
 ## Healthy baseline: status is :ok
-@class_results.first[:status]
+m3cs_seed_baseline
+M3ClassScopedModel.audit_multi_indexes.first[:status]
 #=> :ok
 
 ## Healthy baseline: stale_members is empty
-@class_results.first[:stale_members]
+m3cs_seed_baseline
+M3ClassScopedModel.audit_multi_indexes.first[:stale_members]
 #=> []
 
 ## Healthy baseline: missing is empty
-@class_results.first[:missing]
+m3cs_seed_baseline
+M3ClassScopedModel.audit_multi_indexes.first[:missing]
 #=> []
 
 ## Healthy baseline: orphaned_keys is empty
-@class_results.first[:orphaned_keys]
+m3cs_seed_baseline
+M3ClassScopedModel.audit_multi_indexes.first[:orphaned_keys]
 #=> []
 
 ## Healthy baseline: index_name is correct
-@class_results.first[:index_name]
+m3cs_seed_baseline
+M3ClassScopedModel.audit_multi_indexes.first[:index_name]
 #=> :role_index
 
 ## Stale (object_missing): delete hash key directly
+m3cs_seed_baseline
 M3ClassScopedModel.dbclient.del(M3ClassScopedModel.dbkey('csid-2'))
 @stale_result = M3ClassScopedModel.audit_multi_indexes.first
 @stale_result[:stale_members].any? { |m| m[:indexed_id] == 'csid-2' && m[:reason] == :object_missing }
 #=> true
 
 ## Stale (object_missing): status transitions to :issues_found
-@stale_result[:status]
+m3cs_seed_baseline
+M3ClassScopedModel.dbclient.del(M3ClassScopedModel.dbkey('csid-2'))
+M3ClassScopedModel.audit_multi_indexes.first[:status]
 #=> :issues_found
 
 ## Stale (value_mismatch): mutate field directly via HSET
-@cs2.save
+m3cs_seed_baseline
 M3ClassScopedModel.dbclient.hset(M3ClassScopedModel.dbkey('csid-1'), 'role', '"manager"')
 @mm_result = M3ClassScopedModel.audit_multi_indexes.first
 @mismatch = @mm_result[:stale_members].find { |m| m[:indexed_id] == 'csid-1' }
@@ -178,20 +202,30 @@ M3ClassScopedModel.dbclient.hset(M3ClassScopedModel.dbkey('csid-1'), 'role', '"m
 #=> :value_mismatch
 
 ## Stale (value_mismatch): field_value reflects old bucket
+m3cs_seed_baseline
+M3ClassScopedModel.dbclient.hset(M3ClassScopedModel.dbkey('csid-1'), 'role', '"manager"')
+@mm_result = M3ClassScopedModel.audit_multi_indexes.first
+@mismatch = @mm_result[:stale_members].find { |m| m[:indexed_id] == 'csid-1' }
 @mismatch[:field_value]
 #=> "admin"
 
 ## Stale (value_mismatch): current_value reflects new field value
+m3cs_seed_baseline
+M3ClassScopedModel.dbclient.hset(M3ClassScopedModel.dbkey('csid-1'), 'role', '"manager"')
+@mm_result = M3ClassScopedModel.audit_multi_indexes.first
+@mismatch = @mm_result[:stale_members].find { |m| m[:indexed_id] == 'csid-1' }
 @mismatch[:current_value]
 #=> "manager"
 
 ## Stale (value_mismatch): missing entry added for new field value bucket
+m3cs_seed_baseline
+M3ClassScopedModel.dbclient.hset(M3ClassScopedModel.dbkey('csid-1'), 'role', '"manager"')
+@mm_result = M3ClassScopedModel.audit_multi_indexes.first
 @mm_result[:missing].any? { |m| m[:identifier] == 'csid-1' && m[:field_value] == 'manager' }
 #=> true
 
 ## Missing: create an object whose field value bucket does not exist
-@cs1.role = 'admin'
-@cs1.save
+m3cs_seed_baseline
 @raw_id = 'csid-raw-1'
 M3ClassScopedModel.dbclient.hset(
   M3ClassScopedModel.dbkey(@raw_id),
@@ -204,11 +238,19 @@ M3ClassScopedModel.dbclient.hset(
 #=> true
 
 ## Missing: status is :issues_found
-@missing_result[:status]
+m3cs_seed_baseline
+@raw_id = 'csid-raw-1'
+M3ClassScopedModel.dbclient.hset(
+  M3ClassScopedModel.dbkey(@raw_id),
+  'csid', '"csid-raw-1"',
+  'role', '"observer"',
+  'name', '"Raw"',
+)
+M3ClassScopedModel.audit_multi_indexes.first[:status]
 #=> :issues_found
 
 ## Orphaned: manually SADD a bucket that no object holds
-M3ClassScopedModel.dbclient.del(M3ClassScopedModel.dbkey('csid-raw-1'))
+m3cs_seed_baseline
 @orphan_key = "#{M3ClassScopedModel.prefix}:role_index:ghost"
 M3ClassScopedModel.dbclient.sadd(@orphan_key, '"phantom"')
 @orphan_result = M3ClassScopedModel.audit_multi_indexes.first
@@ -216,11 +258,14 @@ M3ClassScopedModel.dbclient.sadd(@orphan_key, '"phantom"')
 #=> true
 
 ## Orphaned: status is :issues_found
-@orphan_result[:status]
+m3cs_seed_baseline
+@orphan_key = "#{M3ClassScopedModel.prefix}:role_index:ghost"
+M3ClassScopedModel.dbclient.sadd(@orphan_key, '"phantom"')
+M3ClassScopedModel.audit_multi_indexes.first[:status]
 #=> :issues_found
 
 ## Nil field value is skipped gracefully
-M3ClassScopedModel.dbclient.del(@orphan_key)
+m3cs_seed_baseline
 @cs_nil = M3ClassScopedModel.new(csid: 'csid-nil', role: nil, name: 'Nil')
 @cs_nil.save
 @nil_result = M3ClassScopedModel.audit_multi_indexes.first
@@ -228,8 +273,19 @@ M3ClassScopedModel.dbclient.del(@orphan_key)
 #=> false
 
 ## Nil field value does not produce stale members either
-@nil_result[:stale_members].any? { |m| m[:indexed_id] == 'csid-nil' }
+m3cs_seed_baseline
+@cs_nil = M3ClassScopedModel.new(csid: 'csid-nil', role: nil, name: 'Nil')
+@cs_nil.save
+M3ClassScopedModel.audit_multi_indexes.first[:stale_members].any? { |m| m[:indexed_id] == 'csid-nil' }
 #=> false
+
+## Standalone call without scanned_identifiers cache still audits correctly
+# Guards the fallback path when audit_multi_indexes is called directly
+# (outside health_check) so the internal cache kwargs are nil.
+m3cs_seed_baseline
+@standalone_multi = M3ClassScopedModel.audit_multi_indexes
+[@standalone_multi.size, @standalone_multi.first[:index_name]]
+#=> [1, :role_index]
 
 ## Missing entries on class-level multi-index make the report unhealthy and surface in to_h/to_s
 # Inline setup: fresh model and fresh state so the assertion does not depend on prior testcases.
