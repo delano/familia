@@ -56,7 +56,7 @@ module Familia
       # redis.exists returns Integer across all supported redis-rb versions;
       # using > 0 also tolerates a future boolean return without breaking.
       unless redis.exists(temp_key) > 0
-        Familia.info "[Rebuild] No temp key to swap (empty result set)"
+        Familia.info "[AtomicOp] No temp key to swap (empty result set)"
         # Empty rebuild: remove the live index so reads reflect zero members.
         # This is the one path where readers can legitimately see final_key
         # as absent -- the index genuinely has no entries.
@@ -69,17 +69,17 @@ module Familia
       # swap. A preceding DEL would open a gap where concurrent HGETs
       # return nil.
       redis.rename(temp_key, final_key)
-      Familia.info "[Rebuild] Atomic swap completed: #{temp_key} -> #{final_key}"
+      Familia.info "[AtomicOp] Atomic swap completed: #{temp_key} -> #{final_key}"
     rescue Redis::CommandError => e
       # If temp key doesn't exist, just log and return (already handled above)
       if e.message.include?("no such key")
-        Familia.info "[Rebuild] Temp key vanished during swap (concurrent operation?)"
+        Familia.info "[AtomicOp] Temp key vanished during swap (concurrent operation?)"
         return
       end
 
       # For other errors, preserve temp key for debugging
-      Familia.warn "[Rebuild] Atomic swap failed: #{e.message}"
-      Familia.warn "[Rebuild] Temp key preserved for debugging: #{temp_key}"
+      Familia.warn "[AtomicOp] Atomic swap failed: #{e.message}"
+      Familia.warn "[AtomicOp] Temp key preserved for debugging: #{temp_key}"
       raise
     end
   end
