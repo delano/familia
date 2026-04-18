@@ -7,6 +7,116 @@ The format is based on `Keep a Changelog <https://keepachangelog.com/en/1.1.0/>`
 
    <!--scriv-insert-here-->
 
+.. _changelog-2.6.0:
+
+2.6.0 — 2026-04-17
+==================
+
+Added
+-----
+
+- ``audit_multi_indexes`` detects drift in class-level multi-indexes via a
+  three-phase sweep (stale members, missing live objects, orphaned buckets).
+  Instance-scoped indexes (``within:``) return ``:not_implemented``. PR #221
+
+- ``audit_related_fields`` SCANs for instance-level collection keys
+  (``list``, ``set``, ``zset``, ``hashkey``) whose parent hash no longer
+  exists -- typically left behind by interrupted ``destroy!`` calls or
+  external key mutation. Class-level related fields are skipped. PR #221
+
+- ``audit_cross_references`` walks live identifiers against class-level
+  unique indexes to surface drift modes per-registry audits miss:
+  ``in_instances_missing_unique_index`` and
+  ``index_points_to_wrong_identifier`` (split-brain). PR #221
+
+- ``repair_related_fields!`` class method DELs orphaned collection keys
+  from an audit result and returns ``{removed_keys:, failed_keys:,
+  status:}``. ``repair_all!`` gains opt-in ``audit_collections:`` and
+  ``check_cross_refs:`` kwargs (both default ``false``); only
+  ``related_fields`` is auto-repaired, cross-reference drift is
+  reported for manual resolution. PR #221
+
+- ``Familia::AtomicOperations`` module exposing ``atomic_swap`` and
+  ``build_temp_key`` as reusable primitives for rebuild-then-swap
+  workflows (relies on native ``RENAME`` atomicity). PR #221
+
+- ``Horreum#atomic_write(&block)`` wraps scalar persistence and
+  collection mutations in a single MULTI/EXEC. Unlike
+  ``save_with_collections``, failures roll back scalars too. All
+  participating DataTypes must share ``logical_database``; mismatches
+  raise ``Familia::CrossDatabaseError``. (#220)
+
+Changed
+-------
+
+- ``health_check`` accepts new opt-in kwargs ``audit_collections:`` and
+  ``check_cross_refs:`` (both default ``false``). When omitted, the
+  corresponding report dimensions are ``nil`` and ``complete?`` returns
+  ``false`` until opted in. PR #221
+
+- ``atomic_swap`` and ``build_temp_key`` relocated from
+  ``Indexing::RebuildStrategies`` to ``Familia::AtomicOperations``.
+  Internal callers delegate through; downstream direct callers should
+  switch. Semantics preserved verbatim from PR #247. PR #221
+
+- ``health_check`` now reuses a single ``scan_identifiers`` +
+  ``load_multi`` pass across unique- and multi-index audits, reducing
+  SCANs from ``1 + N + M`` to ``2`` regardless of declared indexes.
+  Behavior and return shapes unchanged. PR #221
+
+- Audit methods pipeline batched Redis calls: ``audit_cross_references``
+  uses HMGET per batch instead of per-object HGET;
+  ``discover_multi_index_buckets`` and ``audit_single_related_field``
+  batch SCAN results in slices of 100 inside ``pipelined`` blocks,
+  collapsing M round trips to ~M/100. PR #221
+
+Fixed
+-----
+
+- ``AuditReport#healthy?`` now considers multi-index ``missing`` entries;
+  ``to_h`` / ``to_s`` include the ``missing`` count. Previously a report
+  could show ``issues_found`` while ``healthy?`` returned true. PR #221
+
+- ``atomic_write`` cross-database guard no longer false-positives when a
+  Horreum inherits its ``logical_database`` and a related field explicitly
+  sets ``logical_database: 0``. Both sides now resolve to concrete
+  integers before comparison. (#220)
+
+- ``atomic_write`` same-instance re-entrancy guard now uses a module-level
+  ``Mutex`` to serialise the ``@atomic_write_owner`` check-then-set,
+  closing a narrow race between concurrent entries. (#220)
+
+- ``atomic_write`` clears the dirty flag only when
+  ``MultiResult.successful?`` is true. Previously transactions whose
+  individual commands returned exception objects (MULTI swallows these)
+  could leave the object marked clean. (#220)
+
+- ``Horreum.scan_pattern``, ``discover_multi_index_buckets``, and
+  ``audit_instance_participations`` now respect ``Familia.delim`` instead
+  of hardcoding ``:``. Under a custom delim, every audit grounded in
+  these SCANs (instances, unique, multi, cross-references, participations)
+  silently saw zero keys and reported clean. PR #221
+
+AI Assistance
+-------------
+
+- Implementation and test coverage for the new audit dimensions
+  (``audit_multi_indexes``, ``audit_related_fields``,
+  ``audit_cross_references``, ``repair_related_fields!``), the
+  ``AuditReport`` extensions, the ``healthy?``/``to_h``/``to_s`` fix, the
+  ``Familia::AtomicOperations`` extraction, the ``health_check`` caching
+  refactor, and the four audit performance/correctness fixes
+  (delimiter-aware SCAN, batched HMGET, pipelined SMEMBERS, pipelined
+  EXISTS) were authored with AI assistance. PR #221
+
+- ``atomic_write`` design, implementation, tests, and review were
+  coordinated across Claude Code agents (``feature-dev:code-architect``,
+  ``backend-dev``, ``qa-automation-engineer``,
+  ``feature-dev:code-reviewer``). The reviewer caught a silent-corruption
+  gap in the cross-database guard; follow-up fixes (false-positive guard,
+  re-entrancy race, MultiResult success semantics) were surfaced by
+  ``gemini-code-assist`` and verified by the QA and reviewer agents. (#220)
+
 .. _changelog-2.5.0:
 
 2.5.0 — 2026-04-17
