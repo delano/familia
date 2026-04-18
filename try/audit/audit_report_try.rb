@@ -126,7 +126,7 @@ h[:healthy]
   audited_at: Familia.now,
   instances: { phantoms: [], missing: [], count_timeline: 5, count_scan: 5 },
   unique_indexes: [],
-  multi_indexes: [{ index_name: :role_index, stale_members: [], orphaned_keys: [] }],
+  multi_indexes: [{ index_name: :role_index, stale_members: [], orphaned_keys: [], missing: [] }],
   participations: [],
   related_fields: [],
   cross_references: { in_instances_missing_unique_index: [], index_points_to_wrong_identifier: [], status: :ok },
@@ -141,7 +141,7 @@ h[:healthy]
   audited_at: Familia.now,
   instances: { phantoms: [], missing: [], count_timeline: 5, count_scan: 5 },
   unique_indexes: [],
-  multi_indexes: [{ index_name: :category_index, stale_members: [], orphaned_keys: [], status: :not_implemented }],
+  multi_indexes: [{ index_name: :category_index, stale_members: [], orphaned_keys: [], missing: [], status: :not_implemented }],
   participations: [],
   related_fields: [],
   cross_references: { in_instances_missing_unique_index: [], index_points_to_wrong_identifier: [], status: :ok },
@@ -160,7 +160,7 @@ h[:healthy]
   audited_at: Familia.now,
   instances: { phantoms: ['ghost-1'], missing: [], count_timeline: 6, count_scan: 5 },
   unique_indexes: [],
-  multi_indexes: [{ index_name: :role_index, stale_members: [], orphaned_keys: [] }],
+  multi_indexes: [{ index_name: :role_index, stale_members: [], orphaned_keys: [], missing: [] }],
   participations: [],
   related_fields: [],
   cross_references: { in_instances_missing_unique_index: [], index_points_to_wrong_identifier: [], status: :ok },
@@ -196,3 +196,26 @@ h[:healthy]
 ## to_h omits status key for fully audited multi-index
 @fully_audited_report.to_h[:multi_indexes].first.key?(:status)
 #=> false
+
+## healthy? returns false when multi_index has missing entries (regression guard)
+@missing_multi_report = Familia::Horreum::AuditReport.new(
+  model_class: 'TestModel',
+  audited_at: Familia.now,
+  instances: { phantoms: [], missing: [], count_timeline: 5, count_scan: 5 },
+  unique_indexes: [],
+  multi_indexes: [{ index_name: :role_index, stale_members: [], orphaned_keys: [], missing: [{ identifier: 'foo', field_value: 'bar' }], status: :issues_found }],
+  participations: [],
+  related_fields: [],
+  cross_references: { in_instances_missing_unique_index: [], index_points_to_wrong_identifier: [], status: :ok },
+  duration: 0.05
+)
+@missing_multi_report.healthy?
+#=> false
+
+## to_h surfaces multi_index missing count
+@missing_multi_report.to_h[:multi_indexes].first[:missing]
+#=> 1
+
+## to_s includes missing token for multi_index
+@missing_multi_report.to_s.include?('missing=1')
+#=> true

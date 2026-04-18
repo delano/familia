@@ -231,6 +231,39 @@ M3ClassScopedModel.dbclient.del(@orphan_key)
 @nil_result[:stale_members].any? { |m| m[:indexed_id] == 'csid-nil' }
 #=> false
 
+## Missing entries on class-level multi-index make the report unhealthy and surface in to_h/to_s
+# Inline setup: fresh model and fresh state so the assertion does not depend on prior testcases.
+class M3MissingFlagModel < Familia::Horreum
+  feature :relationships
+  identifier_field :mfid
+  field :mfid
+  field :role
+  field :name
+  multi_index :role, :role_index
+end
+M3MissingFlagModel.instances.clear
+existing_mfm = Familia.dbclient.keys("#{M3MissingFlagModel.prefix}:*")
+Familia.dbclient.del(*existing_mfm) if existing_mfm.any?
+@mf1 = M3MissingFlagModel.new(mfid: 'mf-1', role: 'admin', name: 'One')
+@mf1.save
+# Inject a live object via direct HSET, bypassing the index-update write path.
+M3MissingFlagModel.dbclient.hset(
+  M3MissingFlagModel.dbkey('mf-raw'),
+  'mfid', '"mf-raw"',
+  'role', '"observer"',
+  'name', '"Raw"',
+)
+@mf_report = M3MissingFlagModel.health_check
+[@mf_report.healthy?,
+ @mf_report.to_h[:multi_indexes].first[:missing],
+ @mf_report.to_s.include?('missing=1')]
+#=> [false, 1, true]
+
+# Cleanup for the inline test
+existing_mfm_cleanup = Familia.dbclient.keys("#{M3MissingFlagModel.prefix}:*")
+Familia.dbclient.del(*existing_mfm_cleanup) if existing_mfm_cleanup.any?
+M3MissingFlagModel.instances.clear
+
 # Teardown
 begin
   [M3PlainModel, M3ScopeTarget, M3ScopedModel, M3ClassScopedModel].each do |klass|

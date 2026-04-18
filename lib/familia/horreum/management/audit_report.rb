@@ -15,7 +15,7 @@ module Familia
       :audited_at,         # Float - timestamp when audit started
       :instances,          # Hash {phantoms: [], missing: [], count_timeline: N, count_scan: N}
       :unique_indexes,     # Array<Hash> [{index_name:, stale: [], missing: []}]
-      :multi_indexes,      # Array<Hash> [{index_name:, stale_members: [], orphaned_keys: []}]
+      :multi_indexes,      # Array<Hash> [{index_name:, stale_members: [], orphaned_keys: [], missing: []}]
       :participations,     # Array<Hash> [{collection_name:, stale_members: []}]
       # nil = not checked; [] = no fields; [{field_name:, klass:, orphaned_keys:, count:, status:}]
       :related_fields,
@@ -36,7 +36,7 @@ module Familia
           multi_indexes.all? { |idx|
             next true if idx[:status] == :not_implemented
 
-            idx[:stale_members].empty? && idx[:orphaned_keys].empty?
+            idx[:stale_members].empty? && idx[:orphaned_keys].empty? && idx[:missing].empty?
           } &&
           participations.all? { |p| p[:stale_members].empty? } &&
           related_fields_healthy? &&
@@ -73,7 +73,7 @@ module Familia
             { index_name: idx[:index_name], stale: idx[:stale].size, missing: idx[:missing].size }
           },
           multi_indexes: multi_indexes.map { |idx|
-            entry = { index_name: idx[:index_name], stale_members: idx[:stale_members].size, orphaned_keys: idx[:orphaned_keys].size }
+            entry = { index_name: idx[:index_name], stale_members: idx[:stale_members].size, orphaned_keys: idx[:orphaned_keys].size, missing: idx[:missing].size }
             entry[:status] = idx[:status] if idx[:status]
             entry
           },
@@ -104,7 +104,7 @@ module Familia
             lines << "  multi_index :#{idx[:index_name]}: not_implemented"
           else
             lines << "  multi_index :#{idx[:index_name]}: stale_members=#{idx[:stale_members].size}" \
-                     " orphaned_keys=#{idx[:orphaned_keys].size}"
+                     " orphaned_keys=#{idx[:orphaned_keys].size} missing=#{idx[:missing].size}"
           end
         end
 
