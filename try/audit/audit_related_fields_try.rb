@@ -337,6 +337,26 @@ arf_reset_model(ARFWithCollections)
 ARFWithCollections.health_check(audit_collections: true).to_s.include?('related_field :sessions')
 #=> true
 
+## related_fields entry carries exactly the documented key shape
+# audit_related_fields returns entries with {:field_name, :klass, :orphaned_keys, :count, :status}.
+# Test against report.related_fields (the raw array) since to_h collapses orphaned_keys to a count.
+arf_reset_model(ARFWithCollections)
+@obj = ARFWithCollections.new(cid: 'clean', name: 'Clean')
+@obj.save
+@obj.sessions.push('s-1')
+@report = ARFWithCollections.health_check(audit_collections: true)
+@entry = @report.related_fields.first
+@entry.keys.sort
+#=> [:count, :field_name, :klass, :orphaned_keys, :status]
+
+## complete? is false when audit_collections: true but check_cross_refs is left off
+arf_reset_model(ARFWithCollections)
+@obj = ARFWithCollections.new(cid: 'cr-off', name: 'NoCR')
+@obj.save
+@obj.sessions.push('s-1')
+ARFWithCollections.health_check(audit_collections: true).complete?
+#=> false
+
 # Teardown
 arf_reset_model(ARFPlainModel)
 arf_reset_model(ARFWithCollections)

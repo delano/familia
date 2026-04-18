@@ -438,6 +438,62 @@ ACRIndexedUser.health_check(check_cross_refs: true).to_s.include?('cross_referen
 @complete_report.complete?
 #=> true
 
+## Phantom in instances ZSET (no hash key) is ignored by cross_references audit
+acr_reset(ACRIndexedUser)
+ACRIndexedUser.email_index.clear
+@u1 = ACRIndexedUser.new(user_id: 'cr-live', email: 'live@example.com', name: 'Live')
+@u1.save
+ACRIndexedUser.instances.add('ghost-id', Familia.now)
+@phantom_result = ACRIndexedUser.audit_cross_references
+[@phantom_result[:in_instances_missing_unique_index],
+ @phantom_result[:index_points_to_wrong_identifier]]
+#=> [[], []]
+
+## Combined drift: missing index entry AND wrong identifier surface together
+acr_reset(ACRIndexedUser)
+ACRIndexedUser.email_index.clear
+@u_miss = ACRIndexedUser.new(user_id: 'cb-miss', email: 'miss@example.com', name: 'Miss')
+@u_miss.save
+@u_wrong = ACRIndexedUser.new(user_id: 'cb-wrong', email: 'wrong@example.com', name: 'Wrong')
+@u_wrong.save
+Familia.dbclient.hdel(ACRIndexedUser.email_index.dbkey, 'miss@example.com')
+Familia.dbclient.hset(ACRIndexedUser.email_index.dbkey, 'wrong@example.com', '"other-id"')
+@combined = ACRIndexedUser.audit_cross_references
+[@combined[:in_instances_missing_unique_index].any? { |r| r[:identifier] == 'cb-miss' },
+ @combined[:index_points_to_wrong_identifier].any? { |r| r[:expected_id] == 'cb-wrong' && r[:index_id] == 'other-id' },
+ @combined[:status]]
+#=> [true, true, :issues_found]
+
+## Progress callback yields phase: :cross_references with current/total keys
+acr_reset(ACRIndexedUser)
+ACRIndexedUser.email_index.clear
+@u1 = ACRIndexedUser.new(user_id: 'pc-1', email: 'pc1@example.com', name: 'PC1')
+@u1.save
+@progress_calls = []
+ACRIndexedUser.audit_cross_references do |info|
+  @progress_calls << info
+end
+@progress_calls.any? { |p| p[:phase] == :cross_references && p.key?(:current) && p.key?(:total) }
+#=> true
+
+## Non-default batch_size produces identical result to default
+acr_reset(ACRIndexedUser)
+ACRIndexedUser.email_index.clear
+@s1 = ACRIndexedUser.new(user_id: 'bs-1', email: 'bs1@example.com', name: 'One')
+@s1.save
+@s2 = ACRIndexedUser.new(user_id: 'bs-2', email: 'bs2@example.com', name: 'Two')
+@s2.save
+@s3 = ACRIndexedUser.new(user_id: 'bs-3', email: 'bs3@example.com', name: 'Three')
+@s3.save
+@s4 = ACRIndexedUser.new(user_id: 'bs-4', email: 'bs4@example.com', name: 'Four')
+@s4.save
+@s5 = ACRIndexedUser.new(user_id: 'bs-5', email: 'bs5@example.com', name: 'Five')
+@s5.save
+@default_result = ACRIndexedUser.audit_cross_references
+@batched_result = ACRIndexedUser.audit_cross_references(batch_size: 2)
+@default_result == @batched_result
+#=> true
+
 # Teardown
 acr_reset(ACRPlainModel)
 acr_reset(ACRIndexedUser)

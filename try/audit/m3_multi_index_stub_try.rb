@@ -320,6 +320,24 @@ existing_mfm_cleanup = Familia.dbclient.keys("#{M3MissingFlagModel.prefix}:*")
 Familia.dbclient.del(*existing_mfm_cleanup) if existing_mfm_cleanup.any?
 M3MissingFlagModel.instances.clear
 
+## Duplicate identifiers in same bucket: two admins are both valid, no drift reported
+m3cs_reset_model
+@dup1 = M3ClassScopedModel.new(csid: 'dup-1', role: 'admin', name: 'DupOne')
+@dup1.save
+@dup2 = M3ClassScopedModel.new(csid: 'dup-2', role: 'admin', name: 'DupTwo')
+@dup2.save
+@dup_result = M3ClassScopedModel.audit_multi_indexes.first
+[@dup_result[:stale_members], @dup_result[:missing]]
+#=> [[], []]
+
+## Malformed JSON in bucket is tolerated: audit completes and classifies as object_missing
+m3cs_seed_baseline
+@malformed_key = "#{M3ClassScopedModel.prefix}:role_index:admin"
+M3ClassScopedModel.dbclient.sadd(@malformed_key, 'raw-not-json')
+@malformed_result = M3ClassScopedModel.audit_multi_indexes.first
+@malformed_result[:stale_members].any? { |m| m[:indexed_id] == 'raw-not-json' && m[:reason] == :object_missing }
+#=> true
+
 # Teardown
 begin
   [M3PlainModel, M3ScopeTarget, M3ScopedModel, M3ClassScopedModel].each do |klass|

@@ -219,3 +219,33 @@ h[:healthy]
 ## to_s includes missing token for multi_index
 @missing_multi_report.to_s.include?('missing=1')
 #=> true
+
+## related_fields nil makes complete? false even when cross_references present
+@nil_rf_report = Familia::Horreum::AuditReport.new(
+  model_class: 'TestModel',
+  audited_at: Familia.now,
+  instances: { phantoms: [], missing: [], count_timeline: 0, count_scan: 0 },
+  unique_indexes: [],
+  multi_indexes: [],
+  participations: [],
+  related_fields: nil,
+  cross_references: { in_instances_missing_unique_index: [], index_points_to_wrong_identifier: [], status: :ok },
+  duration: 0.05
+)
+@nil_rf_report.complete?
+#=> false
+
+## related_fields with orphans makes healthy? false
+@orphan_rf_report = Familia::Horreum::AuditReport.new(
+  model_class: 'TestModel',
+  audited_at: Familia.now,
+  instances: { phantoms: [], missing: [], count_timeline: 0, count_scan: 0 },
+  unique_indexes: [],
+  multi_indexes: [],
+  participations: [],
+  related_fields: [{ field_name: :sessions, klass: 'X', orphaned_keys: ['k'], count: 1, status: :issues_found }],
+  cross_references: { in_instances_missing_unique_index: [], index_points_to_wrong_identifier: [], status: :ok },
+  duration: 0.05
+)
+@orphan_rf_report.healthy?
+#=> false
