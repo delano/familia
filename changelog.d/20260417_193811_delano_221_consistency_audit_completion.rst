@@ -23,6 +23,14 @@ Fixed
   report a clean multi-index audit even when orphans or drift
   existed. PR #221
 
+- ``audit_instance_participations`` now also respects
+  ``Familia.delim`` when constructing its collection-key SCAN
+  pattern. The initial delimiter fix in
+  ``discover_multi_index_buckets`` and ``audit_single_related_field``
+  missed this third call site, so instance-level participation
+  audits continued to silently return no stale members under a
+  non-default delim. PR #221
+
 AI Assistance
 -------------
 

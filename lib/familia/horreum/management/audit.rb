@@ -686,8 +686,8 @@ module Familia
         target_class = rel.target_class
         results = []
 
-        # SCAN for all collection keys matching target_prefix:*:collection_name
-        pattern = "#{target_class.prefix}:*:#{collection_name}"
+        # SCAN for all collection keys matching target_prefix{delim}*{delim}collection_name
+        pattern = "#{target_class.prefix}#{Familia.delim}*#{Familia.delim}#{collection_name}"
         collection_keys = scan_matching_keys(pattern, target_class.dbclient)
 
         collection_keys.each do |collection_key|
