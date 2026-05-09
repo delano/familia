@@ -37,9 +37,13 @@ Welcome to the comprehensive documentation for Familia v2.0. This guide collecti
 13. **[Quantization](feature-quantization.md)** - Time-based data bucketing for analytics
 14. **[Time Literals](time-literals.md)** - Time manipulation and formatting utilities
 
+### 🧹 Data Maintenance
+
+15. **[Normalizers](feature-normalizers.md)** - Declarative cleanup lambdas for drifted field values
+
 ### 🛠️ Implementation & Usage
 
-15. **[Optimized Loading](optimized-loading.md)** - Reduce Redis commands by 50-96% for bulk object loading _(new!)_
+16. **[Optimized Loading](optimized-loading.md)** - Reduce Redis commands by 50-96% for bulk object loading _(new!)_
 
 
 ## 🚀 Quick Start Examples
