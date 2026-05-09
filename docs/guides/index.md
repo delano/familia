@@ -39,7 +39,7 @@ Welcome to the comprehensive documentation for Familia v2.0. This guide collecti
 
 ### 🧹 Data Maintenance
 
-15. **[Normalizers](feature-normalizers.md)** - Declarative cleanup lambdas for drifted field values
+15. **[Housekeeping](feature-housekeeping.md)** - Declarative cleanup chores for drifted field values
 
 ### 🛠️ Implementation & Usage
 
