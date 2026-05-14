@@ -4,11 +4,11 @@
 
 # M3: audit_multi_indexes behavior
 #
-# Covers the real class-level multi-index audit implementation plus the
-# still-stubbed instance-scoped path. Class-level indexes are audited in
-# three phases (stale members, missing objects, orphaned buckets) while
-# instance-scoped indexes return status: :not_implemented with a clearer
-# diagnostic message.
+# Covers both class-level and instance-scoped multi-index audit paths.
+# Both are audited in three phases (stale members, missing objects,
+# orphaned buckets). Instance-scoped audits depend on a participation
+# relationship to detect "missing" entries; when absent the result
+# carries missing_status: :not_audited.
 
 require_relative '../support/helpers/test_helpers'
 
@@ -112,9 +112,9 @@ M3PlainModel.audit_multi_indexes.is_a?(Array)
 @results.first[:index_name]
 #=> :category_index
 
-## Instance-scoped multi-index result includes status: :not_implemented
+## Instance-scoped multi-index returns :ok when no objects exist
 @results.first[:status]
-#=> :not_implemented
+#=> :ok
 
 ## Instance-scoped multi-index result has empty stale_members
 @results.first[:stale_members]
@@ -128,20 +128,27 @@ M3PlainModel.audit_multi_indexes.is_a?(Array)
 @results.first[:missing]
 #=> []
 
+## Instance-scoped audit without participation surfaces missing_status
+# M3ScopedModel has multi_index ... within: M3ScopeTarget but no
+# participates_in M3ScopeTarget, so per-scope membership cannot be
+# inferred and the missing dimension is marked :not_audited.
+@results.first[:missing_status]
+#=> :not_audited
+
 ## health_check with instance-scoped multi-index returns AuditReport
 @scoped_report = M3ScopedModel.health_check
 @scoped_report.class.name
 #=> "Familia::Horreum::AuditReport"
 
-## health_check includes multi_indexes with status marker
-@scoped_report.multi_indexes.any? { |idx| idx[:status] == :not_implemented }
+## health_check no longer reports :not_implemented for instance-scoped
+@scoped_report.multi_indexes.none? { |idx| idx[:status] == :not_implemented }
 #=> true
 
-## health_check is still healthy with not_implemented stub (empty collections)
+## health_check is healthy when no buckets exist
 @scoped_report.healthy?
 #=> true
 
-## health_check complete? is false when a stubbed index exists
+## health_check complete? remains false until related_fields/cross_refs are opted in
 @scoped_report.complete?
 #=> false
 

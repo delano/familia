@@ -423,10 +423,13 @@ module Familia
 
       # Audit a single multi index.
       #
-      # Class-level multi-indexes (within: nil or within: :class) are fully
-      # audited. Instance-scoped multi-indexes (within: SomeClass) require
-      # enumerating every scope instance to discover per-value set keys; that
-      # path is not implemented yet and returns status: :not_implemented.
+      # Class-level multi-indexes (within: nil or within: :class) and
+      # instance-scoped multi-indexes (within: SomeClass) are both fully
+      # audited. The class-level path SCANs a single bucket namespace and
+      # cross-checks it against live objects on this class. The
+      # instance-scoped path SCANs across all scope instances, partitions
+      # the discovered bucket keys by scope id, and uses the participation
+      # relationship (if present) to detect missing entries.
       #
       # @param rel [IndexingRelationship]
       # @param scanned_identifiers [Array<String>, nil] Optional cached SCAN result.
@@ -434,26 +437,15 @@ module Familia
       # @return [Hash] {index_name:, stale_members: [], missing: [], orphaned_keys: [], status:}
       #
       def audit_single_multi_index(rel, scanned_identifiers: nil, loaded_objects: nil)
-        index_name = rel.index_name
-
-        unless rel.class_level?
-          Familia.debug "[audit_multi_indexes] #{name}##{index_name}: " \
-                        "instance-scoped audit (within: #{rel.within.inspect}) not implemented; " \
-                        'requires enumerating every scope instance to discover per-value set keys'
-          return {
-            index_name: index_name,
-            stale_members: [],
-            missing: [],
-            orphaned_keys: [],
-            status: :not_implemented,
-          }
+        if rel.class_level?
+          audit_class_level_multi_index(
+            rel,
+            scanned_identifiers: scanned_identifiers,
+            loaded_objects: loaded_objects,
+          )
+        else
+          audit_instance_scoped_multi_index(rel)
         end
-
-        audit_class_level_multi_index(
-          rel,
-          scanned_identifiers: scanned_identifiers,
-          loaded_objects: loaded_objects,
-        )
       end
 
       # Audit a class-level multi index.
@@ -629,6 +621,367 @@ module Familia
         end
 
         orphaned
+      end
+
+      # Audit an instance-scoped multi-index across every scope instance.
+      #
+      # Key layout: "{scope_prefix}:{scope_id}:{index_name}:{field_value}"
+      # SCAN pattern: "{scope_prefix}:*:{index_name}:*"
+      #
+      # Three failure modes are detected:
+      #   - stale_members: bucket member object missing or field value drifted
+      #   - orphaned_keys: scope instance no longer exists, or bucket field
+      #     value is not held by any live participant for that scope
+      #   - missing: live participant has a field value but no bucket entry
+      #     in the scope it belongs to (requires participation relationship)
+      #
+      # Detecting "missing" requires walking each scope instance's
+      # participation collection to discover which indexed objects belong
+      # to which scope. When the indexed class does not declare a
+      # `participates_in scope_class, :collection_name` relationship, the
+      # missing dimension is set to `:not_audited` and a debug message
+      # explains why.
+      #
+      # @param rel [IndexingRelationship]
+      # @return [Hash] {index_name:, stale_members:, missing:, orphaned_keys:, status:}
+      #
+      def audit_instance_scoped_multi_index(rel)
+        scope_class = Familia.resolve_class(rel.scope_class)
+
+        bucket_entries = discover_instance_scoped_buckets(rel, scope_class)
+        scope_ids = bucket_entries.values.map { |e| e[:scope_id] }.uniq
+        scope_exists_flags = batch_check_scope_existence(scope_class, scope_ids)
+
+        stale_members, orphaned_from_scope = inspect_instance_scoped_buckets(
+          rel, bucket_entries, scope_exists_flags
+        )
+
+        missing, missing_status = detect_instance_scoped_missing(
+          rel, scope_class, bucket_entries, scope_exists_flags
+        )
+
+        orphaned_from_field_value = detect_instance_scoped_orphaned_buckets(
+          rel, scope_class, bucket_entries, scope_exists_flags
+        )
+
+        orphaned_keys = orphaned_from_scope + orphaned_from_field_value
+
+        status = if stale_members.empty? && missing.empty? && orphaned_keys.empty?
+          :ok
+        else
+          :issues_found
+        end
+
+        result = {
+          index_name: rel.index_name,
+          stale_members: stale_members,
+          missing: missing,
+          orphaned_keys: orphaned_keys,
+          status: status,
+        }
+        # Surface a sub-status when the "missing" dimension could not be
+        # audited so callers can distinguish "checked and clean" from
+        # "not checked due to missing participation".
+        result[:missing_status] = missing_status if missing_status != :ok
+        result
+      end
+
+      # SCAN for instance-scoped bucket keys and load their members.
+      #
+      # @param rel [IndexingRelationship]
+      # @param scope_class [Class]
+      # @return [Hash{String => Hash}] full_key => {key:, scope_id:, field_value:, identifiers:}
+      #
+      def discover_instance_scoped_buckets(rel, scope_class)
+        scope_prefix = "#{scope_class.prefix}#{Familia.delim}"
+        marker = "#{Familia.delim}#{rel.index_name}#{Familia.delim}"
+        pattern = "#{scope_prefix}*#{marker}*"
+        bucket_entries = {}
+
+        # Use the scope class's dbclient so multi-database setups address
+        # the right Redis instance for the scope namespace.
+        client = scope_class.dbclient
+
+        # Batch SCAN results and pipeline SMEMBERS to collapse a round trip
+        # per bucket key into a round trip per slice of 100 keys.
+        client.scan_each(match: pattern).each_slice(100) do |keys|
+          parsed = keys.filter_map do |key|
+            scope_id, field_value = parse_instance_scoped_bucket_key(key, scope_prefix, marker)
+            next nil if scope_id.nil? || scope_id.empty? || field_value.nil? || field_value.empty?
+
+            [key, scope_id, field_value]
+          end
+          next if parsed.empty?
+
+          members_batch = client.pipelined do |pipe|
+            parsed.each { |(key, _sid, _fv)| pipe.smembers(key) }
+          end
+
+          parsed.each_with_index do |(key, scope_id, field_value), idx|
+            bucket_entries[key] = {
+              key: key,
+              scope_id: scope_id,
+              field_value: field_value,
+              identifiers: deserialize_index_members(members_batch[idx]),
+            }
+          end
+        end
+
+        bucket_entries
+      end
+
+      # Splits a bucket key into (scope_id, field_value).
+      #
+      # The key is structured as "{scope_prefix}{scope_id}{marker}{field_value}"
+      # where marker is "{delim}{index_name}{delim}". The first occurrence of
+      # the marker is used to support identifiers and field values that
+      # themselves contain the delimiter character.
+      #
+      # @param key [String]
+      # @param scope_prefix [String]
+      # @param marker [String]
+      # @return [Array(String, String), Array(nil, nil)]
+      #
+      def parse_instance_scoped_bucket_key(key, scope_prefix, marker)
+        return [nil, nil] unless key.start_with?(scope_prefix)
+
+        rest = key[scope_prefix.length..]
+        marker_pos = rest.index(marker)
+        return [nil, nil] unless marker_pos
+
+        scope_id = rest[0...marker_pos]
+        field_value = rest[(marker_pos + marker.length)..]
+        [scope_id, field_value]
+      end
+
+      # Batch-checks scope instance existence via pipelined EXISTS.
+      #
+      # @param scope_class [Class]
+      # @param scope_ids [Array<String>]
+      # @return [Hash{String => Boolean}]
+      #
+      def batch_check_scope_existence(scope_class, scope_ids)
+        flags = {}
+        return flags if scope_ids.empty?
+
+        scope_ids.each_slice(100) do |slice|
+          results = scope_class.dbclient.pipelined do |pipe|
+            slice.each { |id| pipe.exists(scope_class.dbkey(id)) }
+          end
+          slice.each_with_index do |id, idx|
+            flags[id] = results[idx].to_i.positive?
+          end
+        end
+
+        flags
+      end
+
+      # Inspects each instance-scoped bucket's members for staleness.
+      #
+      # For buckets whose scope still exists, classify members via
+      # classify_multi_index_entry. For buckets whose scope is missing,
+      # mark the entire bucket as orphaned with reason :scope_missing.
+      #
+      # @return [Array(Array<Hash>, Array<Hash>)] (stale_members, orphaned_from_scope)
+      #
+      def inspect_instance_scoped_buckets(rel, bucket_entries, scope_exists_flags)
+        stale_members = []
+        orphaned = []
+
+        bucket_entries.each_value do |entry|
+          unless scope_exists_flags[entry[:scope_id]]
+            orphaned << {
+              field_value: entry[:field_value],
+              key: entry[:key],
+              scope_id: entry[:scope_id],
+              reason: :scope_missing,
+            }
+            next
+          end
+
+          identifiers = entry[:identifiers].map(&:to_s)
+          next if identifiers.empty?
+
+          objects = load_multi(identifiers)
+          identifiers.each_with_index do |identifier, idx|
+            classification = classify_multi_index_entry(rel, entry[:field_value], identifier, objects[idx])
+            next unless classification
+
+            classification[:scope_id] = entry[:scope_id]
+            stale_members << classification
+          end
+        end
+
+        [stale_members, orphaned]
+      end
+
+      # Detects buckets whose field_value is no longer held by any live
+      # participant in that scope.
+      #
+      # Without a participation relationship from this class to the scope
+      # class, we cannot determine which participants belong to which scope,
+      # so this dimension is skipped (the prior :scope_missing check still
+      # surfaces fully orphaned buckets).
+      #
+      # @return [Array<Hash>]
+      #
+      def detect_instance_scoped_orphaned_buckets(rel, scope_class, bucket_entries, scope_exists_flags)
+        participation = find_participation_to_scope(scope_class)
+        return [] unless participation
+
+        # field_values_per_scope: { scope_id => Set<String> } observed on live participants
+        field_values_per_scope = collect_field_values_per_scope(rel, scope_class, participation)
+
+        orphaned = []
+        bucket_entries.each_value do |entry|
+          # Already counted by inspect_instance_scoped_buckets when scope is missing.
+          next unless scope_exists_flags[entry[:scope_id]]
+
+          observed = field_values_per_scope[entry[:scope_id]] || Set.new
+          next if observed.include?(entry[:field_value])
+
+          orphaned << {
+            field_value: entry[:field_value],
+            key: entry[:key],
+            scope_id: entry[:scope_id],
+            reason: :field_value_unheld,
+          }
+        end
+
+        orphaned
+      end
+
+      # Detects live participants whose bucket entry is absent.
+      #
+      # @return [Array(Array<Hash>, Symbol)] (missing, sub_status)
+      #
+      def detect_instance_scoped_missing(rel, scope_class, bucket_entries, scope_exists_flags)
+        participation = find_participation_to_scope(scope_class)
+        return [[], :not_audited] unless participation
+
+        unless scope_class.respond_to?(:instances)
+          Familia.debug "[audit_instance_scoped_multi_index] #{name}##{rel.index_name}: " \
+                        "scope class #{scope_class.name} has no instances collection; " \
+                        "missing detection requires enumerating scope instances"
+          return [[], :no_scope_instances]
+        end
+
+        missing = []
+        scope_ids = enumerate_scope_ids(scope_class, scope_exists_flags)
+
+        scope_ids.each do |scope_id|
+          scope_instance = scope_class.find_by_id(scope_id)
+          next unless scope_instance
+
+          collection = scope_instance.send(participation.collection_name)
+          member_ids = participation_collection_members(collection)
+          next if member_ids.empty?
+
+          member_objects = load_multi(member_ids)
+          member_ids.each_with_index do |identifier, idx|
+            obj = member_objects[idx]
+            next unless obj
+
+            value = obj.send(rel.field)
+            next if value.nil? || value.to_s.strip.empty?
+
+            expected_field_value = value.to_s
+            expected_key = build_instance_scoped_bucket_key(scope_class, scope_id, rel.index_name, expected_field_value)
+            bucket = bucket_entries[expected_key]
+            next if bucket && bucket[:identifiers].any? { |m| m.to_s == identifier.to_s }
+
+            missing << {
+              identifier: identifier,
+              field_value: expected_field_value,
+              scope_class: scope_class.name,
+              scope_id: scope_id,
+            }
+          end
+        end
+
+        [missing, :ok]
+      end
+
+      # Aggregates the field values present per scope instance via the
+      # participation collection. Used to decide which buckets are orphaned
+      # by virtue of no live participant holding their field_value.
+      #
+      # @return [Hash{String => Set<String>}]
+      #
+      def collect_field_values_per_scope(rel, scope_class, participation)
+        result = Hash.new { |h, k| h[k] = Set.new }
+        return result unless scope_class.respond_to?(:instances)
+
+        scope_class.instances.members.each do |scope_id|
+          scope_instance = scope_class.find_by_id(scope_id)
+          next unless scope_instance
+
+          collection = scope_instance.send(participation.collection_name)
+          member_ids = participation_collection_members(collection)
+          next if member_ids.empty?
+
+          load_multi(member_ids).each do |obj|
+            next unless obj
+
+            value = obj.send(rel.field)
+            next if value.nil? || value.to_s.strip.empty?
+
+            result[scope_id] << value.to_s
+          end
+        end
+
+        result
+      end
+
+      # Looks up the indexed-class participation pointing at the scope class.
+      #
+      # Returns nil when the indexed class does not declare a
+      # `participates_in scope_class, :collection_name` relationship,
+      # which makes per-scope membership inference impossible.
+      #
+      # @return [ParticipationRelationship, nil]
+      #
+      def find_participation_to_scope(scope_class)
+        return nil unless respond_to?(:participation_relationships)
+
+        participation_relationships.find { |rel| rel.target_class == scope_class }
+      end
+
+      # Enumerate the set of scope ids worth inspecting for "missing"
+      # detection. Includes:
+      #   - every scope id we already saw a bucket for
+      #   - every scope id in the scope class's instances timeline
+      #
+      # @return [Array<String>]
+      #
+      def enumerate_scope_ids(scope_class, scope_exists_flags)
+        from_buckets = scope_exists_flags.select { |_, v| v }.keys
+        from_instances = scope_class.instances.members.to_a
+        (from_buckets + from_instances).uniq
+      end
+
+      # Returns members of a participation collection in a type-agnostic
+      # way. Falls back to to_a when the DataType does not expose members.
+      #
+      # @return [Array<String>]
+      #
+      def participation_collection_members(collection)
+        if collection.respond_to?(:members)
+          Array(collection.members)
+        elsif collection.respond_to?(:to_a)
+          Array(collection.to_a)
+        else
+          []
+        end
+      end
+
+      # Rebuilds the expected bucket key for a (scope_id, field_value) pair.
+      #
+      # @return [String]
+      #
+      def build_instance_scoped_bucket_key(scope_class, scope_id, index_name, field_value)
+        d = Familia.delim
+        "#{scope_class.prefix}#{d}#{scope_id}#{d}#{index_name}#{d}#{field_value}"
       end
 
       # Audit a class-level participation collection (from class_participates_in).

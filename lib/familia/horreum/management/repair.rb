@@ -222,10 +222,27 @@ module Familia
 
       # Runs health_check then all repair methods.
       #
-      # By default this repairs the three always-on dimensions
-      # (instances, unique indexes, participations). The related_fields
-      # and cross_references dimensions are opt-in and must be enabled
-      # on the audit side for repair to consider them.
+      # By default this repairs four always-on dimensions (instances,
+      # unique indexes, multi indexes, and participations). The
+      # related_fields dimension is opt-in via +audit_collections:+;
+      # cross_references drift is reported but not auto-repaired.
+      #
+      # Each repair stage runs inside its own rescue boundary so a
+      # failure in one dimension does not prevent the others from
+      # running. The returned hash includes:
+      #   - +:report+ -- the AuditReport produced by health_check
+      #   - one entry per stage that ran (e.g. +:instances+, +:indexes+,
+      #     +:multi_indexes+, +:participations+, optionally +:related_fields+)
+      #   - +:errors+ -- map of stage name to exception details for any
+      #     stage that raised
+      #   - +:status+ -- +:ok+ when every stage finished cleanly,
+      #     +:partial_failure+ when one or more stages errored
+      #
+      # When +verify:+ is true, a second health_check runs after repair
+      # and the resulting report is exposed as +:post_audit+, with
+      # +:verified+ set to +post_audit.healthy?+. This lets callers
+      # confirm that the repair actually drove the model back to a
+      # healthy state.
       #
       # @param batch_size [Integer] SCAN batch size passed to health_check
       # @param audit_collections [Boolean] When true, health_check runs
@@ -239,10 +256,13 @@ module Familia
       #   resolve the drift manually. The flag is accepted here for symmetry
       #   with the audit side and so repair_all! can surface the dimension
       #   through its returned report.
+      # @param verify [Boolean] When true, re-run health_check after
+      #   repair and expose the result as +:post_audit+ / +:verified+.
       # @yield [Hash] Progress callbacks
       # @return [Hash] Combined repair results plus the AuditReport
       #
-      def repair_all!(batch_size: 100, audit_collections: false, check_cross_refs: false, &progress)
+      def repair_all!(batch_size: 100, audit_collections: false, check_cross_refs: false,
+                      verify: false, &progress)
         report = health_check(
           batch_size: batch_size,
           audit_collections: audit_collections,
@@ -250,25 +270,100 @@ module Familia
           &progress
         )
 
-        instances_result = repair_instances!(report.instances)
-        indexes_result = repair_indexes!(report.unique_indexes)
-        participations_result = repair_participations!(report.participations)
+        stages = {}
+        errors = {}
 
-        result = {
-          report: report,
-          instances: instances_result,
-          indexes: indexes_result,
-          participations: participations_result,
-        }
+        # Run each repair stage with exception isolation. A failure in
+        # one stage should not prevent later stages from running, so the
+        # operator gets the broadest possible view of what was repaired.
+        run_repair_stage(stages, errors, :instances) { repair_instances!(report.instances) }
+        run_repair_stage(stages, errors, :indexes) { repair_indexes!(report.unique_indexes) }
+        run_repair_stage(stages, errors, :multi_indexes) { repair_multi_indexes!(report.multi_indexes) }
+        run_repair_stage(stages, errors, :participations) { repair_participations!(report.participations) }
 
         # Only repair related fields when the audit actually checked them.
         # Nil means the caller did not pass audit_collections: true to
         # health_check, so repair has nothing to act on.
         unless report.related_fields.nil?
-          result[:related_fields] = repair_related_fields!(report.related_fields, &progress)
+          run_repair_stage(stages, errors, :related_fields) {
+            repair_related_fields!(report.related_fields, &progress)
+          }
+        end
+
+        result = stages.merge(
+          report: report,
+          errors: errors,
+          status: errors.empty? ? :ok : :partial_failure,
+        )
+
+        if verify
+          post = health_check(
+            batch_size: batch_size,
+            audit_collections: audit_collections,
+            check_cross_refs: check_cross_refs,
+            &progress
+          )
+          result[:post_audit] = post
+          result[:verified] = post.healthy?
         end
 
         result
+      end
+
+      # Repairs multi-indexes by invoking the existing rebuild_<index_name>
+      # methods. Handles both class-level and instance-scoped indexes.
+      #
+      # For class-level multi-indexes the rebuild method lives on the
+      # indexed class (e.g. +Customer.rebuild_role_index+). For
+      # instance-scoped multi-indexes the rebuild method lives on each
+      # scope instance (e.g. +company.rebuild_dept_index+); we iterate
+      # the scope class's instances timeline and rebuild per scope.
+      #
+      # Indexes whose audit status is :ok are skipped. Indexes for
+      # which a rebuild method is unavailable or a scope class has no
+      # instances collection are recorded in +:skipped+ with a reason.
+      #
+      # @param audit_results [Array<Hash>, nil] Results from audit_multi_indexes
+      # @return [Hash] {rebuilt:, rebuilt_per_scope:, skipped:}
+      #
+      def repair_multi_indexes!(audit_results = nil)
+        audit_results ||= audit_multi_indexes
+
+        rebuilt = []
+        rebuilt_per_scope = []
+        skipped = []
+
+        unless respond_to?(:indexing_relationships)
+          return { rebuilt: rebuilt, rebuilt_per_scope: rebuilt_per_scope, skipped: skipped }
+        end
+
+        multi_rels = indexing_relationships.select { |r| r.cardinality == :multi }
+
+        audit_results.each do |idx_result|
+          next if idx_result[:status] == :ok
+
+          index_name = idx_result[:index_name]
+          rel = multi_rels.find { |r| r.index_name == index_name }
+          unless rel
+            skipped << { index_name: index_name, reason: :relationship_missing }
+            next
+          end
+
+          if rel.class_level?
+            method = :"rebuild_#{index_name}"
+            if respond_to?(method)
+              send(method)
+              rebuilt << index_name
+            else
+              skipped << { index_name: index_name, reason: :rebuild_method_missing }
+            end
+          else
+            scopes_rebuilt = rebuild_instance_scoped_multi_index(rel, skipped)
+            rebuilt_per_scope << { index_name: index_name, scopes_rebuilt: scopes_rebuilt } if scopes_rebuilt
+          end
+        end
+
+        { rebuilt: rebuilt, rebuilt_per_scope: rebuilt_per_scope, skipped: skipped }
       end
 
       # SCAN helper for enumerating keys matching a pattern.
@@ -291,6 +386,63 @@ module Familia
       end
 
       private
+
+      # Runs a repair stage with exception isolation.
+      #
+      # On success, the stage's return value is stored under +name+ in
+      # +stages+. On failure, the exception is logged and recorded
+      # under +name+ in +errors+ so repair_all! can surface the
+      # partial-failure status without losing the rest of the run.
+      #
+      # @param stages [Hash] Accumulator for successful stage results
+      # @param errors [Hash] Accumulator for stage failures
+      # @param name [Symbol] Stage identifier (:instances, :indexes, ...)
+      # @yield Stage body returning the per-stage result hash
+      #
+      def run_repair_stage(stages, errors, name)
+        stages[name] = yield
+      rescue StandardError => e
+        errors[name] = {
+          class: e.class.name,
+          message: e.message,
+          backtrace: Array(e.backtrace).first(5),
+        }
+        Familia.warn "[repair_all!] #{name} stage failed: #{e.class}: #{e.message}"
+      end
+
+      # Rebuilds an instance-scoped multi-index across every scope
+      # instance. Returns the number of scope instances successfully
+      # rebuilt, or nil when the scope class lacks an instances
+      # collection (in which case +skipped+ is appended to).
+      #
+      # @param rel [IndexingRelationship]
+      # @param skipped [Array<Hash>] Mutated when no scope path is available
+      # @return [Integer, nil]
+      #
+      def rebuild_instance_scoped_multi_index(rel, skipped)
+        scope_class = Familia.resolve_class(rel.scope_class)
+        method = :"rebuild_#{rel.index_name}"
+
+        unless scope_class.respond_to?(:instances)
+          skipped << {
+            index_name: rel.index_name,
+            reason: :no_scope_instances_collection,
+            scope_class: scope_class.name,
+          }
+          return nil
+        end
+
+        count = 0
+        scope_class.instances.members.each do |scope_id|
+          scope = scope_class.find_by_id(scope_id)
+          next unless scope
+          next unless scope.respond_to?(method)
+
+          scope.send(method)
+          count += 1
+        end
+        count
+      end
 
       # Process a batch of key/identifier pairs for rebuild_instances.
       #
