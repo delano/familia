@@ -154,11 +154,36 @@ end
 @rep.tidy!
 #=> {:mark=>:second}
 
+## Subclasses inherit chores from their parent (copy-on-access)
+class HousekeepingParent < Familia::Horreum
+  feature :housekeeping
+  identifier_field :id
+  field :id
+  field :stamp
+  chore(:from_parent) { |o| o.stamp = 'parent'; o.save; :parent }
+end
+class HousekeepingChild < HousekeepingParent
+  chore(:from_child) { |o| o.stamp = 'child'; o.save; :child }
+end
+HousekeepingChild.chores.keys.sort
+#=> [:from_child, :from_parent]
+
+## Registering on the child does not mutate the parent's chores
+HousekeepingParent.chores.keys
+#=> [:from_parent]
+
+## Inherited chores run alongside child-specific ones
+@child = HousekeepingChild.new(id: 'c')
+@child.save
+@child.tidy!.keys.sort
+#=> [:from_child, :from_parent]
+
 ## Cleanup
 @org.destroy! if @org.exists?
 @org2.destroy! if @org2.exists?
 @noop.destroy! if @noop.exists?
 @raiser.destroy! if @raiser.exists?
 @rep.destroy! if @rep.exists?
+@child.destroy! if @child.exists?
 true
 #=> true

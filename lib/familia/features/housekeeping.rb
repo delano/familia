@@ -46,7 +46,6 @@ module Familia
       def self.included(base)
         Familia.trace :LOADED, self, base if Familia.debug?
         base.extend ModelClassMethods
-        base.instance_variable_set(:@chores, {})
       end
 
       # Housekeeping::ModelClassMethods
@@ -61,13 +60,20 @@ module Familia
           raise ArgumentError, 'chore name required' if name.nil? || name.to_s.empty?
           raise ArgumentError, "chore #{name.inspect} requires a block" unless block
 
-          @chores ||= {}
-          @chores[name.to_sym] = block
+          chores[name.to_sym] = block
         end
 
-        # @return [Hash{Symbol => Proc}] registered chores in registration order
+        # Registered chores in registration order. Subclasses inherit a copy
+        # of their parent's chores on first access, so registering a new chore
+        # on a subclass does not mutate the parent.
+        #
+        # @return [Hash{Symbol => Proc}]
         def chores
-          @chores ||= {}
+          @chores ||= if superclass.respond_to?(:chores)
+                        superclass.chores.dup
+                      else
+                        {}
+                      end
         end
       end
 
