@@ -81,22 +81,33 @@ module Familia
           name.to_sym
         end
 
-        # Returns a duped view of the registered chores.
+        # Returns the chores visible to this class, including any registered
+        # on ancestors. Subclass chores override parent chores of the same
+        # name. The returned hash is a fresh copy on every call so callers
+        # cannot mutate the registry.
+        #
         # @return [Hash{Symbol => Proc}]
         def chores
-          (@chores ||= {}).dup
+          inherited =
+            if superclass.respond_to?(:chores) && superclass != Familia::Horreum
+              superclass.chores
+            else
+              {}
+            end
+          inherited.merge(@chores || {})
         end
       end
 
       # Run one or all registered chores against this instance.
       #
       # @param name [Symbol, String, nil] If given, run only the named chore.
-      #   If nil, run all registered chores in registration order.
+      #   If nil, run all registered chores in registration order. Chores
+      #   inherited from ancestor classes are included.
       # @return [Hash{Symbol => Object}] Map of chore name to the block's
       #   return value.
       # @raise [Familia::Problem] If +name+ is given but unregistered.
       def tidy!(name = nil)
-        registry = self.class.instance_variable_get(:@chores) || {}
+        registry = self.class.chores
 
         to_run =
           if name

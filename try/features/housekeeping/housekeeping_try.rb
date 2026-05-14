@@ -46,6 +46,18 @@ class NoChoreOrg < Familia::Horreum
   field :id
 end
 
+class SubHousekeepingOrg < HousekeepingOrg
+  chore :tag_marker do |_org|
+    :tagged
+  end
+end
+
+class OverrideHousekeepingOrg < HousekeepingOrg
+  chore :standardize_planid do |_org|
+    :subclass_override
+  end
+end
+
 @suffix = "#{Process.pid}_#{Familia.now.to_i}"
 
 # --- API surface ------------------------------------------------------------
@@ -154,6 +166,41 @@ end
 CustomReturnOrg.new(id: "ret_#{@suffix}").tidy!(:report)[:report]
 #=> {:changed=>[:a, :b], :skipped=>1}
 
+# --- Inheritance ------------------------------------------------------------
+
+## Subclasses inherit chores registered on the parent
+SubHousekeepingOrg.chores.keys.sort
+#=> [:downcase_email, :standardize_planid, :tag_marker]
+
+## tidy! on a subclass runs both inherited and own chores
+@sub = SubHousekeepingOrg.new(
+  id: "sub_#{@suffix}",
+  planid: 'Pro',
+  email: 'C@Example.com',
+)
+@sub.save
+@sub_result = @sub.tidy!
+@sub_result.keys.sort
+#=> [:downcase_email, :standardize_planid, :tag_marker]
+
+## Inherited chores still mutate the record on the subclass
+[@sub.planid, @sub.email, @sub_result[:tag_marker]]
+#=> ["professional", "c@example.com", :tagged]
+
+## Subclass overrides win for chores with the same name on the subclass
+@override = OverrideHousekeepingOrg.new(id: "override_#{@suffix}", planid: 'pro')
+@override.save
+@override.tidy!(:standardize_planid)[:standardize_planid]
+#=> :subclass_override
+
+## Parent class registry is unchanged by a subclass override
+@parent_chore = HousekeepingOrg.chores[:standardize_planid]
+@sub_chore = OverrideHousekeepingOrg.chores[:standardize_planid]
+@parent_chore.equal?(@sub_chore)
+#=> false
+
 # Cleanup
 @org.destroy! if @org
 @org2.destroy! if @org2
+@sub.destroy! if @sub
+@override.destroy! if @override
