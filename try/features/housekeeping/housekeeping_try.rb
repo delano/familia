@@ -178,6 +178,23 @@ HousekeepingParent.chores.keys
 @child.tidy!.keys.sort
 #=> [:from_child, :from_parent]
 
+## Subclass can override a parent chore by re-registering the same name
+class HousekeepingOverride < HousekeepingParent
+  chore(:from_parent) { |_o| :overridden }
+end
+HousekeepingOverride.chores.keys
+#=> [:from_parent]
+
+## Override chore runs the subclass block, not the parent block
+@override = HousekeepingOverride.new(id: 'ov')
+@override.save
+@override.tidy!(:from_parent)[:from_parent]
+#=> :overridden
+
+## Parent registry is unchanged by a subclass override
+HousekeepingParent.chores[:from_parent].equal?(HousekeepingOverride.chores[:from_parent])
+#=> false
+
 ## Cleanup
 @org.destroy! if @org.exists?
 @org2.destroy! if @org2.exists?
@@ -185,5 +202,6 @@ HousekeepingParent.chores.keys
 @raiser.destroy! if @raiser.exists?
 @rep.destroy! if @rep.exists?
 @child.destroy! if @child.exists?
+@override.destroy! if @override.exists?
 true
 #=> true
