@@ -218,8 +218,8 @@ module Familia
       # @see MultiResult For details on the return value structure
       # @see Familia.transaction For atomic command execution
       # @see #batch_update For similar MultiResult pattern in Horreum models
-      def pipelined(&block)
-        PipelineCore.execute_pipeline(-> { dbclient }, &block)
+      def pipelined(&)
+        PipelineCore.execute_pipeline(-> { dbclient }, &)
       end
       alias pipeline pipelined
 

@@ -181,8 +181,8 @@ module Familia
       # Singleton pattern for stateless handler
       @instance = new.freeze
 
-      def self.instance
-        @instance
+      class << self
+        attr_reader :instance
       end
 
       def handle(_uri)
@@ -209,8 +209,9 @@ module Familia
       @allows_transaction = false
       @allows_pipelined = false
 
-      def initialize(familia_module)
-        @familia_module = familia_module
+      # This override makes the module argument required instead of default optional.
+      def initialize(familia_module) # rubocop:disable Lint/UselessMethodDefinition
+        super
       end
 
       def handle(_uri)
@@ -246,6 +247,7 @@ module Familia
 
       def initialize(data_type)
         @data_type = data_type
+        super
       end
 
       def handle(uri)
@@ -287,6 +289,7 @@ module Familia
 
       def initialize(data_type)
         @data_type = data_type
+        super
       end
 
       def handle(uri)

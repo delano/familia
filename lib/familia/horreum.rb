@@ -293,7 +293,8 @@ module Familia
     #
     def initialize_relatives
       # Store initialization flag on singleton class to avoid polluting instance variables
-      return if singleton_class.instance_variable_defined?(:"@relatives_initialized")
+      return if singleton_class.instance_variable_defined?(:@relatives_initialized)
+
       # Generate instances of each DataType. These need to be
       # unique for each instance of this class so they can piggyback
       # on the specifc index of this instance.
@@ -335,7 +336,7 @@ module Familia
       end
 
       # Mark relatives as initialized on singleton class to avoid polluting instance variables
-      singleton_class.instance_variable_set(:"@relatives_initialized", true)
+      singleton_class.instance_variable_set(:@relatives_initialized, true)
     end
 
     def initialize_with_keyword_args_deserialize_value(**fields)

@@ -236,6 +236,11 @@ module Familia
       end
       alias pipeline pipelined
 
+      # Thread-safe mutex initialization when module is extended
+      def self.extended(base)
+        base.instance_variable_set(:@class_connection_chain_mutex, Mutex.new)
+      end
+
       private
 
       # Ensures that related fields have been initialized before entering transactions or pipelines.
@@ -250,10 +255,10 @@ module Familia
       def ensure_relatives_initialized!
         return if is_a?(Class)  # Class methods handle their own instances
         return unless self.class.respond_to?(:relations?) && self.class.relations?
-        return if singleton_class.instance_variable_defined?(:"@relatives_initialized")
+        return if singleton_class.instance_variable_defined?(:@relatives_initialized)
 
         raise "#{self.class} has related fields but they haven't been initialized. " \
-              "Did you override initialize without calling super? " \
+              'Did you override initialize without calling super? ' \
               "Related fields: #{self.class.related_fields.keys.join(', ')}"
       end
 
@@ -280,10 +285,6 @@ module Familia
           .add_handler(@create_connection_handler)
       end
 
-      # Thread-safe mutex initialization when module is extended
-      def self.extended(base)
-        base.instance_variable_set(:@class_connection_chain_mutex, Mutex.new)
-      end
     end
   end
 end
