@@ -70,10 +70,10 @@ module Familia
         # @return [Hash{Symbol => Proc}]
         def chores
           @chores ||= if superclass.respond_to?(:chores)
-                        superclass.chores.dup
-                      else
-                        {}
-                      end
+            superclass.chores.dup
+          else
+            {}
+          end
         end
       end
 

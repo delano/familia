@@ -109,15 +109,19 @@ module Familia
 
           begin
             fields_count = to_h_for_storage.size
-          rescue => e
-            Familia.error "Failed to serialize fields for logging",
+          rescue StandardError => e
+            Familia.error 'Failed to serialize fields for logging',
               error: e.message,
               class: self.class.name,
-              identifier: (identifier rescue nil)
+              identifier: begin
+                identifier
+              rescue StandardError
+                nil
+              end
             fields_count = 0
           end
 
-          Familia.debug "Horreum saved",
+          Familia.debug 'Horreum saved',
             class: self.class.name,
             identifier: identifier,
             duration: duration,
@@ -127,8 +131,7 @@ module Familia
           Familia::Instrumentation.notify_lifecycle(:save, self,
             duration: duration,
             update_expiration: update_expiration,
-            fields_count: fields_count
-          )
+            fields_count: fields_count)
         end
 
         # Clear dirty tracking after successful save
@@ -401,6 +404,7 @@ module Familia
         fields = kwargs
 
         raise ArgumentError, 'No fields specified' if fields.empty?
+
         guard_allowed_fields!(fields.keys)
 
         Familia.trace :BATCH_FAST_WRITE, nil, fields.keys if Familia.debug?
@@ -414,7 +418,7 @@ module Familia
         result = transaction do |_conn|
           hmset(serialized)
 
-          self.update_expiration if update_exp
+          update_expiration if update_exp
 
           touch_instances!
         end
@@ -556,7 +560,7 @@ module Familia
         end
 
         # Structured lifecycle logging and instrumentation
-        Familia.debug "Horreum destroyed",
+        Familia.debug 'Horreum destroyed',
           class: self.class.name,
           identifier: identifier,
           key: dbkey
@@ -732,7 +736,7 @@ module Familia
 
         raise ArgumentError,
           "Undeclared fields for #{self.class}: #{unknown.join(', ')}. " \
-          "Only fields defined with `field` or `transient` are mass-assignable."
+          'Only fields defined with `field` or `transient` are mass-assignable.'
       end
 
       # Reset all transient fields to nil
