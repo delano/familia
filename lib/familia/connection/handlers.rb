@@ -188,7 +188,7 @@ module Familia
         return nil unless Fiber[:familia_pipeline]
 
         if Fiber[:familia_transaction]
-          Familia.trace :CONFLICTING_CONTEXT, nil,
+          Familia.trace :CONFLICTING_CONTEXT, _uri,
                        'Pipeline handler detected active transaction context'
           raise Familia::ConflictingContextError,
             'Cannot mix pipeline and transaction contexts. ' \
@@ -229,7 +229,7 @@ module Familia
         return nil unless Fiber[:familia_transaction]
 
         if Fiber[:familia_pipeline]
-          Familia.trace :CONFLICTING_CONTEXT, nil,
+          Familia.trace :CONFLICTING_CONTEXT, _uri,
                        'Transaction handler detected active pipeline context'
           raise Familia::ConflictingContextError,
             'Cannot mix pipeline and transaction contexts. ' \
