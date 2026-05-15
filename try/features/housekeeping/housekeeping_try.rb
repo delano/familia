@@ -52,52 +52,94 @@ HousekeepingOrg.respond_to?(:chore)
 HousekeepingOrg.respond_to?(:chores)
 #=> true
 
-## Instance responds to tidy!
+## Instance responds to do_chore!
+@org.respond_to?(:do_chore!)
+#=> true
+
+## Instance responds to do_chores!
+@org.respond_to?(:do_chores!)
+#=> true
+
+## Instance responds to tidy! (alias for do_chores!)
 @org.respond_to?(:tidy!)
+#=> true
+
+## tidy! is an alias of do_chores! (same method, not a wrapper)
+@org.method(:tidy!) == @org.method(:do_chores!)
 #=> true
 
 ## Chores are registered in declaration order
 HousekeepingOrg.chores.keys
 #=> [:standardize_planid, :uppercase_country]
 
-## tidy! with no args runs every registered chore and returns a Hash
-results = @org.tidy!
+## do_chores! runs every registered chore and returns a Hash
+results = @org.do_chores!
 results.keys.sort
 #=> [:standardize_planid, :uppercase_country]
 
-## tidy! persists changes via the block (planid normalized)
+## do_chores! persists changes via the block (planid normalized)
 @org.refresh!
 @org.planid
 #=> "professional"
 
-## tidy! persists changes via the block (country uppercased)
+## do_chores! persists changes via the block (country uppercased)
 @org.country
 #=> "US"
 
-## A second tidy! is a no-op (idempotent by convention)
-second = @org.tidy!
+## A second do_chores! is a no-op (idempotent by convention)
+second = @org.do_chores!
 second
 #=> {:standardize_planid=>nil, :uppercase_country=>nil}
 
-## tidy! with a name runs only that chore
+## tidy! delegates to do_chores! and returns the same Hash shape
+tidy_results = @org.tidy!
+tidy_results
+#=> {:standardize_planid=>nil, :uppercase_country=>nil}
+
+## do_chore! runs only the named chore and returns the block's raw value
 @org2 = HousekeepingOrg.new(orgid: 'beta', planid: 'free', country: 'ca')
 @org2.save
-result = @org2.tidy!(:uppercase_country)
-result
-#=> {:uppercase_country=>true}
+@org2.do_chore!(:uppercase_country)
+#=> true
 
-## Other chores are not run when called by name
+## do_chore! accepts a String name as well as a Symbol
+@org3 = HousekeepingOrg.new(orgid: 'gamma', planid: 'free', country: 'mx')
+@org3.save
+@org3.do_chore!('uppercase_country')
+#=> true
+
+## Other chores are not run when do_chore! is called by name
 @org2.refresh!
 @org2.planid # untouched (still 'free' which case maps to 'free' so no change)
 #=> "free"
 
-## tidy! with unknown chore raises ArgumentError
+## do_chore! returns the raw value when the block returns a no-op (nil)
+@org2.do_chore!(:standardize_planid)
+#=> nil
+
+## do_chore! with unknown chore raises ArgumentError
 begin
-  @org.tidy!(:nonexistent)
+  @org.do_chore!(:nonexistent)
 rescue ArgumentError => e
   e.message
 end
 #=> "unknown chore :nonexistent"
+
+## do_chore! with nil name raises ArgumentError
+begin
+  @org.do_chore!(nil)
+rescue ArgumentError => e
+  e.message
+end
+#=> "chore name required"
+
+## do_chore! with empty name raises ArgumentError
+begin
+  @org.do_chore!('')
+rescue ArgumentError => e
+  e.message
+end
+#=> "chore name required"
 
 ## chore registered without a block raises
 begin
@@ -115,16 +157,28 @@ rescue ArgumentError => e
 end
 #=> "chore name required"
 
-## A class with no chores returns an empty hash from tidy!
+## A class with no chores returns an empty hash from do_chores!
 @noop = HousekeepingNoop.new(id: 'x')
+@noop.do_chores!
+#=> {}
+
+## tidy! on a class with no chores also returns an empty hash
 @noop.tidy!
 #=> {}
+
+## tidy! no longer accepts a name argument (was a single-arg form in 2.7.0)
+begin
+  @org.tidy!(:standardize_planid)
+rescue ArgumentError => e
+  e.message.include?('wrong number of arguments')
+end
+#=> true
 
 ## chore registration is per-class (HousekeepingNoop has no chores)
 HousekeepingNoop.chores
 #=> {}
 
-## Errors raised in a chore propagate to the caller
+## Errors raised in a chore propagate to the caller via do_chores!
 class HousekeepingRaise < Familia::Horreum
   feature :housekeeping
   identifier_field :id
@@ -134,7 +188,15 @@ end
 @raiser = HousekeepingRaise.new(id: 'r')
 @raiser.save
 begin
-  @raiser.tidy!
+  @raiser.do_chores!
+rescue RuntimeError => e
+  e.message
+end
+#=> "kaboom"
+
+## Errors raised in a chore propagate to the caller via do_chore!
+begin
+  @raiser.do_chore!(:boom)
 rescue RuntimeError => e
   e.message
 end
@@ -151,7 +213,7 @@ class HousekeepingReplace < Familia::Horreum
 end
 @rep = HousekeepingReplace.new(id: 'r')
 @rep.save
-@rep.tidy!
+@rep.do_chores!
 #=> {:mark=>:second}
 
 ## Subclasses inherit chores from their parent (copy-on-access)
@@ -175,7 +237,7 @@ HousekeepingParent.chores.keys
 ## Inherited chores run alongside child-specific ones
 @child = HousekeepingChild.new(id: 'c')
 @child.save
-@child.tidy!.keys.sort
+@child.do_chores!.keys.sort
 #=> [:from_child, :from_parent]
 
 ## Subclass can override a parent chore by re-registering the same name
@@ -185,10 +247,10 @@ end
 HousekeepingOverride.chores.keys
 #=> [:from_parent]
 
-## Override chore runs the subclass block, not the parent block
+## do_chore! on subclass runs the override block, not the parent block
 @override = HousekeepingOverride.new(id: 'ov')
 @override.save
-@override.tidy!(:from_parent)[:from_parent]
+@override.do_chore!(:from_parent)
 #=> :overridden
 
 ## Parent registry is unchanged by a subclass override
@@ -198,6 +260,7 @@ HousekeepingParent.chores[:from_parent].equal?(HousekeepingOverride.chores[:from
 ## Cleanup
 @org.destroy! if @org.exists?
 @org2.destroy! if @org2.exists?
+@org3.destroy! if @org3.exists?
 @noop.destroy! if @noop.exists?
 @raiser.destroy! if @raiser.exists?
 @rep.destroy! if @rep.exists?

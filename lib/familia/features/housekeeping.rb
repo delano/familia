@@ -33,10 +33,13 @@ module Familia
     #   end
     #
     #   org = Organization.from_identifier('acme-corp')
-    #   org.tidy!
+    #   org.do_chores!
     #   # => { standardize_planid: true }
     #
-    #   org.tidy!(:standardize_planid)
+    #   org.do_chore!(:standardize_planid)
+    #   # => true
+    #
+    #   org.tidy! # alias for do_chores!
     #   # => { standardize_planid: true }
     #
     # See docs/guides/feature-housekeeping.md for the full guide.
@@ -46,6 +49,7 @@ module Familia
       def self.included(base)
         Familia.trace :LOADED, self, base if Familia.debug?
         base.extend ModelClassMethods
+        base.include ModelInstanceMethods
       end
 
       # Housekeeping::ModelClassMethods
@@ -53,7 +57,7 @@ module Familia
         # Register a chore by name. The block receives the instance.
         #
         # @param name [Symbol, String] chore identifier
-        # @yield [obj] block invoked with the instance during tidy!
+        # @yield [obj] block invoked with the instance during do_chore!/do_chores!
         # @return [Proc] the registered block
         # @raise [ArgumentError] if name is blank or no block is given
         def chore(name, &block)
@@ -77,24 +81,33 @@ module Familia
         end
       end
 
-      # Run all registered chores, or one chore by name.
-      #
-      # @param name [Symbol, String, nil] chore to run; nil runs all
-      # @return [Hash{Symbol => Object}] chore name => block return value
-      # @raise [ArgumentError] if name is given but not registered
-      def tidy!(name = nil)
-        registered = self.class.chores
+      # Housekeeping::ModelInstanceMethods
+      module ModelInstanceMethods
+        # Run a single registered chore by name.
+        #
+        # @param name [Symbol, String] chore to run
+        # @return [Object] the block's return value
+        # @raise [ArgumentError] if name is blank or not registered
+        def do_chore!(name)
+          raise ArgumentError, 'chore name required' if name.nil? || name.to_s.empty?
 
-        if name
           key = name.to_sym
+          registered = self.class.chores
           raise ArgumentError, "unknown chore #{name.inspect}" unless registered.key?(key)
 
-          { key => registered[key].call(self) }
-        else
-          registered.each_with_object({}) do |(chore_name, block), results|
+          registered[key].call(self)
+        end
+
+        # Run every registered chore against this instance.
+        #
+        # @return [Hash{Symbol => Object}] chore name => block return value
+        def do_chores!
+          self.class.chores.each_with_object({}) do |(chore_name, block), results|
             results[chore_name] = block.call(self)
           end
         end
+
+        alias tidy! do_chores!
       end
     end
   end

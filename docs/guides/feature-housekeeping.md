@@ -3,7 +3,7 @@
 The Housekeeping feature provides a declarative DSL for registering named cleanup chores on Horreum models. It is designed for short-lived, repeated tidying against fields whose values have drifted over time -- not for versioned, one-shot migrations.
 
 > [!TIP]
-> Enable with `feature :housekeeping` and register cleanup blocks with `chore :name do |obj| ... end`. Run them with `obj.tidy!`. Iteration and persistence are the caller's responsibility.
+> Enable with `feature :housekeeping` and register cleanup blocks with `chore :name do |obj| ... end`. Run all of them with `obj.do_chores!` (aliased `tidy!`), or one with `obj.do_chore!(:name)`. Iteration and persistence are the caller's responsibility.
 
 ## Quick Start
 
@@ -27,8 +27,12 @@ class Organization < Familia::Horreum
 end
 
 org = Organization.from_identifier("acme-corp")
-org.tidy!
+org.do_chores!
 # => { standardize_planid: true }
+
+# Or run a single chore by name (returns the block's raw value):
+org.do_chore!(:standardize_planid)
+# => true
 ```
 
 ## When to Use
@@ -79,14 +83,17 @@ Run all registered chores, or one by name:
 ```ruby
 user = User.from_identifier("alice@example.com")
 
-user.tidy!
+user.do_chores!
 # => { downcase_email: true, default_timezone: nil }
 
-user.tidy!(:downcase_email)
-# => { downcase_email: true }
+user.tidy! # alias for do_chores!
+# => { downcase_email: nil, default_timezone: nil }
+
+user.do_chore!(:downcase_email)
+# => true
 ```
 
-The return value is a hash mapping chore name to the block's return value. A truthy result signals "modified"; `nil` or `false` signals "no-op". The feature does not interpret these values -- they are passed through for the caller's stats collection.
+`do_chores!` returns a hash mapping chore name to the block's return value. `do_chore!` returns the block's raw return value (not wrapped in a hash). A truthy result signals "modified"; `nil` or `false` signals "no-op". The feature does not interpret these values -- they are passed through for the caller's stats collection.
 
 ### Iteration -- Caller's Responsibility
 
@@ -99,7 +106,7 @@ namespace :data do
     stats = Hash.new(0)
     Organization.instances.each do |id|
       org = Organization.find_by_id(id) or next
-      results = org.tidy!
+      results = org.do_chores!
       results.each { |name, result| stats[name] += 1 if result }
     end
     puts stats.inspect
@@ -117,7 +124,9 @@ The feature has no opinion about batching, SCAN vs KEYS, error aggregation, or s
 |-------|--------|---------|
 | **Class** | `chore(name, &block)` | Register a chore |
 | | `chores` | Hash of registered chores |
-| **Instance** | `tidy!(name = nil)` | Run all (or one) chore; returns Hash |
+| **Instance** | `do_chore!(name)` | Run a single chore by name; returns the block's raw value |
+| | `do_chores!` | Run every registered chore; returns Hash |
+| | `tidy!` | Alias for `do_chores!` |
 
 ## Design Constraints
 
@@ -150,7 +159,7 @@ class Customer < Familia::Horreum
   end
 end
 
-customer.tidy!
+customer.do_chores!
 # => { trim_whitespace: true, uppercase_country: nil }
 ```
 
@@ -182,7 +191,7 @@ end
 modified = []
 Organization.instances.each do |id|
   org = Organization.find_by_id(id) or next
-  results = org.tidy!
+  results = org.do_chores!
   modified << id if results.values.any?
 end
 puts "Modified #{modified.size} records: #{modified.inspect}"
@@ -195,7 +204,7 @@ errors = {}
 Organization.instances.each do |id|
   org = Organization.find_by_id(id) or next
   begin
-    org.tidy!
+    org.do_chores!
   rescue => e
     errors[id] = e.message
   end
