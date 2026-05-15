@@ -46,6 +46,7 @@ module Familia
     #
     #   | Handler | Transaction | Pipeline | Ad-hoc Commands |
     #   |---------|------------|----------|-----------------|
+    #   | **FiberPipeline** | Error | Reentrant (same conn) | Use pipeline conn |
     #   | **FiberTransaction** | Reentrant (same conn) | Error | Use transaction conn |
     #   | **FiberConnection** | Error | Error | ✓ Allowed |
     #   | **Provider** | ✓ New checkout | ✓ New checkout | ✓ New checkout |
@@ -163,11 +164,48 @@ module Familia
       end
     end
 
-    # Checks for fiber-local transaction connections (highest priority for Horreum)
+    # Checks for fiber-local pipeline connections
+    #
+    # Returns the fiber-local pipeline connection when inside a pipelined block.
+    # Raises ConflictingContextError if both pipeline and transaction contexts
+    # are active — these are mutually exclusive operations.
+    #
+    # Reentrant pipeline - just yield the existing connection
+    # No new pipeline block, just participate in existing pipeline
+    #
+    class FiberPipelineHandler < BaseConnectionHandler
+      @allows_transaction = false
+      @allows_pipelined = :reentrant
+
+      # Singleton pattern for stateless handler
+      @instance = new.freeze
+
+      class << self
+        attr_reader :instance
+      end
+
+      def handle(_uri)
+        return nil unless Fiber[:familia_pipeline]
+
+        if Fiber[:familia_transaction]
+          raise Familia::ConflictingContextError,
+            'Cannot mix pipeline and transaction contexts. ' \
+            'Restructure to use one or the other.'
+        end
+
+        Familia.trace :DBCLIENT_FIBER_PIPELINE, nil, 'Using fiber-local pipeline connection'
+        Fiber[:familia_pipeline]
+      end
+    end
+
+    # Checks for fiber-local transaction connections
     #
     # Key insight: Mark that we're in reentrant mode and also track of
     # depth. This allows nested transaction calls to be safely reentrant
     # without breaking Redis's single-level MULTI/EXEC.
+    #
+    # Raises ConflictingContextError if both pipeline and transaction contexts
+    # are active — these are mutually exclusive operations.
     #
     # Reentrant transaction - just yield the existing connection
     # No new MULTI/EXEC, just participate in existing transaction
@@ -187,6 +225,12 @@ module Familia
 
       def handle(_uri)
         return nil unless Fiber[:familia_transaction]
+
+        if Fiber[:familia_pipeline]
+          raise Familia::ConflictingContextError,
+            'Cannot mix pipeline and transaction contexts. ' \
+            'Restructure to use one or the other.'
+        end
 
         Familia.trace :DBCLIENT_FIBER_TRANSACTION, nil, 'Using fiber-local transaction connection'
         Fiber[:familia_transaction]

@@ -14,6 +14,14 @@
 
 require_relative '../../support/helpers/test_helpers'
 
+## FiberPipelineHandler blocks transactions
+Familia::Connection::FiberPipelineHandler.allows_transaction
+#=> false
+
+## FiberPipelineHandler is reentrant for pipelines
+Familia::Connection::FiberPipelineHandler.allows_pipelined
+#=> :reentrant
+
 ## FiberTransactionHandler constraints
 Familia::Connection::FiberTransactionHandler.allows_transaction
 #=> :reentrant

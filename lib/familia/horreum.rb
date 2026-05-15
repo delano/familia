@@ -390,10 +390,12 @@ module Familia
     # Returns the Database connection for the instance using Chain of Responsibility pattern.
     #
     # This method uses a chain of handlers to resolve connections in priority order:
-    # 1. FiberTransactionHandler - Fiber[:familia_transaction] (active transaction)
-    # 2. CachedConnectionHandler - Accesses self.dbclient
-    # 3. CachedConnectionHandler - Accesses self.class.dbclient
-    # 4. GlobalFallbackHandler - Familia.dbclient(uri || logical_database) (global fallback)
+    # 1. FiberPipelineHandler - Fiber[:familia_pipeline] (active pipeline)
+    # 2. FiberTransactionHandler - Fiber[:familia_transaction] (active transaction)
+    # 3. FiberConnectionHandler - Fiber[:familia_connection] (middleware-provided)
+    # 4. ProviderConnectionHandler - connection_provider callback
+    # 5. CachedConnectionHandler - @dbclient instance variable
+    # 6. CreateConnectionHandler - creates new connection (fallback)
     #
     # @return [Redis] the Database connection instance.
     #

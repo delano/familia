@@ -2,8 +2,6 @@
 #
 # frozen_string_literal: true
 
-require 'set'
-
 module Familia
   class Horreum
     # AuditMethods provides proactive consistency detection for Horreum models.
@@ -61,15 +59,15 @@ module Familia
       def audit_unique_indexes(scanned_identifiers: nil, loaded_objects: nil)
         return [] unless respond_to?(:indexing_relationships)
 
-        indexing_relationships.select { |r|
+        indexing_relationships.select do |r|
           r.cardinality == :unique && r.within.nil?
-        }.map { |rel|
+        end.map do |rel|
           audit_single_unique_index(
             rel,
             scanned_identifiers: scanned_identifiers,
             loaded_objects: loaded_objects,
           )
-        }
+        end
       end
 
       # Audits all multi indexes.
@@ -89,15 +87,15 @@ module Familia
       def audit_multi_indexes(scanned_identifiers: nil, loaded_objects: nil)
         return [] unless respond_to?(:indexing_relationships)
 
-        indexing_relationships.select { |r|
+        indexing_relationships.select do |r|
           r.cardinality == :multi
-        }.map { |rel|
+        end.map do |rel|
           audit_single_multi_index(
             rel,
             scanned_identifiers: scanned_identifiers,
             loaded_objects: loaded_objects,
           )
-        }
+        end
       end
 
       # Audits participation collections for stale members.
@@ -114,7 +112,7 @@ module Familia
       def audit_participations(sample_size: nil)
         return [] unless respond_to?(:participation_relationships)
 
-        participation_relationships.flat_map { |rel|
+        participation_relationships.flat_map do |rel|
           if rel.target_class == self
             # Class-level participation (class_participates_in)
             [audit_class_participation(rel, sample_size: sample_size)]
@@ -122,7 +120,7 @@ module Familia
             # Instance-level participation (participates_in TargetClass, :collection)
             audit_instance_participations(rel, sample_size: sample_size)
           end
-        }
+        end
       end
 
       # Audits instance-level related_fields (list/set/zset/hashkey) for
@@ -175,9 +173,9 @@ module Familia
 
         return empty_result unless respond_to?(:indexing_relationships)
 
-        class_unique_rels = indexing_relationships.select { |rel|
+        class_unique_rels = indexing_relationships.select do |rel|
           rel.cardinality == :unique && (rel.within.nil? || rel.within == :class)
-        }
+        end
         return empty_result if class_unique_rels.empty?
 
         instance_ids = instances.members
@@ -278,9 +276,9 @@ module Familia
         # audits. Without this, a model with N unique indexes and M multi
         # indexes would trigger N+M additional SCANs and load_multi round
         # trips during their "missing" phases.
-        has_indexes = respond_to?(:indexing_relationships) && indexing_relationships.any? { |r|
+        has_indexes = respond_to?(:indexing_relationships) && indexing_relationships.any? do |r|
           (r.cardinality == :unique && r.within.nil?) || r.cardinality == :multi
-        }
+        end
 
         if has_indexes
           shared_ids = scan_identifiers(batch_size: batch_size).to_a
@@ -313,7 +311,7 @@ module Familia
           participations: parts,
           related_fields: related,
           cross_references: cross_refs,
-          duration: duration
+          duration: duration,
         )
       end
 
@@ -331,7 +329,7 @@ module Familia
       def scan_identifiers(batch_size: 100, &progress)
         ids = Set.new
         pattern = scan_pattern
-        cursor = "0"
+        cursor = '0'
 
         loop do
           cursor, keys = dbclient.scan(cursor, match: pattern, count: batch_size)
@@ -342,7 +340,7 @@ module Familia
             ids << identifier
           end
           progress&.call(phase: :scanning, current: ids.size, total: nil)
-          break if cursor == "0"
+          break if cursor == '0'
         end
 
         ids
@@ -413,9 +411,7 @@ module Familia
           value = obj.send(field)
           next if value.nil? || value.to_s.strip.empty?
 
-          unless indexed_values.include?(value.to_s)
-            missing << { identifier: identifier, field_value: value.to_s }
-          end
+          missing << { identifier: identifier, field_value: value.to_s } unless indexed_values.include?(value.to_s)
         end
 
         { index_name: index_name, stale: stale, missing: missing }
@@ -862,7 +858,7 @@ module Familia
         unless scope_class.respond_to?(:instances)
           Familia.debug "[audit_instance_scoped_multi_index] #{name}##{rel.index_name}: " \
                         "scope class #{scope_class.name} has no instances collection; " \
-                        "missing detection requires enumerating scope instances"
+                        'missing detection requires enumerating scope instances'
           return [[], :no_scope_instances]
         end
 
@@ -1009,14 +1005,14 @@ module Familia
         raw_members = raw_members.sample(sample_size) if sample_size
 
         raw_members.each do |raw_member|
-          unless exists?(raw_member)
-            stale << {
-              identifier: raw_member,
-              collection_key: collection_key,
-              collection_name: collection_name,
-              reason: :object_missing,
-            }
-          end
+          next if exists?(raw_member)
+
+          stale << {
+            identifier: raw_member,
+            collection_key: collection_key,
+            collection_name: collection_name,
+            reason: :object_missing,
+          }
         end
 
         { collection_name: collection_name, stale_members: stale }
@@ -1080,19 +1076,19 @@ module Familia
                         client.lrange(collection_key, 0, -1)
                       else
                         return stale
-                      end
+        end
 
         raw_members = raw_members.sample(sample_size) if sample_size
 
         raw_members.each do |raw_member|
-          unless exists?(raw_member)
-            stale << {
-              identifier: raw_member,
-              collection_key: collection_key,
-              collection_name: rel.collection_name,
-              reason: :object_missing,
-            }
-          end
+          next if exists?(raw_member)
+
+          stale << {
+            identifier: raw_member,
+            collection_key: collection_key,
+            collection_name: rel.collection_name,
+            reason: :object_missing,
+          }
         end
 
         stale
@@ -1202,12 +1198,12 @@ module Familia
       #
       def scan_matching_keys(pattern, client, batch_size: 100)
         keys = []
-        cursor = "0"
+        cursor = '0'
 
         loop do
           cursor, batch = client.scan(cursor, match: pattern, count: batch_size)
           keys.concat(batch)
-          break if cursor == "0"
+          break if cursor == '0'
         end
 
         keys

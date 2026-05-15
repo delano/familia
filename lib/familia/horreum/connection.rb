@@ -22,9 +22,12 @@ module Familia
       # Returns the Database connection for the class using Chain of Responsibility pattern.
       #
       # This method uses a chain of handlers to resolve connections in priority order:
-      # 1. FiberTransactionHandler - Fiber[:familia_transaction] (active transaction)
-      # 2. DefaultConnectionHandler - Horreum model class-level @dbclient
-      # 3. GlobalFallbackHandler - Familia.dbclient(uri || logical_database) (global fallback)
+      # 1. FiberPipelineHandler - Fiber[:familia_pipeline] (active pipeline)
+      # 2. FiberTransactionHandler - Fiber[:familia_transaction] (active transaction)
+      # 3. FiberConnectionHandler - Fiber[:familia_connection] (middleware connection)
+      # 4. ProviderConnectionHandler - User-defined connection provider
+      # 5. CachedConnectionHandler - Horreum model class-level @dbclient
+      # 6. CreateConnectionHandler - Fresh connection creation (fallback)
       #
       # Thread-safe lazy initialization using double-checked locking to ensure
       # only a single connection chain is built even under high concurrent load.
@@ -278,6 +281,7 @@ module Familia
         @create_connection_handler ||= Familia::Connection::CreateConnectionHandler.new(klass)
 
         Familia::Connection::ResponsibilityChain.new
+          .add_handler(Familia::Connection::FiberPipelineHandler.instance)
           .add_handler(Familia::Connection::FiberTransactionHandler.instance)
           .add_handler(@fiber_connection_handler)
           .add_handler(@provider_connection_handler)

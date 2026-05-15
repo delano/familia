@@ -205,6 +205,7 @@ module Familia
       #   - Transaction: Better consistency for related operations
       #
       # @note Connection Handler Compatibility:
+      #   - FiberPipelineHandler: Supports reentrant pipelines
       #   - ProviderConnectionHandler: Full pipeline support
       #   - CreateConnectionHandler: Full pipeline support
       #   - FiberTransactionHandler: Blocked (raises OperationModeError)

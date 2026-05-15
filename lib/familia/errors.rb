@@ -43,6 +43,10 @@ module Familia
   # inside a transaction or pipeline
   class NestedTransactionError < OperationModeError; end
 
+  # Raised when both pipeline and transaction contexts are active.
+  # These contexts are mutually exclusive — restructure code to use one or the other.
+  class ConflictingContextError < OperationModeError; end
+
   # Raised when atomic_write cannot include all DataType fields because
   # they span multiple Redis databases (MULTI/EXEC cannot cross databases).
   class CrossDatabaseError < OperationModeError

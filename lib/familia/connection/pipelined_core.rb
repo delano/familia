@@ -40,6 +40,13 @@ module Familia
       #   end
       #
       def self.execute_pipeline(dbclient_proc, &)
+        # Prevent mixing pipeline and transaction contexts
+        if Fiber[:familia_transaction]
+          raise Familia::ConflictingContextError,
+            'Cannot start pipeline inside transaction. ' \
+            'Restructure to use one or the other.'
+        end
+
         # First, get the connection to populate the handler class
         dbclient_proc.call
         handler_class = Fiber[:familia_connection_handler_class]
