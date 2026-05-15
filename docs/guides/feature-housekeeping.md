@@ -95,26 +95,31 @@ user.do_chore!(:downcase_email)
 
 `do_chores!` returns a hash mapping chore name to the block's return value. `do_chore!` returns the block's raw return value (not wrapped in a hash). A truthy result signals "modified"; `nil` or `false` signals "no-op". The feature does not interpret these values -- they are passed through for the caller's stats collection.
 
-### Iteration -- Caller's Responsibility
+### Iteration -- Bulk Runner
 
-The feature operates on a single instance. Bulk runs live in the consumer app:
+For running chores across every record, the feature ships a class-level `run_chores!` that iterates the `instances` collection in pipelined batches (via `load_multi`), executes each chore per record with error isolation, and returns a stats hash:
 
 ```ruby
-# nightly rake task
-namespace :data do
-  task tidy_orgs: :environment do
-    stats = Hash.new(0)
-    Organization.instances.each do |id|
-      org = Organization.find_by_id(id) or next
-      results = org.do_chores!
-      results.each { |name, result| stats[name] += 1 if result }
-    end
-    puts stats.inspect
-  end
-end
+Organization.run_chores!
+# => {
+#      model: "Organization",
+#      scanned: 4200,
+#      chores: {
+#        standardize_planid: { modified: 37, errors: 0 },
+#        uppercase_country:  { modified: 102, errors: 1 },
+#      },
+#    }
+
+Organization.run_chores!(chore_name: :standardize_planid, limit: 500)
+# Filter to one chore and cap records scanned.
+
+Organization.run_chores!(batch_size: 50)
+# Tune the load_multi pipeline batch size (default: 100).
 ```
 
-The feature has no opinion about batching, SCAN vs KEYS, error aggregation, or scheduling -- the consumer app owns all of that.
+A truthy chore return increments `modified`; a raised exception increments `errors` (logged via `Familia.warn`) and iteration continues. The runner requires the class to expose `instances` (Horreum's default class-level sorted set) and `load_multi`.
+
+For scheduling, cross-model orchestration, custom logging, or non-default iteration (e.g. a configured allowlist of model classes), wrap `run_chores!` in your own job. The feature deliberately stays out of cron, multi-model discovery, and project-specific logging layers.
 
 ## Generated Method Reference
 
@@ -124,6 +129,7 @@ The feature has no opinion about batching, SCAN vs KEYS, error aggregation, or s
 |-------|--------|---------|
 | **Class** | `chore(name, &block)` | Register a chore |
 | | `chores` | Hash of registered chores |
+| | `run_chores!(chore_name:, limit:, batch_size:)` | Bulk runner across `instances`; returns stats hash |
 | **Instance** | `do_chore!(name)` | Run a single chore by name; returns the block's raw value |
 | | `do_chores!` | Run every registered chore; returns Hash |
 | | `tidy!` | Alias for `do_chores!` |
@@ -131,10 +137,10 @@ The feature has no opinion about batching, SCAN vs KEYS, error aggregation, or s
 ## Design Constraints
 
 1. **No implicit saves.** The block must call `save` (or `commit_fields`) itself. The feature does not auto-persist.
-2. **No iteration.** Operates on a single instance. There is no class-level `tidy_all!`.
+2. **Bulk via `run_chores!` only.** The feature operates on a single instance (`do_chore!`/`do_chores!`) plus one bulk runner (`run_chores!`) that iterates `instances`. Scheduling, multi-model orchestration, and custom logging stay in the consumer app.
 3. **No ordering.** Chores run in registration order, but should not depend on each other. If order matters, write one chore with sequential steps.
 4. **Idempotent by convention.** Use the conditional pattern (`if canonical && canonical != org.planid`) so a second run is a no-op.
-5. **Errors propagate.** The block can raise; the iteration code in the consumer app decides whether to rescue.
+5. **Errors isolate in `run_chores!`, propagate in `do_chore!`/`do_chores!`.** Single-instance methods let exceptions propagate; the bulk runner rescues per-record and increments the chore's `errors` counter so one failure doesn't halt the run.
 
 ## Common Patterns
 
@@ -185,28 +191,43 @@ chore :reconcile_billing do |account|
 end
 ```
 
-### Tracking Modified Records
+### Tracking Modified Records (Bulk)
+
+`run_chores!` already aggregates `modified` and `errors` counts per chore. Use it directly:
+
+```ruby
+report = Organization.run_chores!
+report[:chores].each do |name, counts|
+  puts "#{name}: #{counts[:modified]} modified, #{counts[:errors]} errors"
+end
+```
+
+### Custom Iteration (e.g. SCAN-Based)
+
+If `instances`-driven iteration isn't suitable (sharded data, custom scoping), drop down to `do_chore!`/`do_chores!`:
 
 ```ruby
 modified = []
 Organization.instances.each do |id|
-  org = Organization.find_by_id(id) or next
+  org = Organization.find_by_identifier(id) or next
   results = org.do_chores!
   modified << id if results.values.any?
 end
 puts "Modified #{modified.size} records: #{modified.inspect}"
 ```
 
-### Error Aggregation
+### Wrapping `run_chores!` for a Job Framework
 
 ```ruby
-errors = {}
-Organization.instances.each do |id|
-  org = Organization.find_by_id(id) or next
-  begin
-    org.do_chores!
-  rescue => e
-    errors[id] = e.message
+class HousekeepingJob
+  def self.perform_for(klass)
+    report = klass.run_chores!(batch_size: 50)
+    StatsD.gauge("housekeeping.#{klass.name}.scanned", report[:scanned])
+    report[:chores].each do |chore, counts|
+      StatsD.increment("housekeeping.#{klass.name}.#{chore}.modified", counts[:modified])
+      StatsD.increment("housekeeping.#{klass.name}.#{chore}.errors",   counts[:errors])
+    end
+    report
   end
 end
 ```

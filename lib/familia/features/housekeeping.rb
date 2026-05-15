@@ -46,6 +46,11 @@ module Familia
     module Housekeeping
       Familia::Base.add_feature self, :housekeeping
 
+      # Default Redis-pipelined batch size for `run_chores!`. Each batch hits
+      # Redis once via `load_multi`, then drives the chore block per record.
+      # 100 trades pipeline efficiency against per-batch latency.
+      DEFAULT_BATCH_SIZE = 100
+
       def self.included(base)
         Familia.trace :LOADED, self, base if Familia.debug?
         base.extend ModelClassMethods
@@ -77,6 +82,82 @@ module Familia
             superclass.chores.dup
           else
             {}
+          end
+        end
+
+        # Run registered chores against every record reachable via the
+        # `instances` class-level sorted set. Records are loaded in pipelined
+        # batches (`load_multi`) and each chore is executed per record with
+        # error isolation -- one failing chore call does not abort the run.
+        #
+        # Stats shape:
+        #
+        #   {
+        #     model: 'User',
+        #     scanned: 4200,
+        #     chores: {
+        #       downcase_email: { modified: 37, errors: 0 },
+        #       default_timezone: { modified: 102, errors: 1 },
+        #     },
+        #   }
+        #
+        # The `modified` counter increments when the chore block returns a
+        # truthy value (the conventional "modified" signal). The `errors`
+        # counter increments when the chore block raises; the exception is
+        # logged via `Familia.warn` and iteration continues.
+        #
+        # Requires the class to expose an `instances` collection (Horreum's
+        # default class-level sorted set) and `load_multi` (Horreum default).
+        #
+        # @param chore_name [Symbol, String, nil] specific chore to run; nil
+        #   runs every registered chore against each record
+        # @param limit [Integer, nil] cap on records scanned; nil iterates all
+        # @param batch_size [Integer] pipeline batch size for `load_multi`
+        # @return [Hash] stats hash (see above)
+        # @raise [ArgumentError] if the class has no chores, the named chore
+        #   is not registered, or `instances`/`load_multi` are unavailable
+        def run_chores!(chore_name: nil, limit: nil, batch_size: DEFAULT_BATCH_SIZE)
+          unless respond_to?(:instances) && respond_to?(:load_multi)
+            raise ArgumentError, "#{name} cannot run_chores! without instances and load_multi"
+          end
+
+          chore_keys = resolve_chore_keys(chore_name)
+          stats      = chore_keys.to_h { |key| [key, { modified: 0, errors: 0 }] }
+          scanned    = 0
+
+          instances.to_a.each_slice(batch_size) do |batch_ids|
+            break if limit && scanned >= limit
+
+            batch_ids = batch_ids.take(limit - scanned) if limit
+            records   = load_multi(batch_ids).compact
+            records.each do |record|
+              scanned += 1
+              chore_keys.each do |key|
+                begin
+                  stats[key][:modified] += 1 if record.do_chore!(key)
+                rescue StandardError => e
+                  stats[key][:errors] += 1
+                  Familia.warn "[run_chores!] #{name}##{record.identifier} chore=#{key} failed: #{e.message}"
+                end
+              end
+            end
+          end
+
+          { model: name, scanned: scanned, chores: stats }
+        end
+
+        private
+
+        def resolve_chore_keys(chore_name)
+          raise ArgumentError, "#{name} has no chores registered" if chores.empty?
+
+          if chore_name
+            key = chore_name.to_sym
+            raise ArgumentError, "unknown chore #{chore_name.inspect}" unless chores.key?(key)
+
+            [key]
+          else
+            chores.keys
           end
         end
       end

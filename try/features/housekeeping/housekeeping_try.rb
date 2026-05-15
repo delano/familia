@@ -257,6 +257,115 @@ HousekeepingOverride.chores.keys
 HousekeepingParent.chores[:from_parent].equal?(HousekeepingOverride.chores[:from_parent])
 #=> false
 
+## run_chores! returns model name, scanned count, and per-chore stats
+class HousekeepingBulk < Familia::Horreum
+  feature :housekeeping
+  identifier_field :id
+  field :id
+  field :code
+
+  chore :uppercase_code do |obj|
+    next unless obj.code && obj.code != obj.code.upcase
+    obj.code = obj.code.upcase
+    obj.save
+    true
+  end
+end
+@bulk1 = HousekeepingBulk.new(id: 'b1', code: 'aaa'); @bulk1.save
+@bulk2 = HousekeepingBulk.new(id: 'b2', code: 'BBB'); @bulk2.save
+@bulk3 = HousekeepingBulk.new(id: 'b3', code: 'ccc'); @bulk3.save
+@bulk_result = HousekeepingBulk.run_chores!
+[@bulk_result[:model], @bulk_result[:scanned]]
+#=> [HousekeepingBulk.name, 3]
+
+## run_chores! per-chore stats count modifications (truthy returns)
+@bulk_result[:chores][:uppercase_code]
+#=> {modified: 2, errors: 0}
+
+## run_chores! actually persists changes
+HousekeepingBulk.find_by_identifier('b1').code
+#=> "AAA"
+
+## run_chores! with chore_name: filters to a single chore
+class HousekeepingBulkMulti < Familia::Horreum
+  feature :housekeeping
+  identifier_field :id
+  field :id
+  field :name
+  field :country
+
+  chore(:strip_name) { |o| o.name && o.name != o.name.strip ? (o.name = o.name.strip; o.save; true) : nil }
+  chore(:upper_country) { |o| o.country && o.country != o.country.upcase ? (o.country = o.country.upcase; o.save; true) : nil }
+end
+@m1 = HousekeepingBulkMulti.new(id: 'm1', name: '  alice  ', country: 'us'); @m1.save
+@m2 = HousekeepingBulkMulti.new(id: 'm2', name: 'bob',       country: 'ca'); @m2.save
+HousekeepingBulkMulti.run_chores!(chore_name: :upper_country)[:chores].keys
+#=> [:upper_country]
+
+## run_chores! with chore_name does not run the other chore
+HousekeepingBulkMulti.find_by_identifier('m1').name
+#=> "  alice  "
+
+## run_chores! with chore_name actually ran the named chore
+HousekeepingBulkMulti.find_by_identifier('m1').country
+#=> "US"
+
+## run_chores! honors limit
+@m3 = HousekeepingBulkMulti.new(id: 'm3', name: 'carol', country: 'mx'); @m3.save
+@m4 = HousekeepingBulkMulti.new(id: 'm4', name: 'dave',  country: 'br'); @m4.save
+HousekeepingBulkMulti.run_chores!(chore_name: :upper_country, limit: 2)[:scanned]
+#=> 2
+
+## run_chores! batches via load_multi (batch_size smaller than population)
+HousekeepingBulkMulti.run_chores!(chore_name: :strip_name, batch_size: 1)[:scanned]
+#=> 4
+
+## run_chores! isolates per-record errors and continues
+class HousekeepingBulkError < Familia::Horreum
+  feature :housekeeping
+  identifier_field :id
+  field :id
+  field :payload
+
+  chore(:explode) { |o| raise 'kaboom' if o.payload == 'bad'; o.payload && true }
+end
+@be1 = HousekeepingBulkError.new(id: 'be1', payload: 'good'); @be1.save
+@be2 = HousekeepingBulkError.new(id: 'be2', payload: 'bad');  @be2.save
+@be3 = HousekeepingBulkError.new(id: 'be3', payload: 'good'); @be3.save
+@err_result = HousekeepingBulkError.run_chores!
+@err_result[:chores][:explode]
+#=> {modified: 2, errors: 1}
+
+## run_chores! still reports scanned count including failed records
+@err_result[:scanned]
+#=> 3
+
+## run_chores! raises when no chores are registered
+class HousekeepingBulkEmpty < Familia::Horreum
+  feature :housekeeping
+  identifier_field :id
+  field :id
+end
+begin
+  HousekeepingBulkEmpty.run_chores!
+rescue ArgumentError => e
+  e.message
+end
+#=> "#{HousekeepingBulkEmpty.name} has no chores registered"
+
+## run_chores! raises on unknown chore_name
+begin
+  HousekeepingBulk.run_chores!(chore_name: :nonexistent)
+rescue ArgumentError => e
+  e.message
+end
+#=> "unknown chore :nonexistent"
+
+## run_chores! returns scanned: 0 when instances collection is empty
+@bulk1.destroy!; @bulk2.destroy!; @bulk3.destroy!
+HousekeepingBulk.run_chores!.slice(:scanned, :chores)
+#=> {scanned: 0, chores: {uppercase_code: {modified: 0, errors: 0}}}
+
 ## Cleanup
 @org.destroy! if @org.exists?
 @org2.destroy! if @org2.exists?
@@ -266,5 +375,12 @@ HousekeepingParent.chores[:from_parent].equal?(HousekeepingOverride.chores[:from
 @rep.destroy! if @rep.exists?
 @child.destroy! if @child.exists?
 @override.destroy! if @override.exists?
+@m1.destroy! if @m1.exists?
+@m2.destroy! if @m2.exists?
+@m3.destroy! if @m3.exists?
+@m4.destroy! if @m4.exists?
+@be1.destroy! if @be1.exists?
+@be2.destroy! if @be2.exists?
+@be3.destroy! if @be3.exists?
 true
 #=> true
