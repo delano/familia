@@ -108,6 +108,20 @@ module Familia
         klass.define_method fast_method_name do |val|
           raise ArgumentError, "#{fast_method_name} requires a value" if val.nil?
 
+          # Prevent fast writer within transaction/pipeline - the return value
+          # would be Redis::Future which doesn't support zero?/positive? checks
+          if Fiber[:familia_transaction]
+            raise Familia::OperationModeError, <<~ERROR_MESSAGE.chomp
+              Cannot call fast writer #{fast_method_name} within a transaction.
+              Use batch_update or commit_fields instead.
+            ERROR_MESSAGE
+          elsif Fiber[:familia_pipeline]
+            raise Familia::OperationModeError, <<~ERROR_MESSAGE.chomp
+              Cannot call fast writer #{fast_method_name} within a pipeline.
+              Restructure to call fast writers outside the pipeline.
+            ERROR_MESSAGE
+          end
+
           # UnsortedSet via the setter method to get proper ConcealedString wrapping
           send(:"#{method_name}=", val) if method_name
 
