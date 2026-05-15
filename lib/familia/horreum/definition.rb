@@ -483,11 +483,15 @@ module Familia
             # Prevent fast writer within transaction/pipeline - the return value
             # would be Redis::Future which doesn't support zero?/positive? checks
             if Fiber[:familia_transaction]
+              Familia.trace :FAST_WRITER_BLOCKED, nil,
+                           "#{fast_method_name} blocked by active transaction context"
               raise Familia::OperationModeError, <<~ERROR_MESSAGE.chomp
                 Cannot call fast writer #{fast_method_name} within a transaction.
                 Use batch_update or commit_fields instead.
               ERROR_MESSAGE
             elsif Fiber[:familia_pipeline]
+              Familia.trace :FAST_WRITER_BLOCKED, nil,
+                           "#{fast_method_name} blocked by active pipeline context"
               raise Familia::OperationModeError, <<~ERROR_MESSAGE.chomp
                 Cannot call fast writer #{fast_method_name} within a pipeline.
                 Restructure to call fast writers outside the pipeline.

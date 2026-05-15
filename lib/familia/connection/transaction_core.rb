@@ -95,6 +95,8 @@ module Familia
       def self.execute_transaction(dbclient_proc, &)
         # Prevent mixing pipeline and transaction contexts
         if Fiber[:familia_pipeline]
+          Familia.trace :CONFLICTING_CONTEXT, nil,
+                       'Attempted to start transaction inside active pipeline'
           raise Familia::ConflictingContextError,
             'Cannot start transaction inside pipeline. ' \
             'Restructure to use one or the other.'
