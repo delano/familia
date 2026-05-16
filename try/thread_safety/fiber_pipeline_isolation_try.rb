@@ -206,30 +206,22 @@ multi_pipe_results
 #==> _.size == 6
 #==> _.select { |(label, _)| label == :between }.all? { |(_, is_nil)| is_nil }
 
-## Pipeline and transaction isolation in same fiber
-mixed_results = Concurrent::Array.new
+## Pipeline and transaction cannot be nested - raises ConflictingContextError
+error_raised = false
 
 fiber = Fiber.new do
-  Familia.pipeline do
-    pipe_conn = Fiber[:familia_pipeline]
-    mixed_results << [:pipeline, pipe_conn.object_id]
-
-    Familia.transaction do
-      txn_conn = Fiber[:familia_transaction]
-      pipe_during_txn = Fiber[:familia_pipeline]
-      mixed_results << [:transaction, txn_conn.object_id]
-      mixed_results << [:pipeline_during_txn, pipe_during_txn.object_id]
+  begin
+    Familia.pipeline do
+      Familia.transaction do
+        # Should not reach here
+      end
     end
-
-    pipe_after_txn = Fiber[:familia_pipeline]
-    mixed_results << [:pipeline_after_txn, pipe_after_txn.object_id]
+  rescue Familia::ConflictingContextError
+    error_raised = true
   end
 end
 
 fiber.resume
 
-mixed_results
-#==> _.size == 4
-#==> _[0][1] == _[2][1]  # Pipeline preserved during transaction
-#==> _[0][1] == _[3][1]  # Pipeline preserved after transaction
-#==> _[0][1] != _[1][1]  # Different connections for pipeline and transaction
+error_raised
+#=> true

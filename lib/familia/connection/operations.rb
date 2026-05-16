@@ -205,6 +205,7 @@ module Familia
       #   - Transaction: Better consistency for related operations
       #
       # @note Connection Handler Compatibility:
+      #   - FiberPipelineHandler: Supports reentrant pipelines
       #   - ProviderConnectionHandler: Full pipeline support
       #   - CreateConnectionHandler: Full pipeline support
       #   - FiberTransactionHandler: Blocked (raises OperationModeError)
@@ -218,8 +219,8 @@ module Familia
       # @see MultiResult For details on the return value structure
       # @see Familia.transaction For atomic command execution
       # @see #batch_update For similar MultiResult pattern in Horreum models
-      def pipelined(&block)
-        PipelineCore.execute_pipeline(-> { dbclient }, &block)
+      def pipelined(&)
+        PipelineCore.execute_pipeline(-> { dbclient }, &)
       end
       alias pipeline pipelined
 

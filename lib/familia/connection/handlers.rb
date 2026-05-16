@@ -38,37 +38,54 @@ module Familia
       end
     end
 
-    # Connection handler base class for Chain of Responsibility pattern.
-    # When no arguments are passed, all behaviour is based on the top
-    # Familia module itself. e.g. Familia.create_dbclient.
+    # Shared interface for connection handlers in the Chain of Responsibility.
     #
-    # Summary of Behaviors
+    # Including this module gives a handler class:
+    # * an instance-side `handle(uri)` stub that raises NotImplementedError, and
+    # * a small class-level DSL (`supports`) for declaring capability flags
+    #   (`allows_transaction`, `allows_pipelined`) read by the operation
+    #   guards in {Familia::Connection::TransactionCore} and
+    #   {Familia::Connection::PipelinedCore}.
     #
-    #   | Handler | Transaction | Pipeline | Ad-hoc Commands |
-    #   |---------|------------|----------|-----------------|
-    #   | **FiberTransaction** | Reentrant (same conn) | Error | Use transaction conn |
-    #   | **FiberConnection** | Error | Error | ✓ Allowed |
-    #   | **Provider** | ✓ New checkout | ✓ New checkout | ✓ New checkout |
-    #   | **Default** | ✓ With guards | ✓ With guards | ✓ Check mode |
-    #   | **Create** | ✓ Fresh conn | ✓ Fresh conn | ✓ Fresh conn |
+    # Capability flags default to `nil` when `supports` is not called — there
+    # is no implicit "allow all". Every handler is expected to declare its
+    # capabilities explicitly.
     #
-    # NOTE: Every subclass must provide values for the @allows_transaction
-    # and @allows_pipelined attributes.
+    # Summary of behaviours of the in-tree handlers:
     #
-    class BaseConnectionHandler
-      @allows_transaction = true
-      @allows_pipelined = true
-
-      class << self
-        attr_reader :allows_transaction, :allows_pipelined
+    #   | Handler            | Transaction       | Pipeline             | Ad-hoc Commands      |
+    #   |--------------------|-------------------|----------------------|----------------------|
+    #   | FiberPipeline      | Error             | Reentrant (same conn)| Use pipeline conn    |
+    #   | FiberTransaction   | Reentrant         | Error                | Use transaction conn |
+    #   | FiberConnection    | Error             | Error                | Allowed              |
+    #   | Provider           | New checkout      | New checkout         | New checkout         |
+    #   | Cached             | Error             | Error                | Allowed              |
+    #   | Create / Default   | Fresh conn        | Fresh conn           | Fresh conn           |
+    #   | ParentDelegation   | Delegated         | Delegated            | Delegated            |
+    #   | Standalone         | Allowed           | Allowed              | Allowed              |
+    #
+    module Handler
+      def self.included(base)
+        base.extend(ClassMethods)
       end
 
-      def initialize(familia_module = nil)
-        @familia_module = familia_module || Familia
-      end
-
-      def handle(uri)
+      def handle(_uri)
         raise NotImplementedError, 'Subclasses must implement handle'
+      end
+
+      # Class-level DSL injected into every handler class that includes Handler.
+      # Holds the capability flag readers and the `supports` declarator.
+      module ClassMethods
+        attr_reader :allows_transaction, :allows_pipelined
+
+        # Declare the operation modes this handler supports.
+        #
+        # @param transaction [Boolean, Symbol] true/false or :reentrant
+        # @param pipelined   [Boolean, Symbol] true/false or :reentrant
+        def supports(transaction: false, pipelined: false)
+          @allows_transaction = transaction
+          @allows_pipelined = pipelined
+        end
       end
     end
 
@@ -79,9 +96,14 @@ module Familia
     # Fresh connection each time - all operations safe (transactions,
     # pipelined, ad-hoc)
     #
-    class CreateConnectionHandler < BaseConnectionHandler
-      @allows_transaction = true
-      @allows_pipelined = true
+    class CreateConnectionHandler
+      include Handler
+
+      supports transaction: true, pipelined: true
+
+      def initialize(familia_module = nil)
+        @familia_module = familia_module || Familia
+      end
 
       def handle(uri)
         # Create new connection (no module-level caching)
@@ -101,9 +123,14 @@ module Familia
     # and also expected how they are to be used.
     # This is where connection pools live
     #
-    class ProviderConnectionHandler < BaseConnectionHandler
-      @allows_transaction = true
-      @allows_pipelined = true
+    class ProviderConnectionHandler
+      include Handler
+
+      supports transaction: true, pipelined: true
+
+      def initialize(familia_module = nil)
+        @familia_module = familia_module || Familia
+      end
 
       def handle(uri)
         return nil unless @familia_module.connection_provider
@@ -143,9 +170,14 @@ module Familia
     #       raise "Unknown operation: #{request.operation}"
     #     end
     #
-    class FiberConnectionHandler < BaseConnectionHandler
-      @allows_transaction = false
-      @allows_pipelined = false
+    class FiberConnectionHandler
+      include Handler
+
+      supports transaction: false, pipelined: false
+
+      def initialize(familia_module = nil)
+        @familia_module = familia_module || Familia
+      end
 
       def handle(uri)
         return nil unless Fiber[:familia_connection]
@@ -163,30 +195,79 @@ module Familia
       end
     end
 
-    # Checks for fiber-local transaction connections (highest priority for Horreum)
+    # Checks for fiber-local pipeline connections
+    #
+    # Returns the fiber-local pipeline connection when inside a pipelined block.
+    # Raises ConflictingContextError if both pipeline and transaction contexts
+    # are active — these are mutually exclusive operations.
+    #
+    # Reentrant pipeline - just yield the existing connection
+    # No new pipeline block, just participate in existing pipeline
+    #
+    class FiberPipelineHandler
+      include Handler
+
+      supports transaction: false, pipelined: :reentrant
+
+      # Singleton pattern for stateless handler
+      @instance = new.freeze
+
+      class << self
+        attr_reader :instance
+      end
+
+      def handle(_uri)
+        return nil unless Fiber[:familia_pipeline]
+
+        if Fiber[:familia_transaction]
+          Familia.trace :CONFLICTING_CONTEXT, _uri,
+                       'Pipeline handler detected active transaction context'
+          raise Familia::ConflictingContextError,
+            'Cannot mix pipeline and transaction contexts. ' \
+            'Restructure to use one or the other.'
+        end
+
+        Familia.trace :DBCLIENT_FIBER_PIPELINE, nil, 'Using fiber-local pipeline connection'
+        Fiber[:familia_pipeline]
+      end
+    end
+
+    # Checks for fiber-local transaction connections
     #
     # Key insight: Mark that we're in reentrant mode and also track of
     # depth. This allows nested transaction calls to be safely reentrant
     # without breaking Redis's single-level MULTI/EXEC.
+    #
+    # Raises ConflictingContextError if both pipeline and transaction contexts
+    # are active — these are mutually exclusive operations.
     #
     # Reentrant transaction - just yield the existing connection
     # No new MULTI/EXEC, just participate in existing transaction
     # Fiber[:familia_transaction_depth] ||= 0
     # Fiber[:familia_transaction_depth] += 1
     #
-    class FiberTransactionHandler < BaseConnectionHandler
-      @allows_transaction = :reentrant
-      @allows_pipelined = false
+    class FiberTransactionHandler
+      include Handler
+
+      supports transaction: :reentrant, pipelined: false
 
       # Singleton pattern for stateless handler
       @instance = new.freeze
 
-      def self.instance
-        @instance
+      class << self
+        attr_reader :instance
       end
 
       def handle(_uri)
         return nil unless Fiber[:familia_transaction]
+
+        if Fiber[:familia_pipeline]
+          Familia.trace :CONFLICTING_CONTEXT, _uri,
+                       'Transaction handler detected active pipeline context'
+          raise Familia::ConflictingContextError,
+            'Cannot mix pipeline and transaction contexts. ' \
+            'Restructure to use one or the other.'
+        end
 
         Familia.trace :DBCLIENT_FIBER_TRANSACTION, nil, 'Using fiber-local transaction connection'
         Fiber[:familia_transaction]
@@ -205,9 +286,10 @@ module Familia
     #
     # CachedConnectionHandler - Single cached connection - block all multi-mode operations
     #
-    class CachedConnectionHandler < BaseConnectionHandler
-      @allows_transaction = false
-      @allows_pipelined = false
+    class CachedConnectionHandler
+      include Handler
+
+      supports transaction: false, pipelined: false
 
       def initialize(familia_module)
         @familia_module = familia_module
@@ -240,9 +322,10 @@ module Familia
     # @example Class-level DataType with parent
     #   User.global_users  # DataType that delegates to User.dbclient
     #
-    class ParentDelegationHandler < BaseConnectionHandler
-      @allows_transaction = true
-      @allows_pipelined = true
+    class ParentDelegationHandler
+      include Handler
+
+      supports transaction: true, pipelined: true
 
       def initialize(data_type)
         @data_type = data_type
@@ -281,9 +364,10 @@ module Familia
     # @example Standalone DataType with logical_database option
     #   cache = Familia::HashKey.new('app:cache', logical_database: 2)
     #
-    class StandaloneConnectionHandler < BaseConnectionHandler
-      @allows_transaction = true
-      @allows_pipelined = true
+    class StandaloneConnectionHandler
+      include Handler
+
+      supports transaction: true, pipelined: true
 
       def initialize(data_type)
         @data_type = data_type

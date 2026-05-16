@@ -22,9 +22,12 @@ module Familia
       # Returns the Database connection for the class using Chain of Responsibility pattern.
       #
       # This method uses a chain of handlers to resolve connections in priority order:
-      # 1. FiberTransactionHandler - Fiber[:familia_transaction] (active transaction)
-      # 2. DefaultConnectionHandler - Horreum model class-level @dbclient
-      # 3. GlobalFallbackHandler - Familia.dbclient(uri || logical_database) (global fallback)
+      # 1. FiberPipelineHandler - Fiber[:familia_pipeline] (active pipeline)
+      # 2. FiberTransactionHandler - Fiber[:familia_transaction] (active transaction)
+      # 3. FiberConnectionHandler - Fiber[:familia_connection] (middleware connection)
+      # 4. ProviderConnectionHandler - User-defined connection provider
+      # 5. CachedConnectionHandler - Horreum model class-level @dbclient
+      # 6. CreateConnectionHandler - Fresh connection creation (fallback)
       #
       # Thread-safe lazy initialization using double-checked locking to ensure
       # only a single connection chain is built even under high concurrent load.
@@ -236,6 +239,11 @@ module Familia
       end
       alias pipeline pipelined
 
+      # Thread-safe mutex initialization when module is extended
+      def self.extended(base)
+        base.instance_variable_set(:@class_connection_chain_mutex, Mutex.new)
+      end
+
       private
 
       # Ensures that related fields have been initialized before entering transactions or pipelines.
@@ -250,10 +258,10 @@ module Familia
       def ensure_relatives_initialized!
         return if is_a?(Class)  # Class methods handle their own instances
         return unless self.class.respond_to?(:relations?) && self.class.relations?
-        return if singleton_class.instance_variable_defined?(:"@relatives_initialized")
+        return if singleton_class.instance_variable_defined?(:@relatives_initialized)
 
         raise "#{self.class} has related fields but they haven't been initialized. " \
-              "Did you override initialize without calling super? " \
+              'Did you override initialize without calling super? ' \
               "Related fields: #{self.class.related_fields.keys.join(', ')}"
       end
 
@@ -273,6 +281,7 @@ module Familia
         @create_connection_handler ||= Familia::Connection::CreateConnectionHandler.new(klass)
 
         Familia::Connection::ResponsibilityChain.new
+          .add_handler(Familia::Connection::FiberPipelineHandler.instance)
           .add_handler(Familia::Connection::FiberTransactionHandler.instance)
           .add_handler(@fiber_connection_handler)
           .add_handler(@provider_connection_handler)
@@ -280,10 +289,6 @@ module Familia
           .add_handler(@create_connection_handler)
       end
 
-      # Thread-safe mutex initialization when module is extended
-      def self.extended(base)
-        base.instance_variable_set(:@class_connection_chain_mutex, Mutex.new)
-      end
     end
   end
 end

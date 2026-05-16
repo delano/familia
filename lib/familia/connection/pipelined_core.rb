@@ -39,23 +39,30 @@ module Familia
       #     conn.set('key', 'value')  # Executes individually, no error
       #   end
       #
-      def self.execute_pipeline(dbclient_proc, &block)
+      def self.execute_pipeline(dbclient_proc, &)
+        # Prevent mixing pipeline and transaction contexts
+        if Fiber[:familia_transaction]
+          Familia.trace :CONFLICTING_CONTEXT, nil,
+                       'Attempted to start pipeline inside active transaction'
+          raise Familia::ConflictingContextError,
+            'Cannot start pipeline inside transaction. ' \
+            'Restructure to use one or the other.'
+        end
+
         # First, get the connection to populate the handler class
-        connection = dbclient_proc.call
+        dbclient_proc.call
         handler_class = Fiber[:familia_connection_handler_class]
 
         # Check pipeline capability
         pipeline_capability = handler_class&.allows_pipelined
 
         if pipeline_capability == false
-          OperationCore.handle_fallback(:pipeline, dbclient_proc, handler_class, &block)
+          OperationCore.handle_fallback(:pipeline, dbclient_proc, handler_class, &)
         else
           # Normal pipeline flow (includes nil, true, and other values)
-          execute_normal_pipeline(dbclient_proc, &block)
+          execute_normal_pipeline(dbclient_proc, &)
         end
       end
-
-      private
 
       # Executes a normal Redis pipeline
       #
@@ -66,7 +73,7 @@ module Familia
       # @param block [Proc] Block containing Redis commands to execute
       # @return [MultiResult] Result object with pipeline command results
       #
-      def self.execute_normal_pipeline(dbclient_proc, &block)
+      def self.execute_normal_pipeline(dbclient_proc)
         # Check for existing pipeline context
         return yield(Fiber[:familia_pipeline]) if Fiber[:familia_pipeline]
 

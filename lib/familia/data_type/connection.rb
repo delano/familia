@@ -14,18 +14,18 @@ module Familia
     # Key features:
     # * Database connection resolution with Chain of Responsibility pattern
     # * Redis key generation based on parent context
-    # * Direct database access for advanced operations
     # * Transaction support (MULTI/EXEC) for atomic operations
     # * Pipeline support for batched command execution
     # * Parent delegation for owned DataType objects
     # * Standalone connection management for independent DataType objects
     #
     # Connection Chain Priority:
-    # 1. FiberTransactionHandler - Active transaction context
-    # 2. FiberConnectionHandler - Fiber-local connections
-    # 3. ProviderConnectionHandler - User-defined connection provider
-    # 4. ParentDelegationHandler - Delegate to parent object (primary for owned DataTypes)
-    # 5. StandaloneConnectionHandler - Independent DataType connection
+    # 1. FiberPipelineHandler - Active pipeline context
+    # 2. FiberTransactionHandler - Active transaction context
+    # 3. FiberConnectionHandler - Fiber-local connections
+    # 4. ProviderConnectionHandler - User-defined connection provider
+    # 5. ParentDelegationHandler - Delegate to parent object (primary for owned DataTypes)
+    # 6. StandaloneConnectionHandler - Independent DataType connection
     #
     # @example Parent-owned DataType (automatic delegation)
     #   class User < Familia::Horreum
@@ -79,8 +79,8 @@ module Familia
       # Retrieves a Database connection using the Chain of Responsibility pattern
       #
       # Implements connection resolution optimized for DataType usage patterns:
-      # - Fast path check for active transaction context
-      # - Full connection chain for comprehensive resolution
+      # - Full connection chain for comprehensive resolution (pipeline/transaction
+      #   precedence and conflict detection live in the handlers themselves)
       # - Parent delegation as primary behavior for owned DataTypes
       # - Standalone connection handling for independent DataTypes
       #
@@ -100,10 +100,9 @@ module Familia
       #   cache.dbclient  # Uses standalone handler with db 2
       #
       def dbclient(uri = nil)
-        # Fast path for transaction context (highest priority)
-        return Fiber[:familia_transaction] if Fiber[:familia_transaction]
-
-        # Build connection chain (not cached due to frozen objects)
+        # Build connection chain (not cached due to frozen objects).
+        # The chain handles pipeline/transaction precedence and conflict detection
+        # symmetrically with Horreum#dbclient — no fast paths that bypass the chain.
         build_connection_chain.handle(uri)
       end
 
@@ -157,41 +156,6 @@ module Familia
         end
       end
 
-      # Provides a structured way to "gear down" to run db commands that are
-      # not implemented in our DataType classes since we intentionally don't
-      # have a method_missing method.
-      #
-      # Enhanced to work seamlessly with transactions and pipelines. When called
-      # within a transaction or pipeline context, uses that connection automatically.
-      #
-      # @yield [Redis, String] Yields the connection and dbkey to the block
-      # @return The return value of the block
-      #
-      # @example Basic usage
-      #   datatype.direct_access do |conn, key|
-      #     conn.zadd(key, 100, 'member')
-      #   end
-      #
-      # @example Within transaction (automatic context detection)
-      #   datatype.transaction do |trans_conn|
-      #     datatype.direct_access do |conn, key|
-      #       # conn is the same as trans_conn
-      #       conn.zadd(key, 200, 'member')
-      #     end
-      #   end
-      #
-      def direct_access
-        if Fiber[:familia_transaction]
-          # Already in transaction, use that connection
-          yield(Fiber[:familia_transaction], dbkey)
-        elsif Fiber[:familia_pipeline]
-          # Already in pipeline, use that connection
-          yield(Fiber[:familia_pipeline], dbkey)
-        else
-          yield(dbclient, dbkey)
-        end
-      end
-
       private
 
       # Builds the connection chain with handlers in priority order
@@ -199,11 +163,15 @@ module Familia
       # Creates the Chain of Responsibility for connection resolution with
       # DataType-specific handlers. Handlers are checked in order:
       #
-      # 1. FiberTransactionHandler - Return active transaction connection
-      # 2. FiberConnectionHandler - Use fiber-local connection
-      # 3. ProviderConnectionHandler - Delegate to connection provider
-      # 4. ParentDelegationHandler - Delegate to parent's connection (primary for owned DataTypes)
-      # 5. StandaloneConnectionHandler - Handle standalone DataTypes
+      # 1. FiberPipelineHandler  - Return active pipeline connection (raises on transaction conflict)
+      # 2. FiberTransactionHandler - Return active transaction connection (raises on pipeline conflict)
+      # 3. FiberConnectionHandler - Use fiber-local connection
+      # 4. ProviderConnectionHandler - Delegate to connection provider
+      # 5. ParentDelegationHandler - Delegate to parent's connection (primary for owned DataTypes)
+      # 6. StandaloneConnectionHandler - Handle standalone DataTypes
+      #
+      # Order matches Horreum#build_connection_chain so DataType call sites observe
+      # the same pipeline/transaction precedence and conflict semantics.
       #
       # @return [ResponsibilityChain] Configured connection chain
       #
@@ -218,6 +186,7 @@ module Familia
         standalone_connection_handler = Familia::Connection::StandaloneConnectionHandler.new(self)
 
         Familia::Connection::ResponsibilityChain.new
+          .add_handler(Familia::Connection::FiberPipelineHandler.instance)
           .add_handler(Familia::Connection::FiberTransactionHandler.instance)
           .add_handler(fiber_connection_handler)
           .add_handler(provider_connection_handler)
