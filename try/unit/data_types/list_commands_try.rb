@@ -6,6 +6,19 @@
 
 require_relative '../../support/helpers/test_helpers'
 
+# Class with expiration on the list, used by the rebase-regression tests
+# at the bottom of this file. EXPIRE on a freshly-emptied (Redis auto-deleted)
+# key is the "interesting" case for scenario 2 — without expiration enabled,
+# update_expiration is a no-op and wouldn't exercise the real code path.
+class BoneExpiringList < Familia::Horreum
+  feature :expiration
+  default_expiration 3600
+  identifier_field :token
+  field     :token
+  field     :name
+  list      :owners
+end
+
 @a = Bone.new 'listcmds'
 
 ## Familia::ListKey#pop with count parameter returns array
@@ -182,6 +195,120 @@ result = @a.owners.lmove(@dest.owners, :left, :right)
 [result, @a.owners.to_a, @dest.owners.to_a]
 #=> ['lm1', ['lm2'], ['lm1']]
 
+# Regression block for PR #209 rebase: pop/shift now combine warn_if_dirty!
+# (from main) with the count parameter (from feature branch). The tests below
+# cover the *combination* — that the count branch still fires warn_if_dirty!,
+# and that update_expiration stays safe when RPOP/LPOP drains and Redis
+# auto-deletes the key.
+
+## ListKey#pop with count fires warn_if_dirty! when parent has unsaved scalars
+@a.owners.delete!
+@a.owners.push :w1, :w2, :w3
+@a.name = 'dirty_pop_count'
+Familia.strict_write_order = true
+begin
+  result = @a.owners.pop(2)
+  outcome = [:no_raise, result]
+rescue Familia::Problem => e
+  outcome = [:raised, e.message.include?('unsaved scalar fields'), e.message.include?('name')]
+ensure
+  Familia.strict_write_order = false
+  @a.clear_dirty!
+end
+outcome
+#=> [:raised, true, true]
+
+## ListKey#shift with count fires warn_if_dirty! when parent has unsaved scalars
+@a.owners.delete!
+@a.owners.push :w1, :w2, :w3
+@a.name = 'dirty_shift_count'
+Familia.strict_write_order = true
+begin
+  result = @a.owners.shift(2)
+  outcome = [:no_raise, result]
+rescue Familia::Problem => e
+  outcome = [:raised, e.message.include?('unsaved scalar fields'), e.message.include?('name')]
+ensure
+  Familia.strict_write_order = false
+  @a.clear_dirty!
+end
+outcome
+#=> [:raised, true, true]
+
+## ListKey#pop with count empties the list; update_expiration handles the auto-deleted key
+@expiring = BoneExpiringList.new('explist1')
+@expiring.owners.delete!
+@expiring.owners.push :e1, :e2, :e3
+result = @expiring.owners.pop(3)
+# Key was auto-deleted by Redis when RPOP drained it; EXPIRE on missing key
+# is a no-op (returns 0/false) but must not raise.
+[result, @expiring.owners.empty?, Familia.dbclient.exists(@expiring.owners.dbkey)]
+#=> [['e3', 'e2', 'e1'], true, 0]
+
+## ListKey#shift with count empties the list; update_expiration handles the auto-deleted key
+@expiring = BoneExpiringList.new('explist2')
+@expiring.owners.delete!
+@expiring.owners.push :e1, :e2, :e3
+result = @expiring.owners.shift(3)
+[result, @expiring.owners.empty?, Familia.dbclient.exists(@expiring.owners.dbkey)]
+#=> [['e1', 'e2', 'e3'], true, 0]
+
+## ListKey#pop with count > list length returns all elements without error
+@expiring = BoneExpiringList.new('explist3')
+@expiring.owners.delete!
+@expiring.owners.push :p1, :p2
+result = @expiring.owners.pop(10)
+[result, @expiring.owners.empty?]
+#=> [['p2', 'p1'], true]
+
+## ListKey#shift with count > list length returns all elements without error
+@expiring = BoneExpiringList.new('explist4')
+@expiring.owners.delete!
+@expiring.owners.push :p1, :p2
+result = @expiring.owners.shift(10)
+[result, @expiring.owners.empty?]
+#=> [['p1', 'p2'], true]
+
+## ListKey#pop without count (single-element path) still fires warn_if_dirty!
+## Regression guard: this path existed pre-rebase but now shares a method
+## body with the count branch -- must continue to honour strict_write_order.
+@a.owners.delete!
+@a.owners.push :s1, :s2
+@a.name = 'dirty_pop_single'
+Familia.strict_write_order = true
+begin
+  result = @a.owners.pop
+  outcome = [:no_raise, result]
+rescue Familia::Problem => e
+  outcome = [:raised, e.message.include?('unsaved scalar fields'), e.message.include?('name')]
+ensure
+  Familia.strict_write_order = false
+  @a.clear_dirty!
+end
+outcome
+#=> [:raised, true, true]
+
+## ListKey#shift without count (single-element path) still fires warn_if_dirty!
+@a.owners.delete!
+@a.owners.push :s1, :s2
+@a.name = 'dirty_shift_single'
+Familia.strict_write_order = true
+begin
+  result = @a.owners.shift
+  outcome = [:no_raise, result]
+rescue Familia::Problem => e
+  outcome = [:raised, e.message.include?('unsaved scalar fields'), e.message.include?('name')]
+ensure
+  Familia.strict_write_order = false
+  @a.clear_dirty!
+end
+outcome
+#=> [:raised, true, true]
+
 @a.owners.delete!
 @dest.owners.delete!
 Familia.dbclient.del('familia:test:raw_dest_list')
+BoneExpiringList.new('explist1').owners.delete! rescue nil
+BoneExpiringList.new('explist2').owners.delete! rescue nil
+BoneExpiringList.new('explist3').owners.delete! rescue nil
+BoneExpiringList.new('explist4').owners.delete! rescue nil
