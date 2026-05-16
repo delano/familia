@@ -1,0 +1,20 @@
+Added
+~~~~~
+
+- Trace events for connection-mode conflicts. ``Familia.trace`` now
+  emits ``CONFLICTING_CONTEXT`` when pipeline and transaction
+  contexts collide (in both ``FiberPipelineHandler``/
+  ``FiberTransactionHandler`` and the
+  ``execute_transaction``/``execute_pipeline`` entry points), and
+  ``FAST_WRITER_BLOCKED`` when a fast writer (``field!``) is called
+  inside a transaction or pipeline. These fire just before the
+  corresponding ``ConflictingContextError`` /
+  ``OperationModeError`` is raised, so operators can pinpoint where
+  blocked operations originate when ``FAMILIA_TRACE=1``.
+
+AI Assistance
+~~~~~~~~~~~~~
+
+- Added the trace instrumentation in response to PR #263 review
+  feedback (Claude Code review bot) recommending tracing for
+  conflict detection events.
