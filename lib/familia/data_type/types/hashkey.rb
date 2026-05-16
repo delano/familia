@@ -184,7 +184,9 @@ module Familia
     #   my_hash.incrbyfloat('temperature', 0.5)  #=> 23.5
     #   my_hash.incrbyfloat('temperature', -1.2) #=> 22.3
     def incrbyfloat(field, by)
-      dbclient.hincrbyfloat(dbkey, field.to_s, by).to_f
+      ret = dbclient.hincrbyfloat(dbkey, field.to_s, by).to_f
+      update_expiration
+      ret
     end
     alias incrfloat incrbyfloat
 
