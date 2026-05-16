@@ -332,6 +332,7 @@ module Familia
     #   zset.popmin(3)  #=> [["member1", 1.0], ["member2", 2.0], ["member3", 3.0]]
     #
     def popmin(count = 1)
+      warn_if_dirty!
       # Normalize explicit nil to the default so the structural dispatch below
       # behaves identically whether the arg is omitted or passed as nil.
       # redis-rb treats nil as count <= 1 and returns a flat pair.
@@ -367,6 +368,7 @@ module Familia
     #   zset.popmax(3)  #=> [["member3", 100.0], ["member2", 90.0], ["member1", 80.0]]
     #
     def popmax(count = 1)
+      warn_if_dirty!
       # Normalize explicit nil to the default so the structural dispatch below
       # behaves identically whether the arg is omitted or passed as nil.
       # redis-rb treats nil as count <= 1 and returns a flat pair.
@@ -501,6 +503,7 @@ module Familia
     # @return [Integer] Number of members removed
     #
     def remrangebylex(min, max)
+      warn_if_dirty!
       result = dbclient.zremrangebylex(dbkey, min, max)
       update_expiration
       result
@@ -595,7 +598,9 @@ module Familia
       keys = [dbkey] + resolve_set_keys(other_sets)
       opts = build_set_operation_opts(weights: weights, aggregate: aggregate)
 
-      dbclient.zunionstore(destination, keys, **opts)
+      result = dbclient.zunionstore(destination, keys, **opts)
+      update_expiration
+      result
     end
 
     # Stores the intersection of sorted sets into a destination key.
@@ -610,7 +615,9 @@ module Familia
       keys = [dbkey] + resolve_set_keys(other_sets)
       opts = build_set_operation_opts(weights: weights, aggregate: aggregate)
 
-      dbclient.zinterstore(destination, keys, **opts)
+      result = dbclient.zinterstore(destination, keys, **opts)
+      update_expiration
+      result
     end
 
     # Returns the difference between this sorted set and other sorted sets.
@@ -642,7 +649,9 @@ module Familia
     #
     def diffstore(destination, *other_sets)
       keys = [dbkey] + resolve_set_keys(other_sets)
-      dbclient.zdiffstore(destination, keys)
+      result = dbclient.zdiffstore(destination, keys)
+      update_expiration
+      result
     end
 
 
