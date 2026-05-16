@@ -7,6 +7,160 @@ The format is based on `Keep a Changelog <https://keepachangelog.com/en/1.1.0/>`
 
    <!--scriv-insert-here-->
 
+.. _changelog-2.8.0:
+
+2.8.0 — 2026-05-15
+==================
+
+Added
+-----
+
+- Expanded Redis 7 command coverage across all DataType classes:
+
+  - **StringKey**: ``incrbyfloat``, ``getex``, ``getdel``, ``setex``, ``psetex``,
+    ``bitcount``, ``bitpos``, ``bitfield``, plus class methods ``mget``, ``mset``,
+    ``msetnx``, ``bitop`` for multi-key and bitwise operations.
+
+  - **List**: ``trim``/``ltrim``, ``set``/``lset``, ``insert``/``linsert``,
+    ``move``/``lmove``, ``pushx``/``rpushx``, ``unshiftx``/``lpushx``.
+    Updated ``pop`` and ``shift`` to support optional count parameter for batch operations.
+
+  - **UnsortedSet**: ``intersection``/``inter``, ``union``, ``difference``/``diff``,
+    ``member_any?``/``members?``, ``scan``, ``intercard``/``intersection_cardinality``,
+    ``interstore``/``intersection_store``, ``unionstore``/``union_store``,
+    ``diffstore``/``difference_store``.
+
+  - **SortedSet**: ``popmin``, ``popmax``, ``score_count``/``zcount``, ``mscore``,
+    ``union``, ``inter``, ``rangebylex``, ``revrangebylex``, ``remrangebylex``,
+    ``lexcount``, ``randmember``, ``scan``, ``unionstore``, ``interstore``,
+    ``diff``, ``diffstore``.
+
+  - **HashKey**: ``scan``/``hscan``, ``incrbyfloat``/``incrfloat``,
+    ``strlen``/``hstrlen``, ``randfield``/``hrandfield``, plus field-level TTL
+    commands (Redis 7.4+): ``expire_fields``, ``pexpire_fields``, ``expireat_fields``,
+    ``pexpireat_fields``, ``ttl_fields``, ``pttl_fields``, ``persist_fields``,
+    ``expiretime_fields``, ``pexpiretime_fields``.
+
+- Added 158 new tests across 5 test files covering all new methods.
+
+- Instance-scoped ``audit_multi_indexes`` is now fully implemented.
+  Discovers per-scope bucket keys via SCAN, partitions them by scope
+  instance, and reports stale members, orphaned buckets, and missing
+  entries in the same shape as the class-level audit. Orphan entries
+  carry a ``:reason`` (``:scope_missing`` or ``:field_value_unheld``)
+  and a ``:scope_id``. Missing entries are detected via the indexed
+  class's ``participates_in`` relationship to the scope class; when
+  absent, the result carries ``missing_status: :not_audited``.
+  Resolves the ``:not_implemented`` follow-up from #217.
+
+- ``repair_multi_indexes!`` class method that invokes the existing
+  ``rebuild_<index_name>`` methods for both class-level (one call on
+  the indexed class) and instance-scoped (one call per scope
+  instance) multi-indexes. Indexes whose audit status is ``:ok`` are
+  skipped; rebuild methods that don't exist or scope classes
+  without an ``instances`` collection are recorded in ``:skipped``
+  with a reason.
+
+- ``housekeeping`` feature gains a class-level bulk runner,
+  ``Klass.run_chores!(chore_name:, limit:, batch_size:)``. It iterates
+  the class's ``instances`` collection in pipelined batches via
+  ``load_multi``, runs all registered chores (or one named chore)
+  against each record, and returns a stats hash:
+  ``{ model:, scanned:, chores: { name => { modified:, errors: } } }``.
+  Truthy chore returns increment ``modified``; raised exceptions are
+  isolated per-record, logged via ``Familia.warn``, and counted as
+  ``errors`` so a single failure doesn't halt the run. Lifted from the
+  shape proven out in OneTime Secret's ``HousekeepingJob``.
+
+- Trace events for connection-mode conflicts. ``Familia.trace`` now
+  emits ``CONFLICTING_CONTEXT`` when pipeline and transaction
+  contexts collide (in both ``FiberPipelineHandler``/
+  ``FiberTransactionHandler`` and the
+  ``execute_transaction``/``execute_pipeline`` entry points), and
+  ``FAST_WRITER_BLOCKED`` when a fast writer (``field!``) is called
+  inside a transaction or pipeline. These fire just before the
+  corresponding ``ConflictingContextError`` /
+  ``OperationModeError`` is raised, so operators can pinpoint where
+  blocked operations originate when ``FAMILIA_TRACE=1``.
+
+Changed
+-------
+
+- ``repair_all!`` now runs each repair stage inside its own rescue
+  boundary; a failure in one dimension no longer prevents the others
+  from running. The return hash gains ``:status`` (``:ok`` or
+  ``:partial_failure``), ``:errors`` (per-stage exception details
+  when raised), and ``:multi_indexes`` (results from the new
+  ``repair_multi_indexes!``). An opt-in ``verify: true`` kwarg
+  re-runs ``health_check`` after repair and exposes the result as
+  ``:post_audit`` / ``:verified`` so callers can confirm the run
+  actually drove the model back to a healthy state.
+
+- ``AuditReport#complete?`` is no longer false-positive due to
+  ``:not_implemented`` stubs in ``multi_indexes`` -- instance-scoped
+  indexes return ``:ok`` or ``:issues_found`` like class-level ones.
+
+- ``housekeeping`` feature: split the dual-purpose ``tidy!`` into two
+  explicit instance methods. ``do_chore!(name)`` runs a single named
+  chore and returns the block's raw return value (no longer wrapped
+  in a ``{name => result}`` hash). ``do_chores!`` runs every
+  registered chore and returns the ``{name => result}`` hash.
+  ``tidy!`` is preserved as an alias of ``do_chores!`` for backwards
+  compatibility with the 2.7.0 no-arg call site; the single-arg form
+  ``tidy!(:name)`` now raises ``ArgumentError``.
+
+- The connection handler hierarchy has been refactored from class inheritance (``BaseConnectionHandler``) to module composition. Handlers now ``include Familia::Connection::Handler`` and declare their operation-mode capabilities with a small DSL: ``supports transaction: true, pipelined: false``. The ``BaseConnectionHandler`` constant is gone. This is only relevant if you have custom handlers in application code — the public ``allows_transaction`` / ``allows_pipelined`` class methods continue to work, and the singleton ``.instance`` accessors on ``FiberPipelineHandler`` / ``FiberTransactionHandler`` are unchanged. The previous default of "allow all operations" when capability flags were not set has been removed; every handler is now expected to declare its capabilities explicitly via ``supports``.
+- ``Familia.dbclient`` and ``Familia::DataType#dbclient`` now route through ``FiberPipelineHandler`` before ``FiberTransactionHandler``, matching ``Horreum#dbclient``. With both handlers in the chain, attempting to mix pipeline and transaction contexts raises ``Familia::ConflictingContextError`` uniformly from every call site.
+
+Removed
+-------
+
+- ``Familia::DataType#direct_access`` has been removed. The method was a legacy escape hatch for issuing raw Redis commands from inside a DataType wrapper; it predates the chain-based routing of ``Fiber[:familia_transaction]`` and ``Fiber[:familia_pipeline]``. All in-tree call sites now go through the wrapper's own mutating methods (which auto-route through the active transaction or pipeline) or through the wrapper's ``transaction`` / ``pipelined`` blocks. If you were calling ``direct_access do |conn, key| ... end``, replace it with either the DataType's own mutator or the corresponding block API.
+
+Fixed
+-----
+
+- ``SortedSet#popmin`` and ``SortedSet#popmax`` now normalize an explicitly
+  passed ``nil`` count to the default of ``1``. Previously, calling
+  ``zset.popmin(nil)`` or ``zset.popmax(nil)`` would bypass the ``count == 1``
+  branch of the structural dispatch added in the prior commit, causing
+  redis-rb's flat ``[member, score]`` return shape to be iterated as if it
+  were a nested result — yielding a malformed pair. Omitting the argument
+  was and remains unaffected.
+
+- Restored ``require 'set'`` in ``lib/familia/horreum/management/audit.rb``. ``Set`` is autoloaded as a core class only on Ruby 3.4+; on Ruby 3.2/3.3 (the gem's supported floor) the require is mandatory for the five ``Set.new`` usages in that file.
+
+AI Assistance
+-------------
+
+- Claude Opus 4.5 analyzed Redis 7 command documentation and compared coverage
+  against existing Familia DataType implementations using parallel Explore agents.
+- Implementation performed by 5 parallel backend-dev agents, one per DataType.
+- Test coverage written by 5 parallel qa-automation-engineer agents focusing on
+  Familia-specific behavior (serialization, deserialization, aliases) rather than
+  re-testing redis-rb gem functionality.
+
+- Edge case identified by the Claude Code Review GitHub Action
+  (``.github/workflows/claude-code-review.yml``) when reviewing the
+  structural-dispatch change in commit ``010d5be``. Fix drafted and verified
+  by Claude Opus 4.7 under supervision.
+
+- Instance-scoped multi-index audit algorithm (bucket discovery,
+  scope existence batching, participation-driven missing detection),
+  ``repair_multi_indexes!``, the ``repair_all!`` robustness
+  refactor, and the accompanying tryouts coverage were authored
+  with Claude Code assistance against the #217 review branch.
+
+- Method split, alias wiring, bulk runner port from OTS, doc updates,
+  and expanded tryouts coverage (25 → 48 testcases) authored with
+  Claude Code.
+
+- Added the trace instrumentation in response to PR #263 review
+  feedback (Claude Code review bot) recommending tracing for
+  conflict detection events.
+
+- The handler refactor, ``direct_access`` removal, and changelog drafting were performed with Claude Code assistance while resolving review feedback on PR #263.
+
 .. _changelog-2.7.0:
 
 2.7.0 — 2026-05-13
