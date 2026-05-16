@@ -144,7 +144,7 @@ end
 
 ## Test 5: Perform batch update in atomic context
 @results4 = Familia.atomic do
-  @account6.batch_update(
+  @account6.multi_field_update(
     balance: 600.0,
     holder_name: "Henry Jr."
   )

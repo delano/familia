@@ -65,34 +65,34 @@ Familia.dbclient.set('debug:ending_save_if_not_exists_tests', Familia.now.to_s)
 @customer.to_a[4]
 #=> "John Doe"
 
-## batch_update can update multiple fields atomically, to_h
-@result = @customer.batch_update(name: 'Jane Windows', email: 'jane@example.com')
+## multi_field_update can update multiple fields atomically, to_h
+@result = @customer.multi_field_update(name: 'Jane Windows', email: 'jane@example.com')
 @result.to_h
 #=> {:success=>true, :results=>[0, 0, false, true]}
 
-## batch_update returns successful result, successful?
+## multi_field_update returns successful result, successful?
 @result.successful?
 #=> true
 
-## batch_update returns successful result, tuple
+## multi_field_update returns successful result, tuple
 @result.tuple
 #=> [true, [0, 0, false, true]]
 
-## batch_update returns successful result, to_a
+## multi_field_update returns successful result, to_a
 @result.to_a
 #=> [true, [0, 0, false, true]]
 
-## batch_update updates object fields in memory, confirm fields changed
+## multi_field_update updates object fields in memory, confirm fields changed
 [@customer.name, @customer.email]
 #=> ["Jane Windows", "jane@example.com"]
 
-## batch_update persists to Valkey/Redis
+## multi_field_update persists to Valkey/Redis
 @customer.refresh!
 [@customer.name, @customer.email]
 #=> ["Jane Windows", "jane@example.com"]
 
-## batch_update with update_expiration: false works
-@customer.batch_update(name: 'Bob Jones', update_expiration: false)
+## multi_field_update with update_expiration: false works
+@customer.multi_field_update(name: 'Bob Jones', update_expiration: false)
 @customer.refresh!
 @customer.name
 #=> "Bob Jones"
@@ -148,14 +148,14 @@ result.size
 @customer.hget('temp_field')
 #=> "temp_value"
 
-## Empty batch_update still works
-result = @customer.batch_update
+## Empty multi_field_update still works
+result = @customer.multi_field_update
 result.successful?
 #=> true
 
 ## destroy! removes object from Database (1 of 2)
 @customer.destroy!
-#=:> MultiResult
+#=:> Familia::MultiResult
 #==> result.successful?
 
 ## After destroy!, dbkey no longer exists (2 of 2)
@@ -177,10 +177,10 @@ result.successful?
 @fresh_customer.class
 #=> Customer
 
-## batch_update with new fields returns [1, 1] for new field creation
+## multi_field_update with new fields returns [1, 1] for new field creation
 @fresh_customer.remove_field('role')
 @fresh_customer.remove_field('planid')
-@fresh_result = @fresh_customer.batch_update(role: 'admin', planid: 'premium')
+@fresh_result = @fresh_customer.multi_field_update(role: 'admin', planid: 'premium')
 @fresh_result.to_h
 #=> {:success=>true, :results=>[1, 1, true, true]}
 

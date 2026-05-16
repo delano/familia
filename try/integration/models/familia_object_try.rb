@@ -48,7 +48,7 @@ obj = Customer.find_by_id :delano
 
 ## Customer.destroy
 @cust.destroy!
-#=:> MultiResult
+#=:> Familia::MultiResult
 #==> result.successful?
 
 ## Customer.instances

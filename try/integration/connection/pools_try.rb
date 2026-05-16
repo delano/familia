@@ -145,7 +145,7 @@ threads.each(&:join)
   # Test that transaction connection is available
   conn.ping
 end
-# Transaction returns MultiResult with success status and results
+# Transaction returns Familia::MultiResult with success status and results
 @transfer_result.results.first
 #=> "PONG"
 

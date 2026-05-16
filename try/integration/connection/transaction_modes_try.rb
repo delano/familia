@@ -12,7 +12,7 @@
 # - :permissive: Silently execute commands individually
 #
 # The IndividualCommandProxy executes Redis commands immediately instead of queuing
-# them in a transaction, maintaining the same MultiResult interface for consistency.
+# them in a transaction, maintaining the same Familia::MultiResult interface for consistency.
 
 require_relative '../../support/helpers/test_helpers'
 
@@ -87,8 +87,8 @@ begin
     conn.hget(customer.dbkey, 'name')
   end
 
-  # Should return MultiResult with individual command results
-  result.is_a?(MultiResult) && result.results.last == 'Warn Mode Works'
+  # Should return Familia::MultiResult with individual command results
+  result.is_a?(Familia::MultiResult) && result.results.last == 'Warn Mode Works'
 ensure
   TransactionModeTestCustomer.remove_instance_variable(:@dbclient)
   Familia.configure { |config| config.transaction_mode = :strict }
@@ -111,8 +111,8 @@ begin
     conn.hget(customer.dbkey, 'email')
   end
 
-  # Should return MultiResult
-  result.is_a?(MultiResult) && result.results.last == 'permissive@example.com'
+  # Should return Familia::MultiResult
+  result.is_a?(Familia::MultiResult) && result.results.last == 'permissive@example.com'
 ensure
   TransactionModeTestCustomer.remove_instance_variable(:@dbclient)
   Familia.configure { |config| config.transaction_mode = :strict }
@@ -130,7 +130,7 @@ begin
     conn.hget(customer.dbkey, 'type')
   end
 
-  result.is_a?(MultiResult) && result.results.last == 'normal transaction'
+  result.is_a?(Familia::MultiResult) && result.results.last == 'normal transaction'
 end
 #=> true
 
@@ -146,15 +146,15 @@ begin
     conn.hget(customer.dbkey, 'field1')
   end
 
-  # Check that results are collected and it's a MultiResult
-  result.is_a?(MultiResult) && result.results.size >= 2
+  # Check that results are collected and it's a Familia::MultiResult
+  result.is_a?(Familia::MultiResult) && result.results.size >= 2
 ensure
   TransactionModeTestCustomer.remove_instance_variable(:@dbclient)
   Familia.configure { |config| config.transaction_mode = :strict }
 end
 #=> true
 
-## MultiResult success detection works with individual commands
+## Familia::MultiResult success detection works with individual commands
 begin
   Familia.configure { |config| config.transaction_mode = :permissive }
   TransactionModeTestCustomer.instance_variable_set(:@dbclient, Familia.create_dbclient)
@@ -188,7 +188,7 @@ begin
     conn.get('global_test_key')
   end
 
-  result.is_a?(MultiResult) && result.results.last == 'global_test_value'
+  result.is_a?(Familia::MultiResult) && result.results.last == 'global_test_value'
 ensure
   Familia.connection_provider = original_provider
   Familia.configure { |config| config.transaction_mode = :strict }
@@ -237,12 +237,12 @@ begin
       inner_conn.hset(customer.dbkey, 'inner', 'nested')
     end
 
-    # Inner transaction should return MultiResult
-    inner_result.is_a?(MultiResult)
+    # Inner transaction should return Familia::MultiResult
+    inner_result.is_a?(Familia::MultiResult)
   end
 
-  # Outer transaction should also return MultiResult
-  outer_result.is_a?(MultiResult)
+  # Outer transaction should also return Familia::MultiResult
+  outer_result.is_a?(Familia::MultiResult)
 ensure
   TransactionModeTestCustomer.remove_instance_variable(:@dbclient)
   Familia.configure { |config| config.transaction_mode = :strict }

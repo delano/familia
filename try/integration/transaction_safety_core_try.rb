@@ -86,7 +86,7 @@ end
   conn.expire(@write_customer.dbkey, 3600)
 end
 @write_result.class.name
-#=> "MultiResult"
+#=> "Familia::MultiResult"
 
 ## nested transactions reuse same connection
 @nested_customer = SafetyTestCustomer.new(email: "#{safety_test_id('nested')}@example.com")

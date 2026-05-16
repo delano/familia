@@ -32,10 +32,10 @@ RegistryTestModel.instances.member?('reg-save-1')
 RegistryTestModel.instances.member?('reg-commit-1')
 #=> true
 
-## batch_update adds to instances sorted set
+## multi_field_update adds to instances sorted set
 @obj3 = RegistryTestModel.new(rid: 'reg-batch-1', name: 'Batch Test')
 @obj3.save
-@obj3.batch_update(name: 'Updated Name')
+@obj3.multi_field_update(name: 'Updated Name')
 RegistryTestModel.instances.member?('reg-batch-1')
 #=> true
 

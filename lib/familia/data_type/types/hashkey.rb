@@ -141,6 +141,37 @@ module Familia
       deserialize_values(*elements)
     end
 
+    # Iterates over field-value pairs in the hash.
+    #
+    # Uses HSCAN for memory-efficient iteration. Optionally filters by field
+    # name pattern.
+    #
+    # @param matching [String, nil] Optional glob-style pattern to filter field
+    #   names (e.g., "user:*", "*_count")
+    # @param batch_size [Integer] Number of elements to fetch per HSCAN iteration
+    # @yield [field, value] Each field-value pair
+    # @return [Enumerator, self] Returns Enumerator if no block given, self otherwise
+    #
+    # @example Iterate all pairs
+    #   settings.each { |field, value| puts "#{field}: #{value}" }
+    #
+    # @example Filter by pattern
+    #   settings.each(matching: "cache_*") { |f, v| puts "#{f}: #{v}" }
+    #
+    def each(matching: nil, batch_size: 100, &block)
+      return to_enum(:each, matching: matching, batch_size: batch_size) unless block
+
+      cursor = 0
+      loop do
+        new_cursor, pairs = scan(cursor, match: matching, count: batch_size)
+        pairs.each(&block)
+        cursor = new_cursor
+        break if cursor.zero?
+      end
+
+      self
+    end
+
     # Incrementally iterates over fields in the hash using cursor-based iteration.
     # This is more memory-efficient than `hgetall` for large hashes.
     #

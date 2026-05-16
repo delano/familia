@@ -132,8 +132,39 @@ module Familia
       rangeraw 0, count
     end
 
-    def each(&)
-      range.each(&)
+    # Iterates over elements of the list.
+    #
+    # Uses LRANGE pagination for memory-efficient iteration over large lists.
+    # Unlike sets, Redis lists do not support SCAN, so we paginate through
+    # the list using index ranges.
+    #
+    # @param batch_size [Integer] Number of elements to fetch per LRANGE call
+    # @yield [element] Each deserialized element
+    # @return [Enumerator, self] Returns Enumerator if no block given, self otherwise
+    #
+    # @example Iterate all elements
+    #   history.each { |event| process(event) }
+    #
+    # @example Use as Enumerator
+    #   history.each.with_index { |event, idx| puts "#{idx}: #{event}" }
+    #
+    def each(batch_size: 100, &block)
+      return to_enum(:each, batch_size: batch_size) unless block
+
+      offset = 0
+      loop do
+        # LRANGE is inclusive on both ends, so end_idx = offset + batch_size - 1
+        elements = range(offset, offset + batch_size - 1)
+        break if elements.empty?
+
+        elements.each(&block)
+        offset += elements.size
+
+        # If we got fewer than batch_size, we've reached the end
+        break if elements.size < batch_size
+      end
+
+      self
     end
 
     def each_with_index(&)

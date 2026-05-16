@@ -390,7 +390,7 @@ class BankAccount
     save
   end
 
-  def batch_update(updates)
+  def multi_field_update(updates)
     updates.each do |field, value|
       send("#{field}=", value)
     end

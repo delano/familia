@@ -137,7 +137,7 @@ module Familia
       #
       # @see Familia.transaction For global transaction method
       # @see MultiResult For details on the return value structure
-      # @see #batch_update For similar atomic field updates with MultiResult
+      # @see #multi_field_update For similar atomic field updates with MultiResult
       def transaction(&)
         ensure_relatives_initialized!
         Familia::Connection::TransactionCore.execute_transaction(-> { dbclient }, &)

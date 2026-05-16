@@ -95,7 +95,7 @@ module Familia
       #
       # @see MultiResult For details on the return value structure
       # @see Familia.pipelined For non-atomic command batching
-      # @see #batch_update For similar MultiResult pattern in Horreum models
+      # @see #multi_field_update For similar MultiResult pattern in Horreum models
       def transaction(&)
         Familia::Connection::TransactionCore.execute_transaction(-> { dbclient }, &)
       end
@@ -218,7 +218,7 @@ module Familia
       #
       # @see MultiResult For details on the return value structure
       # @see Familia.transaction For atomic command execution
-      # @see #batch_update For similar MultiResult pattern in Horreum models
+      # @see #multi_field_update For similar MultiResult pattern in Horreum models
       def pipelined(&)
         PipelineCore.execute_pipeline(-> { dbclient }, &)
       end

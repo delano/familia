@@ -87,7 +87,7 @@ end
 [@model3.hget(:status), @model3.flags.member?('important'), @model3.settings['theme']]
 #=> ["mixed", true, "dark"]
 
-## Pipelined block returns MultiResult
+## Pipelined block returns Familia::MultiResult
 @model4 = PipelineRoutingTestModel.new(modelid: 'routing_model_4')
 @model4.save
 @test_keys << @model4.dbkey
@@ -97,16 +97,16 @@ result = @model4.pipelined do |pipe|
   pipe.hget(@model4.dbkey, 'name')
 end
 
-[result.is_a?(MultiResult), result.results.is_a?(Array)]
+[result.is_a?(Familia::MultiResult), result.results.is_a?(Array)]
 #=> [true, true]
 
-## Empty pipelined block returns empty MultiResult
+## Empty pipelined block returns empty Familia::MultiResult
 @model5 = PipelineRoutingTestModel.new(modelid: 'routing_model_5')
 @model5.save
 @test_keys << @model5.dbkey
 
 result = @model5.pipelined { |_pipe| }
-[result.is_a?(MultiResult), result.results.empty?]
+[result.is_a?(Familia::MultiResult), result.results.empty?]
 #=> [true, true]
 
 ## Transaction inside pipelined block raises ConflictingContextError

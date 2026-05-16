@@ -28,7 +28,7 @@
 #   account.save              # Transaction 1
 #
 #   Familia.atomic do
-#     account.batch_update()  # Transaction 2 (separate)
+#     account.multi_field_update()  # Transaction 2 (separate)
 #   end
 # end
 #

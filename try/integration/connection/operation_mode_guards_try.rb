@@ -156,8 +156,8 @@ begin
     conn.get('compat_test')
   end
 
-  # Should return MultiResult as before
-  result.is_a?(MultiResult) && result.results.last == 'success'
+  # Should return Familia::MultiResult as before
+  result.is_a?(Familia::MultiResult) && result.results.last == 'success'
 end
 #=> true
 
@@ -171,7 +171,7 @@ begin
     conn.get('pipe_compat')
   end
 
-  result.is_a?(MultiResult) && result.results.last == 'pipeline_success'
+  result.is_a?(Familia::MultiResult) && result.results.last == 'pipeline_success'
 end
 #=> true
 

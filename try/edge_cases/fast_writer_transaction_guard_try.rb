@@ -51,25 +51,25 @@ rescue Familia::OperationModeError => e
 end
 #=> true
 
-## Transaction error message suggests batch_update or commit_fields
+## Transaction error message suggests multi_field_update or commit_fields
 begin
   @testobj.transaction do
     @testobj.name!('inside-transaction')
   end
   :should_have_raised
 rescue Familia::OperationModeError => e
-  e.message.include?('batch_update') && e.message.include?('commit_fields')
+  e.message.include?('multi_field_update') && e.message.include?('commit_fields')
 end
 #=> true
 
-## Pipeline error message suggests restructuring (not batch_update)
+## Pipeline error message suggests restructuring (not multi_field_update)
 begin
   @testobj.pipelined do
     @testobj.name!('inside-pipeline')
   end
   :should_have_raised
 rescue Familia::OperationModeError => e
-  e.message.include?('Restructure') && !e.message.include?('batch_update')
+  e.message.include?('Restructure') && !e.message.include?('multi_field_update')
 end
 #=> true
 

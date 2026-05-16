@@ -70,7 +70,7 @@ result = @user.pipelined do |pipe|
   pipe.hset(@user.dbkey, 'status', 'active')
 end
 
-[@pipeline_set, result.is_a?(MultiResult)]
+[@pipeline_set, result.is_a?(Familia::MultiResult)]
 #=> [true, true]
 
 ## Fiber[:familia_pipeline] cleared after pipelined block
@@ -91,7 +91,7 @@ result = @user2.pipelined do |pipe|
   @user2.hset(:status, 'pipelined')
 end
 
-[result.is_a?(MultiResult), @user2.hget(:status)]
+[result.is_a?(Familia::MultiResult), @user2.hget(:status)]
 #=> [true, "pipelined"]
 
 ## Multiple Horreum operations inside single pipeline are batched
@@ -160,7 +160,7 @@ result = PipelineHandlerTestUser.pipelined do |pipe|
   pipe.get('test:class_pipe')
 end
 
-[result.is_a?(MultiResult), result.results.last]
+[result.is_a?(Familia::MultiResult), result.results.last]
 #=> [true, "value"]
 
 # Cleanup

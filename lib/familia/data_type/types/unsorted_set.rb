@@ -46,8 +46,45 @@ module Familia
       dbclient.smembers(dbkey)
     end
 
-    def each(&)
-      members.each(&)
+    # Iterates over members of the set.
+    #
+    # Uses SSCAN for memory-efficient iteration. Optionally filters by member
+    # pattern after deserialization.
+    #
+    # @param matching [String, nil] Optional glob-style pattern to filter members
+    #   (e.g., "user:*", "*_active"). Pattern is matched against deserialized
+    #   values using File.fnmatch with FNM_PATHNAME flag.
+    # @param batch_size [Integer] Number of elements to fetch per SSCAN iteration
+    # @yield [member] Each deserialized member (optionally filtered)
+    # @return [Enumerator, self] Returns Enumerator if no block given, self otherwise
+    #
+    # @example Iterate all members
+    #   tags.each { |tag| puts tag }
+    #
+    # @example Filter by pattern
+    #   tags.each(matching: "category:*") { |tag| process(tag) }
+    #
+    # @note Pattern matching is applied after deserialization, so patterns match
+    #   the Ruby values you work with, not the JSON-encoded storage format.
+    #
+    def each(matching: nil, batch_size: 100, &block)
+      return to_enum(:each, matching: matching, batch_size: batch_size) unless block
+
+      cursor = 0
+      loop do
+        new_cursor, elements = scan(cursor, count: batch_size)
+        elements.each do |element|
+          # Apply pattern filter after deserialization if specified
+          if matching
+            next unless File.fnmatch(matching, element.to_s)
+          end
+          block.call(element)
+        end
+        cursor = new_cursor
+        break if cursor.zero?
+      end
+
+      self
     end
 
     def each_with_index(&)

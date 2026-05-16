@@ -105,7 +105,7 @@ end
   @customer.preferences.add('email_notifications')
 end
 @processing_result.class.name
-#=> "MultiResult"
+#=> "Familia::MultiResult"
 
 ## All updates applied atomically
 [@customer.hget('balance').to_i, @order.hget('status'), @inventory.hget('quantity').to_i]
@@ -169,7 +169,7 @@ end
   conn.hset(@customer.dbkey, 'balance', new_balance.to_s)
 end
 @bulk_result.class.name
-#=> "MultiResult"
+#=> "Familia::MultiResult"
 
 ## Error handling in transaction workflow
 @error_order_id = workflow_id('error')

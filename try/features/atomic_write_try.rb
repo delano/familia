@@ -433,18 +433,18 @@ end
 #=> [:a_done, [:b_raised, true], "ThreadA-Wrote"]
 
 ## atomic_write returns false and leaves dirty state intact when the
-## transaction's MultiResult reports a failed command. MULTI/EXEC does not
+## transaction's Familia::MultiResult reports a failed command. MULTI/EXEC does not
 ## raise for individual command errors -- the server returns an Exception
 ## object in that slot -- so relying on `result.nil?` as a success proxy
 ## would incorrectly clear_dirty! and flag an actually-failed write as
 ## clean. We stub `transaction` on a single instance to deliver a canned
-## MultiResult containing a command-level error and verify:
+## Familia::MultiResult containing a command-level error and verify:
 ##   - atomic_write returns false
 ##   - the dirty field is still marked dirty
 @plan_w = AtomicWriteTestPlan.new(planid: 'aw_plan_w', name: 'DirtyBefore')
 @plan_w.save
 @plan_w.name = 'DirtyAfter'  # marks :name dirty
-@failed_result = MultiResult.new(['OK', RuntimeError.new('simulated command failure')])
+@failed_result = Familia::MultiResult.new(['OK', RuntimeError.new('simulated command failure')])
 @plan_w.define_singleton_method(:transaction) do |&blk|
   blk.call(nil)  # run the block so scalars/collections are touched
   @failed_result

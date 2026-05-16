@@ -64,7 +64,7 @@ begin
     conn.hset(customer.dbkey, 'type', 'normal transaction')
     conn.hget(customer.dbkey, 'type')
   end
-  result.is_a?(MultiResult) && result.results.last == 'normal transaction'
+  result.is_a?(Familia::MultiResult) && result.results.last == 'normal transaction'
 end
 #=> true
 
@@ -77,7 +77,7 @@ begin
     conn.hset(customer.dbkey, 'source', 'provider')
     conn.hget(customer.dbkey, 'source')
   end
-  result.is_a?(MultiResult) && result.results.last == 'provider'
+  result.is_a?(Familia::MultiResult) && result.results.last == 'provider'
 ensure
   Familia.connection_provider = original_provider
 end

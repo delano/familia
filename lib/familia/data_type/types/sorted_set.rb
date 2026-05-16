@@ -181,8 +181,56 @@ module Familia
       revrangeraw 0, count, opts
     end
 
-    def each(&)
-      members.each(&)
+    # Iterates over members of the sorted set.
+    #
+    # When called with score bounds (since/until), uses ZRANGEBYSCORE for
+    # efficient range queries. Otherwise uses ZSCAN for memory-efficient
+    # iteration over large sets.
+    #
+    # @param since [Numeric, Time, nil] Minimum score (inclusive). Time objects
+    #   are converted to float timestamps.
+    # @param until [Numeric, Time, nil] Maximum score (inclusive). Time objects
+    #   are converted to float timestamps. Use kwargs syntax: `until: value`.
+    # @param batch_size [Integer] Number of elements to fetch per ZSCAN iteration
+    #   (only used when no score bounds provided)
+    # @yield [member] Each deserialized member
+    # @return [Enumerator, self] Returns Enumerator if no block given, self otherwise
+    #
+    # @example Iterate all members
+    #   scores.each { |member| puts member }
+    #
+    # @example Iterate members within time range
+    #   scores.each(since: 1.hour.ago, until: Time.now) { |m| process(m) }
+    #
+    # @note The `until:` parameter uses Ruby keyword syntax. Since `until` is
+    #   a reserved word, it's accessed via **kwargs internally.
+    #
+    def each(since: nil, batch_size: 100, **kwargs, &block)
+      until_score = kwargs[:until]
+      return to_enum(:each, since: since, until: until_score, batch_size: batch_size) unless block
+
+      # Convert Time objects to numeric scores
+      since_score = since.is_a?(Time) ? since.to_f : since
+      until_score_val = until_score.is_a?(Time) ? until_score.to_f : until_score
+
+      if since_score || until_score_val
+        # Use ZRANGEBYSCORE for bounded queries
+        min = since_score || '-inf'
+        max = until_score_val || '+inf'
+        elements = rangebyscore(min, max)
+        elements.each(&block)
+      else
+        # Use ZSCAN for unbounded iteration (memory-efficient)
+        cursor = 0
+        loop do
+          new_cursor, pairs = scan(cursor, count: batch_size)
+          pairs.each { |member, _score| block.call(member) }
+          cursor = new_cursor
+          break if cursor.zero?
+        end
+      end
+
+      self
     end
 
     def each_with_index(&)

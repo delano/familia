@@ -199,7 +199,7 @@ result = model_db4.pipelined do |pipe|
   pipe.hset(model_db4.dbkey, 'db4_field', 'db4_value')
 end
 
-result.is_a?(MultiResult)
+result.is_a?(Familia::MultiResult)
 #=> true
 
 # Cleanup

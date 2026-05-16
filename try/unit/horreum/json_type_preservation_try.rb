@@ -148,14 +148,14 @@ end
 [@second_load.age.class, @second_load.active.class, @second_load.tags[0].class]
 #=> [Integer, TrueClass, Integer]
 
-## batch_update preserves types
+## multi_field_update preserves types
 @model = JsonTestModel.new(model_id: @test_id)
-@model.batch_update(name: "Batch", age: 50, active: false, tags: ["one", 2])
+@model.multi_field_update(name: "Batch", age: 50, active: false, tags: ["one", 2])
 @loaded = JsonTestModel.find(@test_id)
 [@loaded.name, @loaded.age, @loaded.active, @loaded.tags[1]]
 #=> ["Batch", 50, false, 2]
 
-## batch_update types verification
+## multi_field_update types verification
 [@loaded.age.class, @loaded.active.class, @loaded.tags[1].class]
 #=> [Integer, FalseClass, Integer]
 
