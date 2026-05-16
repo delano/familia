@@ -2,6 +2,8 @@
 #
 # frozen_string_literal: true
 
+require 'set' # stdlib in Ruby 3.2/3.3; autoloaded core in 3.4+. Required for Set.new usages below.
+
 module Familia
   class Horreum
     # AuditMethods provides proactive consistency detection for Horreum models.
