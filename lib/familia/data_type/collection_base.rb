@@ -46,10 +46,15 @@ module Familia
       #
       # @param batch_size [Integer] Number of identifiers to load per batch
       # @param write_size [Integer, nil] Controls pipelining depth for writes
-      #   in the block. When nil, writes are serial. When set, fast writers
-      #   in the block will be pipelined in groups of this size.
-      # @param filters [Hash] Additional filter parameters passed to `each`
-      #   (e.g., `since:`, `until:` for SortedSet, `matching:` for others)
+      #   in the block. When nil or 0, writes are serial (no pipelining).
+      #   When positive, fast writers in the block will be pipelined in
+      #   groups of this size.
+      # @param filters [Hash] Additional filter parameters passed to `each`.
+      #   Available filters depend on the collection type:
+      #   - SortedSet: `since:`, `until:`, `batch_size:`
+      #   - UnsortedSet/HashKey: `matching:`, `batch_size:`
+      #   - ListKey: `batch_size:` only
+      #   Passing unsupported filters raises ArgumentError.
       # @yield [record] Each loaded Horreum record (non-nil)
       # @return [Enumerator, self] Returns Enumerator if no block given, self otherwise
       #
@@ -107,7 +112,7 @@ module Familia
 
         # Iterate using the type's each method with any filters
         each(**filters) do |member|
-          # Extract identifier from member (HashKey yields [field, value] pairs)
+          # HashKey yields [field, value] pairs; extract field as identifier
           identifier = member.is_a?(Array) ? member.first : member
           buffer << identifier
 

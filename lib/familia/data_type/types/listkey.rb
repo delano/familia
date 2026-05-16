@@ -169,24 +169,12 @@ module Familia
       self
     end
 
-    def each_with_index(&)
-      range.each_with_index(&)
-    end
-
     def eachraw(&)
       rangeraw.each(&)
     end
 
     def eachraw_with_index(&)
       rangeraw.each_with_index(&)
-    end
-
-    def collect(&)
-      range.collect(&)
-    end
-
-    def select(&)
-      range.select(&)
     end
 
     def collectraw(&)

@@ -84,18 +84,6 @@ module Familia
       self
     end
 
-    def each_with_index(&)
-      members.each_with_index(&)
-    end
-
-    def collect(&)
-      members.collect(&)
-    end
-
-    def select(&)
-      members.select(&)
-    end
-
     def eachraw(&)
       membersraw.each(&)
     end
