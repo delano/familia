@@ -62,8 +62,6 @@ repos:
     rev: v1.32.2
     hooks:
       - id: talisman-commit
-        env:
-          TALISMAN_SCAN_MODE: CI
 
   # Commit message issue tracking integration
   - repo: https://github.com/delano/add-msg-issue-prefix-hook
