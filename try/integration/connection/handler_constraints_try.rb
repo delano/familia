@@ -61,11 +61,3 @@ Familia::Connection::CreateConnectionHandler.allows_transaction
 ## CreateConnectionHandler allows pipelines
 Familia::Connection::CreateConnectionHandler.allows_pipelined
 #=> true
-
-## BaseConnectionHandler defaults to allow all
-Familia::Connection::BaseConnectionHandler.allows_transaction
-#=> true
-
-## BaseConnectionHandler defaults to allow all pipelines
-Familia::Connection::BaseConnectionHandler.allows_pipelined
-#=> true

@@ -66,8 +66,8 @@ Fiber[:familia_pipeline] = original
 result.object_id == @mock_pipeline.object_id
 #=> true
 
-## FiberPipelineHandler is a subclass of BaseConnectionHandler
-Familia::Connection::FiberPipelineHandler < Familia::Connection::BaseConnectionHandler
+## FiberPipelineHandler includes the Handler interface module
+Familia::Connection::FiberPipelineHandler.include?(Familia::Connection::Handler)
 #=> true
 
 ## FiberPipelineHandler instance responds to handle
