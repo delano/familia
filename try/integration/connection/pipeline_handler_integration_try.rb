@@ -4,14 +4,18 @@
 
 # Integration Tests for FiberPipelineHandler
 #
-# Tests that Horreum methods correctly route through the pipeline connection
-# when called inside pipelined blocks:
-# - commit_fields inside pipelined block uses pipeline connection
-# - Fast writers (field!) inside pipelined block use pipeline connection
-# - Nested DataType operations also route correctly
-# - Commands are batched, not executed immediately
+# Tests that Horreum and DataType operations route through the pipeline
+# connection when called inside a pipelined block:
+# - Connection chain ordering (FiberPipelineHandler before FiberTransactionHandler)
+# - Fiber[:familia_pipeline] is set inside the block and cleared on exit
+# - Ad-hoc database commands (e.g. #hset) inside the block use the pipeline conn
+# - Multiple Horreum operations are batched within a single pipeline
+# - Nested pipelined calls reuse the same connection (reentrant)
+# - DataType operations issued inside the parent's pipeline route correctly
 #
-# These tests verify the handler's integration with the connection chain.
+# Note: Fast writers (field!) and #commit_fields are NOT exercised here — they
+# raise Familia::OperationModeError inside pipeline/transaction contexts. See
+# try/edge_cases/fast_writer_transaction_guard_try.rb for that coverage.
 
 require_relative '../../support/helpers/test_helpers'
 
