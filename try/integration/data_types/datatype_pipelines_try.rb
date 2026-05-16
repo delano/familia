@@ -55,14 +55,18 @@ end
 [result.is_a?(MultiResult), leaderboard.members.size]
 #=> [true, 2]
 
-## Pipeline with direct_access works correctly
-result = @user.profile.pipelined do |pipe_conn|
+## DataType operations inside a pipeline route through the pipeline connection
+# HashKey#[]= and Fiber[:familia_pipeline] should agree: the pipeline
+# connection is what receives the writes. Raw pipe.hset bypasses
+# serialize_value, so 'yes' is stored as a bare string.
+@user.profile.pipelined do |pipe_conn|
   pipe_conn.hset(@user.profile.dbkey, 'pipeline_test', 'yes')
 
-  @user.profile.direct_access do |conn, key|
-    conn.object_id == pipe_conn.object_id &&
-    conn.hset(key, 'direct_test', 'yes')
-  end
+  # The DataType wrapper's mutating methods auto-route to Fiber[:familia_pipeline]
+  @user.profile['direct_test'] = 'yes'
+
+  # The Fiber-local exposes the same connection used by the wrapper
+  pipe_conn.object_id == Fiber[:familia_pipeline].object_id
 end
 [@user.profile['pipeline_test'], @user.profile['direct_test']]
 #=> ["yes", "yes"]
@@ -104,6 +108,22 @@ result = custom.pipelined do |pipe|
   pipe.hget(custom.dbkey, 'key1')
 end
 result.is_a?(MultiResult)
+#=> true
+
+## DataType call site raises ConflictingContextError when pipeline+transaction nest
+# Routing through the DataType chain must surface the same conflict semantics as
+# Horreum (FiberPipelineHandler raises if Fiber[:familia_transaction] is also set).
+error_raised = begin
+  @user.profile.pipelined do |_pipe|
+    @user.profile.transaction do |_txn|
+      # Should not reach here — handler should raise before yielding
+    end
+  end
+  false
+rescue Familia::ConflictingContextError
+  true
+end
+error_raised
 #=> true
 
 # Cleanup
