@@ -124,3 +124,7 @@ end
 @encrypted.destroy!
 true
 #=> true
+
+# Teardown - restore global encryption config so test order is not a factor
+Familia.config.encryption_keys = nil
+Familia.config.current_key_version = nil
