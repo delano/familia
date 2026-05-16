@@ -73,6 +73,8 @@ module Familia
         raise NotImplementedError, 'Subclasses must implement handle'
       end
 
+      # Class-level DSL injected into every handler class that includes Handler.
+      # Holds the capability flag readers and the `supports` declarator.
       module ClassMethods
         attr_reader :allows_transaction, :allows_pipelined
 
@@ -96,6 +98,7 @@ module Familia
     #
     class CreateConnectionHandler
       include Handler
+
       supports transaction: true, pipelined: true
 
       def initialize(familia_module = nil)
@@ -122,6 +125,7 @@ module Familia
     #
     class ProviderConnectionHandler
       include Handler
+
       supports transaction: true, pipelined: true
 
       def initialize(familia_module = nil)
@@ -168,6 +172,7 @@ module Familia
     #
     class FiberConnectionHandler
       include Handler
+
       supports transaction: false, pipelined: false
 
       def initialize(familia_module = nil)
@@ -201,6 +206,7 @@ module Familia
     #
     class FiberPipelineHandler
       include Handler
+
       supports transaction: false, pipelined: :reentrant
 
       # Singleton pattern for stateless handler
@@ -240,6 +246,7 @@ module Familia
     #
     class FiberTransactionHandler
       include Handler
+
       supports transaction: :reentrant, pipelined: false
 
       # Singleton pattern for stateless handler
@@ -277,6 +284,7 @@ module Familia
     #
     class CachedConnectionHandler
       include Handler
+
       supports transaction: false, pipelined: false
 
       def initialize(familia_module)
@@ -312,6 +320,7 @@ module Familia
     #
     class ParentDelegationHandler
       include Handler
+
       supports transaction: true, pipelined: true
 
       def initialize(data_type)
@@ -353,6 +362,7 @@ module Familia
     #
     class StandaloneConnectionHandler
       include Handler
+
       supports transaction: true, pipelined: true
 
       def initialize(data_type)
