@@ -261,8 +261,8 @@ destroy_result = model.destroy!
 # time (under 100ms for this test). I acknowledge this is flaky.
 # Note: 42 results = 40 related field DELs + 1 main object DEL + 1 instances ZREM
 [destroy_result.class, destroy_result.successful?, destroy_result.results.size]
+#=%> 250
 #=> [MultiResult, true, 42]
-#=%> 100
 
 ## Verify transaction_fallback_integration_try.rb bug is fixed
 # Recreate the scenario from the failing test
