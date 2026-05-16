@@ -154,18 +154,19 @@ conn_class
 ## DataType operations inside a transaction route through the transaction connection
 # HashKey#[]= and Fiber[:familia_transaction] should agree: the transaction
 # connection is what receives the writes. The wrapper serializes via JSON
-# (Issue #190), so string values round-trip as strings.
+# (Issue #190), so string values round-trip as strings -- writing 'true'
+# yields the string "true" back, not the boolean true that raw hset produced.
 @user.profile.transaction do |trans_conn|
   trans_conn.hset(@user.profile.dbkey, 'status', @user.profile.serialize_value('active'))
 
   # The DataType wrapper's mutating methods auto-route to Fiber[:familia_transaction]
-  @user.profile['verified'] = 'yes'
+  @user.profile['verified'] = 'true'
 
   # The Fiber-local exposes the same connection used by the wrapper
   trans_conn.object_id == Fiber[:familia_transaction].object_id
 end
 [@user.profile['status'], @user.profile['verified']]
-#=> ["active", "yes"]
+#=> ["active", "true"]
 
 ## Transaction atomicity - all commands succeed or none
 test_zset = Familia::SortedSet.new('atomic:test')
