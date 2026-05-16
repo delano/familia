@@ -84,7 +84,7 @@ cursor, members = @a.tags.scan(0)
 #=> [true, [1, 2, 3, 4]]
 
 ## Familia::UnsortedSet#scan with count hint
-cursor, members = @a.tags.scan(0, count: 2)
+cursor, = @a.tags.scan(0, count: 2)
 cursor.is_a?(Integer)
 #=> true
 

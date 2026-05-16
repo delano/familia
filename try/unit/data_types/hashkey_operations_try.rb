@@ -7,10 +7,6 @@
 #
 # Focus is on Familia-specific behavior: deserialization, cursor iteration,
 # field expiration - NOT re-testing redis-rb gem functionality.
-#
-# NOTE: Some scan and randfield options have implementation bugs in hashkey.rb
-# where positional args are passed instead of keyword args to redis-rb.
-# Those tests are excluded until the implementation is fixed.
 
 require_relative '../../support/helpers/test_helpers'
 

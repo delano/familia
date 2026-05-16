@@ -262,7 +262,7 @@ module Familia
     def revrangebyscoreraw(sscore, escore, opts = {})
       echo :revrangebyscoreraw, Familia.pretty_stack(limit: 1) if Familia.debug
       opts[:with_scores] = true if opts[:withscores]
-      dbclient.zrevrangebyscore(dbkey, sscore, escore, opts)
+      dbclient.zrevrangebyscore(dbkey, sscore, escore, **opts)
     end
 
     def remrangebyrank(srank, erank)

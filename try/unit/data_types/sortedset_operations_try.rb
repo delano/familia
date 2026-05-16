@@ -256,9 +256,6 @@ result.sort
 # rangebylex/revrangebylex - Test lexicographical ordering
 # NOTE: Values are JSON-serialized (e.g., "apple" -> "\"apple\""), so lex
 # boundaries must match the serialized format.
-# NOTE: Tests with limit: option are omitted because the current Familia
-# implementation passes limit as positional args but redis-rb expects
-# a keyword argument. See rangebylex in sorted_set.rb.
 # ============================================================
 
 ## Familia::SortedSet#rangebylex returns members in lex range (inclusive)
@@ -280,6 +277,16 @@ result.sort
 ## Familia::SortedSet#revrangebylex with range
 @lex_test.metrics.revrangebylex('["date"', '["banana"')
 #=> ['date', 'cherry', 'banana']
+
+## Familia::SortedSet#rangebylex with limit returns sliced range
+# limit: [offset, count] - skip 1, take 2 from {apple, banana, cherry, date, elderberry}
+@lex_test.metrics.rangebylex('-', '+', limit: [1, 2])
+#=> ['banana', 'cherry']
+
+## Familia::SortedSet#revrangebylex with limit returns sliced reverse range
+# limit: [offset, count] - skip 1, take 2 from reversed {elderberry, date, cherry, banana, apple}
+@lex_test.metrics.revrangebylex('+', '-', limit: [1, 2])
+#=> ['date', 'cherry']
 
 # ============================================================
 # lexcount - Test counting in lex range

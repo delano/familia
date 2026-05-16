@@ -144,6 +144,38 @@ result_size
 Familia.dbclient.get('stringkey_ext:bitop:or_result')
 #=> "abc"
 
+## mget honors explicit client: kwarg override
+Familia.dbclient.set('client_kwarg:mget:1', 'alpha')
+Familia.dbclient.set('client_kwarg:mget:2', 'beta')
+result = Familia::StringKey.mget('client_kwarg:mget:1', 'client_kwarg:mget:2', client: Familia.dbclient)
+Familia.dbclient.del('client_kwarg:mget:1', 'client_kwarg:mget:2')
+result
+#=> ['alpha', 'beta']
+
+## mset honors explicit client: kwarg override
+Familia.dbclient.del('client_kwarg:mset:1', 'client_kwarg:mset:2')
+Familia::StringKey.mset({ 'client_kwarg:mset:1' => 'one', 'client_kwarg:mset:2' => 'two' }, client: Familia.dbclient)
+result = [Familia.dbclient.get('client_kwarg:mset:1'), Familia.dbclient.get('client_kwarg:mset:2')]
+Familia.dbclient.del('client_kwarg:mset:1', 'client_kwarg:mset:2')
+result
+#=> ['one', 'two']
+
+## msetnx honors explicit client: kwarg override
+Familia.dbclient.del('client_kwarg:msetnx:1', 'client_kwarg:msetnx:2')
+result = Familia::StringKey.msetnx({ 'client_kwarg:msetnx:1' => 'first', 'client_kwarg:msetnx:2' => 'second' }, client: Familia.dbclient)
+Familia.dbclient.del('client_kwarg:msetnx:1', 'client_kwarg:msetnx:2')
+result
+#=> true
+
+## bitop honors explicit client: kwarg override
+Familia.dbclient.del('client_kwarg:bitop:a', 'client_kwarg:bitop:b', 'client_kwarg:bitop:result')
+Familia.dbclient.set('client_kwarg:bitop:a', 'abc')
+Familia.dbclient.set('client_kwarg:bitop:b', 'ABC')
+size = Familia::StringKey.bitop(:and, 'client_kwarg:bitop:result', 'client_kwarg:bitop:a', 'client_kwarg:bitop:b', client: Familia.dbclient)
+Familia.dbclient.del('client_kwarg:bitop:a', 'client_kwarg:bitop:b', 'client_kwarg:bitop:result')
+size
+#=> 3
+
 ## mset stores values raw (no JSON quoting) per documented passthrough contract
 # The class method does NOT apply serialize_value. A plain string "hello"
 # must land in Redis as "hello" (6 bytes with no surrounding quotes), not
