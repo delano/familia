@@ -173,7 +173,10 @@ module Familia
     # @param stop [Integer] End index (inclusive, negative counts from end)
     # @return [String] "OK" on success
     def trim(start, stop)
-      dbclient.ltrim dbkey, start, stop
+      warn_if_dirty!
+      result = dbclient.ltrim dbkey, start, stop
+      update_expiration
+      result
     end
     alias ltrim trim
 
@@ -183,6 +186,7 @@ module Familia
     # @return [String] "OK" on success
     # @raise [Redis::CommandError] if index is out of range
     def set(index, value)
+      warn_if_dirty!
       result = dbclient.lset dbkey, index, serialize_value(value)
       update_expiration
       result
@@ -195,6 +199,7 @@ module Familia
     # @param value The value to insert
     # @return [Integer] Length of list after insert, or -1 if pivot not found
     def insert(position, pivot, value)
+      warn_if_dirty!
       pos = case position
             when :before, 'BEFORE' then 'BEFORE'
             when :after, 'AFTER' then 'AFTER'
@@ -213,6 +218,7 @@ module Familia
     # @param whereto [:left, :right] Which end to push to destination
     # @return [Object, nil] The moved element, or nil if source is empty
     def move(destination, wherefrom, whereto)
+      warn_if_dirty!
       dest_key = destination.respond_to?(:dbkey) ? destination.dbkey : destination
       from = wherefrom.to_s.upcase
       to = whereto.to_s.upcase
@@ -222,6 +228,7 @@ module Familia
       end
 
       result = dbclient.lmove dbkey, dest_key, from, to
+      update_expiration
       deserialize_value result
     end
     alias lmove move
@@ -235,6 +242,7 @@ module Familia
       serialized_values = values.flatten.compact.map { |v| serialize_value(v) }
       return 0 if serialized_values.empty?
 
+      warn_if_dirty!
       result = dbclient.rpushx(dbkey, serialized_values)
       update_expiration if result.positive?
       result
@@ -250,6 +258,7 @@ module Familia
       serialized_values = values.flatten.compact.map { |v| serialize_value(v) }
       return 0 if serialized_values.empty?
 
+      warn_if_dirty!
       result = dbclient.lpushx(dbkey, serialized_values)
       update_expiration if result.positive?
       result
