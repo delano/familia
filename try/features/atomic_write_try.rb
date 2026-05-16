@@ -247,9 +247,12 @@ end
 ## warn_if_dirty! is suppressed during atomic_write block
 @plan_p = AtomicWriteTestPlan.new(planid: 'aw_plan_p', name: 'Original')
 @plan_p.save
-# Capture warnings emitted via Familia.warn (goes to stderr by default)
-original_stderr = $stderr
-$stderr = StringIO.new
+# Capture warnings emitted via Familia.warn by swapping the logger directly.
+# Reassigning $stderr does not work here: Familia.logger is lazily memoized
+# and binds to the original $stderr file descriptor at first reference.
+captured = StringIO.new
+original_logger = Familia.logger
+Familia.logger = Familia::FamiliaLogger.new(captured)
 begin
   @plan_p.atomic_write do
     @plan_p.name = 'Dirty!'           # Makes parent dirty
@@ -257,12 +260,11 @@ begin
     @plan_p.settings['k'] = 'v'       # Another warn_if_dirty! path
     @plan_p.audit_log.push('entry')   # Another warn_if_dirty! path
   end
-  captured = $stderr.string
 ensure
-  $stderr = original_stderr
+  Familia.logger = original_logger
 end
 # No warning should contain the "unsaved scalar fields" message
-captured.include?('unsaved scalar fields')
+captured.string.include?('unsaved scalar fields')
 #=> false
 
 ## collection writes inside atomic_write land in the same MULTI/EXEC as scalars

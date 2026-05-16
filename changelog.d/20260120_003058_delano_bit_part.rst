@@ -1,0 +1,40 @@
+Added
+-----
+
+- Expanded Redis 7 command coverage across all DataType classes:
+
+  - **StringKey**: ``incrbyfloat``, ``getex``, ``getdel``, ``setex``, ``psetex``,
+    ``bitcount``, ``bitpos``, ``bitfield``, plus class methods ``mget``, ``mset``,
+    ``msetnx``, ``bitop`` for multi-key and bitwise operations.
+
+  - **List**: ``trim``/``ltrim``, ``set``/``lset``, ``insert``/``linsert``,
+    ``move``/``lmove``, ``pushx``/``rpushx``, ``unshiftx``/``lpushx``.
+    Updated ``pop`` and ``shift`` to support optional count parameter for batch operations.
+
+  - **UnsortedSet**: ``intersection``/``inter``, ``union``, ``difference``/``diff``,
+    ``member_any?``/``members?``, ``scan``, ``intercard``/``intersection_cardinality``,
+    ``interstore``/``intersection_store``, ``unionstore``/``union_store``,
+    ``diffstore``/``difference_store``.
+
+  - **SortedSet**: ``popmin``, ``popmax``, ``score_count``/``zcount``, ``mscore``,
+    ``union``, ``inter``, ``rangebylex``, ``revrangebylex``, ``remrangebylex``,
+    ``lexcount``, ``randmember``, ``scan``, ``unionstore``, ``interstore``,
+    ``diff``, ``diffstore``.
+
+  - **HashKey**: ``scan``/``hscan``, ``incrbyfloat``/``incrfloat``,
+    ``strlen``/``hstrlen``, ``randfield``/``hrandfield``, plus field-level TTL
+    commands (Redis 7.4+): ``expire_fields``, ``pexpire_fields``, ``expireat_fields``,
+    ``pexpireat_fields``, ``ttl_fields``, ``pttl_fields``, ``persist_fields``,
+    ``expiretime_fields``, ``pexpiretime_fields``.
+
+- Added 158 new tests across 5 test files covering all new methods.
+
+AI Assistance
+-------------
+
+- Claude Opus 4.5 analyzed Redis 7 command documentation and compared coverage
+  against existing Familia DataType implementations using parallel Explore agents.
+- Implementation performed by 5 parallel backend-dev agents, one per DataType.
+- Test coverage written by 5 parallel qa-automation-engineer agents focusing on
+  Familia-specific behavior (serialization, deserialization, aliases) rather than
+  re-testing redis-rb gem functionality.
