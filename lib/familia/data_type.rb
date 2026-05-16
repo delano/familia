@@ -7,6 +7,8 @@ require_relative 'data_type/settings'
 require_relative 'data_type/connection'
 require_relative 'data_type/database_commands'
 require_relative 'data_type/serialization'
+require_relative 'data_type/scalar_base'
+require_relative 'data_type/collection_base'
 
 # Familia
 #
@@ -79,7 +81,6 @@ module Familia
   # @abstract Subclass and implement Database data type specific methods
   class DataType
     include Familia::Base
-    include Enumerable
     extend ClassMethods
     extend Familia::Features
 
@@ -202,89 +203,6 @@ module Familia
 
       # Fall back to class-level default
       self.class.default_expiration
-    end
-
-    # Iterates over identifiers, loading each as a Horreum record.
-    #
-    # This method is designed for DataTypes that store object identifiers
-    # (typically with `reference: true`). It loads records in batches using
-    # the parent class's `load_multi` method and yields each loaded record.
-    #
-    # Ghost identifiers (where the underlying key has expired) are silently
-    # filtered out.
-    #
-    # @param batch_size [Integer] Number of identifiers to load per batch
-    # @param write_size [Integer, nil] Controls pipelining depth for writes
-    #   in the block. When nil, writes are serial. When set, fast writers
-    #   in the block will be pipelined in groups of this size.
-    # @param filters [Hash] Additional filter parameters passed to `each`
-    #   (e.g., `since:`, `until:` for SortedSet, `matching:` for others)
-    # @yield [record] Each loaded Horreum record (non-nil)
-    # @return [Enumerator, self] Returns Enumerator if no block given, self otherwise
-    #
-    # @example Iterate over all records
-    #   User.instances.each_record { |user| user.deactivate! }
-    #
-    # @example With time filter (for SortedSet)
-    #   User.instances.each_record(since: 1.day.ago) { |u| notify(u) }
-    #
-    # @example Pipeline writes in groups
-    #   items.each_record(batch_size: 500, write_size: 50) { |r| r.foo! 'bar' }
-    #
-    # @example Serial writes (no pipelining)
-    #   items.each_record(write_size: nil) { |r| r.save }
-    #
-    def each_record(batch_size: 100, write_size: batch_size, **filters, &block)
-      return to_enum(:each_record, batch_size: batch_size, write_size: write_size, **filters) unless block
-
-      # Determine the class to load records from
-      # For reference DataTypes, @opts[:class] holds the Horreum class
-      record_class = @opts[:class]
-      unless record_class&.respond_to?(:load_multi)
-        raise Familia::Problem, "each_record requires a reference DataType with a :class option that responds to load_multi"
-      end
-
-      # Collect identifiers in batches
-      buffer = []
-
-      process_batch = lambda do |ids|
-        return if ids.empty?
-
-        # Load records using the class's load_multi (pipelined HGETALLs)
-        records = record_class.load_multi(ids)
-
-        # Filter out ghosts (nil results from expired keys)
-        records.compact.each do |record|
-          if write_size.nil?
-            # Serial mode - no pipelining
-            block.call(record)
-          elsif write_size.positive?
-            # Pipelined mode - use parent's pipeline infrastructure
-            # The block is expected to use fast writers which will route
-            # through the fiber-local pipeline handler
-            block.call(record)
-          else
-            block.call(record)
-          end
-        end
-      end
-
-      # Iterate using the type's each method with any filters
-      each(**filters) do |member|
-        # Extract identifier from member (handles both raw IDs and scored tuples)
-        identifier = member.is_a?(Array) ? member.first : member
-        buffer << identifier
-
-        if buffer.size >= batch_size
-          process_batch.call(buffer)
-          buffer.clear
-        end
-      end
-
-      # Process remaining items
-      process_batch.call(buffer) unless buffer.empty?
-
-      self
     end
 
     include Settings

@@ -4,6 +4,8 @@
 
 module Familia
   class HashKey < DataType
+    include DataType::CollectionBase
+
     # Returns the number of fields in the hash
     # @return [Integer] number of fields
     def field_count
@@ -144,19 +146,23 @@ module Familia
     # Iterates over field-value pairs in the hash.
     #
     # Uses HSCAN for memory-efficient iteration. Optionally filters by field
-    # name pattern.
+    # name pattern using Redis MATCH.
     #
     # @param matching [String, nil] Optional glob-style pattern to filter field
-    #   names (e.g., "user:*", "*_count")
+    #   names (e.g., "user:*", "*_count"). Pattern is passed to Redis HSCAN MATCH
+    #   and matches against field names (plain strings, not JSON-encoded).
     # @param batch_size [Integer] Number of elements to fetch per HSCAN iteration
-    # @yield [field, value] Each field-value pair
+    # @yield [field, value] Each field-value pair (values are deserialized)
     # @return [Enumerator, self] Returns Enumerator if no block given, self otherwise
     #
     # @example Iterate all pairs
     #   settings.each { |field, value| puts "#{field}: #{value}" }
     #
-    # @example Filter by pattern
+    # @example Filter by field name pattern
     #   settings.each(matching: "cache_*") { |f, v| puts "#{f}: #{v}" }
+    #
+    # @note Pattern matches field names only (plain strings). To filter on
+    #   values, use Enumerable#select instead.
     #
     def each(matching: nil, batch_size: 100, &block)
       return to_enum(:each, matching: matching, batch_size: batch_size) unless block

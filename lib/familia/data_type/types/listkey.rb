@@ -4,6 +4,8 @@
 
 module Familia
   class ListKey < DataType
+    include DataType::CollectionBase
+
     # Returns the number of elements in the list
     # @return [Integer] number of elements
     def element_count

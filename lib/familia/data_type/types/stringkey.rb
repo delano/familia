@@ -4,6 +4,8 @@
 
 module Familia
   class StringKey < DataType
+    include DataType::ScalarBase
+
     def init; end
 
     # StringKey uses raw string serialization (not JSON) because Redis string
