@@ -41,6 +41,8 @@ module Familia
   #   puts val.to_f
   #
   class JsonStringKey < DataType
+    include DataType::ScalarBase
+
     # Initialization hook (required by DataType contract)
     def init; end
 

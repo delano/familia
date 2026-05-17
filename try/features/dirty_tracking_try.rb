@@ -168,18 +168,18 @@ end
 # normal setter (making the object dirty), then calls a specific write
 # method and asserts that dirty state is cleared afterward.
 
-## batch_update clears dirty state after successful write
+## multi_field_update clears dirty state after successful write
 @wp = DirtyTrackUser.new(email: 'write-path@example.com', name: 'WritePath', age: 25, active: true)
 @wp.save
 @wp.clear_dirty!
 @wp.name = 'BatchUpdated'
-@wp.batch_update(name: 'BatchUpdated')
+@wp.multi_field_update(name: 'BatchUpdated')
 @wp.dirty?
 #=> false
 
-## batch_fast_write clears dirty state after successful write
+## multi_field_fast_write clears dirty state after successful write
 @wp.name = 'FastWritten'
-@wp.batch_fast_write(name: 'FastWritten')
+@wp.multi_field_fast_write(name: 'FastWritten')
 @wp.dirty?
 #=> false
 
@@ -197,7 +197,7 @@ end
 
 # Selective clear_dirty! for partial write paths
 #
-# Partial write paths (fast writers, save_fields, batch_update) only persist
+# Partial write paths (fast writers, save_fields, multi_field_update) only persist
 # a subset of fields. clear_dirty! selectively clears only the fields that
 # were actually written, preserving dirty state for unwritten fields.
 
@@ -249,7 +249,7 @@ end
 @bug2.dirty_fields
 #=> [:age]
 
-## batch_update clears unrelated dirty fields (BUG: should preserve them)
+## multi_field_update clears unrelated dirty fields (BUG: should preserve them)
 # When fields A and B are both dirty and only A is batch-updated,
 # field B should still be marked dirty because it was not persisted.
 @bug3 = DirtyTrackUser.new(email: 'bug3@example.com', name: 'Original', age: 20)
@@ -257,19 +257,19 @@ end
 @bug3.clear_dirty!
 @bug3.name = 'Changed'
 @bug3.age = 99
-@bug3.batch_update(name: 'Changed')
+@bug3.multi_field_update(name: 'Changed')
 @bug3.dirty?(:age)
 #=> true
 
-## batch_update should leave object dirty when unwritten fields remain
+## multi_field_update should leave object dirty when unwritten fields remain
 @bug3.dirty?
 #=> true
 
-## batch_update should not report written field as dirty
+## multi_field_update should not report written field as dirty
 @bug3.dirty?(:name)
 #=> false
 
-## dirty_fields after batch_update should list only unwritten fields
+## dirty_fields after multi_field_update should list only unwritten fields
 @bug3.dirty_fields
 #=> [:age]
 
@@ -386,47 +386,47 @@ end
 @sel.changed_fields.key?(:age)
 #=> true
 
-# P0: batch_update with ALL dirty fields clears everything
+# P0: multi_field_update with ALL dirty fields clears everything
 
-## batch_update with all dirty fields clears everything
+## multi_field_update with all dirty fields clears everything
 @ba = DirtyTrackUser.new(email: 'batch-all@example.com', name: 'BA', age: 50, active: true)
 @ba.save
 @ba.clear_dirty!
 @ba.name = 'BA2'
 @ba.age = 51
-@ba.batch_update(name: 'BA2', age: 51)
+@ba.multi_field_update(name: 'BA2', age: 51)
 @ba.dirty?
 #=> false
 
-## batch_update with all dirty fields yields empty dirty_fields
+## multi_field_update with all dirty fields yields empty dirty_fields
 @ba.dirty_fields
 #=> []
 
-# P1: batch_fast_write partial clear behavior
+# P1: multi_field_fast_write partial clear behavior
 
-## batch_fast_write with subset preserves unwritten dirty field
+## multi_field_fast_write with subset preserves unwritten dirty field
 @bfw = DirtyTrackUser.new(email: 'bfw@example.com', name: 'BFW', age: 60, active: true)
 @bfw.save
 @bfw.clear_dirty!
 @bfw.name = 'BFW2'
 @bfw.age = 61
-@bfw.batch_fast_write(name: 'BFW2')
+@bfw.multi_field_fast_write(name: 'BFW2')
 @bfw.dirty?(:age)
 #=> true
 
-## batch_fast_write with subset clears written field
+## multi_field_fast_write with subset clears written field
 @bfw.dirty?(:name)
 #=> false
 
-## batch_fast_write with subset leaves object dirty overall
+## multi_field_fast_write with subset leaves object dirty overall
 @bfw.dirty?
 #=> true
 
-## batch_fast_write with all dirty fields clears everything
+## multi_field_fast_write with all dirty fields clears everything
 @bfw.clear_dirty!
 @bfw.name = 'BFW3'
 @bfw.age = 62
-@bfw.batch_fast_write(name: 'BFW3', age: 62)
+@bfw.multi_field_fast_write(name: 'BFW3', age: 62)
 @bfw.dirty?
 #=> false
 

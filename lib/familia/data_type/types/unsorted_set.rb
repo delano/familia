@@ -6,6 +6,8 @@ module Familia
   # Familia::UnsortedSet
   #
   class UnsortedSet < DataType
+    include DataType::CollectionBase
+
     # Returns the number of elements in the unsorted set
     # @return [Integer] number of elements
     def element_count
@@ -46,20 +48,40 @@ module Familia
       dbclient.smembers(dbkey)
     end
 
-    def each(&)
-      members.each(&)
-    end
+    # Iterates over members of the set.
+    #
+    # Uses SSCAN for memory-efficient iteration. Optionally filters by member
+    # pattern using Redis MATCH.
+    #
+    # @param matching [String, nil] Optional glob-style pattern to filter members
+    #   (e.g., "user:*", "*_active"). Pattern is passed to Redis SSCAN MATCH and
+    #   matches against raw storage format (JSON-encoded strings). For a string
+    #   "admin", match with `"\"admin\""` or use `"*admin*"` for substring match.
+    # @param batch_size [Integer] Number of elements to fetch per SSCAN iteration
+    # @yield [member] Each deserialized member (optionally filtered)
+    # @return [Enumerator, self] Returns Enumerator if no block given, self otherwise
+    #
+    # @example Iterate all members
+    #   tags.each { |tag| puts tag }
+    #
+    # @example Filter by pattern (matches JSON-encoded storage)
+    #   tags.each(matching: "*category*") { |tag| process(tag) }
+    #
+    # @note Pattern matches raw Redis storage (JSON-encoded). To filter on
+    #   deserialized values, use Enumerable#select instead.
+    #
+    def each(matching: nil, batch_size: 100, &block)
+      return to_enum(:each, matching: matching, batch_size: batch_size) unless block
 
-    def each_with_index(&)
-      members.each_with_index(&)
-    end
+      cursor = 0
+      loop do
+        new_cursor, elements = scan(cursor, match: matching, count: batch_size)
+        elements.each(&block)
+        cursor = new_cursor
+        break if cursor.zero?
+      end
 
-    def collect(&)
-      members.collect(&)
-    end
-
-    def select(&)
-      members.select(&)
+      self
     end
 
     def eachraw(&)

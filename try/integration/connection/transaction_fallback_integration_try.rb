@@ -250,8 +250,8 @@ begin
     conn.hset(user.dbkey, 'batch_processed', 'true')
   end
 
-  # Should complete successfully and return MultiResult
-  result.is_a?(MultiResult) && result.successful?
+  # Should complete successfully and return Familia::MultiResult
+  result.is_a?(Familia::MultiResult) && result.successful?
 ensure
   IntegrationTestUser.remove_instance_variable(:@dbclient)
   Familia.configure { |config| config.transaction_mode = :strict }
@@ -279,8 +279,8 @@ begin
     conn.hset(user.dbkey, 'field2', 'value2')  # Should succeed
   end
 
-  # Should return MultiResult even with mixed success/failure
-  result.is_a?(MultiResult)
+  # Should return Familia::MultiResult even with mixed success/failure
+  result.is_a?(Familia::MultiResult)
 ensure
   IntegrationTestUser.remove_instance_variable(:@dbclient)
   Familia.configure { |config| config.transaction_mode = :strict }

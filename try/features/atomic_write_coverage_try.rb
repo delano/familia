@@ -115,7 +115,7 @@ end
 ## (c) StringKey mutation inside atomic_write returns a Redis::Future (uninspectable until EXEC)
 ## Documents that operations queued inside MULTI return Future objects -- callers must NOT
 ## inspect them until after the block completes (and even then the values come from the
-## MultiResult, not the Future itself).
+## Familia::MultiResult, not the Future itself).
 @str_b = AtomicWriteStringPlan.new(planid: 'aw_str_b', name: 'FutureCheck')
 @str_b.counter.value = '0'
 @inside_return_value = nil

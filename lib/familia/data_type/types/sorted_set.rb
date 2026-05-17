@@ -4,6 +4,8 @@
 
 module Familia
   class SortedSet < DataType
+    include DataType::CollectionBase
+
     # Returns the number of elements in the sorted set
     # @return [Integer] number of elements
     def element_count
@@ -181,20 +183,74 @@ module Familia
       revrangeraw 0, count, opts
     end
 
-    def each(&)
-      members.each(&)
-    end
+    # Iterates over members of the sorted set.
+    #
+    # When called with score bounds (since/until), uses ZRANGEBYSCORE for
+    # efficient range queries. Otherwise uses ZSCAN for memory-efficient
+    # iteration over large sets.
+    #
+    # @param since [Numeric, Time, nil] Minimum score (inclusive). Time objects
+    #   are converted to float timestamps.
+    # @param until [Numeric, Time, nil] Maximum score (inclusive). Time objects
+    #   are converted to float timestamps. Use kwargs syntax: `until: value`.
+    # @param batch_size [Integer] Number of elements to fetch per ZSCAN iteration
+    #   (only used when no score bounds provided)
+    # @yield [member] Each deserialized member
+    # @return [Enumerator, self] Returns Enumerator if no block given, self otherwise
+    #
+    # @example Iterate all members
+    #   scores.each { |member| puts member }
+    #
+    # @example Iterate members within time range
+    #   scores.each(since: 1.hour.ago, until: Time.now) { |m| process(m) }
+    #
+    # @note The `until:` parameter uses Ruby keyword syntax. Since `until` is
+    #   a reserved word, it's accessed via **kwargs internally.
+    #
+    # @note Score-cursor pagination: bounded queries paginate using the last
+    #   seen score as the next exclusive minimum. This is O(n) total work,
+    #   unlike offset-based LIMIT which is O(n²). However, members with
+    #   identical scores may be skipped between pages. Use high-precision
+    #   floats (e.g., Familia.now) for scores to avoid collisions.
+    #
+    def each(since: nil, batch_size: 100, **kwargs, &block)
+      until_score = kwargs.delete(:until)
+      raise ArgumentError, "unknown keyword(s): #{kwargs.keys.join(', ')}" if kwargs.any?
 
-    def each_with_index(&)
-      members.each_with_index(&)
-    end
+      return to_enum(:each, since: since, until: until_score, batch_size: batch_size) unless block
 
-    def collect(&)
-      members.collect(&)
-    end
+      # Convert Time objects to numeric scores
+      since_score = since.is_a?(Time) ? since.to_f : since
+      until_score_val = until_score.is_a?(Time) ? until_score.to_f : until_score
 
-    def select(&)
-      members.select(&)
+      if since_score || until_score_val
+        # Score-cursor pagination: track last score, use exclusive bound for next page
+        min = since_score || '-inf'
+        max = until_score_val || '+inf'
+        loop do
+          # with_scores returns nested pairs: [["a", 1.0], ["b", 2.0]]
+          pairs = rangebyscoreraw(min, max, limit: [0, batch_size], with_scores: true)
+          break if pairs.empty?
+
+          pairs.each do |raw_member, score|
+            yield deserialize_value(raw_member)
+            min = "(#{score}" # exclusive bound for next iteration
+          end
+
+          break if pairs.size < batch_size
+        end
+      else
+        # Use ZSCAN for unbounded iteration (memory-efficient)
+        cursor = 0
+        loop do
+          new_cursor, pairs = scan(cursor, count: batch_size)
+          pairs.each { |member, _score| block.call(member) }
+          cursor = new_cursor
+          break if cursor.zero?
+        end
+      end
+
+      self
     end
 
     def eachraw(&)
@@ -220,13 +276,7 @@ module Familia
     end
 
     def rangeraw(sidx, eidx, opts = {})
-      # NOTE: :withscores (no underscore) is the correct naming for the
-      # redis-4.x gem. We pass :withscores through explicitly b/c
-      # dbclient.zrange et al only accept that one optional argument.
-      # Passing `opts`` through leads to an ArgumentError:
-      #
-      #   sorted_sets.rb:374:in `zrevrange': wrong number of arguments (given 4, expected 3) (ArgumentError)
-      #
+      # NOTE: Redis 5.x gem uses :with_scores (with underscore)
       dbclient.zrange(dbkey, sidx, eidx, **opts)
     end
 

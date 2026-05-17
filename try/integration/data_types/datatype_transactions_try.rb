@@ -38,7 +38,7 @@ result = @user.scores.transaction do |conn|
   conn.zadd(@user.scores.dbkey, 200, 'level2')
   conn.zadd(@user.scores.dbkey, 300, 'level3')
 end
-[result.is_a?(MultiResult), @user.scores.members.sort]
+[result.is_a?(Familia::MultiResult), @user.scores.members.sort]
 #=> [true, ["level1", "level2", "level3"]]
 
 ## Parent-owned HashKey can execute transaction
@@ -47,7 +47,7 @@ result = @user.profile.transaction do |conn|
   conn.hset(@user.profile.dbkey, 'country', 'USA')
   conn.hget(@user.profile.dbkey, 'city')
 end
-[result.is_a?(MultiResult), result.results.last, @user.profile['country']]
+[result.is_a?(Familia::MultiResult), result.results.last, @user.profile['country']]
 #=> [true, "San Francisco", "USA"]
 
 ## Parent-owned UnsortedSet can execute transaction
@@ -56,7 +56,7 @@ result = @user.tags.transaction do |conn|
   conn.sadd(@user.tags.dbkey, 'redis')
   conn.scard(@user.tags.dbkey)
 end
-[result.is_a?(MultiResult), result.results.last, @user.tags.members.sort]
+[result.is_a?(Familia::MultiResult), result.results.last, @user.tags.members.sort]
 #=> [true, 2, ["redis", "ruby"]]
 
 ## Parent-owned List can execute transaction
@@ -66,7 +66,7 @@ result = @user.activity.transaction do |conn|
   conn.rpush(@user.activity.dbkey, 'logout')
   conn.llen(@user.activity.dbkey)
 end
-[result.is_a?(MultiResult), result.results.last, @user.activity.members]
+[result.is_a?(Familia::MultiResult), result.results.last, @user.activity.members]
 #=> [true, 3, ["login", "view_profile", "logout"]]
 
 ## Parent-owned Counter can execute transaction
@@ -76,7 +76,7 @@ result = @user.visits.transaction do |conn|
   conn.incr(@user.visits.dbkey)
   conn.get(@user.visits.dbkey)
 end
-[result.is_a?(MultiResult), result.results.last.to_i, @user.visits.value]
+[result.is_a?(Familia::MultiResult), result.results.last.to_i, @user.visits.value]
 #=> [true, 2, 2]
 
 ## Parent-owned StringKey can execute transaction
@@ -85,7 +85,7 @@ result = @user.bio.transaction do |conn|
   conn.append(@user.bio.dbkey, ' and Redis enthusiast')
   conn.get(@user.bio.dbkey)
 end
-[result.is_a?(MultiResult), result.results.last, @user.bio.value]
+[result.is_a?(Familia::MultiResult), result.results.last, @user.bio.value]
 #=> [true, "Ruby developer and Redis enthusiast", "Ruby developer and Redis enthusiast"]
 
 ## Standalone SortedSet can execute transaction
@@ -97,7 +97,7 @@ result = leaderboard.transaction do |conn|
   conn.zadd(leaderboard.dbkey, 450, 'player3')
   conn.zcard(leaderboard.dbkey)
 end
-[result.is_a?(MultiResult), result.results.last, leaderboard.members.size]
+[result.is_a?(Familia::MultiResult), result.results.last, leaderboard.members.size]
 #=> [true, 3, 3]
 
 ## Standalone HashKey can execute transaction
@@ -108,7 +108,7 @@ result = cache.transaction do |conn|
   conn.hset(cache.dbkey, 'key2', 'value2')
   conn.hkeys(cache.dbkey)
 end
-[result.is_a?(MultiResult), result.results.last.sort, cache.keys.sort]
+[result.is_a?(Familia::MultiResult), result.results.last.sort, cache.keys.sort]
 #=> [true, ["key1", "key2"], ["key1", "key2"]]
 
 ## Standalone UnsortedSet can execute transaction
@@ -119,7 +119,7 @@ result = global_tags.transaction do |conn|
   conn.sadd(global_tags.dbkey, 'tag2')
   conn.smembers(global_tags.dbkey)
 end
-[result.is_a?(MultiResult), result.results.last.sort, global_tags.members.sort]
+[result.is_a?(Familia::MultiResult), result.results.last.sort, global_tags.members.sort]
 #=> [true, ["tag1", "tag2"], ["tag1", "tag2"]]
 
 ## Standalone StringKey can execute transaction
@@ -130,7 +130,7 @@ result = session_data.transaction do |conn|
   conn.expire(session_data.dbkey, 3600)
   conn.get(session_data.dbkey)
 end
-[result.is_a?(MultiResult), result.results.last, session_data.value]
+[result.is_a?(Familia::MultiResult), result.results.last, session_data.value]
 #=> [true, "{\"user_id\": 123}", "{\"user_id\": 123}"]
 
 ## Transaction with logical_database option works
@@ -140,7 +140,7 @@ result = custom_cache.transaction do |conn|
   conn.hset(custom_cache.dbkey, 'setting', 'enabled')
   conn.hget(custom_cache.dbkey, 'setting')
 end
-[result.is_a?(MultiResult), result.results.last]
+[result.is_a?(Familia::MultiResult), result.results.last]
 #=> [true, "enabled"]
 
 ## Transaction provides correct connection object type
@@ -195,9 +195,9 @@ outer_result = @user.scores.transaction do |outer_conn|
     inner_conn.sadd(@user.tags.dbkey, @user.tags.serialize_value('nested_tag'))
   end
 
-  inner_result.is_a?(MultiResult)
+  inner_result.is_a?(Familia::MultiResult)
 end
-[outer_result.is_a?(MultiResult), @user.tags.member?('nested_tag')]
+[outer_result.is_a?(Familia::MultiResult), @user.tags.member?('nested_tag')]
 #=> [true, true]
 
 ## Transaction respects transaction modes (permissive)
@@ -214,16 +214,16 @@ begin
     conn.zadd(@user.scores.dbkey, 888, 'fallback_test')
   end
 
-  result.is_a?(MultiResult)
+  result.is_a?(Familia::MultiResult)
 ensure
   @user.class.remove_instance_variable(:@dbclient)
   Familia.configure { |config| config.transaction_mode = original_mode }
 end
 #=> true
 
-## Transaction with empty block returns empty MultiResult
+## Transaction with empty block returns empty Familia::MultiResult
 result = @user.scores.transaction { |conn| }
-[result.is_a?(MultiResult), result.results.empty?]
+[result.is_a?(Familia::MultiResult), result.results.empty?]
 #=> [true, true]
 
 ## Transaction connection uses parent's logical_database
@@ -247,7 +247,7 @@ result = @user.scores.transaction do |conn|
   conn.rpush(@user.activity.dbkey, @user.activity.serialize_value('multi_action'))
 end
 [
-  result.is_a?(MultiResult),
+  result.is_a?(Familia::MultiResult),
   @user.scores.member?('multi_test'),
   @user.profile['multi'],
   @user.tags.member?('multi_tag'),

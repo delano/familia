@@ -72,7 +72,7 @@ $fresh_result.successful?
 $fresh_result.results.size
 #=> 3
 
-## Test 4: MultiResult format is correct for fallback
+## Test 4: Familia::MultiResult format is correct for fallback
 Familia.configure { |c| c.pipelined_mode = :permissive }
 
 # Cache connection at class level
@@ -84,13 +84,13 @@ $multi_result = customer4.pipelined do |conn|
   conn.get(customer4.dbkey('test'))
 end
 $multi_result.class.name
-#=> 'MultiResult'
+#=> 'Familia::MultiResult'
 
-## Test 4b: MultiResult successful? returns correct value
+## Test 4b: Familia::MultiResult successful? returns correct value
 $multi_result.successful?
 #=> true
 
-## Test 4c: MultiResult results is an Array
+## Test 4c: Familia::MultiResult results is an Array
 $multi_result.results.class
 #=> Array
 

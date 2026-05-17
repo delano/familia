@@ -37,7 +37,7 @@ begin
     conn.hget(customer.dbkey, 'name')
   end
 
-  result.is_a?(MultiResult) && result.results.last == 'Warn Mode Works'
+  result.is_a?(Familia::MultiResult) && result.results.last == 'Warn Mode Works'
 ensure
   WarnModeTestCustomer.remove_instance_variable(:@dbclient)
 end
@@ -56,7 +56,7 @@ begin
     conn.hget(customer.dbkey, 'source')
   end
 
-  result.is_a?(MultiResult) && result.results.last == 'fiber_warn'
+  result.is_a?(Familia::MultiResult) && result.results.last == 'fiber_warn'
 ensure
   Fiber[:familia_connection] = nil
   Fiber[:familia_connection_handler_class] = nil
@@ -72,7 +72,7 @@ begin
     conn.hset(customer.dbkey, 'type', 'normal in warn mode') &&
     conn.hget(customer.dbkey, 'type')
   end
-  result.is_a?(MultiResult) && result.results.last == 'normal in warn mode'
+  result.is_a?(Familia::MultiResult) && result.results.last == 'normal in warn mode'
 end
 #=> true
 
@@ -89,7 +89,7 @@ begin
   end
 
   # Check that results are collected properly
-  result.is_a?(MultiResult) &&
+  result.is_a?(Familia::MultiResult) &&
   result.results.size == 4 &&
   result.results.include?('value1') &&
   result.results.include?('value2')
@@ -128,7 +128,7 @@ begin
     conn.hget(customer.dbkey, 'mode')
   end
 
-  result.is_a?(MultiResult) && result.results.last == 'warn_fallback'
+  result.is_a?(Familia::MultiResult) && result.results.last == 'warn_fallback'
 ensure
   WarnModeTestCustomer.remove_instance_variable(:@dbclient)
 end

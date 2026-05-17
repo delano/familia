@@ -125,10 +125,10 @@ end
 [@before, @after]
 #=> [false, true]
 
-## batch_update touches instances timeline
+## multi_field_update touches instances timeline
 @plan13 = AtomicTestPlan.new(planid: 'atom_plan13', region: 'ZA')
 @plan13.save
-@plan13.batch_update(region: 'NG')
+@plan13.multi_field_update(region: 'NG')
 @reloaded13 = AtomicTestPlan.find_by_id('atom_plan13')
 [@reloaded13.region, AtomicTestPlan.in_instances?('atom_plan13')]
 #=> ['NG', true]

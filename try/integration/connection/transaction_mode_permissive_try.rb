@@ -37,7 +37,7 @@ begin
     conn.hget(customer.dbkey, 'name')
   end
 
-  result.is_a?(MultiResult) && result.results.last == 'Permissive Mode Works'
+  result.is_a?(Familia::MultiResult) && result.results.last == 'Permissive Mode Works'
 ensure
   PermissiveModeTestCustomer.remove_instance_variable(:@dbclient)
 end
@@ -56,7 +56,7 @@ begin
     conn.hget(customer.dbkey, 'source')
   end
 
-  result.is_a?(MultiResult) && result.results.last == 'fiber_permissive'
+  result.is_a?(Familia::MultiResult) && result.results.last == 'fiber_permissive'
 ensure
   Fiber[:familia_connection] = nil
   Fiber[:familia_connection_handler_class] = nil
@@ -72,7 +72,7 @@ begin
     conn.hset(customer.dbkey, 'type', 'normal in permissive mode') &&
     conn.hget(customer.dbkey, 'type')
   end
-  result.is_a?(MultiResult) && result.results.last == 'normal in permissive mode'
+  result.is_a?(Familia::MultiResult) && result.results.last == 'normal in permissive mode'
 end
 #=> true
 
@@ -89,7 +89,7 @@ begin
     conn.hget(customer.dbkey, 'status')
   end
 
-  result.is_a?(MultiResult) && result.results.last == 'processing'
+  result.is_a?(Familia::MultiResult) && result.results.last == 'processing'
 ensure
   PermissiveModeTestCustomer.remove_instance_variable(:@dbclient)
 end
@@ -108,11 +108,11 @@ begin
       inner_conn.hset(customer.dbkey, 'inner', 'nested_value')
     end
 
-    # Both should return MultiResult
-    inner_result.is_a?(MultiResult)
+    # Both should return Familia::MultiResult
+    inner_result.is_a?(Familia::MultiResult)
   end
 
-  outer_result.is_a?(MultiResult)
+  outer_result.is_a?(Familia::MultiResult)
 ensure
   PermissiveModeTestCustomer.remove_instance_variable(:@dbclient)
 end
@@ -132,7 +132,7 @@ begin
     conn.hget(customer.dbkey, 'field_9')
   end
 
-  result.is_a?(MultiResult) && result.results.last == 'value_9'
+  result.is_a?(Familia::MultiResult) && result.results.last == 'value_9'
 ensure
   PermissiveModeTestCustomer.remove_instance_variable(:@dbclient)
 end

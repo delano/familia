@@ -109,7 +109,7 @@ Familia.debug = false
 
 ## "Cleaning up" test objects that were never saved returns true regardless
 ## b/c it takes place in a transaction and it's the transaction's success
-## that successful? is based on. If you look at the MultiResult#results,
+## that successful? is based on. If you look at the Familia::MultiResult#results,
 ## it's an array of 0s, except for the @customer1 that had been saved.
 ## That's b/c DEL command returns the number of keys deleted.
 @customer1.save

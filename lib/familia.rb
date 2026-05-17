@@ -10,7 +10,8 @@ require 'concurrent-ruby'
 
 # OJ configuration is handled internally by Familia::JsonSerializer
 
-require_relative 'multi_result'
+require_relative 'familia/multi_result'
+require_relative 'familia/batch_result'
 require_relative 'familia/refinements'
 require_relative 'familia/errors'
 require_relative 'familia/version'

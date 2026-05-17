@@ -338,17 +338,17 @@ module Familia
       # @return [MultiResult] Transaction result
       #
       # @example Update multiple fields without affecting expiration
-      #   metadata.batch_update(viewed: 1, updated: Familia.now.to_i, update_expiration: false)
+      #   metadata.multi_field_update(viewed: 1, updated: Familia.now.to_i, update_expiration: false)
       #
       # @example Update fields with expiration refresh
-      #   user.batch_update(name: "John", email: "john@example.com")
+      #   user.multi_field_update(name: "John", email: "john@example.com")
       #
-      def batch_update(**kwargs)
+      def multi_field_update(**kwargs)
         update_expiration = kwargs.delete(:update_expiration) { true }
         fields = kwargs
 
         guard_allowed_fields!(fields.keys)
-        Familia.trace :BATCH_UPDATE, nil, fields.keys if Familia.debug?
+        Familia.trace :MULTI_FIELD_UPDATE, nil, fields.keys if Familia.debug?
 
         result = transaction do |_conn|
           # 1. Update all fields atomically (Redis only, no in-memory mutation)
@@ -382,7 +382,7 @@ module Familia
       # This is the multi-field equivalent of the fast_writer (!) methods.
       # It sets all instance variables, serializes the values, and persists
       # them in one HMSET command within a transaction. More efficient than
-      # batch_update (which does individual HSET per field) when writing
+      # multi_field_update (which does individual HSET per field) when writing
       # several fields at once.
       #
       # @param kwargs [Hash] Field names and values to write. Special key
@@ -391,15 +391,15 @@ module Familia
       # @return [self] Returns self for method chaining
       #
       # @example Persist multiple fields atomically
-      #   user.batch_fast_write(name: "Jane", email: "jane@example.com")
+      #   user.multi_field_fast_write(name: "Jane", email: "jane@example.com")
       #
       # @example Without updating expiration
-      #   user.batch_fast_write(status: "active", update_expiration: false)
+      #   user.multi_field_fast_write(status: "active", update_expiration: false)
       #
-      # @see #batch_update Similar but uses individual HSET per field
+      # @see #multi_field_update Similar but uses individual HSET per field
       # @see #save_fields Persists current in-memory values of named fields
       #
-      def batch_fast_write(**kwargs)
+      def multi_field_fast_write(**kwargs)
         update_exp = kwargs.delete(:update_expiration) { true }
         fields = kwargs
 
@@ -407,7 +407,7 @@ module Familia
 
         guard_allowed_fields!(fields.keys)
 
-        Familia.trace :BATCH_FAST_WRITE, nil, fields.keys if Familia.debug?
+        Familia.trace :MULTI_FIELD_FAST_WRITE, nil, fields.keys if Familia.debug?
 
         # Serialize values before the transaction (read-only on instance)
         serialized = {}

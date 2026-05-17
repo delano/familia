@@ -204,7 +204,7 @@ large_exists = @large_obj.exists?
 @batch_obj.save
 
 # Batch update multiple fields
-batch_result = @batch_obj.batch_update(
+batch_result = @batch_obj.multi_field_update(
   name: 'Updated Batch',
   email: 'batch@example.com',
   active: true

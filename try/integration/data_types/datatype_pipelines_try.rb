@@ -32,7 +32,7 @@ result = @user.scores.pipelined do |pipe|
   pipe.zadd(@user.scores.dbkey, 200, 'p2')
   pipe.zcard(@user.scores.dbkey)
 end
-[result.is_a?(MultiResult), @user.scores.members.size]
+[result.is_a?(Familia::MultiResult), @user.scores.members.size]
 #=> [true, 2]
 
 ## Parent-owned HashKey can execute pipeline
@@ -41,7 +41,7 @@ result = @user.profile.pipelined do |pipe|
   pipe.hset(@user.profile.dbkey, 'state', 'NY')
   pipe.hgetall(@user.profile.dbkey)
 end
-[result.is_a?(MultiResult), @user.profile.keys.sort]
+[result.is_a?(Familia::MultiResult), @user.profile.keys.sort]
 #=> [true, ["city", "state"]]
 
 ## Standalone SortedSet can execute pipeline
@@ -52,7 +52,7 @@ result = leaderboard.pipelined do |pipe|
   pipe.zadd(leaderboard.dbkey, 200, 'player2')
   pipe.zcard(leaderboard.dbkey)
 end
-[result.is_a?(MultiResult), leaderboard.members.size]
+[result.is_a?(Familia::MultiResult), leaderboard.members.size]
 #=> [true, 2]
 
 ## DataType operations inside a pipeline route through the pipeline connection
@@ -71,17 +71,17 @@ end
 [@user.profile['pipeline_test'], @user.profile['direct_test']]
 #=> ["yes", "yes"]
 
-## Pipeline returns MultiResult with correct structure
+## Pipeline returns Familia::MultiResult with correct structure
 result = @user.scores.pipelined do |pipe|
   pipe.zadd(@user.scores.dbkey, 300, 'p3')
   pipe.zadd(@user.scores.dbkey, 400, 'p4')
 end
-[result.is_a?(MultiResult), result.results.is_a?(Array)]
+[result.is_a?(Familia::MultiResult), result.results.is_a?(Array)]
 #=> [true, true]
 
-## Empty pipeline returns empty MultiResult
+## Empty pipeline returns empty Familia::MultiResult
 result = @user.scores.pipelined { |pipe| }
-[result.is_a?(MultiResult), result.results.empty?]
+[result.is_a?(Familia::MultiResult), result.results.empty?]
 #=> [true, true]
 
 ## Multiple DataType operations in single pipeline
@@ -93,7 +93,7 @@ result = @user.scores.pipelined do |pipe|
   pipe.sadd(@user.tags.dbkey, @user.tags.serialize_value('multi_tag'))
 end
 [
-  result.is_a?(MultiResult),
+  result.is_a?(Familia::MultiResult),
   @user.scores.member?('multi'),
   @user.profile['multi'],
   @user.tags.member?('multi_tag')
@@ -107,7 +107,7 @@ result = custom.pipelined do |pipe|
   pipe.hset(custom.dbkey, 'key1', 'value1')
   pipe.hget(custom.dbkey, 'key1')
 end
-result.is_a?(MultiResult)
+result.is_a?(Familia::MultiResult)
 #=> true
 
 ## DataType call site raises ConflictingContextError when pipeline+transaction nest

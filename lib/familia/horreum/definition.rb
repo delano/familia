@@ -487,7 +487,7 @@ module Familia
                            "#{fast_method_name} blocked by active transaction context"
               raise Familia::OperationModeError, <<~ERROR_MESSAGE.chomp
                 Cannot call fast writer #{fast_method_name} within a transaction.
-                Use batch_update or commit_fields instead.
+                Use multi_field_update or commit_fields instead.
               ERROR_MESSAGE
             elsif Fiber[:familia_pipeline]
               Familia.trace :FAST_WRITER_BLOCKED, dbkey,

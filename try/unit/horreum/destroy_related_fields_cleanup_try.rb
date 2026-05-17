@@ -262,7 +262,7 @@ destroy_result = model.destroy!
 # Note: 42 results = 40 related field DELs + 1 main object DEL + 1 instances ZREM
 [destroy_result.class, destroy_result.successful?, destroy_result.results.size]
 #=%> 250
-#=> [MultiResult, true, 42]
+#=> [Familia::MultiResult, true, 42]
 
 ## Verify transaction_fallback_integration_try.rb bug is fixed
 # Recreate the scenario from the failing test

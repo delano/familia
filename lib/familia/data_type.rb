@@ -7,6 +7,8 @@ require_relative 'data_type/settings'
 require_relative 'data_type/connection'
 require_relative 'data_type/database_commands'
 require_relative 'data_type/serialization'
+require_relative 'data_type/scalar_base'
+require_relative 'data_type/collection_base'
 
 # Familia
 #
