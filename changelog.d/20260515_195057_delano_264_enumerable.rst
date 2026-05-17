@@ -15,7 +15,7 @@ Added
     glob pattern filter on field names.
 
   - **UnsortedSet#each(matching:)**: Cursor-based iteration via SSCAN with optional
-    glob pattern filter using ``File.fnmatch`` on deserialized values.
+    glob pattern filter using Redis SSCAN MATCH on raw values.
 
   - **ListKey#each(batch_size:)**: Memory-efficient LRANGE pagination for large lists.
 

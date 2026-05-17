@@ -51,9 +51,9 @@ module Familia
       #   groups of this size.
       # @param filters [Hash] Additional filter parameters passed to `each`.
       #   Available filters depend on the collection type:
-      #   - SortedSet: `since:`, `until:`, `batch_size:`
-      #   - UnsortedSet/HashKey: `matching:`, `batch_size:`
-      #   - ListKey: `batch_size:` only
+      #   - SortedSet: `since:`, `until:`, `cursor_batch_size:`
+      #   - UnsortedSet/HashKey: `matching:`, `cursor_batch_size:`
+      #   - ListKey: `cursor_batch_size:` only
       #   Passing unsupported filters raises ArgumentError.
       # @yield [record] Each loaded Horreum record (non-nil)
       # @return [Enumerator, self] Returns Enumerator if no block given, self otherwise

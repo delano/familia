@@ -2,12 +2,9 @@
 #
 # frozen_string_literal: true
 
-# Tests for method renames:
-# - multi_field_update -> multi_field_update
-# - multi_field_fast_write -> multi_field_fast_write
-#
-# Both renames include deprecation shims for the old names.
-# Tests marked "PENDING" require deprecation aliases to be implemented.
+# Tests for Horreum multi-field update methods:
+# - multi_field_update: batch field updates with optional expiration control
+# - multi_field_fast_write: immediate HSET without full save cycle
 
 require_relative '../../support/helpers/test_helpers'
 

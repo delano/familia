@@ -58,7 +58,7 @@ begin
 
   # Try batch update (if available)
   begin
-    session.multi_field_update({ name: 'Batch Updated' }, update_expiration: false)
+    session.multi_field_update(name: 'Batch Updated', update_expiration: false)
     new_ttl = session.realttl
     result = (original_ttl - new_ttl).abs < 5 # TTL preserved within tolerance
   rescue NoMethodError

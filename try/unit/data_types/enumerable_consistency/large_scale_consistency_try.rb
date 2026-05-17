@@ -14,6 +14,7 @@
 
 require_relative '../../../support/helpers/test_helpers'
 require 'digest'
+require 'set'
 
 # Helper to bulk-insert into an UnsortedSet via pipelining
 def bulk_add_to_set(set, count, prefix: 'item')

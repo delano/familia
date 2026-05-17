@@ -71,10 +71,10 @@ module Familia
       errors = []
       start_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
 
-      enumerable.each do |item|
+      enumerable.each do |*args|
         scanned += 1
         begin
-          result = yield(item)
+          result = yield(*args)
           modified += 1 if result
         rescue StandardError => e
           # Extract identifier if possible
