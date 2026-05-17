@@ -7,6 +7,67 @@ The format is based on `Keep a Changelog <https://keepachangelog.com/en/1.1.0/>`
 
    <!--scriv-insert-here-->
 
+.. _changelog-2.9.0:
+
+2.9.0 — 2026-05-17
+==================
+
+Added
+-----
+
+- Batch iteration primitives for DataTypes via ``Enumerable`` integration:
+
+  - All DataTypes (``SortedSet``, ``HashKey``, ``UnsortedSet``, ``ListKey``) now
+    ``include Enumerable``, providing ``each_slice``, ``lazy``, ``map``, ``reduce``,
+    ``find``, and other stdlib methods.
+
+  - **SortedSet#each(since:, until:)**: Cursor-based iteration with optional
+    timestamp bounds. Uses ZRANGEBYSCORE when bounds provided (inclusive),
+    ZSCAN otherwise. Accepts Time objects or numeric scores.
+
+  - **HashKey#each(matching:)**: Cursor-based iteration via HSCAN with optional
+    glob pattern filter on field names.
+
+  - **UnsortedSet#each(matching:)**: Cursor-based iteration via SSCAN with optional
+    glob pattern filter using Redis SSCAN MATCH on raw values.
+
+  - **ListKey#each(batch_size:)**: Memory-efficient LRANGE pagination for large lists.
+
+- ``DataType#each_record(batch_size:, write_size:, **filters)`` yields loaded
+  Horreum records (not raw IDs) via ``load_multi``. Ghost instances (expired keys
+  still in ``instances``) are automatically filtered. The ``write_size:`` parameter
+  controls pipelining depth (``nil`` for serial execution).
+
+- ``Familia::BatchResult`` value type for aggregating batch operation results:
+
+  - ``BatchResult.collect(enumerable, strict: false) { |record| ... }`` iterates
+    any Enumerable, tracking ``scanned``, ``modified`` (truthy returns), ``errors``
+    (array of ``{id:, error:}``), and ``duration_ms``.
+
+  - Per-record exception isolation: errors are captured and iteration continues.
+
+  - ``strict: true`` re-raises collected errors after iteration completes.
+
+Changed
+-------
+
+- Renamed batch field-update methods for clarity:
+
+  - ``batch_update`` is now ``multi_field_update``
+  - ``batch_fast_write`` is now ``multi_field_fast_write``
+
+  Old names removed without deprecation shim (breaking change).
+
+- Moved ``MultiResult`` into Familia namespace as ``Familia::MultiResult``.
+  Old top-level constant removed without backwards-compat alias (breaking change).
+
+AI Assistance
+-------------
+
+- Implementation and test coverage developed with parallel Claude Code agents:
+  one for production code (DataType iteration, BatchResult, renames), one for
+  Tryouts test suite (228 new tests across 8 files). PR #264.
+
 .. _changelog-2.8.0:
 
 2.8.0 — 2026-05-15
