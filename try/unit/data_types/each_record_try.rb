@@ -116,25 +116,29 @@ records.size
 # Combined with filters (on SortedSet)
 # ============================================================
 
-## each_record with since: filter
+## each_record with since: filter includes boundary record
 # Only records with score >= since should be yielded
 records = []
 Customer.instances.each_record(since: @known_score) { |r| records << r if r.custid.start_with?(@test_prefix) }
-records.size >= 1
+# Customer 2 (whose score defines the boundary) must be included
+records.map(&:custid).include?(@customers[2].custid)
 #=> true
 
-## each_record with until: filter
+## each_record with until: filter includes boundary record
 # Only records with score <= until should be yielded
 records = []
 Customer.instances.each_record(until: @known_score) { |r| records << r if r.custid.start_with?(@test_prefix) }
-records.size >= 1
+# Customer 2 (whose score defines the boundary) must be included
+records.map(&:custid).include?(@customers[2].custid)
 #=> true
 
-## each_record with since: and until: filter combined
-# Narrow window should still work
+## each_record with since: and until: exact match returns only matching scores
+# Exact score match - only records at exactly @known_score
 records = []
 Customer.instances.each_record(since: @known_score, until: @known_score) { |r| records << r if r.custid.start_with?(@test_prefix) }
-records.size >= 1
+# Customer 2 must be included, and all records must have exactly @known_score
+records.map(&:custid).include?(@customers[2].custid) &&
+  records.all? { |r| Customer.instances.score(r.identifier) == @known_score }
 #=> true
 
 # ============================================================

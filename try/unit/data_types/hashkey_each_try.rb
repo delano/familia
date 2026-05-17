@@ -192,12 +192,11 @@ collected = {}
 collected.size
 #=> 7
 
-## HashKey#each with empty matching pattern matches all
+## HashKey#each with empty matching pattern matches nothing
 collected = {}
 @bone.props.each(matching: '') { |k, v| collected[k] = v }
-# Empty pattern behavior may vary - typically matches nothing or all
-collected.size >= 0
-#=> true
+collected.size
+#=> 0
 
 ## HashKey#each combined with Enumerable-like iteration
 # Using the Enumerator form

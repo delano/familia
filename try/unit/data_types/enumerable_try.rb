@@ -66,9 +66,9 @@ slices.map(&:size)
 @bone.metrics.lazy.class
 #=> Enumerator::Lazy
 
-## SortedSet#lazy.take returns limited results
-@bone.metrics.lazy.take(2).to_a
-#=> ['metric_a', 'metric_b']
+## SortedSet#lazy.take returns limited results (2 elements, order not guaranteed)
+@bone.metrics.lazy.take(2).to_a.size
+#=> 2
 
 ## SortedSet#select filters members
 @bone.metrics.select { |m| m.end_with?('_a', '_b') }.sort
