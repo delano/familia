@@ -240,6 +240,59 @@ Customer.instances.each_record { |r| records << r if r&.custid&.start_with?(@tes
 records.size
 #=> 5
 
+# ============================================================
+# Argument validation
+# ============================================================
+
+## each_record raises ArgumentError when write_size exceeds batch_size
+begin
+  Customer.instances.each_record(batch_size: 10, write_size: 20) { |r| }
+  raised = false
+rescue ArgumentError => e
+  raised = e.message.include?('write_size') && e.message.include?('batch_size')
+end
+raised
+#=> true
+
+## each_record error message includes both values
+begin
+  Customer.instances.each_record(batch_size: 10, write_size: 20) { |r| }
+  ''
+rescue ArgumentError => e
+  e.message
+end
+#=~ /write_size.*20.*batch_size.*10|batch_size.*10.*write_size.*20/
+
+# ============================================================
+# Non-reference DataType error handling
+# ============================================================
+
+## each_record on non-reference DataType raises Familia::Problem
+@bone = Bone.new 'each_record_non_reference_test'
+@bone.tags.add 'item1'
+@bone.tags.add 'item2'
+begin
+  @bone.tags.each_record { |r| }
+  raised = false
+rescue Familia::Problem => e
+  raised = e.message.include?('reference DataType')
+end
+raised
+#=> true
+
+## each_record error message mentions load_multi requirement
+@bone2 = Bone.new 'each_record_error_msg_test'
+@bone2.owners.push 'owner1'
+begin
+  @bone2.owners.each_record { |r| }
+  ''
+rescue Familia::Problem => e
+  e.message
+end
+#=~ /load_multi/
+
 # Teardown: Clean up test data
 @customers.each { |c| c.destroy! rescue nil }
 Customer.instances.remove("#{@ghost_prefix}_ghost") rescue nil
+@bone.tags.clear rescue nil
+@bone2.owners.clear rescue nil
