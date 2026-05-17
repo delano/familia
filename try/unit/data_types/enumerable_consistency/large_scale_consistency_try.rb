@@ -280,7 +280,7 @@ checksum != 0
 #=> true
 
 ## UnsortedSet 1M: spot-check random members exist in iteration
-samples = @bone_1m.tags.dbclient.srandmember(@bone_1m.tags.dbkey, 10).map { |v| Familia::JsonSerializer.load(v) }
+samples = @bone_1m.tags.dbclient.srandmember(@bone_1m.tags.dbkey, 10).map { |v| Familia::JsonSerializer.parse(v) }
 found = samples.to_set
 @bone_1m.tags.each(batch_size: 50000) { |item| found.delete(item) }
 found.empty?

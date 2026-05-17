@@ -78,7 +78,7 @@ module Familia
           modified += 1 if result
         rescue StandardError => e
           # Extract identifier if possible
-          identifier = extract_identifier(item)
+          identifier = extract_identifier(args.length == 1 ? args[0] : args)
           errors << { id: identifier, error: e }
         end
       end

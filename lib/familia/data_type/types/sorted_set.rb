@@ -228,15 +228,16 @@ module Familia
         min = since_score || '-inf'
         max = until_score_val || '+inf'
         loop do
-          elements = rangebyscoreraw(min, max, limit: [0, batch_size], withscores: true)
-          break if elements.empty?
+          # with_scores returns nested pairs: [["a", 1.0], ["b", 2.0]]
+          pairs = rangebyscoreraw(min, max, limit: [0, batch_size], with_scores: true)
+          break if pairs.empty?
 
-          elements.each_slice(2) do |raw_member, score|
+          pairs.each do |raw_member, score|
             yield deserialize_value(raw_member)
             min = "(#{score}" # exclusive bound for next iteration
           end
 
-          break if elements.size < batch_size * 2 # withscores returns pairs
+          break if pairs.size < batch_size
         end
       else
         # Use ZSCAN for unbounded iteration (memory-efficient)
@@ -275,13 +276,7 @@ module Familia
     end
 
     def rangeraw(sidx, eidx, opts = {})
-      # NOTE: :withscores (no underscore) is the correct naming for the
-      # redis-4.x gem. We pass :withscores through explicitly b/c
-      # dbclient.zrange et al only accept that one optional argument.
-      # Passing `opts`` through leads to an ArgumentError:
-      #
-      #   sorted_sets.rb:374:in `zrevrange': wrong number of arguments (given 4, expected 3) (ArgumentError)
-      #
+      # NOTE: Redis 5.x gem uses :with_scores (with underscore)
       dbclient.zrange(dbkey, sidx, eidx, **opts)
     end
 
