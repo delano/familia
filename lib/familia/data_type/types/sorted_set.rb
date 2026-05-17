@@ -207,8 +207,16 @@ module Familia
     # @note The `until:` parameter uses Ruby keyword syntax. Since `until` is
     #   a reserved word, it's accessed via **kwargs internally.
     #
+    # @note Score-cursor pagination: bounded queries paginate using the last
+    #   seen score as the next exclusive minimum. This is O(n) total work,
+    #   unlike offset-based LIMIT which is O(n²). However, members with
+    #   identical scores may be skipped between pages. Use high-precision
+    #   floats (e.g., Familia.now) for scores to avoid collisions.
+    #
     def each(since: nil, batch_size: 100, **kwargs, &block)
-      until_score = kwargs[:until]
+      until_score = kwargs.delete(:until)
+      raise ArgumentError, "unknown keyword(s): #{kwargs.keys.join(', ')}" if kwargs.any?
+
       return to_enum(:each, since: since, until: until_score, batch_size: batch_size) unless block
 
       # Convert Time objects to numeric scores
@@ -216,11 +224,20 @@ module Familia
       until_score_val = until_score.is_a?(Time) ? until_score.to_f : until_score
 
       if since_score || until_score_val
-        # Use ZRANGEBYSCORE for bounded queries
+        # Score-cursor pagination: track last score, use exclusive bound for next page
         min = since_score || '-inf'
         max = until_score_val || '+inf'
-        elements = rangebyscore(min, max)
-        elements.each(&block)
+        loop do
+          elements = rangebyscoreraw(min, max, limit: [0, batch_size], withscores: true)
+          break if elements.empty?
+
+          elements.each_slice(2) do |raw_member, score|
+            yield deserialize_value(raw_member)
+            min = "(#{score}" # exclusive bound for next iteration
+          end
+
+          break if elements.size < batch_size * 2 # withscores returns pairs
+        end
       else
         # Use ZSCAN for unbounded iteration (memory-efficient)
         cursor = 0
