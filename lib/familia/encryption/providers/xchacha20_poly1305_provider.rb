@@ -95,7 +95,10 @@ module Familia
           personal_string = raw_personal.ljust(16, "\0")
 
           RbNaCl::Hash.blake2b(
-            context.b,
+            # to_s before .b: tolerate non-String contexts (Symbol, nil) and
+            # always operate on a fresh BINARY copy (never mutate a frozen
+            # caller string -- see issue #250 / FrozenError in benchmark).
+            context.to_s.b,
             key: master_key,
             digest_size: 32,
             personal: personal_string
