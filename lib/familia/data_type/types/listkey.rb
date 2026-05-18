@@ -25,7 +25,8 @@ module Familia
     def push *values
       warn_if_dirty!
       echo :push, Familia.pretty_stack(limit: 1) if Familia.debug
-      values.flatten.compact.each { |v| dbclient.rpush dbkey, serialize_value(v) }
+      serialized = values.flatten.compact.map { |v| serialize_value(v) }
+      dbclient.rpush(dbkey, serialized) unless serialized.empty?
       dbclient.ltrim dbkey, -@opts[:maxlength], -1 if @opts[:maxlength]
       update_expiration
       self
@@ -43,7 +44,8 @@ module Familia
     #   scalar field changes, consider calling save first to avoid split-brain state.
     def unshift *values
       warn_if_dirty!
-      values.flatten.compact.each { |v| dbclient.lpush dbkey, serialize_value(v) }
+      serialized = values.flatten.compact.map { |v| serialize_value(v) }
+      dbclient.lpush(dbkey, serialized) unless serialized.empty?
       # TODO: test maxlength
       dbclient.ltrim dbkey, 0, @opts[:maxlength] - 1 if @opts[:maxlength]
       update_expiration

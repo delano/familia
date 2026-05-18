@@ -26,7 +26,8 @@ module Familia
     #   scalar field changes, consider calling save first to avoid split-brain state.
     def add *values
       warn_if_dirty!
-      values.flatten.compact.each { |v| dbclient.sadd? dbkey, serialize_value(v) }
+      serialized = values.flatten.compact.map { |v| serialize_value(v) }
+      dbclient.sadd?(dbkey, serialized) unless serialized.empty?
       update_expiration
       self
     end
