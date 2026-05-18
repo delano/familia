@@ -11,7 +11,7 @@ require 'familia'
 # Configure Familia for the example
 # Note: Individual models can specify logical_database if needed
 Familia.configure do |config|
-  config.uri = 'redis://localhost:6379/'
+  config.uri = ENV.fetch('REDIS_URL', 'redis://localhost:2525/')
 end
 
 puts '=== Familia Relationships Basic Example ==='
@@ -33,12 +33,15 @@ class Customer < Familia::Horreum
   listkey :projects      # Ordered list of project IDs
   sorted_set :activity   # Activity feed with timestamps
 
-  # Create indexes for fast lookups (using class_ prefix for class-level)
-  class_indexed_by :email, :email_lookup # i.e. Customer.email_lookup
-  class_indexed_by :plan, :plan_lookup # i.e. Customer.plan_lookup
+  # Class-level indexes for fast lookups. Both auto-populate on save.
+  #   unique_index: 1:1 mapping  -> Customer.find_by_email(value) => Customer | nil
+  #   multi_index:  1:many group -> Customer.find_all_by_plan(value) => [Customer, ...]
+  unique_index :email, :email_lookup
+  multi_index :plan, :plan_lookup
 
-  # Track in class-level collections (using class_ prefix for class-level)
-  class_participates_in :all_customers, score: :created_at # i.e. Customer.all_customers
+  # Every Horreum subclass already has a built-in `instances` sorted set
+  # (a last-write timeline of all saved records), so there is no need to
+  # declare a separate class-level "all customers" collection.
 end
 
 class Domain < Familia::Horreum
@@ -76,28 +79,28 @@ puts '=== 1. Basic Object Creation ==='
 
 # Create some sample objects
 customer = Customer.new(
-  # custid: "cust_#{SecureRandom.hex(4)}",
+  custid: "cust_#{SecureRandom.hex(4)}",
   name: 'Acme Corporation',
   email: 'admin@acme.com',
   plan: 'enterprise'
 )
 
 domain1 = Domain.new(
-  # domain_id: "dom_#{SecureRandom.hex(4)}",
+  domain_id: "dom_#{SecureRandom.hex(4)}",
   name: 'acme.com',
   dns_zone: 'acme.com.',
   status: 'active'
 )
 
 domain2 = Domain.new(
-  # domain_id: "dom_#{SecureRandom.hex(4)}",
+  domain_id: "dom_#{SecureRandom.hex(4)}",
   name: 'staging.acme.com',
   dns_zone: 'staging.acme.com.',
   status: 'active'
 )
 
 project = Project.new(
-  # project_id: "proj_#{SecureRandom.hex(4)}",
+  project_id: "proj_#{SecureRandom.hex(4)}",
   name: 'Website Redesign',
   priority: 'high'
 )
@@ -110,7 +113,7 @@ puts
 puts '=== 2. Establishing Relationships ==='
 
 # Save objects to automatically update indexes and class-level tracking
-customer.save # Automatically adds to email_lookup, plan_lookup, and all_customers
+customer.save # Auto-populates email_lookup, plan_lookup, and the instances timeline
 puts '✓ Customer automatically added to indexes and tracking on save'
 
 # Establish participates_in relationships using clean << operator syntax
@@ -121,24 +124,28 @@ customer.projects << project  # Same as project.add_to_customer_projects(custome
 puts '✓ Established domain ownership relationships using << operator'
 puts '✓ Established project ownership relationships using << operator'
 
-# Save domains to automatically add them to class-level tracking
-domain1.save  # Automatically adds to active_domains if status == 'active'
-domain2.save  # Automatically adds to active_domains if status == 'active'
-puts '✓ Domains automatically added to status tracking on save'
+# Save domains. NOTE: save auto-populates indexes (unique_index/multi_index)
+# and the instances timeline, but class_participates_in collections are NOT
+# auto-populated -- they must be added explicitly.
+domain1.save
+domain2.save
+
+# Add to the active_domains class collection. The score proc
+# (status == 'active' ? timestamp : 0) is evaluated per domain.
+Domain.add_to_active_domains(domain1)
+Domain.add_to_active_domains(domain2)
+puts '✓ Domains added to active_domains class collection'
 puts
 
 puts '=== 3. Querying Relationships ==='
 
-record = Customer.get_by_email('admin@acme.com')
-puts "Email lookup: #{record&.custid || 'not found'}"
+# unique_index generates find_by_<field>, returning a single record (or nil)
+record = Customer.find_by_email('admin@acme.com')
+puts "Email lookup (unique_index): #{record&.custid || 'not found'}"
 
-Customer.get_by_plan('enterprise') # raises MoreThanOne
-
-results = Customer.find_by_email('admin@acme.com')
-puts "Email lookup: #{results&.size} found"
-
-results = Customer.find_by_plan('enterprise')
-puts "Enterprise lookup: #{results&.size} found"
+# multi_index generates find_all_by_<field>, returning an array of records
+enterprise_customers = Customer.find_all_by_plan('enterprise')
+puts "Plan lookup (multi_index): #{enterprise_customers.size} enterprise customer(s)"
 puts
 
 # Test membership queries
@@ -152,8 +159,8 @@ puts "  Customer has #{customer.projects.size} projects"
 puts "  Domain IDs: #{customer.domains.members}"
 puts "  Project IDs: #{customer.projects.members}"
 
-# Test participates_in collections
-all_customers_count = Customer.values.size
+# The built-in `instances` sorted set tracks every saved record
+all_customers_count = Customer.instances.size
 puts "\nClass-level tracking:"
 puts "  Total customers in system: #{all_customers_count}"
 
@@ -163,16 +170,21 @@ puts
 
 puts '=== 4. Range Queries ==='
 
-# Get recent customers (last 24 hours)
+# Get recent customers (last 24 hours) from the instances timeline
 yesterday = (Familia.now - (24 * 3600)).to_i # 24 hours ago
-recent_customers = Customer.values.rangebyscore(yesterday, '+inf')
+recent_customers = Customer.instances.rangebyscore(yesterday, '+inf')
 puts "Recent customers (last 24h): #{recent_customers.size}"
 
-# Get all active domains by score
-active_domain_scores = Domain.active_domains.rangebyscore(1, '+inf', with_scores: true)
+# List active domains with their activation timestamps. The score is the
+# value produced by the class_participates_in score proc. Look it up by
+# passing the domain object to SortedSet#score (the serialization used when
+# adding members matches object lookups, not bare id strings).
 puts 'Active domains with timestamps:'
-active_domain_scores.each_slice(2) do |domain_id, timestamp|
-  puts "  #{domain_id}: active since #{Time.at(timestamp.to_i)} #{timestamp.inspect}"
+[domain1, domain2].each do |d|
+  score = Domain.active_domains.score(d)
+  next unless score
+
+  puts "  #{d.name} (#{d.domain_id}): active since #{Time.at(score.to_i)} (score=#{score})"
 end
 puts
 
@@ -195,14 +207,29 @@ puts "  Customer domains: #{customer.domains.size}"
 puts "  Active domains: #{Domain.active_domains.size}"
 puts
 
+# Purge all keys created by this example so it can be re-run safely.
+# unique_index enforces uniqueness, so leftover records would collide on
+# the next run with a RecordExistsError.
+puts '=== Cleaning up test data ==='
+[Customer, Domain, Project].each do |klass|
+  keys = klass.dbclient.keys("#{klass.config_name}:*")
+  klass.dbclient.del(*keys) unless keys.empty?
+  puts "✓ Cleaned #{klass.name} (#{keys.length} keys)"
+rescue StandardError => e
+  puts "✗ Error cleaning #{klass.name}: #{e.message}"
+end
+puts
+
 puts '=== Example Complete! ==='
 puts
 puts 'Key takeaways:'
-puts '• class_participates_in: Automatic class-level collections updated on save'
-puts '• class_indexed_by: Automatic class-level indexes updated on save'
+puts '• unique_index: 1:1 class-level index -> find_by_<field> (single record)'
+puts '• multi_index: 1:many class-level index -> find_all_by_<field> (array)'
+puts '• instances: Built-in per-class timeline, auto-updated on every save'
+puts '• unique_index/multi_index: Auto-populated on save'
+puts '• class_participates_in: Class-level collections; add explicitly (not auto on save)'
 puts '• participates_in: Use << operator for clean Ruby-like collection syntax'
-puts '• indexed_by with context:: Use for relationship-scoped indexes'
-puts '• Save operations: Automatically update indexes and class-level tracking'
+puts '• Pass within: to unique_index/multi_index for relationship-scoped indexes'
 puts '• << operator: Works naturally with all collection types (sets, lists, sorted sets)'
 puts
 puts 'See docs/wiki/Relationships-Guide.md for comprehensive documentation'

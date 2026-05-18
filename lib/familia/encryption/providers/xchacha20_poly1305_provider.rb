@@ -95,7 +95,7 @@ module Familia
           personal_string = raw_personal.ljust(16, "\0")
 
           RbNaCl::Hash.blake2b(
-            context.force_encoding('BINARY'),
+            context.b,
             key: master_key,
             digest_size: 32,
             personal: personal_string
