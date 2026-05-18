@@ -45,10 +45,10 @@ module Familia
       # filtered out.
       #
       # @param batch_size [Integer] Number of identifiers to load per batch
-      # @param write_size [Integer, nil] Controls pipelining depth for writes
-      #   in the block. When nil or 0, writes are serial (no pipelining).
-      #   When positive, fast writers in the block will be pipelined in
-      #   groups of this size.
+      # @param pipeline [Integer, nil] Controls pipelining depth for writes
+      #   in the block. When nil (default), writes are serial (no pipelining).
+      #   When a positive integer, fast writers in the block will be pipelined
+      #   in groups of this size. Must not exceed batch_size.
       # @param filters [Hash] Additional filter parameters passed to `each`.
       #   Available filters depend on the collection type:
       #   - SortedSet: `since:`, `until:`, `cursor_batch_size:`
@@ -58,20 +58,17 @@ module Familia
       # @yield [record] Each loaded Horreum record (non-nil)
       # @return [Enumerator, self] Returns Enumerator if no block given, self otherwise
       #
-      # @example Iterate over all records
+      # @example Iterate over all records (no pipelining, safe default)
       #   User.instances.each_record { |user| user.deactivate! }
       #
       # @example With time filter (for SortedSet)
       #   User.instances.each_record(since: 1.day.ago) { |u| notify(u) }
       #
       # @example Pipeline writes in groups
-      #   items.each_record(batch_size: 500, write_size: 50) { |r| r.foo! 'bar' }
+      #   items.each_record(batch_size: 500, pipeline: 50) { |r| r.foo! 'bar' }
       #
-      # @example Serial writes (no pipelining)
-      #   items.each_record(write_size: nil) { |r| r.save }
-      #
-      def each_record(batch_size: 100, write_size: batch_size, **filters, &block)
-        return to_enum(:each_record, batch_size: batch_size, write_size: write_size, **filters) unless block
+      def each_record(batch_size: 100, pipeline: nil, **filters, &block)
+        return to_enum(:each_record, batch_size: batch_size, pipeline: pipeline, **filters) unless block
 
         # Determine the class to load records from
         # For reference DataTypes, @opts[:class] holds the Horreum class
@@ -80,10 +77,9 @@ module Familia
           raise Familia::Problem, "each_record requires a reference DataType with a :class option that responds to load_multi"
         end
 
-        # Validate write_size constraints
-        if write_size && write_size > batch_size
-          raise ArgumentError, "write_size (#{write_size}) cannot exceed batch_size (#{batch_size})"
-        end
+        # Validate pipeline constraints using Ruby 3.2+ nil-safety
+        raise ArgumentError, "pipeline must be nil or a positive integer (got #{pipeline.inspect})" if pipeline && !pipeline.positive?
+        raise ArgumentError, "pipeline (#{pipeline}) cannot exceed batch_size (#{batch_size})" if pipeline&.> batch_size
 
         # Collect identifiers in batches
         buffer = []
@@ -97,12 +93,12 @@ module Familia
           # Filter out ghosts (nil results from expired keys)
           live_records = records.compact
 
-          if write_size.nil? || write_size.zero?
+          if pipeline.nil?
             # Serial mode - no pipelining, execute block for each record directly
             live_records.each { |record| block.call(record) }
           else
             # Pipelined mode - group records and wrap each group in a pipeline
-            live_records.each_slice(write_size) do |group|
+            live_records.each_slice(pipeline) do |group|
               record_class.pipelined do
                 group.each { |record| block.call(record) }
               end
