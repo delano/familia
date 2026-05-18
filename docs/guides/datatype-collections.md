@@ -3,9 +3,40 @@
 
 # DataType - Collection classes
 
-UnsortedSet, Sorted Set, List, and Hash data types all include the `Collection` module, which provides two main iteration methods: `each` and `each_record`. Both methods are designed to efficiently handle large collections by paginating through Valkey/Redis data structures, but they serve different purposes and yield different results.
+UnsortedSet, Sorted Set, List, and Hash data types all include the `Collection` module. This guide covers two performance-sensitive concerns: writing many elements efficiently (a single bulk command instead of one round-trip per element), and iterating large collections efficiently via `each` and `each_record`.
 
-Here's how the two methods iterate, using `ModelClass.instances` (a `SortedSet` with `reference: true`) as the running example.
+## Bulk writes — single round-trip mutations
+
+Collection mutations are **immediate** — every call hits Valkey/Redis right away, unlike scalar `field` setters which are deferred until `save`. Each call also runs `warn_if_dirty!` and cascades expiration. (See the write-model notes in `CLAUDE.md` for the deferred-vs-immediate split.)
+
+Multi-element adds issue **one** command for the whole batch, not one per element. Populating a large collection is therefore a single round-trip even without an explicit pipeline.
+
+The argument shape follows the collection's structure, and is consistent across the codebase:
+
+- **Value-only** collections (`UnsortedSet`, `ListKey`) take a **variadic splat**; arguments are flattened and `nil`-compacted.
+- **Keyed/pair** collections (`HashKey` is `field => value`, `SortedSet` is `member => score`) take a **single Hash** via `update` (aliased `merge!`), raising `ArgumentError` on a non-Hash.
+
+| Type | Bulk method | Call shape | Redis command |
+|---|---|---|---|
+| `UnsortedSet` | `add(*values)` | `tags.add(:a, :b, :c)` | one `SADD` |
+| `ListKey` | `push(*values)` / `unshift(*values)` | `log.push(1, 2, 3)` | one `RPUSH` / `LPUSH` |
+| `HashKey` | `update(hash)` / `merge!` | `cfg.update(a: 1, b: 2)` | one `HMSET` |
+| `SortedSet` | `update(hash)` / `merge!` | `board.update("alice" => 1000, "bob" => 850)` | one `ZADD` |
+
+```ruby
+tags.add(:ruby, :redis, :valkey)              # 1 SADD, returns self
+log.push("a", "b", "c")                        # 1 RPUSH → [a, b, c]
+board.update("alice" => 1000, "bob" => 850)    # 1 ZADD, returns new-member count (2)
+board.merge!("alice" => 1200)                  # 1 ZADD, score updated → returns 0
+```
+
+Behavior notes:
+
+- **Ordering**: `push` preserves argument order; `unshift` prepends each element in turn, so `unshift(a, b, c)` leaves the list head as `c, b, a` (Redis `LPUSH` semantics — unchanged from the prior per-element implementation). Sets are unordered; sorted sets order by score.
+- **Empty input is a no-op**: `add()` / `push()` / `update({})` issue no command. Set/list adds return `self`; `SortedSet#update` returns `0`.
+- **`SortedSet#add(val, score, …)` is unchanged and not bulk** — it takes a single member plus score and the conditional ZADD options (`nx:`, `xx:`, `gt:`, `lt:`, `ch:`). An Array passed as `val` is stored as one JSON-encoded member, not exploded into many. Use `update`/`merge!` for bulk insertion.
+
+The iteration methods `each` and `each_record` efficiently handle large collections by paginating through Valkey/Redis data structures, but they serve different purposes and yield different results. Here's how the two iterate, using `ModelClass.instances` (a `SortedSet` with `reference: true`) as the running example.
 
 ## `each` — yields **members** (identifiers, raw strings)
 
