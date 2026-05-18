@@ -130,10 +130,14 @@ puts '✓ Established project ownership relationships using << operator'
 domain1.save
 domain2.save
 
-# Add to the active_domains class collection. The score proc
-# (status == 'active' ? timestamp : 0) is evaluated per domain.
-Domain.add_to_active_domains(domain1)
-Domain.add_to_active_domains(domain2)
+# Add to the active_domains class collection. NOTE: the class-level add
+# path does not evaluate the `score:` proc declared on class_participates_in
+# (it falls back to current_score), so pass the intended status-based score
+# explicitly to record meaningful activation timestamps.
+[domain1, domain2].each do |d|
+  activation_score = d.status == 'active' ? Familia.now.to_i : 0
+  Domain.add_to_active_domains(d, activation_score)
+end
 puts '✓ Domains added to active_domains class collection'
 puts
 
@@ -176,9 +180,9 @@ recent_customers = Customer.instances.rangebyscore(yesterday, '+inf')
 puts "Recent customers (last 24h): #{recent_customers.size}"
 
 # List active domains with their activation timestamps. The score is the
-# value produced by the class_participates_in score proc. Look it up by
-# passing the domain object to SortedSet#score (the serialization used when
-# adding members matches object lookups, not bare id strings).
+# explicit status-based value passed to add_to_active_domains above. Look it
+# up by passing the domain object to SortedSet#score (the serialization used
+# when adding members matches object lookups, not bare id strings).
 puts 'Active domains with timestamps:'
 [domain1, domain2].each do |d|
   score = Domain.active_domains.score(d)

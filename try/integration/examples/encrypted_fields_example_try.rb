@@ -59,6 +59,9 @@ File.exist?(@script)
 @output.match?(/ArgumentError|FrozenError|NoMethodError|\(NameError\)/)
 #=> false
 
-## Cleanup reports the keys it actually deleted (config_name prefix)
-@output.match?(/Cleaned SecureUser \(\d+ keys\)/)
+## Cleanup actually deletes created keys (locks in the config_name prefix fix)
+# SecureUser persists records in Examples 1 and 6, so a correct prefix must
+# delete a non-zero key count. The old wrong prefix (secureuser:* vs
+# secure_user:*) reported "(0 keys)", so a zero count must fail this test.
+@output[/Cleaned SecureUser \((\d+) keys\)/, 1].to_i.positive?
 #=> true
