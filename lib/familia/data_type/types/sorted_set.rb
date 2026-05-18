@@ -148,11 +148,17 @@ module Familia
     # @param hsh [Hash] Mapping of member => score (Object => Numeric)
     # @return [Integer] Number of new members added (members whose score was
     #   merely updated are not counted), per redis-rb's bulk ZADD return value
-    # @raise [ArgumentError] If the argument is not a Hash
+    # @raise [ArgumentError] If the argument is not a Hash, or any score is
+    #   not Numeric
     #
     # @example
     #   board.update("alice" => 1000, "bob" => 850)  #=> 2
     #   board.merge!("alice" => 1200)                 #=> 0 (score updated)
+    #
+    # @note Unlike single-value #add, scores are required: this bulk path does
+    #   not default a missing score to Familia.now. A non-Numeric score (e.g.
+    #   nil) raises ArgumentError rather than surfacing a low-level client
+    #   error.
     #
     # @note Like #add, this executes immediately (not deferred) and cascades
     #   expiration. Empty input is a no-op returning 0.
@@ -161,7 +167,13 @@ module Familia
       raise ArgumentError, 'Argument to bulk add must be a hash' unless hsh.is_a?(Hash)
       return 0 if hsh.empty?
 
-      pairs = hsh.map { |member, score| [score, serialize_value(member)] }
+      pairs = hsh.map do |member, score|
+        unless score.is_a?(Numeric)
+          raise ArgumentError, "SortedSet#update score for #{member.inspect} must be Numeric, got #{score.class}"
+        end
+
+        [score, serialize_value(member)]
+      end
       ret = dbclient.zadd(dbkey, pairs)
       update_expiration
       ret

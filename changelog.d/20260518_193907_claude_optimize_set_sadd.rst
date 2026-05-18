@@ -6,8 +6,11 @@ Added
   ``field => value`` -- so it follows the established ``HashKey#update``/``merge!``
   convention (a single Hash argument) rather than the variadic splat used by the
   value-only ``UnsortedSet``/``ListKey``. Pass ``{member => score}`` to issue one
-  ``ZADD`` instead of one round-trip per member. Validates the argument is a Hash,
-  cascades expiration, and is a no-op returning ``0`` for empty input. The
+  ``ZADD`` instead of one round-trip per member. Validates the argument is a Hash
+  and that every score is ``Numeric`` (a missing/``nil`` score raises a clear
+  ``ArgumentError`` instead of a low-level client error -- unlike single-value
+  ``#add``, the bulk path does not default a missing score to ``Familia.now``).
+  Cascades expiration, and is a no-op returning ``0`` for empty input. The
   single-value ``SortedSet#add`` (and its array-as-single-member contract) is
   unchanged. PR #269
 

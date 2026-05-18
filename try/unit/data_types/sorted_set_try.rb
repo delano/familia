@@ -99,5 +99,18 @@ rescue ArgumentError => e
 end
 #=> 'Argument to bulk add must be a hash'
 
+## Familia::SortedSet#update raises a clear ArgumentError on a non-Numeric score (not auto-defaulted like #add)
+begin
+  @u.metrics.update('alice' => 1000, 'bob' => nil)
+  :no_error
+rescue ArgumentError => e
+  e.message
+end
+#=> 'SortedSet#update score for "bob" must be Numeric, got NilClass'
+
+## Familia::SortedSet#update rejects a bad score before issuing the ZADD (alice not added)
+@u.metrics.member?('alice')
+#=> false
+
 @u.metrics.delete!
 @a.metrics.delete!
