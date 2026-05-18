@@ -89,26 +89,33 @@ records.size
 #=> 5
 
 # ============================================================
-# write_size parameter for pipelining
+# pipeline parameter for pipelining (renamed from write_size)
 # ============================================================
 
-## each_record with write_size for batched writes
-# write_size controls how many records are processed before flushing writes
+## each_record with no pipeline param uses serial execution (safe-by-default)
+# Default behavior is no pipelining - each record processed individually
 records = []
-Customer.instances.each_record(write_size: 2) { |r| records << r if r.custid.start_with?(@test_prefix) }
+Customer.instances.each_record { |r| records << r if r.custid.start_with?(@test_prefix) }
 records.size
 #=> 5
 
-## each_record with write_size: nil for serial execution
+## each_record with pipeline: for batched writes
+# pipeline controls how many records are processed before flushing writes
+records = []
+Customer.instances.each_record(pipeline: 2) { |r| records << r if r.custid.start_with?(@test_prefix) }
+records.size
+#=> 5
+
+## each_record with pipeline: nil for explicit serial execution
 # Serial execution processes one at a time without batching
 records = []
-Customer.instances.each_record(write_size: nil) { |r| records << r if r.custid.start_with?(@test_prefix) }
+Customer.instances.each_record(pipeline: nil) { |r| records << r if r.custid.start_with?(@test_prefix) }
 records.size
 #=> 5
 
-## each_record with both batch_size and write_size
+## each_record with both batch_size and pipeline
 records = []
-Customer.instances.each_record(batch_size: 3, write_size: 2) { |r| records << r if r.custid.start_with?(@test_prefix) }
+Customer.instances.each_record(batch_size: 3, pipeline: 2) { |r| records << r if r.custid.start_with?(@test_prefix) }
 records.size
 #=> 5
 
@@ -244,24 +251,94 @@ records.size
 # Argument validation
 # ============================================================
 
-## each_record raises ArgumentError when write_size exceeds batch_size
+## each_record raises ArgumentError when batch_size is nil
 begin
-  Customer.instances.each_record(batch_size: 10, write_size: 20) { |r| }
+  Customer.instances.each_record(batch_size: nil) { |r| }
   raised = false
 rescue ArgumentError => e
-  raised = e.message.include?('write_size') && e.message.include?('batch_size')
+  raised = e.message.include?('batch_size') && e.message.include?('positive')
+end
+raised
+#=> true
+
+## each_record raises ArgumentError when batch_size is 0
+begin
+  Customer.instances.each_record(batch_size: 0) { |r| }
+  raised = false
+rescue ArgumentError => e
+  raised = e.message.include?('batch_size') && e.message.include?('positive')
+end
+raised
+#=> true
+
+## each_record raises ArgumentError when batch_size is negative
+begin
+  Customer.instances.each_record(batch_size: -5) { |r| }
+  raised = false
+rescue ArgumentError => e
+  raised = e.message.include?('batch_size') && e.message.include?('positive')
+end
+raised
+#=> true
+
+## each_record raises ArgumentError when batch_size is non-integer
+begin
+  Customer.instances.each_record(batch_size: "100") { |r| }
+  raised = false
+rescue ArgumentError => e
+  raised = e.message.include?('batch_size') && e.message.include?('positive')
+end
+raised
+#=> true
+
+## each_record raises ArgumentError when pipeline exceeds batch_size
+begin
+  Customer.instances.each_record(batch_size: 10, pipeline: 20) { |r| }
+  raised = false
+rescue ArgumentError => e
+  raised = e.message.include?('pipeline') && e.message.include?('batch_size')
 end
 raised
 #=> true
 
 ## each_record error message includes both values
 begin
-  Customer.instances.each_record(batch_size: 10, write_size: 20) { |r| }
+  Customer.instances.each_record(batch_size: 10, pipeline: 20) { |r| }
   ''
 rescue ArgumentError => e
   e.message
 end
-#=~ /write_size.*20.*batch_size.*10|batch_size.*10.*write_size.*20/
+#=~ /pipeline.*20.*batch_size.*10|batch_size.*10.*pipeline.*20/
+
+## each_record raises ArgumentError when pipeline is 0
+begin
+  Customer.instances.each_record(pipeline: 0) { |r| }
+  raised = false
+rescue ArgumentError => e
+  raised = e.message.include?('pipeline') && e.message.include?('positive')
+end
+raised
+#=> true
+
+## each_record raises ArgumentError when pipeline is negative
+begin
+  Customer.instances.each_record(pipeline: -1) { |r| }
+  raised = false
+rescue ArgumentError => e
+  raised = e.message.include?('pipeline') && e.message.include?('positive')
+end
+raised
+#=> true
+
+## each_record raises ArgumentError when pipeline is non-integer
+begin
+  Customer.instances.each_record(pipeline: "10") { |r| }
+  raised = false
+rescue ArgumentError => e
+  raised = e.message.include?('pipeline') && e.message.include?('positive')
+end
+raised
+#=> true
 
 # ============================================================
 # Non-reference DataType error handling
