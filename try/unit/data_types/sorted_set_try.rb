@@ -69,4 +69,48 @@ require_relative '../../support/helpers/test_helpers'
 @a.metrics.members
 #=> ['metric2']
 
+## Familia::SortedSet#update bulk-adds a Hash of member => score in one ZADD, returns new count
+@u = Bone.new 'zset_bulk_update'
+@u.metrics.update(alpha: 1, gamma: 3, beta: 2)
+#=> 3
+
+## Familia::SortedSet#update orders members by their given scores
+@u.metrics.members
+#=> ['alpha', 'beta', 'gamma']
+
+## Familia::SortedSet#merge! is an alias and updates existing scores (0 new members)
+@u.metrics.merge!(alpha: 10)
+#=> 0
+
+## Familia::SortedSet#merge! re-scored member moves position
+@u.metrics.members
+#=> ['beta', 'gamma', 'alpha']
+
+## Familia::SortedSet#update with empty Hash is a no-op returning 0
+@u.metrics.update({})
+#=> 0
+
+## Familia::SortedSet#update raises ArgumentError on non-Hash argument
+begin
+  @u.metrics.update([:not, :a, :hash])
+  :no_error
+rescue ArgumentError => e
+  e.message
+end
+#=> 'Argument to bulk add must be a hash'
+
+## Familia::SortedSet#update raises a clear ArgumentError on a non-Numeric score (not auto-defaulted like #add)
+begin
+  @u.metrics.update('alice' => 1000, 'bob' => nil)
+  :no_error
+rescue ArgumentError => e
+  e.message
+end
+#=> 'SortedSet#update score for "bob" must be Numeric, got NilClass'
+
+## Familia::SortedSet#update rejects a bad score before issuing the ZADD (alice not added)
+@u.metrics.member?('alice')
+#=> false
+
+@u.metrics.delete!
 @a.metrics.delete!
