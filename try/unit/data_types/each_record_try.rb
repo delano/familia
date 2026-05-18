@@ -251,6 +251,46 @@ records.size
 # Argument validation
 # ============================================================
 
+## each_record raises ArgumentError when batch_size is nil
+begin
+  Customer.instances.each_record(batch_size: nil) { |r| }
+  raised = false
+rescue ArgumentError => e
+  raised = e.message.include?('batch_size') && e.message.include?('positive')
+end
+raised
+#=> true
+
+## each_record raises ArgumentError when batch_size is 0
+begin
+  Customer.instances.each_record(batch_size: 0) { |r| }
+  raised = false
+rescue ArgumentError => e
+  raised = e.message.include?('batch_size') && e.message.include?('positive')
+end
+raised
+#=> true
+
+## each_record raises ArgumentError when batch_size is negative
+begin
+  Customer.instances.each_record(batch_size: -5) { |r| }
+  raised = false
+rescue ArgumentError => e
+  raised = e.message.include?('batch_size') && e.message.include?('positive')
+end
+raised
+#=> true
+
+## each_record raises ArgumentError when batch_size is non-integer
+begin
+  Customer.instances.each_record(batch_size: "100") { |r| }
+  raised = false
+rescue ArgumentError => e
+  raised = e.message.include?('batch_size') && e.message.include?('positive')
+end
+raised
+#=> true
+
 ## each_record raises ArgumentError when pipeline exceeds batch_size
 begin
   Customer.instances.each_record(batch_size: 10, pipeline: 20) { |r| }
