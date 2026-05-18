@@ -1,3 +1,16 @@
+Added
+-----
+
+- ``SortedSet#update`` (aliased ``merge!``) for bulk member insertion. A sorted
+  set is ``member => score`` -- the same pair shape as ``HashKey``'s
+  ``field => value`` -- so it follows the established ``HashKey#update``/``merge!``
+  convention (a single Hash argument) rather than the variadic splat used by the
+  value-only ``UnsortedSet``/``ListKey``. Pass ``{member => score}`` to issue one
+  ``ZADD`` instead of one round-trip per member. Validates the argument is a Hash,
+  cascades expiration, and is a no-op returning ``0`` for empty input. The
+  single-value ``SortedSet#add`` (and its array-as-single-member contract) is
+  unchanged. PR #269
+
 Changed
 -------
 
@@ -15,4 +28,8 @@ AI Assistance
 - AI investigated all collection ``DataType`` classes for the same per-element
   loop anti-pattern, identified the three affected methods, verified
   behavior-preservation (ordering, edge cases, chainability) at the Redis wire
-  level, and confirmed zero regressions against the existing test suites.
+  level, and confirmed zero regressions against the existing test suites. The
+  ``SortedSet#update`` API shape was chosen by priority order: existing Familia
+  conventions first (the ``HashKey#update``/``merge!`` precedent for keyed
+  collections), then the upstream redis-rb bulk ``ZADD`` form, then Ruby
+  ``Hash#merge!`` semantics as confirmation.
