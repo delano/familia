@@ -77,8 +77,8 @@ module Familia
           raise Familia::Problem, "each_record requires a reference DataType with a :class option that responds to load_multi"
         end
 
-        # Validate pipeline constraints using Ruby 3.2+ nil-safety
-        raise ArgumentError, "pipeline must be nil or a positive integer (got #{pipeline.inspect})" if pipeline && !pipeline.positive?
+        # Validate pipeline constraints
+        raise ArgumentError, "pipeline must be nil or a positive integer (got #{pipeline.inspect})" unless pipeline.nil? || (pipeline.is_a?(Integer) && pipeline.positive?)
         raise ArgumentError, "pipeline (#{pipeline}) cannot exceed batch_size (#{batch_size})" if pipeline&.> batch_size
 
         # Collect identifiers in batches

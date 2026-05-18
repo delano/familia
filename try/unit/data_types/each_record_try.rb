@@ -290,6 +290,16 @@ end
 raised
 #=> true
 
+## each_record raises ArgumentError when pipeline is non-integer
+begin
+  Customer.instances.each_record(pipeline: "10") { |r| }
+  raised = false
+rescue ArgumentError => e
+  raised = e.message.include?('pipeline') && e.message.include?('positive')
+end
+raised
+#=> true
+
 # ============================================================
 # Non-reference DataType error handling
 # ============================================================
