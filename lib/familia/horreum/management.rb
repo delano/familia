@@ -158,7 +158,7 @@ module Familia
           # Safe mode: Check existence first (original behavior)
           # We use a lower-level method here b/c we're working with the
           # full key and not just the identifier.
-          does_exist = dbclient.exists(objkey).positive?
+          does_exist = Familia.positive?(dbclient.exists(objkey))
 
           Familia.debug "[find_by_key] #{self} from key #{objkey} (exists: #{does_exist})"
           Familia.trace :FIND_BY_DBKEY_KEY, nil, objkey

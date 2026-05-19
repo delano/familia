@@ -342,7 +342,7 @@ module Familia
       # @return [Boolean] true if TTL is set, false if data persists indefinitely
       #
       def expires?
-        ttl.positive?
+        Familia.positive?(ttl)
       end
 
       # Check if this object's data has expired or will expire soon
@@ -377,7 +377,7 @@ module Familia
       #
       def extend_expiration(duration)
         current_ttl = ttl
-        return false unless current_ttl.positive? # no current expiration set
+        return false unless Familia.positive?(current_ttl) == true # no current expiration set
 
         new_ttl = current_ttl + duration.to_f
         expire(new_ttl)

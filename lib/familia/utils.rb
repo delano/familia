@@ -8,6 +8,54 @@ module Familia
   module Utils
     using Familia::Refinements::TimeLiterals
 
+    # Future-aware success check for Redis command return values.
+    #
+    # Redis commands like HSET return 0 (updated existing) or 1 (created new).
+    # Both are success states. Inside a pipeline or transaction, the return
+    # value is a Redis::Future which cannot be inspected until the block
+    # completes.
+    #
+    # @param ret [Integer, Redis::Future] The return value from a Redis command
+    # @return [Boolean, Redis::Future] true/false for concrete values,
+    #   passthrough for Futures
+    #
+    # @example Normal usage
+    #   ret = dbclient.hset(key, field, value)
+    #   Familia.success?(ret)  #=> true (for 0 or 1)
+    #
+    # @example Inside pipeline
+    #   pipelined do
+    #     ret = dbclient.hset(key, field, value)
+    #     Familia.success?(ret)  #=> Redis::Future (passthrough)
+    #   end
+    #
+    def success?(ret)
+      ret.is_a?(Redis::Future) ? ret : (ret.zero? || ret.positive?)
+    end
+
+    # Future-aware positive check for Redis command return values.
+    #
+    # For commands where 0 means "nothing happened" and positive means
+    # "something happened" (e.g., EXISTS, DEL, LINSERT, TTL checks).
+    #
+    # @param ret [Integer, Redis::Future] The return value from a Redis command
+    # @return [Boolean, Redis::Future] true/false for concrete values,
+    #   passthrough for Futures
+    #
+    # @example Check if key exists
+    #   ret = dbclient.exists(key)
+    #   Familia.positive?(ret)  #=> true if key exists
+    #
+    # @example Check TTL inside pipeline
+    #   pipelined do
+    #     ret = dbclient.ttl(key)
+    #     Familia.positive?(ret)  #=> Redis::Future (passthrough)
+    #   end
+    #
+    def positive?(ret)
+      ret.is_a?(Redis::Future) ? ret : ret.positive?
+    end
+
     # Joins array elements with Familia delimiter
     # @param val [Array] elements to join
     # @return [String] joined string

@@ -154,24 +154,6 @@ module Familia
           # Handle Redis::Future objects during transactions
           return hget(field_name) if val.nil? || val.is_a?(Redis::Future)
 
-          # Prevent fast writer within transaction/pipeline - the return value
-          # would be Redis::Future which doesn't support zero?/positive? checks
-          if Fiber[:familia_transaction]
-            Familia.trace :FAST_WRITER_BLOCKED, dbkey,
-                         "#{fast_method_name} blocked by active transaction context"
-            raise Familia::OperationModeError, <<~ERROR_MESSAGE.chomp
-              Cannot call fast writer #{fast_method_name} within a transaction.
-              Use multi_field_update or commit_fields instead.
-            ERROR_MESSAGE
-          elsif Fiber[:familia_pipeline]
-            Familia.trace :FAST_WRITER_BLOCKED, dbkey,
-                         "#{fast_method_name} blocked by active pipeline context"
-            raise Familia::OperationModeError, <<~ERROR_MESSAGE.chomp
-              Cannot call fast writer #{fast_method_name} within a pipeline.
-              Restructure to call fast writers outside the pipeline.
-            ERROR_MESSAGE
-          end
-
           begin
             # Trace the operation if debugging is enabled
             Familia.trace :FAST_WRITER, nil, "#{field_name}: #{val.inspect}" if Familia.debug?
@@ -192,7 +174,7 @@ module Familia
 
             clear_dirty!(field_name) if respond_to?(:clear_dirty!)
 
-            ret.zero? || ret.positive?
+            Familia.success?(ret)
           rescue Familia::Problem => e
             raise "#{fast_method_name} method failed: #{e.message}", e.backtrace
           end

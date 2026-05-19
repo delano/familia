@@ -314,19 +314,19 @@ class TestModelWithInit < Familia::Horreum
 end
 
 # Create object - init should set region based on user_id
-init_obj = TestModelWithInit.new(user_id: "us-west-123")
+init_obj = TestModelWithInit.new(user_id: "ca-west-123")
 init_obj.save
 init_obj.activities << "login"
 init_obj.activities << "purchase"
 
 # Verify init worked and region is set
-region_set_correctly = init_obj.region == "us"
+region_set_correctly = init_obj.region == "ca"
 
 # Verify related field key includes region (would be nil without fix)
 activities_key = init_obj.activities.dbkey
 
 # Destroy using class method - temp instance init should execute with identifier
-TestModelWithInit.destroy!("us-west-123")
+TestModelWithInit.destroy!("ca-west-123")
 
 # Verify all keys are cleaned up (including activities with correct key)
 activities_cleaned = TestModelWithInit.dbclient.exists(activities_key).zero?

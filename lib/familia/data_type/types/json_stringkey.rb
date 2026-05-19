@@ -108,7 +108,7 @@ module Familia
     #
     def del
       ret = dbclient.del dbkey
-      ret.positive?
+      Familia.positive?(ret)
     end
 
     # Checks if the value is nil (key does not exist or has no value).
