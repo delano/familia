@@ -2,5 +2,5 @@
 
 module Familia
   # Version information for the Familia
-  VERSION = '2.9.0'.freeze
+  VERSION = '2.9.1'.freeze
 end
