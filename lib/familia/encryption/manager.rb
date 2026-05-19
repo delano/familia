@@ -109,9 +109,24 @@ module Familia
         raise EncryptionError, 'Provider required for key derivation' unless provider
 
         version ||= current_key_version
-        master_key = get_master_key(version)
 
-        provider.derive_key(master_key, context)
+        # Request-scoped key cache (opt-in via Familia::Encryption.with_request_cache).
+        # Disabled by default for maximum security (keys are not held in memory
+        # longer than a single derivation). The cache key includes the algorithm
+        # so different providers never share a derived key, and the version so
+        # key rotation stays correct. On a hit we return a copy and never fetch
+        # the master key, minimising master-key exposure.
+        cache = Fiber[:familia_request_cache] if Fiber[:familia_request_cache_enabled]
+        if cache
+          cache_key = "#{provider.algorithm}:#{version}:#{context}"
+          cached = cache[cache_key]
+          return cached.dup if cached
+        end
+
+        master_key = get_master_key(version)
+        derived = provider.derive_key(master_key, context)
+        cache[cache_key] = derived.dup if cache
+        derived
       ensure
         Familia::Encryption.secure_wipe(master_key) if master_key
       end

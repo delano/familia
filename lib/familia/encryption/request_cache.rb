@@ -37,34 +37,10 @@ module Familia
         Fiber[:familia_request_cache] = nil
       end
 
-      private
-
-      # Modified derive_key that uses request cache when enabled
-      def derive_key_with_optional_cache(context, version: nil)
-        version ||= current_key_version
-        master_key = get_master_key(version)
-
-        # Only use cache if explicitly enabled for this request
-        if Fiber[:familia_request_cache_enabled]
-          cache = Fiber[:familia_request_cache] ||= {}
-          cache_key = "#{version}:#{context}"
-
-          # Return cached key if available (within same request only)
-          if (cached = cache[cache_key])
-            return cached.dup
-          end
-
-          # Derive and cache for this request only
-          derived = perform_key_derivation(master_key, context)
-          cache[cache_key] = derived.dup
-          derived
-        else
-          # Default: no caching for maximum security
-          perform_key_derivation(master_key, context)
-        end
-      ensure
-        secure_wipe(master_key) if master_key
-      end
+      # NOTE: The actual cache lookup lives in
+      # Familia::Encryption::Manager#derive_key_without_increment, which is the
+      # single key-derivation path for both encrypt and decrypt. This module
+      # only owns the opt-in lifecycle (enable, populate-by-Manager, wipe).
     end
   end
 end
