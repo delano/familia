@@ -174,7 +174,7 @@ module Familia
 
             clear_dirty!(field_name) if respond_to?(:clear_dirty!)
 
-            ret.is_a?(Redis::Future) ? ret : (ret.zero? || ret.positive?)
+            Familia.success?(ret)
           rescue Familia::Problem => e
             raise "#{fast_method_name} method failed: #{e.message}", e.backtrace
           end

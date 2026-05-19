@@ -233,7 +233,7 @@ module Familia
 
     def del
       ret = dbclient.del dbkey
-      ret.positive?
+      Familia.positive?(ret)
     end
 
     # Class methods for multi-key operations

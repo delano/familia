@@ -230,7 +230,7 @@ module Familia
               raise ArgumentError, "position must be :before or :after, got #{position.inspect}"
             end
       result = dbclient.linsert dbkey, pos, serialize_value(pivot), serialize_value(value)
-      update_expiration if result.positive?
+      update_expiration if Familia.positive?(result) == true
       result
     end
     alias linsert insert
@@ -267,7 +267,7 @@ module Familia
 
       warn_if_dirty!
       result = dbclient.rpushx(dbkey, serialized_values)
-      update_expiration if result.positive?
+      update_expiration if Familia.positive?(result) == true
       result
     end
     alias rpushx pushx
@@ -283,7 +283,7 @@ module Familia
 
       warn_if_dirty!
       result = dbclient.lpushx(dbkey, serialized_values)
-      update_expiration if result.positive?
+      update_expiration if Familia.positive?(result) == true
       result
     end
     alias lpushx unshiftx

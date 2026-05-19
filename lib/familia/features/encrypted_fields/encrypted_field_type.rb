@@ -118,7 +118,7 @@ module Familia
           return false if encrypted_data.nil?
 
           ret = hset(field_name, encrypted_data)
-          ret.is_a?(Redis::Future) ? ret : (ret.zero? || ret.positive?)
+          Familia.success?(ret)
         end
       end
     end
