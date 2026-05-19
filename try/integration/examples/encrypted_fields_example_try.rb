@@ -59,9 +59,9 @@ File.exist?(@script)
 @output.match?(/ArgumentError|FrozenError|NoMethodError|\(NameError\)/)
 #=> false
 
-## Cleanup actually deletes created keys (locks in the config_name prefix fix)
-# SecureUser persists records in Examples 1 and 6, so a correct prefix must
-# delete a non-zero key count. The old wrong prefix (secureuser:* vs
-# secure_user:*) reported "(0 keys)", so a zero count must fail this test.
-@output[/Cleaned SecureUser \((\d+) keys\)/, 1].to_i.positive?
+## Surgical teardown destroyed the persisted records (no prefix globs)
+# user + doc + profile + 10 VaultEntry = 13 always-in-scope records, plus
+# the RotationTest and Example-6 SecureUser looked up by id. A regression
+# that stops destroying created records drops this count below 13.
+@output[/Destroyed (\d+) example records \(no prefix globs\)/, 1].to_i >= 13
 #=> true

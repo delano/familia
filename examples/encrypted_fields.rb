@@ -380,15 +380,18 @@ puts 'Notice: SSN and bank account are automatically excluded'
 puts 'Phone number is included but masked for display'
 puts
 
-# Clean up examples
+# Clean up examples. Surgical teardown: destroy! removes exactly each
+# record's own keys + instances entry, never a `prefix:*` glob that could
+# wipe unrelated data on a shared Redis db. mem_obj (Example 5) and the
+# invalid-config object (Example 6) were never persisted, so they are
+# intentionally absent here.
 puts '=== Cleaning up test data ==='
-[SecureUser, SecureDocument, VaultEntry, RotationTest, MemoryTest, SecureProfile].each do |klass|
-  keys = klass.dbclient.keys("#{klass.config_name}:*")
-  klass.dbclient.del(*keys) unless keys.empty?
-  puts "✓ Cleaned #{klass.name} (#{keys.length} keys)"
-rescue StandardError => e
-  puts "✗ Error cleaning #{klass.name}: #{e.message}"
-end
+records = [user, doc, profile, *entries]
+records << RotationTest.find_by_id('rotation_test')
+records << SecureUser.find_by_id('version_test@example.com')
+records = records.compact
+records.each(&:destroy!)
+puts "✓ Destroyed #{records.size} example records (no prefix globs)"
 
 # Clear any request cache
 begin

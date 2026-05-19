@@ -211,17 +211,16 @@ puts "  Customer domains: #{customer.domains.size}"
 puts "  Active domains: #{Domain.active_domains.size}"
 puts
 
-# Purge all keys created by this example so it can be re-run safely.
-# unique_index enforces uniqueness, so leftover records would collide on
-# the next run with a RecordExistsError.
+# Surgical teardown so the example is re-runnable AND safe against a shared
+# Redis: destroy! only removes each record's own keys plus its own index /
+# instances / participation entries -- never a `prefix:*` glob that could
+# wipe unrelated data. class_participates_in collections are not auto-cleaned
+# on destroy!, so explicitly remove the specific members this run added.
 puts '=== Cleaning up test data ==='
-[Customer, Domain, Project].each do |klass|
-  keys = klass.dbclient.keys("#{klass.config_name}:*")
-  klass.dbclient.del(*keys) unless keys.empty?
-  puts "✓ Cleaned #{klass.name} (#{keys.length} keys)"
-rescue StandardError => e
-  puts "✗ Error cleaning #{klass.name}: #{e.message}"
-end
+[domain1, domain2].each { |d| Domain.active_domains.remove(d) }
+records = [customer, domain1, domain2, project]
+records.each(&:destroy!)
+puts "✓ Destroyed #{records.size} example records (no prefix globs)"
 puts
 
 puts '=== Example Complete! ==='
