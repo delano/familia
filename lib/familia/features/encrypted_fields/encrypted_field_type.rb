@@ -108,25 +108,7 @@ module Familia
         klass.define_method fast_method_name do |val|
           raise ArgumentError, "#{fast_method_name} requires a value" if val.nil?
 
-          # Prevent fast writer within transaction/pipeline - the return value
-          # would be Redis::Future which doesn't support zero?/positive? checks
-          if Fiber[:familia_transaction]
-            Familia.trace :FAST_WRITER_BLOCKED, dbkey,
-                         "#{fast_method_name} blocked by active transaction context"
-            raise Familia::OperationModeError, <<~ERROR_MESSAGE.chomp
-              Cannot call fast writer #{fast_method_name} within a transaction.
-              Use multi_field_update or commit_fields instead.
-            ERROR_MESSAGE
-          elsif Fiber[:familia_pipeline]
-            Familia.trace :FAST_WRITER_BLOCKED, dbkey,
-                         "#{fast_method_name} blocked by active pipeline context"
-            raise Familia::OperationModeError, <<~ERROR_MESSAGE.chomp
-              Cannot call fast writer #{fast_method_name} within a pipeline.
-              Restructure to call fast writers outside the pipeline.
-            ERROR_MESSAGE
-          end
-
-          # UnsortedSet via the setter method to get proper ConcealedString wrapping
+          # Use via the setter method to get proper ConcealedString wrapping
           send(:"#{method_name}=", val) if method_name
 
           # Get the ConcealedString and extract encrypted data for storage
@@ -136,7 +118,7 @@ module Familia
           return false if encrypted_data.nil?
 
           ret = hset(field_name, encrypted_data)
-          ret.zero? || ret.positive?
+          ret.is_a?(Redis::Future) ? ret : (ret.zero? || ret.positive?)
         end
       end
     end

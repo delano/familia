@@ -8,7 +8,7 @@ test_keys = { v1: Base64.strict_encode64('a' * 32) }
 Familia.config.encryption_keys = test_keys
 Familia.config.current_key_version = :v1
 
-# Test class for fast writer transaction/pipeline guards
+# Test class for fast writer transaction/pipeline behavior
 class FastWriterGuardTest < Familia::Horreum
   identifier_field :testid
   field :testid
@@ -16,7 +16,7 @@ class FastWriterGuardTest < Familia::Horreum
   field :value
 end
 
-# Test class for encrypted fast writer guards
+# Test class for encrypted fast writer behavior
 class EncryptedFastWriterGuardTest < Familia::Horreum
   feature :encrypted_fields
   identifier_field :testid
@@ -29,61 +29,43 @@ end
 @testobj.destroy!
 @testobj.save
 
-## Fast writer raises OperationModeError inside transaction
-begin
-  @testobj.transaction do
-    @testobj.name!('inside-transaction')
-  end
-  :should_have_raised
-rescue Familia::OperationModeError => e
-  e.message.include?('Cannot call fast writer')
+## Fast writer inside transaction returns Redis::Future
+result = nil
+@testobj.transaction do
+  result = @testobj.name!('inside-transaction')
 end
+result.is_a?(Redis::Future)
 #=> true
 
-## Fast writer raises OperationModeError inside pipeline
-begin
-  @testobj.pipelined do
-    @testobj.name!('inside-pipeline')
-  end
-  :should_have_raised
-rescue Familia::OperationModeError => e
-  e.message.include?('Cannot call fast writer')
+## Fast writer value is persisted after transaction completes
+@testobj.refresh
+@testobj.name
+#=> 'inside-transaction'
+
+## Fast writer inside pipeline returns Redis::Future
+result = nil
+@testobj.pipelined do
+  result = @testobj.value!('inside-pipeline')
 end
+result.is_a?(Redis::Future)
 #=> true
 
-## Transaction error message suggests multi_field_update or commit_fields
-begin
-  @testobj.transaction do
-    @testobj.name!('inside-transaction')
-  end
-  :should_have_raised
-rescue Familia::OperationModeError => e
-  e.message.include?('multi_field_update') && e.message.include?('commit_fields')
-end
-#=> true
-
-## Pipeline error message suggests restructuring (not multi_field_update)
-begin
-  @testobj.pipelined do
-    @testobj.name!('inside-pipeline')
-  end
-  :should_have_raised
-rescue Familia::OperationModeError => e
-  e.message.include?('Restructure') && !e.message.include?('multi_field_update')
-end
-#=> true
-
-## Fast writer works normally outside transaction
-@testobj.value!('direct-write')
+## Fast writer value is persisted after pipeline completes
+@testobj.refresh
 @testobj.value
-#=> 'direct-write'
+#=> 'inside-pipeline'
+
+## Fast writer works normally outside transaction (returns boolean)
+result = @testobj.name!('direct-write')
+[true, false].include?(result)
+#=> true
 
 ## Fast writer as getter works inside transaction (returns Future)
 result = nil
 @testobj.transaction do
   result = @testobj.value!
 end
-result.is_a?(Redis::Future) || result == 'direct-write'
+result.is_a?(Redis::Future) || result == 'inside-pipeline'
 #=> true
 
 ## Fast writer works after transaction completes
@@ -94,29 +76,28 @@ end
 @testobj.value
 #=> 'after-transaction'
 
-## Encrypted fast writer raises OperationModeError inside transaction
+## Encrypted fast writer inside transaction returns Redis::Future
 @encrypted = EncryptedFastWriterGuardTest.new(testid: 'enc-fw-guard-test')
 @encrypted.destroy!
 @encrypted.save
-begin
-  @encrypted.transaction do
-    @encrypted.secret!('sensitive-data')
-  end
-  :should_have_raised
-rescue Familia::OperationModeError => e
-  e.message.include?('Cannot call fast writer')
+result = nil
+@encrypted.transaction do
+  result = @encrypted.secret!('sensitive-data')
 end
+result.is_a?(Redis::Future)
 #=> true
 
-## Encrypted fast writer raises OperationModeError inside pipeline
-begin
-  @encrypted.pipelined do
-    @encrypted.secret!('sensitive-data')
-  end
-  :should_have_raised
-rescue Familia::OperationModeError => e
-  e.message.include?('Cannot call fast writer')
+## Encrypted fast writer value is persisted after transaction
+@encrypted.refresh
+@encrypted.secret.to_s.length > 0
+#=> true
+
+## Encrypted fast writer inside pipeline returns Redis::Future
+result = nil
+@encrypted.pipelined do
+  result = @encrypted.secret!('updated-secret')
 end
+result.is_a?(Redis::Future)
 #=> true
 
 ## Cleanup
