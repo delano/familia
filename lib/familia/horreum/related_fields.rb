@@ -227,6 +227,8 @@ module Familia
         end
 
         related_field = klass.new name, opts
+        # Freeze for thread safety. This means define_singleton_method will
+        # raise FrozenError — stub the class method, not the DataType instance.
         related_field.freeze
         instance_variable_set(:"@#{name}", related_field)
 

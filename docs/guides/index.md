@@ -9,6 +9,10 @@ Welcome to the comprehensive documentation for Familia v2.0. This guide collecti
 
 ## 📚 Guide Structure
 
+### 🚀 Getting Started
+
+0. **[Getting Started](getting-started.md)** - Mental models and key concepts for developers new to Familia
+
 ### 🏗️ Architecture & System Design
 
 1. **[Feature System](feature-system.md)** - Modular architecture with dependencies and autoloader patterns
