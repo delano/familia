@@ -4,8 +4,10 @@
 
 module Familia
   module Encryption
-    EncryptedData = Data.define(:algorithm, :nonce, :ciphertext, :auth_tag, :key_version, :encoding) do
-      def initialize(algorithm:, nonce:, ciphertext:, auth_tag:, key_version:, encoding: nil)
+    EncryptedData = Data.define(:algorithm, :nonce, :ciphertext, :auth_tag, :key_version, :encoding, :envelope_version,
+:aad_fields, :key_material_fields) do
+      def initialize(algorithm:, nonce:, ciphertext:, auth_tag:, key_version:, encoding: nil, envelope_version: nil,
+                     aad_fields: nil, key_material_fields: nil)
         super
       end
 

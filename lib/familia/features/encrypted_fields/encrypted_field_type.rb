@@ -9,12 +9,13 @@ require_relative 'concealed_string'
 
 module Familia
   class EncryptedFieldType < FieldType
-    attr_reader :aad_fields
+    attr_reader :aad_fields, :key_material
 
-    def initialize(name, aad_fields: [], **options)
+    def initialize(name, aad_fields: [], key_material: nil, **options)
       # Encrypted fields are not loggable by default for security
       super(name, **options.merge(on_conflict: :raise, loggable: false))
       @aad_fields = Array(aad_fields).freeze
+      @key_material = key_material # Proc returning entropy string
     end
 
     def define_setter(klass)
@@ -128,13 +129,46 @@ module Familia
       context = build_context(record)
       additional_data = build_aad(record)
 
-      Familia::Encryption.encrypt(value, context: context, additional_data: additional_data)
+      # Extend context with key_material if present
+      entropy = build_key_material(record)
+      context = "#{context}:#{entropy}" if entropy
+
+      result = Familia::Encryption.encrypt(value, context: context, additional_data: additional_data)
+
+      # Add envelope metadata for decryption
+      envelope = Familia::JsonSerializer.parse(result)
+      envelope['envelope_version'] = 2
+      envelope['aad_fields'] = @aad_fields.map(&:to_s) unless @aad_fields.empty?
+      envelope['key_material_fields'] = ['key_material'] if entropy
+
+      Familia::JsonSerializer.dump(envelope)
     end
 
     # Decrypt a value for the given record
     def decrypt_value(record, encrypted)
+      # Parse envelope to check for key_material_fields
+      envelope = if encrypted.is_a?(Hash)
+                   encrypted
+                 else
+                   Familia::JsonSerializer.parse(encrypted)
+                 end
+
       context = build_context(record)
-      additional_data = build_aad(record)
+
+      # Reconstruct AAD from envelope's aad_fields if present, else use class-level @aad_fields
+      aad_field_names = envelope['aad_fields'] || envelope[:aad_fields]
+      additional_data = if aad_field_names
+                          build_aad_from_fields(record, aad_field_names.map(&:to_sym))
+                        else
+                          build_aad(record)
+                        end
+
+      # Check if key_material was used during encryption
+      key_material_fields = envelope['key_material_fields'] || envelope[:key_material_fields]
+      if key_material_fields
+        entropy = build_key_material(record)
+        context = "#{context}:#{entropy}" if entropy
+      end
 
       Familia::Encryption.decrypt(encrypted, context: context, additional_data: additional_data)
     end
@@ -163,6 +197,54 @@ module Familia
     # Build encryption context string
     def build_context(record)
       "#{record.class.name}:#{@name}:#{record.identifier}"
+    end
+
+    # Build key material from proc for mixing into key derivation
+    #
+    # Key material is mixed into BLAKE2b derivation, meaning wrong value
+    # produces a completely wrong key and garbage output (unlike AAD which
+    # causes auth_tag mismatch).
+    #
+    # @param record [Familia::Horreum] The record instance
+    # @return [String, nil] Entropy string for key derivation, or nil
+    def build_key_material(record)
+      return nil unless @key_material
+
+      result = @key_material.call(record)
+      return nil if result.nil?
+
+      if result.is_a?(::RedactedString)
+        result.value
+      else
+        result.to_s
+      end
+    end
+
+    # Build AAD from explicit field list (used during decryption with envelope)
+    #
+    # @param record [Familia::Horreum] The record instance
+    # @param field_names [Array<Symbol>] Field names to include in AAD
+    # @return [String, nil] AAD string
+    def build_aad_from_fields(record, field_names)
+      identifier = record.identifier
+      return nil if identifier.nil? || identifier.to_s.empty?
+
+      base_components = [record.class.name, @name, identifier]
+
+      if field_names.empty?
+        base_components.join(':')
+      else
+        values = field_names.map do |field|
+          raw = record.send(field)
+          if raw.is_a?(::RedactedString)
+            raw.value
+          else
+            raw.to_s
+          end
+        end
+        all_components = [*base_components, *values]
+        Digest::SHA256.hexdigest(all_components.join(':'))
+      end
     end
 
     # Build Additional Authenticated Data (AAD) for authenticated encryption
@@ -230,7 +312,14 @@ module Familia
         # a fixed position in the join. Without this, a nil field would
         # shift later values left and produce a different hash once the
         # field is populated — making existing ciphertext undecryptable.
-        values = @aad_fields.map { |field| record.send(field).to_s }
+        values = @aad_fields.map do |field|
+          raw = record.send(field)
+          if raw.is_a?(::RedactedString)
+            raw.value
+          else
+            raw.to_s
+          end
+        end
         all_components = [*base_components, *values]
         Digest::SHA256.hexdigest(all_components.join(':'))
       end
