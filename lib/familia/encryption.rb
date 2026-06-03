@@ -13,6 +13,7 @@ require_relative 'encryption/providers/aes_gcm_provider'
 require_relative 'encryption/registry'
 require_relative 'encryption/manager'
 require_relative 'encryption/encrypted_data'
+require_relative 'encryption/request_cache'
 
 module Familia
   class EncryptionError < StandardError; end
