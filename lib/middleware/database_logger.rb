@@ -111,6 +111,7 @@ module DatabaseLogger
   @sample_rate = nil  # nil = log everything, 0.1 = 10%, 0.01 = 1%
   @sample_counter = Concurrent::AtomicFixnum.new(0)
   @commands_mutex = Mutex.new  # Protects compound operations on @commands
+  @capture_enabled = true  # true = capture every command into the buffer
 
   class << self
     # Gets/sets the logger instance used by DatabaseLogger.
@@ -153,6 +154,31 @@ module DatabaseLogger
     # @note Command capture is unaffected - only logger output is sampled.
     #   This means tests can still verify commands while production logs stay clean.
     attr_accessor :sample_rate
+
+    # Gets/sets whether commands are captured into the buffer.
+    #
+    # This toggle is independent of {#sample_rate}, which governs only log
+    # output. Capture controls whether each command pays the cost of timing,
+    # CommandMessage allocation, and the buffer append.
+    #
+    # @return [Boolean] Whether command capture is enabled (default true)
+    #
+    # @example Development / test (default) — full capture for assertions
+    #   DatabaseLogger.capture_enabled = true
+    #   # every command captured; capture_commands works as usual
+    #
+    # @example Production — sampled logging, no buffer/timing overhead
+    #   DatabaseLogger.sample_rate = 0.01
+    #   DatabaseLogger.capture_enabled = false
+    #   # 1% of commands logged; unsampled commands take the zero-overhead
+    #   # fast path (no clock_gettime, no allocation, no buffer append) unless
+    #   # an instrumentation hook is registered
+    #
+    # @note When false, a command that is also not sampled for logging and has
+    #   no registered instrumentation hook skips timing entirely. Log output
+    #   still follows sample_rate, and instrumentation hooks still fire at full
+    #   rate (timing is measured whenever a hook is registered).
+    attr_accessor :capture_enabled
 
     # Gets the captured commands for testing purposes.
     # @return [Array<CommandMessage>] Array of captured command messages
@@ -254,6 +280,17 @@ module DatabaseLogger
   # @note Commands are always captured for testing. Logging only occurs when
   #   DatabaseLogger.logger is set and sampling allows it.
   def call(command, config)
+    # Decide up front whether this command needs the measured path. should_log?
+    # must be called exactly once per command to keep deterministic sampling.
+    should_log = DatabaseLogger.should_log?
+    measure_for_hook = defined?(Familia::Instrumentation) &&
+                       Familia::Instrumentation.hooks?(:command)
+
+    # Zero-overhead fast path: capture disabled, not sampled for logging, and no
+    # instrumentation hook registered. Skip the two clock_gettime calls, the
+    # CommandMessage allocation, and the buffer append entirely.
+    return super unless DatabaseLogger.capture_enabled || should_log || measure_for_hook
+
     block_start = DatabaseLogger.now_in_μs
     result = super  # CRITICAL: Must use super, not yield, to chain middlewares
     block_duration = DatabaseLogger.now_in_μs - block_start
@@ -263,11 +300,16 @@ module DatabaseLogger
     # difference is negligible.
     lifetime_duration = (Familia.now.to_f - DatabaseLogger.process_start).round(6)
 
-    msgpack = CommandMessage.new(command.join(' '), block_duration, lifetime_duration)
-    DatabaseLogger.append_command(msgpack)
+    # Build the CommandMessage only when capturing or logging needs it. Append
+    # to the buffer only when capture is enabled.
+    msgpack = nil
+    if DatabaseLogger.capture_enabled || should_log
+      msgpack = CommandMessage.new(command.join(' '), block_duration, lifetime_duration)
+      DatabaseLogger.append_command(msgpack) if DatabaseLogger.capture_enabled
+    end
 
     # Dual-mode logging with sampling
-    if DatabaseLogger.should_log?
+    if should_log
       if DatabaseLogger.structured_logging && DatabaseLogger.logger
         duration_ms = (block_duration / 1000.0).round(2)
         db_num = if config.respond_to?(:db)
@@ -287,8 +329,8 @@ module DatabaseLogger
       end
     end
 
-    # Notify instrumentation hooks
-    if defined?(Familia::Instrumentation)
+    # Notify instrumentation hooks (only when a hook is registered)
+    if measure_for_hook
       duration_ms = (block_duration / 1000.0).round(2)
       db_num = if config.respond_to?(:db)
                    config.db
@@ -322,18 +364,29 @@ module DatabaseLogger
   # @param config [RedisClient::Config, Hash] Connection configuration
   # @return [Array] Results from pipelined commands
   def call_pipelined(commands, config)
+    should_log = DatabaseLogger.should_log?
+    measure_for_hook = defined?(Familia::Instrumentation) &&
+                       Familia::Instrumentation.hooks?(:pipeline)
+
+    # Zero-overhead fast path (see #call for details).
+    return yield unless DatabaseLogger.capture_enabled || should_log || measure_for_hook
+
     block_start = DatabaseLogger.now_in_μs
     results = yield  # CRITICAL: For call_pipelined, yield is correct (not chaining)
     block_duration = DatabaseLogger.now_in_μs - block_start
     lifetime_duration = (Familia.now.to_f - DatabaseLogger.process_start).round(6)
 
-    # Log the entire pipeline as a single operation
-    cmd_string = commands.map { |cmd| cmd.join(' ') }.join(' | ')
-    msgpack = CommandMessage.new(cmd_string, block_duration, lifetime_duration)
-    DatabaseLogger.append_command(msgpack)
+    # Log the entire pipeline as a single operation. Build the CommandMessage
+    # only when capturing or logging; append only when capture is enabled.
+    msgpack = nil
+    if DatabaseLogger.capture_enabled || should_log
+      cmd_string = commands.map { |cmd| cmd.join(' ') }.join(' | ')
+      msgpack = CommandMessage.new(cmd_string, block_duration, lifetime_duration)
+      DatabaseLogger.append_command(msgpack) if DatabaseLogger.capture_enabled
+    end
 
     # Dual-mode logging with sampling
-    if DatabaseLogger.should_log?
+    if should_log
       if DatabaseLogger.structured_logging && DatabaseLogger.logger
         duration_ms = (block_duration / 1000.0).round(2)
         db_num = if config.respond_to?(:db)
@@ -352,8 +405,8 @@ module DatabaseLogger
       end
     end
 
-    # Notify instrumentation hooks
-    if defined?(Familia::Instrumentation)
+    # Notify instrumentation hooks (only when a hook is registered)
+    if measure_for_hook
       duration_ms = (block_duration / 1000.0).round(2)
       db_num = if config.respond_to?(:db)
                    config.db
@@ -387,16 +440,23 @@ module DatabaseLogger
   # @param config [RedisClient::Config, Hash] Connection configuration
   # @return [Object] The result of the Redis command execution
   def call_once(command, config)
+    should_log = DatabaseLogger.should_log?
+
+    # Zero-overhead fast path. call_once does not emit instrumentation
+    # notifications, so the measured path is only needed when capturing or
+    # logging.
+    return yield unless DatabaseLogger.capture_enabled || should_log
+
     block_start = DatabaseLogger.now_in_μs
     result = yield  # CRITICAL: For call_once, yield is correct (not chaining)
     block_duration = DatabaseLogger.now_in_μs - block_start
     lifetime_duration = (Familia.now.to_f - DatabaseLogger.process_start).round(6)
 
     msgpack = CommandMessage.new(command.join(' '), block_duration, lifetime_duration)
-    DatabaseLogger.append_command(msgpack)
+    DatabaseLogger.append_command(msgpack) if DatabaseLogger.capture_enabled
 
     # Dual-mode logging with sampling
-    if DatabaseLogger.should_log?
+    if should_log
       if DatabaseLogger.structured_logging && DatabaseLogger.logger
         duration_ms = (block_duration / 1000.0).round(2)
         db_num = if config.respond_to?(:db)

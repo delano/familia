@@ -330,6 +330,23 @@ module Familia
       logger.trace format('[%s] %s -> %s <-%s', label, instance_id, ident_str, extra_context)
     end
 
+    # Reset the cached trace_enabled? value.
+    #
+    # trace_enabled? caches the FAMILIA_TRACE lookup to avoid an ENV read on
+    # every trace site. Call this after mutating ENV['FAMILIA_TRACE'] (e.g. in
+    # tests) so the next trace_enabled? call re-reads the environment.
+    #
+    # @return [nil]
+    #
+    # @example
+    #   ENV['FAMILIA_TRACE'] = 'true'
+    #   Familia.reset_trace!
+    #   Familia.trace :LOAD, client, 'user:123'  # now emits
+    #
+    def reset_trace!
+      @trace_enabled = nil
+    end
+
     private
 
     # Format a log message with optional structured context.
@@ -356,14 +373,18 @@ module Familia
     # Check if trace logging is enabled via FAMILIA_TRACE environment variable.
     #
     # Trace logging is enabled when FAMILIA_TRACE is set to '1', 'true',
-    # or 'yes' (case-insensitive). Checks the environment variable on every
-    # call to support dynamic changes in test environments.
+    # or 'yes' (case-insensitive). The result is cached after the first call to
+    # avoid re-reading ENV on every trace site (there can be dozens per request
+    # under tracing). Use {#reset_trace!} to re-read FAMILIA_TRACE, e.g. when a
+    # test mutates the environment variable.
     #
     # @return [Boolean] true if trace logging is enabled
     # @api private
     #
     def trace_enabled?
-      %w[1 true yes].include?(ENV.fetch('FAMILIA_TRACE', 'false').downcase)
+      return @trace_enabled unless @trace_enabled.nil?
+
+      @trace_enabled = %w[1 true yes].include?(ENV.fetch('FAMILIA_TRACE', 'false').downcase)
     end
   end
 end
