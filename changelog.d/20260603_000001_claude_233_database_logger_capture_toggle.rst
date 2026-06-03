@@ -47,6 +47,17 @@ AI Assistance
   still evaluated exactly once per command so deterministic sampling is
   preserved, and that the formatted log path keeps working when capture is off.
   Added the ``hooks?`` predicate, the ``trace_enabled?`` cache with
-  ``reset_trace!``, and the trace-site guards, plus tryouts covering
-  ``capture_enabled = false`` (no capture, logging still sampled, fast path),
-  instrumentation forcing the measured path, and ``trace_enabled?`` caching.
+  ``reset_trace!``, and the trace-site guards.
+
+- Following review, AI collapsed the three near-identical middleware methods
+  (``call``/``call_pipelined``/``call_once``) into thin execution+timing shims
+  over shared ``DatabaseLogger.measure?`` / ``record`` helpers, cutting the
+  file's RuboCop offense count from 56 to 16 (and its complex methods from 3 to
+  0). The per-mode instrumentation contract now flows through a single
+  ``hook_type_for`` source of truth consulted by both the fast-path decision and
+  the notify step, so ``call_once`` can never silently drop a hook if it gains
+  instrumentation later -- a guardrail test pins this. Added a performance-
+  contract test that spies on ``now_in_μs`` to prove the fast path performs zero
+  timing calls while the measured path performs exactly two, plus tryouts for
+  ``capture_enabled = false`` (no capture, logging still sampled), instrumentation
+  forcing the measured path, and ``trace_enabled?`` caching.

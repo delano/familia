@@ -175,6 +175,100 @@ Familia::Instrumentation.instance_variable_get(:@hooks)[:command].clear
 result
 #=> [true, false]
 
+# ---------------------------------------------------------------------------
+# Performance contract: the fast path must actually skip timing.
+#
+# The behavioural tests above prove "no buffer / no log", but the whole point
+# of the issue is overhead. These spy on now_in_μs (the clock_gettime wrapper)
+# to assert it is NOT called on the fast path and IS called on the measured
+# path. now_in_μs is temporarily redefined with a counter; the captured Method
+# still points at the original implementation, so it is restored in ensure.
+# ---------------------------------------------------------------------------
+
+## fast path does not call now_in_μs (zero timing overhead)
+DatabaseLogger.clear_commands
+DatabaseLogger.capture_enabled = false
+DatabaseLogger.logger = nil          # should_log? false -> not sampled
+DatabaseLogger.sample_rate = 0.01
+Familia::Instrumentation.instance_variable_get(:@hooks)[:command].clear
+_now_calls = Concurrent::AtomicFixnum.new(0)
+_original_now = DatabaseLogger.method(:now_in_μs)
+DatabaseLogger.singleton_class.send(:define_method, :now_in_μs) do
+  _now_calls.increment
+  _original_now.call
+end
+begin
+  Familia.dbclient.set('fastpath_timing', 'v')
+ensure
+  DatabaseLogger.singleton_class.send(:define_method, :now_in_μs, _original_now)
+end
+DatabaseLogger.logger = @quiet_logger
+_now_calls.value
+#=> 0
+
+## measured path calls now_in_μs exactly twice (start + end timing)
+DatabaseLogger.clear_commands
+DatabaseLogger.capture_enabled = true
+DatabaseLogger.sample_rate = nil
+Familia::Instrumentation.instance_variable_get(:@hooks)[:command].clear
+_now_calls = Concurrent::AtomicFixnum.new(0)
+_original_now = DatabaseLogger.method(:now_in_μs)
+DatabaseLogger.singleton_class.send(:define_method, :now_in_μs) do
+  _now_calls.increment
+  _original_now.call
+end
+begin
+  Familia.dbclient.set('measured_timing', 'v')
+ensure
+  DatabaseLogger.singleton_class.send(:define_method, :now_in_μs, _original_now)
+end
+_now_calls.value
+#=> 2
+
+# ---------------------------------------------------------------------------
+# Guardrail for call_once: hook_type_for is the single source of truth shared
+# by the fast-path decision (measure?) and the notify step (record). These
+# tests pin the current contract -- call_once emits no instrumentation, so a
+# registered command hook does NOT force its measured path. If someone makes
+# call_once notify by flipping hook_type_for(:once) to :command, BOTH of these
+# expectations flip and force a conscious update, so the fast path can never
+# silently swallow a newly-added hook.
+# ---------------------------------------------------------------------------
+
+## hook_type_for maps each mode to its instrumentation hook (or nil)
+[DatabaseLogger.hook_type_for(:call),
+ DatabaseLogger.hook_type_for(:pipeline),
+ DatabaseLogger.hook_type_for(:once)]
+#=> [:command, :pipeline, nil]
+
+## measure? for :once ignores command hooks; :call honours them
+DatabaseLogger.capture_enabled = false
+Familia::Instrumentation.instance_variable_get(:@hooks)[:command].clear
+Familia::Instrumentation.on_command { |_cmd, _duration, _ctx| }
+once_decision = DatabaseLogger.measure?(should_log: false, mode: :once)
+call_decision = DatabaseLogger.measure?(should_log: false, mode: :call)
+Familia::Instrumentation.instance_variable_get(:@hooks)[:command].clear
+[once_decision, call_decision]
+#=> [false, true]
+
+## measure? is true whenever capture is enabled, regardless of mode/sampling
+DatabaseLogger.capture_enabled = true
+Familia::Instrumentation.instance_variable_get(:@hooks)[:command].clear
+DatabaseLogger.measure?(should_log: false, mode: :once)
+#=> true
+
+## measure? is true when the command is sampled for logging
+DatabaseLogger.capture_enabled = false
+Familia::Instrumentation.instance_variable_get(:@hooks)[:command].clear
+DatabaseLogger.measure?(should_log: true, mode: :once)
+#=> true
+
+## command_string joins single commands and pipelines distinctly
+single = DatabaseLogger.command_string(['SET', 'k', 'v'], :call)
+pipeline = DatabaseLogger.command_string([['SET', 'k', 'v'], ['GET', 'k']], :pipeline)
+[single, pipeline]
+#=> ["SET k v", "SET k v | GET k"]
+
 # Teardown: restore original state
 Familia::Instrumentation.instance_variable_get(:@hooks)[:command].clear
 DatabaseLogger.logger = @original_logger
