@@ -228,9 +228,14 @@ module Familia
       # opt down without touching the global setting.
       #
       # Resolution order (highest precedence first):
-      # 1. +Familia.strict_write_order = true+ -- always raises, ignores this.
-      # 2. This class-level setting (inherited through the subclass chain).
-      # 3. +Familia.dirty_write_warnings+ global default (:once when unset).
+      # 1. Active +atomic_write+ block -- suppresses everything.
+      # 2. Class-level +:off+ -- suppresses both warnings AND raises, overriding
+      #    +strict_write_order+ and +raise_on_unsaved_parent_write+. "Off means off."
+      # 3. Raise gates: +Familia.strict_write_order = true+, class +:strict+, or a
+      #    new/unsaved parent when +raise_on_unsaved_parent_write+ is true.
+      # 4. Otherwise warn per the resolved mode: this class-level setting
+      #    (inherited through the subclass chain), else
+      #    +Familia.dirty_write_warnings+ (:once when unset).
       #
       # @param mode [Symbol, nil] one of :strict, :warn, :once, :off, or nil to read
       # @return [Symbol] the resolved mode

@@ -266,7 +266,7 @@ module Familia
           "before mutating its collections to avoid orphaned data. #{DIRTY_WRITE_HINT}"
       else
         "Writing to #{self.class.name} #{dbkey} while parent " \
-          "#{@parent_ref.class.name} has unsaved scalar fields: #{fields} #{DIRTY_WRITE_HINT}"
+          "#{@parent_ref.class.name} has unsaved scalar fields: #{fields}. #{DIRTY_WRITE_HINT}"
       end
     end
 
