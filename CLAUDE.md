@@ -268,6 +268,18 @@ Constraints:
 - Cannot nest inside another `transaction` or `atomic_write` (raises `Familia::OperationModeError`).
 - Collection method return values inside the block are `Redis::Future` objects (inherent to MULTI) -- do not inspect them before EXEC.
 
+**Factory pattern -- `build`/`construct` for create-and-populate:**
+```ruby
+user = User.build(email: "alice@example.com") do |u|
+  u.name = "Alice"          # deferred scalar
+  u.tags.add("admin")       # collection op folded into the same MULTI
+  u.sessions.push("abc123")
+end
+# new(...) runs first; the block's scalars + collections commit in one
+# MULTI/EXEC at block exit. Returns the persisted instance.
+```
+`build` (alias `construct`) is class-level sugar over `new` + `atomic_write`: it inherits the same single-database constraint (`CrossDatabaseError`) and `save` (overwrite) semantics. Unlike `create!` it does no duplicate check but does fold collection writes into the atomic commit. Without a block it degenerates to `new(...).save`.
+
 **Instances timeline**: The class-level `instances` sorted set is a timeline of last-modified times, not a registry. `persist_to_storage` (called by `save`) and `commit_fields`/`batch_update` all call `touch_instances!` to update the timestamp. Use `in_instances?(identifier)` for fast O(log N) checks without loading the object.
 
 ### Instances Timeline Lifecycle

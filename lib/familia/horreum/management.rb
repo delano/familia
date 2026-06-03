@@ -73,6 +73,78 @@ module Familia
         hobj
       end
 
+      # Builds, populates, and atomically persists a new instance in one step.
+      #
+      # This is a factory wrapper around {Horreum#atomic_write} for the common
+      # case of "create an object, set up its collections, and save -- all at
+      # once". The block receives the freshly-built (but not-yet-persisted)
+      # instance. Scalar assignments and collection mutations made inside the
+      # block are all committed in a single MULTI/EXEC when the block exits:
+      #
+      #   - Scalar setters (+u.name = ...+) stay in memory until the implicit
+      #     save queues the HMSET inside the transaction.
+      #   - Collection mutations (+u.tags.add(...)+) auto-route into the open
+      #     transaction because +DataType#dbclient+ honours
+      #     +Fiber[:familia_transaction]+.
+      #
+      # Nothing reaches the database until the block exits, so a factory no
+      # longer has to choose between sequencing +save+ before collection writes
+      # or reaching for +atomic_write+ directly.
+      #
+      # ## Persistence semantics
+      #
+      # +build+ uses {Horreum#atomic_write}, which has +save+ semantics: it
+      # writes unconditionally and overwrites any existing record with the same
+      # identifier. It does NOT perform the existence check that {.create!}
+      # does. Use {.create!} when you need create-only (raise-on-duplicate)
+      # behaviour; note +create!+ cannot fold collection writes into the same
+      # atomic commit.
+      #
+      # ## Without a block
+      #
+      # When called without a block there are no collection operations to fold
+      # in, so +build+ degenerates to +new(...).save+ and returns the instance.
+      #
+      # @param args [Array] Positional arguments forwarded to {.new}.
+      # @param kwargs [Hash] Keyword arguments (field values) forwarded to {.new}.
+      # @yield [instance] The newly built instance, for scalar/collection setup.
+      # @yieldparam instance [Horreum] The not-yet-persisted instance.
+      # @return [Horreum] The built and persisted instance.
+      #
+      # @raise [Familia::CrossDatabaseError] If the class has related fields on a
+      #   different +logical_database+ than the parent (MULTI/EXEC cannot span
+      #   databases). Fall back to building the object and using
+      #   {Persistence#save_with_collections} in that case.
+      # @raise [Familia::NoIdentifier] If the instance has no usable identifier.
+      #
+      # @example Factory/fixture creation with collections (issue #279)
+      #   user = User.build(email: 'alice@example.com') do |u|
+      #     u.tags.add('admin')
+      #     u.sessions.push('abc123')
+      #   end
+      #   # HMSET + SADD + RPUSH all fire in one MULTI/EXEC at block exit
+      #
+      # @example Without a block (plain save)
+      #   user = User.build(email: 'bob@example.com')
+      #
+      # @see #create! Create-only factory (raises on duplicate; no atomic collections)
+      # @see Horreum#atomic_write The underlying single-MULTI/EXEC write
+      # @see Persistence#save_with_collections Sequential alternative for
+      #   cross-database configurations
+      #
+      def build(...)
+        instance = new(...)
+
+        if block_given?
+          instance.atomic_write { yield instance }
+        else
+          instance.save
+        end
+
+        instance
+      end
+      alias construct build
+
       def multiget(...)
         rawmultiget(...).filter_map { |json| Familia::JsonSerializer.parse(json) }
       end
