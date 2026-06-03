@@ -170,11 +170,15 @@ module Familia
     #    uncommitted scalar changes. The parent hash already exists, so the
     #    inconsistency is a partial update rather than a fully orphaned record.
     #
-    # The new-object case gets a distinct, stronger message so it is not lost
-    # in the noise of ordinary dirty-write warnings.
+    # The new-object case gets a distinct, stronger message and, by default,
+    # *raises* regardless of Familia.strict_write_order — the orphaned-record
+    # hazard is rarely intended. Set Familia.raise_on_unsaved_parent_write to
+    # false to downgrade it to a warning instead.
     #
     # @return [void]
-    # @raise [Familia::Problem] if Familia.strict_write_order is true
+    # @raise [Familia::Problem] when Familia.strict_write_order is true, or when
+    #   the parent is a new, unsaved object and
+    #   Familia.raise_on_unsaved_parent_write is true (the default)
     #
     def warn_if_dirty!
       # Suppress warnings while parent is inside atomic_write — scalar setters in the block
@@ -184,8 +188,9 @@ module Familia
       return unless @parent_ref.respond_to?(:dirty?) && @parent_ref.dirty?
 
       dirty = @parent_ref.dirty_fields
+      new_record = parent_new_record?
       message =
-        if parent_new_record?
+        if new_record
           "Writing to #{self.class.name} #{dbkey} while parent " \
             "#{@parent_ref.class.name} is a new, unsaved object (no hash key " \
             "exists yet) with unsaved scalar fields: #{dirty.join(', ')}. Save " \
@@ -195,7 +200,10 @@ module Familia
             "#{@parent_ref.class.name} has unsaved scalar fields: #{dirty.join(', ')}"
         end
 
-      if Familia.strict_write_order
+      # A new, unsaved parent raises by default — orphaning a collection with no
+      # parent hash is almost never intended. Familia.raise_on_unsaved_parent_write
+      # downgrades that to a warning. strict_write_order raises every dirty write.
+      if Familia.strict_write_order || (new_record && Familia.raise_on_unsaved_parent_write)
         raise Familia::Problem, message
       else
         Familia.warn message
@@ -228,7 +236,12 @@ module Familia
       return false unless @parent_ref.respond_to?(:exists?)
 
       !@parent_ref.exists?(check_size: false)
-    rescue Familia::Problem
+    rescue Familia::Problem => e
+      # Could not determine the parent's persistence state (e.g. it has no
+      # identifier yet); fall back to the milder "dirty after save" warning.
+      # Surface the swallowed problem under debug only, so production pays just
+      # one cheap boolean check (Familia.debug?) while real issues stay visible.
+      Familia.trace :NEW_RECORD_PROBE, nil, @parent_ref.class, "#{e.class}: #{e.message}" if Familia.debug?
       false
     end
     private :parent_new_record?

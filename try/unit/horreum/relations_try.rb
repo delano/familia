@@ -35,10 +35,15 @@ end
 @test_user = RelationsTestUser.new
 @test_user.userid = 'user123'
 @test_user.name = 'Test User'
+# Persist the parent before exercising its collections. As of #278, mutating a
+# collection on a new, unsaved (and dirty) parent raises by default to prevent
+# orphaning the collection data with no parent hash to anchor it.
+@test_user.save
 
 @test_product = RelationsTestProduct.new
 @test_product.productid = 'prod456'
 @test_product.title = 'Test Product'
+@test_product.save
 
 ## Class knows about Database type relationships
 RelationsTestUser.relations?
