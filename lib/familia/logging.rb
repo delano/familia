@@ -178,6 +178,9 @@ module Familia
     # Thread-safe mutex initialization when module is extended
     def self.extended(base)
       base.instance_variable_set(:@logger_mutex, Mutex.new)
+      # Cached FAMILIA_TRACE lookup; nil means "not yet computed" so it is
+      # resolved lazily on first use and reset via #reset_trace!.
+      base.instance_variable_set(:@trace_enabled, nil)
     end
 
     # Get the logger instance, initializing with defaults if not yet set
@@ -330,6 +333,24 @@ module Familia
       logger.trace format('[%s] %s -> %s <-%s', label, instance_id, ident_str, extra_context)
     end
 
+    # Clears the cached FAMILIA_TRACE lookup so the next {#trace_enabled?} call
+    # re-reads the environment variable.
+    #
+    # Trace state is cached after first use to avoid a per-call ENV lookup on
+    # the hot path. Tests that toggle ENV['FAMILIA_TRACE'] mid-run must call
+    # this to observe the change.
+    #
+    # @return [nil]
+    #
+    # @example
+    #   ENV['FAMILIA_TRACE'] = 'true'
+    #   Familia.reset_trace!
+    #   Familia.trace :LOAD, client, 'user:123'  # now emitted
+    #
+    def reset_trace!
+      @trace_enabled = nil
+    end
+
     private
 
     # Format a log message with optional structured context.
@@ -356,14 +377,18 @@ module Familia
     # Check if trace logging is enabled via FAMILIA_TRACE environment variable.
     #
     # Trace logging is enabled when FAMILIA_TRACE is set to '1', 'true',
-    # or 'yes' (case-insensitive). Checks the environment variable on every
-    # call to support dynamic changes in test environments.
+    # or 'yes' (case-insensitive). The result is cached after the first call
+    # to avoid a repeated ENV lookup on every trace site; call {#reset_trace!}
+    # to force re-evaluation (e.g. when a test changes the env var).
     #
     # @return [Boolean] true if trace logging is enabled
     # @api private
     #
     def trace_enabled?
-      %w[1 true yes].include?(ENV.fetch('FAMILIA_TRACE', 'false').downcase)
+      cached = @trace_enabled
+      return cached unless cached.nil?
+
+      @trace_enabled = %w[1 true yes].include?(ENV.fetch('FAMILIA_TRACE', 'false').downcase)
     end
   end
 end

@@ -112,6 +112,20 @@ module Familia
         @hooks[:error] << block
       end
 
+      # Reports whether any hooks are registered for the given category.
+      #
+      # Lets hot paths (e.g. DatabaseLogger middleware) cheaply decide whether
+      # collecting instrumentation data is worthwhile. Because this module is
+      # always loaded, `defined?(Familia::Instrumentation)` is not a useful
+      # signal; the presence of registered hooks is.
+      #
+      # @param type [Symbol] hook category (:command, :pipeline, :lifecycle, :error)
+      # @return [Boolean] true if at least one hook is registered for that type
+      def hooks?(type)
+        hooks = @hooks[type]
+        !(hooks.nil? || hooks.empty?)
+      end
+
       # Notify all registered command hooks.
       # @api private
       def notify_command(cmd, duration, context = {})
