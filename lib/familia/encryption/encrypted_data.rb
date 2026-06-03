@@ -4,8 +4,10 @@
 
 module Familia
   module Encryption
-    EncryptedData = Data.define(:algorithm, :nonce, :ciphertext, :auth_tag, :key_version, :encoding) do
-      def initialize(algorithm:, nonce:, ciphertext:, auth_tag:, key_version:, encoding: nil)
+    EncryptedData = Data.define(:algorithm, :nonce, :ciphertext, :auth_tag, :key_version, :encoding, :envelope_version,
+:aad_fields, :key_material_fields) do
+      def initialize(algorithm:, nonce:, ciphertext:, auth_tag:, key_version:, encoding: nil, envelope_version: nil,
+                     aad_fields: nil, key_material_fields: nil)
         super
       end
 
@@ -14,6 +16,29 @@ module Familia
       # key unless explicitly set).
       def to_h
         super.compact
+      end
+
+      def to_json(*_args)
+        Familia::JsonSerializer.dump(to_h)
+      end
+
+      def with_metadata(envelope_version: self.envelope_version, aad_fields: self.aad_fields,
+                         key_material_fields: self.key_material_fields)
+        # EncryptedData is a Data.define, so #with copies all other members
+        # for us; only the envelope metadata is overridden here.
+        with(
+          envelope_version: envelope_version,
+          aad_fields: aad_fields,
+          key_material_fields: key_material_fields
+        )
+      end
+
+      def has_key_material?
+        !key_material_fields.nil? && !key_material_fields.empty?
+      end
+
+      def stored_aad_fields
+        aad_fields&.map(&:to_sym)
       end
 
       # Class methods for parsing and validation

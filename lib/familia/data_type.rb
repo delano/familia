@@ -18,6 +18,18 @@ module Familia
   # This class provides common functionality for various Database data types
   # such as String, JsonStringKey, List, UnsortedSet, SortedSet, and HashKey.
   #
+  # == Mental Model: Live Proxies, Not Cached Relations
+  #
+  # Unlike ActiveRecord relations which return new objects that can cache
+  # loaded records, DataType instances are:
+  #
+  # - **Memoized**: Same object on every access (stable object_id)
+  # - **Uncached**: Every read method hits Redis — no local data cache
+  # - **Frozen**: Class-level DataTypes are frozen for thread safety
+  #
+  # This means `define_singleton_method` raises FrozenError on class-level
+  # DataTypes. To stub in tests, stub the class method returning the DataType.
+  #
   # == Write Method Transaction Safety Audit (2026-02-25)
   #
   # All write methods use dbclient which is transaction-aware: inside a

@@ -114,6 +114,18 @@ class ConcealedString
       @field_type.instance_variable_get(:@name) == expected_field_name
   end
 
+  # Human-readable description of the record/field context this value was
+  # encrypted for. Used to make context-isolation errors actionable by
+  # showing the expected context alongside the accessing one.
+  #
+  # @return [String] "Class:field:identifier", or a marker if context was cleared
+  #
+  def context_description
+    return '(context cleared)' if @record.nil? || @field_type.nil?
+
+    "#{@record.class.name}:#{@field_type.name}:#{@record.identifier}"
+  end
+
   # Clear the encrypted data from memory
   #
   # Safe to call multiple times. This provides best-effort memory
