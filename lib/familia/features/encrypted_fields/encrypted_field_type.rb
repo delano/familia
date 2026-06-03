@@ -88,7 +88,9 @@ module Familia
           # Only validate if we have a proper ConcealedString instance
           if concealed.is_a?(ConcealedString) && !concealed.belongs_to_context?(self, field_name)
             raise Familia::EncryptionError,
-                  "Context isolation violation: encrypted field '#{field_name}' does not belong to #{self.class.name}:#{identifier}"
+                  "Context isolation violation: encrypted field '#{field_name}' accessed from " \
+                  "#{self.class.name}:#{field_name}:#{identifier} but was encrypted for " \
+                  "#{concealed.context_description}"
           end
 
           concealed
@@ -144,7 +146,11 @@ module Familia
       context = build_context(record)
 
       if envelope.envelope_version && envelope.envelope_version >= 2
-        additional_data = build_aad(record, fields: envelope.stored_aad_fields || @aad_fields)
+        # v2 envelopes are self-describing: a nil stored_aad_fields means the
+        # value was encrypted with no AAD fields. Fall back to [] (not the
+        # current class-level @aad_fields) so that adding aad_fields to a model
+        # later cannot break decryption of already-stored v2 envelopes.
+        additional_data = build_aad(record, fields: envelope.stored_aad_fields || [])
         context = context_with_entropy(context, build_key_material(record)) if envelope.has_key_material?
       else
         additional_data = build_aad(record)

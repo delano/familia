@@ -24,10 +24,11 @@ module Familia
 
       def with_metadata(envelope_version: self.envelope_version, aad_fields: self.aad_fields,
                          key_material_fields: self.key_material_fields)
-        self.class.new(
-          algorithm: algorithm, nonce: nonce, ciphertext: ciphertext,
-          auth_tag: auth_tag, key_version: key_version, encoding: encoding,
-          envelope_version: envelope_version, aad_fields: aad_fields,
+        # EncryptedData is a Data.define, so #with copies all other members
+        # for us; only the envelope metadata is overridden here.
+        with(
+          envelope_version: envelope_version,
+          aad_fields: aad_fields,
           key_material_fields: key_material_fields
         )
       end

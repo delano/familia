@@ -280,6 +280,14 @@ module Familia
         #
         # @param name [Symbol] Field name
         # @param aad_fields [Array<Symbol>] Additional fields to include in authentication
+        # @param key_material [Proc, nil] Optional proc mixed into key derivation as
+        #   extra entropy. It is called with the record instance and must return the
+        #   entropy as a String (a RedactedString is unwrapped automatically); return
+        #   nil to contribute no entropy for that record. Because the returned value
+        #   participates in key derivation rather than authentication, supplying the
+        #   wrong material yields a derivation mismatch (garbage/failed decrypt), not
+        #   an auth-tag error. The value is not persisted, so it must be reproducible
+        #   at decrypt time.
         # @param kwargs [Hash] Additional field options
         #
         # @example Basic encrypted field
@@ -293,6 +301,12 @@ module Familia
         #     feature :encrypted_fields
         #     field :doc_id, :owner_id
         #     encrypted_field :content, aad_fields: [:doc_id, :owner_id]
+        #   end
+        #
+        # @example Encrypted field bound to dynamic entropy
+        #   class Secret < Familia::Horreum
+        #     feature :encrypted_fields
+        #     encrypted_field :payload, key_material: ->(rec) { rec.passphrase }
         #   end
         #
         def encrypted_field(name, aad_fields: [], **)
