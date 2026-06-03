@@ -109,8 +109,10 @@ module Familia
 
         # Iterate using the type's each method with any filters
         each(**filters) do |member|
-          # HashKey yields [field, value] pairs; extract field as identifier
-          identifier = member.is_a?(Array) ? member.first : member
+          # HashKey yields [field, value] pairs where the value is the stored
+          # object identifier (e.g. unique_index maps field_value => identifier),
+          # so extract the value. List/Set/SortedSet yield the identifier directly.
+          identifier = member.is_a?(Array) ? member.last : member
           buffer << identifier
 
           if buffer.size >= batch_size

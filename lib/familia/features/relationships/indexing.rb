@@ -139,10 +139,14 @@ module Familia
 
           # Ensure proper DataType field is declared for index
           # Similar to ensure_collection_field in participation system
-          def ensure_index_field(scope_class, index_name, field_type)
+          #
+          # @param opts [Hash] Options forwarded to the DataType declaration
+          #   (e.g. +class:+ and +reference: true+ so the index hashkey is a
+          #   proper reference type that works with +each_record+).
+          def ensure_index_field(scope_class, index_name, field_type, opts = {})
             return if scope_class.method_defined?(index_name) || scope_class.respond_to?(index_name)
 
-            scope_class.send(field_type, index_name)
+            scope_class.send(field_type, index_name, opts)
           end
         end
 

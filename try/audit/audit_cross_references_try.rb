@@ -188,7 +188,7 @@ ACRIndexedUser.email_index.clear
 @u1.save
 @u2 = ACRIndexedUser.new(user_id: 'cr-sb-2', email: 'bob@example.com', name: 'Bob')
 @u2.save
-Familia.dbclient.hset(ACRIndexedUser.email_index.dbkey, 'alice@example.com', '"cr-sb-2"')
+Familia.dbclient.hset(ACRIndexedUser.email_index.dbkey, 'alice@example.com', 'cr-sb-2')
 @result = ACRIndexedUser.audit_cross_references
 @result[:index_points_to_wrong_identifier].any? { |r| r[:expected_id] == 'cr-sb-1' }
 #=> true
@@ -200,7 +200,7 @@ ACRIndexedUser.email_index.clear
 @u1.save
 @u2 = ACRIndexedUser.new(user_id: 'cr-sb-2', email: 'bob@example.com', name: 'Bob')
 @u2.save
-Familia.dbclient.hset(ACRIndexedUser.email_index.dbkey, 'alice@example.com', '"cr-sb-2"')
+Familia.dbclient.hset(ACRIndexedUser.email_index.dbkey, 'alice@example.com', 'cr-sb-2')
 @entry = ACRIndexedUser.audit_cross_references[:index_points_to_wrong_identifier].find { |r| r[:expected_id] == 'cr-sb-1' }
 [@entry[:expected_id], @entry[:index_id]]
 #=> ['cr-sb-1', 'cr-sb-2']
@@ -212,7 +212,7 @@ ACRIndexedUser.email_index.clear
 @u1.save
 @u2 = ACRIndexedUser.new(user_id: 'cr-sb-2', email: 'bob@example.com', name: 'Bob')
 @u2.save
-Familia.dbclient.hset(ACRIndexedUser.email_index.dbkey, 'alice@example.com', '"cr-sb-2"')
+Familia.dbclient.hset(ACRIndexedUser.email_index.dbkey, 'alice@example.com', 'cr-sb-2')
 @entry = ACRIndexedUser.audit_cross_references[:index_points_to_wrong_identifier].find { |r| r[:expected_id] == 'cr-sb-1' }
 @entry[:field_value]
 #=> 'alice@example.com'
@@ -224,7 +224,7 @@ ACRIndexedUser.email_index.clear
 @u1.save
 @u2 = ACRIndexedUser.new(user_id: 'cr-sb-2', email: 'bob@example.com', name: 'Bob')
 @u2.save
-Familia.dbclient.hset(ACRIndexedUser.email_index.dbkey, 'alice@example.com', '"cr-sb-2"')
+Familia.dbclient.hset(ACRIndexedUser.email_index.dbkey, 'alice@example.com', 'cr-sb-2')
 @entry = ACRIndexedUser.audit_cross_references[:index_points_to_wrong_identifier].find { |r| r[:expected_id] == 'cr-sb-1' }
 @entry[:index_name]
 #=> :email_index
@@ -236,7 +236,7 @@ ACRIndexedUser.email_index.clear
 @u1.save
 @u2 = ACRIndexedUser.new(user_id: 'cr-sb-2', email: 'bob@example.com', name: 'Bob')
 @u2.save
-Familia.dbclient.hset(ACRIndexedUser.email_index.dbkey, 'alice@example.com', '"cr-sb-2"')
+Familia.dbclient.hset(ACRIndexedUser.email_index.dbkey, 'alice@example.com', 'cr-sb-2')
 ACRIndexedUser.audit_cross_references[:status]
 #=> :issues_found
 
@@ -457,7 +457,7 @@ ACRIndexedUser.email_index.clear
 @u_wrong = ACRIndexedUser.new(user_id: 'cb-wrong', email: 'wrong@example.com', name: 'Wrong')
 @u_wrong.save
 Familia.dbclient.hdel(ACRIndexedUser.email_index.dbkey, 'miss@example.com')
-Familia.dbclient.hset(ACRIndexedUser.email_index.dbkey, 'wrong@example.com', '"other-id"')
+Familia.dbclient.hset(ACRIndexedUser.email_index.dbkey, 'wrong@example.com', 'other-id')
 @combined = ACRIndexedUser.audit_cross_references
 [@combined[:in_instances_missing_unique_index].any? { |r| r[:identifier] == 'cb-miss' },
  @combined[:index_points_to_wrong_identifier].any? { |r| r[:expected_id] == 'cb-wrong' && r[:index_id] == 'other-id' },

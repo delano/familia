@@ -52,7 +52,8 @@ AuditIndexedUser.audit_unique_indexes.is_a?(Array)
 #=> :email_lookup
 
 ## Stale entry: manually inject wrong value via raw Redis
-AuditIndexedUser.dbclient.hset(AuditIndexedUser.email_lookup.dbkey, 'old@test.com', '"au-999"')
+# unique_index hashkeys are reference types: stored values are raw identifiers
+AuditIndexedUser.dbclient.hset(AuditIndexedUser.email_lookup.dbkey, 'old@test.com', 'au-999')
 @result = AuditIndexedUser.audit_unique_indexes
 @result.first[:stale].any? { |s| s[:field_value] == 'old@test.com' }
 #=> true
@@ -75,7 +76,7 @@ AuditIndexedUser.email_lookup.clear
 AuditIndexedUser.email_lookup.clear
 @u1.save  # re-indexes
 @u2.save
-AuditIndexedUser.dbclient.hset(AuditIndexedUser.email_lookup.dbkey, 'alice@test.com', '"au-2"')
+AuditIndexedUser.dbclient.hset(AuditIndexedUser.email_lookup.dbkey, 'alice@test.com', 'au-2')
 @result = AuditIndexedUser.audit_unique_indexes
 @stale = @result.first[:stale].find { |s| s[:field_value] == 'alice@test.com' }
 @stale[:reason]
