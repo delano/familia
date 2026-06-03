@@ -84,7 +84,16 @@ module Familia
               generate_mutation_methods_self(indexed_class, field, scope_class, index_name)
             when :class
               # Class-level index (no within:)
-              indexed_class.send(:ensure_index_field, indexed_class, index_name, :class_hashkey)
+              #
+              # Declare the backing hashkey as a reference type pointing at the
+              # indexed class. The index maps field_value => object identifier,
+              # so `class: indexed_class, reference: true` lets the stored
+              # identifiers round-trip as raw strings and enables `each_record`
+              # to load the indexed records via load_multi.
+              indexed_class.send(
+                :ensure_index_field, indexed_class, index_name, :class_hashkey,
+                class: indexed_class, reference: true
+              )
               generate_query_methods_class(field, index_name, indexed_class) if query
               generate_mutation_methods_class(field, index_name, indexed_class)
             end
@@ -105,8 +114,14 @@ module Familia
             # Resolve scope class using Familia pattern
             actual_scope_class = Familia.resolve_class(scope_class)
 
-            # Ensure the index field is declared (creates accessor that returns DataType)
-            actual_scope_class.send(:ensure_index_field, actual_scope_class, index_name, :hashkey)
+            # Ensure the index field is declared (creates accessor that returns DataType).
+            # The hashkey lives on the scope class but maps field_value => identifier
+            # of the indexed class, so declare it as a reference type pointing at
+            # indexed_class (raw identifier round-trip + each_record support).
+            actual_scope_class.send(
+              :ensure_index_field, actual_scope_class, index_name, :hashkey,
+              class: indexed_class, reference: true
+            )
 
             # Get scope_class_config for method naming (needed for rebuild methods)
             scope_class_config = actual_scope_class.config_name

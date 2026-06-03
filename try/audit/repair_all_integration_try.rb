@@ -56,7 +56,8 @@ IntegrationItem.instances.member?('int-1')
 #=> false
 
 ## Introduce corruption in unique index: add stale entry for non-existent object
-IntegrationItem.dbclient.hset(IntegrationItem.email_lookup.dbkey, 'stale@test.com', '"int-999"')
+# unique_index hashkeys are reference types: stored values are raw identifiers
+IntegrationItem.dbclient.hset(IntegrationItem.email_lookup.dbkey, 'stale@test.com', 'int-999')
 IntegrationItem.audit_unique_indexes.first[:stale].size
 #=> 1
 
