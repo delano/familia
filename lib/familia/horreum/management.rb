@@ -48,6 +48,12 @@ module Familia
       # identifier already exists. If it does, a Familia::RecordExistsError exception is
       # raised to prevent overwriting existing data.
       #
+      # Concurrency: the duplicate check is best-effort, not fully atomic.
+      # It routes through {#save_if_not_exists!}, which uses WATCH + MULTI/EXEC
+      # to abort if the key appears between the check and the write -- more
+      # cautious than a bare read-then-write, but a true guarantee needs a
+      # server-side check (e.g. Lua). See {#save_if_not_exists!}.
+      #
       # Finally, the method saves the new instance returns it.
       #
       # @example Creating an object with keyword arguments
@@ -64,6 +70,7 @@ module Familia
       # @see #save
       def create!(...)
         hobj = new(...)
+        # Best-effort duplicate guard: WATCH + MULTI/EXEC, not fully atomic.
         hobj.save_if_not_exists!
 
         # If a block is given, yield the created object
@@ -99,6 +106,15 @@ module Familia
       # a factory helper should not silently overwrite existing records.
       # Use {Persistence#save} or {Persistence#save_with_collections} when
       # you explicitly want overwrite/upsert behaviour.
+      #
+      # Concurrency: the duplicate check is best-effort, not atomic. The
+      # +exists?+ read and the subsequent write are separate operations with no
+      # WATCH between them, so two concurrent +build+ calls for the same
+      # identifier can both pass the check and the later write wins. This guard
+      # is weaker than {.create!} (which uses WATCH + MULTI/EXEC via
+      # {#save_if_not_exists!}); it is intended for single-threaded
+      # factory/fixture use. Use {.create!} when concurrent creators are
+      # possible.
       #
       # ## Without a block
       #
@@ -140,6 +156,9 @@ module Familia
         # a post-build callback, so it must not leak into new/initialize.
         instance = new(*, **)
 
+        # Best-effort duplicate guard (TOCTOU): no WATCH between this read and
+        # the write below, so concurrent builds can race. See .create! for a
+        # WATCH-guarded alternative.
         raise Familia::RecordExistsError, instance.dbkey if instance.exists?
 
         if block_given?
