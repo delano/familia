@@ -16,6 +16,7 @@ module Familia
   @pipelined_mode = :warn
   @strict_write_order = false
   @raise_on_unsaved_parent_write = true
+  @dirty_write_warnings = nil # nil resolves to the built-in default (:once)
 
   # Schema validation configuration
   @schema_path = nil      # Directory containing schema files (String or Pathname)
@@ -197,6 +198,48 @@ module Familia
       return true if @raise_on_unsaved_parent_write.nil?
 
       @raise_on_unsaved_parent_write
+    end
+
+    # Global default for how collection writes react when the parent Horreum
+    # has unsaved scalar field changes. Acts as the fallback when a Horreum
+    # subclass does not set its own +dirty_write_warnings+ class setting.
+    #
+    # This governs only the WARNING path: which dirty writes emit a warning and
+    # how often. It is orthogonal to the raise paths -- #strict_write_order and
+    # #raise_on_unsaved_parent_write decide independently whether a write raises
+    # (see Familia::DataType#warn_if_dirty!).
+    #
+    # @param val [Symbol, nil] The mode, or nil to read the current value
+    # @return [Symbol] Current mode (defaults to :once when unconfigured)
+    #
+    # Available modes:
+    # - :once (default): Warn once per distinct dirty-field signature within a
+    #   dirty window (deduped). A change to the dirty set warns again.
+    # - :warn: Warn on every collection write (legacy behavior).
+    # - :strict: Raise Familia::Problem on every violation.
+    # - :off: Suppress warnings entirely.
+    #
+    # Note: +Familia.strict_write_order = true+ always raises and takes
+    # precedence over this setting and any class-level override.
+    #
+    # @example Temporarily silence all classes during a bulk import
+    #   Familia.dirty_write_warnings = :off
+    #   import_records(data)
+    #   Familia.dirty_write_warnings = :once  # restore
+    #
+    def dirty_write_warnings(val = nil)
+      unless val.nil?
+        valid = %i[strict warn once off]
+        unless valid.include?(val)
+          raise ArgumentError, "dirty_write_warnings must be one of #{valid.inspect}, got #{val.inspect}"
+        end
+        @dirty_write_warnings = val
+      end
+      @dirty_write_warnings || :once
+    end
+
+    def dirty_write_warnings=(val)
+      dirty_write_warnings(val)
     end
 
     # Directory containing schema files for JSON Schema validation.

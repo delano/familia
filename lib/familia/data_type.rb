@@ -102,6 +102,10 @@ module Familia
     @valid_options = %i[class parent default_expiration no_expiration default logical_database dbkey dbclient suffix prefix reference].freeze
     @logical_database = nil
 
+    # Remediation hint appended to every dirty-write warning/raise message so
+    # the fix is self-evident without a round trip back to the docs.
+    DIRTY_WRITE_HINT = '(call #save first or wrap in atomic_write)'
+
     feature :expiration
     feature :quantization
 
@@ -170,14 +174,25 @@ module Familia
     #    uncommitted scalar changes. The parent hash already exists, so the
     #    inconsistency is a partial update rather than a fully orphaned record.
     #
-    # The new-object case gets a distinct, stronger message and, by default,
-    # *raises* regardless of Familia.strict_write_order — the orphaned-record
-    # hazard is rarely intended. Set Familia.raise_on_unsaved_parent_write to
-    # false to downgrade it to a warning instead.
+    # The behavior splits into a raise path and a warning path:
+    #
+    # * Raise (exempt from dedup): when Familia.strict_write_order is true, when
+    #   the resolved class mode is :strict, or when the parent is new & unsaved
+    #   and Familia.raise_on_unsaved_parent_write is true (the default). The
+    #   new-object case gets a distinct, stronger message because orphaning a
+    #   record is rarely intended.
+    # * Warn: otherwise the resolved dirty_write_warnings mode governs emission
+    #   (see #resolve_dirty_warning_mode) -- :once (default) warns once per
+    #   distinct dirty-field signature within a dirty window (deduped via the
+    #   parent's #record_dirty_warning!), :warn warns on every collection write,
+    #   and :off suppresses entirely.
+    #
+    # An active +atomic_write+ block suppresses everything, taking priority over
+    # all of the above. Every message ends with the DIRTY_WRITE_HINT remediation.
     #
     # @return [void]
-    # @raise [Familia::Problem] when Familia.strict_write_order is true, or when
-    #   the parent is a new, unsaved object and
+    # @raise [Familia::Problem] when Familia.strict_write_order is true, when the
+    #   resolved mode is :strict, or when the parent is a new, unsaved object and
     #   Familia.raise_on_unsaved_parent_write is true (the default)
     #
     def warn_if_dirty!
@@ -187,28 +202,92 @@ module Familia
 
       return unless @parent_ref.respond_to?(:dirty?) && @parent_ref.dirty?
 
-      dirty = @parent_ref.dirty_fields
-      new_record = parent_new_record?
-      message =
-        if new_record
-          "Writing to #{self.class.name} #{dbkey} while parent " \
-            "#{@parent_ref.class.name} is a new, unsaved object (no hash key " \
-            "exists yet) with unsaved scalar fields: #{dirty.join(', ')}. Save " \
-            'the parent before mutating its collections to avoid orphaned data.'
-        else
-          "Writing to #{self.class.name} #{dbkey} while parent " \
-            "#{@parent_ref.class.name} has unsaved scalar fields: #{dirty.join(', ')}"
-        end
+      mode = resolve_dirty_warning_mode
+      # "Off means off": an explicit :off opts the class out of dirty-write
+      # diagnostics entirely -- no warning AND no raise. The class-level mode is
+      # the most specific signal, so it overrides both global raise switches
+      # (strict_write_order and raise_on_unsaved_parent_write), mirroring how a
+      # local "ignore" beats a global warnings-as-errors escalation elsewhere.
+      return if mode == :off
 
-      # A new, unsaved parent raises by default — orphaning a collection with no
-      # parent hash is almost never intended. Familia.raise_on_unsaved_parent_write
-      # downgrades that to a warning. strict_write_order raises every dirty write.
-      if Familia.strict_write_order || (new_record && Familia.raise_on_unsaved_parent_write)
-        raise Familia::Problem, message
+      new_record = parent_new_record?
+      dirty      = @parent_ref.dirty_fields
+      message    = dirty_write_message(new_record, dirty)
+
+      raise Familia::Problem, message if raise_on_dirty_write?(mode, new_record)
+
+      emit_dirty_warning(mode, message, dirty)
+    end
+
+    # Resolves the dirty-write warning mode for this DataType's parent.
+    #
+    # Reads the parent Horreum class's +dirty_write_warnings+ setting (which
+    # itself walks the subclass chain and falls back to the
+    # +Familia.dirty_write_warnings+ global). Older parents that predate the
+    # class setting fall back to the global directly.
+    #
+    # @return [Symbol] one of :strict, :warn, :once, :off
+    #
+    def resolve_dirty_warning_mode
+      parent_class = @parent_ref.class
+      if parent_class.respond_to?(:dirty_write_warnings)
+        parent_class.dirty_write_warnings
       else
-        Familia.warn message
+        Familia.dirty_write_warnings
       end
     end
+
+    # Whether a dirty collection write should raise instead of warn. Raise paths
+    # take priority over the warning mode and are exempt from dedup:
+    #   - strict_write_order raises every dirty write
+    #   - the class opted into :strict
+    #   - the parent is new & unsaved and raise_on_unsaved_parent_write is on
+    #     (the #278 safety net: orphaning a collection is almost never intended)
+    #
+    # @return [Boolean]
+    #
+    def raise_on_dirty_write?(mode, new_record)
+      Familia.strict_write_order || mode == :strict ||
+        (new_record && Familia.raise_on_unsaved_parent_write)
+    end
+
+    # Builds the dirty-write message. A new, unsaved parent gets a distinct,
+    # stronger message (the orphaned-data hazard); both variants end with the
+    # DIRTY_WRITE_HINT remediation.
+    #
+    # @return [String]
+    #
+    def dirty_write_message(new_record, dirty)
+      fields = dirty.join(', ')
+      if new_record
+        "Writing to #{self.class.name} #{dbkey} while parent " \
+          "#{@parent_ref.class.name} is a new, unsaved object (no hash key " \
+          "exists yet) with unsaved scalar fields: #{fields}. Save the parent " \
+          "before mutating its collections to avoid orphaned data. #{DIRTY_WRITE_HINT}"
+      else
+        "Writing to #{self.class.name} #{dbkey} while parent " \
+          "#{@parent_ref.class.name} has unsaved scalar fields: #{fields} #{DIRTY_WRITE_HINT}"
+      end
+    end
+
+    # Emits the dirty-write warning for a non-raising mode. :warn warns on every
+    # call; :once dedupes per distinct dirty signature within the window via the
+    # parent's #record_dirty_warning!. (:off is handled upstream in #warn_if_dirty!.)
+    #
+    # @return [void]
+    #
+    def emit_dirty_warning(mode, message, dirty)
+      return Familia.warn(message) if mode == :warn
+
+      # :once (default) -- warn once per distinct dirty-field signature per window
+      signature  = dirty.sort.freeze
+      first_time = !@parent_ref.respond_to?(:record_dirty_warning!) ||
+                   @parent_ref.record_dirty_warning!(signature)
+      Familia.warn message if first_time
+    end
+
+    private :resolve_dirty_warning_mode, :raise_on_dirty_write?,
+            :dirty_write_message, :emit_dirty_warning
 
     # Best-effort detection of whether the parent Horreum instance has never
     # been persisted — i.e. its hash key does not exist in Redis yet. This is
