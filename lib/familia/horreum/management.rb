@@ -107,19 +107,18 @@ module Familia
       # Use {Persistence#save} or {Persistence#save_with_collections} when
       # you explicitly want overwrite/upsert behaviour.
       #
-      # Concurrency: the duplicate check is best-effort, not atomic. The
-      # +exists?+ read and the subsequent write are separate operations with no
-      # WATCH between them, so two concurrent +build+ calls for the same
-      # identifier can both pass the check and the later write wins. This guard
-      # is weaker than {.create!} (which uses WATCH + MULTI/EXEC via
-      # {#save_if_not_exists!}); it is intended for single-threaded
-      # factory/fixture use. Use {.create!} when concurrent creators are
-      # possible.
+      # Concurrency: when called without a block, +build+ delegates to
+      # {#save_if_not_exists!} which uses WATCH + MULTI/EXEC for race-safe
+      # duplicate detection. With a block, the duplicate check is best-effort
+      # (TOCTOU): the +exists?+ read and the subsequent +atomic_write+ are
+      # separate operations with no WATCH between them, so concurrent +build+
+      # calls for the same identifier can both pass the check. See issue #288
+      # for composing WATCH into the block path.
       #
       # ## Without a block
       #
       # When called without a block there are no collection operations to fold
-      # in, so +build+ degenerates to +new(...).save+ and returns the instance.
+      # in, so +build+ uses +save_if_not_exists!+ and returns the instance.
       #
       # Positional and keyword arguments are forwarded to {.new}. The block is
       # NOT forwarded to the constructor -- it is invoked here, after building,
@@ -156,15 +155,17 @@ module Familia
         # a post-build callback, so it must not leak into new/initialize.
         instance = new(*, **)
 
-        # Best-effort duplicate guard (TOCTOU): no WATCH between this read and
-        # the write below, so concurrent builds can race. See .create! for a
-        # WATCH-guarded alternative.
-        raise Familia::RecordExistsError, instance.dbkey if instance.exists?
-
         if block_given?
+          # Best-effort duplicate guard (TOCTOU): no WATCH between this read
+          # and the atomic_write below, so concurrent builds can race. See
+          # issue #288 for composing WATCH into atomic_write.
+          raise Familia::RecordExistsError, instance.dbkey if instance.exists?
+
           instance.atomic_write { yield instance }
         else
-          instance.save
+          # No block means no collection ops to fold in, so we can use the
+          # WATCH-guarded save_if_not_exists! directly — race-safe.
+          instance.save_if_not_exists!
         end
 
         instance
