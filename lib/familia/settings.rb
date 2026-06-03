@@ -204,10 +204,10 @@ module Familia
     # has unsaved scalar field changes. Acts as the fallback when a Horreum
     # subclass does not set its own +dirty_write_warnings+ class setting.
     #
-    # This governs only the WARNING path: which dirty writes emit a warning and
-    # how often. It is orthogonal to the raise paths -- #strict_write_order and
-    # #raise_on_unsaved_parent_write decide independently whether a write raises
-    # (see Familia::DataType#warn_if_dirty!).
+    # The resolved mode drives both warning and raise behavior: :warn/:once
+    # control warning frequency, :strict forces a raise, and :off suppresses
+    # everything (warnings and raises) for the class. See the precedence note
+    # below and Familia::DataType#warn_if_dirty!.
     #
     # @param val [Symbol, nil] The mode, or nil to read the current value
     # @return [Symbol] Current mode (defaults to :once when unconfigured)
@@ -219,8 +219,10 @@ module Familia
     # - :strict: Raise Familia::Problem on every violation.
     # - :off: Suppress warnings entirely.
     #
-    # Note: +Familia.strict_write_order = true+ always raises and takes
-    # precedence over this setting and any class-level override.
+    # Note: +Familia.strict_write_order = true+ raises for any class whose mode
+    # is not explicitly +:off+. A class-level +:off+ is authoritative -- it
+    # suppresses both warnings and raises, overriding +strict_write_order+ and
+    # +raise_on_unsaved_parent_write+. "Off means off."
     #
     # @example Temporarily silence all classes during a bulk import
     #   Familia.dirty_write_warnings = :off
