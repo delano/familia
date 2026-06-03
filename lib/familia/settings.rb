@@ -15,6 +15,7 @@ module Familia
   @encryption_personalization = 'FamilialMatters'.freeze
   @pipelined_mode = :warn
   @strict_write_order = false
+  @raise_on_unsaved_parent_write = true
 
   # Schema validation configuration
   @schema_path = nil      # Directory containing schema files (String or Pathname)
@@ -26,7 +27,8 @@ module Familia
   module Settings
     attr_writer :delim, :suffix, :default_expiration, :logical_database, :prefix, :encryption_keys,
                 :current_key_version, :encryption_personalization, :transaction_mode,
-                :schema_path, :schemas, :schema_validator, :strict_write_order
+                :schema_path, :schemas, :schema_validator, :strict_write_order,
+                :raise_on_unsaved_parent_write
 
     def delim(val = nil)
       @delim = val if val
@@ -164,6 +166,37 @@ module Familia
     def strict_write_order(val = nil)
       @strict_write_order = val unless val.nil?
       @strict_write_order || false
+    end
+
+    # Controls whether a collection write on a DataType raises when the parent
+    # Horreum is a *new, unsaved* object — one whose hash key does not exist in
+    # the database yet. This is the most dangerous dirty-write scenario: the
+    # collection lands in Redis while none of the parent's scalar data exists,
+    # orphaning the collection if the parent is never saved.
+    #
+    # Defaults to true (raise) independently of #strict_write_order, because an
+    # orphaned-record bug is rarely what the caller intends. Set to false to
+    # downgrade to a (still distinct, still strong) warning emitted via
+    # Familia.warn instead.
+    #
+    # Note: #strict_write_order, when true, raises for *every* dirty write and
+    # therefore still raises the new-object case even if this is set to false.
+    #
+    # @param val [Boolean, nil] The setting value, or nil to get current value
+    # @return [Boolean] Current raise_on_unsaved_parent_write setting
+    #
+    # @example Downgrade the new, unsaved parent case to a warning
+    #   Familia.configure do |config|
+    #     config.raise_on_unsaved_parent_write = false
+    #   end
+    #
+    def raise_on_unsaved_parent_write(val = nil)
+      @raise_on_unsaved_parent_write = val unless val.nil?
+      # Defaults to true: an unset (nil) value means "raise". Cannot use
+      # `|| true` here -- that would coerce an explicit `false` back to true.
+      return true if @raise_on_unsaved_parent_write.nil?
+
+      @raise_on_unsaved_parent_write
     end
 
     # Directory containing schema files for JSON Schema validation.

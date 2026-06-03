@@ -141,6 +141,9 @@ end
 
 @model4 = FullSecureModel4.new(model_id: 'secure-126')
 @model4.password = 'secure-pass'
+# Persist scalar fields before mutating collections (see #278): a new, unsaved
+# dirty parent raises on collection writes by default to avoid orphaned data.
+@model4.save
 @model4.activity_log << 'User logged in'
 @model4.metadata['last_login'] = Familia.now.to_i.to_s
 
