@@ -1,9 +1,9 @@
 # try/features/build_block_try.rb
 #
-# Tests for the class-level `build` (alias `construct`) factory block.
+# Tests for the class-level `build` factory block.
 # See issue #279. `build` wraps `new` + `atomic_write` so that scalar fields
 # and collection mutations made inside the block all commit in a single
-# MULTI/EXEC at block exit.
+# MULTI/EXEC at block exit. Uses create-only semantics (raises on duplicate).
 
 require_relative '../support/helpers/test_helpers'
 
@@ -68,14 +68,6 @@ end
 [@user_c.is_a?(BuildTestUser), @reloaded_c.name]
 #=> [true, 'Carol']
 
-## construct is an alias for build
-@user_d = BuildTestUser.construct(email: 'dave@example.com', name: 'Dave') do |u|
-  u.tags.add('aliased')
-end
-@reloaded_d = BuildTestUser.find_by_id('dave@example.com')
-[@reloaded_d.name, @reloaded_d.tags.members]
-#=> ['Dave', ['aliased']]
-
 ## build accepts a positional identifier argument plus a block
 @user_e = BuildTestUser.build('erin@example.com') do |u|
   u.name = 'Erin'
@@ -128,17 +120,22 @@ end
 @user_h.dirty?
 #=> false
 
-## build has save (overwrite) semantics, not create-only
+## build raises RecordExistsError on duplicate (create-only semantics)
 @user_i1 = BuildTestUser.build(email: 'ivan@example.com', name: 'Ivan First') do |u|
   u.tags.add('first')
 end
-@user_i2 = BuildTestUser.build(email: 'ivan@example.com', name: 'Ivan Second') do |u|
-  u.tags.add('second')
+@duplicate_raised = false
+begin
+  BuildTestUser.build(email: 'ivan@example.com', name: 'Ivan Second') do |u|
+    u.tags.add('second')
+  end
+rescue Familia::RecordExistsError
+  @duplicate_raised = true
 end
 @reloaded_i = BuildTestUser.find_by_id('ivan@example.com')
-# Scalar is overwritten; the set accumulates both adds (no implicit clear)
-[@reloaded_i.name, @reloaded_i.tags.members.sort]
-#=> ['Ivan Second', ['first', 'second']]
+# Original is untouched; duplicate was rejected
+[@duplicate_raised, @reloaded_i.name, @reloaded_i.tags.members]
+#=> [true, 'Ivan First', ['first']]
 
 ## a clear-then-add inside the block is part of the same atomic commit
 @user_j = BuildTestUser.build(email: 'judy@example.com', name: 'Judy') do |u|

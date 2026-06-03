@@ -93,12 +93,12 @@ module Familia
       #
       # ## Persistence semantics
       #
-      # +build+ uses {Horreum#atomic_write}, which has +save+ semantics: it
-      # writes unconditionally and overwrites any existing record with the same
-      # identifier. It does NOT perform the existence check that {.create!}
-      # does. Use {.create!} when you need create-only (raise-on-duplicate)
-      # behaviour; note +create!+ cannot fold collection writes into the same
-      # atomic commit.
+      # +build+ has create-only semantics: it raises
+      # {Familia::RecordExistsError} if an object with the same identifier
+      # already exists. This follows the principle of least astonishment --
+      # a factory helper should not silently overwrite existing records.
+      # Use {Persistence#save} or {Persistence#save_with_collections} when
+      # you explicitly want overwrite/upsert behaviour.
       #
       # ## Without a block
       #
@@ -111,6 +111,8 @@ module Familia
       # @yieldparam instance [Horreum] The not-yet-persisted instance.
       # @return [Horreum] The built and persisted instance.
       #
+      # @raise [Familia::RecordExistsError] If an object with the same identifier
+      #   already exists in the database.
       # @raise [Familia::CrossDatabaseError] If the class has related fields on a
       #   different +logical_database+ than the parent (MULTI/EXEC cannot span
       #   databases). Fall back to building the object and using
@@ -127,13 +129,14 @@ module Familia
       # @example Without a block (plain save)
       #   user = User.build(email: 'bob@example.com')
       #
-      # @see #create! Create-only factory (raises on duplicate; no atomic collections)
       # @see Horreum#atomic_write The underlying single-MULTI/EXEC write
       # @see Persistence#save_with_collections Sequential alternative for
       #   cross-database configurations
       #
       def build(...)
         instance = new(...)
+
+        raise Familia::RecordExistsError, instance.dbkey if instance.exists?
 
         if block_given?
           instance.atomic_write { yield instance }
@@ -143,7 +146,6 @@ module Familia
 
         instance
       end
-      alias construct build
 
       def multiget(...)
         rawmultiget(...).filter_map { |json| Familia::JsonSerializer.parse(json) }

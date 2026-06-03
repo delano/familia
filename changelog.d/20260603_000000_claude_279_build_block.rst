@@ -1,13 +1,12 @@
 Added
 -----
 
-- ``Horreum.build`` (alias ``Horreum.construct``): a factory block that creates
-  an instance, yields it for scalar and collection setup, then commits
-  everything in a single ``MULTI/EXEC`` when the block exits. Collection
-  mutations made inside the block (e.g. ``u.tags.add(...)``) are folded into the
-  same transaction as the implicit ``HMSET``, so factory/fixture code no longer
-  has to sequence ``save`` before collection writes or reach for
-  ``atomic_write`` directly. #279
+- ``Horreum.build``: a factory block that creates an instance, yields it for
+  scalar and collection setup, then commits everything in a single
+  ``MULTI/EXEC`` when the block exits. Collection mutations made inside the
+  block (e.g. ``u.tags.add(...)``) are folded into the same transaction as the
+  implicit ``HMSET``, so factory/fixture code no longer has to sequence ``save``
+  before collection writes or reach for ``atomic_write`` directly. #279
 
   .. code-block:: ruby
 
@@ -17,10 +16,10 @@ Added
      end
      # HMSET + SADD + RPUSH all fire in one MULTI/EXEC at block exit
 
-  ``build`` has ``save`` (overwrite) semantics like ``atomic_write`` -- it does
-  not perform the duplicate check that ``create!`` does; use ``create!`` for
-  create-only behaviour. Because it builds on ``atomic_write``, the same
-  single-database constraint applies: a related field on a different
+  ``build`` has create-only semantics: it raises ``Familia::RecordExistsError``
+  if the identifier already exists, following the principle of least
+  astonishment for a factory method. Because it builds on ``atomic_write``, the
+  same single-database constraint applies: a related field on a different
   ``logical_database`` raises ``Familia::CrossDatabaseError`` (fall back to
   ``save_with_collections`` in that case). Called without a block, ``build`` is
   equivalent to ``new(...).save``.
@@ -28,11 +27,11 @@ Added
 AI Assistance
 -------------
 
-- AI implemented the ``build``/``construct`` factory block from #279, composing
-  it on the existing ``atomic_write`` infrastructure rather than duplicating the
+- AI implemented the ``build`` factory block from #279, composing it on the
+  existing ``atomic_write`` infrastructure rather than duplicating the
   ``MULTI/EXEC`` plumbing, so it inherits the cross-database guard, same-instance
   re-entrancy protection, and dirty-state warning suppression. Added a tryouts
   suite covering the atomic commit of scalars and collections, exception
   rollback (no partial writes, verified down to the raw collection key),
-  overwrite semantics, the ``construct`` alias, positional-identifier usage, and
+  create-only semantics (duplicate rejection), positional-identifier usage, and
   the cross-database error path.
