@@ -160,6 +160,19 @@ module Familia
     # scalar fields are saved, the collection data is persisted but the
     # scalar data is lost, creating an inconsistent state.
     #
+    # Two flavours of this hazard are distinguished:
+    #
+    # 1. **New, unsaved parent** — the parent has never been persisted, so no
+    #    hash key exists in Redis yet. This is the worst case: the collection
+    #    write creates a key while *none* of the scalar data exists, leaving an
+    #    orphaned collection with no parent hash if the process never saves.
+    # 2. **Dirty after save** — the parent was persisted before and merely has
+    #    uncommitted scalar changes. The parent hash already exists, so the
+    #    inconsistency is a partial update rather than a fully orphaned record.
+    #
+    # The new-object case gets a distinct, stronger message so it is not lost
+    # in the noise of ordinary dirty-write warnings.
+    #
     # @return [void]
     # @raise [Familia::Problem] if Familia.strict_write_order is true
     #
@@ -171,8 +184,16 @@ module Familia
       return unless @parent_ref.respond_to?(:dirty?) && @parent_ref.dirty?
 
       dirty = @parent_ref.dirty_fields
-      message = "Writing to #{self.class.name} #{dbkey} while parent " \
-                "#{@parent_ref.class.name} has unsaved scalar fields: #{dirty.join(', ')}"
+      message =
+        if parent_new_record?
+          "Writing to #{self.class.name} #{dbkey} while parent " \
+            "#{@parent_ref.class.name} is a new, unsaved object (no hash key " \
+            "exists yet) with unsaved scalar fields: #{dirty.join(', ')}. Save " \
+            'the parent before mutating its collections to avoid orphaned data.'
+        else
+          "Writing to #{self.class.name} #{dbkey} while parent " \
+            "#{@parent_ref.class.name} has unsaved scalar fields: #{dirty.join(', ')}"
+        end
 
       if Familia.strict_write_order
         raise Familia::Problem, message
@@ -180,6 +201,37 @@ module Familia
         Familia.warn message
       end
     end
+
+    # Best-effort detection of whether the parent Horreum instance has never
+    # been persisted — i.e. its hash key does not exist in Redis yet. This is
+    # the most dangerous dirty-write scenario surfaced by #warn_if_dirty!:
+    # mutating a collection now writes a Redis key while *none* of the parent's
+    # scalar data exists, so a crash before #save orphans the collection with
+    # no parent hash to anchor it.
+    #
+    # Only consulted from #warn_if_dirty!, which already guarantees @parent_ref
+    # is a dirty Horreum instance. Conservative by design — returns false
+    # (treat as "already persisted", the milder warning) whenever the state
+    # cannot be cheaply and safely determined:
+    #
+    # * inside a transaction/pipeline, where an EXISTS probe would be queued
+    #   into the caller's MULTI/EXEC and return a Redis::Future rather than a
+    #   boolean;
+    # * when the parent cannot answer #exists? (e.g. it has no identifier yet),
+    #   which raises a Familia::Problem during the probe.
+    #
+    # @return [Boolean] true only when we can positively confirm the parent has
+    #   no hash key in the database.
+    #
+    def parent_new_record?
+      return false if Fiber[:familia_transaction] || Fiber[:familia_pipeline]
+      return false unless @parent_ref.respond_to?(:exists?)
+
+      !@parent_ref.exists?(check_size: false)
+    rescue Familia::Problem
+      false
+    end
+    private :parent_new_record?
 
     # Override the default_expiration instance method to inherit from the
     # parent Horreum when this DataType doesn't have its own explicit
