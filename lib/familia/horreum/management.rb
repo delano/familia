@@ -105,8 +105,10 @@ module Familia
       # When called without a block there are no collection operations to fold
       # in, so +build+ degenerates to +new(...).save+ and returns the instance.
       #
-      # @param args [Array] Positional arguments forwarded to {.new}.
-      # @param kwargs [Hash] Keyword arguments (field values) forwarded to {.new}.
+      # Positional and keyword arguments are forwarded to {.new}. The block is
+      # NOT forwarded to the constructor -- it is invoked here, after building,
+      # with the new instance.
+      #
       # @yield [instance] The newly built instance, for scalar/collection setup.
       # @yieldparam instance [Horreum] The not-yet-persisted instance.
       # @return [Horreum] The built and persisted instance.
@@ -133,8 +135,10 @@ module Familia
       # @see Persistence#save_with_collections Sequential alternative for
       #   cross-database configurations
       #
-      def build(...)
-        instance = new(...)
+      def build(*, **)
+        # Forward only positional/keyword args to the constructor; the block is
+        # a post-build callback, so it must not leak into new/initialize.
+        instance = new(*, **)
 
         raise Familia::RecordExistsError, instance.dbkey if instance.exists?
 

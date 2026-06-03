@@ -30,10 +30,28 @@ class BuildCrossDbUser < Familia::Horreum
   list :sessions, logical_database: 5
 end
 
+# Probe class: records whether initialize received a block, to prove that
+# build forwards only positional/keyword args to new -- not the build callback.
+class BuildBlockLeakProbe < Familia::Horreum
+  identifier_field :email
+  field :email
+  set :tags
+
+  class << self
+    attr_accessor :init_saw_block
+  end
+
+  def initialize(*args, **kwargs)
+    self.class.init_saw_block = block_given?
+    super
+  end
+end
+
 # Clean slate
 BuildTestUser.instances.clear
 BuildTestUser.all.each(&:destroy!)
 BuildCrossDbUser.instances.clear rescue nil
+BuildBlockLeakProbe.instances.clear rescue nil
 
 ## build with a block persists scalars and collections atomically
 @user_a = BuildTestUser.build(email: 'alice@example.com', name: 'Alice') do |u|
@@ -147,6 +165,11 @@ end
 @reloaded_j.tags.members
 #=> ['final']
 
+## build forwards only args/kwargs to new -- the callback block does not leak into initialize
+BuildBlockLeakProbe.build(email: 'probe@example.com') { |u| u.tags.add('x') }
+BuildBlockLeakProbe.init_saw_block
+#=> false
+
 ## build raises CrossDatabaseError when a related field spans databases
 @cross_raised = nil
 begin
@@ -164,3 +187,5 @@ BuildTestUser.instances.clear
 BuildTestUser.all.each(&:destroy!)
 BuildCrossDbUser.instances.clear rescue nil
 BuildCrossDbUser.all.each(&:destroy!) rescue nil
+BuildBlockLeakProbe.instances.clear rescue nil
+BuildBlockLeakProbe.all.each(&:destroy!) rescue nil
