@@ -144,18 +144,18 @@ end
 @aad_cleared != @aad_with_pass
 #=> true
 
-## RedactedString value extraction works via build_aad_from_fields
+## RedactedString value extraction works via build_aad with explicit fields
 @record_fromfields = TransientAADModel.new(id: 'fromfields-1')
 @record_fromfields.passphrase = 'fromfields-pass'
-@aad_fromfields = @field_type.send(:build_aad_from_fields, @record_fromfields, [:passphrase])
+@aad_fromfields = @field_type.send(:build_aad, @record_fromfields, fields: [:passphrase])
 @aad_fromfields.is_a?(String) && !@aad_fromfields.empty?
 #=> true
 
-## build_aad and build_aad_from_fields produce same result for same fields
+## Explicit fields: parameter produces same result as default @aad_fields
 @record_compare = TransientAADModel.new(id: 'compare-1')
 @record_compare.passphrase = 'compare-pass'
 @aad_build = @field_type.send(:build_aad, @record_compare)
-@aad_from = @field_type.send(:build_aad_from_fields, @record_compare, [:passphrase])
+@aad_from = @field_type.send(:build_aad, @record_compare, fields: [:passphrase])
 @aad_build == @aad_from
 #=> true
 

@@ -18,6 +18,28 @@ module Familia
         super.compact
       end
 
+      def to_json(*_args)
+        Familia::JsonSerializer.dump(to_h)
+      end
+
+      def with_metadata(envelope_version: self.envelope_version, aad_fields: self.aad_fields,
+                         key_material_fields: self.key_material_fields)
+        self.class.new(
+          algorithm: algorithm, nonce: nonce, ciphertext: ciphertext,
+          auth_tag: auth_tag, key_version: key_version, encoding: encoding,
+          envelope_version: envelope_version, aad_fields: aad_fields,
+          key_material_fields: key_material_fields
+        )
+      end
+
+      def has_key_material?
+        !key_material_fields.nil? && !key_material_fields.empty?
+      end
+
+      def stored_aad_fields
+        aad_fields&.map(&:to_sym)
+      end
+
       # Class methods for parsing and validation
       def self.valid?(json_string)
         return true if json_string.nil? # Allow nil values
