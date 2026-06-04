@@ -58,6 +58,16 @@ rescue ArgumentError
 end
 #=> :raised
 
+## pre_check with empty watch_keys array also raises ArgumentError
+@u4b = WatchTestUser.new(email: 'watch4b@example.com', name: 'Watch4b')
+begin
+  @u4b.atomic_write(watch_keys: [], pre_check: -> { true }) { @u4b.name = 'x' }
+  :no_raise
+rescue ArgumentError
+  :raised
+end
+#=> :raised
+
 ## atomic_write with empty watch_keys array falls back to unwatched path
 @u5 = WatchTestUser.new(email: 'watch5@example.com', name: 'Watch5')
 @u5.atomic_write(watch_keys: []) do
@@ -100,14 +110,15 @@ end
 #=> ['Watch8', ['keep_me']]
 
 ## watched atomic_write retries on OptimisticLockError (simulated WATCH abort)
+# Simulate a WATCH abort by returning MultiResult.new(nil) on the first
+# attempt WITHOUT calling the block, mirroring real WATCH behaviour where
+# EXEC discards all queued commands (nothing reaches Redis).
 @u9 = WatchTestUser.new(email: 'watch9@example.com', name: 'Watch9')
 attempt_count = 0
 original_transaction = @u9.method(:transaction)
 @u9.define_singleton_method(:transaction) do |&blk|
   attempt_count += 1
   if attempt_count == 1
-    # Simulate a WATCH abort on first attempt: multi returns nil
-    blk.call(nil)
     Familia::MultiResult.new(nil)
   else
     original_transaction.call(&blk)

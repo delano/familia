@@ -83,13 +83,24 @@ module Familia
       #     pre_check: -> { raise RecordExistsError, user.dbkey if user.exists? }
       #   ) { user.tags.add("new") }
       #
+      # @note When +watch_keys+ is set and a WATCH abort triggers a retry,
+      #   the block is re-executed (up to +max_attempts+ times). Scalar
+      #   setters and collection mutations are safe to replay (the aborted
+      #   MULTI discards all queued commands), but side effects outside
+      #   Redis (logging, external API calls) will fire again. Design
+      #   blocks to be retry-safe when using +watch_keys+.
+      # @note +prepare_for_save+ (timestamps, unique-index validation) runs
+      #   once before the retry loop, not on each attempt. This matches
+      #   +save_if_not_exists!+ behaviour and keeps timestamps consistent
+      #   across retries.
+      #
       # @see Persistence#save_with_collections For sequential (non-atomic)
       #   scalar+collection writes (supports cross-database configurations).
       # @see Connection#transaction For raw MULTI/EXEC access.
       #
       def atomic_write(update_expiration: true, watch_keys: nil, pre_check: nil)
         raise ArgumentError, 'Block required for atomic_write' unless block_given?
-        raise ArgumentError, 'pre_check requires watch_keys' if pre_check && !watch_keys
+        raise ArgumentError, 'pre_check requires watch_keys' if pre_check && !watch_keys&.any?
 
         # Mirror save's nesting guard -- atomic_write opens its own MULTI and
         # cannot be nested inside an outer transaction (see Persistence#save).
