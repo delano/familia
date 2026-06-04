@@ -1,20 +1,3 @@
-Added
------
-
-- ``Horreum#save_and_then``: a post-save convenience method that yields
-  ``self`` to a block only when ``save`` returns truthy. Unlike Ruby's
-  ``.then`` (which always yields regardless of the receiver's truthiness),
-  ``save_and_then`` skips the block on failure, so callers don't need an
-  inner guard. The block's return value becomes the method's return value,
-  enabling patterns like ``key = user.save_and_then { |u| u.dbkey }``. #286
-
-  .. code-block:: ruby
-
-     user.name = "Alice"
-     user.save_and_then do |u|
-       AuditLog.record(:user_updated, u.identifier)
-     end
-
 Documentation
 -------------
 
@@ -24,13 +7,20 @@ Documentation
   The block receives the persisted instance and is skipped entirely when
   ``save_if_not_exists!`` raises (e.g. ``RecordExistsError``). #286
 
+- ``Horreum#save``: added ``@example`` tags showing idiomatic Ruby patterns
+  for post-save callbacks (``if save`` and ``&&`` short-circuit), replacing
+  the originally proposed ``save_and_then`` method after evaluating how
+  successful ORMs handle this — none add a named wrapper for conditional
+  post-save logic. #286
+
 AI Assistance
 -------------
 
-- AI implemented ``save_and_then`` from the design in #286, keeping it as
-  a thin wrapper around ``save`` that delegates all persistence logic and
-  only adds the conditional-yield semantics. Also added YARD documentation
-  for the existing ``create!`` block behaviour and wrote tryouts test suites
-  covering both features: ``create_block_try.rb`` (block execution timing,
-  skip-on-error, collection ops) and ``save_and_then_try.rb`` (yield-self,
-  return-value chaining, no-block fallback, post-save existence).
+- AI drafted and then removed a ``save_and_then`` convenience method after
+  analysing how ActiveRecord, Sequel, Ecto, and Django handle post-save
+  logic. The conclusion: idiomatic Ruby (``if save; ...; end``) is clearer
+  than a custom method, and a polymorphic return type (block value vs
+  boolean) would be inconsistent with the existing ``save_with_collections``
+  contract. Kept the ``create!`` YARD docs and ``save`` examples, and added
+  a ``create_block_try.rb`` test suite covering block execution timing,
+  skip-on-error, and collection operations. #286

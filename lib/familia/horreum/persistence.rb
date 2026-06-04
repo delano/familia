@@ -79,6 +79,15 @@ module Familia
       #   user = User.new(email: "john@example.com")
       #   user.save  # => true
       #
+      # @example Post-save callback (idiomatic Ruby)
+      #   if user.save
+      #     AuditLog.record(:user_updated, user.identifier)
+      #     notify(user)
+      #   end
+      #
+      # @example Single-expression short-circuit
+      #   user.save && AuditLog.record(:user_updated, user.identifier)
+      #
       # @see #save_if_not_exists! For conditional saves
       # @see #transaction For atomic operations after save
       #
@@ -184,55 +193,6 @@ module Familia
         saved = save(update_expiration: update_expiration)
         yield if saved && block_given?
         saved
-      end
-
-      # Saves the object, then yields +self+ only on success.
-      #
-      # This is a convenience wrapper for the common "save, then do X only
-      # if it worked" pattern. Unlike +save.then { ... }+ (which always
-      # yields regardless of truthiness), +save_and_then+ only enters the
-      # block when +save+ returns truthy. The block receives the instance
-      # itself, so post-save operations read naturally:
-      #
-      #   user.save_and_then { |u| Audit.log(:updated, u.identifier) }
-      #
-      # When +save+ returns falsy (or raises), the block is skipped and
-      # the save result is returned as-is.
-      #
-      # @param update_expiration [Boolean] Passed through to +save+ (default: true)
-      # @yield [self] The persisted instance, only when save succeeds.
-      # @yieldparam obj [Horreum] +self+, for post-save side effects.
-      # @yieldreturn [Object] The block's return value becomes the method's
-      #   return value, enabling chaining like
-      #   +user.save_and_then { |u| u.identifier }+.
-      # @return [Object] The block's return value on success, or the falsy
-      #   save result when the block is skipped.
-      #
-      # @raise [Familia::OperationModeError] If called within a transaction
-      # @raise [Familia::RecordExistsError] If unique index constraint violated
-      #
-      # @example Logging after a successful save
-      #   user.name = "Alice"
-      #   user.save_and_then do |u|
-      #     AuditLog.record(:user_updated, u.identifier)
-      #   end
-      #
-      # @example Extracting a value on success
-      #   key = user.save_and_then { |u| u.dbkey }
-      #   # key is the dbkey on success, or false if save failed
-      #
-      # @example Ruby 3 .then chaining (alternative pattern)
-      #   # For callers who prefer stdlib chaining over a named method:
-      #   user.save.then { |ok| break unless ok; do_something(user) }
-      #
-      # @see #save For the underlying persistence
-      # @see #save_with_collections For post-save collection operations
-      #
-      def save_and_then(update_expiration: true)
-        saved = save(update_expiration: update_expiration)
-        return saved unless saved && block_given?
-
-        yield self
       end
 
       # Conditionally persists object only if it doesn't already exist in storage.
