@@ -7,7 +7,7 @@ UnsortedSet, Sorted Set, List, and Hash data types all include the `Collection` 
 
 ## Bulk writes — single round-trip mutations
 
-Collection mutations are **immediate** — every call hits Valkey/Redis right away, unlike scalar `field` setters which are deferred until `save`. Each call also runs `warn_if_dirty!` and cascades expiration. (See the write-model notes in `CLAUDE.md` for the deferred-vs-immediate split.)
+Collection mutations are **immediate** — every call hits Valkey/Redis right away, unlike scalar `field` setters which are deferred until `save`. Each call also runs `warn_if_dirty!` and cascades expiration. (See the write-model notes in `AGENTS.md` for the deferred-vs-immediate split.)
 
 Multi-element adds issue **one** command for the whole batch, not one per element. Populating a large collection is therefore a single round-trip even without an explicit pipeline.
 
