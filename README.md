@@ -1,4 +1,4 @@
-# Familia - 2.5
+# Familia - v2
 
 **Organize and store Ruby objects in Valkey/Redis using native database types (an ORM of sorts).**
 
@@ -56,7 +56,7 @@ The performance characteristics you rely on in Valkey/Redis remain unchanged. Se
 
 ```bash
 # Add to Gemfile
-gem 'familia', '~> 2.5'
+gem 'familia', '~> 2.10'
 
 # Or install directly
 gem install familia
