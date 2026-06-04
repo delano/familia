@@ -132,9 +132,14 @@ Collections live on separate keys from the object hash.
 **Safe pattern — scalars first, then collections:**
 
 ```ruby
+# Option A: explicit save, then mutate collections directly
 plan.name = "Premium"
 plan.save  # HMSET for scalar fields
+plan.features.clear
+plan.features.add("sso")
 
+# Option B: convenience wrapper (calls save internally, then yields the block)
+plan.name = "Premium"
 plan.save_with_collections do
   plan.features.clear
   plan.features.add("sso")
