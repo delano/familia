@@ -167,50 +167,22 @@ Documentation
 AI Assistance
 -------------
 
-- AI implemented the ``build`` factory block from #279, composing it on the
-  existing ``atomic_write`` infrastructure rather than duplicating the
-  ``MULTI/EXEC`` plumbing. Added tryouts covering the atomic commit, exception
-  rollback, create-only semantics, and the cross-database error path.
+- AI implemented ``build`` factory block (#279) and WATCH composition in
+  ``atomic_write`` (#288), including tryouts for both.
 
-- AI implemented WATCH composition into ``atomic_write`` from #288, extracting
-  the transaction body into ``execute_unwatched_atomic_write`` and adding
-  ``execute_watched_atomic_write`` with WATCH + retry logic. Updated ``build``
-  to use the watched path. Added tryouts for the watched path, pre_check
-  rejection, retry on simulated WATCH abort, and nesting guards.
+- AI refactored encryption envelope handling (#280): unified AAD construction
+  through ``EncryptedData``, added envelope versioning, and fixed the
+  transient-field AAD bypass.
 
-- AI reviewed the initial #280 implementation, refactored so envelope
-  construction/parsing flows through ``EncryptedData``, collapsed duplicate
-  AAD builders, and made ``envelope_version`` load-bearing by branching the
-  decrypt path on it.
+- AI implemented ``DatabaseLogger.capture_enabled`` toggle and middleware
+  consolidation (#233), per-class ``dirty_write_warnings`` (#277), and
+  unsaved-parent guard (#278) with tryouts for each.
 
-- AI implemented the ``capture_enabled`` toggle and fast-path short-circuit
-  across ``call``/``call_pipelined``/``call_once`` for issue #233, collapsed the
-  three near-identical middleware methods into shared helpers, cutting the
-  file's RuboCop offense count from 56 to 16.
+- AI diagnosed and fixed ``each_record`` on ``unique_index`` hashkeys (#276)
+  and repaired all example scripts with regression tryouts (#250).
 
-- AI implemented the full dirty-write-warnings change from issue #277:
-  per-instance deduplication, the dedup-window reset, resolution in
-  ``DataType#warn_if_dirty!``, and class/global settings with validation and
-  subclass-chain inheritance.
-
-- AI diagnosed the root cause of issue #276, implemented the reference-type
-  fix across class-level and instance-scoped generators, corrected
-  ``each_record`` field-vs-value extraction, and added focused regression
-  coverage.
-
-- AI investigated the unsaved-parent guard for issue #278, implemented
-  new-object detection with a guarded ``exists?`` probe that short-circuits
-  inside transactions/pipelines, and added tryout coverage for the full
-  raise/warn matrix.
-
-- AI diagnosed and fixed the broken example scripts and the two latent
-  encryption bugs they surfaced, verified each script runs and is
-  idempotent, and authored the subprocess-driven regression tryouts.
-  Issue #250.
-
-- AI drafted and then removed a ``save_and_then`` convenience method for #286
-  after analysing how ActiveRecord, Sequel, Ecto, and Django handle post-save
-  logic. Kept the YARD docs and added a ``create_block_try.rb`` test suite.
+- AI evaluated and rejected ``save_and_then`` (#286) after cross-ORM analysis;
+  added YARD docs and ``create_block_try.rb`` instead.
 
 .. _changelog-2.9.1:
 
