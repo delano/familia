@@ -48,6 +48,12 @@ module Familia
       # identifier already exists. If it does, a Familia::RecordExistsError exception is
       # raised to prevent overwriting existing data.
       #
+      # Concurrency: the duplicate check is best-effort, not fully atomic.
+      # It routes through {#save_if_not_exists!}, which uses WATCH + MULTI/EXEC
+      # to abort if the key appears between the check and the write -- more
+      # cautious than a bare read-then-write, but a true guarantee needs a
+      # server-side check (e.g. Lua). See {#save_if_not_exists!}.
+      #
       # Finally, the method saves the new instance returns it.
       #
       # @example Creating an object with keyword arguments
@@ -64,6 +70,7 @@ module Familia
       # @see #save
       def create!(...)
         hobj = new(...)
+        # Best-effort duplicate guard: WATCH + MULTI/EXEC, not fully atomic.
         hobj.save_if_not_exists!
 
         # If a block is given, yield the created object
@@ -71,6 +78,97 @@ module Familia
         yield hobj if block_given?
 
         hobj
+      end
+
+      # Builds, populates, and atomically persists a new instance in one step.
+      #
+      # This is a factory wrapper around {Horreum#atomic_write} for the common
+      # case of "create an object, set up its collections, and save -- all at
+      # once". The block receives the freshly-built (but not-yet-persisted)
+      # instance. Scalar assignments and collection mutations made inside the
+      # block are all committed in a single MULTI/EXEC when the block exits:
+      #
+      #   - Scalar setters (+u.name = ...+) stay in memory until the implicit
+      #     save queues the HMSET inside the transaction.
+      #   - Collection mutations (+u.tags.add(...)+) auto-route into the open
+      #     transaction because +DataType#dbclient+ honours
+      #     +Fiber[:familia_transaction]+.
+      #
+      # Nothing reaches the database until the block exits, so a factory no
+      # longer has to choose between sequencing +save+ before collection writes
+      # or reaching for +atomic_write+ directly.
+      #
+      # ## Persistence semantics
+      #
+      # +build+ has create-only semantics: it raises
+      # {Familia::RecordExistsError} if an object with the same identifier
+      # already exists. This follows the principle of least astonishment --
+      # a factory helper should not silently overwrite existing records.
+      # Use {Persistence#save} or {Persistence#save_with_collections} when
+      # you explicitly want overwrite/upsert behaviour.
+      #
+      # Concurrency: when called without a block, +build+ delegates to
+      # {#save_if_not_exists!} which uses WATCH + MULTI/EXEC for race-safe
+      # duplicate detection. With a block, the duplicate check is best-effort
+      # (TOCTOU): the +exists?+ read and the subsequent +atomic_write+ are
+      # separate operations with no WATCH between them, so concurrent +build+
+      # calls for the same identifier can both pass the check. See issue #288
+      # for composing WATCH into the block path.
+      #
+      # ## Without a block
+      #
+      # When called without a block there are no collection operations to fold
+      # in, so +build+ uses +save_if_not_exists!+ and returns the instance.
+      #
+      # Positional and keyword arguments are forwarded to {.new}. The block is
+      # NOT forwarded to the constructor -- it is invoked here, after building,
+      # with the new instance.
+      #
+      # @yield [instance] The newly built instance, for scalar/collection setup.
+      # @yieldparam instance [Horreum] The not-yet-persisted instance.
+      # @return [Horreum] The built and persisted instance.
+      #
+      # @raise [Familia::RecordExistsError] If an object with the same identifier
+      #   already exists in the database.
+      # @raise [Familia::CrossDatabaseError] If the class has related fields on a
+      #   different +logical_database+ than the parent (MULTI/EXEC cannot span
+      #   databases). Fall back to building the object and using
+      #   {Persistence#save_with_collections} in that case.
+      # @raise [Familia::NoIdentifier] If the instance has no usable identifier.
+      #
+      # @example Factory/fixture creation with collections (issue #279)
+      #   user = User.build(email: 'alice@example.com') do |u|
+      #     u.tags.add('admin')
+      #     u.sessions.push('abc123')
+      #   end
+      #   # HMSET + SADD + RPUSH all fire in one MULTI/EXEC at block exit
+      #
+      # @example Without a block (plain save)
+      #   user = User.build(email: 'bob@example.com')
+      #
+      # @see Horreum#atomic_write The underlying single-MULTI/EXEC write
+      # @see Persistence#save_with_collections Sequential alternative for
+      #   cross-database configurations
+      #
+      def build(*, **)
+        # Forward only positional/keyword args to the constructor; the block is
+        # a post-build callback, so it must not leak into new/initialize.
+        instance = new(*, **)
+
+        if block_given?
+          # Best-effort duplicate guard (TOCTOU): no WATCH between this read
+          # and the atomic_write below, so concurrent builds can race. See
+          # issue #288 for composing WATCH into atomic_write.
+          raise Familia::RecordExistsError, instance.dbkey if instance.exists?
+
+          instance.atomic_write { yield instance }
+        else
+          # No block means no collection ops to fold in, so we can use the
+          # WATCH-guarded save_if_not_exists! directly — race-safe.
+          instance.save_if_not_exists!
+        end
+
+        instance
       end
 
       def multiget(...)
