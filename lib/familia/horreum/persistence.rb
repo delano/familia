@@ -531,7 +531,7 @@ module Familia
       # @see #delete! The underlying method that performs the key deletion
       #
       def destroy!
-        Familia.trace :DESTROY!, dbkey, self.class.uri
+        Familia.trace :DESTROY!, dbkey, self.class.uri if Familia.debug?
 
         # Execute all deletion operations within a transaction
         result = transaction do |_conn|
@@ -540,12 +540,16 @@ module Familia
 
           # Delete all related fields if present
           if self.class.relations?
-            Familia.trace :DELETE_RELATED_FIELDS!, nil,
-                          "#{self.class} has relations: #{self.class.related_fields.keys}"
+            if Familia.debug?
+              Familia.trace :DELETE_RELATED_FIELDS!, nil,
+                            "#{self.class} has relations: #{self.class.related_fields.keys}"
+            end
 
             self.class.related_fields.each_key do |name|
               obj = send(name)
-              Familia.trace :DELETE_RELATED_FIELD, name, "Deleting related field #{name} (#{obj.dbkey})"
+              if Familia.debug?
+                Familia.trace :DELETE_RELATED_FIELD, name, "Deleting related field #{name} (#{obj.dbkey})"
+              end
               obj.delete!
             end
           end

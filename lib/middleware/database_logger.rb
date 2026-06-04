@@ -111,6 +111,7 @@ module DatabaseLogger
   @sample_rate = nil  # nil = log everything, 0.1 = 10%, 0.01 = 1%
   @sample_counter = Concurrent::AtomicFixnum.new(0)
   @commands_mutex = Mutex.new  # Protects compound operations on @commands
+  @capture_enabled = true  # true = capture every command into the buffer
 
   class << self
     # Gets/sets the logger instance used by DatabaseLogger.
@@ -153,6 +154,31 @@ module DatabaseLogger
     # @note Command capture is unaffected - only logger output is sampled.
     #   This means tests can still verify commands while production logs stay clean.
     attr_accessor :sample_rate
+
+    # Gets/sets whether commands are captured into the buffer.
+    #
+    # This toggle is independent of {#sample_rate}, which governs only log
+    # output. Capture controls whether each command pays the cost of timing,
+    # CommandMessage allocation, and the buffer append.
+    #
+    # @return [Boolean] Whether command capture is enabled (default true)
+    #
+    # @example Development / test (default) — full capture for assertions
+    #   DatabaseLogger.capture_enabled = true
+    #   # every command captured; capture_commands works as usual
+    #
+    # @example Production — sampled logging, no buffer/timing overhead
+    #   DatabaseLogger.sample_rate = 0.01
+    #   DatabaseLogger.capture_enabled = false
+    #   # 1% of commands logged; unsampled commands take the zero-overhead
+    #   # fast path (no clock_gettime, no allocation, no buffer append) unless
+    #   # an instrumentation hook is registered
+    #
+    # @note When false, a command that is also not sampled for logging and has
+    #   no registered instrumentation hook skips timing entirely. Log output
+    #   still follows sample_rate, and instrumentation hooks still fire at full
+    #   rate (timing is measured whenever a hook is registered).
+    attr_accessor :capture_enabled
 
     # Gets the captured commands for testing purposes.
     # @return [Array<CommandMessage>] Array of captured command messages
@@ -240,75 +266,187 @@ module DatabaseLogger
       sample_interval = (1.0 / @sample_rate).to_i
       (@sample_counter.increment % sample_interval).zero?
     end
+
+    # Maps a middleware mode to the instrumentation hook type it reports to,
+    # or nil when that mode emits no instrumentation.
+    #
+    # This is the SINGLE SOURCE OF TRUTH for the per-mode instrumentation
+    # contract. Both the fast-path decision ({#measure?}) and the notify step
+    # ({#record}) consult it, so a mode can never end up measuring without
+    # notifying (wasted work) or notifying from a fast-pathed call (a silently
+    # dropped hook). +:once+ returns nil because +call_once+ does not emit
+    # instrumentation today; to change that, flip this one method and both the
+    # fast path and the notify step update together.
+    #
+    # @param mode [Symbol] :call, :once, or :pipeline
+    # @return [Symbol, nil] :command, :pipeline, or nil
+    # @api private
+    def hook_type_for(mode)
+      case mode
+      when :pipeline then :pipeline
+      when :call then :command
+      when :once then nil # call_once emits no instrumentation today
+      end
+    end
+
+    # Whether any instrumentation hooks are registered for +type+.
+    #
+    # Guards against +Familia::Instrumentation+ being undefined, then defers to
+    # its +hooks?+ predicate. A +defined?+ check alone cannot gate the fast path
+    # because the module is always loaded.
+    #
+    # @param type [Symbol, nil] hook type, or nil for "no instrumentation"
+    # @return [Boolean]
+    # @api private
+    def hooks_active?(type)
+      return false if type.nil?
+
+      defined?(Familia::Instrumentation) && Familia::Instrumentation.hooks?(type)
+    end
+
+    # Decide whether an invocation needs the measured (non-fast) path.
+    #
+    # Returns true when capture is enabled, the command is sampled for logging,
+    # or a relevant instrumentation hook is registered. When all three are
+    # false the caller takes the zero-overhead fast path (no clock_gettime, no
+    # CommandMessage allocation, no buffer append).
+    #
+    # @param should_log [Boolean] result of the single per-command should_log?
+    #   call (passed in so the sampling counter is advanced exactly once)
+    # @param mode [Symbol] :call, :once, or :pipeline
+    # @return [Boolean]
+    # @api private
+    def measure?(should_log:, mode:)
+      @capture_enabled || should_log || hooks_active?(hook_type_for(mode))
+    end
+
+    # Record a measured command: buffer it, emit a sampled log line, and fire
+    # the instrumentation hook. Called only on the measured path, after the
+    # wrapped command has executed and been timed.
+    #
+    # @param raw [Array] the single command array (:call/:once) or the array of
+    #   command arrays (:pipeline)
+    # @param config connection configuration
+    # @param duration [Integer] measured execution time in microseconds
+    # @param mode [Symbol] :call, :once, or :pipeline
+    # @param should_log [Boolean] the per-command should_log? result
+    # @return [nil]
+    # @api private
+    def record(raw, config, duration, mode:, should_log:)
+      lifetime = (Familia.now.to_f - @process_start).round(6)
+
+      # Build the CommandMessage only when capturing or logging needs it; append
+      # to the buffer only when capture is enabled. The hook-only path (capture
+      # off, not sampled, but a hook is registered) skips the buffer entirely.
+      msgpack = nil
+      if @capture_enabled || should_log
+        msgpack = CommandMessage.new(command_string(raw, mode), duration, lifetime)
+        append_command(msgpack) if @capture_enabled
+      end
+
+      emit_log(raw, config, duration, lifetime, mode, msgpack) if should_log && @logger
+
+      hook = hook_type_for(mode)
+      notify_hook(raw, config, duration, hook) if hooks_active?(hook)
+
+      nil
+    end
+
+    # Emits a single sampled log line: structured key=value context, or the
+    # legacy "[index] timeline durationμs > command" format.
+    # @api private
+    def emit_log(raw, config, duration, lifetime, mode, msgpack)
+      message = if @structured_logging
+                  structured_log_message(raw, config, duration, lifetime, mode)
+                else
+                  format('[%s] %s', index, msgpack.inspect)
+                end
+      @logger.trace(message)
+    end
+
+    # @api private
+    def command_string(raw, mode)
+      if mode == :pipeline
+        raw.map { |cmd| cmd.join(' ') }.join(' | ')
+      else
+        raw.join(' ')
+      end
+    end
+
+    # Extracts [db, connection_id] from either a RedisClient::Config or a Hash.
+    # @api private
+    def connection_meta(config)
+      db = if config.respond_to?(:db)
+             config.db
+           elsif config.is_a?(Hash)
+             config[:db]
+           end
+      conn_id = if config.respond_to?(:custom)
+                  config.custom&.dig(:id)
+                elsif config.is_a?(Hash)
+                  config.dig(:custom, :id)
+                end
+      [db, conn_id]
+    end
+
+    # @api private
+    def structured_log_message(raw, config, duration, lifetime, mode)
+      duration_ms = (duration / 1000.0).round(2)
+      db_num, = connection_meta(config)
+      common = "duration_μs=#{duration} duration_ms=#{duration_ms} " \
+               "timeline=#{lifetime} db=#{db_num} index=#{index}"
+
+      case mode
+      when :pipeline
+        "Redis pipeline commands=#{raw.size} #{common}"
+      when :once
+        "Redis command_once cmd=#{raw.first} args=#{raw[1..].inspect} #{common}"
+      else
+        "Redis command cmd=#{raw.first} args=#{raw[1..].inspect} #{common}"
+      end
+    end
+
+    # @api private
+    def notify_hook(raw, config, duration, hook)
+      duration_ms = (duration / 1000.0).round(2)
+      db_num, conn_id = connection_meta(config)
+
+      if hook == :pipeline
+        Familia::Instrumentation.notify_pipeline(
+          raw.size, duration_ms, db: db_num, connection_id: conn_id
+        )
+      else
+        Familia::Instrumentation.notify_command(
+          raw.first, duration_ms,
+          full_command: raw, db: db_num, connection_id: conn_id
+        )
+      end
+    end
   end
 
   # Logs the Redis command and its execution time.
   #
   # This method is part of the RedisClient middleware chain. It MUST use `super`
-  # instead of `yield` to properly chain with other middlewares.
+  # instead of `yield` to properly chain with other middlewares. The shared
+  # decision/record logic lives in {DatabaseLogger.measure?} and
+  # {DatabaseLogger.record}; only the execution+timing skeleton stays here so
+  # the fast path remains allocation-free and `super` keeps chaining.
   #
   # @param command [Array] The Redis command and its arguments
   # @param config [RedisClient::Config, Hash] Connection configuration
   # @return [Object] The result of the Redis command execution
   #
-  # @note Commands are always captured for testing. Logging only occurs when
-  #   DatabaseLogger.logger is set and sampling allows it.
+  # @note should_log? is evaluated exactly once per command to keep the sampling
+  #   counter deterministic. On the fast path nothing is timed or allocated.
   def call(command, config)
+    should_log = DatabaseLogger.should_log?
+    return super unless DatabaseLogger.measure?(should_log: should_log, mode: :call)
+
     block_start = DatabaseLogger.now_in_μs
     result = super  # CRITICAL: Must use super, not yield, to chain middlewares
-    block_duration = DatabaseLogger.now_in_μs - block_start
+    duration = DatabaseLogger.now_in_μs - block_start
 
-    # We intentionally use two different codepaths for getting the
-    # time, although they will almost always be so similar that the
-    # difference is negligible.
-    lifetime_duration = (Familia.now.to_f - DatabaseLogger.process_start).round(6)
-
-    msgpack = CommandMessage.new(command.join(' '), block_duration, lifetime_duration)
-    DatabaseLogger.append_command(msgpack)
-
-    # Dual-mode logging with sampling
-    if DatabaseLogger.should_log?
-      if DatabaseLogger.structured_logging && DatabaseLogger.logger
-        duration_ms = (block_duration / 1000.0).round(2)
-        db_num = if config.respond_to?(:db)
-                   config.db
-                 elsif config.is_a?(Hash)
-                   config[:db]
-                 end
-        DatabaseLogger.logger.trace(
-          "Redis command cmd=#{command.first} args=#{command[1..-1].inspect} " \
-          "duration_μs=#{block_duration} duration_ms=#{duration_ms} " \
-          "timeline=#{lifetime_duration} db=#{db_num} index=#{DatabaseLogger.index}"
-        )
-      elsif DatabaseLogger.logger
-        # Existing formatted output
-        message = format('[%s] %s', DatabaseLogger.index, msgpack.inspect)
-        DatabaseLogger.logger.trace(message)
-      end
-    end
-
-    # Notify instrumentation hooks
-    if defined?(Familia::Instrumentation)
-      duration_ms = (block_duration / 1000.0).round(2)
-      db_num = if config.respond_to?(:db)
-                   config.db
-                 elsif config.is_a?(Hash)
-                   config[:db]
-                 end
-      conn_id = if config.respond_to?(:custom)
-                   config.custom&.dig(:id)
-                 elsif config.is_a?(Hash)
-                   config.dig(:custom, :id)
-                 end
-      Familia::Instrumentation.notify_command(
-        command.first,
-        duration_ms,
-        full_command: command,
-        db: db_num,
-        connection_id: conn_id,
-      )
-    end
-
+    DatabaseLogger.record(command, config, duration, mode: :call, should_log: should_log)
     result
   end
 
@@ -322,57 +460,14 @@ module DatabaseLogger
   # @param config [RedisClient::Config, Hash] Connection configuration
   # @return [Array] Results from pipelined commands
   def call_pipelined(commands, config)
+    should_log = DatabaseLogger.should_log?
+    return yield unless DatabaseLogger.measure?(should_log: should_log, mode: :pipeline)
+
     block_start = DatabaseLogger.now_in_μs
     results = yield  # CRITICAL: For call_pipelined, yield is correct (not chaining)
-    block_duration = DatabaseLogger.now_in_μs - block_start
-    lifetime_duration = (Familia.now.to_f - DatabaseLogger.process_start).round(6)
+    duration = DatabaseLogger.now_in_μs - block_start
 
-    # Log the entire pipeline as a single operation
-    cmd_string = commands.map { |cmd| cmd.join(' ') }.join(' | ')
-    msgpack = CommandMessage.new(cmd_string, block_duration, lifetime_duration)
-    DatabaseLogger.append_command(msgpack)
-
-    # Dual-mode logging with sampling
-    if DatabaseLogger.should_log?
-      if DatabaseLogger.structured_logging && DatabaseLogger.logger
-        duration_ms = (block_duration / 1000.0).round(2)
-        db_num = if config.respond_to?(:db)
-                   config.db
-                 elsif config.is_a?(Hash)
-                   config[:db]
-                 end
-        DatabaseLogger.logger.trace(
-          "Redis pipeline commands=#{commands.size} duration_μs=#{block_duration} " \
-          "duration_ms=#{duration_ms} timeline=#{lifetime_duration} " \
-          "db=#{db_num} index=#{DatabaseLogger.index}"
-        )
-      elsif DatabaseLogger.logger
-        message = format('[%s] %s', DatabaseLogger.index, msgpack.inspect)
-        DatabaseLogger.logger.trace(message)
-      end
-    end
-
-    # Notify instrumentation hooks
-    if defined?(Familia::Instrumentation)
-      duration_ms = (block_duration / 1000.0).round(2)
-      db_num = if config.respond_to?(:db)
-                   config.db
-                 elsif config.is_a?(Hash)
-                   config[:db]
-                 end
-      conn_id = if config.respond_to?(:custom)
-                   config.custom&.dig(:id)
-                 elsif config.is_a?(Hash)
-                   config.dig(:custom, :id)
-                 end
-      Familia::Instrumentation.notify_pipeline(
-        commands.size,
-        duration_ms,
-        db: db_num,
-        connection_id: conn_id
-      )
-    end
-
+    DatabaseLogger.record(commands, config, duration, mode: :pipeline, should_log: should_log)
     results
   end
 
@@ -386,35 +481,20 @@ module DatabaseLogger
   # @param command [Array] The Redis command and its arguments
   # @param config [RedisClient::Config, Hash] Connection configuration
   # @return [Object] The result of the Redis command execution
+  #
+  # @note call_once shares the same record path as #call. Whether it emits
+  #   instrumentation is governed entirely by {DatabaseLogger.hook_type_for}
+  #   (currently :once => nil), so the fast-path decision and the notify step
+  #   stay in lockstep.
   def call_once(command, config)
+    should_log = DatabaseLogger.should_log?
+    return yield unless DatabaseLogger.measure?(should_log: should_log, mode: :once)
+
     block_start = DatabaseLogger.now_in_μs
     result = yield  # CRITICAL: For call_once, yield is correct (not chaining)
-    block_duration = DatabaseLogger.now_in_μs - block_start
-    lifetime_duration = (Familia.now.to_f - DatabaseLogger.process_start).round(6)
+    duration = DatabaseLogger.now_in_μs - block_start
 
-    msgpack = CommandMessage.new(command.join(' '), block_duration, lifetime_duration)
-    DatabaseLogger.append_command(msgpack)
-
-    # Dual-mode logging with sampling
-    if DatabaseLogger.should_log?
-      if DatabaseLogger.structured_logging && DatabaseLogger.logger
-        duration_ms = (block_duration / 1000.0).round(2)
-        db_num = if config.respond_to?(:db)
-                   config.db
-                 elsif config.is_a?(Hash)
-                   config[:db]
-                 end
-        DatabaseLogger.logger.trace(
-          "Redis command_once cmd=#{command.first} args=#{command[1..-1].inspect} " \
-          "duration_μs=#{block_duration} duration_ms=#{duration_ms} " \
-          "timeline=#{lifetime_duration} db=#{db_num} index=#{DatabaseLogger.index}"
-        )
-      elsif DatabaseLogger.logger
-        message = format('[%s] %s', DatabaseLogger.index, msgpack.inspect)
-        DatabaseLogger.logger.trace(message)
-      end
-    end
-
+    DatabaseLogger.record(command, config, duration, mode: :once, should_log: should_log)
     result
   end
 end
