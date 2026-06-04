@@ -11,9 +11,9 @@ class CreateBlockTestModel < Familia::Horreum
   list :events
 end
 
-# Clean slate
-CreateBlockTestModel.instances.clear
+# Clean slate: destroy objects first, then clear ghost entries.
 CreateBlockTestModel.all.each(&:destroy!)
+CreateBlockTestModel.instances.clear
 
 ## create! yields the persisted instance to the block
 @yielded = nil
@@ -53,6 +53,6 @@ result = CreateBlockTestModel.create!(uid: 'cb_5', name: 'Eve') { |_| 42 }
 result.is_a?(CreateBlockTestModel)
 #=> true
 
-# Clean up
-CreateBlockTestModel.instances.clear
+# Clean up: destroy objects first, then clear ghost entries.
 CreateBlockTestModel.all.each(&:destroy!)
+CreateBlockTestModel.instances.clear
