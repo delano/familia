@@ -45,14 +45,29 @@ module Familia
       # are atomic; the read-validate-write is not.
       #
       # @param update_expiration [Boolean] Whether to set TTL inside the txn.
+      # @param watch_keys [Array<String>, nil] Optional list of Redis keys to
+      #   WATCH before opening the MULTI. When provided, the transaction is
+      #   wrapped in a WATCH block: if any watched key is modified between the
+      #   WATCH and EXEC, Redis aborts the transaction and the method retries
+      #   (up to 3 attempts with exponential backoff). This enables optimistic
+      #   locking patterns such as "create-only" semantics in +build+.
+      # @param pre_check [Proc, nil] Optional callable executed between WATCH
+      #   and MULTI -- the only window where reads return real values (not
+      #   Redis::Future objects) while the watched keys are still guarded.
+      #   Typically used for existence checks that should abort early:
+      #     pre_check: -> { raise RecordExistsError, dbkey if exists? }
+      #   Requires +watch_keys+ to be set.
       # @yield Block containing field assignments and collection mutations.
       # @return [Boolean] true if the transaction's EXEC completed and every
       #   queued command returned without an exception; false if the
       #   transaction was discarded or any queued command returned an error.
-      # @raise [ArgumentError] If no block is given.
+      # @raise [ArgumentError] If no block is given, or if +pre_check+ is
+      #   provided without +watch_keys+.
       # @raise [Familia::OperationModeError] If called within an existing transaction.
       # @raise [Familia::CrossDatabaseError] If related fields span multiple databases.
       # @raise [Familia::NoIdentifier] If the identifier is nil or empty.
+      # @raise [Familia::OptimisticLockError] If retries are exhausted after
+      #   concurrent modification is detected (only when +watch_keys+ is set).
       #
       # @example Atomically update scalar fields and a set
       #   plan.atomic_write do
@@ -62,12 +77,19 @@ module Familia
       #     plan.features.add("sso")
       #   end
       #
+      # @example Race-safe create with WATCH (used by build)
+      #   user.atomic_write(
+      #     watch_keys: [user.dbkey],
+      #     pre_check: -> { raise RecordExistsError, user.dbkey if user.exists? }
+      #   ) { user.tags.add("new") }
+      #
       # @see Persistence#save_with_collections For sequential (non-atomic)
       #   scalar+collection writes (supports cross-database configurations).
       # @see Connection#transaction For raw MULTI/EXEC access.
       #
-      def atomic_write(update_expiration: true)
+      def atomic_write(update_expiration: true, watch_keys: nil, pre_check: nil)
         raise ArgumentError, 'Block required for atomic_write' unless block_given?
+        raise ArgumentError, 'pre_check requires watch_keys' if pre_check && !watch_keys
 
         # Mirror save's nesting guard -- atomic_write opens its own MULTI and
         # cannot be nested inside an outer transaction (see Persistence#save).
@@ -95,27 +117,11 @@ module Familia
           # MULTI/EXEC.
           prepare_for_save
 
-          result = transaction do |_conn|
-            # Yield FIRST so scalar setters mutate ivars and collection mutations
-            # queue their commands (SADD, ZADD, etc.) in the open MULTI.
-            # Collection mutations auto-route via Fiber[:familia_transaction]
-            # (see DataType#dbclient).
-            yield
-
-            # Then queue the HMSET for scalar fields. to_h_for_storage snapshots
-            # ivars at command-queue time, so any assignments made inside the
-            # block are captured. Also queues expiration, class indexes, and
-            # touch_instances!.
-            persist_to_storage(update_expiration)
+          if watch_keys&.any?
+            execute_watched_atomic_write(watch_keys, pre_check, update_expiration) { yield }
+          else
+            execute_unwatched_atomic_write(update_expiration) { yield }
           end
-
-          # A MultiResult is always returned by `transaction` -- inspect its
-          # successful? flag rather than testing for nil. Individual commands
-          # inside MULTI return exception objects (rather than raising) when
-          # they fail; successful? is false if any of those slipped through.
-          success = atomic_write_success?(result)
-          clear_dirty! if success
-          success
         ensure
           release_atomic_write_ownership!
         end
@@ -148,6 +154,74 @@ module Familia
       end
 
       private
+
+      # Executes the standard (unwatched) atomic_write flow: a single
+      # MULTI/EXEC containing the user block and persist_to_storage.
+      #
+      # @param update_expiration [Boolean]
+      # @yield User block (scalar setters + collection mutations)
+      # @return [Boolean]
+      def execute_unwatched_atomic_write(update_expiration)
+        result = transaction do |_conn|
+          yield
+          persist_to_storage(update_expiration)
+        end
+
+        success = atomic_write_success?(result)
+        clear_dirty! if success
+        success
+      end
+
+      # Executes the WATCH-guarded atomic_write flow: WATCH → pre_check →
+      # MULTI/EXEC, with retry on OptimisticLockError.
+      #
+      # When EXEC is aborted by WATCH (a watched key was modified between
+      # WATCH and EXEC), +multi+ returns nil. We detect this via the
+      # MultiResult wrapper and raise OptimisticLockError to trigger a
+      # retry. The retry re-issues WATCH, re-runs the pre_check, and
+      # re-opens MULTI/EXEC.
+      #
+      # @param watch_keys [Array<String>] Keys to WATCH
+      # @param pre_check [Proc, nil] Callable run between WATCH and MULTI
+      # @param update_expiration [Boolean]
+      # @param max_attempts [Integer] Maximum retry attempts (default: 3)
+      # @yield User block (scalar setters + collection mutations)
+      # @return [Boolean]
+      # @raise [Familia::OptimisticLockError] If retries exhausted
+      def execute_watched_atomic_write(watch_keys, pre_check, update_expiration, max_attempts: 3)
+        attempts = 0
+
+        begin
+          attempts += 1
+
+          result = dbclient.watch(*watch_keys) do
+            pre_check&.call
+
+            txn_result = transaction do |_conn|
+              yield
+              persist_to_storage(update_expiration)
+            end
+
+            # WATCH abort: EXEC returns nil → multi returns nil →
+            # MultiResult wraps nil. Raise to trigger retry.
+            if txn_result.is_a?(MultiResult) && txn_result.results.nil?
+              raise Familia::OptimisticLockError,
+                "WATCH detected concurrent modification of #{watch_keys.join(', ')}"
+            end
+
+            txn_result
+          end
+
+          success = atomic_write_success?(result)
+          clear_dirty! if success
+          success
+        rescue Familia::OptimisticLockError
+          raise if attempts >= max_attempts
+
+          sleep(0.001 * (2**attempts))
+          retry
+        end
+      end
 
       # Atomically claim same-instance ownership or raise if a competing
       # Fiber/Thread already owns it. Held for the duration of the ivar

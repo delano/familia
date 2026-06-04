@@ -107,13 +107,13 @@ module Familia
       # Use {Persistence#save} or {Persistence#save_with_collections} when
       # you explicitly want overwrite/upsert behaviour.
       #
-      # Concurrency: when called without a block, +build+ delegates to
-      # {#save_if_not_exists!} which uses WATCH + MULTI/EXEC for race-safe
-      # duplicate detection. With a block, the duplicate check is best-effort
-      # (TOCTOU): the +exists?+ read and the subsequent +atomic_write+ are
-      # separate operations with no WATCH between them, so concurrent +build+
-      # calls for the same identifier can both pass the check. See issue #288
-      # for composing WATCH into the block path.
+      # Concurrency: both paths use WATCH + MULTI/EXEC for race-safe
+      # duplicate detection. Without a block, +build+ delegates to
+      # {#save_if_not_exists!}. With a block, +atomic_write+ is called
+      # with +watch_keys:+ and +pre_check:+ so the existence check runs
+      # between WATCH and MULTI -- if the key is created by another client
+      # in that window, Redis aborts the transaction and the method retries
+      # with exponential backoff (up to 3 attempts). See issue #288.
       #
       # ## Without a block
       #
@@ -156,12 +156,10 @@ module Familia
         instance = new(*, **)
 
         if block_given?
-          # Best-effort duplicate guard (TOCTOU): no WATCH between this read
-          # and the atomic_write below, so concurrent builds can race. See
-          # issue #288 for composing WATCH into atomic_write.
-          raise Familia::RecordExistsError, instance.dbkey if instance.exists?
-
-          instance.atomic_write { yield instance }
+          instance.atomic_write(
+            watch_keys: [instance.dbkey],
+            pre_check: -> { raise Familia::RecordExistsError, instance.dbkey if instance.exists? }
+          ) { yield instance }
         else
           # No block means no collection ops to fold in, so we can use the
           # WATCH-guarded save_if_not_exists! directly — race-safe.
