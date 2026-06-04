@@ -15,97 +15,65 @@ The format is based on `Keep a Changelog <https://keepachangelog.com/en/1.1.0/>`
 Added
 -----
 
-- ``Horreum.build``: a factory block that creates an instance, yields it for
-  scalar and collection setup, then commits everything in a single
-  ``MULTI/EXEC`` when the block exits. Collection mutations made inside the
-  block (e.g. ``u.tags.add(...)``) are folded into the same transaction as the
-  implicit ``HMSET``, so factory/fixture code no longer has to sequence ``save``
-  before collection writes or reach for ``atomic_write`` directly. ``build``
-  has create-only semantics: it raises ``Familia::RecordExistsError`` if the
-  identifier already exists. Called without a block, ``build`` is equivalent to
-  ``new(...).save``. #279
+- ``Horreum.build``: A factory block that yields a new instance, then commits
+  all scalar and collection changes in a single ``MULTI/EXEC`` upon exit.
+  This avoids sequencing ``save`` before collection writes. Raises
+  ``Familia::RecordExistsError`` if the identifier exists (create-only).
+  Without a block, it behaves as ``new(...).save``. #279
 
-- ``atomic_write`` now accepts optional ``watch_keys:`` and ``pre_check:``
-  keyword parameters for composing Redis ``WATCH`` into the ``MULTI/EXEC``
-  transaction. ``watch_keys`` specifies keys to watch for concurrent
-  modification; ``pre_check`` is a callable executed between ``WATCH`` and
-  ``MULTI`` (the only window where reads return real values while the watched
-  keys are guarded). On ``WATCH`` abort the method retries with exponential
-  backoff. This enables optimistic locking patterns without leaving the
-  ``atomic_write`` contract. #288
+- ``atomic_write`` now supports ``watch_keys:`` (keys to watch) and
+  ``pre_check:`` (a callable run between ``WATCH`` and ``MULTI``) to enable
+  optimistic locking. Retries with exponential backoff on abort. #288
 
-- ``encrypted_field`` now accepts a ``key_material:`` option: a proc returning
-  additional entropy that is mixed into key derivation (BLAKE2b context),
-  separate from ``aad_fields``. Unlike AAD (which binds via the authentication
-  tag, so a wrong value fails with an auth mismatch), wrong ``key_material``
-  derives a different key entirely and produces garbage output. Use it to bind
-  ciphertext to a value the holder must supply at decrypt time, e.g.
-  ``key_material: ->(rec) { rec.passphrase }``. PR #280
+- ``encrypted_field`` now accepts a ``key_material:`` proc. This mixes
+  additional entropy into key derivation (separate from AAD), requiring
+  the correct material at decryption to avoid producing garbage output. PR #280
 
-- Encrypted-field envelopes now carry an internal ``envelope_version`` (``2``)
-  plus the ``aad_fields`` used at encrypt time. Decryption rebuilds AAD from the
-  envelope's own field list rather than the current class declaration, so
-  changing a model's ``aad_fields`` no longer breaks previously-encrypted values.
-  Envelopes without a version fall back to the legacy class-level path. PR #280
+- Encrypted-field envelopes now store their own ``envelope_version`` and
+  ``aad_fields`` list. Decryption rebuilds AAD from these stored fields
+  rather than the active class declaration, preventing breakage when model
+  definitions change. PR #280
 
-- ``DatabaseLogger.capture_enabled`` (Boolean, default ``true``) controls whether
-  Redis commands are captured into the in-memory buffer, independently of
-  ``sample_rate``. With capture disabled and no instrumentation hooks, the
-  middleware takes a zero-overhead fast path that skips both ``clock_gettime``
-  calls, the ``CommandMessage`` allocation, and the buffer append. This makes
-  ``capture_enabled = false`` the production setting: keep sampled logs, drop the
-  per-command buffer/timing cost. Issue #233
+- ``DatabaseLogger.capture_enabled`` (Boolean, default ``true``) controls
+  in-memory buffer capturing. Disabling it bypasses clock checks, message
+  allocations, and buffer appends, offering a zero-overhead production path. Issue #233
 
-- ``Familia::Instrumentation.hooks?(type)`` predicate reports whether any hooks
-  are registered for a given event type (``:command``, ``:pipeline``,
-  ``:lifecycle``, ``:error``). Issue #233
+- ``Familia::Instrumentation.hooks?(type)`` reports whether hooks are
+  registered for a given event type (e.g. ``:command``, ``:pipeline``). Issue #233
 
-- ``Familia.reset_trace!`` clears the cached ``FAMILIA_TRACE`` lookup so the next
-  trace check re-reads the environment. Issue #233
+- ``Familia.reset_trace!`` clears the cached trace environment lookup. Issue #233
 
-- ``dirty_write_warnings`` class method on every ``Familia::Horreum`` subclass,
-  mirroring ``Familia.strict_write_order`` but scoped to a single class. Accepts
-  ``:strict`` (raise), ``:warn`` (warn on every collection write), ``:once``
-  (warn once per dirty-field signature per window), or ``:off`` (suppress). The
-  setting inherits through the subclass chain. Issue #277
+- ``dirty_write_warnings`` class method configures write-order warnings per
+  class (inheritable). Accepts ``:strict``, ``:warn``, ``:once``, or ``:off``. Issue #277
 
 - ``Familia.dirty_write_warnings`` global setting providing the default mode for
   classes that do not set their own. Issue #277
 
 - ``Familia.raise_on_unsaved_parent_write`` (default ``true``) controls whether a
-  collection write on a new, unsaved, dirty parent raises or merely warns. Set it
-  to ``false`` to downgrade the new-object case to a warning instead of an
-  exception. Issue #278
+  collection write on a new, unsaved, dirty parent raises or warns. Issue #278
 
 Changed
 -------
 
-- Mutating a collection while its parent Horreum is a *new, unsaved* object now
-  **raises** ``Familia::Problem`` by default, independently of
-  ``Familia.strict_write_order``. The guard fires *before* the collection command
-  runs, so no orphaned data is written. Save the parent before mutating its
-  collections, or set ``Familia.raise_on_unsaved_parent_write = false`` to keep
-  the old warn-only behaviour. Issue #278
+- Mutating a collection on a *new, unsaved* parent Horreum now **raises**
+  ``Familia::Problem`` by default. The guard fires *before* the command runs,
+  preventing orphaned data. Save the parent first, or set
+  ``Familia.raise_on_unsaved_parent_write = false`` to restore warnings. Issue #278
 
-- Dirty-write warnings are now **deduplicated per dirty window** by default. A
-  collection write on a parent with unsaved scalar fields now warns once per
-  distinct set of unsaved fields, rather than once per write. This changes the
-  default mode from the old every-write behavior to ``:once``; set
-  ``dirty_write_warnings :warn`` to restore the previous output.
-  ``Familia.strict_write_order = true`` is unaffected. Issue #277
+- Dirty-write warnings are now **deduplicated per dirty window** (mode ``:once``).
+  Writing to a collection on a parent with unsaved scalar fields warns once per
+  distinct set of unsaved fields instead of on every write. Set
+  ``dirty_write_warnings :warn`` to restore the old behavior. Issue #277
 
-- Dirty-write warning and strict-mode raise messages now append the remediation
-  hint ``(call #save first or wrap in atomic_write)``. Issue #277
+- Dirty-write warnings and strict raises now append the hint:
+  ``(call #save first or wrap in atomic_write)``. Issue #277
 
-- ``trace_enabled?`` now caches the ``FAMILIA_TRACE`` lookup instead of reading
-  the environment on every call. Use ``Familia.reset_trace!`` to force a
-  re-read. Issue #233
+- ``trace_enabled?`` now caches the ``FAMILIA_TRACE`` lookup. Use
+  ``Familia.reset_trace!`` to force a re-read of the environment. Issue #233
 
-- ``unique_index`` hashkeys now store object identifiers as raw strings
-  (reference semantics) rather than JSON-encoded strings. After upgrading,
-  rebuild existing unique indexes to convert legacy entries, e.g.
-  ``User.rebuild_email_lookup`` (class-level) or
-  ``company.rebuild_badge_index`` (instance-scoped). Issue #276
+- ``unique_index`` hashkeys now store identifiers as raw strings rather than
+  JSON-encoded strings. Rebuild existing unique indexes to convert legacy entries,
+  e.g., via ``User.rebuild_email_lookup`` or ``company.rebuild_badge_index``. Issue #276
 
 Fixed
 -----
@@ -163,6 +131,10 @@ Documentation
 
 - ``Horreum#save``: added ``@example`` tags showing idiomatic Ruby patterns
   for post-save callbacks (``if save`` and ``&&`` short-circuit). #286
+
+- Renamed ``CLAUDE.md`` to ``AGENTS.md`` and pruned it to remove volatile
+  content better served by its source of truth. Kept the non-obvious behavioral
+  contracts like deferred-vs-immediate write model and the serialization table.
 
 AI Assistance
 -------------
