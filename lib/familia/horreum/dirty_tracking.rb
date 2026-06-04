@@ -109,6 +109,31 @@ module Familia
         else
           field_names.each { |f| @dirty_fields.delete(f.to_sym) }
         end
+        # The dirty set just changed (full or partial clear); reset the dedup
+        # window so future signatures warn at least once. See record_dirty_warning!.
+        @warned_dirty_signatures&.clear
+      end
+
+      # Records that a dirty-write warning has been emitted for +signature+
+      # within the current dirty window, returning whether this is the first
+      # time that signature has been seen.
+      #
+      # A "dirty window" spans from the first +mark_dirty!+ to the next
+      # +clear_dirty!+ (called by save, commit_fields, batch_update, refresh).
+      # +Familia::DataType#warn_if_dirty!+ uses this to dedupe warnings in
+      # :once mode -- warning once per distinct set of unsaved fields rather
+      # than once per collection write.
+      #
+      # @param signature [Object] a value-equal, hashable key for the dirty set
+      #   (typically the sorted, frozen array of dirty field names)
+      # @return [Boolean] true if this signature had not yet warned this window
+      #
+      def record_dirty_warning!(signature)
+        # Safety net for subclasses that override initialize without calling super.
+        @warned_dirty_signatures ||= Concurrent::Map.new
+        # Atomic: put_if_absent returns nil when the key was absent (and was
+        # just stored), or the existing value otherwise. nil => first time.
+        @warned_dirty_signatures.put_if_absent(signature, true).nil?
       end
     end
   end
