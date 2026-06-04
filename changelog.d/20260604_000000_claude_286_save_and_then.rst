@@ -1,0 +1,26 @@
+Documentation
+-------------
+
+- ``Horreum.create!``: added ``@yield``, ``@yieldparam``, and
+  ``@yieldreturn`` YARD tags documenting the post-success block semantics
+  that were present in the implementation but invisible in the API docs.
+  The block receives the persisted instance and is skipped entirely when
+  ``save_if_not_exists!`` raises (e.g. ``RecordExistsError``). #286
+
+- ``Horreum#save``: added ``@example`` tags showing idiomatic Ruby patterns
+  for post-save callbacks (``if save`` and ``&&`` short-circuit), replacing
+  the originally proposed ``save_and_then`` method after evaluating how
+  successful ORMs handle this — none add a named wrapper for conditional
+  post-save logic. #286
+
+AI Assistance
+-------------
+
+- AI drafted and then removed a ``save_and_then`` convenience method after
+  analysing how ActiveRecord, Sequel, Ecto, and Django handle post-save
+  logic. The conclusion: idiomatic Ruby (``if save; ...; end``) is clearer
+  than a custom method, and a polymorphic return type (block value vs
+  boolean) would be inconsistent with the existing ``save_with_collections``
+  contract. Kept the ``create!`` YARD docs and ``save`` examples, and added
+  a ``create_block_try.rb`` test suite covering block execution timing,
+  skip-on-error, and collection operations. #286

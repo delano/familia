@@ -79,6 +79,15 @@ module Familia
       #   user = User.new(email: "john@example.com")
       #   user.save  # => true
       #
+      # @example Post-save callback (idiomatic Ruby)
+      #   if user.save
+      #     AuditLog.record(:user_updated, user.identifier)
+      #     notify(user)
+      #   end
+      #
+      # @example Single-expression short-circuit
+      #   user.save && AuditLog.record(:user_updated, user.identifier)
+      #
       # @see #save_if_not_exists! For conditional saves
       # @see #transaction For atomic operations after save
       #

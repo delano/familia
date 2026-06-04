@@ -65,6 +65,20 @@ module Familia
       # @note The behavior of this method depends on the implementation of #new,
       #   #exists?, and #save in the class and its superclasses.
       #
+      # @yield [hobj] Yields the persisted instance after a successful save.
+      #   The block is skipped entirely if +save_if_not_exists!+ raises
+      #   (e.g. {Familia::RecordExistsError}), so code inside the block can
+      #   safely assume the object exists in the database.
+      # @yieldparam hobj [Horreum] The newly created and persisted instance.
+      # @yieldreturn [void] The block's return value is ignored; +create!+
+      #   always returns the created instance.
+      #
+      # @example Post-creation callback
+      #   User.create!(email: "alice@example.com") do |user|
+      #     user.sessions.push(SecureRandom.uuid)
+      #     AuditLog.record(:user_created, user.identifier)
+      #   end
+      #
       # @see #new
       # @see #exists?
       # @see #save
