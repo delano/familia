@@ -109,8 +109,11 @@ module Familia
         else
           field_names.each { |f| @dirty_fields.delete(f.to_sym) }
         end
-        # The dirty set just changed (full or partial clear); reset the dedup
-        # window so future signatures warn at least once. See record_dirty_warning!.
+        # Reset the dedup window on every clear_dirty! call. After a real clear
+        # the dirty set has changed, so previously-warned signatures are stale.
+        # On a no-op clear (a field name that was never dirty) the window still
+        # resets, which at worst re-warns one already-seen signature -- harmless,
+        # and not worth a branch to avoid. See record_dirty_warning!.
         @warned_dirty_signatures&.clear
       end
 
