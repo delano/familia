@@ -1,0 +1,36 @@
+Added
+-----
+
+- ``Horreum#save_and_then``: a post-save convenience method that yields
+  ``self`` to a block only when ``save`` returns truthy. Unlike Ruby's
+  ``.then`` (which always yields regardless of the receiver's truthiness),
+  ``save_and_then`` skips the block on failure, so callers don't need an
+  inner guard. The block's return value becomes the method's return value,
+  enabling patterns like ``key = user.save_and_then { |u| u.dbkey }``. #286
+
+  .. code-block:: ruby
+
+     user.name = "Alice"
+     user.save_and_then do |u|
+       AuditLog.record(:user_updated, u.identifier)
+     end
+
+Documentation
+-------------
+
+- ``Horreum.create!``: added ``@yield``, ``@yieldparam``, and
+  ``@yieldreturn`` YARD tags documenting the post-success block semantics
+  that were present in the implementation but invisible in the API docs.
+  The block receives the persisted instance and is skipped entirely when
+  ``save_if_not_exists!`` raises (e.g. ``RecordExistsError``). #286
+
+AI Assistance
+-------------
+
+- AI implemented ``save_and_then`` from the design in #286, keeping it as
+  a thin wrapper around ``save`` that delegates all persistence logic and
+  only adds the conditional-yield semantics. Also added YARD documentation
+  for the existing ``create!`` block behaviour and wrote tryouts test suites
+  covering both features: ``create_block_try.rb`` (block execution timing,
+  skip-on-error, collection ops) and ``save_and_then_try.rb`` (yield-self,
+  return-value chaining, no-block fallback, post-save existence).
