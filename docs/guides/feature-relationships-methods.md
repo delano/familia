@@ -277,9 +277,19 @@ belongs to*.
 | `current_participations` | `Array<Hash>` | Participation collections this object belongs to |
 | `relationship_status` | Hash | `{ identifier:, current_participations:, index_memberships: }` |
 
-There is no built-in project-wide aggregator; compose one over the global
-`Familia.members` registry. For the `IndexingRelationship` field breakdown, the
-project-wide sweep, and the audit/repair layer, see
+### Project-Wide (every class)
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `Familia.index_descriptors(cardinality:, class_level:, owner:)` | `Array<IndexDescriptor>` | Every index across the clan, filterable |
+| `Familia.unique_indexes` / `Familia.multi_indexes` | `Array<IndexDescriptor>` | Cardinality-filtered convenience helpers |
+| `Familia.participation_descriptors(owner:)` | `Array<[Class, ParticipationRelationship]>` | Every participation, paired with its owner |
+| `Familia.stale_indexes(sample:, owner:)` | `Array<IndexDescriptor>` | Class-level unique indexes holding pre-2.10.0 data |
+| `Familia.assert_indexes_current!(on_stale:, owner:)` | Boolean | Boot guard: raise/warn if any index is stale |
+
+Each `IndexDescriptor` exposes the relationship metadata plus `coordinate`,
+`each_record(value:, scope:)`, `rebuild!(scope:)`, and `stale_format?`. For the
+full breakdown and the audit/repair layer, see
 [Introspection](feature-relationships.md#introspection).
 
 ## See Also

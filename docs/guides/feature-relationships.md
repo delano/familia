@@ -220,31 +220,65 @@ Domain.participation_relationships
 #            collection_name=:domains, type=:sorted_set, ...>]
 ```
 
-### Project-Wide: compose from `Familia.members`
+### Project-Wide: `Familia.index_descriptors` and friends
 
-There is no built-in aggregator (no `Familia.all_indexes`). The building block
-is `Familia.members` — the global `Array` of every `Familia::Horreum` subclass,
-populated in `Horreum.inherited`. Sweep it to list every index in the process:
+To enumerate every index across the whole application, use the project-wide
+aggregators. They sweep `Familia.members` (the global registry of every
+`Familia::Horreum` subclass) and return `Familia::IndexDescriptor` objects that
+pair each index with its owning class:
 
 ```ruby
-Familia.members.flat_map do |klass|
-  next [] unless klass.respond_to?(:indexing_relationships)
+Familia.index_descriptors               # => Array<IndexDescriptor> (every index)
+Familia.unique_indexes                   # cardinality: :unique
+Familia.multi_indexes                    # cardinality: :multi
+Familia.participation_descriptors        # => Array<[owner_class, ParticipationRelationship]>
 
-  klass.indexing_relationships.map do |r|
-    [klass.name, r.cardinality, r.index_name, r.field, r.within]
-  end
+# All filter by cardinality (via the helper), class_level:, and owner:
+Familia.unique_indexes(class_level: true)        # exclude instance-scoped
+Familia.unique_indexes(owner: User)              # one class only
+```
+
+An `IndexDescriptor` exposes the underlying relationship's metadata (`field`,
+`index_name`, `cardinality`, `within`, `class_level?`, `unique?`, `query?`) plus
+a stable `coordinate` (`"User:email_lookup"`) — and, crucially, **behavior that
+hides the index's storage layout**: `each_record` and `rebuild!` work without the
+caller knowing the method-naming conventions.
+
+```ruby
+# Iterate the records behind every class-level unique index — no internals:
+Familia.unique_indexes(class_level: true).each do |idx|
+  idx.each_record { |record| record.touch }
 end
-# => [["User", :unique, :email_lookup, :email, nil],
-#     ["Employee", :multi, :dept_index, :department, Company], ...]
 ```
 
 > [!NOTE]
-> Two caveats with `Familia.members`:
-> 1. It includes **all** `Horreum` subclasses — the framework's own models, your
->    application models, and any test classes loaded into the process.
-> 2. A class only appears **after it has been required**. Run any project-wide
->    sweep once your application and models are fully loaded, or the results
->    will be incomplete.
+> `Familia.members` includes **all** loaded `Horreum` subclasses (the framework's
+> own models, your models, and any test classes), and a class only appears
+> **after it has been required**. Run project-wide sweeps once your application is
+> fully loaded; scope with `owner:` when you want a single class.
+
+### Detecting stale index data (boot guard)
+
+The v2.10.0 [unique-index storage change](../migrating/v2.10.0.md#unique-index-storage-format)
+is read-compatible, but indexes written under 2.9.x hold legacy JSON-encoded
+identifiers until rebuilt — and an un-rebuilt index can make a `find_by_*` lookup
+silently miss. The introspection layer can **detect and fix this before it bites**:
+
+```ruby
+# Which class-level unique indexes still hold pre-2.10.0 data?
+Familia.stale_indexes                     # => Array<IndexDescriptor>
+
+# Boot guard / CI smoke test — fail fast (or warn) on stale data:
+Familia.assert_indexes_current!                       # raises Familia::Problem if stale
+Familia.assert_indexes_current!(on_stale: :warn)      # warns and returns false
+
+# The v2.10.0 migration sweep — rebuild everything stale, no internals required:
+Familia.stale_indexes.each(&:rebuild!)
+```
+
+`stale_indexes` samples each index's raw values (via `HRANDFIELD`/`HMGET`, so no
+deserialize and no warning spam) and reuses the same `Familia.legacy_json_encoded?`
+predicate as the read path, so detection and stripping never disagree.
 
 ### Per-Instance: membership state
 
