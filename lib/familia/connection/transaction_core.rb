@@ -169,6 +169,38 @@ module Familia
         # Return same MultiResult format as other methods
         MultiResult.new(command_return_values)
       end
+
+      # Runs a WATCH-guarded transaction on a SINGLE resolved connection so the
+      # WATCH and the MULTI/EXEC share one socket (the optimistic lock is only
+      # effective this way). The caller's block receives the resolved connection
+      # and is expected to run any pre-check reads and then open the MULTI via
+      # execute_normal_transaction(-> { conn }) { ... }. Retries on WATCH abort.
+      #
+      # @param dbclient_proc [Proc] resolves the concrete Redis client (called once per attempt)
+      # @param watch_keys [Array<String>] keys to WATCH
+      # @param max_attempts [Integer]
+      # @yield [conn] the resolved connection
+      # @return [MultiResult, Object] the block's result
+      # @raise [Familia::OptimisticLockError] if retries are exhausted
+      def self.execute_watched_transaction(dbclient_proc, watch_keys:, max_attempts: 3)
+        attempts = 0
+        begin
+          attempts += 1
+          conn = dbclient_proc.call
+          txn_result = conn.watch(*watch_keys) do
+            yield(conn)
+          end
+          if txn_result.is_a?(MultiResult) && txn_result.results.nil?
+            raise Familia::OptimisticLockError,
+                  "WATCH detected concurrent modification of #{watch_keys.join(', ')}"
+          end
+          txn_result
+        rescue Familia::OptimisticLockError
+          raise if attempts >= max_attempts
+          sleep(0.001 * (2**attempts))
+          retry
+        end
+      end
     end
   end
 end

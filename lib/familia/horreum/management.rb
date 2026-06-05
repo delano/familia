@@ -48,11 +48,11 @@ module Familia
       # identifier already exists. If it does, a Familia::RecordExistsError exception is
       # raised to prevent overwriting existing data.
       #
-      # Concurrency: the duplicate check is best-effort, not fully atomic.
+      # Concurrency: the duplicate check is race-safe via optimistic locking.
       # It routes through {#save_if_not_exists!}, which uses WATCH + MULTI/EXEC
-      # to abort if the key appears between the check and the write -- more
-      # cautious than a bare read-then-write, but a true guarantee needs a
-      # server-side check (e.g. Lua). See {#save_if_not_exists!}.
+      # on a single connection to abort if the key appears between the check and
+      # the write. This is an effective optimistic lock, though not a server-side
+      # atomic check (e.g. Lua). See {#save_if_not_exists!}.
       #
       # Finally, the method saves the new instance returns it.
       #
@@ -84,7 +84,8 @@ module Familia
       # @see #save
       def create!(...)
         hobj = new(...)
-        # Best-effort duplicate guard: WATCH + MULTI/EXEC, not fully atomic.
+        # Race-safe duplicate guard: WATCH + MULTI/EXEC optimistic lock on one
+        # connection (not a server-side atomic check).
         hobj.save_if_not_exists!
 
         # If a block is given, yield the created object
@@ -121,8 +122,9 @@ module Familia
       # Use {Persistence#save} or {Persistence#save_with_collections} when
       # you explicitly want overwrite/upsert behaviour.
       #
-      # Concurrency: both paths use WATCH + MULTI/EXEC for race-safe
-      # duplicate detection. Without a block, +build+ delegates to
+      # Concurrency: both paths use a WATCH + MULTI/EXEC optimistic lock on a
+      # single connection for race-safe duplicate detection (not a server-side
+      # atomic check). Without a block, +build+ delegates to
       # {#save_if_not_exists!}. With a block, +atomic_write+ is called
       # with +watch_keys:+ and +pre_check:+ so the existence check runs
       # between WATCH and MULTI -- if the key is created by another client

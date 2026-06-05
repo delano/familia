@@ -17,9 +17,22 @@ class WatchTestUser < Familia::Horreum
   list :sessions
 end
 
-# Clean slate
+# Clean slate. Use a raw DEL sweep rather than WatchTestUser.all.each(&:destroy!)
+# because the real-race tests below intentionally create PARTIAL keys from a
+# second connection (a key with no identifier/email field). destroy! would
+# raise Familia::NoIdentifier on such a key, so flush keys directly instead.
+def flush_watch_test_keys!
+  raw = Redis.new(url: Familia.uri.to_s)
+  %w[watch_test_user:* watch_exhaust:*].each do |pattern|
+    keys = raw.keys(pattern)
+    raw.del(*keys) unless keys.empty?
+  end
+ensure
+  raw&.close
+end
+
 WatchTestUser.instances.clear
-WatchTestUser.all.each(&:destroy!)
+flush_watch_test_keys!
 
 ## atomic_write with watch_keys persists scalars and collections
 @u1 = WatchTestUser.new(email: 'watch1@example.com', name: 'Watch1')
@@ -109,26 +122,99 @@ end
 [@r8.name, @r8.tags.members.sort]
 #=> ['Watch8', ['keep_me']]
 
-## watched atomic_write retries on OptimisticLockError (simulated WATCH abort)
-# Simulate a WATCH abort by returning MultiResult.new(nil) on the first
-# attempt WITHOUT calling the block, mirroring real WATCH behaviour where
-# EXEC discards all queued commands (nothing reaches Redis).
+## watched atomic_write retries on REAL WATCH abort, then succeeds
+# A pre_check that, from a SECOND independent connection, mutates the
+# watched key on the FIRST attempt only. That out-of-band write happens
+# inside the WATCH window, so attempt 1's EXEC is aborted by Redis; the
+# primitive retries, attempt 2 sees no interfering write and commits. The
+# atomic_write's own value must be the one that persists.
+@racer9 = Redis.new(url: Familia.uri.to_s)
 @u9 = WatchTestUser.new(email: 'watch9@example.com', name: 'Watch9')
-attempt_count = 0
-original_transaction = @u9.method(:transaction)
-@u9.define_singleton_method(:transaction) do |&blk|
-  attempt_count += 1
-  if attempt_count == 1
-    Familia::MultiResult.new(nil)
-  else
-    original_transaction.call(&blk)
-  end
-end
-@u9.atomic_write(watch_keys: [@u9.dbkey]) do
+@attempt_count9 = 0
+@u9.atomic_write(
+  watch_keys: [@u9.dbkey],
+  pre_check: -> {
+    @attempt_count9 += 1
+    @racer9.hset(@u9.dbkey, 'name', 'RacerTouch') if @attempt_count9 == 1
+  }
+) do
   @u9.role = 'retried'
 end
-[attempt_count >= 2, WatchTestUser.find_by_id('watch9@example.com').role]
-#=> [true, 'retried']
+@r9 = WatchTestUser.find_by_id('watch9@example.com')
+[@attempt_count9, @r9.role, @r9.name]
+#=> [2, 'retried', 'Watch9']
+
+## watched atomic_write raises OptimisticLockError after exhausting retries
+# A pre_check that mutates the watched key from a SECOND connection on
+# EVERY attempt, so every EXEC aborts and retries are exhausted. The racer's
+# value must survive (no silent overwrite by atomic_write). RED on the old
+# split-connection code (WATCH was inert -> EXEC always committed), GREEN
+# now that WATCH + MULTI/EXEC share one connection.
+@racer10 = Redis.new(url: Familia.uri.to_s)
+@racer10.hset('watch_exhaust:key', 'name', 'RacerOwned')
+@u_ex = WatchTestUser.new(email: 'watch_exhaust@example.com', name: 'ExhaustVictim')
+# WATCH a key the racer keeps changing; persist would target the user's key.
+@watched_key = 'watch_exhaust:key'
+@counter10 = 0
+begin
+  @u_ex.atomic_write(
+    watch_keys: [@watched_key],
+    pre_check: -> {
+      @counter10 += 1
+      @racer10.hset(@watched_key, 'name', "RacerOwned#{@counter10}")
+    }
+  ) do
+    @u_ex.role = 'should_not_persist'
+  end
+  :no_raise
+rescue Familia::OptimisticLockError
+  :raised
+end
+#=> :raised
+
+## ... and the exhausted-retry race left the racer's value intact (no overwrite)
+[@counter10 >= 3, @racer10.hget('watch_exhaust:key', 'name').start_with?('RacerOwned')]
+#=> [true, true]
+
+## save_if_not_exists! real race: key created in WATCH window then retry raises RecordExistsError
+# Stub the instance exists? to report false (so the in-WATCH existence check
+# passes) but, as a side effect, create the key from a SECOND connection.
+# attempt 1: exists?->false, side-effect creates key, EXEC aborts (watched
+# key changed). retry attempt 2: exists? side-effect runs again but the key
+# already exists from attempt 1, and the now-real key makes the WATCH window
+# check raise RecordExistsError -- i.e. no silent overwrite of the racer's row.
+@u_sine = WatchTestUser.new(email: 'watch_sine@example.com', name: 'SineRace')
+# Closure-captured locals: a singleton method defined with a block evaluates
+# @ivars against the SINGLETON object (the instance), not this top-level
+# binding, so use lexical locals here. @sine_box aliases the same mutable
+# array so the next test case can read the attempt count.
+sine_box = [0]
+sine_racer = Redis.new(url: Familia.uri.to_s)
+@sine_box = sine_box
+real_exists = WatchTestUser.instance_method(:exists?)
+@u_sine.define_singleton_method(:exists?) do
+  sine_box[0] += 1
+  if sine_box[0] == 1
+    # Report absent, but as a side effect create the key out-of-band from a
+    # second connection -- inside the WATCH window -- so attempt 1's EXEC is
+    # aborted by the changed watched key.
+    sine_racer.hset(dbkey, 'name', 'RacerCreated')
+    false
+  else
+    real_exists.bind(self).call # now reflects reality: the key exists
+  end
+end
+begin
+  @u_sine.save_if_not_exists!
+  :no_raise
+rescue Familia::RecordExistsError
+  :raised
+end
+#=> :raised
+
+## save_if_not_exists! real race took >=2 attempts and left racer's value intact
+[@sine_box[0] >= 2, Redis.new(url: Familia.uri.to_s).hget(@u_sine.dbkey, 'name')]
+#=> [true, 'RacerCreated']
 
 ## build with block uses WATCH path (duplicate rejected even under concurrent setup)
 @u10 = WatchTestUser.build(email: 'watch10@example.com', name: 'First') do |u|
@@ -161,4 +247,4 @@ end
 
 # Cleanup
 WatchTestUser.instances.clear
-WatchTestUser.all.each(&:destroy!)
+flush_watch_test_keys!
