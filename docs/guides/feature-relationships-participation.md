@@ -355,9 +355,10 @@ See [DataType Collections](datatype-collections.md) for the full `each` vs
 ### Debugging
 
 ```ruby
-# Check configuration
+# Check configuration — returns Array<ParticipationRelationship> (Data objects)
 Domain.participation_relationships
-# => [{ target_class: Customer, collection_name: :domains, ... }]
+# => [#<data ParticipationRelationship target_class=Customer,
+#            collection_name=:domains, type=:sorted_set, ...>]
 
 # Inspect participations
 domain.current_participations
@@ -365,6 +366,10 @@ domain.current_participations
 # Validate consistency
 domain.validate_relationships!
 ```
+
+For the full introspection API — per-class metadata, a project-wide sweep over
+`Familia.members`, per-instance membership state, and the audit/repair layer —
+see [Introspection](feature-relationships.md#introspection).
 
 ## See Also
 

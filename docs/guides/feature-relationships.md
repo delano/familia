@@ -167,6 +167,125 @@ team.members.to_a                         # Just IDs
 team.member_instances                     # Load objects
 ```
 
+## Introspection
+
+The relationships feature exposes its configuration and state at three levels:
+per-class metadata (what a class *declares*), a project-wide sweep (composed
+from the global class registry), and per-instance state (which indexes and
+collections a specific object *currently belongs to*).
+
+### Per-Class: `indexing_relationships` and `participation_relationships`
+
+Every class with `feature :relationships` gains two class-level readers.
+
+`indexing_relationships` returns an `Array<IndexingRelationship>` covering both
+`unique_index` and `multi_index` declarations — they are distinguished by the
+`cardinality` field, not by separate accessors:
+
+```ruby
+User.indexing_relationships
+# => [#<data IndexingRelationship field=:email, index_name=:email_lookup,
+#            cardinality=:unique, within=nil, ...>, ...]
+```
+
+Each `IndexingRelationship` is a `Data.define` exposing:
+
+| Member | Type | Description |
+|--------|------|-------------|
+| `.field` | Symbol | The indexed field, e.g. `:email` |
+| `.index_name` | Symbol | The index name, e.g. `:email_lookup` |
+| `.cardinality` | Symbol | `:unique` (1:1) or `:multi` (1:many) — **this is how you tell index types apart** |
+| `.within` | Class, Symbol, or nil | `nil` (class-level unique), `:class` (class-level multi), or the scope Class (instance-scoped) |
+| `.scope_class` | Class/Symbol | Scope class for `within:` indexes |
+| `.query` | Boolean | Whether `find_by_*` methods were generated |
+| `.class_level?` | Boolean | Convenience: `within.nil? || within == :class` |
+| `.scope_class_config_name` | String | Normalized config name of the scope class |
+
+```ruby
+# Just the unique indexes:
+User.indexing_relationships.select { |r| r.cardinality == :unique }
+
+# Just the instance-scoped indexes:
+User.indexing_relationships.reject(&:class_level?)
+```
+
+The participation parallel is `participation_relationships`, which returns an
+`Array<ParticipationRelationship>` describing every `participates_in` /
+`class_participates_in` declaration (target class, collection name, scoring
+strategy, collection type, and more):
+
+```ruby
+Domain.participation_relationships
+# => [#<data ParticipationRelationship target_class=Customer,
+#            collection_name=:domains, type=:sorted_set, ...>]
+```
+
+### Project-Wide: compose from `Familia.members`
+
+There is no built-in aggregator (no `Familia.all_indexes`). The building block
+is `Familia.members` — the global `Array` of every `Familia::Horreum` subclass,
+populated in `Horreum.inherited`. Sweep it to list every index in the process:
+
+```ruby
+Familia.members.flat_map do |klass|
+  next [] unless klass.respond_to?(:indexing_relationships)
+
+  klass.indexing_relationships.map do |r|
+    [klass.name, r.cardinality, r.index_name, r.field, r.within]
+  end
+end
+# => [["User", :unique, :email_lookup, :email, nil],
+#     ["Employee", :multi, :dept_index, :department, Company], ...]
+```
+
+> [!NOTE]
+> Two caveats with `Familia.members`:
+> 1. It includes **all** `Horreum` subclasses — the framework's own models, your
+>    application models, and any test classes loaded into the process.
+> 2. A class only appears **after it has been required**. Run any project-wide
+>    sweep once your application and models are fully loaded, or the results
+>    will be incomplete.
+
+### Per-Instance: membership state
+
+Where the class-level readers describe *configuration*, the instance methods
+describe *current state* — which indexes and collections a specific object
+actually belongs to.
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `current_indexings` | `Array<Hash>` | Indexes this object currently appears in. Class-level entries are verified against the database; instance-scoped entries are marked `index_key: 'scope_dependent'` (they need a scope instance to verify). |
+| `indexed_in?(:index_name)` | Boolean | Whether the object is present in the named class-level index. Instance-scoped indexes return `false` (a scope instance is required). |
+| `current_participations` | `Array<Hash>` | Participation collections this object is a member of, with score/position where applicable. |
+| `relationship_status` | Hash | Aggregate snapshot: `{ identifier:, current_participations:, index_memberships: }`. |
+
+```ruby
+user.indexed_in?(:email_lookup)   # => true
+user.current_indexings
+# => [{ scope_class: 'class', index_name: :email_lookup, field: :email,
+#       cardinality: :unique, type: 'unique_index', ... }]
+
+user.relationship_status
+# => { identifier: "user_123",
+#      current_participations: [...],
+#      index_memberships: [...] }
+```
+
+### Verifying and repairing indexes
+
+If your goal is to *verify or repair* indexes rather than simply *list* them,
+reach for the audit/repair layer instead of rolling your own consistency
+checks. It is built on the same `indexing_relationships` /
+`participation_relationships` metadata and is mixed into every Horreum subclass
+as class methods (`AuditMethods` / `RepairMethods` in
+`lib/familia/horreum/management/`):
+
+```ruby
+User.health_check          # Aggregate consistency report
+User.audit_unique_indexes  # Detect drift in unique indexes
+User.repair_indexes!       # Reconcile indexes against current instances
+```
+
 ## Serialization of Collection Members
 
 Participation collections store object identifiers as **raw strings**: when you

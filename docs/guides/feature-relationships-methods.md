@@ -254,6 +254,34 @@ employee.add_to_company_dept_index(company)
 engineers = company.find_all_by_department('engineering')
 ```
 
+## Introspection Methods
+
+Unlike the methods above, these are always present on any class with
+`feature :relationships` (and its instances) — they are not generated per
+declaration. They report *what is declared* and *what an object currently
+belongs to*.
+
+### Class-Level (configuration)
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `indexing_relationships` | `Array<IndexingRelationship>` | All `unique_index` / `multi_index` declarations; `.cardinality` distinguishes `:unique` from `:multi` |
+| `participation_relationships` | `Array<ParticipationRelationship>` | All `participates_in` / `class_participates_in` declarations |
+
+### Instance-Level (current state)
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `current_indexings` | `Array<Hash>` | Indexes this object currently appears in |
+| `indexed_in?(:index_name)` | Boolean | Whether the object is in the named class-level index |
+| `current_participations` | `Array<Hash>` | Participation collections this object belongs to |
+| `relationship_status` | Hash | `{ identifier:, current_participations:, index_memberships: }` |
+
+There is no built-in project-wide aggregator; compose one over the global
+`Familia.members` registry. For the `IndexingRelationship` field breakdown, the
+project-wide sweep, and the audit/repair layer, see
+[Introspection](feature-relationships.md#introspection).
+
 ## See Also
 
 - [**Relationships Overview**](feature-relationships.md) - Core concepts and patterns
