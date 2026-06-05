@@ -19,12 +19,18 @@ Changed
   declared with ``class:`` and ``reference: true``. Unlike the ``unique_index``
   change in this release, **no data migration is required**: participation
   collections already stored raw identifiers (a Familia object serializes to
-  its identifier), so the stored byte format is unchanged. Public reads
-  (``members``, ``to_a``, ``member?``, ``score``) are unaffected for string
-  identifiers. A collection pre-declared on the target class before
-  ``participates_in`` runs is left as-is (the existing ``method_defined?``
-  guard wins); declare it as a reference type yourself if you want
-  ``each_record`` on it. Issue #297
+  its identifier), so the stored byte format is unchanged. Object-based lookups
+  (``member?(obj)``, ``score(obj)``) and reads of non-numeric string
+  identifiers are unaffected. Two minor read normalizations apply to
+  *auto-created* collections: a numeric-looking identifier (e.g. ``"456"``) now
+  reads back from ``members``/``to_a`` as the ``String`` ``"456"`` rather than
+  being JSON-coerced to the Integer ``456`` (matching ``membersraw`` and the
+  participant's real identifier), and ``member?``/``score`` with a raw string
+  identifier now match the stored value (previously a known #212 limitation
+  that returned ``false``/``nil``). A collection pre-declared on the target
+  class before ``participates_in`` runs is left as-is (the existing
+  ``method_defined?`` guard wins); declare it as a reference type yourself if
+  you want ``each_record`` on it. Issue #297
 
 AI Assistance
 -------------

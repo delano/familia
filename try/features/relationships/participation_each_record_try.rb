@@ -168,10 +168,38 @@ records.map(&:member_id).sort
 @org.members.member?(@m1)
 #=> true
 
+# ============================================================
+# Numeric-string identifiers: reference reads normalize to the
+# stored String (not JSON-coerced to Integer), and raw-string
+# lookups now match (resolving the issue #212 limitation for
+# auto-created participation collections). See migration notes.
+# ============================================================
+
+## a numeric-looking identifier reads back from members as a String (not Integer)
+@n1 = PERMember.new(member_id: '456', created_at: Familia.now.to_i)
+@n1.save
+@n1.add_to_per_org_members(@org)
+@org.members.members.include?('456')
+#=> true
+
+## ...and is not coerced to an Integer
+@org.members.members.include?(456)
+#=> false
+
+## member?(raw_string_id) now matches the stored identifier
+@org.members.member?('456')
+#=> true
+
+## each_record loads the numeric-id participant like any other
+ids = []
+@org.members.each_record { |r| ids << r.member_id }
+ids.include?('456')
+#=> true
+
 # Teardown
 @org.members.clear rescue nil
 @org.crew.clear rescue nil
 @org.queue.clear rescue nil
 PERMember.all_members.clear rescue nil
-[@m1, @m2, @m3].each { |m| m.destroy! rescue nil }
+[@m1, @m2, @m3, @n1].each { |m| m.destroy! rescue nil }
 @org.destroy! rescue nil
