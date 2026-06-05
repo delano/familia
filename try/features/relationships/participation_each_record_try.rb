@@ -2,16 +2,20 @@
 #
 # frozen_string_literal: true
 
-# Tests for issue #297: participates_in collections were created without the
-# `class:` option, so `each_record` raised Familia::Problem ("requires a
-# reference DataType with a :class option that responds to load_multi").
+# Tests for issue #297: participates_in collections were created without any
+# record/reference class, so `each_record` raised Familia::Problem
+# ("requires a DataType with a :record_class (or :class) option ...").
 #
-# The fix declares participation collections as proper reference types
-# (`class: participant_class, reference: true`), matching the `instances`
-# collection pattern (Horreum.inherited) and the unique_index fix (issue #276).
-# This lets stored participant identifiers round-trip as raw strings and enables
-# `each_record` to load the participant records via load_multi.
+# The fix declares participation collections with `record_class: <participant>`
+# — a loading-only hint that lets `each_record` hydrate the stored participant
+# identifiers via load_multi WITHOUT changing how the collection deserializes
+# reads (members/member?/score keep the generic DataType semantics). This is
+# deliberately narrower than the `class: + reference: true` used by `instances`
+# and `unique_index` (which also want raw-string read semantics), so adding
+# participation to a collection is transparent to existing readers. See the
+# v2.10.0 migration notes for the rationale.
 
+require 'stringio'
 require_relative '../../support/helpers/test_helpers'
 
 class PEROrg < Familia::Horreum
@@ -52,18 +56,22 @@ end
 @m3.add_to_per_org_members(@org)
 
 # ============================================================
-# The participation collection is a proper reference type
+# The participation collection carries record_class (issue #297)
 # ============================================================
 
-## sorted_set participation collection carries the participant class
-@org.members.opts[:class]
+## sorted_set participation collection carries the participant as record_class
+@org.members.opts[:record_class]
 #=> PERMember
 
-## sorted_set participation collection is a reference type
-@org.members.opts[:reference]
-#=> true
+## record_class is a loading-only hint: no serialization :class is set
+@org.members.opts[:class]
+#=> nil
 
-## Stored members are raw identifiers (not JSON-encoded)
+## ...and it is NOT a reference collection (reads keep generic semantics)
+@org.members.opts[:reference]
+#=> nil
+
+## Stored members are raw identifiers (a Familia object stores its identifier)
 @org.members.membersraw.sort
 #=> ["m1", "m2", "m3"]
 
@@ -116,11 +124,11 @@ result
 # each_record on a participates_in set and list
 # ============================================================
 
-## set participation collection is a reference type pointing at the participant
+## set participation collection carries record_class (not a reference type)
 @m1.add_to_per_org_crew(@org)
 @m2.add_to_per_org_crew(@org)
-[@org.crew.opts[:class], @org.crew.opts[:reference]]
-#=> [PERMember, true]
+[@org.crew.opts[:record_class], @org.crew.opts[:reference]]
+#=> [PERMember, nil]
 
 ## each_record on a set yields the participants
 records = []
@@ -128,11 +136,11 @@ records = []
 records.map(&:member_id).sort
 #=> ["m1", "m2"]
 
-## list participation collection is a reference type pointing at the participant
+## list participation collection carries record_class (not a reference type)
 @m1.add_to_per_org_queue(@org)
 @m3.add_to_per_org_queue(@org)
-[@org.queue.opts[:class], @org.queue.opts[:reference]]
-#=> [PERMember, true]
+[@org.queue.opts[:record_class], @org.queue.opts[:reference]]
+#=> [PERMember, nil]
 
 ## each_record on a list yields the participants
 records = []
@@ -144,11 +152,11 @@ records.map(&:member_id).sort
 # each_record on a class-level participation collection
 # ============================================================
 
-## class_participates_in collection carries the class as its reference type
+## class_participates_in collection carries record_class
 PERMember.add_to_all_members(@m1)
 PERMember.add_to_all_members(@m2)
-[PERMember.all_members.opts[:class], PERMember.all_members.opts[:reference]]
-#=> [PERMember, true]
+[PERMember.all_members.opts[:record_class], PERMember.all_members.opts[:reference]]
+#=> [PERMember, nil]
 
 ## each_record on the class-level collection yields the records
 records = []
@@ -157,44 +165,54 @@ records.map(&:member_id).sort
 #=> ["m1", "m2"]
 
 # ============================================================
-# Regression guard: members() still returns raw identifier strings
+# record_class does NOT change read semantics (the whole point of the
+# narrower option): members/member? behave exactly as on a plain DataType.
 # ============================================================
 
-## members() returns raw identifier strings (object lookups remain unchanged)
+## members() returns identifiers exactly as a plain DataType would
 @org.members.members.sort
 #=> ["m1", "m2", "m3"]
 
-## membership lookups by object still work (issue #212 behavior preserved)
+## membership lookups by object still work
 @org.members.member?(@m1)
 #=> true
 
-# ============================================================
-# Numeric-string identifiers: reference reads normalize to the
-# stored String (not JSON-coerced to Integer), and raw-string
-# lookups now match (resolving the issue #212 limitation for
-# auto-created participation collections). See migration notes.
-# ============================================================
-
-## a numeric-looking identifier reads back from members as a String (not Integer)
-@n1 = PERMember.new(member_id: '456', created_at: Familia.now.to_i)
+## A numeric-looking identifier still reads back as Integer — legacy DataType
+## type-preservation is intact, because record_class adds no reference semantics
+@n1 = PERMember.new(member_id: '789', created_at: Familia.now.to_i)
 @n1.save
 @n1.add_to_per_org_members(@org)
-@org.members.members.include?('456')
+@org.members.members.include?(789)
 #=> true
 
-## ...and is not coerced to an Integer
-@org.members.members.include?(456)
+## member?(raw_string_id) keeps object-serialization semantics (issue #212
+## limitation preserved: pass objects, not raw string identifiers)
+@org.members.member?('789')
 #=> false
 
-## member?(raw_string_id) now matches the stored identifier
-@org.members.member?('456')
-#=> true
-
-## each_record loads the numeric-id participant like any other
+## ...but each_record still loads the numeric-id participant (record_class drives loading)
 ids = []
 @org.members.each_record { |r| ids << r.member_id }
-ids.include?('456')
+ids.include?('789')
 #=> true
+
+# ============================================================
+# Regression guard: each_record stays quiet. record_class marks members as
+# object identifiers, so the deserializing each() must NOT emit the per-member
+# "raw fallback" warning it would otherwise log for non-JSON identifiers.
+# ============================================================
+
+## each_record emits no deserialize warnings for (non-JSON) string identifiers
+@log_io = StringIO.new
+@orig_logger = Familia.logger
+Familia.logger = Familia::FamiliaLogger.new(@log_io)
+begin
+  @org.members.each_record { |r| }
+ensure
+  Familia.logger = @orig_logger
+end
+@log_io.string.scan(/Raw fallback/).size
+#=> 0
 
 # Teardown
 @org.members.clear rescue nil

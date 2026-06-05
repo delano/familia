@@ -37,9 +37,13 @@ module Familia
 
       # Iterates over identifiers, loading each as a Horreum record.
       #
-      # This method is designed for DataTypes that store object identifiers
-      # (typically with `reference: true`). It loads records in batches using
-      # the parent class's `load_multi` method and yields each loaded record.
+      # This method is designed for DataTypes that store object identifiers.
+      # It requires the collection to know which class to hydrate, supplied by
+      # either the `record_class:` option (a loading-only hint that does not
+      # change read deserialization — used by `participates_in`) or the `class:`
+      # option on a `reference: true` collection (e.g. `instances`,
+      # `unique_index`). It loads records in batches using the record class's
+      # `load_multi` method and yields each loaded record.
       #
       # Ghost identifiers (where the underlying key has expired) are silently
       # filtered out.
@@ -70,11 +74,22 @@ module Familia
       def each_record(batch_size: 100, pipeline: nil, **filters, &block)
         return to_enum(:each_record, batch_size: batch_size, pipeline: pipeline, **filters) unless block
 
-        # Determine the class to load records from
-        # For reference DataTypes, @opts[:class] holds the Horreum class
-        record_class = @opts[:class]
+        # Determine the class to load records from.
+        #
+        # Two opts can supply it, in priority order:
+        #   - :record_class — a loading-only hint. It tells each_record which
+        #     class to hydrate, WITHOUT affecting how the collection deserializes
+        #     reads (members/member?/score keep the generic DataType semantics).
+        #     Used by participates_in collections (issue #297).
+        #   - :class — set alongside `reference: true` for true reference
+        #     collections (e.g. `instances`, unique_index), where raw-string read
+        #     semantics are also wanted.
+        #
+        # load_multi is identifier-type-tolerant (it builds keys via dbkey), so
+        # whichever path `each` yields the identifier through, loading works.
+        record_class = @opts[:record_class] || @opts[:class]
         unless record_class&.respond_to?(:load_multi)
-          raise Familia::Problem, "each_record requires a reference DataType with a :class option that responds to load_multi"
+          raise Familia::Problem, "each_record requires a DataType with a :record_class (or :class) option that responds to load_multi"
         end
 
         # Validate batch_size and pipeline constraints

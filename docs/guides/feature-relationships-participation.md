@@ -299,10 +299,12 @@ domain.customer_instances           # Efficient bulk loading
 
 ### Iterating a Collection as Loaded Records
 
-Participation collections are declared as reference types pointing at the
-participant class, so you can iterate them with `each_record` — it batches the
-stored identifiers through `load_multi` (pipelined `HGETALL`s), drops ghosts
-(identifiers whose record has expired), and yields fully-loaded records:
+Participation collections carry a `record_class:` pointing at the participant
+class, so you can iterate them with `each_record` — it batches the stored
+identifiers through `load_multi` (pipelined `HGETALL`s), drops ghosts
+(identifiers whose record has expired), and yields fully-loaded records.
+(`record_class:` is a loading-only hint; it does not change how `members`,
+`member?`, or `score` behave.)
 
 ```ruby
 # Yields loaded Domain records, not raw identifiers

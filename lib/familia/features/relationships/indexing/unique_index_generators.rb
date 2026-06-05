@@ -188,12 +188,14 @@ module Familia
                   end
                 end
 
-                # Strategy 2: Fallback to checking related_fields for explicit class: option
+                # Strategy 2: Fallback to checking related_fields for an explicit
+                # record_class:/class: option matching the indexed class.
+                # (participates_in collections carry record_class:; reference
+                # collections carry class:.)
                 unless collection
                   if self.class.respond_to?(:related_fields)
                     self.class.related_fields&.each do |name, field_def|
-                      # Check if this DataType's class option matches the indexed class
-                      if field_def.opts[:class] == indexed_class
+                      if [field_def.opts[:record_class], field_def.opts[:class]].include?(indexed_class)
                         collection = send(name)
                         break
                       end

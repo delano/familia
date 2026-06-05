@@ -361,8 +361,9 @@ module Familia
             # If staged: is provided, also creates staging set and stage/activate/unstage methods
             #
             # Pass the participant class (self, e.g. Domain) so the collection is
-            # declared as a reference type. The collection stores participant
-            # identifiers, so this lets `each_record` load them (issue #297).
+            # declared with record_class:, enabling `each_record` to load the
+            # stored participant identifiers without altering read semantics
+            # (issue #297).
             TargetMethods::Builder.build(target_class, collection_name, type, through, staged, participant_class: self)
 
             # STEP 2: Add participation methods to PARTICIPANT class (Domain) - only if
