@@ -297,6 +297,40 @@ customer.domains.merge([id1, id2])  # Bulk ID operations
 domain.customer_instances           # Efficient bulk loading
 ```
 
+### Iterating a Collection as Loaded Records
+
+Participation collections are declared as reference types pointing at the
+participant class, so you can iterate them with `each_record` — it batches the
+stored identifiers through `load_multi` (pipelined `HGETALL`s), drops ghosts
+(identifiers whose record has expired), and yields fully-loaded records:
+
+```ruby
+# Yields loaded Domain records, not raw identifiers
+customer.domains.each_record { |domain| domain.refresh_dns! }
+
+# Enumerator form composes with Enumerable
+customer.domains.each_record.map(&:created_at)
+
+# Filters forward to the underlying each (sorted sets accept since:/until:)
+customer.domains.each_record(since: 1.day.ago) { |d| notify(d) }
+
+# Class-level participation collections work too
+User.all_users.each_record(pipeline: 50) { |u| u.last_seen_at! Familia.now }
+```
+
+This replaces the manual `load_multi` + `compact` workaround:
+
+```ruby
+# Before — manual batch load
+Domain.load_multi(customer.domains.to_a).compact.each { |d| ... }
+
+# After — each_record does the batching, ghost-filtering, and loading
+customer.domains.each_record { |d| ... }
+```
+
+See [DataType Collections](datatype-collections.md) for the full `each` vs
+`each_record` comparison and `pipeline:` tuning.
+
 ## Troubleshooting
 
 ### Common Issues

@@ -40,9 +40,16 @@ module Familia
           # @param type [Symbol] Collection type (:sorted_set, :set, :list)
           # @param through [Symbol, Class, nil] Through model class for join table pattern
           # @param staged [Symbol, nil] Staging set name for deferred activation
-          def self.build(target_class, collection_name, type, through = nil, staged = nil)
-            # FIRST: Ensure the DataType field is defined on the target class
-            TargetMethods::Builder.ensure_collection_field(target_class, collection_name, type)
+          # @param participant_class [Class, nil] The participant class whose
+          #   identifiers populate the collection. Threaded through so the
+          #   collection is declared as a reference type (enables +each_record+;
+          #   see issue #297).
+          def self.build(target_class, collection_name, type, through = nil, staged = nil, participant_class: nil)
+            # FIRST: Ensure the DataType field is defined on the target class.
+            # Declared as a reference type so `each_record` can load participants.
+            TargetMethods::Builder.ensure_collection_field(
+              target_class, collection_name, type, participant_class: participant_class
+            )
 
             # Create staging set if staged: option provided
             TargetMethods::Builder.ensure_collection_field(target_class, staged, :sorted_set) if staged
@@ -73,8 +80,12 @@ module Familia
           # @param collection_name [Symbol] Name of the collection
           # @param type [Symbol] Collection type
           def self.build_class_level(target_class, collection_name, type)
-            # FIRST: Ensure the class-level DataType field is defined
-            target_class.send("class_#{type}", collection_name)
+            # FIRST: Ensure the class-level DataType field is defined.
+            # The collection holds instances of target_class itself, so declare
+            # it as a reference type (class: + reference: true) — matching the
+            # `instances` collection — so stored identifiers round-trip as raw
+            # strings and `each_record` can load the records (issue #297).
+            target_class.send("class_#{type}", collection_name, class: target_class, reference: true)
 
             # Class-level collection getter (e.g., User.all_users)
             build_class_collection_getter(target_class, collection_name, type)

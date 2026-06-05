@@ -73,7 +73,7 @@ flowchart TD
   ER --> Validate{"pipeline <= batch_size?"}
   Validate -- no --> Raise["raise ArgumentError"]
   Validate -- yes --> CallEach["each(**filters) do |member|"]
-  CallEach --> Extract["id = member.is_a?(Array) ? member.first : member"]
+  CallEach --> Extract["id = member.is_a?(Array) ? member.last : member"]
   Extract --> Buffer["buffer << id"]
   Buffer --> Full{"buffer.size >= batch_size?"}
   Full -- no --> CallEach
@@ -120,6 +120,23 @@ SortedSet#each exhausted
 | Filters | type-specific (`since:`, `matching:`, …) | forwarded to underlying `each` |
 
 So `each_record` is a thin orchestration layer: it leans on the type's own `each` for read pagination, then layers (1) batched record hydration and (2) optional write pipelining on top.
+
+### Which collections support `each_record`?
+
+`each_record` needs a collection declared with `class:` + `reference: true`. The
+collections Familia generates for you already satisfy this, so `each_record`
+works on them out of the box:
+
+- `ModelClass.instances` — the per-class timeline (see Horreum).
+- `unique_index` / `multi_index` lookups — the index hashkey/set points at the indexed class.
+- `participates_in` / `class_participates_in` collections — point at the participant class.
+
+A collection you declare by hand (`sorted_set :foo`, `set :bar`, …) stores
+JSON-encoded values by default and is **not** a reference type; calling
+`each_record` on it raises `Familia::Problem`. Add `class:` + `reference: true`
+to opt in. Note that if you pre-declare a collection that `participates_in`
+would otherwise auto-create, your hand-declared options win — declare it as a
+reference type yourself if you want `each_record` on it.
 
 ## Choosing a `pipeline` mode
 

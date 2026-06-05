@@ -12,13 +12,30 @@ module Familia
         using Familia::Refinements::StylizeWords
 
         # Ensure a target class has the specified DataType field defined
+        #
+        # When +participant_class+ is provided, the collection is declared as a
+        # reference type pointing at the participant class. Participation
+        # collections store participant identifiers (a Familia object serializes
+        # to its identifier), so +class:+ and +reference: true+ let those
+        # identifiers round-trip as raw strings and enable +each_record+ to load
+        # the participant records via +load_multi+. This mirrors the +instances+
+        # collection (see Horreum.inherited) and the unique_index hashkeys
+        # (issue #276); see issue #297.
+        #
         # @param target_class [Class] The class that should have the collection
         # @param collection_name [Symbol] Name of the collection field
         # @param type [Symbol] Collection type (:sorted_set, :set, :list)
-        def ensure_collection_field(target_class, collection_name, type)
+        # @param participant_class [Class, nil] The class whose identifiers the
+        #   collection stores (the participant). When nil, the collection is
+        #   declared without reference semantics (legacy behavior).
+        def ensure_collection_field(target_class, collection_name, type, participant_class: nil)
           return if target_class.method_defined?(collection_name)
 
-          target_class.send(type, collection_name)
+          if participant_class
+            target_class.send(type, collection_name, class: participant_class, reference: true)
+          else
+            target_class.send(type, collection_name)
+          end
         end
 
         # Add an item to a collection, handling type-specific operations
