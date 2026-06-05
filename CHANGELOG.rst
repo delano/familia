@@ -7,6 +7,155 @@ The format is based on `Keep a Changelog <https://keepachangelog.com/en/1.1.0/>`
 
    <!--scriv-insert-here-->
 
+.. _changelog-2.10.0:
+
+2.10.0 — 2026-06-04
+====================
+
+Added
+-----
+
+- ``Horreum.build``: A factory block that yields a new instance, then commits
+  all scalar and collection changes in a single ``MULTI/EXEC`` upon exit.
+  This avoids sequencing ``save`` before collection writes. Raises
+  ``Familia::RecordExistsError`` if the identifier exists (create-only).
+  Without a block, it behaves as ``new(...).save``. #279
+
+- ``atomic_write`` now supports ``watch_keys:`` (keys to watch) and
+  ``pre_check:`` (a callable run between ``WATCH`` and ``MULTI``) to enable
+  optimistic locking. Retries with exponential backoff on abort. #288
+
+- ``encrypted_field`` now accepts a ``key_material:`` proc. This mixes
+  additional entropy into key derivation (separate from AAD), requiring
+  the correct material at decryption to avoid producing garbage output. PR #280
+
+- Encrypted-field envelopes now store their own ``envelope_version`` and
+  ``aad_fields`` list. Decryption rebuilds AAD from these stored fields
+  rather than the active class declaration, preventing breakage when model
+  definitions change. PR #280
+
+- ``DatabaseLogger.capture_enabled`` (Boolean, default ``true``) controls
+  in-memory buffer capturing. Disabling it bypasses clock checks, message
+  allocations, and buffer appends, offering a zero-overhead production path. Issue #233
+
+- ``Familia::Instrumentation.hooks?(type)`` reports whether hooks are
+  registered for a given event type (e.g. ``:command``, ``:pipeline``). Issue #233
+
+- ``Familia.reset_trace!`` clears the cached trace environment lookup. Issue #233
+
+- ``dirty_write_warnings`` class method configures write-order warnings per
+  class (inheritable). Accepts ``:strict``, ``:warn``, ``:once``, or ``:off``. Issue #277
+
+- ``Familia.dirty_write_warnings`` global setting providing the default mode for
+  classes that do not set their own. Issue #277
+
+- ``Familia.raise_on_unsaved_parent_write`` (default ``true``) controls whether a
+  collection write on a new, unsaved, dirty parent raises or warns. Issue #278
+
+Changed
+-------
+
+- Mutating a collection on a *new, unsaved* parent Horreum now **raises**
+  ``Familia::Problem`` by default. The guard fires *before* the command runs,
+  preventing orphaned data. Save the parent first, or set
+  ``Familia.raise_on_unsaved_parent_write = false`` to restore warnings. Issue #278
+
+- Dirty-write warnings are now **deduplicated per dirty window** (mode ``:once``).
+  Writing to a collection on a parent with unsaved scalar fields warns once per
+  distinct set of unsaved fields instead of on every write. Set
+  ``dirty_write_warnings :warn`` to restore the old behavior. Issue #277
+
+- Dirty-write warnings and strict raises now append the hint:
+  ``(call #save first or wrap in atomic_write)``. Issue #277
+
+- ``trace_enabled?`` now caches the ``FAMILIA_TRACE`` lookup. Use
+  ``Familia.reset_trace!`` to force a re-read of the environment. Issue #233
+
+- ``unique_index`` hashkeys now store identifiers as raw strings rather than
+  JSON-encoded strings. Rebuild existing unique indexes to convert legacy entries,
+  e.g., via ``User.rebuild_email_lookup`` or ``company.rebuild_badge_index``. Issue #276
+
+Fixed
+-----
+
+- ``Horreum.build`` with a block no longer has a TOCTOU race between the
+  ``exists?`` check and the ``atomic_write`` commit. The block path now uses
+  ``atomic_write(watch_keys:, pre_check:)`` so the existence check runs between
+  ``WATCH`` and ``MULTI``. #288
+
+- ``aad_fields`` containing a ``transient_field`` now bind to the field's real
+  value. Previously ``build_aad`` called ``RedactedString#to_s``, which returns
+  ``"[REDACTED]"`` for every value -- so all passphrases produced identical AAD
+  and the binding was defeated. PR #280
+
+- ``each_record`` now works on ``unique_index`` hashkeys. Previously it raised
+  ``Familia::Problem`` because ``unique_index`` created its backing hashkey
+  without the ``class:`` option. Issue #276
+
+- ``each_record`` extracts the stored identifier (the hash *value*) from a
+  HashKey instead of the indexed field (the hash *key*). Issue #276
+
+- The unguarded ``Familia.trace`` sites in ``Horreum#destroy!`` and
+  ``find_by_dbkey`` now carry an inline ``if Familia.debug?`` guard. Issue #233
+
+- Two latent encryption bugs surfaced while repairing the examples (issue #250):
+
+  - ``Familia::Encryption.with_request_cache`` and ``clear_request_cache!``
+    were unreachable. The implementation lived in
+    ``lib/familia/encryption/request_cache.rb``, which was never ``require``\ d.
+    The file is now loaded with the rest of the encryption stack.
+
+  - The XChaCha20-Poly1305 provider derived keys with
+    ``context.force_encoding('BINARY')``, mutating the caller's string. A
+    frozen context raised ``FrozenError``. It now uses ``context.b``.
+
+Security
+--------
+
+- The ``aad_fields`` transient-field fix changes AAD output for any field that
+  lists a ``transient_field``. Values encrypted by an earlier release using a
+  transient field in ``aad_fields`` were bound to ``"[REDACTED]"`` and will no
+  longer decrypt after upgrading. Re-encrypt affected values if any exist.
+  PR #280
+
+Documentation
+-------------
+
+- Repaired every script in ``examples/`` so each runs top-to-bottom and is
+  re-runnable (issue #250). Added ``try/integration/examples/`` with one
+  subprocess-driven tryouts file per example script for automated regression
+  coverage.
+
+- ``Horreum.create!``: added ``@yield``, ``@yieldparam``, and
+  ``@yieldreturn`` YARD tags documenting the post-success block semantics. #286
+
+- ``Horreum#save``: added ``@example`` tags showing idiomatic Ruby patterns
+  for post-save callbacks (``if save`` and ``&&`` short-circuit). #286
+
+- Renamed ``CLAUDE.md`` to ``AGENTS.md`` and pruned it to remove volatile
+  content better served by its source of truth. Kept the non-obvious behavioral
+  contracts like deferred-vs-immediate write model and the serialization table.
+
+AI Assistance
+-------------
+
+- AI implemented ``build`` factory block (#279) and WATCH composition in
+  ``atomic_write`` (#288), including tryouts for both.
+
+- AI refactored encryption envelope handling (#280): unified AAD construction
+  through ``EncryptedData``, added envelope versioning, and fixed the
+  transient-field AAD bypass.
+
+- AI implemented ``DatabaseLogger.capture_enabled`` toggle and middleware
+  consolidation (#233), per-class ``dirty_write_warnings`` (#277), and
+  unsaved-parent guard (#278) with tryouts for each.
+
+- AI diagnosed and fixed ``each_record`` on ``unique_index`` hashkeys (#276)
+  and repaired all example scripts with regression tryouts (#250).
+
+- AI evaluated and rejected ``save_and_then`` (#286) after cross-ORM analysis;
+  added YARD docs and ``create_block_try.rb`` instead.
+
 .. _changelog-2.9.1:
 
 2.9.1 — 2026-05-18

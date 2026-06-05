@@ -30,5 +30,5 @@ public/
 # Exclusions
 !README.md
 !CHANGELOG.md
-!CLAUDE.md
+!AGENTS.md
 !LICENSE.txt
