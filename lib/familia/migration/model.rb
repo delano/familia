@@ -1,4 +1,4 @@
-# lib/familia/migration/model.rb
+# lib/familia/migration/model.rb — SCAN-based per-record processing
 #
 # frozen_string_literal: true
 

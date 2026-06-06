@@ -1,3 +1,13 @@
+# lib/familia/migration/rake_tasks.rb — Rake tasks for familia:migrate
+#
+#   familia:migrate              Run all pending migrations
+#   familia:migrate:run          (same)
+#   familia:migrate:status       Show applied/pending
+#   familia:migrate:dry_run      Preview without applying
+#   familia:migrate:rollback[ID] Rollback a specific migration
+#   familia:migrate:validate     Check dependency issues
+#   familia:migrate:schema_drift List models with changed schemas
+#
 # frozen_string_literal: true
 
 require 'rake'
@@ -5,23 +15,7 @@ require_relative '../migration'
 
 module Familia
   module Migration
-    # RakeTasks provides a set of Rake tasks for managing Familia migrations.
-    #
-    # Tasks are installed automatically when this file is required. Available tasks:
-    #
-    #   familia:migrate         - Run all pending migrations
-    #   familia:migrate:run     - Run all pending migrations
-    #   familia:migrate:status  - Show migration status table
-    #   familia:migrate:dry_run - Preview pending migrations (dry run)
-    #   familia:migrate:rollback[ID] - Rollback a specific migration
-    #   familia:migrate:validate - Validate migration dependencies
-    #   familia:migrate:schema_drift - List models with schema drift
-    #
-    # @example Loading tasks in a Rakefile
-    #   require 'familia/migration/rake_tasks'
-    #
-    # @example Loading tasks via .rake file
-    #   load 'familia/migration/rake_tasks.rake'
+    # Installs familia:migrate rake tasks. See file header for task list.
     #
     class RakeTasks
       include Rake::DSL

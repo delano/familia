@@ -1,3 +1,5 @@
+# lib/familia/migration/errors.rb — Error hierarchy
+#
 # frozen_string_literal: true
 
 module Familia
