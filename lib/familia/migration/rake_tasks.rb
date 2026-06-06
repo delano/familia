@@ -1,3 +1,5 @@
+# lib/familia/migration/rake_tasks.rb — Rake task definitions
+#
 # frozen_string_literal: true
 
 require 'rake'

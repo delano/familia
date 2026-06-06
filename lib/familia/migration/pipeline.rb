@@ -1,4 +1,4 @@
-# lib/familia/migration/pipeline.rb
+# lib/familia/migration/pipeline.rb — Batched Redis pipelining
 #
 # frozen_string_literal: true
 

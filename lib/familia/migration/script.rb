@@ -1,3 +1,5 @@
+# lib/familia/migration/script.rb — Lua script registry for atomic operations
+#
 # frozen_string_literal: true
 
 require 'digest/sha1'

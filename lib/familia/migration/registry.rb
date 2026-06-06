@@ -1,3 +1,5 @@
+# lib/familia/migration/registry.rb — Redis-backed state tracking
+#
 require 'json'
 require 'digest'
 

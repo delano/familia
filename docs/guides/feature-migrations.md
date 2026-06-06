@@ -42,12 +42,4 @@ Rollback validates three preconditions: the migration is applied, no dependents 
 
 ## Source files
 
-- `lib/familia/migration.rb` — module entry, configuration
-- `lib/familia/migration/base.rb` — base class, lifecycle, dry-run control
-- `lib/familia/migration/model.rb` — SCAN-based per-record processing
-- `lib/familia/migration/pipeline.rb` — batched pipelining
-- `lib/familia/migration/registry.rb` — Redis-backed state tracking
-- `lib/familia/migration/runner.rb` — orchestration, dependency resolution
-- `lib/familia/migration/script.rb` — Lua script registry
-- `lib/familia/migration/errors.rb` — error hierarchy
-- `lib/familia/migration/rake_tasks.rb` — rake task definitions
+`lib/familia/migration.rb` and `lib/familia/migration/`. Each file's first line states its purpose.
