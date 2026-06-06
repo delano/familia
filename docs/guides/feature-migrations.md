@@ -51,7 +51,3 @@ Rollback validates three preconditions: the migration is applied, no dependents 
 - `lib/familia/migration/script.rb` — Lua script registry
 - `lib/familia/migration/errors.rb` — error hierarchy
 - `lib/familia/migration/rake_tasks.rb` — rake task definitions
-
-## See also
-
-- [Writing Migrations](writing-migrations.md) — practical guide with examples
