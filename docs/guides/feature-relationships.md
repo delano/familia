@@ -169,7 +169,24 @@ team.member_instances                     # Load objects
 
 ## Serialization of Collection Members
 
-Relationship collections (participation sorted sets, index hash keys, instance-scoped sets) store object identifiers as raw strings. When adding objects to these collections, `serialize_value` extracts the `.identifier` from Familia objects and stores it without JSON encoding. This ensures consistent membership checks regardless of whether code passes an object reference or a string identifier. See [Collection Member Serialization](field-system.md#collection-member-serialization) for the authoritative explanation of why reference collections use raw identifiers while value fields use JSON.
+Participation collections store object identifiers as **raw strings**: when you
+add a Familia object, `serialize_value` extracts its `.identifier` and stores it
+without JSON encoding, so identifiers match cleanly and build correct Redis keys
+(no `"\"abc-123\""` quoting artifacts).
+
+Whether a *raw string identifier* (rather than an object) round-trips the same
+way depends on how the collection is declared:
+
+- **Reference collections** (`class:` + `reference: true`) — such as `unique_index`
+  hash keys and Horreum's built-in `instances` set — normalize both paths, so an
+  object and its raw string identifier resolve identically.
+- **`participates_in` collections** use the loading-only `record_class:` option,
+  which does not change serialization. Pass Familia **objects** (not raw string
+  identifiers) to `add` / `member?` / `remove` so the identifier is extracted
+  consistently.
+
+See [Collection Member Serialization](field-system.md#collection-member-serialization)
+for the authoritative serialization rules.
 
 ## Best Practices
 

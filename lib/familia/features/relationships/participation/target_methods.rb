@@ -40,9 +40,16 @@ module Familia
           # @param type [Symbol] Collection type (:sorted_set, :set, :list)
           # @param through [Symbol, Class, nil] Through model class for join table pattern
           # @param staged [Symbol, nil] Staging set name for deferred activation
-          def self.build(target_class, collection_name, type, through = nil, staged = nil)
-            # FIRST: Ensure the DataType field is defined on the target class
-            TargetMethods::Builder.ensure_collection_field(target_class, collection_name, type)
+          # @param participant_class [Class, nil] The participant class whose
+          #   identifiers populate the collection. Threaded through so the
+          #   collection is declared with record_class: (enables +each_record+
+          #   without changing read semantics; see issue #297).
+          def self.build(target_class, collection_name, type, through = nil, staged = nil, participant_class: nil)
+            # FIRST: Ensure the DataType field is defined on the target class.
+            # Declared with record_class: so `each_record` can load participants.
+            TargetMethods::Builder.ensure_collection_field(
+              target_class, collection_name, type, participant_class: participant_class
+            )
 
             # Create staging set if staged: option provided
             TargetMethods::Builder.ensure_collection_field(target_class, staged, :sorted_set) if staged
@@ -73,8 +80,19 @@ module Familia
           # @param collection_name [Symbol] Name of the collection
           # @param type [Symbol] Collection type
           def self.build_class_level(target_class, collection_name, type)
-            # FIRST: Ensure the class-level DataType field is defined
-            target_class.send("class_#{type}", collection_name)
+            # FIRST: Ensure the class-level DataType field is defined.
+            # The collection holds instances of target_class itself. Declare it
+            # with record_class: so `each_record` can load the records (issue
+            # #297) without changing read deserialization — see
+            # CollectionOperations#ensure_collection_field for why participation
+            # uses record_class: rather than class: + reference: true.
+            #
+            # Skip if a class-level accessor already exists, mirroring the
+            # method_defined? guard in ensure_collection_field so a pre-declared
+            # collection is not silently overridden (symmetry with instance-level).
+            unless target_class.respond_to?(collection_name)
+              target_class.send("class_#{type}", collection_name, record_class: target_class)
+            end
 
             # Class-level collection getter (e.g., User.all_users)
             build_class_collection_getter(target_class, collection_name, type)

@@ -12,13 +12,34 @@ module Familia
         using Familia::Refinements::StylizeWords
 
         # Ensure a target class has the specified DataType field defined
+        #
+        # When +participant_class+ is provided, the collection is declared with
+        # +record_class:+ pointing at the participant class. This is a
+        # loading-only hint: it lets +each_record+ hydrate the stored participant
+        # identifiers via +load_multi+ (issue #297) WITHOUT changing how the
+        # collection deserializes reads. +members+/+member?+/+score+ keep the
+        # generic DataType semantics, so adding participation to a collection is
+        # transparent to existing readers.
+        #
+        # This deliberately differs from +instances+ and +unique_index+, which
+        # use +class: + reference: true+ because they also want raw-string read
+        # semantics. Participation only needs the loading capability, so it uses
+        # the narrower +record_class:+ option and avoids any read-behavior change.
+        #
         # @param target_class [Class] The class that should have the collection
         # @param collection_name [Symbol] Name of the collection field
         # @param type [Symbol] Collection type (:sorted_set, :set, :list)
-        def ensure_collection_field(target_class, collection_name, type)
+        # @param participant_class [Class, nil] The class whose identifiers the
+        #   collection stores (the participant). When nil, the collection is
+        #   declared with no record_class (each_record stays unavailable).
+        def ensure_collection_field(target_class, collection_name, type, participant_class: nil)
           return if target_class.method_defined?(collection_name)
 
-          target_class.send(type, collection_name)
+          if participant_class
+            target_class.send(type, collection_name, record_class: participant_class)
+          else
+            target_class.send(type, collection_name)
+          end
         end
 
         # Add an item to a collection, handling type-specific operations

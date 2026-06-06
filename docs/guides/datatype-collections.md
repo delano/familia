@@ -73,7 +73,7 @@ flowchart TD
   ER --> Validate{"pipeline <= batch_size?"}
   Validate -- no --> Raise["raise ArgumentError"]
   Validate -- yes --> CallEach["each(**filters) do |member|"]
-  CallEach --> Extract["id = member.is_a?(Array) ? member.first : member"]
+  CallEach --> Extract["id = member.is_a?(Array) ? member.last : member"]
   Extract --> Buffer["buffer << id"]
   Buffer --> Full{"buffer.size >= batch_size?"}
   Full -- no --> CallEach
@@ -114,12 +114,40 @@ SortedSet#each exhausted
 |---|---|---|
 | Yields | raw identifier (or `[field, value]` for `HashKey`) | loaded Horreum instance |
 | Redis ops per yield | 0 extra (already paged) | amortized `HGETALL` via `load_multi` batch |
-| Requires `reference: true` + `:class` | no | yes (raises `Familia::Problem` otherwise) |
+| Requires `record_class:` (or `class: + reference: true`) | no | yes (raises `Familia::Problem` otherwise) |
 | Ghost handling | yields the dangling id | `compact` drops them silently |
 | Write pipelining | not built-in | `pipeline:` groups block-body writes into `pipelined` blocks |
 | Filters | type-specific (`since:`, `matching:`, …) | forwarded to underlying `each` |
 
 So `each_record` is a thin orchestration layer: it leans on the type's own `each` for read pagination, then layers (1) batched record hydration and (2) optional write pipelining on top.
+
+### Which collections support `each_record`?
+
+`each_record` needs to know which class to hydrate. Two options supply it, and
+the collections Familia generates for you already set one, so `each_record`
+works on them out of the box:
+
+- `ModelClass.instances` — the per-class timeline. Uses `class: + reference: true`.
+- `unique_index` / `multi_index` lookups — the index hashkey/set points at the indexed class. Uses `class: + reference: true`.
+- `participates_in` / `class_participates_in` collections — point at the participant class. Use `record_class:`.
+
+The two options differ in scope:
+
+- **`record_class: SomeClass`** — a *loading-only* hint. It enables `each_record`
+  but does **not** change how the collection serializes/deserializes reads
+  (`members`/`member?`/`score` keep the generic DataType semantics). Use this when
+  you want `each_record` without any read-behavior change. This is what
+  `participates_in` uses.
+- **`class: SomeClass, reference: true`** — a full *reference type*. It enables
+  `each_record` **and** makes reads return raw-string identifiers (and `member?`
+  match raw strings). Use this when you also want raw-string read semantics. This
+  is what `instances` and the indexes use.
+
+A collection you declare by hand (`sorted_set :foo`, `set :bar`, …) sets neither,
+so calling `each_record` on it raises `Familia::Problem`. Add `record_class:` (or
+`class: + reference: true`) to opt in. Note that if you pre-declare a collection
+that `participates_in` would otherwise auto-create, your hand-declared options
+win — add `record_class:` yourself if you want `each_record` on it.
 
 ## Choosing a `pipeline` mode
 

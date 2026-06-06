@@ -228,6 +228,9 @@ domain.customer_count      # => 2
 customer.domains.size      # Count
 customer.domains.to_a      # All IDs
 customer.domains.range(0, 9)  # First 10
+
+# Iterate as loaded records (batched via load_multi, ghosts filtered)
+customer.domains.each_record { |domain| domain.refresh! }
 ```
 
 ### Working with Indexes

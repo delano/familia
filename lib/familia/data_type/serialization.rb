@@ -179,8 +179,26 @@ module Familia
         begin
           Familia::JsonSerializer.parse(val)
         rescue Familia::SerializerError
-          Familia.warn "[deserialize] Raw fallback in #{dbkey} (#{val.class}, #{val.respond_to?(:bytesize) ? val.bytesize : '?'} bytes)"
+          log_raw_fallback(val)
           val
+        end
+      end
+
+      private
+
+      # Log a non-JSON value encountered while deserializing.
+      #
+      # A record_class collection stores object identifiers (e.g. from
+      # participates_in), so a non-JSON value is the expected raw identifier —
+      # logged at debug to keep `each`/`each_record` quiet (issue #297). For
+      # other collections a raw fallback is unusual, so warn. The deserialized
+      # value is unchanged either way; only the log level differs.
+      def log_raw_fallback(val)
+        if @opts[:record_class]
+          Familia.debug "[deserialize] Raw identifier in #{dbkey}: #{val.inspect[0..80]}"
+        else
+          size = val.respond_to?(:bytesize) ? val.bytesize : '?'
+          Familia.warn "[deserialize] Raw fallback in #{dbkey} (#{val.class}, #{size} bytes)"
         end
       end
     end

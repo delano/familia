@@ -359,7 +359,12 @@ module Familia
             # STEP 1: Add collection management methods to TARGET class (Employee)
             # Employee gets: domains, add_domain, remove_domain, etc.
             # If staged: is provided, also creates staging set and stage/activate/unstage methods
-            TargetMethods::Builder.build(target_class, collection_name, type, through, staged)
+            #
+            # Pass the participant class (self, e.g. Domain) so the collection is
+            # declared with record_class:, enabling `each_record` to load the
+            # stored participant identifiers without altering read semantics
+            # (issue #297).
+            TargetMethods::Builder.build(target_class, collection_name, type, through, staged, participant_class: self)
 
             # STEP 2: Add participation methods to PARTICIPANT class (Domain) - only if
             # generate_participant_methods. e.g. in_employee_domains?, add_to_employee_domains, etc.
