@@ -101,6 +101,157 @@ module Familia
       end
       alias multi transaction
 
+      # Persists multiple Horreum instances in a SINGLE MULTI/EXEC transaction.
+      #
+      # This is the cross-model / multi-instance counterpart to
+      # {Familia::Horreum::AtomicWrite#atomic_write}. Where the instance method
+      # composes one object's scalar HMSET and collection mutations into one
+      # transaction, this module-level method folds the persistence of several
+      # (possibly different-class) instances into one atomic MULTI/EXEC.
+      #
+      # ## Why this works
+      #
+      # Once a MULTI opens, every instance's +dbclient+ resolves to the same
+      # +Fiber[:familia_transaction]+ connection. So the HMSET, EXPIRE, index
+      # HSET, and instances ZADD for each instance all queue on one socket and
+      # commit together. The transaction is anchored on
+      # +instances.first.dbclient+; because {#guard_cross_model_database!}
+      # enforces that all roots share ONE logical database, every instance
+      # routes to that same connection -- there is no special routing to
+      # engineer, the same-logical-DB requirement IS the constraint.
+      #
+      # ## Read/write split
+      #
+      # The read-validate-write split is the key constraint. +prepare_for_save+
+      # (timestamps + unique-index reads) runs OUTSIDE the transaction because
+      # the reads it performs would return uninspectable +Redis::Future+ objects
+      # inside MULTI/EXEC. Only +persist_to_storage+ (HMSET/EXPIRE/index
+      # HSET/instances ZADD -- write-only) runs INSIDE.
+      #
+      # ## Optimistic locking / create-only
+      #
+      # Pass +watch_keys:+ to wrap the MULTI in a WATCH block, and +pre_check:+
+      # to run a guard between WATCH and MULTI (the only window where reads
+      # return real values while the watched keys are guarded). A concurrent
+      # modification of any watched key aborts EXEC and retries (the committed
+      # primitive owns abort detection + retry). This enables a race-safe
+      # create-only pattern -- see the example below.
+      #
+      # @param instances [Array<Familia::Horreum>] One or more instances to persist.
+      # @param update_expiration [Boolean] Whether to set each instance's TTL
+      #   inside the transaction (default: true).
+      # @param watch_keys [Array<String>, nil] Optional keys to WATCH before
+      #   opening the MULTI. When present, the transaction retries on WATCH abort.
+      # @param pre_check [Proc, nil] Optional callable executed between WATCH and
+      #   MULTI. Requires +watch_keys+. Typically raises to abort early (e.g.
+      #   existence checks for create-only semantics).
+      # @yield Optional user block run inside the transaction BEFORE each
+      #   instance is persisted -- the place to assign cross-references between
+      #   instances (e.g. +org.owner_id = customer.identifier+) and mutate
+      #   collections.
+      # @return [Boolean] true if the MULTI/EXEC committed cleanly; false if the
+      #   transaction was discarded or any queued command returned an error.
+      #
+      # @raise [ArgumentError] If no instances are given, or +pre_check+ is
+      #   provided without +watch_keys+.
+      # @raise [Familia::OperationModeError] If called within an existing transaction.
+      # @raise [Familia::CrossDatabaseError] If the roots (or their related
+      #   fields) span multiple logical databases.
+      # @raise [Familia::OptimisticLockError] If +watch_keys+ retries are exhausted.
+      #
+      # @example Persist two models atomically
+      #   Familia.atomic_write(customer, org) do
+      #     org.owner_id = customer.identifier
+      #     customer.orgs.add(org.identifier)
+      #   end
+      #
+      # @example Race-safe create-only (reject if EITHER key already exists)
+      #   Familia.atomic_write(customer, org,
+      #     watch_keys: [customer.dbkey, org.dbkey],
+      #     pre_check: -> {
+      #       [customer, org].each { |r| raise Familia::RecordExistsError, r.dbkey if r.exists? }
+      #     }
+      #   ) do
+      #     customer.name = 'Acme Owner'
+      #     org.owner_id = customer.identifier
+      #   end
+      #   # A concurrent creation of EITHER key during the WATCH window aborts the
+      #   # whole MULTI and retries; on retry the existence check raises
+      #   # RecordExistsError -- no silent overwrite.
+      #
+      # @note On Redis Cluster, a cross-model MULTI also requires the watched and
+      #   written keys to share a hash slot (CROSSSLOT error otherwise).
+      #   Co-locate related models with hash tags, e.g. +customer:{acct42}:object+.
+      #
+      # @note When +watch_keys+ is set and a WATCH abort triggers a retry, the
+      #   user block AND each +persist_to_storage+ are re-executed on every
+      #   attempt. The aborted MULTI discards all queued Redis commands, so Redis
+      #   state is clean on retry, but side effects outside Redis (logging,
+      #   counters, external API calls) in the user block fire again -- design
+      #   retry-safe blocks when using +watch_keys+.
+      #
+      # @see Familia::Horreum::AtomicWrite#atomic_write Single-instance variant.
+      #
+      def atomic_write(*instances, update_expiration: true, watch_keys: nil, pre_check: nil, &user_block)
+        raise ArgumentError, 'atomic_write requires at least one instance' if instances.empty?
+        raise ArgumentError, 'pre_check requires watch_keys' if pre_check && !watch_keys&.any?
+        if Fiber[:familia_transaction]
+          raise Familia::OperationModeError,
+                'Cannot call Familia.atomic_write within a transaction. It opens its own MULTI/EXEC and cannot be nested.'
+        end
+
+        guard_cross_model_database!(instances)        # all roots + their related fields share ONE logical db
+
+        # Activate atomic_write mode on every instance BEFORE prepare_for_save so
+        # that collection mutations in the user block do not trip dirty-write
+        # warnings -- or, under :strict / raise_on_unsaved_parent_write, raises --
+        # against the just-dirtied scalars. Those scalars are persisted by this
+        # same MULTI, so the writes are legitimate. Mirrors the instance-level
+        # atomic_write (which acquires ownership before prepare_for_save). Only the
+        # instances actually acquired are released, in the ensure below.
+        acquired = []
+        begin
+          instances.each do |i|
+            i.send(:acquire_atomic_write_ownership!)
+            acquired << i
+          end
+
+          instances.each { |i| i.send(:prepare_for_save) }   # READS — outside the txn
+
+          persist_all = lambda do
+            user_block&.call
+            instances.each { |i| i.send(:persist_to_storage, update_expiration) }
+          end
+
+          result =
+            if watch_keys&.any?
+              Familia::Connection::TransactionCore.execute_watched_transaction(
+                -> { instances.first.dbclient }, watch_keys: watch_keys
+              ) do |conn|
+                pre_check&.call
+                Familia::Connection::TransactionCore.execute_normal_transaction(-> { conn }) { persist_all.call }
+              end
+            else
+              # Route the non-watched path through the instance #transaction so it
+              # inherits execute_transaction's handler-compatibility gate: a
+              # connection whose handler disallows transactions falls back per
+              # Familia.transaction_mode (raise/warn/individual) instead of
+              # issuing a raw MULTI on an unsupported connection. (The watched
+              # branch above must call execute_normal_transaction directly to
+              # reuse the WATCH-resolved connection; this branch has no such
+              # constraint.) Anchored on instances.first -- the guard ensures all
+              # roots share one logical database, so it routes every instance.
+              instances.first.transaction { persist_all.call }
+            end
+
+          success = result.is_a?(Familia::MultiResult) ? result.successful? : !result.nil?
+          instances.each { |i| i.send(:clear_dirty!) } if success
+          success
+        ensure
+          acquired.each { |i| i.send(:release_atomic_write_ownership!) }
+        end
+      end
+
       # Executes Database commands in a pipeline for improved performance.
       #
       # Pipelines send multiple commands without waiting for individual responses,
@@ -274,6 +425,49 @@ module Familia
         ensure
           client&.close
         end
+      end
+
+      private
+
+      # Pre-flight guard for {#atomic_write}: every root instance -- and, by
+      # transitivity, every related field on every root -- must resolve to the
+      # SAME logical database. MULTI/EXEC cannot span databases, so anchoring the
+      # transaction on +instances.first.dbclient+ is only correct when all roots
+      # share that database.
+      #
+      # Two layers of checking:
+      #
+      # 1. Compare each root's resolved logical database (+klass.logical_database+
+      #    falling back to +Familia.logical_database || 0+). If they differ, the
+      #    roots span databases and a synthetic "(root)" {Familia::CrossDatabaseError}
+      #    is raised before any write.
+      #
+      # 2. Reuse each instance's existing per-instance field guard
+      #    (+guard_atomic_write_database!+), which checks that instance's
+      #    +related_fields+ and +class_related_fields+ against its own database.
+      #    Because step 1 proved all instance databases are equal, this
+      #    transitively proves every field across every root shares the one
+      #    database.
+      #
+      # @param instances [Array<Familia::Horreum>]
+      # @raise [Familia::CrossDatabaseError] if roots span databases, or any
+      #   instance has a related field on a different database.
+      # @return [void]
+      #
+      def guard_cross_model_database!(instances)
+        dbs = instances.map { |i| i.class.logical_database || Familia.logical_database || 0 }
+        unless dbs.uniq.size == 1
+          # roots span databases — MULTI/EXEC cannot cross databases
+          offender_idx = dbs.index { |d| d != dbs.first }
+          offender = instances[offender_idx]
+          raise Familia::CrossDatabaseError.new(
+            "#{offender.class} (root)", dbs[offender_idx], dbs.first
+          )
+        end
+        # Reuse each instance's existing per-instance field guard (related_fields +
+        # class_related_fields vs that instance's own db). Since all instance dbs are
+        # equal, this transitively proves every field shares the one db.
+        instances.each { |i| i.send(:guard_atomic_write_database!) }
       end
     end
   end

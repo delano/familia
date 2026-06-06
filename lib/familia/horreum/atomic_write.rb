@@ -186,11 +186,20 @@ module Familia
       # Executes the WATCH-guarded atomic_write flow: WATCH → pre_check →
       # MULTI/EXEC, with retry on OptimisticLockError.
       #
+      # Delegates to +TransactionCore.execute_watched_transaction+, which
+      # resolves the connection ONCE and drives both WATCH and the MULTI/EXEC
+      # through that SAME connection. This is what makes the optimistic lock
+      # effective: WATCH and EXEC must share a socket, otherwise the lock is
+      # inert. The MULTI is opened on the resolved connection via
+      # +execute_normal_transaction(-> { conn })+, so nested collection writes
+      # join it through +Fiber[:familia_transaction]+.
+      #
       # When EXEC is aborted by WATCH (a watched key was modified between
-      # WATCH and EXEC), +multi+ returns nil. We detect this via the
-      # MultiResult wrapper and raise OptimisticLockError to trigger a
-      # retry. The retry re-issues WATCH, re-runs the pre_check, and
-      # re-opens MULTI/EXEC.
+      # WATCH and EXEC), +multi+ returns nil; the primitive detects this via
+      # the MultiResult wrapper, raises OptimisticLockError, and retries
+      # (re-issuing WATCH, re-running the pre_check, and re-opening
+      # MULTI/EXEC). A pre_check that raises a non-OptimisticLockError (e.g.
+      # RecordExistsError) propagates out un-retried.
       #
       # @param watch_keys [Array<String>] Keys to WATCH
       # @param pre_check [Proc, nil] Callable run between WATCH and MULTI
@@ -200,38 +209,19 @@ module Familia
       # @return [Boolean]
       # @raise [Familia::OptimisticLockError] If retries exhausted
       def execute_watched_atomic_write(watch_keys, pre_check, update_expiration, max_attempts: 3)
-        attempts = 0
-
-        begin
-          attempts += 1
-
-          result = dbclient.watch(*watch_keys) do
-            pre_check&.call
-
-            txn_result = transaction do |_conn|
-              yield
-              persist_to_storage(update_expiration)
-            end
-
-            # WATCH abort: EXEC returns nil → multi returns nil →
-            # MultiResult wraps nil. Raise to trigger retry.
-            if txn_result.is_a?(MultiResult) && txn_result.results.nil?
-              raise Familia::OptimisticLockError,
-                "WATCH detected concurrent modification of #{watch_keys.join(', ')}"
-            end
-
-            txn_result
+        result = Familia::Connection::TransactionCore.execute_watched_transaction(
+          -> { dbclient }, watch_keys: watch_keys, max_attempts: max_attempts
+        ) do |conn|
+          pre_check&.call
+          Familia::Connection::TransactionCore.execute_normal_transaction(-> { conn }) do |_m|
+            yield
+            persist_to_storage(update_expiration)
           end
-
-          success = atomic_write_success?(result)
-          clear_dirty! if success
-          success
-        rescue Familia::OptimisticLockError
-          raise if attempts >= max_attempts
-
-          sleep(0.001 * (2**attempts))
-          retry
         end
+
+        success = atomic_write_success?(result)
+        clear_dirty! if success
+        success
       end
 
       # Atomically claim same-instance ownership or raise if a competing

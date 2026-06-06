@@ -144,10 +144,10 @@ module Familia
         end
 
         # Clear dirty tracking after successful save
-        clear_dirty! unless result.nil?
+        clear_dirty! if persisted_successfully?(result)
 
         # Return boolean indicating success
-        !result.nil?
+        persisted_successfully?(result)
       end
 
       # Saves scalar fields first, then executes collection operations in the block.
@@ -197,22 +197,29 @@ module Familia
 
       # Conditionally persists object only if it doesn't already exist in storage.
       #
-      # Uses optimistic locking (WATCH) to atomically check existence and save.
-      # If the object doesn't exist, performs identical operations as save.
-      # If it exists, raises an error with retry logic for optimistic lock failures.
+      # Uses optimistic locking (WATCH + MULTI/EXEC on a single connection) to
+      # guard the existence check against the save. If the object doesn't exist,
+      # performs identical operations as save. If it exists, raises an error;
+      # concurrent modification of the watched key aborts EXEC and retries.
       #
       # `save_if_not_exists` doesn't call save because of the gap between checking
       # existence and persisting the data. We can't check for existence inside the
       # transaction because commands are queued and not executed until EXEC
       # is called (if you try you get a Redis::Future object). So here we use a
       # WATCH + MULTI/EXEC pattern to fail the transaction if the key is created
-      # (or modified in any way) to avoid silent data corruption♀︎.
+      # (or modified in any way) between the check and EXEC, avoiding silent data
+      # corruption♀︎. The WATCH and the MULTI/EXEC run on the SAME resolved
+      # connection (see TransactionCore.execute_watched_transaction) -- this is
+      # what makes the optimistic lock effective; split across connections it
+      # would be inert.
 
       # ♀︎ Additional note about WATCH + MULTI/EXEC in Valkey/Redis or any two
-      # step existence check in any database: although it is more cautious,
-      # it is not atomic. The only way to do that is if the database process
-      # can determine itself whether the record already exists or not. For
-      # Valkey/Redis, that means writing the lua to do that.
+      # step existence check in any database: although it is more cautious and,
+      # on a single connection, a genuine optimistic lock (a concurrent write to
+      # the watched key aborts EXEC), it is still not a server-side atomic check.
+      # The only way to do that is if the database process can determine itself
+      # whether the record already exists or not. For Valkey/Redis, that means
+      # writing the lua to do that.
       #
       # @param update_expiration [Boolean] Whether to refresh key expiration (default: true)
       # @return [Boolean] true on successful save
@@ -241,36 +248,27 @@ module Familia
         # Prepare object for persistence (timestamps, validation)
         prepare_for_save
 
-        attempts = 0
-        begin
-          attempts += 1
+        # Drive WATCH + MULTI/EXEC through a SINGLE resolved connection so the
+        # optimistic lock is effective (the primitive owns abort detection and
+        # retry). The existence check runs in the WATCH window: if the key is
+        # created between WATCH and EXEC, Redis aborts and the primitive retries.
+        result = Familia::Connection::TransactionCore.execute_watched_transaction(
+          -> { dbclient }, watch_keys: [dbkey]
+        ) do |conn|
+          raise Familia::RecordExistsError, dbkey if exists?
 
-          result = watch do
-            raise Familia::RecordExistsError, dbkey if exists?
-
-            txn_result = transaction do |_multi|
-              persist_to_storage(update_expiration)
-            end
-
-            Familia.debug "[save_if_not_exists]: txn_result=#{txn_result.inspect}"
-
-            txn_result
+          Familia::Connection::TransactionCore.execute_normal_transaction(-> { conn }) do |_m|
+            persist_to_storage(update_expiration)
           end
-
-          Familia.debug "[save_if_not_exists]: result=#{result.inspect}"
-
-          # Clear dirty tracking after successful save
-          clear_dirty! unless result.nil?
-
-          # Return boolean indicating success (consistent with save method)
-          !result.nil?
-        rescue OptimisticLockError => e
-          Familia.debug "[save_if_not_exists]: OptimisticLockError (#{attempts}): #{e.message}"
-          raise if attempts >= 3
-
-          sleep(0.001 * (2**attempts))
-          retry
         end
+
+        Familia.debug "[save_if_not_exists]: result=#{result.inspect}"
+
+        # Clear dirty tracking after successful save
+        clear_dirty! if persisted_successfully?(result)
+
+        # Return boolean indicating success (consistent with save method)
+        persisted_successfully?(result)
       end
 
       # Non-raising variant of save_if_not_exists!
@@ -335,10 +333,28 @@ module Familia
         end
 
         # Clear dirty tracking after successful commit
-        clear_dirty! unless result.nil?
+        clear_dirty! if persisted_successfully?(result)
 
         result
       end
+
+      # Whether a persistence MULTI/EXEC committed cleanly. A MultiResult is
+      # successful when no queued command returned an Exception; a nil result
+      # (e.g. a discarded/aborted transaction) is a failure. Shared by save,
+      # save_if_not_exists!, commit_fields, and multi_field_update so they all
+      # interpret the transaction result the same way -- a partial-command
+      # failure must not clear dirty state or report success. Mirrors
+      # AtomicWrite#atomic_write_success?.
+      #
+      # @param result [MultiResult, nil]
+      # @return [Boolean]
+      def persisted_successfully?(result)
+        return false if result.nil?
+        return result.successful? if result.is_a?(Familia::MultiResult)
+
+        true
+      end
+      private :persisted_successfully?
 
       # Updates multiple fields atomically in a Database transaction.
       #
@@ -484,7 +500,7 @@ module Familia
           touch_instances!
         end
 
-        clear_dirty!(*field_names) unless result.nil?
+        clear_dirty!(*field_names) if persisted_successfully?(result)
 
         self
       end
