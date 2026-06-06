@@ -232,9 +232,16 @@ module Familia
                 Familia::Connection::TransactionCore.execute_normal_transaction(-> { conn }) { persist_all.call }
               end
             else
-              Familia::Connection::TransactionCore.execute_normal_transaction(
-                -> { instances.first.dbclient }
-              ) { persist_all.call }
+              # Route the non-watched path through the instance #transaction so it
+              # inherits execute_transaction's handler-compatibility gate: a
+              # connection whose handler disallows transactions falls back per
+              # Familia.transaction_mode (raise/warn/individual) instead of
+              # issuing a raw MULTI on an unsupported connection. (The watched
+              # branch above must call execute_normal_transaction directly to
+              # reuse the WATCH-resolved connection; this branch has no such
+              # constraint.) Anchored on instances.first -- the guard ensures all
+              # roots share one logical database, so it routes every instance.
+              instances.first.transaction { persist_all.call }
             end
 
           success = result.is_a?(Familia::MultiResult) ? result.successful? : !result.nil?

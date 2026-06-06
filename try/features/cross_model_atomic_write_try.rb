@@ -358,6 +358,36 @@ end
 [@strict7, @r_scust7.orgs.members]
 #=> [true, ['cm_strict_org_7']]
 
+## 8. Non-watched path honors execute_transaction's handler-compatibility gate
+## (regression for the #300 review). When the resolved connection's handler
+## disallows transactions (fiber-pinned FiberConnectionHandler, allows_transaction
+## == false) and transaction_mode is :strict, Familia.atomic_write must surface a
+## descriptive OperationModeError via the gate -- not issue a raw MULTI on an
+## unsupported connection. Routing the non-watched branch through instance
+## #transaction (instead of execute_normal_transaction directly) inherits it.
+## Globals are restored in the ensure to avoid cross-test pollution.
+@prev_txn_mode8 = Familia.transaction_mode
+@conn8 = CMCustomer.create_dbclient
+@cust8 = CMCustomer.new(custid: 'cm_cust_8', name: 'GateCheck')
+@gate8 = begin
+  Familia.configure { |c| c.transaction_mode = :strict }
+  Fiber[:familia_connection] = [@conn8, Familia.middleware_version]
+  Fiber[:familia_connection_handler_class] = Familia::Connection::FiberConnectionHandler
+  begin
+    Familia.atomic_write(@cust8) { @cust8.name = 'ShouldNotRawMulti' }
+    :no_raise
+  rescue Familia::OperationModeError
+    :raised
+  end
+ensure
+  Fiber[:familia_connection] = nil
+  Fiber[:familia_connection_handler_class] = nil
+  Familia.configure { |c| c.transaction_mode = @prev_txn_mode8 }
+  @conn8&.close
+end
+@gate8
+#=> :raised
+
 # Cleanup
 @probe1&.close
 @probe2&.close
