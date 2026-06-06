@@ -101,11 +101,14 @@ module Familia
 
     private
 
+    # Resolve the object that owns the generated rebuilder. Mirrors #backing:
+    # class-level indexes rebuild against the owner (any passed scope is
+    # irrelevant and ignored); instance-scoped indexes require the scope.
     def resolve_target(scope)
-      return scope if scope
-      raise Familia::Problem, "#{coordinate} is instance-scoped; pass scope:" unless class_level?
+      return owner if class_level?
+      raise Familia::Problem, "#{coordinate} is instance-scoped; pass scope:" unless scope
 
-      owner
+      scope
     end
 
     def backing(value:, scope:)

@@ -258,6 +258,12 @@ rescue Familia::Problem => e
 end
 #=> true
 
+## rebuild! on a class-level index ignores a stray scope: (not a false query:false error)
+# email_lookup is class-level + query:true; passing a scope must resolve to the
+# owner's rebuilder, not misreport the index as query:false.
+Familia.unique_indexes(owner: IxUser).find { |i| i.index_name == :email_lookup }.rebuild!(scope: @u1).is_a?(Integer)
+#=> true
+
 ## assert_indexes_current! rejects an unrecognized on_stale: value (fails fast)
 begin
   Familia.assert_indexes_current!(owner: IxUser, on_stale: :log)
