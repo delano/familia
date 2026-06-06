@@ -57,24 +57,24 @@ Fixed
   as
   documented. #296
 
-  AI Assistance
-  -------------
+AI Assistance
+-------------
 
-  - AI diagnosed the participation iteration bug and identified that ``reference: true``
-    introduced unintended read-behavior changes. Designed and implemented the
-    ``record_class:`` option to decouple ``each_record`` lookup from read deserialization,
-    suppressed a resulting per-member deserialize warning storm, kept intentional
-    raw-string semantics on ``instances`` and ``unique_index``, updated stale
-    flowcharts in ``datatype-collections.md``, and added regression coverage. Issue #297
+- AI diagnosed the participation iteration bug and identified that ``reference: true``
+  introduced unintended read-behavior changes. Designed and implemented the
+  ``record_class:`` option to decouple ``each_record`` lookup from read deserialization,
+  suppressed a resulting per-member deserialize warning storm, kept intentional
+  raw-string semantics on ``instances`` and ``unique_index``, updated stale
+  flowcharts in ``datatype-collections.md``, and added regression coverage. Issue #297
 
-  - Root-caused and fixed a split-connection defect with Claude Code: implemented a
-    single-connection ``execute_watched_transaction`` primitive (avoiding fiber-pinning
-    that degrades atomic commands) and added real concurrent-modification tests to
-    replace simulated aborts. #296
+- Root-caused and fixed a split-connection defect with Claude Code: implemented a
+  single-connection ``execute_watched_transaction`` primitive (avoiding fiber-pinning
+  that degrades atomic commands) and added real concurrent-modification tests to
+  replace simulated aborts. #296
 
-  - Designed and built multi-model atomic writes on top of the new ``WATCH`` primitive:
-    implemented the same-database guard, orchestration logic, and a test suite covering
-    two-model commits, rollback on error, cross-database rejection, and race conditions. #296
+- Designed and built multi-model atomic writes on top of the new ``WATCH`` primitive:
+  implemented the same-database guard, orchestration logic, and a test suite covering
+  two-model commits, rollback on error, cross-database rejection, and race conditions. #296
 
 .. _changelog-2.10.0:
 
