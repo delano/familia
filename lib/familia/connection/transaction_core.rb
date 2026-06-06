@@ -199,13 +199,23 @@ module Familia
           txn_result = conn.watch(*watch_keys) do
             yield(conn)
           end
-          if txn_result.is_a?(MultiResult) && txn_result.results.nil?
+          # Detect a WATCH abort regardless of how the block opened the MULTI: a
+          # block that goes through execute_normal_transaction gets a
+          # MultiResult(nil) on abort, while one that drives conn.multi directly
+          # would see a bare nil (aborted EXEC). Treat both as an abort so the
+          # retry fires either way.
+          if txn_result.nil? || (txn_result.is_a?(MultiResult) && txn_result.results.nil?)
             raise WatchAbortError,
                   "WATCH detected concurrent modification of #{watch_keys.join(', ')}"
           end
           txn_result
         rescue WatchAbortError
           raise if attempts >= max_attempts
+
+          # Exponential backoff between WATCH retries (sub-10ms). This sleep
+          # blocks the current thread; under a Fiber::Scheduler (Ruby 3+) it
+          # yields cooperatively, but with no scheduler installed it parks the
+          # thread for the backoff window.
           sleep(0.001 * (2**attempts))
           retry
         end
