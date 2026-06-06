@@ -7,6 +7,75 @@ The format is based on `Keep a Changelog <https://keepachangelog.com/en/1.1.0/>`
 
    <!--scriv-insert-here-->
 
+.. _changelog-2.10.1:
+
+2.10.1 — 2026-06-06
+===================
+
+Added
+-----
+
+- ``record_class:`` option for collection DataTypes (``list``/``set``/
+  ``sorted_set``/``hashkey``). This loading-only hint tells ``each_record`` which
+  class to hydrate via ``load_multi`` without changing how the collection
+  serializes or deserializes reads. Use this when you want ``each_record`` lookup
+  behavior but no changes to read behavior. Issue #297
+
+- ``Familia.atomic_write(*instances)`` persists multiple Horreum instances in a
+  single ``MULTI/EXEC``. Includes an optional ``watch_keys:``/``pre_check:``
+  variant for race-safe, write-once semantics. All participating instances must
+  resolve to the same logical database (raising ``Familia::CrossDatabaseError``
+  otherwise) and must share a hash slot on Redis Cluster. #296
+
+Changed
+-------
+
+- ``participates_in`` / ``class_participates_in`` collections now default to
+  using ``record_class:``. This change requires **no data migration and causes no
+  behavior changes**: existing collections already stored raw identifiers, and
+  read operations (``members``, ``to_a``, ``member?``, ``score``) behave exactly
+  as before. The only difference is that ``each_record`` is now supported. Pre-
+  declared collections are left untouched. Issue #297
+
+Fixed
+-----
+
+- Enabled ``each_record`` on ``participates_in`` and ``class_participates_in``
+  collections by automatically declaring them with ``record_class: <participant
+  class>``. This resolves ``Familia::Problem`` exceptions and loads participant
+  records via ``load_multi`` across all collection types. Issue #297
+
+- Suppressed per-member ``[deserialize] Raw fallback`` warning storm when
+  iterating ``record_class`` collections with non-JSON identifiers (such as UUIDs
+  or prefixed IDs). These expected raw values are now logged at the debug level
+  instead of warnings. Issue #297
+
+- Resolved a connection-pooling bug where the ``WATCH``-based optimistic lock
+  in ``atomic_write(watch_keys:)``, ``save_if_not_exists!``, and ``create!`` was
+  silent/inert. The ``WATCH`` and ``MULTI/EXEC`` commands are now driven through
+  the same connection, ensuring concurrent modifications correctly abort and raise
+  as
+  documented. #296
+
+  AI Assistance
+  -------------
+
+  - AI diagnosed the participation iteration bug and identified that ``reference: true``
+    introduced unintended read-behavior changes. Designed and implemented the
+    ``record_class:`` option to decouple ``each_record`` lookup from read deserialization,
+    suppressed a resulting per-member deserialize warning storm, kept intentional
+    raw-string semantics on ``instances`` and ``unique_index``, updated stale
+    flowcharts in ``datatype-collections.md``, and added regression coverage. Issue #297
+
+  - Root-caused and fixed a split-connection defect with Claude Code: implemented a
+    single-connection ``execute_watched_transaction`` primitive (avoiding fiber-pinning
+    that degrades atomic commands) and added real concurrent-modification tests to
+    replace simulated aborts. #296
+
+  - Designed and built multi-model atomic writes on top of the new ``WATCH`` primitive:
+    implemented the same-database guard, orchestration logic, and a test suite covering
+    two-model commits, rollback on error, cross-database rejection, and race conditions. #296
+
 .. _changelog-2.10.0:
 
 2.10.0 — 2026-06-04
