@@ -236,6 +236,38 @@ Familia.assert_indexes_current!(owner: IxUser)
 #=> true
 
 # =============================================
+# 6b. query: false indexes and on_stale validation
+# =============================================
+
+## a query: false index still reports stale_format? honestly
+ulk = IxUser.username_lookup
+ulk.dbclient.hset(ulk.dbkey, 'legacyname', '"legacy_uid"')
+Familia.unique_indexes(owner: IxUser).find { |i| i.index_name == :username_lookup }.stale_format?
+#=> true
+
+## ...but the sweep/guard excludes it (no find_by_*, self-heals on read)
+Familia.stale_indexes(owner: IxUser).map(&:coordinate)
+#=> []
+
+## rebuild! on a query: false index raises a descriptive error, not NoMethodError
+begin
+  Familia.unique_indexes(owner: IxUser).find { |i| i.index_name == :username_lookup }.rebuild!
+  'no raise'
+rescue Familia::Problem => e
+  e.message.include?('query: false')
+end
+#=> true
+
+## assert_indexes_current! rejects an unrecognized on_stale: value (fails fast)
+begin
+  Familia.assert_indexes_current!(owner: IxUser, on_stale: :log)
+  'no raise'
+rescue ArgumentError => e
+  e.message.include?('on_stale')
+end
+#=> true
+
+# =============================================
 # 7. Participation introspection
 # =============================================
 

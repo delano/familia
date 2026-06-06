@@ -13,7 +13,7 @@ module Familia
   # (Familia.unique_indexes, Familia.index_descriptors, ...) rather than
   # constructing them directly.
   #
-  # @example Rebuild every class-level unique index in the app (v2.10.0)
+  # @example Rebuild every class-level unique index in the app (requires 2.10.1+)
   #   Familia.unique_indexes(class_level: true).each(&:rebuild!)
   #
   # @example Iterate the records behind a class-level unique index
@@ -62,8 +62,18 @@ module Familia
     # @param scope [Familia::Horreum, nil] required for instance-scoped indexes
     # @param opts [Hash] forwarded to the generated rebuilder (e.g. batch_size:)
     # @return [Integer] count of indexed records
+    # @raise [Familia::Problem] for instance-scoped indexes called without a
+    #   scope, or for `query: false` indexes (which generate no rebuilder)
     def rebuild!(scope: nil, **opts)
-      resolve_target(scope).public_send(:"rebuild_#{index_name}", **opts)
+      target = resolve_target(scope)
+      rebuilder = :"rebuild_#{index_name}"
+      unless target.respond_to?(rebuilder)
+        raise Familia::Problem,
+              "#{coordinate} has no generated rebuilder (declared query: false). " \
+              'Migrate it by re-saving the affected records, or declare it query: true.'
+      end
+
+      target.public_send(rebuilder, **opts)
     end
 
     # Whether the index's stored data predates the current (raw) storage format
@@ -187,11 +197,19 @@ module Familia
     # Class-level unique indexes whose stored data predates the current format
     # (legacy JSON-encoded identifiers) and therefore need a rebuild.
     #
+    # Scoped to `query: true` indexes: those are the ones with a generated
+    # `find_by_*` that can silently miss on stale data (the failure this guards
+    # against), and the only ones with a generated rebuilder. A `query: false`
+    # index has no `find_by_*`, self-heals on read, and is migrated by re-saving
+    # records — so it is intentionally excluded here.
+    #
     # @param sample [Integer] raw values sampled per index
     # @param owner [Class, nil] restrict to a single owning class
     # @return [Array<Familia::IndexDescriptor>]
     def stale_indexes(sample: 100, owner: nil)
-      unique_indexes(class_level: true, owner: owner).reject { |idx| idx.format_current?(sample: sample) }
+      unique_indexes(class_level: true, owner: owner)
+        .select(&:query?)
+        .reject { |idx| idx.format_current?(sample: sample) }
     end
 
     # Boot guard / CI smoke test: ensure no class-level unique index holds
@@ -203,6 +221,7 @@ module Familia
     # @param owner [Class, nil] restrict the check to a single owning class
     # @param on_stale [Symbol] :raise (default) or :warn
     # @return [Boolean] true when all checked indexes are current
+    # @raise [ArgumentError] when on_stale is not :raise or :warn
     # @raise [Familia::Problem] when stale indexes are found and on_stale: :raise
     #
     # @example Fail fast at boot
@@ -211,6 +230,10 @@ module Familia
     # @example Non-fatal CI smoke test
     #   Familia.assert_indexes_current!(on_stale: :warn)
     def assert_indexes_current!(sample: 100, owner: nil, on_stale: :raise)
+      unless %i[raise warn].include?(on_stale)
+        raise ArgumentError, "on_stale: must be :raise or :warn; got #{on_stale.inspect}"
+      end
+
       stale = stale_indexes(sample: sample, owner: owner)
       return true if stale.empty?
 
