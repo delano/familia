@@ -149,11 +149,10 @@ module Familia
       # Detects and strips legacy JSON-encoded string identifiers stored by
       # pre-2.10.0 unique_index writes (e.g. "\"u1\"" → "u1").
       def strip_legacy_json_encoding(val)
-        return val unless val.is_a?(String) && val.length > 2 &&
-                          val.start_with?('"') && val.end_with?('"')
+        return val unless Familia.legacy_json_encoded?(val)
 
         stripped = val[1..-2]
-        Familia.warn "[familia] Legacy JSON-encoded identifier detected in #{dbkey}: #{val.inspect} → #{stripped.inspect}. Rebuild this index (see docs/migrating/v2.10.0.md)."
+        Familia.warn "[familia] Legacy JSON-encoded identifier detected in #{dbkey}: #{val.inspect} → #{stripped.inspect}. Rebuild this index (see docs/migrating/v2.10.md)."
         stripped
       end
 
