@@ -119,7 +119,7 @@ end
 
 ## PoC 2b: the racer's value survived (no silent overwrite) and the victim's
 ## own customer key was never written under its identifier.
-[@racer.hget(@org2.dbkey, 'name'), Redis.new(url: Familia.uri.to_s).exists(@cust2.dbkey)]
+[@racer.hget(@org2.dbkey, 'name'), @racer.exists(@cust2.dbkey)]
 #=> ['RacerOwned', 0]
 
 # Cleanup

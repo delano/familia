@@ -191,6 +191,7 @@ end
 sine_box = [0]
 sine_racer = Redis.new(url: Familia.uri.to_s)
 @sine_box = sine_box
+@sine_racer = sine_racer # ivar alias so the later block can read + the cleanup can close it
 real_exists = WatchTestUser.instance_method(:exists?)
 @u_sine.define_singleton_method(:exists?) do
   sine_box[0] += 1
@@ -213,7 +214,7 @@ end
 #=> :raised
 
 ## save_if_not_exists! real race took >=2 attempts and left racer's value intact
-[@sine_box[0] >= 2, Redis.new(url: Familia.uri.to_s).hget(@u_sine.dbkey, 'name')]
+[@sine_box[0] >= 2, @sine_racer.hget(@u_sine.dbkey, 'name')]
 #=> [true, 'RacerCreated']
 
 ## build with block uses WATCH path (duplicate rejected even under concurrent setup)
@@ -246,5 +247,8 @@ end
 #=> :raised
 
 # Cleanup
+@racer9&.close
+@racer10&.close
+@sine_racer&.close
 WatchTestUser.instances.clear
 flush_watch_test_keys!

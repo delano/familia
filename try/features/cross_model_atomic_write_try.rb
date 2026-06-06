@@ -54,7 +54,7 @@ end
 # so flush keys directly via a second raw connection.
 def flush_cross_model_keys!
   raw = Redis.new(url: Familia.uri.to_s)
-  %w[cm_customer:* cm_org:* cm_db_zero:*].each do |pattern|
+  %w[cm_customer:* cm_org:* cm_db_zero:* cm_strict_customer:* cm_strict_org:*].each do |pattern|
     keys = raw.keys(pattern)
     raw.del(*keys) unless keys.empty?
   end
@@ -310,9 +310,46 @@ end
 ## and the victim's own key was never written under its identifier.
 [
   @racer6.hget(@org6b.dbkey, 'name'),
-  Redis.new(url: Familia.uri.to_s).exists(@cust6b.dbkey),
+  @racer6.exists(@cust6b.dbkey),
 ]
 #=> ['RacerOwnedOrg', 0]
+
+## 7. Dirty-write suppression: Familia.atomic_write activates atomic_write_mode?
+## on every instance (like the instance-level variant), so collection mutations
+## in the user block against just-dirtied scalars do not fire dirty-write
+## warnings -- or, under dirty_write_warnings :strict, a Familia::Problem raise.
+## Without that activation this happy path would raise. (Regression test for the
+## #300 review finding.)
+class CMStrictCustomer < Familia::Horreum
+  dirty_write_warnings :strict
+  identifier_field :custid
+  field :custid
+  field :name
+  set :orgs
+end
+class CMStrictOrg < Familia::Horreum
+  dirty_write_warnings :strict
+  identifier_field :orgid
+  field :orgid
+  field :name
+  set :members
+end
+CMStrictCustomer.instances.clear
+CMStrictOrg.instances.clear
+@scust7 = CMStrictCustomer.new(custid: 'cm_strict_cust_7', name: 'S')
+@sorg7 = CMStrictOrg.new(orgid: 'cm_strict_org_7', name: 'SO')
+@strict7 = begin
+  Familia.atomic_write(@scust7, @sorg7) do
+    @scust7.name = 'StrictChanged'        # dirties a scalar
+    @scust7.orgs.add(@sorg7.identifier)   # collection mutation on a dirtied :strict parent
+    @sorg7.members.add(@scust7.identifier)
+  end
+rescue Familia::Problem => e
+  [:raised, e.message.to_s[0, 40]]
+end
+@r_scust7 = CMStrictCustomer.find_by_id('cm_strict_cust_7')
+[@strict7, @r_scust7.orgs.members]
+#=> [true, ['cm_strict_org_7']]
 
 # Cleanup
 @probe1&.close
@@ -322,5 +359,7 @@ end
 @racer6&.close
 CMCustomer.instances.clear
 CMOrg.instances.clear
+CMStrictCustomer.instances.clear
+CMStrictOrg.instances.clear
 flush_cross_model_keys!
 flush_cross_model_db5!

@@ -183,6 +183,13 @@ module Familia
       #   written keys to share a hash slot (CROSSSLOT error otherwise).
       #   Co-locate related models with hash tags, e.g. +customer:{acct42}:object+.
       #
+      # @note When +watch_keys+ is set and a WATCH abort triggers a retry, the
+      #   user block AND each +persist_to_storage+ are re-executed on every
+      #   attempt. The aborted MULTI discards all queued Redis commands, so Redis
+      #   state is clean on retry, but side effects outside Redis (logging,
+      #   counters, external API calls) in the user block fire again -- design
+      #   retry-safe blocks when using +watch_keys+.
+      #
       # @see Familia::Horreum::AtomicWrite#atomic_write Single-instance variant.
       #
       def atomic_write(*instances, update_expiration: true, watch_keys: nil, pre_check: nil, &user_block)
@@ -195,30 +202,47 @@ module Familia
 
         guard_cross_model_database!(instances)        # all roots + their related fields share ONE logical db
 
-        instances.each { |i| i.send(:prepare_for_save) }   # READS — outside the txn
-
-        persist_all = lambda do
-          user_block&.call
-          instances.each { |i| i.send(:persist_to_storage, update_expiration) }
-        end
-
-        result =
-          if watch_keys&.any?
-            Familia::Connection::TransactionCore.execute_watched_transaction(
-              -> { instances.first.dbclient }, watch_keys: watch_keys
-            ) do |conn|
-              pre_check&.call
-              Familia::Connection::TransactionCore.execute_normal_transaction(-> { conn }) { persist_all.call }
-            end
-          else
-            Familia::Connection::TransactionCore.execute_normal_transaction(
-              -> { instances.first.dbclient }
-            ) { persist_all.call }
+        # Activate atomic_write mode on every instance BEFORE prepare_for_save so
+        # that collection mutations in the user block do not trip dirty-write
+        # warnings -- or, under :strict / raise_on_unsaved_parent_write, raises --
+        # against the just-dirtied scalars. Those scalars are persisted by this
+        # same MULTI, so the writes are legitimate. Mirrors the instance-level
+        # atomic_write (which acquires ownership before prepare_for_save). Only the
+        # instances actually acquired are released, in the ensure below.
+        acquired = []
+        begin
+          instances.each do |i|
+            i.send(:acquire_atomic_write_ownership!)
+            acquired << i
           end
 
-        success = result.is_a?(Familia::MultiResult) ? result.successful? : !result.nil?
-        instances.each { |i| i.send(:clear_dirty!) } if success
-        success
+          instances.each { |i| i.send(:prepare_for_save) }   # READS — outside the txn
+
+          persist_all = lambda do
+            user_block&.call
+            instances.each { |i| i.send(:persist_to_storage, update_expiration) }
+          end
+
+          result =
+            if watch_keys&.any?
+              Familia::Connection::TransactionCore.execute_watched_transaction(
+                -> { instances.first.dbclient }, watch_keys: watch_keys
+              ) do |conn|
+                pre_check&.call
+                Familia::Connection::TransactionCore.execute_normal_transaction(-> { conn }) { persist_all.call }
+              end
+            else
+              Familia::Connection::TransactionCore.execute_normal_transaction(
+                -> { instances.first.dbclient }
+              ) { persist_all.call }
+            end
+
+          success = result.is_a?(Familia::MultiResult) ? result.successful? : !result.nil?
+          instances.each { |i| i.send(:clear_dirty!) } if success
+          success
+        ensure
+          acquired.each { |i| i.send(:release_atomic_write_ownership!) }
+        end
       end
 
       # Executes Database commands in a pipeline for improved performance.
