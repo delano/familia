@@ -170,6 +170,15 @@ module Familia
         MultiResult.new(command_return_values)
       end
 
+      # Internal sentinel raised ONLY by execute_watched_transaction to mark a
+      # genuine WATCH abort (EXEC discarded). It lets the retry loop distinguish
+      # a real abort -- which should retry -- from an OptimisticLockError raised
+      # by the caller's pre_check or user block, which must propagate untouched
+      # (otherwise the loop would silently re-run the whole transaction and mask
+      # the real failure). Subclasses OptimisticLockError so a public
+      # `rescue Familia::OptimisticLockError` still catches an exhausted retry.
+      class WatchAbortError < Familia::OptimisticLockError; end
+
       # Runs a WATCH-guarded transaction on a SINGLE resolved connection so the
       # WATCH and the MULTI/EXEC share one socket (the optimistic lock is only
       # effective this way). The caller's block receives the resolved connection
@@ -191,11 +200,11 @@ module Familia
             yield(conn)
           end
           if txn_result.is_a?(MultiResult) && txn_result.results.nil?
-            raise Familia::OptimisticLockError,
+            raise WatchAbortError,
                   "WATCH detected concurrent modification of #{watch_keys.join(', ')}"
           end
           txn_result
-        rescue Familia::OptimisticLockError
+        rescue WatchAbortError
           raise if attempts >= max_attempts
           sleep(0.001 * (2**attempts))
           retry

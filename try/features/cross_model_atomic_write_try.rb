@@ -175,6 +175,13 @@ end
 ## does NOT raise for per-command errors). Stub execute_normal_transaction to
 ## return a failed MultiResult after running the block, so scalars are touched
 ## but neither instance is cleared.
+##
+## NOTE: the stub does not set Fiber[:familia_transaction], so persist_to_storage
+## resolves a live connection and actually writes the dirty values to Redis (the
+## teardown flush clears them before any read-back). This is an intentional
+## simplification to exercise the dirty-state-preservation path -- it is NOT a
+## faithful failed-MULTI (a real aborted EXEC writes nothing); Familia.atomic_write
+## does not itself roll back partial Redis writes.
 @cust4b = CMCustomer.new(custid: 'cm_cust_4b', name: 'DirtyBefore')
 @org4b = CMOrg.new(orgid: 'cm_org_4b', name: 'DirtyBeforeOrg')
 @cust4b.save

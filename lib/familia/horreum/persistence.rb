@@ -144,10 +144,10 @@ module Familia
         end
 
         # Clear dirty tracking after successful save
-        clear_dirty! unless result.nil?
+        clear_dirty! if persisted_successfully?(result)
 
         # Return boolean indicating success
-        !result.nil?
+        persisted_successfully?(result)
       end
 
       # Saves scalar fields first, then executes collection operations in the block.
@@ -265,10 +265,10 @@ module Familia
         Familia.debug "[save_if_not_exists]: result=#{result.inspect}"
 
         # Clear dirty tracking after successful save
-        clear_dirty! unless result.nil?
+        clear_dirty! if persisted_successfully?(result)
 
         # Return boolean indicating success (consistent with save method)
-        !result.nil?
+        persisted_successfully?(result)
       end
 
       # Non-raising variant of save_if_not_exists!
@@ -333,10 +333,28 @@ module Familia
         end
 
         # Clear dirty tracking after successful commit
-        clear_dirty! unless result.nil?
+        clear_dirty! if persisted_successfully?(result)
 
         result
       end
+
+      # Whether a persistence MULTI/EXEC committed cleanly. A MultiResult is
+      # successful when no queued command returned an Exception; a nil result
+      # (e.g. a discarded/aborted transaction) is a failure. Shared by save,
+      # save_if_not_exists!, commit_fields, and multi_field_update so they all
+      # interpret the transaction result the same way -- a partial-command
+      # failure must not clear dirty state or report success. Mirrors
+      # AtomicWrite#atomic_write_success?.
+      #
+      # @param result [MultiResult, nil]
+      # @return [Boolean]
+      def persisted_successfully?(result)
+        return false if result.nil?
+        return result.successful? if result.is_a?(Familia::MultiResult)
+
+        true
+      end
+      private :persisted_successfully?
 
       # Updates multiple fields atomically in a Database transaction.
       #
@@ -482,7 +500,7 @@ module Familia
           touch_instances!
         end
 
-        clear_dirty!(*field_names) unless result.nil?
+        clear_dirty!(*field_names) if persisted_successfully?(result)
 
         self
       end
