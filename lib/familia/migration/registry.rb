@@ -1,5 +1,7 @@
 # lib/familia/migration/registry.rb — Redis-backed state tracking
 #
+# frozen_string_literal: true
+
 require 'json'
 require 'digest'
 
