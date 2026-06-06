@@ -100,7 +100,7 @@ module Familia
             case scope_type
             when :instance
               # Instance-scoped multi-index (existing behavior)
-              generate_factory_method(scope_class, index_name)
+              generate_factory_method(indexed_class, scope_class, index_name)
               generate_query_methods_destination(indexed_class, field, scope_class, index_name) if query
               generate_mutation_methods_self(indexed_class, field, scope_class, index_name)
             when :class
@@ -118,7 +118,7 @@ module Familia
           #
           # @param scope_class [Class] The scope class providing uniqueness context (e.g., Company)
           # @param index_name [Symbol] Name of the index (e.g., :dept_index)
-          def generate_factory_method(scope_class, index_name)
+          def generate_factory_method(indexed_class, scope_class, index_name)
             actual_scope_class = Familia.resolve_class(scope_class)
 
             actual_scope_class.class_eval do
@@ -127,7 +127,7 @@ module Familia
               define_method(:"#{index_name}_for") do |field_value|
                 # Return properly managed DataType instance with parameterized key
                 index_key = Familia.join(index_name, field_value)
-                Familia::UnsortedSet.new(index_key, parent: self)
+                Familia::UnsortedSet.new(index_key, parent: self, class: indexed_class, reference: true)
               end
             end
           end
@@ -412,7 +412,7 @@ module Familia
               # string to ensure consistent type handling in key construction.
               validated = MultiIndexGenerators.validate_field_value(field_value, context: "#{name}.#{idx_name}")
               index_key = Familia.join(index_name, validated)
-              Familia::UnsortedSet.new(index_key, parent: self)
+              Familia::UnsortedSet.new(index_key, parent: self, class: indexed_class, reference: true)
             end
           end
 
@@ -510,9 +510,7 @@ module Familia
                     next unless field_value && !field_value.to_s.strip.empty?
 
                     index_set = send("#{index_name}_for", field_value)
-                    # Use JsonSerializer for consistent serialization with update method
-                    serialized_id = Familia::JsonSerializer.dump(obj.identifier)
-                    conn.sadd(index_set.dbkey, serialized_id)
+                    conn.sadd(index_set.dbkey, index_set.serialize_value(obj.identifier))
                   end
                 end
 
