@@ -152,7 +152,7 @@ module Familia
         return val unless Familia.legacy_json_encoded?(val)
 
         stripped = val[1..-2]
-        Familia.warn "[familia] Legacy JSON-encoded identifier detected in #{dbkey}: #{val.inspect} → #{stripped.inspect}. Rebuild this index (see docs/migrating/v2.10.0.md)."
+        Familia.warn "[familia] Legacy JSON-encoded identifier detected in #{dbkey}: #{val.inspect} → #{stripped.inspect}. Rebuild this index (see docs/migrating/v2.10.md)."
         stripped
       end
 

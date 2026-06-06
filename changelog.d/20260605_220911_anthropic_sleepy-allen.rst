@@ -24,8 +24,9 @@ Documentation
 - Documented the relationship introspection API — per-class
   (``indexing_relationships``/``participation_relationships``), project-wide, and
   per-instance — plus the stale-index boot guard, across the relationships guide
-  and methods reference. Added a slimmed design note for the still-open optional
-  persisted "clan manifest".
+  and methods reference. Renamed ``docs/migrating/v2.10.0.md`` to
+  ``docs/migrating/v2.10.md`` and noted that the introspection helpers require
+  2.10.1+.
 
 AI Assistance
 -------------

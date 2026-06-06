@@ -215,7 +215,7 @@ module Familia
       return true if stale.empty?
 
       msg = "Stale unique indexes need rebuild: #{stale.map(&:coordinate).join(', ')}. " \
-            'See docs/migrating/v2.10.0.md (Unique-index storage format).'
+            'See docs/migrating/v2.10.md (Unique-index storage format).'
       raise Familia::Problem, msg unless on_stale == :warn
 
       Familia.warn "[familia] #{msg}"

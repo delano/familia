@@ -170,9 +170,9 @@ team.member_instances                     # Load objects
 ## Introspection
 
 The relationships feature exposes its configuration and state at three levels:
-per-class metadata (what a class *declares*), a project-wide sweep (composed
-from the global class registry), and per-instance state (which indexes and
-collections a specific object *currently belongs to*).
+per-class metadata (what a class *declares*), a project-wide view across all
+classes, and per-instance state (which indexes and collections a specific
+object *currently belongs to*).
 
 ### Per-Class: `indexing_relationships` and `participation_relationships`
 
@@ -200,14 +200,6 @@ Each `IndexingRelationship` is a `Data.define` exposing:
 | `.query` | Boolean | Whether `find_by_*` methods were generated |
 | `.class_level?` | Boolean | Convenience: `within.nil? || within == :class` |
 | `.scope_class_config_name` | String | Normalized config name of the scope class |
-
-```ruby
-# Just the unique indexes:
-User.indexing_relationships.select { |r| r.cardinality == :unique }
-
-# Just the instance-scoped indexes:
-User.indexing_relationships.reject(&:class_level?)
-```
 
 The participation parallel is `participation_relationships`, which returns an
 `Array<ParticipationRelationship>` describing every `participates_in` /
@@ -238,11 +230,10 @@ Familia.unique_indexes(class_level: true)        # exclude instance-scoped
 Familia.unique_indexes(owner: User)              # one class only
 ```
 
-An `IndexDescriptor` exposes the underlying relationship's metadata (`field`,
-`index_name`, `cardinality`, `within`, `class_level?`, `unique?`, `query?`) plus
-a stable `coordinate` (`"User:email_lookup"`) — and, crucially, **behavior that
-hides the index's storage layout**: `each_record` and `rebuild!` work without the
-caller knowing the method-naming conventions.
+Each `IndexDescriptor` delegates the relationship's metadata (above) and adds a
+stable `coordinate` (`"User:email_lookup"`) plus **behavior that hides the
+storage layout** — `each_record` and `rebuild!` work without the caller knowing
+any method-naming conventions.
 
 ```ruby
 # Iterate the records behind every class-level unique index — no internals:
@@ -259,10 +250,11 @@ end
 
 ### Detecting stale index data (boot guard)
 
-The v2.10.0 [unique-index storage change](../migrating/v2.10.0.md#unique-index-storage-format)
+The v2.10.0 [unique-index storage change](../migrating/v2.10.md#unique-index-storage-format)
 is read-compatible, but indexes written under 2.9.x hold legacy JSON-encoded
 identifiers until rebuilt — and an un-rebuilt index can make a `find_by_*` lookup
-silently miss. The introspection layer can **detect and fix this before it bites**:
+silently miss. The introspection layer can **detect and fix this before it bites**
+(the guard methods require 2.10.1+):
 
 ```ruby
 # Which class-level unique indexes still hold pre-2.10.0 data?
@@ -276,9 +268,8 @@ Familia.assert_indexes_current!(on_stale: :warn)      # warns and returns false
 Familia.stale_indexes.each(&:rebuild!)
 ```
 
-`stale_indexes` samples each index's raw values (via `HRANDFIELD`/`HMGET`, so no
-deserialize and no warning spam) and reuses the same `Familia.legacy_json_encoded?`
-predicate as the read path, so detection and stripping never disagree.
+Detection samples raw values and reuses the same predicate as the read path, so
+it never disagrees with what a `find_by_*` lookup would strip.
 
 ### Per-Instance: membership state
 

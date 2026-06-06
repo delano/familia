@@ -226,7 +226,7 @@ end
 Familia.assert_indexes_current!(owner: IxUser, on_stale: :warn)
 #=> false
 
-## the v2.10.0 sweep: rebuilding stale indexes restores current format
+## the migration sweep: rebuilding stale indexes restores current format
 Familia.stale_indexes(owner: IxUser).each(&:rebuild!)
 Familia.stale_indexes(owner: IxUser)
 #=> []
