@@ -264,6 +264,18 @@ end
 Familia.unique_indexes(owner: IxUser).find { |i| i.index_name == :email_lookup }.rebuild!(scope: @u1).is_a?(Integer)
 #=> true
 
+## ...and it warns that the stray scope: was ignored, rather than failing silently
+@log_io = StringIO.new
+@orig_logger = Familia.logger
+Familia.logger = Familia::FamiliaLogger.new(@log_io)
+begin
+  Familia.unique_indexes(owner: IxUser).find { |i| i.index_name == :email_lookup }.rebuild!(scope: @u1)
+ensure
+  Familia.logger = @orig_logger
+end
+@log_io.string.include?('is class-level; ignoring scope')
+#=> true
+
 ## assert_indexes_current! rejects an unrecognized on_stale: value (fails fast)
 begin
   Familia.assert_indexes_current!(owner: IxUser, on_stale: :log)

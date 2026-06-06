@@ -102,10 +102,15 @@ module Familia
     private
 
     # Resolve the object that owns the generated rebuilder. Mirrors #backing:
-    # class-level indexes rebuild against the owner (any passed scope is
-    # irrelevant and ignored); instance-scoped indexes require the scope.
+    # class-level indexes rebuild against the owner; instance-scoped indexes
+    # require the scope. A scope handed to a class-level index is irrelevant —
+    # warn (it signals caller confusion) and ignore it, rather than letting it
+    # fall through to a misleading "no rebuilder" error.
     def resolve_target(scope)
-      return owner if class_level?
+      if class_level?
+        Familia.warn "[familia] #{coordinate} is class-level; ignoring scope: parameter" if scope
+        return owner
+      end
       raise Familia::Problem, "#{coordinate} is instance-scoped; pass scope:" unless scope
 
       scope
