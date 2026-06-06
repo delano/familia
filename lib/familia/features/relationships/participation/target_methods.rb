@@ -86,7 +86,13 @@ module Familia
             # #297) without changing read deserialization — see
             # CollectionOperations#ensure_collection_field for why participation
             # uses record_class: rather than class: + reference: true.
-            target_class.send("class_#{type}", collection_name, record_class: target_class)
+            #
+            # Skip if a class-level accessor already exists, mirroring the
+            # method_defined? guard in ensure_collection_field so a pre-declared
+            # collection is not silently overridden (symmetry with instance-level).
+            unless target_class.respond_to?(collection_name)
+              target_class.send("class_#{type}", collection_name, record_class: target_class)
+            end
 
             # Class-level collection getter (e.g., User.all_users)
             build_class_collection_getter(target_class, collection_name, type)

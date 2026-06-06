@@ -41,6 +41,20 @@ class PERMember < Familia::Horreum
   class_participates_in :all_members, score: :created_at
 end
 
+# Pre-declares its class-level collection BEFORE class_participates_in, to verify
+# build_class_level does not silently override a hand-declared collection
+# (symmetry with the instance-level ensure_collection_field guard).
+class PERPreDeclared < Familia::Horreum
+  feature :relationships
+
+  identifier_field :pid
+  field :pid
+  field :created_at
+
+  class_sorted_set :roster
+  class_participates_in :roster, score: :created_at
+end
+
 # Setup
 @org = PEROrg.new(org_id: 'org-per-1')
 @org.save
@@ -213,6 +227,16 @@ ensure
 end
 @log_io.string.scan(/Raw fallback/).size
 #=> 0
+
+# ============================================================
+# build_class_level is idempotent: a class-level collection pre-declared
+# before class_participates_in keeps its own options (no record_class added),
+# mirroring the instance-level ensure_collection_field guard.
+# ============================================================
+
+## a pre-declared class-level collection is not overridden with record_class
+PERPreDeclared.roster.opts[:record_class]
+#=> nil
 
 # Teardown
 @org.members.clear rescue nil

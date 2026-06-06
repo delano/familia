@@ -197,7 +197,8 @@ module Familia
         if @opts[:record_class]
           Familia.debug "[deserialize] Raw identifier in #{dbkey}: #{val.inspect[0..80]}"
         else
-          Familia.warn "[deserialize] Raw fallback in #{dbkey} (#{val.class}, #{val.bytesize} bytes)"
+          size = val.respond_to?(:bytesize) ? val.bytesize : '?'
+          Familia.warn "[deserialize] Raw fallback in #{dbkey} (#{val.class}, #{size} bytes)"
         end
       end
     end
