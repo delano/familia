@@ -120,13 +120,14 @@ module Familia
           # @param index_name [Symbol] Name of the index (e.g., :dept_index)
           def generate_factory_method(indexed_class, scope_class, index_name)
             actual_scope_class = Familia.resolve_class(scope_class)
+            idx_name = index_name
 
             actual_scope_class.class_eval do
               # Helper method to get index set for a specific field value
               # This acts as a factory for field-value-specific DataTypes
               define_method(:"#{index_name}_for") do |field_value|
-                # Return properly managed DataType instance with parameterized key
-                index_key = Familia.join(index_name, field_value)
+                validated = MultiIndexGenerators.validate_field_value(field_value, context: "#{self.class.name}.#{idx_name}")
+                index_key = Familia.join(index_name, validated)
                 Familia::UnsortedSet.new(index_key, parent: self, class: indexed_class, reference: true)
               end
             end
