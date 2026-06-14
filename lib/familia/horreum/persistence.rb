@@ -823,16 +823,25 @@ module Familia
         nil # Explicit nil return as documented
       end
 
-      # Automatically update class-level indexes after save
+      # Automatically maintains class-level indexes after save.
       #
-      # Iterates through class-level indexing relationships and calls their
-      # corresponding add_to_class_* methods to populate indexes. Only processes
-      # class-level indexes (where within is nil), skipping instance-scoped
-      # indexes which require scope context.
+      # Iterates the class-level indexing relationships and applies the
+      # appropriate index mutation for each (see #apply_class_index_change).
+      # Only class-level indexes are processed here; instance-scoped indexes
+      # (declared with within: a class) require a scope instance and must be
+      # populated explicitly.
       #
-      # Uses idempotent Redis commands (HSET for unique_index) so repeated calls
-      # are safe and have negligible performance overhead. Note that multi_index
-      # always requires within: parameter, so only unique_index benefits from this.
+      # The previous value of each changed field is read from dirty tracking,
+      # which is still populated at this point (clear_dirty! runs AFTER the save
+      # transaction), so a changed indexed field can have its stale entry removed
+      # in the same transaction:
+      #
+      # - unique_index: routes through update_in_class_* (old-value-aware
+      #   HDEL + HSET) so changing an indexed field removes the prior mapping
+      #   atomically and the freed value can be reused.
+      # - multi_index: routes through add_to_class_* (add-only); prior buckets
+      #   are intentionally retained on a value change (see the
+      #   class_level_multi_index tests).
       #
       # @return [void]
       #
@@ -843,12 +852,13 @@ module Familia
       #   end
       #
       #   customer = Customer.new(email: 'test@example.com')
-      #   customer.save  # Automatically calls add_to_class_email_lookup
+      #   customer.save  # Automatically calls update_in_class_email_lookup
       #
-      # @note Only class-level unique_index declarations auto-populate.
-      #   Instance-scoped indexes (with within:) require manual population:
+      # @note Only class-level declarations auto-populate. Instance-scoped
+      #   indexes (with within:) require manual population:
       #   employee.add_to_company_badge_index(company)
       #
+      # @see #apply_class_index_change For the per-relationship routing.
       # @see Familia::Features::Relationships::Indexing For index declaration details
       #
       def auto_update_class_indexes
