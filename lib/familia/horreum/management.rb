@@ -576,6 +576,15 @@ module Familia
 
         objkey = dbkey identifier, suffix
 
+        # Load the object BEFORE the transaction so its field values are available
+        # for class-level index cleanup. Removing a unique-index entry needs the
+        # field value (e.g. email) to HDEL the right mapping, and reads cannot run
+        # inside MULTI/EXEC. If the hash is already gone (nil) we skip index
+        # cleanup -- without the field values the entries to remove are unknowable.
+        # This mirrors the instance #destroy! (which calls remove_from_class_indexes!)
+        # so both destroy paths leave indexes consistent (see issue #241).
+        loaded = find_by_dbkey(objkey, check_exists: false)
+
         # Execute all deletion operations within a transaction
         transaction do |conn|
           # Clean up related fields first to avoid orphaned keys
@@ -597,6 +606,10 @@ module Familia
           # Delete the main object key
           ret = conn.del(objkey)
           Familia.trace :DESTROY!, nil, "#{objkey} #{ret.inspect}" if Familia.debug?
+
+          # Clean up class-level index entries (same as instance #destroy!).
+          # Routes its HDELs into this open transaction via Fiber[:familia_transaction].
+          loaded&.send(:remove_from_class_indexes!)
 
           # Remove from instances collection to avoid ghost entries
           instances.remove(identifier) if respond_to?(:instances)
