@@ -854,6 +854,13 @@ module Familia
       def auto_update_class_indexes
         return unless self.class.respond_to?(:indexing_relationships)
 
+        # Dirty tracking is still populated here: clear_dirty! runs AFTER the save
+        # transaction, while this method runs INSIDE it (via persist_to_storage).
+        # Both `new` and the load path clear dirty after construction, so a
+        # captured old value is the previously-persisted value -- exactly what we
+        # must remove from the index when an indexed field changed.
+        changes = changed_fields # { field => [old_value, new_value] }
+
         self.class.indexing_relationships.each do |rel|
           unless rel.class_level?
             Familia.debug <<~LOG_MESSAGE
@@ -862,11 +869,36 @@ module Familia
             next
           end
 
-          # Call the existing add_to_class_* methods
-          add_method = :"add_to_class_#{rel.index_name}"
-          send(add_method) if respond_to?(add_method)
+          apply_class_index_change(rel, changes)
         end
       end
+
+      # Maintains a single class-level index entry for +rel+ during save.
+      #
+      # @param rel [IndexingRelationship] a class-level indexing relationship
+      # @param changes [Hash] dirty-tracking diff { field => [old_value, new_value] }
+      # @return [void]
+      def apply_class_index_change(rel, changes)
+        update_method = :"update_in_class_#{rel.index_name}"
+        add_method = :"add_to_class_#{rel.index_name}"
+
+        if rel.cardinality == :unique && respond_to?(update_method)
+          # unique_index: use the old-value-aware update so a changed indexed
+          # field removes its stale entry. Otherwise find_by_<field>(old_value)
+          # resolves a tombstone and the freed value cannot be reused (the unique
+          # guard sees the orphan). update_in_class_* always re-adds the current
+          # value, so new records are still indexed; its reentrant transaction
+          # joins this save's MULTI, so remove+add commit atomically.
+          change = changes[rel.field]
+          send(update_method, change && change.first)
+        elsif respond_to?(add_method)
+          # multi_index (and any add-only index): a value change does not retract
+          # prior buckets -- by design (see class_level_multi_index tests).
+          # HSET/SADD are idempotent so repeated saves stay safe.
+          send(add_method)
+        end
+      end
+      private :apply_class_index_change
 
       # Remove class-level index entries during destroy!
       #
