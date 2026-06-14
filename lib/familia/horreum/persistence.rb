@@ -823,16 +823,25 @@ module Familia
         nil # Explicit nil return as documented
       end
 
-      # Automatically update class-level indexes after save
+      # Automatically maintains class-level indexes after save.
       #
-      # Iterates through class-level indexing relationships and calls their
-      # corresponding add_to_class_* methods to populate indexes. Only processes
-      # class-level indexes (where within is nil), skipping instance-scoped
-      # indexes which require scope context.
+      # Iterates the class-level indexing relationships and applies the
+      # appropriate index mutation for each (see #apply_class_index_change).
+      # Only class-level indexes are processed here; instance-scoped indexes
+      # (declared with within: a class) require a scope instance and must be
+      # populated explicitly.
       #
-      # Uses idempotent Redis commands (HSET for unique_index) so repeated calls
-      # are safe and have negligible performance overhead. Note that multi_index
-      # always requires within: parameter, so only unique_index benefits from this.
+      # The previous value of each changed field is read from dirty tracking,
+      # which is still populated at this point (clear_dirty! runs AFTER the save
+      # transaction), so a changed indexed field can have its stale entry removed
+      # in the same transaction:
+      #
+      # - unique_index: routes through update_in_class_* (old-value-aware
+      #   HDEL + HSET) so changing an indexed field removes the prior mapping
+      #   atomically and the freed value can be reused.
+      # - multi_index: routes through add_to_class_* (add-only); prior buckets
+      #   are intentionally retained on a value change (see the
+      #   class_level_multi_index tests).
       #
       # @return [void]
       #
@@ -843,16 +852,24 @@ module Familia
       #   end
       #
       #   customer = Customer.new(email: 'test@example.com')
-      #   customer.save  # Automatically calls add_to_class_email_lookup
+      #   customer.save  # Automatically calls update_in_class_email_lookup
       #
-      # @note Only class-level unique_index declarations auto-populate.
-      #   Instance-scoped indexes (with within:) require manual population:
+      # @note Only class-level declarations auto-populate. Instance-scoped
+      #   indexes (with within:) require manual population:
       #   employee.add_to_company_badge_index(company)
       #
+      # @see #apply_class_index_change For the per-relationship routing.
       # @see Familia::Features::Relationships::Indexing For index declaration details
       #
       def auto_update_class_indexes
         return unless self.class.respond_to?(:indexing_relationships)
+
+        # Dirty tracking is still populated here: clear_dirty! runs AFTER the save
+        # transaction, while this method runs INSIDE it (via persist_to_storage).
+        # Both `new` and the load path clear dirty after construction, so a
+        # captured old value is the previously-persisted value -- exactly what we
+        # must remove from the index when an indexed field changed.
+        changes = changed_fields # { field => [old_value, new_value] }
 
         self.class.indexing_relationships.each do |rel|
           unless rel.class_level?
@@ -862,11 +879,36 @@ module Familia
             next
           end
 
-          # Call the existing add_to_class_* methods
-          add_method = :"add_to_class_#{rel.index_name}"
-          send(add_method) if respond_to?(add_method)
+          apply_class_index_change(rel, changes)
         end
       end
+
+      # Maintains a single class-level index entry for +rel+ during save.
+      #
+      # @param rel [IndexingRelationship] a class-level indexing relationship
+      # @param changes [Hash] dirty-tracking diff { field => [old_value, new_value] }
+      # @return [void]
+      def apply_class_index_change(rel, changes)
+        update_method = :"update_in_class_#{rel.index_name}"
+        add_method = :"add_to_class_#{rel.index_name}"
+
+        if rel.cardinality == :unique && respond_to?(update_method)
+          # unique_index: use the old-value-aware update so a changed indexed
+          # field removes its stale entry. Otherwise find_by_<field>(old_value)
+          # resolves a tombstone and the freed value cannot be reused (the unique
+          # guard sees the orphan). update_in_class_* always re-adds the current
+          # value, so new records are still indexed; its reentrant transaction
+          # joins this save's MULTI, so remove+add commit atomically.
+          change = changes[rel.field]
+          send(update_method, change && change.first)
+        elsif respond_to?(add_method)
+          # multi_index (and any add-only index): a value change does not retract
+          # prior buckets -- by design (see class_level_multi_index tests).
+          # HSET/SADD are idempotent so repeated saves stay safe.
+          send(add_method)
+        end
+      end
+      private :apply_class_index_change
 
       # Remove class-level index entries during destroy!
       #

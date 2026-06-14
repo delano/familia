@@ -233,13 +233,16 @@ collection_name: collection_name)
             target_class.define_method(method_name) do |min_permission = :read|
               collection = send(collection_name)
 
-              # Assumes ScoreEncoding module is available
-              if defined?(ScoreEncoding)
-                permission_score = ScoreEncoding.permission_encode(0, min_permission)
-                collection.zrangebyscore(permission_score, '+inf', with_scores: true)
-              else
-                # Fallback to all members if ScoreEncoding not available
-                collection.members(with_scores: true)
+              # Permission bits are encoded in the FRACTIONAL part of each score
+              # (see ScoreEncoding) and do not form a contiguous range, so a
+              # score-range query (e.g. ZRANGEBYSCORE x +inf) cannot filter by
+              # permission -- it would match members regardless of their bits.
+              # Fetch every member with its score and test the bits per-member.
+              raw_pairs = collection.rangebyscoreraw('-inf', '+inf', with_scores: true)
+              raw_pairs.each_with_object([]) do |(raw_member, score), kept|
+                next unless ScoreEncoding.permission?(score, min_permission)
+
+                kept << collection.deserialize_value(raw_member)
               end
             end
           end
