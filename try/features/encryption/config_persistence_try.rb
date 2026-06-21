@@ -125,6 +125,23 @@ Familia.config.encryption_hkdf_salt = @orig_hkdf
 @hkdf_ok
 #=> true
 
+## XChaCha20 derive_key fails closed on a nil personalization with a clean
+## EncryptionError, not a NoMethodError crash (#311)
+provider = @provider_class.new
+@op = Familia.config.encryption_personalization
+Familia.config.encryption_personalization = nil
+@nil_personal = begin
+  provider.derive_key('a' * 32, 'ctx')
+  'no-error'
+rescue Familia::EncryptionError => e
+  e.message.include?('non-empty') ? 'clean-error' : 'other-encryption-error'
+rescue NoMethodError
+  'crashed'
+end
+Familia.config.encryption_personalization = @op
+@nil_personal
+#=> 'clean-error'
+
 ## derive_key validates master key length
 provider = @provider_class.new
 short_key = 'a' * 16  # Too short

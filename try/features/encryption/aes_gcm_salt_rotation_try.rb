@@ -169,6 +169,42 @@ end
 @shared_size
 #=> 1
 
+## Fail closed (#311): a nil encryption_hkdf_salt refuses to ENCRYPT rather than
+## silently using the legacy global static salt (which would withhold the #310
+## per-deployment domain separation). The raw attr_writer can set nil past the
+## reader's guards, so the check lives at derivation time.
+Familia.config.encryption_hkdf_salt = nil
+Familia.config.encryption_hkdf_salt_history = []
+begin
+  @mgr.encrypt('should not encrypt', context: @ctx)
+  'encrypted-unexpectedly'
+rescue Familia::EncryptionError => e
+  e.message.include?('non-empty') ? 'refused' : 'wrong-error'
+end
+#=> 'refused'
+
+## An empty encryption_hkdf_salt is likewise refused for encryption (#311)
+Familia.config.encryption_hkdf_salt = ''
+Familia.config.encryption_hkdf_salt_history = []
+begin
+  @mgr.encrypt('should not encrypt', context: @ctx)
+  'encrypted-unexpectedly'
+rescue Familia::EncryptionError
+  'refused'
+end
+#=> 'refused'
+
+## Decryption stays permissive even with a blank current salt: data written under
+## a now-historical salt still decrypts (old data stays readable even if the
+## current config is broken), while new writes are refused above.
+Familia.config.encryption_hkdf_salt = 'WriteSalt'
+Familia.config.encryption_hkdf_salt_history = []
+@written = @mgr.encrypt('readable later', context: @ctx)
+Familia.config.encryption_hkdf_salt = nil
+Familia.config.encryption_hkdf_salt_history = ['WriteSalt']
+@mgr.decrypt(@written, context: @ctx)
+#=> 'readable later'
+
 # TEARDOWN
 Familia.config.encryption_hkdf_salt = @orig_salt
 Familia.config.encryption_hkdf_salt_history = @orig_history

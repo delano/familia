@@ -97,6 +97,11 @@ module Familia
           validate_key_length!(master_key)
 
           raw_personal = personal || Familia.config.encryption_personalization
+          # Fail closed on a missing personalization rather than crashing with a
+          # NoMethodError on nil (#311), mirroring XChaCha20Poly1305Provider.
+          unless raw_personal.is_a?(String) && !raw_personal.empty?
+            raise EncryptionError, 'encryption_personalization must be a non-empty string for key derivation'
+          end
           raise EncryptionError, 'Personalization string must not contain null bytes' if raw_personal.include?("\0")
 
           personal_string = raw_personal.ljust(16, "\0")

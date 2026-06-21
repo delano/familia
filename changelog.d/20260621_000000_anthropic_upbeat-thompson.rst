@@ -15,6 +15,15 @@ Security
   static salt stays in the decryption fallback list, so **no data migration is
   required**.
 
+- Key derivation now fails closed on a blank salt/personalization (issue #311).
+  Encrypting with a nil or empty ``encryption_hkdf_salt`` raises rather than
+  silently falling back to the legacy global static salt (which would quietly
+  withhold the #310 per-deployment domain separation); decryption stays permissive
+  so old ciphertext remains readable. The XChaCha20 providers likewise raise a
+  clear error on a nil/empty ``encryption_personalization`` instead of crashing
+  with a ``NoMethodError``. The checks live at derivation time, so they also catch
+  values set through the raw attribute writer, which bypasses the reader guards.
+
 - External identifiers are no longer derived with Ruby's ``Random`` (Mersenne
   Twister) seeded from a 64-bit-truncated digest (issue #310, S3). Derivation is
   now a deterministic SHA-256 over the full objid, or a keyed HMAC-SHA256 when a
