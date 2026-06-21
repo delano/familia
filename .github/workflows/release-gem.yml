@@ -132,11 +132,12 @@ jobs:
         uses: ruby/setup-ruby@afeafc3d1ab54a631816aba4c914a0081c12ff2f # v1.310.0
         with:
           bundler-cache: true
-          # Pinned to 3.4, the oldest non-experimental Ruby in ci.yml's matrix,
-          # so the release build matches a configuration that CI exercises.
+          # Pinned to 3.2, the oldest non-experimental Ruby in ci.yml's matrix
+          # (and the gemspec's required_ruby_version floor), so the release
+          # build matches the minimum supported configuration that CI exercises.
           # Ruby 4.0 is `experimental: true` in ci.yml and intentionally not
           # used for publishing.
-          ruby-version: "3.4"
+          ruby-version: "3.2"
 
       - name: Verify release tag matches Familia::VERSION
         env:
