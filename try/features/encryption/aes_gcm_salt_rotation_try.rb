@@ -81,6 +81,62 @@ Familia.config.encryption_personalization_history = []
 @mgr.decrypt(@legacy_blob, context: @ctx)
 #=> 'legacy secret'
 
+## Legacy data crafted against the *literal* pre-#310 salt string (not the
+## constant) still decrypts -- guards against the constant's value drifting away
+## from the hardcoded 'FamiliaEncryption' the old code shipped.
+@literal_key = @provider.derive_key(@master, @ctx, salt: 'FamiliaEncryption')
+@literal_enc = @provider.encrypt('literal legacy', @literal_key)
+@literal_blob = Familia::JsonSerializer.dump(
+  Familia::Encryption::EncryptedData.new(
+    algorithm: @provider.algorithm,
+    nonce: Base64.strict_encode64(@literal_enc[:nonce]),
+    ciphertext: Base64.strict_encode64(@literal_enc[:ciphertext]),
+    auth_tag: Base64.strict_encode64(@literal_enc[:auth_tag]),
+    key_version: :v1,
+    encoding: 'UTF-8'
+  ).to_h
+)
+Familia.config.encryption_personalization = 'AnotherFreshApp'
+Familia.config.encryption_personalization_history = []
+@mgr.decrypt(@literal_blob, context: @ctx)
+#=> 'literal legacy'
+
+## No false positive: a wrong salt never "succeeds" into garbage -- GCM auth must
+## fail and raise rather than return a plausible-looking wrong string.
+Familia.config.encryption_personalization = 'GoodSalt'
+Familia.config.encryption_personalization_history = []
+@fp_blob = @mgr.encrypt('do not leak', context: @ctx)
+Familia.config.encryption_personalization = 'WrongSalt'
+Familia.config.encryption_personalization_history = []
+begin
+  @mgr.decrypt(@fp_blob, context: @ctx)
+  'false-positive!'
+rescue Familia::EncryptionError
+  'rejected'
+end
+#=> 'rejected'
+
+## hkdf_salts is current-first, deduplicated, and ends with the legacy salt
+Familia.config.encryption_personalization = 'Curr'
+Familia.config.encryption_personalization_history = ['Curr', 'Prev', 'Prev']
+Familia::Encryption::Providers::AESGCMProvider.new.hkdf_salts
+#=> ['Curr', 'Prev', 'FamiliaEncryption']
+
+## Request cache keys by salt: two blobs needing different salts both decrypt
+## correctly inside one cache scope (a salt-blind cache key would corrupt one).
+Familia.config.encryption_personalization = 'CacheA'
+Familia.config.encryption_personalization_history = []
+@cache_a = @mgr.encrypt('alpha', context: @ctx)
+Familia.config.encryption_personalization = 'CacheB'
+Familia.config.encryption_personalization_history = []
+@cache_b = @mgr.encrypt('beta', context: @ctx)
+Familia.config.encryption_personalization = 'CacheB'
+Familia.config.encryption_personalization_history = ['CacheA']
+Familia::Encryption.with_request_cache do
+  [@mgr.decrypt(@cache_b, context: @ctx), @mgr.decrypt(@cache_a, context: @ctx)]
+end
+#=> ['beta', 'alpha']
+
 # TEARDOWN
 Familia.config.encryption_personalization = @orig_personal
 Familia.config.encryption_personalization_history = @orig_history
