@@ -142,3 +142,9 @@ Familia.config.encryption_personalization = @orig_personal
 Familia.config.encryption_personalization_history = @orig_history
 Familia.config.encryption_keys = nil
 Familia.config.current_key_version = nil
+# Restore the request-cache fiber-locals to their pristine (nil) state. The
+# cache test above runs with_request_cache, whose ensure leaves
+# `enabled=false`; in the shared full-suite process that would otherwise leak
+# into a later file asserting the untouched default is nil (request_cache_try).
+Fiber[:familia_request_cache] = nil
+Fiber[:familia_request_cache_enabled] = nil
