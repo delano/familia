@@ -135,12 +135,21 @@ module Familia
         # Disabled by default for maximum security (keys are not held in memory
         # longer than a single derivation). The cache key includes the algorithm
         # so different providers never share a derived key, the version so key
-        # rotation stays correct, and the salt so rotated-salt derivations never
-        # collide. On a hit we return a copy and never fetch the master key,
+        # rotation stays correct, and the resolved salt so rotated-salt derivations
+        # never collide. On a hit we return a copy and never fetch the master key,
         # minimising master-key exposure.
         cache = Fiber[:familia_request_cache] if Fiber[:familia_request_cache_enabled]
         if cache
-          cache_key = "#{provider.algorithm}:#{version}:#{salt}:#{context}"
+          # Key on the *resolved* salt, not the raw argument. When salt is nil
+          # (the encrypt path) the provider derives with hkdf_salts.first; the
+          # decrypt loop later passes that same value explicitly. Keying on the
+          # raw argument would file those two identical derivations under
+          # different keys (nil vs the resolved salt), so an encrypt followed by a
+          # decrypt of the same value in one request would derive twice instead of
+          # hitting the cache. Providers without salt rotation have no effective
+          # salt (nil), so their cache key is unchanged.
+          effective_salt = salt || (provider.respond_to?(:hkdf_salts) ? provider.hkdf_salts.first : nil)
+          cache_key = "#{provider.algorithm}:#{version}:#{effective_salt}:#{context}"
           cached = cache[cache_key]
           return cached.dup if cached
         end

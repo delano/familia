@@ -9,9 +9,11 @@ Security
   first time an identifier is minted or verified.
 
 - The AES-GCM provider no longer derives keys from a static ``'FamiliaEncryption'``
-  HKDF salt (issue #310, S2). It now uses the application
-  ``encryption_personalization`` for per-deployment domain separation, mirroring
-  the XChaCha20 providers.
+  HKDF salt (issue #310, S2). It now derives the salt from a dedicated,
+  application-specific ``encryption_hkdf_salt`` setting for per-deployment domain
+  separation (RFC 5869). Existing ciphertext still decrypts because the legacy
+  static salt stays in the decryption fallback list, so **no data migration is
+  required**.
 
 - External identifiers are no longer derived with Ruby's ``Random`` (Mersenne
   Twister) seeded from a 64-bit-truncated digest (issue #310, S3). Derivation is
@@ -30,15 +32,30 @@ Security
 Changed
 -------
 
+- The AES-GCM HKDF salt is now a dedicated ``encryption_hkdf_salt`` setting,
+  separate from ``encryption_personalization`` (issue #311). The personalization
+  string feeds only the XChaCha20 providers' BLAKE2b ``personal`` parameter, which
+  BLAKE2b caps at 16 bytes; the AES-GCM HKDF salt accepts any length (RFC 5869).
+  Decoupling the two inputs means neither cipher family is constrained by the
+  other's rules -- in particular, the 16-byte personalization limit no longer
+  applies to the AES-GCM salt.
+
 - AES-GCM key derivation supports salt rotation for backward compatibility
-  (issue #310, S2). Encryption always uses the current ``encryption_personalization``;
-  decryption tries the current salt, then ``encryption_personalization_history``
-  (a new, ordered, current-first config), then the pre-#310 static salt. **No
-  data migration is required**: existing ciphertext -- including data written
-  before this change -- still decrypts, because the legacy static salt is always
-  in the fallback list. When you rotate ``encryption_personalization``, add the
-  prior value(s) to ``encryption_personalization_history`` so older ciphertext
-  keeps decrypting.
+  (issues #310 S2, #311). Encryption always uses the current ``encryption_hkdf_salt``;
+  decryption tries the current salt, then ``encryption_hkdf_salt_history`` (an
+  ordered, current-first config), then the pre-#310 static salt. **No data
+  migration is required**: existing ciphertext -- including data written before
+  this change -- still decrypts, because the legacy static salt is always in the
+  fallback list. When you rotate ``encryption_hkdf_salt``, add the prior value(s)
+  to ``encryption_hkdf_salt_history`` so older ciphertext keeps decrypting.
+
+- The opt-in request-scoped key cache now keys on the *resolved* HKDF salt rather
+  than the raw argument (issue #311). Previously an encrypt (which lets the
+  provider default the salt to ``hkdf_salts.first``) and a later decrypt of the
+  same value in one request filed the identical derived key under two different
+  cache keys, so the key was derived twice. The cache key is now symmetric across
+  encrypt and decrypt, recovering the intended single derivation. Behaviour with
+  the cache disabled (the default) is unchanged.
 
 Documentation
 -------------
@@ -46,11 +63,13 @@ Documentation
 - Clarified that the migration ``Script`` SHA-1 is the Redis ``EVALSHA`` script
   identity (protocol-mandated), not a security checksum (issue #310, S5); genuine
   change-detection already uses SHA-256 in ``Migration::Registry``.
-- Corrected docs that described ``encryption_personalization`` as "XChaCha20 only";
-  it now also seeds the AES-GCM HKDF salt.
+- Documented that ``encryption_personalization`` applies only to the XChaCha20
+  (BLAKE2b) providers, and that AES-GCM uses the separate, length-unconstrained
+  ``encryption_hkdf_salt`` (issue #311).
 
 AI Assistance
 -------------
 
-- These security fixes (issue #310), their failing-first tryouts, the salt-rotation
+- These security fixes (issue #310), the AES-GCM salt decoupling and request-cache
+  key normalization (issue #311), their failing-first tryouts, the salt-rotation
   backward-compatibility path, and this changelog were drafted with AI assistance.

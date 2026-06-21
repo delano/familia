@@ -80,15 +80,20 @@ module Familia
 
         # Ordered list of HKDF salts to consider, current first.
         #
-        # Encryption always uses the first entry (the current personalization);
-        # decryption walks the list until the authenticated decrypt succeeds.
-        # This keeps both a personalization rotation and the #310 move away from
-        # the static salt backward-compatible without any envelope/format change.
-        # Each wrong salt yields a different key and fails GCM authentication
-        # cleanly, so trying them in turn never produces a false positive.
+        # Encryption always uses the first entry (the current encryption_hkdf_salt);
+        # decryption walks the list until the authenticated decrypt succeeds. This
+        # keeps both a salt rotation and the #310 move away from the static salt
+        # backward-compatible without any envelope/format change. Each wrong salt
+        # yields a different key and fails GCM authentication cleanly, so trying
+        # them in turn never produces a false positive.
+        #
+        # The salt comes from a dedicated config knob (encryption_hkdf_salt), NOT
+        # the XChaCha20 personalization. HKDF accepts a salt of any length while
+        # BLAKE2b personalization is capped at 16 bytes, so the two cipher
+        # families keep separate inputs and never constrain each other (#311).
         def hkdf_salts
-          current = Familia.config.encryption_personalization
-          history = Familia.config.encryption_personalization_history
+          current = Familia.config.encryption_hkdf_salt
+          history = Familia.config.encryption_hkdf_salt_history
           [current, *history, LEGACY_HKDF_SALT].compact.uniq
         end
 
@@ -100,12 +105,13 @@ module Familia
             # Use application-specific material for the HKDF salt instead of a
             # static library literal. A fixed global salt is shared by every
             # deployment and weakens HKDF's extraction step / domain separation
-            # (RFC 5869). This mirrors the XChaCha20 providers, which derive from
-            # the same personalization string. See issue #310 (S2).
+            # (RFC 5869). The value comes from encryption_hkdf_salt -- a dedicated
+            # AES-GCM knob, kept separate from the XChaCha20 personalization so
+            # neither cipher family constrains the other (issue #311). See #310 (S2).
             #
-            # `salt` defaults to the current personalization (hkdf_salts.first);
-            # the decrypt path passes earlier salts so existing ciphertext stays
-            # decryptable after a salt change.
+            # `salt` defaults to the current salt (hkdf_salts.first); the decrypt
+            # path passes earlier salts so existing ciphertext stays decryptable
+            # after a salt change.
             salt: salt || hkdf_salts.first,
             info: info,
             length: 32,

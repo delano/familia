@@ -892,9 +892,10 @@ end
 Familia.configure do |config|
   config.encryption_keys = { v1: key, v2: new_key }
   config.current_key_version = :v2
-  config.encryption_personalization = 'MyApp-2024'  # Domain separation (XChaCha20 personalization + AES-GCM HKDF salt)
-  # When rotating it, keep prior values for backward-compatible decryption:
-  # config.encryption_personalization_history = ['MyApp-2023']
+  config.encryption_personalization = 'MyApp-2024'  # XChaCha20 BLAKE2b domain separation (<= 16 bytes)
+  config.encryption_hkdf_salt = 'MyApp-2024'        # AES-GCM HKDF salt domain separation (any length)
+  # When rotating the AES-GCM salt, keep prior values for backward-compatible decryption:
+  # config.encryption_hkdf_salt_history = ['MyApp-2023']
 end
 
 # Validate configuration

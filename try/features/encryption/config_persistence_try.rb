@@ -107,6 +107,24 @@ ensure
 end
 #=> "Personalization string must not contain null bytes"
 
+## encryption_personalization (method form) enforces the 16-byte BLAKE2b limit
+## and points callers at the separate, unconstrained AES-GCM salt knob (#311)
+begin
+  Familia.config.encryption_personalization('x' * 17)
+  'should_not_reach_here'
+rescue ArgumentError => e
+  [e.message.include?('16 bytes'), e.message.include?('encryption_hkdf_salt')]
+end
+#=> [true, true]
+
+## encryption_hkdf_salt has no length limit -- a >16-byte salt is accepted (#311)
+@orig_hkdf = Familia.config.encryption_hkdf_salt
+Familia.config.encryption_hkdf_salt = 'x' * 64
+@hkdf_ok = Familia.config.encryption_hkdf_salt == 'x' * 64
+Familia.config.encryption_hkdf_salt = @orig_hkdf
+@hkdf_ok
+#=> true
+
 ## derive_key validates master key length
 provider = @provider_class.new
 short_key = 'a' * 16  # Too short

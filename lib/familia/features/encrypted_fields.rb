@@ -155,9 +155,10 @@ module Familia
     #       v2: ENV['FAMILIA_ENCRYPTION_KEY_V2']
     #     }
     #     config.current_key_version = :v2
-    #     config.encryption_personalization = 'MyApp-2024'  # Optional domain separation
-    #     # When rotating it, keep prior values so old ciphertext still decrypts:
-    #     # config.encryption_personalization_history = ['MyApp-2023']
+    #     config.encryption_personalization = 'MyApp-2024'  # XChaCha20 domain separation (<= 16 bytes)
+    #     config.encryption_hkdf_salt = 'MyApp-2024'        # AES-GCM domain separation (any length)
+    #     # When rotating the salt, keep prior values so old ciphertext still decrypts:
+    #     # config.encryption_hkdf_salt_history = ['MyApp-2023']
     #   end
     #
     #   # Validate configuration before use
