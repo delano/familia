@@ -477,23 +477,28 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ### Running the Tests
 
-Familia's test suite uses the [Tryouts](https://github.com/delano/tryouts) framework:
+Familia's test suite uses the [Tryouts](https://github.com/delano/tryouts)
+framework. The simplest way to run it:
 
 ```bash
 bundle install
-bundle exec try -vf                  # run the full suite
-bundle exec try try/path/to/foo_try.rb   # run a single file
+bundle exec rake test   # full suite, with a guaranteed UTF-8 locale
 ```
 
-The suite requires a **UTF-8 locale**. Some tryouts contain UTF-8 source (e.g.
-Unicode scope cases) and assert on string encodings, so when no locale is set
-Ruby falls back to `Encoding.default_external = US-ASCII`; the runner then aborts
-with `invalid byte sequence in US-ASCII` and encoding specs fail spuriously. Most
-shells and CI already provide one — if yours does not, export a UTF-8 locale
-before running the tests:
+`rake test` runs the suite in a child process with a UTF-8 locale, which the
+suite needs: some tryouts contain UTF-8 source (e.g. Unicode cases) and assert on
+string encodings, so when no locale is set Ruby falls back to
+`Encoding.default_external = US-ASCII`, the runner aborts with `invalid byte
+sequence in US-ASCII`, and encoding specs fail spuriously. (A locale you already
+have is kept; most shells and CI provide a UTF-8 one.)
+
+To invoke the runner directly — e.g. for a single file — ensure your shell has a
+UTF-8 locale first:
 
 ```bash
-export LANG=C.UTF-8   # or en_US.UTF-8
+export LANG=C.UTF-8                        # or en_US.UTF-8; only needed if unset
+bundle exec try -vf                        # full suite
+bundle exec try try/path/to/foo_try.rb     # a single file
 ```
 
 ### PR Compliance Checks
