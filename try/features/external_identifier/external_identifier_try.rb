@@ -53,6 +53,14 @@ class ExternalDataIntegrityTest < Familia::Horreum
   field :name
 end
 
+# Class that keys extid derivation with an application secret (issue #310 S3)
+class SecretExtIdTest < Familia::Horreum
+  feature :object_identifier
+  feature :external_identifier, secret: 'unit-test-extid-secret'
+  identifier_field :id
+  field :id
+end
+
 # Test with existing external ID during initialization
 @existing_ext_obj = ExternalDataIntegrityTest.new(id: 'test_id', extid: 'preset_ext_123', name: 'Preset External')
 
@@ -521,3 +529,35 @@ ExternalIdTest.extid?(:ext_0123456789abcdefghijklmno)
 ## extid? with Symbol input returns false for invalid format
 ExternalIdTest.extid?(:invalid_symbol)
 #=> false
+
+# ========================================
+# S3: deterministic derivation without Mersenne Twister (issue #310)
+# ========================================
+
+## Secret-keyed extid is deterministic across repeated calls
+secret_obj = SecretExtIdTest.new(id: 'determinism')
+secret_obj.extid == secret_obj.extid
+#==> true
+
+## Secret-keyed extid keeps the standard ext_ + base36 format
+fmt_obj = SecretExtIdTest.new(id: 'format')
+fmt_obj.extid.match?(/\Aext_[0-9a-z]{20,32}\z/)
+#==> true
+
+## Configuring a secret changes the derived extid for the same objid
+@plain_obj = ExternalIdTest.new(id: 'shared')
+@shared_objid = @plain_obj.objid
+@keyed_obj = SecretExtIdTest.new(id: 'shared', objid: @shared_objid)
+# Same objid, different derivation (plain SHA-256 vs keyed HMAC) -> different extid
+@plain_obj.extid != @keyed_obj.extid
+#==> true
+
+## Same objid + same secret reproduces the same extid (deterministic, no MT state)
+keyed_again = SecretExtIdTest.new(id: 'shared2', objid: @shared_objid)
+@keyed_obj.extid == keyed_again.extid
+#==> true
+
+## Default (no secret) derivation is also deterministic for a fixed objid
+@plain_again = ExternalIdTest.new(id: 'shared3', objid: @shared_objid)
+@plain_obj.extid == @plain_again.extid
+#==> true

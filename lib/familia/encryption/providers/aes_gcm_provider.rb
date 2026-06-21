@@ -77,7 +77,16 @@ module Familia
           info = personal ? "#{context}:#{personal}" : context
           OpenSSL::KDF.hkdf(
             master_key,
-            salt: 'FamiliaEncryption',
+            # Use application-specific material for the HKDF salt instead of a
+            # static library literal. A fixed global salt is shared by every
+            # deployment and weakens HKDF's extraction step / domain separation
+            # (RFC 5869). This mirrors the XChaCha20 providers, which derive from
+            # the same personalization string. See issue #310 (S2).
+            #
+            # NOTE: changing the salt changes every derived key, so data that was
+            # encrypted with the previous static salt under this fallback
+            # provider must be re-encrypted.
+            salt: Familia.config.encryption_personalization,
             info: info,
             length: 32,
             hash: 'SHA256'

@@ -5,15 +5,22 @@
 # try/core/verifiable_identifier_try.rb
 
 require_relative '../support/helpers/test_helpers'
+
+# A dedicated HMAC secret is REQUIRED: the library intentionally has no
+# committed fallback default (a known key would let anyone forge identifiers --
+# see issue #310, S1). Provide a test-only secret before loading the module so
+# the SECRET_KEY constant resolves instead of raising at load time.
+ENV['VERIFIABLE_ID_HMAC_SECRET'] ||= 'test-only-verifiable-id-hmac-secret-0123456789abcdef'
+
 require 'familia/verifiable_identifier'
 
 ## Module is available
 defined?(Familia::VerifiableIdentifier)
 #=> "constant"
 
-## Uses the development secret key by default when ENV is not set
+## Loads the HMAC secret from the environment (no committed fallback default)
 Familia::VerifiableIdentifier::SECRET_KEY
-#=> "cafef00dcafef00dcafef00dcafef00dcafef00dcafef00d"
+#=> 'test-only-verifiable-id-hmac-secret-0123456789abcdef'
 
 # --- Verifiable ID Generation and Verification ---
 

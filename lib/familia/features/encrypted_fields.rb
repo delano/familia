@@ -155,7 +155,7 @@ module Familia
     #       v2: ENV['FAMILIA_ENCRYPTION_KEY_V2']
     #     }
     #     config.current_key_version = :v2
-    #     config.encryption_personalization = 'MyApp-2024'  # Optional (XChaCha20 only)
+    #     config.encryption_personalization = 'MyApp-2024'  # Optional (domain separation)
     #   end
     #
     #   # Validate configuration before use

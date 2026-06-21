@@ -33,12 +33,25 @@ module Familia
     # @example Generating and Setting the Key
     #     1. Generate a new secure key in your terminal:
     #        $ openssl rand -hex 32
-    #        > cafef00dcafef00dcafef00dcafef00dcafef00dcafef00d
+    #        > <64 hex characters>
     #
     #     2. Set it as an environment variable in your production environment:
-    #        export VERIFIABLE_ID_HMAC_SECRET="cafef00dcafef00dcafef00dcafef00dcafef00dcafef00d"
+    #        export VERIFIABLE_ID_HMAC_SECRET="<the generated value>"
     #
-    SECRET_KEY = ENV.fetch('VERIFIABLE_ID_HMAC_SECRET', 'cafef00dcafef00dcafef00dcafef00dcafef00dcafef00d')
+    # @note There is intentionally NO committed fallback default. A hardcoded
+    #   secret in source would be public knowledge, letting anyone who can read
+    #   the repository forge valid identifiers. If the environment variable is
+    #   not set, loading this module fails loudly at startup rather than
+    #   silently signing with a known key.
+    #
+    SECRET_KEY = ENV.fetch('VERIFIABLE_ID_HMAC_SECRET') do
+      raise KeyError, <<~MSG.strip
+        VERIFIABLE_ID_HMAC_SECRET is not set. Familia::VerifiableIdentifier
+        refuses to fall back to a committed default secret -- a known key would
+        let anyone forge valid identifiers. Generate one with `openssl rand -hex
+        32` and export it before loading this module.
+      MSG
+    end
 
     # The length of the random part of the ID in hex characters (256 bits).
     RANDOM_HEX_LENGTH = 64
