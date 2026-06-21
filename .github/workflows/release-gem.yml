@@ -133,10 +133,8 @@ jobs:
         with:
           bundler-cache: true
           # Pinned to 3.2, the oldest non-experimental Ruby in ci.yml's matrix
-          # (and the gemspec's required_ruby_version floor), so the release
-          # build matches the minimum supported configuration that CI exercises.
-          # Ruby 4.0 is `experimental: true` in ci.yml and intentionally not
-          # used for publishing.
+          # and the gemspec's required_ruby_version floor, so the release build
+          # matches the minimum supported configuration that CI exercises.
           ruby-version: "3.2"
 
       - name: Verify release tag matches Familia::VERSION
