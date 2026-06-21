@@ -561,3 +561,36 @@ keyed_again = SecretExtIdTest.new(id: 'shared2', objid: @shared_objid)
 @plain_again = ExternalIdTest.new(id: 'shared3', objid: @shared_objid)
 @plain_obj.extid == @plain_again.extid
 #==> true
+
+## A callable secret is resolved and keyed exactly like the equivalent string
+## secret: same objid + same resolved value -> identical extid (issue #311 S3)
+class CallableSecretExtIdTest < Familia::Horreum
+  feature :object_identifier
+  feature :external_identifier, secret: -> { 'unit-test-extid-secret' }
+  identifier_field :id
+  field :id
+end
+@cs_objid = ExternalIdTest.new(id: 'cs').objid
+@string_keyed = SecretExtIdTest.new(id: 'cs', objid: @cs_objid).extid
+@callable_keyed = CallableSecretExtIdTest.new(id: 'cs', objid: @cs_objid).extid
+@string_keyed == @callable_keyed
+#==> true
+
+## A callable secret resolves lazily: defining a model whose secret callable
+## raises does NOT raise at class-definition time; the error surfaces only at the
+## first extid derivation, so the model file loads even when the secret is absent.
+class LazyRaisingSecretExtIdTest < Familia::Horreum
+  feature :object_identifier
+  feature :external_identifier, secret: -> { raise 'secret resolved at derivation' }
+  identifier_field :id
+  field :id
+end
+# The class above was defined without error (a load-time raise would have failed
+# this whole file). Deriving an extid now invokes the callable and surfaces it.
+begin
+  LazyRaisingSecretExtIdTest.new(id: 'lazy').extid
+  'no-error'
+rescue RuntimeError => e
+  e.message
+end
+#=> 'secret resolved at derivation'

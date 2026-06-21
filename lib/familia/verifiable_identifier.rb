@@ -53,6 +53,17 @@ module Familia
       end
     end
 
+    # Clears the memoized secret so the next {.secret_key} call re-reads the
+    # environment. Intended for test suites that swap the configured secret (or
+    # exercise the missing-secret path) within a single process. Production code
+    # never needs this: the secret is fixed for a deployment, and rotating it
+    # requires a restart (and invalidates every previously generated identifier).
+    #
+    # @return [nil]
+    def self.reset_secret_key!
+      @secret_key = nil
+    end
+
     # The length of the random part of the ID in hex characters (256 bits).
     RANDOM_HEX_LENGTH = 64
     # The length of the HMAC tag in hex characters (64 bits).

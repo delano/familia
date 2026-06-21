@@ -181,3 +181,16 @@ Familia::VerifiableIdentifier.verified_identifier?(id, 36)
 id = Familia::VerifiableIdentifier.generate_verifiable_id(scope: "test", base: 16)
 Familia::VerifiableIdentifier.verified_identifier?(id, scope: "test", base: 16)
 #=> true
+
+## reset_secret_key! clears memoization so the next read re-reads ENV (test API).
+## Production never needs this; it lets a test swap the configured secret in-process.
+@orig_hmac_secret = ENV['VERIFIABLE_ID_HMAC_SECRET']
+Familia::VerifiableIdentifier.reset_secret_key!
+ENV['VERIFIABLE_ID_HMAC_SECRET'] = 'rotated-secret-for-reset-test-0123456789abcdef'
+@after_reset = Familia::VerifiableIdentifier.secret_key
+# Restore the original secret and re-clear, so the original value is re-memoized
+# and no rotated state leaks into a later case or a shared suite process.
+ENV['VERIFIABLE_ID_HMAC_SECRET'] = @orig_hmac_secret
+Familia::VerifiableIdentifier.reset_secret_key!
+@after_reset
+#=> 'rotated-secret-for-reset-test-0123456789abcdef'

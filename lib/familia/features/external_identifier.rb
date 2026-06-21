@@ -85,11 +85,17 @@ module Familia
       #   # a `secret:` to derive it via a keyed HMAC instead, so external IDs
       #   # cannot be forged or inverted from a known objid. The secret must be
       #   # stable for a deployment (changing it changes every extid) and is
-      #   # typically sourced from the environment, never committed:
+      #   # typically sourced from the environment, never committed.
+      #   #
+      #   # Prefer a callable so the secret resolves lazily at first use: the model
+      #   # file still loads when the env var is absent, and ENV.fetch then raises
+      #   # loudly the first time an extid is derived rather than at class-load.
       #   class ApiToken < Familia::Horreum
       #     feature :object_identifier
-      #     feature :external_identifier, secret: ENV.fetch('EXTID_HMAC_SECRET')
+      #     feature :external_identifier, secret: -> { ENV.fetch('EXTID_HMAC_SECRET') }
       #   end
+      #   # A plain string also works when the value is already in hand:
+      #   #   feature :external_identifier, secret: ENV['EXTID_HMAC_SECRET']
       #
       class ExternalIdentifierFieldType < Familia::FieldType
         # Override getter to provide lazy generation from objid
@@ -315,6 +321,13 @@ module Familia
         # secret, a plain SHA-256 still removes the MT weakness and the 64-bit
         # truncation.
         secret = options[:secret]
+        # Allow a callable secret (e.g. -> { ENV.fetch('EXTID_HMAC_SECRET') }) so
+        # the value resolves lazily at first derivation instead of eagerly at
+        # class-definition time. The model file then loads even when the env var is
+        # absent (CI, tooling, introspection), and a missing secret still raises
+        # loudly here -- where it matters -- rather than masking the whole model
+        # behind a load-time error (#311).
+        secret = secret.call if secret.respond_to?(:call)
         random_bytes =
           if secret && !secret.to_s.empty?
             OpenSSL::HMAC.digest('SHA256', secret.to_s, normalized_hex)[0, 16]
