@@ -111,6 +111,11 @@ module Familia
     # BLAKE2b personalization is capped at 16 bytes. There is deliberately no
     # length limit here (see issue #311).
     #
+    # The built-in default ('FamilialMatters') is a shared library fallback: it
+    # separates Familia's keys from other HKDF users, but NOT one deployment from
+    # another. Set a value unique to each deployment to get deployment-level
+    # separation.
+    #
     # Encryption always uses this current value; decryption tries it first, then
     # each entry in #encryption_hkdf_salt_history, then the pre-#310 static salt,
     # so existing ciphertext keeps decrypting across rotations and upgrades.

@@ -95,6 +95,11 @@ module Familia
           raise EncryptionError, "Decryption failed: #{e.message}"
         end
       ensure
+        # Defensive backstop only. The salt-rotation loop's per-iteration `ensure`
+        # (around provider.decrypt) is the primary wipe and clears `key` on every
+        # path -- success, failure, and break -- so by here `key` is already wiped
+        # and this re-clear is a harmless no-op. It is kept so any future change to
+        # the loop structure still cannot leave a derived key unwiped (#311).
         Familia::Encryption.secure_wipe(key) if key
       end
 
