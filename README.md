@@ -475,6 +475,27 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
+### Running the Tests
+
+Familia's test suite uses the [Tryouts](https://github.com/delano/tryouts) framework:
+
+```bash
+bundle install
+bundle exec try -vf                  # run the full suite
+bundle exec try try/path/to/foo_try.rb   # run a single file
+```
+
+The suite requires a **UTF-8 locale**. Some tryouts contain UTF-8 source (e.g.
+Unicode scope cases) and assert on string encodings, so when no locale is set
+Ruby falls back to `Encoding.default_external = US-ASCII`; the runner then aborts
+with `invalid byte sequence in US-ASCII` and encoding specs fail spuriously. Most
+shells and CI already provide one — if yours does not, export a UTF-8 locale
+before running the tests:
+
+```bash
+export LANG=C.UTF-8   # or en_US.UTF-8
+```
+
 ### PR Compliance Checks
 
 Pull requests are automatically reviewed by [Qodo Merge](https://qodo.ai) with compliance checks for:
