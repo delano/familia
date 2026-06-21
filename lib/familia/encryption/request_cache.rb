@@ -8,17 +8,26 @@
 # SECURITY (see issue #310, S6): the derived-key cache lives in fiber-local
 # storage (Fiber[...]). In pooled or async servers a fiber can be reused across
 # requests, so the cache MUST be cleared between requests or a key derived by
-# one request can leak into a later one. Two safeguards are provided:
+# one request can leak into a later one. #with_request_cache therefore wipes any
+# stale cache on entry AND on exit (ensure), so a reused fiber never starts or
+# finishes a block carrying old keys.
 #
-#   1. #with_request_cache wipes any stale cache on entry AND on exit (ensure),
-#      so a reused fiber never starts or finishes a block carrying old keys.
-#   2. RequestCacheMiddleware clears the cache at the start of every request and
-#      again in an ensure block, so even manual (non-block) usage is bounded to
-#      a single request.
+# Usage in Rack middleware (clear at the start of every request and again in an
+# ensure, so even non-block usage is bounded to a single request):
 #
-# Recommended Rack wiring:
-#   use Familia::Encryption::RequestCacheMiddleware              # clear-only safety net
-#   use Familia::Encryption::RequestCacheMiddleware, enabled: true  # also enable caching
+#   class ClearEncryptionCacheMiddleware
+#     def initialize(app) = @app = app
+#
+#     def call(env)
+#       Familia::Encryption.clear_request_cache!
+#       @app.call(env)
+#     ensure
+#       Familia::Encryption.clear_request_cache!
+#     end
+#   end
+#
+# To also enable caching for the request, wrap the call instead:
+#   Familia::Encryption.with_request_cache { @app.call(env) }
 
 module Familia
   module Encryption
@@ -49,44 +58,6 @@ module Familia
       # Familia::Encryption::Manager#derive_key_without_increment, which is the
       # single key-derivation path for both encrypt and decrypt. This module
       # only owns the opt-in lifecycle (enable, populate-by-Manager, wipe).
-    end
-
-    # Rack middleware that bounds the request-scoped derived-key cache to a
-    # single request, even when the underlying fiber is reused across requests
-    # or the downstream app raises.
-    #
-    # By default it is a clear-only safety net: it wipes any cache a reused
-    # fiber may carry before the request runs, and again afterwards in an
-    # ensure block. Pass `enabled: true` to also turn caching on for the
-    # duration of each request (via #with_request_cache).
-    #
-    # @example Clear-only safety net (recommended baseline)
-    #   use Familia::Encryption::RequestCacheMiddleware
-    #
-    # @example Enable per-request caching for performance
-    #   use Familia::Encryption::RequestCacheMiddleware, enabled: true
-    class RequestCacheMiddleware
-      def initialize(app, enabled: false)
-        @app = app
-        @enabled = enabled
-      end
-
-      def call(env)
-        if @enabled
-          # with_request_cache wipes on entry and exit, so a reused fiber is
-          # always isolated to this request.
-          Familia::Encryption.with_request_cache { @app.call(env) }
-        else
-          # Caching stays off (secure default); clear before and after so a
-          # reused fiber never carries keys from an adjacent request.
-          Familia::Encryption.clear_request_cache!
-          begin
-            @app.call(env)
-          ensure
-            Familia::Encryption.clear_request_cache!
-          end
-        end
-      end
     end
   end
 end

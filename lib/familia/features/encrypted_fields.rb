@@ -155,7 +155,9 @@ module Familia
     #       v2: ENV['FAMILIA_ENCRYPTION_KEY_V2']
     #     }
     #     config.current_key_version = :v2
-    #     config.encryption_personalization = 'MyApp-2024'  # Optional (domain separation)
+    #     config.encryption_personalization = 'MyApp-2024'  # Optional domain separation
+    #     # When rotating it, keep prior values so old ciphertext still decrypts:
+    #     # config.encryption_personalization_history = ['MyApp-2023']
     #   end
     #
     #   # Validate configuration before use

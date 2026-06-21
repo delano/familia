@@ -13,6 +13,7 @@ module Familia
   @encryption_keys = nil
   @current_key_version = nil
   @encryption_personalization = 'FamilialMatters'.freeze
+  @encryption_personalization_history = [].freeze
   @pipelined_mode = :warn
   @strict_write_order = false
   @raise_on_unsaved_parent_write = true
@@ -27,8 +28,8 @@ module Familia
   #
   module Settings
     attr_writer :delim, :suffix, :default_expiration, :logical_database, :prefix, :encryption_keys,
-                :current_key_version, :encryption_personalization, :transaction_mode,
-                :schema_path, :schemas, :schema_validator, :strict_write_order,
+                :current_key_version, :encryption_personalization, :encryption_personalization_history,
+                :transaction_mode, :schema_path, :schemas, :schema_validator, :strict_write_order,
                 :raise_on_unsaved_parent_write
 
     def delim(val = nil)
@@ -91,6 +92,28 @@ module Familia
         @encryption_personalization = val
       end
       @encryption_personalization
+    end
+
+    # Previous personalization values, kept so that rotating
+    # #encryption_personalization stays backward-compatible. The AES-GCM
+    # provider uses the personalization string as its HKDF salt (see issue
+    # #310, S2); when you change the current value, list the prior value(s)
+    # here so existing ciphertext can still be decrypted. Encryption always
+    # uses the current value; decryption tries the current value first, then
+    # each entry here in order. Keep the list short -- every stale salt adds a
+    # decryption attempt on a miss.
+    #
+    # @example Rotating the personalization without losing old data
+    #   Familia.configure do |config|
+    #     config.encryption_personalization = 'MyApp-2025'
+    #     config.encryption_personalization_history = ['MyApp-2024']
+    #   end
+    #
+    # @param val [Array<String>, nil] Ordered list of prior values, or nil to read
+    # @return [Array<String>] Current history list (possibly empty)
+    def encryption_personalization_history(val = nil)
+      @encryption_personalization_history = Array(val) unless val.nil?
+      @encryption_personalization_history || []
     end
 
     # Controls transaction behavior when connection handlers don't support transactions

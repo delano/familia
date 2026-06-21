@@ -8,8 +8,9 @@ require_relative '../support/helpers/test_helpers'
 
 # A dedicated HMAC secret is REQUIRED: the library intentionally has no
 # committed fallback default (a known key would let anyone forge identifiers --
-# see issue #310, S1). Provide a test-only secret before loading the module so
-# the SECRET_KEY constant resolves instead of raising at load time.
+# see issue #310, S1). The secret is read lazily on first use, so requiring the
+# module never raises; provide a test-only secret before the generate/verify
+# cases below exercise it.
 ENV['VERIFIABLE_ID_HMAC_SECRET'] ||= 'test-only-verifiable-id-hmac-secret-0123456789abcdef'
 
 require 'familia/verifiable_identifier'
@@ -18,8 +19,8 @@ require 'familia/verifiable_identifier'
 defined?(Familia::VerifiableIdentifier)
 #=> "constant"
 
-## Loads the HMAC secret from the environment (no committed fallback default)
-Familia::VerifiableIdentifier::SECRET_KEY
+## Reads the HMAC secret lazily from the environment (no committed fallback)
+Familia::VerifiableIdentifier.secret_key
 #=> 'test-only-verifiable-id-hmac-secret-0123456789abcdef'
 
 # --- Verifiable ID Generation and Verification ---

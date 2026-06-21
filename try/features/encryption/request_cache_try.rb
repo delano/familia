@@ -98,41 +98,6 @@ end
 [Fiber[:familia_request_cache], Fiber[:familia_request_cache_enabled]]
 #=> [nil, false]
 
-## RequestCacheMiddleware (clear-only) clears stale state before the app runs
-Fiber[:familia_request_cache_enabled] = true
-Fiber[:familia_request_cache] = { 'stale' => String.new('leftover') }
-@seen = nil
-app = ->(env) { @seen = [Fiber[:familia_request_cache], Fiber[:familia_request_cache_enabled]]; [200, {}, []] }
-mw = Familia::Encryption::RequestCacheMiddleware.new(app)
-mw.call({})
-@seen
-#=> [nil, false]
-
-## RequestCacheMiddleware (clear-only) clears again after the app, even on raise
-Fiber[:familia_request_cache_enabled] = true
-Fiber[:familia_request_cache] = { 'stale' => String.new('leftover') }
-boom = ->(env) { raise 'boom' }
-mw = Familia::Encryption::RequestCacheMiddleware.new(boom)
-begin
-  mw.call({})
-rescue RuntimeError
-  # expected
-end
-[Fiber[:familia_request_cache], Fiber[:familia_request_cache_enabled]]
-#=> [nil, false]
-
-## RequestCacheMiddleware(enabled: true) provides an active cache to the app
-@inside_mw = nil
-app = ->(env) { @inside_mw = Fiber[:familia_request_cache].class; [200, {}, []] }
-mw = Familia::Encryption::RequestCacheMiddleware.new(app, enabled: true)
-mw.call({})
-@inside_mw
-#=> Hash
-
-## RequestCacheMiddleware(enabled: true) still clears the cache afterwards
-[Fiber[:familia_request_cache], Fiber[:familia_request_cache_enabled]]
-#=> [nil, false]
-
 # TEARDOWN
 Familia.config.encryption_keys = nil
 Familia.config.current_key_version = nil

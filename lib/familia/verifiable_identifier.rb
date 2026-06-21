@@ -18,9 +18,6 @@ module Familia
     # This key is the root of trust for verifying identifier authenticity. It must be
     # a long, random, and cryptographically strong string.
     #
-    # @!attribute [r] SECRET_KEY
-    #   @return [String] The secret key.
-    #
     # @note Security Considerations:
     #   - **Secrecy:** This key MUST be kept secret and secure, just like a database
     #     password or API key. Do not commit it to version control.
@@ -29,6 +26,11 @@ module Familia
     #   - **Rotation:** If this key is ever compromised, it must be rotated. Be
     #     aware that rotating the key will invalidate all previously generated
     #     verifiable identifiers.
+    #   - **No committed fallback:** There is intentionally NO default. A hardcoded
+    #     secret in source would be public knowledge, letting anyone forge valid
+    #     identifiers (issue #310, S1). A missing secret raises -- but lazily, the
+    #     first time an identifier is actually minted or verified, so merely
+    #     requiring this file (e.g. for introspection) never blows up.
     #
     # @example Generating and Setting the Key
     #     1. Generate a new secure key in your terminal:
@@ -38,19 +40,17 @@ module Familia
     #     2. Set it as an environment variable in your production environment:
     #        export VERIFIABLE_ID_HMAC_SECRET="<the generated value>"
     #
-    # @note There is intentionally NO committed fallback default. A hardcoded
-    #   secret in source would be public knowledge, letting anyone who can read
-    #   the repository forge valid identifiers. If the environment variable is
-    #   not set, loading this module fails loudly at startup rather than
-    #   silently signing with a known key.
-    #
-    SECRET_KEY = ENV.fetch('VERIFIABLE_ID_HMAC_SECRET') do
-      raise KeyError, <<~MSG.strip
-        VERIFIABLE_ID_HMAC_SECRET is not set. Familia::VerifiableIdentifier
-        refuses to fall back to a committed default secret -- a known key would
-        let anyone forge valid identifiers. Generate one with `openssl rand -hex
-        32` and export it before loading this module.
-      MSG
+    # @return [String] the configured secret
+    # @raise [KeyError] if VERIFIABLE_ID_HMAC_SECRET is not set
+    def self.secret_key
+      @secret_key ||= ENV.fetch('VERIFIABLE_ID_HMAC_SECRET') do
+        raise KeyError, <<~MSG.strip
+          VERIFIABLE_ID_HMAC_SECRET is not set. Familia::VerifiableIdentifier
+          refuses to fall back to a committed default secret -- a known key would
+          let anyone forge valid identifiers. Generate one with `openssl rand -hex
+          32` and export it before generating or verifying identifiers.
+        MSG
+      end
     end
 
     # The length of the random part of the ID in hex characters (256 bits).
@@ -168,7 +168,7 @@ module Familia
         hmac_input = scope ? "#{message}:scope:#{scope}" : message
 
         digest = OpenSSL::Digest.new('sha256')
-        hmac = OpenSSL::HMAC.hexdigest(digest, SECRET_KEY, hmac_input)
+        hmac = OpenSSL::HMAC.hexdigest(digest, secret_key, hmac_input)
         # Truncate to the desired length for the tag.
         hmac[0...TAG_HEX_LENGTH]
       end

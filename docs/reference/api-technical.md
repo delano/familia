@@ -160,7 +160,7 @@ Familia.configure do |config|
     v3: ENV['NEW_KEY']       # New key for rotation
   }
   config.current_key_version = :v2
-  config.encryption_personalization = 'MyApp-2024'  # Optional (XChaCha20 only)
+  config.encryption_personalization = 'MyApp-2024'  # Optional domain separation (XChaCha20 personalization + AES-GCM HKDF salt)
 end
 
 # Operations with encrypted fields

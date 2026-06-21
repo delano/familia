@@ -72,7 +72,27 @@ module Familia
           OpenSSL::Random.random_bytes(NONCE_SIZE)
         end
 
-        def derive_key(master_key, context, personal: nil)
+        # The HKDF salt used before issue #310, when the salt was a static
+        # literal. Retained ONLY as a decryption fallback (see #hkdf_salts) so
+        # data written before the salt became application-specific stays
+        # readable after upgrading. Never used to encrypt new data.
+        LEGACY_HKDF_SALT = 'FamiliaEncryption'.freeze
+
+        # Ordered list of HKDF salts to consider, current first.
+        #
+        # Encryption always uses the first entry (the current personalization);
+        # decryption walks the list until the authenticated decrypt succeeds.
+        # This keeps both a personalization rotation and the #310 move away from
+        # the static salt backward-compatible without any envelope/format change.
+        # Each wrong salt yields a different key and fails GCM authentication
+        # cleanly, so trying them in turn never produces a false positive.
+        def hkdf_salts
+          current = Familia.config.encryption_personalization
+          history = Familia.config.encryption_personalization_history
+          [current, *history, LEGACY_HKDF_SALT].compact.uniq
+        end
+
+        def derive_key(master_key, context, personal: nil, salt: nil)
           validate_key_length!(master_key)
           info = personal ? "#{context}:#{personal}" : context
           OpenSSL::KDF.hkdf(
@@ -83,10 +103,10 @@ module Familia
             # (RFC 5869). This mirrors the XChaCha20 providers, which derive from
             # the same personalization string. See issue #310 (S2).
             #
-            # NOTE: changing the salt changes every derived key, so data that was
-            # encrypted with the previous static salt under this fallback
-            # provider must be re-encrypted.
-            salt: Familia.config.encryption_personalization,
+            # `salt` defaults to the current personalization (hkdf_salts.first);
+            # the decrypt path passes earlier salts so existing ciphertext stays
+            # decryptable after a salt change.
+            salt: salt || hkdf_salts.first,
             info: info,
             length: 32,
             hash: 'SHA256'
