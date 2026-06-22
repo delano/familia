@@ -4,33 +4,36 @@
 
 require 'securerandom'
 
-# Polyfills for SecureRandom.uuid_v7 and SecureRandom.uuid_v4.
+# Polyfills for SecureRandom.uuid_v7 and SecureRandom.uuid_v4 -- Ruby 3.2 only.
 #
-# Both named methods were added to Ruby's standard library in Ruby 3.3. Before
-# that, only SecureRandom.uuid existed (it produces a v4 UUID). Familia's
-# :object_identifier feature offers both :uuid_v7 (the default, for its embedded
-# sortable millisecond timestamp) and :uuid_v4 generators, and the gemspec
-# supports Ruby >= 3.2, so on Ruby 3.2 we supply faithful fallbacks. On Ruby
-# 3.3+ the native methods are present and these blocks are no-ops, leaving the
-# stdlib implementations untouched.
-
-# UUIDv4 is exactly what the long-standing SecureRandom.uuid returns, so the
-# fallback simply delegates to it.
-unless SecureRandom.respond_to?(:uuid_v4)
+# Both named methods entered Ruby's standard library in Ruby 3.3. Ruby 3.2 is
+# the oldest version familia supports (the gemspec's required_ruby_version
+# floor), and there only SecureRandom.uuid exists (it produces a v4 UUID).
+# Familia's :object_identifier feature offers both :uuid_v7 (the default, for
+# its embedded sortable millisecond timestamp) and :uuid_v4 generators, so on
+# Ruby 3.2 we supply faithful fallbacks.
+#
+# The RUBY_VERSION guard below ensures these definitions exist ONLY on Ruby
+# 3.2: on Ruby 3.3+ the block is skipped entirely and the native stdlib
+# implementations are left untouched. The caller (lib/familia/secure_identifier.rb)
+# also gates the require on RUBY_VERSION, so on 3.3+ this file is normally never
+# loaded -- the guard here is a second line of defence in case it is required
+# directly.
+if RUBY_VERSION < '3.3'
+  # UUIDv4 is exactly what the long-standing SecureRandom.uuid returns, so the
+  # fallback simply delegates to it.
   def SecureRandom.uuid_v4
     uuid
   end
-end
 
-# UUIDv7 layout (RFC 9562, millisecond precision):
-#
-#   field       bits  description
-#   unix_ts_ms   48    Unix timestamp in milliseconds, big-endian
-#   ver           4    version, always 0b0111 (7)
-#   rand_a       12    random
-#   var           2    variant, always 0b10
-#   rand_b       62    random
-unless SecureRandom.respond_to?(:uuid_v7)
+  # UUIDv7 layout (RFC 9562, millisecond precision):
+  #
+  #   field       bits  description
+  #   unix_ts_ms   48    Unix timestamp in milliseconds, big-endian
+  #   ver           4    version, always 0b0111 (7)
+  #   rand_a       12    random
+  #   var           2    variant, always 0b10
+  #   rand_b       62    random
   def SecureRandom.uuid_v7
     unix_ts_ms = Process.clock_gettime(Process::CLOCK_REALTIME, :millisecond)
 

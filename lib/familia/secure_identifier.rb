@@ -4,8 +4,10 @@
 
 require 'securerandom'
 
-# Ensures SecureRandom.uuid_v7 is available on Ruby 3.2 (native since Ruby 3.3).
-require_relative 'core_ext/securerandom'
+# SecureRandom.uuid_v7 / uuid_v4 are native since Ruby 3.3; on Ruby 3.2 load
+# the polyfill that supplies them. Gated on RUBY_VERSION so the file is never
+# required on versions that already provide the methods.
+require_relative 'core_ext/securerandom' if RUBY_VERSION < '3.3'
 
 # Provides a suite of tools for generating and manipulating cryptographically
 # secure identifiers in various formats and lengths.
