@@ -1,5 +1,15 @@
 # frozen_string_literal: true
 
+# Bundler's standard gem tasks: build / install / release (and release:*).
+#
+# The release-gem.yml workflow publishes via the `rubygems/release-gem` action,
+# which runs `bundle exec rake release`. That task only exists when this file
+# requires bundler/gem_tasks; without it the release job fails with
+# "Don't know how to build task 'release'". `rake` lives in the (non-optional)
+# :development, :test Gemfile group, so the release job's default `bundle install`
+# already provides it -- no BUNDLE_WITH opt-in is needed here.
+require 'bundler/gem_tasks'
+
 # Run the Tryouts test suite with a guaranteed UTF-8 locale.
 #
 # The suite's source and specs are UTF-8. The tryouts runner reads each test file
