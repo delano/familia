@@ -33,9 +33,20 @@ module Familia
       # Error raised when script execution fails
       class ScriptError < Familia::Migration::Errors::MigrationError; end
 
-      # Holds script source and precomputed SHA1
+      # Holds script source and its precomputed SHA-1.
+      #
+      # SECURITY NOTE (issue #310, S5): this SHA-1 is the Redis *script identity*
+      # used as the EVALSHA cache key, not a security/integrity checksum. The
+      # Redis EVALSHA/SCRIPT LOAD protocol identifies cached scripts by the SHA-1
+      # of their body, so this value MUST be SHA-1 -- swapping in SHA-256 would
+      # make every EVALSHA miss (NOSCRIPT) and silently fall back to EVAL,
+      # re-sending the full script on each call. The scripts here are hardcoded
+      # library constants (or developer-supplied), never attacker-controlled, so
+      # SHA-1 collision attacks do not apply. Genuine change-detection that needs
+      # collision resistance uses SHA-256 elsewhere (see Migration::Registry#schema_digest).
       ScriptEntry = Data.define(:source, :sha) do
         def initialize(source:, sha: nil)
+          # Digest::SHA1 here mirrors what Redis computes for EVALSHA/SCRIPT LOAD.
           computed_sha = sha || Digest::SHA1.hexdigest(source)
           super(source: source.freeze, sha: computed_sha.freeze)
         end

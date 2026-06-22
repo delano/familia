@@ -5,15 +5,23 @@
 # try/core/verifiable_identifier_try.rb
 
 require_relative '../support/helpers/test_helpers'
+
+# A dedicated HMAC secret is REQUIRED: the library intentionally has no
+# committed fallback default (a known key would let anyone forge identifiers --
+# see issue #310, S1). The secret is read lazily on first use, so requiring the
+# module never raises; provide a test-only secret before the generate/verify
+# cases below exercise it.
+ENV['VERIFIABLE_ID_HMAC_SECRET'] ||= 'test-only-verifiable-id-hmac-secret-0123456789abcdef'
+
 require 'familia/verifiable_identifier'
 
 ## Module is available
 defined?(Familia::VerifiableIdentifier)
 #=> "constant"
 
-## Uses the development secret key by default when ENV is not set
-Familia::VerifiableIdentifier::SECRET_KEY
-#=> "cafef00dcafef00dcafef00dcafef00dcafef00dcafef00d"
+## Reads the HMAC secret lazily from the environment (no committed fallback)
+Familia::VerifiableIdentifier.secret_key
+#=> 'test-only-verifiable-id-hmac-secret-0123456789abcdef'
 
 # --- Verifiable ID Generation and Verification ---
 
@@ -173,3 +181,16 @@ Familia::VerifiableIdentifier.verified_identifier?(id, 36)
 id = Familia::VerifiableIdentifier.generate_verifiable_id(scope: "test", base: 16)
 Familia::VerifiableIdentifier.verified_identifier?(id, scope: "test", base: 16)
 #=> true
+
+## reset_secret_key! clears memoization so the next read re-reads ENV (test API).
+## Production never needs this; it lets a test swap the configured secret in-process.
+@orig_hmac_secret = ENV['VERIFIABLE_ID_HMAC_SECRET']
+Familia::VerifiableIdentifier.reset_secret_key!
+ENV['VERIFIABLE_ID_HMAC_SECRET'] = 'rotated-secret-for-reset-test-0123456789abcdef'
+@after_reset = Familia::VerifiableIdentifier.secret_key
+# Restore the original secret and re-clear, so the original value is re-memoized
+# and no rotated state leaks into a later case or a shared suite process.
+ENV['VERIFIABLE_ID_HMAC_SECRET'] = @orig_hmac_secret
+Familia::VerifiableIdentifier.reset_secret_key!
+@after_reset
+#=> 'rotated-secret-for-reset-test-0123456789abcdef'

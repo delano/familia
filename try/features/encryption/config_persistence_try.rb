@@ -107,6 +107,41 @@ ensure
 end
 #=> "Personalization string must not contain null bytes"
 
+## encryption_personalization (method form) enforces the 16-byte BLAKE2b limit
+## and points callers at the separate, unconstrained AES-GCM salt knob (#311)
+begin
+  Familia.config.encryption_personalization('x' * 17)
+  'should_not_reach_here'
+rescue ArgumentError => e
+  [e.message.include?('16 bytes'), e.message.include?('encryption_hkdf_salt')]
+end
+#=> [true, true]
+
+## encryption_hkdf_salt has no length limit -- a >16-byte salt is accepted (#311)
+@orig_hkdf = Familia.config.encryption_hkdf_salt
+Familia.config.encryption_hkdf_salt = 'x' * 64
+@hkdf_ok = Familia.config.encryption_hkdf_salt == 'x' * 64
+Familia.config.encryption_hkdf_salt = @orig_hkdf
+@hkdf_ok
+#=> true
+
+## XChaCha20 derive_key fails closed on a nil personalization with a clean
+## EncryptionError, not a NoMethodError crash (#311)
+provider = @provider_class.new
+@op = Familia.config.encryption_personalization
+Familia.config.encryption_personalization = nil
+@nil_personal = begin
+  provider.derive_key('a' * 32, 'ctx')
+  'no-error'
+rescue Familia::EncryptionError => e
+  e.message.include?('non-empty') ? 'clean-error' : 'other-encryption-error'
+rescue NoMethodError
+  'crashed'
+end
+Familia.config.encryption_personalization = @op
+@nil_personal
+#=> 'clean-error'
+
 ## derive_key validates master key length
 provider = @provider_class.new
 short_key = 'a' * 16  # Too short

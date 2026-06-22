@@ -57,14 +57,35 @@ module Familia
 
           # Validate algorithm support
           provider = Registry.get(data.algorithm)
-          key = derive_key_without_increment(context, version: data.key_version, provider: provider)
 
           # Safely decode and validate sizes
           nonce = decode_and_validate(data.nonce, provider.nonce_size, 'nonce')
           ciphertext = decode_and_validate_ciphertext(data.ciphertext)
           auth_tag = decode_and_validate(data.auth_tag, provider.auth_tag_size, 'auth_tag')
 
-          plaintext = provider.decrypt(ciphertext, key, nonce, auth_tag, additional_data)
+          # Try each candidate HKDF salt, current first, so ciphertext written
+          # before a salt change still decrypts. Providers without salt rotation
+          # expose a single nil "salt" and are attempted exactly once. A wrong
+          # salt derives a different key and fails the authenticated decrypt
+          # cleanly, so iterating never yields a false positive. See #310 (S2).
+          salts = provider.respond_to?(:hkdf_salts) ? provider.hkdf_salts : [nil]
+          key = nil
+          plaintext = nil
+          last_error = nil
+          salts.each do |salt|
+            key = derive_key_without_increment(context, version: data.key_version, provider: provider, salt: salt)
+            begin
+              plaintext = provider.decrypt(ciphertext, key, nonce, auth_tag, additional_data)
+              break
+            rescue EncryptionError => e
+              last_error = e
+              plaintext = nil
+            ensure
+              Familia::Encryption.secure_wipe(key)
+            end
+          end
+          raise(last_error || EncryptionError.new('Decryption failed - invalid key or corrupted data')) if plaintext.nil?
+
           plaintext.force_encoding(data.encoding || 'UTF-8')
         rescue EncryptionError
           raise
@@ -74,6 +95,11 @@ module Familia
           raise EncryptionError, "Decryption failed: #{e.message}"
         end
       ensure
+        # Defensive backstop only. The salt-rotation loop's per-iteration `ensure`
+        # (around provider.decrypt) is the primary wipe and clears `key` on every
+        # path -- success, failure, and break -- so by here `key` is already wiped
+        # and this re-clear is a harmless no-op. It is kept so any future change to
+        # the loop structure still cannot leave a derived key unwiped (#311).
         Familia::Encryption.secure_wipe(key) if key
       end
 
@@ -101,7 +127,7 @@ module Familia
         derive_key_without_increment(context, version: version, provider: provider)
       end
 
-      def derive_key_without_increment(context, version: nil, provider: nil)
+      def derive_key_without_increment(context, version: nil, provider: nil, salt: nil)
         # Use provided provider or fall back to instance provider
         provider ||= @provider
 
@@ -113,18 +139,31 @@ module Familia
         # Request-scoped key cache (opt-in via Familia::Encryption.with_request_cache).
         # Disabled by default for maximum security (keys are not held in memory
         # longer than a single derivation). The cache key includes the algorithm
-        # so different providers never share a derived key, and the version so
-        # key rotation stays correct. On a hit we return a copy and never fetch
-        # the master key, minimising master-key exposure.
+        # so different providers never share a derived key, the version so key
+        # rotation stays correct, and the resolved salt so rotated-salt derivations
+        # never collide. On a hit we return a copy and never fetch the master key,
+        # minimising master-key exposure.
         cache = Fiber[:familia_request_cache] if Fiber[:familia_request_cache_enabled]
         if cache
-          cache_key = "#{provider.algorithm}:#{version}:#{context}"
+          # Key on the *resolved* salt, not the raw argument. When salt is nil
+          # (the encrypt path) the provider derives with hkdf_salts.first; the
+          # decrypt loop later passes that same value explicitly. Keying on the
+          # raw argument would file those two identical derivations under
+          # different keys (nil vs the resolved salt), so an encrypt followed by a
+          # decrypt of the same value in one request would derive twice instead of
+          # hitting the cache. Providers without salt rotation have no effective
+          # salt (nil), so their cache key is unchanged.
+          effective_salt = salt || (provider.respond_to?(:hkdf_salts) ? provider.hkdf_salts.first : nil)
+          cache_key = "#{provider.algorithm}:#{version}:#{effective_salt}:#{context}"
           cached = cache[cache_key]
           return cached.dup if cached
         end
 
         master_key = get_master_key(version)
-        derived = provider.derive_key(master_key, context)
+        # Only forward an explicit salt to providers that accept one (the AES-GCM
+        # salt-rotation path). The default derivation keeps the original arity so
+        # providers without a salt parameter are unaffected.
+        derived = salt.nil? ? provider.derive_key(master_key, context) : provider.derive_key(master_key, context, salt: salt)
         cache[cache_key] = derived.dup if cache
         derived
       ensure

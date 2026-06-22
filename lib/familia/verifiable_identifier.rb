@@ -18,9 +18,6 @@ module Familia
     # This key is the root of trust for verifying identifier authenticity. It must be
     # a long, random, and cryptographically strong string.
     #
-    # @!attribute [r] SECRET_KEY
-    #   @return [String] The secret key.
-    #
     # @note Security Considerations:
     #   - **Secrecy:** This key MUST be kept secret and secure, just like a database
     #     password or API key. Do not commit it to version control.
@@ -29,16 +26,43 @@ module Familia
     #   - **Rotation:** If this key is ever compromised, it must be rotated. Be
     #     aware that rotating the key will invalidate all previously generated
     #     verifiable identifiers.
+    #   - **No committed fallback:** There is intentionally NO default. A hardcoded
+    #     secret in source would be public knowledge, letting anyone forge valid
+    #     identifiers (issue #310, S1). A missing secret raises -- but lazily, the
+    #     first time an identifier is actually minted or verified, so merely
+    #     requiring this file (e.g. for introspection) never blows up.
     #
     # @example Generating and Setting the Key
     #     1. Generate a new secure key in your terminal:
     #        $ openssl rand -hex 32
-    #        > cafef00dcafef00dcafef00dcafef00dcafef00dcafef00d
+    #        > <64 hex characters>
     #
     #     2. Set it as an environment variable in your production environment:
-    #        export VERIFIABLE_ID_HMAC_SECRET="cafef00dcafef00dcafef00dcafef00dcafef00dcafef00d"
+    #        export VERIFIABLE_ID_HMAC_SECRET="<the generated value>"
     #
-    SECRET_KEY = ENV.fetch('VERIFIABLE_ID_HMAC_SECRET', 'cafef00dcafef00dcafef00dcafef00dcafef00dcafef00d')
+    # @return [String] the configured secret
+    # @raise [KeyError] if VERIFIABLE_ID_HMAC_SECRET is not set
+    def self.secret_key
+      @secret_key ||= ENV.fetch('VERIFIABLE_ID_HMAC_SECRET') do
+        raise KeyError, <<~MSG.strip
+          VERIFIABLE_ID_HMAC_SECRET is not set. Familia::VerifiableIdentifier
+          refuses to fall back to a committed default secret -- a known key would
+          let anyone forge valid identifiers. Generate one with `openssl rand -hex
+          32` and export it before generating or verifying identifiers.
+        MSG
+      end
+    end
+
+    # Clears the memoized secret so the next {.secret_key} call re-reads the
+    # environment. Intended for test suites that swap the configured secret (or
+    # exercise the missing-secret path) within a single process. Production code
+    # never needs this: the secret is fixed for a deployment, and rotating it
+    # requires a restart (and invalidates every previously generated identifier).
+    #
+    # @return [nil]
+    def self.reset_secret_key!
+      @secret_key = nil
+    end
 
     # The length of the random part of the ID in hex characters (256 bits).
     RANDOM_HEX_LENGTH = 64
@@ -155,7 +179,7 @@ module Familia
         hmac_input = scope ? "#{message}:scope:#{scope}" : message
 
         digest = OpenSSL::Digest.new('sha256')
-        hmac = OpenSSL::HMAC.hexdigest(digest, SECRET_KEY, hmac_input)
+        hmac = OpenSSL::HMAC.hexdigest(digest, secret_key, hmac_input)
         # Truncate to the desired length for the tag.
         hmac[0...TAG_HEX_LENGTH]
       end

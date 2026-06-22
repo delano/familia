@@ -55,12 +55,19 @@ module Familia
         def target_instance
           return nil unless target_class
 
-          # Resolve class from string name
-          # Only rescue NameError (class doesn't exist), not all exceptions
-          klass = Object.const_get(target_class)
+          # SECURITY: target_class is a string persisted in the database. Using
+          # Object.const_get on it would let anyone able to write to the database
+          # choose which constant gets resolved (and whose code runs next). Look
+          # the name up through Familia's model registry instead -- it only ever
+          # returns a class that was explicitly registered as a Familia model,
+          # acting as an implicit allowlist. Unknown names resolve to nil rather
+          # than to an arbitrary constant. See issue #310 (S4).
+          klass = Familia.resolve_class(target_class)
+          return nil unless klass.respond_to?(:find_by_id)
+
           klass.find_by_id(target_id)
-        rescue NameError
-          # Target class doesn't exist or isn't loaded
+        rescue ArgumentError, NameError
+          # Unresolvable or non-model class name -- treat as a missing target.
           nil
         end
       end
