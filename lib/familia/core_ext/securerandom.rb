@@ -4,14 +4,24 @@
 
 require 'securerandom'
 
-# Polyfill for SecureRandom.uuid_v7.
+# Polyfills for SecureRandom.uuid_v7 and SecureRandom.uuid_v4.
 #
-# `SecureRandom.uuid_v7` was added to Ruby's standard library in Ruby 3.3.
-# Familia's :object_identifier feature defaults to UUIDv7 (for its embedded,
-# sortable millisecond timestamp), and the gemspec supports Ruby >= 3.2, so on
-# Ruby 3.2 we supply a faithful fallback. On Ruby 3.3+ the native method is
-# present and this block is a no-op, leaving the stdlib implementation untouched.
-#
+# Both named methods were added to Ruby's standard library in Ruby 3.3. Before
+# that, only SecureRandom.uuid existed (it produces a v4 UUID). Familia's
+# :object_identifier feature offers both :uuid_v7 (the default, for its embedded
+# sortable millisecond timestamp) and :uuid_v4 generators, and the gemspec
+# supports Ruby >= 3.2, so on Ruby 3.2 we supply faithful fallbacks. On Ruby
+# 3.3+ the native methods are present and these blocks are no-ops, leaving the
+# stdlib implementations untouched.
+
+# UUIDv4 is exactly what the long-standing SecureRandom.uuid returns, so the
+# fallback simply delegates to it.
+unless SecureRandom.respond_to?(:uuid_v4)
+  def SecureRandom.uuid_v4
+    uuid
+  end
+end
+
 # UUIDv7 layout (RFC 9562, millisecond precision):
 #
 #   field       bits  description
