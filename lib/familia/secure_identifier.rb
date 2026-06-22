@@ -4,6 +4,9 @@
 
 require 'securerandom'
 
+# Ensures SecureRandom.uuid_v7 is available on Ruby 3.2 (native since Ruby 3.3).
+require_relative 'core_ext/securerandom'
+
 # Provides a suite of tools for generating and manipulating cryptographically
 # secure identifiers in various formats and lengths.
 module Familia
