@@ -83,7 +83,7 @@ module Familia
       # Register middleware only once, globally
       register_middleware_once
 
-      Redis.new(parsed_uri.conf)
+      Redis.new(parsed_uri.conf.merge(timeout: 5))
     end
     alias connect create_dbclient # backwards compatibility
     alias isolated_dbclient create_dbclient # matches with_isolated_dbclient api
