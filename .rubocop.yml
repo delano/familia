@@ -135,9 +135,11 @@ Style/StringLiterals:
   Enabled: true
   EnforcedStyle: single_quotes
 
+# Every lib/ file carries `# frozen_string_literal: true`; require it rather
+# than flag it (the previous `never` contradicted the entire codebase).
 Style/FrozenStringLiteralComment:
   Enabled: true
-  EnforcedStyle: never
+  EnforcedStyle: always_true
 
 Naming/MemoizedInstanceVariableName:
   Enabled: false

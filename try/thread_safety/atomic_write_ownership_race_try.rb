@@ -4,127 +4,130 @@
 
 require_relative '../support/helpers/test_helpers'
 
-# Thread safety tests for acquire_atomic_write_ownership! compare-and-swap.
+# Deterministic thread-safety tests for acquire_atomic_write_ownership!.
 #
-# lib/familia/horreum/atomic_write.rb wraps the @atomic_write_owner ivar
-# check-then-set in OWNER_STATE_MUTEX.synchronize. Without that mutex,
-# two threads could both observe a nil owner and simultaneously claim
-# ownership, then open parallel MULTIs against shared scalar state.
-#
-# The re-entrancy test in try/features/atomic_write_try.rb establishes a
-# happens-before relationship via a Queue rendezvous: by the time thread
-# B calls acquire, the ivar is already non-nil and B's check short-
-# circuits even without the mutex. That test would still pass if the
-# synchronize wrapper were removed.
-#
-# This file exercises the CAS race as directly as the MRI scheduler
-# permits: N threads synchronised on a CyclicBarrier, released
-# simultaneously, all calling atomic_write on a fresh instance where
-# @atomic_write_owner is nil. With the mutex, exactly one thread wins
-# and the others raise OperationModeError.
-#
-# Caveat: MRI's GVL serialises Ruby bytecode and only pre-empts at safe
-# points, so many iterations INCREASE THE PROBABILITY of catching a
-# pre-emption window between the nil-check and the set in
-# acquire_atomic_write_ownership! but cannot guarantee it. A pure
-# mutation test (removing the mutex) may still pass on some machines if
-# GVL scheduling happens to serialise the threads after barrier release.
-# This test's primary job is to assert the exact-one-winner invariant on
-# simultaneous barrier release; the Fiber-based re-entrancy tests in
-# try/features/atomic_write_try.rb additionally validate the guard's
-# semantics when happens-before ordering is established.
-#
-# The test still earns its place: on loaded CI runners the GVL does
-# pre-empt across iterations; on JRuby/TruffleRuby (which lack a GVL)
-# the race is real every iteration; and even on unloaded MRI the
-# "exact-one-winner" invariant is a smoke test that catches gross
-# regressions (e.g. removing the @atomic_write_owner check entirely,
-# which would let every thread pass the guard and open parallel MULTIs).
+# These tests use Queue-based rendezvous to guarantee happens-before
+# ordering, so the outcome is deterministic regardless of GVL scheduling.
+# The probabilistic stress variant lives in
+# try/support/stress/atomic_write_ownership_stress.rb for manual/periodic
+# validation outside CI.
 
 Familia.debug = false
 
-class CASRacePlan < Familia::Horreum
+class OwnershipGuardPlan < Familia::Horreum
   identifier_field :planid
   field :planid
-  field :winner
+  field :name
   set :marks
 end
 
-CASRacePlan.instances.clear rescue nil
-CASRacePlan.all.each(&:destroy!) rescue nil
+OwnershipGuardPlan.instances.clear rescue nil
+OwnershipGuardPlan.all.each(&:destroy!) rescue nil
 
-## CAS race: exactly one thread per iteration wins atomic_write ownership
-@iterations = 100
-@threads_per_iteration = 10
-@success_counter = Concurrent::AtomicFixnum.new(0)
-@raise_counter = Concurrent::AtomicFixnum.new(0)
-@unexpected_errors = Concurrent::Array.new
-@winner_values = Concurrent::Array.new
+## Thread ownership guard: second thread raises OperationModeError on same instance
+@plan = OwnershipGuardPlan.new(planid: 'guard_thread', name: 'initial')
+@plan.save
+@enter_signal = Queue.new
+@exit_signal = Queue.new
 
-@iterations.times do |iter|
-  # Fresh instance per iteration: @atomic_write_owner must be nil when
-  # threads start. Reusing across iterations lets the prior owner leak.
-  plan = CASRacePlan.new(planid: "cas_race_#{iter}", winner: 'initial')
+@thread_a = Thread.new do
+  @plan.atomic_write do
+    @plan.name = 'thread_a_wrote'
+    @plan.marks.add('mark_a')
+    @enter_signal << :a_inside
+    @exit_signal.pop
+  end
+  :a_done
+end
+
+@thread_b = Thread.new do
+  @enter_signal.pop
+  begin
+    @plan.atomic_write do
+      @plan.name = 'thread_b_wrote'
+      @plan.marks.add('mark_b')
+    end
+    :b_done
+  rescue Familia::OperationModeError => e
+    e.message.include?('another Fiber or Thread') ? :b_rejected : :b_wrong_message
+  ensure
+    @exit_signal << :release
+  end
+end
+
+@result_b = @thread_b.value
+@result_a = @thread_a.value
+[@result_a, @result_b]
+#=> [:a_done, :b_rejected]
+
+## Only the owning thread's mutations are persisted
+@reloaded = OwnershipGuardPlan.find_by_id('guard_thread')
+[@reloaded.name, @reloaded.marks.members]
+#=> ['thread_a_wrote', ['mark_a']]
+
+## Ownership is released after atomic_write completes: subsequent call succeeds
+@plan2 = OwnershipGuardPlan.new(planid: 'guard_release', name: 'before')
+@plan2.save
+@plan2.atomic_write { @plan2.name = 'first_write' }
+@plan2.atomic_write { @plan2.name = 'second_write' }
+OwnershipGuardPlan.find_by_id('guard_release').name
+#=> 'second_write'
+
+## Ownership is released even when the block raises
+@plan3 = OwnershipGuardPlan.new(planid: 'guard_exception', name: 'before')
+@plan3.save
+begin
+  @plan3.atomic_write { raise 'boom' }
+rescue RuntimeError
+end
+@plan3.atomic_write { @plan3.name = 'after_exception' }
+OwnershipGuardPlan.find_by_id('guard_exception').name
+#=> 'after_exception'
+
+## Repeated thread contention: guard holds across N iterations
+@iterations = 20
+@results = @iterations.times.map do |i|
+  plan = OwnershipGuardPlan.new(planid: "guard_repeat_#{i}", name: 'initial')
   plan.save
+  enter = Queue.new
+  release = Queue.new
 
-  barrier = Concurrent::CyclicBarrier.new(@threads_per_iteration)
+  owner = Thread.new do
+    plan.atomic_write do
+      plan.name = "owner_#{i}"
+      plan.marks.add("owner_mark_#{i}")
+      enter << :ready
+      release.pop
+    end
+    :owner_done
+  end
 
-  threads = @threads_per_iteration.times.map do |tid|
-    Thread.new do
-      barrier.wait  # Release all threads simultaneously
-      begin
-        plan.atomic_write do
-          plan.winner = "thread_#{tid}"
-          plan.marks.add("mark_#{tid}")
-        end
-        @success_counter.increment
-      rescue Familia::OperationModeError => e
-        if e.message.include?('another Fiber or Thread')
-          @raise_counter.increment
-        else
-          @unexpected_errors << [:wrong_message, e.message]
-        end
-      rescue => e
-        @unexpected_errors << [:wrong_class, e.class.name, e.message]
-      end
+  contender = Thread.new do
+    enter.pop
+    begin
+      plan.atomic_write { plan.name = "contender_#{i}" }
+      :contender_done
+    rescue Familia::OperationModeError
+      :contender_rejected
+    ensure
+      release << :go
     end
   end
 
-  threads.each(&:join)
-
-  reloaded = CASRacePlan.find_by_id("cas_race_#{iter}")
-  @winner_values << reloaded.winner if reloaded
+  [owner.value, contender.value]
 end
 
-[
-  @success_counter.value,
-  @raise_counter.value,
-  @unexpected_errors.to_a,
-  @winner_values.size,
-]
-#=> [100, 900, [], 100]
+@results.all? { |owner, contender| owner == :owner_done && contender == :contender_rejected }
+#=> true
 
-## Every persisted winner reflects a single thread's update (no mix of writes)
-# Each winner must match the "thread_N" pattern -- if two threads had
-# both opened parallel MULTIs, persist_to_storage could interleave and
-# produce values that neither thread set. A perfect pass guarantees
-# exactly one winner serialised its update per iteration.
-@winner_values.all? { |w| w =~ /\Athread_\d+\z/ }
-#==> _ == true
-
-## All marks sets contain exactly one member (the winning thread's mark)
-# SADD is additive, so if two threads had opened parallel MULTIs and both
-# got past the guard, their respective thread_N mark values would both
-# land and the set would have >= 2 distinct members. A set size of 1
-# per iteration is a second-order witness that exactly one thread
-# executed the MULTI body.
-@marks_counts = @iterations.times.map do |iter|
-  reloaded = CASRacePlan.find_by_id("cas_race_#{iter}")
-  reloaded ? reloaded.marks.members.size : -1
+## All iterated instances reflect only the owner's mutations
+@persisted_correct = @iterations.times.all? do |i|
+  r = OwnershipGuardPlan.find_by_id("guard_repeat_#{i}")
+  r && r.name == "owner_#{i}" && r.marks.members == ["owner_mark_#{i}"]
 end
-@marks_counts.all? { |c| c == 1 }
-#==> _ == true
+@persisted_correct
+#=> true
 
 # Teardown
-CASRacePlan.instances.clear rescue nil
-CASRacePlan.all.each(&:destroy!) rescue nil
+OwnershipGuardPlan.instances.clear rescue nil
+OwnershipGuardPlan.all.each(&:destroy!) rescue nil

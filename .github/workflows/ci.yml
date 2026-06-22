@@ -23,11 +23,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ruby: ["3.4", "3.5"]
+        ruby: ["3.2", "3.3", "3.4", "3.5", "4.0"]
         continue-on-error: [false]
-        include:
-          - ruby: "4.0"
-            continue-on-error: true
 
     services:
       redis:
