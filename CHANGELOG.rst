@@ -7,6 +7,97 @@ The format is based on `Keep a Changelog <https://keepachangelog.com/en/1.1.0/>`
 
    <!--scriv-insert-here-->
 
+.. _changelog-2.11.0:
+
+2.11.0 — 2026-06-22
+===================
+
+Added
+-----
+
+- Project-wide relationship introspection: ``Familia.index_descriptors``,
+  ``Familia.unique_indexes``, ``Familia.multi_indexes``, and
+  ``Familia.participation_descriptors`` aggregate index/participation metadata
+  across all loaded ``Horreum`` subclasses, returning ``Familia::IndexDescriptor``
+  objects (``coordinate``, ``each_record``, ``rebuild!``, ``stale_format?``).
+
+- ``Familia.stale_indexes`` and ``Familia.assert_indexes_current!`` detect
+  class-level unique indexes still holding pre-2.10.0 JSON-encoded identifiers and
+  fail fast (or warn) at boot. Rebuild with ``Familia.stale_indexes.each(&:rebuild!)``.
+
+- ``Familia.legacy_json_encoded?`` predicate for detecting legacy-format
+  identifiers.
+
+Changed
+-------
+
+- New ``encryption_hkdf_salt`` and ``encryption_hkdf_salt_history`` settings
+  configure the AES-GCM HKDF salt, decoupled from ``encryption_personalization``
+  (now used only by the XChaCha20/BLAKE2b providers, still capped at 16 bytes). The
+  salt has no length limit and supports rotation; no data migration is required
+  (issue #311).
+
+- ``feature :external_identifier`` accepts a callable ``secret:``, resolved lazily
+  at first use (issue #311).
+
+- The opt-in request-scoped key cache keys on the resolved salt, so an encrypt and a
+  later decrypt of the same value within one request share a single derived key
+  (issue #311).
+
+Fixed
+-----
+
+- ``SortedSet#members(n)`` / ``#revmembers(n)`` returned one fewer element than
+  requested.
+
+- Participation permission queries (``<collection>_with_permission``) now return
+  matching members instead of raising on a non-existent ``zrangebyscore`` call.
+
+- Class-level ``Model.destroy!(id)`` now removes the record's unique-index entries
+  instead of leaving them orphaned, so a stale ``find_by_<field>`` can no longer
+  resolve a deleted record.
+
+- Changing a ``unique_index`` field value and saving now removes the old value's
+  index entry in the same transaction (``multi_index`` keeps add-only semantics).
+
+Security
+--------
+
+- ``Familia::VerifiableIdentifier`` now requires ``VERIFIABLE_ID_HMAC_SECRET``
+  (issue #310, S1). The committed fallback secret, which allowed identifier
+  forgery, is removed; the secret is read lazily, so requiring the file without it
+  set does not raise.
+
+- AES-GCM keys derive from a per-deployment ``encryption_hkdf_salt`` instead of a
+  static library salt (issue #310, S2). A blank salt or personalization now raises
+  rather than silently using a weak/global value; existing ciphertext still
+  decrypts (issue #311).
+
+- External identifiers derive via SHA-256, or keyed HMAC-SHA256 with a ``secret:``,
+  instead of a Mersenne-Twister PRNG seeded from a truncated digest (issue #310, S3).
+
+- ``ParticipationMembership#target_instance`` resolves class names through the
+  ``Familia.resolve_class`` allowlist instead of ``Object.const_get`` (issue #310, S4).
+
+- The request-scoped key cache is wiped on entry to ``with_request_cache`` as well
+  as on exit, so a reused fiber cannot inherit another request's keys (issue #310, S6).
+
+Documentation
+-------------
+
+- Documented the relationship introspection API and stale-index boot guard across
+  the relationships guide and methods reference. Renamed
+  ``docs/migrating/v2.10.0.md`` to ``docs/migrating/v2.10.md``.
+
+- Clarified that the migration ``Script`` SHA-1 is the Redis ``EVALSHA`` identity,
+  not a security checksum (issue #310, S5).
+
+AI Assistance
+-------------
+
+- The 2.11.0 changes, their tryouts, and this changelog were drafted with AI
+  assistance.
+
 .. _changelog-2.10.1:
 
 2.10.1 — 2026-06-06
