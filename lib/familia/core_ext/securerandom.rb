@@ -50,7 +50,8 @@ if RUBY_VERSION < '3.3'
     # Fifth group: the remaining 48 random bits.
     rand_b_lo = random_number(0x1_0000_0000_0000)
 
-    format('%08x-%04x-%04x-%04x-%012x',
-           time_hi, time_lo, ver_rand_a, var_rand_b_hi, rand_b_lo)
+    format('%<time_hi>08x-%<time_lo>04x-%<ver_rand_a>04x-%<var_rand_b_hi>04x-%<rand_b_lo>012x',
+           time_hi: time_hi, time_lo: time_lo, ver_rand_a: ver_rand_a,
+           var_rand_b_hi: var_rand_b_hi, rand_b_lo: rand_b_lo)
   end
 end

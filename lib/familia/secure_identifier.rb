@@ -103,31 +103,20 @@ module Familia
       truncated_int.to_s(base).rjust(target_length, '0')
     end
 
-    # Calculates the minimum string length required to represent a given number of
-    # bits in a specific numeric base.
-    #
-    private
-
-    # Generates a secure identifier with specified bit length and base.
+    # Calculates the minimum string length required to represent a given number
+    # of bits in a specific numeric base.
     #
     # @private
     #
-    # @param bits [Integer] The number of bits of entropy (64, 128, or 256).
-    # @param base [Integer] The numeric base (2-36).
-    # @return [String] The generated identifier.
-    def _generate_secure_id(bits:, base:)
-      hex_id = SecureRandom.hex(bits / 8)
-      return hex_id if base == 16
-
-      len = SecureIdentifier.min_length_for_bits(bits, base)
-      hex_id.to_i(16).to_s(base).rjust(len, '0')
-    end
-
-    # @private
+    # Thread-safe lazy initialization using Concurrent::Map to ensure atomic
+    # cache population and consistent calculations across all concurrent ID
+    # generation requests.
     #
-    # Thread-safe lazy initialization using Concurrent::Map to ensure
-    # atomic cache population and consistent calculations across all
-    # concurrent ID generation requests.
+    # Defined as a public class method (rather than under +private+ below)
+    # because it is invoked with an explicit receiver --
+    # +SecureIdentifier.min_length_for_bits+ -- from both public and private
+    # instance methods; a private singleton method cannot be called that way.
+    # The +@private+ tag keeps it out of the generated API docs.
     #
     # @param bits [Integer] The number of bits of entropy.
     # @param base [Integer] The numeric base (2-36).
@@ -145,6 +134,23 @@ module Familia
       @min_length_for_bits_cache.fetch_or_store([bits, base]) do
         (bits * Math.log(2) / Math.log(base)).ceil
       end
+    end
+
+    private
+
+    # Generates a secure identifier with specified bit length and base.
+    #
+    # @private
+    #
+    # @param bits [Integer] The number of bits of entropy (64, 128, or 256).
+    # @param base [Integer] The numeric base (2-36).
+    # @return [String] The generated identifier.
+    def _generate_secure_id(bits:, base:)
+      hex_id = SecureRandom.hex(bits / 8)
+      return hex_id if base == 16
+
+      len = SecureIdentifier.min_length_for_bits(bits, base)
+      hex_id.to_i(16).to_s(base).rjust(len, '0')
     end
   end
 end
