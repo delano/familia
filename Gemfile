@@ -5,7 +5,7 @@ source 'https://rubygems.org'
 gemspec
 
 group :test do
-  gem 'concurrent-ruby', '~> 1.3.6', require: false
+  gem 'concurrent-ruby', '~> 1.3.7', require: false
   gem 'ruby-prof'
   gem 'stackprof'
   gem 'timecop', require: false
