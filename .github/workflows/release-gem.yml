@@ -132,10 +132,10 @@ jobs:
         uses: ruby/setup-ruby@afeafc3d1ab54a631816aba4c914a0081c12ff2f # v1.310.0
         with:
           bundler-cache: true
-          # Pinned to 3.2, the oldest non-experimental Ruby in ci.yml's matrix
-          # and the gemspec's required_ruby_version floor, so the release build
-          # matches the minimum supported configuration that CI exercises.
-          ruby-version: "3.2"
+          # Pinned to 3.3 to match the otto/rhales release builds. The gem is
+          # pure Ruby, so the build Ruby is independent of the supported range
+          # declared in the gemspec (>= 3.2).
+          ruby-version: "3.3"
 
       - name: Verify release tag matches Familia::VERSION
         env:
