@@ -17,11 +17,21 @@ on:
 
 jobs:
   claude-review:
-    # Run on opened/synchronize, but only on 'labeled' if label is 'claude-review'
-    if: |
-      github.event.action == 'opened' ||
-      github.event.action == 'synchronize' ||
-      (github.event.action == 'labeled' && github.event.label.name == 'claude-review')
+    # Run only when ALL of the following hold:
+    #   1. Author is not a bot (renovate, dependabot, etc. surface as 'name[bot]').
+    #   2. PR head is not from a fork. Fork PRs run without repository secrets, so
+    #      CLAUDE_CODE_OAUTH_TOKEN is empty and the action would fail.
+    #   3. The event is a freshly opened PR, a 'claude-review' label add, or a push
+    #      to a PR that already carries the 'claude-review' label.
+    if: ${{
+      !endsWith(github.actor, '[bot]') &&
+      !github.event.pull_request.head.repo.fork &&
+      (
+        (github.event.action == 'opened') ||
+        (github.event.action == 'labeled' && github.event.label.name == 'claude-review') ||
+        (github.event.action == 'synchronize' && contains(github.event.pull_request.labels.*.name, 'claude-review'))
+      )
+      }}
 
     runs-on: ubuntu-latest
     permissions:
@@ -67,6 +77,3 @@ jobs:
           # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
           # or https://docs.anthropic.com/en/docs/claude-code/sdk#command-line for available options
           allowed_tools: "Bash(gh issue view:*),Bash(gh search:*),Bash(gh issue list:*),Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr list:*)"
-
-          # Allow bot-initiated workflows (e.g., qodo, dependabot)
-          allowed_bots: "*"
