@@ -4,6 +4,16 @@ on:
   pull_request:
     types: [opened, synchronize, labeled]
   workflow_dispatch:
+    inputs:
+      model:
+        description: "Claude model for this run (overrides the CLAUDE_MODEL repo variable)"
+        type: choice
+        required: false
+        default: claude-opus-4-6
+        options:
+          - claude-opus-4-6
+          - claude-sonnet-4-6
+          - claude-haiku-4-5-20251001
 
 jobs:
   claude-review:
@@ -22,7 +32,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6.0.3
         with:
           fetch-depth: 1
 
@@ -31,6 +41,13 @@ jobs:
         uses: anthropics/claude-code-action@beta
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+
+          # Primary model precedence: the workflow_dispatch "model" input (manual
+          # runs) -> the CLAUDE_MODEL repo variable -> this built-in default.
+          # Pinning a current id avoids the action's frozen default, which 404s
+          # ("model: claude-sonnet-4-20250514"). Fall back to Sonnet on overload.
+          model: "${{ inputs.model || vars.CLAUDE_MODEL || 'claude-opus-4-6' }}"
+          fallback_model: "${{ vars.CLAUDE_FALLBACK_MODEL || 'claude-sonnet-4-6' }}"
 
           # Optional: Use sticky comments to make Claude reuse the same comment on subsequent pushes to the same PR
           use_sticky_comment: true
