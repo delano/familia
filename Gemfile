@@ -26,7 +26,7 @@ group :development, :test do
   gem 'rake', '~> 13.0', require: false
   gem 'redcarpet', require: false
   gem 'reek', require: false
-  gem 'rubocop', '~> 1.85.1', require: false
+  gem 'rubocop', '~> 1.88.0', require: false
   gem 'rubocop-performance', require: false
   gem 'rubocop-thread_safety', require: false
   gem 'ruby-lsp', require: false
