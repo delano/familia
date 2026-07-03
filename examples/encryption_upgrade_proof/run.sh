@@ -17,8 +17,12 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 export PROOF_STATE_DIR="${PROOF_STATE_DIR:-$PWD/state}"
-rm -rf "$PROOF_STATE_DIR"
-mkdir -p "$PROOF_STATE_DIR"
+if [[ -z "$PROOF_STATE_DIR" || "$PROOF_STATE_DIR" == "/" ]]; then
+  echo "PROOF_STATE_DIR is unsafe ('$PROOF_STATE_DIR') -- refusing to rm -rf it" >&2
+  exit 1
+fi
+rm -rf -- "$PROOF_STATE_DIR"
+mkdir -p -- "$PROOF_STATE_DIR"
 
 run_phase() {
   local gemfile="$1" script="$2"
@@ -43,7 +47,9 @@ else
   echo "!! phase 0 (released 2.10.1) unavailable -- seeding fixtures with the local checkout instead"
   PROOF_EXPECT_VERSION="$(ruby -r./../../lib/familia/version -e 'puts Familia::VERSION' 2>/dev/null || true)"
   export PROOF_EXPECT_VERSION
+  export PROOF_FORCE_LEGACY_SALT=1
   run_phase Gemfile.dev-no-libsodium phase0_production_today.rb
+  unset PROOF_FORCE_LEGACY_SALT
 fi
 
 run_phase Gemfile.dev-no-libsodium  phase1_gem_upgrade_no_libsodium.rb

@@ -18,6 +18,16 @@ abort "phase0 expects familia #{expected}, got #{Familia::VERSION}" unless Famil
 
 Proof.configure!
 
+# Offline fallback (see run.sh): when the released 2.10.1 gem can't be
+# installed, phase 0 runs against this checkout instead. This checkout
+# defaults to the post-#310 salt ('FamilialMatters'), not 2.10.1's hardcoded
+# 'FamiliaEncryption' -- force the old salt so fixtures seeded this way are
+# byte-for-byte what 2.10.1 would have produced, and phase 1's nil-salt
+# fallback assertions (which specifically target legacy-salt data) still hold.
+if ENV['PROOF_FORCE_LEGACY_SALT'] && Familia.config.respond_to?(:encryption_hkdf_salt=)
+  Familia.config.encryption_hkdf_salt = 'FamiliaEncryption'
+end
+
 puts "== Phase 0: production baseline (familia #{Familia::VERSION}, OpenSSL only) =="
 
 Familia::Encryption::Registry.setup!

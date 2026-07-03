@@ -20,7 +20,7 @@
 require_relative 'common'
 require_relative 'model'
 
-abort "phase2 expects familia >= 2.11, got #{Familia::VERSION}" if Familia::VERSION < '2.11'
+abort "phase2 expects familia >= 2.11, got #{Familia::VERSION}" if Gem::Version.new(Familia::VERSION) < Gem::Version.new('2.11')
 abort 'phase2 expects rbnacl to be loadable' unless defined?(RbNaCl)
 
 Proof.configure!
