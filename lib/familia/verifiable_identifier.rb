@@ -43,16 +43,18 @@ module Familia
     # @return [String] the configured secret
     # @raise [KeyError] if VERIFIABLE_ID_HMAC_SECRET is unset or blank
     def self.secret_key
-      # Treat a present-but-empty value the same as absent. ENV.fetch only fires
+      # Treat a present-but-blank value the same as absent. ENV.fetch only fires
       # its default block when the key is missing, so a blank
-      # VERIFIABLE_ID_HMAC_SECRET="" would otherwise sail through and HMAC every
-      # identifier under an empty key -- silently reintroducing the forgeable-key
-      # weakness #310 S1 closed. This bites container setups that inject
-      # `VERIFIABLE_ID_HMAC_SECRET=${VERIFIABLE_ID_HMAC_SECRET:-}`, which supplies
-      # an empty string whenever the outer variable is unset. Fail closed on both.
+      # VERIFIABLE_ID_HMAC_SECRET="" (or a whitespace-only "   ", e.g. from a YAML
+      # parser or templating tool) would otherwise sail through and HMAC every
+      # identifier under an effectively empty key -- silently reintroducing the
+      # forgeable-key weakness #310 S1 closed. This bites container setups that
+      # inject `VERIFIABLE_ID_HMAC_SECRET=${VERIFIABLE_ID_HMAC_SECRET:-}`, which
+      # supplies an empty string whenever the outer variable is unset. strip.empty?
+      # fails closed on nil, "", and all-whitespace alike.
       @secret_key ||= begin
         value = ENV.fetch('VERIFIABLE_ID_HMAC_SECRET', nil)
-        if value.nil? || value.empty?
+        if value.nil? || value.strip.empty?
           raise KeyError, <<~MSG.strip
             VERIFIABLE_ID_HMAC_SECRET is not set (or is blank). Familia::VerifiableIdentifier
             refuses to fall back to a committed default or empty secret -- a known or empty

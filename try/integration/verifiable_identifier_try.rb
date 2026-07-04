@@ -2,8 +2,6 @@
 #
 # frozen_string_literal: true
 
-# try/core/verifiable_identifier_try.rb
-
 require_relative '../support/helpers/test_helpers'
 
 # A dedicated HMAC secret is REQUIRED: the library intentionally has no
@@ -206,7 +204,13 @@ begin
 rescue KeyError
   :raised_key_error
 ensure
-  ENV['VERIFIABLE_ID_HMAC_SECRET'] = @orig_hmac_secret
+  # Restore with delete-on-nil: ENV[key] = nil raises TypeError, which would mask
+  # the KeyError assertion above and leave a stale memoized secret behind.
+  if @orig_hmac_secret.nil?
+    ENV.delete('VERIFIABLE_ID_HMAC_SECRET')
+  else
+    ENV['VERIFIABLE_ID_HMAC_SECRET'] = @orig_hmac_secret
+  end
   Familia::VerifiableIdentifier.reset_secret_key!
 end
 #=> :raised_key_error
@@ -223,7 +227,34 @@ begin
 rescue KeyError
   :raised_key_error
 ensure
-  ENV['VERIFIABLE_ID_HMAC_SECRET'] = @orig_hmac_secret
+  # Restore with delete-on-nil: ENV[key] = nil raises TypeError, which would mask
+  # the KeyError assertion above and leave a stale memoized secret behind.
+  if @orig_hmac_secret.nil?
+    ENV.delete('VERIFIABLE_ID_HMAC_SECRET')
+  else
+    ENV['VERIFIABLE_ID_HMAC_SECRET'] = @orig_hmac_secret
+  end
+  Familia::VerifiableIdentifier.reset_secret_key!
+end
+#=> :raised_key_error
+
+## A whitespace-only secret is blank too (issue #335): value.strip.empty? rejects
+## "   " so a secret mangled by a YAML parser or templating tool can't slip
+## through as an effectively-empty HMAC key.
+@orig_hmac_secret = ENV['VERIFIABLE_ID_HMAC_SECRET']
+Familia::VerifiableIdentifier.reset_secret_key!
+ENV['VERIFIABLE_ID_HMAC_SECRET'] = '   '
+begin
+  Familia::VerifiableIdentifier.secret_key
+  :did_not_raise
+rescue KeyError
+  :raised_key_error
+ensure
+  if @orig_hmac_secret.nil?
+    ENV.delete('VERIFIABLE_ID_HMAC_SECRET')
+  else
+    ENV['VERIFIABLE_ID_HMAC_SECRET'] = @orig_hmac_secret
+  end
   Familia::VerifiableIdentifier.reset_secret_key!
 end
 #=> :raised_key_error
