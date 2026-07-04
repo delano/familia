@@ -12,6 +12,16 @@ The format is based on `Keep a Changelog <https://keepachangelog.com/en/1.1.0/>`
 2.11.1 — 2026-07-04
 ===================
 
+Fixed
+-----
+
+- ``Familia::DataType#exists?`` (and its ``StringKey``/``Counter``/``Lock``
+  subclasses) no longer returns ``true`` for a deleted or never-created key.
+  The check consulted ``!size.zero?`` in addition to the database ``EXISTS``
+  count; ``StringKey#to_s`` falls back to ``Object#to_s`` for a ``nil``
+  value, so ``#size`` was non-zero even when the key was absent. ``exists?``
+  now relies solely on a boolean-coerced ``EXISTS`` count. Issue #331
+
 Documentation
 -------------
 
@@ -30,6 +40,9 @@ AI Assistance
 
 - The encryption upgrade proof, its regression tryouts, and this changelog
   entry were drafted with AI assistance. PR #330
+
+- The ``exists?`` fix and its regression tryouts were drafted with AI
+  assistance. Issue #331
 
 .. _changelog-2.11.0:
 
