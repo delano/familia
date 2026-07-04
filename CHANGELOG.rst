@@ -15,18 +15,21 @@ The format is based on `Keep a Changelog <https://keepachangelog.com/en/1.1.0/>`
 Fixed
 -----
 
-- ``Familia::DataType#exists?`` (and its ``StringKey``/``Counter``/``Lock``
-  subclasses) no longer returns ``true`` for a deleted or never-created key.
-  The check consulted ``!size.zero?`` in addition to the database ``EXISTS``
-  count; ``StringKey#char_count`` derived from ``#to_s.size``, and ``#to_s``
-  deliberately falls back to ``Familia::Base``'s "never nil" inspect-string
-  (per that method's documented contract) when the value is ``nil`` -- so
-  ``#size`` was non-zero even when the key was absent. ``exists?`` now relies
-  solely on a boolean-coerced ``EXISTS`` count, and ``char_count``
-  (``size``/``length``/``empty?``) now reads from ``#value`` directly instead
-  of the display-oriented ``#to_s``. ``to_s`` itself is unchanged -- its
-  never-nil fallback is intentional and shared by every ``Familia::Base``
-  object. Issue #331
+- ``Familia::DataType#exists?`` no longer returns ``true`` for a deleted or
+  never-created scalar key (``StringKey``, ``Counter``, ``Lock``,
+  ``JsonStringKey``). The check was ``dbclient.exists(dbkey) && !size.zero?``,
+  but ``EXISTS`` returns an Integer count and ``0`` is truthy in Ruby, so the
+  guard never short-circuited on a missing key -- existence was decided
+  entirely by the size check. ``exists?`` now uses a boolean-coerced ``EXISTS``
+  count directly. Issue #331
+
+- Relatedly, ``StringKey#size``/``#length``/``#empty?`` (and ``Lock``'s) no
+  longer reflect the never-nil ``#to_s`` fallback. ``#char_count`` derived from
+  ``#to_s.size``, and ``#to_s`` intentionally returns ``Familia::Base``'s
+  documented "never nil" inspect-string when the value is absent -- so
+  ``#size`` was non-zero (and ``#empty?`` false) for a missing key.
+  ``#char_count`` now reads ``#value`` directly; ``#to_s`` is left unchanged.
+  Issue #331
 
 Documentation
 -------------

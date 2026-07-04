@@ -14,7 +14,10 @@
 #
 # Fixed on two fronts:
 #   - #exists? now relies solely on a boolean-coerced EXISTS count
-#     (Familia.positive?), not on #size at all.
+#     (Familia.positive?), not on #size at all. This also cures a separate
+#     false-negative for JsonStringKey holding an empty string (old size-0
+#     guard said "absent"), and correctly passes a Redis::Future through
+#     inside a transaction/pipeline.
 #   - #char_count now reads from #value directly instead of #to_s, so it
 #     reflects the actual stored content rather than the display fallback.
 #     #to_s itself is intentionally untouched -- its never-nil contract is
@@ -25,10 +28,12 @@ require_relative '../support/helpers/test_helpers'
 @str = Familia::StringKey.new 'test:bugfix:stringkey_exists'
 @counter = Familia::Counter.new 'test:bugfix:counter_exists'
 @lock = Familia::Lock.new 'test:bugfix:lock_exists'
+@json = Familia::JsonStringKey.new 'test:bugfix:json_exists'
 
 @str.delete!
 @counter.delete!
 @lock.delete!
+@json.delete!
 
 ## StringKey#exists? is false for a key that has never existed
 @str.exists?
@@ -115,7 +120,34 @@ require_relative '../support/helpers/test_helpers'
 @lock.exists?
 #=> false
 
+## JsonStringKey#exists? is false for a key that has never existed
+@json.exists?
+#=> false
+
+## JsonStringKey#exists? is true for a key holding an empty string
+# The old `!size.zero?` guard reported false here (size 0 for ""), a
+# false-negative even though the key is genuinely present. The EXISTS-only
+# check now reports its actual presence.
+@json.value = ''
+@json.exists?
+#=> true
+
+## JsonStringKey#exists? is false again after delete!
+@json.delete!
+@json.exists?
+#=> false
+
+## exists? inside a transaction passes a Redis::Future through without raising
+# Familia.positive? must NOT call Integer#positive? on a Future (that raises);
+# it returns the Future untouched. The Future resolves to the raw EXISTS count.
+@str.value = 'txn'
+@captured = nil
+@str.transaction { |_conn| @captured = @str.exists? }
+[@captured.is_a?(Redis::Future), @captured.value]
+#=> [true, 1]
+
 ## Teardown
 @str.delete!
 @counter.delete!
 @lock.delete!
+@json.delete!

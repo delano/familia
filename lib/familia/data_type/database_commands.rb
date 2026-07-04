@@ -35,14 +35,13 @@ module Familia
       end
       alias clear delete!
 
-      # dbclient.exists returns an Integer (the match count), and 0 is truthy in
-      # Ruby, so a bare `dbclient.exists(dbkey) && ...` never short-circuits on a
-      # missing key -- the result ends up governed entirely by the second
-      # operand. That's harmless for container types (Redis deletes them once
-      # empty, so size and existence always agree) but StringKey#to_s falls back
-      # to Object#to_s for a nil value, making #size non-zero even when the key
-      # is gone. Familia.positive? coerces the count to a real boolean (and
-      # passes a Redis::Future through untouched inside a pipeline/transaction).
+      # EXISTS returns an Integer match count (0 for a missing key). The prior
+      # `dbclient.exists(dbkey) && !size.zero?` never short-circuited, since 0
+      # is truthy in Ruby -- so existence was actually decided by the size
+      # check, which some scalar types (see StringKey#char_count) computed from
+      # a never-nil display string and so got wrong for a missing key.
+      # Familia.positive? coerces the count to a real boolean, and passes a
+      # Redis::Future through untouched inside a pipeline/transaction.
       def exists?
         Familia.positive?(dbclient.exists(dbkey))
       end
