@@ -28,9 +28,9 @@ module Familia
     #     verifiable identifiers.
     #   - **No committed fallback:** There is intentionally NO default. A hardcoded
     #     secret in source would be public knowledge, letting anyone forge valid
-    #     identifiers (issue #310, S1). A missing secret raises -- but lazily, the
-    #     first time an identifier is actually minted or verified, so merely
-    #     requiring this file (e.g. for introspection) never blows up.
+    #     identifiers (issue #310, S1). A missing OR blank secret raises -- but
+    #     lazily, the first time an identifier is actually minted or verified, so
+    #     merely requiring this file (e.g. for introspection) never blows up.
     #
     # @example Generating and Setting the Key
     #     1. Generate a new secure key in your terminal:
@@ -41,15 +41,28 @@ module Familia
     #        export VERIFIABLE_ID_HMAC_SECRET="<the generated value>"
     #
     # @return [String] the configured secret
-    # @raise [KeyError] if VERIFIABLE_ID_HMAC_SECRET is not set
+    # @raise [KeyError] if VERIFIABLE_ID_HMAC_SECRET is unset or blank
     def self.secret_key
-      @secret_key ||= ENV.fetch('VERIFIABLE_ID_HMAC_SECRET') do
-        raise KeyError, <<~MSG.strip
-          VERIFIABLE_ID_HMAC_SECRET is not set. Familia::VerifiableIdentifier
-          refuses to fall back to a committed default secret -- a known key would
-          let anyone forge valid identifiers. Generate one with `openssl rand -hex
-          32` and export it before generating or verifying identifiers.
-        MSG
+      # Treat a present-but-blank value the same as absent. ENV.fetch only fires
+      # its default block when the key is missing, so a blank
+      # VERIFIABLE_ID_HMAC_SECRET="" (or a whitespace-only "   ", e.g. from a YAML
+      # parser or templating tool) would otherwise sail through and HMAC every
+      # identifier under an effectively empty key -- silently reintroducing the
+      # forgeable-key weakness #310 S1 closed. This bites container setups that
+      # inject `VERIFIABLE_ID_HMAC_SECRET=${VERIFIABLE_ID_HMAC_SECRET:-}`, which
+      # supplies an empty string whenever the outer variable is unset. strip.empty?
+      # fails closed on nil, "", and all-whitespace alike.
+      @secret_key ||= begin
+        value = ENV.fetch('VERIFIABLE_ID_HMAC_SECRET', nil)
+        if value.nil? || value.strip.empty?
+          raise KeyError, <<~MSG.strip
+            VERIFIABLE_ID_HMAC_SECRET is not set (or is blank). Familia::VerifiableIdentifier
+            refuses to fall back to a committed default or empty secret -- a known or empty
+            key would let anyone forge valid identifiers. Generate one with `openssl rand -hex
+            32` and export it before generating or verifying identifiers.
+          MSG
+        end
+        value
       end
     end
 
