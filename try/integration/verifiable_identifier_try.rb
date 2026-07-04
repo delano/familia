@@ -194,3 +194,36 @@ ENV['VERIFIABLE_ID_HMAC_SECRET'] = @orig_hmac_secret
 Familia::VerifiableIdentifier.reset_secret_key!
 @after_reset
 #=> 'rotated-secret-for-reset-test-0123456789abcdef'
+
+## An unset secret raises KeyError lazily (issue #310 S1). Uses a fresh key so a
+## restore-on-failure is unnecessary: the case never mutates the configured value.
+@orig_hmac_secret = ENV['VERIFIABLE_ID_HMAC_SECRET']
+Familia::VerifiableIdentifier.reset_secret_key!
+ENV.delete('VERIFIABLE_ID_HMAC_SECRET')
+begin
+  Familia::VerifiableIdentifier.secret_key
+  :did_not_raise
+rescue KeyError
+  :raised_key_error
+ensure
+  ENV['VERIFIABLE_ID_HMAC_SECRET'] = @orig_hmac_secret
+  Familia::VerifiableIdentifier.reset_secret_key!
+end
+#=> :raised_key_error
+
+## A present-but-empty secret raises KeyError too (issue #335): ENV.fetch treats
+## "" as a hit, so without the blank guard it would HMAC under an empty key --
+## silently reintroducing the forgeable-key weakness S1 closed.
+@orig_hmac_secret = ENV['VERIFIABLE_ID_HMAC_SECRET']
+Familia::VerifiableIdentifier.reset_secret_key!
+ENV['VERIFIABLE_ID_HMAC_SECRET'] = ''
+begin
+  Familia::VerifiableIdentifier.secret_key
+  :did_not_raise
+rescue KeyError
+  :raised_key_error
+ensure
+  ENV['VERIFIABLE_ID_HMAC_SECRET'] = @orig_hmac_secret
+  Familia::VerifiableIdentifier.reset_secret_key!
+end
+#=> :raised_key_error
