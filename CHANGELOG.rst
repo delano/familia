@@ -18,9 +18,15 @@ Fixed
 - ``Familia::DataType#exists?`` (and its ``StringKey``/``Counter``/``Lock``
   subclasses) no longer returns ``true`` for a deleted or never-created key.
   The check consulted ``!size.zero?`` in addition to the database ``EXISTS``
-  count; ``StringKey#to_s`` falls back to ``Object#to_s`` for a ``nil``
-  value, so ``#size`` was non-zero even when the key was absent. ``exists?``
-  now relies solely on a boolean-coerced ``EXISTS`` count. Issue #331
+  count; ``StringKey#char_count`` derived from ``#to_s.size``, and ``#to_s``
+  deliberately falls back to ``Familia::Base``'s "never nil" inspect-string
+  (per that method's documented contract) when the value is ``nil`` -- so
+  ``#size`` was non-zero even when the key was absent. ``exists?`` now relies
+  solely on a boolean-coerced ``EXISTS`` count, and ``char_count``
+  (``size``/``length``/``empty?``) now reads from ``#value`` directly instead
+  of the display-oriented ``#to_s``. ``to_s`` itself is unchanged -- its
+  never-nil fallback is intentional and shared by every ``Familia::Base``
+  object. Issue #331
 
 Documentation
 -------------
