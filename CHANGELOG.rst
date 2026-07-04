@@ -7,6 +7,30 @@ The format is based on `Keep a Changelog <https://keepachangelog.com/en/1.1.0/>`
 
    <!--scriv-insert-here-->
 
+.. _changelog-2.11.1:
+
+2.11.1 — 2026-07-04
+===================
+
+Documentation
+-------------
+
+- Added an executable, multi-phase proof (``examples/encryption_upgrade_proof/``)
+  demonstrating that installing ``rbnacl`` safely flips new writes to
+  XChaCha20-Poly1305 while every existing AES-256-GCM envelope — including
+  ciphertext written by the released 2.10.1 gem, under the pre-#310 static HKDF
+  salt, and under a retired master key version — keeps decrypting. Also pins,
+  as deliberately-passing checks, two operational hazards: the XChaCha
+  ``encryption_personalization`` cannot be rotated (no history/fallback like
+  ``encryption_hkdf_salt_history``), and once any XChaCha envelope exists,
+  every node that may read it needs libsodium installed. PR #330
+
+AI Assistance
+-------------
+
+- The encryption upgrade proof, its regression tryouts, and this changelog
+  entry were drafted with AI assistance. PR #330
+
 .. _changelog-2.11.0:
 
 2.11.0 — 2026-06-22
