@@ -8,9 +8,11 @@ Ruby RSS climbs over weeks. Is the cause in Familia?**
 This document diagnoses #309 precisely and audits the rest of `lib/` for memory
 problems. It is a *diagnosis*, not a set of fixes; each finding carries a fix
 sketch and the remediation section prioritises them, but no behaviour is changed
-by this branch. The one code artifact here is an executable proof
-(`try/investigation/process_memory_leak_proof.rb`) that reproduces the four
-latent per-process leaks in pure Ruby.
+by this branch. The code artifacts here are two executable proofs in
+`try/investigation/`: `process_memory_leak_proof.rb` reproduces the four latent
+per-process leaks (Category A) in pure Ruby, and `memory_leak_proof.rb`
+reproduces the Redis-side orphan and O(N) high-water-mark findings (Categories
+B/C) against a live Redis.
 
 ## Method
 
@@ -19,9 +21,11 @@ Eight focused audits ran in parallel over `lib/`, each owning one vector
 method/module generation; encryption & transient fields; relationships/indexing
 Redis-side orphans; whole-collection materialization; logging/instrumentation).
 Every candidate was then classified adversarially against a two-axis rubric and
-only reported if it survived a refutation attempt. Prior art from the unmerged
-`fix/memory-leak` branch (findings F1–F4 + `try/investigation/memory_leak_proof.rb`)
-was confirmed/updated against current 2.11.1 code rather than restated.
+only reported if it survived a refutation attempt. Prior art from the
+`fix/memory-leak` investigation branch (findings F1–F4 and its Redis-side proof)
+was confirmed against current 2.11.1 code rather than restated, and that proof —
+`try/investigation/memory_leak_proof.rb` — is consolidated onto this branch
+alongside this write-up so the evidence and the diagnosis no longer live apart.
 
 ## TL;DR
 
@@ -300,6 +304,16 @@ values, replicated across every integer timestamp. No single range expresses it
 in fact semantically broken for this reason). The full fetch is by design; the
 issue is bounding how much is pulled.
 
+**Provenance.** This code entered on commit `ed69e69e` ("Fix dead/incorrect
+participation permission query", already merged into 2.11.1), which replaced a
+dead `zrangebyscore` call — a nonexistent method whose fallback also raised, so
+the query raised unconditionally — with today's fetch-all-then-filter. The
+author's own commit message reaches the same root cause independently: *"A
+score-range query also cannot filter by permission: bits live in the fractional
+part of the score and are not a contiguous range."* The O(N) fetch was therefore
+a deliberate correctness fix, and #309 is the follow-on ask to bound it; its
+regression tryout lives at `try/bug_fixes/permission_query_try.rb`.
+
 **Fix design (bounded, backward-compatible).**
 
 1. **Keep the default return an `Array`.** Callers rely on `.length`, indexing,
@@ -383,10 +397,11 @@ weeks-long RSS climb; each is small and low-risk.
 
 ## How to confirm empirically
 
-**In-gem (this branch):** `bundle exec ruby try/investigation/process_memory_leak_proof.rb`
-reproduces A1–A4 (pure Ruby, no Redis). For Category C, the `fix/memory-leak`
-branch's `try/investigation/memory_leak_proof.rb` proves F1/F3 and the O(N)
-materialization high-water mark against a live Redis.
+**In-gem (this branch, both proofs in `try/investigation/`):**
+`bundle exec ruby try/investigation/process_memory_leak_proof.rb` reproduces
+A1–A4 (pure Ruby, no Redis). `FAMILIA_TEST_URI=redis://127.0.0.1:6379 ruby
+try/investigation/memory_leak_proof.rb` proves the Category C orphans (F1/F3) and
+the Category B O(N) materialization high-water mark against a live Redis.
 
 **In a running OTS process — determine which (if any) A-candidate is active:**
 
