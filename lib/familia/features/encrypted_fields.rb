@@ -465,7 +465,7 @@ module Familia
       #   vault.encrypted_fields_status
       #   # => {
       #   #   secret_key: { encrypted: true, algorithm: "xchacha20poly1305", cleared: false },
-      #   #   api_token: { encrypted: true, algorithm: "aes-256-gcm", cleared: true }
+      #   #   api_token: { encrypted: true, cleared: true }
       #   # }
       #
       def encrypted_fields_status
@@ -477,7 +477,10 @@ module Familia
                                elsif field_value.respond_to?(:cleared?) && field_value.cleared?
                                  { encrypted: true, cleared: true }
                                elsif field_value.respond_to?(:concealed?) && field_value.concealed?
-                                 { encrypted: true, algorithm: 'unknown', cleared: false }
+                                 # ConcealedString#algorithm reads the stored envelope, so this
+                                 # reflects the field's real write algorithm (including a
+                                 # per-field pin), not the current default provider.
+                                 { encrypted: true, algorithm: field_value.algorithm, cleared: false }
                                else
                                  { encrypted: false, value: '[CONCEALED]' }
                                end

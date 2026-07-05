@@ -134,3 +134,31 @@ rescue Familia::EncryptionError => e
   e.message.include?('nonexistent-cipher') ? 'raised-with-algorithm' : 'raised-generic'
 end
 #=> 'raised-with-algorithm'
+
+## encrypted_fields_status surfaces each field's real algorithm for a live value
+## (issue #334): a live encrypted field now reports {encrypted: true, algorithm:
+## <real>, cleared: false} instead of falling through to the {encrypted: false}
+## fallback branch, and the algorithm honors the per-field pin.
+@status_rec = PerFieldAlgoModel.new(objid: 'rec_status')
+@status_rec.default_field = 'd'
+@status_rec.aes_field = 'a'
+@status_rec.xchacha_field = 'x'
+status = @status_rec.encrypted_fields_status
+[status[:default_field], status[:aes_field], status[:xchacha_field]]
+#=> [{ encrypted: true, algorithm: 'xchacha20poly1305', cleared: false }, { encrypted: true, algorithm: 'aes-256-gcm', cleared: false }, { encrypted: true, algorithm: 'xchacha20poly1305', cleared: false }]
+
+## A nil encrypted field reports encrypted: false with no algorithm
+PerFieldAlgoModel.new(objid: 'rec_nilstatus').encrypted_fields_status[:aes_field]
+#=> { encrypted: false, value: nil }
+
+## ConcealedString exposes #concealed? and #algorithm for a live value
+[@status_rec.aes_field.concealed?, @status_rec.aes_field.algorithm]
+#=> [true, 'aes-256-gcm']
+
+## A cleared field reports cleared (no algorithm) and the wrapper stops concealing
+@clear_rec = PerFieldAlgoModel.new(objid: 'rec_clear')
+@clear_rec.aes_field = 'to be cleared'
+cs = @clear_rec.aes_field
+cs.clear!
+[@clear_rec.encrypted_fields_status[:aes_field], cs.concealed?, cs.algorithm]
+#=> [{ encrypted: true, cleared: true }, false, nil]

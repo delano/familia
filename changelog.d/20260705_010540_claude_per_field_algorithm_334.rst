@@ -13,6 +13,18 @@ Added
   *writes* pinned to AES-256-GCM until all readers are confirmed capable, then drop
   the pin. Issue #334
 
+Fixed
+-----
+
+- ``encrypted_fields_status`` now reports each field's real algorithm for a live
+  encrypted value (e.g. ``{ encrypted: true, algorithm: "aes-256-gcm", cleared:
+  false }``), honoring any per-field pin. Previously it returned ``{ encrypted:
+  false, value: "[CONCEALED]" }`` for every encrypted field, because
+  ``ConcealedString`` had no ``concealed?`` predicate for the status check to
+  match -- so the algorithm shown in the method's docstring and the guides was
+  never actually produced. ``ConcealedString`` gains ``#concealed?`` and
+  ``#algorithm`` readers (the latter reads the stored envelope). Issue #334
+
 Documentation
 -------------
 
@@ -20,10 +32,13 @@ Documentation
   option that was never implemented; those examples now use the real
   ``algorithm: 'aes-256-gcm'`` form, and the ``Familia::Encryption`` facade
   docstring documents the shipped behavior instead of a hypothetical
-  implementation sketch. Issue #334
+  implementation sketch. The ``encrypted_fields_status`` output examples across
+  the guides and the overview were corrected to match what the method now
+  returns. Issue #334
 
 AI Assistance
 -------------
 
-- The per-field algorithm implementation, its regression tryouts, the guide
-  corrections, and this changelog entry were drafted with AI assistance. Issue #334
+- The per-field algorithm implementation, the ``encrypted_fields_status`` fix,
+  their regression tryouts, the guide corrections, and this changelog entry were
+  drafted with AI assistance. Issue #334
