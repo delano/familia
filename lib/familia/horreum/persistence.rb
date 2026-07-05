@@ -88,6 +88,15 @@ module Familia
       # @example Single-expression short-circuit
       #   user.save && AuditLog.record(:user_updated, user.identifier)
       #
+      # @note This is a FULL-OVERWRITE of the object's scalar state: afterwards
+      #   the stored hash matches the in-memory object exactly. Non-nil fields are
+      #   written and fields that are nil in memory are removed from storage. A
+      #   field managed out of band -- e.g. one claimed by another actor via
+      #   HSETNX while this (possibly stale) copy still holds nil for it -- is
+      #   therefore cleared by a full save. To update an object without disturbing
+      #   such fields, use the targeted writers ({#save_fields},
+      #   {#multi_field_update}, {#multi_field_fast_write}) or {#refresh!} first.
+      #
       # @see #save_if_not_exists! For conditional saves
       # @see #transaction For atomic operations after save
       #
@@ -1004,6 +1013,12 @@ module Familia
       # cleared to nil does not leave a stale entry behind. This is what keeps
       # "absent" and "nil" the same observable state after a round trip, and
       # what makes HSETNX/HEXISTS on a nil'd field behave correctly.
+      #
+      # Because it removes every field that is nil in memory, save/commit_fields
+      # are a full-overwrite of scalar state (see {#save}). A field managed out of
+      # band (e.g. an HSETNX claim) that is still nil on this in-memory copy is
+      # cleared by a full save; use the targeted writers or {#refresh!} to avoid
+      # that.
       #
       # Intended to run inside the save/commit transaction. HDEL of an absent
       # field is a harmless no-op, so it is safe on both the create and update

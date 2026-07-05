@@ -28,6 +28,15 @@ Changed
   non-empty. ``to_h`` is unchanged and still returns every declared field
   (including nils) for API stability.
 
+- ``save`` and ``commit_fields`` remain a *full-overwrite* of scalar state: after
+  a save the stored hash matches the in-memory object exactly, so a field that is
+  nil in memory is removed from storage. A consequence worth noting for the claim
+  pattern: a field claimed out of band via ``HSETNX`` while an in-memory copy
+  still holds nil for it is cleared by a full ``save``/``commit_fields`` of that
+  (stale) copy. To claim a field and update the record without disturbing it, use
+  the targeted writers (``save_fields``, ``multi_field_update``,
+  ``multi_field_fast_write``), or ``refresh!`` before saving.
+
 AI Assistance
 -------------
 
