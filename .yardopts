@@ -6,7 +6,7 @@
 --charset utf-8
 --markup markdown
 --markup-provider redcarpet
---output-dir public
+--output-dir doc
 --embed-mixin ClassMethods
 --embed-mixin InstanceMethods
 --embed-mixin Features

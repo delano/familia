@@ -2,8 +2,6 @@
 #
 # frozen_string_literal: true
 
-# try/core/verifiable_identifier_try.rb
-
 require_relative '../support/helpers/test_helpers'
 
 # A dedicated HMAC secret is REQUIRED: the library intentionally has no
@@ -194,3 +192,69 @@ ENV['VERIFIABLE_ID_HMAC_SECRET'] = @orig_hmac_secret
 Familia::VerifiableIdentifier.reset_secret_key!
 @after_reset
 #=> 'rotated-secret-for-reset-test-0123456789abcdef'
+
+## An unset secret raises KeyError lazily (issue #310 S1). Uses a fresh key so a
+## restore-on-failure is unnecessary: the case never mutates the configured value.
+@orig_hmac_secret = ENV['VERIFIABLE_ID_HMAC_SECRET']
+Familia::VerifiableIdentifier.reset_secret_key!
+ENV.delete('VERIFIABLE_ID_HMAC_SECRET')
+begin
+  Familia::VerifiableIdentifier.secret_key
+  :did_not_raise
+rescue KeyError
+  :raised_key_error
+ensure
+  # Restore with delete-on-nil: ENV[key] = nil raises TypeError, which would mask
+  # the KeyError assertion above and leave a stale memoized secret behind.
+  if @orig_hmac_secret.nil?
+    ENV.delete('VERIFIABLE_ID_HMAC_SECRET')
+  else
+    ENV['VERIFIABLE_ID_HMAC_SECRET'] = @orig_hmac_secret
+  end
+  Familia::VerifiableIdentifier.reset_secret_key!
+end
+#=> :raised_key_error
+
+## A present-but-empty secret raises KeyError too (issue #335): ENV.fetch treats
+## "" as a hit, so without the blank guard it would HMAC under an empty key --
+## silently reintroducing the forgeable-key weakness S1 closed.
+@orig_hmac_secret = ENV['VERIFIABLE_ID_HMAC_SECRET']
+Familia::VerifiableIdentifier.reset_secret_key!
+ENV['VERIFIABLE_ID_HMAC_SECRET'] = ''
+begin
+  Familia::VerifiableIdentifier.secret_key
+  :did_not_raise
+rescue KeyError
+  :raised_key_error
+ensure
+  # Restore with delete-on-nil: ENV[key] = nil raises TypeError, which would mask
+  # the KeyError assertion above and leave a stale memoized secret behind.
+  if @orig_hmac_secret.nil?
+    ENV.delete('VERIFIABLE_ID_HMAC_SECRET')
+  else
+    ENV['VERIFIABLE_ID_HMAC_SECRET'] = @orig_hmac_secret
+  end
+  Familia::VerifiableIdentifier.reset_secret_key!
+end
+#=> :raised_key_error
+
+## A whitespace-only secret is blank too (issue #335): value.strip.empty? rejects
+## "   " so a secret mangled by a YAML parser or templating tool can't slip
+## through as an effectively-empty HMAC key.
+@orig_hmac_secret = ENV['VERIFIABLE_ID_HMAC_SECRET']
+Familia::VerifiableIdentifier.reset_secret_key!
+ENV['VERIFIABLE_ID_HMAC_SECRET'] = '   '
+begin
+  Familia::VerifiableIdentifier.secret_key
+  :did_not_raise
+rescue KeyError
+  :raised_key_error
+ensure
+  if @orig_hmac_secret.nil?
+    ENV.delete('VERIFIABLE_ID_HMAC_SECRET')
+  else
+    ENV['VERIFIABLE_ID_HMAC_SECRET'] = @orig_hmac_secret
+  end
+  Familia::VerifiableIdentifier.reset_secret_key!
+end
+#=> :raised_key_error
