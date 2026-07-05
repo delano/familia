@@ -1,0 +1,4 @@
+# The released gem onetimesecret pins in production, no rbnacl.
+source 'https://rubygems.org'
+
+gem 'familia', '2.10.1'

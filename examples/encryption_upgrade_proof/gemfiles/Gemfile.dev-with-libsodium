@@ -1,0 +1,5 @@
+# This checkout, with rbnacl: XChaCha20-Poly1305 becomes the default provider.
+source 'https://rubygems.org'
+
+gem 'familia', path: '../../..'
+gem 'rbnacl', '~> 7.1', '>= 7.1.1'

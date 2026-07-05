@@ -5,7 +5,7 @@ source 'https://rubygems.org'
 gemspec
 
 group :test do
-  gem 'concurrent-ruby', '~> 1.3.6', require: false
+  gem 'concurrent-ruby', '~> 1.3.7', require: false
   gem 'ruby-prof'
   gem 'stackprof'
   gem 'timecop', require: false
@@ -21,12 +21,12 @@ group :development, :test do
   # Config#to_data, which we don't use (we don't use Dry::Configurable at all),
   # so cap below 1.4 to keep the dev bundle installable on Ruby 3.2.
   gem 'dry-configurable', '>= 1.3', '< 1.5', require: false
-  gem 'irb', '~> 1.15.2', require: false
+  gem 'irb', '~> 1.18.0', require: false
   gem 'json_schemer', '~> 2.0', require: false
   gem 'rake', '~> 13.0', require: false
   gem 'redcarpet', require: false
   gem 'reek', require: false
-  gem 'rubocop', '~> 1.85.1', require: false
+  gem 'rubocop', '~> 1.88.0', require: false
   gem 'rubocop-performance', require: false
   gem 'rubocop-thread_safety', require: false
   gem 'ruby-lsp', require: false
