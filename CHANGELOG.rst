@@ -12,6 +12,25 @@ The format is based on `Keep a Changelog <https://keepachangelog.com/en/1.1.0/>`
 2.11.1 — 2026-07-04
 ===================
 
+Fixed
+-----
+
+- ``Familia::DataType#exists?`` no longer returns ``true`` for a deleted or
+  never-created scalar key (``StringKey``, ``Counter``, ``Lock``,
+  ``JsonStringKey``). The check was ``dbclient.exists(dbkey) && !size.zero?``,
+  but ``EXISTS`` returns an Integer count and ``0`` is truthy in Ruby, so the
+  guard never short-circuited on a missing key -- existence was decided
+  entirely by the size check. ``exists?`` now uses a boolean-coerced ``EXISTS``
+  count directly. Issue #331
+
+- Relatedly, ``StringKey#size``/``#length``/``#empty?`` (and ``Lock``'s) no
+  longer reflect the never-nil ``#to_s`` fallback. ``#char_count`` derived from
+  ``#to_s.size``, and ``#to_s`` intentionally returns ``Familia::Base``'s
+  documented "never nil" inspect-string when the value is absent -- so
+  ``#size`` was non-zero (and ``#empty?`` false) for a missing key.
+  ``#char_count`` now reads ``#value`` directly; ``#to_s`` is left unchanged.
+  Issue #331
+
 Documentation
 -------------
 
@@ -30,6 +49,9 @@ AI Assistance
 
 - The encryption upgrade proof, its regression tryouts, and this changelog
   entry were drafted with AI assistance. PR #330
+
+- The ``exists?`` fix and its regression tryouts were drafted with AI
+  assistance. Issue #331
 
 .. _changelog-2.11.0:
 
