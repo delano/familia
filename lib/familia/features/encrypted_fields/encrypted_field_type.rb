@@ -9,13 +9,23 @@ require_relative 'concealed_string'
 
 module Familia
   class EncryptedFieldType < FieldType
-    attr_reader :aad_fields, :key_material
+    attr_reader :aad_fields, :key_material, :algorithm
 
-    def initialize(name, aad_fields: [], key_material: nil, **options)
+    def initialize(name, aad_fields: [], key_material: nil, algorithm: nil, **options)
       # Encrypted fields are not loggable by default for security
       super(name, **options.merge(on_conflict: :raise, loggable: false))
       @aad_fields = Array(aad_fields).freeze
       @key_material = key_material # Proc returning entropy string
+      # Optional per-field write-algorithm pin. When nil, writes use the
+      # registry's default provider (highest priority available). When set to a
+      # registered algorithm identifier (e.g. 'aes-256-gcm', 'xchacha20poly1305')
+      # every write from this field is encrypted with that algorithm regardless
+      # of the default. Reads are unaffected -- the provider is always resolved
+      # from the stored envelope's own algorithm field -- so pinning changes
+      # only the write side and never breaks ciphertext already at rest.
+      # Validated lazily: an unregistered algorithm raises Familia::EncryptionError
+      # on the first write, not at field declaration.
+      @algorithm = algorithm
     end
 
     def define_setter(klass)
@@ -132,7 +142,15 @@ module Familia
       entropy = build_key_material(record)
       context = context_with_entropy(context, entropy)
 
-      result = Familia::Encryption.encrypt(value, context: context, additional_data: additional_data)
+      # A per-field @algorithm pins the write algorithm via encrypt_with;
+      # otherwise the default provider (registry priority) is used. Either path
+      # records the chosen algorithm in the envelope, so the read path stays
+      # self-describing and unpinning/repinning never affects existing data.
+      result = if @algorithm
+        Familia::Encryption.encrypt_with(@algorithm, value, context: context, additional_data: additional_data)
+      else
+        Familia::Encryption.encrypt(value, context: context, additional_data: additional_data)
+      end
 
       Familia::Encryption::EncryptedData.from_json(result).with_metadata(
         envelope_version: 2,
