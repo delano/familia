@@ -149,6 +149,33 @@ class ConcealedString
     @cleared
   end
 
+  # Check if this wrapper is currently concealing encrypted data.
+  #
+  # True for a live encrypted value; false once #clear! has wiped it. Used by
+  # Horreum#encrypted_fields_status to tell an active encrypted field apart from
+  # a cleared one.
+  #
+  # @return [Boolean]
+  #
+  def concealed?
+    !@cleared && !@encrypted_data.nil?
+  end
+
+  # Algorithm identifier recorded in the encrypted envelope (e.g.
+  # 'aes-256-gcm', 'xchacha20poly1305').
+  #
+  # Read from the stored envelope, so it reflects the algorithm the value was
+  # actually written with -- including a per-field pin -- not the current
+  # default provider. Returns nil once the data has been cleared.
+  #
+  # @return [String, nil]
+  #
+  def algorithm
+    return nil if @cleared
+
+    @encrypted_data_obj&.algorithm
+  end
+
   def empty?
     @encrypted_data.to_s.empty?
   end

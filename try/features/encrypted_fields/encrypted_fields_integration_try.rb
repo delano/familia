@@ -160,24 +160,15 @@ concealed_data = @xchacha_model.secret_data
 #=> [true, "[CONCEALED]", "xchacha20poly1305 integration test"]
 
 
-# ALGORITHM PARAMETER FIX NEEDED:
-#
-# Problem: encrypted_field :secret_data, algorithm: 'aes-256-gcm'
-# is ignored - always uses default XChaCha20Poly1305
-#
-# Root cause: EncryptedFieldType.encrypt_value always calls
-# Familia::Encryption.encrypt() (default) instead of
-# Familia::Encryption.encrypt_with(@algorithm, ...) when algorithm specified
-#
-# Fix required in lib/familia/features/encrypted_fields/encrypted_field_type.rb:
-# 1. Add attr_reader :algorithm
-# 2. Add algorithm: nil parameter to initialize()
-# 3. Store @algorithm = algorithm
-# 4. Update encrypt_value() to use encrypt_with(@algorithm, ...) when @algorithm present
-#
-# This enables per-field algorithm selection while maintaining backward compatibility
+# Per-field algorithm pin (issue #334): encrypted_field :name, algorithm: '...'
+# selects the write algorithm for that field via Familia::Encryption.encrypt_with,
+# independent of the registry's default provider. Reads stay envelope-driven, so
+# pinning never affects ciphertext already at rest. See per_field_algorithm_try.rb
+# for the full behavioral contract; the two checks below pin it end-to-end through
+# the model field path.
 
-## TEST 8: AES-GCM algorithm specification test (shows default provider takes precedence)
+## TEST 8: a field pinned to AES-256-GCM writes AES-256-GCM even though the
+## registry default is XChaCha20-Poly1305 (rbnacl loaded)
 test_keys = { v1: Base64.strict_encode64('a' * 32) }
 Familia.config.encryption_keys = test_keys
 Familia.config.current_key_version = :v1
@@ -187,20 +178,20 @@ class AESIntegrationModel < Familia::Horreum
   identifier_field :model_id
 
   field :model_id
-  encrypted_field :secret_data, algorithm: 'aes-256-gcm' # Specify the algorithm
+  encrypted_field :secret_data, algorithm: 'aes-256-gcm' # Pin the write algorithm
 end
 
 @aes_model = AESIntegrationModel.new(model_id: 'aes-test')
 @aes_model.secret_data = 'aes-gcm integration test'
 
-# Test shows that algorithm parameter is currently ignored - XChaCha20Poly1305 is used by default
+# The pin is honored: the envelope records aes-256-gcm, not the default xchacha.
 concealed_data = @aes_model.secret_data
 encrypted_json = concealed_data.encrypted_value
 parsed_data = Familia::JsonSerializer.parse(encrypted_json, symbolize_names: true)
 [parsed_data[:algorithm], @aes_model.secret_data.reveal { |data| data }]
-#=> ["xchacha20poly1305", "aes-gcm integration test"]
+#=> ["aes-256-gcm", "aes-gcm integration test"]
 
-## TEST 9: Provider-specific integration: AES-GCM with forced algorithm
+## TEST 9: Provider-specific integration: AES-GCM with pinned algorithm
 test_keys = { v1: Base64.strict_encode64('a' * 32) }
 Familia.config.encryption_keys = test_keys
 Familia.config.current_key_version = :v1
@@ -209,7 +200,7 @@ class AESIntegrationModel2 < Familia::Horreum
   feature :encrypted_fields
   identifier_field :model_id
   field :model_id
-  encrypted_field :secret_data, algorithm: 'aes-256-gcm' # Specify the algorithm
+  encrypted_field :secret_data, algorithm: 'aes-256-gcm' # Pin the write algorithm
 end
 
 @aes_model2 = AESIntegrationModel2.new(model_id: 'aes-test')
@@ -220,4 +211,4 @@ concealed_data = @aes_model2.secret_data
 encrypted_json = concealed_data.encrypted_value
 parsed_data = Familia::JsonSerializer.parse(encrypted_json, symbolize_names: true)
 [parsed_data[:algorithm], @aes_model2.secret_data.reveal { |data| data }]
-#=> ["xchacha20poly1305", "aes-gcm integration test"]
+#=> ["aes-256-gcm", "aes-gcm integration test"]

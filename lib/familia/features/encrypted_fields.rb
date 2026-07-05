@@ -291,6 +291,18 @@ module Familia
         #   wrong material yields a derivation mismatch (garbage/failed decrypt), not
         #   an auth-tag error. The value is not persisted, so it must be reproducible
         #   at decrypt time.
+        # @param algorithm [String, nil] Optional per-field write-algorithm pin. When
+        #   nil (default), writes use the registry's default provider -- the highest
+        #   priority available, i.e. XChaCha20-Poly1305 whenever rbnacl is loaded, else
+        #   AES-256-GCM. When set to a registered algorithm identifier
+        #   ('aes-256-gcm' or 'xchacha20poly1305'), every write from this field is
+        #   encrypted with that algorithm regardless of the default. Reads are always
+        #   driven by the stored envelope's own algorithm, so pinning is safe to add,
+        #   change, or remove without breaking ciphertext already at rest. This is the
+        #   supported lever for a reader-before-writer format migration: deploy rbnacl
+        #   fleet-wide so every node can read XChaCha20, while keeping writes pinned to
+        #   'aes-256-gcm' until all readers are confirmed capable, then remove the pin.
+        #   An unregistered algorithm raises Familia::EncryptionError on first write.
         # @param kwargs [Hash] Additional field options
         #
         # @example Basic encrypted field
@@ -312,7 +324,15 @@ module Familia
         #     encrypted_field :payload, key_material: ->(rec) { rec.passphrase }
         #   end
         #
-        def encrypted_field(name, aad_fields: [], **)
+        # @example Field pinned to a specific write algorithm
+        #   class Ledger < Familia::Horreum
+        #     feature :encrypted_fields
+        #     # Keep writing AES-256-GCM even after rbnacl makes XChaCha20 the
+        #     # default, so older nodes can still decrypt during a fleet rollout.
+        #     encrypted_field :entry, algorithm: 'aes-256-gcm'
+        #   end
+        #
+        def encrypted_field(name, aad_fields: [], algorithm: nil, **)
           @encrypted_fields ||= []
           @encrypted_fields << name unless @encrypted_fields.include?(name)
 
@@ -321,7 +341,7 @@ module Familia
             field_groups[:encrypted_fields] << name
           end
 
-          field_type = EncryptedFieldType.new(name, aad_fields: aad_fields, **)
+          field_type = EncryptedFieldType.new(name, aad_fields: aad_fields, algorithm: algorithm, **)
           register_field_type(field_type)
         end
 
@@ -445,7 +465,7 @@ module Familia
       #   vault.encrypted_fields_status
       #   # => {
       #   #   secret_key: { encrypted: true, algorithm: "xchacha20poly1305", cleared: false },
-      #   #   api_token: { encrypted: true, algorithm: "aes-256-gcm", cleared: true }
+      #   #   api_token: { encrypted: true, cleared: true }
       #   # }
       #
       def encrypted_fields_status
@@ -457,7 +477,10 @@ module Familia
                                elsif field_value.respond_to?(:cleared?) && field_value.cleared?
                                  { encrypted: true, cleared: true }
                                elsif field_value.respond_to?(:concealed?) && field_value.concealed?
-                                 { encrypted: true, algorithm: 'unknown', cleared: false }
+                                 # ConcealedString#algorithm reads the stored envelope, so this
+                                 # reflects the field's real write algorithm (including a
+                                 # per-field pin), not the current default provider.
+                                 { encrypted: true, algorithm: field_value.algorithm, cleared: false }
                                else
                                  { encrypted: false, value: '[CONCEALED]' }
                                end
