@@ -16,31 +16,57 @@ require_relative '../../../support/helpers/test_helpers'
 require 'digest'
 require 'set'
 
+# Number of commands to buffer per pipeline round-trip when bulk-loading.
+#
+# The setups here load 10k-1M items. Doing that as a SINGLE pipelined block
+# buffers the whole command batch client-side and forces the server to ingest
+# all of it before the first reply comes back. On a busy/shared CI database that
+# round-trip can exceed the client read timeout -- surfacing as
+# `Redis::ConnectionError: Waited 5 seconds` during setup, which then cascades
+# into the dependent assertions (the collection was never fully populated). This
+# is the standard Redis pipelining guidance: prefer many bounded pipelines over
+# one unbounded one. 10k keeps each round-trip small and fast while still
+# amortizing away per-command latency, and mirrors the `batch_size: 10000` the
+# iteration assertions use.
+BULK_PIPELINE_BATCH = 10_000
+
+# Bulk-load `count` items in bounded pipeline batches. Yields the pipeline and
+# the current index for each item; batches run in ascending index order and each
+# pipeline completes before the next begins, so insertion order is preserved
+# (matters for ListKey's ordered checks).
+def bulk_pipeline(dbclient, count, batch_size: BULK_PIPELINE_BATCH)
+  (0...count).each_slice(batch_size) do |batch|
+    dbclient.pipelined do |pipe|
+      batch.each { |i| yield pipe, i }
+    end
+  end
+end
+
 # Helper to bulk-insert into an UnsortedSet via pipelining
 def bulk_add_to_set(set, count, prefix: 'item')
-  set.dbclient.pipelined do |pipe|
-    count.times { |i| pipe.sadd(set.dbkey, Familia::JsonSerializer.dump("#{prefix}_#{i.to_s.rjust(7, '0')}")) }
+  bulk_pipeline(set.dbclient, count) do |pipe, i|
+    pipe.sadd(set.dbkey, Familia::JsonSerializer.dump("#{prefix}_#{i.to_s.rjust(7, '0')}"))
   end
 end
 
 # Helper to bulk-insert into a SortedSet via pipelining
 def bulk_add_to_zset(zset, count, prefix: 'metric')
-  zset.dbclient.pipelined do |pipe|
-    count.times { |i| pipe.zadd(zset.dbkey, i.to_f, Familia::JsonSerializer.dump("#{prefix}_#{i.to_s.rjust(7, '0')}")) }
+  bulk_pipeline(zset.dbclient, count) do |pipe, i|
+    pipe.zadd(zset.dbkey, i.to_f, Familia::JsonSerializer.dump("#{prefix}_#{i.to_s.rjust(7, '0')}"))
   end
 end
 
 # Helper to bulk-insert into a ListKey via pipelining
 def bulk_push_to_list(list, count, prefix: 'owner')
-  list.dbclient.pipelined do |pipe|
-    count.times { |i| pipe.rpush(list.dbkey, Familia::JsonSerializer.dump("#{prefix}_#{i.to_s.rjust(7, '0')}")) }
+  bulk_pipeline(list.dbclient, count) do |pipe, i|
+    pipe.rpush(list.dbkey, Familia::JsonSerializer.dump("#{prefix}_#{i.to_s.rjust(7, '0')}"))
   end
 end
 
 # Helper to bulk-insert into a HashKey via pipelining
 def bulk_set_hash(hash, count, prefix: 'field')
-  hash.dbclient.pipelined do |pipe|
-    count.times { |i| pipe.hset(hash.dbkey, "#{prefix}_#{i.to_s.rjust(7, '0')}", Familia::JsonSerializer.dump("value_#{i}")) }
+  bulk_pipeline(hash.dbclient, count) do |pipe, i|
+    pipe.hset(hash.dbkey, "#{prefix}_#{i.to_s.rjust(7, '0')}", Familia::JsonSerializer.dump("value_#{i}"))
   end
 end
 
