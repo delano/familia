@@ -75,6 +75,25 @@ ensure
 end
 #=> [true, true, true]
 
+## The message is correct for the decrypt path too: installing the dependency covers reads and writes, and pinning is flagged as write-only
+# get() runs on both encrypt and decrypt (Manager#decrypt resolves the provider from
+# the stored envelope), so the guidance must not imply pinning fixes decrypt.
+saved = Familia::Encryption::Registry.providers.dup
+Familia::Encryption::Registry.providers.delete('xchacha20poly1305')
+begin
+  Familia::Encryption::Registry.get('xchacha20poly1305')
+  :no_raise
+rescue Familia::EncryptionError => e
+  [
+    e.message.include?('read or write this algorithm'),
+    e.message.include?('cannot decrypt ciphertext already written'),
+    e.message.downcase.include?('for writes'), # pinning scoped to writes
+  ]
+ensure
+  Familia::Encryption::Registry.providers.replace(saved)
+end
+#=> [true, true, true]
+
 ## A hintless provider (always-available OpenSSL AES) omits the "requires ..." clause rather than naming another provider's library
 saved = Familia::Encryption::Registry.providers.dup
 Familia::Encryption::Registry.providers.delete('aes-256-gcm')

@@ -30,6 +30,12 @@ module Familia
           # deployed), so point at the real fix instead of implying a typo.
           known = known_providers.find { |klass| algorithm == klass::ALGORITHM }
           if known
+            # get is on both the write (encrypt) and read (decrypt) paths --
+            # Manager#decrypt resolves the provider from the stored envelope's
+            # own algorithm. Installing the dependency is the fix for BOTH;
+            # pinning to another algorithm is a write-time workaround only and
+            # cannot decrypt ciphertext already written under this one, so the
+            # message frames pinning as write-only rather than a general fix.
             # Each provider declares its own dependency (via .dependency_hint),
             # so this generic path stays accurate as providers are added without
             # naming any one library here.
@@ -39,8 +45,10 @@ module Familia
                   "Algorithm #{algorithm.inspect} is known but its provider " \
                   "(#{known.name}) is not available on this node -- its " \
                   "runtime dependency is missing#{requirement}. Install the " \
-                  'dependency, or pin to an available algorithm: ' \
-                  "#{available_algorithms.inspect}."
+                  'dependency to read or write this algorithm. (For writes you ' \
+                  'may instead pin the field to an available algorithm ' \
+                  "(#{available_algorithms.inspect}), but that cannot decrypt " \
+                  'ciphertext already written with this one.)'
           end
 
           raise EncryptionError, "Unsupported algorithm: #{algorithm}"

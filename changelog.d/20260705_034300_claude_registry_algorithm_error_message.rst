@@ -8,7 +8,10 @@ Changed
   node without ``rbnacl``/libsodium previously raised the misleading
   ``"Unsupported algorithm: xchacha20poly1305"`` -- pointing an operator at a typo
   when the real fix is a missing dependency. It now names the provider, explains
-  the dependency is missing, and lists the algorithms actually available. Each
+  the dependency is missing, and (because ``get`` runs on both the encrypt and
+  decrypt paths) states that installing the dependency is what enables reading
+  *and* writing the algorithm, framing an algorithm pin as a write-time
+  workaround that cannot decrypt existing ciphertext. Each
   provider declares its own dependency via a new ``Provider.dependency_hint``
   class method (nil for always-available providers like OpenSSL AES-256-GCM), so
   the generic error path names the correct library as providers are added rather
