@@ -12,6 +12,43 @@ The format is based on `Keep a Changelog <https://keepachangelog.com/en/1.1.0/>`
 2.11.1 — 2026-07-04
 ===================
 
+Added
+-----
+
+- ``encrypted_field`` now honors a per-field ``algorithm:`` option, pinning that
+  field's write algorithm to a specific registered provider (``'aes-256-gcm'`` or
+  ``'xchacha20poly1305'``) independent of the registry's default-provider
+  priority. The option was previously documented but silently ignored, so writes
+  always used the default provider. Decryption stays envelope-driven, so a pin can
+  be added, changed, or removed without breaking ciphertext already at rest, and
+  ``re_encrypt_fields!`` re-encrypts under the pin rather than the default. This is
+  the supported lever for a reader-before-writer format migration: deploy
+  ``rbnacl`` fleet-wide so every node can *read* XChaCha20-Poly1305 while keeping
+  *writes* pinned to AES-256-GCM until all readers are confirmed capable, then drop
+  the pin. Issue #334
+
+Changed
+-------
+
+- ``Familia::Encryption::Registry.get`` now distinguishes an unknown algorithm
+  from a *known* algorithm whose provider is not available on the current node.
+  Because ``Registry.register`` only stores providers whose runtime dependency is
+  present, pinning ``encrypted_field ..., algorithm: 'xchacha20poly1305'`` on a
+  node without ``rbnacl``/libsodium previously raised the misleading
+  ``"Unsupported algorithm: xchacha20poly1305"`` -- pointing an operator at a typo
+  when the real fix is a missing dependency. It now names the provider, explains
+  the dependency is missing, and (because ``get`` runs on both the encrypt and
+  decrypt paths) states that installing the dependency is what enables reading
+  *and* writing the algorithm, framing an algorithm pin as a write-time
+  workaround that cannot decrypt existing ciphertext. Each provider declares its
+  own dependency via a new ``Provider.dependency_hint`` class method (nil for
+  always-available providers like OpenSSL AES-256-GCM), so the generic error path
+  names the correct library as providers are added rather than hardcoding any one
+  of them. The set of registerable providers is centralized in
+  ``Registry.known_providers``, the single source of truth shared by ``setup!``
+  and ``get``. Error-message and internal-refactor only; the resolution of every
+  available algorithm is unchanged. Issue #334
+
 Fixed
 -----
 
@@ -31,6 +68,15 @@ Fixed
   ``#char_count`` now reads ``#value`` directly; ``#to_s`` is left unchanged.
   Issue #331
 
+- ``encrypted_fields_status`` now reports each field's real algorithm for a live
+  encrypted value (e.g. ``{ encrypted: true, algorithm: "aes-256-gcm", cleared:
+  false }``), honoring any per-field pin. Previously it returned ``{ encrypted:
+  false, value: "[CONCEALED]" }`` for every encrypted field, because
+  ``ConcealedString`` had no ``concealed?`` predicate for the status check to
+  match -- so the algorithm shown in the method's docstring and the guides was
+  never actually produced. ``ConcealedString`` gains ``#concealed?`` and
+  ``#algorithm`` readers (the latter reads the stored envelope). Issue #334
+
 Documentation
 -------------
 
@@ -44,6 +90,22 @@ Documentation
   ``encryption_hkdf_salt_history``), and once any XChaCha envelope exists,
   every node that may read it needs libsodium installed. PR #330
 
+- The encrypted-fields guide previously showed a ``provider: :aes_gcm`` field
+  option that was never implemented; those examples now use the real
+  ``algorithm: 'aes-256-gcm'`` form, and the ``Familia::Encryption`` facade
+  docstring documents the shipped behavior instead of a hypothetical
+  implementation sketch. The ``encrypted_fields_status`` output examples across
+  the guides and the overview were corrected to match what the method now
+  returns. Issue #334
+
+- Added a memory-audit investigation (``docs/investigation/memory-audit.md``)
+  diagnosing #309's ``<collection>_with_permission`` O(N) query as a transient,
+  GC-reclaimable spike rather than a per-process leak, and auditing the rest of
+  ``lib/`` for per-process growth (concluding Familia has no unconditional leak).
+  Ships two executable proofs in ``try/investigation/`` — a pure-Ruby
+  ``process_memory_leak_proof.rb`` and a live-Redis ``memory_leak_proof.rb``.
+  Diagnosis only; no runtime behaviour is changed by the investigation. Issue #309
+
 AI Assistance
 -------------
 
@@ -52,6 +114,14 @@ AI Assistance
 
 - The ``exists?`` fix and its regression tryouts were drafted with AI
   assistance. Issue #331
+
+- The per-field algorithm implementation, the ``encrypted_fields_status`` fix,
+  their regression tryouts, the guide corrections, and the
+  ``Registry.get`` error-message refinement were drafted with AI assistance.
+  Issue #334
+
+- The memory-audit investigation and its executable proofs were drafted with AI
+  assistance. Issue #309
 
 .. _changelog-2.11.0:
 

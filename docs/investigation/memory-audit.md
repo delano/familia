@@ -7,12 +7,14 @@ Ruby RSS climbs over weeks. Is the cause in Familia?**
 
 This document diagnoses #309 precisely and audits the rest of `lib/` for memory
 problems. It is a *diagnosis*, not a set of fixes; each finding carries a fix
-sketch and the remediation section prioritises them, but no behaviour is changed
-by this branch. The code artifacts here are two executable proofs in
-`try/investigation/`: `process_memory_leak_proof.rb` reproduces the four latent
-per-process leaks (Category A) in pure Ruby, and `memory_leak_proof.rb`
-reproduces the Redis-side orphan and O(N) high-water-mark findings (Categories
-B/C) against a live Redis.
+sketch and the remediation section prioritises them, but this investigation
+itself changes no runtime behaviour — it adds only this write-up and the two
+executable proofs below. (Other, unrelated changes ride along in the 2.11.1
+release branch this landed on; those are tracked in `CHANGELOG.rst`.) The code
+artifacts here are two executable proofs in `try/investigation/`:
+`process_memory_leak_proof.rb` reproduces the four latent per-process leaks
+(Category A) in pure Ruby, and `memory_leak_proof.rb` reproduces the Redis-side
+orphan and O(N) high-water-mark findings (Categories B/C) against a live Redis.
 
 ## Method
 
