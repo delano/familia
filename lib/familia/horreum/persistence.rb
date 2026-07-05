@@ -329,20 +329,23 @@ module Familia
 
         result = transaction do |_conn|
           # Set all non-nil fields atomically
-          result = hmset(prepared_value)
+          hmset_result = hmset(prepared_value)
 
           # Remove any fields cleared to nil so their prior stored value is not
           # left stale (HMSET never deletes omitted fields).
           remove_stale_nil_fields
 
           # Update expiration in same transaction to ensure atomicity
-          self.update_expiration if result && update_expiration
+          self.update_expiration if hmset_result && update_expiration
 
-          # Touch instances timeline so the object is visible
-          # to list-based enumeration (instances.to_a, count, etc.)
-          touch_instances! if result
+          # Touch instances timeline so the object is visible to list-based
+          # enumeration (instances.to_a, count, etc.). Skip it when nothing was
+          # persisted and no hash key exists -- otherwise the identifier is
+          # registered in `instances` pointing at a missing hash (see
+          # {#persist_to_storage}).
+          touch_instances! if hmset_result && !prepared_value.empty?
 
-          result
+          hmset_result
         end
 
         # Clear dirty tracking after successful commit
@@ -1067,8 +1070,18 @@ module Familia
         # 3. Update class-level indexes
         auto_update_class_indexes
 
-        # 4. Touch instances timeline (delegates to touch_instances!)
-        touch_instances!
+        # 4. Touch instances timeline (delegates to touch_instances!).
+        #
+        # Skip it when there is genuinely nothing stored and no hash key exists.
+        # prepared_h is empty only when every declared persistent field is nil
+        # AND the identifier is not itself a stored field (a Proc-derived
+        # identifier) -- hmset no-op'd and no key was created. Registering the
+        # identifier in `instances` in that case would leave a dangling
+        # reference: the identifier would list in instances.to_a while exists?
+        # (check_size: true) returns false and any load follows a dead pointer.
+        # In the ubiquitous `identifier_field :id; field :id` pattern the id
+        # keeps prepared_h non-empty, so this only skips the degenerate case.
+        touch_instances! unless prepared_h.empty?
 
         hmset_result
       end

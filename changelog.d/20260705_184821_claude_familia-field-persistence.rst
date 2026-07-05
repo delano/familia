@@ -25,8 +25,11 @@ Changed
   ``multi_field_fast_write``) delete a named field passed as nil. ``HMSET`` on an
   object with no non-nil fields is treated as a successful no-op instead of
   raising, since a normal object's always-present identifier field keeps its hash
-  non-empty. ``to_h`` is unchanged and still returns every declared field
-  (including nils) for API stability.
+  non-empty. In that degenerate "nothing persisted" case (only reachable with a
+  Proc-derived identifier and all-nil fields) the write paths also skip touching
+  the class ``instances`` timeline, so the identifier is not registered pointing
+  at a hash key that was never created. ``to_h`` is unchanged and still returns
+  every declared field (including nils) for API stability.
 
 - ``save`` and ``commit_fields`` remain a *full-overwrite* of scalar state: after
   a save the stored hash matches the in-memory object exactly, so a field that is

@@ -18,6 +18,17 @@ class NilAbsenceModel < Familia::Horreum
   field :note
 end
 
+# Identifier derived from a NON-persistent attribute (a Proc), so every declared
+# persistent field can be nil while the object still has a usable identifier.
+# This exercises the degenerate "nothing to persist" path.
+class ProcIdAbsenceModel < Familia::Horreum
+  identifier_field ->(obj) { obj.probe_id }
+  field :name
+  field :note
+
+  attr_accessor :probe_id
+end
+
 # Clean up any prior test data
 begin
   existing = Familia.dbclient.keys('nilabsencemodel:*')
@@ -102,6 +113,33 @@ Familia.dbclient.hexists(@mfu.dbkey, 'note')
 Familia.dbclient.hexists(@sf.dbkey, 'note')
 #=> false
 
+## multi_field_fast_write with a nil value deletes the named field
+@mffw = NilAbsenceModel.new(id: next_id, name: 'mffw', note: 'present')
+@mffw.save
+@mffw.multi_field_fast_write(note: nil)
+Familia.dbclient.hexists(@mffw.dbkey, 'note')
+#=> false
+
+## multi_field_fast_write also clears the in-memory value
+@mffw.note
+#=> nil
+
+## A Proc-identifier object with all-nil fields does not create a ghost instances entry
+# Nothing is persisted (hmset no-ops), so no hash key is created; the identifier
+# must NOT be registered in the instances timeline, or it would dangle -- listed
+# in instances.to_a while exists? reports false and any load follows a dead ref.
+@ghost = ProcIdAbsenceModel.new
+@ghost.probe_id = "proc-#{Familia.now.to_i}-#{@id_counter += 1}"
+@ghost.save
+[@ghost.exists?, ProcIdAbsenceModel.instances.to_a.include?(@ghost.identifier)]
+#=> [false, false]
+
+## Once a Proc-identifier object has a real field value, it persists and registers normally
+@ghost.name = 'now real'
+@ghost.save
+[@ghost.exists?, ProcIdAbsenceModel.instances.to_a.include?(@ghost.identifier)]
+#=> [true, true]
+
 ## Legacy data: a field stored as the JSON literal "null" is cleaned up on save
 @legacy = NilAbsenceModel.new(id: next_id, name: 'legacy')
 @legacy.save
@@ -115,6 +153,7 @@ Familia.dbclient.hexists(@legacy.dbkey, 'claimed_at')
 # Final cleanup
 begin
   leftover = Familia.dbclient.keys('nilabsencemodel:*')
+  leftover.concat(Familia.dbclient.keys('procidabsencemodel:*'))
   Familia.dbclient.del(*leftover) if leftover.any?
 rescue StandardError
   # ignore cleanup errors
