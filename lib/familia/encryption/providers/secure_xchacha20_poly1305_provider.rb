@@ -55,6 +55,10 @@ module Familia
           !!defined?(RbNaCl) && !!defined?(FFI)
         end
 
+        def self.dependency_hint
+          'rbnacl/libsodium and ffi'
+        end
+
         def self.priority
           110 # Higher than regular XChaCha20Poly1305Provider
         end

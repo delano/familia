@@ -41,6 +41,10 @@ module Familia
           !!defined?(RbNaCl)
         end
 
+        def self.dependency_hint
+          'rbnacl/libsodium'
+        end
+
         def self.priority
           100 # Highest priority - best in class
         end
