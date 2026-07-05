@@ -19,9 +19,27 @@ module Familia
 
         def get(algorithm)
           provider_class = providers[algorithm]
-          raise EncryptionError, "Unsupported algorithm: #{algorithm}" unless provider_class
+          return provider_class.new if provider_class
 
-          provider_class.new
+          # Not registered. `register` only stores providers whose runtime
+          # dependency is present (available? == true), so distinguish a
+          # genuinely unknown algorithm from a known one whose provider isn't
+          # installed on this node. The latter is the common misstep when
+          # pinning `encrypted_field ..., algorithm:` ahead of a fleet rollout
+          # (e.g. pinning xchacha20poly1305 before rbnacl/libsodium is
+          # deployed), so point at the real fix instead of implying a typo.
+          known = known_providers.find { |klass| algorithm == klass::ALGORITHM }
+          if known
+            raise EncryptionError,
+                  "Algorithm #{algorithm.inspect} is known but its provider " \
+                  "(#{known.name}) is not available on this node -- its " \
+                  'runtime dependency is missing (e.g. xchacha20poly1305 ' \
+                  'requires rbnacl/libsodium). Install the dependency, or pin ' \
+                  'to an available algorithm: ' \
+                  "#{available_algorithms.inspect}."
+          end
+
+          raise EncryptionError, "Unsupported algorithm: #{algorithm}"
         end
 
         def default_provider
@@ -40,11 +58,23 @@ module Familia
           providers.keys
         end
 
+        # Every provider class Familia knows how to register, regardless of
+        # whether its runtime dependency is available on this node. `providers`
+        # holds only the subset that passed `available?`; this is the full set,
+        # and the single source of truth shared by `setup!` (which registers
+        # the available ones) and `get` (which uses it to tell an unknown
+        # algorithm apart from a known-but-unavailable one).
+        def known_providers
+          [
+            Providers::XChaCha20Poly1305Provider,
+            Providers::AESGCMProvider,
+            # Future: Providers::ChaCha20Poly1305Provider
+          ]
+        end
+
         # Auto-register known providers
         def setup!
-          register(Providers::XChaCha20Poly1305Provider)
-          register(Providers::AESGCMProvider)
-          # Future: register(Providers::ChaCha20Poly1305Provider)
+          known_providers.each { |provider_class| register(provider_class) }
         end
       end
     end
