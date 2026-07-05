@@ -46,6 +46,15 @@ module Familia
       def self.priority
         0
       end
+
+      # Human-readable name of the runtime dependency this provider needs to be
+      # `available?`, or nil when it has none (e.g. an always-available OpenSSL
+      # provider). Used only to build a helpful error when a field is pinned to a
+      # known algorithm whose provider isn't installed on this node; override in
+      # subclasses whose availability is gated on an optional library.
+      def self.dependency_hint
+        nil
+      end
     end
   end
 end

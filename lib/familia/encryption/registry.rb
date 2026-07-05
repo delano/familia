@@ -30,12 +30,16 @@ module Familia
           # deployed), so point at the real fix instead of implying a typo.
           known = known_providers.find { |klass| algorithm == klass::ALGORITHM }
           if known
+            # Each provider declares its own dependency (via .dependency_hint),
+            # so this generic path stays accurate as providers are added without
+            # naming any one library here.
+            dependency = known.dependency_hint
+            requirement = dependency ? " (requires #{dependency})" : ''
             raise EncryptionError,
                   "Algorithm #{algorithm.inspect} is known but its provider " \
                   "(#{known.name}) is not available on this node -- its " \
-                  'runtime dependency is missing (e.g. xchacha20poly1305 ' \
-                  'requires rbnacl/libsodium). Install the dependency, or pin ' \
-                  'to an available algorithm: ' \
+                  "runtime dependency is missing#{requirement}. Install the " \
+                  'dependency, or pin to an available algorithm: ' \
                   "#{available_algorithms.inspect}."
           end
 

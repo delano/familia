@@ -50,22 +50,43 @@ end
 # the live registration is dropped, which is exactly what an absent dependency
 # looks like: `register` skipped it because `available?` was false.)
 
-## A known-but-unavailable algorithm names the provider and points at the missing dependency
+## Each provider declares its own dependency (nil when always available), so the error hint is not hardcoded
+[
+  Familia::Encryption::Providers::AESGCMProvider.dependency_hint,
+  Familia::Encryption::Providers::XChaCha20Poly1305Provider.dependency_hint,
+]
+#=> [nil, 'rbnacl/libsodium']
+
+## A known-but-unavailable algorithm names the provider and sources the dependency hint from the provider itself
 saved = Familia::Encryption::Registry.providers.dup
 Familia::Encryption::Registry.providers.delete('xchacha20poly1305')
 begin
   Familia::Encryption::Registry.get('xchacha20poly1305')
   :no_raise
 rescue Familia::EncryptionError => e
+  hint = Familia::Encryption::Providers::XChaCha20Poly1305Provider.dependency_hint
   [
     e.message.include?('is known but its provider'),
-    e.message.include?('rbnacl'),
     e.message.include?('XChaCha20Poly1305Provider'),
+    e.message.include?("requires #{hint}"), # dependency text comes from .dependency_hint, not a literal
   ]
 ensure
   Familia::Encryption::Registry.providers.replace(saved)
 end
 #=> [true, true, true]
+
+## A hintless provider (always-available OpenSSL AES) omits the "requires ..." clause rather than naming another provider's library
+saved = Familia::Encryption::Registry.providers.dup
+Familia::Encryption::Registry.providers.delete('aes-256-gcm')
+begin
+  Familia::Encryption::Registry.get('aes-256-gcm')
+  :no_raise
+rescue Familia::EncryptionError => e
+  [e.message.include?('is known but its provider'), e.message.include?('requires')]
+ensure
+  Familia::Encryption::Registry.providers.replace(saved)
+end
+#=> [true, false]
 
 ## The known-but-unavailable message does NOT reuse the misleading "Unsupported algorithm" wording
 saved = Familia::Encryption::Registry.providers.dup

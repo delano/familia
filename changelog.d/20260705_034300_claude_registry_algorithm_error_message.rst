@@ -8,11 +8,14 @@ Changed
   node without ``rbnacl``/libsodium previously raised the misleading
   ``"Unsupported algorithm: xchacha20poly1305"`` -- pointing an operator at a typo
   when the real fix is a missing dependency. It now names the provider, explains
-  the dependency is missing, and lists the algorithms actually available. The set
-  of registerable providers is centralized in ``Registry.known_providers``, the
-  single source of truth shared by ``setup!`` and ``get``. Error-message and
-  internal-refactor only; the resolution of every available algorithm is
-  unchanged. Issue #334
+  the dependency is missing, and lists the algorithms actually available. Each
+  provider declares its own dependency via a new ``Provider.dependency_hint``
+  class method (nil for always-available providers like OpenSSL AES-256-GCM), so
+  the generic error path names the correct library as providers are added rather
+  than hardcoding any one of them. The set of registerable providers is
+  centralized in ``Registry.known_providers``, the single source of truth shared
+  by ``setup!`` and ``get``. Error-message and internal-refactor only; the
+  resolution of every available algorithm is unchanged. Issue #334
 
 AI Assistance
 -------------
