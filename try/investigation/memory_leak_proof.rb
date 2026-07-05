@@ -71,6 +71,13 @@ end
 def mb(kb) = (kb / 1024.0).round(1)
 def mbb(bytes) = (bytes / 1024.0 / 1024.0).round(1)
 
+# Print-safe URI: scheme://host:port/path only -- never userinfo -- so a
+# password embedded in FAMILIA_TEST_URI (redis://:pw@host) cannot leak to logs.
+def safe_uri
+  u = Familia.uri
+  "#{u.scheme}://#{u.host}:#{u.port}#{u.path}"
+end
+
 $failures = 0
 def check(label, ok)
   status = ok ? 'PASS' : 'FAIL'
@@ -136,11 +143,11 @@ AtomicOps = Familia::AtomicOperations
 
 # --------------------------------------------------------------------------
 puts "Familia memory-leak proof"
-puts "uri=#{Familia.uri}  BATCH=#{BATCH} ROUNDS=#{ROUNDS} GHOSTS=#{GHOSTS} TTL=#{TTL}s"
+puts "uri=#{safe_uri}  BATCH=#{BATCH} ROUNDS=#{ROUNDS} GHOSTS=#{GHOSTS} TTL=#{TTL}s"
 begin
   Familia.dbclient.ping
 rescue StandardError => e
-  abort "Cannot reach Redis at #{Familia.uri}: #{e.class}: #{e.message}"
+  abort "Cannot reach Redis at #{safe_uri}: #{e.class}: #{e.message}"
 end
 
 # ==========================================================================

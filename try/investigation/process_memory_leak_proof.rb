@@ -116,20 +116,24 @@ RedisClient.singleton_class.send(:define_method, :register) do |*a, **k, &b|
   reg_count += 1
   orig_register.call(*a, **k, &b)
 end
-Familia.enable_database_logging = true if Familia.respond_to?(:enable_database_logging=)
-Familia.enable_database_counter = true if Familia.respond_to?(:enable_database_counter=)
+begin
+  Familia.enable_database_logging = true if Familia.respond_to?(:enable_database_logging=)
+  Familia.enable_database_counter = true if Familia.respond_to?(:enable_database_counter=)
 
-reg_count = 0
-rounds = 5
-rounds.times { Familia.reconnect! }
-puts "  RedisClient.register invocations across #{rounds} reconnect! calls: #{reg_count}"
-check("reconnect! re-registers on every call (#{reg_count} >= #{rounds})", reg_count >= rounds)
-puts '  Interpretation: RedisClient has no unregister; each reconnect! leaves one'
-puts '  more DatabaseLogger/DatabaseCommandCounter reference on the global list,'
-puts '  invoked on every command thereafter. Bounded only if reconnect! is rare.'
-
-# restore
-RedisClient.singleton_class.send(:define_method, :register, orig_register)
+  reg_count = 0
+  rounds = 5
+  rounds.times { Familia.reconnect! }
+  puts "  RedisClient.register invocations across #{rounds} reconnect! calls: #{reg_count}"
+  check("reconnect! re-registers on every call (#{reg_count} >= #{rounds})", reg_count >= rounds)
+  puts '  Interpretation: RedisClient has no unregister; each reconnect! leaves one'
+  puts '  more DatabaseLogger/DatabaseCommandCounter reference on the global list,'
+  puts '  invoked on every command thereafter. Bounded only if reconnect! is rare.'
+ensure
+  # Guaranteed restore: if reconnect!/registration raises mid-loop, the global
+  # RedisClient.register must not stay patched -- it would corrupt A3/A4 below
+  # and leak the instrumented method into the host process.
+  RedisClient.singleton_class.send(:define_method, :register, orig_register)
+end
 
 # ==========================================================================
 # PROOF A3 - Instrumentation hook arrays are append-only, no unregister
@@ -154,7 +158,9 @@ puts "  @hooks[:command] grew #{before} -> #{after} over 2000 registrations"
 puts "  removal/unregister API present: #{has_removal}"
 check('every on_command registration is retained (grew by 2000)', after - before == 2_000)
 check('no unregister/clear API exists to shed them', !has_removal)
-hooks[:command].clear # local cleanup so this proof does not perturb others
+# Remove only the hooks THIS proof appended (LIFO); non-destructive to any
+# instrumentation a host process registered before this script ran.
+(after - before).times { hooks[:command].pop }
 
 # ==========================================================================
 # PROOF A4 - Familia.members pins every Horreum subclass forever (strong ref)
