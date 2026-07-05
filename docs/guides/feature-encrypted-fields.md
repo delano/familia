@@ -189,8 +189,8 @@ Standard AES encryption using OpenSSL (always available):
 class StandardVault < Familia::Horreum
   feature :encrypted_fields
 
-  # Explicitly specify AES-GCM
-  encrypted_field :secret_data, provider: :aes_gcm
+  # Pin this field's writes to AES-256-GCM
+  encrypted_field :secret_data, algorithm: 'aes-256-gcm'
 end
 ```
 
@@ -211,11 +211,11 @@ providers = Familia::Encryption.available_providers
 #   { name: :aes_gcm, priority: 50, available: true }
 # ]
 
-# Force specific provider for testing
+# Pin a specific write algorithm (e.g. for testing or compliance)
 class TestVault < Familia::Horreum
   feature :encrypted_fields
 
-  encrypted_field :test_data, provider: :aes_gcm  # Force AES-GCM
+  encrypted_field :test_data, algorithm: 'aes-256-gcm'  # Force AES-256-GCM
 end
 ```
 
@@ -258,24 +258,54 @@ doc.save
 >
 > Do not mutate any `aad_fields` value between `load` and `re_encrypt_fields!`. The old ciphertext's AAD is bound to the values present at encryption time; changing an AAD field first causes `reveal` inside the rotation loop to fail with `Familia::EncryptionError`, leaving the in-memory object partially rotated (some encrypted fields re-encrypted, others still under the old key). Either re-encrypt before mutating AAD fields, or mutate AAD fields, `save`, re-load, and re-encrypt.
 
-### Per-Field Provider Selection
+### Per-Field Algorithm Selection
+
+By default every field writes with the registry's default provider — the
+highest-priority algorithm available, i.e. XChaCha20-Poly1305 whenever `rbnacl`
+is loaded, otherwise AES-256-GCM. Pass `algorithm:` to pin a field's **write**
+algorithm to a specific registered identifier instead:
 
 ```ruby
 class MultiAlgorithmVault < Familia::Horreum
   feature :encrypted_fields
 
-  # Use best available algorithm (XChaCha20-Poly1305 preferred)
+  # Use the best available algorithm (XChaCha20-Poly1305 when rbnacl is loaded)
   encrypted_field :general_secret
 
-  # Force AES-GCM for compliance requirements
-  encrypted_field :compliance_data, provider: :aes_gcm
+  # Pin writes to AES-256-GCM for compliance requirements
+  encrypted_field :compliance_data, algorithm: 'aes-256-gcm'
 
-  # High-security field with AAD
+  # Pin writes to XChaCha20-Poly1305, combined with AAD
   encrypted_field :ultra_secure,
-                  provider: :xchacha20_poly1305,
+                  algorithm: 'xchacha20poly1305',
                   aad_fields: [:vault_id, :owner_id]
 end
 ```
+
+Valid identifiers are `'aes-256-gcm'` and `'xchacha20poly1305'` (the values a
+provider reports as its `algorithm`). An unregistered value — for example
+`'xchacha20poly1305'` when `rbnacl` is not installed — raises
+`Familia::EncryptionError` on the **first write** to that field, not at class
+declaration.
+
+Only the write side is affected. Decryption always resolves the provider from
+the stored envelope's own `algorithm` field, so a pin can be added, changed, or
+removed at any time without breaking ciphertext already at rest. `re_encrypt_fields!`
+honors the current pin, re-encrypting under the pinned algorithm rather than the
+default.
+
+> **🔄 Reader-before-writer migrations**
+>
+> This is the supported lever for a one-way format migration on a multi-node
+> fleet. To move from AES-256-GCM to XChaCha20-Poly1305 without a mixed-fleet
+> window where new pods write envelopes old pods cannot read:
+>
+> 1. Pin the field to `algorithm: 'aes-256-gcm'` and deploy `rbnacl` fleet-wide,
+>    so every node can *read* XChaCha20 while all *writes* stay AES-256-GCM.
+> 2. Once every node is confirmed capable of reading XChaCha20, remove the pin
+>    (or set it to `'xchacha20poly1305'`) and deploy. New writes flip to XChaCha20;
+>    existing AES-256-GCM envelopes keep decrypting.
+> 3. Optionally run `re_encrypt_fields!` to migrate data at rest to the new format.
 
 ## ConcealedString Security
 
@@ -546,7 +576,7 @@ vault.save
 
 field_status = vault.encrypted_fields_status
 puts "Field status: #{field_status}"
-# => {debug_data: {encrypted: true, key_version: :v2, provider: :xchacha20_poly1305}}
+# => {debug_data: {encrypted: true, algorithm: "xchacha20poly1305", cleared: false}}
 ```
 
 ### Performance Debugging
