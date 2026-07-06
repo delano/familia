@@ -22,7 +22,9 @@ module Familia
       #   # Note: Returns actual Ruby types, not JSON strings
       #
       # @note Only loggable fields are included. Encrypted fields are excluded.
-      # @note Nil values are excluded from the returned hash (storage optimization)
+      # @note Every persistent field appears, including those whose value is nil.
+      #   This differs from {#to_h_for_storage}, which omits nil fields so that
+      #   absence -- not a stored "null" -- represents "no value" in Valkey/Redis.
       #
       def to_h
         self.class.persistent_fields.each_with_object({}) do |field, hsh|
@@ -55,13 +57,25 @@ module Familia
       #   # Note: Strings are JSON-encoded with quotes
       #
       # @note This is an internal method used by commit_fields and hmset
-      # @note Nil values are excluded to optimize Redis storage
+      # @note Nil-valued fields are omitted so that field *absence* -- not a
+      #   stored "null" -- represents "no value" in the Valkey/Redis hash. This
+      #   is what keeps HSETNX/HEXISTS-based claim patterns usable and avoids
+      #   materializing every declared field. Fields cleared to nil are actively
+      #   removed from storage on save; see {Persistence#remove_stale_nil_fields}.
       #
       def to_h_for_storage
         self.class.persistent_fields.each_with_object({}) do |field, hsh|
           field_type = self.class.field_types[field]
 
           val = send(field_type.method_name)
+
+          # Omit nil fields entirely. A Valkey/Redis hash has no NULL: absence is
+          # the native "no value". Persisting nil as the JSON string "null" would
+          # make declared fields perpetually present, defeating HSETNX/HEXISTS and
+          # wasting memory. Round-trips are unaffected -- deserialize_value already
+          # returns nil for an absent field.
+          next if val.nil?
+
           prepared = serialize_value(val)
 
           if Familia.debug?

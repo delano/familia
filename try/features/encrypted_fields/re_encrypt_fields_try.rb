@@ -127,13 +127,13 @@ result = @partial_fresh.re_encrypt_fields!
 
 raw_token = Familia.dbclient.hget(@partial_fresh.dbkey, 'token')
 raw_secret = Familia.dbclient.hget(@partial_fresh.dbkey, 'secret')
-# Nil encrypted fields are stored as the JSON literal "null" by Familia's
-# scalar serializer -- not as an encrypted envelope. The contract we care
-# about here is: re_encrypt_fields! must not turn a nil field into
-# ciphertext. Parsing "null" yields nil, so we assert that directly.
-token_parsed = JSON.parse(raw_token) rescue :unparseable
-[result, token_parsed, JSON.parse(raw_secret)['key_version']]
-#=> [true, nil, 'v2']
+# A nil field is not persisted at all -- in a Redis hash, absence *is* the
+# representation of "no value" -- so the token field simply does not exist in
+# storage (hget returns nil). The contract we care about here is: re_encrypt_fields!
+# must not turn a nil field into ciphertext; an absent field trivially satisfies
+# that, and is now directly observable via HEXISTS/hget being nil.
+[result, raw_token.nil?, JSON.parse(raw_secret)['key_version']]
+#=> [true, true, 'v2']
 
 ## is idempotent when current key is unchanged
 # Calling re_encrypt_fields! twice without rotating must succeed both times

@@ -88,6 +88,15 @@ module Familia
       # @example Single-expression short-circuit
       #   user.save && AuditLog.record(:user_updated, user.identifier)
       #
+      # @note This is a FULL-OVERWRITE of the object's scalar state: afterwards
+      #   the stored hash matches the in-memory object exactly. Non-nil fields are
+      #   written and fields that are nil in memory are removed from storage. A
+      #   field managed out of band -- e.g. one claimed by another actor via
+      #   HSETNX while this (possibly stale) copy still holds nil for it -- is
+      #   therefore cleared by a full save. To update an object without disturbing
+      #   such fields, use the targeted writers ({#save_fields},
+      #   {#multi_field_update}, {#multi_field_fast_write}) or {#refresh!} first.
+      #
       # @see #save_if_not_exists! For conditional saves
       # @see #transaction For atomic operations after save
       #
@@ -319,17 +328,24 @@ module Familia
         Familia.debug "[commit_fields] Begin #{self.class} #{dbkey} #{prepared_value} (exp: #{update_expiration})"
 
         result = transaction do |_conn|
-          # Set all fields atomically
-          result = hmset(prepared_value)
+          # Set all non-nil fields atomically
+          hmset_result = hmset(prepared_value)
+
+          # Remove any fields cleared to nil so their prior stored value is not
+          # left stale (HMSET never deletes omitted fields).
+          remove_stale_nil_fields
 
           # Update expiration in same transaction to ensure atomicity
-          self.update_expiration if result && update_expiration
+          self.update_expiration if hmset_result && update_expiration
 
-          # Touch instances timeline so the object is visible
-          # to list-based enumeration (instances.to_a, count, etc.)
-          touch_instances! if result
+          # Touch instances timeline so the object is visible to list-based
+          # enumeration (instances.to_a, count, etc.). Skip it when nothing was
+          # persisted and no hash key exists -- otherwise the identifier is
+          # registered in `instances` pointing at a missing hash (see
+          # {#persist_to_storage}).
+          touch_instances! if hmset_result && !prepared_value.empty?
 
-          result
+          hmset_result
         end
 
         # Clear dirty tracking after successful commit
@@ -376,10 +392,15 @@ module Familia
         Familia.trace :MULTI_FIELD_UPDATE, nil, fields.keys if Familia.debug?
 
         result = transaction do |_conn|
-          # 1. Update all fields atomically (Redis only, no in-memory mutation)
+          # 1. Update all fields atomically (Redis only, no in-memory mutation).
+          # A nil value deletes the field rather than storing "null", so absence
+          # stays authoritative (see Serialization#to_h_for_storage).
           fields.each do |field, value|
-            prepared_value = serialize_value(value)
-            hset field, prepared_value
+            if value.nil?
+              remove_field(field)
+            else
+              hset field, serialize_value(value)
+            end
           end
 
           # 2. Update expiration in same transaction
@@ -434,14 +455,23 @@ module Familia
 
         Familia.trace :MULTI_FIELD_FAST_WRITE, nil, fields.keys if Familia.debug?
 
-        # Serialize values before the transaction (read-only on instance)
+        # Serialize values before the transaction (read-only on instance).
+        # A nil value deletes the field rather than storing "null" (see
+        # Serialization#to_h_for_storage), so split writes from removals.
         serialized = {}
+        nil_fields = []
         fields.each do |field, value|
-          serialized[field] = serialize_value(value)
+          if value.nil?
+            nil_fields << field.to_s
+          else
+            serialized[field] = serialize_value(value)
+          end
         end
 
         result = transaction do |_conn|
           hmset(serialized)
+
+          dbclient.hdel(dbkey, *nil_fields) unless nil_fields.empty?
 
           update_expiration if update_exp
 
@@ -478,19 +508,28 @@ module Familia
         Familia.trace :SAVE_FIELDS, nil, field_names if Familia.debug?
 
         result = transaction do |_conn|
-          # Build hash of field names to serialized values
+          # Build hash of non-nil field values; collect nil'd fields for removal.
+          # A nil field is deleted rather than stored as "null" so that absence
+          # stays authoritative (see Serialization#to_h_for_storage).
           fields_hash = {}
+          nil_fields = []
           field_names.each do |field|
             field_sym = field.to_sym
             raise ArgumentError, "Unknown field: #{field}" unless respond_to?(field_sym)
 
             value = send(field_sym)
-            prepared_value = serialize_value(value)
-            fields_hash[field] = prepared_value
+            if value.nil?
+              nil_fields << field.to_s
+            else
+              fields_hash[field] = serialize_value(value)
+            end
           end
 
-          # Set all fields at once using hmset
+          # Set all non-nil fields at once (hmset no-ops on an empty hash)
           hmset(fields_hash)
+
+          # Remove any nil'd fields so their prior stored value does not linger
+          dbclient.hdel(dbkey, *nil_fields) unless nil_fields.empty?
 
           # Update expiration in same transaction
           self.update_expiration if update_expiration
@@ -959,6 +998,46 @@ module Familia
       end
       private :prepare_for_save
 
+      # Names (as strings) of declared persistent fields whose current in-memory
+      # value is nil. These are omitted from {Serialization#to_h_for_storage}, so
+      # on an update their previously-stored value must be explicitly deleted.
+      #
+      # @return [Array<String>]
+      #
+      def nil_persistent_field_names
+        self.class.persistent_fields.each_with_object([]) do |field, names|
+          field_type = self.class.field_types[field]
+          names << field.to_s if send(field_type.method_name).nil?
+        end
+      end
+      private :nil_persistent_field_names
+
+      # Deletes any now-nil persistent fields from the object hash so a value
+      # cleared to nil does not leave a stale entry behind. This is what keeps
+      # "absent" and "nil" the same observable state after a round trip, and
+      # what makes HSETNX/HEXISTS on a nil'd field behave correctly.
+      #
+      # Because it removes every field that is nil in memory, save/commit_fields
+      # are a full-overwrite of scalar state (see {#save}). A field managed out of
+      # band (e.g. an HSETNX claim) that is still nil on this in-memory copy is
+      # cleared by a full save; use the targeted writers or {#refresh!} to avoid
+      # that.
+      #
+      # Intended to run inside the save/commit transaction. HDEL of an absent
+      # field is a harmless no-op, so it is safe on both the create and update
+      # paths (and queues cleanly inside MULTI/EXEC).
+      #
+      # @return [void]
+      #
+      def remove_stale_nil_fields
+        names = nil_persistent_field_names
+        return if names.empty?
+
+        Familia.trace :HDEL, nil, names if Familia.debug?
+        dbclient.hdel(dbkey, *names)
+      end
+      private :remove_stale_nil_fields
+
       # Persists the object's data to storage within a transaction.
       #
       # This is the primary code path that adds an object to the class-level
@@ -975,9 +1054,15 @@ module Familia
       # @return [Object] The result of the hmset operation
       #
       def persist_to_storage(update_expiration)
-        # 1. Save all fields to hashkey at once
+        # 1. Save all non-nil fields to hashkey at once
         prepared_h = to_h_for_storage
         hmset_result = hmset(prepared_h)
+
+        # 1b. Remove any fields cleared to nil so a nil'd value does not linger
+        # in storage. HMSET only sets the fields it is given; it never deletes
+        # omitted ones, so an update that clears a field to nil would otherwise
+        # leave the prior value behind. Harmless no-op on the create path.
+        remove_stale_nil_fields
 
         # 2. Set expiration in same transaction
         self.update_expiration if update_expiration
@@ -985,8 +1070,18 @@ module Familia
         # 3. Update class-level indexes
         auto_update_class_indexes
 
-        # 4. Touch instances timeline (delegates to touch_instances!)
-        touch_instances!
+        # 4. Touch instances timeline (delegates to touch_instances!).
+        #
+        # Skip it when there is genuinely nothing stored and no hash key exists.
+        # prepared_h is empty only when every declared persistent field is nil
+        # AND the identifier is not itself a stored field (a Proc-derived
+        # identifier) -- hmset no-op'd and no key was created. Registering the
+        # identifier in `instances` in that case would leave a dangling
+        # reference: the identifier would list in instances.to_a while exists?
+        # (check_size: true) returns false and any load follows a dead pointer.
+        # In the ubiquitous `identifier_field :id; field :id` pattern the id
+        # keeps prepared_h non-empty, so this only skips the degenerate case.
+        touch_instances! unless prepared_h.empty?
 
         hmset_result
       end

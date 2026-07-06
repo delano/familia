@@ -67,10 +67,11 @@ key_parts = dbkey.split(':')
 expected_fields = @serial_test.class.persistent_fields.length
 redis_field_count = Familia.dbclient.hlen(@serial_test.dbkey)
 actual_object_fields = @serial_test.to_h.keys.length
-# The JSON Serializer stores all fields (including nil as "null")
-# Expected fields (5) >= redis count (5) >= to_h count (5, even though email is nil)
+# Storage omits nil fields (absence represents "no value"), so only the single
+# non-nil field (id) is written even though the class declares 5 persistent
+# fields. to_h still reports every declared field, including the nil ones.
 [expected_fields, redis_field_count, actual_object_fields]
-#=> [5, 5, 5]
+#=> [5, 1, 5]
 
 ## Memory vs persistence state consistency after save
 @consistency_obj = ConsistencyTestModel.new(id: next_test_id, name: 'Memory Test', email: 'test@example.com')
