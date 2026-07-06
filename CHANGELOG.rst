@@ -7,6 +7,40 @@ The format is based on `Keep a Changelog <https://keepachangelog.com/en/1.1.0/>`
 
    <!--scriv-insert-here-->
 
+.. _changelog-2.11.2:
+
+2.11.2 — 2026-07-05
+===================
+
+
+Changed
+-------
+
+- ``to_h_for_storage`` omits nil fields; every write path removes a field that has
+  become nil. ``save``/``commit_fields`` do a full overwrite (the stored hash
+  matches the in-memory object, so a field nil in memory is deleted);
+  ``save_fields``/``multi_field_update``/``multi_field_fast_write`` delete a named
+  field passed as nil. ``to_h`` still returns every declared field, nils included.
+
+- Claim caveat: a full ``save``/``commit_fields`` of a stale copy clears a field
+  another writer claimed via ``HSETNX``. To claim and update without disturbing
+  it, use the targeted writers or ``refresh!`` first.
+
+Fixed
+-----
+
+- Nil-valued fields are no longer stored as the JSON string ``"null"``. Because a
+  hash has no native NULL, this left declared fields perpetually present, breaking
+  ``HSETNX``/``HEXISTS`` atomic-claim patterns and wasting memory. Nil fields are
+  now omitted, and clearing a field to nil removes it from storage (``HDEL``), so
+  absence again means "no value". No migration required: stale ``"null"`` values
+  are cleaned up on the next save and already decode back to ``nil`` on read.
+
+AI Assistance
+-------------
+
+- Investigation, implementation, and tryouts coverage produced with Claude Code.
+
 .. _changelog-2.11.1:
 
 2.11.1 — 2026-07-04
