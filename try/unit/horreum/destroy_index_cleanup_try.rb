@@ -11,10 +11,9 @@
 # after destroy and cause `RecordExistsError` on the next `create!` with
 # the same indexed value.
 #
-# Scope: class-level indexes only (`within: nil` / `within: :class`).
-# Instance-scoped indexes (`within: SomeClass`) are a known limitation
-# documented separately -- they are not covered by the #241 fix and
-# remain orphaned after destroy!.
+# Scope: class-level indexes (#241) and instance-scoped indexes (#282).
+# Instance-scoped indexes use a reverse index tracker to record scope
+# memberships, enabling automatic cleanup on destroy!.
 
 require_relative '../../support/helpers/test_helpers'
 
@@ -153,13 +152,12 @@ end
 Widget241.category_index_for('asymm').members.include?('w241-mixed-002')
 #=> false
 
-## Instance-scoped index cleanup is out of scope for #241 (documented limitation)
-# The fix in #241 covers only class-level indexes. Instance-scoped indexes
-# (`within: SomeClass`) require a parent context to resolve the set, so
-# destroy! -- which has no parent reference -- cannot clean them up here.
-# This test asserts the *current, unchanged* behavior so we notice if it
-# ever changes unintentionally. Do not "fix" this by making the assertion
-# match the class-level cleanup behavior; tracking is separate from #241.
+## Instance-scoped index cleanup via reverse index tracker (#282)
+# The #241 fix covered class-level indexes only. Issue #282 adds a
+# per-object reverse index tracker (_idx_scopes) that records which
+# scope instances hold references. destroy! reads the tracker before
+# its MULTI/EXEC transaction, then replays remove_from_* calls inside
+# the transaction to clean up instance-scoped entries atomically.
 class ::Widget241ScopedCompany < Familia::Horreum
   feature :relationships
   identifier_field :company_id
@@ -183,13 +181,13 @@ end
 @scope_company.badge_index.has_key?('B-42')
 #=> true
 
-## Documented limitation: instance-scoped entry persists after destroy!
-# This is the known gap outside #241's scope. Flipping this expectation
-# would require threading parent context through destroy! -- tracked
-# separately.
+## BUG #282: destroy! now cleans up instance-scoped index entries
+# The reverse index tracker records that scope_emp was added to
+# scope_company's badge_index. destroy! reads this tracker, then
+# removes the entry inside the same MULTI/EXEC transaction.
 @scope_emp.destroy!
 @scope_company.badge_index.has_key?('B-42')
-#=> true
+#=> false
 
 # Teardown: flush the database and remove throwaway constants so this
 # tryout doesn't pollute sibling suites (index keys in particular can

@@ -323,11 +323,10 @@ module Familia
                 field_value = send(field)
                 return unless field_value
 
-                # Use helper method on scope instance instead of manual instantiation
                 index_set = scope_instance.send("#{index_name}_for", field_value)
-
-                # Use UnsortedSet DataType method (no scoring)
                 index_set.add(identifier)
+
+                _record_index_scope(scope_class_config, index_name, scope_instance)
               end
 
               method_name = :"remove_from_#{scope_class_config}_#{index_name}"
@@ -339,11 +338,10 @@ module Familia
                 field_value = send(field)
                 return unless field_value
 
-                # Use helper method on scope instance instead of manual instantiation
                 index_set = scope_instance.send("#{index_name}_for", field_value)
-
-                # Remove using UnsortedSet DataType method
                 index_set.remove(identifier)
+
+                _unrecord_index_scope(scope_class_config, index_name, scope_instance)
               end
 
               method_name = :"update_in_#{scope_class_config}_#{index_name}"

@@ -65,7 +65,9 @@ module Familia
       # Class-level unique_index declarations automatically populate on save():
       #   user = User.new(email: 'test@example.com')
       #   user.save  # Auto-indexes email → user_id
-      # Instance-scoped indexes (with within:) remain manual (require parent context).
+      # Instance-scoped indexes (with within:) require an initial manual add_to_*
+      # call to establish the scope context. Subsequent saves auto-refresh tracked
+      # scopes, and destroy! auto-removes all tracked entries (#282).
       #
       # Design Philosophy:
       # Indexing is for finding objects by attribute, not ordering them.
@@ -159,17 +161,11 @@ module Familia
               index_name = config.index_name
               old_field_value = old_values[field]
 
-              # Determine which update method to call based on scope type
-              # Class-level: within is nil (unique_index default) or :class (multi_index default)
-              # Instance-scoped: within is a specific class
-              if config.within.nil? || config.within == :class
-                # Class-level index (auto-indexed on save)
+              if config.class_level?
                 send("update_in_class_#{index_name}", old_field_value)
               else
-                # Instance-scoped index - requires explicit scope context
                 next unless scope_context
 
-                # Use config_name for method naming
                 scope_class_config = Familia.resolve_class(config.scope_class).config_name
                 send("update_in_#{scope_class_config}_#{index_name}", scope_context, old_field_value)
               end
@@ -185,22 +181,116 @@ module Familia
             self.class.indexing_relationships.each do |config|
               index_name = config.index_name
 
-              # Determine which remove method to call based on scope type
-              # Class-level: within is nil (unique_index default) or :class (multi_index default)
-              # Instance-scoped: within is a specific class
-              if config.within.nil? || config.within == :class
-                # Class-level index (auto-indexed on save)
+              if config.class_level?
                 send("remove_from_class_#{index_name}")
               else
-                # Instance-scoped index - requires explicit scope context
                 next unless scope_context
 
-                # Use config_name for method naming
                 scope_class_config = Familia.resolve_class(config.scope_class).config_name
                 send("remove_from_#{scope_class_config}_#{index_name}", scope_context)
               end
             end
           end
+
+          # Auto-update instance-scoped indexes on save using the reverse
+          # index tracker. Called after the save transaction completes.
+          # Only refreshes entries for scope instances previously registered
+          # via add_to_* calls; the initial add_to_* remains manual.
+          def auto_update_instance_indexes
+            return unless _has_instance_scoped_indexes?
+
+            entries = _index_scope_tracker.members
+            return if entries.empty?
+
+            entries.each do |entry|
+              scope_config, idx_name, scope_id = entry.split("\t", 3)
+              next unless scope_config && idx_name && scope_id
+
+              config = self.class.indexing_relationships.find { |rel|
+                !rel.class_level? && rel.index_name.to_s == idx_name
+              }
+              next unless config
+
+              scope_instance = _build_scope_stub(config.scope_class, scope_id)
+              add_method = :"add_to_#{scope_config}_#{idx_name}"
+              send(add_method, scope_instance) if respond_to?(add_method)
+            end
+          end
+
+          # Read instance-scoped index tracker entries. Must be called
+          # BEFORE entering a MULTI/EXEC transaction since SMEMBERS
+          # inside MULTI returns futures, not values.
+          #
+          # @return [Array<String>] tracker entries, empty if none
+          def read_instance_index_scopes
+            return [] unless _has_instance_scoped_indexes?
+
+            _index_scope_tracker.members
+          end
+
+          # Remove instance-scoped index entries using pre-read tracker
+          # data. Safe to call inside a MULTI/EXEC transaction since all
+          # operations are writes (HDEL, SREM, DEL).
+          #
+          # @param tracked_entries [Array<String>] entries from read_instance_index_scopes
+          def remove_tracked_index_entries!(tracked_entries)
+            return if tracked_entries.nil? || tracked_entries.empty?
+
+            tracked_entries.each do |entry|
+              scope_config, idx_name, scope_id = entry.split("\t", 3)
+              next unless scope_config && idx_name && scope_id
+
+              config = self.class.indexing_relationships.find { |rel|
+                !rel.class_level? && rel.index_name.to_s == idx_name
+              }
+              next unless config
+
+              scope_instance = _build_scope_stub(config.scope_class, scope_id)
+              remove_method = :"remove_from_#{scope_config}_#{idx_name}"
+              send(remove_method, scope_instance) if respond_to?(remove_method)
+            end
+
+            _index_scope_tracker.delete!
+          end
+
+          # Record that this object was added to an instance-scoped index.
+          # Called by the generated add_to_* methods.
+          def _record_index_scope(scope_config, index_name, scope_instance)
+            entry = "#{scope_config}\t#{index_name}\t#{scope_instance.identifier}"
+            _index_scope_tracker.add(entry)
+          end
+
+          # Remove a scope tracking entry. Called by the generated
+          # remove_from_* methods.
+          def _unrecord_index_scope(scope_config, index_name, scope_instance)
+            entry = "#{scope_config}\t#{index_name}\t#{scope_instance.identifier}"
+            _index_scope_tracker.remove(entry)
+          end
+
+          def _has_instance_scoped_indexes?
+            return false unless self.class.respond_to?(:indexing_relationships)
+
+            self.class.indexing_relationships.any? { |rel| !rel.class_level? }
+          end
+
+          def _index_scope_tracker
+            @_index_scope_tracker ||= Familia::UnsortedSet.new(
+              Familia.join('_idx_scopes'), parent: self
+            )
+          end
+
+          # Build a minimal scope instance for Redis key resolution
+          # without loading the full object from the database.
+          def _build_scope_stub(scope_class, scope_id)
+            id_field = scope_class.identifier_field
+            case id_field
+            when Symbol, String
+              scope_class.new(id_field.to_sym => scope_id)
+            else
+              scope_class.find_by_identifier(scope_id)
+            end
+          end
+          private :_index_scope_tracker, :_build_scope_stub, :_has_instance_scoped_indexes?
 
           # Get all indexes this object appears in
           # Note: For instance-scoped indexes, this only shows class-level indexes

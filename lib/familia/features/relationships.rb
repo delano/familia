@@ -186,11 +186,7 @@ module Familia
           result = super
 
           if result && respond_to?(:update_all_indexes)
-            # Automatically update all indexes when object is saved
             update_all_indexes
-
-            # NOTE: Relationship-specific participation updates are done explicitly
-            # since we need to know which specific collections this object should be in
           end
 
           result

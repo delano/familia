@@ -533,12 +533,17 @@ module Familia
       def destroy!
         Familia.trace :DESTROY!, dbkey, self.class.uri
 
-        # Execute all deletion operations within a transaction
+        # Pre-read instance-scoped index tracker before MULTI/EXEC
+        # (SMEMBERS returns futures inside a transaction, not values)
+        tracked_scopes = if respond_to?(:read_instance_index_scopes)
+          read_instance_index_scopes
+        else
+          []
+        end
+
         result = transaction do |_conn|
-          # Delete the main object key
           delete!
 
-          # Delete all related fields if present
           if self.class.relations?
             Familia.trace :DELETE_RELATED_FIELDS!, nil,
                           "#{self.class} has relations: #{self.class.related_fields.keys}"
@@ -550,12 +555,15 @@ module Familia
             end
           end
 
-          # Clean up class-level index entries (see issue #241).
-          # Instance-scoped indexes require a scope instance unavailable here;
-          # tracked separately in issue #244.
+          # Clean up instance-scoped index entries (#282) using
+          # pre-read tracker data. Must precede class-level cleanup.
+          if tracked_scopes.any? && respond_to?(:remove_tracked_index_entries!)
+            remove_tracked_index_entries!(tracked_scopes)
+          end
+
+          # Clean up class-level index entries (#241)
           remove_from_class_indexes!
 
-          # Remove from instances collection
           remove_from_instances!
         end
 
@@ -817,8 +825,9 @@ module Familia
       #   customer.save  # Automatically calls add_to_class_email_lookup
       #
       # @note Only class-level unique_index declarations auto-populate.
-      #   Instance-scoped indexes (with within:) require manual population:
-      #   employee.add_to_company_badge_index(company)
+      #   Instance-scoped indexes (with within:) are auto-refreshed on save
+      #   for scopes previously registered via add_to_* (#282). The initial
+      #   add_to_* call remains manual since save has no scope context.
       #
       # @see Familia::Features::Relationships::Indexing For index declaration details
       #
@@ -843,13 +852,12 @@ module Familia
       #
       # Iterates through class-level indexing relationships and calls their
       # corresponding remove_from_class_* methods to purge stale entries.
-      # Only processes class-level indexes (where within is nil or :class),
-      # skipping instance-scoped indexes which require scope context that
-      # destroy! does not have. See issue #241 for the class-level fix;
-      # instance-scoped cleanup is tracked as a known limitation.
+      # Only processes class-level indexes (where within is nil or :class).
+      # Instance-scoped indexes are handled separately via the reverse
+      # index tracker (#282) — see remove_tracked_index_entries!.
       #
-      # Intended to be called from inside destroy!'s MULTI/EXEC transaction
-      # so index hash/set mutations are atomic with the object hash delete.
+      # Called from inside destroy!'s MULTI/EXEC transaction so index
+      # hash/set mutations are atomic with the object hash delete.
       #
       # @return [void]
       #

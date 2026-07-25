@@ -42,7 +42,8 @@ module Familia
         #   - employee.update_in_class_email_index(old_email)
         #
         # Note: Class-level indexes auto-populate on save(). Instance-scoped indexes
-        # (with within:) remain manual as they require parent context.
+        # (with within:) require an initial manual add_to_* call. Subsequent saves
+        # auto-refresh and destroy! auto-cleans via the reverse index tracker (#282).
         module UniqueIndexGenerators
           module_function
 
@@ -244,19 +245,15 @@ module Familia
                 field_value = send(field)
                 return unless field_value
 
-                # Automatically validate uniqueness before adding to index.
-                # Skip validation inside transactions since guard methods require read
-                # operations not available in MULTI/EXEC blocks.
                 unless Fiber[:familia_transaction]
                   guard_method = :"guard_unique_#{scope_class_config}_#{index_name}!"
                   send(guard_method, scope_instance) if respond_to?(guard_method)
                 end
 
-                # Use declared field accessor on scope instance
                 index_hash = scope_instance.send(index_name)
-
-                # Set the value (guard already validated uniqueness)
                 index_hash[field_value.to_s] = identifier
+
+                _record_index_scope(scope_class_config, index_name, scope_instance)
               end
 
               # Add a guard method to enforce unique constraint on this instance-scoped index
@@ -299,11 +296,10 @@ module Familia
                 field_value = send(field)
                 return unless field_value
 
-                # Use declared field accessor on scope instance
                 index_hash = scope_instance.send(index_name)
-
-                # Remove using HashKey DataType method
                 index_hash.remove(field_value.to_s)
+
+                _unrecord_index_scope(scope_class_config, index_name, scope_instance)
               end
 
               method_name = :"update_in_#{scope_class_config}_#{index_name}"
