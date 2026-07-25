@@ -12,4 +12,6 @@ fileignoreconfig:
     checksum: 10c94f802b2fa3a39fa33bf7dc34dac2ecaa2dd453ff97a19313f96a32fadeff
   - filename: examples/encrypted_fields.rb
     checksum: d1bd77f85d951d367e1c2bfd066a1d68d5f486346ee479121a3d5dcc2560bf52
+  - filename: docs/adr/0002-watch-for-private-keys-lua-for-shared-keys.md
+    checksum: 0e99ed5641d97ced7ab77b1dcb6ab9af2fb154ebcfe3fb02ede15502b767ff57
 version: ""
