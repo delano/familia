@@ -367,12 +367,15 @@ module Familia
         # @return [Hash] Hash containing encryption algorithm details
         #
         def encryption_info
-          provider = Familia::Encryption.current_provider
+          provider = Familia::Encryption.manager.provider
           {
-            algorithm: provider.algorithm_name,
-            key_size: provider.key_size,
+            algorithm: provider.algorithm,
+            # Providers expose no key-size accessor; both bundled providers
+            # derive fixed 32-byte keys (BLAKE2b digest_size / HKDF length in
+            # their derive_key implementations).
+            key_size: 32,
             nonce_size: provider.nonce_size,
-            tag_size: provider.tag_size,
+            tag_size: provider.auth_tag_size,
           }
         end
       end
