@@ -5,8 +5,25 @@
 # Tests for Horreum multi-field update methods:
 # - multi_field_update: batch field updates with optional expiration control
 # - multi_field_fast_write: immediate HSET without full save cycle
+# - field-type guards: transient fields and plaintext-to-encrypted rejected
 
+require 'base64'
 require_relative '../../support/helpers/test_helpers'
+
+Familia.config.encryption_keys = { v1: Base64.strict_encode64('a' * 32) }
+Familia.config.current_key_version = :v1
+
+# Model with encrypted and transient fields for guard coverage
+class MultiFieldGuardModel < Familia::Horreum
+  feature :encrypted_fields
+  feature :transient_fields
+
+  identifier_field :guard_id
+  field :guard_id
+  field :label
+  encrypted_field :api_key
+  transient_field :temp_secret
+end
 
 # Setup: Create test customer
 @test_prefix = "multi_field_test_#{Time.now.to_i}"
@@ -17,6 +34,8 @@ require_relative '../../support/helpers/test_helpers'
   role: 'user'
 )
 @customer.save
+@guarded = MultiFieldGuardModel.new(guard_id: "#{@test_prefix}_guard", label: 'initial')
+@guarded.save
 
 # ============================================================
 # multi_field_update (renamed from multi_field_update)
@@ -139,5 +158,91 @@ fresh.multi_field_update(name: 'Fresh Update')
 fresh.name
 #=> 'Fresh Update'
 
+# ============================================================
+# Field-type guards: transient and encrypted fields
+# ============================================================
+
+## multi_field_update rejects transient fields (never persisted)
+begin
+  @guarded.multi_field_update(temp_secret: 'ephemeral')
+  'UNEXPECTED SUCCESS'
+rescue ArgumentError => e
+  e.message.include?('Transient field temp_secret')
+end
+#=> true
+
+## multi_field_fast_write rejects transient fields (never persisted)
+begin
+  @guarded.multi_field_fast_write(temp_secret: 'ephemeral')
+  'UNEXPECTED SUCCESS'
+rescue ArgumentError => e
+  e.message.include?('Transient field temp_secret')
+end
+#=> true
+
+## multi_field_update rejects plaintext for encrypted fields
+begin
+  @guarded.multi_field_update(api_key: 'raw-plaintext-secret')
+  'UNEXPECTED SUCCESS'
+rescue ArgumentError => e
+  e.message.include?('Encrypted field api_key')
+end
+#=> true
+
+## multi_field_fast_write rejects plaintext for encrypted fields
+begin
+  @guarded.multi_field_fast_write(api_key: 'raw-plaintext-secret')
+  'UNEXPECTED SUCCESS'
+rescue ArgumentError => e
+  e.message.include?('Encrypted field api_key')
+end
+#=> true
+
+## Rejected batch persists nothing, including the regular fields in it
+begin
+  @guarded.multi_field_update(label: 'should-not-persist', api_key: 'plain')
+rescue ArgumentError
+  # expected
+end
+@guarded.dbclient.hget(@guarded.dbkey, 'label')
+#=> '"initial"'
+
+## Regular fields on a guard-enabled model still persist
+@guarded.multi_field_update(label: 'updated-label')
+@guarded.dbclient.hget(@guarded.dbkey, 'label')
+#=> '"updated-label"'
+
+## ConcealedString value persists ciphertext, not plaintext
+@guarded.api_key = 'conceal-me-multi'
+@guarded.multi_field_update(api_key: @guarded.api_key)
+stored = @guarded.dbclient.hget(@guarded.dbkey, 'api_key')
+[stored.include?('conceal-me-multi'), stored.include?('"algorithm"')]
+#=> [false, true]
+
+## Persisted ConcealedString round-trips through reveal
+reloaded = MultiFieldGuardModel.find_by_id(@guarded.guard_id)
+revealed = nil
+reloaded.api_key.reveal { |pt| revealed = pt.dup }
+revealed
+#=> 'conceal-me-multi'
+
+## nil still deletes the encrypted field
+@guarded.multi_field_update(api_key: nil)
+@guarded.dbclient.hexists(@guarded.dbkey, 'api_key')
+#=> false
+
+## multi_field_fast_write persists ciphertext for ConcealedString values
+@guarded.api_key = 'conceal-me-fast'
+@guarded.multi_field_fast_write(api_key: @guarded.api_key)
+stored = @guarded.dbclient.hget(@guarded.dbkey, 'api_key')
+[stored.include?('conceal-me-fast'), stored.include?('"algorithm"')]
+#=> [false, true]
+
+## multi_field_fast_write with nil deletes the encrypted field
+@guarded.multi_field_fast_write(api_key: nil, label: 'fast-label')
+[@guarded.dbclient.hexists(@guarded.dbkey, 'api_key'), @guarded.dbclient.hget(@guarded.dbkey, 'label')]
+#=> [false, '"fast-label"']
+
 # Teardown: Clean up test data
 @customer.destroy! rescue nil
+@guarded.destroy! rescue nil
