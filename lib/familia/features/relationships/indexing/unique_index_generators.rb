@@ -433,7 +433,11 @@ module Familia
 
                 return unless field_value
 
-                # Just set the value - uniqueness should be validated before save
+                # Blind HSET (also in update_in_class_*): uniqueness is only
+                # guarded by a pre-transaction read (guard_unique_*!), so a
+                # concurrent save can silently overwrite this entry. Known
+                # TOCTOU; closing it needs a server-side CAS at this write.
+                # See https://github.com/delano/familia/issues/353.
                 index_hash[field_value.to_s] = identifier
               end
 
