@@ -70,11 +70,9 @@ decoded_zero = @domain1.decode_score(zero_score)
 decoded_zero[:permissions]
 #=> 0
 
-## Permission encoding handles unknown permission levels
-unknown_perm_score = @domain1.permission_encode(Familia.now, :unknown_permission)
-decoded_unknown = @domain1.permission_decode(unknown_perm_score)
-decoded_unknown[:permission_list]
-#=> []
+## Permission encoding rejects unknown permission symbols (fail loud, not fail open)
+@domain1.permission_encode(Familia.now, :unknown_permission)
+#=!> error.class == ArgumentError
 
 ## Score encoding preserves precision for small timestamps
 small_time = Time.at(1000000)

@@ -116,10 +116,10 @@ module Familia
 
             permission_bits = case permissions
                               when Symbol
-                                PERMISSION_ROLES[permissions] || PERMISSION_FLAGS[permissions] || 0
+                                PERMISSION_ROLES[permissions] || permission_level_value(permissions)
                               when Array
                                 # Support array of permission symbols
-                                permissions.reduce(0) { |acc, p| acc | (PERMISSION_FLAGS[p] || 0) }
+                                permissions.reduce(0) { |acc, p| acc | permission_level_value(p) }
                               when Integer
                                 validate_permission_bits(permissions)
                               else
@@ -164,8 +164,7 @@ module Familia
             permission_bits = decoded[:permissions]
 
             permissions.all? do |perm|
-              flag = PERMISSION_FLAGS[perm]
-              flag && permission_bits.anybits?(flag)
+              permission_bits.anybits?(permission_level_value(perm))
             end
           end
 
@@ -183,7 +182,7 @@ module Familia
             current_bits = decoded[:permissions]
 
             new_bits = permissions.reduce(current_bits) do |acc, perm|
-              acc | (PERMISSION_FLAGS[perm] || 0)
+              acc | permission_level_value(perm)
             end
 
             encode_score(decoded[:timestamp], new_bits)
@@ -203,7 +202,7 @@ module Familia
             current_bits = decoded[:permissions]
 
             new_bits = permissions.reduce(current_bits) do |acc, perm|
-              acc & ~(PERMISSION_FLAGS[perm] || 0)
+              acc & ~permission_level_value(perm)
             end
 
             encode_score(decoded[:timestamp], new_bits)
@@ -219,10 +218,10 @@ module Familia
           #   permission_range([:read], [:read, :write])
           #   #=> [0.001, 0.005]
           def permission_range(min_permissions = [], max_permissions = nil)
-            min_bits = Array(min_permissions).reduce(0) { |acc, p| acc | (PERMISSION_FLAGS[p] || 0) }
+            min_bits = Array(min_permissions).reduce(0) { |acc, p| acc | permission_level_value(p) }
             max_bits = if max_permissions
                          Array(max_permissions).reduce(0) do |acc, p|
-                           acc | (PERMISSION_FLAGS[p] || 0)
+                           acc | permission_level_value(p)
                          end
                        else
                          255
@@ -255,7 +254,7 @@ module Familia
           def score_range(start_time = nil, end_time = nil, min_permissions: nil)
             min_bits = if min_permissions
                          Array(min_permissions).reduce(0) do |acc, p|
-                           acc | (PERMISSION_FLAGS[p] || 0)
+                           acc | permission_level_value(p)
                          end
                        else
                          0
@@ -364,22 +363,11 @@ module Familia
             end
           end
 
-          # Range queries for categorical filtering
-          #
-          # @param category [Symbol] Category to create range for
-          # @param start_time [Time, nil] Optional start time filter
-          # @param end_time [Time, nil] Optional end time filter
-          # @return [Array<String>] Min and max range strings for Valkey/Redis queries
-          def category_score_range(category, start_time = nil, end_time = nil)
-            PERMISSION_CATEGORIES[category] || 0
-
-            # Any permission matching the category mask
-            min_score = start_time ? start_time.to_i : 0
-            max_score = end_time ? end_time.to_i : Familia.now.to_i
-
-            # Return range that includes any matching permissions
-            ["#{min_score}.000", "#{max_score}.999"]
-          end
+          # NOTE: There is deliberately no category-based score range method.
+          # Permission bits live in the fractional part of the score and a
+          # bitmask category is not expressible as one contiguous score range.
+          # Fetch the time window with score_range, then post-filter with
+          # filter_by_category or meets_category?.
 
           private
 
