@@ -215,11 +215,13 @@ module Familia
 
       # Decrements the integer value of a hash field by the given amount.
       #
+      # There is no HDECRBY command; this is HINCRBY with a negated amount.
+      #
       # @param field [String] The field name
       # @param decrement [Integer] The decrement value
       # @return [Integer] The value after decrementing
       def decrby(field, decrement)
-        dbclient.decrby dbkey(suffix), field, decrement
+        dbclient.hincrby dbkey(suffix), field, -Integer(decrement)
       end
       alias decrementby decrby
 
@@ -228,7 +230,7 @@ module Familia
       # @param field [String] The field name
       # @return [Integer] The value after decrementing
       def decr(field)
-        dbclient.hdecr field
+        dbclient.hincrby dbkey(suffix), field, -1
       end
       alias decrement decr
 
