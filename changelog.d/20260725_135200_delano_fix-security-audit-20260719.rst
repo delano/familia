@@ -1,0 +1,54 @@
+Security
+--------
+
+- Batch writes now enforce field-type semantics: ``multi_field_update`` and
+  ``multi_field_fast_write`` raise ``ArgumentError`` for transient fields
+  (never persisted) and for encrypted fields given anything other than nil or
+  an already-concealed value, instead of persisting transient values and
+  storing encrypted-field plaintext verbatim. To encrypt a new plaintext
+  value, use the field setter followed by ``save``/``save_fields``.
+
+- Permission symbol lookups in ``Relationships::ScoreEncoding`` fail loudly:
+  ``add_permissions``, ``remove_permissions``, ``permission?``,
+  ``permission_range``, ``score_range``, and ``encode_score`` now raise
+  ``ArgumentError`` on unknown permission symbols instead of silently treating
+  them as no permission — previously ``remove_permissions(score, :admn)``
+  (a typo) was a silent no-op that left the permission granted.
+
+- Pinned ``anthropics/claude-code-action`` to the immutable v1.0.183 release
+  commit SHA in both workflows holding ``CLAUDE_CODE_OAUTH_TOKEN``, replacing
+  the mutable ``@beta`` branch ref. The pin required migrating the removed
+  beta inputs (``model``/``fallback_model``/``allowed_tools`` to
+  ``claude_args`` flags; ``direct_prompt`` to ``prompt``).
+
+Fixed
+-----
+
+- ``decrby`` and ``decr`` (and their ``decrementby``/``decrement`` aliases)
+  raised on every call — one used the string ``DECRBY`` signature against a
+  hash, the other called a nonexistent client method. Both now use ``HINCRBY``
+  with a negated amount, mirroring ``incrby``/``incr``.
+
+- ``encryption_info`` raised ``NoMethodError`` on every call via the phantom
+  ``Familia::Encryption.current_provider`` and nonexistent provider accessors.
+  It now uses ``Familia::Encryption.manager.provider`` and the real provider
+  API, preserving the ``algorithm``/``key_size``/``nonce_size``/``tag_size``
+  hash contract.
+
+Removed
+-------
+
+- ``ScoreEncoding.category_score_range``: it discarded the category mask and
+  returned the full time window for **all** permissions (e.g. the
+  ``:administrator`` range included viewer-only entries), and a bitmask
+  category is not expressible as a contiguous score range. Fetch the time
+  window with ``score_range`` and post-filter with ``filter_by_category`` or
+  ``meets_category?``. The method had no callers in lib/, tests, examples, or
+  docs.
+
+AI Assistance
+-------------
+
+- All six fixes, their tryouts (75+ new test cases across five files), and an
+  independent full-branch verification pass were produced by AI agents working
+  from the 2026-07-19 security audit's confirmed HIGH/MEDIUM findings.
