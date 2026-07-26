@@ -112,6 +112,12 @@ module Familia
       ret = dbclient.eval(
         RELEASE_FIELD_SCRIPT, keys: [dbkey], argv: [field.to_s, *ownership_variants(val)]
       )
+      # Refreshed unconditionally, matching #[]= -- a release that deleted
+      # nothing still touched the index key's TTL policy, and `ret` cannot gate
+      # it anyway: inside a MULTI (where this method is explicitly safe to
+      # queue) `ret` is a Future with no value to test. On an index hash with
+      # no default_expiration -- the usual case -- this returns early without
+      # issuing a command.
       update_expiration
       ret
     end
@@ -531,6 +537,16 @@ module Familia
     # byte mismatch and raise a spurious conflict against itself -- the read
     # path already tolerates that format (see
     # DataType::Serialization#strip_legacy_json_encoding), so the CAS must too.
+    #
+    # Deliberately mirrors that read path, including its constraint: an
+    # identifier whose own serialized form satisfies Familia.legacy_json_encoded?
+    # (i.e. it both starts and ends with a double quote, such as the literal
+    # three-character string %q("s")) is indistinguishable from the legacy
+    # encoding of the identifier it wraps. Such an identifier is already
+    # unsupported in reference collections -- strip_legacy_json_encoding rewrites
+    # it on read, so it cannot round-trip -- and the ambiguity here is that same
+    # pre-existing constraint, not a new one. Do not use quote-wrapped
+    # identifiers with unique indexes.
     #
     # @param val [Object] the value whose ownership is being asserted
     # @return [Array<String>] serialized forms, canonical first

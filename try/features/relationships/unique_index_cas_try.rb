@@ -265,6 +265,16 @@ CasUser.transaction { @unclaimed.add_to_class_email_cas_index }
 CasUser.email_cas_index['txn1@test.com']
 #=> 'txn1'
 
+## Calling claim_unique_<index>! directly is enough on its own
+# This is the escape hatch the OperationModeError message points at, so it has
+# to actually satisfy the check -- the per-index claim records its own ledger
+# entry rather than relying on prepare_for_save to do it.
+@direct = CasUser.new(uid: 'txn2', email: 'txn2@test.com')
+@direct.claim_unique_email_cas_index!
+CasUser.transaction { @direct.add_to_class_email_cas_index }
+CasUser.email_cas_index['txn2@test.com']
+#=> 'txn2'
+
 # ========================================
 # Partial-claim rollback across two unique indexes
 # ========================================
@@ -354,10 +364,75 @@ CasUser.email_cas_index['contested@test.com']
 #=> nil
 
 # ========================================
+# The claim ledger records the value, not just the index name
+# ========================================
+# The in-MULTI HSET is only sound as a re-affirmation of *the value that was
+# claimed*. An index-name-only ledger would vouch for a value no CAS ever saw
+# in two reachable shapes, both of them the blind write this issue removes.
+
+## prepare_for_save records the claimed value
+CasUser.email_cas_index.clear
+@ledger_ok = CasUser.new(uid: 'led_ok', email: 'ok@test.com')
+@ledger_ok.send(:prepare_for_save)
+@ledger_ok.send(:unique_index_claimed?, :email_cas_index, 'ok@test.com')
+#=> true
+
+## and vouches for that value only
+@ledger_ok.send(:unique_index_claimed?, :email_cas_index, 'other@test.com')
+#=> false
+
+## A nil indexed field claims nothing, so the ledger stays empty
+# Recording the index name here would let a later write of any value ride on an
+# entry that was never taken.
+@ledger_nil = CasUser.new(uid: 'led_nil')
+@ledger_nil.send(:prepare_for_save)
+@ledger_nil.instance_variable_get(:@unique_index_claims)
+#=> {}
+
+## An atomic_write block that changes the indexed field is refused
+# prepare_for_save claims the value the record holds when the block opens; the
+# block then runs INSIDE the MULTI. Reassigning the field there reaches the
+# HSET with a value no CAS settled.
+CasUser.email_cas_index.clear
+@led_inc = CasUser.new(uid: 'led_inc', email: 'ledger@test.com')
+@led_inc.save
+@led_mut = CasUser.new(uid: 'led_mut', email: 'ledgerown@test.com')
+begin
+  @led_mut.atomic_write { @led_mut.email = 'ledger@test.com' }
+  'no error'
+rescue Familia::OperationModeError
+  'refused'
+end
+#=> 'refused'
+
+## and the incumbent's entry survives it
+CasUser.email_cas_index['ledger@test.com']
+#=> 'led_inc'
+
+## The ledger does not outlive the save that populated it
+# A caller-opened transaction after the indexed field changed must not find the
+# index still marked claimed from the previous save.
+@led_stale = CasUser.new(uid: 'led_stale', email: 'stale1@test.com')
+@led_stale.save
+@led_stale.email = 'stale2@test.com'
+begin
+  CasUser.transaction { @led_stale.add_to_class_email_cas_index }
+  'no error'
+rescue Familia::OperationModeError
+  'refused'
+end
+#=> 'refused'
+
+## so the unclaimed value was never written
+CasUser.email_cas_index['stale2@test.com']
+#=> nil
+
+# ========================================
 # Teardown
 # ========================================
 
-@teardown_ids = %w[save1 save2 save3 race_a race_b txn1 own stale aw1 aw2 aw3 aw4 aw5]
+@teardown_ids = %w[save1 save2 save3 race_a race_b txn1 txn2 own stale aw1 aw2 aw3 aw4 aw5
+                   led_ok led_nil led_inc led_mut led_stale]
 @teardown_ids.each { |uid| CasUser.new(uid: uid).destroy! rescue nil }
 %w[inc part oth].each { |uid| CasDualUser.new(uid: uid).destroy! rescue nil }
 CasUser.email_cas_index.clear

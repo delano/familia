@@ -33,7 +33,10 @@ Added
   touch exactly one key, so they work unchanged under Redis Cluster. Values
   written by pre-2.10.0 unique indexes (JSON-encoded identifiers such as
   ``"\"u1\""``) count as owned and are normalized to the canonical form in
-  place. #353
+  place. As with the existing read path, an identifier that is *itself*
+  quote-wrapped (the literal three-character string ``"s"``) is
+  indistinguishable from the legacy encoding of ``s``; such identifiers already
+  cannot round-trip through a reference collection and remain unsupported. #353
 
 - Generated per-index ``claim_unique_<index>!`` and ``release_unique_<index>!``
   instance methods, plus a private ``claim_unique_indexes!`` (alongside the
@@ -48,13 +51,25 @@ Changed
 
 - ``add_to_class_<index>`` and ``update_in_class_<index>`` for a ``unique_index``
   now raise ``Familia::OperationModeError`` when called inside a transaction the
-  caller opened without first claiming the value. The in-``MULTI`` ``HSET`` is
-  only sound as a re-affirmation of an existing claim; without one it is the
-  blind write this change removes. All ``save`` paths (``save``,
-  ``save_if_not_exists!``, ``atomic_write``, ``Familia.atomic_write``) claim via
-  ``prepare_for_save`` and are unaffected. Instance-scoped (``within:``) unique
-  indexes keep the documented in-transaction escape hatch but now warn that the
-  write is unenforced. #353
+  caller opened without first claiming *the exact value being written*. The
+  in-``MULTI`` ``HSET`` is only sound as a re-affirmation of an existing claim;
+  without one it is the blind write this change removes. All ``save`` paths
+  (``save``, ``save_if_not_exists!``, ``atomic_write``, ``Familia.atomic_write``)
+  claim via ``prepare_for_save`` and are unaffected. Instance-scoped
+  (``within:``) unique indexes keep the documented in-transaction escape hatch
+  but now warn that the write is unenforced. #353
+
+  The claim is tracked per value, not per index name. An index-name-only ledger
+  would vouch for a value no CAS ever settled in two reachable shapes: an
+  ``atomic_write`` block that reassigns the indexed field (the block runs
+  *inside* the ``MULTI``, after ``prepare_for_save`` has claimed the value the
+  record held when the block opened), and a caller-opened transaction reached
+  after a completed save changed the field. Both now raise instead of writing
+  blind. Code that mutates a unique-indexed field inside ``atomic_write``, or
+  that opens its own transaction after changing one, must either set the field
+  before the block or call ``claim_unique_<index>!`` outside the ``MULTI`` --
+  that per-index claim records its own ledger entry and is sufficient on its
+  own. #353
 
 - ``guard_unique_indexes!`` is retained and is load-bearing rather than
   redundant: it checks every unique index *before* any claim is written, so the

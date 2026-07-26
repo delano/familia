@@ -475,12 +475,22 @@ module Familia
 
                 index_hash = self.class.send(index_name)
                 outcome = index_hash.claim_field(field_value.to_s, identifier)
-                return outcome if outcome.is_a?(Symbol)
 
-                raise Familia::RecordExistsError.new(
-                  "#{self.class} exists #{field}=#{field_value}",
-                  existing_id: outcome,
-                )
+                unless outcome.is_a?(Symbol)
+                  raise Familia::RecordExistsError.new(
+                    "#{self.class} exists #{field}=#{field_value}",
+                    existing_id: outcome,
+                  )
+                end
+
+                # Record which value was claimed, so a later in-MULTI HSET can
+                # verify it is re-affirming *this* value and not one that was
+                # assigned after the claim was taken. Recording here (rather
+                # than in Persistence#claim_unique_indexes!) is what makes a
+                # direct claim_unique_<index>! call sufficient on its own.
+                record_unique_index_claim(index_name, field_value)
+
+                outcome
               end
 
               # Release this record's claim on its current field value.
@@ -505,16 +515,23 @@ module Familia
                 unless Fiber[:familia_transaction]
                   # Outside a transaction the CAS *is* the write -- claim_field
                   # HSETs on success, so there is nothing left to do.
+                  #
+                  # `next` (not `return`) exits a define_method body with a
+                  # value. Both work here -- define_method gives the block
+                  # method semantics for `return` -- but `next` is the form that
+                  # stays correct if this body is ever passed around as a Proc.
                   next send(:"claim_unique_#{index_name}!")
                 end
 
-                # Inside a MULTI this can only re-affirm a value already claimed
+                # Inside a MULTI this can only re-affirm the value claimed
                 # before the transaction opened (prepare_for_save does that for
                 # every save path). Without that claim the HSET below is the old
-                # blind write, so refuse rather than reopen the TOCTOU.
-                unless unique_index_claimed?(index_name)
+                # blind write, so refuse rather than reopen the TOCTOU. The
+                # check is value-aware: a block that changed the indexed field
+                # after prepare_for_save holds no claim on the new value.
+                unless unique_index_claimed?(index_name, field_value)
                   raise Familia::OperationModeError, <<~ERROR_MESSAGE
-                    Cannot add_to_class_#{index_name} inside a transaction without first claiming the value. Call claim_unique_#{index_name}! outside the MULTI (see ADR-0002); the in-transaction HSET only re-affirms an existing claim.
+                    Cannot add_to_class_#{index_name} inside a transaction without first claiming #{field.inspect}=#{field_value.inspect}. Call claim_unique_#{index_name}! outside the MULTI (see ADR-0002); the in-transaction HSET only re-affirms a claim on this exact value. If you changed #{field} inside an atomic_write block, set it before the block instead -- prepare_for_save claims the value the record holds when the block opens.
                   ERROR_MESSAGE
                 end
 
@@ -572,9 +589,9 @@ module Familia
                 if new_field_value
                   if !Fiber[:familia_transaction]
                     send(:"claim_unique_#{index_name}!")
-                  elsif !unique_index_claimed?(index_name)
+                  elsif !unique_index_claimed?(index_name, new_field_value)
                     raise Familia::OperationModeError, <<~ERROR_MESSAGE
-                      Cannot update_in_class_#{index_name} inside a transaction without first claiming the value. Call claim_unique_#{index_name}! outside the MULTI (see ADR-0002); the in-transaction HSET only re-affirms an existing claim.
+                      Cannot update_in_class_#{index_name} inside a transaction without first claiming #{field.inspect}=#{new_field_value.inspect}. Call claim_unique_#{index_name}! outside the MULTI (see ADR-0002); the in-transaction HSET only re-affirms a claim on this exact value. If you changed #{field} inside an atomic_write block, set it before the block instead -- prepare_for_save claims the value the record holds when the block opens.
                     ERROR_MESSAGE
                   end
                 end

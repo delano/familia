@@ -829,18 +829,62 @@ module Familia
         end
       end
 
-      # Whether +index_name+ was claimed during the current {#prepare_for_save}.
+      # Whether +field_value+ was claimed for +index_name+ during the current
+      # {#prepare_for_save}.
       #
       # The generated +add_to_class_*+ mutators consult this before issuing the
       # in-MULTI HSET: that write is only sound as a re-affirmation of a claim
       # already taken server-side, so a caller who opened their own transaction
       # without claiming gets an error instead of the old blind write.
       #
+      # The ledger records the *value* claimed, not just the index name. An
+      # index-name-only ledger would vouch for a value that was never claimed
+      # in two reachable cases:
+      #
+      #   1. +atomic_write+ runs {#prepare_for_save} (which claims the value the
+      #      record holds at that moment) and then yields the caller's block
+      #      INSIDE the MULTI. A block that reassigns the indexed field would
+      #      reach the in-MULTI HSET with a value no CAS ever saw.
+      #   2. The ledger outlives the save that populated it. A later
+      #      caller-opened transaction touching the same instance after the
+      #      indexed field changed would find the index still marked claimed.
+      #
+      # Both are the blind write this PR removes, so the comparison is against
+      # the value. +field_value+ is compared as a string because that is the
+      # form both {Familia::HashKey#claim_field} and the HSET use.
+      #
       # @param index_name [Symbol]
+      # @param field_value [Object] the value about to be written
       # @return [Boolean]
-      def unique_index_claimed?(index_name)
-        Array(@unique_index_claims).include?(index_name)
+      def unique_index_claimed?(index_name, field_value)
+        return false if field_value.nil?
+
+        unique_index_claims[index_name] == field_value.to_s
       end
+
+      # The claim ledger: { index_name => claimed value (String) }.
+      #
+      # @return [Hash{Symbol => String}]
+      def unique_index_claims
+        @unique_index_claims ||= {}
+      end
+      private :unique_index_claims
+
+      # Records that +field_value+ is now claimed for +index_name+.
+      #
+      # Called by the generated +claim_unique_<index>!+ methods, so that taking
+      # a claim directly -- the documented way to make an in-transaction write
+      # legal -- is enough on its own. {#claim_unique_indexes!} resets the
+      # ledger and then relies on the same recording.
+      #
+      # @param index_name [Symbol]
+      # @param field_value [Object]
+      # @return [void]
+      def record_unique_index_claim(index_name, field_value)
+        unique_index_claims[index_name] = field_value.to_s
+        nil
+      end
+      private :record_unique_index_claim
 
       # Atomically claims this record's value in every class-level unique index.
       #
@@ -865,9 +909,9 @@ module Familia
       #
       def claim_unique_indexes!
         # Reset the ledger before anything can bail out: a claim recorded by a
-        # previous save must never vouch for this one, and this method is public
-        # so it can be reached without going through prepare_for_save.
-        @unique_index_claims = []
+        # previous save must never vouch for this one. Private, but reachable
+        # via send, so it cannot assume prepare_for_save is the only caller.
+        @unique_index_claims = {}
 
         return unless self.class.respond_to?(:indexing_relationships)
 
@@ -878,8 +922,13 @@ module Familia
             claim_method = :"claim_unique_#{rel.index_name}!"
             next unless respond_to?(claim_method)
 
+            # The ledger entry is written by claim_unique_<index>! itself. A nil
+            # outcome means the record has no value for the indexed field --
+            # nothing was claimed, so nothing was recorded and nothing may be
+            # re-affirmed later.
             outcome = send(claim_method)
-            @unique_index_claims << rel.index_name
+            next unless outcome.is_a?(Symbol)
+
             created << rel.index_name if outcome == :created
           end
         rescue StandardError
@@ -1097,8 +1146,8 @@ module Familia
 
         # Take the claims server-side. This is the enforcement, and it must
         # happen here -- outside the transaction the caller is about to open.
-        # It also resets the claim ledger the in-MULTI writes consult (see
-        # #unique_index_claimed?).
+        # It also resets the claim ledger the in-MULTI writes consult, recording
+        # which *value* each index was claimed for (see #unique_index_claimed?).
         claim_unique_indexes!
       end
       private :prepare_for_save

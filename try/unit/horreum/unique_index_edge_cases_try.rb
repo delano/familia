@@ -358,6 +358,13 @@ old_badge = @emp11.badge_number
 @emp11.email = 'compound_new@test.com'
 @emp11.badge_number = 'B666'
 
+# Claim the NEW email outside the MULTI. The save above claimed the old value;
+# the in-transaction HSET only re-affirms a claim on the exact value being
+# written, so a changed field needs a fresh claim (#353 / ADR-0002). Without
+# this the write would be the blind HSET that can overwrite another record's
+# ownership -- which is what this test used to exercise.
+@emp11.claim_unique_email_index!
+
 # Update both indexes in single transaction
 result = EdgeCaseEmployee.transaction do |tx|
   @emp11.update_in_class_email_index(old_email)
