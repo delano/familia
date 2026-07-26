@@ -169,6 +169,15 @@ Two constraints follow from cleanup running write-only inside a transaction:
 Both are checked before the index write, so a rejected call leaves nothing
 behind.
 
+> **`delete!` does not clean up the tracker.** `delete!` removes only the main
+> object hash; related keys — the `_idx_scopes` tracker included — survive, per
+> its documented contract. If a *new* record is later saved under the same
+> identifier, save's refresh reads the stale tracker and re-joins the tracked
+> scopes on the new record's behalf (uniqueness is still validated, so a
+> colliding value raises rather than evicts). Use `destroy!` for the full
+> lifecycle; reach for `delete!` only when leftover related keys are
+> acceptable.
+
 ### Generated Methods
 
 **On scope class (Company):**
