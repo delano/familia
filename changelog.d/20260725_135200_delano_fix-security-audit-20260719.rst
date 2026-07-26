@@ -4,9 +4,13 @@ Security
 - Batch writes now enforce field-type semantics: ``multi_field_update`` and
   ``multi_field_fast_write`` raise ``ArgumentError`` for transient fields
   (never persisted) and for encrypted fields given anything other than nil or
-  an already-concealed value, instead of persisting transient values and
-  storing encrypted-field plaintext verbatim. To encrypt a new plaintext
-  value, use the field setter followed by ``save``/``save_fields``.
+  a ``ConcealedString``, instead of persisting transient values and storing
+  encrypted-field plaintext verbatim. To encrypt a new plaintext value, use
+  the field setter followed by ``save``/``save_fields``. The encrypted-field
+  check tests the ``ConcealedString`` type rather than the presence of an
+  ``encrypted_value`` method: ``serialize_value`` persists that method's
+  return value verbatim, so accepting the interface would let a
+  caller-supplied object write plaintext through the guard meant to stop it.
 
 - Permission symbol lookups in ``Relationships::ScoreEncoding`` fail loudly:
   ``add_permissions``, ``remove_permissions``, ``permission?``,
@@ -14,6 +18,18 @@ Security
   ``ArgumentError`` on unknown permission symbols instead of silently treating
   them as no permission — previously ``remove_permissions(score, :admn)``
   (a typo) was a silent no-op that left the permission granted.
+
+  The two symbol namespaces are now documented as distinct rather than
+  interchangeable. ``PERMISSION_ROLES`` (``:viewer``, ``:editor``,
+  ``:moderator``, ``:admin``) are an encode-time convenience accepted only by
+  ``encode_score``/``permission_encode``; the methods that inspect, mutate, or
+  range over bits take atomic ``PERMISSION_FLAGS`` and now reject roles with a
+  message naming the flags to use instead. Roles are deliberately not resolved
+  there: ``permission?`` tests bits individually and would answer "holds any of
+  these" where callers mean "holds all of these", and ``:admin`` differs
+  between the namespaces (flag = bit 7, role = all eight bits), so resolving it
+  would silently widen ``add_permissions(score, :admin)`` from one bit to
+  eight.
 
 - Pinned ``anthropics/claude-code-action`` to the immutable v1.0.183 release
   commit SHA in both workflows holding ``CLAUDE_CODE_OAUTH_TOKEN``, replacing

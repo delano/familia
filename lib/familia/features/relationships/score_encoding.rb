@@ -26,6 +26,33 @@ module Familia
       #
       # This allows combining permissions (read + delete without write) and efficient
       # permission checking using bitwise operations while maintaining time-based ordering.
+      #
+      # ## Flags versus roles
+      #
+      # Two symbol namespaces exist and they are NOT interchangeable:
+      #
+      # - PERMISSION_FLAGS are the atomic bits (:read, :write, :delete, ...).
+      #   They are the currency of every API that inspects, mutates, or ranges
+      #   over permission bits: permission?, add_permissions,
+      #   remove_permissions, permission_range, score_range.
+      # - PERMISSION_ROLES are named bundles of flags (:viewer, :editor,
+      #   :moderator, :admin). They are an encode-time convenience accepted
+      #   ONLY by encode_score and permission_encode.
+      #
+      # Passing a role to a flag-taking method raises ArgumentError rather than
+      # resolving it. Bundles do not survive the bit operations those methods
+      # perform: permission? tests bits individually, so a bundle would answer
+      # "holds any of these" where callers mean "holds all of these", and
+      # remove_permissions(score, :editor) would silently revoke three
+      # permissions where the caller named one thing. Expand the role at the
+      # call site (PERMISSION_ROLES.fetch(:editor)) when you want its bits.
+      #
+      # Note the deliberate overlap on :admin -- the FLAG is bit 7 (128) while
+      # the ROLE is all eight bits (255). encode_score(t, :admin) therefore
+      # grants everything, but :admin reaching a flag-taking method means bit 7
+      # alone. Because the two differ, roles are never silently resolved in
+      # those methods: doing so would widen add_permissions(score, :admin) from
+      # one bit to all eight.
       module ScoreEncoding
         # Maximum value for metadata to preserve precision (3 decimal places)
         # For 8-bit permission system, max value is 255
@@ -65,11 +92,29 @@ module Familia
         class << self
           # Get permission bit flag value for a permission symbol
           #
+          # Accepts atomic PERMISSION_FLAGS only. Role symbols are rejected
+          # with a message naming the alternative -- see the "Flags versus
+          # roles" section in the module documentation for why they are not
+          # resolved here.
+          #
           # @param permission [Symbol] Permission symbol to get value for
           # @return [Integer] Bit flag value for the permission
-          # @raise [ArgumentError] If permission is unknown
+          # @raise [ArgumentError] If permission is a role or is unknown
           def permission_level_value(permission)
-            PERMISSION_FLAGS[permission] || raise(ArgumentError, "Unknown permission: #{permission.inspect}")
+            flag = PERMISSION_FLAGS[permission]
+            return flag if flag
+
+            if PERMISSION_ROLES.key?(permission)
+              raise ArgumentError,
+                    "#{permission.inspect} is a permission role, not a permission flag. " \
+                    'Roles are accepted only by encode_score/permission_encode. Pass atomic ' \
+                    "flags here (#{decode_permission_flags(PERMISSION_ROLES[permission]).map(&:inspect).join(', ')}), " \
+                    "or expand the role with PERMISSION_ROLES.fetch(#{permission.inspect})."
+            end
+
+            raise ArgumentError,
+                  "Unknown permission: #{permission.inspect}. Valid flags: " \
+                  "#{PERMISSION_FLAGS.keys.map(&:inspect).join(', ')}."
           end
 
           # Encode timestamp and permission (alias for encode_score)

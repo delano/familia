@@ -136,3 +136,67 @@ require_relative '../../support/helpers/test_helpers'
 ## contiguous score range
 @se.respond_to?(:category_score_range)
 #=> false
+
+# Flags versus roles: PERMISSION_ROLES are an encode-time convenience only.
+# Flag-taking methods reject them rather than resolving them, because the bit
+# operations those methods perform would silently change what the caller named
+# (permission? would answer "any of" where callers mean "all of", and
+# remove_permissions(:editor) would revoke three permissions, not one).
+
+## encode_score still accepts role symbols
+@se.decode_score(@se.encode_score(@ts, :editor))[:permission_list]
+#=> [:read, :write, :edit]
+
+## permission_encode accepts role symbols too
+@se.decode_score(@se.permission_encode(@ts, :viewer))[:permissions]
+#=> 1
+
+## permission? rejects role symbols instead of resolving them
+@se.permission?(@full_score, :editor)
+#=!> error.class == ArgumentError
+
+## The rejection names the namespace and the expansion route
+begin
+  @se.permission_level_value(:moderator)
+rescue ArgumentError => e
+  [e.message.include?('is a permission role, not a permission flag'),
+   e.message.include?('PERMISSION_ROLES.fetch(:moderator)')]
+end
+#=> [true, true]
+
+## add_permissions rejects role symbols
+@se.add_permissions(@read_score, :moderator)
+#=!> error.class == ArgumentError
+
+## remove_permissions rejects role symbols
+@se.remove_permissions(@full_score, :editor)
+#=!> error.class == ArgumentError
+
+## permission_range rejects role symbols
+@se.permission_range([:viewer])
+#=!> error.class == ArgumentError
+
+## score_range rejects role symbols
+@se.score_range(nil, nil, min_permissions: [:editor])
+#=!> error.class == ArgumentError
+
+## :admin is deliberately in both namespaces -- as a ROLE it encodes all bits
+@se.decode_score(@se.encode_score(@ts, :admin))[:permissions]
+#=> 255
+
+## ...but as a FLAG it is bit 7 alone; roles are never silently resolved in
+## flag-taking methods, which would widen this grant from one bit to eight
+@se.decode_score(@se.add_permissions(@se.encode_score(@ts, :none), :admin))[:permissions]
+#=> 128
+
+## Callers wanting a role's bits expand it explicitly at the call site
+@se.decode_score(@se.add_permissions(@read_score, *Familia::Features::Relationships::ScoreEncoding::PERMISSION_ROLES.fetch(:editor).then { |bits| @se.decode_permission_flags(bits) }))[:permission_list]
+#=> [:read, :write, :edit]
+
+## Unknown symbols still raise, and the message lists the valid flags
+begin
+  @se.permission_level_value(:admn)
+rescue ArgumentError => e
+  [e.message.include?('Unknown permission: :admn'), e.message.include?(':read')]
+end
+#=> [true, true]
