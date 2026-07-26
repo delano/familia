@@ -99,7 +99,7 @@ module Familia
     using Familia::Refinements::TimeLiterals
 
     @registered_types = {}
-    @valid_options = %i[class record_class parent default_expiration no_expiration default logical_database dbkey dbclient suffix prefix reference].freeze
+    @valid_options = %i[class record_class parent default_expiration no_expiration default logical_database dbkey dbclient suffix prefix reference dirty_write_warnings].freeze
     @logical_database = nil
 
     # Remediation hint appended to every dirty-write warning/raise message so
@@ -138,6 +138,12 @@ module Familia
     # :suffix => the suffix to use for the key (e.g. 'scores' in customer:custid:scores).
     # :prefix => the prefix to use for the key (e.g. 'customer' in customer:custid:scores).
     #
+    # :dirty_write_warnings => one of :strict, :warn, :once, :off. Overrides
+    # the parent class's setting for THIS collection only (see
+    # #resolve_dirty_warning_mode). Intended for ORM-internal structures that
+    # the persistence path writes deliberately while the parent is dirty; user
+    # data should rely on the class/global setting instead.
+    #
     # Connection precendence: uses the database connection of the parent or the
     # value of opts[:dbclient] or Familia.dbclient (in that order).
     def initialize(keystring, opts = {})
@@ -146,6 +152,12 @@ module Familia
 
       # Remove all keys from the opts that are not in the allowed list
       @opts = DataType.valid_keys_only(opts || {})
+
+      # Validate eagerly: an unrecognized mode would otherwise fall through
+      # #warn_if_dirty! to the :once branch, so a typo would silently change
+      # the diagnostic level instead of failing. Mirrors the same check on
+      # Familia.dirty_write_warnings and the Horreum class-level setter.
+      validate_dirty_write_warnings!(@opts[:dirty_write_warnings])
 
       # Apply the options to instance method setters of the same name
       @opts.each do |k, v|
@@ -219,16 +231,40 @@ module Familia
       emit_dirty_warning(mode, message, dirty)
     end
 
-    # Resolves the dirty-write warning mode for this DataType's parent.
+    # Valid +dirty_write_warnings+ modes, matching the class-level and global
+    # settings of the same name.
+    DIRTY_WRITE_MODES = %i[strict warn once off].freeze
+
+    # @raise [ArgumentError] if mode is present and not a recognized mode
+    def validate_dirty_write_warnings!(mode)
+      return if mode.nil? || DIRTY_WRITE_MODES.include?(mode)
+
+      raise ArgumentError,
+            "dirty_write_warnings must be one of #{DIRTY_WRITE_MODES.inspect}, got #{mode.inspect}"
+    end
+    private :validate_dirty_write_warnings!
+
+    # Resolves the dirty-write warning mode for this DataType.
     #
-    # Reads the parent Horreum class's +dirty_write_warnings+ setting (which
-    # itself walks the subclass chain and falls back to the
+    # An explicit +dirty_write_warnings:+ option on the DataType itself wins:
+    # it is the most specific signal available, and it is what lets an
+    # ORM-internal structure opt out of a diagnostic aimed at user code. The
+    # reverse index tracker is the motivating case -- it is written by the
+    # save path itself, inside the same MULTI that persists the scalar
+    # fields, so "parent has unsaved scalar fields" is not merely noisy there,
+    # it is false, and under +strict_write_order+ it would abort every save.
+    #
+    # Otherwise reads the parent Horreum class's +dirty_write_warnings+
+    # setting (which itself walks the subclass chain and falls back to the
     # +Familia.dirty_write_warnings+ global). Older parents that predate the
     # class setting fall back to the global directly.
     #
     # @return [Symbol] one of :strict, :warn, :once, :off
     #
     def resolve_dirty_warning_mode
+      explicit_mode = @opts[:dirty_write_warnings]
+      return explicit_mode if explicit_mode
+
       parent_class = @parent_ref.class
       if parent_class.respond_to?(:dirty_write_warnings)
         parent_class.dirty_write_warnings
