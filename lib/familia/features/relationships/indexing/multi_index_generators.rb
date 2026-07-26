@@ -321,6 +321,10 @@ module Familia
               define_method(method_name) do |scope_instance|
                 return unless scope_instance
 
+                # Before any write: an untrackable scope produces an index
+                # entry that destroy! could never find again.
+                _ensure_trackable_index_scope!(scope_instance)
+
                 field_value = send(field)
                 return unless field_value
 
@@ -329,22 +333,36 @@ module Familia
                 index_set = scope_instance.send("#{index_name}_for", field_value)
                 index_set.add(identifier)
 
-                _record_index_scope(scope_class_config, index_name, scope_instance)
+                # Per-value entry: add_to_* is add-only, so the object may now
+                # occupy several buckets and each needs its own cleanup entry.
+                _record_index_scope(scope_class_config, index_name, scope_instance, field_value,
+                                    cardinality: :multi)
               end
 
               method_name = :"remove_from_#{scope_class_config}_#{index_name}"
               Familia.debug("[MultiIndexGenerators] #{name} method #{method_name}")
 
-              define_method(method_name) do |scope_instance|
+              # @param scope_instance [Object] the scope holding the index
+              # @param field_value [Object, nil] the value bucket to remove
+              #   from. Defaults to the object's current field value,
+              #   preserving the public single-argument call. destroy! cleanup
+              #   passes the value recorded at index time instead, since the
+              #   current one may have changed (or be nil on an
+              #   identifier-only instance).
+              define_method(method_name) do |scope_instance, field_value = nil|
                 return unless scope_instance
 
-                field_value = send(field)
+                field_value = send(field) if field_value.nil?
                 return unless field_value
 
                 index_set = scope_instance.send("#{index_name}_for", field_value)
                 index_set.remove(identifier)
 
-                _unrecord_index_scope(scope_class_config, index_name, scope_instance)
+                # field_value is part of the multi entry key -- the bucket
+                # just left is the entry to drop, not the membership as a
+                # whole (other buckets may still hold this object).
+                _unrecord_index_scope(scope_class_config, index_name, scope_instance, field_value,
+                                      cardinality: :multi)
               end
 
               method_name = :"update_in_#{scope_class_config}_#{index_name}"
@@ -352,6 +370,8 @@ module Familia
 
               define_method(method_name) do |scope_instance, old_field_value = nil|
                 return unless scope_instance
+
+                _ensure_trackable_index_scope!(scope_instance)
 
                 new_field_value = send(field)
 
@@ -371,6 +391,21 @@ module Familia
                     new_index_set.add(identifier)
                   end
                 end
+
+                # Mirror the bucket moves above into the tracker: drop the
+                # entry for the retracted bucket, add one for the new bucket.
+                #
+                # Synced outside the block above, which behaves differently
+                # depending on the caller. Standalone, scope_instance.transaction
+                # opens a MULTI on the SCOPE's connection -- a tracker write
+                # inside it would go to the wrong connection, since the tracker
+                # belongs to this object. The tradeoff is that standalone, the
+                # tracker sync is NOT atomic with the index write. During save
+                # the block is reentrant (it joins the caller's MULTI via
+                # Fiber[:familia_transaction]) so both land in that one
+                # transaction and the tradeoff does not apply.
+                _sync_multi_index_scope(scope_class_config, index_name, scope_instance,
+                                        old_field_value, new_field_value)
               end
             end
           end
