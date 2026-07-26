@@ -69,17 +69,18 @@ module Familia
     #   customer.domains_with_permission(:read)
     #
     # @example Multi-collection operations
-    #   # Atomic updates across multiple collections
-    #   domain.update_multiple_presence([
-    #     { key: "customer:123:domains", score: current_score },
-    #     { key: "team:456:domains", score: permission_encode(Familia.now, :read) }
-    #   ], :add, domain.identifier)
+    #   # A participant carries a reverse index of every collection it is in,
+    #   # so cross-collection questions are answered from the participant.
+    #   domain.participating_ids_for_target(Customer)          # => ["123"]
+    #   domain.participating_ids_for_target(Team, ['domains']) # scoped to one collection
+    #   domain.participating_in_target?(Customer)              # => true
     #
-    #   # UnsortedSet operations on collections
-    #   accessible = Domain.union_collections([
-    #     { owner: customer, collection: :domains },
-    #     { owner: team, collection: :domains }
-    #   ], min_permission: :read)
+    #   # Writes to several collections are grouped by the connection layer,
+    #   # not by a relationships-specific batch method.
+    #   Familia.transaction do
+    #     customer.add_domains_instance(domain, domain.permission_encode(Familia.now, :read))
+    #     team.add_domains_instance(domain, domain.permission_encode(Familia.now, :read))
+    #   end
     module Relationships
       # Register the feature with Familia
       Familia::Base.add_feature Relationships, :relationships

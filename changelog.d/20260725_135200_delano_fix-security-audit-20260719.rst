@@ -87,6 +87,16 @@ Documentation
   helpers are ``add_<collection>_instance``/``remove_<collection>_instance`` —
   no ``add_domain``/``remove_domain`` is generated.
 
+- Replaced the fabricated "Multi-collection operations" example in the
+  ``Relationships`` rdoc. It documented ``update_multiple_presence`` and
+  ``Domain.union_collections`` with a ``min_permission:`` keyword; none of the
+  three appears anywhere in ``lib/``, in any form. The replacement shows the
+  real cross-collection surface — ``participating_ids_for_target`` and
+  ``participating_in_target?`` answering from the participant's reverse index,
+  and ``Familia.transaction`` for grouping writes, since there is no
+  relationships-specific batch method. Pinned by
+  ``try/bug_fixes/relationships_rdoc_example_try.rb``.
+
 - Documented that ``<collection>_with_permission`` takes atomic
   ``PERMISSION_FLAGS`` and raises ``ArgumentError`` on a role symbol. The raise
   is the intended fail-loud behaviour introduced above, but the generated
