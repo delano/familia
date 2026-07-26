@@ -65,6 +65,45 @@ Removed
   ``meets_category?``. The method had no callers in lib/, tests, examples, or
   docs.
 
+Documentation
+-------------
+
+- The "Permission Management" section of ``docs/overview.md`` described a
+  subsystem that does not exist: a ``permission_tracking`` class-level DSL and
+  fifteen generated instance methods (``grant``, ``revoke``, ``can?``,
+  ``permissions_for``, ``permission_tier_for``, ``all_permissions``,
+  ``users_by_category``, ``accessible_items``, ``items_by_permission``,
+  ``permission_matrix``, ``admin_access?`` and others). None of them appear
+  anywhere in ``lib/``. Replaced with the real surface: permission bits packed
+  into the fractional part of a sorted set score, granted by the score passed
+  to a ``participates_in ... type: :sorted_set`` collection, queried with the
+  generated ``<collection>_with_permission`` and the ``ScoreEncoding`` module
+  methods. The replacement example is pinned by
+  ``try/bug_fixes/overview_permission_example_try.rb``, which runs it verbatim.
+
+- Corrected generated method names and receivers in the ``Relationships`` and
+  ``TargetMethods`` rdoc. Target methods are instance-level, not class-level
+  (``customer.domains``, not ``Customer.domains``), and the singular add/remove
+  helpers are ``add_<collection>_instance``/``remove_<collection>_instance`` —
+  no ``add_domain``/``remove_domain`` is generated.
+
+- Documented that ``<collection>_with_permission`` takes atomic
+  ``PERMISSION_FLAGS`` and raises ``ArgumentError`` on a role symbol. The raise
+  is the intended fail-loud behaviour introduced above, but the generated
+  method gave no indication that ``domains_with_permission(:editor)`` would not
+  work while ``domains_with_permission(:edit)`` does.
+
+- Documented ``PERMISSION_CATEGORIES`` and permission tiers as the third and
+  fourth symbol namespaces, and the collision between them. ``category?`` is a
+  non-exclusive overlap test — a ``:moderator`` score answers ``true`` to all
+  five categories — while ``permission_tier`` assigns one exclusive bucket,
+  checking most-privileged first. They reuse the names ``:content_editor`` and
+  ``:administrator`` for opposite questions, so the same score is
+  ``category?(:content_editor)`` **and** tier ``:administrator`` (``:delete``
+  falls inside the administrator mask). Tier ``:viewer`` is the one exact
+  correspondence with a role: the masks partition all eight bits, making it
+  reachable only at ``bits == 1``.
+
 AI Assistance
 -------------
 
