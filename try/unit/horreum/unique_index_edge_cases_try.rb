@@ -290,12 +290,22 @@ rescue
 end
 #=> true
 
-## Both write to index (last write wins in Redis)
+## First writer claims the value; the second is rejected by the server-side CAS
+# The read guard above races (both saw an empty index), so the guard alone
+# cannot decide this. add_to_class_* settles it with a single EVAL that checks
+# and writes atomically -- the loser raises instead of silently overwriting.
 @emp8.add_to_class_email_index
-@emp9.add_to_class_email_index
-# Verify the index contains the identifier (orphaned entry - wastes space but harmless)
+begin
+  @emp9.add_to_class_email_index
+  'no error'
+rescue Familia::RecordExistsError => e
+  e.existing_id
+end
+#=> 'e8'
+
+## The first writer's claim survives the losing write
 EdgeCaseEmployee.email_index['race2@test.com']
-#=> 'e9'
+#=> 'e8'
 
 ## find_by returns nil for orphaned index entries (object never saved)
 # This is correct behavior - orphaned entries degrade gracefully to nil

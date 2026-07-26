@@ -37,3 +37,26 @@ cost: a claim that succeeds before an EXEC that dies on connection failure
 leaves an orphan index entry until the next save cleans it via dirty tracking.
 Lua enters an otherwise Lua-free gem — keep scripts small, single-key, and
 tested.
+
+## Implementation notes
+
+Implemented for `unique_index` in `HashKey#claim_field` / `#release_field`
+(`lib/familia/data_type/types/hashkey.rb`), driven by
+`Horreum#claim_unique_indexes!` from `prepare_for_save`. Three things the
+decision above did not anticipate, settled during implementation:
+
+- **The guard is load-bearing, not courtesy.** With more than one unique index
+  on a class, claiming index A and then colliding on index B strands A's value
+  on a record that never saves. `guard_unique_indexes!` reads *every* index
+  before *any* claim is written, so the common case fails before the first
+  write; for the residual race, `claim_unique_indexes!` releases the claims it
+  *created* (not ones the record already owned) before re-raising.
+- **The release side needs the same protection.** An unconditional `HDEL` lets a
+  stale in-memory value evict a claim another record now owns. Unlike the claim,
+  an ownership-checked delete needs no return value to decide anything, so it
+  *can* be queued inside the MULTI — which is what `destroy!` and the old-value
+  removal in `update_in_class_*` do.
+- **The in-MULTI HSET asserts a prior claim.** It is only sound as a
+  re-affirmation, so the mutators raise `OperationModeError` when called inside a
+  caller-opened transaction with no claim on record, rather than silently
+  reverting to the blind write.

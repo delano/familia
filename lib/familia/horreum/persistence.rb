@@ -829,6 +829,103 @@ module Familia
         end
       end
 
+      # Whether +index_name+ was claimed during the current {#prepare_for_save}.
+      #
+      # The generated +add_to_class_*+ mutators consult this before issuing the
+      # in-MULTI HSET: that write is only sound as a re-affirmation of a claim
+      # already taken server-side, so a caller who opened their own transaction
+      # without claiming gets an error instead of the old blind write.
+      #
+      # @param index_name [Symbol]
+      # @return [Boolean]
+      def unique_index_claimed?(index_name)
+        Array(@unique_index_claims).include?(index_name)
+      end
+
+      # Atomically claims this record's value in every class-level unique index.
+      #
+      # Runs OUTSIDE the save transaction (from {#prepare_for_save}), because a
+      # CAS queued inside a MULTI cannot abort the other queued commands and its
+      # verdict comes back as a Future. Once claimed, the index HSET that
+      # +persist_to_storage+ issues inside the MULTI is an idempotent
+      # re-affirmation of a value this record already owns.
+      #
+      # Claims are taken in relationship order. If a later index collides, the
+      # entries this call *created* are released before the error propagates --
+      # otherwise a two-unique-index class could permanently strand a value in
+      # the first index for a record that never got saved. Entries that were
+      # already owned by this record (+:owned+) are left alone; they predate the
+      # call and rolling them back would destroy valid state.
+      #
+      # @raise [Familia::RecordExistsError] if another record owns a value
+      # @return [void]
+      #
+      # @see Familia::HashKey#claim_field The server-side CAS.
+      # @see docs/adr/0002-watch-for-private-keys-lua-for-shared-keys.md
+      #
+      def claim_unique_indexes!
+        # Reset the ledger before anything can bail out: a claim recorded by a
+        # previous save must never vouch for this one, and this method is public
+        # so it can be reached without going through prepare_for_save.
+        @unique_index_claims = []
+
+        return unless self.class.respond_to?(:indexing_relationships)
+
+        created = []
+
+        begin
+          each_class_level_unique_index do |rel|
+            claim_method = :"claim_unique_#{rel.index_name}!"
+            next unless respond_to?(claim_method)
+
+            outcome = send(claim_method)
+            @unique_index_claims << rel.index_name
+            created << rel.index_name if outcome == :created
+          end
+        rescue StandardError
+          release_created_index_claims!(created)
+          raise
+        end
+
+        nil
+      end
+
+      # Releases index entries created earlier in a {#claim_unique_indexes!}
+      # run that then failed. Best-effort: a release that itself fails must not
+      # mask the original constraint violation.
+      #
+      # @param index_names [Array<Symbol>]
+      # @return [void]
+      def release_created_index_claims!(index_names)
+        index_names.each do |index_name|
+          release_method = :"release_unique_#{index_name}!"
+          next unless respond_to?(release_method)
+
+          begin
+            send(release_method)
+          rescue StandardError => e
+            Familia.warn <<~LOG_MESSAGE
+              [claim_unique_indexes!] Failed to release #{self.class}##{index_name} claim after a later conflict: #{e.message}. A stale entry may remain until the next save.
+            LOG_MESSAGE
+          end
+        end
+      end
+      private :release_created_index_claims!
+
+      # Yields each class-level unique indexing relationship.
+      #
+      # @yield [IndexingRelationship]
+      # @return [void]
+      def each_class_level_unique_index
+        self.class.indexing_relationships.each do |rel|
+          next unless rel.cardinality == :unique
+          next unless rel.class_level?
+
+          yield rel
+        end
+      end
+      private :each_class_level_unique_index
+
       # Validates that unique index constraints are satisfied before saving
       # This must be called OUTSIDE of transactions to allow reading current values
       #
@@ -845,15 +942,16 @@ module Familia
       #
       # @return [void]
       #
+      # @note This is a fast-fail read, not the enforcement. Two savers can both
+      #   pass it for the same value; {#claim_unique_indexes!} is what actually
+      #   settles the race. It still earns its keep by checking EVERY unique
+      #   index before any claim is written, so a collision on the second index
+      #   of a two-index class fails before the first index is touched.
+      #
       def guard_unique_indexes!
         return unless self.class.respond_to?(:indexing_relationships)
 
-        self.class.indexing_relationships.each do |rel|
-          # Only validate unique indexes (not multi_index)
-          next unless rel.cardinality == :unique
-
-          next unless rel.class_level?
-
+        each_class_level_unique_index do |rel|
           # Call the validation method if it exists
           validate_method = :"guard_unique_#{rel.index_name}!"
           send(validate_method) if respond_to?(validate_method)
@@ -993,8 +1091,15 @@ module Familia
         self.created ||= Familia.now if respond_to?(:created)
         self.updated = Familia.now if respond_to?(:updated)
 
-        # Validate unique indexes BEFORE the transaction
+        # Read-only pre-check across all unique indexes; cheap, and fails
+        # before any claim is written when a value is plainly taken.
         guard_unique_indexes!
+
+        # Take the claims server-side. This is the enforcement, and it must
+        # happen here -- outside the transaction the caller is about to open.
+        # It also resets the claim ledger the in-MULTI writes consult (see
+        # #unique_index_claimed?).
+        claim_unique_indexes!
       end
       private :prepare_for_save
 

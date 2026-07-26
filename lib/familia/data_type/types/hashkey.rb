@@ -6,6 +6,116 @@ module Familia
   class HashKey < DataType
     include DataType::CollectionBase
 
+    # Server-side compare-and-set: HSET the field only if it is unclaimed or
+    # already holds a value this caller owns.
+    #
+    # KEYS[1] is the hash; ARGV[1] the field; ARGV[2] the canonical value to
+    # write; ARGV[3..] additional values that count as "already ours" (see
+    # {#claim_field} for the legacy-encoding case). A stored value matching a
+    # non-canonical variant is rewritten to the canonical form, so a claim
+    # doubles as an in-place normalization.
+    #
+    # @return [Integer, String] 0 when newly created, 1 when re-affirmed,
+    #   or the conflicting stored value.
+    CLAIM_FIELD_SCRIPT = <<~LUA
+      local current = redis.call('HGET', KEYS[1], ARGV[1])
+      if current == false then
+        redis.call('HSET', KEYS[1], ARGV[1], ARGV[2])
+        return 0
+      end
+      for i = 2, #ARGV do
+        if current == ARGV[i] then
+          if current ~= ARGV[2] then
+            redis.call('HSET', KEYS[1], ARGV[1], ARGV[2])
+          end
+          return 1
+        end
+      end
+      return current
+    LUA
+
+    # Server-side compare-and-delete: HDEL the field only if it holds a value
+    # this caller owns. Same KEYS/ARGV shape as {CLAIM_FIELD_SCRIPT} minus the
+    # normalization (there is nothing to normalize on the way out).
+    #
+    # @return [Integer] 1 when deleted, 0 when the field was absent or owned
+    #   by someone else.
+    RELEASE_FIELD_SCRIPT = <<~LUA
+      local current = redis.call('HGET', KEYS[1], ARGV[1])
+      if current == false then
+        return 0
+      end
+      for i = 2, #ARGV do
+        if current == ARGV[i] then
+          return redis.call('HDEL', KEYS[1], ARGV[1])
+        end
+      end
+      return 0
+    LUA
+
+    # Claims +field+ for +val+, atomically, server-side.
+    #
+    # This is the enforcement half of the unique-index invariant (ADR-0002).
+    # A read-then-HSET pair cannot enforce uniqueness on a key many writers
+    # share -- two savers both read "unclaimed" and the second HSET silently
+    # overwrites the first. WATCH does not help either: its granularity is the
+    # whole key, so every concurrent save of the class aborts every other one.
+    # A single EVAL checks and writes at field granularity, conflicting only on
+    # a genuine collision, and touches exactly one key (so it is Redis Cluster
+    # safe).
+    #
+    # @param field [String, Symbol] hash field (an indexed value)
+    # @param val [Object] the value to claim it for (an identifier)
+    # @return [Symbol, Object] +:created+ when the field was unclaimed,
+    #   +:owned+ when it already held an equivalent value (normalized to the
+    #   canonical form as a side effect), or the deserialized conflicting value
+    #   when another owner holds it.
+    # @raise [Familia::OperationModeError] when called inside a transaction or
+    #   pipeline, where EVAL returns a Future and its verdict cannot be acted on.
+    #
+    # @see #release_field The matching ownership-checked delete.
+    #
+    def claim_field(field, val)
+      if Fiber[:familia_transaction] || Fiber[:familia_pipeline]
+        raise Familia::OperationModeError, <<~ERROR_MESSAGE
+          Cannot claim_field inside a transaction or pipeline: EVAL returns a Future there, so the claim's verdict cannot be checked. Claim before opening the MULTI (see ADR-0002).
+        ERROR_MESSAGE
+      end
+
+      result = dbclient.eval(
+        CLAIM_FIELD_SCRIPT, keys: [dbkey], argv: [field.to_s, *ownership_variants(val)]
+      )
+
+      return deserialize_value(result) unless result.is_a?(Integer)
+
+      update_expiration
+      result.zero? ? :created : :owned
+    end
+
+    # Deletes +field+ only if it currently holds a value equivalent to +val+.
+    #
+    # The release half of the claim protocol. An unconditional HDEL lets a
+    # stale in-memory value delete a claim another record now legitimately
+    # owns -- the same shared-key overwrite {#claim_field} closes on the way in.
+    #
+    # Unlike {#claim_field} this is safe to queue inside a MULTI: it needs no
+    # return value to decide anything, so the script's atomicity still holds
+    # at EXEC time.
+    #
+    # @param field [String, Symbol] hash field to release
+    # @param val [Object] the value the caller believes it owns
+    # @return [Integer, Redis::Future] 1 if deleted, 0 if absent or not ours
+    #
+    # @see #claim_field
+    #
+    def release_field(field, val)
+      ret = dbclient.eval(
+        RELEASE_FIELD_SCRIPT, keys: [dbkey], argv: [field.to_s, *ownership_variants(val)]
+      )
+      update_expiration
+      ret
+    end
+
     # Returns the number of fields in the hash
     # @return [Integer] number of fields
     def field_count
@@ -410,6 +520,30 @@ module Familia
     alias hpexpiretime pexpiretime_fields
 
     private
+
+    # Stored-value forms that count as "owned by +val+" for {#claim_field} and
+    # {#release_field}.
+    #
+    # The canonical form comes first (it is what gets written). Reference
+    # collections get one extra variant: the JSON-encoded string that pre-2.10.0
+    # unique_index writes left behind (`"\"u1\""` where `u1` is the identifier).
+    # Without it, a record that already owns a legacy-encoded entry would see a
+    # byte mismatch and raise a spurious conflict against itself -- the read
+    # path already tolerates that format (see
+    # DataType::Serialization#strip_legacy_json_encoding), so the CAS must too.
+    #
+    # @param val [Object] the value whose ownership is being asserted
+    # @return [Array<String>] serialized forms, canonical first
+    def ownership_variants(val)
+      canonical = serialize_value(val)
+      variants = [canonical]
+
+      if opts[:reference] && canonical.is_a?(String) && !Familia.legacy_json_encoded?(canonical)
+        variants << Familia::JsonSerializer.dump(canonical)
+      end
+
+      variants
+    end
 
     # Executes a hash field command with the FIELDS syntax.
     # Used internally by field-level TTL methods (Redis 7.4+).
