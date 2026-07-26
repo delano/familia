@@ -23,11 +23,11 @@ module Familia
         # When Domain calls: participates_in Customer, :domains
         #
         # Customer instances (TARGET) get these methods:
-        # ├── domains                           # Get the domains collection
-        # ├── add_domain(domain, score)        # Add a domain to my collection
-        # ├── remove_domain(domain)            # Remove a domain from my collection
-        # ├── add_domains([...])               # Bulk add domains
-        # └── domains_with_permission(level)   # Query with score filtering (sorted_set only)
+        # ├── domains                              # Get the domains collection
+        # ├── add_domains_instance(domain, score)  # Add one domain to my collection
+        # ├── remove_domains_instance(domain)      # Remove one domain from my collection
+        # ├── add_domains([...])                   # Bulk add domains
+        # └── domains_with_permission(flag)        # Query by permission flag (sorted_set only)
         module Builder
           extend CollectionOperations
 

@@ -43,10 +43,10 @@ module Familia
     #   end
     #
     # @example Generated methods (collision-free)
-    #   # Participation methods
-    #   Customer.domains                    # => Familia::SortedSet
-    #   Customer.add_domain(domain, score)  # Add to customer's domains
-    #   domain.in_customer_domains?(customer) # Check membership
+    #   # Participation methods (instance-level on the target)
+    #   customer.domains                              # => Familia::SortedSet
+    #   customer.add_domains_instance(domain, score)  # Add to customer's domains
+    #   domain.in_customer_domains?(customer)         # Check membership
     #
     #   # Indexing methods
     #   Customer.find_by_display_name(name) # O(1) lookup
@@ -65,8 +65,8 @@ module Familia
     #   decoded = domain.permission_decode(score)
     #   # => { timestamp: 1704067200, permissions: 4, permission_list: [:write] }
     #
-    #   # Query with permission filtering
-    #   Customer.domains_with_permission(:read)
+    #   # Query with permission filtering (atomic flags only, never role names)
+    #   customer.domains_with_permission(:read)
     #
     # @example Multi-collection operations
     #   # Atomic updates across multiple collections
