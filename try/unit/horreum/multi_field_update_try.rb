@@ -243,6 +243,31 @@ stored = @guarded.dbclient.hget(@guarded.dbkey, 'api_key')
 [@guarded.dbclient.hexists(@guarded.dbkey, 'api_key'), @guarded.dbclient.hget(@guarded.dbkey, 'label')]
 #=> [false, '"fast-label"']
 
+## Duck-typed impostor is rejected: an object merely exposing #encrypted_value
+## satisfies serialize_value, so accepting the interface rather than the
+## ConcealedString type would persist its return value verbatim
+@impostor = Struct.new(:encrypted_value).new('PLAINTEXT-VIA-DUCK-TYPE')
+begin
+  @guarded.multi_field_update(api_key: @impostor)
+  :not_rejected
+rescue ArgumentError => e
+  e.message.include?('cannot be written from a')
+end
+#=> true
+
+## multi_field_fast_write rejects the duck-typed impostor too
+begin
+  @guarded.multi_field_fast_write(api_key: @impostor)
+  :not_rejected
+rescue ArgumentError
+  :rejected
+end
+#=> :rejected
+
+## Neither impostor call left plaintext in the database
+@guarded.dbclient.hget(@guarded.dbkey, 'api_key').to_s.include?('PLAINTEXT-VIA-DUCK-TYPE')
+#=> false
+
 # Teardown: Clean up test data
 @customer.destroy! rescue nil
 @guarded.destroy! rescue nil
