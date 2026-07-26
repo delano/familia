@@ -152,6 +152,28 @@ end
 raised
 #=> true
 
+## The undeclared-field message names the offender and the actual boundary:
+## declared-on-the-class, not a particular field DSL -- encrypted and
+## feature-registered fields are declared fields and pass this guard
+begin
+  @guarded.multi_field_update(nonexistent_field: 'value')
+  :not_rejected
+rescue ArgumentError => e
+  [e.message.include?('nonexistent_field'),
+   e.message.include?('Mass assignment is limited to fields declared on the class')]
+end
+#=> [true, true]
+
+## An encrypted field is a declared field: it clears this guard and is
+## rejected later, by the persistable-field guard, for the plaintext
+begin
+  @guarded.multi_field_update(api_key: 'plaintext')
+  :not_rejected
+rescue ArgumentError => e
+  [e.message.include?('Undeclared'), e.message.include?('Encrypted field api_key')]
+end
+#=> [false, true]
+
 ## multi_field_update works after fresh load
 fresh = Customer.find_by_id(@customer.custid)
 fresh.multi_field_update(name: 'Fresh Update')

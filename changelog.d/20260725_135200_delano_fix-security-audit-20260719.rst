@@ -99,7 +99,7 @@ Documentation
   ``encrypted_field`` and feature-registered fields — so the message named the
   wrong boundary for anyone debugging an undeclared-field error. It now states
   only what the guard checks: the name is not a declared field. Per-field-type
-  write policy stays with ``guard_batch_writable!``.
+  write policy stays with ``guard_persistable_fields!``.
 
 - Documented ``PERMISSION_CATEGORIES`` and permission tiers as the third and
   fourth symbol namespaces, and the collision between them. ``category?`` is a

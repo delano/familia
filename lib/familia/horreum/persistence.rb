@@ -815,8 +815,10 @@ module Familia
       # (field_method_map), whichever DSL declared it -- `field`,
       # `encrypted_field`, `transient_field`, or a feature that registers its
       # own (objid, extid). This guard answers "is this a field?" and nothing
-      # more; whether a declared field may actually be written in a batch is
-      # guard_batch_writable!'s decision.
+      # more; whether a declared field may actually be persisted by a batch
+      # write is guard_persistable_fields!'s decision, and only the batch-write
+      # methods call it -- apply_fields runs this guard alone, so a transient
+      # field passed there reaches its setter and stays in memory.
       #
       # @param names [Array<Symbol, String>] field names to validate
       # @raise [ArgumentError] if any name is not a declared field
