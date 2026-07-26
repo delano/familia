@@ -836,7 +836,10 @@ module Familia
       # - Encrypted fields must never receive raw plaintext: serialize_value
       #   would store it verbatim. Only nil (field deletion) or an actual
       #   ConcealedString -- the type returned by the encrypted field getter --
-      #   is accepted.
+      #   is accepted. This checks the type, not its provenance: a
+      #   ConcealedString belonging to another record or field is accepted
+      #   here and will fail its AAD check on decrypt. The setter path
+      #   (belongs_to_context?) is what validates provenance.
       #
       # The ConcealedString check is a type check, not a duck type check. Any
       # object exposing #encrypted_value would satisfy serialize_value and be

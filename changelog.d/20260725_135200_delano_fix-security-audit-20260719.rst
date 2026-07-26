@@ -22,14 +22,17 @@ Security
   The two symbol namespaces are now documented as distinct rather than
   interchangeable. ``PERMISSION_ROLES`` (``:viewer``, ``:editor``,
   ``:moderator``, ``:admin``) are an encode-time convenience accepted only by
-  ``encode_score``/``permission_encode``; the methods that inspect, mutate, or
-  range over bits take atomic ``PERMISSION_FLAGS`` and now reject roles with a
-  message naming the flags to use instead. Roles are deliberately not resolved
-  there: ``permission?`` tests bits individually and would answer "holds any of
-  these" where callers mean "holds all of these", and ``:admin`` differs
-  between the namespaces (flag = bit 7, role = all eight bits), so resolving it
-  would silently widen ``add_permissions(score, :admin)`` from one bit to
-  eight.
+  ``encode_score``/``permission_encode``, and only in the bare-symbol form —
+  ``encode_score(ts, :editor)`` resolves the bundle, ``encode_score(ts,
+  [:editor])`` does not. Everywhere else, atomic ``PERMISSION_FLAGS`` are the
+  currency, and a role now raises with a message naming the flags to use
+  instead. Roles are deliberately not resolved there: ``permission?`` tests
+  bits individually and would answer "holds any of these" where callers mean
+  "holds all of these", and ``:admin`` differs between the namespaces (flag =
+  bit 7, role = all eight bits), so resolving it would silently widen
+  ``add_permissions(score, :admin)`` from one bit to eight. ``:admin`` is
+  consequently the one role symbol those methods accept, since it names a flag
+  too.
 
 - Pinned ``anthropics/claude-code-action`` to the immutable v1.0.183 release
   commit SHA in both workflows holding ``CLAUDE_CODE_OAUTH_TOKEN``, replacing

@@ -143,7 +143,7 @@ require_relative '../../support/helpers/test_helpers'
 # (permission? would answer "any of" where callers mean "all of", and
 # remove_permissions(:editor) would revoke three permissions, not one).
 
-## encode_score still accepts role symbols
+## encode_score still accepts role symbols in the bare-symbol form
 @se.decode_score(@se.encode_score(@ts, :editor))[:permission_list]
 #=> [:read, :write, :edit]
 
@@ -151,18 +151,31 @@ require_relative '../../support/helpers/test_helpers'
 @se.decode_score(@se.permission_encode(@ts, :viewer))[:permissions]
 #=> 1
 
+## ...but encode_score's ARRAY form does not: it routes every element through
+## permission_level_value, so it takes atomic flags only
+@se.encode_score(@ts, [:editor])
+#=!> error.class == ArgumentError
+
+## The array form still works with atomic flags
+@se.decode_score(@se.encode_score(@ts, %i[read write edit]))[:permissions]
+#=> 13
+
 ## permission? rejects role symbols instead of resolving them
 @se.permission?(@full_score, :editor)
 #=!> error.class == ArgumentError
 
-## The rejection names the namespace and the expansion route
+## The rejection names the namespace and the atomic flags to use instead
 begin
   @se.permission_level_value(:moderator)
 rescue ArgumentError => e
   [e.message.include?('is a permission role, not a permission flag'),
-   e.message.include?('PERMISSION_ROLES.fetch(:moderator)')]
+   e.message.include?(':read, :write, :edit, :delete')]
 end
 #=> [true, true]
+
+## The remedy the message suggests actually works: named flags are accepted
+@se.decode_score(@se.add_permissions(@read_score, :write, :edit, :delete))[:permissions]
+#=> 45
 
 ## add_permissions rejects role symbols
 @se.add_permissions(@read_score, :moderator)
@@ -189,9 +202,17 @@ end
 @se.decode_score(@se.add_permissions(@se.encode_score(@ts, :none), :admin))[:permissions]
 #=> 128
 
-## Callers wanting a role's bits expand it explicitly at the call site
-@se.decode_score(@se.add_permissions(@read_score, *Familia::Features::Relationships::ScoreEncoding::PERMISSION_ROLES.fetch(:editor).then { |bits| @se.decode_permission_flags(bits) }))[:permission_list]
+## Callers wanting a role's bits name the flags, or expand the bundle through
+## decode_permission_flags -- PERMISSION_ROLES.fetch returns an Integer, which
+## only encode_score accepts
+@role_flags = @se.decode_permission_flags(@se::PERMISSION_ROLES.fetch(:editor))
+@se.decode_score(@se.add_permissions(@read_score, *@role_flags))[:permission_list]
 #=> [:read, :write, :edit]
+
+## Passing the raw Integer from PERMISSION_ROLES.fetch to a flag-taking method
+## is rejected: bits are not a flag symbol
+@se.add_permissions(@read_score, @se::PERMISSION_ROLES.fetch(:editor))
+#=!> error.class == ArgumentError
 
 ## Unknown symbols still raise, and the message lists the valid flags
 begin

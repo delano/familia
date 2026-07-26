@@ -37,10 +37,15 @@ module Familia
       #   remove_permissions, permission_range, score_range.
       # - PERMISSION_ROLES are named bundles of flags (:viewer, :editor,
       #   :moderator, :admin). They are an encode-time convenience accepted
-      #   ONLY by encode_score and permission_encode.
+      #   ONLY by encode_score and permission_encode, and only in the
+      #   bare-symbol form: encode_score(ts, :editor) resolves the bundle, but
+      #   encode_score(ts, [:editor]) does NOT -- the array form routes every
+      #   element through permission_level_value like everything else, so it
+      #   takes atomic flags only.
       #
       # Passing a role to a flag-taking method raises ArgumentError rather than
-      # resolving it. Bundles do not survive the bit operations those methods
+      # resolving it -- except :admin, which names a flag too and so resolves
+      # to bit 7 (see the overlap note below). Bundles do not survive the bit operations those methods
       # perform: permission? tests bits individually, so a bundle would answer
       # "holds any of these" where callers mean "holds all of these", and
       # remove_permissions(score, :editor) would silently revoke three
@@ -105,11 +110,12 @@ module Familia
             return flag if flag
 
             if PERMISSION_ROLES.key?(permission)
+              expansion = decode_permission_flags(PERMISSION_ROLES[permission])
               raise ArgumentError,
                     "#{permission.inspect} is a permission role, not a permission flag. " \
-                    'Roles are accepted only by encode_score/permission_encode. Pass atomic ' \
-                    "flags here (#{decode_permission_flags(PERMISSION_ROLES[permission]).map(&:inspect).join(', ')}), " \
-                    "or expand the role with PERMISSION_ROLES.fetch(#{permission.inspect})."
+                    'A role is accepted only by encode_score/permission_encode, and only in ' \
+                    "the bare-symbol form -- encode_score(timestamp, #{permission.inspect}). " \
+                    "Everywhere else, including the array form, pass atomic flags: #{expansion.map(&:inspect).join(', ')}."
             end
 
             raise ArgumentError,
