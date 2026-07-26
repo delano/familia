@@ -82,6 +82,11 @@ company1.find_by_badge_number('12345')  # => emp1
 company2.find_by_badge_number('12345')  # => emp2
 ```
 
+> **Note**: The indexed object must be persisted before it can be added to an
+> instance-scoped index. `add_to_*` and `update_in_*` raise
+> `Familia::PersistenceError` for unsaved objects, since the index entry would
+> point at a record that does not exist yet. Call `save` first.
+
 ### Generated Methods
 
 **On scope class (Company):**
@@ -399,7 +404,12 @@ Index values (the object identifiers stored in hash keys and sets) are raw strin
 **Index not updating:**
 
 - Class indexes: automatic on save/destroy
-- Instance indexes: require manual `add_to_*` calls
+- Instance indexes: require manual `add_to_*` calls on a saved object
+
+**`Familia::PersistenceError` from `add_to_*` / `update_in_*`:**
+
+- The object has never been saved; instance-scoped indexes reject unsaved
+  objects to prevent dangling entries. Call `save` before indexing.
 
 **Duplicate key errors:**
 

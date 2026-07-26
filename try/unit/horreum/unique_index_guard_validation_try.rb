@@ -132,6 +132,7 @@ end
 #=> nil
 
 ## Can add to index after guard passes
+@emp1.save  # Instance-scoped indexes require a persisted record
 @emp1.add_to_guard_company_badge_index(@company)
 @company.badge_index.has_key?('BADGE123')
 #=> true
@@ -158,6 +159,7 @@ end
 #=> nil
 
 ## Can add same badge to different company
+@emp2.save
 @emp2.add_to_guard_company_badge_index(@company2)
 @company2.badge_index.has_key?('BADGE123')
 #=> true

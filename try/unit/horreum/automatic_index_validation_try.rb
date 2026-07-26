@@ -64,6 +64,7 @@ end
 
 ## Duplicate badge is automatically rejected without manual guard call
 @emp2 = AutoValidEmployee.new(emp_id: @emp2_id, badge_number: 'BADGE123', email: 'emp2@example.com')
+@emp2.save  # Instance-scoped indexes require a persisted record
 begin
   @emp2.add_to_auto_valid_company_badge_index(@company)
   false
@@ -76,8 +77,9 @@ end
 @company.badge_index.get('BADGE123')
 #=> @emp1_id
 
-## Different badge number works fine
+## Different badge number works fine (set, save, then index)
 @emp2.badge_number = 'BADGE456'
+@emp2.save
 @emp2.add_to_auto_valid_company_badge_index(@company)
 @company.badge_index.has_key?('BADGE456')
 #=> true
@@ -93,6 +95,7 @@ end
 @company2.save
 @emp3_id = "emp_#{rand(1000000)}"
 @emp3 = AutoValidEmployee.new(emp_id: @emp3_id, badge_number: 'BADGE123', email: 'emp3@example.com')
+@emp3.save
 @emp3.add_to_auto_valid_company_badge_index(@company2)
 @company2.badge_index.has_key?('BADGE123')
 #=> true
@@ -220,6 +223,7 @@ end
 ## Manual guard call before add_to_* is redundant but harmless
 @emp7_id = "emp_#{rand(1000000)}"
 @emp7 = AutoValidEmployee.new(emp_id: @emp7_id, badge_number: 'BADGE777', email: 'emp7@example.com')
+@emp7.save
 @emp7.guard_unique_auto_valid_company_badge_index!(@company)
 @emp7.add_to_auto_valid_company_badge_index(@company)
 @company.badge_index.has_key?('BADGE777')
@@ -236,8 +240,42 @@ rescue Familia::RecordExistsError
 end
 #=> true
 
+# =============================================
+# 6. Unsaved Instances Cannot Be Indexed
+# =============================================
+
+## Unsaved instance is rejected before any write
+@emp9_id = "emp_#{rand(1000000)}"
+@emp9 = AutoValidEmployee.new(emp_id: @emp9_id, badge_number: 'BADGE900', email: 'emp9@example.com')
+begin
+  @emp9.add_to_auto_valid_company_badge_index(@company)
+  false
+rescue Familia::PersistenceError => e
+  e.message.include?('Call #save first')
+end
+#=> true
+
+## Rejection is fail-fast - no dangling entry was written to the index
+@company.badge_index.has_key?('BADGE900')
+#=> false
+
+## update_in_* is also rejected for unsaved instances
+begin
+  @emp9.update_in_auto_valid_company_badge_index(@company, 'BADGE900')
+  false
+rescue Familia::PersistenceError
+  true
+end
+#=> true
+
+## After saving, the same instance can be indexed
+@emp9.save
+@emp9.add_to_auto_valid_company_badge_index(@company)
+@company.badge_index.get('BADGE900')
+#=> @emp9_id
+
 # Teardown - clean up test objects
-[@emp1, @emp2, @emp3, @emp_nil, @emp4, @emp5, @emp6, @emp7, @emp8].compact.each do |obj|
+[@emp1, @emp2, @emp3, @emp_nil, @emp4, @emp5, @emp6, @emp7, @emp8, @emp9].compact.each do |obj|
   obj.destroy! if obj.respond_to?(:destroy!) && obj.respond_to?(:exists?) && obj.exists?
 end
 

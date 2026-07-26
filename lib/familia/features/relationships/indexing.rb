@@ -271,6 +271,26 @@ module Familia
             _index_scope_tracker.remove(entry)
           end
 
+          # Fail fast when this object has never been persisted. Called by the
+          # generated add_to_*/update_in_* methods before any write. An
+          # instance-scoped index entry stores this object's identifier, so
+          # indexing an unsaved object plants a dangling pointer in the scope's
+          # index — and if the process never saves, no tracker entry or
+          # destroy! pass can find it to clean up.
+          #
+          # Skipped inside a transaction/pipeline, where the EXISTS probe would
+          # queue into the caller's MULTI and return a Future instead of a
+          # boolean (same conservatism as DataType#warn_if_dirty!).
+          def _ensure_persisted_before_index_write!(index_name, scope_instance)
+            return if Fiber[:familia_transaction]
+            return if exists?
+
+            raise Familia::PersistenceError,
+                  "Cannot index unsaved #{self.class.name} in #{index_name} on " \
+                  "#{scope_instance.class.name}: the index entry would point to a " \
+                  'record that does not exist in the database yet. Call #save first.'
+          end
+
           def _has_instance_scoped_indexes?
             return false unless self.class.respond_to?(:indexing_relationships)
 

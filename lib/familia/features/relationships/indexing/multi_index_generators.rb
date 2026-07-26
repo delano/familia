@@ -324,6 +324,8 @@ module Familia
                 field_value = send(field)
                 return unless field_value
 
+                _ensure_persisted_before_index_write!(index_name, scope_instance)
+
                 index_set = scope_instance.send("#{index_name}_for", field_value)
                 index_set.add(identifier)
 
@@ -352,6 +354,8 @@ module Familia
                 return unless scope_instance
 
                 new_field_value = send(field)
+
+                _ensure_persisted_before_index_write!(index_name, scope_instance)
 
                 # Use Familia's transaction method for atomicity with DataType abstraction
                 scope_instance.transaction do |_tx|

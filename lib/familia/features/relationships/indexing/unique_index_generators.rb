@@ -262,6 +262,8 @@ module Familia
                 field_value = send(field)
                 return unless field_value
 
+                _ensure_persisted_before_index_write!(index_name, scope_instance)
+
                 unless Fiber[:familia_transaction]
                   guard_method = :"guard_unique_#{scope_class_config}_#{index_name}!"
                   send(guard_method, scope_instance) if respond_to?(guard_method)
@@ -326,6 +328,8 @@ module Familia
                 return unless scope_instance
 
                 new_field_value = send(field)
+
+                _ensure_persisted_before_index_write!(index_name, scope_instance)
 
                 # Use Familia's transaction method for atomicity with DataType abstraction
                 scope_instance.transaction do |_tx|
