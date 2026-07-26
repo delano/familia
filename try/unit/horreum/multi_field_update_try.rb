@@ -268,6 +268,9 @@ end
 @guarded.dbclient.hget(@guarded.dbkey, 'api_key').to_s.include?('PLAINTEXT-VIA-DUCK-TYPE')
 #=> false
 
-# Teardown: Clean up test data
+# Teardown: Clean up test data and restore the global encryption config so
+# test order is not a factor under the shared-context tryouts runner.
 @customer.destroy! rescue nil
 @guarded.destroy! rescue nil
+Familia.config.encryption_keys = nil
+Familia.config.current_key_version = nil
