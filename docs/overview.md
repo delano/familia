@@ -476,50 +476,102 @@ attempt.security_token.reveal   # => "sensitive_data"
 
 ### Permission Management
 
-The relationships feature includes a powerful permission management system:
+Permissions are not a separate subsystem with its own DSL. They are 8 bit flags
+packed into the *fractional* part of a sorted set score, alongside a timestamp in
+the integer part. A `participates_in ... type: :sorted_set` relationship is
+therefore also a permission grant, and one sorted set gives you both time-ordering
+and access control:
 
 ```ruby
-class Document < Familia::Horreum
+class Customer < Familia::Horreum
   feature :relationships
-  permission_tracking :user_permissions
-
-  field :title, :content
+  identifier_field :custid
+  field :custid
 end
 
-# Generated permission control methods
-doc.grant(user, :read, :write)           # Grant permissions to user
-doc.revoke(user, :write)                 # Revoke specific permissions
-doc.add_permission(user, :delete)        # Add to existing permissions
-doc.set_permissions(user, :read, :edit)  # Replace all permissions
+class Document < Familia::Horreum
+  feature :relationships
+  identifier_field :doc_id
+  field :doc_id
+  field :title
 
-# Generated permission query methods
-doc.can?(user, :read)                    # Check if user has permission
-doc.permissions_for(user)                # Get user's permission array
-doc.category?(user, :content_editor)     # Check permission category
-doc.permission_tier_for(user)            # Get tier: :administrator, :content_editor, :viewer, :none
+  participates_in Customer, :documents, type: :sorted_set
+end
 
-# Generated bulk operations
-doc.all_permissions                      # Hash of all users and permissions
-doc.clear_all_permissions               # Remove all permissions
-doc.users_by_category(:viewer)          # Filter users by permission level
+SE = Familia::Features::Relationships::ScoreEncoding
 
-# Generated collection filtering
-doc.accessible_items("org:123:documents")               # Get items with scores
-doc.items_by_permission("org:123:documents", :readable) # Filter by permission
-doc.permission_matrix("org:123:documents")              # Count by permission level
-doc.admin_access?(user, "org:123:documents")            # Check admin privileges
+# Grant by encoding flags into the score you add with
+customer.add_documents_instance(doc, SE.encode_score(Familia.now, [:read, :write]))
+
+# Query the collection, filtered per-member by permission bits
+customer.documents_with_permission(:write)   # => ["doc_1"]
+customer.documents_with_permission(:delete)  # => []
+customer.documents_with_permission           # defaults to :read
 ```
 
-**Permission Categories:**
-- `:viewer` - Read-only access
-- `:content_editor` - Read and edit access
-- `:administrator` - Full access including user management
+Both the target and the participant need `feature :relationships`.
+`<collection>_with_permission` is generated only for `type: :sorted_set`
+participations — a `:set` has no scores to carry permission bits — and it is an
+*instance* method on the target, not a class method.
+
+Grant through `add_<collection>_instance`, which passes an explicit score
+through untouched and also records the reverse participation index. Writing to
+`customer.documents` directly with `.add` sets the score but skips that
+bookkeeping.
+
+**Reading and changing permission bits** — these are `ScoreEncoding` module
+methods operating on a score, not on a user:
+
+```ruby
+score = SE.encode_score(Familia.now, [:read, :write])
+
+SE.decode_score(score)         # => {timestamp:, permissions: 5, permission_list: [:read, :write]}
+SE.permission?(score, :write)  # => true  (all named flags present)
+SE.add_permissions(score, :delete)
+SE.remove_permissions(score, :write)
+SE.category?(score, :content_editor)  # => true  (overlaps the category mask)
+SE.permission_tier(score)             # => :content_editor  (single bucket)
+```
+
+**Four symbol namespaces — do not mix them.** This is the most common source of
+`ArgumentError` in this API:
+
+| Namespace | Members | Accepted by |
+|---|---|---|
+| `PERMISSION_FLAGS` | `:read :append :write :edit :configure :delete :transfer :admin` | every method that inspects or mutates bits |
+| `PERMISSION_ROLES` | `:viewer :editor :moderator :admin` | `encode_score`/`permission_encode` only, and only as a bare symbol |
+| `PERMISSION_CATEGORIES` | `:readable :content_editor :administrator :privileged :owner` | `category?`, `filter_by_category`, `meets_category?` |
+| Tiers (return values) | `:administrator :content_editor :viewer :none` | returned by `permission_tier`; never an input |
+
+Passing a role where a flag is expected raises rather than silently expanding:
+
+```ruby
+SE.encode_score(Familia.now, :editor)   # => role resolves to read|write|edit
+SE.encode_score(Familia.now, [:editor]) # => ArgumentError -- array form takes flags only
+customer.documents_with_permission(:editor)  # => ArgumentError -- flags only
+customer.documents_with_permission(:edit)    # => works
+```
+
+`:admin` is deliberately in both namespaces and does *not* raise: as a role it is
+all eight bits, as a flag it is bit 7 alone.
+
+`category?` and `permission_tier` also reuse the names `:content_editor` and
+`:administrator` while asking opposite questions. `category?` tests overlap and is
+non-exclusive; `permission_tier` assigns one bucket, checking most-privileged
+first. A `:moderator` score (read|write|edit|delete) answers `true` to *every*
+category — including `:content_editor` — yet its tier is `:administrator`, because
+`:delete` falls inside the administrator mask.
 
 **Key Features:**
-- **Granular Control**: Fine-grained permission assignment per user
-- **Category-based Queries**: Efficient filtering by permission levels
-- **Bulk Operations**: Manage permissions across collections
-- **Performance Optimized**: O(1) permission checks using Valkey/Redis sorted sets
+- **Granular Control**: 8 independent flags, combinable in any pattern
+- **Category-based Queries**: Broad filtering via bitmask overlap
+- **One Structure, Two Axes**: Time ordering and permissions in a single score
+
+> Permission bits are not a contiguous score range, so they cannot be filtered
+> server-side by `ZRANGEBYSCORE`. `<collection>_with_permission` fetches members
+> with scores and tests bits per member; there is deliberately no category-based
+> score range method. For large collections, fetch a time window with `score_range`
+> and post-filter with `filter_by_category`.
 
 ## Advanced Patterns
 
