@@ -807,9 +807,16 @@ module Familia
       # Validates that all field names are declared Familia fields.
       #
       # Prevents mass-assignment of arbitrary setter methods (e.g. role=,
-      # admin=) that are not declared via the `field` or `transient` DSL.
-      # This is a defense-in-depth measure for downstream callers that may
-      # inadvertently pass unsanitized input to batch methods.
+      # admin=) that are not declared fields. This is a defense-in-depth
+      # measure for downstream callers that may inadvertently pass
+      # unsanitized input to batch methods.
+      #
+      # The allowed set is every field registered on the class
+      # (field_method_map), whichever DSL declared it -- `field`,
+      # `encrypted_field`, `transient_field`, or a feature that registers its
+      # own (objid, extid). This guard answers "is this a field?" and nothing
+      # more; whether a declared field may actually be written in a batch is
+      # guard_batch_writable!'s decision.
       #
       # @param names [Array<Symbol, String>] field names to validate
       # @raise [ArgumentError] if any name is not a declared field
@@ -822,7 +829,7 @@ module Familia
 
         raise ArgumentError,
           "Undeclared fields for #{self.class}: #{unknown.join(', ')}. " \
-          'Only fields defined with `field` or `transient` are mass-assignable.'
+          'Mass assignment is limited to fields declared on the class.'
       end
 
       # Validates that a batch of field/value pairs may be written to storage.

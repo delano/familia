@@ -93,6 +93,14 @@ Documentation
   method gave no indication that ``domains_with_permission(:editor)`` would not
   work while ``domains_with_permission(:edit)`` does.
 
+- Corrected the ``guard_allowed_fields!`` error message, which claimed "only
+  fields defined with ``field`` or ``transient`` are mass-assignable". The
+  allowed set is every field in ``field_method_map`` — including
+  ``encrypted_field`` and feature-registered fields — so the message named the
+  wrong boundary for anyone debugging an undeclared-field error. It now states
+  only what the guard checks: the name is not a declared field. Per-field-type
+  write policy stays with ``guard_batch_writable!``.
+
 - Documented ``PERMISSION_CATEGORIES`` and permission tiers as the third and
   fourth symbol namespaces, and the collision between them. ``category?`` is a
   non-exclusive overlap test — a ``:moderator`` score answers ``true`` to all
