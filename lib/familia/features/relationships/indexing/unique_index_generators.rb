@@ -504,7 +504,14 @@ module Familia
                 field_value = send(field)
                 return nil unless field_value
 
-                self.class.send(index_name).release_field(field_value.to_s, identifier)
+                ret = self.class.send(index_name).release_field(field_value.to_s, identifier)
+
+                # The claim is gone, so the ledger must stop vouching for it --
+                # otherwise a later in-MULTI write would "re-affirm" a claim
+                # this record no longer holds, over whoever took the value next.
+                forget_unique_index_claim(index_name, field_value)
+
+                ret
               end
 
               define_method(:"add_to_class_#{index_name}") do
@@ -566,15 +573,15 @@ module Familia
               end
 
               define_method(:"remove_from_class_#{index_name}") do
-                field_value = send(field)
-
-                return unless field_value
-
-                # Ownership-checked delete. A blind HDEL here lets a stale
-                # in-memory field value evict a claim another record has since
-                # taken -- the release-side twin of the TOCTOU claim_field
-                # closes on the way in.
-                self.class.send(index_name).release_field(field_value.to_s, identifier)
+                # Ownership-checked delete, and it must also clear the claim
+                # ledger -- hence the delegation rather than a bare
+                # release_field. A blind HDEL here lets a stale in-memory field
+                # value evict a claim another record has since taken (the
+                # release-side twin of the TOCTOU claim_field closes on the way
+                # in), and a release that left the ledger intact would let this
+                # record write the value back over the new owner from inside a
+                # later transaction.
+                send(:"release_unique_#{index_name}!")
               end
 
               define_method(:"update_in_class_#{index_name}") do |old_field_value = nil|
@@ -600,8 +607,14 @@ module Familia
                 self.class.transaction do |_tx|
                   index_hash = self.class.send(index_name) # Access the class-level hashkey DataType
 
-                  # Release old value if provided (ownership-checked)
-                  index_hash.release_field(old_field_value.to_s, identifier) if old_field_value
+                  # Release old value if provided (ownership-checked). The
+                  # forget is value-matched, so it drops a ledger entry still
+                  # pointing at the OLD value while leaving the claim on the
+                  # new one -- which is the entry the HSET below re-affirms.
+                  if old_field_value
+                    index_hash.release_field(old_field_value.to_s, identifier)
+                    forget_unique_index_claim(index_name, old_field_value)
+                  end
 
                   # Re-affirm the claimed value
                   index_hash[new_field_value.to_s] = identifier if new_field_value

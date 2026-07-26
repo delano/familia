@@ -427,14 +427,92 @@ end
 CasUser.email_cas_index['stale2@test.com']
 #=> nil
 
+## A ledger entry is a snapshot, not a reference to the record's own String
+# String#to_s returns self, so storing the value raw would let an in-place
+# mutation (downcase!, <<, strip!) rewrite the ledger in lockstep and carry a
+# value the CAS never saw past the check.
+CasUser.email_cas_index.clear
+@mut_inc = CasUser.new(uid: 'led_minc', email: 'mutate@test.com')
+@mut_inc.save
+@mut = CasUser.new(uid: 'led_mut2', email: 'mutate')
+begin
+  @mut.atomic_write { @mut.email << '@test.com' }
+  'no error'
+rescue Familia::OperationModeError
+  'refused'
+end
+#=> 'refused'
+
+## and the incumbent still owns the value
+CasUser.email_cas_index['mutate@test.com']
+#=> 'led_minc'
+
+## Releasing a claim clears the ledger entry that vouched for it
+# Otherwise the entry outlives the claim and a later in-MULTI write re-affirms
+# something this record no longer holds -- over whoever took it next.
+CasUser.email_cas_index.clear
+@rel = CasUser.new(uid: 'led_rel', email: 'released@test.com')
+@rel.save
+@rel.remove_from_class_email_cas_index
+@rel_new = CasUser.new(uid: 'led_relnew', email: 'released@test.com')
+@rel_new.save
+begin
+  CasUser.transaction { @rel.add_to_class_email_cas_index }
+  'no error'
+rescue Familia::OperationModeError
+  'refused'
+end
+#=> 'refused'
+
+## so the new owner keeps the value
+CasUser.email_cas_index['released@test.com']
+#=> 'led_relnew'
+
+## A rolled-back partial claim stops vouching too
+# claim_unique_indexes! releases the entries it created when a later index
+# collides. The ledger has to forget them in the same breath.
+CasDualUser.dual_email_index.clear
+CasDualUser.dual_handle_index.clear
+@rb_inc = CasDualUser.new(uid: 'rb_inc', email: 'rb_inc@test.com', handle: 'rb_taken')
+@rb_inc.save
+@rb2 = CasDualUser.new(uid: 'rb2', email: 'rb_free@test.com', handle: 'rb_taken')
+begin
+  @rb2.send(:claim_unique_indexes!)
+rescue Familia::RecordExistsError
+  nil
+end
+@rb2.send(:unique_index_claims)
+#=> {}
+
+## A copy that was given a new identifier cannot spend the original's claim
+# #dup shallow-copies ivars, so the copy shares the very same ledger Hash. The
+# recorded identifier is what keeps it from re-affirming as someone else.
+CasUser.email_cas_index.clear
+@orig = CasUser.new(uid: 'led_orig', email: 'dup@test.com')
+@orig.save
+@copy = @orig.dup
+@copy.uid = 'led_copy'
+begin
+  CasUser.transaction { @copy.add_to_class_email_cas_index }
+  'no error'
+rescue Familia::OperationModeError
+  'refused'
+end
+#=> 'refused'
+
+## so the original keeps the value
+CasUser.email_cas_index['dup@test.com']
+#=> 'led_orig'
+
 # ========================================
 # Teardown
 # ========================================
 
 @teardown_ids = %w[save1 save2 save3 race_a race_b txn1 txn2 own stale aw1 aw2 aw3 aw4 aw5
-                   led_ok led_nil led_inc led_mut led_stale]
+                   led_ok led_nil led_inc led_mut led_stale led_minc led_mut2
+                   led_rel led_relnew led_orig led_copy]
 @teardown_ids.each { |uid| CasUser.new(uid: uid).destroy! rescue nil }
-%w[inc part oth].each { |uid| CasDualUser.new(uid: uid).destroy! rescue nil }
+%w[inc part oth rb_inc rb2].each { |uid| CasDualUser.new(uid: uid).destroy! rescue nil }
 CasUser.email_cas_index.clear
 CasDualUser.dual_email_index.clear
 CasDualUser.dual_handle_index.clear

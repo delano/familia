@@ -859,12 +859,21 @@ module Familia
       def unique_index_claimed?(index_name, field_value)
         return false if field_value.nil?
 
-        unique_index_claims[index_name] == field_value.to_s
+        claim = unique_index_claims[index_name]
+        return false unless claim
+
+        # Both halves matter. The value half is the point of the ledger. The
+        # identifier half keeps a copied instance from spending the original's
+        # claim: #dup shallow-copies ivars, so a dup shares this very Hash, and
+        # a Marshal round-trip carries it along too. A copy that kept the same
+        # identifier is the same owner and may re-affirm; one that was given a
+        # new identifier owns nothing.
+        claim[0] == identifier.to_s && claim[1] == field_value.to_s
       end
 
-      # The claim ledger: { index_name => claimed value (String) }.
+      # The claim ledger: { index_name => [identifier, claimed value] }.
       #
-      # @return [Hash{Symbol => String}]
+      # @return [Hash{Symbol => Array(String, String)}]
       def unique_index_claims
         @unique_index_claims ||= {}
       end
@@ -877,14 +886,42 @@ module Familia
       # legal -- is enough on its own. {#claim_unique_indexes!} resets the
       # ledger and then relies on the same recording.
       #
+      # The value is snapshotted, not referenced: +String#to_s+ returns +self+,
+      # so storing it raw would let an in-place mutation of the record's own
+      # field (+email.downcase!+, +email << suffix+) rewrite the ledger entry in
+      # lockstep and smuggle a value the CAS never saw past the check.
+      #
       # @param index_name [Symbol]
       # @param field_value [Object]
       # @return [void]
       def record_unique_index_claim(index_name, field_value)
-        unique_index_claims[index_name] = field_value.to_s
+        unique_index_claims[index_name] = [-identifier.to_s, -field_value.to_s]
         nil
       end
       private :record_unique_index_claim
+
+      # Drops the ledger entry for +index_name+ when it records +field_value+.
+      #
+      # A ledger entry asserts "this record holds a server-side claim on this
+      # value". Releasing the claim without dropping the entry leaves the
+      # assertion false, and a later in-transaction write would re-affirm a
+      # claim that no longer exists -- reinstating the blind write over whoever
+      # legitimately took the value in the meantime.
+      #
+      # Value-matched, because +update_in_class_*+ releases the OLD value while
+      # the ledger legitimately holds a claim on the NEW one.
+      #
+      # @param index_name [Symbol]
+      # @param field_value [Object] the value being released
+      # @return [void]
+      def forget_unique_index_claim(index_name, field_value)
+        return if field_value.nil?
+
+        claim = unique_index_claims[index_name]
+        unique_index_claims.delete(index_name) if claim && claim[1] == field_value.to_s
+        nil
+      end
+      private :forget_unique_index_claim
 
       # Atomically claims this record's value in every class-level unique index.
       #

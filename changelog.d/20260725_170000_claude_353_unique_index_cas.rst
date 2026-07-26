@@ -69,7 +69,18 @@ Changed
   that opens its own transaction after changing one, must either set the field
   before the block or call ``claim_unique_<index>!`` outside the ``MULTI`` --
   that per-index claim records its own ledger entry and is sufficient on its
-  own. #353
+  own. This includes ``update_all_indexes``, which routes to
+  ``update_in_class_<index>``. #353
+
+  A ledger entry records the claiming identifier alongside a *snapshot* of the
+  value, and is dropped as soon as the claim is released
+  (``remove_from_class_<index>``, ``release_unique_<index>!``, the old-value
+  side of ``update_in_class_<index>``, and the partial-claim rollback). Each
+  half closes a way the entry could otherwise outlive what it asserts: an
+  in-place mutation of the record's own field (``email << suffix``) would
+  rewrite a referenced value in lockstep, a released claim would still read as
+  held, and a ``dup``'d instance shares the ledger Hash and could spend the
+  original's claim under a new identifier. #353
 
 - ``guard_unique_indexes!`` is retained and is load-bearing rather than
   redundant: it checks every unique index *before* any claim is written, so the
