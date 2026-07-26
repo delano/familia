@@ -274,8 +274,37 @@ end
 @company.badge_index.get('BADGE900')
 #=> @emp9_id
 
+## Class-level add_to_class_* is also rejected for unsaved instances
+@emp10_id = "emp_#{rand(1000000)}"
+@emp10 = AutoValidEmployee.new(emp_id: @emp10_id, badge_number: 'BADGE1000', email: 'emp10@example.com')
+begin
+  @emp10.add_to_class_email_index
+  false
+rescue Familia::PersistenceError => e
+  e.message.include?('class-level email_index')
+end
+#=> true
+
+## Rejection is fail-fast - no dangling entry in the class-level index
+AutoValidEmployee.email_index.has_key?('emp10@example.com')
+#=> false
+
+## Class-level update_in_class_* is also rejected for unsaved instances
+begin
+  @emp10.update_in_class_email_index('old@example.com')
+  false
+rescue Familia::PersistenceError
+  true
+end
+#=> true
+
+## Saving still auto-populates the class-level index (guard skips in-transaction)
+@emp10.save
+AutoValidEmployee.email_index.get('emp10@example.com')
+#=> @emp10_id
+
 # Teardown - clean up test objects
-[@emp1, @emp2, @emp3, @emp_nil, @emp4, @emp5, @emp6, @emp7, @emp8, @emp9].compact.each do |obj|
+[@emp1, @emp2, @emp3, @emp_nil, @emp4, @emp5, @emp6, @emp7, @emp8, @emp9, @emp10].compact.each do |obj|
   obj.destroy! if obj.respond_to?(:destroy!) && obj.respond_to?(:exists?) && obj.exists?
 end
 

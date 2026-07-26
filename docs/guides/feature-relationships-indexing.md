@@ -83,9 +83,11 @@ company2.find_by_badge_number('12345')  # => emp2
 ```
 
 > **Note**: The indexed object must be persisted before it can be added to an
-> instance-scoped index. `add_to_*` and `update_in_*` raise
+> index. `add_to_*`/`update_in_*` (instance-scoped) and
+> `add_to_class_*`/`update_in_class_*` (class-level) raise
 > `Familia::PersistenceError` for unsaved objects, since the index entry would
-> point at a record that does not exist yet. Call `save` first.
+> point at a record that does not exist yet. Call `save` first — for
+> class-level indexes, `save` populates the index automatically anyway.
 
 ### Generated Methods
 
@@ -406,10 +408,11 @@ Index values (the object identifiers stored in hash keys and sets) are raw strin
 - Class indexes: automatic on save/destroy
 - Instance indexes: require manual `add_to_*` calls on a saved object
 
-**`Familia::PersistenceError` from `add_to_*` / `update_in_*`:**
+**`Familia::PersistenceError` from `add_to_*` / `update_in_*` (including `*_class_*` variants):**
 
-- The object has never been saved; instance-scoped indexes reject unsaved
-  objects to prevent dangling entries. Call `save` before indexing.
+- The object has never been saved; index writers reject unsaved objects to
+  prevent dangling entries. Call `save` before indexing (class-level indexes
+  populate automatically on save).
 
 **Duplicate key errors:**
 

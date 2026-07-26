@@ -433,6 +433,8 @@ module Familia
 
                 return unless field_value
 
+                _ensure_persisted_before_index_write!(index_name)
+
                 # Just set the value - uniqueness should be validated before save
                 index_hash[field_value.to_s] = identifier
               end
@@ -469,6 +471,8 @@ module Familia
 
               define_method(:"update_in_class_#{index_name}") do |old_field_value = nil|
                 new_field_value = send(field)
+
+                _ensure_persisted_before_index_write!(index_name)
 
                 # Use class-level transaction for atomicity with DataType abstraction
                 self.class.transaction do |_tx|

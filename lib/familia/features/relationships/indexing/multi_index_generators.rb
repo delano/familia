@@ -547,6 +547,8 @@ module Familia
                 field_value = send(field)
                 return unless field_value && !field_value.to_s.strip.empty?
 
+                _ensure_persisted_before_index_write!(index_name)
+
                 index_set = self.class.send("#{index_name}_for", field_value)
                 index_set.add(identifier)
               end
@@ -570,6 +572,8 @@ module Familia
 
                 new_field_value = send(field)
                 return if old_field_value == new_field_value
+
+                _ensure_persisted_before_index_write!(index_name)
 
                 # Get the index sets for old and new values
                 old_set = self.class.send("#{index_name}_for", old_field_value)
