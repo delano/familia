@@ -89,6 +89,86 @@ company2.find_by_badge_number('12345')  # => emp2
 > point at a record that does not exist yet. Call `save` first — for
 > class-level indexes, `save` populates the index automatically anyway.
 
+### Automatic Refresh and Cleanup
+
+The *first* `add_to_*` is manual — `save` has no scope instance to invent one
+from. After that the membership is maintained automatically: each
+`add_to_*`/`update_in_*` records it in a per-object reverse index tracker — a
+hash stored at `<object_key>:_idx_scopes` that maps
+an entry key to the field value written into the index. The key's shape
+follows the index's cardinality — unique indexes are 1:1 within a scope, so
+the `"<scope_config>\t<index_name>\t<scope_id>"` triple is the whole identity;
+multi indexes are 1:many, so the value is appended and each bucket the object
+occupies gets its own entry:
+
+```ruby
+emp1.add_to_company_badge_index(company1)
+# unique: { "company\tbadge_index\t<company1 id>" => "12345" }
+
+emp1.add_to_company_dept_index(company1)
+# multi:  { "company\tdept_index\t<company1 id>\tengineering" => "engineering" }
+
+emp1.destroy!
+company1.find_by_badge_number('12345')  # => nil
+```
+
+Both `save` and `destroy!` read the tracker before opening their transaction
+(reads inside MULTI return futures, not values), then replay the writes inside
+it, so index maintenance commits atomically with the object hash.
+
+**Refresh on save.** Changing an indexed field and saving moves the tracked
+entry — the old value is retracted, so it becomes reusable:
+
+```ruby
+emp1.badge_number = '99999'
+emp1.save
+
+company1.find_by_badge_number('12345')  # => nil  (retracted)
+company1.find_by_badge_number('99999')  # => emp1
+```
+
+This runs inside save's transaction, where dirty tracking is still live — that
+is what supplies the previous value to retract. Only scopes already registered
+via `add_to_*` are refreshed. Uniqueness is validated first, outside the
+transaction: if the new value is already taken in that scope, `save` raises
+`Familia::RecordExistsError` and the index is left untouched, exactly as a
+class-level `unique_index` behaves.
+
+> **`atomic_write` does not refresh instance-scoped indexes.** It calls the
+> shared persistence path from inside a MULTI it has already opened, and the
+> tracker snapshot requires a read taken *before* the transaction (reads inside
+> MULTI return futures). So scalar fields are written but instance-scoped index
+> entries keep their previous values, silently. Use `save` when an indexed
+> field changed, or call `update_in_*` explicitly after the `atomic_write`.
+
+> **multi_index refresh is add-only.** A value change adds the identifier to
+> the new bucket but does **not** remove it from the old one, matching
+> class-level `multi_index` behavior. The object genuinely is in both buckets,
+> and the tracker records both — so `destroy!` still clears every one of them.
+> Call `update_in_*` explicitly when you want the old bucket retracted at the
+> time of the change rather than at destroy.
+
+**Cleanup on destroy.** The tracker stores the *indexed value*, not just the
+membership, so cleanup targets the bucket the entry actually lives in — not
+whatever the field happens to hold at destroy time:
+
+```ruby
+Employee.new(emp_id: emp1.identifier).destroy!  # identifier-only: no field
+                                                # values in memory, cleanup
+                                                # still finds the bucket
+```
+
+Two constraints follow from cleanup running write-only inside a transaction:
+
+- The scope instance must have an identifier when `add_to_*`/`update_in_*` is
+  called, or `Familia::NoIdentifier` is raised.
+- The scope class must use a Symbol/String `identifier_field`, since the scope
+  is rebuilt from its identifier alone during cleanup. A Proc identifier raises
+  `ArgumentError` at index time.
+
+Both are checked before the index write, so a rejected call leaves nothing
+behind.
+
 ### Generated Methods
 
 **On scope class (Company):**
@@ -221,6 +301,10 @@ sample = company.sample_from_department('engineering', 1)  # => [random engineer
 | `employee.add_to_company_dept_index(company)` | Add to company's index |
 | `employee.remove_from_company_dept_index(company)` | Remove from index |
 | `employee.update_in_company_dept_index(company, old_dept)` | Move between indexes |
+
+Instance-scoped multi-indexes are tracked, refreshed on `save`, and cleaned up
+on `destroy!` the same way unique ones are — except that refresh is add-only.
+See [Automatic Refresh and Cleanup](#automatic-refresh-and-cleanup).
 
 ## Advanced Patterns
 
@@ -406,13 +490,31 @@ Index values (the object identifiers stored in hash keys and sets) are raw strin
 **Index not updating:**
 
 - Class indexes: automatic on save/destroy
-- Instance indexes: require manual `add_to_*` calls on a saved object
+- Instance indexes: require an initial manual `add_to_*` call on a saved
+  object. After that, refresh on `save` and removal on `destroy!` are both
+  automatic (see
+  [Automatic Refresh and Cleanup](#automatic-refresh-and-cleanup)). If a
+  `multi_index` value changed, the old bucket is retained by design — use
+  `update_in_*` to retract it at change time; `destroy!` clears it either way.
 
 **`Familia::PersistenceError` from `add_to_*` / `update_in_*` (including `*_class_*` variants):**
 
 - The object has never been saved; index writers reject unsaved objects to
   prevent dangling entries. Call `save` before indexing (class-level indexes
   populate automatically on save).
+
+**`Familia::NoIdentifier` / `ArgumentError` from `add_to_*` / `update_in_*`:**
+
+- The scope instance has no identifier, uses a Proc `identifier_field`, or its
+  identifier contains a tab. In each case `destroy!` could not later rebuild
+  the scope and clean the entry up safely, so the write is refused. See
+  [Automatic Refresh and Cleanup](#automatic-refresh-and-cleanup).
+
+**`Familia::RecordExistsError` from `save` (instance-scoped index):**
+
+- Saving changed an indexed field to a value another record already holds in
+  that scope. Instance-scoped uniqueness is validated on save just as
+  class-level uniqueness is; the index is left untouched.
 
 **Duplicate key errors:**
 
