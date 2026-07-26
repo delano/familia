@@ -224,14 +224,16 @@ debug_array.map(&:to_s)
 #=> "ConcealedString"
 
 ## Debug what's actually in the database
+# Redis/Valkey do not guarantee KEYS ordering; sort for a deterministic check.
 @all_keys = Familia.dbclient.keys("*")
-@all_keys
-#=> ["secret_document:test123:object", "secret_document:instances"]
+@all_keys.sort
+#=> ["secret_document:instances", "secret_document:test123:object"]
 
 ## Check database storage - should be encrypted
+# Hash field order is encoding/version-dependent; compare as a sorted set.
 @db_hash = Familia.dbclient.hgetall("secret_document:test123:object")
-@db_hash.keys
-#=> ["id", "title", "content", "api_key"]
+@db_hash.keys.sort
+#=> ["api_key", "content", "id", "title"]
 
 ## Database storage contains encrypted string
 db_content = Familia.dbclient.hget("secret_document:test123:object", "content")

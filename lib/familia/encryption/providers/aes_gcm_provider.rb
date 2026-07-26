@@ -72,12 +72,72 @@ module Familia
           OpenSSL::Random.random_bytes(NONCE_SIZE)
         end
 
-        def derive_key(master_key, context, personal: nil)
+        # The HKDF salt used before issue #310, when the salt was a static
+        # literal. Retained ONLY as a decryption fallback (see #hkdf_salts) so
+        # data written before the salt became application-specific stays
+        # readable after upgrading. Never used to encrypt new data.
+        LEGACY_HKDF_SALT = 'FamiliaEncryption'.freeze
+
+        # Ordered list of HKDF salts to consider when DECRYPTING, current first.
+        #
+        # Decryption walks this list until the authenticated decrypt succeeds, so
+        # it is intentionally permissive: it ends with the pre-#310 static salt and
+        # tolerates a blank current salt (dropped by #compact), so existing
+        # ciphertext stays readable even if the current config is broken. Each
+        # wrong salt yields a different key and fails GCM authentication cleanly,
+        # so trying them in turn never produces a false positive.
+        #
+        # ENCRYPTION does NOT use this list's head -- see #current_hkdf_salt, which
+        # fails closed rather than silently encrypting under the legacy static salt.
+        #
+        # The salt comes from a dedicated config knob (encryption_hkdf_salt), NOT
+        # the XChaCha20 personalization. HKDF accepts a salt of any length while
+        # BLAKE2b personalization is capped at 16 bytes, so the two cipher
+        # families keep separate inputs and never constrain each other (#311).
+        def hkdf_salts
+          current = Familia.config.encryption_hkdf_salt
+          history = Familia.config.encryption_hkdf_salt_history
+          [current, *history, LEGACY_HKDF_SALT].compact.uniq
+        end
+
+        # The HKDF salt used to ENCRYPT new data.
+        #
+        # Unlike #hkdf_salts (the permissive decryption candidate list, which
+        # deliberately ends with the pre-#310 global static salt so old ciphertext
+        # stays readable), this fails CLOSED. A nil or empty encryption_hkdf_salt is
+        # a misconfiguration -- and the raw attr_writer can set one, bypassing the
+        # reader's guards -- so silently encrypting new data under the legacy global
+        # static salt would quietly withhold the #310 per-deployment domain
+        # separation. Refuse instead, so the operator notices (#311). To use the old
+        # global salt on purpose, set it explicitly as a non-empty string.
+        def current_hkdf_salt
+          salt = Familia.config.encryption_hkdf_salt
+          return salt if salt.is_a?(String) && !salt.empty?
+
+          raise EncryptionError,
+                'encryption_hkdf_salt must be a non-empty string to encrypt; refusing to ' \
+                'fall back to the legacy global HKDF salt. Set Familia.config.encryption_hkdf_salt ' \
+                'for per-deployment domain separation.'
+        end
+
+        def derive_key(master_key, context, personal: nil, salt: nil)
           validate_key_length!(master_key)
           info = personal ? "#{context}:#{personal}" : context
           OpenSSL::KDF.hkdf(
             master_key,
-            salt: 'FamiliaEncryption',
+            # Use application-specific material for the HKDF salt instead of a
+            # static library literal. A fixed global salt is shared by every
+            # deployment and weakens HKDF's extraction step / domain separation
+            # (RFC 5869). The value comes from encryption_hkdf_salt -- a dedicated
+            # AES-GCM knob, kept separate from the XChaCha20 personalization so
+            # neither cipher family constrains the other (issue #311). See #310 (S2).
+            #
+            # `salt` defaults to the current encryption salt (#current_hkdf_salt),
+            # which fails closed on a nil/blank config rather than silently using
+            # the legacy global static salt. The decrypt path passes explicit
+            # candidate salts from #hkdf_salts so existing ciphertext stays
+            # decryptable after a salt change.
+            salt: salt || current_hkdf_salt,
             info: info,
             length: 32,
             hash: 'SHA256'

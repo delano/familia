@@ -13,8 +13,12 @@ module Familia
   @encryption_keys = nil
   @current_key_version = nil
   @encryption_personalization = 'FamilialMatters'.freeze
+  @encryption_hkdf_salt = 'FamilialMatters'.freeze
+  @encryption_hkdf_salt_history = [].freeze
   @pipelined_mode = :warn
   @strict_write_order = false
+  @raise_on_unsaved_parent_write = true
+  @dirty_write_warnings = nil # nil resolves to the built-in default (:once)
 
   # Schema validation configuration
   @schema_path = nil      # Directory containing schema files (String or Pathname)
@@ -25,8 +29,9 @@ module Familia
   #
   module Settings
     attr_writer :delim, :suffix, :default_expiration, :logical_database, :prefix, :encryption_keys,
-                :current_key_version, :encryption_personalization, :transaction_mode,
-                :schema_path, :schemas, :schema_validator, :strict_write_order
+                :current_key_version, :encryption_personalization, :encryption_hkdf_salt,
+                :encryption_hkdf_salt_history, :transaction_mode, :schema_path, :schemas,
+                :schema_validator, :strict_write_order, :raise_on_unsaved_parent_write
 
     def delim(val = nil)
       @delim = val if val
@@ -70,10 +75,16 @@ module Familia
       @current_key_version
     end
 
-    # Personalization string for BLAKE2b key derivation in XChaCha20Poly1305.
-    # This provides cryptographic domain separation, ensuring derived keys are
+    # Personalization string for BLAKE2b key derivation in the XChaCha20Poly1305
+    # providers. Provides cryptographic domain separation so derived keys are
     # unique per application even with identical master keys and contexts.
-    # Must be 16 bytes or less (automatically padded with null bytes).
+    #
+    # This knob feeds BLAKE2b's `personal` parameter ONLY. BLAKE2b caps the
+    # personalization at 16 bytes (the value is null-padded to 16), so it must be
+    # <= 16 bytes. The AES-GCM provider does NOT read this string -- it has its
+    # own #encryption_hkdf_salt, which carries no length limit. Keeping the two
+    # inputs separate avoids constraining one cipher family by the other's rules
+    # (see issue #311).
     #
     # @example Familia.configure do |config|
     #     config.encryption_personalization = 'MyApp1.0'
@@ -83,11 +94,61 @@ module Familia
     # @return [String] Current personalization string
     def encryption_personalization(val = nil)
       if val
-        raise ArgumentError, 'Personalization string cannot exceed 16 bytes' if val.bytesize > 16
-
+        if val.bytesize > 16
+          raise ArgumentError,
+                'encryption_personalization cannot exceed 16 bytes (BLAKE2b personalization limit). ' \
+                'For the AES-GCM HKDF salt, which has no length limit, use encryption_hkdf_salt.'
+        end
         @encryption_personalization = val
       end
       @encryption_personalization
+    end
+
+    # HKDF salt for the AES-GCM provider's key derivation (RFC 5869). Provides
+    # per-deployment domain separation for AES-GCM, mirroring what
+    # #encryption_personalization does for the XChaCha20 (BLAKE2b) providers --
+    # but as a SEPARATE input, because HKDF accepts a salt of any length while
+    # BLAKE2b personalization is capped at 16 bytes. There is deliberately no
+    # length limit here (see issue #311).
+    #
+    # The built-in default ('FamilialMatters') is a shared library fallback: it
+    # separates Familia's keys from other HKDF users, but NOT one deployment from
+    # another. Set a value unique to each deployment to get deployment-level
+    # separation.
+    #
+    # Encryption always uses this current value; decryption tries it first, then
+    # each entry in #encryption_hkdf_salt_history, then the pre-#310 static salt,
+    # so existing ciphertext keeps decrypting across rotations and upgrades.
+    #
+    # @example Familia.configure do |config|
+    #     config.encryption_hkdf_salt = 'MyApp-AESGCM-2025'
+    #   end
+    #
+    # @param val [String, nil] The HKDF salt, or nil to get current value
+    # @return [String] Current HKDF salt
+    def encryption_hkdf_salt(val = nil)
+      @encryption_hkdf_salt = val if val
+      @encryption_hkdf_salt
+    end
+
+    # Previous #encryption_hkdf_salt values, kept so that rotating the AES-GCM
+    # HKDF salt stays backward-compatible. When you change the current salt, list
+    # the prior value(s) here so existing ciphertext can still be decrypted.
+    # Encryption always uses the current value; decryption tries the current
+    # value first, then each entry here in order. Keep the list short -- every
+    # stale salt adds a decryption attempt on a miss.
+    #
+    # @example Rotating the AES-GCM HKDF salt without losing old data
+    #   Familia.configure do |config|
+    #     config.encryption_hkdf_salt = 'MyApp-2025'
+    #     config.encryption_hkdf_salt_history = ['MyApp-2024']
+    #   end
+    #
+    # @param val [Array<String>, nil] Ordered list of prior values, or nil to read
+    # @return [Array<String>] Current history list (possibly empty)
+    def encryption_hkdf_salt_history(val = nil)
+      @encryption_hkdf_salt_history = Array(val) unless val.nil?
+      @encryption_hkdf_salt_history || []
     end
 
     # Controls transaction behavior when connection handlers don't support transactions
@@ -164,6 +225,81 @@ module Familia
     def strict_write_order(val = nil)
       @strict_write_order = val unless val.nil?
       @strict_write_order || false
+    end
+
+    # Controls whether a collection write on a DataType raises when the parent
+    # Horreum is a *new, unsaved* object — one whose hash key does not exist in
+    # the database yet. This is the most dangerous dirty-write scenario: the
+    # collection lands in Redis while none of the parent's scalar data exists,
+    # orphaning the collection if the parent is never saved.
+    #
+    # Defaults to true (raise) independently of #strict_write_order, because an
+    # orphaned-record bug is rarely what the caller intends. Set to false to
+    # downgrade to a (still distinct, still strong) warning emitted via
+    # Familia.warn instead.
+    #
+    # Note: #strict_write_order, when true, raises for *every* dirty write and
+    # therefore still raises the new-object case even if this is set to false.
+    #
+    # @param val [Boolean, nil] The setting value, or nil to get current value
+    # @return [Boolean] Current raise_on_unsaved_parent_write setting
+    #
+    # @example Downgrade the new, unsaved parent case to a warning
+    #   Familia.configure do |config|
+    #     config.raise_on_unsaved_parent_write = false
+    #   end
+    #
+    def raise_on_unsaved_parent_write(val = nil)
+      @raise_on_unsaved_parent_write = val unless val.nil?
+      # Defaults to true: an unset (nil) value means "raise". Cannot use
+      # `|| true` here -- that would coerce an explicit `false` back to true.
+      return true if @raise_on_unsaved_parent_write.nil?
+
+      @raise_on_unsaved_parent_write
+    end
+
+    # Global default for how collection writes react when the parent Horreum
+    # has unsaved scalar field changes. Acts as the fallback when a Horreum
+    # subclass does not set its own +dirty_write_warnings+ class setting.
+    #
+    # The resolved mode drives both warning and raise behavior: :warn/:once
+    # control warning frequency, :strict forces a raise, and :off suppresses
+    # everything (warnings and raises) for the class. See the precedence note
+    # below and Familia::DataType#warn_if_dirty!.
+    #
+    # @param val [Symbol, nil] The mode, or nil to read the current value
+    # @return [Symbol] Current mode (defaults to :once when unconfigured)
+    #
+    # Available modes:
+    # - :once (default): Warn once per distinct dirty-field signature within a
+    #   dirty window (deduped). A change to the dirty set warns again.
+    # - :warn: Warn on every collection write (legacy behavior).
+    # - :strict: Raise Familia::Problem on every violation.
+    # - :off: Suppress warnings entirely.
+    #
+    # Note: +Familia.strict_write_order = true+ raises for any class whose mode
+    # is not explicitly +:off+. A class-level +:off+ is authoritative -- it
+    # suppresses both warnings and raises, overriding +strict_write_order+ and
+    # +raise_on_unsaved_parent_write+. "Off means off."
+    #
+    # @example Temporarily silence all classes during a bulk import
+    #   Familia.dirty_write_warnings = :off
+    #   import_records(data)
+    #   Familia.dirty_write_warnings = :once  # restore
+    #
+    def dirty_write_warnings(val = nil)
+      unless val.nil?
+        valid = %i[strict warn once off]
+        unless valid.include?(val)
+          raise ArgumentError, "dirty_write_warnings must be one of #{valid.inspect}, got #{val.inspect}"
+        end
+        @dirty_write_warnings = val
+      end
+      @dirty_write_warnings || :once
+    end
+
+    def dirty_write_warnings=(val)
+      dirty_write_warnings(val)
     end
 
     # Directory containing schema files for JSON Schema validation.

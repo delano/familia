@@ -35,6 +35,9 @@ module Familia
     @field_groups = nil
     @current_field_group = nil
 
+    # Dirty-write warning mode (nil = inherit from superclass / Familia default)
+    @dirty_write_warnings = nil
+
     # DefinitionMethods - Class-level DSL methods for defining Horreum model structure
     #
     # This module is extended into classes that include Familia::Horreum,
@@ -215,6 +218,54 @@ module Familia
         Familia.trace :LOGICAL_DATABASE_DEF, "instvar:#{@logical_database}", num if Familia.debug?
         @logical_database = num unless num.nil?
         @logical_database || parent&.logical_database
+      end
+
+      # Sets or retrieves how collection writes on this class's DataTypes react
+      # when the parent instance has unsaved scalar field changes.
+      #
+      # Mirrors +Familia.strict_write_order+ but is scoped to a single Horreum
+      # subclass, so seed scripts, bulk importers, and known-safe call sites can
+      # opt down without touching the global setting.
+      #
+      # Resolution order (highest precedence first):
+      # 1. Active +atomic_write+ block -- suppresses everything.
+      # 2. Class-level +:off+ -- suppresses both warnings AND raises, overriding
+      #    +strict_write_order+ and +raise_on_unsaved_parent_write+. "Off means off."
+      # 3. Raise gates: +Familia.strict_write_order = true+, class +:strict+, or a
+      #    new/unsaved parent when +raise_on_unsaved_parent_write+ is true.
+      # 4. Otherwise warn per the resolved mode: this class-level setting
+      #    (inherited through the subclass chain), else
+      #    +Familia.dirty_write_warnings+ (:once when unset).
+      #
+      # @param mode [Symbol, nil] one of :strict, :warn, :once, :off, or nil to read
+      # @return [Symbol] the resolved mode
+      #
+      # - :strict - raise Familia::Problem (overrides global strict_write_order=false)
+      # - :warn   - warn on every collection write (legacy behavior)
+      # - :once   - warn once per distinct dirty-field signature per window [default]
+      # - :off    - suppress entirely for this class
+      #
+      # @example Silence a seed subclass
+      #   class SeedPlan < Billing::Plan
+      #     dirty_write_warnings :off
+      #   end
+      #
+      def dirty_write_warnings(mode = nil)
+        unless mode.nil?
+          valid = %i[strict warn once off]
+          unless valid.include?(mode)
+            raise ArgumentError, "dirty_write_warnings must be one of #{valid.inspect}, got #{mode.inspect}"
+          end
+          return @dirty_write_warnings = mode
+        end
+
+        @dirty_write_warnings ||
+          (superclass.respond_to?(:dirty_write_warnings) ? superclass.dirty_write_warnings : nil) ||
+          Familia.dirty_write_warnings
+      end
+
+      def dirty_write_warnings=(mode)
+        dirty_write_warnings(mode)
       end
 
       # Returns the list of field names defined for the class in the order

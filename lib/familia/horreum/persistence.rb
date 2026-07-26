@@ -79,6 +79,24 @@ module Familia
       #   user = User.new(email: "john@example.com")
       #   user.save  # => true
       #
+      # @example Post-save callback (idiomatic Ruby)
+      #   if user.save
+      #     AuditLog.record(:user_updated, user.identifier)
+      #     notify(user)
+      #   end
+      #
+      # @example Single-expression short-circuit
+      #   user.save && AuditLog.record(:user_updated, user.identifier)
+      #
+      # @note This is a FULL-OVERWRITE of the object's scalar state: afterwards
+      #   the stored hash matches the in-memory object exactly. Non-nil fields are
+      #   written and fields that are nil in memory are removed from storage. A
+      #   field managed out of band -- e.g. one claimed by another actor via
+      #   HSETNX while this (possibly stale) copy still holds nil for it -- is
+      #   therefore cleared by a full save. To update an object without disturbing
+      #   such fields, use the targeted writers ({#save_fields},
+      #   {#multi_field_update}, {#multi_field_fast_write}) or {#refresh!} first.
+      #
       # @see #save_if_not_exists! For conditional saves
       # @see #transaction For atomic operations after save
       #
@@ -135,10 +153,10 @@ module Familia
         end
 
         # Clear dirty tracking after successful save
-        clear_dirty! unless result.nil?
+        clear_dirty! if persisted_successfully?(result)
 
         # Return boolean indicating success
-        !result.nil?
+        persisted_successfully?(result)
       end
 
       # Saves scalar fields first, then executes collection operations in the block.
@@ -188,22 +206,29 @@ module Familia
 
       # Conditionally persists object only if it doesn't already exist in storage.
       #
-      # Uses optimistic locking (WATCH) to atomically check existence and save.
-      # If the object doesn't exist, performs identical operations as save.
-      # If it exists, raises an error with retry logic for optimistic lock failures.
+      # Uses optimistic locking (WATCH + MULTI/EXEC on a single connection) to
+      # guard the existence check against the save. If the object doesn't exist,
+      # performs identical operations as save. If it exists, raises an error;
+      # concurrent modification of the watched key aborts EXEC and retries.
       #
       # `save_if_not_exists` doesn't call save because of the gap between checking
       # existence and persisting the data. We can't check for existence inside the
       # transaction because commands are queued and not executed until EXEC
       # is called (if you try you get a Redis::Future object). So here we use a
       # WATCH + MULTI/EXEC pattern to fail the transaction if the key is created
-      # (or modified in any way) to avoid silent data corruption♀︎.
+      # (or modified in any way) between the check and EXEC, avoiding silent data
+      # corruption♀︎. The WATCH and the MULTI/EXEC run on the SAME resolved
+      # connection (see TransactionCore.execute_watched_transaction) -- this is
+      # what makes the optimistic lock effective; split across connections it
+      # would be inert.
 
       # ♀︎ Additional note about WATCH + MULTI/EXEC in Valkey/Redis or any two
-      # step existence check in any database: although it is more cautious,
-      # it is not atomic. The only way to do that is if the database process
-      # can determine itself whether the record already exists or not. For
-      # Valkey/Redis, that means writing the lua to do that.
+      # step existence check in any database: although it is more cautious and,
+      # on a single connection, a genuine optimistic lock (a concurrent write to
+      # the watched key aborts EXEC), it is still not a server-side atomic check.
+      # The only way to do that is if the database process can determine itself
+      # whether the record already exists or not. For Valkey/Redis, that means
+      # writing the lua to do that.
       #
       # @param update_expiration [Boolean] Whether to refresh key expiration (default: true)
       # @return [Boolean] true on successful save
@@ -232,36 +257,27 @@ module Familia
         # Prepare object for persistence (timestamps, validation)
         prepare_for_save
 
-        attempts = 0
-        begin
-          attempts += 1
+        # Drive WATCH + MULTI/EXEC through a SINGLE resolved connection so the
+        # optimistic lock is effective (the primitive owns abort detection and
+        # retry). The existence check runs in the WATCH window: if the key is
+        # created between WATCH and EXEC, Redis aborts and the primitive retries.
+        result = Familia::Connection::TransactionCore.execute_watched_transaction(
+          -> { dbclient }, watch_keys: [dbkey]
+        ) do |conn|
+          raise Familia::RecordExistsError, dbkey if exists?
 
-          result = watch do
-            raise Familia::RecordExistsError, dbkey if exists?
-
-            txn_result = transaction do |_multi|
-              persist_to_storage(update_expiration)
-            end
-
-            Familia.debug "[save_if_not_exists]: txn_result=#{txn_result.inspect}"
-
-            txn_result
+          Familia::Connection::TransactionCore.execute_normal_transaction(-> { conn }) do |_m|
+            persist_to_storage(update_expiration)
           end
-
-          Familia.debug "[save_if_not_exists]: result=#{result.inspect}"
-
-          # Clear dirty tracking after successful save
-          clear_dirty! unless result.nil?
-
-          # Return boolean indicating success (consistent with save method)
-          !result.nil?
-        rescue OptimisticLockError => e
-          Familia.debug "[save_if_not_exists]: OptimisticLockError (#{attempts}): #{e.message}"
-          raise if attempts >= 3
-
-          sleep(0.001 * (2**attempts))
-          retry
         end
+
+        Familia.debug "[save_if_not_exists]: result=#{result.inspect}"
+
+        # Clear dirty tracking after successful save
+        clear_dirty! if persisted_successfully?(result)
+
+        # Return boolean indicating success (consistent with save method)
+        persisted_successfully?(result)
       end
 
       # Non-raising variant of save_if_not_exists!
@@ -312,24 +328,49 @@ module Familia
         Familia.debug "[commit_fields] Begin #{self.class} #{dbkey} #{prepared_value} (exp: #{update_expiration})"
 
         result = transaction do |_conn|
-          # Set all fields atomically
-          result = hmset(prepared_value)
+          # Set all non-nil fields atomically
+          hmset_result = hmset(prepared_value)
+
+          # Remove any fields cleared to nil so their prior stored value is not
+          # left stale (HMSET never deletes omitted fields).
+          remove_stale_nil_fields
 
           # Update expiration in same transaction to ensure atomicity
-          self.update_expiration if result && update_expiration
+          self.update_expiration if hmset_result && update_expiration
 
-          # Touch instances timeline so the object is visible
-          # to list-based enumeration (instances.to_a, count, etc.)
-          touch_instances! if result
+          # Touch instances timeline so the object is visible to list-based
+          # enumeration (instances.to_a, count, etc.). Skip it when nothing was
+          # persisted and no hash key exists -- otherwise the identifier is
+          # registered in `instances` pointing at a missing hash (see
+          # {#persist_to_storage}).
+          touch_instances! if hmset_result && !prepared_value.empty?
 
-          result
+          hmset_result
         end
 
         # Clear dirty tracking after successful commit
-        clear_dirty! unless result.nil?
+        clear_dirty! if persisted_successfully?(result)
 
         result
       end
+
+      # Whether a persistence MULTI/EXEC committed cleanly. A MultiResult is
+      # successful when no queued command returned an Exception; a nil result
+      # (e.g. a discarded/aborted transaction) is a failure. Shared by save,
+      # save_if_not_exists!, commit_fields, and multi_field_update so they all
+      # interpret the transaction result the same way -- a partial-command
+      # failure must not clear dirty state or report success. Mirrors
+      # AtomicWrite#atomic_write_success?.
+      #
+      # @param result [MultiResult, nil]
+      # @return [Boolean]
+      def persisted_successfully?(result)
+        return false if result.nil?
+        return result.successful? if result.is_a?(Familia::MultiResult)
+
+        true
+      end
+      private :persisted_successfully?
 
       # Updates multiple fields atomically in a Database transaction.
       #
@@ -351,10 +392,15 @@ module Familia
         Familia.trace :MULTI_FIELD_UPDATE, nil, fields.keys if Familia.debug?
 
         result = transaction do |_conn|
-          # 1. Update all fields atomically (Redis only, no in-memory mutation)
+          # 1. Update all fields atomically (Redis only, no in-memory mutation).
+          # A nil value deletes the field rather than storing "null", so absence
+          # stays authoritative (see Serialization#to_h_for_storage).
           fields.each do |field, value|
-            prepared_value = serialize_value(value)
-            hset field, prepared_value
+            if value.nil?
+              remove_field(field)
+            else
+              hset field, serialize_value(value)
+            end
           end
 
           # 2. Update expiration in same transaction
@@ -409,14 +455,23 @@ module Familia
 
         Familia.trace :MULTI_FIELD_FAST_WRITE, nil, fields.keys if Familia.debug?
 
-        # Serialize values before the transaction (read-only on instance)
+        # Serialize values before the transaction (read-only on instance).
+        # A nil value deletes the field rather than storing "null" (see
+        # Serialization#to_h_for_storage), so split writes from removals.
         serialized = {}
+        nil_fields = []
         fields.each do |field, value|
-          serialized[field] = serialize_value(value)
+          if value.nil?
+            nil_fields << field.to_s
+          else
+            serialized[field] = serialize_value(value)
+          end
         end
 
         result = transaction do |_conn|
           hmset(serialized)
+
+          dbclient.hdel(dbkey, *nil_fields) unless nil_fields.empty?
 
           update_expiration if update_exp
 
@@ -453,19 +508,28 @@ module Familia
         Familia.trace :SAVE_FIELDS, nil, field_names if Familia.debug?
 
         result = transaction do |_conn|
-          # Build hash of field names to serialized values
+          # Build hash of non-nil field values; collect nil'd fields for removal.
+          # A nil field is deleted rather than stored as "null" so that absence
+          # stays authoritative (see Serialization#to_h_for_storage).
           fields_hash = {}
+          nil_fields = []
           field_names.each do |field|
             field_sym = field.to_sym
             raise ArgumentError, "Unknown field: #{field}" unless respond_to?(field_sym)
 
             value = send(field_sym)
-            prepared_value = serialize_value(value)
-            fields_hash[field] = prepared_value
+            if value.nil?
+              nil_fields << field.to_s
+            else
+              fields_hash[field] = serialize_value(value)
+            end
           end
 
-          # Set all fields at once using hmset
+          # Set all non-nil fields at once (hmset no-ops on an empty hash)
           hmset(fields_hash)
+
+          # Remove any nil'd fields so their prior stored value does not linger
+          dbclient.hdel(dbkey, *nil_fields) unless nil_fields.empty?
 
           # Update expiration in same transaction
           self.update_expiration if update_expiration
@@ -475,7 +539,7 @@ module Familia
           touch_instances!
         end
 
-        clear_dirty!(*field_names) unless result.nil?
+        clear_dirty!(*field_names) if persisted_successfully?(result)
 
         self
       end
@@ -531,7 +595,7 @@ module Familia
       # @see #delete! The underlying method that performs the key deletion
       #
       def destroy!
-        Familia.trace :DESTROY!, dbkey, self.class.uri
+        Familia.trace :DESTROY!, dbkey, self.class.uri if Familia.debug?
 
         # Pre-read instance-scoped index tracker before MULTI/EXEC
         # (SMEMBERS returns futures inside a transaction, not values)
@@ -545,12 +609,16 @@ module Familia
           delete!
 
           if self.class.relations?
-            Familia.trace :DELETE_RELATED_FIELDS!, nil,
-                          "#{self.class} has relations: #{self.class.related_fields.keys}"
+            if Familia.debug?
+              Familia.trace :DELETE_RELATED_FIELDS!, nil,
+                            "#{self.class} has relations: #{self.class.related_fields.keys}"
+            end
 
             self.class.related_fields.each_key do |name|
               obj = send(name)
-              Familia.trace :DELETE_RELATED_FIELD, name, "Deleting related field #{name} (#{obj.dbkey})"
+              if Familia.debug?
+                Familia.trace :DELETE_RELATED_FIELD, name, "Deleting related field #{name} (#{obj.dbkey})"
+              end
               obj.delete!
             end
           end
@@ -802,16 +870,25 @@ module Familia
         nil # Explicit nil return as documented
       end
 
-      # Automatically update class-level indexes after save
+      # Automatically maintains class-level indexes after save.
       #
-      # Iterates through class-level indexing relationships and calls their
-      # corresponding add_to_class_* methods to populate indexes. Only processes
-      # class-level indexes (where within is nil), skipping instance-scoped
-      # indexes which require scope context.
+      # Iterates the class-level indexing relationships and applies the
+      # appropriate index mutation for each (see #apply_class_index_change).
+      # Only class-level indexes are processed here; instance-scoped indexes
+      # (declared with within: a class) require a scope instance and must be
+      # populated explicitly.
       #
-      # Uses idempotent Redis commands (HSET for unique_index) so repeated calls
-      # are safe and have negligible performance overhead. Note that multi_index
-      # always requires within: parameter, so only unique_index benefits from this.
+      # The previous value of each changed field is read from dirty tracking,
+      # which is still populated at this point (clear_dirty! runs AFTER the save
+      # transaction), so a changed indexed field can have its stale entry removed
+      # in the same transaction:
+      #
+      # - unique_index: routes through update_in_class_* (old-value-aware
+      #   HDEL + HSET) so changing an indexed field removes the prior mapping
+      #   atomically and the freed value can be reused.
+      # - multi_index: routes through add_to_class_* (add-only); prior buckets
+      #   are intentionally retained on a value change (see the
+      #   class_level_multi_index tests).
       #
       # @return [void]
       #
@@ -822,17 +899,25 @@ module Familia
       #   end
       #
       #   customer = Customer.new(email: 'test@example.com')
-      #   customer.save  # Automatically calls add_to_class_email_lookup
+      #   customer.save  # Automatically calls update_in_class_email_lookup
       #
       # @note Only class-level unique_index declarations auto-populate.
       #   Instance-scoped indexes (with within:) are auto-refreshed on save
       #   for scopes previously registered via add_to_* (#282). The initial
       #   add_to_* call remains manual since save has no scope context.
       #
+      # @see #apply_class_index_change For the per-relationship routing.
       # @see Familia::Features::Relationships::Indexing For index declaration details
       #
       def auto_update_class_indexes
         return unless self.class.respond_to?(:indexing_relationships)
+
+        # Dirty tracking is still populated here: clear_dirty! runs AFTER the save
+        # transaction, while this method runs INSIDE it (via persist_to_storage).
+        # Both `new` and the load path clear dirty after construction, so a
+        # captured old value is the previously-persisted value -- exactly what we
+        # must remove from the index when an indexed field changed.
+        changes = changed_fields # { field => [old_value, new_value] }
 
         self.class.indexing_relationships.each do |rel|
           unless rel.class_level?
@@ -842,11 +927,36 @@ module Familia
             next
           end
 
-          # Call the existing add_to_class_* methods
-          add_method = :"add_to_class_#{rel.index_name}"
-          send(add_method) if respond_to?(add_method)
+          apply_class_index_change(rel, changes)
         end
       end
+
+      # Maintains a single class-level index entry for +rel+ during save.
+      #
+      # @param rel [IndexingRelationship] a class-level indexing relationship
+      # @param changes [Hash] dirty-tracking diff { field => [old_value, new_value] }
+      # @return [void]
+      def apply_class_index_change(rel, changes)
+        update_method = :"update_in_class_#{rel.index_name}"
+        add_method = :"add_to_class_#{rel.index_name}"
+
+        if rel.cardinality == :unique && respond_to?(update_method)
+          # unique_index: use the old-value-aware update so a changed indexed
+          # field removes its stale entry. Otherwise find_by_<field>(old_value)
+          # resolves a tombstone and the freed value cannot be reused (the unique
+          # guard sees the orphan). update_in_class_* always re-adds the current
+          # value, so new records are still indexed; its reentrant transaction
+          # joins this save's MULTI, so remove+add commit atomically.
+          change = changes[rel.field]
+          send(update_method, change && change.first)
+        elsif respond_to?(add_method)
+          # multi_index (and any add-only index): a value change does not retract
+          # prior buckets -- by design (see class_level_multi_index tests).
+          # HSET/SADD are idempotent so repeated saves stay safe.
+          send(add_method)
+        end
+      end
+      private :apply_class_index_change
 
       # Remove class-level index entries during destroy!
       #
@@ -896,6 +1006,46 @@ module Familia
       end
       private :prepare_for_save
 
+      # Names (as strings) of declared persistent fields whose current in-memory
+      # value is nil. These are omitted from {Serialization#to_h_for_storage}, so
+      # on an update their previously-stored value must be explicitly deleted.
+      #
+      # @return [Array<String>]
+      #
+      def nil_persistent_field_names
+        self.class.persistent_fields.each_with_object([]) do |field, names|
+          field_type = self.class.field_types[field]
+          names << field.to_s if send(field_type.method_name).nil?
+        end
+      end
+      private :nil_persistent_field_names
+
+      # Deletes any now-nil persistent fields from the object hash so a value
+      # cleared to nil does not leave a stale entry behind. This is what keeps
+      # "absent" and "nil" the same observable state after a round trip, and
+      # what makes HSETNX/HEXISTS on a nil'd field behave correctly.
+      #
+      # Because it removes every field that is nil in memory, save/commit_fields
+      # are a full-overwrite of scalar state (see {#save}). A field managed out of
+      # band (e.g. an HSETNX claim) that is still nil on this in-memory copy is
+      # cleared by a full save; use the targeted writers or {#refresh!} to avoid
+      # that.
+      #
+      # Intended to run inside the save/commit transaction. HDEL of an absent
+      # field is a harmless no-op, so it is safe on both the create and update
+      # paths (and queues cleanly inside MULTI/EXEC).
+      #
+      # @return [void]
+      #
+      def remove_stale_nil_fields
+        names = nil_persistent_field_names
+        return if names.empty?
+
+        Familia.trace :HDEL, nil, names if Familia.debug?
+        dbclient.hdel(dbkey, *names)
+      end
+      private :remove_stale_nil_fields
+
       # Persists the object's data to storage within a transaction.
       #
       # This is the primary code path that adds an object to the class-level
@@ -912,9 +1062,15 @@ module Familia
       # @return [Object] The result of the hmset operation
       #
       def persist_to_storage(update_expiration)
-        # 1. Save all fields to hashkey at once
+        # 1. Save all non-nil fields to hashkey at once
         prepared_h = to_h_for_storage
         hmset_result = hmset(prepared_h)
+
+        # 1b. Remove any fields cleared to nil so a nil'd value does not linger
+        # in storage. HMSET only sets the fields it is given; it never deletes
+        # omitted ones, so an update that clears a field to nil would otherwise
+        # leave the prior value behind. Harmless no-op on the create path.
+        remove_stale_nil_fields
 
         # 2. Set expiration in same transaction
         self.update_expiration if update_expiration
@@ -922,8 +1078,18 @@ module Familia
         # 3. Update class-level indexes
         auto_update_class_indexes
 
-        # 4. Touch instances timeline (delegates to touch_instances!)
-        touch_instances!
+        # 4. Touch instances timeline (delegates to touch_instances!).
+        #
+        # Skip it when there is genuinely nothing stored and no hash key exists.
+        # prepared_h is empty only when every declared persistent field is nil
+        # AND the identifier is not itself a stored field (a Proc-derived
+        # identifier) -- hmset no-op'd and no key was created. Registering the
+        # identifier in `instances` in that case would leave a dangling
+        # reference: the identifier would list in instances.to_a while exists?
+        # (check_size: true) returns false and any load follows a dead pointer.
+        # In the ubiquitous `identifier_field :id; field :id` pattern the id
+        # keeps prepared_h non-empty, so this only skips the degenerate case.
+        touch_instances! unless prepared_h.empty?
 
         hmset_result
       end

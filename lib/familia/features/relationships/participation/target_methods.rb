@@ -40,9 +40,16 @@ module Familia
           # @param type [Symbol] Collection type (:sorted_set, :set, :list)
           # @param through [Symbol, Class, nil] Through model class for join table pattern
           # @param staged [Symbol, nil] Staging set name for deferred activation
-          def self.build(target_class, collection_name, type, through = nil, staged = nil)
-            # FIRST: Ensure the DataType field is defined on the target class
-            TargetMethods::Builder.ensure_collection_field(target_class, collection_name, type)
+          # @param participant_class [Class, nil] The participant class whose
+          #   identifiers populate the collection. Threaded through so the
+          #   collection is declared with record_class: (enables +each_record+
+          #   without changing read semantics; see issue #297).
+          def self.build(target_class, collection_name, type, through = nil, staged = nil, participant_class: nil)
+            # FIRST: Ensure the DataType field is defined on the target class.
+            # Declared with record_class: so `each_record` can load participants.
+            TargetMethods::Builder.ensure_collection_field(
+              target_class, collection_name, type, participant_class: participant_class
+            )
 
             # Create staging set if staged: option provided
             TargetMethods::Builder.ensure_collection_field(target_class, staged, :sorted_set) if staged
@@ -73,8 +80,19 @@ module Familia
           # @param collection_name [Symbol] Name of the collection
           # @param type [Symbol] Collection type
           def self.build_class_level(target_class, collection_name, type)
-            # FIRST: Ensure the class-level DataType field is defined
-            target_class.send("class_#{type}", collection_name)
+            # FIRST: Ensure the class-level DataType field is defined.
+            # The collection holds instances of target_class itself. Declare it
+            # with record_class: so `each_record` can load the records (issue
+            # #297) without changing read deserialization — see
+            # CollectionOperations#ensure_collection_field for why participation
+            # uses record_class: rather than class: + reference: true.
+            #
+            # Skip if a class-level accessor already exists, mirroring the
+            # method_defined? guard in ensure_collection_field so a pre-declared
+            # collection is not silently overridden (symmetry with instance-level).
+            unless target_class.respond_to?(collection_name)
+              target_class.send("class_#{type}", collection_name, record_class: target_class)
+            end
 
             # Class-level collection getter (e.g., User.all_users)
             build_class_collection_getter(target_class, collection_name, type)
@@ -215,13 +233,16 @@ collection_name: collection_name)
             target_class.define_method(method_name) do |min_permission = :read|
               collection = send(collection_name)
 
-              # Assumes ScoreEncoding module is available
-              if defined?(ScoreEncoding)
-                permission_score = ScoreEncoding.permission_encode(0, min_permission)
-                collection.zrangebyscore(permission_score, '+inf', with_scores: true)
-              else
-                # Fallback to all members if ScoreEncoding not available
-                collection.members(with_scores: true)
+              # Permission bits are encoded in the FRACTIONAL part of each score
+              # (see ScoreEncoding) and do not form a contiguous range, so a
+              # score-range query (e.g. ZRANGEBYSCORE x +inf) cannot filter by
+              # permission -- it would match members regardless of their bits.
+              # Fetch every member with its score and test the bits per-member.
+              raw_pairs = collection.rangebyscoreraw('-inf', '+inf', with_scores: true)
+              raw_pairs.each_with_object([]) do |(raw_member, score), kept|
+                next unless ScoreEncoding.permission?(score, min_permission)
+
+                kept << collection.deserialize_value(raw_member)
               end
             end
           end

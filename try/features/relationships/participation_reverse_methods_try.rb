@@ -103,13 +103,16 @@ old_way_teams.map(&:name).sort
 #=> true
 
 ## Debug - Check participations data
-@user1.participations.members
-#=> ["project_team:#{@team1.identifier}:members", "project_team:#{@team2.identifier}:members", "project_team:#{@team1.identifier}:admins", "project_organization:#{@org1.identifier}:employees", "project_organization:#{@org2.identifier}:contractors"]
+# participations is a Redis SET (unordered); sort both sides for determinism.
+@user1.participations.members.sort
+#=> ["project_team:#{@team1.identifier}:members", "project_team:#{@team2.identifier}:members", "project_team:#{@team1.identifier}:admins", "project_organization:#{@org1.identifier}:employees", "project_organization:#{@org2.identifier}:contractors"].sort
 
 ## Debug - Check if participating_ids_for_target works
+# participating_ids_for_target derives from the participations SET (unordered),
+# so sort both sides for determinism (matches the sorted check above).
 ids = @user1.participating_ids_for_target(ProjectTeam)
-ids
-#=> [@team1.identifier, @team2.identifier]
+ids.sort
+#=> [@team1.identifier, @team2.identifier].sort
 
 ## Debug - Test individual team loading
 ProjectTeam.load(@team1.identifier).name

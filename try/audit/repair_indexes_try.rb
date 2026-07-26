@@ -37,7 +37,8 @@ RepairIdxUser.audit_unique_indexes.first[:stale].size
 #=> 0
 
 ## Corrupt index by adding stale entry via raw Redis
-RepairIdxUser.dbclient.hset(RepairIdxUser.email_lookup.dbkey, 'gone@test.com', '"ri-999"')
+# unique_index hashkeys are reference types: stored values are raw identifiers
+RepairIdxUser.dbclient.hset(RepairIdxUser.email_lookup.dbkey, 'gone@test.com', 'ri-999')
 RepairIdxUser.audit_unique_indexes.first[:stale].size
 #=> 1
 

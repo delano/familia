@@ -205,7 +205,8 @@ module Familia
     end
 
     def members(count = -1, opts = {})
-      count -= 1 if count.positive?
+      # NOTE: count math (positive count -> end index) is handled once by
+      # membersraw. Do not decrement here too, or members(n) returns n-1.
       elements = membersraw count, opts
       deserialize_values(*elements)
     end
@@ -218,7 +219,8 @@ module Familia
     end
 
     def revmembers(count = -1, opts = {})
-      count -= 1 if count.positive?
+      # See #members: revmembersraw already converts a positive count to the
+      # correct end index; decrementing here as well would drop one element.
       elements = revmembersraw count, opts
       deserialize_values(*elements)
     end

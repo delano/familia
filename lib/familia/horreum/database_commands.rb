@@ -157,8 +157,14 @@ module Familia
       #
       # @param hsh [Hash] Hash of field-value pairs to set
       # @return [String] 'OK' on success
-      def hmset(hsh = {})
+      def hmset(hsh = nil)
         hsh ||= to_h_for_storage
+        # An empty hash means there is nothing to persist -- e.g. an object whose
+        # only non-nil field would be a Proc-derived identifier, so no declared
+        # field is written. HMSET with zero field/value pairs is a Redis error,
+        # so treat it as a successful no-op rather than crashing the save.
+        return 'OK' if hsh.empty?
+
         Familia.trace :HMSET, nil, hsh if Familia.debug?
         dbclient.hmset dbkey(suffix), hsh
       end

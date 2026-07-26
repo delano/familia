@@ -91,7 +91,7 @@ module Familia
 
         # Reference collections store raw identifiers — return as-is
         if @opts[:reference]
-          return values.flatten
+          return values.flatten.map { |v| strip_legacy_json_encoding(v) }
         end
 
         # If a class option is specified, use class-based deserialization
@@ -146,6 +146,16 @@ module Familia
       # consistent type preservation. Legacy data stored without JSON
       # encoding is returned as-is.
       #
+      # Detects and strips legacy JSON-encoded string identifiers stored by
+      # pre-2.10.0 unique_index writes (e.g. "\"u1\"" → "u1").
+      def strip_legacy_json_encoding(val)
+        return val unless Familia.legacy_json_encoded?(val)
+
+        stripped = val[1..-2]
+        Familia.warn "[familia] Legacy JSON-encoded identifier detected in #{dbkey}: #{val.inspect} → #{stripped.inspect}. Rebuild this index (see docs/migrating/v2.10.md)."
+        stripped
+      end
+
       def deserialize_value(val)
         # Handle Redis::Future objects during transactions first
         return val if val.is_a?(Redis::Future)
@@ -153,7 +163,9 @@ module Familia
         return @opts[:default] if val.nil?
 
         # Reference collections store raw identifiers — return as-is
-        return val if @opts[:reference]
+        if @opts[:reference]
+          return strip_legacy_json_encoding(val)
+        end
 
         # If a class option is specified, use the existing class-based deserialization
         if @opts[:class]
@@ -166,8 +178,26 @@ module Familia
         begin
           Familia::JsonSerializer.parse(val)
         rescue Familia::SerializerError
-          Familia.warn "[deserialize] Raw fallback in #{dbkey} (#{val.class}, #{val.respond_to?(:bytesize) ? val.bytesize : '?'} bytes)"
+          log_raw_fallback(val)
           val
+        end
+      end
+
+      private
+
+      # Log a non-JSON value encountered while deserializing.
+      #
+      # A record_class collection stores object identifiers (e.g. from
+      # participates_in), so a non-JSON value is the expected raw identifier —
+      # logged at debug to keep `each`/`each_record` quiet (issue #297). For
+      # other collections a raw fallback is unusual, so warn. The deserialized
+      # value is unchanged either way; only the log level differs.
+      def log_raw_fallback(val)
+        if @opts[:record_class]
+          Familia.debug "[deserialize] Raw identifier in #{dbkey}: #{val.inspect[0..80]}"
+        else
+          size = val.respond_to?(:bytesize) ? val.bytesize : '?'
+          Familia.warn "[deserialize] Raw fallback in #{dbkey} (#{val.class}, #{size} bytes)"
         end
       end
     end

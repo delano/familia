@@ -66,9 +66,12 @@ Familia.dbclient.set('debug:ending_save_if_not_exists_tests', Familia.now.to_s)
 #=> "John Doe"
 
 ## multi_field_update can update multiple fields atomically, to_h
+# email was never set before the initial save, so under nil-omitting storage it
+# was not persisted; this HSET therefore CREATES the field (returns 1) whereas
+# name already exists (returns 0).
 @result = @customer.multi_field_update(name: 'Jane Windows', email: 'jane@example.com')
 @result.to_h
-#=> {:success=>true, :results=>[0, 0, false, true]}
+#=> {:success=>true, :results=>[0, 1, false, true]}
 
 ## multi_field_update returns successful result, successful?
 @result.successful?
@@ -76,11 +79,11 @@ Familia.dbclient.set('debug:ending_save_if_not_exists_tests', Familia.now.to_s)
 
 ## multi_field_update returns successful result, tuple
 @result.tuple
-#=> [true, [0, 0, false, true]]
+#=> [true, [0, 1, false, true]]
 
 ## multi_field_update returns successful result, to_a
 @result.to_a
-#=> [true, [0, 0, false, true]]
+#=> [true, [0, 1, false, true]]
 
 ## multi_field_update updates object fields in memory, confirm fields changed
 [@customer.name, @customer.email]

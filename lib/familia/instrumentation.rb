@@ -112,6 +112,28 @@ module Familia
         @hooks[:error] << block
       end
 
+      # Check whether any hooks are registered for the given event type.
+      #
+      # Because Familia::Instrumentation is always loaded, a
+      # `defined?(Familia::Instrumentation)` check is always true and cannot be
+      # used to gate fast paths. This predicate answers the question that
+      # actually matters: is anyone listening? Middleware uses it to decide
+      # whether timing must be measured so that observability hooks keep firing
+      # at full rate even when command capture is disabled.
+      #
+      # @param type [Symbol] The hook type (:command, :pipeline, :lifecycle, :error)
+      # @return [Boolean] true if at least one hook is registered for the type
+      #
+      # @example
+      #   Familia::Instrumentation.hooks?(:command) # => false
+      #   Familia.on_command { |cmd, dur, ctx| ... }
+      #   Familia::Instrumentation.hooks?(:command) # => true
+      #
+      def hooks?(type)
+        hooks = @hooks[type]
+        !hooks.nil? && !hooks.empty?
+      end
+
       # Notify all registered command hooks.
       # @api private
       def notify_command(cmd, duration, context = {})

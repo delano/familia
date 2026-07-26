@@ -198,7 +198,7 @@ result
 #=> ['"quoted"', '42']
 
 ## mset/mget round-trip with StringKey instance values
-# StringKey instances use raw .to_s serialization (per CLAUDE.md table), so
+# StringKey instances use raw .to_s serialization (per AGENTS.md table), so
 # a value written via `instance.value=` can be read back raw via the class
 # mget passthrough without JSON mismatch.
 @pt_instance = Familia::StringKey.new 'passthrough:roundtrip:instance'

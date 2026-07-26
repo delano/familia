@@ -352,7 +352,7 @@ begin
   @bone.tags.each_record { |r| }
   raised = false
 rescue Familia::Problem => e
-  raised = e.message.include?('reference DataType')
+  raised = e.message.include?('record_class')
 end
 raised
 #=> true

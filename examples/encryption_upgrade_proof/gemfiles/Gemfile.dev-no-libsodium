@@ -1,0 +1,4 @@
+# This checkout, without rbnacl: AES-256-GCM is the only provider.
+source 'https://rubygems.org'
+
+gem 'familia', path: '../../..'

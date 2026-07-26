@@ -2,6 +2,9 @@
 #
 # frozen_string_literal: true
 
+require 'digest'
+require 'openssl'
+
 module Familia
   module Features
     # Familia::Features::ExternalIdentifier
@@ -76,6 +79,23 @@ module Familia
       #   end
       #   resource = Resource.new
       #   resource.extid  # => "v2/abc123def456ghi789"
+      #
+      # @example Keying derivation with an application secret (recommended)
+      #   # By default the extid is a deterministic SHA-256 of the objid. Supply
+      #   # a `secret:` to derive it via a keyed HMAC instead, so external IDs
+      #   # cannot be forged or inverted from a known objid. The secret must be
+      #   # stable for a deployment (changing it changes every extid) and is
+      #   # typically sourced from the environment, never committed.
+      #   #
+      #   # Prefer a callable so the secret resolves lazily at first use: the model
+      #   # file still loads when the env var is absent, and ENV.fetch then raises
+      #   # loudly the first time an extid is derived rather than at class-load.
+      #   class ApiToken < Familia::Horreum
+      #     feature :object_identifier
+      #     feature :external_identifier, secret: -> { ENV.fetch('EXTID_HMAC_SECRET') }
+      #   end
+      #   # A plain string also works when the value is already in hand:
+      #   #   feature :external_identifier, secret: ENV['EXTID_HMAC_SECRET']
       #
       class ExternalIdentifierFieldType < Familia::FieldType
         # Override getter to provide lazy generation from objid
@@ -283,32 +303,43 @@ module Familia
         # Normalize the objid to a consistent hex representation first.
         normalized_hex = normalize_objid_to_hex(current_objid)
 
-        # Use the objid's randomness to create a deterministic, yet secure,
-        # external identifier. We do not use SecureRandom here because the output
-        # must be deterministic.
+        options = self.class.feature_options(:external_identifier)
+
+        # Derive 16 deterministic bytes (128 bits) from the objid. We do not use
+        # SecureRandom because the output must be deterministic (same objid ->
+        # same extid, which lookups depend on).
         #
-        # The process is as follows:
-        # 1. The objid (a high-entropy value) is hashed to create a uniform seed.
-        # 2. The seed initializes a standard PRNG (Random.new).
-        # 3. The PRNG acts as a deterministic function to generate a sequence of
-        #    bytes that appears random, obscuring the original objid.
-
-        # 1. Create a high-quality, uniform seed from the objid's entropy.
-        seed = Digest::SHA256.digest(normalized_hex)
-
-        # 2. Initialize a PRNG with the seed. The same seed will always produce
-        #    the same sequence of "random" numbers.
-        prng = Random.new(seed.unpack1('Q>'))
-
-        # 3. Generate 16 bytes (128 bits) of deterministic output.
-        random_bytes = prng.bytes(16)
+        # We deliberately avoid Random/Mersenne Twister here (see issue #310,
+        # S3): MT is not a cryptographic PRNG -- its internal state can be
+        # reconstructed from observed output -- and the previous implementation
+        # seeded it via `seed.unpack1('Q>')`, discarding all but the first 64 of
+        # the digest's 256 bits. A hash/HMAC keeps the derivation deterministic
+        # while being one-way and preserving the full input entropy.
+        #
+        # When a `secret:` is configured for the feature, a keyed HMAC is used so
+        # external IDs cannot be forged or inverted from a known objid. Without a
+        # secret, a plain SHA-256 still removes the MT weakness and the 64-bit
+        # truncation.
+        secret = options[:secret]
+        # Allow a callable secret (e.g. -> { ENV.fetch('EXTID_HMAC_SECRET') }) so
+        # the value resolves lazily at first derivation instead of eagerly at
+        # class-definition time. The model file then loads even when the env var is
+        # absent (CI, tooling, introspection), and a missing secret still raises
+        # loudly here -- where it matters -- rather than masking the whole model
+        # behind a load-time error (#311).
+        secret = secret.call if secret.respond_to?(:call)
+        random_bytes =
+          if secret && !secret.to_s.empty?
+            OpenSSL::HMAC.digest('SHA256', secret.to_s, normalized_hex)[0, 16]
+          else
+            Digest::SHA256.digest(normalized_hex)[0, 16]
+          end
 
         # Encode as a base36 string for a compact, URL-safe identifier.
         # 128 bits is approximately 25 characters in base36.
         external_part = random_bytes.unpack1('H*').to_i(16).to_s(36).rjust(25, '0')
 
         # Get format from feature options and interpolate the ID
-        options = self.class.feature_options(:external_identifier)
         format = options[:format] || 'ext_%{id}'
 
         format % { id: external_part }

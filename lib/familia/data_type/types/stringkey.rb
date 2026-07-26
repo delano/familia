@@ -30,10 +30,17 @@ module Familia
       val
     end
 
-    # Returns the number of elements in the list
-    # @return [Integer] number of elements
+    # Returns the number of characters in the stored value.
+    #
+    # Reads from #value rather than #to_s: #to_s follows Familia::Base's
+    # "never nil" contract and falls back to an inspect-style string
+    # (e.g. "#<Familia::StringKey:0x...>") when there's no value, which
+    # made #char_count/#size/#empty? report a nonsense non-zero count for
+    # a deleted/never-created key.
+    #
+    # @return [Integer] number of characters
     def char_count
-      to_s.size
+      value.to_s.size
     end
     alias size char_count
     alias length char_count

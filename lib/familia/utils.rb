@@ -56,6 +56,21 @@ module Familia
       ret.is_a?(Redis::Future) ? ret : ret.positive?
     end
 
+    # Detects the legacy JSON-encoded string format written by pre-2.10.0
+    # reference collections (e.g. unique_index hashkeys stored `"\"u1\""`
+    # instead of the raw `"u1"`).
+    #
+    # This is the single source of truth for the format check: the read path
+    # (DataType::Serialization#strip_legacy_json_encoding) strips such values,
+    # and the index introspection layer (IndexDescriptor#stale_format?) samples
+    # for them to flag indexes that need a rebuild. Side-effect free.
+    #
+    # @param val [Object] the raw stored value
+    # @return [Boolean] true when val is a JSON-encoded string identifier
+    def legacy_json_encoded?(val)
+      val.is_a?(String) && val.length > 2 && val.start_with?('"') && val.end_with?('"')
+    end
+
     # Joins array elements with Familia delimiter
     # @param val [Array] elements to join
     # @return [String] joined string

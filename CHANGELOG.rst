@@ -7,6 +7,465 @@ The format is based on `Keep a Changelog <https://keepachangelog.com/en/1.1.0/>`
 
    <!--scriv-insert-here-->
 
+.. _changelog-2.11.2:
+
+2.11.2 — 2026-07-05
+===================
+
+
+Changed
+-------
+
+- ``to_h_for_storage`` omits nil fields; every write path removes a field that has
+  become nil. ``save``/``commit_fields`` do a full overwrite (the stored hash
+  matches the in-memory object, so a field nil in memory is deleted);
+  ``save_fields``/``multi_field_update``/``multi_field_fast_write`` delete a named
+  field passed as nil. ``to_h`` still returns every declared field, nils included.
+
+- Claim caveat: a full ``save``/``commit_fields`` of a stale copy clears a field
+  another writer claimed via ``HSETNX``. To claim and update without disturbing
+  it, use the targeted writers or ``refresh!`` first.
+
+Fixed
+-----
+
+- Nil-valued fields are no longer stored as the JSON string ``"null"``. Because a
+  hash has no native NULL, this left declared fields perpetually present, breaking
+  ``HSETNX``/``HEXISTS`` atomic-claim patterns and wasting memory. Nil fields are
+  now omitted, and clearing a field to nil removes it from storage (``HDEL``), so
+  absence again means "no value". No migration required: stale ``"null"`` values
+  are cleaned up on the next save and already decode back to ``nil`` on read.
+
+AI Assistance
+-------------
+
+- Investigation, implementation, and tryouts coverage produced with Claude Code.
+
+.. _changelog-2.11.1:
+
+2.11.1 — 2026-07-04
+===================
+
+Added
+-----
+
+- ``encrypted_field`` now honors a per-field ``algorithm:`` option, pinning that
+  field's write algorithm to a specific registered provider (``'aes-256-gcm'`` or
+  ``'xchacha20poly1305'``) independent of the registry's default-provider
+  priority. The option was previously documented but silently ignored, so writes
+  always used the default provider. Decryption stays envelope-driven, so a pin can
+  be added, changed, or removed without breaking ciphertext already at rest, and
+  ``re_encrypt_fields!`` re-encrypts under the pin rather than the default. This is
+  the supported lever for a reader-before-writer format migration: deploy
+  ``rbnacl`` fleet-wide so every node can *read* XChaCha20-Poly1305 while keeping
+  *writes* pinned to AES-256-GCM until all readers are confirmed capable, then drop
+  the pin. Issue #334
+
+Changed
+-------
+
+- ``Familia::Encryption::Registry.get`` now distinguishes an unknown algorithm
+  from a *known* algorithm whose provider is not available on the current node.
+  Because ``Registry.register`` only stores providers whose runtime dependency is
+  present, pinning ``encrypted_field ..., algorithm: 'xchacha20poly1305'`` on a
+  node without ``rbnacl``/libsodium previously raised the misleading
+  ``"Unsupported algorithm: xchacha20poly1305"`` -- pointing an operator at a typo
+  when the real fix is a missing dependency. It now names the provider, explains
+  the dependency is missing, and (because ``get`` runs on both the encrypt and
+  decrypt paths) states that installing the dependency is what enables reading
+  *and* writing the algorithm, framing an algorithm pin as a write-time
+  workaround that cannot decrypt existing ciphertext. Each provider declares its
+  own dependency via a new ``Provider.dependency_hint`` class method (nil for
+  always-available providers like OpenSSL AES-256-GCM), so the generic error path
+  names the correct library as providers are added rather than hardcoding any one
+  of them. The set of registerable providers is centralized in
+  ``Registry.known_providers``, the single source of truth shared by ``setup!``
+  and ``get``. Error-message and internal-refactor only; the resolution of every
+  available algorithm is unchanged. Issue #334
+
+Fixed
+-----
+
+- ``Familia::DataType#exists?`` no longer returns ``true`` for a deleted or
+  never-created scalar key (``StringKey``, ``Counter``, ``Lock``,
+  ``JsonStringKey``). The check was ``dbclient.exists(dbkey) && !size.zero?``,
+  but ``EXISTS`` returns an Integer count and ``0`` is truthy in Ruby, so the
+  guard never short-circuited on a missing key -- existence was decided
+  entirely by the size check. ``exists?`` now uses a boolean-coerced ``EXISTS``
+  count directly. Issue #331
+
+- Relatedly, ``StringKey#size``/``#length``/``#empty?`` (and ``Lock``'s) no
+  longer reflect the never-nil ``#to_s`` fallback. ``#char_count`` derived from
+  ``#to_s.size``, and ``#to_s`` intentionally returns ``Familia::Base``'s
+  documented "never nil" inspect-string when the value is absent -- so
+  ``#size`` was non-zero (and ``#empty?`` false) for a missing key.
+  ``#char_count`` now reads ``#value`` directly; ``#to_s`` is left unchanged.
+  Issue #331
+
+- ``encrypted_fields_status`` now reports each field's real algorithm for a live
+  encrypted value (e.g. ``{ encrypted: true, algorithm: "aes-256-gcm", cleared:
+  false }``), honoring any per-field pin. Previously it returned ``{ encrypted:
+  false, value: "[CONCEALED]" }`` for every encrypted field, because
+  ``ConcealedString`` had no ``concealed?`` predicate for the status check to
+  match -- so the algorithm shown in the method's docstring and the guides was
+  never actually produced. ``ConcealedString`` gains ``#concealed?`` and
+  ``#algorithm`` readers (the latter reads the stored envelope). Issue #334
+
+Documentation
+-------------
+
+- Added an executable, multi-phase proof (``examples/encryption_upgrade_proof/``)
+  demonstrating that installing ``rbnacl`` safely flips new writes to
+  XChaCha20-Poly1305 while every existing AES-256-GCM envelope — including
+  ciphertext written by the released 2.10.1 gem, under the pre-#310 static HKDF
+  salt, and under a retired master key version — keeps decrypting. Also pins,
+  as deliberately-passing checks, two operational hazards: the XChaCha
+  ``encryption_personalization`` cannot be rotated (no history/fallback like
+  ``encryption_hkdf_salt_history``), and once any XChaCha envelope exists,
+  every node that may read it needs libsodium installed. PR #330
+
+- The encrypted-fields guide previously showed a ``provider: :aes_gcm`` field
+  option that was never implemented; those examples now use the real
+  ``algorithm: 'aes-256-gcm'`` form, and the ``Familia::Encryption`` facade
+  docstring documents the shipped behavior instead of a hypothetical
+  implementation sketch. The ``encrypted_fields_status`` output examples across
+  the guides and the overview were corrected to match what the method now
+  returns. Issue #334
+
+- Added a memory-audit investigation (``docs/investigation/memory-audit.md``)
+  diagnosing #309's ``<collection>_with_permission`` O(N) query as a transient,
+  GC-reclaimable spike rather than a per-process leak, and auditing the rest of
+  ``lib/`` for per-process growth (concluding Familia has no unconditional leak).
+  Ships two executable proofs in ``try/investigation/`` — a pure-Ruby
+  ``process_memory_leak_proof.rb`` and a live-Redis ``memory_leak_proof.rb``.
+  Diagnosis only; no runtime behaviour is changed by the investigation. Issue #309
+
+AI Assistance
+-------------
+
+- The encryption upgrade proof, its regression tryouts, and this changelog
+  entry were drafted with AI assistance. PR #330
+
+- The ``exists?`` fix and its regression tryouts were drafted with AI
+  assistance. Issue #331
+
+- The per-field algorithm implementation, the ``encrypted_fields_status`` fix,
+  their regression tryouts, the guide corrections, and the
+  ``Registry.get`` error-message refinement were drafted with AI assistance.
+  Issue #334
+
+- The memory-audit investigation and its executable proofs were drafted with AI
+  assistance. Issue #309
+
+.. _changelog-2.11.0:
+
+2.11.0 — 2026-06-22
+===================
+
+Added
+-----
+
+- Project-wide relationship introspection: ``Familia.index_descriptors``,
+  ``Familia.unique_indexes``, ``Familia.multi_indexes``, and
+  ``Familia.participation_descriptors`` aggregate index/participation metadata
+  across all loaded ``Horreum`` subclasses, returning ``Familia::IndexDescriptor``
+  objects (``coordinate``, ``each_record``, ``rebuild!``, ``stale_format?``).
+
+- ``Familia.stale_indexes`` and ``Familia.assert_indexes_current!`` detect
+  class-level unique indexes still holding pre-2.10.0 JSON-encoded identifiers and
+  fail fast (or warn) at boot. Rebuild with ``Familia.stale_indexes.each(&:rebuild!)``.
+
+- ``Familia.legacy_json_encoded?`` predicate for detecting legacy-format
+  identifiers.
+
+Changed
+-------
+
+- New ``encryption_hkdf_salt`` and ``encryption_hkdf_salt_history`` settings
+  configure the AES-GCM HKDF salt, decoupled from ``encryption_personalization``
+  (now used only by the XChaCha20/BLAKE2b providers, still capped at 16 bytes). The
+  salt has no length limit and supports rotation; no data migration is required
+  (issue #311).
+
+- ``feature :external_identifier`` accepts a callable ``secret:``, resolved lazily
+  at first use (issue #311).
+
+- The opt-in request-scoped key cache keys on the resolved salt, so an encrypt and a
+  later decrypt of the same value within one request share a single derived key
+  (issue #311).
+
+Fixed
+-----
+
+- ``SortedSet#members(n)`` / ``#revmembers(n)`` returned one fewer element than
+  requested.
+
+- Participation permission queries (``<collection>_with_permission``) now return
+  matching members instead of raising on a non-existent ``zrangebyscore`` call.
+
+- Class-level ``Model.destroy!(id)`` now removes the record's unique-index entries
+  instead of leaving them orphaned, so a stale ``find_by_<field>`` can no longer
+  resolve a deleted record.
+
+- Changing a ``unique_index`` field value and saving now removes the old value's
+  index entry in the same transaction (``multi_index`` keeps add-only semantics).
+
+Security
+--------
+
+- ``Familia::VerifiableIdentifier`` now requires ``VERIFIABLE_ID_HMAC_SECRET``
+  (issue #310, S1). The committed fallback secret, which allowed identifier
+  forgery, is removed; the secret is read lazily, so requiring the file without it
+  set does not raise.
+
+- AES-GCM keys derive from a per-deployment ``encryption_hkdf_salt`` instead of a
+  static library salt (issue #310, S2). A blank salt or personalization now raises
+  rather than silently using a weak/global value; existing ciphertext still
+  decrypts (issue #311).
+
+- External identifiers derive via SHA-256, or keyed HMAC-SHA256 with a ``secret:``,
+  instead of a Mersenne-Twister PRNG seeded from a truncated digest (issue #310, S3).
+
+- ``ParticipationMembership#target_instance`` resolves class names through the
+  ``Familia.resolve_class`` allowlist instead of ``Object.const_get`` (issue #310, S4).
+
+- The request-scoped key cache is wiped on entry to ``with_request_cache`` as well
+  as on exit, so a reused fiber cannot inherit another request's keys (issue #310, S6).
+
+Documentation
+-------------
+
+- Documented the relationship introspection API and stale-index boot guard across
+  the relationships guide and methods reference. Renamed
+  ``docs/migrating/v2.10.0.md`` to ``docs/migrating/v2.10.md``.
+
+- Clarified that the migration ``Script`` SHA-1 is the Redis ``EVALSHA`` identity,
+  not a security checksum (issue #310, S5).
+
+AI Assistance
+-------------
+
+- The 2.11.0 changes, their tryouts, and this changelog were drafted with AI
+  assistance.
+
+.. _changelog-2.10.1:
+
+2.10.1 — 2026-06-06
+===================
+
+Added
+-----
+
+- ``record_class:`` option for collection DataTypes (``list``/``set``/
+  ``sorted_set``/``hashkey``). This loading-only hint tells ``each_record`` which
+  class to hydrate via ``load_multi`` without changing how the collection
+  serializes or deserializes reads. Use this when you want ``each_record`` lookup
+  behavior but no changes to read behavior. Issue #297
+
+- ``Familia.atomic_write(*instances)`` persists multiple Horreum instances in a
+  single ``MULTI/EXEC``. Includes an optional ``watch_keys:``/``pre_check:``
+  variant for race-safe, write-once semantics. All participating instances must
+  resolve to the same logical database (raising ``Familia::CrossDatabaseError``
+  otherwise) and must share a hash slot on Redis Cluster. #296
+
+Changed
+-------
+
+- ``participates_in`` / ``class_participates_in`` collections now default to
+  using ``record_class:``. This change requires **no data migration and causes no
+  behavior changes**: existing collections already stored raw identifiers, and
+  read operations (``members``, ``to_a``, ``member?``, ``score``) behave exactly
+  as before. The only difference is that ``each_record`` is now supported. Pre-
+  declared collections are left untouched. Issue #297
+
+Fixed
+-----
+
+- Enabled ``each_record`` on ``participates_in`` and ``class_participates_in``
+  collections by automatically declaring them with ``record_class: <participant
+  class>``. This resolves ``Familia::Problem`` exceptions and loads participant
+  records via ``load_multi`` across all collection types. Issue #297
+
+- Suppressed per-member ``[deserialize] Raw fallback`` warning storm when
+  iterating ``record_class`` collections with non-JSON identifiers (such as UUIDs
+  or prefixed IDs). These expected raw values are now logged at the debug level
+  instead of warnings. Issue #297
+
+- Resolved a connection-pooling bug where the ``WATCH``-based optimistic lock
+  in ``atomic_write(watch_keys:)``, ``save_if_not_exists!``, and ``create!`` was
+  silent/inert. The ``WATCH`` and ``MULTI/EXEC`` commands are now driven through
+  the same connection, ensuring concurrent modifications correctly abort and raise
+  as
+  documented. #296
+
+AI Assistance
+-------------
+
+- AI diagnosed the participation iteration bug and identified that ``reference: true``
+  introduced unintended read-behavior changes. Designed and implemented the
+  ``record_class:`` option to decouple ``each_record`` lookup from read deserialization,
+  suppressed a resulting per-member deserialize warning storm, kept intentional
+  raw-string semantics on ``instances`` and ``unique_index``, updated stale
+  flowcharts in ``datatype-collections.md``, and added regression coverage. Issue #297
+
+- Root-caused and fixed a split-connection defect with Claude Code: implemented a
+  single-connection ``execute_watched_transaction`` primitive (avoiding fiber-pinning
+  that degrades atomic commands) and added real concurrent-modification tests to
+  replace simulated aborts. #296
+
+- Designed and built multi-model atomic writes on top of the new ``WATCH`` primitive:
+  implemented the same-database guard, orchestration logic, and a test suite covering
+  two-model commits, rollback on error, cross-database rejection, and race conditions. #296
+
+.. _changelog-2.10.0:
+
+2.10.0 — 2026-06-04
+====================
+
+Added
+-----
+
+- ``Horreum.build``: A factory block that yields a new instance, then commits
+  all scalar and collection changes in a single ``MULTI/EXEC`` upon exit.
+  This avoids sequencing ``save`` before collection writes. Raises
+  ``Familia::RecordExistsError`` if the identifier exists (create-only).
+  Without a block, it behaves as ``new(...).save``. #279
+
+- ``atomic_write`` now supports ``watch_keys:`` (keys to watch) and
+  ``pre_check:`` (a callable run between ``WATCH`` and ``MULTI``) to enable
+  optimistic locking. Retries with exponential backoff on abort. #288
+
+- ``encrypted_field`` now accepts a ``key_material:`` proc. This mixes
+  additional entropy into key derivation (separate from AAD), requiring
+  the correct material at decryption to avoid producing garbage output. PR #280
+
+- Encrypted-field envelopes now store their own ``envelope_version`` and
+  ``aad_fields`` list. Decryption rebuilds AAD from these stored fields
+  rather than the active class declaration, preventing breakage when model
+  definitions change. PR #280
+
+- ``DatabaseLogger.capture_enabled`` (Boolean, default ``true``) controls
+  in-memory buffer capturing. Disabling it bypasses clock checks, message
+  allocations, and buffer appends, offering a zero-overhead production path. Issue #233
+
+- ``Familia::Instrumentation.hooks?(type)`` reports whether hooks are
+  registered for a given event type (e.g. ``:command``, ``:pipeline``). Issue #233
+
+- ``Familia.reset_trace!`` clears the cached trace environment lookup. Issue #233
+
+- ``dirty_write_warnings`` class method configures write-order warnings per
+  class (inheritable). Accepts ``:strict``, ``:warn``, ``:once``, or ``:off``. Issue #277
+
+- ``Familia.dirty_write_warnings`` global setting providing the default mode for
+  classes that do not set their own. Issue #277
+
+- ``Familia.raise_on_unsaved_parent_write`` (default ``true``) controls whether a
+  collection write on a new, unsaved, dirty parent raises or warns. Issue #278
+
+Changed
+-------
+
+- Mutating a collection on a *new, unsaved* parent Horreum now **raises**
+  ``Familia::Problem`` by default. The guard fires *before* the command runs,
+  preventing orphaned data. Save the parent first, or set
+  ``Familia.raise_on_unsaved_parent_write = false`` to restore warnings. Issue #278
+
+- Dirty-write warnings are now **deduplicated per dirty window** (mode ``:once``).
+  Writing to a collection on a parent with unsaved scalar fields warns once per
+  distinct set of unsaved fields instead of on every write. Set
+  ``dirty_write_warnings :warn`` to restore the old behavior. Issue #277
+
+- Dirty-write warnings and strict raises now append the hint:
+  ``(call #save first or wrap in atomic_write)``. Issue #277
+
+- ``trace_enabled?`` now caches the ``FAMILIA_TRACE`` lookup. Use
+  ``Familia.reset_trace!`` to force a re-read of the environment. Issue #233
+
+- ``unique_index`` hashkeys now store identifiers as raw strings rather than
+  JSON-encoded strings. Rebuild existing unique indexes to convert legacy entries,
+  e.g., via ``User.rebuild_email_lookup`` or ``company.rebuild_badge_index``. Issue #276
+
+Fixed
+-----
+
+- ``Horreum.build`` with a block no longer has a TOCTOU race between the
+  ``exists?`` check and the ``atomic_write`` commit. The block path now uses
+  ``atomic_write(watch_keys:, pre_check:)`` so the existence check runs between
+  ``WATCH`` and ``MULTI``. #288
+
+- ``aad_fields`` containing a ``transient_field`` now bind to the field's real
+  value. Previously ``build_aad`` called ``RedactedString#to_s``, which returns
+  ``"[REDACTED]"`` for every value -- so all passphrases produced identical AAD
+  and the binding was defeated. PR #280
+
+- ``each_record`` now works on ``unique_index`` hashkeys. Previously it raised
+  ``Familia::Problem`` because ``unique_index`` created its backing hashkey
+  without the ``class:`` option. Issue #276
+
+- ``each_record`` extracts the stored identifier (the hash *value*) from a
+  HashKey instead of the indexed field (the hash *key*). Issue #276
+
+- The unguarded ``Familia.trace`` sites in ``Horreum#destroy!`` and
+  ``find_by_dbkey`` now carry an inline ``if Familia.debug?`` guard. Issue #233
+
+- Two latent encryption bugs surfaced while repairing the examples (issue #250):
+
+  - ``Familia::Encryption.with_request_cache`` and ``clear_request_cache!``
+    were unreachable. The implementation lived in
+    ``lib/familia/encryption/request_cache.rb``, which was never ``require``\ d.
+    The file is now loaded with the rest of the encryption stack.
+
+  - The XChaCha20-Poly1305 provider derived keys with
+    ``context.force_encoding('BINARY')``, mutating the caller's string. A
+    frozen context raised ``FrozenError``. It now uses ``context.b``.
+
+Security
+--------
+
+- The ``aad_fields`` transient-field fix changes AAD output for any field that
+  lists a ``transient_field``. Values encrypted by an earlier release using a
+  transient field in ``aad_fields`` were bound to ``"[REDACTED]"`` and will no
+  longer decrypt after upgrading. Re-encrypt affected values if any exist.
+  PR #280
+
+Documentation
+-------------
+
+- Repaired every script in ``examples/`` so each runs top-to-bottom and is
+  re-runnable (issue #250). Added ``try/integration/examples/`` with one
+  subprocess-driven tryouts file per example script for automated regression
+  coverage.
+
+- ``Horreum.create!``: added ``@yield``, ``@yieldparam``, and
+  ``@yieldreturn`` YARD tags documenting the post-success block semantics. #286
+
+- ``Horreum#save``: added ``@example`` tags showing idiomatic Ruby patterns
+  for post-save callbacks (``if save`` and ``&&`` short-circuit). #286
+
+- Renamed ``CLAUDE.md`` to ``AGENTS.md`` and pruned it to remove volatile
+  content better served by its source of truth. Kept the non-obvious behavioral
+  contracts like deferred-vs-immediate write model and the serialization table.
+
+AI Assistance
+-------------
+
+- AI implemented ``build`` factory block (#279) and WATCH composition in
+  ``atomic_write`` (#288), including tryouts for both.
+
+- AI refactored encryption envelope handling (#280): unified AAD construction
+  through ``EncryptedData``, added envelope versioning, and fixed the
+  transient-field AAD bypass.
+
+- AI implemented ``DatabaseLogger.capture_enabled`` toggle and middleware
+  consolidation (#233), per-class ``dirty_write_warnings`` (#277), and
+  unsaved-parent guard (#278) with tryouts for each.
+
+- AI diagnosed and fixed ``each_record`` on ``unique_index`` hashkeys (#276)
+  and repaired all example scripts with regression tryouts (#250).
+
+- AI evaluated and rejected ``save_and_then`` (#286) after cross-ORM analysis;
+  added YARD docs and ``create_block_try.rb`` instead.
+
 .. _changelog-2.9.1:
 
 2.9.1 — 2026-05-18

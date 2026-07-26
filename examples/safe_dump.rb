@@ -273,10 +273,12 @@ puts "LegacyModel fields after set_safe_dump_fields: #{LegacyModel.safe_dump_fie
 # Clean up
 puts
 puts '=== Cleaning up test data ==='
-[User, Product, Order, Address, Customer, LegacyModel].each do |klass|
-  klass.dbclient.del(klass.dbclient.keys("#{klass.name.downcase}:*"))
-rescue StandardError => e
-  puts "Error cleaning #{klass}: #{e.message}"
-end
+# Only the two Address records are persisted; every other object in this
+# script is built in memory for safe_dump demos and never saved. destroy!
+# removes exactly those records (and their instances entries) -- no
+# `prefix:*` glob that could wipe unrelated data on a shared Redis db.
+records = [billing, shipping]
+records.each(&:destroy!)
+puts "✓ Destroyed #{records.size} example records (no prefix globs)"
 
 puts 'SafeDump examples completed!'

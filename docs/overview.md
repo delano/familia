@@ -826,7 +826,7 @@ Familia::Encryption.validate_configuration!
 
 # Check encryption status for specific fields
 user.encrypted_fields_status
-# => {ssn: {encrypted: true, key_version: :v2}, credit_card: {encrypted: false}}
+# => {ssn: {encrypted: true, algorithm: "xchacha20poly1305", cleared: false}, credit_card: {encrypted: false, value: nil}}
 
 # Re-encrypt all fields with current key
 user.re_encrypt_fields!

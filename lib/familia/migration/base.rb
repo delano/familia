@@ -1,4 +1,4 @@
-# lib/familia/migration/base.rb
+# lib/familia/migration/base.rb — Base class, lifecycle, dry-run control
 #
 # frozen_string_literal: true
 

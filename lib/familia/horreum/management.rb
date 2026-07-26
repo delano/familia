@@ -48,6 +48,12 @@ module Familia
       # identifier already exists. If it does, a Familia::RecordExistsError exception is
       # raised to prevent overwriting existing data.
       #
+      # Concurrency: the duplicate check is race-safe via optimistic locking.
+      # It routes through {#save_if_not_exists!}, which uses WATCH + MULTI/EXEC
+      # on a single connection to abort if the key appears between the check and
+      # the write. This is an effective optimistic lock, though not a server-side
+      # atomic check (e.g. Lua). See {#save_if_not_exists!}.
+      #
       # Finally, the method saves the new instance returns it.
       #
       # @example Creating an object with keyword arguments
@@ -59,11 +65,27 @@ module Familia
       # @note The behavior of this method depends on the implementation of #new,
       #   #exists?, and #save in the class and its superclasses.
       #
+      # @yield [hobj] Yields the persisted instance after a successful save.
+      #   The block is skipped entirely if +save_if_not_exists!+ raises
+      #   (e.g. {Familia::RecordExistsError}), so code inside the block can
+      #   safely assume the object exists in the database.
+      # @yieldparam hobj [Horreum] The newly created and persisted instance.
+      # @yieldreturn [void] The block's return value is ignored; +create!+
+      #   always returns the created instance.
+      #
+      # @example Post-creation callback
+      #   User.create!(email: "alice@example.com") do |user|
+      #     user.sessions.push(SecureRandom.uuid)
+      #     AuditLog.record(:user_created, user.identifier)
+      #   end
+      #
       # @see #new
       # @see #exists?
       # @see #save
       def create!(...)
         hobj = new(...)
+        # Race-safe duplicate guard: WATCH + MULTI/EXEC optimistic lock on one
+        # connection (not a server-side atomic check).
         hobj.save_if_not_exists!
 
         # If a block is given, yield the created object
@@ -71,6 +93,96 @@ module Familia
         yield hobj if block_given?
 
         hobj
+      end
+
+      # Builds, populates, and atomically persists a new instance in one step.
+      #
+      # This is a factory wrapper around {Horreum#atomic_write} for the common
+      # case of "create an object, set up its collections, and save -- all at
+      # once". The block receives the freshly-built (but not-yet-persisted)
+      # instance. Scalar assignments and collection mutations made inside the
+      # block are all committed in a single MULTI/EXEC when the block exits:
+      #
+      #   - Scalar setters (+u.name = ...+) stay in memory until the implicit
+      #     save queues the HMSET inside the transaction.
+      #   - Collection mutations (+u.tags.add(...)+) auto-route into the open
+      #     transaction because +DataType#dbclient+ honours
+      #     +Fiber[:familia_transaction]+.
+      #
+      # Nothing reaches the database until the block exits, so a factory no
+      # longer has to choose between sequencing +save+ before collection writes
+      # or reaching for +atomic_write+ directly.
+      #
+      # ## Persistence semantics
+      #
+      # +build+ has create-only semantics: it raises
+      # {Familia::RecordExistsError} if an object with the same identifier
+      # already exists. This follows the principle of least astonishment --
+      # a factory helper should not silently overwrite existing records.
+      # Use {Persistence#save} or {Persistence#save_with_collections} when
+      # you explicitly want overwrite/upsert behaviour.
+      #
+      # Concurrency: both paths use a WATCH + MULTI/EXEC optimistic lock on a
+      # single connection for race-safe duplicate detection (not a server-side
+      # atomic check). Without a block, +build+ delegates to
+      # {#save_if_not_exists!}. With a block, +atomic_write+ is called
+      # with +watch_keys:+ and +pre_check:+ so the existence check runs
+      # between WATCH and MULTI -- if the key is created by another client
+      # in that window, Redis aborts the transaction and the method retries
+      # with exponential backoff (up to 3 attempts). See issue #288.
+      #
+      # ## Without a block
+      #
+      # When called without a block there are no collection operations to fold
+      # in, so +build+ uses +save_if_not_exists!+ and returns the instance.
+      #
+      # Positional and keyword arguments are forwarded to {.new}. The block is
+      # NOT forwarded to the constructor -- it is invoked here, after building,
+      # with the new instance.
+      #
+      # @yield [instance] The newly built instance, for scalar/collection setup.
+      # @yieldparam instance [Horreum] The not-yet-persisted instance.
+      # @return [Horreum] The built and persisted instance.
+      #
+      # @raise [Familia::RecordExistsError] If an object with the same identifier
+      #   already exists in the database.
+      # @raise [Familia::CrossDatabaseError] If the class has related fields on a
+      #   different +logical_database+ than the parent (MULTI/EXEC cannot span
+      #   databases). Fall back to building the object and using
+      #   {Persistence#save_with_collections} in that case.
+      # @raise [Familia::NoIdentifier] If the instance has no usable identifier.
+      #
+      # @example Factory/fixture creation with collections (issue #279)
+      #   user = User.build(email: 'alice@example.com') do |u|
+      #     u.tags.add('admin')
+      #     u.sessions.push('abc123')
+      #   end
+      #   # HMSET + SADD + RPUSH all fire in one MULTI/EXEC at block exit
+      #
+      # @example Without a block (plain save)
+      #   user = User.build(email: 'bob@example.com')
+      #
+      # @see Horreum#atomic_write The underlying single-MULTI/EXEC write
+      # @see Persistence#save_with_collections Sequential alternative for
+      #   cross-database configurations
+      #
+      def build(*, **)
+        # Forward only positional/keyword args to the constructor; the block is
+        # a post-build callback, so it must not leak into new/initialize.
+        instance = new(*, **)
+
+        if block_given?
+          instance.atomic_write(
+            watch_keys: [instance.dbkey],
+            pre_check: -> { raise Familia::RecordExistsError, instance.dbkey if instance.exists? }
+          ) { yield instance }
+        else
+          # No block means no collection ops to fold in, so we can use the
+          # WATCH-guarded save_if_not_exists! directly — race-safe.
+          instance.save_if_not_exists!
+        end
+
+        instance
       end
 
       def multiget(...)
@@ -161,7 +273,7 @@ module Familia
           does_exist = Familia.positive?(dbclient.exists(objkey))
 
           Familia.debug "[find_by_key] #{self} from key #{objkey} (exists: #{does_exist})"
-          Familia.trace :FIND_BY_DBKEY_KEY, nil, objkey
+          Familia.trace :FIND_BY_DBKEY_KEY, nil, objkey if Familia.debug?
 
           # This is the reason for calling exists first. We want to definitively
           # and without any ambiguity know if the object exists in the database. If it
@@ -172,11 +284,11 @@ module Familia
         else
           # Optimized mode: Skip existence check
           Familia.debug "[find_by_key] #{self} from key #{objkey} (check_exists: false)"
-          Familia.trace :FIND_BY_DBKEY_KEY, nil, objkey
+          Familia.trace :FIND_BY_DBKEY_KEY, nil, objkey if Familia.debug?
         end
 
         obj = dbclient.hgetall(objkey) # horreum objects are persisted as database hashes
-        Familia.trace :FIND_BY_DBKEY_INSPECT, nil, "#{objkey}: #{obj.inspect}"
+        Familia.trace :FIND_BY_DBKEY_INSPECT, nil, "#{objkey}: #{obj.inspect}" if Familia.debug?
 
         # Always check for empty hash to handle race conditions where the key
         # expires between EXISTS check and HGETALL (when check_exists: true),
@@ -464,6 +576,15 @@ module Familia
 
         objkey = dbkey identifier, suffix
 
+        # Load the object BEFORE the transaction so its field values are available
+        # for class-level index cleanup. Removing a unique-index entry needs the
+        # field value (e.g. email) to HDEL the right mapping, and reads cannot run
+        # inside MULTI/EXEC. If the hash is already gone (nil) we skip index
+        # cleanup -- without the field values the entries to remove are unknowable.
+        # This mirrors the instance #destroy! (which calls remove_from_class_indexes!)
+        # so both destroy paths leave indexes consistent (see issue #241).
+        loaded = find_by_dbkey(objkey, check_exists: false)
+
         # Execute all deletion operations within a transaction
         transaction do |conn|
           # Clean up related fields first to avoid orphaned keys
@@ -485,6 +606,10 @@ module Familia
           # Delete the main object key
           ret = conn.del(objkey)
           Familia.trace :DESTROY!, nil, "#{objkey} #{ret.inspect}" if Familia.debug?
+
+          # Clean up class-level index entries (same as instance #destroy!).
+          # Routes its HDELs into this open transaction via Fiber[:familia_transaction].
+          loaded&.send(:remove_from_class_indexes!)
 
           # Remove from instances collection to avoid ghost entries
           instances.remove(identifier) if respond_to?(:instances)
@@ -749,6 +874,7 @@ module Familia
       def instantiate_from_hash(obj_hash)
         instance = allocate
         instance.instance_variable_set(:@dirty_fields, Concurrent::Map.new)
+        instance.instance_variable_set(:@warned_dirty_signatures, Concurrent::Map.new)
         instance.send(:initialize_relatives)
         instance.send(:initialize_with_keyword_args_deserialize_value, **obj_hash)
         # Object was just loaded from Redis, so it matches DB state exactly.
@@ -800,6 +926,7 @@ module Familia
         # Use a temporary instance for deserialization (needs serialize_value/deserialize_value)
         temp = allocate
         temp.instance_variable_set(:@dirty_fields, Concurrent::Map.new)
+        temp.instance_variable_set(:@warned_dirty_signatures, Concurrent::Map.new)
         temp.send(:initialize_relatives)
 
         raw_hash.each_with_object({}) do |(field, raw_val), result|

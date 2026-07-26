@@ -13,53 +13,36 @@ require_relative 'encryption/providers/aes_gcm_provider'
 require_relative 'encryption/registry'
 require_relative 'encryption/manager'
 require_relative 'encryption/encrypted_data'
+require_relative 'encryption/request_cache'
 
 module Familia
   class EncryptionError < StandardError; end
 
   module Encryption
-    # Smart facade with provider selection and field-specific encryption
+    # Smart facade over the provider registry: default-provider selection,
+    # explicit per-call algorithm selection, and envelope-driven decryption.
     #
-    # Usage in EncryptedFieldType can now be more flexible:
+    # Three entry points:
     #
-    #   module Familia
-    #     class EncryptedFieldType < FieldType
-    #       attr_reader :algorithm  # Optional algorithm override
+    #   # Encrypt with the registry's default provider (highest priority
+    #   # available -- XChaCha20-Poly1305 when rbnacl is loaded, else AES-256-GCM).
+    #   Familia::Encryption.encrypt(plaintext, context:, additional_data:)
     #
-    #       def initialize(name, aad_fields: [], algorithm: nil, **options)
-    #         super(name, **options.merge(on_conflict: :raise))
-    #         @aad_fields = Array(aad_fields).freeze
-    #         @algorithm = algorithm  # Use specific algorithm for this field
-    #       end
+    #   # Encrypt with a specific registered algorithm, independent of the
+    #   # default's priority ('aes-256-gcm' or 'xchacha20poly1305').
+    #   Familia::Encryption.encrypt_with(algorithm, plaintext, context:, additional_data:)
     #
-    #       def encrypt_value(record, value)
-    #         context = build_context(record)
-    #         additional_data = build_aad(record)
+    #   # Decrypt: the provider is resolved from the envelope's own algorithm
+    #   # field, so ciphertext written under any registered algorithm (or a
+    #   # retired key version) decrypts without the caller specifying anything.
+    #   Familia::Encryption.decrypt(encrypted, context:, additional_data:)
     #
-    #         if @algorithm
-    #           # Use specific algorithm for this field
-    #           Familia::Encryption.encrypt_with(@algorithm, value,
-    #             context: context,
-    #             additional_data: additional_data)
-    #         else
-    #           # Use default best algorithm
-    #           Familia::Encryption.encrypt(value,
-    #             context: context,
-    #             additional_data: additional_data)
-    #         end
-    #       end
-    #
-    #       # Decrypt auto-detects algorithm from data, so no change needed
-    #       def decrypt_value(record, encrypted)
-    #         context = build_context(record)
-    #         additional_data = build_aad(record)
-    #
-    #         Familia::Encryption.decrypt(encrypted,
-    #           context: context,
-    #           additional_data: additional_data)
-    #       end
-    #     end
-    #   end
+    # EncryptedFieldType builds on this: `encrypted_field :name` uses #encrypt
+    # (the default provider), while `encrypted_field :name, algorithm: '...'`
+    # pins that field's writes to #encrypt_with. Because reads are always
+    # envelope-driven, a field's algorithm pin can be added, changed, or removed
+    # without breaking any ciphertext already at rest -- the lever behind the
+    # reader-before-writer rollout for a one-way format migration.
     class << self
       # Get or create a manager with specific algorithm
       #

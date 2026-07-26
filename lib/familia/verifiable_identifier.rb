@@ -18,9 +18,6 @@ module Familia
     # This key is the root of trust for verifying identifier authenticity. It must be
     # a long, random, and cryptographically strong string.
     #
-    # @!attribute [r] SECRET_KEY
-    #   @return [String] The secret key.
-    #
     # @note Security Considerations:
     #   - **Secrecy:** This key MUST be kept secret and secure, just like a database
     #     password or API key. Do not commit it to version control.
@@ -29,16 +26,56 @@ module Familia
     #   - **Rotation:** If this key is ever compromised, it must be rotated. Be
     #     aware that rotating the key will invalidate all previously generated
     #     verifiable identifiers.
+    #   - **No committed fallback:** There is intentionally NO default. A hardcoded
+    #     secret in source would be public knowledge, letting anyone forge valid
+    #     identifiers (issue #310, S1). A missing OR blank secret raises -- but
+    #     lazily, the first time an identifier is actually minted or verified, so
+    #     merely requiring this file (e.g. for introspection) never blows up.
     #
     # @example Generating and Setting the Key
     #     1. Generate a new secure key in your terminal:
     #        $ openssl rand -hex 32
-    #        > cafef00dcafef00dcafef00dcafef00dcafef00dcafef00d
+    #        > <64 hex characters>
     #
     #     2. Set it as an environment variable in your production environment:
-    #        export VERIFIABLE_ID_HMAC_SECRET="cafef00dcafef00dcafef00dcafef00dcafef00dcafef00d"
+    #        export VERIFIABLE_ID_HMAC_SECRET="<the generated value>"
     #
-    SECRET_KEY = ENV.fetch('VERIFIABLE_ID_HMAC_SECRET', 'cafef00dcafef00dcafef00dcafef00dcafef00dcafef00d')
+    # @return [String] the configured secret
+    # @raise [KeyError] if VERIFIABLE_ID_HMAC_SECRET is unset or blank
+    def self.secret_key
+      # Treat a present-but-blank value the same as absent. ENV.fetch only fires
+      # its default block when the key is missing, so a blank
+      # VERIFIABLE_ID_HMAC_SECRET="" (or a whitespace-only "   ", e.g. from a YAML
+      # parser or templating tool) would otherwise sail through and HMAC every
+      # identifier under an effectively empty key -- silently reintroducing the
+      # forgeable-key weakness #310 S1 closed. This bites container setups that
+      # inject `VERIFIABLE_ID_HMAC_SECRET=${VERIFIABLE_ID_HMAC_SECRET:-}`, which
+      # supplies an empty string whenever the outer variable is unset. strip.empty?
+      # fails closed on nil, "", and all-whitespace alike.
+      @secret_key ||= begin
+        value = ENV.fetch('VERIFIABLE_ID_HMAC_SECRET', nil)
+        if value.nil? || value.strip.empty?
+          raise KeyError, <<~MSG.strip
+            VERIFIABLE_ID_HMAC_SECRET is not set (or is blank). Familia::VerifiableIdentifier
+            refuses to fall back to a committed default or empty secret -- a known or empty
+            key would let anyone forge valid identifiers. Generate one with `openssl rand -hex
+            32` and export it before generating or verifying identifiers.
+          MSG
+        end
+        value
+      end
+    end
+
+    # Clears the memoized secret so the next {.secret_key} call re-reads the
+    # environment. Intended for test suites that swap the configured secret (or
+    # exercise the missing-secret path) within a single process. Production code
+    # never needs this: the secret is fixed for a deployment, and rotating it
+    # requires a restart (and invalidates every previously generated identifier).
+    #
+    # @return [nil]
+    def self.reset_secret_key!
+      @secret_key = nil
+    end
 
     # The length of the random part of the ID in hex characters (256 bits).
     RANDOM_HEX_LENGTH = 64
@@ -155,7 +192,7 @@ module Familia
         hmac_input = scope ? "#{message}:scope:#{scope}" : message
 
         digest = OpenSSL::Digest.new('sha256')
-        hmac = OpenSSL::HMAC.hexdigest(digest, SECRET_KEY, hmac_input)
+        hmac = OpenSSL::HMAC.hexdigest(digest, secret_key, hmac_input)
         # Truncate to the desired length for the tag.
         hmac[0...TAG_HEX_LENGTH]
       end

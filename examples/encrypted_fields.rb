@@ -16,11 +16,15 @@ Familia.uri = 'redis://localhost:2525/3'
 puts '=== Encrypted Fields Feature Examples ==='
 puts
 
-# Configure encryption keys for examples
+# Configure encryption keys for examples.
+#
+# Keys must decode to exactly 32 bytes. In production, generate them with
+# `Base64.strict_encode64(SecureRandom.bytes(32))` and load from the
+# environment or a secrets manager -- never hardcode real keys.
 Familia.configure do |config|
   config.encryption_keys = {
-    v1: 'dGVzdGtleWZvcmV4YW1wbGVzMTIzNDU2Nzg5MA==', # Base64 encoded 32 bytes
-    v2: 'bmV3ZXJrZXlmb3JleGFtcGxlczEyMzQ1Njc4OTA=', # Base64 encoded 32 bytes
+    v1: Base64.strict_encode64('example-encryption-key-version-1'),
+    v2: Base64.strict_encode64('example-encryption-key-version-2'),
   }
   config.current_key_version = :v2
   config.encryption_personalization = 'FamiliaExamples'
@@ -65,11 +69,13 @@ user = SecureUser.new(
 user.save
 puts '✓ User saved with encrypted fields'
 
-# Demonstrate transparent access
+# Demonstrate controlled access. ConcealedString#reveal requires a block;
+# the plaintext is only available inside it and the block's return value
+# becomes reveal's return value.
 puts "Name (plaintext): #{user.name}"
-puts "SSN (encrypted): #{user.ssn.class} -> #{user.ssn.reveal}"
-puts "Credit card: #{user.credit_card.reveal}"
-puts "Notes: #{user.notes.reveal}"
+puts "SSN (encrypted): #{user.ssn.class} -> #{user.ssn.reveal { |v| v }}"
+puts "Credit card: #{user.credit_card.reveal { |v| v }}"
+puts "Notes: #{user.notes.reveal { |v| v }}"
 
 # Show how ConcealedString protects data in logs
 puts "SSN to_s (safe for logging): #{user.ssn}"
@@ -106,8 +112,8 @@ puts '✓ Document saved with AAD-protected content'
 
 # AAD ensures content can only be decrypted with matching metadata
 puts "Title: #{doc.title}"
-puts "Content (with AAD protection): #{doc.content.reveal}"
-puts "Summary (no AAD): #{doc.summary.reveal}"
+puts "Content (with AAD protection): #{doc.content.reveal { |v| v }}"
+puts "Summary (no AAD): #{doc.summary.reveal { |v| v }}"
 puts
 
 # Example 3: Performance optimization with request caching
@@ -195,7 +201,7 @@ original_current_key_version = Familia.config.current_key_version
 begin
   # Start with only v1 available so the initial save uses v1 as current.
   Familia.config.encryption_keys = {
-    v1: 'dGVzdGtleWZvcmV4YW1wbGVzMTIzNDU2Nzg5MA==',
+    v1: Base64.strict_encode64('example-encryption-key-version-1'),
   }
   Familia.config.current_key_version = :v1
 
@@ -211,8 +217,8 @@ begin
   # Rotate: add v2, promote v2 to current. v1 stays in the keyring so existing
   # ciphertext remains decryptable until it is re-encrypted.
   Familia.config.encryption_keys = {
-    v1: 'dGVzdGtleWZvcmV4YW1wbGVzMTIzNDU2Nzg5MA==',
-    v2: 'bmV3ZXJrZXlmb3JleGFtcGxlczEyMzQ1Njc4OTA=',
+    v1: Base64.strict_encode64('example-encryption-key-version-1'),
+    v2: Base64.strict_encode64('example-encryption-key-version-2'),
   }
   Familia.config.current_key_version = :v2
 
@@ -263,12 +269,15 @@ puts "Has encrypted data: #{mem_obj.encrypted_data?}"
 puts "Fields cleared: #{mem_obj.encrypted_fields_cleared?}"
 
 # Access some fields to load them into memory
-puts "Secret one: #{mem_obj.secret_one.reveal}"
-puts "Secret two: #{mem_obj.secret_two.reveal}"
+puts "Secret one: #{mem_obj.secret_one.reveal { |v| v }}"
+puts "Secret two: #{mem_obj.secret_two.reveal { |v| v }}"
 
-# Clear specific field
-mem_obj.secret_one.clear!
-puts "Secret one cleared: #{mem_obj.secret_one.cleared?}"
+# Clear a specific field. Capture the ConcealedString reference first:
+# clear! nulls its record/field context, so the field getter would reject
+# it with a context-isolation error if accessed again afterward.
+secret_one = mem_obj.secret_one
+secret_one.clear!
+puts "Secret one cleared: #{secret_one.cleared?}"
 
 # Clear all encrypted fields
 mem_obj.clear_encrypted_fields!
@@ -300,8 +309,9 @@ begin
   old_keys = Familia.config.encryption_keys.dup
   Familia.config.encryption_keys = { v3: old_keys[:v2] }
 
-  # This should fail when trying to decrypt
-  test_obj.ssn.reveal
+  # This should fail when trying to decrypt: reveal decrypts before yielding,
+  # so the missing v2 key raises Familia::EncryptionError and the block never runs.
+  test_obj.ssn.reveal { |v| v }
 rescue Familia::EncryptionError => e
   puts "✓ Caught expected error with missing key version: #{e.message}"
 ensure
@@ -345,8 +355,9 @@ class SecureProfile < Familia::Horreum
   safe_dump_field :username
   safe_dump_field :email
   safe_dump_field :phone_display, lambda { |profile|
-    phone = profile.phone.reveal
-    phone ? "#{phone[0..2]}-***-#{phone[-4..]}" : nil
+    profile.phone.reveal do |phone|
+      phone ? "#{phone[0..2]}-***-#{phone[-4..]}" : nil
+    end
   }
   safe_dump_field :created_at
 end
@@ -369,15 +380,18 @@ puts 'Notice: SSN and bank account are automatically excluded'
 puts 'Phone number is included but masked for display'
 puts
 
-# Clean up examples
+# Clean up examples. Surgical teardown: destroy! removes exactly each
+# record's own keys + instances entry, never a `prefix:*` glob that could
+# wipe unrelated data on a shared Redis db. mem_obj (Example 5) and the
+# invalid-config object (Example 6) were never persisted, so they are
+# intentionally absent here.
 puts '=== Cleaning up test data ==='
-[SecureUser, SecureDocument, VaultEntry, RotationTest, MemoryTest, SecureProfile].each do |klass|
-  keys = klass.dbclient.keys("#{klass.name.downcase.gsub('::', '_')}:*")
-  klass.dbclient.del(*keys) unless keys.empty?
-  puts "✓ Cleaned #{klass.name} (#{keys.length} keys)"
-rescue StandardError => e
-  puts "✗ Error cleaning #{klass.name}: #{e.message}"
-end
+records = [user, doc, profile, *entries]
+records << RotationTest.find_by_id('rotation_test')
+records << SecureUser.find_by_id('version_test@example.com')
+records = records.compact
+records.each(&:destroy!)
+puts "✓ Destroyed #{records.size} example records (no prefix globs)"
 
 # Clear any request cache
 begin

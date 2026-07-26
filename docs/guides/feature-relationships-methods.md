@@ -228,6 +228,9 @@ domain.customer_count      # => 2
 customer.domains.size      # Count
 customer.domains.to_a      # All IDs
 customer.domains.range(0, 9)  # First 10
+
+# Iterate as loaded records (batched via load_multi, ghosts filtered)
+customer.domains.each_record { |domain| domain.refresh! }
 ```
 
 ### Working with Indexes
@@ -250,6 +253,44 @@ company.find_by_badge_number('12345')    # => employee
 employee.add_to_company_dept_index(company)
 engineers = company.find_all_by_department('engineering')
 ```
+
+## Introspection Methods
+
+Unlike the methods above, these are always present on any class with
+`feature :relationships` (and its instances) — they are not generated per
+declaration. They report *what is declared* and *what an object currently
+belongs to*.
+
+### Class-Level (configuration)
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `indexing_relationships` | `Array<IndexingRelationship>` | All `unique_index` / `multi_index` declarations; `.cardinality` distinguishes `:unique` from `:multi` |
+| `participation_relationships` | `Array<ParticipationRelationship>` | All `participates_in` / `class_participates_in` declarations |
+
+### Instance-Level (current state)
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `current_indexings` | `Array<Hash>` | Indexes this object currently appears in |
+| `indexed_in?(:index_name)` | Boolean | Whether the object is in the named class-level index |
+| `current_participations` | `Array<Hash>` | Participation collections this object belongs to |
+| `relationship_status` | Hash | `{ identifier:, current_participations:, index_memberships: }` |
+
+### Project-Wide (every class)
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `Familia.index_descriptors(cardinality:, class_level:, owner:)` | `Array<IndexDescriptor>` | Every index across the clan, filterable |
+| `Familia.unique_indexes` / `Familia.multi_indexes` | `Array<IndexDescriptor>` | Cardinality-filtered convenience helpers |
+| `Familia.participation_descriptors(owner:)` | `Array<[Class, ParticipationRelationship]>` | Every participation, paired with its owner |
+| `Familia.stale_indexes(sample:, owner:)` | `Array<IndexDescriptor>` | Class-level unique indexes holding pre-2.10.0 data |
+| `Familia.assert_indexes_current!(on_stale:, owner:)` | Boolean | Boot guard: raise/warn if any index is stale |
+
+Each `IndexDescriptor` exposes the relationship metadata plus `coordinate`,
+`each_record(value:, scope:)`, `rebuild!(scope:)`, and `stale_format?`. For the
+full breakdown and the audit/repair layer, see
+[Introspection](feature-relationships.md#introspection).
 
 ## See Also
 

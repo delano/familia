@@ -169,6 +169,57 @@ module Familia
         # Return same MultiResult format as other methods
         MultiResult.new(command_return_values)
       end
+
+      # Internal sentinel raised ONLY by execute_watched_transaction to mark a
+      # genuine WATCH abort (EXEC discarded). It lets the retry loop distinguish
+      # a real abort -- which should retry -- from an OptimisticLockError raised
+      # by the caller's pre_check or user block, which must propagate untouched
+      # (otherwise the loop would silently re-run the whole transaction and mask
+      # the real failure). Subclasses OptimisticLockError so a public
+      # `rescue Familia::OptimisticLockError` still catches an exhausted retry.
+      class WatchAbortError < Familia::OptimisticLockError; end
+
+      # Runs a WATCH-guarded transaction on a SINGLE resolved connection so the
+      # WATCH and the MULTI/EXEC share one socket (the optimistic lock is only
+      # effective this way). The caller's block receives the resolved connection
+      # and is expected to run any pre-check reads and then open the MULTI via
+      # execute_normal_transaction(-> { conn }) { ... }. Retries on WATCH abort.
+      #
+      # @param dbclient_proc [Proc] resolves the concrete Redis client (called once per attempt)
+      # @param watch_keys [Array<String>] keys to WATCH
+      # @param max_attempts [Integer]
+      # @yield [conn] the resolved connection
+      # @return [MultiResult, Object] the block's result
+      # @raise [Familia::OptimisticLockError] if retries are exhausted
+      def self.execute_watched_transaction(dbclient_proc, watch_keys:, max_attempts: 3)
+        attempts = 0
+        begin
+          attempts += 1
+          conn = dbclient_proc.call
+          txn_result = conn.watch(*watch_keys) do
+            yield(conn)
+          end
+          # Detect a WATCH abort regardless of how the block opened the MULTI: a
+          # block that goes through execute_normal_transaction gets a
+          # MultiResult(nil) on abort, while one that drives conn.multi directly
+          # would see a bare nil (aborted EXEC). Treat both as an abort so the
+          # retry fires either way.
+          if txn_result.nil? || (txn_result.is_a?(MultiResult) && txn_result.results.nil?)
+            raise WatchAbortError,
+                  "WATCH detected concurrent modification of #{watch_keys.join(', ')}"
+          end
+          txn_result
+        rescue WatchAbortError
+          raise if attempts >= max_attempts
+
+          # Exponential backoff between WATCH retries (sub-10ms). This sleep
+          # blocks the current thread; under a Fiber::Scheduler (Ruby 3+) it
+          # yields cooperatively, but with no scheduler installed it parks the
+          # thread for the backoff window.
+          sleep(0.001 * (2**attempts))
+          retry
+        end
+      end
     end
   end
 end

@@ -101,13 +101,15 @@ AutoIndexUser.username_index.get('testuser')
 AutoIndexUser.email_index.get('test@example.com')
 #=> @user_id
 
-## Changing indexed field and saving adds new entry (old entry remains unless manually removed)
-# Note: Auto-indexing is idempotent addition only - updates require manual update_in_class_* calls
+## Changing a unique-indexed field and saving removes the stale entry
+# unique_index auto-update is old-value-aware (via dirty tracking): the previous
+# value's mapping is removed in the same save transaction so find_by_<field> can
+# never resolve a tombstone and the freed value can be reused.
 @user.email = 'newemail@example.com'
 @user.save
-# New email is indexed, but old email remains (expected behavior - use update_in_class_* for proper updates)
+# Old email mapping is gone; new email is indexed.
 [AutoIndexUser.email_index.has_key?('test@example.com'), AutoIndexUser.email_index.get('newemail@example.com') == @user_id]
-#=> [true, true]
+#=> [false, true]
 
 # =============================================
 # 2. Instance-Scoped Indexes (Manual Only)
@@ -155,14 +157,13 @@ AutoIndexUser.find_by_email('create@example.com')&.user_id
 AutoIndexUser.email_index.get('create@example.com')
 #=> @user2_id
 
-## Field update followed by save adds new entry (use update_in_class_* for proper updates)
+## Field update followed by save removes the old unique-index value automatically
 old_email = @user2.email
 @user2.email = 'updated@example.com'
 @user2.save
-# Both old and new emails are indexed (auto-indexing doesn't remove old values)
-# For proper updates that remove old values, use: @user2.update_in_class_email_index(old_email)
+# Old value mapping is removed in the same save; new value is indexed.
 [AutoIndexUser.email_index.has_key?(old_email), AutoIndexUser.email_index.get('updated@example.com') == @user2_id]
-#=> [true, true]
+#=> [false, true]
 
 # =============================================
 # 4. Integration with Other Features

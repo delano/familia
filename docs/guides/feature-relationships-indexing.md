@@ -409,9 +409,12 @@ Index values (the object identifiers stored in hash keys and sets) are raw strin
 ### Debugging
 
 ```ruby
-# Check configuration
+# Check configuration — returns Array<IndexingRelationship> (Data objects),
+# distinguished by .cardinality (:unique vs :multi)
 User.indexing_relationships
-# => [{ field: :email, index_name: :email_lookup, ... }]
+# => [#<data IndexingRelationship field=:email, index_name=:email_lookup,
+#            cardinality=:unique, within=nil, ...>]
+User.indexing_relationships.select { |r| r.cardinality == :unique }
 
 # Inspect index contents
 User.email_lookup.to_h
@@ -419,7 +422,12 @@ User.email_lookup.to_h
 
 # Verify membership
 employee.in_company_badge_index?(company)  # => true/false
+user.indexed_in?(:email_lookup)            # => true/false (class-level indexes)
 ```
+
+For the full introspection API — the `IndexingRelationship` fields, a
+project-wide sweep over `Familia.members`, per-instance membership state, and
+the audit/repair layer — see [Introspection](feature-relationships.md#introspection).
 
 ## See Also
 

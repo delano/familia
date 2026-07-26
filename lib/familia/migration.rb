@@ -1,3 +1,5 @@
+# lib/familia/migration.rb — Module entry point and configuration
+#
 # frozen_string_literal: true
 
 require_relative 'migration/errors'

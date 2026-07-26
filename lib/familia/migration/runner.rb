@@ -1,3 +1,5 @@
+# lib/familia/migration/runner.rb — Orchestration and dependency resolution
+#
 # frozen_string_literal: true
 
 module Familia
