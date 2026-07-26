@@ -29,7 +29,9 @@ module Familia
       #
       # ## Flags versus roles
       #
-      # Two symbol namespaces exist and they are NOT interchangeable:
+      # Four symbol namespaces exist and they are NOT interchangeable. Two are
+      # inputs that carry bits (flags, roles), one is an input that carries a
+      # mask (categories), and one is output only (tiers):
       #
       # - PERMISSION_FLAGS are the atomic bits (:read, :write, :delete, ...).
       #   They are the currency of every API that inspects, mutates, or ranges
@@ -42,6 +44,15 @@ module Familia
       #   encode_score(ts, [:editor]) does NOT -- the array form routes every
       #   element through permission_level_value like everything else, so it
       #   takes atomic flags only.
+      # - PERMISSION_CATEGORIES are bitmasks for broad overlap queries
+      #   (:readable, :content_editor, :administrator, :privileged, :owner),
+      #   accepted only by category?, filter_by_category and meets_category?.
+      #   They are not bundles to grant -- they answer "does this score touch
+      #   this mask", and several are true at once for the same score.
+      # - Tiers are the return values of permission_tier (:administrator,
+      #   :content_editor, :viewer, :none). They are never valid input. Two of
+      #   the names are borrowed from PERMISSION_CATEGORIES but mean a single
+      #   exclusive bucket rather than an overlap -- see permission_tier.
       #
       # Passing a role to a flag-taking method raises ArgumentError rather than
       # resolving it -- except :admin, which names a flag too and so resolves
@@ -338,9 +349,19 @@ module Familia
 
           # Check broad permission categories
           #
+          # Overlap test, not a classification: true when the score shares ANY
+          # bit with the category mask. The masks are not mutually exclusive, so
+          # one score answers true to several categories at once -- a moderator
+          # score (read|write|edit|delete) is true for all five. Use
+          # permission_tier when you want a single bucket instead.
+          #
+          # Takes a PERMISSION_CATEGORIES key. Flags and roles are not
+          # categories; an unknown symbol returns false rather than raising,
+          # because there is no bit to misinterpret.
+          #
           # @param score [Float] The encoded score
           # @param category [Symbol] Category to check (:readable, :content_editor, :administrator, etc.)
-          # @return [Boolean] True if score meets the category requirements
+          # @return [Boolean] True if score shares any bit with the category mask
           def category?(score, category)
             decoded = decode_score(score)
             permission_bits = decoded[:permissions]
@@ -367,6 +388,27 @@ module Familia
           end
 
           # Get permission tier for score
+          #
+          # Classification, not an overlap test: returns exactly one bucket,
+          # checking most-privileged first. The three masks it consults partition
+          # all eight bits (0b11110000 | 0b00001110 | 0b00000001 == 0xFF), so the
+          # highest set bit alone decides the answer.
+          #
+          # Tier names are a FOURTH symbol namespace -- output only, never valid
+          # input to any method here. Two of them collide with
+          # PERMISSION_CATEGORIES keys while asking the opposite question, so a
+          # score can be true for category X and still tier as something else:
+          #
+          #   score = encode_score(t, PERMISSION_ROLES[:moderator])  # bits 45
+          #   category?(score, :content_editor)  #=> true  (overlaps the mask)
+          #   permission_tier(score)             #=> :administrator
+          #
+          # The moderator lands in :administrator because :delete (bit 5) sits
+          # inside the administrator mask. Do not read a tier as "this user is a
+          # PERMISSION_ROLES[:administrator]" -- the role namespace does not even
+          # contain that name. Tier :viewer is the one exact correspondence: its
+          # mask arithmetic makes it reachable only at bits == 1, which is
+          # PERMISSION_ROLES[:viewer].
           #
           # @param score [Float] The encoded score
           # @return [Symbol] Permission tier (:administrator, :content_editor, :viewer, :none)
