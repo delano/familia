@@ -4,9 +4,11 @@
 
 # Pins the "Multi-collection operations" example in the Relationships rdoc.
 # That block previously documented `update_multiple_presence` and
-# `union_collections` with a `min_permission:` keyword -- none of which exist
-# anywhere in lib/. This file runs the replacement example verbatim so it
-# cannot drift back into fiction.
+# `union_collections`, neither of which exists anywhere in lib/, and passed the
+# second a `min_permission:` keyword. `min_permission` is a real name -- the
+# positional parameter of the generated `<collection>_with_permission` -- but
+# not a keyword of the method the example called. This file runs the
+# replacement example verbatim so it cannot drift back into fiction.
 
 require_relative '../support/helpers/test_helpers'
 
