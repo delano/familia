@@ -88,6 +88,28 @@ require_relative '../../support/helpers/test_helpers'
 @se.permission_tier(@se.encode_score(@ts, 0))
 #=> :none
 
+## permission_tier :viewer is reachable only at bits == 1, the exact
+## correspondence with PERMISSION_ROLES[:viewer]. The three masks it consults
+## partition all eight bits, so any other bit pattern tiers higher.
+(0..255).select { |b| @se.permission_tier(@se.encode_score(@ts, b)) == :viewer }
+#=> [Familia::Features::Relationships::ScoreEncoding::PERMISSION_ROLES[:viewer]]
+
+## category? is a non-exclusive overlap test: a moderator score answers true
+## to every category at once
+@moderator_score = @se.encode_score(@ts, @se::PERMISSION_ROLES[:moderator])
+%i[readable content_editor administrator privileged owner].all? { |c| @se.category?(@moderator_score, c) }
+#=> true
+
+## permission_tier disagrees with the same-named category on that score: it
+## assigns one bucket, and :delete falls inside the administrator mask
+[@se.category?(@moderator_score, :content_editor), @se.permission_tier(@moderator_score)]
+#=> [true, :administrator]
+
+## category? returns false for a role symbol rather than raising -- unlike the
+## flag-taking methods, there is no bit to misinterpret
+@se.category?(@moderator_score, :moderator)
+#=> false
+
 ## meets_category? :readable is true for any permission bits
 @se.meets_category?(1, :readable)
 #=> true

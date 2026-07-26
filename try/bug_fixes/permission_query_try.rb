@@ -60,5 +60,15 @@ now = Familia.now
 @target.widgets_with_permission.sort
 #=> ["w_admin", "w_read", "w_write"]
 
+## takes atomic flags only -- a role symbol raises rather than expanding to its
+## bits, since permission? tests bits individually and would answer "holds any"
+## where the caller means "holds all"
+@target.widgets_with_permission(:editor)
+#=!> error.class == ArgumentError
+
+## :admin names a flag as well as a role, so it resolves to bit 7 and does not raise
+@target.widgets_with_permission(:admin)
+#=> ["w_admin"]
+
 @target.widgets.delete!
 @target.destroy!
