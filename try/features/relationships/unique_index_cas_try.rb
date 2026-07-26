@@ -427,6 +427,32 @@ end
 CasUser.email_cas_index['stale2@test.com']
 #=> nil
 
+## update_all_indexes is covered too -- it routes to update_in_class_*
+CasUser.email_cas_index.clear
+@uai = CasUser.new(uid: 'led_uai', email: 'uai_old@test.com')
+@uai.save
+@uai.email = 'uai_new@test.com'
+begin
+  CasUser.transaction { @uai.update_all_indexes(email: 'uai_old@test.com') }
+  'no error'
+rescue Familia::OperationModeError
+  'refused'
+end
+#=> 'refused'
+
+## A record with no identifier gets the refusal, not an identifier error
+# unique_index_claimed? reads `identifier` on the refusal path, which earlier
+# versions never touched. Horreum#identifier returns nil (rather than raising)
+# for an unpopulated identifier field, so the check stays clean.
+@noid = CasUser.new(email: 'noid@test.com')
+begin
+  CasUser.transaction { @noid.add_to_class_email_cas_index }
+  'no error'
+rescue Familia::OperationModeError
+  'refused'
+end
+#=> 'refused'
+
 ## A ledger entry is a snapshot, not a reference to the record's own String
 # String#to_s returns self, so storing the value raw would let an in-place
 # mutation (downcase!, <<, strip!) rewrite the ledger in lockstep and carry a
@@ -510,7 +536,7 @@ CasUser.email_cas_index['dup@test.com']
 
 @teardown_ids = %w[save1 save2 save3 race_a race_b txn1 txn2 own stale aw1 aw2 aw3 aw4 aw5
                    led_ok led_nil led_inc led_mut led_stale led_minc led_mut2
-                   led_rel led_relnew led_orig led_copy]
+                   led_rel led_relnew led_orig led_copy led_uai]
 @teardown_ids.each { |uid| CasUser.new(uid: uid).destroy! rescue nil }
 %w[inc part oth rb_inc rb2].each { |uid| CasDualUser.new(uid: uid).destroy! rescue nil }
 CasUser.email_cas_index.clear
