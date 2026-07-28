@@ -169,14 +169,18 @@ Two constraints follow from cleanup running write-only inside a transaction:
 Both are checked before the index write, so a rejected call leaves nothing
 behind.
 
-> **`delete!` does not clean up the tracker.** `delete!` removes only the main
-> object hash; related keys — the `_idx_scopes` tracker included — survive, per
-> its documented contract. If a *new* record is later saved under the same
-> identifier, save's refresh reads the stale tracker and re-joins the tracked
-> scopes on the new record's behalf (uniqueness is still validated, so a
-> colliding value raises rather than evicts). Use `destroy!` for the full
-> lifecycle; reach for `delete!` only when leftover related keys are
-> acceptable.
+> **`delete!` does not clean up the tracker — the next save does.** `delete!`
+> removes only the main object hash; related keys — the `_idx_scopes` tracker
+> included — survive, per its documented contract. Tracker entries that outlive
+> the hash can only describe a dead incarnation of the identifier, so when a
+> record is later saved under it (plain `save` or `save_if_not_exists!`), the
+> save prunes them instead of replaying them: the previous record's index
+> entries are removed inside the save transaction and the tracker is cleared.
+> The new record starts with no instance-scoped memberships — `add_to_*` it
+> explicitly where membership is intended. The same reconciliation applies when
+> the hash expired via TTL while the tracker survived. Other related keys
+> (sets, lists, counters) are still inherited as-is; use `destroy!` for the
+> full lifecycle.
 
 ### Generated Methods
 
