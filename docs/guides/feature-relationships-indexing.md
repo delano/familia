@@ -531,8 +531,7 @@ Index values (the object identifiers stored in hash keys and sets) are raw strin
   prevent dangling entries. Call `save` before indexing (class-level indexes
   populate automatically on save).
 
-**`Familia::OperationModeError` from `add_to_class_*` / `update_in_class_*`
-(`unique_index` only):**
+**`Familia::OperationModeError` from `add_to_class_*` / `update_in_class_*` (`unique_index` only):**
 
 - The write is inside a transaction *you* opened and the record holds no claim
   on the exact value being written. That in-MULTI `HSET` is only sound as a
@@ -563,12 +562,17 @@ Index values (the object identifiers stored in hash keys and sets) are raw strin
 
   The message names whichever mutator ran, so an `atomic_write` that changed a
   field reports `update_in_class_*` (the path dirty tracking routes to), not
-  `add_to_class_*`. The error propagates out of the transaction block, so the
-  MULTI is discarded whole: neither the index entry nor any scalar field queued
-  alongside it is written, and the record reloads with its previous values.
-  `update_all_indexes` routes to `update_in_class_*` and raises the same way.
-  Instance-scoped (`within:`) unique indexes are *not* claim-enforced: inside a
-  transaction they write blindly and log that the write is unenforced.
+  `add_to_class_*`. `update_all_indexes` routes there too and raises the same
+  way. Instance-scoped (`within:`) unique indexes are *not* claim-enforced:
+  inside a transaction they write blindly and say so via `Familia.debug`, which
+  is silent unless debug logging is on.
+
+  The error propagates out of the transaction block, so the MULTI is discarded
+  whole: neither the index entry nor any scalar field queued alongside it is
+  written. Only the stored state is rolled back, though — the in-memory record
+  keeps the assignments that triggered the error and stays dirty, so a plain
+  `save` afterwards is a valid recovery (it claims, then persists the pending
+  change). Call `refresh!` instead to discard it and reload what is stored.
 
 - Two neighbouring causes of the same error class, both pre-existing: `save`
   itself refuses to run inside a transaction, and `HashKey#claim_field` refuses
