@@ -370,10 +370,7 @@ module Familia
           provider = Familia::Encryption.manager.provider
           {
             algorithm: provider.algorithm,
-            # Providers expose no key-size accessor; both bundled providers
-            # derive fixed 32-byte keys (BLAKE2b digest_size / HKDF length in
-            # their derive_key implementations).
-            key_size: 32,
+            key_size: provider.key_size,
             nonce_size: provider.nonce_size,
             tag_size: provider.auth_tag_size,
           }

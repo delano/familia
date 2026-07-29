@@ -136,6 +136,26 @@ rescue ArgumentError => e
 end
 #=> ArgumentError
 
+## incrby accepts a numeric string increment
+@counter_bone.incrby('points', '5')
+#=> 0
+
+## incrby raises on a fractional increment instead of truncating it
+begin
+  @counter_bone.incrby('points', 2.5)
+rescue ArgumentError => e
+  e.class
+end
+#=> ArgumentError
+
+## decrby raises on a fractional decrement instead of truncating it
+begin
+  @counter_bone.decrby('points', 2.5)
+rescue ArgumentError => e
+  e.class
+end
+#=> ArgumentError
+
 ## incr then decr returns the field to its original value
 before = @counter_bone.hget('points').to_i
 @counter_bone.incr('points')

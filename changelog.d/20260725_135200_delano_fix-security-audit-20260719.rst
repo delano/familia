@@ -46,13 +46,20 @@ Fixed
 - ``decrby`` and ``decr`` (and their ``decrementby``/``decrement`` aliases)
   raised on every call — one used the string ``DECRBY`` signature against a
   hash, the other called a nonexistent client method. Both now use ``HINCRBY``
-  with a negated amount, mirroring ``incrby``/``incr``.
+  with a negated amount, mirroring ``incrby``/``incr``. ``incrby`` and
+  ``decrby`` also validate the amount client-side (``Integer(_, 10)``):
+  numeric strings are accepted, and a fractional amount raises
+  ``ArgumentError`` on both instead of silently truncating in ``decrby``
+  (``Integer(2.5)`` truncates to 2) while failing server-side in ``incrby``.
 
 - ``encryption_info`` raised ``NoMethodError`` on every call via the phantom
   ``Familia::Encryption.current_provider`` and nonexistent provider accessors.
   It now uses ``Familia::Encryption.manager.provider`` and the real provider
   API, preserving the ``algorithm``/``key_size``/``nonce_size``/``tag_size``
-  hash contract.
+  hash contract. Providers now expose ``key_size`` (a lazily-read
+  ``KEY_SIZE`` constant, wired into each bundled provider's ``derive_key``)
+  rather than ``encryption_info`` hardcoding 32, so a custom provider with a
+  different derived-key length is reported accurately.
 
 Removed
 -------
@@ -129,6 +136,6 @@ Documentation
 AI Assistance
 -------------
 
-- All six fixes, their tryouts (75+ new test cases across five files), and an
+- All six fixes, their tryouts (120+ new test cases across eight files), and an
   independent full-branch verification pass were produced by AI agents working
   from the 2026-07-19 security audit's confirmed HIGH/MEDIUM findings.

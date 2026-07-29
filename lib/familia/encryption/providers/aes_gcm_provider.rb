@@ -29,6 +29,7 @@ module Familia
         ALGORITHM = 'aes-256-gcm'.freeze
         NONCE_SIZE = 12
         AUTH_TAG_SIZE = 16
+        KEY_SIZE = 32
 
         def self.available?
           true # OpenSSL is always available
@@ -139,7 +140,7 @@ module Familia
             # decryptable after a salt change.
             salt: salt || current_hkdf_salt,
             info: info,
-            length: 32,
+            length: KEY_SIZE,
             hash: 'SHA256'
           )
         end

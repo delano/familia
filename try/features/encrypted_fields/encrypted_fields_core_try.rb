@@ -189,7 +189,7 @@ end
 
 ## encryption_info values all match the default manager's provider
 provider = Familia::Encryption.manager.provider
-@info == { algorithm: provider.algorithm, key_size: 32,
+@info == { algorithm: provider.algorithm, key_size: provider.key_size,
            nonce_size: provider.nonce_size, tag_size: provider.auth_tag_size }
 #=> true
 
