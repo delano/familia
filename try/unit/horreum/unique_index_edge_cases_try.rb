@@ -290,25 +290,47 @@ rescue
 end
 #=> true
 
-## First writer claims the value; the second is rejected by the server-side CAS
-# The read guard above races (both saw an empty index), so the guard alone
-# cannot decide this. add_to_class_* settles it with a single EVAL that checks
-# and writes atomically -- the loser raises instead of silently overwriting.
-@emp8.add_to_class_email_index
+## Unsaved objects can no longer blind-write the index (#282 guard)
+# Previously both writes landed and last-write-won, leaving an orphaned
+# entry pointing at a record that never existed. The persisted-record
+# guard closes that leg of the race before any write. It fires ahead of the
+# CAS below, so this leg of the race never reaches the index at all.
 begin
-  @emp9.add_to_class_email_index
+  @emp8.add_to_class_email_index
+  false
+rescue Familia::PersistenceError
+  true
+end
+#=> true
+
+## When both racers ARE persisted, the CAS settles what the read guard cannot (#353)
+# The guard is a read, so two savers can both see an empty index (exactly the
+# pair above). claim_unique_* is a single EVAL that checks and writes
+# atomically: the first caller takes the value, the loser is told who owns it
+# instead of silently overwriting.
+@race_a = EdgeCaseEmployee.new(emp_id: 'race_a', email: 'race_cas@test.com')
+@race_b = EdgeCaseEmployee.new(emp_id: 'race_b', email: 'race_cas@test.com')
+@race_a.save
+begin
+  @race_b.claim_unique_email_index!
   'no error'
 rescue Familia::RecordExistsError => e
   e.existing_id
 end
-#=> 'e8'
+#=> 'race_a'
 
-## The first writer's claim survives the losing write
+## The first claimer's entry survives the losing write
+EdgeCaseEmployee.email_index['race_cas@test.com']
+#=> 'race_a'
+
+## No orphaned entry was written - the index stays empty
 EdgeCaseEmployee.email_index['race2@test.com']
-#=> 'e8'
+#=> nil
 
-## find_by returns nil for orphaned index entries (object never saved)
-# This is correct behavior - orphaned entries degrade gracefully to nil
+## find_by returns nil for orphaned index entries (no backing record)
+# Orphans can still be created via raw index writes; they degrade
+# gracefully to nil instead of erroring.
+EdgeCaseEmployee.email_index['race2@test.com'] = 'e9'
 EdgeCaseEmployee.find_by_email('race2@test.com')
 #=> nil
 

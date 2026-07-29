@@ -42,7 +42,9 @@ module Familia
         #   - employee.update_in_class_email_index(old_email)
         #
         # Note: Class-level indexes auto-populate on save(). Instance-scoped indexes
-        # (with within:) remain manual as they require parent context.
+        # (with within:) require an initial manual add_to_* call; afterwards save
+        # auto-refreshes the tracked entry and destroy! auto-cleans it, both via
+        # the reverse index tracker (#282).
         module UniqueIndexGenerators
           module_function
 
@@ -258,8 +260,14 @@ module Familia
               define_method(method_name) do |scope_instance|
                 return unless scope_instance
 
+                # Before any write: an untrackable scope produces an index
+                # entry that destroy! could never find again.
+                _ensure_trackable_index_scope!(scope_instance)
+
                 field_value = send(field)
                 return unless field_value
+
+                _ensure_persisted_before_index_write!(index_name, scope_instance)
 
                 index_hash = scope_instance.send(index_name)
 
@@ -288,6 +296,12 @@ module Familia
                     )
                   end
                 end
+
+                # Only reached when the value is ours: a lost claim raises
+                # above, so destroy! never inherits a tracker entry for an
+                # index entry another record owns.
+                _record_index_scope(scope_class_config, index_name, scope_instance, field_value,
+                                    cardinality: :unique)
               end
 
               # Add a guard method to enforce unique constraint on this instance-scoped index
@@ -324,18 +338,29 @@ module Familia
               method_name = :"remove_from_#{scope_class_config}_#{index_name}"
               Familia.debug("[UniqueIndexGenerators] #{name} method #{method_name}")
 
-              define_method(method_name) do |scope_instance|
+              # @param scope_instance [Object] the scope holding the index
+              # @param field_value [Object, nil] the value to unindex. Defaults
+              #   to the object's current field value, preserving the public
+              #   single-argument call. destroy! cleanup passes the value
+              #   recorded at index time instead, since the current one may
+              #   have changed (or be nil on an identifier-only instance).
+              define_method(method_name) do |scope_instance, field_value = nil|
                 return unless scope_instance
 
-                field_value = send(field)
+                field_value = send(field) if field_value.nil?
                 return unless field_value
 
-                # Use declared field accessor on scope instance
                 index_hash = scope_instance.send(index_name)
 
                 # Ownership-checked delete, so a stale in-memory field value
                 # cannot evict an entry another record now owns.
                 index_hash.release_field(field_value.to_s, identifier)
+
+                # Untracked either way. If the entry belonged to another
+                # record, release_field left it alone and this object has no
+                # business pointing destroy! at it.
+                _unrecord_index_scope(scope_class_config, index_name, scope_instance, field_value,
+                                      cardinality: :unique)
               end
 
               method_name = :"update_in_#{scope_class_config}_#{index_name}"
@@ -343,6 +368,8 @@ module Familia
 
               define_method(method_name) do |scope_instance, old_field_value = nil|
                 return unless scope_instance
+
+                _ensure_trackable_index_scope!(scope_instance)
 
                 new_field_value = send(field)
                 index_hash = scope_instance.send(index_name)
@@ -360,6 +387,8 @@ module Familia
                   end
                 end
 
+                _ensure_persisted_before_index_write!(index_name, scope_instance)
+
                 # Use Familia's transaction method for atomicity with DataType abstraction
                 scope_instance.transaction do |_tx|
                   # Release old value if provided (ownership-checked)
@@ -368,6 +397,19 @@ module Familia
                   # Re-affirm the claimed value
                   index_hash[new_field_value.to_s] = identifier if new_field_value
                 end
+
+                # Keep the tracker pointing at what is actually in the index.
+                #
+                # Synced outside the block above, which behaves differently
+                # depending on the caller. Standalone, scope_instance.transaction
+                # opens a MULTI on the SCOPE's connection -- a tracker write
+                # inside it would go to the wrong connection, since the tracker
+                # belongs to this object. The tradeoff is that standalone, the
+                # tracker sync is NOT atomic with the index write. During save
+                # the block is reentrant (it joins the caller's MULTI via
+                # Fiber[:familia_transaction]) so both land in that one
+                # transaction and the tradeoff does not apply.
+                _sync_unique_index_scope(scope_class_config, index_name, scope_instance, new_field_value)
               end
             end
           end
@@ -519,6 +561,8 @@ module Familia
 
                 return unless field_value
 
+                _ensure_persisted_before_index_write!(index_name)
+
                 unless Fiber[:familia_transaction]
                   # Outside a transaction the CAS *is* the write -- claim_field
                   # HSETs on success, so there is nothing left to do.
@@ -586,6 +630,8 @@ module Familia
 
               define_method(:"update_in_class_#{index_name}") do |old_field_value = nil|
                 new_field_value = send(field)
+
+                _ensure_persisted_before_index_write!(index_name)
 
                 # Claim before the MULTI. This is the path save takes (see
                 # Persistence#apply_class_index_change), and inside the save's

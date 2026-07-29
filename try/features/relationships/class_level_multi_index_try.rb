@@ -331,6 +331,34 @@ result = @cust3.update_in_class_role_index(nil)
 result.nil?
 #=> true
 
+## Unsaved customer cannot be added to a class-level multi-index directly
+@cust_unsaved = ClassLevelCustomer.new(custid: 'cust_unsaved', name: 'Ghost', role: 'phantom', region: 'west')
+begin
+  @cust_unsaved.add_to_class_role_index
+  false
+rescue Familia::PersistenceError => e
+  e.message.include?('class-level role_index')
+end
+#=> true
+
+## Rejection is fail-fast - no dangling entry in the index
+ClassLevelCustomer.role_index_for('phantom').members.include?('cust_unsaved')
+#=> false
+
+## update_in_class_* is also rejected for unsaved customers
+begin
+  @cust_unsaved.update_in_class_role_index('oldrole')
+  false
+rescue Familia::PersistenceError
+  true
+end
+#=> true
+
+## Saving still auto-populates the class-level multi-index (guard skips in-transaction)
+@cust_unsaved.save
+ClassLevelCustomer.role_index_for('phantom').members.include?('cust_unsaved')
+#=> true
+
 # Teardown
 @cust1.delete!
 @cust2.delete!
@@ -340,10 +368,12 @@ result.nil?
 @cust_empty&.delete!
 @cust_whitespace&.delete!
 @cust_update&.delete!
+@cust_unsaved&.delete!
 # Clean up index keys
 ClassLevelCustomer.dbclient.del(ClassLevelCustomer.role_index_for('admin').dbkey)
 ClassLevelCustomer.dbclient.del(ClassLevelCustomer.role_index_for('user').dbkey)
 ClassLevelCustomer.dbclient.del(ClassLevelCustomer.role_index_for('superadmin').dbkey)
 ClassLevelCustomer.dbclient.del(ClassLevelCustomer.role_index_for('tempuser').dbkey)
+ClassLevelCustomer.dbclient.del(ClassLevelCustomer.role_index_for('phantom').dbkey)
 ClassLevelCustomer.dbclient.del(ClassLevelCustomer.region_index_for('west').dbkey)
 ClassLevelCustomer.dbclient.del(ClassLevelCustomer.region_index_for('east').dbkey)

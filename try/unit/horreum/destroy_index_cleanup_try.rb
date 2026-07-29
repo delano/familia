@@ -11,10 +11,9 @@
 # after destroy and cause `RecordExistsError` on the next `create!` with
 # the same indexed value.
 #
-# Scope: class-level indexes only (`within: nil` / `within: :class`).
-# Instance-scoped indexes (`within: SomeClass`) are a known limitation
-# documented separately -- they are not covered by the #241 fix and
-# remain orphaned after destroy!.
+# Scope: class-level indexes (#241) and instance-scoped indexes (#282).
+# Instance-scoped indexes use a reverse index tracker to record scope
+# memberships, enabling automatic cleanup on destroy!.
 
 require_relative '../../support/helpers/test_helpers'
 
@@ -153,13 +152,12 @@ end
 Widget241.category_index_for('asymm').members.include?('w241-mixed-002')
 #=> false
 
-## Instance-scoped index cleanup is out of scope for #241 (documented limitation)
-# The fix in #241 covers only class-level indexes. Instance-scoped indexes
-# (`within: SomeClass`) require a parent context to resolve the set, so
-# destroy! -- which has no parent reference -- cannot clean them up here.
-# This test asserts the *current, unchanged* behavior so we notice if it
-# ever changes unintentionally. Do not "fix" this by making the assertion
-# match the class-level cleanup behavior; tracking is separate from #241.
+## Instance-scoped index cleanup via reverse index tracker (#282)
+# The #241 fix covered class-level indexes only. Issue #282 adds a
+# per-object reverse index tracker (_idx_scopes) that records which
+# scope instances hold references. destroy! reads the tracker before
+# its MULTI/EXEC transaction, then replays remove_from_* calls inside
+# the transaction to clean up instance-scoped entries atomically.
 class ::Widget241ScopedCompany < Familia::Horreum
   feature :relationships
   identifier_field :company_id
@@ -183,18 +181,588 @@ end
 @scope_company.badge_index.has_key?('B-42')
 #=> true
 
-## Documented limitation: instance-scoped entry persists after destroy!
-# This is the known gap outside #241's scope. Flipping this expectation
-# would require threading parent context through destroy! -- tracked
-# separately.
+## BUG #282: destroy! now cleans up instance-scoped index entries
+# The reverse index tracker records that scope_emp was added to
+# scope_company's badge_index. destroy! reads this tracker, then
+# removes the entry inside the same MULTI/EXEC transaction.
 @scope_emp.destroy!
 @scope_company.badge_index.has_key?('B-42')
+#=> false
+
+## Tracker records the indexed VALUE, not just the membership
+# The tracker is a HashKey: field is the
+# "<scope_config>\t<index_name>\t<scope_id>" identity triple, value is the
+# field value that was written into the index. Cleanup needs the value to
+# know which bucket to clear, so it is stored at index time.
+@val_co = Widget241ScopedCompany.create!(company_id: 'w241co-val')
+@val_emp = Widget241ScopedEmployee.create!(emp_id: 'w241emp-val', badge: 'B-VAL')
+@val_emp.add_to_widget241scoped_company_badge_index(@val_co)
+@val_emp.send(:_index_scope_tracker).hgetall
+#=> { "widget241scoped_company\tbadge_index\tw241co-val" => 'B-VAL' }
+
+## Indexed field changed, then destroy!: nothing is left behind
+# save auto-refreshes the tracked entry from 'B-OLD' to 'B-NEW', and the
+# tracker follows it, so destroy! clears the bucket the entry actually
+# lives in. Before the stored-value tracker, cleanup re-read the current
+# field value and could remove the wrong key, orphaning the other.
+@chg_co = Widget241ScopedCompany.create!(company_id: 'w241co-chg')
+@chg_emp = Widget241ScopedEmployee.create!(emp_id: 'w241emp-chg', badge: 'B-OLD')
+@chg_emp.add_to_widget241scoped_company_badge_index(@chg_co)
+@chg_emp.badge = 'B-NEW'
+@chg_emp.save
+@chg_emp.destroy!
+[@chg_co.badge_index.has_key?('B-OLD'), @chg_co.badge_index.has_key?('B-NEW')]
+#=> [false, false]
+
+## Auto-refresh on save: the OLD unique value no longer resolves
+# The tracked membership is refreshed inside save's transaction, routed
+# through update_in_* with the previous value from dirty tracking so the
+# stale entry is retracted rather than left as a tombstone.
+@ref_co = Widget241ScopedCompany.create!(company_id: 'w241co-ref')
+@ref_emp = Widget241ScopedEmployee.create!(emp_id: 'w241emp-ref', badge: 'B-BEFORE')
+@ref_emp.add_to_widget241scoped_company_badge_index(@ref_co)
+@ref_emp.badge = 'B-AFTER'
+@ref_emp.save
+@ref_co.find_by_badge('B-BEFORE')
+#=> nil
+
+## Auto-refresh on save: the NEW unique value resolves to the record
+@ref_co.find_by_badge('B-AFTER')&.identifier
+#=> 'w241emp-ref'
+
+## Auto-refresh on save: the tracker follows the new value
+@ref_emp.send(:_index_scope_tracker).hgetall
+#=> { "widget241scoped_company\tbadge_index\tw241co-ref" => 'B-AFTER' }
+
+## Auto-refresh frees the old unique value for a different record
+# Proves no orphan holds 'B-BEFORE': the uniqueness guard on add_to_*
+# raises RecordExistsError if a stale entry is still parked there.
+@ref_emp2 = Widget241ScopedEmployee.create!(emp_id: 'w241emp-ref2', badge: 'B-BEFORE')
+@ref_emp2.add_to_widget241scoped_company_badge_index(@ref_co)
+@ref_co.find_by_badge('B-BEFORE')&.identifier
+#=> 'w241emp-ref2'
+
+## save_if_not_exists! refreshes tracked indexes too
+# The object hash is removed out of band (delete!), leaving tracker entries
+# whose index bucket still points here. Re-creating via save_if_not_exists!
+# re-syncs them to the resurrected record rather than leaving them stale.
+@sine_co = Widget241ScopedCompany.create!(company_id: 'w241co-sine')
+@sine_emp = Widget241ScopedEmployee.create!(emp_id: 'w241emp-sine', badge: 'B-SINE')
+@sine_emp.add_to_widget241scoped_company_badge_index(@sine_co)
+@sine_emp.delete!
+@sine_emp.badge = 'B-SINE2'
+@sine_emp.save_if_not_exists!
+[@sine_co.badge_index.has_key?('B-SINE'), @sine_co.badge_index.get('B-SINE2')]
+#=> [false, 'w241emp-sine']
+
+## save_if_not_exists! re-reads the tracker after a WATCH abort
+# The snapshot is taken INSIDE the watched block, so a retry re-reads it
+# rather than replaying a stale one. Simulated deterministically: the first
+# pass touches the watched key (dbkey), which invalidates the WATCH and
+# aborts EXEC; the probe counter proves the block ran more than once.
+@sir_co = Widget241ScopedCompany.create!(company_id: 'w241co-sir')
+@sir_emp = Widget241ScopedEmployee.create!(emp_id: 'w241emp-sir', badge: 'S-1')
+@sir_emp.add_to_widget241scoped_company_badge_index(@sir_co)
+@sir_emp.delete!
+class << @sir_emp
+  attr_accessor :probe_count
+
+  def read_instance_index_scopes
+    self.probe_count = (probe_count || 0) + 1
+    if probe_count == 1
+      # Stand in for a concurrent writer: modify then restore the watched
+      # key so EXEC aborts but the existence check still passes on retry.
+      Familia.dbclient.hset(dbkey, 'probe', '1')
+      Familia.dbclient.hdel(dbkey, 'probe')
+    end
+    super
+  end
+end
+@sir_emp.badge = 'S-2'
+@sir_emp.save_if_not_exists!
+@sir_emp.probe_count > 1
+#=> true
+
+## The retried save_if_not_exists! still refreshed the index correctly
+[@sir_co.badge_index.has_key?('S-1'), @sir_co.badge_index.get('S-2')]
+#=> [false, 'w241emp-sir']
+
+## atomic_write does NOT refresh instance-scoped indexes (documented gap)
+# atomic_write calls persist_to_storage from inside a MULTI it already
+# opened, so there is no pre-transaction point at which the tracker could
+# be read (HGETALL inside MULTI returns futures). The index keeps the value
+# recorded at add_to_* time. This test exists to keep the YARD note honest:
+# if atomic_write ever gains a pre-read, this expectation must change.
+@aw_co = Widget241ScopedCompany.create!(company_id: 'w241co-aw')
+@aw_emp = Widget241ScopedEmployee.create!(emp_id: 'w241emp-aw', badge: 'B-AW1')
+@aw_emp.add_to_widget241scoped_company_badge_index(@aw_co)
+@aw_emp.atomic_write { @aw_emp.badge = 'B-AW2' }
+[@aw_co.badge_index.get('B-AW1'), @aw_co.badge_index.has_key?('B-AW2')]
+#=> ['w241emp-aw', false]
+
+## atomic_write leaves the tracker consistent with the un-refreshed index
+# Since neither was touched, destroy! still cleans up correctly.
+@aw_emp.destroy!
+[@aw_co.badge_index.has_key?('B-AW1'), @aw_co.badge_index.has_key?('B-AW2')]
+#=> [false, false]
+
+## DataType rejects an unrecognized dirty_write_warnings mode
+# Without the check a typo would fall through warn_if_dirty! to the :once
+# branch, silently changing the diagnostic level instead of failing.
+begin
+  Familia::HashKey.new('dwtest', dirty_write_warnings: :of)
+  :no_raise
+rescue ArgumentError => e
+  e.message.include?('dirty_write_warnings must be one of')
+end
+#=> true
+
+## DataType keeps an explicit dirty_write_warnings mode (not silently dropped)
+# valid_keys_only filters opts against a whitelist, so the option is inert
+# unless :dirty_write_warnings is on it. Asserting the resolved mode -- not
+# just that construction succeeded -- is what catches that.
+[:strict, :warn, :once, :off].map { |m|
+  Familia::HashKey.new('dwtest', dirty_write_warnings: m).send(:resolve_dirty_warning_mode)
+}
+#=> [:strict, :warn, :once, :off]
+
+## Explicit dirty_write_warnings beats the parent class setting
+# The DataType-level option is the most specific signal available.
+class ::DwModeModel < Familia::Horreum
+  identifier_field :dwid
+  field :dwid
+  dirty_write_warnings :strict
+end
+@dw_parent = DwModeModel.new(dwid: 'dw-1')
+@dw_default = Familia::HashKey.new('dwdefault', parent: @dw_parent)
+@dw_explicit = Familia::HashKey.new('dwexplicit', parent: @dw_parent, dirty_write_warnings: :off)
+[@dw_default.send(:resolve_dirty_warning_mode), @dw_explicit.send(:resolve_dirty_warning_mode)]
+#=> [:strict, :off]
+
+## :off suppresses the raise a :strict parent class would otherwise trigger
+# "off means off" -- an explicit :off overrides the raise paths, which is
+# exactly what keeps the index tracker writable during save.
+@dw_parent.dwid = 'dw-changed'  # make the parent dirty
+begin
+  @dw_default['k'] = 'v'
+  :no_raise
+rescue Familia::Problem
+  :raised
+end
+#=> :raised
+
+## :off on the same dirty parent writes without raising
+begin
+  @dw_explicit['k'] = 'v'
+  :no_raise
+rescue Familia::Problem
+  :raised
+end
+#=> :no_raise
+
+## :off also overrides the global strict_write_order switch
+# This is the setting that would otherwise abort every save that refreshes
+# an instance-scoped index.
+@dw_prior_strict = Familia.strict_write_order
+Familia.strict_write_order = true
+@dw_strict_result = begin
+  @dw_explicit['k2'] = 'v2'
+  :no_raise
+rescue Familia::Problem
+  :raised
+end
+Familia.strict_write_order = @dw_prior_strict
+@dw_strict_result
+#=> :no_raise
+
+## Save-refresh enforces instance-scoped uniqueness (no silent eviction)
+# The refresh routes through update_in_*, which has no uniqueness guard --
+# only add_to_* did. Without a pre-transaction guard, changing an indexed
+# field to a value another record holds silently evicted that record's
+# entry, and the evicted record's tracker still claimed the slot, so ITS
+# later destroy! unindexed the live winner. Matches the class-level path,
+# which always raised.
+@dup_co = Widget241ScopedCompany.create!(company_id: 'w241co-dup')
+@dup_e1 = Widget241ScopedEmployee.create!(emp_id: 'w241emp-dup1', badge: 'D-1')
+@dup_e1.add_to_widget241scoped_company_badge_index(@dup_co)
+@dup_e2 = Widget241ScopedEmployee.create!(emp_id: 'w241emp-dup2', badge: 'D-2')
+@dup_e2.add_to_widget241scoped_company_badge_index(@dup_co)
+@dup_e2.badge = 'D-1'
+begin
+  @dup_e2.save
+  :no_raise
+rescue Familia::RecordExistsError
+  :record_exists
+end
+#=> :record_exists
+
+## Duplicate-value save leaves the index completely untouched
+# A rejected save must not have partially applied -- the guard runs before
+# the transaction opens.
+@dup_co.badge_index.hgetall
+#=> { 'D-1' => 'w241emp-dup1', 'D-2' => 'w241emp-dup2' }
+
+## The original holder survives destroy! of the rejected record
+# This is the corruption the guard prevents: previously D-1 pointed at the
+# evicted record, so destroying it removed the live winner's entry.
+@dup_e2.destroy!
+@dup_co.find_by_badge('D-1')&.identifier
+#=> 'w241emp-dup1'
+
+## Renaming to a genuinely free value still refreshes normally
+@dup_e1.badge = 'D-FREE'
+@dup_e1.save
+[@dup_co.find_by_badge('D-1'), @dup_co.find_by_badge('D-FREE')&.identifier]
+#=> [nil, 'w241emp-dup1']
+
+## Re-saving without changing the indexed value does not raise
+# The guard only inspects changed fields; an unchanged value would
+# otherwise be validated against its own entry.
+begin
+  @dup_e1.save
+  :no_raise
+rescue Familia::RecordExistsError
+  :record_exists
+end
+#=> :no_raise
+
+## A tab in the scope identifier is rejected before any write
+# Tracker entries are tab-delimited and the scope id is an interior
+# component, so a tab makes a unique entry byte-identical to a multi entry
+# for a DIFFERENT scope -- destroy! would then delete an unrelated scope's
+# live index entry.
+@tab_co = Widget241ScopedCompany.create!(company_id: "tab\tinjected")
+@tab_emp = Widget241ScopedEmployee.create!(emp_id: 'w241emp-tab', badge: 'T-1')
+begin
+  @tab_emp.add_to_widget241scoped_company_badge_index(@tab_co)
+  :no_raise
+rescue ArgumentError => e
+  e.message.include?('scope identifier contains a tab')
+end
+#=> true
+
+## The tab-scoped rejection leaves no tracker entry behind
+@tab_emp.send(:_index_scope_tracker).hgetall
+#=> {}
+
+## A neighbouring scope whose id is a prefix of the tab id is untouched
+# This is the victim in the original report: scope 'tab' vs "tab\tinjected".
+@tab_victim_co = Widget241ScopedCompany.create!(company_id: 'tab')
+@tab_victim = Widget241ScopedEmployee.create!(emp_id: 'w241emp-tabv', badge: 'T-1')
+@tab_victim.add_to_widget241scoped_company_badge_index(@tab_victim_co)
+@tab_emp.destroy!
+@tab_victim_co.find_by_badge('T-1')&.identifier
+#=> 'w241emp-tabv'
+
+## Auto-refresh only touches scopes already registered via add_to_*
+# The initial add_to_* stays manual: save has no scope context to invent
+# one from, so an unregistered employee is not indexed by saving.
+@unreg_co = Widget241ScopedCompany.create!(company_id: 'w241co-unreg')
+@unreg_emp = Widget241ScopedEmployee.create!(emp_id: 'w241emp-unreg', badge: 'B-UNREG')
+@unreg_emp.badge = 'B-UNREG2'
+@unreg_emp.save
+[@unreg_co.badge_index.has_key?('B-UNREG'), @unreg_co.badge_index.has_key?('B-UNREG2')]
+#=> [false, false]
+
+## update_in_* re-records the tracker so destroy! follows the value
+# Save already refreshed this entry; the explicit update_in_* call is
+# idempotent. It moves the index entry to the new value and HSETs the
+# tracker, so no old-value bookkeeping is needed and destroy! clears the
+# bucket the entry actually lives in.
+@upd_co = Widget241ScopedCompany.create!(company_id: 'w241co-upd')
+@upd_emp = Widget241ScopedEmployee.create!(emp_id: 'w241emp-upd', badge: 'B-ONE')
+@upd_emp.add_to_widget241scoped_company_badge_index(@upd_co)
+@upd_emp.badge = 'B-TWO'
+@upd_emp.save
+@upd_emp.update_in_widget241scoped_company_badge_index(@upd_co, 'B-ONE')
+@before_destroy = [@upd_co.badge_index.has_key?('B-ONE'), @upd_co.badge_index.has_key?('B-TWO')]
+@upd_emp.destroy!
+[@before_destroy, @upd_co.badge_index.has_key?('B-TWO')]
+#=> [[false, true], false]
+
+## update_in_* with a nil field value unrecords instead of recording
+# There is no index entry left to clean up, so the tracker entry is dropped
+# rather than left pointing at an empty bucket.
+@nil_co = Widget241ScopedCompany.create!(company_id: 'w241co-nil')
+@nil_emp = Widget241ScopedEmployee.create!(emp_id: 'w241emp-nil', badge: 'B-GONE')
+@nil_emp.add_to_widget241scoped_company_badge_index(@nil_co)
+@nil_emp.badge = nil
+@nil_emp.save
+@nil_emp.update_in_widget241scoped_company_badge_index(@nil_co, 'B-GONE')
+[@nil_co.badge_index.has_key?('B-GONE'), @nil_emp.send(:_index_scope_tracker).hgetall]
+#=> [false, {}]
+
+## Identifier-only destroy! still cleans up instance-scoped entries
+# A freshly constructed instance carrying only the identifier has no
+# in-memory field values, so send(:badge) is nil. Cleanup previously
+# short-circuited on that nil and orphaned the entry; it now uses the
+# value recorded in the tracker.
+@idonly_co = Widget241ScopedCompany.create!(company_id: 'w241co-idonly')
+@idonly_emp = Widget241ScopedEmployee.create!(emp_id: 'w241emp-idonly', badge: 'B-IDONLY')
+@idonly_emp.add_to_widget241scoped_company_badge_index(@idonly_co)
+@idonly_stub = Widget241ScopedEmployee.new(emp_id: 'w241emp-idonly')
+@idonly_stub.badge
+#=> nil
+
+## Identifier-only destroy! removes the entry recorded by the loaded object
+@idonly_stub.destroy!
+@idonly_co.badge_index.has_key?('B-IDONLY')
+#=> false
+
+## Field values that look like JSON literals round-trip through the tracker
+# The tracker stores values JSON-encoded while the index bucket key is
+# written raw, so a value like '0' or 'null' must survive the round trip
+# or cleanup targets a different key than the write did.
+@lit_co = Widget241ScopedCompany.create!(company_id: 'w241co-lit')
+@lit_emp = Widget241ScopedEmployee.create!(emp_id: 'w241emp-lit', badge: '0')
+@lit_emp.add_to_widget241scoped_company_badge_index(@lit_co)
+@lit_emp2 = Widget241ScopedEmployee.create!(emp_id: 'w241emp-lit2', badge: 'null')
+@lit_emp2.add_to_widget241scoped_company_badge_index(@lit_co)
+@lit_stub = Widget241ScopedEmployee.new(emp_id: 'w241emp-lit')
+@lit_stub2 = Widget241ScopedEmployee.new(emp_id: 'w241emp-lit2')
+@lit_stub.destroy!
+@lit_stub2.destroy!
+[@lit_co.badge_index.has_key?('0'), @lit_co.badge_index.has_key?('null')]
+#=> [false, false]
+
+## Instance-scoped multi_index cleanup uses the recorded bucket too
+# The multi_index generator stores identifiers in a per-value UnsortedSet,
+# so a changed field value means a different key entirely.
+class ::Widget282MultiCompany < Familia::Horreum
+  feature :relationships
+  identifier_field :company_id
+  field :company_id
+end
+
+class ::Widget282MultiEmployee < Familia::Horreum
+  feature :relationships
+  identifier_field :emp_id
+  field :emp_id
+  field :department
+
+  multi_index :department, :dept_index, within: Widget282MultiCompany
+end
+
+@multi_co = Widget282MultiCompany.create!(company_id: 'w282mco-001')
+@multi_emp = Widget282MultiEmployee.create!(emp_id: 'w282memp-001', department: 'eng')
+@multi_emp.add_to_widget282multi_company_dept_index(@multi_co)
+@multi_co.dept_index_for('eng').members
+#=> ['w282memp-001']
+
+## multi_index: destroy! with no value change clears the recorded bucket
+@multi_emp.destroy!
+@multi_co.dept_index_for('eng').members
+#=> []
+
+## multi_index auto-refresh on save is ADD-ONLY: new bucket gains the id
+# Deliberate, and consistent with the class-level multi_index decision
+# (see the class_level_multi_index tests): a value change does not retract
+# prior buckets. SADD is idempotent, so repeated saves stay safe.
+@multi_emp2 = Widget282MultiEmployee.create!(emp_id: 'w282memp-002', department: 'eng')
+@multi_emp2.add_to_widget282multi_company_dept_index(@multi_co)
+@multi_emp2.department = 'sales'
+@multi_emp2.save
+@multi_co.dept_index_for('sales').members
+#=> ['w282memp-002']
+
+## multi_index auto-refresh on save: the OLD bucket is retained, by design
+@multi_co.dept_index_for('eng').members
+#=> ['w282memp-002']
+
+## multi_index: the tracker records BOTH buckets the object occupies
+# Tracker cardinality mirrors index cardinality: multi entries are keyed by
+# scope/index/scope_id/VALUE, so add-only refresh produces one entry per
+# bucket rather than a single entry that can only name one of them.
+@multi_emp2.send(:_index_scope_tracker).hgetall.keys.sort
+#=> ["widget282multi_company\tdept_index\tw282mco-001\teng", "widget282multi_company\tdept_index\tw282mco-001\tsales"]
+
+## multi_index: destroy! clears EVERY bucket the object was in
+# The assertion that proves the fix. With a triple-keyed tracker the 'eng'
+# bucket was orphaned permanently; per-value entries let destroy! reach
+# both.
+@multi_emp2.destroy!
+[@multi_co.dept_index_for('sales').members, @multi_co.dept_index_for('eng').members]
+#=> [[], []]
+
+## multi_index: explicit update_in_* retracts the old bucket and its entry
+# Unlike the add-only save refresh, update_in_* with an old value removes
+# the object from that bucket -- so the tracker entry for it must go too,
+# or the tracker would over-claim a membership that no longer exists.
+@upd_multi_emp = Widget282MultiEmployee.create!(emp_id: 'w282memp-003', department: 'eng')
+@upd_multi_emp.add_to_widget282multi_company_dept_index(@multi_co)
+@upd_multi_emp.department = 'ops'
+@upd_multi_emp.save
+@upd_multi_emp.update_in_widget282multi_company_dept_index(@multi_co, 'eng')
+[@multi_co.dept_index_for('eng').members,
+ @multi_co.dept_index_for('ops').members,
+ @upd_multi_emp.send(:_index_scope_tracker).hgetall.keys]
+#=> [[], ['w282memp-003'], ["widget282multi_company\tdept_index\tw282mco-001\tops"]]
+
+## multi_index: one object in two different scope INSTANCES cleans up both
+# Guards against the 4-tuple collapsing scope_id: each (scope instance,
+# bucket) pair is its own entry.
+@multi_co_b = Widget282MultiCompany.create!(company_id: 'w282mco-002')
+@two_scope_emp = Widget282MultiEmployee.create!(emp_id: 'w282memp-004', department: 'qa')
+@two_scope_emp.add_to_widget282multi_company_dept_index(@multi_co)
+@two_scope_emp.add_to_widget282multi_company_dept_index(@multi_co_b)
+@two_scope_before = [@multi_co.dept_index_for('qa').members, @multi_co_b.dept_index_for('qa').members]
+@two_scope_emp.destroy!
+[@two_scope_before,
+ @multi_co.dept_index_for('qa').members,
+ @multi_co_b.dept_index_for('qa').members]
+#=> [[['w282memp-004'], ['w282memp-004']], [], []]
+
+## A tab in the FIELD VALUE is allowed and round-trips
+# Unlike the scope identifier, the value is the FINAL component of a
+# tracker entry, so the limit-4 split leaves it intact however many tabs it
+# holds -- and removal takes the bucket from the stored HSET value rather
+# than re-parsing the key, so it cannot misdirect a delete.
+@tabval_co = Widget282MultiCompany.create!(company_id: 'w282mco-tabval')
+@tabval_emp = Widget282MultiEmployee.create!(emp_id: 'w282memp-tabval', department: "eng\tops")
+@tabval_emp.add_to_widget282multi_company_dept_index(@tabval_co)
+@tabval_before = @tabval_co.dept_index_for("eng\tops").members
+@tabval_emp.destroy!
+[@tabval_before, @tabval_co.dept_index_for("eng\tops").members]
+#=> [['w282memp-tabval'], []]
+
+## multi_index: two scope instances AND a value change all clean up
+# The full cross product: 2 scope instances x 2 buckets = 4 tracker entries,
+# every one of them removed by destroy!.
+@x_emp = Widget282MultiEmployee.create!(emp_id: 'w282memp-005', department: 'before')
+@x_emp.add_to_widget282multi_company_dept_index(@multi_co)
+@x_emp.add_to_widget282multi_company_dept_index(@multi_co_b)
+@x_emp.department = 'after'
+@x_emp.save
+@x_entry_count = @x_emp.send(:_index_scope_tracker).hgetall.size
+@x_emp.destroy!
+[@x_entry_count,
+ @multi_co.dept_index_for('before').members, @multi_co.dept_index_for('after').members,
+ @multi_co_b.dept_index_for('before').members, @multi_co_b.dept_index_for('after').members]
+#=> [4, [], [], [], []]
+
+## Two scope classes sharing an index name each clean up their own entry
+# The tracker records the scope config alongside the index name. Matching
+# on index name alone always resolved to the first-declared relationship,
+# so cleanup built a stub of the wrong class and mutated the wrong key.
+class ::Widget282ScopeA < Familia::Horreum
+  feature :relationships
+  identifier_field :a_id
+  field :a_id
+end
+
+class ::Widget282ScopeB < Familia::Horreum
+  feature :relationships
+  identifier_field :b_id
+  field :b_id
+end
+
+class ::Widget282SharedName < Familia::Horreum
+  feature :relationships
+  identifier_field :doc_id
+  field :doc_id
+  field :slug
+
+  # Same index_name, two different scope classes.
+  unique_index :slug, :slug_index, within: Widget282ScopeA
+  unique_index :slug, :slug_index, within: Widget282ScopeB
+end
+
+@shared_a = Widget282ScopeA.create!(a_id: 'w282a-001')
+@shared_b = Widget282ScopeB.create!(b_id: 'w282b-001')
+@shared_doc_a = Widget282SharedName.create!(doc_id: 'w282doc-a', slug: 'shared-slug')
+@shared_doc_b = Widget282SharedName.create!(doc_id: 'w282doc-b', slug: 'shared-slug')
+@shared_doc_a.add_to_widget282scope_a_slug_index(@shared_a)
+@shared_doc_b.add_to_widget282scope_b_slug_index(@shared_b)
+[@shared_a.slug_index.get('shared-slug'), @shared_b.slug_index.get('shared-slug')]
+#=> ['w282doc-a', 'w282doc-b']
+
+## Destroying the ScopeA-indexed doc leaves the ScopeB entry untouched
+@shared_doc_a.destroy!
+[@shared_a.slug_index.has_key?('shared-slug'), @shared_b.slug_index.get('shared-slug')]
+#=> [false, 'w282doc-b']
+
+## Destroying the ScopeB-indexed doc then clears the remaining entry
+@shared_doc_b.destroy!
+[@shared_a.slug_index.has_key?('shared-slug'), @shared_b.slug_index.has_key?('shared-slug')]
+#=> [false, false]
+
+## add_to_* raises when the scope instance has no identifier
+# A blank scope identifier yields an ambiguous tracker entry and a
+# malformed index key. Raising beats a silent skip: the alternative is an
+# index entry nothing can ever clean up.
+@blank_co = Widget241ScopedCompany.new
+@blank_emp = Widget241ScopedEmployee.create!(emp_id: 'w241emp-blank', badge: 'B-BLANK')
+@keys_before_blank = Familia.dbclient.keys('*').sort
+begin
+  @blank_emp.add_to_widget241scoped_company_badge_index(@blank_co)
+  :no_raise
+rescue Familia::NoIdentifier
+  :no_identifier
+end
+#=> :no_identifier
+
+## add_to_* with a blank scope identifier writes nothing
+# The guard runs before the index write, so no partial state is left --
+# neither a malformed index key nor a tracker entry to chase later.
+[Familia.dbclient.keys('*').sort == @keys_before_blank,
+ @blank_emp.send(:_index_scope_tracker).hgetall]
+#=> [true, {}]
+
+## update_in_* raises on a blank scope identifier too
+begin
+  @blank_emp.update_in_widget241scoped_company_badge_index(@blank_co, nil)
+  :no_raise
+rescue Familia::NoIdentifier
+  :no_identifier
+end
+#=> :no_identifier
+
+## Scope classes without a simple identifier field are rejected up front
+# Cleanup runs inside destroy!'s MULTI and must rebuild the scope from its
+# identifier alone -- no reads available. A Proc identifier_field cannot
+# support that, so the index write is refused rather than tracked into a
+# state destroy! could not undo.
+class ::Widget282ProcScope < Familia::Horreum
+  feature :relationships
+  identifier_field ->(obj) { obj.scope_id }
+  field :scope_id
+end
+
+class ::Widget282ProcScoped < Familia::Horreum
+  feature :relationships
+  identifier_field :thing_id
+  field :thing_id
+  field :label
+
+  unique_index :label, :label_index, within: Widget282ProcScope
+end
+
+@proc_scope = Widget282ProcScope.new(scope_id: 'w282proc-001')
+@proc_thing = Widget282ProcScoped.create!(thing_id: 'w282thing-001', label: 'L-1')
+begin
+  @proc_thing.add_to_widget282proc_scope_label_index(@proc_scope)
+  :no_raise
+rescue ArgumentError => e
+  e.message.include?('simple (Symbol or String) identifier field')
+end
 #=> true
 
 # Teardown: flush the database and remove throwaway constants so this
 # tryout doesn't pollute sibling suites (index keys in particular can
 # otherwise interfere with re-run iterations).
 Familia.dbclient.flushdb
-Object.send(:remove_const, :Widget241) if Object.const_defined?(:Widget241)
-Object.send(:remove_const, :Widget241ScopedEmployee) if Object.const_defined?(:Widget241ScopedEmployee)
-Object.send(:remove_const, :Widget241ScopedCompany) if Object.const_defined?(:Widget241ScopedCompany)
+%i[
+  Widget241
+  Widget241ScopedEmployee
+  Widget241ScopedCompany
+  Widget282MultiEmployee
+  Widget282MultiCompany
+  Widget282SharedName
+  Widget282ScopeA
+  Widget282ScopeB
+  Widget282ProcScoped
+  Widget282ProcScope
+  DwModeModel
+].each do |const|
+  Object.send(:remove_const, const) if Object.const_defined?(const)
+end

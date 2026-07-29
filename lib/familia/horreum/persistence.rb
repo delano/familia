@@ -116,9 +116,26 @@ module Familia
         # Prepare object for persistence (timestamps, validation)
         prepare_for_save
 
+        # Pre-read the instance-scoped index tracker before MULTI/EXEC, for
+        # the same reason destroy! does: HGETALL inside a transaction returns
+        # futures, not values. Replayed inside the transaction below, where
+        # dirty tracking is still live (see #auto_update_class_indexes).
+        tracked_scopes = if respond_to?(:read_instance_index_scopes)
+          read_instance_index_scopes
+        else
+          {}
+        end
+
+        # Validate instance-scoped unique constraints here too -- same reason
+        # prepare_for_save runs guard_unique_indexes! outside the transaction
+        # (the guard reads). guard_unique_indexes! only covers class-level
+        # relationships; without this, the refresh below could evict another
+        # record's index entry silently.
+        guard_tracked_index_scopes!(tracked_scopes) if respond_to?(:guard_tracked_index_scopes!)
+
         # Everything in ONE transaction for complete atomicity
         result = transaction do |_conn|
-          persist_to_storage(update_expiration)
+          persist_to_storage(update_expiration, tracked_index_scopes: tracked_scopes)
         end
 
         # Structured lifecycle logging and instrumentation
@@ -266,8 +283,26 @@ module Familia
         ) do |conn|
           raise Familia::RecordExistsError, dbkey if exists?
 
+          # Snapshot the instance-scoped index tracker in the WATCH window,
+          # alongside the existence check and for the same reason: it is a
+          # read, and reads inside the MULTI below return futures. Read here
+          # rather than before the watched block so a WATCH abort re-reads it
+          # on retry. Usually empty (this path only proceeds when the object
+          # hash is absent), but a hash removed out of band -- delete!, or
+          # expiry -- can leave tracker entries whose index buckets still
+          # point here; refreshing re-syncs them to the resurrected record.
+          tracked_scopes = if respond_to?(:read_instance_index_scopes)
+            read_instance_index_scopes
+          else
+            {}
+          end
+
+          # Instance-scoped uniqueness, validated in the same read window as
+          # the existence check above and for the same reason (see #save).
+          guard_tracked_index_scopes!(tracked_scopes) if respond_to?(:guard_tracked_index_scopes!)
+
           Familia::Connection::TransactionCore.execute_normal_transaction(-> { conn }) do |_m|
-            persist_to_storage(update_expiration)
+            persist_to_storage(update_expiration, tracked_index_scopes: tracked_scopes)
           end
         end
 
@@ -597,12 +632,18 @@ module Familia
       def destroy!
         Familia.trace :DESTROY!, dbkey, self.class.uri if Familia.debug?
 
-        # Execute all deletion operations within a transaction
+        # Pre-read instance-scoped index tracker before MULTI/EXEC
+        # (HGETALL returns futures inside a transaction, not values).
+        # Maps "<scope_config>\t<index_name>\t<scope_id>" => indexed value.
+        tracked_scopes = if respond_to?(:read_instance_index_scopes)
+          read_instance_index_scopes
+        else
+          {}
+        end
+
         result = transaction do |_conn|
-          # Delete the main object key
           delete!
 
-          # Delete all related fields if present
           if self.class.relations?
             if Familia.debug?
               Familia.trace :DELETE_RELATED_FIELDS!, nil,
@@ -618,12 +659,15 @@ module Familia
             end
           end
 
-          # Clean up class-level index entries (see issue #241).
-          # Instance-scoped indexes require a scope instance unavailable here;
-          # tracked separately in issue #244.
+          # Clean up instance-scoped index entries (#282) using
+          # pre-read tracker data. Must precede class-level cleanup.
+          if !tracked_scopes.empty? && respond_to?(:remove_tracked_index_entries!)
+            remove_tracked_index_entries!(tracked_scopes)
+          end
+
+          # Clean up class-level index entries (#241)
           remove_from_class_indexes!
 
-          # Remove from instances collection
           remove_from_instances!
         end
 
@@ -1077,9 +1121,11 @@ module Familia
       #   customer = Customer.new(email: 'test@example.com')
       #   customer.save  # Automatically calls update_in_class_email_lookup
       #
-      # @note Only class-level declarations auto-populate. Instance-scoped
-      #   indexes (with within:) require manual population:
-      #   employee.add_to_company_badge_index(company)
+      # @note Only class-level unique_index declarations auto-populate here.
+      #   Instance-scoped indexes (with within:) need a scope instance, which
+      #   save cannot invent, so their initial add_to_* stays manual. Once
+      #   tracked, they are refreshed alongside this method by
+      #   #auto_update_instance_indexes and removed by destroy! (#282).
       #
       # @see #apply_class_index_change For the per-relationship routing.
       # @see Familia::Features::Relationships::Indexing For index declaration details
@@ -1137,13 +1183,12 @@ module Familia
       #
       # Iterates through class-level indexing relationships and calls their
       # corresponding remove_from_class_* methods to purge stale entries.
-      # Only processes class-level indexes (where within is nil or :class),
-      # skipping instance-scoped indexes which require scope context that
-      # destroy! does not have. See issue #241 for the class-level fix;
-      # instance-scoped cleanup is tracked as a known limitation.
+      # Only processes class-level indexes (where within is nil or :class).
+      # Instance-scoped indexes are handled separately via the reverse
+      # index tracker (#282) — see remove_tracked_index_entries!.
       #
-      # Intended to be called from inside destroy!'s MULTI/EXEC transaction
-      # so index hash/set mutations are atomic with the object hash delete.
+      # Called from inside destroy!'s MULTI/EXEC transaction so index
+      # hash/set mutations are atomic with the object hash delete.
       #
       # @return [void]
       #
@@ -1242,9 +1287,16 @@ module Familia
       # save_if_not_exists. It must be called within a transaction block.
       #
       # @param update_expiration [Boolean] Whether to update the key's expiration
+      # @param tracked_index_scopes [Hash] instance-scoped index tracker
+      #   entries, pre-read outside the transaction by the caller (the read
+      #   cannot happen here -- HGETALL inside MULTI returns futures). Only
+      #   +save+ and +save_if_not_exists!+ supply it; the +atomic_write+ paths
+      #   call this from inside a MULTI they already opened, so there is no
+      #   pre-transaction point available to them and they default to empty,
+      #   leaving instance-scoped indexes untouched.
       # @return [Object] The result of the hmset operation
       #
-      def persist_to_storage(update_expiration)
+      def persist_to_storage(update_expiration, tracked_index_scopes: {})
         # 1. Save all non-nil fields to hashkey at once
         prepared_h = to_h_for_storage
         hmset_result = hmset(prepared_h)
@@ -1260,6 +1312,11 @@ module Familia
 
         # 3. Update class-level indexes
         auto_update_class_indexes
+
+        # 3b. Refresh instance-scoped indexes for scopes already registered
+        # via add_to_*. Uses the tracker snapshot read before this
+        # transaction opened; the initial add_to_* remains manual.
+        auto_update_instance_indexes(tracked_index_scopes) if respond_to?(:auto_update_instance_indexes)
 
         # 4. Touch instances timeline (delegates to touch_instances!).
         #
