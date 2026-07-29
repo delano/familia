@@ -5,7 +5,7 @@ source 'https://rubygems.org'
 gemspec
 
 group :test do
-  gem 'concurrent-ruby', '~> 1.3.7', require: false
+  gem 'concurrent-ruby', '~> 1.3.8', require: false
   gem 'ruby-prof'
   gem 'stackprof'
   gem 'timecop', require: false
@@ -26,7 +26,7 @@ group :development, :test do
   gem 'rake', '~> 13.0', require: false
   gem 'redcarpet', require: false
   gem 'reek', require: false
-  gem 'rubocop', '~> 1.88.0', require: false
+  gem 'rubocop', '~> 1.88.2', require: false
   gem 'rubocop-performance', require: false
   gem 'rubocop-thread_safety', require: false
   gem 'ruby-lsp', require: false

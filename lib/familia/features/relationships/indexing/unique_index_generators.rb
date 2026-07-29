@@ -42,7 +42,9 @@ module Familia
         #   - employee.update_in_class_email_index(old_email)
         #
         # Note: Class-level indexes auto-populate on save(). Instance-scoped indexes
-        # (with within:) remain manual as they require parent context.
+        # (with within:) require an initial manual add_to_* call; afterwards save
+        # auto-refreshes the tracked entry and destroy! auto-cleans it, both via
+        # the reverse index tracker (#282).
         module UniqueIndexGenerators
           module_function
 
@@ -258,22 +260,25 @@ module Familia
               define_method(method_name) do |scope_instance|
                 return unless scope_instance
 
+                # Before any write: an untrackable scope produces an index
+                # entry that destroy! could never find again.
+                _ensure_trackable_index_scope!(scope_instance)
+
                 field_value = send(field)
                 return unless field_value
 
-                # Automatically validate uniqueness before adding to index.
-                # Skip validation inside transactions since guard methods require read
-                # operations not available in MULTI/EXEC blocks.
+                _ensure_persisted_before_index_write!(index_name, scope_instance)
+
                 unless Fiber[:familia_transaction]
                   guard_method = :"guard_unique_#{scope_class_config}_#{index_name}!"
                   send(guard_method, scope_instance) if respond_to?(guard_method)
                 end
 
-                # Use declared field accessor on scope instance
                 index_hash = scope_instance.send(index_name)
-
-                # Set the value (guard already validated uniqueness)
                 index_hash[field_value.to_s] = identifier
+
+                _record_index_scope(scope_class_config, index_name, scope_instance, field_value,
+                                    cardinality: :unique)
               end
 
               # Add a guard method to enforce unique constraint on this instance-scoped index
@@ -310,17 +315,23 @@ module Familia
               method_name = :"remove_from_#{scope_class_config}_#{index_name}"
               Familia.debug("[UniqueIndexGenerators] #{name} method #{method_name}")
 
-              define_method(method_name) do |scope_instance|
+              # @param scope_instance [Object] the scope holding the index
+              # @param field_value [Object, nil] the value to unindex. Defaults
+              #   to the object's current field value, preserving the public
+              #   single-argument call. destroy! cleanup passes the value
+              #   recorded at index time instead, since the current one may
+              #   have changed (or be nil on an identifier-only instance).
+              define_method(method_name) do |scope_instance, field_value = nil|
                 return unless scope_instance
 
-                field_value = send(field)
+                field_value = send(field) if field_value.nil?
                 return unless field_value
 
-                # Use declared field accessor on scope instance
                 index_hash = scope_instance.send(index_name)
-
-                # Remove using HashKey DataType method
                 index_hash.remove(field_value.to_s)
+
+                _unrecord_index_scope(scope_class_config, index_name, scope_instance, field_value,
+                                      cardinality: :unique)
               end
 
               method_name = :"update_in_#{scope_class_config}_#{index_name}"
@@ -329,7 +340,11 @@ module Familia
               define_method(method_name) do |scope_instance, old_field_value = nil|
                 return unless scope_instance
 
+                _ensure_trackable_index_scope!(scope_instance)
+
                 new_field_value = send(field)
+
+                _ensure_persisted_before_index_write!(index_name, scope_instance)
 
                 # Use Familia's transaction method for atomicity with DataType abstraction
                 scope_instance.transaction do |_tx|
@@ -342,6 +357,19 @@ module Familia
                   # Add new value if present
                   index_hash[new_field_value.to_s] = identifier if new_field_value
                 end
+
+                # Keep the tracker pointing at what is actually in the index.
+                #
+                # Synced outside the block above, which behaves differently
+                # depending on the caller. Standalone, scope_instance.transaction
+                # opens a MULTI on the SCOPE's connection -- a tracker write
+                # inside it would go to the wrong connection, since the tracker
+                # belongs to this object. The tradeoff is that standalone, the
+                # tracker sync is NOT atomic with the index write. During save
+                # the block is reentrant (it joins the caller's MULTI via
+                # Fiber[:familia_transaction]) so both land in that one
+                # transaction and the tradeoff does not apply.
+                _sync_unique_index_scope(scope_class_config, index_name, scope_instance, new_field_value)
               end
             end
           end
@@ -433,6 +461,8 @@ module Familia
 
                 return unless field_value
 
+                _ensure_persisted_before_index_write!(index_name)
+
                 # Just set the value - uniqueness should be validated before save
                 index_hash[field_value.to_s] = identifier
               end
@@ -469,6 +499,8 @@ module Familia
 
               define_method(:"update_in_class_#{index_name}") do |old_field_value = nil|
                 new_field_value = send(field)
+
+                _ensure_persisted_before_index_write!(index_name)
 
                 # Use class-level transaction for atomicity with DataType abstraction
                 self.class.transaction do |_tx|
