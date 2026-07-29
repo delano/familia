@@ -137,6 +137,15 @@ module Familia
       # primitive owns abort detection + retry). This enables a race-safe
       # create-only pattern -- see the example below.
       #
+      # +watch_keys+ suits keys PRIVATE to the contending operation (an
+      # object's own dbkey): an abort there signals a genuine conflict on that
+      # record. Do NOT watch keys shared across unrelated writers, such as a
+      # class-level unique_index hash -- WATCH granularity is per-key, so any
+      # concurrent write to any field of that hash aborts EXEC and retries,
+      # serializing the whole class through one hot key. For shared keys,
+      # enforce the invariant server-side with a CAS (Lua) at the write site
+      # instead. See https://github.com/delano/familia/issues/353.
+      #
       # @param instances [Array<Familia::Horreum>] One or more instances to persist.
       # @param update_expiration [Boolean] Whether to set each instance's TTL
       #   inside the transaction (default: true).

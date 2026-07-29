@@ -126,16 +126,39 @@ module Familia
           {}
         end
 
+        # A non-empty tracker with no object hash can only belong to a dead
+        # incarnation of this identifier: add_to_* refuses never-saved
+        # records, so entries outliving the hash mean delete! (or expiry)
+        # removed the hash out from under them. Replaying them would silently
+        # re-join whatever scopes the PREVIOUS record occupied (#365), so the
+        # transaction below prunes them instead -- replaying remove_from_*
+        # with the recorded values, which also clears the index entries the
+        # dead incarnation left behind. The EXISTS probe costs a round trip
+        # only when the tracker has entries.
+        #
+        # The probe runs before the MULTI, so a concurrent delete! landing
+        # between the two makes a live tracker look stale and the save prunes
+        # memberships that were valid an instant earlier. That is the
+        # accepted conservative failure mode -- losing memberships for a
+        # record that was just deleted beats joining the wrong scopes -- and
+        # the same read-window race save already accepts for its guards
+        # (MULTI-only by design, no WATCH).
+        stale_tracker = !tracked_scopes.empty? && !exists?
+
         # Validate instance-scoped unique constraints here too -- same reason
         # prepare_for_save runs guard_unique_indexes! outside the transaction
         # (the guard reads). guard_unique_indexes! only covers class-level
         # relationships; without this, the refresh below could evict another
-        # record's index entry silently.
-        guard_tracked_index_scopes!(tracked_scopes) if respond_to?(:guard_tracked_index_scopes!)
+        # record's index entry silently. Stale entries are pruned rather than
+        # replayed, so there is no membership to validate.
+        if !stale_tracker && respond_to?(:guard_tracked_index_scopes!)
+          guard_tracked_index_scopes!(tracked_scopes)
+        end
 
         # Everything in ONE transaction for complete atomicity
         result = transaction do |_conn|
-          persist_to_storage(update_expiration, tracked_index_scopes: tracked_scopes)
+          persist_to_storage(update_expiration, tracked_index_scopes: tracked_scopes,
+                                                prune_stale_tracker: stale_tracker)
         end
 
         # Structured lifecycle logging and instrumentation
@@ -289,20 +312,20 @@ module Familia
           # rather than before the watched block so a WATCH abort re-reads it
           # on retry. Usually empty (this path only proceeds when the object
           # hash is absent), but a hash removed out of band -- delete!, or
-          # expiry -- can leave tracker entries whose index buckets still
-          # point here; refreshing re-syncs them to the resurrected record.
+          # expiry -- can leave entries behind. Those entries describe the
+          # previous incarnation of this identifier, not the record being
+          # created, so the transaction prunes them (#365): remove_from_* is
+          # replayed with the recorded values and the tracker cleared. No
+          # uniqueness guard is needed -- nothing is being joined.
           tracked_scopes = if respond_to?(:read_instance_index_scopes)
             read_instance_index_scopes
           else
             {}
           end
 
-          # Instance-scoped uniqueness, validated in the same read window as
-          # the existence check above and for the same reason (see #save).
-          guard_tracked_index_scopes!(tracked_scopes) if respond_to?(:guard_tracked_index_scopes!)
-
           Familia::Connection::TransactionCore.execute_normal_transaction(-> { conn }) do |_m|
-            persist_to_storage(update_expiration, tracked_index_scopes: tracked_scopes)
+            persist_to_storage(update_expiration, tracked_index_scopes: tracked_scopes,
+                                                  prune_stale_tracker: true)
           end
         end
 
@@ -954,6 +977,189 @@ module Familia
         end
       end
 
+      # Whether +field_value+ was claimed for +index_name+ during the current
+      # {#prepare_for_save}.
+      #
+      # The generated +add_to_class_*+ mutators consult this before issuing the
+      # in-MULTI HSET: that write is only sound as a re-affirmation of a claim
+      # already taken server-side, so a caller who opened their own transaction
+      # without claiming gets an error instead of the old blind write.
+      #
+      # The ledger records the *value* claimed, not just the index name. An
+      # index-name-only ledger would vouch for a value that was never claimed
+      # in two reachable cases:
+      #
+      #   1. +atomic_write+ runs {#prepare_for_save} (which claims the value the
+      #      record holds at that moment) and then yields the caller's block
+      #      INSIDE the MULTI. A block that reassigns the indexed field would
+      #      reach the in-MULTI HSET with a value no CAS ever saw.
+      #   2. The ledger outlives the save that populated it. A later
+      #      caller-opened transaction touching the same instance after the
+      #      indexed field changed would find the index still marked claimed.
+      #
+      # Both are the blind write this PR removes, so the comparison is against
+      # the value. +field_value+ is compared as a string because that is the
+      # form both {Familia::HashKey#claim_field} and the HSET use.
+      #
+      # @param index_name [Symbol]
+      # @param field_value [Object] the value about to be written
+      # @return [Boolean]
+      def unique_index_claimed?(index_name, field_value)
+        return false if field_value.nil?
+
+        claim = unique_index_claims[index_name]
+        return false unless claim
+
+        # Both halves matter. The value half is the point of the ledger. The
+        # identifier half keeps a copied instance from spending the original's
+        # claim: #dup shallow-copies ivars, so a dup shares this very Hash, and
+        # a Marshal round-trip carries it along too. A copy that kept the same
+        # identifier is the same owner and may re-affirm; one that was given a
+        # new identifier owns nothing.
+        claim[0] == identifier.to_s && claim[1] == field_value.to_s
+      end
+
+      # The claim ledger: { index_name => [identifier, claimed value] }.
+      #
+      # @return [Hash{Symbol => Array(String, String)}]
+      def unique_index_claims
+        @unique_index_claims ||= {}
+      end
+      private :unique_index_claims
+
+      # Records that +field_value+ is now claimed for +index_name+.
+      #
+      # Called by the generated +claim_unique_<index>!+ methods, so that taking
+      # a claim directly -- the documented way to make an in-transaction write
+      # legal -- is enough on its own. {#claim_unique_indexes!} resets the
+      # ledger and then relies on the same recording.
+      #
+      # The value is snapshotted, not referenced: +String#to_s+ returns +self+,
+      # so storing it raw would let an in-place mutation of the record's own
+      # field (+email.downcase!+, +email << suffix+) rewrite the ledger entry in
+      # lockstep and smuggle a value the CAS never saw past the check.
+      #
+      # @param index_name [Symbol]
+      # @param field_value [Object]
+      # @return [void]
+      def record_unique_index_claim(index_name, field_value)
+        unique_index_claims[index_name] = [-identifier.to_s, -field_value.to_s]
+        nil
+      end
+      private :record_unique_index_claim
+
+      # Drops the ledger entry for +index_name+ when it records +field_value+.
+      #
+      # A ledger entry asserts "this record holds a server-side claim on this
+      # value". Releasing the claim without dropping the entry leaves the
+      # assertion false, and a later in-transaction write would re-affirm a
+      # claim that no longer exists -- reinstating the blind write over whoever
+      # legitimately took the value in the meantime.
+      #
+      # Value-matched, because +update_in_class_*+ releases the OLD value while
+      # the ledger legitimately holds a claim on the NEW one.
+      #
+      # @param index_name [Symbol]
+      # @param field_value [Object] the value being released
+      # @return [void]
+      def forget_unique_index_claim(index_name, field_value)
+        return if field_value.nil?
+
+        claim = unique_index_claims[index_name]
+        unique_index_claims.delete(index_name) if claim && claim[1] == field_value.to_s
+        nil
+      end
+      private :forget_unique_index_claim
+
+      # Atomically claims this record's value in every class-level unique index.
+      #
+      # Runs OUTSIDE the save transaction (from {#prepare_for_save}), because a
+      # CAS queued inside a MULTI cannot abort the other queued commands and its
+      # verdict comes back as a Future. Once claimed, the index HSET that
+      # +persist_to_storage+ issues inside the MULTI is an idempotent
+      # re-affirmation of a value this record already owns.
+      #
+      # Claims are taken in relationship order. If a later index collides, the
+      # entries this call *created* are released before the error propagates --
+      # otherwise a two-unique-index class could permanently strand a value in
+      # the first index for a record that never got saved. Entries that were
+      # already owned by this record (+:owned+) are left alone; they predate the
+      # call and rolling them back would destroy valid state.
+      #
+      # @raise [Familia::RecordExistsError] if another record owns a value
+      # @return [void]
+      #
+      # @see Familia::HashKey#claim_field The server-side CAS.
+      # @see docs/adr/0002-watch-for-private-keys-lua-for-shared-keys.md
+      #
+      def claim_unique_indexes!
+        # Reset the ledger before anything can bail out: a claim recorded by a
+        # previous save must never vouch for this one. Private, but reachable
+        # via send, so it cannot assume prepare_for_save is the only caller.
+        @unique_index_claims = {}
+
+        return unless self.class.respond_to?(:indexing_relationships)
+
+        created = []
+
+        begin
+          each_class_level_unique_index do |rel|
+            claim_method = :"claim_unique_#{rel.index_name}!"
+            next unless respond_to?(claim_method)
+
+            # The ledger entry is written by claim_unique_<index>! itself. A nil
+            # outcome means the record has no value for the indexed field --
+            # nothing was claimed, so nothing was recorded and nothing may be
+            # re-affirmed later.
+            outcome = send(claim_method)
+            next unless outcome.is_a?(Symbol)
+
+            created << rel.index_name if outcome == :created
+          end
+        rescue StandardError
+          release_created_index_claims!(created)
+          raise
+        end
+
+        nil
+      end
+
+      # Releases index entries created earlier in a {#claim_unique_indexes!}
+      # run that then failed. Best-effort: a release that itself fails must not
+      # mask the original constraint violation.
+      #
+      # @param index_names [Array<Symbol>]
+      # @return [void]
+      def release_created_index_claims!(index_names)
+        index_names.each do |index_name|
+          release_method = :"release_unique_#{index_name}!"
+          next unless respond_to?(release_method)
+
+          begin
+            send(release_method)
+          rescue StandardError => e
+            Familia.warn <<~LOG_MESSAGE
+              [claim_unique_indexes!] Failed to release #{self.class}##{index_name} claim after a later conflict: #{e.message}. A stale entry may remain until the next save.
+            LOG_MESSAGE
+          end
+        end
+      end
+      private :release_created_index_claims!
+
+      # Yields each class-level unique indexing relationship.
+      #
+      # @yield [IndexingRelationship]
+      # @return [void]
+      def each_class_level_unique_index
+        self.class.indexing_relationships.each do |rel|
+          next unless rel.cardinality == :unique
+          next unless rel.class_level?
+
+          yield rel
+        end
+      end
+      private :each_class_level_unique_index
+
       # Validates that unique index constraints are satisfied before saving
       # This must be called OUTSIDE of transactions to allow reading current values
       #
@@ -970,15 +1176,16 @@ module Familia
       #
       # @return [void]
       #
+      # @note This is a fast-fail read, not the enforcement. Two savers can both
+      #   pass it for the same value; {#claim_unique_indexes!} is what actually
+      #   settles the race. It still earns its keep by checking EVERY unique
+      #   index before any claim is written, so a collision on the second index
+      #   of a two-index class fails before the first index is touched.
+      #
       def guard_unique_indexes!
         return unless self.class.respond_to?(:indexing_relationships)
 
-        self.class.indexing_relationships.each do |rel|
-          # Only validate unique indexes (not multi_index)
-          next unless rel.cardinality == :unique
-
-          next unless rel.class_level?
-
+        each_class_level_unique_index do |rel|
           # Call the validation method if it exists
           validate_method = :"guard_unique_#{rel.index_name}!"
           send(validate_method) if respond_to?(validate_method)
@@ -1119,8 +1326,15 @@ module Familia
         self.created ||= Familia.now if respond_to?(:created)
         self.updated = Familia.now if respond_to?(:updated)
 
-        # Validate unique indexes BEFORE the transaction
+        # Read-only pre-check across all unique indexes; cheap, and fails
+        # before any claim is written when a value is plainly taken.
         guard_unique_indexes!
+
+        # Take the claims server-side. This is the enforcement, and it must
+        # happen here -- outside the transaction the caller is about to open.
+        # It also resets the claim ledger the in-MULTI writes consult, recording
+        # which *value* each index was claimed for (see #unique_index_claimed?).
+        claim_unique_indexes!
       end
       private :prepare_for_save
 
@@ -1184,9 +1398,14 @@ module Familia
       #   call this from inside a MULTI they already opened, so there is no
       #   pre-transaction point available to them and they default to empty,
       #   leaving instance-scoped indexes untouched.
+      # @param prune_stale_tracker [Boolean] true when the caller determined
+      #   the tracker entries belong to a dead incarnation of this identifier
+      #   (object hash absent while entries survive -- delete! or expiry).
+      #   Stale entries are pruned via remove_from_* replay instead of being
+      #   re-joined onto the record being written (#365).
       # @return [Object] The result of the hmset operation
       #
-      def persist_to_storage(update_expiration, tracked_index_scopes: {})
+      def persist_to_storage(update_expiration, tracked_index_scopes: {}, prune_stale_tracker: false)
         # 1. Save all non-nil fields to hashkey at once
         prepared_h = to_h_for_storage
         hmset_result = hmset(prepared_h)
@@ -1203,10 +1422,18 @@ module Familia
         # 3. Update class-level indexes
         auto_update_class_indexes
 
-        # 3b. Refresh instance-scoped indexes for scopes already registered
-        # via add_to_*. Uses the tracker snapshot read before this
-        # transaction opened; the initial add_to_* remains manual.
-        auto_update_instance_indexes(tracked_index_scopes) if respond_to?(:auto_update_instance_indexes)
+        # 3b. Reconcile instance-scoped indexes using the tracker snapshot
+        # read before this transaction opened. Live entries (the object hash
+        # existed) are refreshed for scopes already registered via add_to_*;
+        # the initial add_to_* remains manual. Stale entries -- left by a
+        # previous incarnation whose hash was delete!'d or expired -- are
+        # pruned instead, removing that incarnation's index buckets and the
+        # tracker itself rather than joining its scopes (#365).
+        if prune_stale_tracker
+          remove_tracked_index_entries!(tracked_index_scopes) if respond_to?(:remove_tracked_index_entries!)
+        elsif respond_to?(:auto_update_instance_indexes)
+          auto_update_instance_indexes(tracked_index_scopes)
+        end
 
         # 4. Touch instances timeline (delegates to touch_instances!).
         #

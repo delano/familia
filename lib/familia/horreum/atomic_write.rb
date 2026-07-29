@@ -93,6 +93,15 @@ module Familia
       #   once before the retry loop, not on each attempt. This matches
       #   +save_if_not_exists!+ behaviour and keeps timestamps consistent
       #   across retries.
+      # @note Instance-scoped index entries are neither refreshed nor
+      #   reconciled here: +persist_to_storage+ runs inside the already-open
+      #   MULTI, so there is no pre-transaction point to snapshot the
+      #   +_idx_scopes+ tracker or probe it for staleness. In particular,
+      #   recreating a +delete!+'d identifier via atomic_write leaves the
+      #   dead incarnation's tracker and index entries in place -- and once
+      #   the new hash exists, a later +save+ can no longer tell they are
+      #   stale and will treat them as live memberships (#365). Use +save+
+      #   for the first write to a reused identifier.
       #
       # @see Persistence#save_with_collections For sequential (non-atomic)
       #   scalar+collection writes (supports cross-database configurations).

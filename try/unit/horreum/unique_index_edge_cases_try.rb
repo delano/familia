@@ -293,7 +293,8 @@ end
 ## Unsaved objects can no longer blind-write the index (#282 guard)
 # Previously both writes landed and last-write-won, leaving an orphaned
 # entry pointing at a record that never existed. The persisted-record
-# guard closes that leg of the race before any write.
+# guard closes that leg of the race before any write. It fires ahead of the
+# CAS below, so this leg of the race never reaches the index at all.
 begin
   @emp8.add_to_class_email_index
   false
@@ -301,6 +302,26 @@ rescue Familia::PersistenceError
   true
 end
 #=> true
+
+## When both racers ARE persisted, the CAS settles what the read guard cannot (#353)
+# The guard is a read, so two savers can both see an empty index (exactly the
+# pair above). claim_unique_* is a single EVAL that checks and writes
+# atomically: the first caller takes the value, the loser is told who owns it
+# instead of silently overwriting.
+@race_a = EdgeCaseEmployee.new(emp_id: 'race_a', email: 'race_cas@test.com')
+@race_b = EdgeCaseEmployee.new(emp_id: 'race_b', email: 'race_cas@test.com')
+@race_a.save
+begin
+  @race_b.claim_unique_email_index!
+  'no error'
+rescue Familia::RecordExistsError => e
+  e.existing_id
+end
+#=> 'race_a'
+
+## The first claimer's entry survives the losing write
+EdgeCaseEmployee.email_index['race_cas@test.com']
+#=> 'race_a'
 
 ## No orphaned entry was written - the index stays empty
 EdgeCaseEmployee.email_index['race2@test.com']
@@ -358,6 +379,13 @@ old_email = @emp11.email
 old_badge = @emp11.badge_number
 @emp11.email = 'compound_new@test.com'
 @emp11.badge_number = 'B666'
+
+# Claim the NEW email outside the MULTI. The save above claimed the old value;
+# the in-transaction HSET only re-affirms a claim on the exact value being
+# written, so a changed field needs a fresh claim (#353 / ADR-0002). Without
+# this the write would be the blind HSET that can overwrite another record's
+# ownership -- which is what this test used to exercise.
+@emp11.claim_unique_email_index!
 
 # Update both indexes in single transaction
 result = EdgeCaseEmployee.transaction do |tx|

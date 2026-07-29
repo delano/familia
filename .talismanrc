@@ -17,6 +17,8 @@ fileignoreconfig:
     checksum: 3a7acf45fb032644c40bad629ba6c0271689a1233ef6893aba3caf03f6327b50
   - filename: .github/workflows/claude-code-review.yml
     checksum: 698ebf39c1c49a72212cd8d9fd0117aaf15079dcb9f1e22c94dc7a871dd7952e
+  - filename: docs/adr/0002-watch-for-private-keys-lua-for-shared-keys.md
+    checksum: 0ace51636017e6d0a5b489dc14fc6b684cabd64c6bb706a710f869d31ea5f4f0
   - filename: .github/workflows/ruby-lint.yml
     checksum: b8009bc29189d214229c88f1cf7960c651404e659be74436a79efb130177ff58
   - filename: .github/workflows/ci.yml

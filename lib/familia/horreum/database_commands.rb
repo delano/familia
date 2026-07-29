@@ -257,10 +257,12 @@ module Familia
       # It does not delete the related fields keys. See destroy!
       #
       # @note Because related keys survive, a record saved later under the
-      #   same identifier inherits them — including ORM bookkeeping such as
-      #   the instance-scoped index tracker (+_idx_scopes+), which save
-      #   replays, re-joining scopes the previous record was added to. Use
-      #   destroy! when the identifier may be reused.
+      #   same identifier inherits them — sets, lists, counters and the like.
+      #   The instance-scoped index tracker (+_idx_scopes+) is the exception:
+      #   save detects that its entries outlived the object hash and prunes
+      #   them, removing the previous record's index entries instead of
+      #   re-joining its scopes (#365). Other leftovers are not reconciled;
+      #   use destroy! when the identifier may be reused.
       #
       # @return [Boolean] true if the key was deleted, false otherwise
       def delete!
