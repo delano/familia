@@ -126,16 +126,39 @@ module Familia
           {}
         end
 
+        # A non-empty tracker with no object hash can only belong to a dead
+        # incarnation of this identifier: add_to_* refuses never-saved
+        # records, so entries outliving the hash mean delete! (or expiry)
+        # removed the hash out from under them. Replaying them would silently
+        # re-join whatever scopes the PREVIOUS record occupied (#365), so the
+        # transaction below prunes them instead -- replaying remove_from_*
+        # with the recorded values, which also clears the index entries the
+        # dead incarnation left behind. The EXISTS probe costs a round trip
+        # only when the tracker has entries.
+        #
+        # The probe runs before the MULTI, so a concurrent delete! landing
+        # between the two makes a live tracker look stale and the save prunes
+        # memberships that were valid an instant earlier. That is the
+        # accepted conservative failure mode -- losing memberships for a
+        # record that was just deleted beats joining the wrong scopes -- and
+        # the same read-window race save already accepts for its guards
+        # (MULTI-only by design, no WATCH).
+        stale_tracker = !tracked_scopes.empty? && !exists?
+
         # Validate instance-scoped unique constraints here too -- same reason
         # prepare_for_save runs guard_unique_indexes! outside the transaction
         # (the guard reads). guard_unique_indexes! only covers class-level
         # relationships; without this, the refresh below could evict another
-        # record's index entry silently.
-        guard_tracked_index_scopes!(tracked_scopes) if respond_to?(:guard_tracked_index_scopes!)
+        # record's index entry silently. Stale entries are pruned rather than
+        # replayed, so there is no membership to validate.
+        if !stale_tracker && respond_to?(:guard_tracked_index_scopes!)
+          guard_tracked_index_scopes!(tracked_scopes)
+        end
 
         # Everything in ONE transaction for complete atomicity
         result = transaction do |_conn|
-          persist_to_storage(update_expiration, tracked_index_scopes: tracked_scopes)
+          persist_to_storage(update_expiration, tracked_index_scopes: tracked_scopes,
+                                                prune_stale_tracker: stale_tracker)
         end
 
         # Structured lifecycle logging and instrumentation
@@ -289,20 +312,20 @@ module Familia
           # rather than before the watched block so a WATCH abort re-reads it
           # on retry. Usually empty (this path only proceeds when the object
           # hash is absent), but a hash removed out of band -- delete!, or
-          # expiry -- can leave tracker entries whose index buckets still
-          # point here; refreshing re-syncs them to the resurrected record.
+          # expiry -- can leave entries behind. Those entries describe the
+          # previous incarnation of this identifier, not the record being
+          # created, so the transaction prunes them (#365): remove_from_* is
+          # replayed with the recorded values and the tracker cleared. No
+          # uniqueness guard is needed -- nothing is being joined.
           tracked_scopes = if respond_to?(:read_instance_index_scopes)
             read_instance_index_scopes
           else
             {}
           end
 
-          # Instance-scoped uniqueness, validated in the same read window as
-          # the existence check above and for the same reason (see #save).
-          guard_tracked_index_scopes!(tracked_scopes) if respond_to?(:guard_tracked_index_scopes!)
-
           Familia::Connection::TransactionCore.execute_normal_transaction(-> { conn }) do |_m|
-            persist_to_storage(update_expiration, tracked_index_scopes: tracked_scopes)
+            persist_to_storage(update_expiration, tracked_index_scopes: tracked_scopes,
+                                                  prune_stale_tracker: true)
           end
         end
 
@@ -1294,9 +1317,14 @@ module Familia
       #   call this from inside a MULTI they already opened, so there is no
       #   pre-transaction point available to them and they default to empty,
       #   leaving instance-scoped indexes untouched.
+      # @param prune_stale_tracker [Boolean] true when the caller determined
+      #   the tracker entries belong to a dead incarnation of this identifier
+      #   (object hash absent while entries survive -- delete! or expiry).
+      #   Stale entries are pruned via remove_from_* replay instead of being
+      #   re-joined onto the record being written (#365).
       # @return [Object] The result of the hmset operation
       #
-      def persist_to_storage(update_expiration, tracked_index_scopes: {})
+      def persist_to_storage(update_expiration, tracked_index_scopes: {}, prune_stale_tracker: false)
         # 1. Save all non-nil fields to hashkey at once
         prepared_h = to_h_for_storage
         hmset_result = hmset(prepared_h)
@@ -1313,10 +1341,18 @@ module Familia
         # 3. Update class-level indexes
         auto_update_class_indexes
 
-        # 3b. Refresh instance-scoped indexes for scopes already registered
-        # via add_to_*. Uses the tracker snapshot read before this
-        # transaction opened; the initial add_to_* remains manual.
-        auto_update_instance_indexes(tracked_index_scopes) if respond_to?(:auto_update_instance_indexes)
+        # 3b. Reconcile instance-scoped indexes using the tracker snapshot
+        # read before this transaction opened. Live entries (the object hash
+        # existed) are refreshed for scopes already registered via add_to_*;
+        # the initial add_to_* remains manual. Stale entries -- left by a
+        # previous incarnation whose hash was delete!'d or expired -- are
+        # pruned instead, removing that incarnation's index buckets and the
+        # tracker itself rather than joining its scopes (#365).
+        if prune_stale_tracker
+          remove_tracked_index_entries!(tracked_index_scopes) if respond_to?(:remove_tracked_index_entries!)
+        elsif respond_to?(:auto_update_instance_indexes)
+          auto_update_instance_indexes(tracked_index_scopes)
+        end
 
         # 4. Touch instances timeline (delegates to touch_instances!).
         #

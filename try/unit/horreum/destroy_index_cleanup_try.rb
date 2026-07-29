@@ -242,22 +242,28 @@ end
 @ref_co.find_by_badge('B-BEFORE')&.identifier
 #=> 'w241emp-ref2'
 
-## save_if_not_exists! refreshes tracked indexes too
+## save_if_not_exists! prunes tracker entries that outlived the hash (#365)
 # The object hash is removed out of band (delete!), leaving tracker entries
-# whose index bucket still points here. Re-creating via save_if_not_exists!
-# re-syncs them to the resurrected record rather than leaving them stale.
+# whose index bucket still points here. Entries without a hash can only
+# describe a dead incarnation of the identifier, so re-creating via
+# save_if_not_exists! removes the old bucket and does NOT re-join the
+# scope -- instance-scoped membership stays opt-in for the new record.
 @sine_co = Widget241ScopedCompany.create!(company_id: 'w241co-sine')
 @sine_emp = Widget241ScopedEmployee.create!(emp_id: 'w241emp-sine', badge: 'B-SINE')
 @sine_emp.add_to_widget241scoped_company_badge_index(@sine_co)
 @sine_emp.delete!
 @sine_emp.badge = 'B-SINE2'
 @sine_emp.save_if_not_exists!
-[@sine_co.badge_index.has_key?('B-SINE'), @sine_co.badge_index.get('B-SINE2')]
-#=> [false, 'w241emp-sine']
+[@sine_co.badge_index.has_key?('B-SINE'), @sine_co.badge_index.has_key?('B-SINE2')]
+#=> [false, false]
+
+## The prune clears the tracker itself, leaving a genuinely clean slate
+@sine_emp.send(:_index_scope_tracker).hgetall
+#=> {}
 
 ## save_if_not_exists! re-reads the tracker after a WATCH abort
 # The snapshot is taken INSIDE the watched block, so a retry re-reads it
-# rather than replaying a stale one. Simulated deterministically: the first
+# rather than pruning from a stale copy. Simulated deterministically: the first
 # pass touches the watched key (dbkey), which invalidates the WATCH and
 # aborts EXEC; the probe counter proves the block ran more than once.
 @sir_co = Widget241ScopedCompany.create!(company_id: 'w241co-sir')
@@ -283,9 +289,67 @@ end
 @sir_emp.probe_count > 1
 #=> true
 
-## The retried save_if_not_exists! still refreshed the index correctly
-[@sir_co.badge_index.has_key?('S-1'), @sir_co.badge_index.get('S-2')]
-#=> [false, 'w241emp-sir']
+## The retried save_if_not_exists! still pruned the stale entries correctly
+[@sir_co.badge_index.has_key?('S-1'), @sir_co.badge_index.has_key?('S-2')]
+#=> [false, false]
+
+## Reused identifier: plain save prunes the previous record's tracker (#365)
+# delete! removes only the object hash; the tracker survives. A NEW record
+# saved under the same identifier used to replay the stale tracker and
+# silently join the scopes the previous record was added to. save now
+# detects that the entries outlived the hash (an EXISTS probe, paid only
+# when the tracker is non-empty) and prunes them: the dead incarnation's
+# bucket is removed and the new record joins nothing.
+@reuse_co = Widget241ScopedCompany.create!(company_id: 'w241co-reuse')
+@reuse_a = Widget241ScopedEmployee.create!(emp_id: 'w241emp-reuse', badge: 'R-OLD')
+@reuse_a.add_to_widget241scoped_company_badge_index(@reuse_co)
+@reuse_a.delete!
+@reuse_b = Widget241ScopedEmployee.new(emp_id: 'w241emp-reuse', badge: 'R-NEW')
+@reuse_b.save
+[@reuse_co.badge_index.has_key?('R-OLD'), @reuse_co.badge_index.has_key?('R-NEW')]
+#=> [false, false]
+
+## Reused identifier: the tracker is cleared along with the index entries
+@reuse_b.send(:_index_scope_tracker).hgetall
+#=> {}
+
+## Reused identifier: a fresh add_to_* then behaves like a first membership
+# The new record opts in explicitly and gets the ordinary lifecycle,
+# destroy! cleanup included.
+@reuse_b.add_to_widget241scoped_company_badge_index(@reuse_co)
+@reuse_joined = @reuse_co.badge_index.get('R-NEW')
+@reuse_b.destroy!
+[@reuse_joined, @reuse_co.badge_index.has_key?('R-NEW')]
+#=> ['w241emp-reuse', false]
+
+## Reused identifier with a COLLIDING value no longer raises (#365)
+# Previously the stale replay tripped the uniqueness guard when the new
+# record's value matched another record's entry, failing the save of a
+# record that never asked to join the scope. With stale entries pruned
+# instead of replayed there is nothing to guard: the save succeeds and the
+# other record's entry is untouched.
+@col_holder = Widget241ScopedEmployee.create!(emp_id: 'w241emp-col-holder', badge: 'C-HELD')
+@col_holder.add_to_widget241scoped_company_badge_index(@reuse_co)
+@col_a = Widget241ScopedEmployee.create!(emp_id: 'w241emp-col', badge: 'C-A')
+@col_a.add_to_widget241scoped_company_badge_index(@reuse_co)
+@col_a.delete!
+@col_b = Widget241ScopedEmployee.new(emp_id: 'w241emp-col', badge: 'C-HELD')
+@col_b.save
+[@reuse_co.badge_index.get('C-HELD'), @reuse_co.badge_index.has_key?('C-A')]
+#=> ['w241emp-col-holder', false]
+
+## Same-object save after delete! is also a fresh start (#365)
+# Re-saving the very object that was delete!'d (a stand-in for the hash
+# expiring via TTL while the tracker survived) goes through the same
+# staleness detection: the membership is pruned, not preserved. An object
+# whose hash is gone is gone; memberships do not survive death.
+@exp_co = Widget241ScopedCompany.create!(company_id: 'w241co-exp')
+@exp_emp = Widget241ScopedEmployee.create!(emp_id: 'w241emp-exp', badge: 'E-1')
+@exp_emp.add_to_widget241scoped_company_badge_index(@exp_co)
+@exp_emp.delete!
+@exp_emp.save
+[@exp_co.badge_index.has_key?('E-1'), @exp_emp.send(:_index_scope_tracker).hgetall]
+#=> [false, {}]
 
 ## atomic_write does NOT refresh instance-scoped indexes (documented gap)
 # atomic_write calls persist_to_storage from inside a MULTI it already
@@ -305,6 +369,45 @@ end
 @aw_emp.destroy!
 [@aw_co.badge_index.has_key?('B-AW1'), @aw_co.badge_index.has_key?('B-AW2')]
 #=> [false, false]
+
+## atomic_write does NOT prune a stale tracker either (documented gap, #365)
+# Same root cause as the refresh gap: persist_to_storage runs inside the
+# already-open MULTI, so there is no pre-transaction point to probe EXISTS
+# or snapshot the tracker. Recreating a delete!'d identifier via
+# atomic_write therefore leaves the dead incarnation's index entry and
+# tracker in place.
+@awr_co = Widget241ScopedCompany.create!(company_id: 'w241co-awr')
+@awr_old = Widget241ScopedEmployee.create!(emp_id: 'w241emp-awr', badge: 'B-AWR-OLD')
+@awr_old.add_to_widget241scoped_company_badge_index(@awr_co)
+@awr_old.delete!
+@awr_new = Widget241ScopedEmployee.new(emp_id: 'w241emp-awr')
+@awr_new.atomic_write { @awr_new.badge = 'B-AWR-NEW' }
+[@awr_co.badge_index.get('B-AWR-OLD'),
+ @awr_new.send(:_index_scope_tracker).hgetall.empty?]
+#=> ['w241emp-awr', false]
+
+## Once atomic_write recreated the hash, staleness is undetectable (#365)
+# This test keeps the YARD note honest: the hash now EXISTS, so a later
+# save has no way to tell the inherited tracker belongs to a dead
+# incarnation -- it replays the membership as live, and the record joins
+# the previous incarnation's scope. This is why the first write to a
+# reused identifier should be a save, never an atomic_write. If
+# atomic_write ever gains a pre-transaction staleness probe, this
+# expectation must change.
+@awr_new.save
+@awr_co.badge_index.get('B-AWR-NEW')
+#=> 'w241emp-awr'
+
+## Reused identifier with an EMPTY tracker takes the ordinary create path
+# The staleness probe is gated on the tracker having entries, so a
+# delete!'d identifier with no instance-scoped memberships is re-saved
+# with no EXISTS probe, no prune, and no error -- a plain create.
+@empty_co = Widget241ScopedCompany.create!(company_id: 'w241co-empty')
+@empty_old = Widget241ScopedEmployee.create!(emp_id: 'w241emp-empty', badge: 'B-EMPTY')
+@empty_old.delete!
+@empty_new = Widget241ScopedEmployee.new(emp_id: 'w241emp-empty', badge: 'B-EMPTY2')
+[@empty_new.save, @empty_new.send(:_index_scope_tracker).hgetall]
+#=> [true, {}]
 
 ## DataType rejects an unrecognized dirty_write_warnings mode
 # Without the check a typo would fall through warn_if_dirty! to the :once
@@ -639,6 +742,24 @@ end
  @multi_co.dept_index_for('before').members, @multi_co.dept_index_for('after').members,
  @multi_co_b.dept_index_for('before').members, @multi_co_b.dept_index_for('after').members]
 #=> [4, [], [], [], []]
+
+## Reused identifier: multi_index buckets are pruned too (#365)
+# Every bucket the dead incarnation occupied is cleared on the new
+# record's save, exactly as destroy! would have cleared them, and the new
+# record joins none of them.
+@mre_co = Widget282MultiCompany.create!(company_id: 'w282mco-reuse')
+@mre_a = Widget282MultiEmployee.create!(emp_id: 'w282memp-reuse', department: 'eng')
+@mre_a.add_to_widget282multi_company_dept_index(@mre_co)
+@mre_a.department = 'ops'
+@mre_a.save
+@mre_a.delete!
+@mre_b = Widget282MultiEmployee.new(emp_id: 'w282memp-reuse', department: 'qa')
+@mre_b.save
+[@mre_co.dept_index_for('eng').members,
+ @mre_co.dept_index_for('ops').members,
+ @mre_co.dept_index_for('qa').members,
+ @mre_b.send(:_index_scope_tracker).hgetall]
+#=> [[], [], [], {}]
 
 ## Two scope classes sharing an index name each clean up their own entry
 # The tracker records the scope config alongside the index name. Matching
