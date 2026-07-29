@@ -46,6 +46,17 @@ user.destroy
 User.find_by_email('alice.smith@example.com')  # => nil
 ```
 
+> **Uniqueness is enforced server-side, before the transaction opens.** `save`
+> claims the value with a single-key Lua compare-and-set, so two concurrent
+> saves of the same value cannot both see it as free — the loser raises
+> `Familia::RecordExistsError` carrying `existing_id`. The `HSET` inside save's
+> MULTI only re-affirms a claim the record already holds. Every save path
+> (`save`, `save_if_not_exists!`, `atomic_write`, `Familia.atomic_write`) claims
+> automatically; a transaction you open yourself does not, so writing an index
+> from inside one needs an explicit `claim_unique_<index>!` first — see
+> `Familia::OperationModeError` under [Troubleshooting](#troubleshooting) and
+> [ADR-0002](../adr/0002-watch-for-private-keys-lua-for-shared-keys.md).
+
 ### Generated Methods
 
 | Method                         | Description       |
@@ -511,6 +522,50 @@ Index values (the object identifiers stored in hash keys and sets) are raw strin
 - The object has never been saved; index writers reject unsaved objects to
   prevent dangling entries. Call `save` before indexing (class-level indexes
   populate automatically on save).
+
+**`Familia::OperationModeError` from `add_to_class_*` / `update_in_class_*`
+(`unique_index` only):**
+
+- The write is inside a transaction *you* opened and the record holds no claim
+  on the exact value being written. That in-MULTI `HSET` is only sound as a
+  re-affirmation of a server-side claim; without one it is a blind write that
+  can silently overwrite another record's ownership. Ordinary `save` never hits
+  this — every save path claims first. Two shapes reach it:
+
+  ```ruby
+  # 1. Reassigning the indexed field inside atomic_write. The block runs
+  #    INSIDE the MULTI, after the claim was taken on the OLD value.
+  user.atomic_write { user.email = 'new@example.com' }   # raises
+
+  # Fix: set the field before the block, so the claim covers the new value.
+  user.email = 'new@example.com'
+  user.atomic_write { user.name = 'Alice' }
+  ```
+
+  ```ruby
+  # 2. Opening your own transaction after changing the field.
+  old_email = user.email
+  user.email = 'new@example.com'
+  User.transaction { user.update_in_class_email_lookup(old_email) }  # raises
+
+  # Fix: claim outside the MULTI, then write inside it.
+  user.claim_unique_email_lookup!
+  User.transaction { user.update_in_class_email_lookup(old_email) }
+  ```
+
+  The message names whichever mutator ran, so an `atomic_write` that changed a
+  field reports `update_in_class_*` (the path dirty tracking routes to), not
+  `add_to_class_*`. The error propagates out of the transaction block, so the
+  MULTI is discarded whole: neither the index entry nor any scalar field queued
+  alongside it is written, and the record reloads with its previous values.
+  `update_all_indexes` routes to `update_in_class_*` and raises the same way.
+  Instance-scoped (`within:`) unique indexes are *not* claim-enforced: inside a
+  transaction they write blindly and log that the write is unenforced.
+
+- Two neighbouring causes of the same error class, both pre-existing: `save`
+  itself refuses to run inside a transaction, and `HashKey#claim_field` refuses
+  too — a CAS verdict inside MULTI would come back as a `Future`, with nothing
+  left to abort.
 
 **`Familia::NoIdentifier` / `ArgumentError` from `add_to_*` / `update_in_*`:**
 
