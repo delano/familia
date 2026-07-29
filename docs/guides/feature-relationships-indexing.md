@@ -563,9 +563,11 @@ Index values (the object identifiers stored in hash keys and sets) are raw strin
   The message names whichever mutator ran, so an `atomic_write` that changed a
   field reports `update_in_class_*` (the path dirty tracking routes to), not
   `add_to_class_*`. `update_all_indexes` routes there too and raises the same
-  way. Instance-scoped (`within:`) unique indexes are *not* claim-enforced:
-  inside a transaction they write blindly and say so via `Familia.debug`, which
-  is silent unless debug logging is on.
+  way. Instance-scoped (`within:`) unique indexes are *not* claim-enforced —
+  inside a transaction they write blindly instead of raising, and the two paths
+  differ in how loudly: `add_to_*` says so via `Familia.debug`, which is silent
+  unless debug logging is on, while `update_in_*` skips the claim with no notice
+  at all.
 
   The error propagates out of the transaction block, so the MULTI is discarded
   whole: neither the index entry nor any scalar field queued alongside it is
