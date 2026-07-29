@@ -254,6 +254,12 @@ module Familia
       #
       # It does not delete the related fields keys. See destroy!
       #
+      # @note Because related keys survive, a record saved later under the
+      #   same identifier inherits them — including ORM bookkeeping such as
+      #   the instance-scoped index tracker (+_idx_scopes+), which save
+      #   replays, re-joining scopes the previous record was added to. Use
+      #   destroy! when the identifier may be reused.
+      #
       # @return [Boolean] true if the key was deleted, false otherwise
       def delete!
         Familia.trace :DELETE!, nil, self.class.uri if Familia.debug?

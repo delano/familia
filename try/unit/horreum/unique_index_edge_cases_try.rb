@@ -290,15 +290,26 @@ rescue
 end
 #=> true
 
-## Both write to index (last write wins in Redis)
-@emp8.add_to_class_email_index
-@emp9.add_to_class_email_index
-# Verify the index contains the identifier (orphaned entry - wastes space but harmless)
-EdgeCaseEmployee.email_index['race2@test.com']
-#=> 'e9'
+## Unsaved objects can no longer blind-write the index (#282 guard)
+# Previously both writes landed and last-write-won, leaving an orphaned
+# entry pointing at a record that never existed. The persisted-record
+# guard closes that leg of the race before any write.
+begin
+  @emp8.add_to_class_email_index
+  false
+rescue Familia::PersistenceError
+  true
+end
+#=> true
 
-## find_by returns nil for orphaned index entries (object never saved)
-# This is correct behavior - orphaned entries degrade gracefully to nil
+## No orphaned entry was written - the index stays empty
+EdgeCaseEmployee.email_index['race2@test.com']
+#=> nil
+
+## find_by returns nil for orphaned index entries (no backing record)
+# Orphans can still be created via raw index writes; they degrade
+# gracefully to nil instead of erroring.
+EdgeCaseEmployee.email_index['race2@test.com'] = 'e9'
 EdgeCaseEmployee.find_by_email('race2@test.com')
 #=> nil
 
