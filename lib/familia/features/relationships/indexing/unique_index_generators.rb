@@ -269,14 +269,37 @@ module Familia
 
                 _ensure_persisted_before_index_write!(index_name, scope_instance)
 
-                unless Fiber[:familia_transaction]
+                index_hash = scope_instance.send(index_name)
+
+                if Fiber[:familia_transaction]
+                  # Inside a MULTI neither the read guard nor the CAS can run
+                  # (both need a verdict, and queued commands only return
+                  # Futures). Instance-scoped indexes are populated explicitly,
+                  # so there is no pre-transaction claim to lean on the way
+                  # class-level indexes have prepare_for_save. Write blindly and
+                  # say so -- this is the documented escape hatch, and it does
+                  # not enforce uniqueness.
+                  Familia.debug <<~LOG_MESSAGE
+                    [#{self.class}] add_to_#{scope_class_config}_#{index_name} inside a transaction writes without a uniqueness check. Call it outside the MULTI for the server-side CAS.
+                  LOG_MESSAGE
+                  index_hash[field_value.to_s] = identifier
+                else
+                  # Fast-fail read, then the CAS that actually enforces it.
                   guard_method = :"guard_unique_#{scope_class_config}_#{index_name}!"
                   send(guard_method, scope_instance) if respond_to?(guard_method)
+
+                  outcome = index_hash.claim_field(field_value.to_s, identifier)
+                  unless outcome.is_a?(Symbol)
+                    raise Familia::RecordExistsError.new(
+                      "#{self.class} exists in #{scope_instance.class} with #{field}=#{field_value}",
+                      existing_id: outcome,
+                    )
+                  end
                 end
 
-                index_hash = scope_instance.send(index_name)
-                index_hash[field_value.to_s] = identifier
-
+                # Only reached when the value is ours: a lost claim raises
+                # above, so destroy! never inherits a tracker entry for an
+                # index entry another record owns.
                 _record_index_scope(scope_class_config, index_name, scope_instance, field_value,
                                     cardinality: :unique)
               end
@@ -328,8 +351,14 @@ module Familia
                 return unless field_value
 
                 index_hash = scope_instance.send(index_name)
-                index_hash.remove(field_value.to_s)
 
+                # Ownership-checked delete, so a stale in-memory field value
+                # cannot evict an entry another record now owns.
+                index_hash.release_field(field_value.to_s, identifier)
+
+                # Untracked either way. If the entry belonged to another
+                # record, release_field left it alone and this object has no
+                # business pointing destroy! at it.
                 _unrecord_index_scope(scope_class_config, index_name, scope_instance, field_value,
                                       cardinality: :unique)
               end
@@ -343,18 +372,29 @@ module Familia
                 _ensure_trackable_index_scope!(scope_instance)
 
                 new_field_value = send(field)
+                index_hash = scope_instance.send(index_name)
+
+                # Claim before the MULTI opens (see ADR-0002). Inside an outer
+                # transaction there is nothing to claim against, so the writes
+                # below are unenforced -- same escape hatch as add_to_*.
+                if new_field_value && !Fiber[:familia_transaction]
+                  outcome = index_hash.claim_field(new_field_value.to_s, identifier)
+                  unless outcome.is_a?(Symbol)
+                    raise Familia::RecordExistsError.new(
+                      "#{self.class} exists in #{scope_instance.class} with #{field}=#{new_field_value}",
+                      existing_id: outcome,
+                    )
+                  end
+                end
 
                 _ensure_persisted_before_index_write!(index_name, scope_instance)
 
                 # Use Familia's transaction method for atomicity with DataType abstraction
                 scope_instance.transaction do |_tx|
-                  # Use declared field accessor on scope instance
-                  index_hash = scope_instance.send(index_name)
+                  # Release old value if provided (ownership-checked)
+                  index_hash.release_field(old_field_value.to_s, identifier) if old_field_value
 
-                  # Remove old value if provided
-                  index_hash.remove(old_field_value.to_s) if old_field_value
-
-                  # Add new value if present
+                  # Re-affirm the claimed value
                   index_hash[new_field_value.to_s] = identifier if new_field_value
                 end
 
@@ -455,19 +495,107 @@ module Familia
           # - employee.update_in_class_email_index(old_email)
           def generate_mutation_methods_class(field, index_name, indexed_class)
             indexed_class.class_eval do
+              # Atomically claim this record's current field value in the index.
+              #
+              # This is where the unique constraint is actually enforced: a
+              # server-side CAS (HashKey#claim_field) that checks and writes in
+              # one EVAL, so two concurrent savers of the same value cannot both
+              # observe "unclaimed". guard_unique_*! reads before this and is a
+              # fast-fail courtesy; this is the enforcement.
+              #
+              # Must run OUTSIDE a MULTI -- an EVAL queued inside one cannot
+              # abort the other queued commands, and its verdict is a Future.
+              # See docs/adr/0002-watch-for-private-keys-lua-for-shared-keys.md.
+              #
+              # @return [Symbol, nil] :created when the entry was newly written,
+              #   :owned when this record already held it, nil when the record
+              #   has no value for the indexed field.
+              # @raise [Familia::RecordExistsError] if another record owns the value
+              define_method(:"claim_unique_#{index_name}!") do
+                field_value = send(field)
+                return nil unless field_value
+
+                index_hash = self.class.send(index_name)
+                outcome = index_hash.claim_field(field_value.to_s, identifier)
+
+                unless outcome.is_a?(Symbol)
+                  raise Familia::RecordExistsError.new(
+                    "#{self.class} exists #{field}=#{field_value}",
+                    existing_id: outcome,
+                  )
+                end
+
+                # Record which value was claimed, so a later in-MULTI HSET can
+                # verify it is re-affirming *this* value and not one that was
+                # assigned after the claim was taken. Recording here (rather
+                # than in Persistence#claim_unique_indexes!) is what makes a
+                # direct claim_unique_<index>! call sufficient on its own.
+                record_unique_index_claim(index_name, field_value)
+
+                outcome
+              end
+
+              # Release this record's claim on its current field value.
+              #
+              # Ownership-checked: an entry another record now legitimately owns
+              # is left alone. Safe to queue inside a MULTI (it needs no return
+              # value to decide anything).
+              #
+              # @return [Integer, Redis::Future, nil]
+              define_method(:"release_unique_#{index_name}!") do
+                field_value = send(field)
+                return nil unless field_value
+
+                ret = self.class.send(index_name).release_field(field_value.to_s, identifier)
+
+                # The claim is gone, so the ledger must stop vouching for it --
+                # otherwise a later in-MULTI write would "re-affirm" a claim
+                # this record no longer holds, over whoever took the value next.
+                forget_unique_index_claim(index_name, field_value)
+
+                ret
+              end
+
               define_method(:"add_to_class_#{index_name}") do
-                index_hash = self.class.send(index_name)  # Access the class-level hashkey DataType
                 field_value = send(field)
 
                 return unless field_value
 
                 _ensure_persisted_before_index_write!(index_name)
 
-                # Just set the value - uniqueness should be validated before save
-                index_hash[field_value.to_s] = identifier
+                unless Fiber[:familia_transaction]
+                  # Outside a transaction the CAS *is* the write -- claim_field
+                  # HSETs on success, so there is nothing left to do.
+                  #
+                  # `next` (not `return`) exits a define_method body with a
+                  # value. Both work here -- define_method gives the block
+                  # method semantics for `return` -- but `next` is the form that
+                  # stays correct if this body is ever passed around as a Proc.
+                  next send(:"claim_unique_#{index_name}!")
+                end
+
+                # Inside a MULTI this can only re-affirm the value claimed
+                # before the transaction opened (prepare_for_save does that for
+                # every save path). Without that claim the HSET below is the old
+                # blind write, so refuse rather than reopen the TOCTOU. The
+                # check is value-aware: a block that changed the indexed field
+                # after prepare_for_save holds no claim on the new value.
+                unless unique_index_claimed?(index_name, field_value)
+                  raise Familia::OperationModeError, <<~ERROR_MESSAGE
+                    Cannot add_to_class_#{index_name} inside a transaction without first claiming #{field.inspect}=#{field_value.inspect}. Call claim_unique_#{index_name}! outside the MULTI (see ADR-0002); the in-transaction HSET only re-affirms a claim on this exact value. If you changed #{field} inside an atomic_write block, set it before the block instead -- prepare_for_save claims the value the record holds when the block opens.
+                  ERROR_MESSAGE
+                end
+
+                self.class.send(index_name)[field_value.to_s] = identifier
               end
 
               # Add a guard method to enforce unique constraint on this specific index
+              #
+              # Read-only pre-check. It runs for every unique index BEFORE any
+              # claim is written (see Persistence#prepare_for_save), which is
+              # what keeps a class with two unique indexes from writing a claim
+              # for the first one and then failing on the second. Load-bearing,
+              # not redundant with claim_unique_*!.
               #
               # @raise [Familia::RecordExistsError] if a record with the same
               # field value exists. Values are compared as strings.
@@ -489,12 +617,15 @@ module Familia
               end
 
               define_method(:"remove_from_class_#{index_name}") do
-                index_hash = self.class.send(index_name)  # Access the class-level hashkey DataType
-                field_value = send(field)
-
-                return unless field_value
-
-                index_hash.remove(field_value.to_s)
+                # Ownership-checked delete, and it must also clear the claim
+                # ledger -- hence the delegation rather than a bare
+                # release_field. A blind HDEL here lets a stale in-memory field
+                # value evict a claim another record has since taken (the
+                # release-side twin of the TOCTOU claim_field closes on the way
+                # in), and a release that left the ledger intact would let this
+                # record write the value back over the new owner from inside a
+                # later transaction.
+                send(:"release_unique_#{index_name}!")
               end
 
               define_method(:"update_in_class_#{index_name}") do |old_field_value = nil|
@@ -502,14 +633,36 @@ module Familia
 
                 _ensure_persisted_before_index_write!(index_name)
 
+                # Claim before the MULTI. This is the path save takes (see
+                # Persistence#apply_class_index_change), and inside the save's
+                # transaction prepare_for_save has already claimed -- the HSET
+                # below is then an idempotent re-affirmation. A caller who
+                # opened their own MULTI without claiming gets an error rather
+                # than the old blind write.
+                if new_field_value
+                  if !Fiber[:familia_transaction]
+                    send(:"claim_unique_#{index_name}!")
+                  elsif !unique_index_claimed?(index_name, new_field_value)
+                    raise Familia::OperationModeError, <<~ERROR_MESSAGE
+                      Cannot update_in_class_#{index_name} inside a transaction without first claiming #{field.inspect}=#{new_field_value.inspect}. Call claim_unique_#{index_name}! outside the MULTI (see ADR-0002); the in-transaction HSET only re-affirms a claim on this exact value. If you changed #{field} inside an atomic_write block, set it before the block instead -- prepare_for_save claims the value the record holds when the block opens.
+                    ERROR_MESSAGE
+                  end
+                end
+
                 # Use class-level transaction for atomicity with DataType abstraction
                 self.class.transaction do |_tx|
                   index_hash = self.class.send(index_name) # Access the class-level hashkey DataType
 
-                  # Remove old value if provided
-                  index_hash.remove(old_field_value.to_s) if old_field_value
+                  # Release old value if provided (ownership-checked). The
+                  # forget is value-matched, so it drops a ledger entry still
+                  # pointing at the OLD value while leaving the claim on the
+                  # new one -- which is the entry the HSET below re-affirms.
+                  if old_field_value
+                    index_hash.release_field(old_field_value.to_s, identifier)
+                    forget_unique_index_claim(index_name, old_field_value)
+                  end
 
-                  # Add new value if present
+                  # Re-affirm the claimed value
                   index_hash[new_field_value.to_s] = identifier if new_field_value
                 end
               end

@@ -12,6 +12,8 @@ fileignoreconfig:
     checksum: 10c94f802b2fa3a39fa33bf7dc34dac2ecaa2dd453ff97a19313f96a32fadeff
   - filename: examples/encrypted_fields.rb
     checksum: d1bd77f85d951d367e1c2bfd066a1d68d5f486346ee479121a3d5dcc2560bf52
+  - filename: docs/adr/0002-watch-for-private-keys-lua-for-shared-keys.md
+    checksum: 0ace51636017e6d0a5b489dc14fc6b684cabd64c6bb706a710f869d31ea5f4f0
   - filename: .github/workflows/ruby-lint.yml
     checksum: b8009bc29189d214229c88f1cf7960c651404e659be74436a79efb130177ff58
   - filename: .github/workflows/ci.yml
