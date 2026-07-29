@@ -1,7 +1,0 @@
-### Fixed
-
-- **A record saved under a reused identifier no longer inherits the previous record's index tracker**: `delete!` removes only the main object hash, so the instance-scoped index tracker (`_idx_scopes`) survived it — and the next `save` under the same identifier replayed the stale entries, silently joining the new record to every scope the *previous* record had been added to (or raising `Familia::RecordExistsError` when the new value collided with another record's entry). Save now detects the staleness — tracker entries can only outlive the object hash when a previous incarnation was `delete!`'d or expired, since `add_to_*` refuses never-saved records — and prunes them inside the save transaction: `remove_from_*` is replayed with the recorded values, clearing the dead incarnation's index entries (previously orphaned forever) along with the tracker itself. The new record starts with no instance-scoped memberships; `add_to_*` remains the explicit opt-in. `save_if_not_exists!` applies the same reconciliation (replacing its previous behavior of re-syncing stale entries onto the resurrected record), and the detection costs an EXISTS probe only when the tracker actually has entries. (#365)
-
-### AI Assistance
-
-- The staleness-detection design (prune-on-stale rather than a `delete!` override or an epoch marker), the save-path wiring, and the accompanying tests were developed with AI assistance.

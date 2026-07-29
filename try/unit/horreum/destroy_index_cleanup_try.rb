@@ -370,6 +370,45 @@ end
 [@aw_co.badge_index.has_key?('B-AW1'), @aw_co.badge_index.has_key?('B-AW2')]
 #=> [false, false]
 
+## atomic_write does NOT prune a stale tracker either (documented gap, #365)
+# Same root cause as the refresh gap: persist_to_storage runs inside the
+# already-open MULTI, so there is no pre-transaction point to probe EXISTS
+# or snapshot the tracker. Recreating a delete!'d identifier via
+# atomic_write therefore leaves the dead incarnation's index entry and
+# tracker in place.
+@awr_co = Widget241ScopedCompany.create!(company_id: 'w241co-awr')
+@awr_old = Widget241ScopedEmployee.create!(emp_id: 'w241emp-awr', badge: 'B-AWR-OLD')
+@awr_old.add_to_widget241scoped_company_badge_index(@awr_co)
+@awr_old.delete!
+@awr_new = Widget241ScopedEmployee.new(emp_id: 'w241emp-awr')
+@awr_new.atomic_write { @awr_new.badge = 'B-AWR-NEW' }
+[@awr_co.badge_index.get('B-AWR-OLD'),
+ @awr_new.send(:_index_scope_tracker).hgetall.empty?]
+#=> ['w241emp-awr', false]
+
+## Once atomic_write recreated the hash, staleness is undetectable (#365)
+# This test keeps the YARD note honest: the hash now EXISTS, so a later
+# save has no way to tell the inherited tracker belongs to a dead
+# incarnation -- it replays the membership as live, and the record joins
+# the previous incarnation's scope. This is why the first write to a
+# reused identifier should be a save, never an atomic_write. If
+# atomic_write ever gains a pre-transaction staleness probe, this
+# expectation must change.
+@awr_new.save
+@awr_co.badge_index.get('B-AWR-NEW')
+#=> 'w241emp-awr'
+
+## Reused identifier with an EMPTY tracker takes the ordinary create path
+# The staleness probe is gated on the tracker having entries, so a
+# delete!'d identifier with no instance-scoped memberships is re-saved
+# with no EXISTS probe, no prune, and no error -- a plain create.
+@empty_co = Widget241ScopedCompany.create!(company_id: 'w241co-empty')
+@empty_old = Widget241ScopedEmployee.create!(emp_id: 'w241emp-empty', badge: 'B-EMPTY')
+@empty_old.delete!
+@empty_new = Widget241ScopedEmployee.new(emp_id: 'w241emp-empty', badge: 'B-EMPTY2')
+[@empty_new.save, @empty_new.send(:_index_scope_tracker).hgetall]
+#=> [true, {}]
+
 ## DataType rejects an unrecognized dirty_write_warnings mode
 # Without the check a typo would fall through warn_if_dirty! to the :once
 # branch, silently changing the diagnostic level instead of failing.

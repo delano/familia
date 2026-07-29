@@ -180,7 +180,11 @@ behind.
 > explicitly where membership is intended. The same reconciliation applies when
 > the hash expired via TTL while the tracker survived. Other related keys
 > (sets, lists, counters) are still inherited as-is; use `destroy!` for the
-> full lifecycle.
+> full lifecycle. One escape hatch to avoid: `atomic_write` performs no
+> staleness detection (it has no pre-transaction point to probe from), and
+> once it has recreated the hash a later `save` can no longer tell the
+> inherited entries are stale — so make the first write to a reused
+> identifier a `save`, not an `atomic_write`.
 
 ### Generated Methods
 

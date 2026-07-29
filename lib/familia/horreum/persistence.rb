@@ -135,6 +135,14 @@ module Familia
         # with the recorded values, which also clears the index entries the
         # dead incarnation left behind. The EXISTS probe costs a round trip
         # only when the tracker has entries.
+        #
+        # The probe runs before the MULTI, so a concurrent delete! landing
+        # between the two makes a live tracker look stale and the save prunes
+        # memberships that were valid an instant earlier. That is the
+        # accepted conservative failure mode -- losing memberships for a
+        # record that was just deleted beats joining the wrong scopes -- and
+        # the same read-window race save already accepts for its guards
+        # (MULTI-only by design, no WATCH).
         stale_tracker = !tracked_scopes.empty? && !exists?
 
         # Validate instance-scoped unique constraints here too -- same reason
@@ -150,7 +158,7 @@ module Familia
         # Everything in ONE transaction for complete atomicity
         result = transaction do |_conn|
           persist_to_storage(update_expiration, tracked_index_scopes: tracked_scopes,
-                                                stale_index_scopes: stale_tracker)
+                                                prune_stale_tracker: stale_tracker)
         end
 
         # Structured lifecycle logging and instrumentation
@@ -317,7 +325,7 @@ module Familia
 
           Familia::Connection::TransactionCore.execute_normal_transaction(-> { conn }) do |_m|
             persist_to_storage(update_expiration, tracked_index_scopes: tracked_scopes,
-                                                  stale_index_scopes: true)
+                                                  prune_stale_tracker: true)
           end
         end
 
@@ -1118,14 +1126,14 @@ module Familia
       #   call this from inside a MULTI they already opened, so there is no
       #   pre-transaction point available to them and they default to empty,
       #   leaving instance-scoped indexes untouched.
-      # @param stale_index_scopes [Boolean] true when the caller determined
+      # @param prune_stale_tracker [Boolean] true when the caller determined
       #   the tracker entries belong to a dead incarnation of this identifier
       #   (object hash absent while entries survive -- delete! or expiry).
       #   Stale entries are pruned via remove_from_* replay instead of being
       #   re-joined onto the record being written (#365).
       # @return [Object] The result of the hmset operation
       #
-      def persist_to_storage(update_expiration, tracked_index_scopes: {}, stale_index_scopes: false)
+      def persist_to_storage(update_expiration, tracked_index_scopes: {}, prune_stale_tracker: false)
         # 1. Save all non-nil fields to hashkey at once
         prepared_h = to_h_for_storage
         hmset_result = hmset(prepared_h)
@@ -1149,7 +1157,7 @@ module Familia
         # previous incarnation whose hash was delete!'d or expired -- are
         # pruned instead, removing that incarnation's index buckets and the
         # tracker itself rather than joining its scopes (#365).
-        if stale_index_scopes
+        if prune_stale_tracker
           remove_tracked_index_entries!(tracked_index_scopes) if respond_to?(:remove_tracked_index_entries!)
         elsif respond_to?(:auto_update_instance_indexes)
           auto_update_instance_indexes(tracked_index_scopes)
