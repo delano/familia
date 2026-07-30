@@ -23,16 +23,16 @@ class RotationTest < Familia::Horreum
 end
 
 # Data encrypted with v1 can still be decrypted after rotation to v2
-Familia.config.encryption_keys = { v1: @test_keys[:v1] }
-Familia.config.current_key_version = :v1
+set_test_encryption_keys({ v1: @test_keys[:v1] }, current_version: :v1)
 
 @model = RotationTest.new(id: 'rot-1')
 @model.secret = 'original-secret'
 @v1_ciphertext = @model.instance_variable_get(:@secret)
 
-# Rotate to v2 with both keys available
-Familia.config.encryption_keys = { v1: @test_keys[:v1], v2: @test_keys[:v2] }
-Familia.config.current_key_version = :v2
+# Rotate to v2 with both keys available. Only the first install above records
+# the config to restore, so the teardown still hands back the pre-file state.
+set_test_encryption_keys({ v1: @test_keys[:v1], v2: @test_keys[:v2] },
+                         current_version: :v2)
 
 ## Manually set the old ciphertext and try to decrypt
 @model.instance_variable_set(:@secret, @v1_ciphertext)
@@ -123,5 +123,4 @@ Familia.config.current_key_version = :v2
 #=> 'v3-data'
 
 # Cleanup
-Familia.config.encryption_keys = nil
-Familia.config.current_key_version = nil
+clear_test_encryption_keys

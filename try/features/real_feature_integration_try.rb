@@ -2,9 +2,16 @@
 #
 # frozen_string_literal: true
 
+require 'base64'
+
 require_relative '../support/helpers/test_helpers'
 
 Familia.debug = false
+
+# SafeDumpCategoryTest below declares an encrypted_field and the setup assigns
+# it, so this file needs a keyring of its own. Until #363 it had none and ran on
+# whatever the previous file in the shared-context run had left installed.
+set_test_encryption_keys({ v1: Base64.strict_encode64('a' * 32) }, current_version: :v1)
 
 # Real feature integration: expiration feature works with new system
 class ExpirationIntegrationTest < Familia::Horreum
@@ -152,3 +159,4 @@ DuplicateFeatureHandling.features_enabled
 @expiration_test = nil
 @safedump_test = nil
 @combined_test = nil
+clear_test_encryption_keys

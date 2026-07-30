@@ -21,6 +21,13 @@ Run with `--agent` for token-efficient output (`--agent-focus summary|first-fail
 See `bundle exec try --help` for the full CLI, framework integration (`--rspec`,
 `--minitest`), and debugging flags.
 
+The whole suite runs in one process, so anything a file sets globally outlives
+it. For encryption keys use the scoped helpers rather than assigning
+`Familia.config.encryption_keys` directly: `set_test_encryption_keys(keys,
+current_version:)` in setup with `clear_test_encryption_keys` in teardown, or
+`with_test_encryption_keys(keys, current_version:) { ... }` for a single
+testcase. See @try/support/helpers/encryption_config.rb.
+
 ### Changelog
 
 Add a changelog fragment (RST) with each user-facing change. See @changelog.d/README.md

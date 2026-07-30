@@ -28,8 +28,7 @@ nonce.bytesize
 
 ## XChaCha20Poly1305 key derivation with default personalization
 test_keys = { v1: Base64.strict_encode64('a' * 32) }
-Familia.config.encryption_keys = test_keys
-Familia.config.current_key_version = :v1
+set_test_encryption_keys(test_keys, current_version: :v1)
 provider = Familia::Encryption::Providers::XChaCha20Poly1305Provider.new
 master_key = Base64.strict_decode64(test_keys[:v1])
 context = 'test-context'
@@ -170,4 +169,4 @@ test_key.length
 #=> 0
 
 # TEARDOWN
-Fiber[:familia_key_cache]&.clear if Fiber[:familia_key_cache]
+clear_test_encryption_keys

@@ -17,16 +17,18 @@ require_relative '../../support/helpers/test_helpers'
 defined?(Familia::Encryption)
 #=> "constant"
 
-## UnsortedSet and check configuration directly in test
-Familia.encryption_keys = { v1: Base64.strict_encode64('a' * 32) }
+## Configured keys read back through the Familia.* spelling of the setting
+# Familia.encryption_keys and Familia.config.encryption_keys are the same
+# setting -- Familia.config returns Familia itself -- so this spelling leaks
+# across files exactly like the other one (issue #363).
+set_test_encryption_keys({ v1: Base64.strict_encode64('a' * 32) }, current_version: :v1)
 Familia.encryption_keys.is_a?(Hash)
 #=> true
 
-## UnsortedSet and check current key version directly in test
-Familia.current_key_version = :v1
+## The current key version reads back through that spelling too
 Familia.current_key_version
 #=> :v1
 
 
 # TEARDOWN
-# Clean up
+clear_test_encryption_keys

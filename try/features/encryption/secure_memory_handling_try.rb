@@ -9,10 +9,8 @@ require_relative '../../../lib/familia/encryption/providers/secure_xchacha20_pol
 require 'base64'
 
 # SETUP
-Familia.config.encryption_keys = {
-  v1: Base64.strict_encode64('a' * 32)
-}
-Familia.config.current_key_version = :v1
+set_test_encryption_keys({ v1: Base64.strict_encode64('a' * 32) },
+                         current_version: :v1)
 
 ## SecureXChaCha20Poly1305Provider is available when dependencies are loaded
 @provider_class = Familia::Encryption::Providers::SecureXChaCha20Poly1305Provider
@@ -126,4 +124,4 @@ nonce.bytesize
 #=> "xchacha20poly1305-secure"
 
 # TEARDOWN
-Fiber[:familia_key_cache]&.clear if Fiber[:familia_key_cache]
+clear_test_encryption_keys
