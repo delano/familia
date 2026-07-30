@@ -23,18 +23,14 @@ require 'json'
 
 require_relative '../../support/helpers/test_helpers'
 
-# Capture original encryption state so teardown can restore it.
-@original_encryption_keys = Familia.config.encryption_keys
-@original_current_key_version = Familia.config.current_key_version
-
-# Two distinct versioned keys; v1 is current at setup time.
+# Two distinct versioned keys; v1 is current at setup time. The helper captures
+# whatever encryption state it displaces so teardown can put it back (#363).
 @test_keys = {
   v1: Base64.strict_encode64('a' * 32),
   v2: Base64.strict_encode64('b' * 32),
 }
 
-Familia.config.encryption_keys = @test_keys
-Familia.config.current_key_version = :v1
+set_test_encryption_keys(@test_keys, current_version: :v1)
 
 # Model with two encrypted fields and one plain field.
 class ReEncryptTarget < Familia::Horreum
@@ -222,19 +218,16 @@ Familia.config.current_key_version = :v1
 @orphan.save
 @created_ids << @orphan.id
 
-pre_block_keys = Familia.config.encryption_keys
-pre_block_version = Familia.config.current_key_version
 raised = begin
-  Familia.config.encryption_keys = { v2: @test_keys[:v2] }
-  Familia.config.current_key_version = :v2
-  orphan_fresh = ReEncryptTarget.load('re-enc-orphan')
-  orphan_fresh.re_encrypt_fields!
-  nil
+  # The block form restores the file's own keyring on exit, including the exit
+  # taken by the EncryptionError this test is provoking.
+  with_test_encryption_keys({ v2: @test_keys[:v2] }, current_version: :v2) do
+    orphan_fresh = ReEncryptTarget.load('re-enc-orphan')
+    orphan_fresh.re_encrypt_fields!
+    nil
+  end
 rescue Familia::EncryptionError => e
   e.class
-ensure
-  Familia.config.encryption_keys = pre_block_keys
-  Familia.config.current_key_version = pre_block_version
 end
 raised
 #=> Familia::EncryptionError
@@ -301,5 +294,4 @@ if @mixed_created_id
   end
 end
 
-Familia.config.encryption_keys = @original_encryption_keys
-Familia.config.current_key_version = @original_current_key_version
+clear_test_encryption_keys

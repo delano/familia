@@ -11,6 +11,7 @@
 require 'digest'
 
 require_relative '../../../lib/familia'
+require_relative 'encryption_config'
 
 Familia.enable_database_logging = true
 Familia.enable_database_counter = true

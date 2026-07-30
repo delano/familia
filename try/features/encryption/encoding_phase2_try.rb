@@ -105,4 +105,7 @@ decrypted = Familia::Encryption.decrypt(legacy_json, context: context)
 #=> ["legacy payload", "UTF-8"]
 
 # TEARDOWN
-Fiber[:familia_key_cache]&.clear if Fiber[:familia_key_cache]
+# Every test above installs its own keys inline. Clear the process-global
+# encryption config so the next file in the shared-context run does not inherit
+# them (issue #363).
+clear_test_encryption_keys

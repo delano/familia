@@ -13,8 +13,7 @@ test_keys = {
   v1: Base64.strict_encode64('a' * 32),
   v2: Base64.strict_encode64('b' * 32)
 }
-Familia.config.encryption_keys = test_keys
-Familia.config.current_key_version = :v1
+set_test_encryption_keys(test_keys, current_version: :v1)
 
 ## No persistent key cache exists
 ## Verify that we don't maintain a key cache at all
@@ -219,5 +218,4 @@ Familia.config.current_key_version = :v1
 
 # Teardown
 Fiber[:familia_key_cache] = nil
-Familia.config.encryption_keys = nil
-Familia.config.current_key_version = nil
+clear_test_encryption_keys
