@@ -374,6 +374,12 @@ module Familia
                 new_field_value = send(field)
                 index_hash = scope_instance.send(index_name)
 
+                # Before the claim, not after: claim_field HSETs on success, so
+                # a claim followed by a persistence failure leaves the value
+                # permanently held by a record that never existed. Same ordering
+                # as add_to_* above.
+                _ensure_persisted_before_index_write!(index_name, scope_instance)
+
                 # Claim before the MULTI opens (see ADR-0002). Inside an outer
                 # transaction there is nothing to claim against, so the writes
                 # below are unenforced -- same escape hatch as add_to_*.
@@ -386,8 +392,6 @@ module Familia
                     )
                   end
                 end
-
-                _ensure_persisted_before_index_write!(index_name, scope_instance)
 
                 # Use Familia's transaction method for atomicity with DataType abstraction
                 scope_instance.transaction do |_tx|
