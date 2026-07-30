@@ -13,8 +13,7 @@ require_relative '../../support/helpers/test_helpers'
 test_keys = {
   v1: Base64.strict_encode64('a' * 32),
 }
-Familia.config.encryption_keys = test_keys
-Familia.config.current_key_version = :v1
+set_test_encryption_keys(test_keys, current_version: :v1)
 
 # Model with key_material from regular field
 class KeyMaterialModel < Familia::Horreum
@@ -201,5 +200,4 @@ result_km
 #=> "Familia::EncryptionError"
 
 Familia.dbclient.flushdb
-Familia.config.encryption_keys = nil
-Familia.config.current_key_version = nil
+clear_test_encryption_keys

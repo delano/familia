@@ -14,8 +14,7 @@ test_keys = {
   v1: Base64.strict_encode64('a' * 32),
   v2: Base64.strict_encode64('b' * 32)
 }
-Familia.config.encryption_keys = test_keys
-Familia.config.current_key_version = :v1
+set_test_encryption_keys(test_keys, current_version: :v1)
 
 class ThreadTest < Familia::Horreum
   feature :encrypted_fields
@@ -199,5 +198,4 @@ errors.empty? && Familia::Encryption.derivation_count.value == 50
 #=> true
 
 # Cleanup
-Familia.config.encryption_keys = nil
-Familia.config.current_key_version = nil
+clear_test_encryption_keys

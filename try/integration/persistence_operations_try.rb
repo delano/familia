@@ -242,8 +242,7 @@ persisted_name = @mod_obj.name
 test_keys = {
   v1: Base64.strict_encode64('a' * 32),
 }
-Familia.config.encryption_keys = test_keys
-Familia.config.current_key_version = :v1
+set_test_encryption_keys(test_keys, current_version: :v1)
 
 class EncryptedPersistenceTest < Familia::Horreum
   feature :encrypted_fields
@@ -261,8 +260,7 @@ before_save = @enc_obj.exists?
 after_save = @enc_obj.exists?
 
 # Clean up encryption config
-Familia.config.encryption_keys = nil
-Familia.config.current_key_version = nil
+clear_test_encryption_keys
 
 [before_save, after_save]
 #=> [false, true]
