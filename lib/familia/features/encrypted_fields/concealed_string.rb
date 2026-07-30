@@ -22,7 +22,13 @@
 #   2. Debugging Safety - inspect, logging, console output shows [CONCEALED]
 #   3. Exception Safety - never leaks plaintext in error messages
 #   4. Future-proof - any new serialization method automatically safe
-#   5. Memory Clearing - best-effort encrypted data clearing
+#   5. Explicit Lifecycle - clear! drops references and blocks further reveals
+#
+# What this class does NOT do: wipe memory. Ruby cannot guarantee string
+# wiping (copies, GC compaction, immutable internals), and the encrypted
+# buffer here is frozen besides. clear! releases references and marks the
+# wrapper unusable; reclaiming the bytes is left to the GC. See the
+# RedactedString header for the full list of Ruby memory caveats.
 #
 # Critical Design Principles:
 #   - Secure by default - no auto-decryption anywhere
@@ -65,8 +71,6 @@ class ConcealedString
         raise Familia::EncryptionError, "Invalid encrypted data: #{e.message}"
       end
     end
-
-    ObjectSpace.define_finalizer(self, self.class.finalizer_proc(@encrypted_data))
   end
 
   # Primary API: reveal the decrypted plaintext in a controlled block
@@ -126,10 +130,14 @@ class ConcealedString
     "#{@record.class.name}:#{@field_type.name}:#{@record.identifier}"
   end
 
-  # Clear the encrypted data from memory
+  # Release the encrypted data and make the wrapper unusable
   #
-  # Safe to call multiple times. This provides best-effort memory
-  # clearing within Ruby's limitations.
+  # Safe to call multiple times. Drops the references to the encrypted
+  # data and its record/field context, so further reveals raise
+  # SecurityError and the buffers become eligible for GC. This does NOT
+  # wipe memory -- the frozen encrypted string persists until the GC
+  # reclaims it, and Ruby offers no way to guarantee otherwise (see the
+  # class header).
   #
   def clear!
     return if @cleared
@@ -315,15 +323,6 @@ class ConcealedString
   # Prevent exposure in Rails serialization (as_json -> to_json)
   def as_json(*)
     '[CONCEALED]'
-  end
-
-  # Finalizer to attempt memory cleanup
-  def self.finalizer_proc(encrypted_data)
-    proc do
-      # Best effort cleanup - Ruby doesn't guarantee memory security
-      # Only clear if not frozen to avoid FrozenError
-      encrypted_data.clear if encrypted_data.respond_to?(:clear) && !encrypted_data.frozen?
-    end
   end
 
   private
