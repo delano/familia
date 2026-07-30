@@ -12,8 +12,7 @@ Familia.debug = false
 # Configure encryption keys for the encrypted_field fixtures. Mirrors the
 # pattern used in try/features/encrypted_fields/encrypted_fields_core_try.rb.
 test_keys = { v1: Base64.strict_encode64('a' * 32) }
-Familia.config.encryption_keys = test_keys
-Familia.config.current_key_version = :v1
+set_test_encryption_keys(test_keys, current_version: :v1)
 
 # (a) Horreum with encrypted_field + a regular collection. Exercises the
 # encryption-on-assignment path inside an atomic_write block. The plaintext
@@ -144,5 +143,4 @@ AtomicWriteJsonPlan.instances.clear rescue nil
 AtomicWriteJsonPlan.all.each(&:destroy!) rescue nil
 AtomicWriteStringPlan.instances.clear rescue nil
 AtomicWriteStringPlan.all.each(&:destroy!) rescue nil
-Familia.config.encryption_keys = nil
-Familia.config.current_key_version = nil
+clear_test_encryption_keys

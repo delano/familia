@@ -13,10 +13,11 @@ require_relative '../../support/helpers/test_helpers'
 require 'familia/encryption/providers/xchacha20_poly1305_provider'
 
 # SETUP
-Familia.config.encryption_keys = {
-  v1: Base64.strict_encode64('a' * 32)
-}
-Familia.config.current_key_version = :v1
+# Config persistence across test sections is this file's subject, so the
+# override has to survive every test below -- but not the file itself. The
+# helper scopes it to exactly that (issue #363).
+set_test_encryption_keys({ v1: Base64.strict_encode64('a' * 32) },
+                         current_version: :v1)
 
 ## Check config in test
 keys = Familia.config.encryption_keys
@@ -228,4 +229,4 @@ true
 #=> true
 
 # TEARDOWN
-Fiber[:familia_key_cache]&.clear if Fiber[:familia_key_cache]
+clear_test_encryption_keys

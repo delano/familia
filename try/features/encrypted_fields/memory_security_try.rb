@@ -7,11 +7,8 @@
 require 'base64'
 require_relative '../../support/helpers/test_helpers'
 
-test_keys = {
-  v1: Base64.strict_encode64('a' * 32),
-}
-Familia.config.encryption_keys = test_keys
-Familia.config.current_key_version = :v1
+set_test_encryption_keys({ v1: Base64.strict_encode64('a' * 32) },
+                         current_version: :v1)
 
 ## Keys are wiped from memory after use
 # Note: This is difficult to test directly, but we can verify
@@ -39,3 +36,6 @@ model.secret
 # Should wipe master key after each derivation (2 operations = 2 wipes)
 wipe_calls >= 2
 #=> true
+
+# TEARDOWN
+clear_test_encryption_keys

@@ -10,9 +10,8 @@ require 'base64'
 Familia.debug = false
 
 # Configure encryption keys
-test_keys = { v1: Base64.strict_encode64('a' * 32) }
-Familia.config.encryption_keys = test_keys
-Familia.config.current_key_version = :v1
+set_test_encryption_keys({ v1: Base64.strict_encode64('a' * 32) },
+                         current_version: :v1)
 
 # Test class with encrypted fields
 class TestSecretDocument < Familia::Horreum
@@ -266,3 +265,4 @@ end
 
 # Teardown
 Familia.dbclient.flushdb
+clear_test_encryption_keys

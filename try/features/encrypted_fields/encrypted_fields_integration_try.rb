@@ -212,3 +212,9 @@ encrypted_json = concealed_data.encrypted_value
 parsed_data = Familia::JsonSerializer.parse(encrypted_json, symbolize_names: true)
 [parsed_data[:algorithm], @aes_model2.secret_data.reveal { |data| data }]
 #=> ["aes-256-gcm", "aes-gcm integration test"]
+
+# TEARDOWN
+# Every test above installs its own keys inline. Clear the process-global
+# encryption config so the next file in the shared-context run does not inherit
+# them (issue #363).
+clear_test_encryption_keys
