@@ -6,11 +6,15 @@
 # transaction or a pipeline.
 #
 # Three outcomes are distinguished:
-#   - committed cleanly    -> results is an array with no Exception members
-#   - committed with errors -> results is an array containing Exception objects
-#   - aborted (issue #355)  -> results is nil, because redis-rb returns nil from
-#     #multi when EXEC is discarded (a WATCH-guarded transaction whose watched
-#     key changed under it). Accessors must report failure, not raise.
+#   - committed cleanly     -> results has no Exception members
+#   - committed with errors  -> results contains Exception objects
+#   - aborted (issue #355)   -> redis-rb returned nil from #multi because EXEC
+#     was discarded (a WATCH-guarded transaction whose watched key changed
+#     under it). Accessors must report failure, not raise.
+#
+# #results is normalized to an Array in every case, so callers can index and
+# iterate it unconditionally; #aborted? carries the abort/empty-commit
+# distinction that the nil used to carry.
 
 require_relative '../support/helpers/test_helpers'
 
@@ -53,9 +57,13 @@ require_relative '../support/helpers/test_helpers'
 @ok.tuple
 #=> [true, ['OK', 'OK', 1]]
 
-## A clean result hashes to success: true
+## A clean result hashes to success: true, aborted: false
 @ok.to_h
-#=> { success: true, results: ['OK', 'OK', 1]  }
+#=> { success: true, aborted: false, results: ['OK', 'OK', 1] }
+
+## A clean result inspects without dumping the command return values
+@ok.inspect
+#=> '#<Familia::MultiResult ok size=3>'
 
 # ============================================================
 # Results carrying command errors
@@ -81,8 +89,12 @@ require_relative '../support/helpers/test_helpers'
 @failed.size
 #=> 3
 
+## A result with an Exception member inspects with the error count
+@failed.inspect
+#=> '#<Familia::MultiResult errors=1 size=3>'
+
 # ============================================================
-# Empty results (a transaction that queued no commands)
+# Empty results (an operation that queued no commands)
 # ============================================================
 
 ## An empty result is successful -- nothing ran, nothing failed
@@ -98,7 +110,7 @@ require_relative '../support/helpers/test_helpers'
 #=> 0
 
 # ============================================================
-# Aborted results (nil) -- issue #355
+# Aborted results -- issue #355
 # ============================================================
 
 ## An aborted result reports aborted?
@@ -125,40 +137,84 @@ require_relative '../support/helpers/test_helpers'
 @aborted.errors?
 #=> false
 
-## The empty errors array is frozen, since it is shared across aborted results
-@aborted.errors.frozen?
-#=> true
-
 ## An aborted result has size zero (previously raised)
 @aborted.size
 #=> 0
 
-## An aborted result preserves nil in #results, so callers can tell it apart
-## from a transaction that committed zero commands
-@aborted.results
-#=> nil
+## An aborted result normalizes nil to an empty array, so callers can index
+## and iterate #results without a nil check
+[@aborted.results, @aborted.results[0], @aborted.results.map(&:to_s)]
+#=> [[], nil, []]
 
-## An aborted result tuples to [false, nil]
+## An aborted result tuples to [false, []]
 @aborted.tuple
-#=> [false, nil]
+#=> [false, []]
 
 ## to_a is the tuple alias and also survives an aborted result
 @aborted.to_a
-#=> [false, nil]
+#=> [false, []]
 
-## An aborted result hashes to success: false (previously raised)
+## An aborted result hashes to success: false, aborted: true -- a dumped
+## failure has to say WHY it failed, or it reads as errors gone missing
 @aborted.to_h
-#=> { success: false, results: nil }
+#=> { success: false, aborted: true, results: [] }
+
+## An aborted result inspects as aborted
+@aborted.inspect
+#=> '#<Familia::MultiResult aborted size=0>'
 
 ## Repeated calls stay stable -- memoization must not cache a bad value
 [@aborted.errors, @aborted.errors, @aborted.successful?, @aborted.successful?]
 #=> [[], [], false, false]
 
 # ============================================================
+# Abort vs. zero-command commit
+# ============================================================
+
+## An abort and an empty commit both report an empty #results, so #aborted?
+## is the only thing that separates them -- the distinction the raw nil used
+## to carry has to survive the normalization
+[@aborted.results, @empty.results]
+#=> [[], []]
+
+## ... and it does: only one of them is an abort, and only one is successful
+[@aborted.aborted?, @empty.aborted?, @aborted.successful?, @empty.successful?]
+#=> [true, false, false, true]
+
+# ============================================================
+# #errors is frozen on every path
+# ============================================================
+
+## #errors is frozen for a clean result
+@ok.errors.frozen?
+#=> true
+
+## #errors is frozen for a result carrying command errors
+@failed.errors.frozen?
+#=> true
+
+## #errors is frozen for an aborted result, so mutating it fails the same way
+## regardless of outcome rather than only on some
+@aborted.errors.frozen?
+#=> true
+
+## Mutating #errors raises rather than silently corrupting the memo
+@ok.errors << 'nope'
+#=!> FrozenError
+
+## #results stays mutable, and each result owns its own array -- normalizing
+## must not hand every aborted result the same shared object
+a = Familia::MultiResult.new(nil)
+b = Familia::MultiResult.new(nil)
+a.results << 'local'
+[a.results, b.results, a.results.frozen?]
+#=> [['local'], [], false]
+
+# ============================================================
 # Real WATCH-aborted MULTI against the database
 # ============================================================
 
-## A WATCH abort really does produce a MultiResult wrapping nil.
+## A WATCH abort really does produce an aborted MultiResult.
 ## Drive WATCH + MULTI/EXEC on one connection while a SECOND connection
 ## dirties the watched key inside the WATCH window, so Redis discards EXEC.
 @conn = Redis.new(url: Familia.uri.to_s)
@@ -170,12 +226,12 @@ require_relative '../support/helpers/test_helpers'
     txn.set(@watch_key, 'from-transaction')
   end
 end
-[@real_abort.class, @real_abort.results]
-#=> [Familia::MultiResult, nil]
+[@real_abort.class, @real_abort.aborted?]
+#=> [Familia::MultiResult, true]
 
 ## The aborted transaction reports failure rather than raising NoMethodError
-[@real_abort.successful?, @real_abort.errors, @real_abort.errors?, @real_abort.size]
-#=> [false, [], false, 0]
+[@real_abort.successful?, @real_abort.errors, @real_abort.errors?, @real_abort.size, @real_abort.results]
+#=> [false, [], false, 0, []]
 
 ## The aborted transaction applied none of its commands
 @conn.get(@watch_key)
@@ -193,7 +249,7 @@ end
 
 ## execute_watched_transaction turns the abort into a retry, then raises
 ## OptimisticLockError once attempts are exhausted -- it must not crash on
-## the nil-carrying MultiResult it inspects to detect the abort.
+## the aborted MultiResult it inspects to detect the abort.
 @attempts = 0
 begin
   Familia::Connection::TransactionCore.execute_watched_transaction(

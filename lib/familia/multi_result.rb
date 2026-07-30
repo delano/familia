@@ -9,21 +9,31 @@ module Familia
   # providing access to both the command results and derived success status
   # based on the presence of errors in the results.
   #
-  # Success is determined by checking for Exception objects in the results array.
-  # When Redis commands fail within a transaction or pipeline, they return
-  # exception objects rather than raising them, allowing other commands to
-  # continue executing.
+  # A multi-command operation has three possible outcomes:
   #
-  # A third outcome exists for transactions: an *aborted* MULTI. redis-rb
-  # returns nil (not an array) from #multi when EXEC is discarded, which is the
-  # documented result of a WATCH-guarded transaction whose watched key was
-  # modified by another client. Such a result carries no command return values
-  # at all, so it is neither successful nor a carrier of errors -- see
-  # {#aborted?}.
+  # 1. **Committed cleanly** -- every queued command returned a value.
+  # 2. **Committed with errors** -- the commands ran, but one or more returned
+  #    an Exception object. Redis returns failed commands inside a transaction
+  #    as exception objects rather than raising them, so the remaining commands
+  #    still execute. {#errors} collects them.
+  # 3. **Aborted** -- EXEC was discarded and no command ran at all. This is the
+  #    documented outcome of a WATCH-guarded transaction whose watched key was
+  #    modified by another client; redis-rb signals it by returning nil instead
+  #    of an array. See {#aborted?}.
   #
-  # @attr_reader results [Array, nil] Array of return values from the Database commands.
-  #   Values can be strings, integers, booleans, or Exception objects for failed commands.
-  #   nil when the transaction was aborted before EXEC ran.
+  # An aborted operation is a failure, but not an *error* in the sense of (2):
+  # no command ran, so there is nothing for {#errors} to report. {#successful?}
+  # is the method to test for the overall outcome; {#errors?} answers the
+  # narrower question of whether any individual command failed.
+  #
+  # {#results} is always an Array -- an aborted operation reports an empty one
+  # rather than nil, so callers can index and iterate it unconditionally.
+  # Use {#aborted?} to tell an abort apart from an operation that committed
+  # zero commands.
+  #
+  # @attr_reader results [Array] Array of return values from the Database commands.
+  #   Values can be strings, integers, booleans, or Exception objects for failed
+  #   commands. Empty when the operation queued no commands or was aborted.
   #
   # @example Creating a MultiResult instance
   #   result = Familia::MultiResult.new(["OK", "OK", 1])
@@ -47,75 +57,75 @@ module Familia
   #     end
   #   end
   #
-  # @example Handling a WATCH-aborted transaction
-  #   result = Familia::MultiResult.new(nil)
-  #   result.aborted?     # => true
-  #   result.successful?  # => false
-  #   result.errors       # => []
+  # @example Distinguishing an abort from a clean commit
+  #   if result.aborted?
+  #     retry_the_transaction   # a watched key changed; nothing was applied
+  #   elsif result.errors?
+  #     report(result.errors)   # the commands ran; some of them failed
+  #   end
   #
   class MultiResult
-    # Returned by {#errors} for an aborted transaction so callers can iterate
-    # the value without a nil check. Frozen because it is shared across every
-    # aborted result.
-    NO_ERRORS = [].freeze
-
-    # @return [Array, nil] The raw return values from the Database commands,
-    #   or nil when the transaction was aborted before EXEC ran
+    # @return [Array] The raw return values from the Database commands. Always
+    #   an Array; empty for an aborted operation
     attr_reader :results
 
     # Creates a new MultiResult instance.
     #
     # @param results [Array, nil] The raw results from Database commands.
     #   Exception objects in the array indicate command failures. nil means
-    #   the transaction was discarded rather than executed (see {#aborted?}).
+    #   the transaction was discarded rather than executed, and is normalized
+    #   to an empty array with {#aborted?} recording the distinction.
     def initialize(results)
-      @results = results
+      @aborted = results.nil?
+      @results = results || []
     end
 
-    # Whether the transaction was discarded instead of executed.
+    # Whether the operation was discarded instead of executed.
     #
-    # redis-rb returns nil from #multi when EXEC is aborted, which happens
-    # when a WATCH-guarded transaction detects that a watched key changed
-    # under it. An aborted transaction applied none of its commands, so it
-    # reports no errors ({#errors} is empty) but is also not successful --
-    # callers should retry rather than treat it as a no-op success.
+    # redis-rb returns nil from #multi when EXEC is aborted, which happens when
+    # a WATCH-guarded transaction detects that a watched key changed under it.
+    # An aborted transaction applied none of its commands, so it reports no
+    # errors ({#errors} is empty) but is also not successful -- callers should
+    # retry rather than treat it as a no-op success.
     #
-    # @return [Boolean] true if no command results were returned
+    # This is the only way to distinguish an abort from an operation that
+    # committed zero commands, since both report an empty {#results}.
+    #
+    # @return [Boolean] true if EXEC was discarded before any command ran
     def aborted?
-      results.nil?
+      @aborted
     end
 
     # Returns all Exception objects from the results array.
     #
     # This method is memoized for performance when called multiple times
-    # on the same MultiResult instance.
+    # on the same MultiResult instance. The returned array is frozen: it is
+    # derived state backing that memo, not a collection for callers to modify.
     #
-    # @return [Array<Exception>] Array of exceptions that occurred during
-    #   execution; always empty for an aborted transaction, which ran no
+    # @return [Array<Exception>] Frozen array of exceptions that occurred
+    #   during execution; always empty for an aborted operation, which ran no
     #   commands and therefore produced no per-command failures
     def errors
-      return NO_ERRORS if aborted?
-
-      @errors ||= results.select { |ret| ret.is_a?(Exception) }
+      @errors ||= results.grep(Exception).freeze
     end
 
-    # Checks if any errors occurred during execution.
+    # Checks if any individual command failed.
     #
-    # An aborted transaction reports false here -- it failed, but not because
-    # a command errored. Use {#successful?} to test the overall outcome.
+    # An aborted operation reports false here -- it failed, but not because a
+    # command errored. Use {#successful?} to test the overall outcome.
     #
-    # @return [Boolean] true if at least one command failed, false otherwise
+    # @return [Boolean] true if at least one command returned an Exception
     def errors?
       !errors.empty?
     end
 
-    # Checks if all commands completed successfully (no exceptions).
+    # Checks if the operation ran and all commands completed successfully.
     #
     # This is the primary method for determining if a multi-command
     # operation completed without errors.
     #
-    # @return [Boolean] true if the transaction ran and no exceptions are in
-    #   results, false otherwise (including an aborted transaction)
+    # @return [Boolean] true if the operation ran and no exceptions are in
+    #   results, false otherwise (including an aborted operation)
     def successful?
       !aborted? && errors.empty?
     end
@@ -126,8 +136,7 @@ module Familia
     #
     # @return [Array] A tuple containing the success status and the raw results.
     #   The success status is a boolean indicating if all commands succeeded.
-    #   The raw results is an array of return values from the Database commands,
-    #   or nil for an aborted transaction.
+    #   The raw results is an array of return values from the Database commands.
     #
     # @example
     #   [true, ["OK", true, 1]]
@@ -140,18 +149,44 @@ module Familia
     # Returns the number of results in the multi-operation.
     #
     # @return [Integer] The number of individual command results returned;
-    #   0 for an aborted transaction
+    #   0 for an aborted operation
     def size
-      return 0 if aborted?
-
       results.size
     end
 
     # Returns a hash representation of the result.
     #
-    # @return [Hash] Hash with :success and :results keys
+    # Includes :aborted so a failed result is self-describing -- otherwise a
+    # dumped abort is indistinguishable from a failure whose errors went
+    # missing.
+    #
+    # @return [Hash] Hash with :success, :aborted, and :results keys
     def to_h
-      { success: successful?, results: results }
+      { success: successful?, aborted: aborted?, results: results }
+    end
+
+    # Returns a summary of the outcome for logging and debugging.
+    #
+    # Deliberately omits the command return values: they routinely carry field
+    # values read back out of the database, which have no business landing in
+    # a log line or an exception trace by default. Reach for {#results} when
+    # the values are what you actually want.
+    #
+    # @return [String] e.g. +#<Familia::MultiResult aborted size=0>+
+    def inspect
+      "#<#{self.class.name} #{outcome} size=#{size}>"
+    end
+
+    private
+
+    # One-word summary of which of the three outcomes this result represents.
+    #
+    # @return [String] 'aborted', 'errors=N', or 'ok'
+    def outcome
+      return 'aborted' if aborted?
+      return "errors=#{errors.size}" if errors?
+
+      'ok'
     end
   end
 end

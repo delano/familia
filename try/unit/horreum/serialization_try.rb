@@ -71,7 +71,7 @@ Familia.dbclient.set('debug:ending_save_if_not_exists_tests', Familia.now.to_s)
 # name already exists (returns 0).
 @result = @customer.multi_field_update(name: 'Jane Windows', email: 'jane@example.com')
 @result.to_h
-#=> {:success=>true, :results=>[0, 1, false, true]}
+#=> {:success=>true, :aborted=>false, :results=>[0, 1, false, true]}
 
 ## multi_field_update returns successful result, successful?
 @result.successful?
@@ -185,7 +185,7 @@ result.successful?
 @fresh_customer.remove_field('planid')
 @fresh_result = @fresh_customer.multi_field_update(role: 'admin', planid: 'premium')
 @fresh_result.to_h
-#=> {:success=>true, :results=>[1, 1, true, true]}
+#=> {:success=>true, :aborted=>false, :results=>[1, 1, true, true]}
 
 ## Fresh customer fields are set correctly
 [@fresh_customer.role, @fresh_customer.planid]
