@@ -268,6 +268,26 @@ rescue Familia::PersistenceError
 end
 #=> true
 
+## update_in_* rejection does not leak a claim on the new value
+## (the persisted guard must run before claim_field, which HSETs on
+## success -- a leaked claim would leave BADGE900 pointing at a record
+## that does not exist and block any other record from claiming it)
+@company.badge_index.has_key?('BADGE900')
+#=> false
+
+## The value rejected above is still claimable by a persisted record
+@emp9b_id = "emp_#{rand(1000000)}"
+@emp9b = AutoValidEmployee.new(emp_id: @emp9b_id, badge_number: 'BADGE900', email: 'emp9b@example.com')
+@emp9b.save
+@emp9b.add_to_auto_valid_company_badge_index(@company)
+@company.badge_index.get('BADGE900')
+#=> @emp9b_id
+
+## Release the value so @emp9 can take it after saving (below)
+@emp9b.remove_from_auto_valid_company_badge_index(@company)
+@company.badge_index.has_key?('BADGE900')
+#=> false
+
 ## After saving, the same instance can be indexed
 @emp9.save
 @emp9.add_to_auto_valid_company_badge_index(@company)
@@ -304,7 +324,7 @@ AutoValidEmployee.email_index.get('emp10@example.com')
 #=> @emp10_id
 
 # Teardown - clean up test objects
-[@emp1, @emp2, @emp3, @emp_nil, @emp4, @emp5, @emp6, @emp7, @emp8, @emp9, @emp10].compact.each do |obj|
+[@emp1, @emp2, @emp3, @emp_nil, @emp4, @emp5, @emp6, @emp7, @emp8, @emp9, @emp9b, @emp10].compact.each do |obj|
   obj.destroy! if obj.respond_to?(:destroy!) && obj.respond_to?(:exists?) && obj.exists?
 end
 
