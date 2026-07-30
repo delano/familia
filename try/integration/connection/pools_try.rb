@@ -14,20 +14,27 @@ require_relative '../../support/helpers/test_helpers'
 # Configure connection pooling via connection_provider
 require 'connection_pool'
 
-# Create pools for each logical database
+# Create pools for each logical database.
+#
+# Each pool is built ONCE per URI and the provider returns a
+# ConnectionPool::Wrapper, which checks a connection out for the duration of
+# each command and checks it back in afterwards. Returning
+# `pool.with { |conn| conn }` would hand back a connection the pool already
+# considers available, so concurrent callers would share it (issue #358).
 @pools = {}
+@pools_mutex = Mutex.new
 
 Familia.connection_provider = lambda do |uri|
-  @pools[uri] ||= ConnectionPool.new(size: 5, timeout: 2) do
-    parsed = URI.parse(uri)
-    Redis.new(
-      host: parsed.host,
-      port: parsed.port,
-      db: parsed.db || 0
-    )
+  @pools_mutex.synchronize do
+    @pools[uri] ||= ConnectionPool::Wrapper.new(size: 5, timeout: 2) do
+      parsed = URI.parse(uri)
+      Redis.new(
+        host: parsed.host,
+        port: parsed.port,
+        db: parsed.db || 0
+      )
+    end
   end
-
-  @pools[uri].with { |conn| conn }
 end
 
 # Test model for connection pool testing

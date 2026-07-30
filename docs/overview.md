@@ -618,16 +618,21 @@ Configure connection pooling for production environments:
 require 'connection_pool'
 
 pools = {
-  "redis://localhost:6379/0" => ConnectionPool.new(size: 10) { Redis.new(db: 0) }
+  'redis://localhost:6379/0' => ConnectionPool::Wrapper.new(size: 10) { Redis.new(db: 0) }
 }
 
 Familia.connection_provider = lambda do |uri|
-  pool = pools[uri]
-  pool.with { |conn| conn }
+  pools.fetch(uri)
 end
 ```
 
 This ensures efficient Valkey connection usage in multi-threaded applications.
+
+The provider hands back a `ConnectionPool::Wrapper`, which checks a connection
+out for the duration of each command and checks it back in afterwards. Do not
+return `pool.with { |conn| conn }`: `with` checks the connection back in when
+its block returns, so the client Familia receives is simultaneously available to
+other callers. See [the provider contract](reference/api-technical.md#provider-contract).
 
 ### Encrypted Fields
 
@@ -776,15 +781,15 @@ end
 # Multi-database with connection pooling
 require 'connection_pool'
 
-primary_pool = ConnectionPool.new(size: 20) { Redis.new(url: ENV['PRIMARY_REDIS_URL']) }
-cache_pool = ConnectionPool.new(size: 10) { Redis.new(url: ENV['CACHE_REDIS_URL']) }
+primary_pool = ConnectionPool::Wrapper.new(size: 20) { Redis.new(url: ENV['PRIMARY_REDIS_URL']) }
+cache_pool = ConnectionPool::Wrapper.new(size: 10) { Redis.new(url: ENV['CACHE_REDIS_URL']) }
 
 Familia.connection_provider = lambda do |uri|
   case uri
   when /primary/
-    primary_pool.with { |conn| yield conn }
+    primary_pool
   when /cache/
-    cache_pool.with { |conn| yield conn }
+    cache_pool
   else
     Redis.new(url: uri)
   end
