@@ -193,11 +193,13 @@ secret.reveal do |raw_value|
   HTTP.post('/api', headers: { 'X-Token' => raw_value })
 end
 
-# Check if cleared from memory
-secret.cleared?            # Returns true if wiped
+# Check if cleared
+secret.cleared?            # Returns true after clear!
 
-# Explicit cleanup
-secret.clear!              # Best-effort memory wiping
+# Explicit cleanup — drops references and blocks further reveals.
+# Does NOT wipe memory: Ruby cannot guarantee string wiping, so the
+# encrypted buffer persists until garbage collection reclaims it.
+secret.clear!
 ```
 
 ## Provider-Specific Features
@@ -418,7 +420,7 @@ Encrypted data is stored as JSON with algorithm-specific metadata:
 ### Memory Safety Limitations
 
 ⚠️ **Important**: Ruby provides NO memory safety guarantees:
-- No secure memory wiping (best-effort only)
+- No secure memory wiping (`clear!` drops references; it cannot zero the bytes)
 - Garbage collector may copy secrets
 - String operations create uncontrolled copies
 - Memory dumps may contain plaintext secrets
