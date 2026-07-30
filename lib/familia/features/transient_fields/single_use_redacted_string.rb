@@ -44,13 +44,19 @@ class SingleUseRedactedString < RedactedString
   # This ensures the value can only be accessed once via expose,
   # providing maximum security for single-use secrets.
   #
+  # The guard clauses run *before* the begin/ensure region so that misuse
+  # (calling without a block) raises without destroying the secret. Only a
+  # call that actually reaches the yield consumes the single use.
+  #
   def expose
     raise ArgumentError, 'Block required' unless block_given?
     raise SecurityError, 'Value already cleared' if cleared?
 
-    yield @value
-  ensure
-    clear! # Automatically clear after single use
+    begin
+      yield @value
+    ensure
+      clear! # Automatically clear after single use
+    end
   end
 
   # Override value accessor to prevent direct access

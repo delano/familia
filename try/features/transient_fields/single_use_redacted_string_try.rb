@@ -71,6 +71,38 @@ rescue ArgumentError => e
 end
 #=> "Block required"
 
+## expose without a block preserves the secret (no single use consumed)
+single_use_no_block_preserved = SingleUseRedactedString.new(@otp_code)
+begin
+  single_use_no_block_preserved.expose
+rescue ArgumentError
+  # Misuse must not destroy the value
+end
+single_use_no_block_preserved.cleared?
+#=> false
+
+## Secret remains usable after a blockless expose attempt
+single_use_no_block_usable = SingleUseRedactedString.new("123456")
+begin
+  single_use_no_block_usable.expose
+rescue ArgumentError
+  # Misuse must not destroy the value
+end
+result = nil
+single_use_no_block_usable.expose { |val| result = val.dup }
+[result, single_use_no_block_usable.cleared?]
+#=> ["123456", true]
+
+## expose on an already-cleared value leaves it cleared (SecurityError guard)
+single_use_cleared_guard = SingleUseRedactedString.new(@auth_token)
+single_use_cleared_guard.clear!
+begin
+  single_use_cleared_guard.expose { |val| val }
+rescue SecurityError => e
+  [e.message, single_use_cleared_guard.cleared?]
+end
+#=> ["Value already cleared", true]
+
 ## expose method provides access to original value
 single_use_expose = SingleUseRedactedString.new("123456")
 result = nil
