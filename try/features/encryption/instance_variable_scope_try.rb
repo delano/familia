@@ -25,10 +25,11 @@ require_relative '../../support/helpers/test_helpers'
 #=> false
 
 ## UnsortedSet config and check immediately in same test
-Familia.config.encryption_keys = @test_keys
-Familia.config.current_key_version = :v1
-result = Familia::Encryption.encrypt('test', context: 'test')
-result.nil?
+# Block form: the override is scoped to this test case, so nothing is left
+# installed for the next file in the shared-context run (issue #363).
+with_test_encryption_keys(@test_keys, current_version: :v1) do
+  Familia::Encryption.encrypt('test', context: 'test').nil?
+end
 #=> false
 
 

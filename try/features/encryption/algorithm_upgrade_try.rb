@@ -20,11 +20,9 @@
 require_relative '../../support/helpers/test_helpers'
 require 'base64'
 
-Familia.config.encryption_keys = {
-  v1: Base64.strict_encode64('a' * 32),
-  v2: Base64.strict_encode64('b' * 32),
-}
-Familia.config.current_key_version = :v2
+set_test_encryption_keys({ v1: Base64.strict_encode64('a' * 32),
+                           v2: Base64.strict_encode64('b' * 32) },
+                         current_version: :v2)
 
 class AlgorithmUpgradeSecret < Familia::Horreum
   feature :encrypted_fields
@@ -112,5 +110,7 @@ rescue Familia::EncryptionError
 end
 #=> 'failed-as-expected'
 
-# Restore config for any subsequent try files sharing the process.
-Familia.config.current_key_version = :v2
+# Restore config for any subsequent try files sharing the process. One test
+# above rewinds current_key_version to :v1 mid-file; this puts the whole
+# override back, keys included (issue #363).
+clear_test_encryption_keys

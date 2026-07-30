@@ -30,3 +30,6 @@ decrypted
 
 
 # TEARDOWN
+# Both tests install keys inline. Clear the process-global encryption config so
+# the next file in the shared-context run does not inherit them (issue #363).
+clear_test_encryption_keys

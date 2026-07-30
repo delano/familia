@@ -22,8 +22,8 @@
 require_relative '../../support/helpers/test_helpers'
 require 'base64'
 
-Familia.config.encryption_keys = { v1: Base64.strict_encode64('a' * 32) }
-Familia.config.current_key_version = :v1
+set_test_encryption_keys({ v1: Base64.strict_encode64('a' * 32) },
+                         current_version: :v1)
 Familia::Encryption::Registry.setup!
 
 class PerFieldAlgoModel < Familia::Horreum
@@ -162,3 +162,6 @@ cs = @clear_rec.aes_field
 cs.clear!
 [@clear_rec.encrypted_fields_status[:aes_field], cs.concealed?, cs.algorithm]
 #=> [{ encrypted: true, cleared: true }, false, nil]
+
+# TEARDOWN
+clear_test_encryption_keys
