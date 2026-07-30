@@ -377,12 +377,23 @@ end
 ```ruby
 require 'connection_pool'
 
+POOLS = {}
+POOLS_MUTEX = Mutex.new
+
 Familia.connection_provider = lambda do |uri|
-  ConnectionPool.new(size: 10, timeout: 5) do
-    Redis.new(url: uri)
-  end.with { |conn| yield conn if block_given?; conn }
+  POOLS_MUTEX.synchronize do
+    POOLS[uri] ||= ConnectionPool::Wrapper.new(size: 10, timeout: 5) do
+      Redis.new(url: uri)
+    end
+  end
 end
 ```
+
+Build each pool once, outside the lambda, and return a `ConnectionPool::Wrapper`
+— it checks a connection out for the duration of each command and checks it back
+in afterwards. Returning `pool.with { |conn| conn }` instead hands back a
+connection the pool already considers free, so concurrent callers share it. See
+[the provider contract](docs/reference/api-technical.md#provider-contract).
 
 ### Encryption Setup
 

@@ -87,15 +87,18 @@ end
 ### Connection Pooling (Performance)
 ```ruby
 # Configure connection provider for multi-database pooling
+POOLS = {}
+POOLS_MUTEX = Mutex.new
+
 Familia.connection_provider = lambda do |uri|
-  parsed = URI.parse(uri) # => URI::Redis
-  pool_key = "#{parsed.host}:#{parsed.port}/#{parsed.db || 0}"
-
-  @pools[pool_key] ||= ConnectionPool.new(size: 10) do
-    Redis.new(host: parsed.host, port: parsed.port, db: parsed.db || 0)
+  # One wrapper per URI, built once. The wrapper checks a connection out for
+  # each command and back in afterwards; `pool.with { |conn| conn }` would
+  # hand back a connection the pool already considers free.
+  POOLS_MUTEX.synchronize do
+    POOLS[uri] ||= ConnectionPool::Wrapper.new(size: 10, timeout: 5) do
+      Redis.new(url: uri) # uri already carries the logical database
+    end
   end
-
-  @pools[pool_key].with { |conn| conn }
 end
 ```
 

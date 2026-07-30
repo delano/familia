@@ -387,8 +387,15 @@ module Familia
       # Provides explicit access to a Database connection.
       #
       # This method is useful when you need direct access to a connection
-      # for operations not covered by other methods. The connection is
-      # properly managed and returned to the pool (if using connection_provider).
+      # for operations not covered by other methods. It resolves the client
+      # through the same chain as {#dbclient}.
+      #
+      # @note The block is not pinned to one connection. Familia has no
+      #   check-in hook, so a pooled provider hands back a per-command proxy
+      #   (see {Familia::Connection#connection_provider}) and successive
+      #   commands in the block may run on different connections. When several
+      #   commands must share one connection -- WATCH, MULTI, SUBSCRIBE --
+      #   use {#transaction}, {#pipelined}, or check out from your own pool.
       #
       # @yield [Redis] A Database connection
       # @return The result of the block
