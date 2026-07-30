@@ -367,12 +367,12 @@ module Familia
         # @return [Hash] Hash containing encryption algorithm details
         #
         def encryption_info
-          provider = Familia::Encryption.current_provider
+          provider = Familia::Encryption.manager.provider
           {
-            algorithm: provider.algorithm_name,
+            algorithm: provider.algorithm,
             key_size: provider.key_size,
             nonce_size: provider.nonce_size,
-            tag_size: provider.tag_size,
+            tag_size: provider.auth_tag_size,
           }
         end
       end

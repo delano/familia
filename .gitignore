@@ -27,6 +27,9 @@ public/
 # Ignore WIP or temp dev files with uppercase names
 [A-Z]*.md
 
+# Unredacted security notes stay local; publish redacted summaries only
+*.private.md
+
 # Exclusions
 !README.md
 !CHANGELOG.md

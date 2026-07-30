@@ -155,4 +155,42 @@ end
 @user3.encrypted_data?
 #=> false
 
+## encryption_info returns a hash with all four keys
+test_keys = { v1: Base64.strict_encode64('a' * 32) }
+Familia.config.encryption_keys = test_keys
+Familia.config.current_key_version = :v1
+
+class SecureUser7 < Familia::Horreum
+  feature :encrypted_fields
+  identifier_field :user_id
+  field :user_id
+  encrypted_field :ssn
+end
+
+@info = SecureUser7.encryption_info
+@info.keys.sort
+#=> [:algorithm, :key_size, :nonce_size, :tag_size]
+
+## encryption_info algorithm matches the default provider (XChaCha20-Poly1305)
+@info[:algorithm]
+#=> 'xchacha20poly1305'
+
+## encryption_info reports the 32-byte derived key size
+@info[:key_size]
+#=> 32
+
+## encryption_info reports the default provider's nonce size
+@info[:nonce_size]
+#=> 24
+
+## encryption_info reports the default provider's auth tag size
+@info[:tag_size]
+#=> 16
+
+## encryption_info values all match the default manager's provider
+provider = Familia::Encryption.manager.provider
+@info == { algorithm: provider.algorithm, key_size: provider.key_size,
+           nonce_size: provider.nonce_size, tag_size: provider.auth_tag_size }
+#=> true
+
 Fiber[:familia_key_cache]&.clear if Fiber[:familia_key_cache]

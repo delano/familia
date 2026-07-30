@@ -432,9 +432,18 @@ module Familia
 
       # Updates multiple fields atomically in a Database transaction.
       #
+      # Values bypass the field setters on the write path, so field-type
+      # semantics are enforced up front: transient fields are rejected (they
+      # are never persisted), and encrypted fields only accept nil (deletes
+      # the field) or the ConcealedString returned by the field getter --
+      # raw plaintext never reaches the database. To encrypt a new plaintext
+      # value, use the field setter followed by save or save_fields.
+      #
       # @param kwargs [Hash] Field names and values to update. Special key :update_expiration
       #   controls whether to update key expiration (default: true)
       # @return [MultiResult] Transaction result
+      # @raise [ArgumentError] if a field is undeclared, transient, or an
+      #   encrypted field given a value that is not nil or a ConcealedString
       #
       # @example Update multiple fields without affecting expiration
       #   metadata.multi_field_update(viewed: 1, updated: Familia.now.to_i, update_expiration: false)
@@ -446,7 +455,7 @@ module Familia
         update_expiration = kwargs.delete(:update_expiration) { true }
         fields = kwargs
 
-        guard_allowed_fields!(fields.keys)
+        guard_persistable_fields!(fields)
         Familia.trace :MULTI_FIELD_UPDATE, nil, fields.keys if Familia.debug?
 
         result = transaction do |_conn|
@@ -489,10 +498,19 @@ module Familia
       # multi_field_update (which does individual HSET per field) when writing
       # several fields at once.
       #
+      # Values bypass the field setters on the write path, so field-type
+      # semantics are enforced up front: transient fields are rejected (they
+      # are never persisted), and encrypted fields only accept nil (deletes
+      # the field) or the ConcealedString returned by the field getter --
+      # raw plaintext never reaches the database. To encrypt a new plaintext
+      # value, use the field setter followed by save or save_fields.
+      #
       # @param kwargs [Hash] Field names and values to write. Special key
       #   :update_expiration controls whether to refresh key expiration
       #   (default: true).
       # @return [self] Returns self for method chaining
+      # @raise [ArgumentError] if a field is undeclared, transient, or an
+      #   encrypted field given a value that is not nil or a ConcealedString
       #
       # @example Persist multiple fields atomically
       #   user.multi_field_fast_write(name: "Jane", email: "jane@example.com")
@@ -509,7 +527,7 @@ module Familia
 
         raise ArgumentError, 'No fields specified' if fields.empty?
 
-        guard_allowed_fields!(fields.keys)
+        guard_persistable_fields!(fields)
 
         Familia.trace :MULTI_FIELD_FAST_WRITE, nil, fields.keys if Familia.debug?
 
@@ -856,9 +874,18 @@ module Familia
       # Validates that all field names are declared Familia fields.
       #
       # Prevents mass-assignment of arbitrary setter methods (e.g. role=,
-      # admin=) that are not declared via the `field` or `transient` DSL.
-      # This is a defense-in-depth measure for downstream callers that may
-      # inadvertently pass unsanitized input to batch methods.
+      # admin=) that are not declared fields. This is a defense-in-depth
+      # measure for downstream callers that may inadvertently pass
+      # unsanitized input to batch methods.
+      #
+      # The allowed set is every field registered on the class
+      # (field_method_map), whichever DSL declared it -- `field`,
+      # `encrypted_field`, `transient_field`, or a feature that registers its
+      # own (objid, extid). This guard answers "is this a field?" and nothing
+      # more; whether a declared field may actually be persisted by a batch
+      # write is guard_persistable_fields!'s decision, and only the batch-write
+      # methods call it -- apply_fields runs this guard alone, so a transient
+      # field passed there reaches its setter and stays in memory.
       #
       # @param names [Array<Symbol, String>] field names to validate
       # @raise [ArgumentError] if any name is not a declared field
@@ -871,7 +898,61 @@ module Familia
 
         raise ArgumentError,
           "Undeclared fields for #{self.class}: #{unknown.join(', ')}. " \
-          'Only fields defined with `field` or `transient` are mass-assignable.'
+          'Mass assignment is limited to fields declared on the class.'
+      end
+
+      # Validates that a batch of field/value pairs may be written to storage.
+      #
+      # The batch-write methods (multi_field_update, multi_field_fast_write)
+      # persist caller-supplied values directly via serialize_value, bypassing
+      # the field setters that normally enforce field-type semantics. This
+      # guard restores those semantics up front:
+      #
+      # - Transient fields are never persisted, so passing one is an error.
+      # - Encrypted fields must never receive raw plaintext: serialize_value
+      #   would store it verbatim. Only nil (field deletion) or an actual
+      #   ConcealedString -- the type returned by the encrypted field getter --
+      #   is accepted. This checks the type, not its provenance: a
+      #   ConcealedString belonging to another record or field is accepted
+      #   here and will fail its AAD check on decrypt. The setter path
+      #   (belongs_to_context?) is what validates provenance.
+      #
+      # The ConcealedString check is a type check, not a duck type check. Any
+      # object exposing #encrypted_value would satisfy serialize_value and be
+      # persisted verbatim, so accepting the interface rather than the type
+      # would let a caller-supplied object put plaintext in the database
+      # through the very guard meant to prevent it. serialize_value itself
+      # stays duck-typed: it is the general serializer for every write path,
+      # and narrowing it is a broader change than this guard warrants.
+      #
+      # @param fields [Hash{Symbol => Object}] field names mapped to the
+      #   values about to be persisted
+      # @raise [ArgumentError] if any field is undeclared, transient, or an
+      #   encrypted field given a value that is neither nil nor a
+      #   ConcealedString
+      # @return [void]
+      #
+      def guard_persistable_fields!(fields)
+        guard_allowed_fields!(fields.keys)
+
+        field_types = self.class.field_types
+        fields.each do |name, value|
+          field_type = field_types[name.to_sym]
+
+          if field_type.transient?
+            raise ArgumentError,
+              "Transient field #{name} for #{self.class} is never persisted " \
+              'and cannot be written with batch persistence methods.'
+          end
+
+          next unless field_type.category == :encrypted
+          next if value.nil? || value.is_a?(::ConcealedString)
+
+          raise ArgumentError,
+            "Encrypted field #{name} for #{self.class} cannot be written from " \
+            "a #{value.class} here. Pass the ConcealedString from the field " \
+            'getter, or use the field setter followed by save/save_fields.'
+        end
       end
 
       # Reset all transient fields to nil

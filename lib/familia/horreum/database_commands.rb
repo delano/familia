@@ -195,11 +195,16 @@ module Familia
 
       # Increments the integer value of a hash field by the given amount.
       #
+      # The amount is validated client-side with Integer(_, 10): numeric
+      # strings are accepted, but fractional amounts raise ArgumentError
+      # (Integer(2.5) alone would silently truncate to 2).
+      #
       # @param field [String] The field name
       # @param increment [Integer] The increment value
       # @return [Integer] The value after incrementing
+      # @raise [ArgumentError] if increment is not a whole number
       def incrby(field, increment)
-        dbclient.hincrby dbkey(suffix), field, increment
+        dbclient.hincrby dbkey(suffix), field, Integer(increment.to_s, 10)
       end
       alias incrementby incrby
 
@@ -215,11 +220,16 @@ module Familia
 
       # Decrements the integer value of a hash field by the given amount.
       #
+      # There is no HDECRBY command; this is HINCRBY with a negated amount.
+      # The amount is validated the same way as incrby: numeric strings are
+      # accepted, fractional amounts raise ArgumentError.
+      #
       # @param field [String] The field name
       # @param decrement [Integer] The decrement value
       # @return [Integer] The value after decrementing
+      # @raise [ArgumentError] if decrement is not a whole number
       def decrby(field, decrement)
-        dbclient.decrby dbkey(suffix), field, decrement
+        dbclient.hincrby dbkey(suffix), field, -Integer(decrement.to_s, 10)
       end
       alias decrementby decrby
 
@@ -228,7 +238,7 @@ module Familia
       # @param field [String] The field name
       # @return [Integer] The value after decrementing
       def decr(field)
-        dbclient.hdecr field
+        dbclient.hincrby dbkey(suffix), field, -1
       end
       alias decrement decr
 

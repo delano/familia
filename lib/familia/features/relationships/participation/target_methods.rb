@@ -23,11 +23,11 @@ module Familia
         # When Domain calls: participates_in Customer, :domains
         #
         # Customer instances (TARGET) get these methods:
-        # ├── domains                           # Get the domains collection
-        # ├── add_domain(domain, score)        # Add a domain to my collection
-        # ├── remove_domain(domain)            # Remove a domain from my collection
-        # ├── add_domains([...])               # Bulk add domains
-        # └── domains_with_permission(level)   # Query with score filtering (sorted_set only)
+        # ├── domains                              # Get the domains collection
+        # ├── add_domains_instance(domain, score)  # Add one domain to my collection
+        # ├── remove_domains_instance(domain)      # Remove one domain from my collection
+        # ├── add_domains([...])                   # Bulk add domains
+        # └── domains_with_permission(flag)        # Query by permission flag (sorted_set only)
         module Builder
           extend CollectionOperations
 
@@ -227,6 +227,16 @@ collection_name: collection_name)
 
           # Build permission query for sorted sets
           # Creates: customer.domains_with_permission(min_level)
+          #
+          # min_permission takes an atomic PERMISSION_FLAG (:read, :write,
+          # :delete, ...). It is forwarded to ScoreEncoding.permission?, so a
+          # PERMISSION_ROLE (:viewer, :editor, :moderator) raises ArgumentError
+          # rather than being expanded to its bits -- deliberately, since
+          # permission? tests bits individually and would answer "holds any of
+          # these" where the caller means "holds all of these". Pass the flag you
+          # mean (:edit, not :editor). :admin names a flag as well as a role and
+          # so resolves to bit 7 alone; see the "Flags versus roles" section in
+          # ScoreEncoding for the full rationale.
           def self.build_permission_query(target_class, collection_name)
             method_name = "#{collection_name}_with_permission"
 

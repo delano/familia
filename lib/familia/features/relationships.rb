@@ -43,10 +43,10 @@ module Familia
     #   end
     #
     # @example Generated methods (collision-free)
-    #   # Participation methods
-    #   Customer.domains                    # => Familia::SortedSet
-    #   Customer.add_domain(domain, score)  # Add to customer's domains
-    #   domain.in_customer_domains?(customer) # Check membership
+    #   # Participation methods (instance-level on the target)
+    #   customer.domains                              # => Familia::SortedSet
+    #   customer.add_domains_instance(domain, score)  # Add to customer's domains
+    #   domain.in_customer_domains?(customer)         # Check membership
     #
     #   # Indexing methods
     #   Customer.find_by_display_name(name) # O(1) lookup
@@ -65,21 +65,22 @@ module Familia
     #   decoded = domain.permission_decode(score)
     #   # => { timestamp: 1704067200, permissions: 4, permission_list: [:write] }
     #
-    #   # Query with permission filtering
-    #   Customer.domains_with_permission(:read)
+    #   # Query with permission filtering (atomic flags only, never role names)
+    #   customer.domains_with_permission(:read)
     #
     # @example Multi-collection operations
-    #   # Atomic updates across multiple collections
-    #   domain.update_multiple_presence([
-    #     { key: "customer:123:domains", score: current_score },
-    #     { key: "team:456:domains", score: permission_encode(Familia.now, :read) }
-    #   ], :add, domain.identifier)
+    #   # A participant carries a reverse index of every collection it is in,
+    #   # so cross-collection questions are answered from the participant.
+    #   domain.participating_ids_for_target(Customer)          # => ["123"]
+    #   domain.participating_ids_for_target(Team, ['domains']) # scoped to one collection
+    #   domain.participating_in_target?(Customer)              # => true
     #
-    #   # UnsortedSet operations on collections
-    #   accessible = Domain.union_collections([
-    #     { owner: customer, collection: :domains },
-    #     { owner: team, collection: :domains }
-    #   ], min_permission: :read)
+    #   # Writes to several collections are grouped by the connection layer,
+    #   # not by a relationships-specific batch method.
+    #   Familia.transaction do
+    #     customer.add_domains_instance(domain, domain.permission_encode(Familia.now, :read))
+    #     team.add_domains_instance(domain, domain.permission_encode(Familia.now, :read))
+    #   end
     module Relationships
       # Register the feature with Familia
       Familia::Base.add_feature Relationships, :relationships

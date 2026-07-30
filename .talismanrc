@@ -12,6 +12,11 @@ fileignoreconfig:
     checksum: 10c94f802b2fa3a39fa33bf7dc34dac2ecaa2dd453ff97a19313f96a32fadeff
   - filename: examples/encrypted_fields.rb
     checksum: d1bd77f85d951d367e1c2bfd066a1d68d5f486346ee479121a3d5dcc2560bf52
+  # SHA-pinned actions read as "hex encoded text" to talisman; the pin is the point.
+  - filename: .github/workflows/claude.yml
+    checksum: 3a7acf45fb032644c40bad629ba6c0271689a1233ef6893aba3caf03f6327b50
+  - filename: .github/workflows/claude-code-review.yml
+    checksum: 698ebf39c1c49a72212cd8d9fd0117aaf15079dcb9f1e22c94dc7a871dd7952e
   - filename: docs/adr/0002-watch-for-private-keys-lua-for-shared-keys.md
     checksum: 0ace51636017e6d0a5b489dc14fc6b684cabd64c6bb706a710f869d31ea5f4f0
   - filename: .github/workflows/ruby-lint.yml

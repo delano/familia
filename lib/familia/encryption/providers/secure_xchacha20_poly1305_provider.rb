@@ -50,6 +50,7 @@ module Familia
         ALGORITHM = 'xchacha20poly1305-secure'.freeze
         NONCE_SIZE = 24
         AUTH_TAG_SIZE = 16
+        KEY_SIZE = 32
 
         def self.available?
           !!defined?(RbNaCl) && !!defined?(FFI)
@@ -114,7 +115,7 @@ module Familia
           derived_key = RbNaCl::Hash.blake2b(
             context.force_encoding('BINARY'),
             key: master_key,
-            digest_size: 32,
+            digest_size: KEY_SIZE,
             personal: personal_string
           )
 

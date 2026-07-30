@@ -48,7 +48,7 @@ jobs:
 
       - name: Run Claude Code Review
         id: claude-review
-        uses: anthropics/claude-code-action@beta
+        uses: anthropics/claude-code-action@be7b93b1907a4abad570368f3c74b6fe3807510b # v1.0.183
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 
@@ -56,13 +56,23 @@ jobs:
           # runs) -> the CLAUDE_MODEL repo variable -> this built-in default.
           # Pinning a current id avoids the action's frozen default, which 404s
           # ("model: claude-sonnet-4-20250514"). Fall back to Sonnet on overload.
-          model: "${{ inputs.model || vars.CLAUDE_MODEL || 'claude-opus-4-6' }}"
-          fallback_model: "${{ vars.CLAUDE_FALLBACK_MODEL || 'claude-sonnet-4-6' }}"
+          # v1 of the action dropped the model/fallback_model/allowed_tools
+          # inputs; they are CLI flags passed via claude_args now (see
+          # docs/migration-guide.md and docs/usage.md in the action repo).
+          claude_args: |
+            --model ${{ inputs.model || vars.CLAUDE_MODEL || 'claude-opus-4-6' }}
+            --fallback-model ${{ vars.CLAUDE_FALLBACK_MODEL || 'claude-sonnet-4-6' }}
+            --allowedTools "Bash(gh issue view:*),Bash(gh search:*),Bash(gh issue list:*),Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr list:*)"
 
           # Optional: Use sticky comments to make Claude reuse the same comment on subsequent pushes to the same PR
           use_sticky_comment: true
 
-          direct_prompt: |
+          # v1 renamed direct_prompt -> prompt. The REPO/PR NUMBER header is the
+          # format the migration guide calls for so Claude reviews the right PR.
+          prompt: |
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ github.event.pull_request.number }}
+
             Please review this pull request and provide feedback on:
             - Code quality and best practices
             - Potential bugs or issues
@@ -73,7 +83,3 @@ jobs:
             Use the repository's AGENTS.md for guidance on style and conventions. Be constructive and helpful in your feedback.
 
             Use `gh pr comment` with your Bash tool to leave your review as a comment on the PR.
-
-          # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
-          # or https://docs.anthropic.com/en/docs/claude-code/sdk#command-line for available options
-          allowed_tools: "Bash(gh issue view:*),Bash(gh search:*),Bash(gh issue list:*),Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr list:*)"

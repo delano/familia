@@ -14,6 +14,13 @@ module Familia
         @auth_tag_size = self.class::AUTH_TAG_SIZE
       end
 
+      # Derived-key length in bytes. Read lazily rather than in initialize so
+      # provider subclasses written before KEY_SIZE existed still construct;
+      # they raise a NameError naming the missing constant only when asked.
+      def key_size
+        self.class::KEY_SIZE
+      end
+
       # Public interface methods that subclasses must implement
       def encrypt(plaintext, key, additional_data = nil)
         raise NotImplementedError

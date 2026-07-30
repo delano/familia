@@ -1,0 +1,141 @@
+Security
+--------
+
+- Batch writes now enforce field-type semantics: ``multi_field_update`` and
+  ``multi_field_fast_write`` raise ``ArgumentError`` for transient fields
+  (never persisted) and for encrypted fields given anything other than nil or
+  a ``ConcealedString``, instead of persisting transient values and storing
+  encrypted-field plaintext verbatim. To encrypt a new plaintext value, use
+  the field setter followed by ``save``/``save_fields``. The encrypted-field
+  check tests the ``ConcealedString`` type rather than the presence of an
+  ``encrypted_value`` method: ``serialize_value`` persists that method's
+  return value verbatim, so accepting the interface would let a
+  caller-supplied object write plaintext through the guard meant to stop it.
+
+- Permission symbol lookups in ``Relationships::ScoreEncoding`` fail loudly:
+  ``add_permissions``, ``remove_permissions``, ``permission?``,
+  ``permission_range``, ``score_range``, and ``encode_score`` now raise
+  ``ArgumentError`` on unknown permission symbols instead of silently treating
+  them as no permission — previously ``remove_permissions(score, :admn)``
+  (a typo) was a silent no-op that left the permission granted.
+
+  The two symbol namespaces are now documented as distinct rather than
+  interchangeable. ``PERMISSION_ROLES`` (``:viewer``, ``:editor``,
+  ``:moderator``, ``:admin``) are an encode-time convenience accepted only by
+  ``encode_score``/``permission_encode``, and only in the bare-symbol form —
+  ``encode_score(ts, :editor)`` resolves the bundle, ``encode_score(ts,
+  [:editor])`` does not. Everywhere else, atomic ``PERMISSION_FLAGS`` are the
+  currency, and a role now raises with a message naming the flags to use
+  instead. Roles are deliberately not resolved there: ``permission?`` tests
+  bits individually and would answer "holds any of these" where callers mean
+  "holds all of these", and ``:admin`` differs between the namespaces (flag =
+  bit 7, role = all eight bits), so resolving it would silently widen
+  ``add_permissions(score, :admin)`` from one bit to eight. ``:admin`` is
+  consequently the one role symbol those methods accept, since it names a flag
+  too.
+
+- Pinned ``anthropics/claude-code-action`` to the immutable v1.0.183 release
+  commit SHA in both workflows holding ``CLAUDE_CODE_OAUTH_TOKEN``, replacing
+  the mutable ``@beta`` branch ref. The pin required migrating the removed
+  beta inputs (``model``/``fallback_model``/``allowed_tools`` to
+  ``claude_args`` flags; ``direct_prompt`` to ``prompt``).
+
+Fixed
+-----
+
+- ``decrby`` and ``decr`` (and their ``decrementby``/``decrement`` aliases)
+  raised on every call — one used the string ``DECRBY`` signature against a
+  hash, the other called a nonexistent client method. Both now use ``HINCRBY``
+  with a negated amount, mirroring ``incrby``/``incr``. ``incrby`` and
+  ``decrby`` also validate the amount client-side (``Integer(_, 10)``):
+  numeric strings are accepted, and a fractional amount raises
+  ``ArgumentError`` on both instead of silently truncating in ``decrby``
+  (``Integer(2.5)`` truncates to 2) while failing server-side in ``incrby``.
+
+- ``encryption_info`` raised ``NoMethodError`` on every call via the phantom
+  ``Familia::Encryption.current_provider`` and nonexistent provider accessors.
+  It now uses ``Familia::Encryption.manager.provider`` and the real provider
+  API, preserving the ``algorithm``/``key_size``/``nonce_size``/``tag_size``
+  hash contract. Providers now expose ``key_size`` (a lazily-read
+  ``KEY_SIZE`` constant, wired into each bundled provider's ``derive_key``)
+  rather than ``encryption_info`` hardcoding 32, so a custom provider with a
+  different derived-key length is reported accurately.
+
+Removed
+-------
+
+- ``ScoreEncoding.category_score_range``: it discarded the category mask and
+  returned the full time window for **all** permissions (e.g. the
+  ``:administrator`` range included viewer-only entries), and a bitmask
+  category is not expressible as a contiguous score range. Fetch the time
+  window with ``score_range`` and post-filter with ``filter_by_category`` or
+  ``meets_category?``. The method had no callers in lib/, tests, examples, or
+  docs.
+
+Documentation
+-------------
+
+- The "Permission Management" section of ``docs/overview.md`` described a
+  subsystem that does not exist: a ``permission_tracking`` class-level DSL and
+  fifteen generated instance methods (``grant``, ``revoke``, ``can?``,
+  ``permissions_for``, ``permission_tier_for``, ``all_permissions``,
+  ``users_by_category``, ``accessible_items``, ``items_by_permission``,
+  ``permission_matrix``, ``admin_access?`` and others). None of them appear
+  anywhere in ``lib/``. Replaced with the real surface: permission bits packed
+  into the fractional part of a sorted set score, granted by the score passed
+  to a ``participates_in ... type: :sorted_set`` collection, queried with the
+  generated ``<collection>_with_permission`` and the ``ScoreEncoding`` module
+  methods. The replacement example is pinned by
+  ``try/bug_fixes/overview_permission_example_try.rb``, which runs it verbatim.
+
+- Corrected generated method names and receivers in the ``Relationships`` and
+  ``TargetMethods`` rdoc. Target methods are instance-level, not class-level
+  (``customer.domains``, not ``Customer.domains``), and the singular add/remove
+  helpers are ``add_<collection>_instance``/``remove_<collection>_instance`` —
+  no ``add_domain``/``remove_domain`` is generated.
+
+- Replaced the fabricated "Multi-collection operations" example in the
+  ``Relationships`` rdoc. It documented ``update_multiple_presence`` and
+  ``Domain.union_collections``, neither of which appears anywhere in ``lib/``,
+  and passed the second a ``min_permission:`` keyword. That last name is real
+  but belongs elsewhere: ``min_permission`` is the positional parameter of the
+  generated ``<collection>_with_permission`` method, and ``min_permissions:``
+  is a keyword on ``score_range`` — neither is a keyword of the nonexistent
+  method the example called. The replacement shows the
+  real cross-collection surface — ``participating_ids_for_target`` and
+  ``participating_in_target?`` answering from the participant's reverse index,
+  and ``Familia.transaction`` for grouping writes, since there is no
+  relationships-specific batch method. Pinned by
+  ``try/bug_fixes/relationships_rdoc_example_try.rb``.
+
+- Documented that ``<collection>_with_permission`` takes atomic
+  ``PERMISSION_FLAGS`` and raises ``ArgumentError`` on a role symbol. The raise
+  is the intended fail-loud behaviour introduced above, but the generated
+  method gave no indication that ``domains_with_permission(:editor)`` would not
+  work while ``domains_with_permission(:edit)`` does.
+
+- Corrected the ``guard_allowed_fields!`` error message, which claimed "only
+  fields defined with ``field`` or ``transient`` are mass-assignable". The
+  allowed set is every field in ``field_method_map`` — including
+  ``encrypted_field`` and feature-registered fields — so the message named the
+  wrong boundary for anyone debugging an undeclared-field error. It now states
+  only what the guard checks: the name is not a declared field. Per-field-type
+  write policy stays with ``guard_persistable_fields!``.
+
+- Documented ``PERMISSION_CATEGORIES`` and permission tiers as the third and
+  fourth symbol namespaces, and the collision between them. ``category?`` is a
+  non-exclusive overlap test — a ``:moderator`` score answers ``true`` to all
+  five categories — while ``permission_tier`` assigns one exclusive bucket,
+  checking most-privileged first. They reuse the names ``:content_editor`` and
+  ``:administrator`` for opposite questions, so the same score is
+  ``category?(:content_editor)`` **and** tier ``:administrator`` (``:delete``
+  falls inside the administrator mask). Tier ``:viewer`` is the one exact
+  correspondence with a role: the masks partition all eight bits, making it
+  reachable only at ``bits == 1``.
+
+AI Assistance
+-------------
+
+- All six fixes, their tryouts (120+ new test cases across eight files), and an
+  independent full-branch verification pass were produced by AI agents working
+  from the 2026-07-19 security audit's confirmed HIGH/MEDIUM findings.

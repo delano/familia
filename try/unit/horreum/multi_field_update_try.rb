@@ -5,8 +5,25 @@
 # Tests for Horreum multi-field update methods:
 # - multi_field_update: batch field updates with optional expiration control
 # - multi_field_fast_write: immediate HSET without full save cycle
+# - field-type guards: transient fields and plaintext-to-encrypted rejected
 
+require 'base64'
 require_relative '../../support/helpers/test_helpers'
+
+Familia.config.encryption_keys = { v1: Base64.strict_encode64('a' * 32) }
+Familia.config.current_key_version = :v1
+
+# Model with encrypted and transient fields for guard coverage
+class MultiFieldGuardModel < Familia::Horreum
+  feature :encrypted_fields
+  feature :transient_fields
+
+  identifier_field :guard_id
+  field :guard_id
+  field :label
+  encrypted_field :api_key
+  transient_field :temp_secret
+end
 
 # Setup: Create test customer
 @test_prefix = "multi_field_test_#{Time.now.to_i}"
@@ -17,6 +34,8 @@ require_relative '../../support/helpers/test_helpers'
   role: 'user'
 )
 @customer.save
+@guarded = MultiFieldGuardModel.new(guard_id: "#{@test_prefix}_guard", label: 'initial')
+@guarded.save
 
 # ============================================================
 # multi_field_update (renamed from multi_field_update)
@@ -133,11 +152,147 @@ end
 raised
 #=> true
 
+## The undeclared-field message names the offender and the actual boundary:
+## declared-on-the-class, not a particular field DSL -- encrypted and
+## feature-registered fields are declared fields and pass this guard
+begin
+  @guarded.multi_field_update(nonexistent_field: 'value')
+  :not_rejected
+rescue ArgumentError => e
+  [e.message.include?('nonexistent_field'),
+   e.message.include?('Mass assignment is limited to fields declared on the class')]
+end
+#=> [true, true]
+
+## An encrypted field is a declared field: it clears this guard and is
+## rejected later, by the persistable-field guard, for the plaintext
+begin
+  @guarded.multi_field_update(api_key: 'plaintext')
+  :not_rejected
+rescue ArgumentError => e
+  [e.message.include?('Undeclared'), e.message.include?('Encrypted field api_key')]
+end
+#=> [false, true]
+
 ## multi_field_update works after fresh load
 fresh = Customer.find_by_id(@customer.custid)
 fresh.multi_field_update(name: 'Fresh Update')
 fresh.name
 #=> 'Fresh Update'
 
-# Teardown: Clean up test data
+# ============================================================
+# Field-type guards: transient and encrypted fields
+# ============================================================
+
+## multi_field_update rejects transient fields (never persisted)
+begin
+  @guarded.multi_field_update(temp_secret: 'ephemeral')
+  'UNEXPECTED SUCCESS'
+rescue ArgumentError => e
+  e.message.include?('Transient field temp_secret')
+end
+#=> true
+
+## multi_field_fast_write rejects transient fields (never persisted)
+begin
+  @guarded.multi_field_fast_write(temp_secret: 'ephemeral')
+  'UNEXPECTED SUCCESS'
+rescue ArgumentError => e
+  e.message.include?('Transient field temp_secret')
+end
+#=> true
+
+## multi_field_update rejects plaintext for encrypted fields
+begin
+  @guarded.multi_field_update(api_key: 'raw-plaintext-secret')
+  'UNEXPECTED SUCCESS'
+rescue ArgumentError => e
+  e.message.include?('Encrypted field api_key')
+end
+#=> true
+
+## multi_field_fast_write rejects plaintext for encrypted fields
+begin
+  @guarded.multi_field_fast_write(api_key: 'raw-plaintext-secret')
+  'UNEXPECTED SUCCESS'
+rescue ArgumentError => e
+  e.message.include?('Encrypted field api_key')
+end
+#=> true
+
+## Rejected batch persists nothing, including the regular fields in it
+begin
+  @guarded.multi_field_update(label: 'should-not-persist', api_key: 'plain')
+rescue ArgumentError
+  # expected
+end
+@guarded.dbclient.hget(@guarded.dbkey, 'label')
+#=> '"initial"'
+
+## Regular fields on a guard-enabled model still persist
+@guarded.multi_field_update(label: 'updated-label')
+@guarded.dbclient.hget(@guarded.dbkey, 'label')
+#=> '"updated-label"'
+
+## ConcealedString value persists ciphertext, not plaintext
+@guarded.api_key = 'conceal-me-multi'
+@guarded.multi_field_update(api_key: @guarded.api_key)
+stored = @guarded.dbclient.hget(@guarded.dbkey, 'api_key')
+[stored.include?('conceal-me-multi'), stored.include?('"algorithm"')]
+#=> [false, true]
+
+## Persisted ConcealedString round-trips through reveal
+reloaded = MultiFieldGuardModel.find_by_id(@guarded.guard_id)
+revealed = nil
+reloaded.api_key.reveal { |pt| revealed = pt.dup }
+revealed
+#=> 'conceal-me-multi'
+
+## nil still deletes the encrypted field
+@guarded.multi_field_update(api_key: nil)
+@guarded.dbclient.hexists(@guarded.dbkey, 'api_key')
+#=> false
+
+## multi_field_fast_write persists ciphertext for ConcealedString values
+@guarded.api_key = 'conceal-me-fast'
+@guarded.multi_field_fast_write(api_key: @guarded.api_key)
+stored = @guarded.dbclient.hget(@guarded.dbkey, 'api_key')
+[stored.include?('conceal-me-fast'), stored.include?('"algorithm"')]
+#=> [false, true]
+
+## multi_field_fast_write with nil deletes the encrypted field
+@guarded.multi_field_fast_write(api_key: nil, label: 'fast-label')
+[@guarded.dbclient.hexists(@guarded.dbkey, 'api_key'), @guarded.dbclient.hget(@guarded.dbkey, 'label')]
+#=> [false, '"fast-label"']
+
+## Duck-typed impostor is rejected: an object merely exposing #encrypted_value
+## satisfies serialize_value, so accepting the interface rather than the
+## ConcealedString type would persist its return value verbatim
+@impostor = Struct.new(:encrypted_value).new('PLAINTEXT-VIA-DUCK-TYPE')
+begin
+  @guarded.multi_field_update(api_key: @impostor)
+  :not_rejected
+rescue ArgumentError => e
+  e.message.include?('cannot be written from a')
+end
+#=> true
+
+## multi_field_fast_write rejects the duck-typed impostor too
+begin
+  @guarded.multi_field_fast_write(api_key: @impostor)
+  :not_rejected
+rescue ArgumentError
+  :rejected
+end
+#=> :rejected
+
+## Neither impostor call left plaintext in the database
+@guarded.dbclient.hget(@guarded.dbkey, 'api_key').to_s.include?('PLAINTEXT-VIA-DUCK-TYPE')
+#=> false
+
+# Teardown: Clean up test data and restore the global encryption config so
+# test order is not a factor under the shared-context tryouts runner.
 @customer.destroy! rescue nil
+@guarded.destroy! rescue nil
+Familia.config.encryption_keys = nil
+Familia.config.current_key_version = nil

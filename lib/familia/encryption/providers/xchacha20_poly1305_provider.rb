@@ -36,6 +36,7 @@ module Familia
         ALGORITHM = 'xchacha20poly1305'.freeze
         NONCE_SIZE = 24
         AUTH_TAG_SIZE = 16
+        KEY_SIZE = 32
 
         def self.available?
           !!defined?(RbNaCl)
@@ -110,7 +111,7 @@ module Familia
             # caller string -- see issue #250 / FrozenError in benchmark).
             context.to_s.b,
             key: master_key,
-            digest_size: 32,
+            digest_size: KEY_SIZE,
             personal: personal_string
           )
         end

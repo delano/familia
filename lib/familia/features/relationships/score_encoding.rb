@@ -26,6 +26,49 @@ module Familia
       #
       # This allows combining permissions (read + delete without write) and efficient
       # permission checking using bitwise operations while maintaining time-based ordering.
+      #
+      # ## Flags versus roles
+      #
+      # Four symbol namespaces exist and they are NOT interchangeable. Two are
+      # inputs that carry bits (flags, roles), one is an input that carries a
+      # mask (categories), and one is output only (tiers):
+      #
+      # - PERMISSION_FLAGS are the atomic bits (:read, :write, :delete, ...).
+      #   They are the currency of every API that inspects, mutates, or ranges
+      #   over permission bits: permission?, add_permissions,
+      #   remove_permissions, permission_range, score_range.
+      # - PERMISSION_ROLES are named bundles of flags (:viewer, :editor,
+      #   :moderator, :admin). They are an encode-time convenience accepted
+      #   ONLY by encode_score and permission_encode, and only in the
+      #   bare-symbol form: encode_score(ts, :editor) resolves the bundle, but
+      #   encode_score(ts, [:editor]) does NOT -- the array form routes every
+      #   element through permission_level_value like everything else, so it
+      #   takes atomic flags only.
+      # - PERMISSION_CATEGORIES are bitmasks for broad overlap queries
+      #   (:readable, :content_editor, :administrator, :privileged, :owner),
+      #   accepted only by category?, filter_by_category and meets_category?.
+      #   They are not bundles to grant -- they answer "does this score touch
+      #   this mask", and several are true at once for the same score.
+      # - Tiers are the return values of permission_tier (:administrator,
+      #   :content_editor, :viewer, :none). They are never valid input. Two of
+      #   the names are borrowed from PERMISSION_CATEGORIES but mean a single
+      #   exclusive bucket rather than an overlap -- see permission_tier.
+      #
+      # Passing a role to a flag-taking method raises ArgumentError rather than
+      # resolving it -- except :admin, which names a flag too and so resolves
+      # to bit 7 (see the overlap note below). Bundles do not survive the bit operations those methods
+      # perform: permission? tests bits individually, so a bundle would answer
+      # "holds any of these" where callers mean "holds all of these", and
+      # remove_permissions(score, :editor) would silently revoke three
+      # permissions where the caller named one thing. Expand the role at the
+      # call site (PERMISSION_ROLES.fetch(:editor)) when you want its bits.
+      #
+      # Note the deliberate overlap on :admin -- the FLAG is bit 7 (128) while
+      # the ROLE is all eight bits (255). encode_score(t, :admin) therefore
+      # grants everything, but :admin reaching a flag-taking method means bit 7
+      # alone. Because the two differ, roles are never silently resolved in
+      # those methods: doing so would widen add_permissions(score, :admin) from
+      # one bit to all eight.
       module ScoreEncoding
         # Maximum value for metadata to preserve precision (3 decimal places)
         # For 8-bit permission system, max value is 255
@@ -65,11 +108,30 @@ module Familia
         class << self
           # Get permission bit flag value for a permission symbol
           #
+          # Accepts atomic PERMISSION_FLAGS only. Role symbols are rejected
+          # with a message naming the alternative -- see the "Flags versus
+          # roles" section in the module documentation for why they are not
+          # resolved here.
+          #
           # @param permission [Symbol] Permission symbol to get value for
           # @return [Integer] Bit flag value for the permission
-          # @raise [ArgumentError] If permission is unknown
+          # @raise [ArgumentError] If permission is a role or is unknown
           def permission_level_value(permission)
-            PERMISSION_FLAGS[permission] || raise(ArgumentError, "Unknown permission: #{permission.inspect}")
+            flag = PERMISSION_FLAGS[permission]
+            return flag if flag
+
+            if PERMISSION_ROLES.key?(permission)
+              expansion = decode_permission_flags(PERMISSION_ROLES[permission])
+              raise ArgumentError,
+                    "#{permission.inspect} is a permission role, not a permission flag. " \
+                    'A role is accepted only by encode_score/permission_encode, and only in ' \
+                    "the bare-symbol form -- encode_score(timestamp, #{permission.inspect}). " \
+                    "Everywhere else, including the array form, pass atomic flags: #{expansion.map(&:inspect).join(', ')}."
+            end
+
+            raise ArgumentError,
+                  "Unknown permission: #{permission.inspect}. Valid flags: " \
+                  "#{PERMISSION_FLAGS.keys.map(&:inspect).join(', ')}."
           end
 
           # Encode timestamp and permission (alias for encode_score)
@@ -116,10 +178,10 @@ module Familia
 
             permission_bits = case permissions
                               when Symbol
-                                PERMISSION_ROLES[permissions] || PERMISSION_FLAGS[permissions] || 0
+                                PERMISSION_ROLES[permissions] || permission_level_value(permissions)
                               when Array
                                 # Support array of permission symbols
-                                permissions.reduce(0) { |acc, p| acc | (PERMISSION_FLAGS[p] || 0) }
+                                permissions.reduce(0) { |acc, p| acc | permission_level_value(p) }
                               when Integer
                                 validate_permission_bits(permissions)
                               else
@@ -164,8 +226,7 @@ module Familia
             permission_bits = decoded[:permissions]
 
             permissions.all? do |perm|
-              flag = PERMISSION_FLAGS[perm]
-              flag && permission_bits.anybits?(flag)
+              permission_bits.anybits?(permission_level_value(perm))
             end
           end
 
@@ -183,7 +244,7 @@ module Familia
             current_bits = decoded[:permissions]
 
             new_bits = permissions.reduce(current_bits) do |acc, perm|
-              acc | (PERMISSION_FLAGS[perm] || 0)
+              acc | permission_level_value(perm)
             end
 
             encode_score(decoded[:timestamp], new_bits)
@@ -203,7 +264,7 @@ module Familia
             current_bits = decoded[:permissions]
 
             new_bits = permissions.reduce(current_bits) do |acc, perm|
-              acc & ~(PERMISSION_FLAGS[perm] || 0)
+              acc & ~permission_level_value(perm)
             end
 
             encode_score(decoded[:timestamp], new_bits)
@@ -219,10 +280,10 @@ module Familia
           #   permission_range([:read], [:read, :write])
           #   #=> [0.001, 0.005]
           def permission_range(min_permissions = [], max_permissions = nil)
-            min_bits = Array(min_permissions).reduce(0) { |acc, p| acc | (PERMISSION_FLAGS[p] || 0) }
+            min_bits = Array(min_permissions).reduce(0) { |acc, p| acc | permission_level_value(p) }
             max_bits = if max_permissions
                          Array(max_permissions).reduce(0) do |acc, p|
-                           acc | (PERMISSION_FLAGS[p] || 0)
+                           acc | permission_level_value(p)
                          end
                        else
                          255
@@ -255,7 +316,7 @@ module Familia
           def score_range(start_time = nil, end_time = nil, min_permissions: nil)
             min_bits = if min_permissions
                          Array(min_permissions).reduce(0) do |acc, p|
-                           acc | (PERMISSION_FLAGS[p] || 0)
+                           acc | permission_level_value(p)
                          end
                        else
                          0
@@ -288,9 +349,19 @@ module Familia
 
           # Check broad permission categories
           #
+          # Overlap test, not a classification: true when the score shares ANY
+          # bit with the category mask. The masks are not mutually exclusive, so
+          # one score answers true to several categories at once -- a moderator
+          # score (read|write|edit|delete) is true for all five. Use
+          # permission_tier when you want a single bucket instead.
+          #
+          # Takes a PERMISSION_CATEGORIES key. Flags and roles are not
+          # categories; an unknown symbol returns false rather than raising,
+          # because there is no bit to misinterpret.
+          #
           # @param score [Float] The encoded score
           # @param category [Symbol] Category to check (:readable, :content_editor, :administrator, etc.)
-          # @return [Boolean] True if score meets the category requirements
+          # @return [Boolean] True if score shares any bit with the category mask
           def category?(score, category)
             decoded = decode_score(score)
             permission_bits = decoded[:permissions]
@@ -317,6 +388,27 @@ module Familia
           end
 
           # Get permission tier for score
+          #
+          # Classification, not an overlap test: returns exactly one bucket,
+          # checking most-privileged first. The three masks it consults partition
+          # all eight bits (0b11110000 | 0b00001110 | 0b00000001 == 0xFF), so the
+          # highest set bit alone decides the answer.
+          #
+          # Tier names are a FOURTH symbol namespace -- output only, never valid
+          # input to any method here. Two of them collide with
+          # PERMISSION_CATEGORIES keys while asking the opposite question, so a
+          # score can be true for category X and still tier as something else:
+          #
+          #   score = encode_score(t, PERMISSION_ROLES[:moderator])  # bits 45
+          #   category?(score, :content_editor)  #=> true  (overlaps the mask)
+          #   permission_tier(score)             #=> :administrator
+          #
+          # The moderator lands in :administrator because :delete (bit 5) sits
+          # inside the administrator mask. Do not read a tier as "this user is a
+          # PERMISSION_ROLES[:administrator]" -- the role namespace does not even
+          # contain that name. Tier :viewer is the one exact correspondence: its
+          # mask arithmetic makes it reachable only at bits == 1, which is
+          # PERMISSION_ROLES[:viewer].
           #
           # @param score [Float] The encoded score
           # @return [Symbol] Permission tier (:administrator, :content_editor, :viewer, :none)
@@ -364,22 +456,11 @@ module Familia
             end
           end
 
-          # Range queries for categorical filtering
-          #
-          # @param category [Symbol] Category to create range for
-          # @param start_time [Time, nil] Optional start time filter
-          # @param end_time [Time, nil] Optional end time filter
-          # @return [Array<String>] Min and max range strings for Valkey/Redis queries
-          def category_score_range(category, start_time = nil, end_time = nil)
-            PERMISSION_CATEGORIES[category] || 0
-
-            # Any permission matching the category mask
-            min_score = start_time ? start_time.to_i : 0
-            max_score = end_time ? end_time.to_i : Familia.now.to_i
-
-            # Return range that includes any matching permissions
-            ["#{min_score}.000", "#{max_score}.999"]
-          end
+          # NOTE: There is deliberately no category-based score range method.
+          # Permission bits live in the fractional part of the score and a
+          # bitmask category is not expressible as one contiguous score range.
+          # Fetch the time window with score_range, then post-filter with
+          # filter_by_category or meets_category?.
 
           private
 
