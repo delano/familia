@@ -113,7 +113,12 @@ module Familia
 
           # Perform derivation and immediately clear intermediate values
           derived_key = RbNaCl::Hash.blake2b(
-            context.force_encoding('BINARY'),
+            # to_s before .b: tolerate non-String contexts (Symbol, nil) and
+            # always operate on a fresh BINARY copy. force_encoding mutates its
+            # receiver, which flipped the caller's context string to BINARY and
+            # raised FrozenError on frozen literals (#356, mirroring the fix
+            # made to XChaCha20Poly1305Provider in #250).
+            context.to_s.b,
             key: master_key,
             digest_size: KEY_SIZE,
             personal: personal_string
