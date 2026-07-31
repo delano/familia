@@ -31,9 +31,13 @@ module Familia
   # Use {#aborted?} to tell an abort apart from an operation that committed
   # zero commands.
   #
-  # @attr_reader results [Array] Array of return values from the Database commands.
-  #   Values can be strings, integers, booleans, or Exception objects for failed
-  #   commands. Empty when the operation queued no commands or was aborted.
+  # Instances are read-only: {#results} and {#errors} are both frozen, since
+  # this object describes an operation that has already finished.
+  #
+  # @attr_reader results [Array] Frozen array of return values from the Database
+  #   commands. Values can be strings, integers, booleans, or Exception objects
+  #   for failed commands. Empty when the operation queued no commands or was
+  #   aborted.
   #
   # @example Creating a MultiResult instance
   #   result = Familia::MultiResult.new(["OK", "OK", 1])
@@ -66,7 +70,7 @@ module Familia
   #
   class MultiResult
     # @return [Array] The raw return values from the Database commands. Always
-    #   an Array; empty for an aborted operation
+    #   a frozen Array; empty for an aborted operation
     attr_reader :results
 
     # Creates a new MultiResult instance.
@@ -77,7 +81,13 @@ module Familia
     #   to an empty array with {#aborted?} recording the distinction.
     def initialize(results)
       @aborted = results.nil?
-      @results = results || []
+      # Frozen because this object describes an operation that already
+      # finished -- its return values are history, not a working buffer. It
+      # also keeps the memo in #errors coherent: that array is derived from
+      # this one and cached, so a caller mutating this one afterwards would
+      # leave the two disagreeing. Each instance freezes its own array rather
+      # than sharing a constant, so no two results alias the same object.
+      @results = (results || []).freeze
     end
 
     # Whether the operation was discarded instead of executed.
@@ -159,6 +169,9 @@ module Familia
     # Includes :aborted so a failed result is self-describing -- otherwise a
     # dumped abort is indistinguishable from a failure whose errors went
     # missing.
+    #
+    # The :results value is this object's own frozen array, not a copy, so a
+    # caller cannot reach through the hash to mutate internal state.
     #
     # @return [Hash] Hash with :success, :aborted, and :results keys
     def to_h

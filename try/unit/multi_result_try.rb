@@ -182,7 +182,7 @@ require_relative '../support/helpers/test_helpers'
 #=> [true, false, false, true]
 
 # ============================================================
-# #errors is frozen on every path
+# A result is read-only -- it describes a finished operation
 # ============================================================
 
 ## #errors is frozen for a clean result
@@ -202,13 +202,35 @@ require_relative '../support/helpers/test_helpers'
 @ok.errors << 'nope'
 #=!> FrozenError
 
-## #results stays mutable, and each result owns its own array -- normalizing
-## must not hand every aborted result the same shared object
+## #results is frozen too. #errors is a memo derived from it, so a result
+## whose #results could still change after #errors was computed could hold
+## the two disagreeing -- freezing the source makes that unreachable.
+@ok.results << 'nope'
+#=!> FrozenError
+
+## The memo and its source cannot drift: appending an Exception to #results
+## after #errors is computed is refused outright rather than silently leaving
+## a stale error list behind
+drifter = Familia::MultiResult.new(['OK'])
+before = drifter.errors.size
+begin
+  drifter.results << Redis::CommandError.new('late')
+rescue FrozenError
+  :refused
+end.then { |outcome| [before, outcome, drifter.errors.size, drifter.successful?] }
+#=> [0, :refused, 0, true]
+
+## to_h hands out that same frozen array, so a caller cannot reach through
+## the hash to mutate internal state
+@ok.to_h[:results] << 'nope'
+#=!> FrozenError
+
+## Each result still owns its own array -- normalizing must not hand every
+## aborted result one shared object
 a = Familia::MultiResult.new(nil)
 b = Familia::MultiResult.new(nil)
-a.results << 'local'
-[a.results, b.results, a.results.frozen?]
-#=> [['local'], [], false]
+[a.results, b.results, a.results.equal?(b.results), a.results.frozen?]
+#=> [[], [], false, true]
 
 # ============================================================
 # Real WATCH-aborted MULTI against the database

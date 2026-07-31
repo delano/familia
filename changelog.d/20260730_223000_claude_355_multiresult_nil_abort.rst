@@ -57,10 +57,15 @@ Changed
   missing. ``to_h`` now returns ``{success:, aborted:, results:}``. Code
   comparing the hash by equality needs the extra key.
 
-- ``Familia::MultiResult#errors`` returns a frozen array on every path. It was
-  already frozen for aborted results, so mutating it used to succeed or raise
-  depending on the outcome. It is derived state backing a memo, so mutating it
-  was never meaningful. ``#results`` stays mutable and per-instance.
+- ``Familia::MultiResult`` instances are now read-only: both ``#results`` and
+  ``#errors`` are frozen. ``#errors`` was previously frozen only for aborted
+  results, so mutating it succeeded or raised depending on the outcome. And
+  because ``#errors`` is a memo derived from ``#results``, a mutable
+  ``#results`` let the two drift — appending an exception after ``#errors``
+  had been read left a stale error list, and ``to_h[:results]`` handed out a
+  live reference to internal state. A result describes an operation that has
+  already finished, so neither array was ever meaningful to modify. Code that
+  mutates either in place should work on a ``dup``.
 
 AI Assistance
 -------------
