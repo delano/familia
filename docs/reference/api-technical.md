@@ -610,23 +610,71 @@ end
 # Custom connection provider with pooling
 require 'connection_pool'
 
+POOLS = {}
+POOLS_MUTEX = Mutex.new
+
 Familia.connection_provider = lambda do |uri|
-  # Provider MUST return connection already on correct database
-  parsed = URI.parse(uri)
-  pool_key = "#{parsed.host}:#{parsed.port}/#{parsed.db || 0}"
-
-  @pools ||= {}
-  @pools[pool_key] ||= ConnectionPool.new(size: 10, timeout: 5) do
-    Redis.new(
-      host: parsed.host,
-      port: parsed.port,
-      db: parsed.db || 0
-    )
+  # Provider MUST return a connection already on the correct database.
+  # Build each pool ONCE and hand back a wrapper (see the contract below).
+  POOLS_MUTEX.synchronize do
+    POOLS[uri] ||= ConnectionPool::Wrapper.new(size: 10, timeout: 5) do
+      Redis.new(url: uri)
+    end
   end
-
-  @pools[pool_key].with { |conn| conn }
 end
 ```
+
+#### Provider contract
+
+Familia calls the provider every time it needs a client and never hands the
+connection back — there is no check-in hook. The provider must therefore return
+a client that stays exclusively usable by the caller without a matching
+check-in, and it must not build a new pool per call.
+
+**Do not do this:**
+
+```ruby
+Familia.connection_provider = lambda do |uri|
+  pool = ConnectionPool.new { Redis.new(url: uri) }  # a new pool every call
+  pool.with { |conn| conn }                          # checked back in already
+end
+```
+
+`ConnectionPool#with` checks the connection back in the moment its block
+returns, so the client handed to Familia is simultaneously available to every
+other checkout — the pool reports it as free while Familia is still using it:
+
+```ruby
+pool = ConnectionPool.new(size: 5) { Redis.new }
+conn = pool.with { |c| c }
+pool.available  # => 5 of 5 — nothing is checked out, yet `conn` is in use
+```
+
+Under concurrency two threads then issue commands on one connection, and
+per-connection state (MULTI, WATCH, SELECT, SUBSCRIBE) crosses callers.
+
+**Use `ConnectionPool::Wrapper`** (alias `ConnectionPool.wrap`) instead. It
+proxies each command through `pool.with`, so a connection is checked out for
+exactly the duration of that command and checked back in afterwards.
+ConnectionPool's checkout is reentrant per fiber, so a MULTI/EXEC, a pipeline,
+or a WATCH-guarded transaction still runs entirely on one connection.
+
+**Or check out explicitly** when a request should pin one connection for its
+whole lifetime — then the checkout is yours to release at the boundary:
+
+```ruby
+Familia.connection_provider = ->(uri) { POOLS.fetch(uri).checkout }
+
+# Rack middleware / job wrapper
+def call(env)
+  @app.call(env)
+ensure
+  POOLS.each_value { |pool| pool.checkin(force: true) }
+end
+```
+
+Without that `ensure`, a bare `pool.checkout` in the provider leaks a
+connection on every call and the pool exhausts.
 
 ### Multi-Database Support
 Configure different logical databases for different models.
@@ -1120,19 +1168,22 @@ Configure connection pools based on application needs.
 
 ```ruby
 # High-throughput application
-Familia.connection_provider = lambda do |uri|
-  ConnectionPool.new(size: 25, timeout: 5) do
-    Redis.new(url: uri)
-  end.with { |conn| conn }
+HIGH_THROUGHPUT_POOL = ConnectionPool::Wrapper.new(size: 25, timeout: 5) do
+  Redis.new(url: ENV['REDIS_URL'])
 end
+Familia.connection_provider = ->(_uri) { HIGH_THROUGHPUT_POOL }
 
 # Memory-constrained environment
-Familia.connection_provider = lambda do |uri|
-  ConnectionPool.new(size: 5, timeout: 10) do
-    Redis.new(url: uri)
-  end.with { |conn| conn }
+SMALL_POOL = ConnectionPool::Wrapper.new(size: 5, timeout: 10) do
+  Redis.new(url: ENV['REDIS_URL'])
 end
+Familia.connection_provider = ->(_uri) { SMALL_POOL }
 ```
+
+Both build the pool once at boot. A single-pool provider like this ignores the
+`uri` it is given, so it only works when every model shares one logical
+database; see [Connection Provider Pattern](#connection-provider-pattern) for
+the per-URI form.
 
 ---
 

@@ -34,11 +34,57 @@ module Familia
     # The provider should accept a URI string and return a Redis connection
     # already connected to the correct database specified in the URI.
     #
+    # ## Contract
+    #
+    # Familia calls the provider every time it needs a client and never hands
+    # the connection back -- there is no check-in hook. The provider must
+    # therefore return a client that remains exclusively usable by the caller
+    # without a matching check-in.
+    #
+    # `pool.with { |conn| conn }` does NOT satisfy that contract: `with` checks
+    # the connection back in the moment its block returns, so the client handed
+    # to Familia is simultaneously available to every other checkout. Under
+    # concurrency two threads end up issuing commands on one connection, and
+    # per-connection state (MULTI, WATCH, SELECT, SUBSCRIBE) crosses callers.
+    #
+    # `ConnectionPool::Wrapper` (alias `ConnectionPool.wrap`) does satisfy it:
+    # it proxies each command through `pool.with`, so a connection is checked
+    # out for exactly the duration of that command and checked back in
+    # afterwards. ConnectionPool's checkout is reentrant per fiber, so a
+    # MULTI/EXEC, a pipeline, or a WATCH-guarded transaction still runs
+    # entirely on one connection.
+    #
+    # Build the pool once, outside the lambda. A `ConnectionPool.new` inside
+    # the provider mints a fresh pool -- and eventually a fresh connection --
+    # on every call.
+    #
     # @example Setting a connection provider
-    #   Familia.connection_provider = ->(uri) do
-    #     pool = ConnectionPool.new { Redis.new(url: uri) }
-    #     pool.with { |conn| conn }
+    #   require 'connection_pool'
+    #
+    #   POOLS = {}
+    #   POOLS_MUTEX = Mutex.new
+    #
+    #   Familia.connection_provider = lambda do |uri|
+    #     POOLS_MUTEX.synchronize do
+    #       POOLS[uri] ||= ConnectionPool::Wrapper.new(size: 10, timeout: 5) do
+    #         Redis.new(url: uri) # uri already carries the logical database
+    #       end
+    #     end
     #   end
+    #
+    # @example Holding one connection per unit of work
+    #   # When a request should pin a single connection, check out in the
+    #   # provider and check back in at the boundary. Without the check-in a
+    #   # bare `checkout` leaks a connection per call and the pool exhausts.
+    #   Familia.connection_provider = ->(uri) { POOLS.fetch(uri).checkout }
+    #
+    #   def call(env)  # Rack middleware / job wrapper
+    #     @app.call(env)
+    #   ensure
+    #     POOLS.each_value { |pool| pool.checkin(force: true) }
+    #   end
+    #
+    # @see docs/reference/api-technical.md#connection-provider-pattern
     attr_reader :connection_provider
 
     # Sets the connection provider and bumps middleware version

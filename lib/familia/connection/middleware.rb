@@ -77,8 +77,10 @@ module Familia
       #   Familia.reconnect!
       #
       # @example In test suites
-      #   # Test file A creates pools
-      #   Familia.connection_provider = ->(uri) { pool.with { |c| c } }
+      #   # Test file A creates pools (values are ConnectionPool::Wrapper --
+      #   # see Familia.connection_provider for why `pool.with { |c| c }` is not
+      #   # a valid provider)
+      #   Familia.connection_provider = ->(uri) { pools.fetch(uri) }
       #
       #   # Test file B enables middleware
       #   Familia.enable_database_logging = true

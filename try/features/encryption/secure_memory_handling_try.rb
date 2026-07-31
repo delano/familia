@@ -47,6 +47,31 @@ derived_key = provider.derive_key(master_key, context, personal: 'test_personal'
 derived_key.bytesize
 #=> 32
 
+## derive_key leaves the caller's context string encoding untouched (#356)
+provider = @provider_class.new
+context = (+'TestModel:field:user123').force_encoding(Encoding::UTF_8)
+provider.derive_key('a' * 32, context)
+context.encoding
+#=> Encoding::UTF_8
+
+## derive_key accepts a frozen context string without raising (#356)
+provider = @provider_class.new
+provider.derive_key('a' * 32, 'TestModel:field:user123'.freeze).bytesize
+#=> 32
+
+## derive_key tolerates non-String contexts (#356)
+provider = @provider_class.new
+provider.derive_key('a' * 32, :symbol_context).bytesize
+#=> 32
+
+## derive_key output is unchanged by the no-mutation fix: still matches the
+## sibling provider byte for byte, so existing ciphertexts stay decryptable
+provider = @provider_class.new
+sibling = Familia::Encryption::Providers::XChaCha20Poly1305Provider.new
+context = 'TestModel:field:user123'
+provider.derive_key('a' * 32, context) == sibling.derive_key('a' * 32, context)
+#=> true
+
 ## encrypt operation clears key after use (demonstration)
 provider = @provider_class.new
 master_key = ('a' * 32).dup  # Make mutable copy
