@@ -311,7 +311,9 @@ module Familia
         cursor = 0
         loop do
           new_cursor, pairs = scan(cursor, count: batch_size)
-          pairs.each_key(&block)
+          # ZSCAN yields an Array of [member, score] pairs (not a Hash), so
+          # Hash#each_key would raise NoMethodError here.
+          pairs.each { |member, _score| block.call(member) }
           cursor = new_cursor
           break if cursor.zero?
         end
