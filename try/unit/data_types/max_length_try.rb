@@ -59,7 +59,7 @@ end
 #=> ['m4', 'm5', 'm6']
 
 ## merge! adding a mid-scoring member into a full set evicts the lowest
-@zb.merge!('m45' => 45)
+@zb['m45'] = 45
 @zb.members
 #=> ['m45', 'm5', 'm6']
 

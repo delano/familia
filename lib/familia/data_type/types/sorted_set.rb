@@ -311,7 +311,7 @@ module Familia
         cursor = 0
         loop do
           new_cursor, pairs = scan(cursor, count: batch_size)
-          pairs.each { |member, _score| block.call(member) }
+          pairs.each_key(&block)
           cursor = new_cursor
           break if cursor.zero?
         end
@@ -772,7 +772,6 @@ module Familia
       result
     end
 
-
     private
 
     # Runs a member-creating write (ZADD/ZINCRBY), enforcing :max_length when
@@ -787,12 +786,12 @@ module Familia
     # @yield [conn] Connection to issue the ZADD/ZINCRBY against
     # @return [Object] The write command's result
     #
-    def capped_zadd_write(&write)
+    def capped_zadd_write(&)
       max = @opts[:max_length]
       return yield(dbclient) unless max
 
       execute_capped_write do |conn|
-        ret = write.call(conn)
+        ret = yield(conn)
         conn.zremrangebyrank(dbkey, 0, -(max + 1))
         ret
       end
@@ -861,26 +860,20 @@ module Familia
     #
     def validate_zadd_options!(nx:, xx:, gt:, lt:)
       # NX and XX are mutually exclusive
-      if nx && xx
-        raise ArgumentError, "ZADD options NX and XX are mutually exclusive"
-      end
+      raise ArgumentError, 'ZADD options NX and XX are mutually exclusive' if nx && xx
 
       # GT and LT are mutually exclusive
-      if gt && lt
-        raise ArgumentError, "ZADD options GT and LT are mutually exclusive"
-      end
+      raise ArgumentError, 'ZADD options GT and LT are mutually exclusive' if gt && lt
 
       # NX is mutually exclusive with GT
-      if nx && gt
-        raise ArgumentError, "ZADD options NX and GT are mutually exclusive"
-      end
+      raise ArgumentError, 'ZADD options NX and GT are mutually exclusive' if nx && gt
 
       # NX is mutually exclusive with LT
-      if nx && lt
-        raise ArgumentError, "ZADD options NX and LT are mutually exclusive"
-      end
+      return unless nx && lt
 
-      # Note: XX + GT and XX + LT are valid combinations
+      raise ArgumentError, 'ZADD options NX and LT are mutually exclusive'
+
+      # NOTE: XX + GT and XX + LT are valid combinations
     end
 
     Familia::DataType.register self, :sorted_set

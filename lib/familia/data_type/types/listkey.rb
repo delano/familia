@@ -33,7 +33,7 @@ module Familia
     # @note This method executes a Redis RPUSH immediately, unlike scalar field
     #   setters which are deferred until save. If the parent object has unsaved
     #   scalar field changes, consider calling save first to avoid split-brain state.
-    def push *values
+    def push(*values)
       warn_if_dirty!
       echo :push, Familia.pretty_stack(limit: 1) if Familia.debug
       serialized = values.flatten.compact.map { |v| serialize_value(v) }
@@ -64,7 +64,7 @@ module Familia
     # @note This method executes a Redis LPUSH immediately, unlike scalar field
     #   setters which are deferred until save. If the parent object has unsaved
     #   scalar field changes, consider calling save first to avoid split-brain state.
-    def unshift *values
+    def unshift(*values)
       warn_if_dirty!
       serialized = values.flatten.compact.map { |v| serialize_value(v) }
       unless serialized.empty?
@@ -91,11 +91,11 @@ module Familia
     def pop(count = nil)
       warn_if_dirty!
       ret = if count
-              result = dbclient.rpop(dbkey, count)
-              result.nil? ? nil : deserialize_values(*result)
-            else
-              deserialize_value dbclient.rpop(dbkey)
-            end
+        result = dbclient.rpop(dbkey, count)
+        result.nil? ? nil : deserialize_values(*result)
+      else
+        deserialize_value dbclient.rpop(dbkey)
+      end
       update_expiration
       ret
     end
@@ -106,11 +106,11 @@ module Familia
     def shift(count = nil)
       warn_if_dirty!
       ret = if count
-              result = dbclient.lpop(dbkey, count)
-              result.nil? ? nil : deserialize_values(*result)
-            else
-              deserialize_value dbclient.lpop(dbkey)
-            end
+        result = dbclient.lpop(dbkey, count)
+        result.nil? ? nil : deserialize_values(*result)
+      else
+        deserialize_value dbclient.lpop(dbkey)
+      end
       update_expiration
       ret
     end
@@ -260,7 +260,7 @@ module Familia
             when :after, 'AFTER' then 'AFTER'
             else
               raise ArgumentError, "position must be :before or :after, got #{position.inspect}"
-            end
+      end
       result = dbclient.linsert dbkey, pos, serialize_value(pivot), serialize_value(value)
       update_expiration if Familia.positive?(result) == true
       result

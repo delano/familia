@@ -27,7 +27,7 @@ module Familia
       module ClassMethods
         def collection_type?
           # Check ancestors to handle inheritance
-          ancestors.include?(Familia::DataType::CollectionBase)
+          self <= Familia::DataType::CollectionBase
         end
       end
 
@@ -116,13 +116,20 @@ module Familia
         # load_multi is identifier-type-tolerant (it builds keys via dbkey), so
         # whichever path `each` yields the identifier through, loading works.
         record_class = @opts[:record_class] || @opts[:class]
-        unless record_class&.respond_to?(:load_multi)
-          raise Familia::Problem, "each_record requires a DataType with a :record_class (or :class) option that responds to load_multi"
+        unless record_class.respond_to?(:load_multi)
+          raise Familia::Problem,
+'each_record requires a DataType with a :record_class (or :class) option that responds to load_multi'
         end
 
         # Validate batch_size and pipeline constraints
-        raise ArgumentError, "batch_size must be a positive integer (got #{batch_size.inspect})" unless batch_size.is_a?(Integer) && batch_size.positive?
-        raise ArgumentError, "pipeline must be nil or a positive integer (got #{pipeline.inspect})" unless pipeline.nil? || (pipeline.is_a?(Integer) && pipeline.positive?)
+        unless batch_size.is_a?(Integer) && batch_size.positive?
+          raise ArgumentError,
+"batch_size must be a positive integer (got #{batch_size.inspect})"
+        end
+        unless pipeline.nil? || (pipeline.is_a?(Integer) && pipeline.positive?)
+          raise ArgumentError,
+"pipeline must be nil or a positive integer (got #{pipeline.inspect})"
+        end
         raise ArgumentError, "pipeline (#{pipeline}) cannot exceed batch_size (#{batch_size})" if pipeline&.> batch_size
 
         # Collect identifiers in batches
@@ -139,12 +146,12 @@ module Familia
 
           if pipeline.nil?
             # Serial mode - no pipelining, execute block for each record directly
-            live_records.each { |record| block.call(record) }
+            live_records.each(&block)
           else
             # Pipelined mode - group records and wrap each group in a pipeline
             live_records.each_slice(pipeline) do |group|
               record_class.pipelined do
-                group.each { |record| block.call(record) }
+                group.each(&block)
               end
             end
           end

@@ -105,7 +105,8 @@ module Familia
     using Familia::Refinements::TimeLiterals
 
     @registered_types = {}
-    @valid_options = %i[class record_class parent default_expiration no_expiration default logical_database dbkey dbclient suffix prefix reference dirty_write_warnings max_length].freeze
+    @valid_options = %i[class record_class parent default_expiration no_expiration default logical_database dbkey
+                        dbclient suffix prefix reference dirty_write_warnings max_length].freeze
     @logical_database = nil
 
     # Remediation hint appended to every dirty-write warning/raise message so
@@ -181,9 +182,7 @@ module Familia
       # the valid-keys filter below. It is deliberately NOT honored as an
       # alias: suddenly enforcing a cap that was silently ignored for years
       # would mass-delete untrimmed production data on gem upgrade.
-      if opts&.key?(:maxlength)
-        Familia.warn '[familia] :maxlength is ignored; rename to max_length:'
-      end
+      Familia.warn '[familia] :maxlength is ignored; rename to max_length:' if opts&.key?(:maxlength)
 
       # Remove all keys from the opts that are not in the allowed list
       @opts = DataType.valid_keys_only(opts || {})
@@ -448,7 +447,7 @@ module Familia
       # Inherit from parent Horreum if available
       if @parent_ref.respond_to?(:default_expiration)
         parent_exp = @parent_ref.default_expiration
-        return parent_exp if parent_exp && parent_exp > 0
+        return parent_exp if parent_exp&.positive?
       end
 
       # Fall back to class-level default
