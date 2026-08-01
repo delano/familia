@@ -204,7 +204,7 @@ module Familia
           # MultiResult(nil) on abort, while one that drives conn.multi directly
           # would see a bare nil (aborted EXEC). Treat both as an abort so the
           # retry fires either way.
-          if txn_result.nil? || (txn_result.is_a?(MultiResult) && txn_result.results.nil?)
+          if txn_result.nil? || (txn_result.is_a?(MultiResult) && txn_result.aborted?)
             raise WatchAbortError,
                   "WATCH detected concurrent modification of #{watch_keys.join(', ')}"
           end
