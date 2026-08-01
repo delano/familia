@@ -6,6 +6,17 @@ module Familia
   class ListKey < DataType
     include DataType::CollectionBase
 
+    # ListKey implements :max_length (capped collection, issue #351) with
+    # per-end semantics — intentionally not unified with SortedSet's
+    # score-based trim: #push trims from the head (keeps the newest tail,
+    # LTRIM -max_length -1), while #unshift trims from the tail (keeps the
+    # newest head, LTRIM 0 max_length-1). Either way the max_length most
+    # recently written elements survive. NOT capped: pushx/unshiftx, insert,
+    # set, move destinations, and external writers.
+    def self.supports_max_length?
+      true
+    end
+
     # Returns the number of elements in the list
     # @return [Integer] number of elements
     def element_count
@@ -26,8 +37,19 @@ module Familia
       warn_if_dirty!
       echo :push, Familia.pretty_stack(limit: 1) if Familia.debug
       serialized = values.flatten.compact.map { |v| serialize_value(v) }
-      dbclient.rpush(dbkey, serialized) unless serialized.empty?
-      dbclient.ltrim dbkey, -@opts[:maxlength], -1 if @opts[:maxlength]
+      unless serialized.empty?
+        if (max = @opts[:max_length])
+          # Keep the tail: RPUSH appends there, so trimming from the head
+          # retains the max_length newest elements.
+          execute_capped_write do |conn|
+            ret = conn.rpush(dbkey, serialized)
+            conn.ltrim(dbkey, -max, -1)
+            ret
+          end
+        else
+          dbclient.rpush(dbkey, serialized)
+        end
+      end
       update_expiration
       self
     end
@@ -45,9 +67,19 @@ module Familia
     def unshift *values
       warn_if_dirty!
       serialized = values.flatten.compact.map { |v| serialize_value(v) }
-      dbclient.lpush(dbkey, serialized) unless serialized.empty?
-      # TODO: test maxlength
-      dbclient.ltrim dbkey, 0, @opts[:maxlength] - 1 if @opts[:maxlength]
+      unless serialized.empty?
+        if (max = @opts[:max_length])
+          # Keep the head: LPUSH prepends there, so trimming from the tail
+          # retains the max_length newest elements.
+          execute_capped_write do |conn|
+            ret = conn.lpush(dbkey, serialized)
+            conn.ltrim(dbkey, 0, max - 1)
+            ret
+          end
+        else
+          dbclient.lpush(dbkey, serialized)
+        end
+      end
       update_expiration
       self
     end

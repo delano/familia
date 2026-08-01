@@ -36,6 +36,46 @@ Behavior notes:
 - **Empty input is a no-op**: `add()` / `push()` / `update({})` issue no command. Set/list adds return `self`; `SortedSet#update` returns `0`.
 - **`SortedSet#add(val, score, …)` is unchanged and not bulk** — it takes a single member plus score and the conditional ZADD options (`nx:`, `xx:`, `gt:`, `lt:`, `ch:`). An Array passed as `val` is stored as one JSON-encoded member, not exploded into many. Use `update`/`merge!` for bulk insertion.
 
+## Capped collections — `max_length:`
+
+`SortedSet` and `ListKey` accept a `max_length:` option that caps the collection at write time. Every member-creating write trims in the same operation, so the collection never stays over the cap:
+
+```ruby
+# Standalone
+events = Familia::SortedSet.new 'events', max_length: 100
+
+# Horreum class declaration
+class Customer < Familia::Horreum
+  sorted_set :audit_events, max_length: 10_000
+  list :recent_errors, max_length: 50
+end
+```
+
+### SortedSet: top-N by score
+
+`max_length: N` retains the **N highest-scoring members** — the trim is `ZREMRANGEBYRANK key 0 -(N+1)`. This is "newest N" only when scores are timestamps; with arbitrary scores it is simply top-N by score. Capping applies to all member-creating paths: `add` (and `<<` / `[]=`), `update` / `merge!`, and `increment` / `decrement` (ZINCRBY creates the member if absent). The trim runs unconditionally after the write, which is a cheap no-op when under the cap and harmless when a conditional `nx:`/`xx:`/`gt:`/`lt:` add skipped the write.
+
+### ListKey: per-end semantics
+
+The cap keeps the elements nearest the end you wrote to — this asymmetry is intentional:
+
+- `push` (RPUSH) trims from the **head**, keeping the newest **tail** elements.
+- `unshift` (LPUSH) trims from the **tail**, keeping the newest **head** elements.
+
+### Atomicity
+
+Standalone, each write+trim pair is wrapped in its own `MULTI`, so a crash cannot leave the collection over-cap; the write command's documented return value (e.g. `add`'s Boolean, `update`'s new-member count) is preserved. Inside a caller transaction (`Fiber[:familia_transaction]`) or pipeline, the pair is issued bare and the outer MULTI covers both — Redis MULTI does not nest.
+
+### What is not capped
+
+Writes that bypass the instance's write methods are out of scope: `unionstore` / `interstore` / `diffstore` destination keys, `RESTORE`, and any external client writing the key directly. The cap re-asserts itself on the next capped write.
+
+### Validation and the old `:maxlength` spelling
+
+- `max_length:` must be a **positive Integer** — anything else raises `ArgumentError` at definition time (`max_length: 0` would delete everything on every write).
+- Passing `max_length:` to a type that does not implement it (`HashKey`, `UnsortedSet`, `StringKey`, `Counter`, …) raises `ArgumentError` rather than being silently ignored.
+- The old `:maxlength` spelling was **never honored** and remains ignored; it now emits a warning (`[familia] :maxlength is ignored; rename to max_length:`). It is deliberately not treated as an alias — honoring it would start mass-deleting previously untrimmed data on upgrade. Rename to `max_length:` explicitly to opt in to trimming.
+
 The iteration methods `each` and `each_record` efficiently handle large collections by paginating through Valkey/Redis data structures, but they serve different purposes and yield different results. Here's how the two iterate, using `ModelClass.instances` (a `SortedSet` with `reference: true`) as the running example.
 
 ## `each` — yields **members** (identifiers, raw strings)

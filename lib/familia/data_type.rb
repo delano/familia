@@ -46,9 +46,10 @@ module Familia
   #   UnsortedSet | remove_element   | SREM           | yes        | no
   #   UnsortedSet | pop              | SPOP           | yes        | no
   #   UnsortedSet | move             | SMOVE          | yes        | no
-  #   SortedSet   | add              | ZADD           | yes        | no
+  #   SortedSet   | add              | ZADD(+ZREMRANGEBYRANK) | yes | no
+  #   SortedSet   | update           | ZADD(+ZREMRANGEBYRANK) | yes | no
   #   SortedSet   | remove_element   | ZREM           | yes        | no
-  #   SortedSet   | increment        | ZINCRBY        | yes        | no
+  #   SortedSet   | increment        | ZINCRBY(+ZREMRANGEBYRANK) | yes | no
   #   SortedSet   | decrement        | ZINCRBY (neg)  | yes (via increment) | no
   #   SortedSet   | remrangebyrank   | ZREMRANGEBYRANK| yes        | no
   #   SortedSet   | remrangebyscore  | ZREMRANGEBYSCORE| yes       | no
@@ -89,6 +90,11 @@ module Familia
   #   update_expiration because the key no longer exists.
   # - HashKey#hsetnx only calls update_expiration when the field was
   #   actually set (ret == 1), which is correct conditional behavior.
+  # - The (+ZREMRANGEBYRANK) / (+LTRIM) trims only fire when :max_length is
+  #   set. Standalone capped writes wrap write + trim in their own MULTI so a
+  #   crash cannot leave the collection over-cap; inside a caller transaction
+  #   both commands are queued bare into the outer MULTI (Redis MULTI does
+  #   not nest). See CollectionBase#execute_capped_write.
   #
   # @abstract Subclass and implement Database data type specific methods
   class DataType
@@ -99,7 +105,7 @@ module Familia
     using Familia::Refinements::TimeLiterals
 
     @registered_types = {}
-    @valid_options = %i[class record_class parent default_expiration no_expiration default logical_database dbkey dbclient suffix prefix reference dirty_write_warnings].freeze
+    @valid_options = %i[class record_class parent default_expiration no_expiration default logical_database dbkey dbclient suffix prefix reference dirty_write_warnings max_length].freeze
     @logical_database = nil
 
     # Remediation hint appended to every dirty-write warning/raise message so
@@ -111,6 +117,18 @@ module Familia
 
     class << self
       attr_reader :registered_types, :valid_options, :has_related_fields
+
+      # Whether this DataType implements the :max_length capping option.
+      #
+      # :max_length is validated in #initialize for every DataType (the option
+      # list is shared), but only types that actually trim on write may accept
+      # it — a silently ignored cap is the exact bug class this option was
+      # introduced to fix. Overridden to return true in SortedSet and ListKey.
+      #
+      # @return [Boolean]
+      def supports_max_length?
+        false
+      end
     end
 
     # +keystring+: If parent is set, this will be used as the suffix
@@ -144,14 +162,36 @@ module Familia
     # the persistence path writes deliberately while the parent is dirty; user
     # data should rely on the class/global setting instead.
     #
+    # :max_length => positive Integer. Caps the collection's size: every
+    # member-creating write trims the collection back down to this many
+    # elements. Only SortedSet (retains the max_length HIGHEST-scoring
+    # members) and ListKey (per-end trim: push keeps the tail, unshift keeps
+    # the head) implement it; passing it to any other type raises
+    # ArgumentError rather than silently ignoring the cap. The old :maxlength
+    # spelling is warned about and ignored (never honored as an alias, since
+    # that would mass-delete previously untrimmed data on upgrade).
+    #
     # Connection precendence: uses the database connection of the parent or the
     # value of opts[:dbclient] or Familia.dbclient (in that order).
     def initialize(keystring, opts = {})
       @keystring = keystring
       @keystring = @keystring.join(Familia.delim) if @keystring.is_a?(Array)
 
+      # Warn about the pre-2.x :maxlength spelling before it is stripped by
+      # the valid-keys filter below. It is deliberately NOT honored as an
+      # alias: suddenly enforcing a cap that was silently ignored for years
+      # would mass-delete untrimmed production data on gem upgrade.
+      if opts&.key?(:maxlength)
+        Familia.warn '[familia] :maxlength is ignored; rename to max_length:'
+      end
+
       # Remove all keys from the opts that are not in the allowed list
       @opts = DataType.valid_keys_only(opts || {})
+
+      # Validate eagerly, mirroring dirty_write_warnings below: max_length: 0
+      # would delete everything on every write, and a type that never trims
+      # would silently ignore the cap — both should fail at definition time.
+      validate_max_length!(@opts[:max_length])
 
       # Validate eagerly: an unrecognized mode would otherwise fall through
       # #warn_if_dirty! to the :once branch, so a typo would silently change
@@ -243,6 +283,24 @@ module Familia
             "dirty_write_warnings must be one of #{DIRTY_WRITE_MODES.inspect}, got #{mode.inspect}"
     end
     private :validate_dirty_write_warnings!
+
+    # @raise [ArgumentError] if value is present and not a positive Integer,
+    #   or if this DataType does not implement max_length trimming
+    def validate_max_length!(value)
+      return if value.nil?
+
+      unless value.is_a?(Integer) && value.positive?
+        raise ArgumentError,
+              "max_length must be a positive Integer, got #{value.inspect}"
+      end
+
+      return if self.class.supports_max_length?
+
+      raise ArgumentError,
+            "max_length is not supported by #{self.class.name} " \
+            '(only SortedSet and ListKey trim on write)'
+    end
+    private :validate_max_length!
 
     # Resolves the dirty-write warning mode for this DataType.
     #

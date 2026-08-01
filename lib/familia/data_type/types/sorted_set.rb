@@ -6,6 +6,22 @@ module Familia
   class SortedSet < DataType
     include DataType::CollectionBase
 
+    # SortedSet implements :max_length (capped collection, issue #351): a cap
+    # of N retains the N HIGHEST-scoring members — trim is ZREMRANGEBYRANK
+    # key 0 -(N+1), removing from the low-score end. When scores are
+    # timestamps (the #add default) this keeps the newest N; with arbitrary
+    # scores it keeps the top-N by score, not by recency.
+    #
+    # All member-creating paths trim: #add (covers << and []=), #update /
+    # #merge! (bulk ZADD), and #increment / #decrement (ZINCRBY creates the
+    # member if absent). The trim is issued unconditionally after the write —
+    # an under-cap trim is an O(log N) no-op, and it is harmless when an
+    # NX/XX/GT/LT constraint skipped the write. NOT capped (external writers
+    # beware): unionstore/interstore/diffstore destination keys and restore.
+    def self.supports_max_length?
+      true
+    end
+
     # Returns the number of elements in the sorted set
     # @return [Integer] number of elements
     def element_count
@@ -124,10 +140,12 @@ module Familia
       opts[:ch] = true if ch
 
       # Pass options to ZADD
-      ret = if opts.empty?
-        dbclient.zadd(dbkey, score, serialize_value(val))
-      else
-        dbclient.zadd(dbkey, score, serialize_value(val), **opts)
+      ret = capped_zadd_write do |conn|
+        if opts.empty?
+          conn.zadd(dbkey, score, serialize_value(val))
+        else
+          conn.zadd(dbkey, score, serialize_value(val), **opts)
+        end
       end
 
       update_expiration
@@ -174,7 +192,9 @@ module Familia
 
         [score, serialize_value(member)]
       end
-      ret = dbclient.zadd(dbkey, pairs)
+      # Trim is mandatory here: a bulk populate can blow past the cap in a
+      # single ZADD, not just by one member.
+      ret = capped_zadd_write { |conn| conn.zadd(dbkey, pairs) }
       update_expiration
       ret
     end
@@ -377,7 +397,8 @@ module Familia
     end
 
     def increment(val, by = 1)
-      ret = dbclient.zincrby(dbkey, by, serialize_value(val)).to_f
+      # ZINCRBY creates the member if absent, so it is a capped path too.
+      ret = capped_zadd_write { |conn| conn.zincrby(dbkey, by, serialize_value(val)) }.to_f
       update_expiration
       ret
     end
@@ -753,6 +774,29 @@ module Familia
 
 
     private
+
+    # Runs a member-creating write (ZADD/ZINCRBY), enforcing :max_length when
+    # set. The trim keeps the max_length highest-scoring members by removing
+    # ranks 0..-(max_length+1) — i.e. everything below the top-N. Without a
+    # cap, the write goes straight to dbclient exactly as before.
+    #
+    # Atomicity is delegated to CollectionBase#execute_capped_write: bare
+    # inside a caller transaction/pipeline, own MULTI standalone (returning
+    # the write's result, not the trim's).
+    #
+    # @yield [conn] Connection to issue the ZADD/ZINCRBY against
+    # @return [Object] The write command's result
+    #
+    def capped_zadd_write(&write)
+      max = @opts[:max_length]
+      return yield(dbclient) unless max
+
+      execute_capped_write do |conn|
+        ret = write.call(conn)
+        conn.zremrangebyrank(dbkey, 0, -(max + 1))
+        ret
+      end
+    end
 
     # Resolves sorted set arguments to their Redis key names.
     #

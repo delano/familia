@@ -35,6 +35,34 @@ module Familia
         self.class.collection_type?
       end
 
+      # Executes a member-creating write followed by its cap-enforcing trim,
+      # keeping the pair atomic when possible. Used by the :max_length paths
+      # in SortedSet and ListKey (see DataType.supports_max_length?).
+      #
+      # The block receives a connection and must issue the write, then the
+      # trim, and return the write command's result. Three contexts:
+      #
+      # * Inside a caller transaction (Fiber[:familia_transaction] set): both
+      #   commands are queued bare — the outer MULTI already covers them, and
+      #   Redis MULTI does not nest. The block's return value is a future, as
+      #   it is for any write inside a transaction.
+      # * Inside a caller pipeline: queued bare as well; pipelines never
+      #   promise atomicity, so the trim rides along unbatched.
+      # * Standalone: wraps the pair in this object's own MULTI so a crash
+      #   between write and trim cannot leave the collection over-cap, and
+      #   returns the FIRST command's result so the caller's documented
+      #   return value (ZADD Boolean, RPUSH/ZINCRBY Integer) survives.
+      #
+      # @yield [conn] Connection to issue the write + trim against
+      # @return [Object] The write command's result (or its future in-transaction)
+      #
+      def execute_capped_write(&)
+        return yield(dbclient) if Fiber[:familia_transaction] || Fiber[:familia_pipeline]
+
+        transaction(&).results.first
+      end
+      private :execute_capped_write
+
       # Iterates over identifiers, loading each as a Horreum record.
       #
       # This method is designed for DataTypes that store object identifiers.
