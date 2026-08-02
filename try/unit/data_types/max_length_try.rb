@@ -10,6 +10,9 @@
 # ListKey: per-end semantics — push keeps the tail-N, unshift keeps the head-N.
 # Validation: max_length must be a positive Integer and is rejected on
 # non-implementing types; the old :maxlength spelling warns and is ignored.
+# enforce_max_length! applies the cap to already-oversized data (migration
+# step); participates_in/class_participates_in take max_length: directly and
+# raise on conflict with a pre-declared cap.
 
 require_relative '../../support/helpers/test_helpers'
 
@@ -40,6 +43,29 @@ class CappedFeedItem < Familia::Horreum
   participates_in CappedFeedOwner, :activity, score: :created_at
 end
 
+# participates_in with max_length: passed directly — no pre-declaration on the
+# target needed (issue #351). record_class: is still threaded automatically,
+# so each_record keeps working.
+class KwargFeedOwner < Familia::Horreum
+  identifier_field :owner_id
+  field :owner_id
+end
+
+class KwargFeedItem < Familia::Horreum
+  feature :relationships
+  identifier_field :item_id
+  field :item_id
+  field :created_at
+  participates_in KwargFeedOwner, :activity, score: :created_at, max_length: 3
+end
+
+class CappedClassMember < Familia::Horreum
+  feature :relationships
+  identifier_field :mid
+  field :mid
+  class_participates_in :recent_members, max_length: 3
+end
+
 @cb = CappedBone.new 'maxlen-token'
 @zs = Familia::SortedSet.new 'test:maxlen:zs', max_length: 3
 @zi = Familia::SortedSet.new 'test:maxlen:zi', max_length: 3
@@ -63,6 +89,11 @@ end
 end
 @move_src = Familia::ListKey.new 'test:maxlen:movesrc'
 @move_dest = Familia::ListKey.new 'test:maxlen:movedest', max_length: 3
+@kwarg_owner = KwargFeedOwner.new(owner_id: 'maxlen-kwarg-owner')
+@kwarg_owner.save
+@kwarg_items = 5.times.map do |i|
+  KwargFeedItem.new(item_id: "ki#{i}", created_at: i + 1).tap(&:save)
+end
 
 ## Standalone SortedSet: add beyond cap keeps the 3 highest-scoring members
 @zs.add('a', 1)
@@ -246,6 +277,56 @@ Familia::HashKey.new('test:maxlen:hashreader').max_length
 [@retro.to_a.size, @retro.push('g6').to_a]
 #=> [5, ['g4', 'g5', 'g6']]
 
+## SortedSet#enforce_max_length! trims an oversized set to the cap immediately,
+## keeping the highest scores and returning the number removed
+@mig_zs_raw = Familia::SortedSet.new 'test:maxlen:migzs'
+%w[e1 e2 e3 e4 e5].each_with_index { |v, i| @mig_zs_raw.add(v, i + 1) }
+@mig_zs = Familia::SortedSet.new 'test:maxlen:migzs', max_length: 3
+[@mig_zs.enforce_max_length!, @mig_zs.members]
+#=> [2, ['e3', 'e4', 'e5']]
+
+## enforce_max_length! within cap removes nothing (idempotent)
+@mig_zs.enforce_max_length!
+#=> 0
+
+## ListKey#enforce_max_length! keeps the tail by default (push-fed lists)
+@mig_list_raw = Familia::ListKey.new 'test:maxlen:miglist'
+%w[l1 l2 l3 l4 l5].each { |v| @mig_list_raw.push(v) }
+@mig_list = Familia::ListKey.new 'test:maxlen:miglist', max_length: 3
+[@mig_list.enforce_max_length!, @mig_list.to_a]
+#=> [2, ['l3', 'l4', 'l5']]
+
+## ListKey#enforce_max_length!(keep: :head) keeps the head (unshift-fed lists)
+@mig_head_raw = Familia::ListKey.new 'test:maxlen:mighead'
+%w[h1 h2 h3 h4 h5].each { |v| @mig_head_raw.push(v) }
+@mig_head = Familia::ListKey.new 'test:maxlen:mighead', max_length: 3
+[@mig_head.enforce_max_length!(keep: :head), @mig_head.to_a]
+#=> [2, ['h1', 'h2', 'h3']]
+
+## enforce_max_length! on an uncapped list raises rather than silently no-oping
+begin
+  Familia::ListKey.new('test:maxlen:nocap').enforce_max_length!
+rescue Familia::Problem => e
+  e.message.include?('requires the :max_length option')
+end
+#=> true
+
+## enforce_max_length! on an uncapped sorted set raises too
+begin
+  Familia::SortedSet.new('test:maxlen:nocapzs').enforce_max_length!
+rescue Familia::Problem => e
+  e.message.include?('uncapped')
+end
+#=> true
+
+## enforce_max_length! rejects an unknown keep: end
+begin
+  @mig_list.enforce_max_length!(keep: :middle)
+rescue ArgumentError => e
+  e.message.include?('keep must be :tail or :head')
+end
+#=> true
+
 ## move into a capped list is NOT capped (the cap belongs to the caller)
 @move_src.push('m1', 'm2', 'm3', 'm4')
 4.times { @move_src.move(@move_dest, :left, :right) }
@@ -266,6 +347,96 @@ Familia::HashKey.new('test:maxlen:hashreader').max_length
 @feed_items.each { |item| @feed_owner.add_activity([item]) }
 @feed_owner.activity.members
 #=> ['fi2', 'fi3', 'fi4']
+
+## participates_in accepts max_length: directly; the collection it declares
+## carries the cap without any pre-declaration on the target
+@kwarg_owner.activity.max_length
+#=> 3
+
+## Participation adds through the kwarg-declared cap keep the newest 3
+@kwarg_items.each { |item| @kwarg_owner.add_activity([item]) }
+@kwarg_owner.activity.members
+#=> ['ki2', 'ki3', 'ki4']
+
+## record_class: is still threaded alongside max_length:, so each_record
+## hydrates the surviving participants
+@kwarg_owner.activity.each_record.map(&:item_id)
+#=> ['ki2', 'ki3', 'ki4']
+
+## A capped participation collection is a recent-N view: in_*? queries the
+## collection live, so an evicted participant reads as not-a-member
+@kwarg_items.first.in_kwarg_feed_owner_activity?(@kwarg_owner)
+#=> false
+
+## ...but the trim never touches the reverse index, so the evicted
+## participant's participations set still lists the collection
+## (current_participations can over-report; destroy cleanup tolerates it)
+@kwarg_items.first.participations.member?(@kwarg_owner.activity.dbkey)
+#=> true
+
+## A max_length: matching a pre-declared cap is accepted (harmless repetition)
+Class.new(Familia::Horreum) do
+  feature :relationships
+  identifier_field :item_id
+  field :item_id
+  participates_in CappedFeedOwner, :activity, max_length: 3, generate_participant_methods: false
+end
+@feed_owner.activity.max_length
+#=> 3
+
+## A max_length: conflicting with a pre-declared cap raises at definition time
+## instead of silently keeping the wrong cap
+begin
+  Class.new(Familia::Horreum) do
+    feature :relationships
+    identifier_field :item_id
+    field :item_id
+    participates_in CappedFeedOwner, :activity, max_length: 5, generate_participant_methods: false
+  end
+  :no_error
+rescue ArgumentError => e
+  e.message.include?('conflicts with the existing :activity declaration')
+end
+#=> true
+
+## max_length: with a non-capping collection type raises at definition time
+begin
+  Class.new(Familia::Horreum) do
+    feature :relationships
+    identifier_field :item_id
+    field :item_id
+    participates_in CappedFeedOwner, :tag_members, type: :set, max_length: 3,
+                                                   generate_participant_methods: false
+  end
+  :no_error
+rescue ArgumentError => e
+  e.message.include?('not supported for type')
+end
+#=> true
+
+## participates_in validates the max_length: value eagerly (not on first access)
+begin
+  Class.new(Familia::Horreum) do
+    feature :relationships
+    identifier_field :item_id
+    field :item_id
+    participates_in CappedFeedOwner, :bad_cap, max_length: 0, generate_participant_methods: false
+  end
+  :no_error
+rescue ArgumentError => e
+  e.message.include?('positive Integer')
+end
+#=> true
+
+## class_participates_in accepts max_length: and caps the class-level collection
+@class_members = 5.times.map { |i| CappedClassMember.new(mid: "cm#{i}").tap(&:save) }
+@class_members.each_with_index { |m, i| CappedClassMember.add_to_recent_members(m, i + 1) }
+CappedClassMember.recent_members.members
+#=> ['cm2', 'cm3', 'cm4']
+
+## The class-level cap reads back through #max_length
+CappedClassMember.recent_members.max_length
+#=> 3
 
 ## max_length: 0 raises ArgumentError (would delete everything on every write)
 begin
@@ -357,9 +528,17 @@ Familia.logger = @orig_logger
 @move_src.delete!
 @move_dest.delete!
 @retro.delete!
+@mig_zs.delete!
+@mig_list.delete!
+@mig_head.delete!
 @feed_owner.activity.delete!
 @feed_owner.destroy!
 @feed_items.each(&:destroy!)
+@kwarg_owner.activity.delete!
+@kwarg_owner.destroy!
+@kwarg_items.each(&:destroy!)
+CappedClassMember.recent_members.delete!
+@class_members.each(&:destroy!)
 @legacy_list.delete!
 @cb.events.delete!
 @cb.recent.delete!

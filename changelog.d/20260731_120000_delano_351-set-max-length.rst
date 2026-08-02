@@ -24,6 +24,29 @@ Added
   (``HashKey``, ``UnsortedSet``, ``StringKey``, ``Counter``, …) raises
   ``ArgumentError`` instead of being silently ignored. #351
 
+- ``SortedSet#enforce_max_length!`` and ``ListKey#enforce_max_length!`` apply
+  the cap to an already-oversized collection — the migration step after adding
+  ``max_length:`` to live data, which otherwise stays over-cap until the next
+  write. Both return the number of elements removed and raise
+  ``Familia::Problem`` on an uncapped collection instead of silently doing
+  nothing. Lists take ``keep: :tail`` (default, push-fed) or ``keep: :head``
+  (unshift-fed) since the cap's per-end semantics belong to the write method,
+  and run ``LLEN`` + ``LTRIM`` in one ``MULTI`` so the count is exact under
+  concurrent writes. #351
+
+- ``participates_in`` and ``class_participates_in`` accept ``max_length:``
+  directly (``participates_in Owner, :activity, score: :created_at,
+  max_length: 1000``), declaring the target collection capped with
+  ``record_class:`` still threaded automatically. The value and collection
+  type are validated at class-definition time, and a ``max_length:`` that
+  conflicts with a pre-declared collection's cap (including an uncapped
+  pre-declaration) raises ``ArgumentError`` rather than silently keeping the
+  wrong cap. Pre-declaring the capped collection before ``participates_in``
+  continues to work unchanged. A capped participation collection is a
+  recent-N view, not authoritative membership: the trim does not touch each
+  participant's ``participations`` reverse index, so ``member?``/``in_*?``
+  stay accurate while ``current_participations`` can over-report. #351
+
 Changed
 -------
 
@@ -55,5 +78,7 @@ AI Assistance
 - Claude Code implemented the capped-write plumbing (shared
   ``execute_capped_write`` helper, ``supports_max_length?`` predicate,
   definition-time validation), wired trimming into all member-creating paths
-  of ``SortedSet`` and ``ListKey``, and wrote the documentation and this
-  changelog entry.
+  of ``SortedSet`` and ``ListKey``, added ``enforce_max_length!`` and the
+  ``participates_in`` / ``class_participates_in`` ``max_length:`` passthrough
+  with conflict detection, and wrote the documentation and this changelog
+  entry.

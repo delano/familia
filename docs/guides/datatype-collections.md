@@ -85,11 +85,36 @@ Writes that bypass the instance's write methods are out of scope: `unionstore` /
 - `insert` (LINSERT) and `set` (LSET) — position-relative writes.
 - `move` (LMOVE) when this list is the **destination**; the cap belongs to the method being called, and `move` is called on the source.
 
-Adding `max_length:` to a collection that is already over the cap does not trim it retroactively — nothing runs at definition time. In every case the cap re-asserts itself on the next capped write; call `push`/`add` once (or trim manually) if you need it enforced sooner.
+Adding `max_length:` to a collection that is already over the cap does not trim it retroactively — nothing runs at definition time. The cap re-asserts itself on the next capped write; to enforce it sooner, call `enforce_max_length!`.
+
+### Enforcing the cap on existing data — `enforce_max_length!`
+
+Adding `max_length:` to a live production collection is a no-op until something writes to it. `enforce_max_length!` applies the cap immediately — the migration step after declaring a cap on an existing collection — and returns the number of elements removed (0 when already within the cap). Calling it on an uncapped collection raises `Familia::Problem` rather than silently doing nothing.
+
+```ruby
+customer.audit_events.enforce_max_length!   #=> 4215 (keeps the 10_000 highest scores)
+customer.recent_errors.enforce_max_length!  #=> 12   (keeps the newest 50 at the tail)
+```
+
+- **SortedSet** keeps the `max_length` highest-scoring members — the same `ZREMRANGEBYRANK` trim every capped write applies.
+- **ListKey** must be told which end survives, since the cap's per-end semantics belong to the write method: `keep: :tail` (the default) matches a push-fed list, `keep: :head` an unshift-fed one. `LLEN` and `LTRIM` run in one `MULTI`, so the removed count is exact even under concurrent writes.
 
 ### Capping a `participates_in` collection
 
-`participates_in` takes no `max_length:` option, but it does not overwrite a collection you declared yourself — `ensure_collection_field` returns early when the accessor already exists. Declare the collection with the cap **before** the `participates_in` that targets it, and participation writes are capped like any other:
+`participates_in` (and `class_participates_in`) accept `max_length:` directly. The collection declared on the target carries the cap, and `record_class:` is still threaded automatically so `each_record` keeps working:
+
+```ruby
+class FeedItem < Familia::Horreum
+  feature :relationships
+  participates_in Owner, :activity, score: :created_at, max_length: 1000
+end
+```
+
+The value is validated at class-definition time: it must be a positive Integer, and only `:sorted_set` and `:list` implement capping — `max_length:` with any other `type:` raises `ArgumentError`.
+
+A capped participation collection is a **recent-N view, not authoritative membership**. The trim evicts members silently, without touching each participant's `participations` reverse-index set. Membership checks (`collection.member?`, the participant's `in_*?` methods) query the collection live and stay accurate after eviction, but `current_participations` reads the reverse index and can list collections the participant was trimmed out of. Destruction cleanup tolerates this — removing a member that was already evicted is a no-op — so the staleness over-reports but never breaks anything.
+
+Pre-declaring the collection on the target still works — participation never overwrites an existing accessor — but then the two declarations must agree. A `participates_in` whose `max_length:` differs from the pre-declared cap (including an uncapped pre-declaration) raises `ArgumentError` at definition time rather than silently keeping the wrong cap; omitting `max_length:` from `participates_in` keeps whatever the pre-declaration says, capped or not. When you pre-declare, pass `record_class:` yourself, since you are replacing the declaration participation would otherwise have made — without it, `each_record` on the collection has nothing to hydrate:
 
 ```ruby
 class Owner < Familia::Horreum
@@ -101,11 +126,9 @@ end
 
 class FeedItem < Familia::Horreum
   feature :relationships
-  participates_in Owner, :activity, score: :created_at
+  participates_in Owner, :activity, score: :created_at, max_length: 1000  # must match (or be omitted)
 end
 ```
-
-Pass `record_class:` yourself when you pre-declare, since you are replacing the declaration participation would otherwise have made — without it, `each_record` on the collection has nothing to hydrate.
 
 ### Validation and the old `:maxlength` spelling
 
