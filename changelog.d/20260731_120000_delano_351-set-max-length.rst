@@ -47,6 +47,15 @@ Added
   participant's ``participations`` reverse index, so ``member?``/``in_*?``
   stay accurate while ``current_participations`` can over-report. #351
 
+- ``Familia::Features::Housekeeping::EnforceCollectionCaps`` ships the
+  cap-enforcement sweep as a registerable chore class: it trims every capped
+  collection on an instance via ``enforce_max_length!``, returning the removed
+  count (truthy = modified) or ``nil`` on a clean pass so repeated runs are
+  no-ops in ``run_chores!`` stats. Designed as a base class — override
+  ``keep_for`` for unshift-fed lists, ``collection_names`` to scope the sweep.
+  To support it, ``chore`` now accepts any ``#call``-able in place of a block
+  (``chore :enforce_collection_caps, EnforceCollectionCaps``). #351
+
 Changed
 -------
 
@@ -80,5 +89,6 @@ AI Assistance
   definition-time validation), wired trimming into all member-creating paths
   of ``SortedSet`` and ``ListKey``, added ``enforce_max_length!`` and the
   ``participates_in`` / ``class_participates_in`` ``max_length:`` passthrough
-  with conflict detection, and wrote the documentation and this changelog
-  entry.
+  with conflict detection, shipped the ``Housekeeping::EnforceCollectionCaps``
+  chore class (extending ``chore`` to accept callables), and wrote the
+  documentation and this changelog entry.
