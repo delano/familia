@@ -22,6 +22,24 @@ class CappedBone < Familia::Horreum
   list :recent, max_length: 3
 end
 
+# A participation target whose collection is pre-declared WITH a cap. The
+# declaration must come before the participates_in that targets it —
+# ensure_collection_field returns early when the accessor already exists, so
+# the capped declaration wins instead of being replaced by an uncapped one.
+class CappedFeedOwner < Familia::Horreum
+  identifier_field :owner_id
+  field :owner_id
+  zset :activity, max_length: 3, record_class: 'CappedFeedItem'
+end
+
+class CappedFeedItem < Familia::Horreum
+  feature :relationships
+  identifier_field :item_id
+  field :item_id
+  field :created_at
+  participates_in CappedFeedOwner, :activity, score: :created_at
+end
+
 @cb = CappedBone.new 'maxlen-token'
 @zs = Familia::SortedSet.new 'test:maxlen:zs', max_length: 3
 @zi = Familia::SortedSet.new 'test:maxlen:zi', max_length: 3
@@ -34,6 +52,17 @@ end
 @one_zs = Familia::SortedSet.new 'test:maxlen:onezs', max_length: 1
 @zd = Familia::SortedSet.new 'test:maxlen:zd', max_length: 3
 @zp = Familia::SortedSet.new 'test:maxlen:zp', max_length: 3
+@bulk_head = Familia::ListKey.new 'test:maxlen:bulkhead', max_length: 3
+@tx_list = Familia::ListKey.new 'test:maxlen:txlist', max_length: 3
+@tx_zs = Familia::SortedSet.new 'test:maxlen:txzs', max_length: 3
+@ret_zs = Familia::SortedSet.new 'test:maxlen:ret', max_length: 3
+@feed_owner = CappedFeedOwner.new(owner_id: 'maxlen-owner')
+@feed_owner.save
+@feed_items = 5.times.map do |i|
+  CappedFeedItem.new(item_id: "fi#{i}", created_at: i + 1).tap(&:save)
+end
+@move_src = Familia::ListKey.new 'test:maxlen:movesrc'
+@move_dest = Familia::ListKey.new 'test:maxlen:movedest', max_length: 3
 
 ## Standalone SortedSet: add beyond cap keeps the 3 highest-scoring members
 @zs.add('a', 1)
@@ -152,6 +181,92 @@ end
 @zp.members
 #=> ['pl2', 'pl3', 'pl4']
 
+## Bulk unshift past the cap in ONE call keeps the head-N
+@bulk_head.unshift('h1', 'h2', 'h3', 'h4', 'h5')
+@bulk_head.to_a
+#=> ['h5', 'h4', 'h3']
+
+## Capped ListKey inside a transaction: no nesting error, cap holds after exec
+@cb.transaction do |_conn|
+  5.times { |i| @tx_list.push("t#{i}") }
+end
+@tx_list.to_a
+#=> ['t2', 't3', 't4']
+
+## increment inside a transaction returns the future untouched (no to_f on it)
+@cb.transaction do |_conn|
+  @tx_zs.increment('fut', 5)
+end
+@tx_zs.score('fut')
+#=> 5.0
+
+## increment inside a pipeline is capped and does not raise on the future
+@cb.pipelined do |_conn|
+  5.times { |i| @tx_zs.increment("pi#{i}", i + 1) }
+end
+@tx_zs.size
+#=> 3
+
+## Capped add returns the same value as an uncapped add (write result, not trim)
+@ret_zs.add('r1', 1)
+#=> true
+
+## Capped update returns the ZADD count, not the trim count
+@ret_zs.update('r2' => 2, 'r3' => 3, 'r4' => 4)
+#=> 3
+
+## Capped increment returns the member's new score as a Float
+@ret_zs.increment('r4', 1)
+#=> 5.0
+
+## #max_length reads back the configured cap on a Horreum-declared collection
+@cb.events.max_length
+#=> 3
+
+## #max_length reads back the cap on a standalone collection
+@zs.max_length
+#=> 3
+
+## #max_length is nil on an uncapped collection of a capping type
+Familia::ListKey.new('test:maxlen:uncapped').max_length
+#=> nil
+
+## #max_length is defined on non-capping types too, always nil there
+Familia::HashKey.new('test:maxlen:hashreader').max_length
+#=> nil
+
+## The cap is read-only — there is no writer to change it after definition
+@zs.respond_to?(:max_length=)
+#=> false
+
+## Adding a cap does not trim retroactively; the next capped write enforces it
+@retro_uncapped = Familia::ListKey.new 'test:maxlen:retro'
+%w[g1 g2 g3 g4 g5].each { |v| @retro_uncapped.push(v) }
+@retro = Familia::ListKey.new 'test:maxlen:retro', max_length: 3
+[@retro.to_a.size, @retro.push('g6').to_a]
+#=> [5, ['g4', 'g5', 'g6']]
+
+## move into a capped list is NOT capped (the cap belongs to the caller)
+@move_src.push('m1', 'm2', 'm3', 'm4')
+4.times { @move_src.move(@move_dest, :left, :right) }
+@move_dest.to_a
+#=> ['m1', 'm2', 'm3', 'm4']
+
+## set (LSET) on a capped list is not a member-creating write, so no trim
+@move_dest.set(0, 'replaced')
+@move_dest.to_a
+#=> ['replaced', 'm2', 'm3', 'm4']
+
+## A pre-declared participation collection keeps its cap (participates_in does
+## not overwrite an existing accessor)
+@feed_owner.activity.max_length
+#=> 3
+
+## Participation writes go through the capped add path
+@feed_items.each { |item| @feed_owner.add_activity([item]) }
+@feed_owner.activity.members
+#=> ['fi2', 'fi3', 'fi4']
+
 ## max_length: 0 raises ArgumentError (would delete everything on every write)
 begin
   Familia::SortedSet.new 'test:maxlen:zero', max_length: 0
@@ -220,6 +335,10 @@ Familia.logger = @orig_logger
 @legacy_list.to_a
 #=> ['l1', 'l2', 'l3', 'l4']
 
+## The ignored :maxlength spelling is stripped, so the reader stays nil
+@legacy_list.max_length
+#=> nil
+
 @zs.delete!
 @zi.delete!
 @zb.delete!
@@ -231,6 +350,16 @@ Familia.logger = @orig_logger
 @one_zs.delete!
 @zd.delete!
 @zp.delete!
+@bulk_head.delete!
+@tx_list.delete!
+@tx_zs.delete!
+@ret_zs.delete!
+@move_src.delete!
+@move_dest.delete!
+@retro.delete!
+@feed_owner.activity.delete!
+@feed_owner.destroy!
+@feed_items.each(&:destroy!)
 @legacy_list.delete!
 @cb.events.delete!
 @cb.recent.delete!

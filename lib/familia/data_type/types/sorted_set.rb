@@ -402,7 +402,11 @@ module Familia
     def increment(val, by = 1)
       warn_if_dirty!
       # ZINCRBY creates the member if absent, so it is a capped path too.
-      ret = capped_zadd_write { |conn| conn.zincrby(dbkey, by, serialize_value(val)) }.to_f
+      ret = capped_zadd_write { |conn| conn.zincrby(dbkey, by, serialize_value(val)) }
+      # Inside a transaction or pipeline the write is a Redis::Future, which
+      # cannot be coerced until the block commits — pass it through untouched
+      # (same contract as #add). See Familia.positive? for the same idiom.
+      ret = ret.to_f unless ret.is_a?(Redis::Future)
       update_expiration
       ret
     end
