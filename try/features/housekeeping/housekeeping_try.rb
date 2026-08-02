@@ -141,13 +141,13 @@ rescue ArgumentError => e
 end
 #=> "chore name required"
 
-## chore registered without a block raises
+## chore registered without a callable or block raises
 begin
   HousekeepingOrg.chore(:no_block)
 rescue ArgumentError => e
   e.message
 end
-#=> "chore :no_block requires a block"
+#=> "chore :no_block requires a callable or block"
 
 ## chore registered with empty name raises
 begin
