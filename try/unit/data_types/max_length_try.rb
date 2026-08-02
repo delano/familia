@@ -28,6 +28,12 @@ end
 @zb = Familia::SortedSet.new 'test:maxlen:zb', max_length: 3
 @push_list = Familia::ListKey.new 'test:maxlen:push', max_length: 3
 @unshift_list = Familia::ListKey.new 'test:maxlen:unshift', max_length: 3
+@bulk_list = Familia::ListKey.new 'test:maxlen:bulk', max_length: 3
+@xlist = Familia::ListKey.new 'test:maxlen:x', max_length: 3
+@one_list = Familia::ListKey.new 'test:maxlen:one', max_length: 1
+@one_zs = Familia::SortedSet.new 'test:maxlen:onezs', max_length: 1
+@zd = Familia::SortedSet.new 'test:maxlen:zd', max_length: 3
+@zp = Familia::SortedSet.new 'test:maxlen:zp', max_length: 3
 
 ## Standalone SortedSet: add beyond cap keeps the 3 highest-scoring members
 @zs.add('a', 1)
@@ -102,6 +108,50 @@ end
 @cb.recent.to_a
 #=> ['r2', 'r3', 'r4']
 
+## Bulk push of more values than the cap in ONE call trims to the tail-N
+@bulk_list.push('b1', 'b2', 'b3', 'b4', 'b5')
+@bulk_list.to_a
+#=> ['b3', 'b4', 'b5']
+
+## pushx is NOT capped (documented): it appends to an existing list untrimmed
+@xlist.push('x1')
+@xlist.pushx('x2', 'x3', 'x4')
+@xlist.to_a
+#=> ['x1', 'x2', 'x3', 'x4']
+
+## unshiftx is NOT capped either
+@xlist.unshiftx('x0')
+@xlist.to_a
+#=> ['x0', 'x1', 'x2', 'x3', 'x4']
+
+## max_length: 1 on a list keeps exactly the newest element (no off-by-one)
+%w[o1 o2 o3].each { |v| @one_list.push(v) }
+@one_list.to_a
+#=> ['o3']
+
+## max_length: 1 on a sorted set keeps exactly the highest-scoring member
+@one_zs.update('s1' => 1, 's2' => 2, 's3' => 3)
+@one_zs.members
+#=> ['s3']
+
+## decrement creating an absent member is capped via the increment delegation
+@zd.update('d1' => 100, 'd2' => 200, 'd3' => 300)
+@zd.decrement('sinker', 50)
+@zd.members
+#=> ['d1', 'd2', 'd3']
+
+## decrement creating a member that ranks in-cap evicts the lowest
+@zd.decrement('d250', -250)
+@zd.members
+#=> ['d2', 'd250', 'd3']
+
+## Capped writes inside a pipeline issue bare commands and the cap still holds
+@cb.pipelined do |_conn|
+  5.times { |i| @zp.add("pl#{i}", i) }
+end
+@zp.members
+#=> ['pl2', 'pl3', 'pl4']
+
 ## max_length: 0 raises ArgumentError (would delete everything on every write)
 begin
   Familia::SortedSet.new 'test:maxlen:zero', max_length: 0
@@ -175,6 +225,12 @@ Familia.logger = @orig_logger
 @zb.delete!
 @push_list.delete!
 @unshift_list.delete!
+@bulk_list.delete!
+@xlist.delete!
+@one_list.delete!
+@one_zs.delete!
+@zd.delete!
+@zp.delete!
 @legacy_list.delete!
 @cb.events.delete!
 @cb.recent.delete!

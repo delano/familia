@@ -312,8 +312,9 @@ module Familia
         loop do
           new_cursor, pairs = scan(cursor, count: batch_size)
           # ZSCAN yields an Array of [member, score] pairs (not a Hash), so
-          # Hash#each_key would raise NoMethodError here.
-          pairs.each { |member, _score| block.call(member) }
+          # Hash#each_key would raise NoMethodError here. The cop cannot see
+          # that and its autocorrect breaks this loop — keep it disabled.
+          pairs.each { |member, _score| block.call(member) } # rubocop:disable Style/HashEachMethods
           cursor = new_cursor
           break if cursor.zero?
         end
@@ -399,6 +400,7 @@ module Familia
     end
 
     def increment(val, by = 1)
+      warn_if_dirty!
       # ZINCRBY creates the member if absent, so it is a capped path too.
       ret = capped_zadd_write { |conn| conn.zincrby(dbkey, by, serialize_value(val)) }.to_f
       update_expiration
@@ -870,12 +872,11 @@ module Familia
       # NX is mutually exclusive with GT
       raise ArgumentError, 'ZADD options NX and GT are mutually exclusive' if nx && gt
 
-      # NX is mutually exclusive with LT
+      # NX is mutually exclusive with LT.
+      # NOTE: XX + GT and XX + LT are valid combinations, so nothing to check.
       return unless nx && lt
 
       raise ArgumentError, 'ZADD options NX and LT are mutually exclusive'
-
-      # NOTE: XX + GT and XX + LT are valid combinations
     end
 
     Familia::DataType.register self, :sorted_set
