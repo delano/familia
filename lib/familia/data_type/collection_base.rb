@@ -117,18 +117,16 @@ module Familia
         # whichever path `each` yields the identifier through, loading works.
         record_class = @opts[:record_class] || @opts[:class]
         unless record_class.respond_to?(:load_multi)
-          raise Familia::Problem,
-'each_record requires a DataType with a :record_class (or :class) option that responds to load_multi'
+          raise Familia::Problem, 'each_record requires a DataType with a :record_class ' \
+                                  '(or :class) option that responds to load_multi'
         end
 
         # Validate batch_size and pipeline constraints
         unless batch_size.is_a?(Integer) && batch_size.positive?
-          raise ArgumentError,
-"batch_size must be a positive integer (got #{batch_size.inspect})"
+          raise ArgumentError, "batch_size must be a positive integer (got #{batch_size.inspect})"
         end
         unless pipeline.nil? || (pipeline.is_a?(Integer) && pipeline.positive?)
-          raise ArgumentError,
-"pipeline must be nil or a positive integer (got #{pipeline.inspect})"
+          raise ArgumentError, "pipeline must be nil or a positive integer (got #{pipeline.inspect})"
         end
         raise ArgumentError, "pipeline (#{pipeline}) cannot exceed batch_size (#{batch_size})" if pipeline&.> batch_size
 
