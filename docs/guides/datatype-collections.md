@@ -51,6 +51,15 @@ class Customer < Familia::Horreum
 end
 ```
 
+Every collection exposes the configured cap through `#max_length`, which returns `nil` when uncapped:
+
+```ruby
+customer.audit_events.max_length  #=> 10_000
+customer.tags.max_length          #=> nil
+```
+
+It is read-only: the cap is fixed at definition time so that validation can happen once, up front. To change it, redeclare the collection.
+
 ### SortedSet: top-N by score
 
 `max_length: N` retains the **N highest-scoring members** — the trim is `ZREMRANGEBYRANK key 0 -(N+1)`. This is "newest N" only when scores are timestamps; with arbitrary scores it is simply top-N by score. Capping applies to all member-creating paths: `add` (and `<<` / `[]=`), `update` / `merge!`, and `increment` / `decrement` (ZINCRBY creates the member if absent). The trim runs unconditionally after the write, which is a cheap no-op when under the cap and harmless when a conditional `nx:`/`xx:`/`gt:`/`lt:` add skipped the write.
@@ -68,7 +77,35 @@ Standalone, each write+trim pair is wrapped in its own `MULTI`, so a crash canno
 
 ### What is not capped
 
-Writes that bypass the instance's write methods are out of scope: `unionstore` / `interstore` / `diffstore` destination keys, `RESTORE`, and any external client writing the key directly. The cap re-asserts itself on the next capped write.
+Writes that bypass the instance's write methods are out of scope: `unionstore` / `interstore` / `diffstore` destination keys, `RESTORE`, and any external client writing the key directly.
+
+`ListKey` also leaves its conditional and positional writers uncapped by design, since none of them is an append in the sense the per-end trim assumes:
+
+- `pushx` / `unshiftx` — conditional appends that no-op on a missing key.
+- `insert` (LINSERT) and `set` (LSET) — position-relative writes.
+- `move` (LMOVE) when this list is the **destination**; the cap belongs to the method being called, and `move` is called on the source.
+
+Adding `max_length:` to a collection that is already over the cap does not trim it retroactively — nothing runs at definition time. In every case the cap re-asserts itself on the next capped write; call `push`/`add` once (or trim manually) if you need it enforced sooner.
+
+### Capping a `participates_in` collection
+
+`participates_in` takes no `max_length:` option, but it does not overwrite a collection you declared yourself — `ensure_collection_field` returns early when the accessor already exists. Declare the collection with the cap **before** the `participates_in` that targets it, and participation writes are capped like any other:
+
+```ruby
+class Owner < Familia::Horreum
+  identifier_field :owner_id
+  field :owner_id
+  # Must come first — participates_in skips a collection that already exists
+  sorted_set :activity, max_length: 1000, record_class: 'FeedItem'
+end
+
+class FeedItem < Familia::Horreum
+  feature :relationships
+  participates_in Owner, :activity, score: :created_at
+end
+```
+
+Pass `record_class:` yourself when you pre-declare, since you are replacing the declaration participation would otherwise have made — without it, `each_record` on the collection has nothing to hydrate.
 
 ### Validation and the old `:maxlength` spelling
 

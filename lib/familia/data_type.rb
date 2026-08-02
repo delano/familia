@@ -283,6 +283,22 @@ module Familia
     end
     private :validate_dirty_write_warnings!
 
+    # The configured cap, or nil when this collection is uncapped.
+    #
+    # Defined on every DataType, not just the capping ones: a caller holding a
+    # generic collection can ask without first checking the type, and types
+    # that do not support :max_length can never have one (initialize raises).
+    #
+    # @example
+    #   customer.events.max_length  #=> 3
+    #   customer.tags.max_length    #=> nil
+    #
+    # @return [Integer, nil] The positive cap, or nil if uncapped
+    #
+    def max_length
+      @opts && @opts[:max_length]
+    end
+
     # @raise [ArgumentError] if value is present and not a positive Integer,
     #   or if this DataType does not implement max_length trimming
     def validate_max_length!(value)
