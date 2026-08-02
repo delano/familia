@@ -235,6 +235,43 @@ module Familia
     end
     alias ltrim trim
 
+    # Trims an already-oversized list down to its :max_length cap. Capped
+    # writes enforce the cap going forward, but nothing runs at definition
+    # time: adding max_length: to a live collection leaves the existing
+    # overage in place until the next push/unshift. Call this once, e.g. as
+    # a migration step, to enforce the cap immediately.
+    #
+    # The cap's per-end semantics belong to the write method (push keeps the
+    # tail, unshift keeps the head), so a manual trim must be told which end
+    # to keep: keep: :tail matches a push-fed list (the default),
+    # keep: :head an unshift-fed one.
+    #
+    # LLEN and LTRIM run in one MULTI so the removed count is exact even
+    # under concurrent writes. Inside a caller transaction or pipeline the
+    # pair is queued bare and the pre-trim length's future is returned
+    # instead of a count.
+    #
+    # @param keep [:tail, :head] which end of the list survives the trim
+    # @return [Integer] number of elements removed (0 when already within cap)
+    # @raise [Familia::Problem] when the collection has no :max_length
+    def enforce_max_length!(keep: :tail)
+      max = require_max_length!
+      start, stop = case keep
+                    when :tail then [-max, -1]
+                    when :head then [0, max - 1]
+                    else
+                      raise ArgumentError, "keep must be :tail or :head, got #{keep.inspect}"
+      end
+      warn_if_dirty!
+      length = execute_capped_write do |conn|
+        ret = conn.llen(dbkey)
+        conn.ltrim(dbkey, start, stop)
+        ret
+      end
+      update_expiration
+      length.is_a?(Integer) ? [length - max, 0].max : length
+    end
+
     # Sets the element at the specified index
     # @param index [Integer] Index to set (0-based, negative counts from end)
     # @param value The value to set

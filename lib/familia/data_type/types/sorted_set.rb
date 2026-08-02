@@ -392,6 +392,25 @@ module Familia
       ret
     end
 
+    # Trims an already-oversized sorted set down to its :max_length cap,
+    # keeping the max_length highest-scoring members — the same trim every
+    # capped write applies (ZREMRANGEBYRANK 0 -(max_length+1)).
+    #
+    # Capped writes enforce the cap going forward, but nothing runs at
+    # definition time: adding max_length: to a live collection leaves the
+    # existing overage in place until the next write. Call this once, e.g.
+    # as a migration step, to enforce the cap immediately.
+    #
+    # @return [Integer] number of members removed (0 when already within cap)
+    # @raise [Familia::Problem] when the collection has no :max_length
+    def enforce_max_length!
+      max = require_max_length!
+      warn_if_dirty!
+      removed = dbclient.zremrangebyrank(dbkey, 0, -(max + 1))
+      update_expiration
+      removed
+    end
+
     def remrangebyscore(sscore, escore)
       warn_if_dirty!
       ret = dbclient.zremrangebyscore dbkey, sscore, escore

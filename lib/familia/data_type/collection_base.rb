@@ -37,7 +37,9 @@ module Familia
 
       # Executes a member-creating write followed by its cap-enforcing trim,
       # keeping the pair atomic when possible. Used by the :max_length paths
-      # in SortedSet and ListKey (see DataType.supports_max_length?).
+      # in SortedSet and ListKey (see DataType.supports_max_length?), and by
+      # ListKey#enforce_max_length! (there the first command is an LLEN so
+      # the removed count can be derived from the pre-trim length).
       #
       # The block receives a connection and must issue the write, then the
       # trim, and return the write command's result. Three contexts:
@@ -62,6 +64,19 @@ module Familia
         transaction(&).results.first
       end
       private :execute_capped_write
+
+      # Returns the configured :max_length cap, raising when the collection is
+      # uncapped. Guard for #enforce_max_length!: a migration step that expects
+      # to trim must fail loudly instead of silently doing nothing.
+      #
+      # @return [Integer] the configured cap
+      # @raise [Familia::Problem] when no :max_length option is set
+      def require_max_length!
+        @opts[:max_length] || raise(Familia::Problem,
+                                    "#{self.class.name}#enforce_max_length! requires the " \
+                                    ":max_length option (#{dbkey} is uncapped)")
+      end
+      private :require_max_length!
 
       # Iterates over identifiers, loading each as a Horreum record.
       #
