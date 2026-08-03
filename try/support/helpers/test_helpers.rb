@@ -27,6 +27,52 @@ def generate_random_email
   "#{username}@#{domain}"
 end
 
+# Scoped cleanup for tryout files sharing the test server (issue #283).
+#
+# Every try file talks to the same Valkey/Redis instance (logical db 0
+# unless a model overrides it), and the runner may execute files in
+# parallel. A FLUSHDB in one file erases another file's live data
+# mid-run, so test files must never flush. Delete only the keys the
+# file itself creates instead:
+#
+#   delete_test_dbkeys(Widget241, DwModeModel)      # by model class
+#   delete_test_dbkeys('widget282*')                # by key pattern
+#   delete_test_dbkeys('test:*', client: source)    # explicit connection
+#
+# A Familia::Horreum subclass contributes the pattern "<prefix>:*" and
+# is cleaned through its own #dbclient, so logical_database is
+# respected. A String is used verbatim as a SCAN MATCH pattern against
+# +client+ (default Familia.dbclient). Keys are discovered with SCAN and
+# removed with DEL, so nothing outside the given patterns is touched.
+#
+# Keep patterns tight: a prefix shared with another try file (grep for
+# the class name first) means you must scope down to the exact
+# identifiers this file writes.
+#
+# @return [Integer] total number of keys deleted
+def delete_test_dbkeys(*targets, client: nil)
+  targets.sum do |target|
+    if target.is_a?(Class) && target <= Familia::Horreum
+      scan_and_delete_dbkeys("#{target.prefix}#{Familia.delim}*", target.dbclient)
+    else
+      scan_and_delete_dbkeys(target.to_s, client || Familia.dbclient)
+    end
+  end
+end
+
+# SCAN+DEL every key matching +pattern+ on +dbclient+. Building block
+# for #delete_test_dbkeys; prefer that entry point in test files.
+def scan_and_delete_dbkeys(pattern, dbclient)
+  deleted = 0
+  cursor = '0'
+  loop do
+    cursor, keys = dbclient.scan(cursor, match: pattern, count: 1000)
+    deleted += dbclient.del(*keys) unless keys.empty?
+    break if cursor == '0'
+  end
+  deleted
+end
+
 class Bone < Familia::Horreum
   using Familia::Refinements::TimeLiterals
 
