@@ -67,6 +67,9 @@ module Familia
     #
     #   # Query with permission filtering (atomic flags only, never role names)
     #   customer.domains_with_permission(:read)
+    #   customer.domains_with_permission(:read, limit: 50, offset: 50)  # bounded page (batch_size: kwarg too)
+    #   customer.each_domains_with_permission(:read) { |id| ... }       # ZSCAN stream, O(1) memory;
+    #                                                                   # Enumerator without a block
     #
     # @example Multi-collection operations
     #   # A participant carries a reverse index of every collection it is in,
