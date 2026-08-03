@@ -249,7 +249,9 @@ collection_name: collection_name)
           # Creates: customer.domains_with_permission(min_level)
           #
           # min_permission takes an atomic PERMISSION_FLAG (:read, :write,
-          # :delete, ...). It is forwarded to ScoreEncoding.permission?, so a
+          # :delete, ...). It is validated eagerly (before the limit: 0
+          # shortcut and any scan, so it raises even on an empty collection)
+          # and forwarded per-member to ScoreEncoding.permission?, so a
           # PERMISSION_ROLE (:viewer, :editor, :moderator) raises ArgumentError
           # rather than being expanded to its bits -- deliberately, since
           # permission? tests bits individually and would answer "holds any of
@@ -273,6 +275,7 @@ collection_name: collection_name)
             method_name = "#{collection_name}_with_permission"
 
             target_class.define_method(method_name) do |min_permission = :read, limit: nil, offset: 0, batch_size: 500|
+              TargetMethods::Builder.validate_min_permission!(min_permission)
               TargetMethods::Builder.validate_permission_query_args!(
                 limit: limit, offset: offset, batch_size: batch_size,
               )
@@ -283,6 +286,17 @@ collection_name: collection_name)
                 limit: limit, offset: offset, batch_size: batch_size
               )
             end
+          end
+
+          # Validate min_permission eagerly, before any shortcut or scan loop,
+          # so an invalid flag raises even when limit: 0 or the collection is
+          # empty -- the lazy per-member permission? check never runs in those
+          # cases. Delegates to permission_level_value so the role-vs-flag
+          # ArgumentError message stays identical to the per-member path.
+          # @api private
+          def self.validate_min_permission!(min_permission)
+            ScoreEncoding.permission_level_value(min_permission)
+            nil
           end
 
           # Validate the pagination kwargs for *_with_permission (issue #309).
@@ -376,6 +390,7 @@ collection_name: collection_name)
             method_name = "each_#{collection_name}_with_permission"
 
             target_class.define_method(method_name) do |min_permission = :read, batch_size: 100, &block|
+              TargetMethods::Builder.validate_min_permission!(min_permission)
               unless batch_size.is_a?(Integer) && batch_size.positive?
                 raise ArgumentError, "batch_size must be a positive integer (got #{batch_size.inspect})"
               end
