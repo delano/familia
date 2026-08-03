@@ -68,7 +68,9 @@ module Familia
       #       score: -> { permission_encode(created_at, permission_bits) }
       #   end
       #
-      #   customer.domains_with_permission(:read)  # → filtered by score
+      #   customer.domains_with_permission(:read)                    # → filtered by score
+      #   customer.domains_with_permission(:read, limit: 50)         # → bounded (offset:, batch_size: kwargs)
+      #   customer.each_domains_with_permission(:read) { |id| ... }  # → ZSCAN stream, O(1) memory
       #
       # Key Differences from Indexing:
       # - Participation: Bidirectional relationships with semantic scores

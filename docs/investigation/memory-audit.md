@@ -281,6 +281,11 @@ expiring models and add a `*:rebuild:*` sweep + a TTL on temp keys.
 
 ## Issue #309 — focused diagnosis and fix design
 
+> **Status: fixed.** Shipped on branch `fix/309-collection-with-permission-perf`,
+> implementing the design below — additive `limit:`/`offset:`/`batch_size:`
+> kwargs on the Array-returning method (internal `ZRANGEBYSCORE … LIMIT` paging)
+> plus the ZSCAN-backed `each_<collection>_with_permission` enumerator.
+
 **What it is.** The generated `<collection>_with_permission(min_permission)`
 (`target_methods.rb:230-248`) issues one `ZRANGEBYSCORE key -inf +inf WITHSCORES`,
 materializing the **entire** sorted set as a Ruby array of `[member, score]` pairs

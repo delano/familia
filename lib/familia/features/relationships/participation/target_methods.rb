@@ -27,7 +27,8 @@ module Familia
         # ├── add_domains_instance(domain, score)  # Add one domain to my collection
         # ├── remove_domains_instance(domain)      # Remove one domain from my collection
         # ├── add_domains([...])                   # Bulk add domains
-        # └── domains_with_permission(flag)        # Query by permission flag (sorted_set only)
+        # ├── domains_with_permission(flag)        # Query by permission flag (sorted_set only)
+        # └── each_domains_with_permission(flag)   # Stream by permission flag via ZSCAN (sorted_set only)
         module Builder
           extend CollectionOperations
 
@@ -80,6 +81,7 @@ module Familia
             return unless type == :sorted_set
 
             build_permission_query(target_class, collection_name)
+            build_permission_enumerator(target_class, collection_name)
           end
 
           # Build class-level collection methods (for class_participates_in)
@@ -247,7 +249,9 @@ collection_name: collection_name)
           # Creates: customer.domains_with_permission(min_level)
           #
           # min_permission takes an atomic PERMISSION_FLAG (:read, :write,
-          # :delete, ...). It is forwarded to ScoreEncoding.permission?, so a
+          # :delete, ...). It is validated eagerly (before the limit: 0
+          # shortcut and any scan, so it raises even on an empty collection)
+          # and forwarded per-member to ScoreEncoding.permission?, so a
           # PERMISSION_ROLE (:viewer, :editor, :moderator) raises ArgumentError
           # rather than being expanded to its bits -- deliberately, since
           # permission? tests bits individually and would answer "holds any of
@@ -255,23 +259,164 @@ collection_name: collection_name)
           # mean (:edit, not :editor). :admin names a flag as well as a role and
           # so resolves to bit 7 alone; see the "Flags versus roles" section in
           # ScoreEncoding for the full rationale.
+          # Pagination is additive and backward compatible: the default call
+          # (no kwargs) returns the same Array as before, but pages internally
+          # so peak intermediate memory is O(batch_size) instead of O(N)
+          # (issue #309).
+          #
+          # @param limit [Integer, nil] Max matching members to return
+          #   (nil = no cap; all pages are scanned but memory stays bounded).
+          # @param offset [Integer] Matching members to skip, applied
+          #   POST-FILTER (skips members that pass the permission test, not
+          #   raw sorted-set entries).
+          # @param batch_size [Integer] Page size for the internal
+          #   ZRANGEBYSCORE ... LIMIT loop.
           def self.build_permission_query(target_class, collection_name)
             method_name = "#{collection_name}_with_permission"
 
-            target_class.define_method(method_name) do |min_permission = :read|
-              collection = send(collection_name)
+            target_class.define_method(method_name) do |min_permission = :read, limit: nil, offset: 0, batch_size: 500|
+              TargetMethods::Builder.validate_min_permission!(min_permission)
+              TargetMethods::Builder.validate_permission_query_args!(
+                limit: limit, offset: offset, batch_size: batch_size,
+              )
+              return [] if limit&.zero?
 
-              # Permission bits are encoded in the FRACTIONAL part of each score
-              # (see ScoreEncoding) and do not form a contiguous range, so a
-              # score-range query (e.g. ZRANGEBYSCORE x +inf) cannot filter by
-              # permission -- it would match members regardless of their bits.
-              # Fetch every member with its score and test the bits per-member.
-              raw_pairs = collection.rangebyscoreraw('-inf', '+inf', with_scores: true)
-              raw_pairs.each_with_object([]) do |(raw_member, score), kept|
-                next unless ScoreEncoding.permission?(score, min_permission)
+              TargetMethods::Builder.filter_by_permission(
+                send(collection_name), min_permission,
+                limit: limit, offset: offset, batch_size: batch_size
+              )
+            end
+          end
 
-                kept << collection.deserialize_value(raw_member)
+          # Validate min_permission eagerly, before any shortcut or scan loop,
+          # so an invalid flag raises even when limit: 0 or the collection is
+          # empty -- the lazy per-member permission? check never runs in those
+          # cases. Delegates to permission_level_value so the role-vs-flag
+          # ArgumentError message stays identical to the per-member path.
+          # @api private
+          def self.validate_min_permission!(min_permission)
+            ScoreEncoding.permission_level_value(min_permission)
+            nil
+          end
+
+          # Validate the pagination kwargs for *_with_permission (issue #309).
+          # Mirrors the validation style in CollectionBase#each_record.
+          # @api private
+          def self.validate_permission_query_args!(limit:, offset:, batch_size:)
+            unless batch_size.is_a?(Integer) && batch_size.positive?
+              raise ArgumentError, "batch_size must be a positive integer (got #{batch_size.inspect})"
+            end
+            unless offset.is_a?(Integer) && !offset.negative?
+              raise ArgumentError, "offset must be a non-negative integer (got #{offset.inspect})"
+            end
+            return if limit.nil? || (limit.is_a?(Integer) && !limit.negative?)
+
+            raise ArgumentError, "limit must be nil or a non-negative integer (got #{limit.inspect})"
+          end
+
+          # Collect members whose scores carry min_permission, in score order,
+          # applying offset (POST-FILTER: counts members that pass the
+          # permission test, not raw entries) and limit.
+          # @api private
+          def self.filter_by_permission(collection, min_permission, limit:, offset:, batch_size:)
+            matches = []
+            skipped = 0
+
+            each_permitted_pair(collection, min_permission, batch_size) do |raw_member, _score|
+              if skipped < offset
+                skipped += 1
+                next
               end
+
+              matches << collection.deserialize_value(raw_member)
+              return matches if limit && matches.size >= limit
+            end
+
+            matches
+          end
+
+          # Yield [raw_member, score] pairs holding min_permission, one
+          # ZRANGEBYSCORE page at a time so peak memory is O(batch_size).
+          #
+          # Permission bits are encoded in the FRACTIONAL part of each score
+          # (see ScoreEncoding) and do not form a contiguous range, so a
+          # score-range query (e.g. ZRANGEBYSCORE x +inf) cannot filter by
+          # permission -- it would match members regardless of their bits.
+          # Fetch members page by page and test the bits per-member.
+          #
+          # Pagination is offset-based (LIMIT page*batch_size, batch_size) on
+          # purpose. Do NOT switch to score-cursor pagination with an
+          # exclusive bound ("(#{score}"): encode_score truncates timestamps
+          # to integer seconds, so members added in the same second with the
+          # same permission bits share IDENTICAL scores, and an exclusive
+          # bound would silently drop members straddling a page boundary. The
+          # O(N²/batch) deep-offset CPU cost is the accepted trade for
+          # correctness and bounded memory.
+          # @api private
+          def self.each_permitted_pair(collection, min_permission, batch_size)
+            page = 0
+
+            loop do
+              raw_pairs = collection.rangebyscoreraw(
+                '-inf', '+inf',
+                limit: [page * batch_size, batch_size], with_scores: true
+              )
+              break if raw_pairs.empty?
+
+              raw_pairs.each do |raw_member, score|
+                yield raw_member, score if ScoreEncoding.permission?(score, min_permission)
+              end
+
+              break if raw_pairs.size < batch_size
+
+              page += 1
+            end
+          end
+
+          # Build streaming permission query for sorted sets (issue #309)
+          # Creates: customer.each_domains_with_permission(min_level) { |d| ... }
+          #
+          # Streams members via ZSCAN, so retained memory is O(1) regardless
+          # of collection size. ZSCAN trade-offs (vs the Array-returning
+          # <collection>_with_permission):
+          # - Iteration order is UNORDERED (not score order).
+          # - Delivery is at-least-once: a member may be yielded more than
+          #   once if the sorted set is rehashed mid-scan (duplicates
+          #   possible); members present for the whole scan are never missed.
+          #
+          # min_permission semantics match build_permission_query above:
+          # atomic PERMISSION_FLAGs only, roles raise ArgumentError.
+          def self.build_permission_enumerator(target_class, collection_name)
+            method_name = "each_#{collection_name}_with_permission"
+
+            target_class.define_method(method_name) do |min_permission = :read, batch_size: 100, &block|
+              TargetMethods::Builder.validate_min_permission!(min_permission)
+              unless batch_size.is_a?(Integer) && batch_size.positive?
+                raise ArgumentError, "batch_size must be a positive integer (got #{batch_size.inspect})"
+              end
+
+              unless block
+                return to_enum(:"each_#{collection_name}_with_permission", min_permission, batch_size: batch_size)
+              end
+
+              collection = send(collection_name)
+              cursor = 0
+              loop do
+                cursor, pairs = collection.scan(cursor, count: batch_size)
+                # ZSCAN yields an Array of [member, score] pairs (not a Hash);
+                # SortedSet#scan already deserializes members and coerces
+                # scores to Float, so yield the member directly. NB: if this
+                # loop ever stops using `score`, Style/HashEachMethods will
+                # want to autocorrect it to each_key, which raises
+                # NoMethodError on an Array — disable the cop, don't obey it
+                # (see the guard in SortedSet#each).
+                pairs.each do |member, score|
+                  block.call(member) if ScoreEncoding.permission?(score, min_permission)
+                end
+                break if cursor.zero?
+              end
+
+              self
             end
           end
 

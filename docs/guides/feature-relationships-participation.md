@@ -91,6 +91,20 @@ participates_in Customer, :domains, score: -> {
 customer.domains_with_permission(:read)  # Query by permission
 ```
 
+Permission bits live in the fractional part of the score and are not a
+contiguous range, so filtering is always client-side; the query pages
+internally (`batch_size:`, default 500). `limit:` and `offset:` count
+*matching* members (post-filter), enabling pagination in score order. For
+O(1)-memory streaming over large collections, the `each_` sibling walks the
+set with `ZSCAN` (unordered, at-least-once delivery) and returns an
+`Enumerator` when called without a block:
+
+```ruby
+customer.domains_with_permission(:write, limit: 50)              # first 50 matches
+customer.domains_with_permission(:write, limit: 50, offset: 50)  # next page
+customer.each_domains_with_permission(:read) { |id| ... }        # stream, O(1) memory
+```
+
 ## Class-Level Participation
 
 Track all instances automatically:
