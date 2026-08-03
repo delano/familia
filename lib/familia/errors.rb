@@ -128,21 +128,29 @@ module Familia
   # fail-closed ordering in ADR-0002. Use multi_field_update, save_fields,
   # or save for indexed fields.
   class IndexedFieldFastWriteError < PersistenceError
-    attr_reader :field, :index_name
+    attr_reader :field, :index_name, :offenders
 
-    def initialize(field, index_name)
+    # @param field [Symbol] the (first) offending field
+    # @param index_name [Symbol] the index that field backs
+    # @param offenders [Array<Array(Symbol, Symbol)>, nil] every
+    #   (field, index_name) pair the caller found. The message names them
+    #   all, so a batch write with several indexed fields is diagnosed in
+    #   one pass instead of one retry per field. field/index_name stay the
+    #   first pair for callers that predate the batch guard.
+    def initialize(field, index_name, offenders: nil)
       @field = field
       @index_name = index_name
+      @offenders = offenders || [[field, index_name]]
       super(build_message)
     end
 
     private
 
     def build_message
-      "Cannot fast-write #{field}: it backs the class-level index " \
-        "#{index_name}, which a single HMSET cannot maintain (ADR-0002). " \
-        'Use multi_field_update or save so the index is claimed and updated ' \
-        'with the hash write.'
+      described = offenders.map { |f, idx| "#{f} (backs #{idx})" }.join(', ')
+      "Cannot fast-write #{described}: a class-level index cannot be " \
+        'maintained by a single HMSET (ADR-0002). Use multi_field_update ' \
+        'or save so the index is claimed and updated with the hash write.'
     end
   end
 

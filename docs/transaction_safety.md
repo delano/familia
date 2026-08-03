@@ -45,6 +45,8 @@ end
 
 **Implementation**: `save` — and the partial writers `commit_fields`, `save_fields`, and `multi_field_update` — automatically guard and claim BEFORE starting their internal transaction, then re-affirm the claim inside it.
 
+**Scope note**: `save_fields` and `multi_field_update` guard and claim only the indexes covering the fields being written. `commit_fields` writes the full hash, so it guards and claims EVERY class-level unique index — one CAS round-trip per index — even when the indexed value is unchanged (an unchanged value resolves as `:owned` and succeeds). If you are updating a small set of non-indexed fields on a class with several unique indexes, `save_fields`/`multi_field_update` avoid those extra round-trips.
+
 ### 3. Create with Success Callback
 
 **Pattern**: Use the block form of `create!` for additional operations:
@@ -75,7 +77,16 @@ end
 
 ### 5. Handling Nested Transactions
 
-**Behavior**: Familia uses reentrant transactions. If you're already in a transaction, nested transaction calls reuse the same connection.
+**Behavior**: Familia uses reentrant transactions (see
+`TransactionCore.execute_normal_transaction`). If you're already in a
+transaction, a nested `transaction` call does not open a new MULTI/EXEC — it
+yields the outer transaction's connection, so the nested block's commands are
+queued into the outer MULTI and commit (or fail) with the outer EXEC.
+
+Nesting itself never raises. The `Familia::OperationModeError` cases described
+elsewhere in this document come from *what* runs inside a transaction (`save`,
+`create!`, partial writes on unique-indexed fields) or from connection handlers
+that do not support transactions — not from nested `transaction` calls.
 
 ```ruby
 Customer.transaction do |conn|

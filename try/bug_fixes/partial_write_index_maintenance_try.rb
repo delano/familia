@@ -36,8 +36,36 @@ class ::PartialIdxBucket < Familia::Horreum
   multi_index :status, :status_index
 end
 
+# Two unique indexes, so a fast write can offend on more than one field at
+# once (the error must name them all, not just the first).
+class ::PartialIdxDouble < Familia::Horreum
+  feature :relationships
+  include Familia::Features::Relationships::Indexing
+
+  identifier_field :did
+  field :did
+  field :email
+  field :username
+  field :note
+
+  unique_index :email, :em_lookup
+  unique_index :username, :un_lookup
+end
+
+# objid's setter has a Redis side effect (objid_lookup HDEL) that the
+# multi_field_update rollback cannot restore -- the field must be refused.
+class ::PartialIdxOwner < Familia::Horreum
+  feature :object_identifier
+
+  identifier_field :pid
+  field :pid
+  field :label
+end
+
 cleanup_keys = Familia.dbclient.keys('partial_idx_user:*') +
-               Familia.dbclient.keys('partial_idx_bucket:*')
+               Familia.dbclient.keys('partial_idx_bucket:*') +
+               Familia.dbclient.keys('partial_idx_double:*') +
+               Familia.dbclient.keys('partial_idx_owner:*')
 Familia.dbclient.del(*cleanup_keys) if cleanup_keys.any?
 
 def hmset_calls
@@ -132,6 +160,86 @@ Familia.dbclient.hget(@u1.dbkey, 'email')
 [@u1.email, @u1.dirty?(:email)]
 #=> ["pw1-d@example.com", false]
 
+## a mixed indexed/non-indexed multi_field_update that loses the claim
+## rolls back ALL fields (non-indexed included) and touches no hash field:
+## the claim runs before the MULTI, so nothing was queued for either field
+begin
+  @u1.multi_field_update(email: 'pw1-c@example.com', nickname: 'diverged')
+rescue Familia::RecordExistsError
+  nil
+end
+[@u1.email, @u1.nickname, @u1.dirty?(:email), @u1.dirty?(:nickname),
+ Familia.dbclient.hget(@u1.dbkey, 'email'), Familia.dbclient.hget(@u1.dbkey, 'nickname')]
+#=> ["pw1-d@example.com", nil, false, false, '"pw1-d@example.com"', nil]
+
+# =============================================
+# 2b. Failed transactions do not leak index claims
+# =============================================
+# The unique-index claim is a pre-MULTI CAS that writes the index entry
+# itself, so a transaction that never lands must release the entries it
+# created -- otherwise the index maps a value to a hash state that was
+# never stored. Once EXEC runs, every queued command executed, so an
+# errors?-result is ambiguous and the claim is deliberately KEPT.
+
+## an aborted transaction (EXEC never ran) releases the created claim and
+## rolls multi_field_update's in-memory state back; the old entry survives
+@u3 = PartialIdxUser.new(uid: 'pw3', email: 'pw3-a@example.com')
+@u3.save
+def @u3.transaction(*) = Familia::MultiResult.new(nil)
+@u3.multi_field_update(email: 'pw3-b@example.com')
+[@u3.email, PartialIdxUser.email_lookup.get('pw3-b@example.com'),
+ PartialIdxUser.email_lookup.get('pw3-a@example.com')]
+#=> ["pw3-a@example.com", nil, "pw3"]
+
+## commit_fields releases its created claim on abort too; the in-memory
+## value stays set and dirty (documented divergence -- the caller set it)
+@u3.email = 'pw3-e@example.com'
+@u3.commit_fields
+[@u3.email, @u3.dirty?(:email), PartialIdxUser.email_lookup.get('pw3-e@example.com')]
+#=> ["pw3-e@example.com", true, nil]
+
+## save_fields releases its created claim on abort, same divergence rule
+@u3.refresh
+@u3.email = 'pw3-f@example.com'
+@u3.save_fields(:email)
+[@u3.email, PartialIdxUser.email_lookup.get('pw3-f@example.com')]
+#=> ["pw3-f@example.com", nil]
+
+## a transaction that raises (MULTI discarded before EXEC) releases the
+## claim before restoring and propagating
+@u3.refresh
+def @u3.transaction(*) = raise(Familia::Problem, 'forced failure')
+begin
+  @u3.multi_field_update(email: 'pw3-c@example.com')
+rescue Familia::Problem
+  nil
+end
+[@u3.email, PartialIdxUser.email_lookup.get('pw3-c@example.com')]
+#=> ["pw3-a@example.com", nil]
+
+## executed-with-errors is ambiguous: EXEC ran every queued command, so the
+## hash write may have landed and the claim entry may be the record's valid
+## mapping. The claim is KEPT (a leaked claim is recoverable; deleting a
+## valid entry is not) while the in-memory state still rolls back.
+def @u3.transaction(*) = Familia::MultiResult.new([StandardError.new('boom')])
+@u3.multi_field_update(email: 'pw3-g@example.com')
+[@u3.email, PartialIdxUser.email_lookup.get('pw3-g@example.com')]
+#=> ["pw3-a@example.com", "pw3"]
+
+## the kept claim blocks other records from taking the value in the window
+@u5 = PartialIdxUser.new(uid: 'pw5', email: 'pw3-g@example.com')
+@u5.save
+#=!> Familia::RecordExistsError
+
+## the owner reconciles by saving the value for real: the kept claim
+## becomes its valid index entry
+@u3.singleton_class.send(:remove_method, :transaction)
+@u3.email = 'pw3-g@example.com'
+@u3.save
+[PartialIdxUser.find_by_email('pw3-g@example.com')&.uid,
+ Familia.dbclient.hget(@u3.dbkey, 'email')]
+#=> ["pw3", '"pw3-g@example.com"']
+
 # =============================================
 # 3. multi_field_fast_write refuses indexed fields
 # =============================================
@@ -159,6 +267,17 @@ rescue Familia::IndexedFieldFastWriteError => e
   [e.field, e.index_name]
 end
 #=> [:email, :email_lookup]
+
+## with several indexed fields the ONE error names them all (no discovery
+## by retry); field/index_name stay the first pair for older callers
+@d1 = PartialIdxDouble.new(did: 'pwd1', email: 'd@example.com', username: 'du')
+begin
+  @d1.multi_field_fast_write(email: 'x@example.com', username: 'dv', note: 'ok')
+rescue Familia::IndexedFieldFastWriteError => e
+  [e.field, e.index_name, e.offenders,
+   e.message.include?('email'), e.message.include?('username')]
+end
+#=> [:email, :em_lookup, [[:email, :em_lookup], [:username, :un_lookup]], true, true]
 
 ## non-indexed fields still fast-write with a single HMSET
 @before = hmset_calls
@@ -318,9 +437,38 @@ Familia::RecordExistsError.new('some:key', existing_id: 'pw2').message
 Familia::RecordExistsError.new('some:key', existing_id: @weird).message
 #=> "Key already exists: some:key"
 
+# =============================================
+# 8. multi_field_update refuses objid/extid fields
+# =============================================
+# The objid setter HDELs the old value from the class-level objid_lookup
+# hash. That side effect survives the snapshot rollback, so a failed
+# update would strip the persisted identifier's lookup entry -- and even a
+# successful partial write never re-adds the mapping (only save and
+# save_if_not_exists do). Fail-closed, like transient fields.
+
+## setup: a saved owner resolves through its objid_lookup mapping
+@o1 = PartialIdxOwner.new(pid: 'po1', label: 'one')
+@o1.save
+@orig_objid = @o1.objid
+PartialIdxOwner.objid_lookup[@orig_objid]
+#=> "po1"
+
+## objid is refused up front by multi_field_update
+@o1.multi_field_update(objid: 'replacement-objid', label: 'two')
+#=!> ArgumentError
+
+## the refusal ran before any setter: objid unchanged, mapping intact, and
+## the non-identifier field in the same batch was not applied either
+[@o1.objid == @orig_objid, PartialIdxOwner.objid_lookup[@orig_objid], @o1.label]
+#=> [true, "po1", "one"]
+
 @u1.destroy! rescue nil
 @u2.destroy! rescue nil
+@u3.destroy! rescue nil
 @c1.destroy! rescue nil
+@o1.destroy! rescue nil
 cleanup_keys = Familia.dbclient.keys('partial_idx_user:*') +
-               Familia.dbclient.keys('partial_idx_bucket:*')
+               Familia.dbclient.keys('partial_idx_bucket:*') +
+               Familia.dbclient.keys('partial_idx_double:*') +
+               Familia.dbclient.keys('partial_idx_owner:*')
 Familia.dbclient.del(*cleanup_keys) if cleanup_keys.any?
