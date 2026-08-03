@@ -55,6 +55,55 @@ provider.derive_key(master_key, context, personal: "bad\0personal")
 #=!> Familia::EncryptionError
 #==> error.message.include?('null bytes')
 
+## XChaCha20Poly1305 key derivation rejects a >16-byte personalization with a
+## clean EncryptionError instead of surfacing RbNaCl::LengthError (#333)
+provider = Familia::Encryption::Providers::XChaCha20Poly1305Provider.new
+provider.derive_key('a' * 32, 'test-context', personal: 'x' * 17)
+#=!> Familia::EncryptionError
+#==> error.message.include?('16 bytes')
+
+## XChaCha20Poly1305 exposes the decrypt candidate list: current first, then
+## history, ending with the built-in legacy personalization (#333)
+provider = Familia::Encryption::Providers::XChaCha20Poly1305Provider.new
+@op = Familia.config.encryption_personalization
+@oh = Familia.config.encryption_personalization_history
+Familia.config.encryption_personalization = 'ProviderTry'
+Familia.config.encryption_personalization_history = ['OldProviderTry']
+@candidates = provider.personalizations
+Familia.config.encryption_personalization = @op
+Familia.config.encryption_personalization_history = @oh
+@candidates
+#=> ['ProviderTry', 'OldProviderTry', 'FamilialMatters']
+
+## XChaCha20Poly1305 current_personalization returns the configured write-path
+## value, not the candidate list head (#333)
+provider = Familia::Encryption::Providers::XChaCha20Poly1305Provider.new
+@op = Familia.config.encryption_personalization
+Familia.config.encryption_personalization = 'WritePathValue'
+@current = provider.current_personalization
+Familia.config.encryption_personalization = @op
+@current
+#=> 'WritePathValue'
+
+## XChaCha20Poly1305 current_personalization fails closed on a nil config while
+## personalizations stays permissive and still offers the legacy tail (#333)
+provider = Familia::Encryption::Providers::XChaCha20Poly1305Provider.new
+@op = Familia.config.encryption_personalization
+@oh = Familia.config.encryption_personalization_history
+Familia.config.encryption_personalization = nil
+Familia.config.encryption_personalization_history = []
+@failed_closed = begin
+  provider.current_personalization
+  'no-error'
+rescue Familia::EncryptionError => e
+  e.message.include?('non-empty') ? 'refused' : 'other-error'
+end
+@permissive = provider.personalizations
+Familia.config.encryption_personalization = @op
+Familia.config.encryption_personalization_history = @oh
+[@failed_closed, @permissive]
+#=> ['refused', ['FamilialMatters']]
+
 ## XChaCha20Poly1305 encryption produces expected structure
 test_keys = { v1: Base64.strict_encode64('a' * 32) }
 provider = Familia::Encryption::Providers::XChaCha20Poly1305Provider.new
