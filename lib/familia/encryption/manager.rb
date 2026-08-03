@@ -44,66 +44,92 @@ module Familia
         # Increment counter immediately to track all decryption attempts, even failed ones
         Familia::Encryption.derivation_count.increment
 
-        begin
-          # Delegate parsing and instantiation to EncryptedData.from_json
-          # Wrap validation errors for security (don't expose internal structure details)
-          begin
-            data = Familia::Encryption::EncryptedData.from_json(encrypted_json_or_hash)
-            raise EncryptionError, 'Failed to parse encrypted data' unless data
-          rescue EncryptionError => e
-            # Re-wrap validation errors with generic message for security
-            raise EncryptionError, "Decryption failed: #{e.message}"
-          end
+        data = parse_encrypted_data(encrypted_json_or_hash)
 
-          # Validate algorithm support
-          provider = Registry.get(data.algorithm)
+        # Validate algorithm support
+        provider = Registry.get(data.algorithm)
 
-          # Safely decode and validate sizes
-          nonce = decode_and_validate(data.nonce, provider.nonce_size, 'nonce')
-          ciphertext = decode_and_validate_ciphertext(data.ciphertext)
-          auth_tag = decode_and_validate(data.auth_tag, provider.auth_tag_size, 'auth_tag')
-
-          # Try each candidate HKDF salt, current first, so ciphertext written
-          # before a salt change still decrypts. Providers without salt rotation
-          # expose a single nil "salt" and are attempted exactly once. A wrong
-          # salt derives a different key and fails the authenticated decrypt
-          # cleanly, so iterating never yields a false positive. See #310 (S2).
-          salts = provider.respond_to?(:hkdf_salts) ? provider.hkdf_salts : [nil]
-          key = nil
-          plaintext = nil
-          last_error = nil
-          salts.each do |salt|
-            key = derive_key_without_increment(context, version: data.key_version, provider: provider, salt: salt)
-            begin
-              plaintext = provider.decrypt(ciphertext, key, nonce, auth_tag, additional_data)
-              break
-            rescue EncryptionError => e
-              last_error = e
-              plaintext = nil
-            ensure
-              Familia::Encryption.secure_wipe(key)
-            end
-          end
-          raise(last_error || EncryptionError.new('Decryption failed - invalid key or corrupted data')) if plaintext.nil?
-
-          plaintext.force_encoding(data.encoding || 'UTF-8')
-        rescue EncryptionError
-          raise
-        rescue Familia::SerializerError => e
-          raise EncryptionError, "Invalid JSON structure: #{e.message}"
-        rescue StandardError => e
-          raise EncryptionError, "Decryption failed: #{e.message}"
-        end
-      ensure
-        # Defensive backstop only. The salt-rotation loop's per-iteration `ensure`
-        # (around provider.decrypt) is the primary wipe and clears `key` on every
-        # path -- success, failure, and break -- so by here `key` is already wiped
-        # and this re-clear is a harmless no-op. It is kept so any future change to
-        # the loop structure still cannot leave a derived key unwiped (#311).
-        Familia::Encryption.secure_wipe(key) if key
+        plaintext = decrypt_with_candidates(provider, data, context, additional_data)
+        plaintext.force_encoding(data.encoding || 'UTF-8')
+      rescue EncryptionError
+        raise
+      rescue Familia::SerializerError => e
+        raise EncryptionError, "Invalid JSON structure: #{e.message}"
+      rescue StandardError => e
+        raise EncryptionError, "Decryption failed: #{e.message}"
       end
 
       private
+
+      # Delegate parsing and instantiation to EncryptedData.from_json
+      # Wrap validation errors for security (don't expose internal structure details)
+      def parse_encrypted_data(encrypted_json_or_hash)
+        data = Familia::Encryption::EncryptedData.from_json(encrypted_json_or_hash)
+        raise EncryptionError, 'Failed to parse encrypted data' unless data
+
+        data
+      rescue EncryptionError => e
+        # Re-wrap validation errors with generic message for security
+        raise EncryptionError, "Decryption failed: #{e.message}"
+      end
+
+      # Try each rotation candidate, current first, so ciphertext written
+      # before a config change still decrypts. A wrong candidate derives a
+      # different key and fails the authenticated decrypt cleanly, so
+      # iterating never yields a false positive. See #310 (S2).
+      def decrypt_with_candidates(provider, data, context, additional_data)
+        # Safely decode and validate sizes
+        nonce = decode_and_validate(data.nonce, provider.nonce_size, 'nonce')
+        ciphertext = decode_and_validate_ciphertext(data.ciphertext)
+        auth_tag = decode_and_validate(data.auth_tag, provider.auth_tag_size, 'auth_tag')
+
+        key = nil
+        plaintext = nil
+        last_error = nil
+        rotation_candidates(provider).each do |candidate|
+          # Derivation happens INSIDE the rescue so a candidate that raises
+          # while deriving falls through to the next candidate instead of
+          # aborting the walk. The candidate lists are pre-filtered, so only
+          # EncryptionError is expected here; anything else is a bug and
+          # should surface.
+
+          key = derive_key_without_increment(context, version: data.key_version, provider: provider, **candidate)
+          plaintext = provider.decrypt(ciphertext, key, nonce, auth_tag, additional_data)
+          break
+        rescue EncryptionError => e
+          last_error = e
+          plaintext = nil
+        ensure
+          Familia::Encryption.secure_wipe(key)
+        end
+        raise(last_error || EncryptionError.new('Decryption failed - invalid key or corrupted data')) if plaintext.nil?
+
+        plaintext
+      ensure
+        # Defensive backstop only. The candidate loop's per-iteration `ensure`
+        # (around derive + provider.decrypt) is the primary wipe and clears `key`
+        # on every path -- success, failure, and break -- so by here `key` is
+        # already wiped and this re-clear is a harmless no-op. It is kept so any
+        # future change to the loop structure still cannot leave a derived key
+        # unwiped (#311).
+        Familia::Encryption.secure_wipe(key) if key
+      end
+
+      # Each provider exposes at most ONE rotation dimension -- AES-GCM
+      # rotates HKDF salts (#310), the XChaCha20 providers rotate BLAKE2b
+      # personalizations (#333) -- never both. A provider responding to both
+      # would multiply into an N x M candidate matrix here; add a new
+      # dimension only by replacing the old one. Providers without rotation
+      # are attempted exactly once.
+      def rotation_candidates(provider)
+        if provider.respond_to?(:hkdf_salts)
+          provider.hkdf_salts.map { |salt| { salt: salt } }
+        elsif provider.respond_to?(:personalizations)
+          provider.personalizations.map { |personal| { personal: personal } }
+        else
+          [{}]
+        end
+      end
 
       def decode_and_validate(encoded, expected_size, component)
         decoded = Base64.strict_decode64(encoded)
@@ -127,7 +153,7 @@ module Familia
         derive_key_without_increment(context, version: version, provider: provider)
       end
 
-      def derive_key_without_increment(context, version: nil, provider: nil, salt: nil)
+      def derive_key_without_increment(context, version: nil, provider: nil, salt: nil, personal: nil)
         # Use provided provider or fall back to instance provider
         provider ||= @provider
 
@@ -140,34 +166,59 @@ module Familia
         # Disabled by default for maximum security (keys are not held in memory
         # longer than a single derivation). The cache key includes the algorithm
         # so different providers never share a derived key, the version so key
-        # rotation stays correct, and the resolved salt so rotated-salt derivations
-        # never collide. On a hit we return a copy and never fetch the master key,
-        # minimising master-key exposure.
+        # rotation stays correct, and the resolved rotation candidate (salt or
+        # personalization) so rotated derivations never collide. On a hit we
+        # return a copy and never fetch the master key, minimising master-key
+        # exposure.
         cache = Fiber[:familia_request_cache] if Fiber[:familia_request_cache_enabled]
         if cache
-          # Key on the *resolved* salt, not the raw argument. When salt is nil
-          # (the encrypt path) the provider derives with hkdf_salts.first; the
-          # decrypt loop later passes that same value explicitly. Keying on the
-          # raw argument would file those two identical derivations under
-          # different keys (nil vs the resolved salt), so an encrypt followed by a
-          # decrypt of the same value in one request would derive twice instead of
-          # hitting the cache. Providers without salt rotation have no effective
-          # salt (nil), so their cache key is unchanged.
-          effective_salt = salt || (provider.respond_to?(:hkdf_salts) ? provider.hkdf_salts.first : nil)
-          cache_key = "#{provider.algorithm}:#{version}:#{effective_salt}:#{context}"
+          cache_key = rotation_cache_key(provider, version, context, salt: salt, personal: personal)
           cached = cache[cache_key]
           return cached.dup if cached
         end
 
         master_key = get_master_key(version)
-        # Only forward an explicit salt to providers that accept one (the AES-GCM
-        # salt-rotation path). The default derivation keeps the original arity so
-        # providers without a salt parameter are unaffected.
-        derived = salt.nil? ? provider.derive_key(master_key, context) : provider.derive_key(master_key, context, salt: salt)
+        derived = derive_candidate_key(provider, master_key, context, salt: salt, personal: personal)
         cache[cache_key] = derived.dup if cache
         derived
       ensure
-        Familia::Encryption.secure_wipe(master_key) if master_key
+        # secure_wipe is nil-safe, so no guard: master_key is nil when the
+        # cache hit returned early or a validation raise preceded assignment.
+        Familia::Encryption.secure_wipe(master_key)
+      end
+
+      # Key on the *resolved* candidate, not the raw argument. When the
+      # candidate is nil (the encrypt path) the provider derives with its
+      # current value; the decrypt loop later passes that same value
+      # explicitly. Keying on the raw argument would file those two
+      # identical derivations under different keys (nil vs the resolved
+      # value), so an encrypt followed by a decrypt of the same value in
+      # one request would derive twice instead of hitting the cache. The
+      # personalization resolves through current_personalization -- NOT
+      # personalizations.first -- so a blank config still raises here
+      # exactly as the provider's own derivation would, instead of quietly
+      # caching under a fallback. Providers without rotation have no
+      # effective candidate (nil:nil), so their cache key shape is stable.
+      def rotation_cache_key(provider, version, context, salt:, personal:)
+        effective_salt = salt || (provider.respond_to?(:hkdf_salts) ? provider.hkdf_salts.first : nil)
+        effective_personal = personal ||
+                             (provider.respond_to?(:current_personalization) ? provider.current_personalization : nil)
+        "#{provider.algorithm}:#{version}:#{effective_salt}:#{effective_personal}:#{context}"
+      end
+
+      # Only forward an explicit rotation candidate to the provider (the
+      # decrypt walk). The default derivation keeps the original arity so
+      # providers resolve their own current value and providers without a
+      # rotation parameter are unaffected. A provider exposes at most one
+      # dimension (salt OR personal, see the decrypt walk), so at most one
+      # kwarg is ever set here.
+      def derive_candidate_key(provider, master_key, context, salt:, personal:)
+        candidate_kwargs = {}
+        candidate_kwargs[:salt] = salt unless salt.nil?
+        candidate_kwargs[:personal] = personal unless personal.nil?
+        return provider.derive_key(master_key, context) if candidate_kwargs.empty?
+
+        provider.derive_key(master_key, context, **candidate_kwargs)
       end
 
       def get_master_key(version)

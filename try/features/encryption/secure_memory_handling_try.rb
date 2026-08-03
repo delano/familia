@@ -72,6 +72,54 @@ context = 'TestModel:field:user123'
 provider.derive_key('a' * 32, context) == sibling.derive_key('a' * 32, context)
 #=> true
 
+## Secure provider shares the personalization rotation list with its sibling
+## via Blake2bPersonalization: current first, then history, then the legacy
+## tail -- and byte-identical to the registered provider's list (#333). The two
+## files have drifted apart before (#250, #356), so identity matters, not just
+## shape.
+provider = @provider_class.new
+sibling = Familia::Encryption::Providers::XChaCha20Poly1305Provider.new
+@op = Familia.config.encryption_personalization
+@oh = Familia.config.encryption_personalization_history
+Familia.config.encryption_personalization = 'SecureTry'
+Familia.config.encryption_personalization_history = ['SecureOldTry']
+@rotation = [provider.personalizations, provider.personalizations == sibling.personalizations]
+Familia.config.encryption_personalization = @op
+Familia.config.encryption_personalization_history = @oh
+@rotation
+#=> [['SecureTry', 'SecureOldTry', 'FamilialMatters'], true]
+
+## Secure provider current_personalization returns the configured write-path value (#333)
+provider = @provider_class.new
+@op = Familia.config.encryption_personalization
+Familia.config.encryption_personalization = 'SecureCurrent'
+@current = provider.current_personalization
+Familia.config.encryption_personalization = @op
+@current
+#=> 'SecureCurrent'
+
+## Secure provider current_personalization fails closed on a nil config,
+## exactly like the sibling provider (#333)
+provider = @provider_class.new
+@op = Familia.config.encryption_personalization
+Familia.config.encryption_personalization = nil
+@refusal = begin
+  provider.current_personalization
+  'no-error'
+rescue Familia::EncryptionError => e
+  e.message.include?('non-empty') ? 'refused' : 'other-error'
+end
+Familia.config.encryption_personalization = @op
+@refusal
+#=> 'refused'
+
+## Secure provider derive_key rejects a >16-byte personalization with a clean
+## EncryptionError instead of RbNaCl::LengthError (#333)
+provider = @provider_class.new
+provider.derive_key('a' * 32, 'TestModel:field:user123', personal: 'x' * 17)
+#=!> Familia::EncryptionError
+#==> error.message.include?('16 bytes')
+
 ## encrypt operation clears key after use (demonstration)
 provider = @provider_class.new
 master_key = ('a' * 32).dup  # Make mutable copy

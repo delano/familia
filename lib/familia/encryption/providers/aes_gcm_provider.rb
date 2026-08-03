@@ -26,7 +26,7 @@ module Familia
   module Encryption
     module Providers
       class AESGCMProvider < Provider
-        ALGORITHM = 'aes-256-gcm'.freeze
+        ALGORITHM = 'aes-256-gcm'
         NONCE_SIZE = 12
         AUTH_TAG_SIZE = 16
         KEY_SIZE = 32

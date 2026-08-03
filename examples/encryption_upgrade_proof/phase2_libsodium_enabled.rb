@@ -224,20 +224,35 @@ Proof.check_raises('an unknown algorithm is rejected cleanly', Familia::Encrypti
                               context: ctx, additional_data: ctx)
 end
 
-# --- 9. Config-rotation behaviors (hazards the envelope does NOT cover) ------
-# The envelope does not record the BLAKE2b personalization: changing it breaks
-# decryption of all existing XChaCha data, and there is no history/fallback
-# mechanism (unlike the AES HKDF salt). This documents the hazard.
+# --- 9. Config-rotation behaviors --------------------------------------------
+# The envelope does not record the BLAKE2b personalization, but since #333 the
+# XChaCha decrypt path walks a candidate list -- the current value, then
+# encryption_personalization_history, then the built-in 'FamilialMatters'
+# default -- mirroring the AES HKDF salt rotation from #310/#311 below.
 begin
   Familia.encryption_personalization = 'DifferentApp'
-  Proof.check_raises('changing encryption_personalization breaks existing XChaCha data (no fallback!)',
+  Proof.check('after personalization rotation, envelopes under the built-in default decrypt via the legacy fallback') do
+    Familia::Encryption.decrypt(env, context: ctx, additional_data: ctx) == pt
+  end
+
+  # Only the built-in default gets an unconditional fallback. A NON-default
+  # personalization must be added to encryption_personalization_history when
+  # rotating away from it, or its data is stranded.
+  rotated_env = Familia::Encryption.encrypt(pt, context: ctx, additional_data: ctx)
+  Familia.encryption_personalization = 'DifferentApp2'
+  Proof.check_raises('rotating away from a NON-default personalization without history strands its data',
                      Familia::EncryptionError) do
-    Familia::Encryption.decrypt(env, context: ctx, additional_data: ctx)
+    Familia::Encryption.decrypt(rotated_env, context: ctx, additional_data: ctx)
+  end
+  Familia.encryption_personalization_history = ['DifferentApp']
+  Proof.check('...until the previous value is added to encryption_personalization_history') do
+    Familia::Encryption.decrypt(rotated_env, context: ctx, additional_data: ctx) == pt
   end
 ensure
   Familia.encryption_personalization = 'FamilialMatters'
+  Familia.encryption_personalization_history = []
 end
-Proof.check('restoring the personalization restores decryption') do
+Proof.check('restoring the personalization keeps existing data decryptable') do
   Familia::Encryption.decrypt(env, context: ctx, additional_data: ctx) == pt
 end
 

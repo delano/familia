@@ -35,7 +35,7 @@ xchacha_field   = phase2['envelopes'].find { |r| r['label'] == 'field-secret-xch
 aes_rec         = phase2['envelopes'].find { |r| r['label'] == 'manager-aes-211' }
 
 Proof.check_raises('XChaCha envelope fails CLEANLY without rbnacl (no silent garbage)',
-                   Familia::EncryptionError, /Unsupported algorithm/) do
+                   Familia::EncryptionError, /Unsupported algorithm|is not available on this node/) do
   Familia::Encryption.decrypt(xchacha_manager['envelope'],
                               context: xchacha_manager['context'],
                               additional_data: xchacha_manager['aad'])

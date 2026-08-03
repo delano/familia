@@ -118,6 +118,30 @@ rescue ArgumentError => e
 end
 #=> [true, true]
 
+## encryption_personalization_history defaults to an empty list when unset (#333)
+@oh = Familia.config.encryption_personalization_history
+Familia.config.encryption_personalization_history = nil
+@default_history = Familia.config.encryption_personalization_history
+Familia.config.encryption_personalization_history = @oh
+@default_history
+#=> []
+
+## encryption_personalization_history (method form) coerces a scalar to an
+## Array, mirroring the reader/writer idiom of the other config knobs (#333)
+@oh = Familia.config.encryption_personalization_history
+@coerced = Familia.config.encryption_personalization_history('MyApp1.0')
+Familia.config.encryption_personalization_history = @oh
+@coerced
+#=> ['MyApp1.0']
+
+## encryption_personalization_history round-trips a list through the attr_writer
+@oh = Familia.config.encryption_personalization_history
+Familia.config.encryption_personalization_history = ['MyApp2.0', 'MyApp1.0']
+@stored = Familia.config.encryption_personalization_history
+Familia.config.encryption_personalization_history = @oh
+@stored
+#=> ['MyApp2.0', 'MyApp1.0']
+
 ## encryption_hkdf_salt has no length limit -- a >16-byte salt is accepted (#311)
 @orig_hkdf = Familia.config.encryption_hkdf_salt
 Familia.config.encryption_hkdf_salt = 'x' * 64
@@ -141,6 +165,18 @@ rescue NoMethodError
 end
 Familia.config.encryption_personalization = @op
 @nil_personal
+#=> 'clean-error'
+
+## XChaCha20 derive_key rejects an over-limit personalization with a clean
+## EncryptionError rather than letting RbNaCl raise LengthError mid-derivation
+## (#333 defense in depth -- the decrypt walk pre-filters, direct callers don't)
+provider = @provider_class.new
+begin
+  provider.derive_key('a' * 32, 'TestModel:field:user123', personal: 'x' * 17)
+  'no-error'
+rescue Familia::EncryptionError => e
+  e.message.include?('16 bytes') ? 'clean-error' : 'other-encryption-error'
+end
 #=> 'clean-error'
 
 ## derive_key validates master key length

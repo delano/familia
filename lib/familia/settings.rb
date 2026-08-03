@@ -5,15 +5,16 @@
 # Familia
 #
 module Familia
-  @delim = ':'.freeze
+  @delim = ':'
   @prefix = nil
   @suffix = :object
   @default_expiration = 0 # see update_expiration. Zero is skip. nil is an exception.
   @logical_database = nil
   @encryption_keys = nil
   @current_key_version = nil
-  @encryption_personalization = 'FamilialMatters'.freeze
-  @encryption_hkdf_salt = 'FamilialMatters'.freeze
+  @encryption_personalization = 'FamilialMatters'
+  @encryption_personalization_history = [].freeze
+  @encryption_hkdf_salt = 'FamilialMatters'
   @encryption_hkdf_salt_history = [].freeze
   @pipelined_mode = :warn
   @strict_write_order = false
@@ -29,9 +30,9 @@ module Familia
   #
   module Settings
     attr_writer :delim, :suffix, :default_expiration, :logical_database, :prefix, :encryption_keys,
-                :current_key_version, :encryption_personalization, :encryption_hkdf_salt,
-                :encryption_hkdf_salt_history, :transaction_mode, :schema_path, :schemas,
-                :schema_validator, :strict_write_order, :raise_on_unsaved_parent_write
+                :current_key_version, :encryption_personalization, :encryption_personalization_history,
+                :encryption_hkdf_salt, :encryption_hkdf_salt_history, :transaction_mode, :schema_path,
+                :schemas, :schema_validator, :strict_write_order, :raise_on_unsaved_parent_write
 
     def delim(val = nil)
       @delim = val if val
@@ -48,14 +49,14 @@ module Familia
       @suffix
     end
 
-    def default_expiration(v = nil)
-      @default_expiration = v unless v.nil?
+    def default_expiration(val = nil)
+      @default_expiration = val unless val.nil?
       @default_expiration
     end
 
-    def logical_database(v = nil)
-      Familia.trace :DB, nil, "#{@logical_database} #{v}" if Familia.debug?
-      @logical_database = v unless v.nil?
+    def logical_database(val = nil)
+      Familia.trace :DB, nil, "#{@logical_database} #{val}" if Familia.debug?
+      @logical_database = val unless val.nil?
       @logical_database
     end
 
@@ -86,6 +87,11 @@ module Familia
     # inputs separate avoids constraining one cipher family by the other's rules
     # (see issue #311).
     #
+    # Encryption always uses this current value; decryption tries it first, then
+    # each entry in #encryption_personalization_history, then the built-in
+    # default ('FamilialMatters'), so existing ciphertext keeps decrypting
+    # across rotations and upgrades (see issue #333).
+    #
     # @example Familia.configure do |config|
     #     config.encryption_personalization = 'MyApp1.0'
     #   end
@@ -102,6 +108,29 @@ module Familia
         @encryption_personalization = val
       end
       @encryption_personalization
+    end
+
+    # Previous #encryption_personalization values, kept so that rotating the
+    # BLAKE2b personalization used by the XChaCha20 providers stays
+    # backward-compatible. When you change the current value, list the prior
+    # value(s) here so existing ciphertext can still be decrypted. Encryption
+    # always uses the current value; decryption tries the current value first,
+    # then each entry here in order. Keep the list short -- every stale entry
+    # adds a decryption attempt on a miss. Entries are subject to the same
+    # BLAKE2b constraints as the current value (non-empty String, no null
+    # bytes, <= 16 bytes); entries that violate them are skipped on decrypt.
+    #
+    # @example Rotating the personalization without losing old data
+    #   Familia.configure do |config|
+    #     config.encryption_personalization = 'MyApp2.0'
+    #     config.encryption_personalization_history = ['MyApp1.0']
+    #   end
+    #
+    # @param val [Array<String>, nil] Ordered list of prior values, or nil to read
+    # @return [Array<String>] Current history list (possibly empty)
+    def encryption_personalization_history(val = nil)
+      @encryption_personalization_history = Array(val) unless val.nil?
+      @encryption_personalization_history || []
     end
 
     # HKDF salt for the AES-GCM provider's key derivation (RFC 5869). Provides
@@ -168,9 +197,10 @@ module Familia
     #
     def transaction_mode(val = nil)
       if val
-        unless [:strict, :warn, :permissive].include?(val)
+        unless %i[strict warn permissive].include?(val)
           raise ArgumentError, 'Transaction mode must be :strict, :warn, or :permissive'
         end
+
         @transaction_mode = val
       end
       @transaction_mode || :warn  # default to warn mode
@@ -193,18 +223,20 @@ module Familia
     #
     def pipelined_mode(val = nil)
       if val
-        unless [:strict, :warn, :permissive].include?(val)
+        unless %i[strict warn permissive].include?(val)
           raise ArgumentError, 'Pipeline mode must be :strict, :warn, or :permissive'
         end
+
         @pipelined_mode = val
       end
       @pipelined_mode || :warn  # default to warn mode
     end
 
     def pipelined_mode=(val)
-      unless [:strict, :warn, :permissive].include?(val)
+      unless %i[strict warn permissive].include?(val)
         raise ArgumentError, 'Pipeline mode must be :strict, :warn, or :permissive'
       end
+
       @pipelined_mode = val
     end
 
@@ -293,6 +325,7 @@ module Familia
         unless valid.include?(val)
           raise ArgumentError, "dirty_write_warnings must be one of #{valid.inspect}, got #{val.inspect}"
         end
+
         @dirty_write_warnings = val
       end
       @dirty_write_warnings || :once

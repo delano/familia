@@ -29,11 +29,18 @@ rescue LoadError
   # To add: gem 'rbnacl', '~> 7.1', '>= 7.1.1'
 end
 
+require_relative 'blake2b_personalization'
+
 module Familia
   module Encryption
     module Providers
+      # XChaCha20-Poly1305 AEAD provider backed by RbNaCl/libsodium. Derives
+      # per-context keys via BLAKE2b keyed hashing with a rotatable
+      # personalization string (see Blake2bPersonalization, #333).
       class XChaCha20Poly1305Provider < Provider
-        ALGORITHM = 'xchacha20poly1305'.freeze
+        include Blake2bPersonalization
+
+        ALGORITHM = 'xchacha20poly1305'
         NONCE_SIZE = 24
         AUTH_TAG_SIZE = 16
         KEY_SIZE = 32
@@ -88,21 +95,22 @@ module Familia
         # identical master keys and contexts. This prevents key reuse across
         # different applications or library versions.
         #
+        # `personal` defaults to the current configured personalization
+        # (Blake2bPersonalization#current_personalization), which fails closed
+        # on a nil/blank config. The decrypt path passes explicit candidates
+        # from #personalizations so ciphertext written under a previous
+        # personalization stays decryptable after a rotation (#333).
+        #
         # @param master_key [String] The master key (must be >= 32 bytes)
         # @param context [String] Context string for key derivation
         # @param personal [String, nil] Optional personalization override
         # @return [String] 32-byte derived key
         def derive_key(master_key, context, personal: nil)
           validate_key_length!(master_key)
-          raw_personal = personal || Familia.config.encryption_personalization
-          # Fail closed on a missing personalization rather than crashing with a
-          # NoMethodError on nil (#311): a blank value gives no domain separation,
-          # and the raw attr_writer can set nil/'' past the reader's guards.
-          unless raw_personal.is_a?(String) && !raw_personal.empty?
-            raise EncryptionError, 'encryption_personalization must be a non-empty string for key derivation'
-          end
-          raise EncryptionError, 'Personalization string must not contain null bytes' if raw_personal.include?("\0")
-
+          # validate_personalization! guards explicitly-passed candidates with
+          # the same fail-closed checks as the config path (defense in depth --
+          # #personalizations already filters the decrypt walk).
+          raw_personal = personal ? validate_personalization!(personal) : current_personalization
           personal_string = raw_personal.ljust(16, "\0")
 
           RbNaCl::Hash.blake2b(
@@ -112,7 +120,7 @@ module Familia
             context.to_s.b,
             key: master_key,
             digest_size: KEY_SIZE,
-            personal: personal_string
+            personal: personal_string,
           )
         end
 

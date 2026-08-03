@@ -647,6 +647,8 @@ Familia.configure do |config|
   }
   config.current_key_version = :v2
   config.encryption_personalization = 'MyApp-2024'  # Optional
+  # If you later rotate the personalization, list prior values so old data still decrypts:
+  # config.encryption_personalization_history = ['MyApp-2023']
 end
 
 # Validate configuration before use
@@ -823,6 +825,9 @@ Familia.configure do |config|
   }
   config.current_key_version = :v3
   config.encryption_personalization = ENV['FAMILIA_ENCRYPTION_CONTEXT']
+  # After rotating the personalization, keep prior values for decryption
+  # (mirrors config.encryption_hkdf_salt_history for the AES-GCM salt):
+  # config.encryption_personalization_history = [ENV['FAMILIA_ENCRYPTION_CONTEXT_PREV']]
 
   # Validate configuration on startup
   Familia::Encryption.validate_configuration!

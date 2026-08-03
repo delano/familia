@@ -926,6 +926,8 @@ Familia.configure do |config|
   config.encryption_hkdf_salt = 'MyApp-2024'        # AES-GCM HKDF salt domain separation (any length)
   # When rotating the AES-GCM salt, keep prior values for backward-compatible decryption:
   # config.encryption_hkdf_salt_history = ['MyApp-2023']
+  # Same for the XChaCha20 personalization (entries obey the same <= 16-byte limit):
+  # config.encryption_personalization_history = ['MyApp-2023']
 end
 
 # Validate configuration
