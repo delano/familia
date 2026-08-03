@@ -30,7 +30,7 @@ class AADRoundtripEnforcementModel < Familia::Horreum
   encrypted_field :api_key, aad_fields: [:email]
 end
 
-Familia.dbclient.flushdb
+delete_test_dbkeys(AADRoundtripModel, AADRoundtripEnforcementModel) # scoped delete, not FLUSHDB (issue #283)
 
 ## reveal succeeds on in-memory object after create! with aad_fields
 config = AADRoundtripModel.create!(domain_id: 'dom-001', api_key: 'secret-abc')
@@ -96,5 +96,5 @@ end
 result_enforced
 #=> "Familia::EncryptionError"
 
-Familia.dbclient.flushdb
+delete_test_dbkeys(AADRoundtripModel, AADRoundtripEnforcementModel) # scoped delete, not FLUSHDB (issue #283)
 clear_test_encryption_keys

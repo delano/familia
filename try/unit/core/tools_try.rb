@@ -19,8 +19,10 @@ begin
   dest_moved = dest_redis.get('test:key1') == 'value1'
   source_removed = !source_redis.exists?('test:key1')
 
-  source_redis.flushdb
-  dest_redis.flushdb
+  # Scoped cleanup (issue #283): dbs 1 and 2 are shared with other tryout
+  # files, so delete only the keys this test created -- never flush.
+  source_redis.del('test:key1', 'test:key2')
+  dest_redis.del('test:key1', 'test:key2')
 
   [moved, dest_moved, source_removed]
 rescue NameError

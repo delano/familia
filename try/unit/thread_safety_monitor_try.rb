@@ -93,32 +93,40 @@ duration_μs >= 5000
 #=> true
 
 ## Wait time tracking uses microsecond precision
+Familia.start_monitoring!
 mutex = Familia::ThreadSafety::InstrumentedMutex.new('timing_mutex')
 Familia.thread_safety_monitor.reset_metrics
 
-# Create intentional contention with timing
-t1_ready = false
-t2_ready = false
+# Force contention deterministically: t1 holds the mutex until t2 is
+# provably blocked waiting on it. Contention is recorded as soon as the
+# non-blocking try_lock inside #synchronize fails, so t2 attempting
+# acquisition while t1 holds the lock guarantees contention_count > 0.
+lock_held = Queue.new
+release_lock = Queue.new
 
 t1 = Thread.new do
   mutex.synchronize do
-    t1_ready = true
-    sleep 0.01 while !t2_ready  # Wait for t2 to be waiting
-    sleep 0.005  # Hold lock for 5ms
+    lock_held.push(:held)
+    release_lock.pop  # Hold the lock until explicitly released
   end
 end
 
-t2 = Thread.new do
-  sleep 0.001 while !t1_ready  # Wait for t1 to acquire lock
-  t2_ready = true
-  mutex.synchronize { 'got lock' }
-end
+lock_held.pop  # Rendezvous: t1 definitely holds the mutex now
 
+t2 = Thread.new { mutex.synchronize { 'got lock' } }
+# Wait until t2 is blocked on the mutex (its try_lock has already failed
+# and contention has been recorded by the time it sleeps in Mutex#lock).
+# Bounded deadline so an unexpected t2 state fails the assertion below
+# instead of hanging the suite.
+deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 5
+Thread.pass while t2.alive? && t2.status != 'sleep' &&
+                  Process.clock_gettime(Process::CLOCK_MONOTONIC) < deadline
+
+release_lock.push(:go)
 t1.join
 t2.join
 
 stats = mutex.stats
-# Should show contention occurred due to intentional delay
 stats[:contention_count] > 0
 #=> true
 

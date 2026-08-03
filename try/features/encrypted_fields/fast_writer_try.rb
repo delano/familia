@@ -20,7 +20,7 @@ class EncryptedFastWriterModel < Familia::Horreum
   encrypted_field :secret
 end
 
-Familia.dbclient.flushdb
+delete_test_dbkeys(EncryptedFastWriterModel) # scoped delete, not FLUSHDB (issue #283)
 
 ## Fast write persists and can be revealed after reload
 record = EncryptedFastWriterModel.new(id: 'fast-1')
@@ -63,5 +63,5 @@ loaded_normal.secret.reveal { |pt| decrypted_normal = pt }
 decrypted_fast == decrypted_normal && decrypted_fast == 'shared-value'
 #=> true
 
-Familia.dbclient.flushdb
+delete_test_dbkeys(EncryptedFastWriterModel) # scoped delete, not FLUSHDB (issue #283)
 clear_test_encryption_keys

@@ -1,8 +1,8 @@
-# try/features/transient_fields/simple_refresh_test.rb
+# try/support/debugging/simple_refresh_test.rb
 #
 # frozen_string_literal: true
 
-require_relative '../../helpers/test_helpers'
+require_relative '../helpers/test_helpers'
 
 Familia.debug = false
 Familia.dbclient.flushdb

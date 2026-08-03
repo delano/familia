@@ -23,7 +23,7 @@ class AADProtectedModel < Familia::Horreum
 end
 
 # Clean test environment
-Familia.dbclient.flushdb
+delete_test_dbkeys(AADProtectedModel) # scoped delete, not FLUSHDB (issue #283)
 
 ## AAD prevents field substitution attacks - proper cross-record test
 @victim = AADProtectedModel.new(id: 'victim-1', email: 'victim@example.com')
@@ -136,5 +136,5 @@ decrypted_legit
 #=> "legitimate-secret"
 
 # Cleanup
-Familia.dbclient.flushdb
+delete_test_dbkeys(AADProtectedModel) # scoped delete, not FLUSHDB (issue #283)
 clear_test_encryption_keys

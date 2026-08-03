@@ -453,4 +453,5 @@ count_dirty_warnings(@no_out)
 Familia.strict_write_order = false
 Familia.dirty_write_warnings = :once
 Familia.raise_on_unsaved_parent_write = true
-Familia.dbclient.flushdb
+# Scoped delete of this file's DWW* model keys, never FLUSHDB (issue #283).
+delete_test_dbkeys('dww_*')

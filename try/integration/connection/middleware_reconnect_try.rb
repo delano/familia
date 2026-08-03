@@ -40,9 +40,9 @@ chain_cleared
 
 
 
-## Setup: Clean database
-ReconnectTestUser.dbclient.flushdb
-#=> "OK"
+## Setup: Clean this file's keys (scoped delete, never FLUSHDB -- issue #283)
+delete_test_dbkeys(ReconnectTestUser).is_a?(Integer)
+#=> true
 
 ## Test 1: Basic reconnect functionality clears chain and increments version
 Familia.enable_database_logging = true

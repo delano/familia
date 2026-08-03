@@ -39,7 +39,7 @@ class MixedAADModel < Familia::Horreum
   encrypted_field :api_key, aad_fields: [:region, :session_token]
 end
 
-Familia.dbclient.flushdb
+delete_test_dbkeys(TransientAADModel, MixedAADModel) # scoped delete, not FLUSHDB (issue #283)
 
 @field_type = TransientAADModel.field_types[:secret]
 @mixed_ft = MixedAADModel.field_types[:api_key]
@@ -158,5 +158,5 @@ end
 @aad_build == @aad_from
 #=> true
 
-Familia.dbclient.flushdb
+delete_test_dbkeys(TransientAADModel, MixedAADModel) # scoped delete, not FLUSHDB (issue #283)
 clear_test_encryption_keys
