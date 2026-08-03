@@ -449,19 +449,6 @@ module Familia
         end
       end
 
-      def define_attr_accessor_methods(field_name, method_name, on_conflict)
-        handle_method_conflict(method_name, on_conflict) do
-          # Equivalent to `attr_reader :field_name`
-          define_method method_name do
-            instance_variable_get(:"@#{field_name}")
-          end
-          # Equivalent to `attr_writer :field_name=`
-          define_method :"#{method_name}=" do |value|
-            instance_variable_set(:"@#{field_name}", value)
-          end
-        end
-      end
-
       # Fast attribute accessor method for immediate DB persistence.
       #
       # @param field_name [Symbol, String] the name of the horreum model attribute

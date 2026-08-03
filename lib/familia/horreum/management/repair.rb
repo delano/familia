@@ -553,45 +553,6 @@ module Familia
 
         total_removed
       end
-
-      # Removes a stale member from a collection using raw Redis commands.
-      #
-      # Detects the collection type via TYPE and uses the appropriate
-      # removal command (ZREM for sorted sets, SREM for sets, LREM for lists).
-      #
-      # Raw commands are necessary because DataType#remove calls
-      # serialize_value, which JSON-encodes strings. The stored member
-      # values are raw identifier strings (serialized from Familia objects),
-      # so we must match them exactly.
-      #
-      # @param collection_key [String] Full Redis key of the collection
-      # @param raw_member [String] The raw member value to remove
-      # @param client [Redis, nil] Redis client to use (default: self.dbclient).
-      #   Pass target_class.dbclient in multi-database setups.
-      # @return [Boolean, Integer] For zsets/sets: true if removed, false
-      #   otherwise (redis-rb single-element semantics). For lists: integer
-      #   count of elements removed. Returns 0 for missing/unknown key types.
-      #
-      def remove_stale_collection_member(collection_key, raw_member, client: nil)
-        client ||= dbclient
-        key_type = client.type(collection_key)
-
-        case key_type
-        when 'zset'
-          client.zrem(collection_key, raw_member)
-        when 'set'
-          client.srem(collection_key, raw_member)
-        when 'list'
-          # LREM count=0 removes all occurrences
-          client.lrem(collection_key, 0, raw_member)
-        when 'none'
-          # Key no longer exists, nothing to remove
-          0
-        else
-          Familia.debug "[repair_participations!] Unknown key type '#{key_type}' for #{collection_key}"
-          0
-        end
-      end
     end
   end
 end
