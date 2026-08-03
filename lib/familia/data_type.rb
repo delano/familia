@@ -77,7 +77,7 @@ module Familia
   #   StringKey   | del              | DEL            | no         | no
   #   Counter     | reset            | SET (via set)  | yes (via value=) | no
   #   Counter     | incr_if_lt       | EVAL (Lua)     | yes        | no (atomic Lua)
-  #   Lock        | acquire          | SETNX(+EXPIRE) | yes (via setnx) | no
+  #   Lock        | acquire          | SET NX EX      | yes (via setnx when ttl nil) | no (atomic SET NX EX for positive ttl)
   #   Lock        | release          | EVAL (Lua)     | no (deletes key) | no (atomic Lua)
   #   Lock        | force_unlock!    | DEL            | no (deletes key) | no
   #

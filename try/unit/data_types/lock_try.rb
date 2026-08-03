@@ -137,7 +137,16 @@ sleep 0.05 while @lock.locked? && Process.clock_gettime(Process::CLOCK_MONOTONIC
 @lock2.current_expiration
 #=> -1
 
+## Fresh acquire with positive TTL sets expiration atomically (SET NX EX):
+## the expiry must be present immediately after a successful acquire, never
+## a TTL-less key from a SETNX-then-EXPIRE gap.
+@lock3 = Familia::Lock.new 'test:lock3'
+@atomic_token = @lock3.acquire('atomic-token', ttl: 30)
+[@atomic_token, @lock3.current_expiration.positive?]
+#=> ['atomic-token', true]
+
 ## Cleanup
 @a.lock.delete!
 @lock.delete!
 @lock2.delete!
+@lock3.delete!
