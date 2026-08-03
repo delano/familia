@@ -18,8 +18,20 @@ class ::StaleIdxUser < Familia::Horreum
   identifier_field :uid
   field :uid
   field :email
+  field :nickname
 
   unique_index :email, :email_lookup
+end
+
+# Deliberately declares NO index at load time: the unique_index arrives at
+# runtime, after the first fast write, to exercise memo invalidation.
+class ::StaleIdxLateDecl < Familia::Horreum
+  feature :relationships
+  include Familia::Features::Relationships::Indexing
+
+  identifier_field :uid
+  field :uid
+  field :handle
 end
 
 @u = StaleIdxUser.new(uid: 'su1', email: 'old@example.com')
@@ -50,5 +62,117 @@ StaleIdxUser.find_by_email('old@example.com')&.uid
 StaleIdxUser.find_by_email('old@example.com')&.uid
 #=> "su2"
 
+## fast writer on the indexed field maintains the index (#308)
+@loaded.email!('fast@example.com')
+StaleIdxUser.find_by_email('fast@example.com')&.uid
+#=> "su1"
+
+## fast writer removed the previous value's index entry (no orphan)
+StaleIdxUser.email_lookup.get('new@example.com')
+#=> nil
+
+## fast writer to a value another record owns raises before the hash write
+@loaded.email!('old@example.com')
+#=!> Familia::RecordExistsError
+
+## the failed fast write left the hash untouched
+StaleIdxUser.find_by_id('su1').email
+#=> "fast@example.com"
+
+## the failed fast write rolled the in-memory value back
+[@loaded.email, @loaded.dirty?(:email)]
+#=> ["fast@example.com", false]
+
+## fast writer on an indexed field refuses inside a transaction
+@err = nil
+@loaded.transaction do
+  @loaded.email!('txn@example.com')
+rescue Familia::IndexedFieldFastWriteError => e
+  @err = e
+end
+[@err.class, @err.field, @err.index_name]
+#=> [Familia::IndexedFieldFastWriteError, :email, :email_lookup]
+
+## fast writer on an indexed field refuses inside a pipeline
+@err = nil
+@loaded.pipelined do
+  @loaded.email!('pipe@example.com')
+rescue Familia::IndexedFieldFastWriteError => e
+  @err = e
+end
+[@err.class, StaleIdxUser.find_by_id('su1').email]
+#=> [Familia::IndexedFieldFastWriteError, "fast@example.com"]
+
+## fast writer as getter still works inside a transaction (read-only path)
+result = nil
+@loaded.transaction do
+  result = @loaded.email!
+end
+result.is_a?(Redis::Future)
+#=> true
+
+## fast writer on an indexed field refuses for an unsaved record
+@u3 = StaleIdxUser.new(uid: 'su3')
+@u3.email!('unsaved@example.com')
+#=!> Familia::PersistenceError
+
+## fast writer on a NON-indexed field still works for a never-saved record
+## (the persistence guard only applies to indexed fields; #308 left this
+## pre-existing behavior unchanged)
+@u4 = StaleIdxUser.new(uid: 'su4')
+@u4.nickname!('fresh')
+#=> true
+
+## the unsaved-record non-indexed fast write persisted to the hash (the
+## no-arg fast reader returns the raw serialized form), kept the in-memory
+## value, and left the field clean
+[@u4.nickname, @u4.nickname!, @u4.dirty?(:nickname)]
+#=> ["fresh", "\"fresh\"", false]
+
+## a hash write that fails AFTER the index entries were updated raises the
+## original error (the fast writer's index update + HSET are separate
+## commands, not one MULTI; the failure path compensates best-effort)
+@c = StaleIdxUser.new(uid: 'su5', email: 'comp-a@example.com')
+@c.save
+def @c.hset(*) = raise('simulated connection failure')
+@c.email!('comp-b@example.com')
+#=!> RuntimeError
+
+## compensation released the attempted value's just-claimed index entry
+StaleIdxUser.email_lookup.get('comp-b@example.com')
+#=> nil
+
+## compensation restored the old value's index entry
+StaleIdxUser.email_lookup.get('comp-a@example.com')
+#=> "su5"
+
+## compensation rolled the in-memory value back clean
+[@c.email, @c.dirty?(:email)]
+#=> ["comp-a@example.com", false]
+
+## the stored hash still holds the old value after the failed fast write
+StaleIdxUser.find_by_id('su5').email
+#=> "comp-a@example.com"
+
+## a unique_index declared AFTER the first fast write is picked up: the
+## fast-writer memo keys on the relationship count, not just the class
+@late = StaleIdxLateDecl.new(uid: 'sl1')
+@late.save
+@late.handle!('pre-index')
+StaleIdxLateDecl.unique_index :handle, :handle_lookup
+@late.handle!('post-index')
+StaleIdxLateDecl.find_by_handle('post-index')&.uid
+#=> "sl1"
+
+## subsequent fast writes maintain the late-declared index like any other
+## (new value resolves, previous value's entry is retracted)
+@late.handle!('post-index-2')
+[StaleIdxLateDecl.handle_lookup.get('post-index'),
+ StaleIdxLateDecl.find_by_handle('post-index-2')&.uid]
+#=> [nil, "sl1"]
+
 @u.destroy! rescue nil
 @u2.destroy! rescue nil
+@u4.destroy! rescue nil
+@c.destroy! rescue nil
+@late.destroy! rescue nil

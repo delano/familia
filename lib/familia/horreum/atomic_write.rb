@@ -135,6 +135,14 @@ module Familia
           # prepare_for_save must run OUTSIDE the transaction: guard_unique_indexes!
           # performs reads, which return uninspectable Redis::Future objects inside
           # MULTI/EXEC.
+          #
+          # KNOWN GAP: the created-claims list prepare_for_save returns is
+          # discarded here, so a failed atomic_write leaks its unique-index
+          # claims (the partial writers and save release theirs via
+          # reconcile_index_claims_after_failed_write). The block-based flow
+          # has no single post-transaction failure point to hang the
+          # reconcile on; a leaked claim is reconciled by the record's next
+          # successful save.
           prepare_for_save
 
           if watch_keys&.any?
