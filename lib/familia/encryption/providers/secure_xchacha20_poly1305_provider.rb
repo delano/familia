@@ -32,6 +32,8 @@ rescue LoadError
   # Dependencies not available - provider will report as unavailable
 end
 
+require_relative 'blake2b_personalization'
+
 module Familia
   module Encryption
     module Providers
@@ -47,7 +49,9 @@ module Familia
       # 4. Uses locked memory where possible (future enhancement)
       #
       class SecureXChaCha20Poly1305Provider < Provider
-        ALGORITHM = 'xchacha20poly1305-secure'.freeze
+        include Blake2bPersonalization
+
+        ALGORITHM = 'xchacha20poly1305-secure'
         NONCE_SIZE = 24
         AUTH_TAG_SIZE = 16
         KEY_SIZE = 32
@@ -97,18 +101,19 @@ module Familia
           RbNaCl::Random.random_bytes(NONCE_SIZE)
         end
 
-        # Enhanced key derivation with immediate cleanup
+        # Enhanced key derivation with immediate cleanup.
+        #
+        # Personalization resolution and validation are shared with
+        # XChaCha20Poly1305Provider via Blake2bPersonalization -- this file has
+        # drifted from its sibling before (#250, #356), so the two providers
+        # must stay on the identical code path (#333).
         def derive_key(master_key, context, personal: nil)
           validate_key_length!(master_key)
 
-          raw_personal = personal || Familia.config.encryption_personalization
-          # Fail closed on a missing personalization rather than crashing with a
-          # NoMethodError on nil (#311), mirroring XChaCha20Poly1305Provider.
-          unless raw_personal.is_a?(String) && !raw_personal.empty?
-            raise EncryptionError, 'encryption_personalization must be a non-empty string for key derivation'
-          end
-          raise EncryptionError, 'Personalization string must not contain null bytes' if raw_personal.include?("\0")
-
+          # validate_personalization! guards explicitly-passed candidates with
+          # the same fail-closed checks as the config path (defense in depth --
+          # #personalizations already filters the decrypt walk).
+          raw_personal = personal ? validate_personalization!(personal) : current_personalization
           personal_string = raw_personal.ljust(16, "\0")
 
           # Perform derivation and immediately clear intermediate values
@@ -121,7 +126,7 @@ module Familia
             context.to_s.b,
             key: master_key,
             digest_size: KEY_SIZE,
-            personal: personal_string
+            personal: personal_string,
           )
 
           # Clear personalization string from memory

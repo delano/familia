@@ -159,6 +159,8 @@ module Familia
     #     config.encryption_hkdf_salt = 'MyApp-2024'        # AES-GCM domain separation (any length)
     #     # When rotating the salt, keep prior values so old ciphertext still decrypts:
     #     # config.encryption_hkdf_salt_history = ['MyApp-2023']
+    #     # Same for the personalization (entries obey the same <= 16-byte limit):
+    #     # config.encryption_personalization_history = ['MyApp-2023']
     #   end
     #
     #   # Validate configuration before use
