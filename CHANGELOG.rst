@@ -7,6 +7,713 @@ The format is based on `Keep a Changelog <https://keepachangelog.com/en/1.1.0/>`
 
    <!--scriv-insert-here-->
 
+.. _changelog-2.12.0:
+
+2.12.0 — 2026-08-03
+===================
+
+Added
+-----
+
+- ``Familia::HashKey#claim_field`` and ``#release_field``: server-side
+  compare-and-set / compare-and-delete on a single hash field. ``claim_field``
+  returns ``:created`` when the field was unclaimed, ``:owned`` when it already
+  held an equivalent value, or the conflicting value when another owner holds
+  it; it raises ``Familia::OperationModeError`` inside a transaction or pipeline,
+  where its verdict would only be a ``Future``. ``release_field`` deletes only
+  when the caller owns the value and is safe to queue inside a ``MULTI``. Both
+  touch exactly one key, so they work unchanged under Redis Cluster. Values
+  written by pre-2.10.0 unique indexes (JSON-encoded identifiers such as
+  ``"\"u1\""``) count as owned and are normalized to the canonical form in
+  place. As with the existing read path, an identifier that is *itself*
+  quote-wrapped (the literal three-character string ``"s"``) is
+  indistinguishable from the legacy encoding of ``s``; such identifiers already
+  cannot round-trip through a reference collection and remain unsupported. #353
+
+- Generated per-index ``claim_unique_<index>!`` and ``release_unique_<index>!``
+  instance methods, plus a private ``claim_unique_indexes!`` (alongside the
+  existing ``guard_unique_indexes!``) that ``prepare_for_save`` now runs after
+  the guard. When a class declares several unique indexes and a later one
+  collides, claims *created* earlier in the same run are released before the
+  error propagates, so a value is never stranded on a record that never got
+  saved. Entries the record already owned are left intact. #353
+
+- ``try/support/helpers/encryption_config.rb``, loaded by ``test_helpers``, with
+  three helpers for tryouts that need encryption keys:
+  ``set_test_encryption_keys(keys, current_version:)`` installs a keyring and
+  records what it displaced, ``clear_test_encryption_keys`` puts that back (used
+  in teardown), and ``with_test_encryption_keys(keys, current_version:) { ... }``
+  scopes an override to a single test case and restores it even when the block
+  raises. Restoring means restoring the *previous* values rather than nilling
+  them, so the two forms nest. Repeat calls to ``set_test_encryption_keys`` in
+  one file are safe: only the first records the baseline. The baseline is scoped
+  to the file that recorded it, so a file that installs keys and then forgets its
+  teardown does not suppress the next file's leak check or become what that file
+  restores to -- the next install warns and baselines to the empty keyring, which
+  ends the leak there rather than passing it along. Each install and
+  restore also wipes the fiber-local derived-key cache, which is keyed by version
+  and context rather than by the master key an entry came from and so would
+  otherwise survive a keyring swap. When a file installs keys and finds the
+  config already populated -- the signature of an earlier file that forgot its
+  teardown -- the helper warns on stderr naming the file, so the next such
+  omission is loud instead of silent. #363
+
+- ``Familia::MultiResult#aborted?`` reports whether a transaction was discarded
+  before ``EXEC`` ran, letting callers tell a WATCH abort (retry the whole
+  transaction) apart from one where an individual command failed (inspect
+  ``errors``). Note the deliberate asymmetry: an aborted transaction is not
+  ``successful?``, yet ``errors?`` is false — it ran no commands, so no command
+  errored. ``successful?`` remains the method to test for the overall outcome.
+
+- ``Familia::MultiResult#inspect`` summarizes the outcome
+  (``#<Familia::MultiResult aborted size=0>``) instead of using the default
+  object dump. It deliberately omits the command return values, which
+  routinely carry field values read back out of the database and have no
+  business landing in a log line by default.
+
+- ``SortedSet`` and ``ListKey`` accept a ``max_length:`` option that caps the
+  collection at write time (``sorted_set :audit_events, max_length: 10_000`` or
+  ``Familia::SortedSet.new 'events', max_length: 100``). Every member-creating
+  write trims in the same operation: sorted sets keep the N highest-scoring
+  members (``ZREMRANGEBYRANK`` after ``ZADD``/``ZINCRBY`` — "newest N" only
+  when scores are timestamps), lists keep the elements nearest the end written
+  to (``push`` keeps the tail, ``unshift`` keeps the head). Standalone, each
+  write+trim pair runs in its own ``MULTI`` so a crash cannot leave the
+  collection over-cap; inside a caller transaction the outer ``MULTI`` covers
+  the pair. ``unionstore``/``interstore``/``diffstore`` destinations,
+  ``RESTORE``, and external writers are out of scope. #351
+
+- ``DataType#max_length`` reads back the configured cap
+  (``customer.audit_events.max_length #=> 10_000``), returning ``nil`` when the
+  collection is uncapped. Defined on every DataType so a caller holding a
+  generic collection can ask without first checking the type. Read-only: the
+  cap is fixed at definition time. #351
+
+- ``max_length:`` is validated at definition time: it must be a positive
+  Integer, and passing it to a type that does not implement capping
+  (``HashKey``, ``UnsortedSet``, ``StringKey``, ``Counter``, …) raises
+  ``ArgumentError`` instead of being silently ignored. #351
+
+- ``SortedSet#enforce_max_length!`` and ``ListKey#enforce_max_length!`` apply
+  the cap to an already-oversized collection — the migration step after adding
+  ``max_length:`` to live data, which otherwise stays over-cap until the next
+  write. Both return the number of elements removed and raise
+  ``Familia::Problem`` on an uncapped collection instead of silently doing
+  nothing. Lists take ``keep: :tail`` (default, push-fed) or ``keep: :head``
+  (unshift-fed) since the cap's per-end semantics belong to the write method,
+  and run ``LLEN`` + ``LTRIM`` in one ``MULTI`` so the count is exact under
+  concurrent writes. #351
+
+- ``participates_in`` and ``class_participates_in`` accept ``max_length:``
+  directly (``participates_in Owner, :activity, score: :created_at,
+  max_length: 1000``), declaring the target collection capped with
+  ``record_class:`` still threaded automatically. The value and collection
+  type are validated at class-definition time, and a ``max_length:`` that
+  conflicts with a pre-declared collection's cap (including an uncapped
+  pre-declaration) raises ``ArgumentError`` rather than silently keeping the
+  wrong cap. Pre-declaring the capped collection before ``participates_in``
+  continues to work unchanged. A capped participation collection is a
+  recent-N view, not authoritative membership: the trim does not touch each
+  participant's ``participations`` reverse index, so ``member?``/``in_*?``
+  stay accurate while ``current_participations`` can over-report. #351
+
+- ``Familia::Features::Housekeeping::EnforceCollectionCaps`` ships the
+  cap-enforcement sweep as a registerable chore class: it trims every capped
+  collection on an instance via ``enforce_max_length!``, returning the removed
+  count (truthy = modified) or ``nil`` on a clean pass so repeated runs are
+  no-ops in ``run_chores!`` stats. Designed as a base class — override
+  ``keep_for`` for unshift-fed lists, ``collection_names`` to scope the sweep.
+  To support it, ``chore`` now accepts any ``#call``-able in place of a block
+  (``chore :enforce_collection_caps, EnforceCollectionCaps``). #351
+
+- New ``encryption_personalization_history`` setting: the BLAKE2b
+  personalization used by the XChaCha20-Poly1305 providers can now be rotated,
+  mirroring the AES-GCM ``encryption_hkdf_salt_history`` design from 2.11.0
+  (#311). Encryption always uses the current ``encryption_personalization``;
+  decryption tries the current value first, then each history entry in order,
+  then the pre-rotation built-in default (``'FamilialMatters'``), so existing
+  ciphertext keeps decrypting across rotations and upgrades. Candidates that
+  violate BLAKE2b's constraints (non-String, blank, null bytes, over 16 bytes)
+  are skipped rather than aborting the walk. The rotation logic lives in a new
+  shared ``Familia::Encryption::Providers::Blake2bPersonalization`` module
+  included by both XChaCha20 providers, so the registered provider and its
+  unregistered ``Secure`` sibling can no longer drift apart (as they did in
+  #250 and #356). The default personalization is unchanged, so unrotated
+  deployments encrypt and decrypt exactly as under 2.11. #333
+
+- ``limit:`` and ``offset:`` keyword arguments on
+  ``<collection>_with_permission`` count *matching* members (post-filter
+  semantics), enabling pagination in deterministic score order, and a new
+  ``each_<collection>_with_permission(min_permission = :read, batch_size: 100)``
+  sibling streams matches via ``ZSCAN`` with O(1) retained memory — unordered,
+  at-least-once delivery — returning an ``Enumerator`` when called without a
+  block. #309
+
+Changed
+-------
+
+- ``add_to_class_<index>`` and ``update_in_class_<index>`` for a ``unique_index``
+  now raise ``Familia::OperationModeError`` when called inside a transaction the
+  caller opened without first claiming *the exact value being written*. The
+  in-``MULTI`` ``HSET`` is only sound as a re-affirmation of an existing claim;
+  without one it is the blind write this change removes. All ``save`` paths
+  (``save``, ``save_if_not_exists!``, ``atomic_write``, ``Familia.atomic_write``)
+  claim via ``prepare_for_save`` and are unaffected. Instance-scoped
+  (``within:``) unique indexes keep the documented in-transaction escape hatch
+  but now warn that the write is unenforced. #353
+
+  The claim is tracked per value, not per index name. An index-name-only ledger
+  would vouch for a value no CAS ever settled in two reachable shapes: an
+  ``atomic_write`` block that reassigns the indexed field (the block runs
+  *inside* the ``MULTI``, after ``prepare_for_save`` has claimed the value the
+  record held when the block opened), and a caller-opened transaction reached
+  after a completed save changed the field. Both now raise instead of writing
+  blind. Code that mutates a unique-indexed field inside ``atomic_write``, or
+  that opens its own transaction after changing one, must either set the field
+  before the block or call ``claim_unique_<index>!`` outside the ``MULTI`` --
+  that per-index claim records its own ledger entry and is sufficient on its
+  own. This includes ``update_all_indexes``, which routes to
+  ``update_in_class_<index>``. #353
+
+  A ledger entry records the claiming identifier alongside a *snapshot* of the
+  value, and is dropped as soon as the claim is released
+  (``remove_from_class_<index>``, ``release_unique_<index>!``, the old-value
+  side of ``update_in_class_<index>``, and the partial-claim rollback). Each
+  half closes a way the entry could otherwise outlive what it asserts: an
+  in-place mutation of the record's own field (``email << suffix``) would
+  rewrite a referenced value in lockstep, a released claim would still read as
+  held, and a ``dup``'d instance shares the ledger Hash and could spend the
+  original's claim under a new identifier. #353
+
+- ``guard_unique_indexes!`` is retained and is load-bearing rather than
+  redundant: it checks every unique index *before* any claim is written, so the
+  common collision fails without touching the index at all. It remains a
+  fast-fail read; ``claim_unique_indexes!`` is the enforcement. #353
+
+- Callers of ``remove_from_class_*`` (including ``remove_from_all_indexes`` and
+  the class-level ``destroy!`` cleanup) no longer evict an index entry that
+  points at a *different* identifier; the delete is now a no-op in that case
+  rather than removing another record's live entry. Both built-in callers load
+  the record's stored values immediately beforehand, so a no-op there means the
+  index was already inconsistent. Code that relied on the previous blind ``HDEL``
+  to clear wrong-owner entries should use the repair/rebuild APIs
+  (``rebuild_<index>``, ``repair_*``), which write the index directly. #353
+
+- ``Familia::MultiResult#results`` is now always an Array. It previously
+  exposed redis-rb's raw return value, which is ``nil`` for an aborted
+  transaction, pushing a nil check onto every caller that indexes or iterates
+  it — the same class of crash as #355, one level out. An abort now reports an
+  empty array, and ``#aborted?`` carries the distinction the ``nil`` used to
+  carry:
+
+  .. code-block:: ruby
+
+     # before
+     result.results        # => nil on a WATCH abort
+     result.results.nil?   # the only way to detect an abort
+
+     # after
+     result.results        # => [] on a WATCH abort
+     result.aborted?       # => true
+     result.results[0]     # => nil, instead of NoMethodError
+
+  Code testing ``results.nil?`` to detect an abort should call ``aborted?``.
+  Note that an abort and a transaction that committed zero commands both
+  report ``results == []``; ``aborted?`` is what separates them.
+
+- ``Familia::MultiResult#to_h`` gained an ``:aborted`` key, so a dumped
+  failure says why it failed rather than reading as a result whose errors went
+  missing. ``to_h`` now returns ``{success:, aborted:, results:}``. Code
+  comparing the hash by equality needs the extra key.
+
+- ``Familia::MultiResult`` instances are now read-only: both ``#results`` and
+  ``#errors`` are frozen. ``#errors`` was previously frozen only for aborted
+  results, so mutating it succeeded or raised depending on the outcome. And
+  because ``#errors`` is a memo derived from ``#results``, a mutable
+  ``#results`` let the two drift — appending an exception after ``#errors``
+  had been read left a stale error list, and ``to_h[:results]`` handed out a
+  live reference to internal state. A result describes an operation that has
+  already finished, so neither array was ever meaningful to modify. Code that
+  mutates either in place should work on a ``dup``.
+
+- ``SortedSet#increment`` (and its ``incr``/``incrby``/``decrement`` aliases)
+  now runs the same ``warn_if_dirty!`` guard as ``add`` and ``update``. Writing
+  through it from a dirty, never-saved parent warns — or raises, under the
+  default ``raise_on_unsaved_parent_write`` — where it previously wrote
+  silently. #351
+
+- ``Manager#decrypt`` walks the XChaCha20 providers' personalization
+  candidates exactly as it walks AES-GCM's HKDF salts; each provider exposes
+  at most one rotation dimension, never both. A candidate that fails while
+  deriving now falls through to the next candidate instead of aborting the
+  walk, and an explicit over-long ``personal:`` passed to ``derive_key``
+  raises ``Familia::EncryptionError`` instead of leaking
+  ``RbNaCl::LengthError``. #333
+
+- The opt-in request-scoped key cache key gained a personalization segment
+  (``algorithm:version:salt:personal:context``), so derivations under
+  different rotation candidates never collide while an encrypt and a later
+  decrypt of the same value within one request still share a single derived
+  key. #333
+
+- ``multi_field_fast_write`` raises ``Familia::IndexedFieldFastWriteError``
+  (new, ``< PersistenceError``, exposes ``field``/``index_name``) when any
+  written field backs a class-level index (``unique_index`` or
+  ``multi_index``) -- previously it wrote the hash and silently skipped the
+  index. Its single-``HMSET`` contract leaves no room for the
+  out-of-transaction claim ADR-0002 requires, so the write is refused before
+  anything is touched. The check is local metadata only; non-indexed fields
+  keep the one-round-trip behavior unchanged. Use ``multi_field_update``,
+  ``save_fields``, or ``save`` for indexed fields. #308
+
+- ``field!`` on a class-indexed field raises
+  ``Familia::IndexedFieldFastWriteError`` inside a caller's transaction or
+  pipeline, where the claim's CAS verdict would come back as a ``Future`` --
+  previously it queued the ``HSET`` and left the index stale. It also now
+  refuses an unsaved record for such fields (``Familia::PersistenceError``,
+  "Call #save first"), consistent with every other index writer. #308
+
+Removed
+-------
+
+- ``ScoreEncoding.category_score_range``: it discarded the category mask and
+  returned the full time window for **all** permissions (e.g. the
+  ``:administrator`` range included viewer-only entries), and a bitmask
+  category is not expressible as a contiguous score range. Fetch the time
+  window with ``score_range`` and post-filter with ``filter_by_category`` or
+  ``meets_category?``. The method had no callers in lib/, tests, examples, or
+  docs.
+
+- Dropped the unused ``csv`` and ``stringio`` runtime dependencies from the
+  gemspec. Neither was referenced anywhere in the shipped library — no
+  ``require``, no ``CSV.`` call, no ``StringIO`` reference in ``lib/``,
+  ``bin/``, or ``examples/`` — so both were leftovers from code paths that no
+  longer exist. Installing familia no longer pulls ``csv`` into a consumer's
+  bundle.
+
+  The ``stringio`` entry was the more pressing of the two: it pinned
+  ``>= 3.1.1, < 3.3.0`` on a Ruby **default gem**, so once a Ruby release ships
+  stringio 3.3.0 or newer, every consumer of familia on that Ruby would hit an
+  unresolvable dependency for a gem the library never used. Removing the
+  constraint takes that future breakage off the table.
+
+  Nothing needs to change on the consumer side. Both gems ship with Ruby, and
+  familia never loaded either, so an application that uses ``CSV`` or
+  ``StringIO`` in its own code is unaffected — though an application that was
+  relying on familia to declare ``csv`` for it should now declare it directly.
+  Test files under ``try/`` that use ``StringIO`` keep working: it is a default
+  gem and ``require 'stringio'`` resolves without a gemspec entry. #354
+
+- Dropped the dead private helpers ``Horreum::define_attr_accessor_methods``
+  (``definition.rb``) and ``remove_stale_collection_member``
+  (``management/repair.rb``); neither had any caller. #347
+
+- ``Familia::Horreum::Definition#define_fast_writer_method``: dead duplicate
+  of ``FieldType#define_fast_writer`` with zero callers. #308
+
+Fixed
+-----
+
+- ``decrby`` and ``decr`` (and their ``decrementby``/``decrement`` aliases)
+  raised on every call — one used the string ``DECRBY`` signature against a
+  hash, the other called a nonexistent client method. Both now use ``HINCRBY``
+  with a negated amount, mirroring ``incrby``/``incr``. ``incrby`` and
+  ``decrby`` also validate the amount client-side (``Integer(_, 10)``):
+  numeric strings are accepted, and a fractional amount raises
+  ``ArgumentError`` on both instead of silently truncating in ``decrby``
+  (``Integer(2.5)`` truncates to 2) while failing server-side in ``incrby``.
+
+- ``encryption_info`` raised ``NoMethodError`` on every call via the phantom
+  ``Familia::Encryption.current_provider`` and nonexistent provider accessors.
+  It now uses ``Familia::Encryption.manager.provider`` and the real provider
+  API, preserving the ``algorithm``/``key_size``/``nonce_size``/``tag_size``
+  hash contract. Providers now expose ``key_size`` (a lazily-read
+  ``KEY_SIZE`` constant, wired into each bundled provider's ``derive_key``)
+  rather than ``encryption_info`` hardcoding 32, so a custom provider with a
+  different derived-key length is reported accurately.
+
+- ``unique_index`` no longer has a TOCTOU race between its uniqueness guard and
+  the index write. Previously ``guard_unique_*!`` read the index before the save
+  ``MULTI`` and the index ``HSET`` inside it was blind, so two concurrent saves
+  of the same value could both pass the guard and the later write would silently
+  overwrite the earlier one -- leaving two records believing they owned the
+  value. The invariant is now enforced server-side: a single-key Lua
+  compare-and-set claims the value before the transaction opens, and the
+  in-``MULTI`` ``HSET`` only re-affirms a claim this record already holds. The
+  loser of a race raises ``Familia::RecordExistsError`` with ``existing_id``
+  instead of overwriting. Field-granular, so unrelated saves of the same class
+  never contend -- unlike ``WATCH``, whose per-key granularity would serialize
+  every writer through one hot index key. #353
+
+- ``remove_from_class_*`` and the old-value removal in ``update_in_class_*`` no
+  longer issue a blind ``HDEL``. A record holding a stale in-memory field value
+  could delete an index entry another record had since legitimately claimed --
+  the release-side twin of the same shared-key overwrite. Both now use an
+  ownership-checked delete that leaves another owner's entry intact. #353
+
+- Tryout files no longer leak their encryption config into the rest of the run.
+  ``Familia.config.encryption_keys`` and ``current_key_version`` are
+  process-global and the tryouts runner evaluates every file in one process, so
+  a file that set them and never cleared them left them installed for whatever
+  ran next. Running each such file followed by a probe that asserts both settings
+  are nil confirmed nineteen leakers. No test failed as a result, which was the
+  hazard: a file that believed it had configured its own key material could be
+  exercising a neighbour's, and an encryption test passing under the wrong key is
+  not testing what it claims. Adding a file that requires the keys to be *absent*
+  would also have passed or failed depending on where it sorted. Every file that
+  touches the encryption config now installs it through a scoped helper and hands
+  back the previous config when it finishes. #363
+
+- ``try/features/real_feature_integration_try.rb`` was the leak's confirmed
+  victim. It declares an ``encrypted_field`` and assigns it during setup but
+  never configured any key material, so it had been running on whatever the
+  previous file in the run happened to leave installed. It fails outright when
+  run on its own -- ``Key version cannot be nil`` -- which is what closing the
+  leak made it do in the full suite as well. It now installs its own keyring.
+  #363
+
+- ``try/features/encryption/module_loading_try.rb`` leaked too, under a spelling
+  the original survey missed: ``Familia.encryption_keys=`` and
+  ``Familia.config.encryption_keys=`` are the same setting, because
+  ``Familia.config`` returns ``Familia`` itself. The new helper's leak warning is
+  what surfaced it. #363
+
+- The teardown line ``Fiber[:familia_key_cache]&.clear`` in eight encryption
+  tryouts was a no-op -- the derived-key cache lives under
+  ``Fiber[:familia_request_cache]``, so nothing was ever cleared. Those teardowns
+  now go through the helper, which wipes the real cache. #363
+
+- ``update_in_<scope>_<index_name>`` (instance-scoped ``unique_index`` with
+  ``within:``) no longer leaks an index claim when called on an unsaved
+  record. The generated method claimed the new field value via the CAS
+  *before* running the persisted-record guard, so when
+  ``_ensure_persisted_before_index_write!`` raised
+  ``Familia::PersistenceError`` the already-written claim was never
+  released -- the value stayed pointing at a record that did not exist in
+  the database and no other record could ever claim it. The guard now runs
+  before the claim, matching the ordering the sibling generated methods
+  (``add_to_*``, ``add_to_class_*``, ``update_in_class_*``) already used.
+  Not reachable through the normal save flow (inside a save ``MULTI`` the
+  guard short-circuits and the claim path is skipped); it required a direct
+  call to the generated method on an unpersisted record. Found by the
+  2026-07-30 security audit. #370
+
+- ``ConcealedString`` no longer registers a GC finalizer that could never do
+  anything. ``initialize`` freezes the encrypted buffer, while the finalizer
+  only cleared unfrozen strings -- mutually exclusive by construction, so the
+  advertised "best-effort memory clearing" was unconditionally a no-op. The
+  finalizer and the claim are gone: the class docs, ``clear!`` docs, and the
+  encryption guide now state plainly that ``clear!`` drops references and
+  blocks further reveals but cannot wipe memory, matching the honesty of the
+  ``RedactedString`` header's memory-model caveats. Behavior is unchanged
+  (the finalizer never did anything); ``ConcealedString.finalizer_proc`` is
+  removed. Not exploitable -- a truth-in-advertising fix from the 2026-07-19
+  internal code audit. #359
+
+- ``Familia::MultiResult`` no longer raises ``NoMethodError`` when it wraps an
+  aborted transaction. A WATCH-guarded ``MULTI`` whose watched key is modified
+  by another client has its ``EXEC`` discarded, and redis-rb returns ``nil``
+  rather than an array of command results — so ``errors``, ``errors?``,
+  ``successful?``, ``size``, and ``to_h`` all blew up on ``nil`` instead of
+  reporting the transaction as unsuccessful. A caller doing the right thing
+  (checking ``result.successful?`` and retrying on contention) crashed exactly
+  when contention occurred. An aborted result now reports ``successful? ==
+  false`` with an empty ``errors`` array and ``size == 0``. #355
+
+- ``SecureXChaCha20Poly1305Provider#derive_key`` no longer mutates the context
+  string it is given. It passed ``context.force_encoding('BINARY')`` to
+  BLAKE2b, and ``force_encoding`` mutates its receiver: the caller's string
+  came back re-tagged as ``ASCII-8BIT``, and a frozen context (routine under
+  ``# frozen_string_literal: true``) raised ``FrozenError`` instead of
+  deriving a key. The provider now hashes a fresh binary copy via
+  ``context.to_s.b``, matching the fix made to the sibling
+  ``XChaCha20Poly1305Provider`` in #250 -- which also means a ``Symbol`` or
+  ``nil`` context no longer raises ``NoMethodError``. Derived keys are
+  byte-for-byte unchanged (only the encoding tag differed, never the bytes
+  hashed), so no stored ciphertext needs re-encryption. Found by the
+  2026-07-19 security audit. #356
+
+- ``SortedSet#increment`` no longer raises ``NoMethodError`` when called inside
+  a transaction or pipeline. ``ZINCRBY`` returns a ``Redis::Future`` there,
+  which cannot be coerced with ``to_f`` until the block commits; the future is
+  now passed through untouched, matching ``add``. #351
+
+- The old ``:maxlength`` option spelling **was never honored** — it was
+  silently stripped, so lists declared with it were never trimmed. It
+  **remains ignored**: honoring it as an alias would begin mass-deleting
+  previously untrimmed data on gem upgrade. It now emits a warning at
+  definition time (``[familia] :maxlength is ignored; rename to
+  max_length:``). Trimming requires an explicit rename to ``max_length:``.
+  #351
+
+- ``Lock#acquire`` with a positive TTL is now a single atomic ``SET NX EX``
+  command instead of ``SETNX`` followed by ``EXPIRE``, closing the crash
+  window between the two commands that could strand a permanent, TTL-less
+  lock. Invalid TTLs (<= 0) are rejected before touching the server. #347
+
+- ``DatabaseLogger.sample_rate`` is now validated on assignment: ``0`` is
+  coerced to ``nil`` (log everything), values above ``1.0`` clamp to ``1.0``,
+  and negative, non-finite (NaN/Infinity), or non-numeric values raise
+  ``ArgumentError`` at config time. ``should_log?`` is hardened to read the
+  rate once and guard against a non-finite sampling interval, so a bad value
+  can no longer crash every Redis command on the hot path. #347
+
+- ``SingleUseRedactedString`` is now loaded by ``require 'familia'``;
+  previously it had to be required manually even though the transient
+  fields feature documented it. #347
+
+- Bounded the generated ``<collection>_with_permission`` participation query,
+  which previously materialized the entire sorted set per call. Permission bits
+  live in the fractional part of the score and are not a contiguous range, so
+  they can never be filtered server-side; the query now pages internally via
+  ``ZRANGEBYSCORE ... LIMIT`` in ``batch_size:`` chunks (default 500), keeping
+  peak memory at O(batch_size) instead of O(N). Results are identical for
+  collections not being concurrently modified; unlike the old single-command
+  fetch, the paged read is not an atomic snapshot. #309
+
+- Removed the redundant post-save ``update_all_indexes`` re-run from the
+  ``Relationships`` feature's ``save`` override (follow-up to #306). Class-level
+  index maintenance is fully handled inside the save transaction by
+  ``auto_update_class_indexes``, so the post-``EXEC`` re-run only re-claimed and
+  re-wrote the same values -- costing an extra ``EXISTS`` probe, a
+  ``claim_field`` ``EVAL``, and a second ``MULTI`` per unique index, and able to
+  raise ``RecordExistsError``/``PersistenceError`` *after* the save had already
+  committed. #307
+
+- Partial write paths now maintain class-level indexes fail-closed.
+  ``commit_fields``, ``save_fields``, and ``multi_field_update`` guard and
+  claim class-level unique indexes *before* their transaction opens -- the
+  same server-side Lua CAS that ``save`` uses, scoped to the fields being
+  written -- and update the index entries inside the same ``MULTI`` as the
+  hash write. Previously they wrote the hash and cleared dirty tracking
+  without touching class-level indexes, so ``find_by_<field>`` kept resolving
+  the old value and the freed value could not be reused. A constraint
+  violation raises ``Familia::RecordExistsError`` before any hash command is
+  queued; ``multi_field_update`` additionally rolls its in-memory assignments
+  back, preserving its never-diverged contract. Indexes on fields outside a
+  partial write are neither claimed nor re-affirmed, so unrelated claims
+  survive it. Timestamps are untouched -- unlike ``save``, a partial write
+  still does not bump ``created``/``updated``. #308
+
+- Fast writers (``field!``) on a field backing a class-level index now claim
+  and update the index before the ``HSET`` instead of leaving the entry
+  stale. A losing claim raises ``Familia::RecordExistsError`` with the hash
+  and in-memory state untouched. For ``multi_index``-backed fields the update
+  is add-only, matching save. #308
+
+Security
+--------
+
+- Batch writes now enforce field-type semantics: ``multi_field_update`` and
+  ``multi_field_fast_write`` raise ``ArgumentError`` for transient fields
+  (never persisted) and for encrypted fields given anything other than nil or
+  a ``ConcealedString``, instead of persisting transient values and storing
+  encrypted-field plaintext verbatim. To encrypt a new plaintext value, use
+  the field setter followed by ``save``/``save_fields``. The encrypted-field
+  check tests the ``ConcealedString`` type rather than the presence of an
+  ``encrypted_value`` method: ``serialize_value`` persists that method's
+  return value verbatim, so accepting the interface would let a
+  caller-supplied object write plaintext through the guard meant to stop it.
+
+- Permission symbol lookups in ``Relationships::ScoreEncoding`` fail loudly:
+  ``add_permissions``, ``remove_permissions``, ``permission?``,
+  ``permission_range``, ``score_range``, and ``encode_score`` now raise
+  ``ArgumentError`` on unknown permission symbols instead of silently treating
+  them as no permission — previously ``remove_permissions(score, :admn)``
+  (a typo) was a silent no-op that left the permission granted.
+
+  The two symbol namespaces are now documented as distinct rather than
+  interchangeable. ``PERMISSION_ROLES`` (``:viewer``, ``:editor``,
+  ``:moderator``, ``:admin``) are an encode-time convenience accepted only by
+  ``encode_score``/``permission_encode``, and only in the bare-symbol form —
+  ``encode_score(ts, :editor)`` resolves the bundle, ``encode_score(ts,
+  [:editor])`` does not. Everywhere else, atomic ``PERMISSION_FLAGS`` are the
+  currency, and a role now raises with a message naming the flags to use
+  instead. Roles are deliberately not resolved there: ``permission?`` tests
+  bits individually and would answer "holds any of these" where callers mean
+  "holds all of these", and ``:admin`` differs between the namespaces (flag =
+  bit 7, role = all eight bits), so resolving it would silently widen
+  ``add_permissions(score, :admin)`` from one bit to eight. ``:admin`` is
+  consequently the one role symbol those methods accept, since it names a flag
+  too.
+
+- Pinned ``anthropics/claude-code-action`` to the immutable v1.0.183 release
+  commit SHA in both workflows holding ``CLAUDE_CODE_OAUTH_TOKEN``, replacing
+  the mutable ``@beta`` branch ref. The pin required migrating the removed
+  beta inputs (``model``/``fallback_model``/``allowed_tools`` to
+  ``claude_args`` flags; ``direct_prompt`` to ``prompt``).
+
+Documentation
+-------------
+
+- The "Permission Management" section of ``docs/overview.md`` described a
+  subsystem that does not exist: a ``permission_tracking`` class-level DSL and
+  fifteen generated instance methods (``grant``, ``revoke``, ``can?``,
+  ``permissions_for``, ``permission_tier_for``, ``all_permissions``,
+  ``users_by_category``, ``accessible_items``, ``items_by_permission``,
+  ``permission_matrix``, ``admin_access?`` and others). None of them appear
+  anywhere in ``lib/``. Replaced with the real surface: permission bits packed
+  into the fractional part of a sorted set score, granted by the score passed
+  to a ``participates_in ... type: :sorted_set`` collection, queried with the
+  generated ``<collection>_with_permission`` and the ``ScoreEncoding`` module
+  methods. The replacement example is pinned by
+  ``try/bug_fixes/overview_permission_example_try.rb``, which runs it verbatim.
+
+- Corrected generated method names and receivers in the ``Relationships`` and
+  ``TargetMethods`` rdoc. Target methods are instance-level, not class-level
+  (``customer.domains``, not ``Customer.domains``), and the singular add/remove
+  helpers are ``add_<collection>_instance``/``remove_<collection>_instance`` —
+  no ``add_domain``/``remove_domain`` is generated.
+
+- Replaced the fabricated "Multi-collection operations" example in the
+  ``Relationships`` rdoc. It documented ``update_multiple_presence`` and
+  ``Domain.union_collections``, neither of which appears anywhere in ``lib/``,
+  and passed the second a ``min_permission:`` keyword. That last name is real
+  but belongs elsewhere: ``min_permission`` is the positional parameter of the
+  generated ``<collection>_with_permission`` method, and ``min_permissions:``
+  is a keyword on ``score_range`` — neither is a keyword of the nonexistent
+  method the example called. The replacement shows the
+  real cross-collection surface — ``participating_ids_for_target`` and
+  ``participating_in_target?`` answering from the participant's reverse index,
+  and ``Familia.transaction`` for grouping writes, since there is no
+  relationships-specific batch method. Pinned by
+  ``try/bug_fixes/relationships_rdoc_example_try.rb``.
+
+- Documented that ``<collection>_with_permission`` takes atomic
+  ``PERMISSION_FLAGS`` and raises ``ArgumentError`` on a role symbol. The raise
+  is the intended fail-loud behaviour introduced above, but the generated
+  method gave no indication that ``domains_with_permission(:editor)`` would not
+  work while ``domains_with_permission(:edit)`` does.
+
+- Corrected the ``guard_allowed_fields!`` error message, which claimed "only
+  fields defined with ``field`` or ``transient`` are mass-assignable". The
+  allowed set is every field in ``field_method_map`` — including
+  ``encrypted_field`` and feature-registered fields — so the message named the
+  wrong boundary for anyone debugging an undeclared-field error. It now states
+  only what the guard checks: the name is not a declared field. Per-field-type
+  write policy stays with ``guard_persistable_fields!``.
+
+- Documented ``PERMISSION_CATEGORIES`` and permission tiers as the third and
+  fourth symbol namespaces, and the collision between them. ``category?`` is a
+  non-exclusive overlap test — a ``:moderator`` score answers ``true`` to all
+  five categories — while ``permission_tier`` assigns one exclusive bucket,
+  checking most-privileged first. They reuse the names ``:content_editor`` and
+  ``:administrator`` for opposite questions, so the same score is
+  ``category?(:content_editor)`` **and** tier ``:administrator`` (``:delete``
+  falls inside the administrator mask). Tier ``:viewer`` is the one exact
+  correspondence with a role: the masks partition all eight bits, making it
+  reachable only at ``bits == 1``.
+
+- Fixed the ``connection_provider`` examples, which ended with
+  ``pool.with { |conn| conn }`` -- a connection the pool has already checked
+  back in, so concurrent callers share it. #358
+
+- The encryption upgrade proof (``examples/encryption_upgrade_proof/``) no
+  longer pins "personalization is unrotatable" as a hazard: phase 2 now
+  proves that after rotating ``encryption_personalization``, envelopes
+  written under the built-in default keep decrypting via the legacy fallback
+  and via an explicit history entry. The encrypted-fields and encryption
+  guides, the overview, and the technical reference document
+  ``encryption_personalization_history`` alongside the salt history,
+  including a rotation example. #333
+
+AI Assistance
+-------------
+
+- All six fixes, their tryouts (120+ new test cases across eight files), and an
+  independent full-branch verification pass were produced by AI agents working
+  from the 2026-07-19 security audit's confirmed HIGH/MEDIUM findings.
+
+- AI implemented the Lua CAS design recorded in ADR-0002, adding
+  ``claim_field``/``release_field`` to ``HashKey``, rewriting the generated
+  unique-index mutators to claim before the ``MULTI`` and re-affirm inside it,
+  and wiring ``claim_unique_indexes!`` into ``prepare_for_save`` with rollback of
+  partial claims. Added a tryouts suite covering the CAS primitives, legacy
+  value normalization, the simulated save race, partial-claim rollback across two
+  unique indexes, the in-transaction claim assertion, and ownership-checked
+  release on ``destroy!``. Updated the edge-case tryout that previously asserted
+  the buggy "last write wins" behavior.
+
+- AI wrote the scoped-config helper and migrated every tryout that touches the
+  encryption config to it: the files with no teardown, and the files that already
+  cleaned up by assigning ``nil`` or by hand-rolling their own save/restore.
+  Added ``try/support/encryption_config_helper_try.rb`` covering install/restore,
+  block nesting inside a file-scoped override, restoration when the block raises,
+  the repeat-install baseline rule, the clear-with-no-install fallback, the leak
+  warning, and the derived-key cache wipe. Verified the fix by running every
+  encryption-touching file followed by a leak probe -- nineteen fail that probe
+  before the change, none after. #363
+
+- AI reordered the persisted-record guard ahead of the CAS claim in the
+  generated ``update_in_<scope>_<index_name>`` method and added regression
+  coverage asserting that a rejected unsaved record leaves no claim behind
+  and that the value remains claimable by a persisted record.
+
+- AI removed the dead finalizer path, rewrote the memory-clearing claims in
+  the ``ConcealedString`` docs and the encryption guide to describe what
+  ``clear!`` actually does, and verified the encrypted/transient field
+  tryouts suites still pass.
+
+- Claude Code implemented the nil handling and the accessor normalization,
+  added ``try/unit/multi_result_try.rb`` covering clean, error-carrying,
+  empty, and aborted results across every accessor and alias — including that
+  an abort stays distinguishable from a zero-command commit — plus a real
+  WATCH-aborted ``MULTI`` driven against the database from two connections,
+  and switched ``TransactionCore.execute_watched_transaction``'s abort
+  detection to the new ``aborted?`` predicate.
+
+- AI reproduced both symptoms (caller-string encoding flip and ``FrozenError``
+  on a frozen context) against the unfixed provider, applied the ``to_s.b``
+  fix, and added regression coverage asserting that the caller's encoding is
+  preserved, that a frozen context derives successfully, that non-String
+  contexts are tolerated, and that the derived key still matches the sibling
+  provider byte for byte.
+
+- Claude Code implemented the capped-write plumbing (shared
+  ``execute_capped_write`` helper, ``supports_max_length?`` predicate,
+  definition-time validation), wired trimming into all member-creating paths
+  of ``SortedSet`` and ``ListKey``, added ``enforce_max_length!`` and the
+  ``participates_in`` / ``class_participates_in`` ``max_length:`` passthrough
+  with conflict detection, shipped the ``Housekeeping::EnforceCollectionCaps``
+  chore class (extending ``chore`` to accept callables), and wrote the
+  documentation and this changelog entry.
+
+- Claude Code verified that neither dependency had any caller in the shipped
+  library, removed both from ``familia.gemspec``, regenerated ``Gemfile.lock``
+  (``stringio`` remains in the lockfile as a transitive dependency of ``psych``,
+  now uncapped), and confirmed the full tryouts suite stays green.
+
+- The shared ``Blake2bPersonalization`` module, the manager decrypt-walk and
+  cache-key changes, the upgrade-proof and guide updates, and this changelog
+  entry were drafted with AI assistance. #333
+
+- Claude Code implemented the atomic ``SET NX EX`` acquire path, the
+  ``sample_rate`` writer validation and ``should_log?`` hardening, added
+  regression tryouts for both, and confirmed the full tryouts suite green
+  (6361 testcases, 311 files).
+
+- AI implemented the bounded/streaming query forms recommended by the memory
+  audit's #309 diagnosis and updated the relationships documentation
+  (``docs/overview.md``, the participation guide, and rdoc comments) to match.
+
+- AI deleted the ``save`` override in
+  ``Familia::Features::Relationships::ModelInstanceMethods`` and added
+  regression coverage asserting that a class-level ``unique_index`` save queues
+  its ``HSET`` inside the save ``MULTI``/``EXEC`` and issues no index writes
+  after the transaction commits.
+
+- AI extended the #353 claim machinery to the partial writers: extracted
+  ``prepare_for_partial_write`` (guard + claim scoped to written fields, no
+  timestamp mutation), added ``only:`` filters to the guard/claim/index-update
+  primitives with a per-index ledger reset so partial writes do not wipe
+  unrelated claims, restructured ``multi_field_update`` to run setters before
+  the claim with snapshot/rollback of in-memory state, and taught the
+  generated ``field!`` writers to resolve index participation lazily per
+  runtime class. Added tryouts covering index add/remove per write path,
+  fail-closed conflicts with rollback, transaction/pipeline refusal, and
+  timestamp non-mutation; updated the transaction-safety and indexing guides
+  with a per-write-path maintenance table.
+
 .. _changelog-2.11.2:
 
 2.11.2 — 2026-07-05
