@@ -54,8 +54,11 @@ end
 
 # objid's setter has a Redis side effect (objid_lookup HDEL) that the
 # multi_field_update rollback cannot restore -- the field must be refused.
+# extid's setter has the same side effect against extid_lookup, so the
+# guard must catch both categories, not just :object_identifier.
 class ::PartialIdxOwner < Familia::Horreum
   feature :object_identifier
+  feature :external_identifier
 
   identifier_field :pid
   field :pid
@@ -461,6 +464,21 @@ PartialIdxOwner.objid_lookup[@orig_objid]
 ## the non-identifier field in the same batch was not applied either
 [@o1.objid == @orig_objid, PartialIdxOwner.objid_lookup[@orig_objid], @o1.label]
 #=> [true, "po1", "one"]
+
+## a string key is refused the same as a symbol key
+@o1.multi_field_update('objid' => 'replacement-objid')
+#=!> ArgumentError
+
+## extid carries the identical extid_lookup side effect and is refused too
+@o1.multi_field_update(extid: 'ext_replacement')
+#=!> ArgumentError
+
+## non-identifier fields on an objid/extid-bearing record still update
+## normally -- the guard scopes to the written fields, not the class
+@o1.multi_field_update(label: 'two')
+@o1.refresh
+[@o1.label, PartialIdxOwner.objid_lookup[@orig_objid]]
+#=> ["two", "po1"]
 
 @u1.destroy! rescue nil
 @u2.destroy! rescue nil

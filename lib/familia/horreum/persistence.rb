@@ -1470,7 +1470,13 @@ module Familia
       #
       # - nil or aborted result: EXEC never ran, so none of the queued
       #   commands applied. The pre-MULTI claim entries are the only
-      #   Redis-side trace of the failed write; release them.
+      #   Redis-side trace of the failed write; release them. One edge is
+      #   accepted here: a connection error raised while EXEC itself was in
+      #   flight also reaches this branch, and there the write may have
+      #   landed server-side. Releasing then drops what would have been a
+      #   valid entry -- recoverable, since the record's next successful
+      #   save re-claims it -- which beats the certain leak of never
+      #   releasing.
       # - executed-with-errors result: once EXEC runs, Redis executes EVERY
       #   queued command -- an error in one does not stop the others -- so
       #   the hash write may well have landed, making the claim entry the
