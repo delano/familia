@@ -154,7 +154,7 @@ end
 #=> ['beta', 'alpha']
 
 ## Issue 2 (#311): encrypt then decrypt the same value in one cache scope derives
-## once. The encrypt path (salt nil, resolved to hkdf_salts.first) and the decrypt
+## once. The encrypt path (salt nil, resolved via current_hkdf_salt) and the decrypt
 ## loop's first iteration (explicit hkdf_salts.first) now share a single cache
 ## entry, instead of filing the same derived key under nil and under the resolved
 ## salt. A single cached entry proves the redundant second derivation is gone.
@@ -190,6 +190,27 @@ begin
   'encrypted-unexpectedly'
 rescue Familia::EncryptionError
   'refused'
+end
+#=> 'refused'
+
+## Fail closed survives a warm request cache (#380): a decrypt inside the cache
+## scope populates an entry keyed on the historical salt; a subsequent encrypt
+## must still be refused rather than reusing that cached key. The cache lookup
+## precedes derivation, so the cache key itself must resolve through the
+## fail-closed accessor (current_hkdf_salt), never the candidate list's head.
+Familia.config.encryption_hkdf_salt = 'WarmCacheSalt'
+Familia.config.encryption_hkdf_salt_history = []
+@warm_blob = @mgr.encrypt('written under warm cache salt', context: @ctx)
+Familia.config.encryption_hkdf_salt = nil
+Familia.config.encryption_hkdf_salt_history = ['WarmCacheSalt']
+Familia::Encryption.with_request_cache do
+  @mgr.decrypt(@warm_blob, context: @ctx) # warms the cache under 'WarmCacheSalt'
+  begin
+    @mgr.encrypt('should not encrypt', context: @ctx)
+    'encrypted-unexpectedly'
+  rescue Familia::EncryptionError => e
+    e.message.include?('non-empty') ? 'refused' : 'wrong-error'
+  end
 end
 #=> 'refused'
 
