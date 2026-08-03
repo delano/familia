@@ -8,7 +8,10 @@ require_relative '../../support/helpers/test_helpers'
 
 Familia.debug = false
 
-Familia.dbclient.flushdb
+# Scoped delete, never FLUSHDB (issue #283). SecretService is also defined
+# by transient_fields_core/integration tryouts with different identifiers,
+# so scope down to the exact identifiers this file writes.
+delete_test_dbkeys('secret_service:test-service:*', 'simple_service:no-transient-test:*')
 
 class SecretService < Familia::Horreum
   feature :transient_fields

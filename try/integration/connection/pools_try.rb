@@ -84,9 +84,11 @@ class PoolTestAccountDB1 < Familia::Horreum
 end
 
 
-## Clean up before tests
-PoolTestAccount.dbclient.flushdb
-#=> "OK"
+## Clean up before tests (scoped delete, never FLUSHDB -- issue #283).
+## Model identifiers are random per run; this just prevents accumulation
+## of this file's own keys, including Test 13's test_key_<hex> strings.
+delete_test_dbkeys(PoolTestAccount, PoolTestSession, PoolTestAccountDB1, 'test_key_*').is_a?(Integer)
+#=> true
 
 ## Test 1: Connection provider configuration
 Familia.connection_provider.is_a?(Proc)

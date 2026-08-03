@@ -33,7 +33,7 @@ class AADMultiFieldModel < Familia::Horreum
   encrypted_field :token, aad_fields: [:org, :role, :region]
 end
 
-Familia.dbclient.flushdb
+delete_test_dbkeys(AADNilFieldModel, AADMultiFieldModel) # scoped delete, not FLUSHDB (issue #283)
 
 ## Encrypt with nil AAD field and reveal without changing it succeeds
 record = AADNilFieldModel.new(id: 'nil-aad-1')
@@ -108,5 +108,5 @@ aad_one = @ft.send(:build_aad, rec_one_nil)
 aad_two != aad_one
 #=> true
 
-Familia.dbclient.flushdb
+delete_test_dbkeys(AADNilFieldModel, AADMultiFieldModel) # scoped delete, not FLUSHDB (issue #283)
 clear_test_encryption_keys

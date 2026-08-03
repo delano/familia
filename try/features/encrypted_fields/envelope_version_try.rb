@@ -34,7 +34,7 @@ class EnvelopeNoAADModel < Familia::Horreum
   encrypted_field :token
 end
 
-Familia.dbclient.flushdb
+delete_test_dbkeys(EnvelopeVersionModel, EnvelopeNoAADModel, 'evolving_model:*', 'multi_aad_model:*', 'empty_aad_model:*') # scoped delete, not FLUSHDB (issue #283)
 
 ## New envelope has envelope_version: 2
 @record = EnvelopeVersionModel.new(id: 'env-v2-1', org_id: 'org-abc')
@@ -165,5 +165,5 @@ end
 @empty_env['aad_fields']
 #=> nil
 
-Familia.dbclient.flushdb
+delete_test_dbkeys(EnvelopeVersionModel, EnvelopeNoAADModel, 'evolving_model:*', 'multi_aad_model:*', 'empty_aad_model:*') # scoped delete, not FLUSHDB (issue #283)
 clear_test_encryption_keys

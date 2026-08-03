@@ -43,7 +43,9 @@ class ::Widget241 < Familia::Horreum
 end
 
 # Start from a clean slate for indexes so previous test runs don't leak.
-Familia.dbclient.flushdb
+# Scoped to this file's own key prefixes (issue #283): the db is shared
+# with every other tryout file, so flushing it would erase their data.
+delete_test_dbkeys('widget241*', 'widget282*', 'dw_mode_model:*')
 
 ## Class-level unique_index is populated by save
 @w1 = Widget241.create!(objid: 'w241-unique-001', name: 'alpha')
@@ -868,10 +870,11 @@ rescue ArgumentError => e
 end
 #=> true
 
-# Teardown: flush the database and remove throwaway constants so this
+# Teardown: delete this file's keys and remove throwaway constants so this
 # tryout doesn't pollute sibling suites (index keys in particular can
-# otherwise interfere with re-run iterations).
-Familia.dbclient.flushdb
+# otherwise interfere with re-run iterations). Scoped delete, not FLUSHDB,
+# because the db is shared (issue #283).
+delete_test_dbkeys('widget241*', 'widget282*', 'dw_mode_model:*')
 %i[
   Widget241
   Widget241ScopedEmployee

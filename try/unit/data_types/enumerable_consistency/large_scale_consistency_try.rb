@@ -295,9 +295,20 @@ bulk_add_to_set(@bone_1m.tags, 1_000_000)
 @bone_1m.tags.element_count
 #=> 1000000
 
-## UnsortedSet 1M: streaming count matches element_count
-@bone_1m.tags.each(batch_size: 50000).count
-#=> 1000000
+## UnsortedSet 1M: streaming covers every member (SSCAN is at-least-once)
+# SSCAN guarantees at-least-once delivery, not exactly-once: a member can be
+# yielded more than once while the hash table rehashes (likely right after a
+# 1M-member bulk load), so an exact `.count == 1_000_000` is inherently racy.
+# Assert the semantics SSCAN actually provides: raw yield count is at least
+# the cardinality, and the deduplicated count matches element_count exactly.
+raw_count = 0
+unique = Set.new
+@bone_1m.tags.each(batch_size: 50000) do |item|
+  raw_count += 1
+  unique << item
+end
+[raw_count >= @bone_1m.tags.element_count, unique.size]
+#=> [true, 1000000]
 
 ## UnsortedSet 1M: streaming XOR checksum is non-zero (sanity check)
 checksum = 0
