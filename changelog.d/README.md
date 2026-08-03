@@ -12,18 +12,18 @@ This approach provides several benefits:
 - **Reduces Merge Conflicts:** Developers can work in parallel without conflicting over a central changelog file.
 - **Improves Developer Experience:** Creating a small, focused fragment is a simple and repeatable task during development.
 - **Ensures Consistency:** Automation helps maintain a consistent structure for all changelog entries.
-- **AI Transparency:** An opportunity to be specific and detailed about the assistance provided.
+- **AI Transparency:** An opportunity to briefly note AI involvement without cluttering standard technical sections.
 - **Builds Trust:** A clear and well-maintained changelog communicates respect for our users and collaborators.
 
-## Relevant paths
+### Relevant paths
 
 * `changelog.d/` - (e.g. changelog.d/YYYYMMDD_HHmmss_username_branch.rst)
 * `docs/migrating/` - (e.g. docs/migrating/v2.0.0-pre.md)
-* `CHANGELOG.rst` - The full changelog for all releases, in reverse chronological order. Careful: LARGE DOCUMENT. Limit reading to the first 50 lines.
+* `CHANGELOG.rst` - The full changelog for all releases, in reverse chronological order. Careful: LARGE DOCUMENT. Default to reading only the first 100 lines.
 
 * `changelog.d/scriv.ini` - Scriv tool settings
 
-## How to Add a Changelog Entry
+## Add a Changelog Entry
 
 1.  **Create a New Fragment:**
 
@@ -48,16 +48,25 @@ git add changelog.d/YYYYMMDD_HHmmss_username_branch.rst [docs/migrating/v2.0.0-p
 git commit
 ```
 
-## Fragment Guidelines
+### Fragment Guidelines
 
 - **One Fragment Per Change:** Keep each fragment focused on a single feature, fix, or improvement.
-- **Documenting AI Assistance:** If a change involved significant AI assistance, place it in its own fragment. This ensures the `### AI Assistance` section clearly corresponds to the single change described in that fragment.
-- **Write for a Human Audience:** Describe the *impact* of the change, not just the implementation details.
-    - **Good:** "Improved the performance and stability of Database connections under high load."
-    - **Bad:** "Refactored the `DatabaseManager`."
+- **Documenting AI Assistance:** Keep AI acknowledgments to a single terse sentence. Avoid verbose narrative, process logs, or repeating technical details captured in standard sections.
+- **Write Tersely and Objectively:** Focus on precise technical details (method/class names, parameters, exceptions, issues) without narrative filler explaining "why" or "how".
+    - **Good:** "Added ``Familia::HashKey#claim_field`` and ``#release_field`` for single-hash server-side CAS/CAD operations. Raises ``Familia::OperationModeError`` in pipelines/transactions."
+    - **Bad:** "We found a race condition during an audit, so we added a nice compare-and-set wrapper called `#claim_field` to allow callers to safely claim a field in single hash fields."
 - **Be Specific:** Avoid generic messages like "fixed a bug." Clearly state what was fixed.
 - **Include Context:** Reference issue or pull request numbers to provide a link to the discussion and implementation details. `scriv` will automatically create links for them.
     - **Example:** `- Fixed a bug where users could not reset their passwords. PR #123`
+
+### Content Guidelines
+
+- **Target Audience Priority**: Focus exclusively on what is external, breaking, or actionable for developers consuming the package, omitting step-by-step internal implementation steps.
+- **Semantic Classification**: Align technical facts strictly with standardized headers (`Added`, `Changed`, `Removed`, `Fixed`, `Security`) to enable fast, scannable reading.
+- **Impact-Driven Filtering**: Retain precise contract signatures, method names, options, and exceptions raised while eliminating explanatory narratives on "why" or "how" the defect was introduced or found.
+- **Process Log Exclusion**: Remove all development metadata (such as tool-specific implementation notes, agent logs, and audit timelines) that do not change library APIs or behavior.
+- **Structural Consistency**: Match the terse style and spacing of previous changelog versions in the repository to maintain a unified document format.
+
 
 ### Categories
 
@@ -70,7 +79,7 @@ Use these categories:
 - **Fixed**: Bug fixes.
 - **Security**: Security-related improvements.
 - **Documentation**: Documentation improvements.
-- **AI Assistance**: Significant AI assistance in the change, including discussion, rubber ducking, formatting, writing documentation, writing tests.
+- **AI Assistance**: Terse, single-sentence acknowledgment of AI assistance for the change. Do not duplicate technical details already listed in other categories.
 
 ## Release Process
 
