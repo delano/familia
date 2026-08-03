@@ -4,73 +4,56 @@ This directory contains changelog fragments managed by [Scriv](https://scriv.rea
 
 ## Our Approach
 
-Changelogs are for humans and agents, not just machines. We follow the core principles of [Keep a Changelog](https://keepachangelog.com) and semvar to ensure our release notes are clear, consistent, and useful.
+Changelogs are for humans and agents, not just machines. We follow [Keep a Changelog](https://keepachangelog.com) and semver to ensure clear, consistent, and useful release notes.
 
-To achieve this, we use a fragment-based workflow with `scriv`. Instead of a single, large `CHANGELOG.md` file that can cause merge conflicts, each developer includes a small changelog fragment with their pull request. At release time, these fragments are collected and aggregated into the main changelog.
+We use a fragment-based workflow with `scriv`. Each developer includes a small, focused changelog fragment with their pull request. At release time, these are compiled into the main changelog.
 
-This approach provides several benefits:
-- **Reduces Merge Conflicts:** Developers can work in parallel without conflicting over a central changelog file.
-- **Improves Developer Experience:** Creating a small, focused fragment is a simple and repeatable task during development.
-- **Ensures Consistency:** Automation helps maintain a consistent structure for all changelog entries.
-- **AI Transparency:** An opportunity to briefly note AI involvement without cluttering standard technical sections.
-- **Builds Trust:** A clear and well-maintained changelog communicates respect for our users and collaborators.
+Benefits:
+- **No Merge Conflicts:** Developers work in parallel without conflicting over a single file.
+- **Improved DX:** Creating a small fragment is simple and repeatable.
+- **AI Transparency:** Briefly notes AI involvement without cluttering technical sections.
+- **Consistency:** Automation maintains a unified structure.
 
-### Relevant paths
+### Relevant Paths
 
-* `changelog.d/` - (e.g. changelog.d/YYYYMMDD_HHmmss_username_branch.rst)
-* `docs/migrating/` - (e.g. docs/migrating/v2.0.0-pre.md)
-* `CHANGELOG.rst` - The full changelog for all releases, in reverse chronological order. Careful: LARGE DOCUMENT. Default to reading only the first 100 lines.
-
-* `changelog.d/scriv.ini` - Scriv tool settings
+* `changelog.d/` - Fragment directory (e.g. `changelog.d/YYYYMMDD_HHmmss_username_branch.rst`)
+* `docs/migrating/` - Migration guides (e.g. `docs/migrating/v2.0.0-pre.md`)
+* `CHANGELOG.rst` - The full changelog (reverse chronological, large file; read only the top 100 lines default)
+* `changelog.d/scriv.ini` - Scriv configuration
 
 ## Add a Changelog Entry
 
-1.  **Create a New Fragment:**
+1. **Create a New Fragment:**
+   ```bash
+   scriv create
+   ```
+2. **Edit the Fragment:**
+   Open the new `.rst` file and write your entry under the relevant category using the guidelines below.
+3. **Add or Update Migrating Guide (Optional):**
+   If the change requires developer action to upgrade, add or update a guide in `docs/migrating/`. Use existing guides as a reference and ensure headers do not repeat.
+4. **Commit with Your Code:**
+   ```bash
+   git add changelog.d/YYYYMMDD_HHmmss_username_branch.rst [docs/migrating/v2.0.0-pre.md]
+   git commit
+   ```
 
-```bash
-# This will create a new file in the `changelog.d/` directory.
-scriv create
-```
-
-2.  **Edit the Fragment File:**
-Open the newly created file and add your entry under the relevant category. See the guidelines below for writing good CHANGELOG entries.
-
-3. **Add or Update Migrating Guide:** (optional)
-Include technical details to help developers update to the new version. Start with a specific introduction, e.g. "This version introduces significant improvements to Familia's feature system, making it easier to organize and use features across complex projects.". Including code snippets and multi-line content that is too detailed for the CHANGELOG.
-
-Use the content of an existing `docs/migrating/vMajor.Minor.Patch*.md file as a reference.
-
-Compare the headers of your draft content with the headers of the previous migration guide to make sure it does not repeat or overlap.
-
-4.  **Commit with Your Code:**
-```bash
-git add changelog.d/YYYYMMDD_HHmmss_username_branch.rst [docs/migrating/v2.0.0-pre.md]
-git commit
-```
-
-### Fragment Guidelines
+## Fragment Guidelines
 
 - **One Fragment Per Change:** Keep each fragment focused on a single feature, fix, or improvement.
-- **Documenting AI Assistance:** Keep AI acknowledgments to a single terse sentence. Avoid verbose narrative, process logs, or repeating technical details captured in standard sections.
-- **Write Tersely and Objectively:** Focus on precise technical details (method/class names, parameters, exceptions, issues) without narrative filler explaining "why" or "how".
-    - **Good:** "Added ``Familia::HashKey#claim_field`` and ``#release_field`` for single-hash server-side CAS/CAD operations. Raises ``Familia::OperationModeError`` in pipelines/transactions."
-    - **Bad:** "We found a race condition during an audit, so we added a nice compare-and-set wrapper called `#claim_field` to allow callers to safely claim a field in single hash fields."
-- **Be Specific:** Avoid generic messages like "fixed a bug." Clearly state what was fixed.
-- **Include Context:** Reference issue or pull request numbers to provide a link to the discussion and implementation details. `scriv` will automatically create links for them.
-    - **Example:** `- Fixed a bug where users could not reset their passwords. PR #123`
+- **Reference Context:** Include issue or PR numbers. Scriv will automatically link them. (e.g., `PR #123`).
 
-### Content Guidelines
+## Content Guidelines
 
-- **Target Audience Priority**: Focus exclusively on what is external, breaking, or actionable for developers consuming the package, omitting step-by-step internal implementation steps.
-- **Semantic Classification**: Align technical facts strictly with standardized headers (`Added`, `Changed`, `Removed`, `Fixed`, `Security`) to enable fast, scannable reading.
-- **Impact-Driven Filtering**: Retain precise contract signatures, method names, options, and exceptions raised while eliminating explanatory narratives on "why" or "how" the defect was introduced or found.
-- **Process Log Exclusion**: Remove all development metadata (such as tool-specific implementation notes, agent logs, and audit timelines) that do not change library APIs or behavior.
-- **Structural Consistency**: Match the terse style and spacing of previous changelog versions in the repository to maintain a unified document format.
+- **Target the Consumer:** Focus exclusively on external, breaking, or actionable behavior. Omit internal implementation steps, development metadata, and agent logs.
+- **Impact-Driven Filtering:** Focus strictly on technical facts (method/class signatures, parameters, exceptions, issues resolved) and eliminate explanatory "how" or "why" narratives.
+  - **Good:** "Added ``Familia::HashKey#claim_field`` and ``#release_field`` for single-hash server-side CAS/CAD operations. Raises ``Familia::OperationModeError`` in pipelines/transactions."
+  - **Bad:** "We found a race condition during an audit, so we added a nice compare-and-set wrapper called `#claim_field` to allow callers to safely claim a field in single hash fields."
+- **Process Log Exclusion:** Remove all development metadata (such as tool-specific implementation notes, agent logs, and audit timelines) that do not change library APIs or behavior.
+- **Maintain Consistency:** Match the terse style, semantic classification, and spacing of previous changelog versions.
 
+## Categories
 
-### Categories
-
-Use these categories:
+Use these standard headers in your fragment:
 
 - **Added**: New features or capabilities.
 - **Changed**: Changes to existing functionality.
@@ -83,4 +66,4 @@ Use these categories:
 
 ## Release Process
 
-At release time, scriv will collect all fragments into the main `CHANGELOG.rst` file with th command `scriv collect`. The version is taken automatically from `lib/familia/version.rb`.
+At release, run `scriv collect` to aggregate all fragments into `CHANGELOG.rst`. The version is parsed automatically from `lib/familia/version.rb`.
