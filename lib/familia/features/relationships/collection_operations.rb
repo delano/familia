@@ -32,14 +32,95 @@ module Familia
         # @param participant_class [Class, nil] The class whose identifiers the
         #   collection stores (the participant). When nil, the collection is
         #   declared with no record_class (each_record stays unavailable).
-        def ensure_collection_field(target_class, collection_name, type, participant_class: nil)
-          return if target_class.method_defined?(collection_name)
+        # @param max_length [Integer, nil] Cap for the collection (issue #351),
+        #   validated eagerly so a bad value or unsupported type fails at class
+        #   definition time rather than on first access. When the collection is
+        #   pre-declared, the caps must agree — see assert_compatible_cap!.
+        def ensure_collection_field(target_class, collection_name, type, participant_class: nil, max_length: nil)
+          validate_max_length_option!(type, max_length)
 
-          if participant_class
-            target_class.send(type, collection_name, record_class: participant_class)
-          else
-            target_class.send(type, collection_name)
+          if target_class.method_defined?(collection_name)
+            existing = target_class.related_fields[collection_name.to_s.to_sym]
+            assert_compatible_cap!(existing, max_length, target_class, collection_name, type)
+            return
           end
+
+          opts = {}
+          opts[:record_class] = participant_class if participant_class
+          opts[:max_length] = max_length if max_length
+          target_class.send(type, collection_name, **opts)
+        end
+
+        # Eager definition-time validation for a max_length: passed through
+        # participation. The DataType itself validates in #initialize, but for
+        # instance-level relations that instance is created lazily on first
+        # accessor call — too late to point at the participates_in line that
+        # caused it. No-op when max_length is nil.
+        #
+        # @raise [ArgumentError] on a non-positive/non-Integer value or a
+        #   collection type that does not implement capping
+        def validate_max_length_option!(type, max_length)
+          return if max_length.nil?
+
+          unless max_length.is_a?(Integer) && max_length.positive?
+            raise ArgumentError, "max_length must be a positive Integer, got #{max_length.inspect}"
+          end
+
+          return if Familia::DataType.registered_type(type)&.supports_max_length?
+
+          raise ArgumentError,
+                "max_length: is not supported for type: #{type.inspect} collections " \
+                '(only :sorted_set and :list implement capping)'
+        end
+
+        # When a participation declaration requests a cap but the collection
+        # accessor already exists, the existing declaration wins (participation
+        # never overwrites it). Agreement is fine — repeating the cap is
+        # harmless — but a mismatch would silently produce a collection with
+        # the wrong cap (or none), so it raises instead. No-op when the
+        # participation declaration did not request a cap: a pre-declared cap
+        # is kept as-is, preserving the pre-declaration pattern.
+        #
+        # @param existing [RelatedFieldDefinition, nil] the pre-existing
+        #   declaration, or nil when the accessor exists but did not come from
+        #   a related-field DSL call (handwritten method, another feature) —
+        #   there is no declaration to carry a cap, so a requested cap raises
+        #   with a message that says so rather than reporting a phantom
+        #   `max_length: nil` declaration
+        # @param dsl [String, nil] the DSL method the error messages should
+        #   name as the remedy; defaults to +type+ (instance-level). The
+        #   class-level caller passes "class_#{type}" so the suggested fix
+        #   matches the declaration style that actually applies.
+        # @raise [ArgumentError] when the requested cap differs from the
+        #   declared one, or when there is no declaration to check against
+        def assert_compatible_cap!(existing, max_length, target_class, collection_name, type, dsl: nil)
+          return if max_length.nil?
+
+          dsl ||= type
+
+          if existing.nil?
+            raise ArgumentError, <<~ERROR
+              max_length: #{max_length} cannot be applied: #{target_class} already defines
+              ##{collection_name}, but not via a `#{dsl} :#{collection_name}` declaration,
+              so participation has no collection declaration to cap.
+
+              Participation never overwrites an existing method. Either remove max_length:
+              from the participation declaration, or replace the existing ##{collection_name}
+              with a `#{dsl} :#{collection_name}, max_length: #{max_length}` declaration.
+            ERROR
+          end
+
+          declared_max = existing.opts&.fetch(:max_length, nil)
+          return if declared_max == max_length
+
+          raise ArgumentError, <<~ERROR
+            max_length: #{max_length} conflicts with the existing :#{collection_name} declaration
+            on #{target_class} (max_length: #{declared_max.inspect}).
+
+            Participation does not overwrite a collection that is already declared. Either
+            remove max_length: from the participation declaration, or give the
+            `#{dsl} :#{collection_name}` declaration on #{target_class} the same cap.
+          ERROR
         end
 
         # Add an item to a collection, handling type-specific operations

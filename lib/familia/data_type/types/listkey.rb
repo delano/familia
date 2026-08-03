@@ -6,6 +6,17 @@ module Familia
   class ListKey < DataType
     include DataType::CollectionBase
 
+    # ListKey implements :max_length (capped collection, issue #351) with
+    # per-end semantics — intentionally not unified with SortedSet's
+    # score-based trim: #push trims from the head (keeps the newest tail,
+    # LTRIM -max_length -1), while #unshift trims from the tail (keeps the
+    # newest head, LTRIM 0 max_length-1). Either way the max_length most
+    # recently written elements survive. NOT capped: pushx/unshiftx, insert,
+    # set, move destinations, and external writers.
+    def self.supports_max_length?
+      true
+    end
+
     # Returns the number of elements in the list
     # @return [Integer] number of elements
     def element_count
@@ -22,12 +33,23 @@ module Familia
     # @note This method executes a Redis RPUSH immediately, unlike scalar field
     #   setters which are deferred until save. If the parent object has unsaved
     #   scalar field changes, consider calling save first to avoid split-brain state.
-    def push *values
+    def push(*values)
       warn_if_dirty!
       echo :push, Familia.pretty_stack(limit: 1) if Familia.debug
       serialized = values.flatten.compact.map { |v| serialize_value(v) }
-      dbclient.rpush(dbkey, serialized) unless serialized.empty?
-      dbclient.ltrim dbkey, -@opts[:maxlength], -1 if @opts[:maxlength]
+      unless serialized.empty?
+        if (max = @opts[:max_length])
+          # Keep the tail: RPUSH appends there, so trimming from the head
+          # retains the max_length newest elements.
+          execute_capped_write do |conn|
+            ret = conn.rpush(dbkey, serialized)
+            conn.ltrim(dbkey, -max, -1)
+            ret
+          end
+        else
+          dbclient.rpush(dbkey, serialized)
+        end
+      end
       update_expiration
       self
     end
@@ -42,12 +64,22 @@ module Familia
     # @note This method executes a Redis LPUSH immediately, unlike scalar field
     #   setters which are deferred until save. If the parent object has unsaved
     #   scalar field changes, consider calling save first to avoid split-brain state.
-    def unshift *values
+    def unshift(*values)
       warn_if_dirty!
       serialized = values.flatten.compact.map { |v| serialize_value(v) }
-      dbclient.lpush(dbkey, serialized) unless serialized.empty?
-      # TODO: test maxlength
-      dbclient.ltrim dbkey, 0, @opts[:maxlength] - 1 if @opts[:maxlength]
+      unless serialized.empty?
+        if (max = @opts[:max_length])
+          # Keep the head: LPUSH prepends there, so trimming from the tail
+          # retains the max_length newest elements.
+          execute_capped_write do |conn|
+            ret = conn.lpush(dbkey, serialized)
+            conn.ltrim(dbkey, 0, max - 1)
+            ret
+          end
+        else
+          dbclient.lpush(dbkey, serialized)
+        end
+      end
       update_expiration
       self
     end
@@ -59,11 +91,11 @@ module Familia
     def pop(count = nil)
       warn_if_dirty!
       ret = if count
-              result = dbclient.rpop(dbkey, count)
-              result.nil? ? nil : deserialize_values(*result)
-            else
-              deserialize_value dbclient.rpop(dbkey)
-            end
+        result = dbclient.rpop(dbkey, count)
+        result.nil? ? nil : deserialize_values(*result)
+      else
+        deserialize_value dbclient.rpop(dbkey)
+      end
       update_expiration
       ret
     end
@@ -74,11 +106,11 @@ module Familia
     def shift(count = nil)
       warn_if_dirty!
       ret = if count
-              result = dbclient.lpop(dbkey, count)
-              result.nil? ? nil : deserialize_values(*result)
-            else
-              deserialize_value dbclient.lpop(dbkey)
-            end
+        result = dbclient.lpop(dbkey, count)
+        result.nil? ? nil : deserialize_values(*result)
+      else
+        deserialize_value dbclient.lpop(dbkey)
+      end
       update_expiration
       ret
     end
@@ -203,6 +235,45 @@ module Familia
     end
     alias ltrim trim
 
+    # Trims an already-oversized list down to its :max_length cap. Capped
+    # writes enforce the cap going forward, but nothing runs at definition
+    # time: adding max_length: to a live collection leaves the existing
+    # overage in place until the next push/unshift. Call this once, e.g. as
+    # a migration step, to enforce the cap immediately.
+    #
+    # The cap's per-end semantics belong to the write method (push keeps the
+    # tail, unshift keeps the head), so a manual trim must be told which end
+    # to keep: keep: :tail matches a push-fed list (the default),
+    # keep: :head an unshift-fed one.
+    #
+    # LLEN and LTRIM run in one MULTI so the removed count is exact even
+    # under concurrent writes. Inside a caller transaction or pipeline the
+    # pair is queued bare and the pre-trim length's future is returned
+    # instead of a count.
+    #
+    # @param keep [:tail, :head] which end of the list survives the trim
+    # @return [Integer, Redis::Future] number of elements removed (0 when
+    #   already within cap); inside a caller transaction or pipeline, the
+    #   future of the pre-trim length instead
+    # @raise [Familia::Problem] when the collection has no :max_length
+    def enforce_max_length!(keep: :tail)
+      max = require_max_length!
+      start, stop = case keep
+                    when :tail then [-max, -1]
+                    when :head then [0, max - 1]
+                    else
+                      raise ArgumentError, "keep must be :tail or :head, got #{keep.inspect}"
+      end
+      warn_if_dirty!
+      length = execute_capped_write do |conn|
+        ret = conn.llen(dbkey)
+        conn.ltrim(dbkey, start, stop)
+        ret
+      end
+      update_expiration
+      length.is_a?(Integer) ? [length - max, 0].max : length
+    end
+
     # Sets the element at the specified index
     # @param index [Integer] Index to set (0-based, negative counts from end)
     # @param value The value to set
@@ -228,7 +299,7 @@ module Familia
             when :after, 'AFTER' then 'AFTER'
             else
               raise ArgumentError, "position must be :before or :after, got #{position.inspect}"
-            end
+      end
       result = dbclient.linsert dbkey, pos, serialize_value(pivot), serialize_value(value)
       update_expiration if Familia.positive?(result) == true
       result

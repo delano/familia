@@ -2,6 +2,8 @@
 #
 # frozen_string_literal: true
 
+require_relative 'housekeeping/enforce_collection_caps'
+
 module Familia
   module Features
     # Housekeeping registers named cleanup chores on a Horreum class and runs
@@ -59,24 +61,33 @@ module Familia
 
       # Housekeeping::ModelClassMethods
       module ModelClassMethods
-        # Register a chore by name. The block receives the instance.
+        # Register a chore by name. Takes either a block or any callable
+        # (a class or object responding to +call+) -- both receive the
+        # instance. Callables allow shipping reusable chores as classes,
+        # e.g. Housekeeping::EnforceCollectionCaps.
         #
         # @param name [Symbol, String] chore identifier
+        # @param callable [#call, nil] callable invoked with the instance
         # @yield [obj] block invoked with the instance during do_chore!/do_chores!
-        # @return [Proc] the registered block
-        # @raise [ArgumentError] if name is blank or no block is given
-        def chore(name, &block)
+        # @return [#call] the registered handler
+        # @raise [ArgumentError] if name is blank, neither or both of
+        #   callable/block are given, or the callable does not respond to call
+        def chore(name, callable = nil, &block)
           raise ArgumentError, 'chore name required' if name.nil? || name.to_s.empty?
-          raise ArgumentError, "chore #{name.inspect} requires a block" unless block
+          raise ArgumentError, "chore #{name.inspect} takes a callable or a block, not both" if callable && block
 
-          chores[name.to_sym] = block
+          handler = callable || block
+          raise ArgumentError, "chore #{name.inspect} requires a callable or block" unless handler
+          raise ArgumentError, "chore #{name.inspect} callable must respond to #call" unless handler.respond_to?(:call)
+
+          chores[name.to_sym] = handler
         end
 
         # Registered chores in registration order. Subclasses inherit a copy
         # of their parent's chores on first access, so registering a new chore
         # on a subclass does not mutate the parent.
         #
-        # @return [Hash{Symbol => Proc}]
+        # @return [Hash{Symbol => #call}]
         def chores
           @chores ||= if superclass.respond_to?(:chores)
             superclass.chores.dup
@@ -183,8 +194,8 @@ module Familia
         #
         # @return [Hash{Symbol => Object}] chore name => block return value
         def do_chores!
-          self.class.chores.each_with_object({}) do |(chore_name, block), results|
-            results[chore_name] = block.call(self)
+          self.class.chores.each_with_object({}) do |(chore_name, handler), results|
+            results[chore_name] = handler.call(self)
           end
         end
 

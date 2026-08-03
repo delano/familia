@@ -76,6 +76,14 @@ User.chores.keys
 # => [:downcase_email, :default_timezone]
 ```
 
+In place of a block, `chore` accepts any object responding to `call` -- including a class with a `self.call` -- so reusable chores can ship as classes:
+
+```ruby
+chore :enforce_collection_caps, Familia::Features::Housekeeping::EnforceCollectionCaps
+```
+
+Passing both a callable and a block, or a callable without `call`, raises `ArgumentError`.
+
 ### Execution -- Single Instance
 
 Run all registered chores, or one by name:
@@ -127,7 +135,7 @@ For scheduling, cross-model orchestration, custom logging, or non-default iterat
 
 | Class | Method | Purpose |
 |-------|--------|---------|
-| **Class** | `chore(name, &block)` | Register a chore |
+| **Class** | `chore(name, callable = nil, &block)` | Register a chore (block or `#call`-able) |
 | | `chores` | Hash of registered chores |
 | | `run_chores!(chore_name:, limit:, batch_size:)` | Bulk runner across `instances`; returns stats hash |
 | **Instance** | `do_chore!(name)` | Run a single chore by name; returns the block's raw value |
@@ -191,6 +199,46 @@ chore :reconcile_billing do |account|
 end
 ```
 
+### Capping Oversized Collections
+
+Adding `max_length:` to a live collection caps future writes but leaves any existing overage in place until the next write. The feature ships this as a ready-made chore class, `Familia::Features::Housekeeping::EnforceCollectionCaps`, which sweeps every capped collection on the instance through `enforce_max_length!`. It is naturally idempotent -- once a collection is within its cap, the trim removes nothing and the chore returns `nil`:
+
+```ruby
+class Customer < Familia::Horreum
+  feature :housekeeping
+
+  sorted_set :events,       max_length: 100
+  list       :activity_log, max_length: 50  # push-fed: the cap keeps the tail
+
+  chore :enforce_collection_caps, Familia::Features::Housekeeping::EnforceCollectionCaps
+end
+
+Customer.run_chores!(chore_name: :enforce_collection_caps)
+```
+
+Notes on this chore:
+
+- **No `save` needed.** The trim is a direct write against the collection's own key, not a field mutation -- there is nothing dirty to persist.
+- **Selecting via `max_length` keeps the sweep generic.** The reader is defined on every DataType and returns `nil` for uncapped collections, so the sweep skips hashes, sets, and uncapped lists without type checks -- it never trips `enforce_max_length!`'s uncapped `Familia::Problem` guard.
+- **Returns the removed count.** Truthy signals "modified" to `run_chores!`; `nil` on a clean pass keeps repeat runs no-ops in the stats.
+- **Lists have per-end semantics.** `ListKey#enforce_max_length!` defaults to `keep: :tail`, matching push-fed lists. For an unshift-fed list, subclass and override `keep_for`; override `collection_names` to scope the sweep:
+
+```ruby
+class MailboxCaps < Familia::Features::Housekeeping::EnforceCollectionCaps
+  def keep_for(name)
+    name == :inbox ? :head : :tail
+  end
+end
+
+class Mailbox < Familia::Horreum
+  feature :housekeeping
+
+  list :inbox, max_length: 500  # unshift-fed: newest at the head
+
+  chore :enforce_collection_caps, MailboxCaps
+end
+```
+
 ### Tracking Modified Records (Bulk)
 
 `run_chores!` already aggregates `modified` and `errors` counts per chore. Use it directly:
@@ -243,5 +291,6 @@ end
 ## See Also
 
 - [**Writing Migrations**](writing-migrations.md) - Versioned, one-shot data transformations
+- [**DataType Collections**](datatype-collections.md) - `max_length:` capping and `enforce_max_length!`
 - [**Field System**](field-system.md) - How field values are stored and serialized
 - [**Feature System**](feature-system.md) - How features are mixed into Horreum classes

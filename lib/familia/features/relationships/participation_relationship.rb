@@ -25,6 +25,7 @@ module Familia
         :through,             # Symbol/Class/nil - through model class for join table pattern
         :method_prefix,       # Symbol/nil - custom prefix for reverse method names (e.g., :team)
         :staged,              # Symbol/nil - staging set name for deferred relationship activation
+        :max_length,          # Integer/nil - cap for the collection (issue #351); nil = uncapped
       ) do
         # Get a unique key for this participation relationship
         # Useful for comparisons and hash keys

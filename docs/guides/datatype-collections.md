@@ -36,6 +36,106 @@ Behavior notes:
 - **Empty input is a no-op**: `add()` / `push()` / `update({})` issue no command. Set/list adds return `self`; `SortedSet#update` returns `0`.
 - **`SortedSet#add(val, score, …)` is unchanged and not bulk** — it takes a single member plus score and the conditional ZADD options (`nx:`, `xx:`, `gt:`, `lt:`, `ch:`). An Array passed as `val` is stored as one JSON-encoded member, not exploded into many. Use `update`/`merge!` for bulk insertion.
 
+## Capped collections — `max_length:`
+
+`SortedSet` and `ListKey` accept a `max_length:` option that caps the collection at write time. Every member-creating write trims in the same operation, so the collection never stays over the cap:
+
+```ruby
+# Standalone
+events = Familia::SortedSet.new 'events', max_length: 100
+
+# Horreum class declaration
+class Customer < Familia::Horreum
+  sorted_set :audit_events, max_length: 10_000
+  list :recent_errors, max_length: 50
+end
+```
+
+Every collection exposes the configured cap through `#max_length`, which returns `nil` when uncapped:
+
+```ruby
+customer.audit_events.max_length  #=> 10_000
+customer.tags.max_length          #=> nil
+```
+
+It is read-only: the cap is fixed at definition time so that validation can happen once, up front. To change it, redeclare the collection.
+
+### SortedSet: top-N by score
+
+`max_length: N` retains the **N highest-scoring members** — the trim is `ZREMRANGEBYRANK key 0 -(N+1)`. This is "newest N" only when scores are timestamps; with arbitrary scores it is simply top-N by score. Capping applies to all member-creating paths: `add` (and `<<` / `[]=`), `update` / `merge!`, and `increment` / `decrement` (ZINCRBY creates the member if absent). The trim runs unconditionally after the write, which is a cheap no-op when under the cap and harmless when a conditional `nx:`/`xx:`/`gt:`/`lt:` add skipped the write.
+
+### ListKey: per-end semantics
+
+The cap keeps the elements nearest the end you wrote to — this asymmetry is intentional:
+
+- `push` (RPUSH) trims from the **head**, keeping the newest **tail** elements.
+- `unshift` (LPUSH) trims from the **tail**, keeping the newest **head** elements.
+
+### Atomicity
+
+Standalone, each write+trim pair is wrapped in its own `MULTI`, so a crash cannot leave the collection over-cap; the write command's documented return value (e.g. `add`'s Boolean, `update`'s new-member count) is preserved. Inside a caller transaction (`Fiber[:familia_transaction]`) or pipeline, the pair is issued bare and the outer MULTI covers both — Redis MULTI does not nest.
+
+### What is not capped
+
+Writes that bypass the instance's write methods are out of scope: `unionstore` / `interstore` / `diffstore` destination keys, `RESTORE`, and any external client writing the key directly.
+
+`ListKey` also leaves its conditional and positional writers uncapped by design, since none of them is an append in the sense the per-end trim assumes:
+
+- `pushx` / `unshiftx` — conditional appends that no-op on a missing key.
+- `insert` (LINSERT) and `set` (LSET) — position-relative writes.
+- `move` (LMOVE) when this list is the **destination**; the cap belongs to the method being called, and `move` is called on the source.
+
+Adding `max_length:` to a collection that is already over the cap does not trim it retroactively — nothing runs at definition time. The cap re-asserts itself on the next capped write; to enforce it sooner, call `enforce_max_length!`.
+
+### Enforcing the cap on existing data — `enforce_max_length!`
+
+Adding `max_length:` to a live production collection is a no-op until something writes to it. `enforce_max_length!` applies the cap immediately — the migration step after declaring a cap on an existing collection — and returns the number of elements removed (0 when already within the cap). Calling it on an uncapped collection raises `Familia::Problem` rather than silently doing nothing.
+
+```ruby
+customer.audit_events.enforce_max_length!   #=> 4215 (keeps the 10_000 highest scores)
+customer.recent_errors.enforce_max_length!  #=> 12   (keeps the newest 50 at the tail)
+```
+
+- **SortedSet** keeps the `max_length` highest-scoring members — the same `ZREMRANGEBYRANK` trim every capped write applies.
+- **ListKey** must be told which end survives, since the cap's per-end semantics belong to the write method: `keep: :tail` (the default) matches a push-fed list, `keep: :head` an unshift-fed one. `LLEN` and `LTRIM` run in one `MULTI`, so the removed count is exact even under concurrent writes.
+
+### Capping a `participates_in` collection
+
+`participates_in` (and `class_participates_in`) accept `max_length:` directly. The collection declared on the target carries the cap, and `record_class:` is still threaded automatically so `each_record` keeps working:
+
+```ruby
+class FeedItem < Familia::Horreum
+  feature :relationships
+  participates_in Owner, :activity, score: :created_at, max_length: 1000
+end
+```
+
+The value is validated at class-definition time: it must be a positive Integer, and only `:sorted_set` and `:list` implement capping — `max_length:` with any other `type:` raises `ArgumentError`.
+
+A capped participation collection is a **recent-N view, not authoritative membership**. The trim evicts members silently, without touching each participant's `participations` reverse-index set. Membership checks (`collection.member?`, the participant's `in_*?` methods) query the collection live and stay accurate after eviction, but `current_participations` reads the reverse index and can list collections the participant was trimmed out of. Destruction cleanup tolerates this — removing a member that was already evicted is a no-op — so the staleness over-reports but never breaks anything.
+
+Pre-declaring the collection on the target still works — participation never overwrites an existing accessor — but then the two declarations must agree. A `participates_in` whose `max_length:` differs from the pre-declared cap (including an uncapped pre-declaration) raises `ArgumentError` at definition time rather than silently keeping the wrong cap; omitting `max_length:` from `participates_in` keeps whatever the pre-declaration says, capped or not. When you pre-declare, pass `record_class:` yourself, since you are replacing the declaration participation would otherwise have made — without it, `each_record` on the collection has nothing to hydrate:
+
+```ruby
+class Owner < Familia::Horreum
+  identifier_field :owner_id
+  field :owner_id
+  # Must come first — participates_in skips a collection that already exists
+  sorted_set :activity, max_length: 1000, record_class: 'FeedItem'
+end
+
+class FeedItem < Familia::Horreum
+  feature :relationships
+  participates_in Owner, :activity, score: :created_at, max_length: 1000  # must match (or be omitted)
+end
+```
+
+### Validation and the old `:maxlength` spelling
+
+- `max_length:` must be a **positive Integer** — anything else raises `ArgumentError` at definition time (`max_length: 0` would delete everything on every write).
+- Passing `max_length:` to a type that does not implement it (`HashKey`, `UnsortedSet`, `StringKey`, `Counter`, …) raises `ArgumentError` rather than being silently ignored.
+- The old `:maxlength` spelling was **never honored** and remains ignored; it now emits a warning (`[familia] :maxlength is ignored; rename to max_length:`). It is deliberately not treated as an alias — honoring it would start mass-deleting previously untrimmed data on upgrade. Rename to `max_length:` explicitly to opt in to trimming.
+
 The iteration methods `each` and `each_record` efficiently handle large collections by paginating through Valkey/Redis data structures, but they serve different purposes and yield different results. Here's how the two iterate, using `ModelClass.instances` (a `SortedSet` with `reference: true`) as the running example.
 
 ## `each` — yields **members** (identifiers, raw strings)

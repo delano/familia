@@ -27,13 +27,56 @@ module Familia
       module ClassMethods
         def collection_type?
           # Check ancestors to handle inheritance
-          ancestors.include?(Familia::DataType::CollectionBase)
+          self <= Familia::DataType::CollectionBase
         end
       end
 
       def collection_type?
         self.class.collection_type?
       end
+
+      # Executes a member-creating write followed by its cap-enforcing trim,
+      # keeping the pair atomic when possible. Used by the :max_length paths
+      # in SortedSet and ListKey (see DataType.supports_max_length?), and by
+      # ListKey#enforce_max_length! (there the first command is an LLEN so
+      # the removed count can be derived from the pre-trim length).
+      #
+      # The block receives a connection and must issue the write, then the
+      # trim, and return the write command's result. Three contexts:
+      #
+      # * Inside a caller transaction (Fiber[:familia_transaction] set): both
+      #   commands are queued bare — the outer MULTI already covers them, and
+      #   Redis MULTI does not nest. The block's return value is a future, as
+      #   it is for any write inside a transaction.
+      # * Inside a caller pipeline: queued bare as well; pipelines never
+      #   promise atomicity, so the trim rides along unbatched.
+      # * Standalone: wraps the pair in this object's own MULTI so a crash
+      #   between write and trim cannot leave the collection over-cap, and
+      #   returns the FIRST command's result so the caller's documented
+      #   return value (ZADD Boolean, RPUSH/ZINCRBY Integer) survives.
+      #
+      # @yield [conn] Connection to issue the write + trim against
+      # @return [Object] The write command's result (or its future in-transaction)
+      #
+      def execute_capped_write(&)
+        return yield(dbclient) if Fiber[:familia_transaction] || Fiber[:familia_pipeline]
+
+        transaction(&).results.first
+      end
+      private :execute_capped_write
+
+      # Returns the configured :max_length cap, raising when the collection is
+      # uncapped. Guard for #enforce_max_length!: a migration step that expects
+      # to trim must fail loudly instead of silently doing nothing.
+      #
+      # @return [Integer] the configured cap
+      # @raise [Familia::Problem] when no :max_length option is set
+      def require_max_length!
+        @opts[:max_length] || raise(Familia::Problem,
+                                    "#{self.class.name}#enforce_max_length! requires the " \
+                                    ":max_length option (#{dbkey} is uncapped)")
+      end
+      private :require_max_length!
 
       # Iterates over identifiers, loading each as a Horreum record.
       #
@@ -88,13 +131,18 @@ module Familia
         # load_multi is identifier-type-tolerant (it builds keys via dbkey), so
         # whichever path `each` yields the identifier through, loading works.
         record_class = @opts[:record_class] || @opts[:class]
-        unless record_class&.respond_to?(:load_multi)
-          raise Familia::Problem, "each_record requires a DataType with a :record_class (or :class) option that responds to load_multi"
+        unless record_class.respond_to?(:load_multi)
+          raise Familia::Problem, 'each_record requires a DataType with a :record_class ' \
+                                  '(or :class) option that responds to load_multi'
         end
 
         # Validate batch_size and pipeline constraints
-        raise ArgumentError, "batch_size must be a positive integer (got #{batch_size.inspect})" unless batch_size.is_a?(Integer) && batch_size.positive?
-        raise ArgumentError, "pipeline must be nil or a positive integer (got #{pipeline.inspect})" unless pipeline.nil? || (pipeline.is_a?(Integer) && pipeline.positive?)
+        unless batch_size.is_a?(Integer) && batch_size.positive?
+          raise ArgumentError, "batch_size must be a positive integer (got #{batch_size.inspect})"
+        end
+        unless pipeline.nil? || (pipeline.is_a?(Integer) && pipeline.positive?)
+          raise ArgumentError, "pipeline must be nil or a positive integer (got #{pipeline.inspect})"
+        end
         raise ArgumentError, "pipeline (#{pipeline}) cannot exceed batch_size (#{batch_size})" if pipeline&.> batch_size
 
         # Collect identifiers in batches
@@ -111,12 +159,12 @@ module Familia
 
           if pipeline.nil?
             # Serial mode - no pipelining, execute block for each record directly
-            live_records.each { |record| block.call(record) }
+            live_records.each(&block)
           else
             # Pipelined mode - group records and wrap each group in a pipeline
             live_records.each_slice(pipeline) do |group|
               record_class.pipelined do
-                group.each { |record| block.call(record) }
+                group.each(&block)
               end
             end
           end

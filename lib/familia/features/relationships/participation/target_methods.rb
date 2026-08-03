@@ -44,11 +44,18 @@ module Familia
           #   identifiers populate the collection. Threaded through so the
           #   collection is declared with record_class: (enables +each_record+
           #   without changing read semantics; see issue #297).
-          def self.build(target_class, collection_name, type, through = nil, staged = nil, participant_class: nil)
+          # @param max_length [Integer, nil] Cap for the collection (issue
+          #   #351). Threaded to ensure_collection_field, which validates it
+          #   eagerly and raises on conflict with a pre-declared cap.
+          # rubocop:disable Metrics/ParameterLists -- mirrors participates_in's surface; every param is threaded through
+          def self.build(target_class, collection_name, type, through = nil, staged = nil,
+                         participant_class: nil, max_length: nil)
+            # rubocop:enable Metrics/ParameterLists
             # FIRST: Ensure the DataType field is defined on the target class.
             # Declared with record_class: so `each_record` can load participants.
             TargetMethods::Builder.ensure_collection_field(
-              target_class, collection_name, type, participant_class: participant_class
+              target_class, collection_name, type,
+              participant_class: participant_class, max_length: max_length
             )
 
             # Create staging set if staged: option provided
@@ -79,7 +86,12 @@ module Familia
           # @param target_class [Class] The class receiving these methods
           # @param collection_name [Symbol] Name of the collection
           # @param type [Symbol] Collection type
-          def self.build_class_level(target_class, collection_name, type)
+          # @param max_length [Integer, nil] Cap for the collection (issue
+          #   #351), validated eagerly; raises on conflict with a pre-declared
+          #   class-level cap (symmetry with ensure_collection_field).
+          def self.build_class_level(target_class, collection_name, type, max_length: nil)
+            validate_max_length_option!(type, max_length)
+
             # FIRST: Ensure the class-level DataType field is defined.
             # The collection holds instances of target_class itself. Declare it
             # with record_class: so `each_record` can load the records (issue
@@ -90,8 +102,14 @@ module Familia
             # Skip if a class-level accessor already exists, mirroring the
             # method_defined? guard in ensure_collection_field so a pre-declared
             # collection is not silently overridden (symmetry with instance-level).
-            unless target_class.respond_to?(collection_name)
-              target_class.send("class_#{type}", collection_name, record_class: target_class)
+            if target_class.respond_to?(collection_name)
+              existing = target_class.class_related_fields[collection_name.to_s.to_sym]
+              assert_compatible_cap!(existing, max_length, target_class, collection_name, type,
+                                     dsl: "class_#{type}")
+            else
+              opts = { record_class: target_class }
+              opts[:max_length] = max_length if max_length
+              target_class.send("class_#{type}", collection_name, **opts)
             end
 
             # Class-level collection getter (e.g., User.all_users)

@@ -163,7 +163,8 @@ module Familia
           # @see #participates_in for instance-level participation relationships
           # @since 1.0.0
           def class_participates_in(collection_name, score: nil,
-                                    type: :sorted_set, generate_participant_methods: true, through: nil)
+                                    type: :sorted_set, generate_participant_methods: true, through: nil,
+                                    max_length: nil)
             # Store metadata for this participation relationship
             participation_relationships << ParticipationRelationship.new(
               _original_target: self,   # For class-level, original and resolved are the same
@@ -175,11 +176,12 @@ module Familia
               through: through,
               method_prefix: nil,       # Not applicable for class-level participation
               staged: nil,              # Not applicable for class-level participation
+              max_length: max_length,
             )
 
             # STEP 1: Add collection management methods to the class itself
             # e.g., User.all_users, User.add_to_all_users(user)
-            TargetMethods::Builder.build_class_level(self, collection_name, type)
+            TargetMethods::Builder.build_class_level(self, collection_name, type, max_length: max_length)
 
             # STEP 2: Add participation methods to instances (if generate_participant_methods)
             # e.g., user.in_class_all_users?, user.add_to_class_all_users
@@ -251,6 +253,12 @@ module Familia
           #   - Gets auto-created when adding to collection (via +through_attrs:+ param)
           #   - Gets auto-destroyed when removing from collection
           #   - Uses deterministic keys: +{target}:{id}:{participant}:{id}:{through}+
+          # @param max_length [Integer, nil] Cap the collection at N elements
+          #        (issue #351). Only +:sorted_set+ and +:list+ implement capping;
+          #        other types raise ArgumentError at definition time. When the
+          #        target pre-declares the collection itself, the caps must agree
+          #        or definition raises — participation never overwrites an
+          #        existing declaration.
           #
           # @example Basic domain-employee relationship
           #
@@ -296,7 +304,7 @@ module Familia
           # @see ModelInstanceMethods#current_participations for membership queries
           # @see ModelInstanceMethods#calculate_participation_score for scoring details
           #
-          def participates_in(target, collection_name, score: nil, type: :sorted_set, generate_participant_methods: true, as: nil, through: nil, method_prefix: nil, staged: nil)
+          def participates_in(target, collection_name, score: nil, type: :sorted_set, generate_participant_methods: true, as: nil, through: nil, method_prefix: nil, staged: nil, max_length: nil)
 
             # Normalize the target class parameter
             target_class = Familia.resolve_class(target)
@@ -350,6 +358,7 @@ module Familia
               through: through,
               method_prefix: method_prefix,
               staged: staged,
+              max_length: max_length,
             )
 
             # STEP 0: Add participations tracking field to PARTICIPANT class (Domain)
@@ -364,7 +373,8 @@ module Familia
             # declared with record_class:, enabling `each_record` to load the
             # stored participant identifiers without altering read semantics
             # (issue #297).
-            TargetMethods::Builder.build(target_class, collection_name, type, through, staged, participant_class: self)
+            TargetMethods::Builder.build(target_class, collection_name, type, through, staged,
+                                         participant_class: self, max_length: max_length)
 
             # STEP 2: Add participation methods to PARTICIPANT class (Domain) - only if
             # generate_participant_methods. e.g. in_employee_domains?, add_to_employee_domains, etc.

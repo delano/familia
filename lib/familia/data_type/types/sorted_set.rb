@@ -6,6 +6,22 @@ module Familia
   class SortedSet < DataType
     include DataType::CollectionBase
 
+    # SortedSet implements :max_length (capped collection, issue #351): a cap
+    # of N retains the N HIGHEST-scoring members — trim is ZREMRANGEBYRANK
+    # key 0 -(N+1), removing from the low-score end. When scores are
+    # timestamps (the #add default) this keeps the newest N; with arbitrary
+    # scores it keeps the top-N by score, not by recency.
+    #
+    # All member-creating paths trim: #add (covers << and []=), #update /
+    # #merge! (bulk ZADD), and #increment / #decrement (ZINCRBY creates the
+    # member if absent). The trim is issued unconditionally after the write —
+    # an under-cap trim is an O(log N) no-op, and it is harmless when an
+    # NX/XX/GT/LT constraint skipped the write. NOT capped (external writers
+    # beware): unionstore/interstore/diffstore destination keys and restore.
+    def self.supports_max_length?
+      true
+    end
+
     # Returns the number of elements in the sorted set
     # @return [Integer] number of elements
     def element_count
@@ -124,10 +140,12 @@ module Familia
       opts[:ch] = true if ch
 
       # Pass options to ZADD
-      ret = if opts.empty?
-        dbclient.zadd(dbkey, score, serialize_value(val))
-      else
-        dbclient.zadd(dbkey, score, serialize_value(val), **opts)
+      ret = capped_zadd_write do |conn|
+        if opts.empty?
+          conn.zadd(dbkey, score, serialize_value(val))
+        else
+          conn.zadd(dbkey, score, serialize_value(val), **opts)
+        end
       end
 
       update_expiration
@@ -174,7 +192,9 @@ module Familia
 
         [score, serialize_value(member)]
       end
-      ret = dbclient.zadd(dbkey, pairs)
+      # Trim is mandatory here: a bulk populate can blow past the cap in a
+      # single ZADD, not just by one member.
+      ret = capped_zadd_write { |conn| conn.zadd(dbkey, pairs) }
       update_expiration
       ret
     end
@@ -291,7 +311,10 @@ module Familia
         cursor = 0
         loop do
           new_cursor, pairs = scan(cursor, count: batch_size)
-          pairs.each { |member, _score| block.call(member) }
+          # ZSCAN yields an Array of [member, score] pairs (not a Hash), so
+          # Hash#each_key would raise NoMethodError here. The cop cannot see
+          # that and its autocorrect breaks this loop — keep it disabled.
+          pairs.each { |member, _score| block.call(member) } # rubocop:disable Style/HashEachMethods
           cursor = new_cursor
           break if cursor.zero?
         end
@@ -369,6 +392,27 @@ module Familia
       ret
     end
 
+    # Trims an already-oversized sorted set down to its :max_length cap,
+    # keeping the max_length highest-scoring members — the same trim every
+    # capped write applies (ZREMRANGEBYRANK 0 -(max_length+1)).
+    #
+    # Capped writes enforce the cap going forward, but nothing runs at
+    # definition time: adding max_length: to a live collection leaves the
+    # existing overage in place until the next write. Call this once, e.g.
+    # as a migration step, to enforce the cap immediately.
+    #
+    # @return [Integer, Redis::Future] number of members removed (0 when
+    #   already within cap); inside a caller transaction or pipeline, the
+    #   removal count's future instead
+    # @raise [Familia::Problem] when the collection has no :max_length
+    def enforce_max_length!
+      max = require_max_length!
+      warn_if_dirty!
+      removed = dbclient.zremrangebyrank(dbkey, 0, -(max + 1))
+      update_expiration
+      removed
+    end
+
     def remrangebyscore(sscore, escore)
       warn_if_dirty!
       ret = dbclient.zremrangebyscore dbkey, sscore, escore
@@ -377,7 +421,13 @@ module Familia
     end
 
     def increment(val, by = 1)
-      ret = dbclient.zincrby(dbkey, by, serialize_value(val)).to_f
+      warn_if_dirty!
+      # ZINCRBY creates the member if absent, so it is a capped path too.
+      ret = capped_zadd_write { |conn| conn.zincrby(dbkey, by, serialize_value(val)) }
+      # Inside a transaction or pipeline the write is a Redis::Future, which
+      # cannot be coerced until the block commits — pass it through untouched
+      # (same contract as #add). See Familia.positive? for the same idiom.
+      ret = ret.to_f unless ret.is_a?(Redis::Future)
       update_expiration
       ret
     end
@@ -751,8 +801,30 @@ module Familia
       result
     end
 
-
     private
+
+    # Runs a member-creating write (ZADD/ZINCRBY), enforcing :max_length when
+    # set. The trim keeps the max_length highest-scoring members by removing
+    # ranks 0..-(max_length+1) — i.e. everything below the top-N. Without a
+    # cap, the write goes straight to dbclient exactly as before.
+    #
+    # Atomicity is delegated to CollectionBase#execute_capped_write: bare
+    # inside a caller transaction/pipeline, own MULTI standalone (returning
+    # the write's result, not the trim's).
+    #
+    # @yield [conn] Connection to issue the ZADD/ZINCRBY against
+    # @return [Object] The write command's result
+    #
+    def capped_zadd_write(&)
+      max = @opts[:max_length]
+      return yield(dbclient) unless max
+
+      execute_capped_write do |conn|
+        ret = yield(conn)
+        conn.zremrangebyrank(dbkey, 0, -(max + 1))
+        ret
+      end
+    end
 
     # Resolves sorted set arguments to their Redis key names.
     #
@@ -817,26 +889,19 @@ module Familia
     #
     def validate_zadd_options!(nx:, xx:, gt:, lt:)
       # NX and XX are mutually exclusive
-      if nx && xx
-        raise ArgumentError, "ZADD options NX and XX are mutually exclusive"
-      end
+      raise ArgumentError, 'ZADD options NX and XX are mutually exclusive' if nx && xx
 
       # GT and LT are mutually exclusive
-      if gt && lt
-        raise ArgumentError, "ZADD options GT and LT are mutually exclusive"
-      end
+      raise ArgumentError, 'ZADD options GT and LT are mutually exclusive' if gt && lt
 
       # NX is mutually exclusive with GT
-      if nx && gt
-        raise ArgumentError, "ZADD options NX and GT are mutually exclusive"
-      end
+      raise ArgumentError, 'ZADD options NX and GT are mutually exclusive' if nx && gt
 
-      # NX is mutually exclusive with LT
-      if nx && lt
-        raise ArgumentError, "ZADD options NX and LT are mutually exclusive"
-      end
+      # NX is mutually exclusive with LT.
+      # NOTE: XX + GT and XX + LT are valid combinations, so nothing to check.
+      return unless nx && lt
 
-      # Note: XX + GT and XX + LT are valid combinations
+      raise ArgumentError, 'ZADD options NX and LT are mutually exclusive'
     end
 
     Familia::DataType.register self, :sorted_set

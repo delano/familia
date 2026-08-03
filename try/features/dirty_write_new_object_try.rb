@@ -21,6 +21,7 @@ class DirtyWriteWidget < Familia::Horreum
   field :name
   list  :events
   set   :tags
+  zset  :scores
 end
 
 # Capture everything Familia.warn emits during the block and return it as a
@@ -67,6 +68,25 @@ Familia.raise_on_unsaved_parent_write
 
 ## The raise prevents the collection write, so no orphaned data is left behind
 @new_widget.tags.members.empty?
+#=> true
+
+## SortedSet#increment runs the same dirty guard as #add (issue #351)
+@incr_widget = DirtyWriteWidget.new(widget_id: 'dww_incr', name: 'Original')
+@incr_widget.name = 'Changed'
+@incr_outcome =
+  begin
+    @incr_widget.scores.increment('hits', 1)
+    [:no_raise]
+  rescue Familia::Problem => e
+    [:raised, e.message.include?('new, unsaved object')]
+  ensure
+    @incr_widget.clear_dirty!
+  end
+@incr_outcome
+#=> [:raised, true]
+
+## increment's guard also prevents the write, leaving no orphaned member
+@incr_widget.scores.members.empty?
 #=> true
 
 ## raise_on_unsaved_parent_write=false downgrades the new-object case to a warning
@@ -173,9 +193,10 @@ Familia.strict_write_order = false
 Familia.raise_on_unsaved_parent_write = true
 [
   'dww_clean', 'dww_new', 'dww_warn', 'dww_saved', 'dww_strict_saved',
-  'dww_override', 'dww_promote', 'dww_txn_clean', 'dww_txn_dirty'
+  'dww_override', 'dww_promote', 'dww_txn_clean', 'dww_txn_dirty', 'dww_incr'
 ].each do |wid|
   w = DirtyWriteWidget.new(widget_id: wid)
   w.tags.delete! rescue nil
+  w.scores.delete! rescue nil
   w.destroy! rescue nil
 end
