@@ -72,6 +72,26 @@ DatabaseLogger.sample_rate = nil
 DatabaseLogger.sample_rate
 #=> nil
 
+## sample_rate of 0 is coerced to nil (sampling disabled)
+DatabaseLogger.sample_rate = 0
+DatabaseLogger.sample_rate
+#=> nil
+
+## sample_rate above 1.0 is clamped to 1.0 (log everything)
+DatabaseLogger.sample_rate = 2.0
+result = DatabaseLogger.sample_rate
+DatabaseLogger.sample_rate = nil
+result
+#=> 1.0
+
+## negative sample_rate raises ArgumentError at config time
+DatabaseLogger.sample_rate = -0.5
+#=!> ArgumentError
+
+## non-finite sample_rate raises ArgumentError at config time
+DatabaseLogger.sample_rate = Float::NAN
+#=!> ArgumentError
+
 ## commands getter returns the captured commands array
 DatabaseLogger.clear_commands
 commands = DatabaseLogger.commands
