@@ -7,7 +7,9 @@ Indexing provides O(1) field-to-object lookups using Redis data structures, enab
 Indexing creates fast lookups for finding objects by field values:
 
 - **O(1) performance** - Hash/Set-based constant-time access
-- **Automatic management** - Class indexes update on save/destroy
+- **Automatic management** - Class indexes update on every hash-writing path
+  (save, destroy, and the partial writers — see
+  [Index Maintenance by Write Path](#index-maintenance-by-write-path))
 - **Flexible scoping** - Global or parent-scoped uniqueness
 - **Query generation** - Automatic `find_by_*` methods
 
@@ -56,6 +58,28 @@ User.find_by_email('alice.smith@example.com')  # => nil
 > from inside one needs an explicit `claim_unique_<index>!` first — see
 > `Familia::OperationModeError` under [Troubleshooting](#troubleshooting) and
 > [ADR-0002](../adr/0002-watch-for-private-keys-lua-for-shared-keys.md).
+
+### Index Maintenance by Write Path
+
+Every path that writes the object hash either maintains class-level indexes
+(unique and multi alike) fail-closed — the claim precedes the hash write, so a
+`Familia::RecordExistsError` leaves the hash untouched — or refuses the write
+outright rather than leave lookups stale (#308):
+
+| Write path                            | Class-level index maintenance                                                                                                    |
+| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `save` / `save!` / `save_if_not_exists!` / `create!` | All class-level indexes: claim before the MULTI, update inside it                                                  |
+| `atomic_write` / `Familia.atomic_write` | All class-level indexes (claims the values held when the block opens — see [Troubleshooting](#troubleshooting))                  |
+| `commit_fields`                       | All class-level indexes (writes the full hash)                                                                                    |
+| `save_fields(:a, :b)`                 | Indexes on the named fields only                                                                                                  |
+| `multi_field_update(a: 1)`            | Indexes on the written fields only                                                                                                |
+| `multi_field_fast_write(a: 1)`        | Refused: raises `Familia::IndexedFieldFastWriteError` if any written field backs a class-level index — its single-HMSET contract leaves no room for the out-of-transaction claim |
+| `field!(value)` fast writer           | Maintained (claim, then index update, then HSET); inside a transaction or pipeline it raises `Familia::IndexedFieldFastWriteError` instead |
+| `destroy!`                            | All class-level index entries removed                                                                                             |
+
+For `multi_index`, "maintained" means add-only: a value change adds the
+identifier to the new bucket without retracting the old one, same as on save.
+Call `update_in_class_*` with the old value to retract it.
 
 ### Generated Methods
 
@@ -517,7 +541,8 @@ Index values (the object identifiers stored in hash keys and sets) are raw strin
 
 **Index not updating:**
 
-- Class indexes: automatic on save/destroy
+- Class indexes: automatic on save/destroy and the partial writers (see
+  [Index Maintenance by Write Path](#index-maintenance-by-write-path))
 - Instance indexes: require an initial manual `add_to_*` call on a saved
   object. After that, refresh on `save` and removal on `destroy!` are both
   automatic (see
@@ -580,6 +605,16 @@ Index values (the object identifiers stored in hash keys and sets) are raw strin
   itself refuses to run inside a transaction, and `HashKey#claim_field` refuses
   too — a CAS verdict inside MULTI would come back as a `Future`, with nothing
   left to abort.
+
+**`Familia::IndexedFieldFastWriteError` from `multi_field_fast_write` / `field!`:**
+
+- The field backs a class-level index (`unique_index` or `multi_index`), and
+  the write cannot take the out-of-transaction claim that index maintenance
+  requires: `multi_field_fast_write` never can (its contract is a single
+  HMSET), `field!` only when called inside a transaction or pipeline. Nothing
+  is written — use `multi_field_update`, `save_fields`, or `save`, or call
+  `field!` outside the transaction, where it claims and maintains the index
+  itself.
 
 **`Familia::NoIdentifier` / `ArgumentError` from `add_to_*` / `update_in_*`:**
 

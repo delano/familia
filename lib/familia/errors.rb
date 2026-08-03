@@ -122,6 +122,30 @@ module Familia
     end
   end
 
+  # Raised when a fast-write method is asked to write a field that backs a
+  # class-level index. Fast writers issue a single HMSET with no surrounding
+  # claim, so they cannot maintain index consistency without violating the
+  # fail-closed ordering in ADR-0002. Use multi_field_update, save_fields,
+  # or save for indexed fields.
+  class IndexedFieldFastWriteError < PersistenceError
+    attr_reader :field, :index_name
+
+    def initialize(field, index_name)
+      @field = field
+      @index_name = index_name
+      super(build_message)
+    end
+
+    private
+
+    def build_message
+      "Cannot fast-write #{field}: it backs the class-level index " \
+        "#{index_name}, which a single HMSET cannot maintain (ADR-0002). " \
+        'Use multi_field_update or save so the index is claimed and updated ' \
+        'with the hash write.'
+    end
+  end
+
   # Raised when attempting to create an object that already
   # exists in the database
   class RecordExistsError < NonUniqueKey
@@ -135,7 +159,12 @@ module Familia
 
     def message
       msg = "Key already exists: #{key}"
-      msg << " (existing_id=#{existing_id})" unless existing_id.nil?
+      begin
+        msg << " (existing_id=#{existing_id})" unless existing_id.nil?
+      rescue StandardError
+        # existing_id may not support nil?/to_s (e.g. a Redis::Future captured
+        # inside a MULTI); a diagnostic message must never raise itself.
+      end
       msg
     end
   end

@@ -135,14 +135,25 @@ module Familia
     # Fast methods provide direct database access for immediate persistence.
     # Subclasses can override this to customize fast method behavior.
     #
+    # Fields backing a class-level index are maintained fail-closed (#308):
+    # outside any transaction/pipeline the unique claim runs before the hash
+    # write (a conflict raises Familia::RecordExistsError and the hash is
+    # untouched); inside a caller's MULTI/pipeline no claim is possible, so
+    # the writer raises Familia::IndexedFieldFastWriteError rather than write
+    # the hash and leave the index stale. Non-indexed fields are unaffected.
+    #
     # @param klass [Class] The class to define the method on
     #
     def define_fast_writer(klass)
       return unless @fast_method_name&.to_s&.end_with?('!')
 
       field_name = @name
-      method_name = @method_name
       fast_method_name = @fast_method_name
+      field_type = self
+
+      # Lives in the closure (not an ivar) because field types are frozen
+      # after installation.
+      index_rel_cache = {}.compare_by_identity
 
       handle_method_conflict(klass, fast_method_name) do
         klass.define_method fast_method_name do |*args|
@@ -154,17 +165,23 @@ module Familia
           # Handle Redis::Future objects during transactions
           return hget(field_name) if val.nil? || val.is_a?(Redis::Future)
 
+          index_rels = field_type.send(:class_index_relationships, index_rel_cache, self.class)
+          field_type.send(:guard_indexed_fast_write!, index_rels)
+
+          # Trace the operation if debugging is enabled
+          Familia.trace :FAST_WRITER, nil, "#{field_name}: #{val.inspect}" if Familia.debug?
+
+          # Convert value for database storage
+          prepared = serialize_value(val)
+          Familia.debug "[FieldType#define_fast_writer] #{fast_method_name} val: #{val.class} prepared: #{prepared.class}"
+
+          # Runs the setter, then claims and updates any class-level index
+          # entries before the hash write below (ADR-0002 fail-closed
+          # ordering). A claim conflict restores the in-memory state and
+          # propagates typed, so the hash write never runs.
+          field_type.send(:apply_fast_write_value, self, val, index_rels)
+
           begin
-            # Trace the operation if debugging is enabled
-            Familia.trace :FAST_WRITER, nil, "#{field_name}: #{val.inspect}" if Familia.debug?
-
-            # Convert value for database storage
-            prepared = serialize_value(val)
-            Familia.debug "[FieldType#define_fast_writer] #{fast_method_name} val: #{val.class} prepared: #{prepared.class}"
-
-            # Use the setter method to update instance variable
-            send(:"#{method_name}=", val) if method_name
-
             # Persist to database immediately
             ret = hset(field_name, prepared)
 
@@ -253,6 +270,99 @@ module Familia
     alias to_s inspect
 
     private
+
+    # The class-level indexing relationships backed by this field on
+    # +record_class+ (unique_index and multi_index alike).
+    #
+    # Not resolvable at install time: unique_index/multi_index declarations
+    # typically follow the field declaration in the class body. Memoized
+    # lazily per runtime class (subclasses can add indexes on inherited
+    # fields), so non-indexed fields pay one Hash lookup per call. The cache
+    # is closure-owned by the generated method (field types are frozen after
+    # installation) and identity-keyed: Horreum classes define a `hash` DSL
+    # method (the related-field kind) that shadows Object#hash, so a regular
+    # Hash lookup keyed by the class would invoke it with no args. Each entry
+    # also records the class's relationship count at resolution time, so an
+    # index declared AFTER the first fast write invalidates the memo instead
+    # of being silently skipped.
+    #
+    # @param cache [Hash] identity-compared memo owned by the caller
+    # @param record_class [Class] the runtime class of the record
+    # @return [Array<IndexingRelationship>] frozen, possibly empty
+    #
+    def class_index_relationships(cache, record_class)
+      count = if record_class.respond_to?(:indexing_relationships)
+        record_class.indexing_relationships.size
+      else
+        0
+      end
+
+      cached_count, cached_rels = cache[record_class]
+      return cached_rels if cached_rels && cached_count == count
+
+      rels = resolve_class_index_relationships(record_class)
+      cache[record_class] = [count, rels]
+      rels
+    end
+
+    # Uncached resolution behind {#class_index_relationships}.
+    #
+    # @param record_class [Class]
+    # @return [Array<IndexingRelationship>] frozen
+    #
+    def resolve_class_index_relationships(record_class)
+      return [].freeze unless record_class.respond_to?(:indexing_relationships)
+
+      record_class.indexing_relationships.select do |rel|
+        rel.class_level? && rel.field == @name
+      end.freeze
+    end
+
+    # Refuses an indexed fast write queued into a caller's MULTI/pipeline.
+    # The unique claim (a Lua CAS EVAL) cannot run there -- its verdict would
+    # be a Future -- so writing the hash would leave the index stale. See
+    # ADR-0002 and #308.
+    #
+    # @param index_rels [Array<IndexingRelationship>]
+    # @raise [Familia::IndexedFieldFastWriteError]
+    # @return [void]
+    #
+    def guard_indexed_fast_write!(index_rels)
+      return if index_rels.empty?
+      return unless Fiber[:familia_transaction] || Fiber[:familia_pipeline]
+
+      raise Familia::IndexedFieldFastWriteError.new(@name, index_rels.first.index_name)
+    end
+
+    # Applies the in-memory setter, then maintains the class-level index
+    # entries for +index_rels+ before the caller's hash write: the dirty map
+    # recorded by the setter supplies the old value to release, the getter
+    # supplies the new value to claim (update_in_class_* self-claims outside
+    # a transaction). On failure the record's in-memory state is restored
+    # and the error propagates typed, so the hash write never happens.
+    #
+    # @param record [Familia::Horreum] the record being written
+    # @param value [Object] the new field value
+    # @param index_rels [Array<IndexingRelationship>]
+    # @return [void]
+    #
+    def apply_fast_write_value(record, value, index_rels)
+      if index_rels.empty?
+        record.send(:"#{@method_name}=", value) if @method_name
+        return
+      end
+
+      snapshot = record.send(:capture_field_rollback_state, [@name])
+      record.send(:"#{@method_name}=", value) if @method_name
+
+      begin
+        changes = record.respond_to?(:changed_fields) ? record.changed_fields : {}
+        index_rels.each { |rel| record.send(:apply_class_index_change, rel, changes) }
+      rescue StandardError
+        record.send(:restore_field_rollback_state, snapshot)
+        raise
+      end
+    end
 
     # Handle method name conflicts during definition
     #
