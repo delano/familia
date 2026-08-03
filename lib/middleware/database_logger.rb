@@ -161,20 +161,22 @@ module DatabaseLogger
     # Validation rules:
     # - +nil+ stays +nil+ (sampling disabled, log everything)
     # - +0+ / +0.0+ is coerced to +nil+ (sampling disabled)
-    # - values in (0, 1] are stored unchanged
+    # - values in (0, 1] are stored as Float
     # - values above 1.0 are clamped to 1.0 (log everything)
-    # - negative, non-finite (NaN/Infinity), or non-numeric values raise
-    #   ArgumentError immediately
+    # - negative, non-finite (NaN/Infinity), non-real (Complex), or
+    #   non-numeric values raise ArgumentError immediately
     #
     # @param rate [Numeric, nil] Desired sample rate
     # @return [Float, nil] The stored rate
-    # @raise [ArgumentError] if rate is negative, non-finite, or not a number
+    # @raise [ArgumentError] if rate is negative, non-finite, or not a real number
     def sample_rate=(rate)
       @sample_rate =
         if rate.nil?
           nil
-        elsif !rate.is_a?(Numeric)
-          raise ArgumentError, "sample_rate must be a Numeric in 0..1 or nil (got #{rate.inspect})"
+        elsif !rate.is_a?(Numeric) || !rate.real?
+          # real? excludes Complex, which lacks the ordered-comparison
+          # predicates (negative?, >) the checks below rely on
+          raise ArgumentError, "sample_rate must be a real Numeric in 0..1 or nil (got #{rate.inspect})"
         elsif !rate.finite?
           raise ArgumentError, "sample_rate must be finite (got #{rate.inspect})"
         elsif rate.negative?
@@ -184,7 +186,7 @@ module DatabaseLogger
         elsif rate > 1.0
           1.0 # clamp: anything above 100% just logs everything
         else
-          rate
+          rate.to_f # Float per the documented accessor type, whatever came in
         end
     end
 
@@ -291,11 +293,14 @@ module DatabaseLogger
     # @return [Boolean] true if command should be logged
     # @api private
     def should_log?
+      # No logger means no log line can be emitted -- bail before the rate
+      # check so nil-rate + nil-logger configs keep the zero-overhead path.
+      return false if @logger.nil?
+
       # Read once: a concurrent `sample_rate = nil` between checks must not
       # raise on the hot path.
       rate = @sample_rate
       return true if rate.nil?
-      return false if @logger.nil?
 
       # The writer validates, but the ivar can still be set directly (subclass,
       # instance_variable_set), so guard against a non-finite interval here too

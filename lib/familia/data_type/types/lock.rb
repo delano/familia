@@ -18,7 +18,22 @@ module Familia
     # @param token [String] Unique token to identify lock holder (auto-generated if nil)
     # @param ttl [Integer, nil] Time-to-live in seconds. nil = no expiration, <=0 rejected
     # @return [String, false] Returns token if acquired successfully, false otherwise
-    def acquire(token = SecureRandom.uuid, ttl: 10)
+    # @raise [Familia::OperationModeError] inside a transaction or pipeline,
+    #   where the SET is only queued and returns a Redis::Future -- ownership
+    #   cannot be decided before EXEC, so a truthy Future would report a lock
+    #   as acquired while another holder still owns it
+    def acquire(token = nil, ttl: 10)
+      if Fiber[:familia_transaction] || Fiber[:familia_pipeline]
+        raise Familia::OperationModeError,
+              'Lock#acquire cannot run inside a transaction or pipeline: ' \
+              'the NX verdict resolves at EXEC, after the caller has already ' \
+              'proceeded. Acquire the lock outside the block.'
+      end
+
+      # An explicitly passed nil would serialize to "" -- honor the documented
+      # auto-generation contract instead.
+      token ||= SecureRandom.uuid
+
       # Reject invalid TTLs before touching the server
       return false if ttl&.<=(0)
 

@@ -145,8 +145,34 @@ sleep 0.05 while @lock.locked? && Process.clock_gettime(Process::CLOCK_MONOTONIC
 [@atomic_token, @lock3.current_expiration.positive?]
 #=> ['atomic-token', true]
 
+## Acquire with an explicit nil token auto-generates one (never stores "")
+@lock4 = Familia::Lock.new 'test:lock4'
+@nil_token = @lock4.acquire(nil, ttl: 30)
+[@nil_token.class, @nil_token.empty?, @lock4.held_by?(@nil_token)]
+#=> [String, false, true]
+
+## Acquire inside a transaction raises: the NX verdict only resolves at EXEC,
+## so a queued Future must not be reported as a successful acquisition
+@lock5 = Familia::Lock.new 'test:lock5'
+Familia.transaction do |_conn|
+  @lock5.acquire('txn-token', ttl: 30)
+end
+#=!> Familia::OperationModeError
+
+## Acquire inside a pipeline raises for the same reason
+Familia.pipelined do |_conn|
+  @lock5.acquire('pipe-token', ttl: 30)
+end
+#=!> Familia::OperationModeError
+
+## Lock is not held after the in-transaction/in-pipeline attempts
+@lock5.locked?
+#=> false
+
 ## Cleanup
 @a.lock.delete!
 @lock.delete!
 @lock2.delete!
 @lock3.delete!
+@lock4.delete!
+@lock5.delete!

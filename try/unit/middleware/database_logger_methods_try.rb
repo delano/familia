@@ -92,6 +92,18 @@ DatabaseLogger.sample_rate = -0.5
 DatabaseLogger.sample_rate = Float::NAN
 #=!> ArgumentError
 
+## non-real Numeric (Complex) raises ArgumentError, not NoMethodError
+DatabaseLogger.sample_rate = Complex(0.5, 1)
+#=!> ArgumentError
+
+## accepted rates are stored as Float per the documented accessor type
+## (class-sensitive: a plain == 1.0 check would pass for Integer 1 too)
+DatabaseLogger.sample_rate = 1
+result = DatabaseLogger.sample_rate
+DatabaseLogger.sample_rate = nil
+[result, result.class]
+#=> [1.0, Float]
+
 ## commands getter returns the captured commands array
 DatabaseLogger.clear_commands
 commands = DatabaseLogger.commands
@@ -209,6 +221,13 @@ DatabaseLogger.should_log?
 
 ## should_log? returns false when logger is nil regardless of sample_rate
 DatabaseLogger.sample_rate = 1.0
+DatabaseLogger.logger = nil
+DatabaseLogger.should_log?
+#=> false
+
+## should_log? returns false when logger is nil even with sampling disabled:
+## no logger means no line can be emitted, so skip the measured path entirely
+DatabaseLogger.sample_rate = nil
 DatabaseLogger.logger = nil
 DatabaseLogger.should_log?
 #=> false
