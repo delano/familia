@@ -9,6 +9,12 @@
 require_relative '../../support/helpers/test_helpers'
 require 'base64'
 
+# Clean up any leftover keys from a previous (possibly aborted) run so counts
+# like activity_log.size stay deterministic. Scoped delete, not FLUSHDB
+# (issue #283). Only FullSecureModel4 (secure-126) persists to the database;
+# the class is defined mid-file, so match its prefix by string here.
+delete_test_dbkeys('full_secure_model4:*')
+
 
 class FullSecureModel < Familia::Horreum
   feature :encrypted_fields
@@ -218,3 +224,8 @@ parsed_data = Familia::JsonSerializer.parse(encrypted_json, symbolize_names: tru
 # encryption config so the next file in the shared-context run does not inherit
 # them (issue #363).
 clear_test_encryption_keys
+
+# Remove the keys this file wrote (FullSecureModel4 secure-126 object hash,
+# activity_log list, metadata hashkey, and any class-level registry entries).
+# Scoped delete, not FLUSHDB (issue #283).
+delete_test_dbkeys('full_secure_model4:*')
