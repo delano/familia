@@ -487,10 +487,10 @@ module Familia
             return if exists?
 
             location = if scope_instance
-                         "#{index_name} on #{scope_instance.class.name}"
-                       else
-                         "class-level #{index_name}"
-                       end
+              "#{index_name} on #{scope_instance.class.name}"
+            else
+              "class-level #{index_name}"
+            end
             raise Familia::PersistenceError,
                   "Cannot index unsaved #{self.class.name} in #{location}: " \
                   'the index entry would point to a record that does not ' \
