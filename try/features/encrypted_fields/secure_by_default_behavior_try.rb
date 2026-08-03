@@ -26,7 +26,7 @@ class SecureUserAccount < Familia::Horreum
 end
 
 # Clean test environment
-Familia.dbclient.flushdb
+delete_test_dbkeys(SecureUserAccount) # scoped delete, not FLUSHDB (issue #283)
 
 # Create test user
 @user = SecureUserAccount.new
@@ -352,5 +352,5 @@ end
 #=> true
 
 # Teardown
-Familia.dbclient.flushdb
+delete_test_dbkeys(SecureUserAccount) # scoped delete, not FLUSHDB (issue #283)
 clear_test_encryption_keys

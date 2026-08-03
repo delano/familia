@@ -26,7 +26,7 @@ class DataRecord < Familia::Horreum
 end
 
 # Clean environment
-Familia.dbclient.flushdb
+delete_test_dbkeys(DataRecord) # scoped delete, not FLUSHDB (issue #283)
 
 # Create test record with mixed data
 @record = DataRecord.new
@@ -191,5 +191,5 @@ end
 #=> true
 
 # Teardown
-Familia.dbclient.flushdb
+delete_test_dbkeys(DataRecord) # scoped delete, not FLUSHDB (issue #283)
 clear_test_encryption_keys

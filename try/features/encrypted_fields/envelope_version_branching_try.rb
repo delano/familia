@@ -33,7 +33,7 @@ class VersionBranchKMModel < Familia::Horreum
   encrypted_field :vault, key_material: ->(r) { r.salt }
 end
 
-Familia.dbclient.flushdb
+delete_test_dbkeys(VersionBranchModel, VersionBranchKMModel) # scoped delete, not FLUSHDB (issue #283)
 
 ## v2 envelope decrypts normally
 @record = VersionBranchModel.new(id: 'vb-1', org_id: 'org-a')
@@ -100,5 +100,5 @@ end
 @loaded_env['envelope_version']
 #=> 2
 
-Familia.dbclient.flushdb
+delete_test_dbkeys(VersionBranchModel, VersionBranchKMModel) # scoped delete, not FLUSHDB (issue #283)
 clear_test_encryption_keys

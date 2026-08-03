@@ -82,7 +82,7 @@ class SecretWithTransientAAD < Familia::Horreum
   transient_field :ciphertext_passphrase
 end
 
-Familia.dbclient.flushdb
+delete_test_dbkeys(SecretNoAAD, SecretWithFieldAAD, SecretTwoFieldAAD, SecretWithTransientAAD) # scoped delete, not FLUSHDB (issue #283)
 
 # ============================================================
 # PART 1: Current OTS behavior — no AAD, decrypt without passphrase
@@ -247,5 +247,5 @@ end
 #=> false
 
 # Cleanup
-Familia.dbclient.flushdb
+delete_test_dbkeys(SecretNoAAD, SecretWithFieldAAD, SecretTwoFieldAAD, SecretWithTransientAAD) # scoped delete, not FLUSHDB (issue #283)
 clear_test_encryption_keys

@@ -27,7 +27,7 @@ end
 Object.const_set(:SecretDocument, TestSecretDocument)
 
 # Clean test environment
-Familia.dbclient.flushdb
+delete_test_dbkeys(TestSecretDocument) # scoped delete, not FLUSHDB (issue #283)
 
 # Create test document
 @doc = SecretDocument.new
@@ -224,7 +224,9 @@ debug_array.map(&:to_s)
 
 ## Debug what's actually in the database
 # Redis/Valkey do not guarantee KEYS ordering; sort for a deterministic check.
-@all_keys = Familia.dbclient.keys("*")
+# Scoped to this file's prefix (issue #283): the db is shared with other
+# tryout files, so asserting the whole keyspace is not valid.
+@all_keys = Familia.dbclient.keys("secret_document:*")
 @all_keys.sort
 #=> ["secret_document:instances", "secret_document:test123:object"]
 
@@ -264,5 +266,5 @@ end
 #=> "Public Title has concealed content"
 
 # Teardown
-Familia.dbclient.flushdb
+delete_test_dbkeys(TestSecretDocument) # scoped delete, not FLUSHDB (issue #283)
 clear_test_encryption_keys

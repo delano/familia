@@ -47,7 +47,7 @@ class NoKeyMaterialModel < Familia::Horreum
   encrypted_field :token
 end
 
-Familia.dbclient.flushdb
+delete_test_dbkeys(KeyMaterialModel, KeyMaterialTransientModel, NoKeyMaterialModel, 'nil_key_material_model:*', 'combined_model:*') # scoped delete, not FLUSHDB (issue #283)
 
 ## key_material present, correct value at decrypt succeeds
 record = KeyMaterialModel.new(id: 'km-1', user_salt: 'salt-abc')
@@ -199,5 +199,5 @@ end
 result_km
 #=> "Familia::EncryptionError"
 
-Familia.dbclient.flushdb
+delete_test_dbkeys(KeyMaterialModel, KeyMaterialTransientModel, NoKeyMaterialModel, 'nil_key_material_model:*', 'combined_model:*') # scoped delete, not FLUSHDB (issue #283)
 clear_test_encryption_keys
