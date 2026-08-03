@@ -193,14 +193,18 @@ module Familia
       # explicitly. Keying on the raw argument would file those two
       # identical derivations under different keys (nil vs the resolved
       # value), so an encrypt followed by a decrypt of the same value in
-      # one request would derive twice instead of hitting the cache. The
-      # personalization resolves through current_personalization -- NOT
-      # personalizations.first -- so a blank config still raises here
-      # exactly as the provider's own derivation would, instead of quietly
-      # caching under a fallback. Providers without rotation have no
-      # effective candidate (nil:nil), so their cache key shape is stable.
+      # one request would derive twice instead of hitting the cache. Both
+      # dimensions resolve through their fail-closed accessors
+      # (current_hkdf_salt / current_personalization) -- NOT the candidate
+      # list's head -- so a blank config still raises here exactly as the
+      # provider's own derivation would. The cache lookup precedes
+      # derivation, so a permissive fallback would let a warm entry (e.g.
+      # from a decrypt keyed on a historical value) satisfy an encrypt that
+      # derive-time guards would refuse (#380). Providers without rotation
+      # have no effective candidate (nil:nil), so their cache key shape is
+      # stable.
       def rotation_cache_key(provider, version, context, salt:, personal:)
-        effective_salt = salt || (provider.respond_to?(:hkdf_salts) ? provider.hkdf_salts.first : nil)
+        effective_salt = salt || (provider.respond_to?(:current_hkdf_salt) ? provider.current_hkdf_salt : nil)
         effective_personal = personal ||
                              (provider.respond_to?(:current_personalization) ? provider.current_personalization : nil)
         "#{provider.algorithm}:#{version}:#{effective_salt}:#{effective_personal}:#{context}"
