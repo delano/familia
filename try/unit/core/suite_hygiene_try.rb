@@ -10,15 +10,22 @@
 # `delete_test_dbkeys` in try/support/helpers/test_helpers.rb.
 #
 # The forbidden-word regex is case-sensitive and this file spells the
-# commands in uppercase only, so the guard does not match itself. There
-# is no allowlist on purpose: the expected offender count is zero.
+# commands in uppercase only, so the guard does not match itself.
+#
+# Scope is every .rb under try/ except try/support/: the suite runner only
+# executes *_try.rb, but non-tryout scripts sitting in suite directories
+# get required or copy-pasted from, so they must not flush either. Manual
+# debugging/prototype scripts live in try/support/ and are allowlisted.
 
 require_relative '../../support/helpers/test_helpers'
 
-## No *_try.rb file under try/ contains a lowercase FLUSHDB/FLUSHALL call
+## No .rb file under try/ (outside try/support/) contains a lowercase
+## FLUSHDB/FLUSHALL call
 try_root = File.expand_path('../..', __dir__)
 forbidden = /\bflush(?:db|all)\b/
-offenders = Dir.glob(File.join(try_root, '**', '*_try.rb')).select do |path|
+offenders = Dir.glob(File.join(try_root, '**', '*.rb')).reject do |path|
+  path.start_with?(File.join(try_root, 'support/'))
+end.select do |path|
   File.read(path).match?(forbidden)
 end
 offenders.map { |path| path.sub("#{try_root}/", '') }.sort
