@@ -66,6 +66,18 @@ class CappedClassMember < Familia::Horreum
   class_participates_in :recent_members, max_length: 3
 end
 
+class HandmadeAccessorOwner < Familia::Horreum
+  feature :relationships
+  identifier_field :oid
+  field :oid
+
+  # Deliberately NOT a related-field declaration: participation must refuse
+  # a max_length: against this with an accurate diagnosis (issue #351).
+  def handmade_feed
+    []
+  end
+end
+
 @cb = CappedBone.new 'maxlen-token'
 @zs = Familia::SortedSet.new 'test:maxlen:zs', max_length: 3
 @zi = Familia::SortedSet.new 'test:maxlen:zi', max_length: 3
@@ -78,6 +90,8 @@ end
 @one_zs = Familia::SortedSet.new 'test:maxlen:onezs', max_length: 1
 @zd = Familia::SortedSet.new 'test:maxlen:zd', max_length: 3
 @zp = Familia::SortedSet.new 'test:maxlen:zp', max_length: 3
+@zc = Familia::SortedSet.new 'test:maxlen:zcond', max_length: 3
+@zcond_raw = Familia::SortedSet.new 'test:maxlen:zcond'
 @bulk_head = Familia::ListKey.new 'test:maxlen:bulkhead', max_length: 3
 @tx_list = Familia::ListKey.new 'test:maxlen:txlist', max_length: 3
 @tx_zs = Familia::SortedSet.new 'test:maxlen:txzs', max_length: 3
@@ -139,6 +153,20 @@ end
 @zi.increment('x3', 1)
 @zi.size
 #=> 3
+
+## Conditional add (nx:) that no-ops still enforces the cap: the trim is
+## unconditional. Over-fill via an uncapped handle to the same key, then a
+## ZADD NX on an existing member writes nothing but the trim still fires.
+@zcond_raw.update('c1' => 1, 'c2' => 2, 'c3' => 3, 'c4' => 4)
+@zc.add('c4', 99, nx: true)
+@zc.members
+#=> ['c2', 'c3', 'c4']
+
+## Conditional add (xx:) on an absent member is a no-op write but still trims
+@zcond_raw.add('c0', 0)
+@zc.add('ghost', 50, xx: true)
+[@zc.member?('ghost'), @zc.members]
+#=> [false, ['c2', 'c3', 'c4']]
 
 ## Horreum-declared capped zset works (sorted_set :events, max_length: 3)
 6.times { |i| @cb.events.add("ev#{i}", i) }
@@ -399,6 +427,23 @@ rescue ArgumentError => e
 end
 #=> true
 
+## A max_length: on a participation whose target defines the accessor by hand
+## (no related-field declaration) raises an accurate error — not a phantom
+## `max_length: nil` conflict pointing at a declaration that does not exist
+begin
+  Class.new(Familia::Horreum) do
+    feature :relationships
+    identifier_field :item_id
+    field :item_id
+    participates_in HandmadeAccessorOwner, :handmade_feed, max_length: 3,
+                                                           generate_participant_methods: false
+  end
+  :no_error
+rescue ArgumentError => e
+  [e.message.include?('no collection declaration to cap'), e.message.include?('conflicts')]
+end
+#=> [true, false]
+
 ## max_length: with a non-capping collection type raises at definition time
 begin
   Class.new(Familia::Horreum) do
@@ -437,6 +482,22 @@ CappedClassMember.recent_members.members
 ## The class-level cap reads back through #max_length
 CappedClassMember.recent_members.max_length
 #=> 3
+
+## A class-level cap conflict names the class-level DSL in the remedy
+## (`class_sorted_set`, not the instance-level `sorted_set`)
+begin
+  Class.new(Familia::Horreum) do
+    feature :relationships
+    identifier_field :mid
+    field :mid
+    class_sorted_set :leaders, max_length: 3
+    class_participates_in :leaders, max_length: 5
+  end
+  :no_error
+rescue ArgumentError => e
+  e.message.include?('`class_sorted_set :leaders` declaration')
+end
+#=> true
 
 ## max_length: 0 raises ArgumentError (would delete everything on every write)
 begin
@@ -521,6 +582,7 @@ Familia.logger = @orig_logger
 @one_zs.delete!
 @zd.delete!
 @zp.delete!
+@zc.delete!
 @bulk_head.delete!
 @tx_list.delete!
 @tx_zs.delete!

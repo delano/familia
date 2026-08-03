@@ -104,7 +104,8 @@ module Familia
             # collection is not silently overridden (symmetry with instance-level).
             if target_class.respond_to?(collection_name)
               existing = target_class.class_related_fields[collection_name.to_s.to_sym]
-              assert_compatible_cap!(existing, max_length, target_class, collection_name, type)
+              assert_compatible_cap!(existing, max_length, target_class, collection_name, type,
+                                     dsl: "class_#{type}")
             else
               opts = { record_class: target_class }
               opts[:max_length] = max_length if max_length

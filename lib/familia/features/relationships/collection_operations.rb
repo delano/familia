@@ -82,13 +82,35 @@ module Familia
         # is kept as-is, preserving the pre-declaration pattern.
         #
         # @param existing [RelatedFieldDefinition, nil] the pre-existing
-        #   declaration, if the accessor came from a related-field DSL call
+        #   declaration, or nil when the accessor exists but did not come from
+        #   a related-field DSL call (handwritten method, another feature) —
+        #   there is no declaration to carry a cap, so a requested cap raises
+        #   with a message that says so rather than reporting a phantom
+        #   `max_length: nil` declaration
+        # @param dsl [String, nil] the DSL method the error messages should
+        #   name as the remedy; defaults to +type+ (instance-level). The
+        #   class-level caller passes "class_#{type}" so the suggested fix
+        #   matches the declaration style that actually applies.
         # @raise [ArgumentError] when the requested cap differs from the
-        #   declared one
-        def assert_compatible_cap!(existing, max_length, target_class, collection_name, type)
+        #   declared one, or when there is no declaration to check against
+        def assert_compatible_cap!(existing, max_length, target_class, collection_name, type, dsl: nil)
           return if max_length.nil?
 
-          declared_max = existing&.opts&.fetch(:max_length, nil)
+          dsl ||= type
+
+          if existing.nil?
+            raise ArgumentError, <<~ERROR
+              max_length: #{max_length} cannot be applied: #{target_class} already defines
+              ##{collection_name}, but not via a `#{dsl} :#{collection_name}` declaration,
+              so participation has no collection declaration to cap.
+
+              Participation never overwrites an existing method. Either remove max_length:
+              from the participation declaration, or replace the existing ##{collection_name}
+              with a `#{dsl} :#{collection_name}, max_length: #{max_length}` declaration.
+            ERROR
+          end
+
+          declared_max = existing.opts&.fetch(:max_length, nil)
           return if declared_max == max_length
 
           raise ArgumentError, <<~ERROR
@@ -97,7 +119,7 @@ module Familia
 
             Participation does not overwrite a collection that is already declared. Either
             remove max_length: from the participation declaration, or give the
-            `#{type} :#{collection_name}` declaration on #{target_class} the same cap.
+            `#{dsl} :#{collection_name}` declaration on #{target_class} the same cap.
           ERROR
         end
 

@@ -296,7 +296,7 @@ module Familia
     # @return [Integer, nil] The positive cap, or nil if uncapped
     #
     def max_length
-      @opts && @opts[:max_length]
+      @opts[:max_length]
     end
 
     # @raise [ArgumentError] if value is present and not a positive Integer,
