@@ -3,6 +3,7 @@
 # frozen_string_literal: true
 
 require_relative 'transient_fields/redacted_string'
+require_relative 'transient_fields/single_use_redacted_string'
 require_relative 'transient_fields/transient_field_type'
 
 module Familia

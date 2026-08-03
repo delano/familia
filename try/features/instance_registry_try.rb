@@ -11,13 +11,9 @@ class RegistryTestModel < Familia::Horreum
   field :status
 end
 
-# Clean up any leftover test data
-begin
-  existing = Familia.dbclient.keys('registrytestmodel:*')
-  Familia.dbclient.del(*existing) if existing.any?
-rescue => e
-  # Ignore cleanup errors
-end
+# Clean up any leftover test data from a previous (possibly aborted) run.
+# Scoped delete, not FLUSHDB (issue #283); prefix is registry_test_model.
+delete_test_dbkeys(RegistryTestModel)
 RegistryTestModel.instances.clear
 
 ## save adds to instances sorted set
@@ -102,11 +98,7 @@ RegistryTestModel.instances.member?('reg-unreg-1')
 @obj10.exists?
 #=> true
 
-## Teardown
-begin
-  existing = Familia.dbclient.keys('registrytestmodel:*')
-  Familia.dbclient.del(*existing) if existing.any?
-rescue => e
-  # Ignore cleanup errors
-end
+# TEARDOWN
+# Scoped delete, not FLUSHDB (issue #283); prefix is registry_test_model.
+delete_test_dbkeys(RegistryTestModel)
 RegistryTestModel.instances.clear

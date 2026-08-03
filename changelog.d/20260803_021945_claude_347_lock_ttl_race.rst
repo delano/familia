@@ -1,0 +1,33 @@
+Fixed
+-----
+
+- ``Lock#acquire`` with a positive TTL is now a single atomic ``SET NX EX``
+  command instead of ``SETNX`` followed by ``EXPIRE``, closing the crash
+  window between the two commands that could strand a permanent, TTL-less
+  lock. Invalid TTLs (<= 0) are rejected before touching the server. #347
+
+- ``DatabaseLogger.sample_rate`` is now validated on assignment: ``0`` is
+  coerced to ``nil`` (log everything), values above ``1.0`` clamp to ``1.0``,
+  and negative, non-finite (NaN/Infinity), or non-numeric values raise
+  ``ArgumentError`` at config time. ``should_log?`` is hardened to read the
+  rate once and guard against a non-finite sampling interval, so a bad value
+  can no longer crash every Redis command on the hot path. #347
+
+- ``SingleUseRedactedString`` is now loaded by ``require 'familia'``;
+  previously it had to be required manually even though the transient
+  fields feature documented it. #347
+
+Removed
+-------
+
+- Dropped the dead private helpers ``Horreum::define_attr_accessor_methods``
+  (``definition.rb``) and ``remove_stale_collection_member``
+  (``management/repair.rb``); neither had any caller. #347
+
+AI Assistance
+-------------
+
+- Claude Code implemented the atomic ``SET NX EX`` acquire path, the
+  ``sample_rate`` writer validation and ``should_log?`` hardening, added
+  regression tryouts for both, and confirmed the full tryouts suite green
+  (6361 testcases, 311 files).

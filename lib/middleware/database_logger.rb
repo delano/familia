@@ -137,10 +137,10 @@ module DatabaseLogger
     #   # Outputs: "[123] 0.001234 567μs > SET key value"
     attr_accessor :structured_logging
 
-    # Gets/sets the sampling rate for logging.
+    # Gets the sampling rate for logging.
     # Controls what percentage of commands are logged to reduce noise.
     #
-    # @return [Float, nil] Sample rate (0.0-1.0) or nil for no sampling
+    # @return [Float, nil] Sample rate in (0.0, 1.0] or nil for no sampling
     #
     # @example Log 10% of commands
     #   DatabaseLogger.sample_rate = 0.1
@@ -153,7 +153,42 @@ module DatabaseLogger
     #
     # @note Command capture is unaffected - only logger output is sampled.
     #   This means tests can still verify commands while production logs stay clean.
-    attr_accessor :sample_rate
+    attr_reader :sample_rate
+
+    # Sets the sampling rate, validating at config time so that a bad value
+    # cannot crash {#should_log?} on the hot path (issue #347).
+    #
+    # Validation rules:
+    # - +nil+ stays +nil+ (sampling disabled, log everything)
+    # - +0+ / +0.0+ is coerced to +nil+ (sampling disabled)
+    # - values in (0, 1] are stored as Float
+    # - values above 1.0 are clamped to 1.0 (log everything)
+    # - negative, non-finite (NaN/Infinity), non-real (Complex), or
+    #   non-numeric values raise ArgumentError immediately
+    #
+    # @param rate [Numeric, nil] Desired sample rate
+    # @return [Float, nil] The stored rate
+    # @raise [ArgumentError] if rate is negative, non-finite, or not a real number
+    def sample_rate=(rate)
+      @sample_rate =
+        if rate.nil?
+          nil
+        elsif !rate.is_a?(Numeric) || !rate.real?
+          # real? excludes Complex, which lacks the ordered-comparison
+          # predicates (negative?, >) the checks below rely on
+          raise ArgumentError, "sample_rate must be a real Numeric in 0..1 or nil (got #{rate.inspect})"
+        elsif !rate.finite?
+          raise ArgumentError, "sample_rate must be finite (got #{rate.inspect})"
+        elsif rate.negative?
+          raise ArgumentError, "sample_rate must not be negative (got #{rate.inspect})"
+        elsif rate.zero?
+          nil # 0 disables sampling (same as nil): every command is logged
+        elsif rate > 1.0
+          1.0 # clamp: anything above 100% just logs everything
+        else
+          rate.to_f # Float per the documented accessor type, whatever came in
+        end
+    end
 
     # Gets/sets whether commands are captured into the buffer.
     #
@@ -258,13 +293,25 @@ module DatabaseLogger
     # @return [Boolean] true if command should be logged
     # @api private
     def should_log?
-      return true if @sample_rate.nil?
+      # No logger means no log line can be emitted -- bail before the rate
+      # check so nil-rate + nil-logger configs keep the zero-overhead path.
       return false if @logger.nil?
 
+      # Read once: a concurrent `sample_rate = nil` between checks must not
+      # raise on the hot path.
+      rate = @sample_rate
+      return true if rate.nil?
+
+      # The writer validates, but the ivar can still be set directly (subclass,
+      # instance_variable_set), so guard against a non-finite interval here too
+      # (e.g. a subnormal rate where 1.0 / rate overflows to Infinity).
+      interval = 1.0 / rate
+      return false unless interval.finite?
+
       # Deterministic sampling: every Nth command where N = 1/sample_rate
-      # e.g., 0.1 = every 10th, 0.01 = every 100th
-      sample_interval = (1.0 / @sample_rate).to_i
-      (@sample_counter.increment % sample_interval).zero?
+      # e.g., 0.1 = every 10th, 0.01 = every 100th; rates >= 1.0 clamp the
+      # interval to 1, so every call increments the counter and logs.
+      (@sample_counter.increment % [1, interval.to_i].max).zero?
     end
 
     # Maps a middleware mode to the instrumentation hook type it reports to,
