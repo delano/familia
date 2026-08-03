@@ -570,8 +570,29 @@ category — including `:content_editor` — yet its tier is `:administrator`, b
 > Permission bits are not a contiguous score range, so they cannot be filtered
 > server-side by `ZRANGEBYSCORE`. `<collection>_with_permission` fetches members
 > with scores and tests bits per member; there is deliberately no category-based
-> score range method. For large collections, fetch a time window with `score_range`
-> and post-filter with `filter_by_category`.
+> score range method. The fetch is paged internally in `batch_size:` chunks
+> (default 500), so peak memory is O(batch_size) rather than O(N).
+
+For large collections, bound the result or stream it:
+
+```ruby
+customer.documents_with_permission(:write, limit: 50)              # first 50 matches
+customer.documents_with_permission(:write, limit: 50, offset: 50)  # next page
+customer.each_documents_with_permission(:read) { |id| ... }        # stream, O(1) memory
+```
+
+`limit:` caps how many matching members are returned and `offset:` skips the
+first N *matching* members (post-filter semantics), so the two paginate cleanly
+in deterministic score order. Deep offsets cost server CPU — each page is a
+`ZRANGEBYSCORE ... LIMIT` scan, so the server re-walks skipped pages. Because
+the result is assembled across multiple paged reads rather than one command,
+the Array form is no longer an atomic snapshot: concurrent writes to the
+collection between pages can skip or duplicate a member.
+`each_<collection>_with_permission(min_permission = :read, batch_size: 100)`
+streams via `ZSCAN` instead: O(1) retained memory in a single pass, returning an
+`Enumerator` when called without a block. The trade is that iteration is
+unordered and at-least-once — a member can be yielded twice while the server
+rehashes — so collect into a `Set` when uniqueness matters.
 
 ## Advanced Patterns
 
