@@ -252,7 +252,9 @@ module Familia
     # instead of a count.
     #
     # @param keep [:tail, :head] which end of the list survives the trim
-    # @return [Integer] number of elements removed (0 when already within cap)
+    # @return [Integer, Redis::Future] number of elements removed (0 when
+    #   already within cap); inside a caller transaction or pipeline, the
+    #   future of the pre-trim length instead
     # @raise [Familia::Problem] when the collection has no :max_length
     def enforce_max_length!(keep: :tail)
       max = require_max_length!

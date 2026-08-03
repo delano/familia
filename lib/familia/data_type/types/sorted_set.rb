@@ -401,7 +401,9 @@ module Familia
     # existing overage in place until the next write. Call this once, e.g.
     # as a migration step, to enforce the cap immediately.
     #
-    # @return [Integer] number of members removed (0 when already within cap)
+    # @return [Integer, Redis::Future] number of members removed (0 when
+    #   already within cap); inside a caller transaction or pipeline, the
+    #   removal count's future instead
     # @raise [Familia::Problem] when the collection has no :max_length
     def enforce_max_length!
       max = require_max_length!
