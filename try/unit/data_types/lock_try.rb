@@ -95,9 +95,15 @@ require_relative '../../support/helpers/test_helpers'
 @ttl_token
 #=> 'ttl-token'
 
-## Wait for TTL expiration and check if lock auto-expires
-# Note: This test might be flaky in fast test runs
-sleep 2
+## Lock acquired with TTL registers an expiration
+@lock.current_expiration.positive?
+#=> true
+
+## Lock auto-expires once its TTL elapses
+# Poll with a bounded deadline instead of a single fixed sleep: the key
+# expires ~1s after acquisition; allow up to 3s for slow/loaded runners.
+deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 3
+sleep 0.05 while @lock.locked? && Process.clock_gettime(Process::CLOCK_MONOTONIC) < deadline
 @lock.locked?
 #=> false
 
