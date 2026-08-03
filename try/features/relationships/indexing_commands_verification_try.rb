@@ -141,3 +141,19 @@ memberships = @user.current_indexings
 membership = memberships.find { |m| m[:type] == 'unique_index' }
 [membership[:index_name], membership[:field], membership[:field_value]]
 #=> [:email_index, :email, "test@example.com"]
+
+## Regression #307: save writes the class-level unique index inside the save
+## transaction (the HSET is queued in the MULTI/EXEC pipeline, not issued after)
+@txn_user = TestIndexedUser.new(user_id: 'txn_user_307', email: 'txn307@example.com')
+@save_commands = DatabaseLogger.capture_commands { @txn_user.save }.map(&:command)
+@txn_pos = @save_commands.index { |cmd| cmd.match?(/\Amulti\b/i) && cmd.match?(/\bexec\z/i) }
+@save_commands[@txn_pos].downcase.include?('email_index')
+#=> true
+
+## Regression #307: no post-commit index writes after the save transaction.
+## Before #307 the Relationships save override re-ran update_all_indexes after
+## super, issuing an EXISTS probe, a claim_field EVAL, and a second MULTI with
+## a redundant HSET -- all after the save had already committed.
+@post_commit = @save_commands[(@txn_pos + 1)..]
+@post_commit.grep(/email_index|\beval\b/i)
+#=> []

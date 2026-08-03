@@ -182,17 +182,6 @@ module Familia
         # NOTE: identifier and identifier= methods are provided by Horreum base class
         # No need to override them here - use the existing infrastructure
 
-        # Override save to update relationships automatically
-        def save(update_expiration: true)
-          result = super
-
-          if result && respond_to?(:update_all_indexes)
-            update_all_indexes
-          end
-
-          result
-        end
-
         # Get comprehensive relationship status for this object
         def relationship_status
           status = {
