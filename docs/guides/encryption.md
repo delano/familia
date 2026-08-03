@@ -75,7 +75,7 @@ class Provider
 
   def encrypt(plaintext, key, additional_data)
   def decrypt(ciphertext, key, nonce, auth_tag, additional_data)
-  def derive_key(master_key, context, personal: nil)
+  def derive_key(master_key, context, personal: nil)  # AES-GCM also accepts salt:
   def generate_nonce
 end
 ```
@@ -90,6 +90,12 @@ Master Key + Field Context → Provider KDF → Field-Specific Key
 XChaCha20-Poly1305: BLAKE2b with personalization
 AES-256-GCM:        HKDF-SHA256
 ```
+
+Each derivation input can be rotated: encryption always uses the current
+value, while decryption tries the current value first, then each entry in the
+matching history setting (`encryption_personalization_history` for XChaCha20,
+`encryption_hkdf_salt_history` for AES-GCM), then the built-in default. See
+[Rotating Derivation Inputs](#rotating-derivation-inputs) below.
 
 ## Implementation Steps
 
@@ -115,7 +121,8 @@ Familia.configure do |config|
     v1: ENV['FAMILIA_ENCRYPTION_KEY_V1']
   }
   config.current_key_version = :v1
-  config.encryption_personalization = 'MyApp-2024'  # Optional
+  config.encryption_personalization = 'MyApp-2024'  # Optional, <= 16 bytes
+  # config.encryption_personalization_history = ['MyApp-2023']  # Prior values, for decryption
 end
 
 # Validate configuration at startup
@@ -339,6 +346,32 @@ vault.save
 
 # Step 4: After all data is re-encrypted, remove old key
 ```
+
+## Rotating Derivation Inputs
+
+The BLAKE2b personalization (XChaCha20) and the HKDF salt (AES-GCM) rotate
+the same way, without re-encrypting stored data: set the new value and move
+the old value into the matching history list. New writes use the current
+value; decryption tries the current value first, then each history entry in
+order, then the built-in default (`'FamilialMatters'`), so pre-rotation
+ciphertext keeps decrypting.
+
+```ruby
+Familia.configure do |config|
+  # Rotate the XChaCha20 BLAKE2b personalization (values <= 16 bytes)
+  config.encryption_personalization = 'MyApp2.0'
+  config.encryption_personalization_history = ['MyApp1.0']
+
+  # Rotate the AES-GCM HKDF salt (any length)
+  config.encryption_hkdf_salt = 'MyApp-2025'
+  config.encryption_hkdf_salt_history = ['MyApp-2024']
+end
+```
+
+Keep the history lists short — each stale entry adds one decryption attempt
+on a miss. History entries are subject to the same constraints as the current
+value (non-empty String, no null bytes, and for the personalization <= 16
+bytes); invalid entries are skipped on decrypt.
 
 ## Error Handling
 

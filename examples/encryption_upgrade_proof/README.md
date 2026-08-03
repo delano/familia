@@ -67,10 +67,12 @@ These are *current behaviors* pinned by the proof so that any future change
 shows up as a failing check. See the accompanying findings report for the
 recommendations.
 
-- **Personalization is unrotatable**: changing
-  `encryption_personalization` breaks all existing XChaCha ciphertext; there
-  is no history/fallback mechanism (unlike `encryption_hkdf_salt_history`).
-  Pick the value *before* the first XChaCha write and treat it as permanent.
+- **Personalization rotates only through history**: since #333,
+  `encryption_personalization` rotates like the HKDF salt — decryption walks
+  the current value, then `encryption_personalization_history`, then the
+  built-in `'FamilialMatters'` fallback. Only the built-in default gets that
+  unconditional fallback: rotating away from a *non-default* value without
+  adding it to the history strands every envelope written under it.
 - **Wiping the current HKDF salt strands current-salt data**: the decrypt
   fallback list rescues legacy-salt envelopes, not envelopes written under
   the salt you just removed.
@@ -79,6 +81,7 @@ recommendations.
   and is never encrypted.
 - **The upgrade is a one-way door**: once one XChaCha envelope exists,
   every process that may read it needs libsodium. Nodes without it fail
-  cleanly (`Familia::EncryptionError: Unsupported algorithm`) but they fail.
+  cleanly (`Familia::EncryptionError` naming the unavailable provider and
+  its missing dependency) but they fail.
   Deploy libsodium to the whole fleet atomically, or accept read errors
   during the rollout window.
