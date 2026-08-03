@@ -7,6 +7,97 @@ The format is based on `Keep a Changelog <https://keepachangelog.com/en/1.1.0/>`
 
    <!--scriv-insert-here-->
 
+.. _changelog-2.12.0:
+
+2.12.0 — 2026-08-03
+===================
+
+Added
+-----
+
+- Added ``Familia::HashKey#claim_field`` and ``#release_field`` for server-side compare-and-set/compare-and-delete on single hash fields. Raises ``Familia::OperationModeError`` in pipelines/transactions.
+- Added generated ``claim_unique_<index>!`` and ``release_unique_<index>!`` instance methods with automatic partial claim rollback on unique index save collisions. #353
+- Added tryout test helpers (``set_test_encryption_keys``, ``clear_test_encryption_keys``, ``with_test_encryption_keys``) to safely manage encryption key configurations during test runs. #363
+- Added ``Familia::MultiResult#aborted?`` to distinguish WATCH aborts from individual command errors.
+- Added ``Familia::MultiResult#inspect`` for log-safe, compact transaction outcome summaries.
+- Added ``max_length:`` option to ``SortedSet`` and ``ListKey`` to automatically cap collection sizes at write time (retaining newest N elements). #351
+- Added ``DataType#max_length`` to query configured collection caps, with definition-time validation of the parameter. #351
+- Added ``SortedSet#enforce_max_length!`` and ``ListKey#enforce_max_length!`` to trim existing collections. #351
+- Added ``max_length:`` option to ``participates_in`` and ``class_participates_in``. #351
+- Added ``Familia::Features::Housekeeping::EnforceCollectionCaps`` chore class to support bulk cap enforcement. #351
+- Added ``encryption_personalization_history`` setting to support key personalization rotation for XChaCha20-Poly1305 providers. #333
+- Added ``limit:``, ``offset:``, and ``each_<collection>_with_permission`` to stream permission-filtered collection members via ``ZSCAN`` with O(1) memory. #309
+
+Changed
+-------
+
+- Unique index updates (``add_to_class_<index>``, ``update_in_class_<index>``) now raise ``Familia::OperationModeError`` inside transactions unless the written value was previously claimed. #353
+- Retained ``guard_unique_indexes!`` for fast-fail read checks before acquiring index claims. #353
+- Calls to ``remove_from_class_*`` and class-level ``destroy!`` no longer evict index entries that point to different identifiers. #353
+- ``Familia::MultiResult#results`` now always returns an ``Array`` (empty instead of ``nil`` on transaction abort) to prevent upstream crashes.
+- ``Familia::MultiResult#to_h`` now includes an ``:aborted`` boolean key.
+- ``Familia::MultiResult`` instances are now read-only, freezing both ``#results`` and ``#errors``.
+- ``SortedSet#increment`` now runs the ``warn_if_dirty!`` guard, warning or raising when called on an unsaved parent. #351
+- ``Manager#decrypt`` now handles XChaCha20 provider personalization candidates correctly during decryption walks, matching AES-GCM salt history behavior. #333
+- The request-scoped key cache key now includes a personalization segment to prevent collisions across different rotation candidates. #333
+- ``multi_field_fast_write`` now raises ``Familia::IndexedFieldFastWriteError`` if any written field backs a class-level index. #308
+- Fast writer ``field!`` on a class-indexed field now raises ``Familia::IndexedFieldFastWriteError`` inside transactions/pipelines, and raises ``Familia::PersistenceError`` on unsaved records. #308
+- With a blank ``encryption_hkdf_salt``, ``Manager#encrypt`` now raises ``EncryptionError`` when the request-cache key is built rather than at key derivation. The raise happens earlier and now also fires on what would previously have been a warm-cache hit; correctly configured deployments see no change. #380
+
+Removed
+-------
+
+- Removed the unused ``ScoreEncoding.category_score_range`` method.
+- Removed unused ``csv`` and ``stringio`` runtime dependencies from the gemspec. #354
+- Removed dead private helper methods ``Horreum::define_attr_accessor_methods``, ``remove_stale_collection_member``, and ``define_fast_writer_method``. #347, #308
+
+Fixed
+-----
+
+- Fixed ``decrby`` and ``decr`` (and aliases) to correctly use ``HINCRBY`` with a negated amount and added client-side integer validation.
+- Fixed ``encryption_info`` to reference the correct provider APIs and accurately expose ``key_size``.
+- Fixed a TOCTOU race in ``unique_index`` by enforcing server-side CAS claims using Lua before opening transactions, raising ``Familia::RecordExistsError`` on collision. #353
+- Fixed ``remove_from_class_*`` and ``update_in_class_*`` to use ownership-checked deletes, preventing accidental deletion of other records' valid entries. #353
+- Fixed process-global encryption configuration leaks across tryouts by using scoped helpers and restoring baselines. #363
+- Fixed test isolation in ``real_feature_integration_try.rb`` and ``module_loading_try.rb`` by explicitly managing encryption key rings. #363
+- Fixed fiber-local key cache teardowns to clear the correct request cache key. #363
+- Fixed claim leaks on unpersisted records in ``update_in_<scope>_<index_name>`` by running the persisted-record guard before checking claims. #370
+- Fixed ``ConcealedString`` by removing a redundant and non-functional GC finalizer. #359
+- Fixed ``Familia::MultiResult`` to prevent ``NoMethodError`` crashes on WATCH-aborted transactions. #355
+- Fixed ``SecureXChaCha20Poly1305Provider#derive_key`` to avoid mutating the receiver context string and handle non-String contexts correctly. #356
+- Fixed ``SortedSet#increment`` inside transactions/pipelines to safely return the future instead of calling ``to_f`` prematurely. #351
+- Fixed long-ignored ``:maxlength`` spelling to explicitly warn at definition time, prompting rename to ``max_length:``. #351
+- Fixed ``Lock#acquire`` with a positive TTL to run as a single atomic ``SET NX EX`` command. #347
+- Fixed ``DatabaseLogger.sample_rate`` assignment to validate and clamp input values, preventing crashes on the hot path. #347
+- Fixed ``SingleUseRedactedString`` to be loaded automatically by ``require 'familia'``. #347
+- Fixed memory overhead in ``<collection>_with_permission`` queries by batching and paging internally via ``ZRANGEBYSCORE ... LIMIT``. #309
+- Fixed performance by removing redundant post-save ``update_all_indexes`` calls inside relationships save. #307
+- Fixed partial write paths (``commit_fields``, ``save_fields``, ``multi_field_update``) to safely guard and claim unique indexes before executing writes. #308
+- Fixed fast writers (``field!``) on indexed fields to claim and update the index atomically before execution. #308
+
+Security
+--------
+
+- Enforced field-type semantics in ``multi_field_update`` and ``multi_field_fast_write`` to prevent writing plaintext to encrypted fields or persisting transient fields.
+- Enforced loud failures for invalid permission symbol lookups in ``Relationships::ScoreEncoding`` to prevent silent misconfigurations.
+- Pinned GitHub Workflows holding ``CLAUDE_CODE_OAUTH_TOKEN`` to immutable release commit SHAs.
+- The encrypt-path request-cache key now resolves the HKDF salt through the fail-closed ``current_hkdf_salt`` accessor instead of the permissive candidate list's head (``hkdf_salts.first``). Previously, with a blank ``encryption_hkdf_salt``, a decrypt inside ``with_request_cache`` could warm an entry keyed on a historical salt that a subsequent encrypt would silently reuse -- because the cache lookup precedes derivation, the blank-salt refusal in the provider never fired. Encrypts now refuse a blank salt even against a warm cache. #380
+
+Documentation
+-------------
+
+- Replaced fabricated/incorrect examples in ``docs/overview.md`` and RDoc comments with accurate, tested examples for permission management and relationships.
+- Documented that ``<collection>_with_permission`` requires atomic flags and rejects role symbols.
+- Corrected the error message for ``guard_allowed_fields!``.
+- Documented ``PERMISSION_CATEGORIES`` and exclusive permission tiers.
+- Fixed incorrect connection provider examples in docs.
+- Updated encryption guides to cover personalization history and rotation.
+
+AI Assistance
+-------------
+
+- Core fixes, tryout coverage (120+ test cases), and documentation updates implemented with AI assistance.
+
 .. _changelog-2.11.2:
 
 2.11.2 — 2026-07-05
