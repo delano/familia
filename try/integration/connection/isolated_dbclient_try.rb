@@ -14,11 +14,16 @@ require_relative '../../support/helpers/test_helpers'
 # Clean up any existing test data left by previous runs of THIS file.
 # Scoped delete, never FLUSHDB (issue #283): these databases are shared
 # with other tryout files. The list below is exactly the keys this file
-# writes, removed from every db it exercises (0..8).
+# writes, removed from every db it exercises (0..8). Keys are namespaced
+# with this file's name so the cleanup can't collide with other files'
+# keys under --parallel.
 own_keys = %w[
-  test_key cached_key isolated_key before_error after_error
-  db_test uri_test default_test test_model:test:object
-] + (0..4).map { |i| "temp_key_#{i}" }
+  isolated_dbclient_try:test_key isolated_dbclient_try:cached_key
+  isolated_dbclient_try:isolated_key isolated_dbclient_try:before_error
+  isolated_dbclient_try:after_error isolated_dbclient_try:db_test
+  isolated_dbclient_try:uri_test isolated_dbclient_try:default_test
+  test_model:test:object
+] + (0..4).map { |i| "isolated_dbclient_try:temp_key_#{i}" }
 (0..8).each do |db|
   Familia.with_isolated_dbclient(db) do |client|
     client.del(*own_keys)
@@ -36,17 +41,17 @@ different_objects
 
 ## isolated_dbclient connects to the correct database
 Familia.with_isolated_dbclient(5) do |client|
-  client.set("test_key", "test_value")
+  client.set("isolated_dbclient_try:test_key", "test_value")
 end
 
 # Verify the key was set in database 5
 found_in_db5 = Familia.with_isolated_dbclient(5) do |client|
-  client.get("test_key") == "test_value"
+  client.get("isolated_dbclient_try:test_key") == "test_value"
 end
 
 # Verify the key is NOT in database 0
 not_found_in_db0 = Familia.with_isolated_dbclient(0) do |client|
-  client.get("test_key").nil?
+  client.get("isolated_dbclient_try:test_key").nil?
 end
 
 found_in_db5 && not_found_in_db0
@@ -55,17 +60,17 @@ found_in_db5 && not_found_in_db0
 ## isolated_dbclient doesn't affect cached connections
 # Set up a cached connection
 regular_client = Familia.dbclient(0)
-regular_client.set("cached_key", "cached_value")
+regular_client.set("isolated_dbclient_try:cached_key", "cached_value")
 
 # Use isolated connection on same database
 isolated_result = Familia.with_isolated_dbclient(0) do |client|
-  client.set("isolated_key", "isolated_value")
-  client.get("cached_key")
+  client.set("isolated_dbclient_try:isolated_key", "isolated_value")
+  client.get("isolated_dbclient_try:cached_key")
 end
 
 # Both keys should be accessible
-cached_accessible = regular_client.get("cached_key") == "cached_value"
-isolated_accessible = regular_client.get("isolated_key") == "isolated_value"
+cached_accessible = regular_client.get("isolated_dbclient_try:cached_key") == "cached_value"
+isolated_accessible = regular_client.get("isolated_dbclient_try:isolated_key") == "isolated_value"
 
 cached_accessible && isolated_accessible && isolated_result == "cached_value"
 #=> true
@@ -77,7 +82,7 @@ captured_clients = []
 5.times do |i|
   Familia.with_isolated_dbclient(i) do |client|
     captured_clients << client
-    client.set("temp_key_#{i}", "temp_value_#{i}")
+    client.set("isolated_dbclient_try:temp_key_#{i}", "temp_value_#{i}")
     # Verify connection works inside block
     client.ping
   end
@@ -86,7 +91,7 @@ end
 # Verify all connections worked and created distinct objects
 all_worked = captured_clients.size == 5
 all_distinct = captured_clients.map(&:object_id).uniq.size == 5
-keys_set = Familia.with_isolated_dbclient(0) { |c| c.exists?("temp_key_0") }
+keys_set = Familia.with_isolated_dbclient(0) { |c| c.exists?("isolated_dbclient_try:temp_key_0") }
 
 all_worked && all_distinct && keys_set
 #=> true
@@ -97,10 +102,10 @@ database_state_correct = false
 
 begin
   Familia.with_isolated_dbclient(0) do |client|
-    client.set("before_error", "value")
+    client.set("isolated_dbclient_try:before_error", "value")
     raise "Test exception"
     # This line should not be reached
-    client.set("after_error", "should_not_be_set")
+    client.set("isolated_dbclient_try:after_error", "should_not_be_set")
   end
 rescue => e
   exception_raised = (e.message == "Test exception")
@@ -109,7 +114,7 @@ end
 # Verify the database state after the exception was caught
 if exception_raised
   database_state_correct = Familia.with_isolated_dbclient(0) do |client|
-    client.get("before_error") == "value" && client.get("after_error").nil?
+    client.get("isolated_dbclient_try:before_error") == "value" && client.get("isolated_dbclient_try:after_error").nil?
   end
 end
 
@@ -147,16 +152,16 @@ Familia.unload_member(TestModel)
 
 ## isolated_dbclient with Integer argument
 client = Familia.isolated_dbclient(7)
-client.set("db_test", "seven")
-result = client.get("db_test")
+client.set("isolated_dbclient_try:db_test", "seven")
+result = client.get("isolated_dbclient_try:db_test")
 client.close
 result
 #=> "seven"
 
 ## isolated_dbclient with String URI argument
 client = Familia.isolated_dbclient("redis://localhost:2525/8")
-client.set("uri_test", "eight")
-result = client.get("uri_test")
+client.set("isolated_dbclient_try:uri_test", "eight")
+result = client.get("isolated_dbclient_try:uri_test")
 client.close
 result
 #=> "eight"
@@ -164,11 +169,11 @@ result
 ## isolated_dbclient with nil uses default
 default_db = Familia.uri.db || 0
 client = Familia.isolated_dbclient(nil)
-client.set("default_test", "default_value")
+client.set("isolated_dbclient_try:default_test", "default_value")
 
 # Verify it's in the expected database
 verification = Familia.with_isolated_dbclient(default_db) do |verify_client|
-  verify_client.get("default_test")
+  verify_client.get("isolated_dbclient_try:default_test")
 end
 
 client.close

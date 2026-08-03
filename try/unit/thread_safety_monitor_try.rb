@@ -115,8 +115,12 @@ lock_held.pop  # Rendezvous: t1 definitely holds the mutex now
 
 t2 = Thread.new { mutex.synchronize { 'got lock' } }
 # Wait until t2 is blocked on the mutex (its try_lock has already failed
-# and contention has been recorded by the time it sleeps in Mutex#lock)
-Thread.pass while t2.alive? && t2.status != 'sleep'
+# and contention has been recorded by the time it sleeps in Mutex#lock).
+# Bounded deadline so an unexpected t2 state fails the assertion below
+# instead of hanging the suite.
+deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 5
+Thread.pass while t2.alive? && t2.status != 'sleep' &&
+                  Process.clock_gettime(Process::CLOCK_MONOTONIC) < deadline
 
 release_lock.push(:go)
 t1.join
