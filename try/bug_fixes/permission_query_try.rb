@@ -40,6 +40,25 @@ now = Familia.now
 @target.widgets.add("w_write", SE.encode_score(now, [:read, :write]))   # read + write
 @target.widgets.add("w_admin", SE.encode_score(now, [:read, :admin]))   # read + admin
 
+# Empty collection: min_permission must be validated eagerly, since the lazy
+# per-member permission? check never runs when there is nothing to scan.
+@empty_target = PermTarget.new(tid: "perm_target_empty", name: "E")
+@empty_target.save
+@empty_target.widgets.delete!
+
+# Multi-page dataset: 12 members with distinct integer-second timestamps so
+# ZRANGEBYSCORE order is deterministic. :write is set on m01-m04 and m09-m12;
+# m05-m08 are read-only, so with batch_size: 4 the middle page is entirely
+# non-matching for :write and must be skipped by the paging loop.
+@paged_target = PermTarget.new(tid: "perm_target_paged", name: "P")
+@paged_target.save
+@paged_target.widgets.delete!
+base = Familia.now.to_i
+(1..12).each do |i|
+  flags = (5..8).cover?(i) ? [:read] : [:read, :write]
+  @paged_target.widgets.add(format("m%02d", i), SE.encode_score(base + i, flags))
+end
+
 ## the sorted_set participation generates a *_with_permission method
 @target.respond_to?(:widgets_with_permission)
 #=> true
@@ -146,5 +165,51 @@ collected.sort
 @target.each_widgets_with_permission(:read, batch_size: 0)
 #=!> error.class == ArgumentError
 
+## min_permission is validated eagerly: a role raises even with limit: 0,
+## which would otherwise short-circuit to [] before any per-member check
+@target.widgets_with_permission(:editor, limit: 0)
+#=!> error.class == ArgumentError
+
+## eager validation also fires on an EMPTY collection (array form), where the
+## lazy per-member check would never run
+@empty_target.widgets_with_permission(:editor)
+#=!> error.class == ArgumentError
+
+## unknown permission symbols raise on an empty collection too
+@empty_target.widgets_with_permission(:bogus)
+#=!> error.class == ArgumentError
+
+## the streaming form validates min_permission eagerly on an empty collection
+@empty_target.each_widgets_with_permission(:editor) { |m| m }
+#=!> error.class == ArgumentError
+
+## and even without a block, before the Enumerator is built
+@empty_target.each_widgets_with_permission(:editor)
+#=!> error.class == ArgumentError
+
+## multi-page boundary: batch_size: 4 over 12 members pages through an
+## entirely non-matching middle page (m05-m08 lack :write) without dropping
+## the matches on either side
+@paged_target.widgets_with_permission(:write, batch_size: 4)
+#=> ["m01", "m02", "m03", "m04", "m09", "m10", "m11", "m12"]
+
+## the paged result equals the default (unpaged) result
+@paged_target.widgets_with_permission(:write, batch_size: 4) == @paged_target.widgets_with_permission(:write)
+#=> true
+
+## limit + offset + batch_size combined: offset is POST-FILTER, so it skips
+## the first 3 :write matches (m01-m03), then limit: 3 takes m04 plus the two
+## matches after the non-matching middle page
+@paged_target.widgets_with_permission(:write, limit: 3, offset: 3, batch_size: 4)
+#=> ["m04", "m09", "m10"]
+
+## same kwarg combination where every member matches (:read): the window is a
+## straight slice of score order across internal page boundaries
+@paged_target.widgets_with_permission(:read, limit: 5, offset: 4, batch_size: 4)
+#=> ["m05", "m06", "m07", "m08", "m09"]
+
 @target.widgets.delete!
 @target.destroy!
+@empty_target.destroy!
+@paged_target.widgets.delete!
+@paged_target.destroy!
