@@ -11,10 +11,17 @@
 
 require_relative '../../support/helpers/test_helpers'
 
-# Clean up any existing test data in all test databases
-(0..2).each do |db|
+# Clean up any existing test data left by previous runs of THIS file.
+# Scoped delete, never FLUSHDB (issue #283): these databases are shared
+# with other tryout files. The list below is exactly the keys this file
+# writes, removed from every db it exercises (0..8).
+own_keys = %w[
+  test_key cached_key isolated_key before_error after_error
+  db_test uri_test default_test test_model:test:object
+] + (0..4).map { |i| "temp_key_#{i}" }
+(0..8).each do |db|
   Familia.with_isolated_dbclient(db) do |client|
-    client.flushdb
+    client.del(*own_keys)
   end
 end
 
