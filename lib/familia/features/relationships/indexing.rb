@@ -209,8 +209,8 @@ module Familia
           #
           # 1. Dirty tracking is still live -- clear_dirty! runs after the
           #    transaction -- so the previous value of a changed indexed field
-          #    is available to retract. The relationships save hook runs after
-          #    the commit, where changed_fields is already empty.
+          #    is available to retract. A post-commit hook would see empty
+          #    changed_fields and could never retract stale entries.
           # 2. The index mutation commits atomically with the object hash.
           #
           # @param tracked_entries [Hash<String, String>] tracker entries
@@ -487,10 +487,10 @@ module Familia
             return if exists?
 
             location = if scope_instance
-                         "#{index_name} on #{scope_instance.class.name}"
-                       else
-                         "class-level #{index_name}"
-                       end
+              "#{index_name} on #{scope_instance.class.name}"
+            else
+              "class-level #{index_name}"
+            end
             raise Familia::PersistenceError,
                   "Cannot index unsaved #{self.class.name} in #{location}: " \
                   'the index entry would point to a record that does not ' \

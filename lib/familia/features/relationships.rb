@@ -122,7 +122,6 @@ module Familia
           identifier_field
         end
 
-
         # Validate relationship configurations
         def validate_relationships!
           errors = []
@@ -147,9 +146,7 @@ module Familia
 
           # Validate identifier field exists
           id_field = identifier
-          unless instance_methods.include?(id_field) || method_defined?(id_field)
-            errors << "Identifier field '#{id_field}' is not defined"
-          end
+          errors << "Identifier field '#{id_field}' is not defined" unless method_defined?(id_field)
 
           raise RelationshipError, "Relationship validation failed: #{errors.join('; ')}" if errors.any?
 
@@ -174,24 +171,11 @@ module Familia
 
         # Include core score encoding methods at class level
         include ScoreEncoding
-
-        private
       end
 
       module ModelInstanceMethods
         # NOTE: identifier and identifier= methods are provided by Horreum base class
         # No need to override them here - use the existing infrastructure
-
-        # Override save to update relationships automatically
-        def save(update_expiration: true)
-          result = super
-
-          if result && respond_to?(:update_all_indexes)
-            update_all_indexes
-          end
-
-          result
-        end
 
         # Get comprehensive relationship status for this object
         def relationship_status
@@ -262,8 +246,6 @@ module Familia
 
           temp_key
         end
-
-        private
       end
     end
   end
