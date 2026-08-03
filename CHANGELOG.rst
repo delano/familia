@@ -42,6 +42,7 @@ Changed
 - The request-scoped key cache key now includes a personalization segment to prevent collisions across different rotation candidates. #333
 - ``multi_field_fast_write`` now raises ``Familia::IndexedFieldFastWriteError`` if any written field backs a class-level index. #308
 - Fast writer ``field!`` on a class-indexed field now raises ``Familia::IndexedFieldFastWriteError`` inside transactions/pipelines, and raises ``Familia::PersistenceError`` on unsaved records. #308
+- With a blank ``encryption_hkdf_salt``, ``Manager#encrypt`` now raises ``EncryptionError`` when the request-cache key is built rather than at key derivation. The raise happens earlier and now also fires on what would previously have been a warm-cache hit; correctly configured deployments see no change. #380
 
 Removed
 -------
@@ -80,6 +81,7 @@ Security
 - Enforced field-type semantics in ``multi_field_update`` and ``multi_field_fast_write`` to prevent writing plaintext to encrypted fields or persisting transient fields.
 - Enforced loud failures for invalid permission symbol lookups in ``Relationships::ScoreEncoding`` to prevent silent misconfigurations.
 - Pinned GitHub Workflows holding ``CLAUDE_CODE_OAUTH_TOKEN`` to immutable release commit SHAs.
+- The encrypt-path request-cache key now resolves the HKDF salt through the fail-closed ``current_hkdf_salt`` accessor instead of the permissive candidate list's head (``hkdf_salts.first``). Previously, with a blank ``encryption_hkdf_salt``, a decrypt inside ``with_request_cache`` could warm an entry keyed on a historical salt that a subsequent encrypt would silently reuse -- because the cache lookup precedes derivation, the blank-salt refusal in the provider never fired. Encrypts now refuse a blank salt even against a warm cache. #380
 
 Documentation
 -------------
