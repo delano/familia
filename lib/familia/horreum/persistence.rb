@@ -113,52 +113,63 @@ module Familia
 
         Familia.trace :SAVE, nil, self.class.uri if Familia.debug?
 
-        # Prepare object for persistence (timestamps, validation)
-        prepare_for_save
+        # Prepare object for persistence (timestamps, validation). Everything
+        # from here to EXEC runs with the unique-index claims already written
+        # server-side (ADR-0002), so any failure before the transaction lands
+        # -- including guard_tracked_index_scopes! raising below -- must
+        # release the entries this call created; hence the rescue around the
+        # whole post-claim region.
+        created_claims = prepare_for_save
 
-        # Pre-read the instance-scoped index tracker before MULTI/EXEC, for
-        # the same reason destroy! does: HGETALL inside a transaction returns
-        # futures, not values. Replayed inside the transaction below, where
-        # dirty tracking is still live (see #auto_update_class_indexes).
-        tracked_scopes = if respond_to?(:read_instance_index_scopes)
-          read_instance_index_scopes
-        else
-          {}
-        end
+        begin
+          # Pre-read the instance-scoped index tracker before MULTI/EXEC, for
+          # the same reason destroy! does: HGETALL inside a transaction returns
+          # futures, not values. Replayed inside the transaction below, where
+          # dirty tracking is still live (see #auto_update_class_indexes).
+          tracked_scopes = if respond_to?(:read_instance_index_scopes)
+            read_instance_index_scopes
+          else
+            {}
+          end
 
-        # A non-empty tracker with no object hash can only belong to a dead
-        # incarnation of this identifier: add_to_* refuses never-saved
-        # records, so entries outliving the hash mean delete! (or expiry)
-        # removed the hash out from under them. Replaying them would silently
-        # re-join whatever scopes the PREVIOUS record occupied (#365), so the
-        # transaction below prunes them instead -- replaying remove_from_*
-        # with the recorded values, which also clears the index entries the
-        # dead incarnation left behind. The EXISTS probe costs a round trip
-        # only when the tracker has entries.
-        #
-        # The probe runs before the MULTI, so a concurrent delete! landing
-        # between the two makes a live tracker look stale and the save prunes
-        # memberships that were valid an instant earlier. That is the
-        # accepted conservative failure mode -- losing memberships for a
-        # record that was just deleted beats joining the wrong scopes -- and
-        # the same read-window race save already accepts for its guards
-        # (MULTI-only by design, no WATCH).
-        stale_tracker = !tracked_scopes.empty? && !exists?
+          # A non-empty tracker with no object hash can only belong to a dead
+          # incarnation of this identifier: add_to_* refuses never-saved
+          # records, so entries outliving the hash mean delete! (or expiry)
+          # removed the hash out from under them. Replaying them would silently
+          # re-join whatever scopes the PREVIOUS record occupied (#365), so the
+          # transaction below prunes them instead -- replaying remove_from_*
+          # with the recorded values, which also clears the index entries the
+          # dead incarnation left behind. The EXISTS probe costs a round trip
+          # only when the tracker has entries.
+          #
+          # The probe runs before the MULTI, so a concurrent delete! landing
+          # between the two makes a live tracker look stale and the save prunes
+          # memberships that were valid an instant earlier. That is the
+          # accepted conservative failure mode -- losing memberships for a
+          # record that was just deleted beats joining the wrong scopes -- and
+          # the same read-window race save already accepts for its guards
+          # (MULTI-only by design, no WATCH).
+          stale_tracker = !tracked_scopes.empty? && !exists?
 
-        # Validate instance-scoped unique constraints here too -- same reason
-        # prepare_for_save runs guard_unique_indexes! outside the transaction
-        # (the guard reads). guard_unique_indexes! only covers class-level
-        # relationships; without this, the refresh below could evict another
-        # record's index entry silently. Stale entries are pruned rather than
-        # replayed, so there is no membership to validate.
-        if !stale_tracker && respond_to?(:guard_tracked_index_scopes!)
-          guard_tracked_index_scopes!(tracked_scopes)
-        end
+          # Validate instance-scoped unique constraints here too -- same reason
+          # prepare_for_save runs guard_unique_indexes! outside the transaction
+          # (the guard reads). guard_unique_indexes! only covers class-level
+          # relationships; without this, the refresh below could evict another
+          # record's index entry silently. Stale entries are pruned rather than
+          # replayed, so there is no membership to validate.
+          guard_tracked_index_scopes!(tracked_scopes) if !stale_tracker && respond_to?(:guard_tracked_index_scopes!)
 
-        # Everything in ONE transaction for complete atomicity
-        result = transaction do |_conn|
-          persist_to_storage(update_expiration, tracked_index_scopes: tracked_scopes,
-                                                prune_stale_tracker: stale_tracker)
+          # Everything in ONE transaction for complete atomicity
+          result = transaction do |_conn|
+            persist_to_storage(update_expiration, tracked_index_scopes: tracked_scopes,
+                                                  prune_stale_tracker: stale_tracker)
+          end
+        rescue StandardError
+          # EXEC never ran (a raised transaction block is discarded), so the
+          # hash write demonstrably did not land and the claim entries are
+          # the only Redis-side trace of this save.
+          release_created_index_claims!(created_claims)
+          raise
         end
 
         # Structured lifecycle logging and instrumentation
@@ -192,8 +203,14 @@ module Familia
             fields_count: fields_count)
         end
 
-        # Clear dirty tracking after successful save
-        clear_dirty! if persisted_successfully?(result)
+        # Clear dirty tracking after successful save; otherwise decide the
+        # fate of the freshly-created index claims (release on abort, keep
+        # and warn when EXEC ran -- see the helper for the reasoning).
+        if persisted_successfully?(result)
+          clear_dirty!
+        else
+          reconcile_index_claims_after_failed_write(created_claims, result)
+        end
 
         # Return boolean indicating success
         persisted_successfully?(result)
@@ -294,45 +311,60 @@ module Familia
         Familia.debug "[save_if_not_exists]: #{self.class} #{identifier_field}=#{identifier}"
         Familia.trace :SAVE_IF_NOT_EXISTS, nil, self.class.uri if Familia.debug?
 
-        # Prepare object for persistence (timestamps, validation)
-        prepare_for_save
+        # Prepare object for persistence (timestamps, validation). As in
+        # save, the unique-index claims are written server-side here, so a
+        # failure that prevents the hash write from landing (record exists,
+        # retries exhausted) must release the entries this call created.
+        created_claims = prepare_for_save
 
         # Drive WATCH + MULTI/EXEC through a SINGLE resolved connection so the
         # optimistic lock is effective (the primitive owns abort detection and
         # retry). The existence check runs in the WATCH window: if the key is
         # created between WATCH and EXEC, Redis aborts and the primitive retries.
-        result = Familia::Connection::TransactionCore.execute_watched_transaction(
-          -> { dbclient }, watch_keys: [dbkey]
-        ) do |conn|
-          raise Familia::RecordExistsError, dbkey if exists?
+        begin
+          result = Familia::Connection::TransactionCore.execute_watched_transaction(
+            -> { dbclient }, watch_keys: [dbkey]
+          ) do |conn|
+            raise Familia::RecordExistsError, dbkey if exists?
 
-          # Snapshot the instance-scoped index tracker in the WATCH window,
-          # alongside the existence check and for the same reason: it is a
-          # read, and reads inside the MULTI below return futures. Read here
-          # rather than before the watched block so a WATCH abort re-reads it
-          # on retry. Usually empty (this path only proceeds when the object
-          # hash is absent), but a hash removed out of band -- delete!, or
-          # expiry -- can leave entries behind. Those entries describe the
-          # previous incarnation of this identifier, not the record being
-          # created, so the transaction prunes them (#365): remove_from_* is
-          # replayed with the recorded values and the tracker cleared. No
-          # uniqueness guard is needed -- nothing is being joined.
-          tracked_scopes = if respond_to?(:read_instance_index_scopes)
-            read_instance_index_scopes
-          else
-            {}
-          end
+            # Snapshot the instance-scoped index tracker in the WATCH window,
+            # alongside the existence check and for the same reason: it is a
+            # read, and reads inside the MULTI below return futures. Read here
+            # rather than before the watched block so a WATCH abort re-reads it
+            # on retry. Usually empty (this path only proceeds when the object
+            # hash is absent), but a hash removed out of band -- delete!, or
+            # expiry -- can leave entries behind. Those entries describe the
+            # previous incarnation of this identifier, not the record being
+            # created, so the transaction prunes them (#365): remove_from_* is
+            # replayed with the recorded values and the tracker cleared. No
+            # uniqueness guard is needed -- nothing is being joined.
+            tracked_scopes = if respond_to?(:read_instance_index_scopes)
+              read_instance_index_scopes
+            else
+              {}
+            end
 
-          Familia::Connection::TransactionCore.execute_normal_transaction(-> { conn }) do |_m|
-            persist_to_storage(update_expiration, tracked_index_scopes: tracked_scopes,
-                                                  prune_stale_tracker: true)
+            Familia::Connection::TransactionCore.execute_normal_transaction(-> { conn }) do |_m|
+              persist_to_storage(update_expiration, tracked_index_scopes: tracked_scopes,
+                                                    prune_stale_tracker: true)
+            end
           end
+        rescue StandardError
+          # The record exists, or the WATCH retries were exhausted: either
+          # way the hash write did not land, so the claims this call created
+          # must not survive it.
+          release_created_index_claims!(created_claims)
+          raise
         end
 
         Familia.debug "[save_if_not_exists]: result=#{result.inspect}"
 
-        # Clear dirty tracking after successful save
-        clear_dirty! if persisted_successfully?(result)
+        if persisted_successfully?(result)
+          # Clear dirty tracking after successful save
+          clear_dirty!
+        else
+          reconcile_index_claims_after_failed_write(created_claims, result)
+        end
 
         # Return boolean indicating success (consistent with save method)
         persisted_successfully?(result)
@@ -354,9 +386,12 @@ module Familia
       # Optionally updates the key's expiration time if the feature is enabled
       # for the object's class.
       #
-      # Unlike +save+, this method does not run +prepare_for_save+ (timestamps,
-      # unique index guards) and does not update class indexes. It does update
-      # the class-level +instances+ sorted set via +touch_instances!+, so the
+      # Unlike +save+, this method does not touch the created/updated
+      # timestamps. Class-level unique indexes are guarded and claimed before
+      # the transaction opens (see #prepare_for_partial_write) and re-affirmed
+      # inside it via #auto_update_class_indexes, so indexed lookups stay
+      # consistent with the stored hash (#308). It also updates the
+      # class-level +instances+ sorted set via +touch_instances!+, so the
       # object will appear in +instances.to_a+ listings. Use this for updating
       # fields on an object that is already persisted and tracked.
       #
@@ -364,6 +399,16 @@ module Familia
       #   of the Valkey key. Defaults to true.
       #
       # @return [Object] The result of the HMSET operation from the DB.
+      # @raise [Familia::RecordExistsError] if a class-level unique index
+      #   already maps an indexed field's value to another record. Raised
+      #   before the transaction opens; the object hash is untouched.
+      #
+      # @note On a failed claim the in-memory field keeps the conflicting
+      #   value and stays dirty -- it was set by the caller before this call,
+      #   so silently reverting it would destroy caller state. The object is
+      #   diverged from storage until the caller corrects the value or calls
+      #   refresh!. (multi_field_update differs: it applies the setters
+      #   itself, so it rolls them back and never leaves the object diverged.)
       #
       # @example Basic usage
       #   user.name = "John"
@@ -385,29 +430,52 @@ module Familia
         prepared_value = to_h_for_storage
         Familia.debug "[commit_fields] Begin #{self.class} #{dbkey} #{prepared_value} (exp: #{update_expiration})"
 
-        result = transaction do |_conn|
-          # Set all non-nil fields atomically
-          hmset_result = hmset(prepared_value)
+        # Guard and claim class-level unique indexes before the MULTI opens
+        # (fail-closed: a constraint violation leaves the hash untouched).
+        created_claims = prepare_for_partial_write
 
-          # Remove any fields cleared to nil so their prior stored value is not
-          # left stale (HMSET never deletes omitted fields).
-          remove_stale_nil_fields
+        begin
+          result = transaction do |_conn|
+            # Set all non-nil fields atomically
+            hmset_result = hmset(prepared_value)
 
-          # Update expiration in same transaction to ensure atomicity
-          self.update_expiration if hmset_result && update_expiration
+            # Remove any fields cleared to nil so their prior stored value is not
+            # left stale (HMSET never deletes omitted fields).
+            remove_stale_nil_fields
 
-          # Touch instances timeline so the object is visible to list-based
-          # enumeration (instances.to_a, count, etc.). Skip it when nothing was
-          # persisted and no hash key exists -- otherwise the identifier is
-          # registered in `instances` pointing at a missing hash (see
-          # {#persist_to_storage}).
-          touch_instances! if hmset_result && !prepared_value.empty?
+            # Maintain class-level indexes in the same transaction as the hash
+            # write. Dirty tracking is still populated here (clear_dirty! runs
+            # after EXEC), so changed indexed fields drop their stale entries.
+            auto_update_class_indexes
 
-          hmset_result
+            # Update expiration in same transaction to ensure atomicity
+            self.update_expiration if hmset_result && update_expiration
+
+            # Touch instances timeline so the object is visible to list-based
+            # enumeration (instances.to_a, count, etc.). Skip it when nothing was
+            # persisted and no hash key exists -- otherwise the identifier is
+            # registered in `instances` pointing at a missing hash (see
+            # {#persist_to_storage}).
+            touch_instances! if hmset_result && !prepared_value.empty?
+
+            hmset_result
+          end
+        rescue StandardError
+          # A raise here means the MULTI never reached EXEC (redis-rb discards
+          # on a raised block), so the hash write demonstrably did not land
+          # and the pre-MULTI claim entries are the only Redis-side trace of
+          # this write. Release them so the index cannot point at a hash
+          # state that was never stored.
+          release_created_index_claims!(created_claims)
+          raise
         end
 
-        # Clear dirty tracking after successful commit
-        clear_dirty! if persisted_successfully?(result)
+        if persisted_successfully?(result)
+          # Clear dirty tracking after successful commit
+          clear_dirty!
+        else
+          reconcile_index_claims_after_failed_write(created_claims, result)
+        end
 
         result
       end
@@ -430,6 +498,39 @@ module Familia
       end
       private :persisted_successfully?
 
+      # Snapshot of in-memory state for the fields multi_field_update is about
+      # to mutate: ivar value plus whether the field was already dirty. Only
+      # fields with a plain setter are captured -- they are the only ones the
+      # setter loop mutates.
+      #
+      # @param field_names [Array<Symbol, String>]
+      # @return [Array<Array(Symbol, Object, Boolean)>]
+      def capture_field_rollback_state(field_names)
+        field_names.filter_map do |field|
+          next unless respond_to?(:"#{field}=")
+
+          [field.to_sym, instance_variable_get(:"@#{field}"), dirty?(field)]
+        end
+      end
+      private :capture_field_rollback_state
+
+      # Restores a {#capture_field_rollback_state} snapshot. Writes the ivar
+      # directly (bypassing the setter) so the rollback itself records no new
+      # dirty entries; a field that was clean before the failed write is
+      # cleared, while one that was already dirty keeps its original baseline
+      # (mark_dirty! never overwrites it).
+      #
+      # @param snapshot [Array<Array(Symbol, Object, Boolean)>]
+      # @return [void]
+      def restore_field_rollback_state(snapshot)
+        snapshot.each do |field, old_value, was_dirty|
+          instance_variable_set(:"@#{field}", old_value)
+          clear_dirty!(field) unless was_dirty
+        end
+        nil
+      end
+      private :restore_field_rollback_state
+
       # Updates multiple fields atomically in a Database transaction.
       #
       # Values bypass the field setters on the write path, so field-type
@@ -439,11 +540,26 @@ module Familia
       # raw plaintext never reaches the database. To encrypt a new plaintext
       # value, use the field setter followed by save or save_fields.
       #
+      # Class-level indexes on the written fields are maintained (#308): the
+      # in-memory setters are applied before the transaction so dirty tracking
+      # captures the old values, unique indexes are guarded and claimed before
+      # the MULTI opens (see #prepare_for_partial_write), and the index
+      # entries are updated inside the same transaction as the hash write. On
+      # a failed claim or transaction the in-memory state is rolled back to
+      # its pre-call values, so a failed update never leaves the object
+      # diverged from storage.
+      #
       # @param kwargs [Hash] Field names and values to update. Special key :update_expiration
       #   controls whether to update key expiration (default: true)
       # @return [MultiResult] Transaction result
-      # @raise [ArgumentError] if a field is undeclared, transient, or an
-      #   encrypted field given a value that is not nil or a ConcealedString
+      # @raise [ArgumentError] if a field is undeclared, transient, an
+      #   encrypted field given a value that is not nil or a ConcealedString,
+      #   or an objid/extid field (their setters carry lookup-hash side
+      #   effects the rollback cannot undo -- see
+      #   #guard_rollback_safe_fields!)
+      # @raise [Familia::RecordExistsError] if a class-level unique index
+      #   already maps a written field's value to another record. Raised
+      #   before the transaction opens; the object hash is untouched.
       #
       # @example Update multiple fields without affecting expiration
       #   metadata.multi_field_update(viewed: 1, updated: Familia.now.to_i, update_expiration: false)
@@ -456,35 +572,75 @@ module Familia
         fields = kwargs
 
         guard_persistable_fields!(fields)
+        guard_rollback_safe_fields!(fields.keys)
         Familia.trace :MULTI_FIELD_UPDATE, nil, fields.keys if Familia.debug?
 
-        result = transaction do |_conn|
-          # 1. Update all fields atomically (Redis only, no in-memory mutation).
-          # A nil value deletes the field rather than storing "null", so absence
-          # stays authoritative (see Serialization#to_h_for_storage).
+        # Apply the setters BEFORE the claim and the transaction, so dirty
+        # tracking captures the old values (auto_update_class_indexes reads
+        # them to drop stale index entries) and the generated claim/update
+        # index methods -- which read the field getters -- see the values
+        # being written. The snapshot below restores the pre-call in-memory
+        # state (ivar value and dirty status) if anything fails, preserving
+        # the documented never-diverged rollback semantics.
+        rollback = capture_field_rollback_state(fields.keys)
+        created_claims = []
+
+        begin
           fields.each do |field, value|
-            if value.nil?
-              remove_field(field)
-            else
-              hset field, serialize_value(value)
-            end
+            send(:"#{field}=", value) if respond_to?(:"#{field}=")
           end
 
-          # 2. Update expiration in same transaction
-          self.update_expiration if update_expiration
+          # Guard and claim class-level unique indexes before the MULTI opens
+          # (fail-closed: a constraint violation leaves the hash untouched).
+          # A conflict inside the claim releases its own partial progress, so
+          # created_claims stays empty on that path.
+          created_claims = prepare_for_partial_write(fields.keys)
 
-          # 3. Register in instances sorted set so the object is visible
-          # to list-based enumeration (instances.to_a, count, etc.)
-          touch_instances!
+          result = transaction do |_conn|
+            # 1. Update all fields atomically. A nil value deletes the field
+            # rather than storing "null", so absence stays authoritative (see
+            # Serialization#to_h_for_storage).
+            fields.each do |field, value|
+              if value.nil?
+                remove_field(field)
+              else
+                hset field, serialize_value(value)
+              end
+            end
+
+            # 2. Maintain class-level indexes on the written fields in the
+            # same transaction as the hash write.
+            auto_update_class_indexes(only: fields.keys)
+
+            # 3. Update expiration in same transaction
+            self.update_expiration if update_expiration
+
+            # 4. Register in instances sorted set so the object is visible
+            # to list-based enumeration (instances.to_a, count, etc.)
+            touch_instances!
+          end
+        rescue StandardError
+          # Release BEFORE restoring: the MULTI never reached EXEC (redis-rb
+          # discards on a raised block), so the claim entries are the only
+          # Redis-side trace of this write -- and release_unique_*! reads the
+          # CURRENT field value, which must still be the claimed one here
+          # (see #release_created_index_claims!).
+          release_created_index_claims!(created_claims)
+          restore_field_rollback_state(rollback)
+          raise
         end
 
-        # Update in-memory state only after transaction succeeds,
-        # so a failed transaction never leaves the object diverged.
         if result.is_a?(MultiResult) && result.successful?
-          fields.each do |field, value|
-            send("#{field}=", value) if respond_to?("#{field}=")
-          end
           clear_dirty!(*fields.keys)
+        else
+          # Same ordering as the rescue above: when the claims are released
+          # (nil/aborted result), the fields must still hold the claimed
+          # values. In the ambiguous executed-with-errors case the claims are
+          # kept (see #reconcile_index_claims_after_failed_write) while the
+          # in-memory state is still rolled back -- the warn it emits is the
+          # record of that divergence.
+          reconcile_index_claims_after_failed_write(created_claims, result)
+          restore_field_rollback_state(rollback)
         end
 
         result
@@ -505,12 +661,21 @@ module Familia
       # raw plaintext never reaches the database. To encrypt a new plaintext
       # value, use the field setter followed by save or save_fields.
       #
+      # Fields backing a class-level index (unique_index or multi_index) are
+      # refused outright: the one-HMSET contract leaves no room for the
+      # out-of-transaction claim that index maintenance requires (ADR-0002),
+      # and writing the hash without the index would leave lookups stale
+      # (#308). Use multi_field_update or save for indexed fields. The check
+      # is local metadata only -- no extra database round trips.
+      #
       # @param kwargs [Hash] Field names and values to write. Special key
       #   :update_expiration controls whether to refresh key expiration
       #   (default: true).
       # @return [self] Returns self for method chaining
       # @raise [ArgumentError] if a field is undeclared, transient, or an
       #   encrypted field given a value that is not nil or a ConcealedString
+      # @raise [Familia::IndexedFieldFastWriteError] if a field backs a
+      #   class-level index. Raised before any write; the hash is untouched.
       #
       # @example Persist multiple fields atomically
       #   user.multi_field_fast_write(name: "Jane", email: "jane@example.com")
@@ -528,6 +693,7 @@ module Familia
         raise ArgumentError, 'No fields specified' if fields.empty?
 
         guard_persistable_fields!(fields)
+        guard_unindexed_fields!(fields.keys)
 
         Familia.trace :MULTI_FIELD_FAST_WRITE, nil, fields.keys if Familia.debug?
 
@@ -571,9 +737,25 @@ module Familia
       # Saves the current in-memory values of specified fields to Redis without
       # modifying them first. Fields must already be set on the instance.
       #
+      # Class-level indexes on the written fields are maintained (#308):
+      # unique indexes are guarded and claimed before the transaction opens
+      # (see #prepare_for_partial_write), and the index entries are updated
+      # inside the same transaction as the hash write. Indexes on fields not
+      # named here are left untouched.
+      #
       # @param field_names [Array<Symbol, String>] Names of fields to persist
       # @param update_expiration [Boolean] Whether to refresh key expiration
       # @return [self] Returns self for method chaining
+      # @raise [Familia::RecordExistsError] if a class-level unique index
+      #   already maps a written field's value to another record. Raised
+      #   before the transaction opens; the object hash is untouched.
+      #
+      # @note On a failed claim the in-memory field keeps the conflicting
+      #   value and stays dirty -- it was set by the caller before this call,
+      #   so silently reverting it would destroy caller state. The object is
+      #   diverged from storage until the caller corrects the value or calls
+      #   refresh!. (multi_field_update differs: it applies the setters
+      #   itself, so it rolls them back and never leaves the object diverged.)
       #
       # @example Persist only passphrase fields after updating them
       #   customer.update_passphrase('secret').save_fields(:passphrase, :passphrase_encryption)
@@ -583,39 +765,61 @@ module Familia
 
         Familia.trace :SAVE_FIELDS, nil, field_names if Familia.debug?
 
-        result = transaction do |_conn|
-          # Build hash of non-nil field values; collect nil'd fields for removal.
-          # A nil field is deleted rather than stored as "null" so that absence
-          # stays authoritative (see Serialization#to_h_for_storage).
-          fields_hash = {}
-          nil_fields = []
-          field_names.each do |field|
-            field_sym = field.to_sym
-            raise ArgumentError, "Unknown field: #{field}" unless respond_to?(field_sym)
+        # Build hash of non-nil field values; collect nil'd fields for removal.
+        # A nil field is deleted rather than stored as "null" so that absence
+        # stays authoritative (see Serialization#to_h_for_storage). Built
+        # before the transaction so an unknown field fails before any claim
+        # or write happens.
+        fields_hash = {}
+        nil_fields = []
+        field_names.each do |field|
+          field_sym = field.to_sym
+          raise ArgumentError, "Unknown field: #{field}" unless respond_to?(field_sym)
 
-            value = send(field_sym)
-            if value.nil?
-              nil_fields << field.to_s
-            else
-              fields_hash[field] = serialize_value(value)
-            end
+          value = send(field_sym)
+          if value.nil?
+            nil_fields << field.to_s
+          else
+            fields_hash[field] = serialize_value(value)
           end
-
-          # Set all non-nil fields at once (hmset no-ops on an empty hash)
-          hmset(fields_hash)
-
-          # Remove any nil'd fields so their prior stored value does not linger
-          dbclient.hdel(dbkey, *nil_fields) unless nil_fields.empty?
-
-          # Update expiration in same transaction
-          self.update_expiration if update_expiration
-
-          # Touch instances timeline so the object is visible
-          # to list-based enumeration (instances.to_a, count, etc.)
-          touch_instances!
         end
 
-        clear_dirty!(*field_names) if persisted_successfully?(result)
+        # Guard and claim class-level unique indexes before the MULTI opens
+        # (fail-closed: a constraint violation leaves the hash untouched).
+        created_claims = prepare_for_partial_write(field_names)
+
+        begin
+          result = transaction do |_conn|
+            # Set all non-nil fields at once (hmset no-ops on an empty hash)
+            hmset(fields_hash)
+
+            # Remove any nil'd fields so their prior stored value does not linger
+            dbclient.hdel(dbkey, *nil_fields) unless nil_fields.empty?
+
+            # Maintain class-level indexes on the written fields in the same
+            # transaction as the hash write
+            auto_update_class_indexes(only: field_names)
+
+            # Update expiration in same transaction
+            self.update_expiration if update_expiration
+
+            # Touch instances timeline so the object is visible
+            # to list-based enumeration (instances.to_a, count, etc.)
+            touch_instances!
+          end
+        rescue StandardError
+          # The MULTI never reached EXEC (redis-rb discards on a raised
+          # block): the hash write demonstrably did not land, so the
+          # pre-MULTI claim entries must not survive it.
+          release_created_index_claims!(created_claims)
+          raise
+        end
+
+        if persisted_successfully?(result)
+          clear_dirty!(*field_names)
+        else
+          reconcile_index_claims_after_failed_write(created_claims, result)
+        end
 
         self
       end
@@ -955,6 +1159,67 @@ module Familia
         end
       end
 
+      # Refuses identifier-category fields (objid, extid) in
+      # multi_field_update. Their setters carry a Redis side effect --
+      # removing the OLD value's entry from the class-level
+      # objid_lookup/extid_lookup hash -- that the ivar-and-dirty snapshot
+      # rollback cannot restore, so a failed claim or transaction would
+      # silently strip the persisted identifier's lookup entry. The path is
+      # no better on success: only save and save_if_not_exists re-add the
+      # lookup mapping, so a partial write of a changed objid/extid would
+      # leave the new value unresolvable via find_by_objid/find_by_extid
+      # anyway. Refused up front, like transient fields, before any setter
+      # runs.
+      #
+      # @param field_names [Array<Symbol, String>] fields about to be written
+      # @raise [ArgumentError] if any field is an object/external identifier
+      # @return [void]
+      #
+      def guard_rollback_safe_fields!(field_names)
+        field_types = self.class.field_types
+        field_names.each do |name|
+          category = field_types[name.to_sym]&.category
+          next unless %i[object_identifier external_identifier].include?(category)
+
+          raise ArgumentError,
+            "#{category} field #{name} for #{self.class} cannot be written " \
+            'with multi_field_update: its setter drops the old value from ' \
+            'the class-level lookup hash, a side effect the failure ' \
+            'rollback cannot restore. Set the field and call save instead.'
+        end
+      end
+      private :guard_rollback_safe_fields!
+
+      # Refuses fields that back a class-level index. The fast-write path is
+      # a single HMSET with no out-of-transaction claim, so it cannot maintain
+      # index consistency without violating the fail-closed ordering in
+      # ADR-0002 (#308). Purely a local metadata check -- no database reads.
+      #
+      # Every offending field is collected before raising, so a batch with
+      # several indexed fields is diagnosed in one error instead of one
+      # retry-discovered field at a time.
+      #
+      # @param field_names [Array<Symbol, String>] fields about to be written
+      # @raise [Familia::IndexedFieldFastWriteError] if any field backs a
+      #   class-level index; names every such field
+      # @return [void]
+      #
+      def guard_unindexed_fields!(field_names)
+        return unless self.class.respond_to?(:indexing_relationships)
+
+        offenders = field_names.filter_map do |field|
+          rel = self.class.indexing_relationships.find do |candidate|
+            candidate.class_level? && candidate.field == field.to_sym
+          end
+          [field, rel.index_name] if rel
+        end
+        return if offenders.empty?
+
+        first_field, first_index = offenders.first
+        raise Familia::IndexedFieldFastWriteError.new(first_field, first_index, offenders: offenders)
+      end
+      private :guard_unindexed_fields!
+
       # Reset all transient fields to nil
       #
       # This method ensures that transient fields return to their uninitialized
@@ -1086,47 +1351,95 @@ module Familia
       # already owned by this record (+:owned+) are left alone; they predate the
       # call and rolling them back would destroy valid state.
       #
+      # @param only [Array<Symbol, String>, nil] restrict claiming to indexes
+      #   on these fields; nil claims every class-level unique index. Partial
+      #   writers pass the fields they are about to write, so indexes outside
+      #   the write are neither claimed nor (later) re-affirmed.
       # @raise [Familia::RecordExistsError] if another record owns a value
-      # @return [void]
+      # @return [Array<Symbol>] the index names whose entries this call newly
+      #   created (:created outcomes). Callers hold onto this so they can
+      #   release exactly those entries if their subsequent transaction never
+      #   lands (see #reconcile_index_claims_after_failed_write); :owned
+      #   entries predate the call and are never listed.
       #
       # @see Familia::HashKey#claim_field The server-side CAS.
       # @see docs/adr/0002-watch-for-private-keys-lua-for-shared-keys.md
       #
-      def claim_unique_indexes!
+      def claim_unique_indexes!(only: nil)
+        fields = only&.map(&:to_sym)
+
         # Reset the ledger before anything can bail out: a claim recorded by a
         # previous save must never vouch for this one. Private, but reachable
         # via send, so it cannot assume prepare_for_save is the only caller.
-        @unique_index_claims = {}
+        # A filtered call drops only the entries for the indexes it is about
+        # to re-take (below): indexes outside the written fields are not
+        # re-affirmed by a partial write, so their claims are neither spent
+        # nor endangered by it.
+        @unique_index_claims = {} if fields.nil?
 
-        return unless self.class.respond_to?(:indexing_relationships)
+        return [] unless self.class.respond_to?(:indexing_relationships)
 
         created = []
 
         begin
-          each_class_level_unique_index do |rel|
-            claim_method = :"claim_unique_#{rel.index_name}!"
-            next unless respond_to?(claim_method)
+          class_level_unique_indexes_for(fields).each do |rel|
+            # Drop the stale ledger entry before re-taking the claim. On an
+            # unfiltered run the ledger was just reset, so this is a no-op.
+            unique_index_claims.delete(rel.index_name)
 
-            # The ledger entry is written by claim_unique_<index>! itself. A nil
-            # outcome means the record has no value for the indexed field --
-            # nothing was claimed, so nothing was recorded and nothing may be
-            # re-affirmed later.
-            outcome = send(claim_method)
-            next unless outcome.is_a?(Symbol)
-
-            created << rel.index_name if outcome == :created
+            created << rel.index_name if claim_single_unique_index(rel) == :created
           end
         rescue StandardError
           release_created_index_claims!(created)
           raise
         end
 
-        nil
+        created
       end
 
+      # The class-level unique indexing relationships whose indexed field is
+      # in +fields+ (nil means no filter -- all of them).
+      #
+      # @param fields [Array<Symbol>, nil]
+      # @return [Array<IndexingRelationship>]
+      def class_level_unique_indexes_for(fields)
+        rels = []
+        each_class_level_unique_index do |rel|
+          rels << rel if fields.nil? || fields.include?(rel.field)
+        end
+        rels
+      end
+      private :class_level_unique_indexes_for
+
+      # Takes the server-side claim for a single unique index relationship.
+      #
+      # The ledger entry is written by claim_unique_<index>! itself. A nil
+      # outcome means the record has no value for the indexed field --
+      # nothing was claimed, so nothing was recorded and nothing may be
+      # re-affirmed later.
+      #
+      # @param rel [IndexingRelationship] a class-level unique relationship
+      # @return [Symbol, nil] :created, :owned, or nil when nothing claimed
+      def claim_single_unique_index(rel)
+        claim_method = :"claim_unique_#{rel.index_name}!"
+        return nil unless respond_to?(claim_method)
+
+        outcome = send(claim_method)
+        outcome.is_a?(Symbol) ? outcome : nil
+      end
+      private :claim_single_unique_index
+
       # Releases index entries created earlier in a {#claim_unique_indexes!}
-      # run that then failed. Best-effort: a release that itself fails must not
-      # mask the original constraint violation.
+      # run that then failed, or created for a write whose transaction never
+      # landed. Best-effort: a release that itself fails must not mask the
+      # original failure.
+      #
+      # Releases via release_unique_<index>!, which reads the CURRENT field
+      # value -- so a caller that rolls back in-memory state (see
+      # multi_field_update) must release BEFORE restoring, while the field
+      # still holds the value that was claimed. Released after the restore,
+      # the ownership-checked delete would target the record's still-valid
+      # pre-update index entry instead.
       #
       # @param index_names [Array<Symbol>]
       # @return [void]
@@ -1139,12 +1452,63 @@ module Familia
             send(release_method)
           rescue StandardError => e
             Familia.warn <<~LOG_MESSAGE
-              [claim_unique_indexes!] Failed to release #{self.class}##{index_name} claim after a later conflict: #{e.message}. A stale entry may remain until the next save.
+              [release_created_index_claims!] Failed to release #{self.class}##{index_name} claim during failure cleanup: #{e.message}. A stale entry may remain until the next save.
             LOG_MESSAGE
           end
         end
       end
       private :release_created_index_claims!
+
+      # Cleans up unique-index claims created for a write whose transaction
+      # did not commit cleanly. The claim CAS writes the index entry
+      # (value => identifier) BEFORE the MULTI opens (ADR-0002), so a write
+      # that never lands would otherwise leave the index pointing at a hash
+      # state that was never stored: wrong lookups, and the value blocked
+      # from legitimate reuse.
+      #
+      # The rule is deliberately asymmetric:
+      #
+      # - nil or aborted result: EXEC never ran, so none of the queued
+      #   commands applied. The pre-MULTI claim entries are the only
+      #   Redis-side trace of the failed write; release them. One edge is
+      #   accepted here: a connection error raised while EXEC itself was in
+      #   flight also reaches this branch, and there the write may have
+      #   landed server-side. Releasing then drops what would have been a
+      #   valid entry -- recoverable, since the record's next successful
+      #   save re-claims it -- which beats the certain leak of never
+      #   releasing.
+      # - executed-with-errors result: once EXEC runs, Redis executes EVERY
+      #   queued command -- an error in one does not stop the others -- so
+      #   the hash write may well have landed, making the claim entry the
+      #   record's VALID index mapping. Per-command inspection cannot settle
+      #   which command failed: the queue layout varies (an empty-hash HMSET
+      #   queues nothing, remove_stale_nil_fields queues zero or one HDEL,
+      #   update_expiration and the index updates queue a variable number),
+      #   so positions in MultiResult#results cannot be mapped back to the
+      #   hash command reliably. Keep the claims and warn: a kept-but-stale
+      #   claim is recoverable (the record's next successful save re-affirms
+      #   or releases it, and release_field is ownership-checked throughout),
+      #   whereas releasing a valid entry silently breaks find_by_* for data
+      #   that did persist.
+      #
+      # @param created [Array<Symbol>] index names returned by
+      #   {#claim_unique_indexes!} (via prepare_for_save or
+      #   prepare_for_partial_write) for the write that just failed
+      # @param result [MultiResult, nil] the failed transaction result
+      # @return [void]
+      def reconcile_index_claims_after_failed_write(created, result)
+        return if created.empty?
+
+        if result.nil? || (result.is_a?(MultiResult) && result.aborted?)
+          release_created_index_claims!(created)
+        else
+          Familia.warn <<~LOG_MESSAGE
+            [#{self.class}] Transaction executed with errors after claiming unique index #{created.join(', ')}; keeping the claim(s) because the hash write may have landed. If it did not, the entry is reconciled by this record's next successful save.
+          LOG_MESSAGE
+        end
+        nil
+      end
+      private :reconcile_index_claims_after_failed_write
 
       # Yields each class-level unique indexing relationship.
       #
@@ -1182,10 +1546,17 @@ module Familia
       #   index before any claim is written, so a collision on the second index
       #   of a two-index class fails before the first index is touched.
       #
-      def guard_unique_indexes!
+      # @param only [Array<Symbol, String>, nil] restrict the check to indexes
+      #   on these fields; nil checks every class-level unique index
+      #
+      def guard_unique_indexes!(only: nil)
         return unless self.class.respond_to?(:indexing_relationships)
 
+        fields = only&.map(&:to_sym)
+
         each_class_level_unique_index do |rel|
+          next if fields && !fields.include?(rel.field)
+
           # Call the validation method if it exists
           validate_method = :"guard_unique_#{rel.index_name}!"
           send(validate_method) if respond_to?(validate_method)
@@ -1234,14 +1605,24 @@ module Familia
       # @see #apply_class_index_change For the per-relationship routing.
       # @see Familia::Features::Relationships::Indexing For index declaration details
       #
-      def auto_update_class_indexes
+      # @param only [Array<Symbol, String>, nil] restrict maintenance to
+      #   indexes on these fields; nil processes every class-level index. The
+      #   partial writers pass the fields they wrote, matching the claims
+      #   taken by their #prepare_for_partial_write call -- an unfiltered run
+      #   would re-affirm indexes no claim was recorded for and raise
+      #   Familia::OperationModeError inside the MULTI.
+      #
+      def auto_update_class_indexes(only: nil)
         return unless self.class.respond_to?(:indexing_relationships)
 
+        fields = only&.map(&:to_sym)
+
         # Dirty tracking is still populated here: clear_dirty! runs AFTER the save
-        # transaction, while this method runs INSIDE it (via persist_to_storage).
-        # Both `new` and the load path clear dirty after construction, so a
-        # captured old value is the previously-persisted value -- exactly what we
-        # must remove from the index when an indexed field changed.
+        # transaction, while this method runs INSIDE it (via persist_to_storage
+        # and the partial writers, #308). Both `new` and the load path clear
+        # dirty after construction, so a captured old value is the
+        # previously-persisted value -- exactly what we must remove from the
+        # index when an indexed field changed.
         changes = changed_fields # { field => [old_value, new_value] }
 
         self.class.indexing_relationships.each do |rel|
@@ -1251,6 +1632,8 @@ module Familia
             LOG_MESSAGE
             next
           end
+
+          next if fields && !fields.include?(rel.field)
 
           apply_class_index_change(rel, changes)
         end
@@ -1319,7 +1702,9 @@ module Familia
       # preparation logic. It updates created/updated timestamps and validates unique
       # indexes before the transaction begins.
       #
-      # @return [void]
+      # @return [Array<Symbol>] the index names newly claimed by this call
+      #   (see #claim_unique_indexes!), for release if the save's transaction
+      #   never lands
       #
       def prepare_for_save
         # Update timestamp fields before saving
@@ -1337,6 +1722,46 @@ module Familia
         claim_unique_indexes!
       end
       private :prepare_for_save
+
+      # The prepare_for_save of the partial writers (commit_fields,
+      # save_fields, multi_field_update): read-only guard plus server-side CAS
+      # claim for class-level unique indexes, scoped to the fields being
+      # written. Deliberately omits the timestamp mutation prepare_for_save
+      # performs -- a partial write must not change created/updated (#308).
+      #
+      # Must run OUTSIDE the transaction the caller is about to open (see
+      # #claim_unique_indexes!), which is what makes the write fail-closed: a
+      # constraint violation raises before any hash command is queued. Inside
+      # a caller's MULTI/pipeline the guard's index reads come back as futures
+      # (truthy, never equal to the identifier), which would surface as a
+      # spurious RecordExistsError -- so when a class-level unique index
+      # covers the written fields, the write is refused outright with the
+      # same OperationModeError save raises. Classes without a covering
+      # unique index are untouched: no index work would happen, so their
+      # in-transaction behavior is unchanged.
+      #
+      # @param field_names [Array<Symbol, String>, nil] fields about to be
+      #   written; nil means the full hash is being written (commit_fields)
+      # @raise [Familia::OperationModeError] if called within a transaction or
+      #   pipeline while a class-level unique index covers the written fields
+      # @raise [Familia::RecordExistsError] if another record owns a value
+      # @return [Array<Symbol>] the index names newly claimed by this call
+      #   (see #claim_unique_indexes!), for release if the caller's
+      #   transaction never lands
+      #
+      def prepare_for_partial_write(field_names = nil)
+        if (Fiber[:familia_transaction] || Fiber[:familia_pipeline]) &&
+           self.class.respond_to?(:indexing_relationships) &&
+           !class_level_unique_indexes_for(field_names&.map(&:to_sym)).empty?
+          raise Familia::OperationModeError, <<~ERROR_MESSAGE
+            Cannot perform a partial write (commit_fields, save_fields, multi_field_update) on unique-indexed fields within a transaction or pipeline. Unique constraints require read operations whose results are unavailable inside MULTI, so perform the write outside the transaction.
+          ERROR_MESSAGE
+        end
+
+        guard_unique_indexes!(only: field_names)
+        claim_unique_indexes!(only: field_names)
+      end
+      private :prepare_for_partial_write
 
       # Names (as strings) of declared persistent fields whose current in-memory
       # value is nil. These are omitted from {Serialization#to_h_for_storage}, so

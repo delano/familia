@@ -38,9 +38,8 @@ class UniqueIndexModel < Familia::Horreum
 end
 
 # Clean up any existing test data
-cleanup_keys = Familia.dbclient.keys('timestampedmodel:*') +
-               Familia.dbclient.keys('uniqueindexmodel:*') +
-               Familia.dbclient.keys('*:email_lookup:*')
+cleanup_keys = Familia.dbclient.keys('timestamped_model:*') +
+               Familia.dbclient.keys('unique_index_model:*')
 Familia.dbclient.del(*cleanup_keys) if cleanup_keys.any?
 
 @test_counter = 0
@@ -234,8 +233,55 @@ result
 [@empty_save.exists?, @empty_sine.exists?]
 #=> [true, true]
 
+# =============================================
+# 9. Partial Writer Index Consistency (#308)
+# =============================================
+
+## save and multi_field_update produce the same unique index transition
+@save_old_email = "cons-save-old-#{next_id}@test.com"
+@save_new_email = "cons-save-new-#{next_id}@test.com"
+@partial_old_email = "cons-partial-old-#{next_id}@test.com"
+@partial_new_email = "cons-partial-new-#{next_id}@test.com"
+@idx_save = UniqueIndexModel.new(id: next_id, email: @save_old_email)
+@idx_save.save
+@idx_save.email = @save_new_email
+@idx_save.save
+@idx_partial = UniqueIndexModel.new(id: next_id, email: @partial_old_email)
+@idx_partial.save
+@idx_partial.multi_field_update(email: @partial_new_email)
+save_state = [UniqueIndexModel.email_lookup.get(@save_new_email) == @idx_save.identifier,
+              UniqueIndexModel.email_lookup.get(@save_old_email)]
+partial_state = [UniqueIndexModel.email_lookup.get(@partial_new_email) == @idx_partial.identifier,
+                 UniqueIndexModel.email_lookup.get(@partial_old_email)]
+[save_state, partial_state]
+#=> [[true, nil], [true, nil]]
+
+## save_fields matches save's index maintenance (new mapped, old retracted)
+@sf_new_email = "cons-sf-new-#{next_id}@test.com"
+@idx_partial.email = @sf_new_email
+@idx_partial.save_fields(:email)
+[UniqueIndexModel.email_lookup.get(@sf_new_email) == @idx_partial.identifier,
+ UniqueIndexModel.email_lookup.get(@partial_new_email)]
+#=> [true, nil]
+
+## commit_fields matches save's index maintenance (new mapped, old retracted)
+@cf_new_email = "cons-cf-new-#{next_id}@test.com"
+@idx_partial.email = @cf_new_email
+@idx_partial.commit_fields
+[UniqueIndexModel.email_lookup.get(@cf_new_email) == @idx_partial.identifier,
+ UniqueIndexModel.email_lookup.get(@sf_new_email)]
+#=> [true, nil]
+
+## multi_field_update enforces the unique constraint like save does
+@idx_partial.multi_field_update(email: @save_new_email)
+#=!> Familia::RecordExistsError
+
+## a failed partial write leaves both index and lookup state intact
+[UniqueIndexModel.email_lookup.get(@save_new_email) == @idx_save.identifier,
+ UniqueIndexModel.email_lookup.get(@cf_new_email) == @idx_partial.identifier]
+#=> [true, true]
+
 # Cleanup
-cleanup_keys = Familia.dbclient.keys('timestampedmodel:*') +
-               Familia.dbclient.keys('uniqueindexmodel:*') +
-               Familia.dbclient.keys('*:email_lookup:*')
+cleanup_keys = Familia.dbclient.keys('timestamped_model:*') +
+               Familia.dbclient.keys('unique_index_model:*')
 Familia.dbclient.del(*cleanup_keys) if cleanup_keys.any?

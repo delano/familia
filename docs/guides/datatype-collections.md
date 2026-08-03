@@ -256,7 +256,7 @@ win — add `record_class:` yourself if you want `each_record` on it.
 | Value | Dispatch | Use when the block… |
 |---|---|---|
 | `nil` (default) | Each record runs in its own connection context, no pipeline wrapper | …reads, OR calls `save` / `commit_fields` / `transaction` / anything with its own internal MULTI |
-| positive integer | Groups of `pipeline` records run inside `record_class.pipelined { ... }` | …only issues fast writers (`record.field!`) that tolerate being queued |
+| positive integer | Groups of `pipeline` records run inside `record_class.pipelined { ... }` | …only issues fast writers (`record.field!`) that tolerate being queued — which excludes fields backing a class-level index (those raise `Familia::IndexedFieldFastWriteError` when queued; see the [indexing guide](feature-relationships-indexing.md#index-maintenance-by-write-path)) |
 
 Note: `pipeline: 0` raises `ArgumentError`. Use `pipeline: nil` to disable pipelining.
 

@@ -24,8 +24,11 @@ vendor
 *.gem
 public/
 
-# Ignore WIP or temp dev files with uppercase names
-[A-Z]*.md
+# Ignore WIP or temp dev files with uppercase names, at the repo root only.
+# Anchored because core.ignoreCase is true on macOS/Windows checkouts: git
+# casefolds the [A-Z] class, so an unanchored pattern silently swallowed every
+# new lowercase .md anywhere in the tree (docs/*.md included).
+/[A-Z]*.md
 
 # Unredacted security notes stay local; publish redacted summaries only
 *.private.md
