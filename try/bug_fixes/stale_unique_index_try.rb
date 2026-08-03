@@ -18,6 +18,7 @@ class ::StaleIdxUser < Familia::Horreum
   identifier_field :uid
   field :uid
   field :email
+  field :nickname
 
   unique_index :email, :email_lookup
 end
@@ -115,6 +116,44 @@ result.is_a?(Redis::Future)
 @u3.email!('unsaved@example.com')
 #=!> Familia::PersistenceError
 
+## fast writer on a NON-indexed field still works for a never-saved record
+## (the persistence guard only applies to indexed fields; #308 left this
+## pre-existing behavior unchanged)
+@u4 = StaleIdxUser.new(uid: 'su4')
+@u4.nickname!('fresh')
+#=> true
+
+## the unsaved-record non-indexed fast write persisted to the hash (the
+## no-arg fast reader returns the raw serialized form), kept the in-memory
+## value, and left the field clean
+[@u4.nickname, @u4.nickname!, @u4.dirty?(:nickname)]
+#=> ["fresh", "\"fresh\"", false]
+
+## a hash write that fails AFTER the index entries were updated raises the
+## original error (the fast writer's index update + HSET are separate
+## commands, not one MULTI; the failure path compensates best-effort)
+@c = StaleIdxUser.new(uid: 'su5', email: 'comp-a@example.com')
+@c.save
+def @c.hset(*) = raise('simulated connection failure')
+@c.email!('comp-b@example.com')
+#=!> RuntimeError
+
+## compensation released the attempted value's just-claimed index entry
+StaleIdxUser.email_lookup.get('comp-b@example.com')
+#=> nil
+
+## compensation restored the old value's index entry
+StaleIdxUser.email_lookup.get('comp-a@example.com')
+#=> "su5"
+
+## compensation rolled the in-memory value back clean
+[@c.email, @c.dirty?(:email)]
+#=> ["comp-a@example.com", false]
+
+## the stored hash still holds the old value after the failed fast write
+StaleIdxUser.find_by_id('su5').email
+#=> "comp-a@example.com"
+
 ## a unique_index declared AFTER the first fast write is picked up: the
 ## fast-writer memo keys on the relationship count, not just the class
 @late = StaleIdxLateDecl.new(uid: 'sl1')
@@ -134,4 +173,6 @@ StaleIdxLateDecl.find_by_handle('post-index')&.uid
 
 @u.destroy! rescue nil
 @u2.destroy! rescue nil
+@u4.destroy! rescue nil
+@c.destroy! rescue nil
 @late.destroy! rescue nil

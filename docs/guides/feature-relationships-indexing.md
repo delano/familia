@@ -74,12 +74,22 @@ outright rather than leave lookups stale (#308):
 | `save_fields(:a, :b)`                 | Indexes on the named fields only                                                                                                  |
 | `multi_field_update(a: 1)`            | Indexes on the written fields only                                                                                                |
 | `multi_field_fast_write(a: 1)`        | Refused: raises `Familia::IndexedFieldFastWriteError` if any written field backs a class-level index — its single-HMSET contract leaves no room for the out-of-transaction claim |
-| `field!(value)` fast writer           | Maintained (claim, then index update, then HSET); inside a transaction or pipeline it raises `Familia::IndexedFieldFastWriteError` instead |
+| `field!(value)` fast writer           | Maintained (claim, then index update, then HSET) — but NOT as one MULTI; see below. Inside a transaction or pipeline it raises `Familia::IndexedFieldFastWriteError` instead |
 | `destroy!`                            | All class-level index entries removed                                                                                             |
 
 For `multi_index`, "maintained" means add-only: a value change adds the
 identifier to the new bucket without retracting the old one, same as on save.
 Call `update_in_class_*` with the old value to retract it.
+
+Unlike `save` and `multi_field_update`, the `field!` fast writer does not wrap
+its index update and hash write in a single MULTI — they are separate commands
+(the fast writer's contract is a single hash command on the happy path). If the
+HSET fails after the index entries were already updated (e.g. a dropped
+connection), the writer compensates best-effort before re-raising the original
+error: it restores the in-memory value, releases the just-claimed entry, and
+restores the previous value's entry. A failure during compensation is logged
+via `Familia.warn` and never masks the original error, so in the worst case a
+stale index entry remains until the next save.
 
 ### Generated Methods
 

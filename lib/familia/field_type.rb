@@ -140,7 +140,10 @@ module Familia
     # write (a conflict raises Familia::RecordExistsError and the hash is
     # untouched); inside a caller's MULTI/pipeline no claim is possible, so
     # the writer raises Familia::IndexedFieldFastWriteError rather than write
-    # the hash and leave the index stale. Non-indexed fields are unaffected.
+    # the hash and leave the index stale. Should the hash write itself fail
+    # after the index was updated, the writer compensates best-effort before
+    # re-raising (see #compensate_failed_indexed_fast_write) -- the two
+    # commands are not one MULTI. Non-indexed fields are unaffected.
     #
     # @param klass [Class] The class to define the method on
     #
@@ -152,7 +155,12 @@ module Familia
       field_type = self
 
       # Lives in the closure (not an ivar) because field types are frozen
-      # after installation.
+      # after installation. One entry per runtime class, never pruned: safe
+      # in practice because Horreum subclasses are a small static set for
+      # the life of the process. It would only leak under unbounded dynamic
+      # class creation (e.g. anonymous classes churned in a long-lived
+      # process), where each discarded class leaves an entry that also pins
+      # the class itself.
       index_rel_cache = {}.compare_by_identity
 
       handle_method_conflict(klass, fast_method_name) do
@@ -178,12 +186,16 @@ module Familia
           # Runs the setter, then claims and updates any class-level index
           # entries before the hash write below (ADR-0002 fail-closed
           # ordering). A claim conflict restores the in-memory state and
-          # propagates typed, so the hash write never runs.
-          field_type.send(:apply_fast_write_value, self, val, index_rels)
+          # propagates typed, so the hash write never runs. For indexed
+          # fields the rollback snapshot is returned (nil otherwise) so a
+          # failed hash write below can be compensated.
+          snapshot = field_type.send(:apply_fast_write_value, self, val, index_rels)
 
           begin
-            # Persist to database immediately
-            ret = hset(field_name, prepared)
+            # Persist to database immediately, compensating the index
+            # entries above if the write fails (the two are separate
+            # commands, not one MULTI -- see #persist_fast_write_value).
+            ret = field_type.send(:persist_fast_write_value, self, prepared, val, index_rels, snapshot)
 
             # Touch instances timeline so the object is visible
             # to list-based enumeration (instances.to_a, count, etc.)
@@ -344,7 +356,9 @@ module Familia
     # @param record [Familia::Horreum] the record being written
     # @param value [Object] the new field value
     # @param index_rels [Array<IndexingRelationship>]
-    # @return [void]
+    # @return [Array, nil] the rollback snapshot for indexed fields (feed it
+    #   to {#compensate_failed_indexed_fast_write} if the subsequent hash
+    #   write fails); nil for non-indexed fields
     #
     def apply_fast_write_value(record, value, index_rels)
       if index_rels.empty?
@@ -362,6 +376,77 @@ module Familia
         record.send(:restore_field_rollback_state, snapshot)
         raise
       end
+
+      snapshot
+    end
+
+    # The fast writer's hash write. Deliberately NOT one MULTI with the
+    # index maintenance done by {#apply_fast_write_value} -- the fast
+    # writer's contract is a single hash command on the happy path. If the
+    # write fails after the index entries were already updated, compensate
+    # best-effort (restore the in-memory state, revert the index entries)
+    # and re-raise the original error.
+    #
+    # @param record [Familia::Horreum] the record being written
+    # @param prepared [Object] the serialized value to persist
+    # @param value [Object] the raw value (needed to revert index entries)
+    # @param index_rels [Array<IndexingRelationship>]
+    # @param snapshot [Array, nil] rollback state from {#apply_fast_write_value}
+    # @return [Integer] the HSET return value
+    #
+    def persist_fast_write_value(record, prepared, value, index_rels, snapshot)
+      record.hset(@name, prepared)
+    rescue StandardError
+      compensate_failed_indexed_fast_write(record, value, index_rels, snapshot) unless index_rels.empty?
+      raise
+    end
+
+    # Best-effort compensation for an indexed fast write whose hash write
+    # failed AFTER the class-level index entries were already updated (the
+    # two are separate commands by contract -- the fast writer is not
+    # transactional). Without this, the index would resolve +value+ to a
+    # record whose hash still holds the old value, and +value+ would stay
+    # blocked for every other record.
+    #
+    # Restores the in-memory snapshot first (the getter must return the old
+    # value again), then reverses each index mutation via update_in_class_*
+    # with +value+ as the entry to retract: for a unique index that releases
+    # the just-claimed entry (ownership-checked, ledger-forgetting) and
+    # re-claims/re-affirms the restored old value; for a multi index it
+    # removes the record from the +value+ bucket and re-adds the old one.
+    #
+    # Mirrors release_created_index_claims! (persistence.rb): every step is
+    # wrapped so a failure here is warned, never raised -- the caller
+    # re-raises the original write error unmasked. Worst case a stale entry
+    # remains until the next save.
+    #
+    # @param record [Familia::Horreum] the record whose hash write failed
+    # @param value [Object] the value the failed write attempted to persist
+    # @param index_rels [Array<IndexingRelationship>]
+    # @param snapshot [Array] rollback state from {#apply_fast_write_value}
+    # @return [void]
+    #
+    def compensate_failed_indexed_fast_write(record, value, index_rels, snapshot)
+      begin
+        record.send(:restore_field_rollback_state, snapshot)
+      rescue StandardError => e
+        Familia.warn <<~LOG_MESSAGE
+          [#{@fast_method_name}] Failed to restore in-memory state for #{record.class}##{@name} after a failed hash write: #{e.message}
+        LOG_MESSAGE
+      end
+
+      index_rels.each do |rel|
+        update_method = :"update_in_class_#{rel.index_name}"
+        next unless record.respond_to?(update_method)
+
+        record.send(update_method, value)
+      rescue StandardError => e
+        Familia.warn <<~LOG_MESSAGE
+          [#{@fast_method_name}] Failed to revert #{record.class}##{rel.index_name} after a failed hash write: #{e.message}. A stale entry for #{@name}=#{value.inspect} may remain until the next save.
+        LOG_MESSAGE
+      end
+
+      nil
     end
 
     # Handle method name conflicts during definition
