@@ -143,7 +143,10 @@ membership = memberships.find { |m| m[:type] == 'unique_index' }
 #=> [:email_index, :email, "test@example.com"]
 
 ## Regression #307: save writes the class-level unique index inside the save
-## transaction (the HSET is queued in the MULTI/EXEC pipeline, not issued after)
+## transaction (the HSET is queued in the MULTI/EXEC pipeline, not issued after).
+## Relies on DatabaseLogger.capture_commands rendering a pipelined MULTI..EXEC as
+## a single joined command string; if that format changes, @txn_pos comes back
+## nil and the next line raises TypeError -- a loud failure, not a silent pass.
 @txn_user = TestIndexedUser.new(user_id: 'txn_user_307', email: 'txn307@example.com')
 @save_commands = DatabaseLogger.capture_commands { @txn_user.save }.map(&:command)
 @txn_pos = @save_commands.index { |cmd| cmd.match?(/\Amulti\b/i) && cmd.match?(/\bexec\z/i) }
