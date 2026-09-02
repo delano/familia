@@ -4,6 +4,18 @@
 
 module Familia
   module Encryption
+    # Encoding names an envelope may carry. The write path records
+    # `plaintext.encoding.name`, so every legitimate value is a canonical
+    # Ruby encoding name (aliases are accepted too). The special names
+    # "locale", "external", "internal" and "filesystem" are excluded: they
+    # resolve differently per host, are never written, and would let a
+    # tampered envelope pick the encoding of whatever machine reads it.
+    #
+    # The field is not covered by the AEAD tag, so this allowlist is what
+    # stands between a rewritten `encoding` and force_encoding raising
+    # ArgumentError/TypeError inside the decrypt path (#408).
+    ENVELOPE_ENCODINGS = (Encoding.name_list - %w[locale external internal filesystem]).freeze
+
     EncryptedData = Data.define(:algorithm, :nonce, :ciphertext, :auth_tag, :key_version, :encoding, :envelope_version,
 :aad_fields, :key_material_fields) do
       def initialize(algorithm:, nonce:, ciphertext:, auth_tag:, key_version:, encoding: nil, envelope_version: nil,
@@ -106,6 +118,8 @@ module Familia
         # Check if algorithm is supported
         return false unless Registry.providers.key?(algorithm)
 
+        return false unless encoding_valid?
+
         # Validate Base64 encoding of binary fields
         begin
           Base64.strict_decode64(nonce)
@@ -169,7 +183,23 @@ module Familia
           raise EncryptionError, "No key for version: #{key_version}"
         end
 
-        self
+        validate_encoding!
+      end
+
+      # The encoding field is optional (pre-#229 envelopes omit it and decrypt
+      # as UTF-8). When present it must be a String naming an encoding this
+      # Ruby knows, see ENVELOPE_ENCODINGS.
+      def encoding_valid?
+        encoding.nil? || (encoding.is_a?(::String) && ENVELOPE_ENCODINGS.include?(encoding))
+      end
+
+      # @raise [EncryptionError] when the encoding field is present but not a
+      #   known encoding name. Raised as a defined error so it can never be
+      #   mistaken for corrupted ciphertext (#408).
+      def validate_encoding!
+        return self if encoding_valid?
+
+        raise EncryptionError, "Unsupported encoding: #{encoding.inspect}"
       end
     end
   end

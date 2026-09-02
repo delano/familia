@@ -63,11 +63,18 @@ module Familia
 
       # Delegate parsing and instantiation to EncryptedData.from_json
       # Wrap validation errors for security (don't expose internal structure details)
+      #
+      # The encoding field is checked here, before any key derivation, because
+      # it is applied to the plaintext with force_encoding after decryption and
+      # is not covered by the AEAD tag. Left unchecked, an unknown name would
+      # raise ArgumentError (or TypeError for a non-string) and be swallowed by
+      # the generic rescue in #decrypt as a "Decryption failed" that is
+      # indistinguishable from corrupted ciphertext (#408).
       def parse_encrypted_data(encrypted_json_or_hash)
         data = Familia::Encryption::EncryptedData.from_json(encrypted_json_or_hash)
         raise EncryptionError, 'Failed to parse encrypted data' unless data
 
-        data
+        data.validate_encoding!
       rescue EncryptionError => e
         # Re-wrap validation errors with generic message for security
         raise EncryptionError, "Decryption failed: #{e.message}"
