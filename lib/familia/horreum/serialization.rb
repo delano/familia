@@ -225,30 +225,50 @@ module Familia
       def log_deserialization_issue(val, field_name)
         context = field_name ? "#{self.class}##{field_name}" : self.class.to_s
         dbkey_info = respond_to?(:dbkey) ? dbkey : 'no dbkey'
+        corrupted = looks_like_json?(val)
+        error_type = corrupted ? :corrupted_json : :legacy_string
+        value_length = val.to_s.bytesize
 
-        msg = if looks_like_json?(val)
-          "Corrupted JSON in #{context}: #{val.inspect} (#{dbkey_info})"
+        # The message deliberately carries no bytes of the stored value. This
+        # branch is reached precisely for values the library does not
+        # understand (legacy plain strings, corrupted JSON, ciphertext migrated
+        # from older schemes), which is the worst class of value to copy
+        # verbatim into a log line or an error-reporting sink. The message is
+        # logged at ERROR (ungated) and also wrapped in the StandardError sent
+        # to notify_error, so anything placed in it reaches every sink.
+        msg = if corrupted
+          "Corrupted JSON in #{context} (#{dbkey_info})"
         else
-          "Legacy plain string in #{context}: #{val.inspect} (#{dbkey_info})"
+          "Legacy plain string in #{context} (#{dbkey_info})"
         end
 
-        # Structured error logging with instrumentation
-        error_type = looks_like_json?(val) ? :corrupted_json : :legacy_string
-        Familia.error msg,
+        # Structured error logging with instrumentation. The length is always
+        # safe to report; a bounded preview of the value is only included when
+        # debug mode is on, so the default ERROR record contains no value bytes.
+        ident = begin
+          identifier
+        rescue StandardError
+          nil
+        end
+        log_context = {
           error_type: error_type,
           field: field_name,
-          value_preview: val.to_s[0...50],
           object_class: self.class.name,
-          identifier: (identifier rescue nil),
-          key: dbkey_info
+          identifier: ident,
+          key: dbkey_info,
+          value_length: value_length,
+        }
+        log_context[:value_preview] = val.to_s[0...50] if Familia.debug?
+        Familia.error msg, **log_context
 
-        # Notify instrumentation hooks
+        # Notify instrumentation hooks (no value bytes here either)
         Familia::Instrumentation.notify_error(
           StandardError.new(msg),
           operation: :deserialization,
           error_type: error_type,
           field: field_name,
-          object_class: self.class.name
+          object_class: self.class.name,
+          value_length: value_length,
         )
       end
 

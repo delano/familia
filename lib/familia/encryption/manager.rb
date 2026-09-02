@@ -54,7 +54,7 @@ module Familia
       rescue EncryptionError
         raise
       rescue Familia::SerializerError => e
-        raise EncryptionError, "Invalid JSON structure: #{e.message}"
+        raise EncryptionError, "Invalid JSON structure: #{e.class}"
       rescue StandardError => e
         raise EncryptionError, "Decryption failed: #{e.message}"
       end

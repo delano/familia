@@ -337,6 +337,29 @@ user.api_key.reveal do |actual_key|
 end
 ```
 
+### Every Assignment Is Encrypted
+
+The setter never decides whether to encrypt by looking at the value. Anything
+assigned by application code -- through the setter, the fast writer
+(`api_key!`), `apply_fields`, or keyword construction -- is plaintext and gets
+encrypted, even a string or Hash that is byte-for-byte a valid encryption
+envelope (`multi_field_update` goes further and raises unless handed a
+`ConcealedString`):
+
+```ruby
+envelope_json = other_user.api_key.encrypted_value
+
+user.api_key = envelope_json     # encrypted as plaintext, NOT stored verbatim
+user.api_key.reveal { |v| v }    # => envelope_json
+```
+
+Only values arriving from storage (`load`, `find_by_id`, `refresh!`,
+`naive_refresh`) are taken verbatim. That path wraps each stored value in
+`Familia::Encryption::StoredEnvelope` via `EncryptedFieldType#deserialize`
+before it reaches the setter, so provenance, not shape, is what skips
+encryption. Before this, a caller who supplied envelope-shaped plaintext had it
+persisted unencrypted (issue #405).
+
 ### String Operations
 
 ```ruby

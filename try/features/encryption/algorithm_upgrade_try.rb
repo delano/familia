@@ -50,9 +50,11 @@ Familia::Encryption::Registry.default_provider.algorithm
 #=> [100, 50]
 
 ## Field-level POSITIVE cross-algorithm read: an AES envelope injected into a
-## record (as DB hydration does) reveals fine while the default is XChaCha
+## record the way DB hydration does -- wrapped in the StoredEnvelope provenance
+## marker (#405); a bare envelope string would be encrypted as plaintext --
+## reveals fine while the default is XChaCha
 @record = AlgorithmUpgradeSecret.new(objid: 'sec_1')
-@record.ciphertext = @aes_envelope
+@record.ciphertext = Familia::Encryption::StoredEnvelope.new(payload: @aes_envelope)
 @record.ciphertext.reveal { |plaintext| plaintext }
 #=> 'pre-upgrade secret'
 
@@ -69,7 +71,7 @@ Familia::JsonSerializer.parse(@fresh.ciphertext.encrypted_value)['algorithm']
 
 ## re_encrypt_fields! upgrades an AES envelope to the current algorithm in place
 @migrate = AlgorithmUpgradeSecret.new(objid: 'sec_1')
-@migrate.ciphertext = @aes_envelope
+@migrate.ciphertext = Familia::Encryption::StoredEnvelope.new(payload: @aes_envelope)
 @migrate.re_encrypt_fields!
 Familia::JsonSerializer.parse(@migrate.ciphertext.encrypted_value)['algorithm']
 #=> 'xchacha20poly1305'

@@ -65,10 +65,10 @@ module Familia
           # Check for required fields
           required_fields = %i[algorithm nonce ciphertext auth_tag key_version]
           result = required_fields.all? { |field| parsed.key?(field) }
-          Familia.debug "[valid?] result: #{result}, parsed: #{parsed}, required: #{required_fields}"
+          Familia.debug "[valid?] result: #{result}, missing: #{(required_fields - parsed.keys).inspect}"
           result
         rescue Familia::SerializerError => e
-          Familia.debug "[valid?] JSON error: #{e.message}"
+          Familia.debug "[valid?] JSON error: #{e.class}"
           false
         end
       end
@@ -81,7 +81,7 @@ module Familia
         begin
           parsed = Familia::JsonSerializer.parse(json_string, symbolize_names: true)
         rescue Familia::SerializerError => e
-          raise EncryptionError, "Invalid JSON structure: #{e.message}"
+          raise EncryptionError, "Invalid JSON structure: #{e.class}"
         end
 
         raise EncryptionError, "Expected JSON object, got #{parsed.class}" unless parsed.is_a?(Hash)
