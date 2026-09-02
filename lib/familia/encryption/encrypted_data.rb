@@ -69,7 +69,7 @@ module Familia
         begin
           parsed = Familia::JsonSerializer.parse(json_string, symbolize_names: true)
         rescue Familia::SerializerError => e
-          raise EncryptionError, "Invalid JSON structure: #{e.message}"
+          raise EncryptionError, "Invalid JSON structure: #{e.class}"
         end
 
         raise EncryptionError, "Expected JSON object, got #{parsed.class}" unless parsed.is_a?(Hash)

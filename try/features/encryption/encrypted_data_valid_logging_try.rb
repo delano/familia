@@ -126,3 +126,20 @@ before = [Familia.debug?, Familia.logger]
 capture_valid_debug_output { Familia::Encryption::EncryptedData.valid?(@full_envelope) }
 [Familia.debug?, Familia.logger] == before
 #=> true
+
+## validate! rejects a non-JSON candidate with an EncryptionError
+begin
+  Familia::Encryption::EncryptedData.validate!(@plain_secret)
+rescue Familia::EncryptionError => e
+  @validate_error = e
+end
+@validate_error.message.start_with?('Invalid JSON structure')
+#=> true
+
+## validate! error message does not quote the candidate
+@validate_error.message.include?(@plain_secret)
+#=> false
+
+## validate! error message names only the parser error class
+@validate_error.message
+#=> "Invalid JSON structure: Familia::SerializerError"
