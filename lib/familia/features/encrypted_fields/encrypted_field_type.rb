@@ -45,14 +45,15 @@ module Familia
           elsif value.is_a?(ConcealedString)
             # Already concealed, store as-is
             instance_variable_set(:"@#{field_name}", value)
-          elsif field_type.encrypted_json?(value)
-            # Already encrypted (JSON string or Hash from database) - wrap in ConcealedString without re-encrypting
-            # Convert Hash back to JSON string if needed (v2.0 deserialization returns Hash)
-            encrypted_string = value.is_a?(Hash) ? Familia::JsonSerializer.dump(value) : value
-            concealed = ConcealedString.new(encrypted_string, self, field_type)
-            instance_variable_set(:"@#{field_name}", concealed)
+          elsif value.is_a?(Familia::Encryption::StoredEnvelope)
+            # Rehydrated from storage (load, find_by_id, refresh!). Provenance,
+            # not shape, earns the verbatim path: #deserialize is the only place
+            # that wraps values in StoredEnvelope, so nothing a caller assigns
+            # reaches this branch by looking like an envelope (#405).
+            instance_variable_set(:"@#{field_name}", field_type.conceal_stored(self, value))
           else
-            # Encrypt plaintext and wrap in ConcealedString
+            # Plaintext -- including anything that merely looks like an
+            # envelope. Encrypt and wrap in ConcealedString.
             encrypted = field_type.encrypt_value(self, value)
             concealed = ConcealedString.new(encrypted, self, field_type)
             instance_variable_set(:"@#{field_name}", concealed)
@@ -185,7 +186,50 @@ module Familia
       :encrypted
     end
 
-    # Check if a string looks like encrypted JSON data
+    # Storage hook (FieldType#deserialize): mark the value as having come from
+    # storage so the setter can take it verbatim. Horreum calls this only while
+    # hydrating an object from its hash, never for values assigned by callers,
+    # which is what makes the marker a provenance signal rather than a shape
+    # check (#405).
+    #
+    # @param value [Hash, String, nil] The decoded stored value
+    # @return [Familia::Encryption::StoredEnvelope, nil]
+    #
+    def deserialize(value, _record = nil)
+      return nil if value.nil?
+
+      Familia::Encryption::StoredEnvelope.new(payload: value)
+    end
+
+    # Wrap a value rehydrated from storage for the given record.
+    #
+    # The payload is normally the parsed envelope (deserialize_value returns
+    # a Hash), which is re-serialized to its canonical JSON string and wrapped
+    # without re-encrypting. A payload that is not an envelope at all is a
+    # legacy plaintext value already at rest in this slot; it is encrypted in
+    # memory so the next save protects it, as before.
+    #
+    # @param record [Familia::Horreum] The record being hydrated
+    # @param stored_envelope [Familia::Encryption::StoredEnvelope]
+    # @return [ConcealedString, nil]
+    #
+    def conceal_stored(record, stored_envelope)
+      stored = stored_envelope.payload
+      return nil if stored.nil? || (stored.is_a?(::String) && stored.empty?)
+
+      encrypted = if encrypted_json?(stored)
+        stored.is_a?(Hash) ? Familia::JsonSerializer.dump(stored) : stored
+      else
+        encrypt_value(record, stored)
+      end
+
+      ConcealedString.new(encrypted, record, self)
+    end
+
+    # Shape check: does this value parse as an encryption envelope? Used to
+    # validate what came back from storage. It is deliberately NOT how the
+    # setter decides whether to encrypt -- that is decided by provenance via
+    # StoredEnvelope (#405), because any caller can produce this shape.
     def encrypted_json?(data)
       # Support both JSON strings (legacy) and Hashes (v2.0 deserialization)
       if data.is_a?(Hash)

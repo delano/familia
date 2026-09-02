@@ -341,9 +341,18 @@ module Familia
     end
 
     def initialize_with_keyword_args_deserialize_value(**fields)
-      # Deserialize Database string values back to their original types
+      # Deserialize Database string values back to their original types, then
+      # hand each value to its field type's storage hook (FieldType#deserialize).
+      # EncryptedFieldType uses the hook to wrap the stored envelope in
+      # Familia::Encryption::StoredEnvelope, which is how its setter tells a
+      # rehydrated envelope apart from caller-supplied plaintext that merely
+      # looks like one (#405). This hydration path is the only caller of the
+      # hook; the public constructor (initialize_with_keyword_args) never is.
       deserialized_fields = fields.each_with_object({}) do |(field_name, value), hsh|
-        hsh[field_name] = deserialize_value(value, field_name: field_name)
+        deserialized = deserialize_value(value, field_name: field_name)
+        field_type = self.class.field_types[field_name.to_sym]
+        deserialized = field_type.deserialize(deserialized, self) if field_type&.persistent?
+        hsh[field_name] = deserialized
       end
       initialize_with_keyword_args(**deserialized_fields)
     end

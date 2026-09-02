@@ -49,7 +49,10 @@ phase0['envelopes'].each do |rec|
               ProofApp::Document.new(docid: rec['docid'], owner_id: rec['owner_id'])
             end
       field = rec['model'] == 'Secret' ? :ciphertext : :content
-      obj.send(:"#{field}=", rec['envelope']) # setter recognizes envelope JSON: rehydration, no re-encrypt
+      # Rehydrate the way DB hydration does: the StoredEnvelope marker is what
+      # tells the setter "already encrypted, keep verbatim". A bare envelope
+      # string would be encrypted as plaintext (#405).
+      obj.send(:"#{field}=", Familia::Encryption::StoredEnvelope.new(payload: rec['envelope']))
       obj.send(field).reveal { |plain| plain == rec['plaintext'] }
     end
   end

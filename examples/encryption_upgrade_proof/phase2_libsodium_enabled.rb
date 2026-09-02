@@ -56,7 +56,9 @@ end
                 ProofApp::Document.new(docid: rec['docid'], owner_id: rec['owner_id'])
               end
         field = rec['model'] == 'Secret' ? :ciphertext : :content
-        obj.send(:"#{field}=", rec['envelope'])
+        # StoredEnvelope marks the value as rehydrated from storage; a bare
+        # envelope string would be encrypted as plaintext (#405).
+        obj.send(:"#{field}=", Familia::Encryption::StoredEnvelope.new(payload: rec['envelope']))
         obj.send(field).reveal { |plain| plain == rec['plaintext'] }
       end
     end
@@ -279,10 +281,11 @@ Proof.check('encrypting an empty string returns nil (stored as no-value)') do
   Familia::Encryption.encrypt('', context: ctx).nil?
 end
 
-# In-band signaling hazard: a PLAINTEXT that happens to look like an envelope
-# is treated as already-encrypted by the field setter and stored VERBATIM --
-# i.e. never encrypted. See the findings report; this check documents the
-# current behavior so any future fix will show up as a diff here.
+# Former in-band signaling hazard (#405): through 2.12 a PLAINTEXT that
+# happened to look like an envelope was treated as already-encrypted by the
+# field setter and stored VERBATIM. The setter now decides by provenance, not
+# shape: only a Familia::Encryption::StoredEnvelope (applied by DB hydration)
+# is kept verbatim, so this lookalike is encrypted like any other plaintext.
 lookalike = JSON.generate(
   'algorithm' => 'aes-256-gcm',
   'nonce' => Base64.strict_encode64(OpenSSL::Random.random_bytes(12)),
@@ -290,10 +293,11 @@ lookalike = JSON.generate(
   'auth_tag' => Base64.strict_encode64(OpenSSL::Random.random_bytes(16)),
   'key_version' => 'v2'
 )
-Proof.check('HAZARD (documented): plaintext shaped like an envelope is stored verbatim, unencrypted') do
+Proof.check('plaintext shaped like an envelope is encrypted, not stored verbatim (#405)') do
   s = ProofApp::Secret.new(objid: 'sec_hazard', owner_id: 'cust_1')
   s.ciphertext = lookalike
-  s.ciphertext.encrypted_value == lookalike # byte-identical: no encryption happened
+  s.ciphertext.encrypted_value != lookalike && # a fresh envelope, not the caller's bytes
+    s.ciphertext.reveal { |plain| plain == lookalike } # and it round-trips as plaintext
 end
 
 # --- Persist fixtures for the rollback phase ---------------------------------
