@@ -9,7 +9,7 @@
 # - Legacy plain strings (data that was never JSON)
 # - Valid JSON data
 
-require_relative '../../../lib/familia'
+require_relative '../../support/helpers/test_helpers'
 require 'logger'
 require 'stringio'
 
@@ -172,3 +172,4 @@ Familia.instance_variable_get(:@logger).level = Logger::DEBUG
 
 # Teardown
 Familia.instance_variable_set(:@logger, @original_logger)
+@model.delete!
