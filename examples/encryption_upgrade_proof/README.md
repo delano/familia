@@ -76,9 +76,12 @@ recommendations.
 - **Wiping the current HKDF salt strands current-salt data**: the decrypt
   fallback list rescues legacy-salt envelopes, not envelopes written under
   the salt you just removed.
-- **Envelope-lookalike plaintext is stored verbatim**: a plaintext that is
-  valid envelope JSON is treated as already-encrypted by the field setter
-  and is never encrypted.
+- **Envelope-lookalike plaintext was stored verbatim** (fixed by #405):
+  through 2.12 the field setter treated any value that was valid envelope
+  JSON as already-encrypted and never encrypted it. The setter now encrypts
+  everything a caller assigns; only values wrapped in
+  `Familia::Encryption::StoredEnvelope` by the hydration path are kept
+  verbatim, which is why phases 1 and 2 rehydrate through that marker.
 - **The upgrade is a one-way door**: once one XChaCha envelope exists,
   every process that may read it needs libsodium. Nodes without it fail
   cleanly (`Familia::EncryptionError` naming the unavailable provider and

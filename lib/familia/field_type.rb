@@ -246,6 +246,14 @@ module Familia
 
     # Deserialize a value from database storage
     #
+    # Called on the hydration path only (load, find_by_id, refresh!, and the
+    # other storage-to-object paths) for persistent fields, after the generic
+    # JSON decoding in Horreum#deserialize_value and before the value reaches
+    # the field's setter. Values assigned by application code never pass
+    # through here, so an override can use it to mark or reshape what came
+    # from storage. EncryptedFieldType wraps the stored envelope in
+    # Familia::Encryption::StoredEnvelope this way (#405).
+    #
     # Subclasses can override this to customize deserialization.
     # The default implementation passes values through unchanged.
     #
