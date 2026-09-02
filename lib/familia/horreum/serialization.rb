@@ -224,7 +224,14 @@ module Familia
 
       def log_deserialization_issue(val, field_name)
         context = field_name ? "#{self.class}##{field_name}" : self.class.to_s
-        dbkey_info = respond_to?(:dbkey) ? dbkey : 'no dbkey'
+        # During instantiate_from_hash the instance is allocated and every
+        # field is deserialized before any setter runs, so the identifier is
+        # still nil here and dbkey would raise Familia::NoIdentifier.
+        dbkey_info = begin
+          respond_to?(:dbkey) ? dbkey : 'no dbkey'
+        rescue Familia::NoIdentifier
+          'no dbkey'
+        end
 
         msg = if looks_like_json?(val)
           "Corrupted JSON in #{context}: #{val.inspect} (#{dbkey_info})"
