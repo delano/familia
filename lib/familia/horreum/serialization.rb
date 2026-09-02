@@ -227,6 +227,7 @@ module Familia
         dbkey_info = respond_to?(:dbkey) ? dbkey : 'no dbkey'
         corrupted = looks_like_json?(val)
         error_type = corrupted ? :corrupted_json : :legacy_string
+        value_length = val.to_s.bytesize
 
         # The message deliberately carries no bytes of the stored value. This
         # branch is reached precisely for values the library does not
@@ -255,7 +256,7 @@ module Familia
           object_class: self.class.name,
           identifier: ident,
           key: dbkey_info,
-          value_length: val.to_s.bytesize,
+          value_length: value_length,
         }
         log_context[:value_preview] = val.to_s[0...50] if Familia.debug?
         Familia.error msg, **log_context
@@ -267,7 +268,7 @@ module Familia
           error_type: error_type,
           field: field_name,
           object_class: self.class.name,
-          value_length: val.to_s.bytesize,
+          value_length: value_length,
         )
       end
 
