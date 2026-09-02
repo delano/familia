@@ -54,7 +54,7 @@ Familia.instance_variable_get(:@logger).level = Logger::DEBUG
 ## The legacy string is logged with the intended message
 @log_output.rewind
 @log_output.read
-#=~> /Legacy plain string in .*LegacyStringFinder#plain: "legacy-plain-string" \(no dbkey\)/
+#=~> /Legacy plain string in .*LegacyStringFinder#plain \(no dbkey\)/
 
 ## find_by_dbkey follows the same path and also loads
 LegacyStringFinder.find_by_dbkey(@key).plain
@@ -70,7 +70,7 @@ LegacyStringFinder.load_multi(['leg']).map(&:plain)
 @record.refresh!
 @log_output.rewind
 @log_output.read
-#=~> /Legacy plain string in .*LegacyStringFinder#plain: "legacy-plain-string" \(legacy_string_finder:leg:object\)/
+#=~> /Legacy plain string in .*LegacyStringFinder#plain \(legacy_string_finder:leg:object\)/
 
 Familia.instance_variable_set(:@logger, @original_logger)
 LegacyStringFinder.dbclient.del(@key)
