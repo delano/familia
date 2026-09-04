@@ -27,6 +27,7 @@ Added
 - Added ``Familia::Features::Housekeeping::EnforceCollectionCaps`` chore class to support bulk cap enforcement. #351
 - Added ``encryption_personalization_history`` setting to support key personalization rotation for XChaCha20-Poly1305 providers. #333
 - Added ``limit:``, ``offset:``, and ``each_<collection>_with_permission`` to stream permission-filtered collection members via ``ZSCAN`` with O(1) memory. #309
+- Added the ``dirty_write_warnings:`` collection option to override a parent class's dirty-write diagnostic mode. #282
 
 Changed
 -------
@@ -43,6 +44,10 @@ Changed
 - ``multi_field_fast_write`` now raises ``Familia::IndexedFieldFastWriteError`` if any written field backs a class-level index. #308
 - Fast writer ``field!`` on a class-indexed field now raises ``Familia::IndexedFieldFastWriteError`` inside transactions/pipelines, and raises ``Familia::PersistenceError`` on unsaved records. #308
 - With a blank ``encryption_hkdf_salt``, ``Manager#encrypt`` now raises ``EncryptionError`` when the request-cache key is built rather than at key derivation. The raise happens earlier and now also fires on what would previously have been a warm-cache hit; correctly configured deployments see no change. #380
+- Registered instance-scoped index memberships now refresh when their record is saved. ``atomic_write`` callers must explicitly update those indexes. #282
+- Saving a record with an instance-scoped unique-index collision now raises ``Familia::RecordExistsError`` without replacing the existing entry. #282
+- Direct calls to generated instance- and class-scoped index mutation methods now require a persisted record. #282
+- Instance-scoped index mutations now reject scopes without an identifier or a Symbol/String ``identifier_field``. #282
 
 Removed
 -------
@@ -74,6 +79,8 @@ Fixed
 - Fixed performance by removing redundant post-save ``update_all_indexes`` calls inside relationships save. #307
 - Fixed partial write paths (``commit_fields``, ``save_fields``, ``multi_field_update``) to safely guard and claim unique indexes before executing writes. #308
 - Fixed fast writers (``field!``) on indexed fields to claim and update the index atomically before execution. #308
+- Fixed instance-scoped index cleanup after an indexed value changes or when scope classes share an index name. #282
+- Fixed stale instance-scoped index memberships being inherited when a record identifier is reused through ``save`` or ``save_if_not_exists!``. #365
 
 Security
 --------
