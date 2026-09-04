@@ -385,6 +385,7 @@ module Familia
           # @param temp_key [String] The temporary index key
           # @param scope_instance [Object, nil] Optional scope instance. If provided, only objects belonging to this scope will be indexed.
           # @return [Integer] Number of objects indexed in this batch
+          # @raise [StandardError] If the batch cannot be loaded, filtered, or written
           #
           def process_scan_batch(keys, indexed_class, field, temp_key, index_hashkey, scope_instance)
             # Load objects by keys
@@ -419,7 +420,7 @@ module Familia
             batch_indexed
           rescue StandardError => e
             Familia.warn "[Rebuild] Error processing batch: #{e.message}"
-            0
+            raise
           end
         end
       end
