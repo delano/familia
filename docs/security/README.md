@@ -24,16 +24,16 @@ findings and one partially resolved finding**.
 
 | Recorded severity | Finding | Status | Detail |
 | --- | --- | --- | --- |
-| High | `rebuild_via_scan` lacks normal regression coverage. | Open | [July 26 audit](2026-07-26-audit.md#current-status) |
-| High | A failed SCAN batch can replace a live index with a truncated rebuild. | Open | [July 26 audit](2026-07-26-audit.md#current-status) |
-| Medium | The Claude workflow action is pinned, but public `@claude` triggers have no evident collaborator or author-association gate. | Partially resolved | [July 26 audit](2026-07-26-audit.md#medium) |
-| Medium | Encrypting before assignment of a record identifier can prevent later decryption. | Open | [July 26 audit](2026-07-26-audit.md#current-status) |
-| Medium | Concurrent rebuilds can share a second-resolution temporary key. | Open | [July 26 audit](2026-07-26-audit.md#current-status) |
+| High | `rebuild_via_scan` lacks normal regression coverage. | Open | [July 26 audit](2026-07-26-audit.md#rebuild-via-scan-coverage) |
+| High | A failed SCAN batch can replace a live index with a truncated rebuild. | Open | [July 26 audit](2026-07-26-audit.md#scan-batch-truncated-rebuild) |
+| Medium | The Claude workflow action is pinned, but public `@claude` triggers have no evident collaborator or author-association gate. | Partially resolved | [July 26 audit](2026-07-26-audit.md#claude-workflow-public-trigger) |
+| Medium | Encrypting before assignment of a record identifier can prevent later decryption. | Open | [July 26 audit](2026-07-26-audit.md#encryption-before-identifier) |
+| Medium | Concurrent rebuilds can share a second-resolution temporary key. | Open | [July 26 audit](2026-07-26-audit.md#concurrent-rebuild-temp-key) |
 | Medium | `multi_field_fast_write` can break object and external identifier lookups. | Open | [September 4 delta](2026-09-04-audit.md#medium--multi_field_fast_write-can-break-object-and-external-identifier-lookups) |
 | Medium | Instance-scoped SCAN rebuild can include records from unrelated scopes. | Open | [September 4 delta](2026-09-04-audit.md#medium--instance-scoped-scan-rebuild-can-populate-an-index-from-unrelated-scopes) |
 | Medium | Index rebuild paths retain complete working sets in memory. | Open | [September 4 delta](2026-09-04-audit.md#medium--rebuild-paths-retain-complete-working-sets-in-memory) |
-| Low | Variable-length multi-field AAD components can collide after colon joining. | Open | [July 26 audit](2026-07-26-audit.md#current-status) |
-| Low | Positional Symbol scopes in verifiable identifiers are silently ignored. | Open | [July 26 audit](2026-07-26-audit.md#current-status) |
+| Low | Variable-length multi-field AAD components can collide after colon joining. | Open | [July 26 audit](2026-07-26-audit.md#multi-field-aad-delimiter-collision) |
+| Low | Positional Symbol scopes in verifiable identifiers are silently ignored. | Open | [July 26 audit](2026-07-26-audit.md#positional-symbol-scope) |
 | Low | Failed index swaps retain temporary keys indefinitely. | Open | [September 4 delta](2026-09-04-audit.md#low--failed-index-swaps-retain-temporary-keys-indefinitely) |
 
 ## Resolved historical audits
