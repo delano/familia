@@ -15,83 +15,63 @@ The format is based on `Keep a Changelog <https://keepachangelog.com/en/1.1.0/>`
 Added
 -----
 
-- Added ``Familia::HashKey#claim_field`` and ``#release_field`` for server-side compare-and-set/compare-and-delete on single hash fields. Raises ``Familia::OperationModeError`` in pipelines/transactions.
-- Added generated ``claim_unique_<index>!`` and ``release_unique_<index>!`` instance methods with automatic partial claim rollback on unique index save collisions. #353
-- Added tryout test helpers (``set_test_encryption_keys``, ``clear_test_encryption_keys``, ``with_test_encryption_keys``) to safely manage encryption key configurations during test runs. #363
-- Added ``Familia::MultiResult#aborted?`` to distinguish WATCH aborts from individual command errors.
-- Added ``Familia::MultiResult#inspect`` for log-safe, compact transaction outcome summaries.
-- Added ``max_length:`` option to ``SortedSet`` and ``ListKey`` to automatically cap collection sizes at write time (retaining newest N elements). #351
-- Added ``DataType#max_length`` to query configured collection caps, with definition-time validation of the parameter. #351
-- Added ``SortedSet#enforce_max_length!`` and ``ListKey#enforce_max_length!`` to trim existing collections. #351
-- Added ``max_length:`` option to ``participates_in`` and ``class_participates_in``. #351
-- Added ``Familia::Features::Housekeeping::EnforceCollectionCaps`` chore class to support bulk cap enforcement. #351
-- Added ``encryption_personalization_history`` setting to support key personalization rotation for XChaCha20-Poly1305 providers. #333
-- Added ``limit:``, ``offset:``, and ``each_<collection>_with_permission`` to stream permission-filtered collection members via ``ZSCAN`` with O(1) memory. #309
+- Added ``Familia::HashKey#claim_field`` and ``#release_field`` for single-field compare-and-set and compare-and-delete. They raise ``Familia::OperationModeError`` in pipelines and transactions.
+- Added generated ``claim_unique_<index>!`` and ``release_unique_<index>!`` methods for class-level unique indexes. #353
+- Added ``Familia::MultiResult#aborted?`` and ``#inspect`` for transaction outcome handling and logging.
+- Added ``max_length:`` to ``ListKey``, ``SortedSet``, ``participates_in``, and ``class_participates_in``. ``ListKey`` retains the N elements nearest the end written to, while ``SortedSet`` retains its N highest-scoring members. Existing oversized collections are trimmed on the next capped write; call ``enforce_max_length!`` or run ``Familia::Features::Housekeeping::EnforceCollectionCaps`` to enforce a new cap immediately. ``DataType#max_length`` exposes the configured cap. #351
+- Added ``encryption_personalization_history`` to support XChaCha20-Poly1305 personalization rotation. See ``docs/guides/encryption.md``. #333
+- Added ``limit:``, ``offset:``, and ``each_<collection>_with_permission`` for memory-bounded permission-filtered collection queries. #309
+- Added the ``dirty_write_warnings:`` collection option to override a parent class's diagnostic mode. #282
 
 Changed
 -------
 
-- Unique index updates (``add_to_class_<index>``, ``update_in_class_<index>``) now raise ``Familia::OperationModeError`` inside transactions unless the written value was previously claimed. #353
-- Retained ``guard_unique_indexes!`` for fast-fail read checks before acquiring index claims. #353
-- Calls to ``remove_from_class_*`` and class-level ``destroy!`` no longer evict index entries that point to different identifiers. #353
-- ``Familia::MultiResult#results`` now always returns an ``Array`` (empty instead of ``nil`` on transaction abort) to prevent upstream crashes.
-- ``Familia::MultiResult#to_h`` now includes an ``:aborted`` boolean key.
-- ``Familia::MultiResult`` instances are now read-only, freezing both ``#results`` and ``#errors``.
-- ``SortedSet#increment`` now runs the ``warn_if_dirty!`` guard, warning or raising when called on an unsaved parent. #351
-- ``Manager#decrypt`` now handles XChaCha20 provider personalization candidates correctly during decryption walks, matching AES-GCM salt history behavior. #333
-- The request-scoped key cache key now includes a personalization segment to prevent collisions across different rotation candidates. #333
-- ``multi_field_fast_write`` now raises ``Familia::IndexedFieldFastWriteError`` if any written field backs a class-level index. #308
-- Fast writer ``field!`` on a class-indexed field now raises ``Familia::IndexedFieldFastWriteError`` inside transactions/pipelines, and raises ``Familia::PersistenceError`` on unsaved records. #308
-- With a blank ``encryption_hkdf_salt``, ``Manager#encrypt`` now raises ``EncryptionError`` when the request-cache key is built rather than at key derivation. The raise happens earlier and now also fires on what would previously have been a warm-cache hit; correctly configured deployments see no change. #380
+- Class-level unique-index updates inside transactions now require a prior claim and raise ``Familia::OperationModeError`` otherwise. #353
+- Class-level index removal and destruction no longer delete entries owned by other records. #353
+- ``Familia::MultiResult#results`` now returns an empty ``Array`` on transaction aborts, ``#to_h`` includes ``:aborted``, and result objects are read-only.
+- ``SortedSet#increment`` now applies the dirty-write guard. #351
+- XChaCha20 decryption and request caching now support personalization rotation candidates. #333
+- ``multi_field_fast_write`` rejects class-indexed fields, and ``field!`` rejects class-indexed fields in transactions or pipelines and unsaved records. #308
+- Registered instance-scoped index memberships refresh on ``save``. ``atomic_write`` callers must update those indexes explicitly. #282
+- Saving a record with an instance-scoped unique-index collision now raises ``Familia::RecordExistsError`` without replacing the existing entry. #282
+- Direct instance- and class-scoped index mutations now require a persisted record. #282
+- Instance-scoped index mutations now reject scopes without an identifier or a Symbol/String ``identifier_field``. #282
 
 Removed
 -------
 
-- Removed the unused ``ScoreEncoding.category_score_range`` method.
 - Removed unused ``csv`` and ``stringio`` runtime dependencies from the gemspec. #354
-- Removed dead private helper methods ``Horreum::define_attr_accessor_methods``, ``remove_stale_collection_member``, and ``define_fast_writer_method``. #347, #308
 
 Fixed
 -----
 
-- Fixed ``decrby`` and ``decr`` (and aliases) to correctly use ``HINCRBY`` with a negated amount and added client-side integer validation.
-- Fixed ``encryption_info`` to reference the correct provider APIs and accurately expose ``key_size``.
-- Fixed a TOCTOU race in ``unique_index`` by enforcing server-side CAS claims using Lua before opening transactions, raising ``Familia::RecordExistsError`` on collision. #353
-- Fixed ``remove_from_class_*`` and ``update_in_class_*`` to use ownership-checked deletes, preventing accidental deletion of other records' valid entries. #353
-- Fixed process-global encryption configuration leaks across tryouts by using scoped helpers and restoring baselines. #363
-- Fixed test isolation in ``real_feature_integration_try.rb`` and ``module_loading_try.rb`` by explicitly managing encryption key rings. #363
-- Fixed fiber-local key cache teardowns to clear the correct request cache key. #363
-- Fixed claim leaks on unpersisted records in ``update_in_<scope>_<index_name>`` by running the persisted-record guard before checking claims. #370
-- Fixed ``ConcealedString`` by removing a redundant and non-functional GC finalizer. #359
-- Fixed ``Familia::MultiResult`` to prevent ``NoMethodError`` crashes on WATCH-aborted transactions. #355
-- Fixed ``SecureXChaCha20Poly1305Provider#derive_key`` to avoid mutating the receiver context string and handle non-String contexts correctly. #356
-- Fixed ``SortedSet#increment`` inside transactions/pipelines to safely return the future instead of calling ``to_f`` prematurely. #351
-- Fixed long-ignored ``:maxlength`` spelling to explicitly warn at definition time, prompting rename to ``max_length:``. #351
-- Fixed ``Lock#acquire`` with a positive TTL to run as a single atomic ``SET NX EX`` command. #347
-- Fixed ``DatabaseLogger.sample_rate`` assignment to validate and clamp input values, preventing crashes on the hot path. #347
-- Fixed ``SingleUseRedactedString`` to be loaded automatically by ``require 'familia'``. #347
-- Fixed memory overhead in ``<collection>_with_permission`` queries by batching and paging internally via ``ZRANGEBYSCORE ... LIMIT``. #309
-- Fixed performance by removing redundant post-save ``update_all_indexes`` calls inside relationships save. #307
-- Fixed partial write paths (``commit_fields``, ``save_fields``, ``multi_field_update``) to safely guard and claim unique indexes before executing writes. #308
-- Fixed fast writers (``field!``) on indexed fields to claim and update the index atomically before execution. #308
+- Fixed ``decrby`` and ``decr`` (and aliases) to decrement hash fields correctly and validate integer amounts.
+- Fixed ``encryption_info`` to report correct provider details and key sizes.
+- Fixed unique-index save races and ownership-checked removals, preventing collisions from replacing or deleting another record's entry. #353
+- Fixed claim leaks when unpersisted records call ``update_in_<scope>_<index_name>``. #370
+- Fixed ``Familia::MultiResult`` handling of WATCH-aborted transactions. #355
+- Fixed XChaCha20 key derivation to preserve caller-provided context values. #356
+- Fixed ``SortedSet#increment`` in transactions and pipelines to return the queued result. #351
+- ``:maxlength`` now warns at definition time; rename it to ``max_length:`` to opt in to collection capping. #351
+- Fixed ``Lock#acquire`` with a TTL to acquire and set the expiration atomically. #347
+- Fixed ``DatabaseLogger.sample_rate`` validation and ``SingleUseRedactedString`` loading through ``require 'familia'``. #347
+- Fixed memory use in ``<collection>_with_permission`` queries by processing results in bounded batches. #309
+- Fixed invalid permission-symbol lookups to fail rather than silently misconfigure permission queries.
+- Fixed partial and fast writes to maintain class-level unique indexes atomically. #308
+- Fixed instance-scoped index cleanup after indexed values change, scope classes share an index name, or identifiers are reused. #282, #365
 
 Security
 --------
 
-- Enforced field-type semantics in ``multi_field_update`` and ``multi_field_fast_write`` to prevent writing plaintext to encrypted fields or persisting transient fields.
-- Enforced loud failures for invalid permission symbol lookups in ``Relationships::ScoreEncoding`` to prevent silent misconfigurations.
+- ``multi_field_update`` and ``multi_field_fast_write`` now reject plaintext writes to encrypted fields and writes to transient fields.
 - Pinned GitHub Workflows holding ``CLAUDE_CODE_OAUTH_TOKEN`` to immutable release commit SHAs.
-- The encrypt-path request-cache key now resolves the HKDF salt through the fail-closed ``current_hkdf_salt`` accessor instead of the permissive candidate list's head (``hkdf_salts.first``). Previously, with a blank ``encryption_hkdf_salt``, a decrypt inside ``with_request_cache`` could warm an entry keyed on a historical salt that a subsequent encrypt would silently reuse -- because the cache lookup precedes derivation, the blank-salt refusal in the provider never fired. Encrypts now refuse a blank salt even against a warm cache. #380
+- Encryption now fails closed when ``encryption_hkdf_salt`` is blank, including with a warm request cache. Configure a non-blank salt as described in ``docs/guides/encryption.md``. #380
 
 Documentation
 -------------
 
-- Replaced fabricated/incorrect examples in ``docs/overview.md`` and RDoc comments with accurate, tested examples for permission management and relationships.
-- Documented that ``<collection>_with_permission`` requires atomic flags and rejects role symbols.
-- Corrected the error message for ``guard_allowed_fields!``.
-- Documented ``PERMISSION_CATEGORIES`` and exclusive permission tiers.
-- Fixed incorrect connection provider examples in docs.
-- Updated encryption guides to cover personalization history and rotation.
+- Corrected permission-management, relationship, and connection-provider examples.
+- Documented ``<collection>_with_permission`` flags, permission categories, exclusive tiers, and encryption personalization rotation.
 
 AI Assistance
 -------------
@@ -107,25 +87,14 @@ AI Assistance
 Changed
 -------
 
-- ``to_h_for_storage`` omits nil fields; every write path removes a field that has
-  become nil. ``save``/``commit_fields`` do a full overwrite (the stored hash
-  matches the in-memory object, so a field nil in memory is deleted);
-  ``save_fields``/``multi_field_update``/``multi_field_fast_write`` delete a named
-  field passed as nil. ``to_h`` still returns every declared field, nils included.
+- Nil-valued fields are now omitted from storage. Setting a field to ``nil`` removes it on every write path, while ``to_h`` continues to include declared fields with nil values.
 
-- Claim caveat: a full ``save``/``commit_fields`` of a stale copy clears a field
-  another writer claimed via ``HSETNX``. To claim and update without disturbing
-  it, use the targeted writers or ``refresh!`` first.
+- Refresh stale instances before a full ``save`` or ``commit_fields`` when another writer may have claimed a field; use targeted writers to update only named fields.
 
 Fixed
 -----
 
-- Nil-valued fields are no longer stored as the JSON string ``"null"``. Because a
-  hash has no native NULL, this left declared fields perpetually present, breaking
-  ``HSETNX``/``HEXISTS`` atomic-claim patterns and wasting memory. Nil fields are
-  now omitted, and clearing a field to nil removes it from storage (``HDEL``), so
-  absence again means "no value". No migration required: stale ``"null"`` values
-  are cleaned up on the next save and already decode back to ``nil`` on read.
+- Fixed nil-valued fields being stored as the JSON string ``"null"``. No migration is required; existing values are cleaned up on the next save.
 
 AI Assistance
 -------------
@@ -140,96 +109,28 @@ AI Assistance
 Added
 -----
 
-- ``encrypted_field`` now honors a per-field ``algorithm:`` option, pinning that
-  field's write algorithm to a specific registered provider (``'aes-256-gcm'`` or
-  ``'xchacha20poly1305'``) independent of the registry's default-provider
-  priority. The option was previously documented but silently ignored, so writes
-  always used the default provider. Decryption stays envelope-driven, so a pin can
-  be added, changed, or removed without breaking ciphertext already at rest, and
-  ``re_encrypt_fields!`` re-encrypts under the pin rather than the default. This is
-  the supported lever for a reader-before-writer format migration: deploy
-  ``rbnacl`` fleet-wide so every node can *read* XChaCha20-Poly1305 while keeping
-  *writes* pinned to AES-256-GCM until all readers are confirmed capable, then drop
-  the pin. Issue #334
+- ``encrypted_field`` now honors its per-field ``algorithm:`` option for new writes, including ``re_encrypt_fields!``. Existing ciphertext remains decryptable when the pin changes or is removed. See ``docs/guides/feature-encrypted-fields.md`` for rollout guidance. #334
 
 Changed
 -------
 
-- ``Familia::Encryption::Registry.get`` now distinguishes an unknown algorithm
-  from a *known* algorithm whose provider is not available on the current node.
-  Because ``Registry.register`` only stores providers whose runtime dependency is
-  present, pinning ``encrypted_field ..., algorithm: 'xchacha20poly1305'`` on a
-  node without ``rbnacl``/libsodium previously raised the misleading
-  ``"Unsupported algorithm: xchacha20poly1305"`` -- pointing an operator at a typo
-  when the real fix is a missing dependency. It now names the provider, explains
-  the dependency is missing, and (because ``get`` runs on both the encrypt and
-  decrypt paths) states that installing the dependency is what enables reading
-  *and* writing the algorithm, framing an algorithm pin as a write-time
-  workaround that cannot decrypt existing ciphertext. Each provider declares its
-  own dependency via a new ``Provider.dependency_hint`` class method (nil for
-  always-available providers like OpenSSL AES-256-GCM), so the generic error path
-  names the correct library as providers are added rather than hardcoding any one
-  of them. The set of registerable providers is centralized in
-  ``Registry.known_providers``, the single source of truth shared by ``setup!``
-  and ``get``. Error-message and internal-refactor only; the resolution of every
-  available algorithm is unchanged. Issue #334
+- Encryption errors now distinguish unsupported algorithms from known algorithms whose provider dependency is unavailable. #334
 
 Fixed
 -----
 
-- ``Familia::DataType#exists?`` no longer returns ``true`` for a deleted or
-  never-created scalar key (``StringKey``, ``Counter``, ``Lock``,
-  ``JsonStringKey``). The check was ``dbclient.exists(dbkey) && !size.zero?``,
-  but ``EXISTS`` returns an Integer count and ``0`` is truthy in Ruby, so the
-  guard never short-circuited on a missing key -- existence was decided
-  entirely by the size check. ``exists?`` now uses a boolean-coerced ``EXISTS``
-  count directly. Issue #331
+- Fixed ``Familia::DataType#exists?`` and missing ``StringKey`` and ``Lock`` size and emptiness checks. #331
 
-- Relatedly, ``StringKey#size``/``#length``/``#empty?`` (and ``Lock``'s) no
-  longer reflect the never-nil ``#to_s`` fallback. ``#char_count`` derived from
-  ``#to_s.size``, and ``#to_s`` intentionally returns ``Familia::Base``'s
-  documented "never nil" inspect-string when the value is absent -- so
-  ``#size`` was non-zero (and ``#empty?`` false) for a missing key.
-  ``#char_count`` now reads ``#value`` directly; ``#to_s`` is left unchanged.
-  Issue #331
-
-- ``encrypted_fields_status`` now reports each field's real algorithm for a live
-  encrypted value (e.g. ``{ encrypted: true, algorithm: "aes-256-gcm", cleared:
-  false }``), honoring any per-field pin. Previously it returned ``{ encrypted:
-  false, value: "[CONCEALED]" }`` for every encrypted field, because
-  ``ConcealedString`` had no ``concealed?`` predicate for the status check to
-  match -- so the algorithm shown in the method's docstring and the guides was
-  never actually produced. ``ConcealedString`` gains ``#concealed?`` and
-  ``#algorithm`` readers (the latter reads the stored envelope). Issue #334
+- Fixed ``encrypted_fields_status`` to report the stored algorithm for encrypted fields, including per-field algorithm pins. #334
 
 Documentation
 -------------
 
-- Added an executable, multi-phase proof (``examples/encryption_upgrade_proof/``)
-  demonstrating that installing ``rbnacl`` safely flips new writes to
-  XChaCha20-Poly1305 while every existing AES-256-GCM envelope — including
-  ciphertext written by the released 2.10.1 gem, under the pre-#310 static HKDF
-  salt, and under a retired master key version — keeps decrypting. Also pins,
-  as deliberately-passing checks, two operational hazards: the XChaCha
-  ``encryption_personalization`` cannot be rotated (no history/fallback like
-  ``encryption_hkdf_salt_history``), and once any XChaCha envelope exists,
-  every node that may read it needs libsodium installed. PR #330
+- Added ``examples/encryption_upgrade_proof/`` to demonstrate encrypted-field algorithm upgrades. PR #330
 
-- The encrypted-fields guide previously showed a ``provider: :aes_gcm`` field
-  option that was never implemented; those examples now use the real
-  ``algorithm: 'aes-256-gcm'`` form, and the ``Familia::Encryption`` facade
-  docstring documents the shipped behavior instead of a hypothetical
-  implementation sketch. The ``encrypted_fields_status`` output examples across
-  the guides and the overview were corrected to match what the method now
-  returns. Issue #334
+- Corrected encrypted-field option and status examples to match supported behavior. #334
 
-- Added a memory-audit investigation (``docs/investigation/memory-audit.md``)
-  diagnosing #309's ``<collection>_with_permission`` O(N) query as a transient,
-  GC-reclaimable spike rather than a per-process leak, and auditing the rest of
-  ``lib/`` for per-process growth (concluding Familia has no unconditional leak).
-  Ships two executable proofs in ``try/investigation/`` — a pure-Ruby
-  ``process_memory_leak_proof.rb`` and a live-Redis ``memory_leak_proof.rb``.
-  Diagnosis only; no runtime behaviour is changed by the investigation. Issue #309
+- Documented memory characteristics of ``<collection>_with_permission`` queries in ``docs/investigation/memory-audit.md``. #309
 
 AI Assistance
 -------------
