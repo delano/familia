@@ -407,7 +407,7 @@ module Familia
 
             # Transaction per batch
             batch_indexed = 0
-            indexed_class.transaction do |tx|
+            transaction_result = indexed_class.transaction do |tx|
               objects.each do |obj|
                 value = obj.send(field)
                 next unless value && !value.to_s.strip.empty?
@@ -416,10 +416,24 @@ module Familia
                 batch_indexed += 1
               end
             end
+
+            RebuildStrategies.ensure_scan_batch_succeeded!(transaction_result)
             batch_indexed
-          rescue StandardError => e
-            Familia.warn "[Rebuild] Error processing batch: #{e.message}"
-            0
+          end
+
+          # Raises when a SCAN batch transaction did not fully commit.
+          #
+          # Redis command errors are returned inside MultiResult rather than raised,
+          # so callers must inspect the result before swapping the rebuilt index.
+          #
+          # @param result [Familia::MultiResult] The completed batch transaction
+          # @return [void]
+          def ensure_scan_batch_succeeded!(result)
+            return if result.successful?
+
+            raise result.errors.first if result.errors?
+
+            raise Familia::Problem, 'SCAN rebuild batch transaction aborted'
           end
         end
       end
