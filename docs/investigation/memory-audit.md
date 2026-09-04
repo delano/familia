@@ -16,6 +16,11 @@ artifacts here are two executable proofs in `try/investigation/`:
 (Category A) in pure Ruby, and `memory_leak_proof.rb` reproduces the Redis-side
 orphan and O(N) high-water-mark findings (Categories B/C) against a live Redis.
 
+For the separate class-level `unique_index` rebuild incident—its causal chain
+and implementation plan—see [Rebuild memory incident: class-level unique
+indexes](rebuild-memory-incident.md). It is distinct from the fixed permission
+query in #309, which is documented below.
+
 ## Method
 
 Eight focused audits ran in parallel over `lib/`, each owning one vector
@@ -279,6 +284,29 @@ expiring models and add a `*:rebuild:*` sweep + a TTL on temp keys.
 
 ---
 
+## Category D — documentation and connection-lifecycle gaps
+
+These do not explain the OTS process-RSS symptom, but they can create
+operational pressure or lead applications into the Redis-side orphan pattern.
+
+- **README `connection_provider` example recreates a pool per call** —
+  `README.md:380-384` constructs a new `ConnectionPool` every time the provider
+  runs, while `lib/familia/connection/handlers.rb:148` invokes the provider per
+  connection request. The memoized form (`@pools[uri] ||= ConnectionPool.new(...)`)
+  is already used in `docs/guides/index.md:94` and
+  `docs/reference/api-technical.md:618`. This is connection churn and file-
+  descriptor / `connected_clients` pressure—not a strict unbounded Ruby leak,
+  because pools and sockets are GC-reclaimable. Update the README to match the
+  memoized examples.
+- **Expiration documentation omits the pruning constraint** —
+  `lib/familia/features/expiration.rb:61-99` describes the cascade to
+  per-instance relations but does not explain that class-level `instances` and
+  `unique_index` entries cannot expire independently. Surface the existing
+  `repair_instances!`, `audit_instances`, and `audit_indexes` maintenance tools
+  for models that combine expiration with indexes.
+
+---
+
 ## Issue #309 — focused diagnosis and fix design
 
 > **Status: fixed.** Shipped on branch `fix/309-collection-with-permission-perf`,
@@ -399,6 +427,12 @@ weeks-long RSS climb; each is small and low-risk.
    sustainability win, independent of the process leak.
 7. **`run_chores!` / rebuild `.members.each_slice`** *(low-med effort)* — switch to
    `each_record`/streaming so periodic/admin jobs don't materialise whole ZSETs.
+   The class-level unique-index implementation plan is maintained in
+   [Rebuild memory incident: class-level unique indexes](rebuild-memory-incident.md).
+8. **Documentation and README pool example** *(low effort)* — document the
+   expiration/index pruning constraint and memoize the advertised connection
+   provider. This removes a misleading operational recommendation without
+   changing runtime behaviour.
 
 ---
 
