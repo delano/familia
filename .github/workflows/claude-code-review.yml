@@ -62,17 +62,18 @@ jobs:
           claude_args: |
             --model ${{ inputs.model || vars.CLAUDE_MODEL || 'claude-opus-4-6' }}
             --fallback-model ${{ vars.CLAUDE_FALLBACK_MODEL || 'claude-sonnet-4-6' }}
-            --allowedTools "Bash(gh issue view:*),Bash(gh search:*),Bash(gh issue list:*),Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr list:*)"
+            --allowedTools "Bash(gh issue view:*),Bash(gh search:*),Bash(gh issue list:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr list:*)"
 
-          # Optional: Use sticky comments to make Claude reuse the same comment on subsequent pushes to the same PR
+          # A bare `prompt` puts the action in agent mode, which creates no tracking
+          # comment, so use_sticky_comment alone did nothing and every push got a
+          # fresh `gh pr comment`. track_progress forces tag mode: the action owns
+          # one tracking comment, use_sticky_comment finds and reuses it on later
+          # pushes, and Claude writes the review into it via the action's built-in
+          # comment tool. The prompt becomes <custom_instructions> in tag mode.
+          track_progress: true
           use_sticky_comment: true
 
-          # v1 renamed direct_prompt -> prompt. The REPO/PR NUMBER header is the
-          # format the migration guide calls for so Claude reviews the right PR.
           prompt: |
-            REPO: ${{ github.repository }}
-            PR NUMBER: ${{ github.event.pull_request.number }}
-
             Please review this pull request and provide feedback on:
             - Code quality and best practices
             - Potential bugs or issues
@@ -81,5 +82,3 @@ jobs:
             - Test coverage
 
             Use the repository's AGENTS.md for guidance on style and conventions. Be constructive and helpful in your feedback.
-
-            Use `gh pr comment` with your Bash tool to leave your review as a comment on the PR.
