@@ -18,7 +18,8 @@ module Familia
         base.include ModelInstanceMethods
 
         # Ensure default format is set in feature options
-        base.add_feature_options(:external_identifier, format: 'ext_%{id}')
+        base.add_feature_options(:external_identifier, format: "ext_#{CANONICAL_PLACEHOLDER}")
+        validate_format!(base.feature_options(:external_identifier)[:format])
 
         # Add class-level mapping for extid -> id lookups
         base.class_hashkey :extid_lookup
@@ -29,6 +30,17 @@ module Familia
 
       # Error classes
       class ExternalIdentifierError < FieldTypeError; end
+
+      FORMAT_PATTERN = /\A[^%]*%\{id\}[^%]*\z/
+      CANONICAL_PLACEHOLDER = '%{id}' # rubocop:disable Style/FormatStringToken
+      private_constant :FORMAT_PATTERN, :CANONICAL_PLACEHOLDER
+
+      def self.validate_format!(format)
+        return if format.is_a?(String) && format.match?(FORMAT_PATTERN)
+
+        message = "External identifier format must contain exactly one canonical placeholder (#{CANONICAL_PLACEHOLDER})"
+        raise ArgumentError, "#{message} and no other format directives"
+      end
 
       # ExternalIdentifierFieldType - Fields that derive deterministic external identifiers
       #
@@ -212,16 +224,16 @@ module Familia
           return false if guess.to_s.empty?
 
           options = feature_options(:external_identifier)
-          format = options[:format] || 'ext_%{id}'
+          format = options[:format] || "ext_#{CANONICAL_PLACEHOLDER}"
 
-          # Extract prefix and suffix from format
-          return false unless format.include?('%{id}')
-          prefix, suffix = format.split('%{id}', 2)
+          # The feature declaration validates that the template has exactly one
+          # canonical placeholder, so this split mirrors minting exactly.
+          prefix, suffix = format.split(CANONICAL_PLACEHOLDER, 2)
 
-          # Build regex pattern to match the extid format
-          # Accept 20-32 base36 characters to allow for entropy/encoding variations
-          # Current generation: 16 bytes -> base36 -> 25 chars (rjust with '0')
-          pattern = /\A#{Regexp.escape(prefix)}[0-9a-z]{20,32}#{Regexp.escape(suffix)}\z/i
+          # Build regex pattern to match the extid format.
+          # Accept 20-32 base36 characters to allow for entropy/encoding variations.
+          # Current generation: 16 bytes -> base36 -> 25 chars (rjust with '0').
+          pattern = /\A#{Regexp.escape(prefix)}[0-9a-z]{20,32}#{Regexp.escape(suffix)}\z/
 
           !!(guess =~ pattern)
         end
@@ -340,7 +352,7 @@ module Familia
         external_part = random_bytes.unpack1('H*').to_i(16).to_s(36).rjust(25, '0')
 
         # Get format from feature options and interpolate the ID
-        format = options[:format] || 'ext_%{id}'
+        format = options[:format] || "ext_#{CANONICAL_PLACEHOLDER}"
 
         format % { id: external_part }
       end

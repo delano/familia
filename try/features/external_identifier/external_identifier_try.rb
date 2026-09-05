@@ -287,6 +287,18 @@ ExternalIdTest.extid_lookup.key?(destroy_extid)
 # Comprehensive Format Option Test Coverage
 # ========================================
 
+## External identifier format requires the canonical %{id} placeholder at declaration time
+begin
+  Class.new(Familia::Horreum) do
+    feature :object_identifier
+    feature :external_identifier, format: 'ext_%<id>s'
+  end
+  false
+rescue ArgumentError => e
+  e.message.include?('exactly one canonical placeholder')
+end
+#=> true
+
 ## Format option: default format produces ext_ prefix
 default_obj = ExternalIdTest.new
 default_obj.extid.start_with?('ext_')
@@ -417,14 +429,21 @@ ExternalIdTest.extid?('   ')
 ExternalIdTest.extid?('ext_0123456789abcdefghijklmno')
 #=> true
 
-## extid? returns true for valid extid with uppercase characters
-# The pattern allows [0-9a-zA-Z] for the ID part
+## extid? returns false for uppercase characters
 ExternalIdTest.extid?('ext_0123456789ABCDEFGHIJKLMNO')
-#=> true
+#=> false
 
-## extid? returns true for valid extid with mixed case
+## extid? returns false for mixed-case characters
 ExternalIdTest.extid?('ext_0123456789AbCdEfGhIjKlMnO')
-#=> true
+#=> false
+
+## extid? rejects an uppercase variant that cannot resolve
+case_sensitive_obj = ExternalIdTest.new(id: 'case_sensitive_extid')
+case_sensitive_obj.save
+uppercase_variant = case_sensitive_obj.extid.sub(/[a-z]/, &:upcase)
+[ExternalIdTest.extid?(uppercase_variant), ExternalIdTest.find_by_extid(uppercase_variant)]
+#=> [false, nil]
+case_sensitive_obj.destroy!
 
 ## extid? returns true for generated extid
 obj = ExternalIdTest.new
