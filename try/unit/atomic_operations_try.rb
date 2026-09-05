@@ -6,7 +6,8 @@
 #
 # Covers the two public primitives that back index rebuilds and audit/repair
 # routines:
-#   - build_temp_key: timestamped temp key name with the :rebuild: marker
+#   - build_temp_key: unique temp key name (timestamp + random nonce) with
+#                     the :rebuild: marker
 #   - atomic_swap:    RENAME when temp key exists, DEL otherwise; idempotent
 #                     when final_key is absent
 #
@@ -29,11 +30,39 @@ end
 Familia::AtomicOperations.build_temp_key('myindex:live').include?(':rebuild:')
 #=> true
 
-## build_temp_key includes a numeric timestamp suffix
+## build_temp_key suffix is a numeric timestamp followed by a hex nonce
 @temp = Familia::AtomicOperations.build_temp_key('x:y')
 @suffix = @temp.split(':rebuild:').last
-@suffix.match?(/\A\d+\z/)
+@suffix.match?(/\A\d+:\h{16}\z/)
 #=> true
+
+## build_temp_key timestamp component reflects the current time
+@ts = @suffix.split(':').first.to_i
+(@ts - Familia.now.to_i).abs <= 2
+#=> true
+
+## build_temp_key never returns the same key twice for one base key
+# Two rebuilds of the same index started within one second must not share a
+# temp key, otherwise their contents interleave and one RENAME strands the other.
+@first = Familia::AtomicOperations.build_temp_key('same')
+@second = Familia::AtomicOperations.build_temp_key('same')
+@first == @second
+#=> false
+
+## build_temp_key produces distinct keys across many rapid calls
+keys = Array.new(1000) { Familia::AtomicOperations.build_temp_key('same') }
+keys.uniq.size
+#=> 1000
+
+## build_temp_key produces distinct keys across concurrent threads
+results = Queue.new
+threads = Array.new(8) do
+  Thread.new { 50.times { results << Familia::AtomicOperations.build_temp_key('same') } }
+end
+threads.each(&:join)
+keys = Array.new(results.size) { results.pop }
+[keys.size, keys.uniq.size]
+#=> [400, 400]
 
 ## build_temp_key returns a String
 Familia::AtomicOperations.build_temp_key('base').is_a?(String)

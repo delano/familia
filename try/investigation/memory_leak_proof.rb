@@ -344,14 +344,15 @@ end
 temp_ttl    = Familia.dbclient.ttl(temp_key)
 temp_exists = Familia.dbclient.exists?(temp_key)
 
-# Timestamp-collision footnote: same-second rebuilds reuse the same temp key.
+# Temp key names carry a random nonce, so same-second rebuilds no longer share
+# a key (resolved; see docs/security/2026-07-26-audit.md#concurrent-rebuild-temp-key).
 collide = AtomicOps.build_temp_key(final_key) == AtomicOps.build_temp_key(final_key)
 
 puts "  after forced swap failure: exists=#{temp_exists} ttl=#{temp_ttl}"
 check("atomic_swap re-raised (preserve-and-raise branch taken)", raised)
 check("temp key was preserved (leaked), not cleaned up", temp_exists)
 check("temp key has NO expiration (ttl == -1)", temp_ttl == -1)
-check("build_temp_key collides within the same second", collide)
+check("build_temp_key does not collide within the same second", !collide)
 Familia.dbclient.del(final_key, temp_key)
 puts "  Interpretation: every failed/interrupted rebuild orphans a full"
 puts "  index-sized HASH with no TTL. Unbounded across failures."

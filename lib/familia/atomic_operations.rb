@@ -2,6 +2,8 @@
 #
 # frozen_string_literal: true
 
+require 'securerandom'
+
 # Familia
 #
 # A family warehouse for your keystore data.
@@ -24,14 +26,24 @@ module Familia
   #   Familia::AtomicOperations.atomic_swap(temp_key, final_key, redis)
   #
   module AtomicOperations
-    # Builds a temporary key name for atomic swaps
+    # Builds a unique temporary key name for atomic swaps.
+    #
+    # The suffix combines a second-resolution timestamp with a 64-bit random
+    # nonce. The timestamp keeps orphaned keys sortable by age for sweeps
+    # matching `*:rebuild:*`; the nonce guarantees that two rebuilds of the
+    # same base key started within the same second (in any thread or
+    # process) never write into the same temporary key. Without it, one
+    # rebuild could RENAME a mixture of both rebuilds contents onto the
+    # live key and the other would then find its temp key gone.
     #
     # @param base_key [String] The final index key
-    # @return [String] Temporary key with timestamp suffix
+    # @return [String] Temporary key in the form
+    #   "<base_key>:rebuild:<timestamp>:<nonce>"
     #
     def self.build_temp_key(base_key)
       timestamp = Familia.now.to_i
-      "#{base_key}:rebuild:#{timestamp}"
+      nonce = SecureRandom.hex(8)
+      "#{base_key}:rebuild:#{timestamp}:#{nonce}"
     end
 
     # Performs atomic swap of temp key to final key.
