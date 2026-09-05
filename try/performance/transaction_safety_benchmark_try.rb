@@ -40,34 +40,54 @@ end
   customer
 end
 
+# Warm up the connection and transaction machinery so first-call costs
+# (connection setup, handler class resolution) don't land in the baseline.
+@customers.last.transaction do
+  @customers.last.hset(:status, 'warmup')
+end
+
+# Each timed loop runs several rounds over its customers so a single GC
+# pause or scheduler hiccup can't dominate the ratio between them. Durations
+# are reported per round (10 transactions) so the absolute thresholds below
+# stay comparable to a single pass.
+BENCHMARK_ROUNDS = 5
+
 ## Simple transaction performance baseline
+# Issues the same four commands as the nested benchmark below so the two
+# timings differ only by the reentrant transaction call, not by workload.
 @start_time = Familia.now
-@customers.first(10).each do |customer|
-  customer.transaction do
-    customer.hset(:login_count, '1')
-    customer.hset(:status, 'updated')
+BENCHMARK_ROUNDS.times do
+  @customers.first(10).each do |customer|
+    customer.transaction do
+      customer.hset(:login_count, '1')
+      customer.hset(:status, 'updated')
+      customer.orders.push('simple_order')
+      customer.hset(:balance, '950')
+    end
   end
 end
-@simple_duration = ((Familia.now - @start_time) * 1000).round(2)
+@simple_duration = ((Familia.now - @start_time) * 1000 / BENCHMARK_ROUNDS).round(2)
 @simple_duration < 100  # Should complete in under 100ms
 #=> true
 
 ## Nested transaction performance (reentrant)
 @start_time = Familia.now
-@customers[10, 10].each do |customer|
-  customer.transaction do
-    customer.hset(:login_count, '1')
-
-    # Nested transaction (reentrant)
+BENCHMARK_ROUNDS.times do
+  @customers[10, 10].each do |customer|
     customer.transaction do
-      customer.hset(:status, 'nested_updated')
-      customer.orders.push('nested_order')
-    end
+      customer.hset(:login_count, '1')
 
-    customer.hset(:balance, '950')
+      # Nested transaction (reentrant)
+      customer.transaction do
+        customer.hset(:status, 'nested_updated')
+        customer.orders.push('nested_order')
+      end
+
+      customer.hset(:balance, '950')
+    end
   end
 end
-@nested_duration = ((Familia.now - @start_time) * 1000).round(2)
+@nested_duration = ((Familia.now - @start_time) * 1000 / BENCHMARK_ROUNDS).round(2)
 @nested_duration < 150  # Should have minimal overhead
 #=> true
 
@@ -190,24 +210,28 @@ end
 
 ## Transaction vs pipeline performance comparison
 @transaction_start = Familia.now
-@customers[90, 5].each do |customer|
-  customer.transaction do |conn|
-    conn.hset(customer.dbkey, 'txn_field1', 'value1')
-    conn.hset(customer.dbkey, 'txn_field2', 'value2')
-    conn.hset(customer.dbkey, 'txn_field3', 'value3')
+BENCHMARK_ROUNDS.times do
+  @customers[90, 5].each do |customer|
+    customer.transaction do |conn|
+      conn.hset(customer.dbkey, 'txn_field1', 'value1')
+      conn.hset(customer.dbkey, 'txn_field2', 'value2')
+      conn.hset(customer.dbkey, 'txn_field3', 'value3')
+    end
   end
 end
-@transaction_perf_duration = ((Familia.now - @transaction_start) * 1000).round(2)
+@transaction_perf_duration = ((Familia.now - @transaction_start) * 1000 / BENCHMARK_ROUNDS).round(2)
 
 @pipeline_start = Familia.now
-@customers[95, 5].each do |customer|
-  customer.dbclient.pipelined do |pipe|
-    pipe.hset(customer.dbkey, 'pipe_field1', 'value1')
-    pipe.hset(customer.dbkey, 'pipe_field2', 'value2')
-    pipe.hset(customer.dbkey, 'pipe_field3', 'value3')
+BENCHMARK_ROUNDS.times do
+  @customers[95, 5].each do |customer|
+    customer.dbclient.pipelined do |pipe|
+      pipe.hset(customer.dbkey, 'pipe_field1', 'value1')
+      pipe.hset(customer.dbkey, 'pipe_field2', 'value2')
+      pipe.hset(customer.dbkey, 'pipe_field3', 'value3')
+    end
   end
 end
-@pipeline_perf_duration = ((Familia.now - @pipeline_start) * 1000).round(2)
+@pipeline_perf_duration = ((Familia.now - @pipeline_start) * 1000 / BENCHMARK_ROUNDS).round(2)
 
 # Pipeline should be faster or comparable
 @performance_difference = @transaction_perf_duration / @pipeline_perf_duration

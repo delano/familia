@@ -90,6 +90,10 @@ user.external_identifier = 'new'   # Same as user.extid = 'new'
 
 ## Custom Format Templates
 
+A format must contain exactly one canonical `%{id}` placeholder. Other Ruby
+format-directive spellings, including `%<id>s`, are rejected when the feature
+is declared.
+
 ### Custom Prefix
 
 ```ruby
