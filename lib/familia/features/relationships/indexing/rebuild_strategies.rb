@@ -16,7 +16,8 @@ module Familia
         # - Zero downtime during rebuild (live index remains available)
         # - Memory efficiency (batch processing)
         # - Consistent progress reporting
-        # - Safe failure handling (temp key abandoned on error)
+        # - Safe failure handling (temp key dropped on error; swap failures
+        #   retain it only for a bounded diagnostic window)
         #
         # @example Via instances collection
         #   RebuildStrategies.rebuild_via_instances(
@@ -99,45 +100,46 @@ module Familia
 
             index_hashkey = indexed_class.send(index_name)
             final_key = index_hashkey.dbkey
-            temp_key = Familia::AtomicOperations.build_temp_key(final_key)
 
             processed = 0
             indexed_count = 0
 
-            # Process in batches - use members to get deserialized identifiers
-            instances.members.each_slice(batch_size) do |identifiers|
-              # Bulk load objects, filtering out nils (deleted/missing objects)
-              objects = indexed_class.load_multi(identifiers).compact
+            # Lock, bounded temp key, and atomic swap (ZERO DOWNTIME) are all
+            # owned by with_rebuild; touch keeps the temp key alive per batch.
+            Familia::AtomicOperations.with_rebuild(final_key, indexed_class.dbclient) do |temp_key, touch|
+              # Process in batches - use members to get deserialized identifiers
+              instances.members.each_slice(batch_size) do |identifiers|
+                # Bulk load objects, filtering out nils (deleted/missing objects)
+                objects = indexed_class.load_multi(identifiers).compact
 
-              # Transaction per batch (NOT entire rebuild)
-              batch_indexed = 0
-              indexed_class.transaction do |tx|
-                objects.each do |obj|
-                  value = obj.send(field)
-                  # Skip nil/empty field values gracefully
-                  next unless value && !value.to_s.strip.empty?
+                # Transaction per batch (NOT entire rebuild)
+                batch_indexed = 0
+                indexed_class.transaction do |tx|
+                  objects.each do |obj|
+                    value = obj.send(field)
+                    # Skip nil/empty field values gracefully
+                    next unless value && !value.to_s.strip.empty?
 
-                  # For class-level indexes, use HSET with serialized value for consistency
-                  tx.hset(temp_key, value.to_s, index_hashkey.serialize_value(obj))
-                  batch_indexed += 1
+                    # For class-level indexes, use HSET with serialized value for consistency
+                    tx.hset(temp_key, value.to_s, index_hashkey.serialize_value(obj))
+                    batch_indexed += 1
+                  end
                 end
+                touch.call
+
+                processed += identifiers.size
+                indexed_count += batch_indexed
+                elapsed = Familia.now - start_time
+                rate = processed / elapsed
+
+                progress&.call(
+                  completed: processed,
+                  total: total,
+                  rate: rate.round(2),
+                  elapsed: elapsed.round(2)
+                )
               end
-
-              processed += identifiers.size
-              indexed_count += batch_indexed
-              elapsed = Familia.now - start_time
-              rate = processed / elapsed
-
-              progress&.call(
-                completed: processed,
-                total: total,
-                rate: rate.round(2),
-                elapsed: elapsed.round(2)
-              )
             end
-
-            # Atomic swap: temp -> final (ZERO DOWNTIME)
-            Familia::AtomicOperations.atomic_swap(temp_key, final_key, indexed_class.dbclient)
 
             elapsed = Familia.now - start_time
             Familia.info "[Rebuild] Completed via_instances: #{indexed_count} indexed (#{processed} total) in #{elapsed.round(2)}s"
@@ -217,44 +219,43 @@ module Familia
 
             index_datatype = scope_instance.send(index_name)
             final_key = index_datatype.dbkey
-            temp_key = Familia::AtomicOperations.build_temp_key(final_key)
 
             processed = 0
             indexed_count = 0
 
-            # Process in batches - use members to get deserialized identifiers
-            collection.members.each_slice(batch_size) do |identifiers|
-              objects = indexed_class.load_multi(identifiers).compact
+            Familia::AtomicOperations.with_rebuild(final_key, scope_instance.dbclient) do |temp_key, touch|
+              # Process in batches - use members to get deserialized identifiers
+              collection.members.each_slice(batch_size) do |identifiers|
+                objects = indexed_class.load_multi(identifiers).compact
 
-              # Transaction per batch
-              batch_indexed = 0
-              scope_instance.transaction do |tx|
-                objects.each do |obj|
-                  value = obj.send(field)
-                  next unless value && !value.to_s.strip.empty?
+                # Transaction per batch
+                batch_indexed = 0
+                scope_instance.transaction do |tx|
+                  objects.each do |obj|
+                    value = obj.send(field)
+                    next unless value && !value.to_s.strip.empty?
 
-                  # For unique index: HSET temp_key field_value serialized_identifier
-                  # For multi-index: SADD temp_key:field_value identifier
-                  tx.hset(temp_key, value.to_s, index_hashkey.serialize_value(obj))
-                  batch_indexed += 1
+                    # For unique index: HSET temp_key field_value serialized_identifier
+                    # For multi-index: SADD temp_key:field_value identifier
+                    tx.hset(temp_key, value.to_s, index_hashkey.serialize_value(obj))
+                    batch_indexed += 1
+                  end
                 end
+                touch.call
+
+                processed += identifiers.size
+                indexed_count += batch_indexed
+                elapsed = Familia.now - start_time
+                rate = processed / elapsed
+
+                progress&.call(
+                  completed: processed,
+                  total: total,
+                  rate: rate.round(2),
+                  elapsed: elapsed.round(2)
+                )
               end
-
-              processed += identifiers.size
-              indexed_count += batch_indexed
-              elapsed = Familia.now - start_time
-              rate = processed / elapsed
-
-              progress&.call(
-                completed: processed,
-                total: total,
-                rate: rate.round(2),
-                elapsed: elapsed.round(2)
-              )
             end
-
-            # Atomic swap
-            Familia::AtomicOperations.atomic_swap(temp_key, final_key, scope_instance.dbclient)
 
             elapsed = Familia.now - start_time
             Familia.info "[Rebuild] Completed via_participation: #{indexed_count} indexed (#{processed} total) in #{elapsed.round(2)}s"
@@ -328,48 +329,44 @@ module Familia
 
             index_hashkey = index_owner.send(index_name)
             final_key = index_hashkey.dbkey
-            temp_key = Familia::AtomicOperations.build_temp_key(final_key)
 
             processed = 0
             indexed_count = 0
             scanned = 0
             redis = indexed_class.dbclient
 
-            # Use SCAN (not KEYS) for memory efficiency
-            batch = []
-            redis.scan_each(match: pattern, count: batch_size) do |key|
-              batch << key
-              scanned += 1
+            Familia::AtomicOperations.with_rebuild(final_key, redis) do |temp_key, touch|
+              # Use SCAN (not KEYS) for memory efficiency
+              batch = []
+              redis.scan_each(match: pattern, count: batch_size) do |key|
+                batch << key
+                scanned += 1
 
-              # Process in batches
-              if batch.size >= batch_size
+                # Process in batches
+                if batch.size >= batch_size
+                  batch_indexed = RebuildStrategies.process_scan_batch(batch, indexed_class, field, temp_key, index_hashkey, scope_instance)
+                  touch.call
+                  processed += batch.size
+                  indexed_count += batch_indexed
+
+                  elapsed = Familia.now - start_time
+                  progress&.call(
+                    completed: processed, scanned: scanned,
+                    rate: (processed / elapsed).round(2), elapsed: elapsed.round(2)
+                  )
+
+                  batch.clear
+                end
+              end
+
+              # Process remaining batch
+              unless batch.empty?
                 batch_indexed = RebuildStrategies.process_scan_batch(batch, indexed_class, field, temp_key, index_hashkey, scope_instance)
+                touch.call
                 processed += batch.size
                 indexed_count += batch_indexed
-
-                elapsed = Familia.now - start_time
-                rate = processed / elapsed
-
-                progress&.call(
-                  completed: processed,
-                  scanned: scanned,
-                  rate: rate.round(2),
-                  elapsed: elapsed.round(2)
-                )
-
-                batch.clear
               end
             end
-
-            # Process remaining batch
-            unless batch.empty?
-              batch_indexed = RebuildStrategies.process_scan_batch(batch, indexed_class, field, temp_key, index_hashkey, scope_instance)
-              processed += batch.size
-              indexed_count += batch_indexed
-            end
-
-            # Atomic swap
-            Familia::AtomicOperations.atomic_swap(temp_key, final_key, redis)
 
             elapsed = Familia.now - start_time
             Familia.info "[Rebuild] Completed via_scan: #{indexed_count} indexed (#{processed} total) in #{elapsed.round(2)}s (scanned: #{scanned})"
