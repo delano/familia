@@ -2,14 +2,12 @@
 
 ## Current reference
 
-**Last source verification:** 2026-09-04 on `main` at `0633eb41`.
+**Last status update:** 2026-09-04.
 
 This page is the current, consolidated reference for the repository's recorded
 security-audit findings. It combines the status verification in the
 [2026-07-26 audit](2026-07-26-audit.md) with the additional findings in the
-[2026-09-04 delta audit](2026-09-04-audit.md). The source tree at the current
-`HEAD` has no code, test, or workflow changes after that verification; later
-changes in this branch are audit documentation only.
+[2026-09-04 delta audit](2026-09-04-audit.md).
 
 This is not a new full security audit. Recorded severities and statuses below
 are those of the latest verification, not a reassessment of exploitability or
@@ -17,15 +15,15 @@ business impact.
 
 ## Summary
 
-Of the 23 findings and candidates in the original audit record, 16 are
-resolved, six remain open, and one is partially resolved. The September delta
-adds four open findings. In total, the current record contains **10 open
+Of the 23 findings and candidates in the original audit record, 18 are
+resolved, four remain open, and one is partially resolved. The September delta
+adds four open findings. In total, the current record contains **eight open
 findings and one partially resolved finding**.
 
 | Recorded severity | Finding | Status | Detail |
 | --- | --- | --- | --- |
-| High | `rebuild_via_scan` lacks normal regression coverage. | Open | [July 26 audit](2026-07-26-audit.md#rebuild-via-scan-coverage) |
-| High | A failed SCAN batch can replace a live index with a truncated rebuild. | Open | [July 26 audit](2026-07-26-audit.md#scan-batch-truncated-rebuild) |
+| High | `rebuild_via_scan` lacks normal regression coverage. | Resolved | [July 26 audit](2026-07-26-audit.md#rebuild-via-scan-coverage) |
+| High | A failed SCAN batch can replace a live index with a truncated rebuild. | Resolved | [July 26 audit](2026-07-26-audit.md#scan-batch-truncated-rebuild) |
 | Medium | The Claude workflow action is pinned, but public `@claude` triggers have no evident collaborator or author-association gate. | Partially resolved | [July 26 audit](2026-07-26-audit.md#claude-workflow-public-trigger) |
 | Medium | Encrypting before assignment of a record identifier can prevent later decryption. | Open | [July 26 audit](2026-07-26-audit.md#encryption-before-identifier) |
 | Medium | Concurrent rebuilds can share a second-resolution temporary key. | Open | [July 26 audit](2026-07-26-audit.md#concurrent-rebuild-temp-key) |

@@ -385,6 +385,7 @@ module Familia
           # @param temp_key [String] The temporary index key
           # @param scope_instance [Object, nil] Optional scope instance. If provided, only objects belonging to this scope will be indexed.
           # @return [Integer] Number of objects indexed in this batch
+          # @raise [StandardError] If the batch cannot be loaded, filtered, or written
           #
           def process_scan_batch(keys, indexed_class, field, temp_key, index_hashkey, scope_instance)
             # Load objects by keys
@@ -407,7 +408,7 @@ module Familia
 
             # Transaction per batch
             batch_indexed = 0
-            indexed_class.transaction do |tx|
+            transaction_result = indexed_class.transaction do |tx|
               objects.each do |obj|
                 value = obj.send(field)
                 next unless value && !value.to_s.strip.empty?
@@ -416,10 +417,24 @@ module Familia
                 batch_indexed += 1
               end
             end
+
+            RebuildStrategies.ensure_scan_batch_succeeded!(transaction_result)
             batch_indexed
-          rescue StandardError => e
-            Familia.warn "[Rebuild] Error processing batch: #{e.message}"
-            0
+          end
+
+          # Raises when a SCAN batch transaction did not fully commit.
+          #
+          # Redis command errors are returned inside MultiResult rather than raised,
+          # so callers must inspect the result before swapping the rebuilt index.
+          #
+          # @param result [Familia::MultiResult] The completed batch transaction
+          # @return [void]
+          def ensure_scan_batch_succeeded!(result)
+            return if result.successful?
+
+            raise result.errors.first if result.errors?
+
+            raise Familia::Problem, 'SCAN rebuild batch transaction aborted'
           end
         end
       end
