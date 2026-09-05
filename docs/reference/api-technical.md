@@ -1139,6 +1139,20 @@ company.rebuild_badge_index
 - Recovering from index corruption
 - Adding indexes to existing data
 
+Each rebuild holds an advisory lock at `<index_key>:rebuild-lock`. A rebuild of
+an index that is already being rebuilt raises
+`Familia::RebuildInProgressError` rather than running concurrently. A rebuild
+whose batch overran the lock TTL and lost the lock to another rebuild raises
+`Familia::RebuildLockLostError` at the next batch or before the swap, discards
+its own temporary key, and leaves the live index untouched. Calling a rebuild
+inside an enclosing `Familia.transaction` or pipeline raises
+`Familia::OperationModeError`, because the lock's `SET NX` would only be queued
+there. The temporary key used for the swap expires after 300 seconds between
+batches, and the swap fails closed: a rebuild that cannot complete the swap
+raises rather than leaving a partial or stale index reported as current. See
+[Concurrency and temporary keys](../guides/feature-relationships-indexing.md#concurrency-and-temporary-keys)
+for the sweep used to clear temporary keys left by older versions.
+
 ### Memory Optimization
 Efficient memory usage patterns.
 

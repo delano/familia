@@ -24,7 +24,7 @@ A rebuild creates two distinct memory effects that must not be conflated:
 |---|---|---|
 | Expired records leave `instances` and class-level `unique_index` entries behind | Redis `used_memory` | Unbounded growth |
 | Rebuild loads every `instances` member into Ruby before batching | Ruby RSS | Transient O(N) high-water mark |
-| A failed swap preserves a full temporary index key | Redis `used_memory` | Unbounded growth per failed rebuild |
+| A failed swap preserves a full temporary index key | Redis `used_memory` | Resolved: bounded to the diagnostic window |
 
 `try/investigation/memory_leak_proof.rb` exercises these three effects against a
 live Redis instance.
@@ -58,12 +58,19 @@ ghost-bloated `instances` set—not the number of live records or `batch_size`.
   object in `cached_objects` for the full rebuild
   (`multi_index_generators.rb:232,235,498`). Their documented `batch_size:`
   controls Redis I/O, not total Ruby memory.
-- Temporary swap keys have no TTL. On a non-"no such key" swap error,
-  `atomic_swap` deliberately preserves the temporary key
-  (`lib/familia/atomic_operations.rb`). A failed rebuild can therefore leave a
-  full-index-sized HASH indefinitely. (Key-name collisions between rebuilds
-  started in the same second are resolved: `build_temp_key` now appends a
-  random nonce to the timestamp suffix.)
+- Temporary swap keys are now bounded (`lib/familia/atomic_operations.rb`).
+  `with_rebuild` gives the temporary key a TTL of `DEFAULT_REBUILD_TTL` (300
+  seconds), refreshed once per batch, and deletes it when the rebuild block
+  raises. On a non-"no such key" swap error, `atomic_swap` retains the
+  temporary key for `preserve_for` seconds (default 3600) rather than
+  indefinitely, so a failed rebuild no longer leaves a full-index-sized HASH
+  behind. Key-name collisions between rebuilds started in the same second are
+  resolved: `build_temp_key` appends a 64-bit random nonce to the timestamp
+  suffix, and a per-index lock prevents concurrent rebuilds of the same index
+  entirely. `atomic_swap` fails closed: it raises on an error object or aborted
+  transaction in the swap results, and a `RENAME` reporting "no such key" after
+  the temporary key passed the `EXISTS` check raises rather than reporting
+  success over a stale live index.
 
 ## Implementation plan
 
@@ -76,10 +83,23 @@ ghost-bloated `instances` set—not the number of live records or `batch_size`.
 2. **Remove whole-rebuild object retention from multi-index rebuilds.** Discover
    field values and rebuild incrementally, or introduce a disk/Redis-backed
    intermediate representation. Do not retain `cached_objects` for reuse.
-3. **Make temporary rebuild keys safe.** Collision-resistant suffix: done.
-   Still open: apply a bounded TTL while a rebuild is in progress. On swap failure, log the
-   key and retain it only for the documented diagnostic window; provide a sweep
-   for existing `*:rebuild:*` keys.
+3. **Make temporary rebuild keys safe.** Done. `build_temp_key` appends a
+   64-bit random nonce to the timestamp suffix. `AtomicOperations.with_rebuild`
+   holds a per-index lock at `<final_key>:rebuild-lock`, applies a bounded TTL
+   to the temporary key while the rebuild is in progress, refreshes it once per
+   batch through the yielded `touch`, and deletes the temporary key if the
+   block raises. A rebuild that finds the lock held raises
+   `Familia::RebuildInProgressError` rather than waiting. The lock is refreshed
+   by compare-and-extend, so a rebuild whose batch overran the lock TTL cannot
+   extend a lock a successor has taken; it raises
+   `Familia::RebuildLockLostError` at the next `touch` or immediately before the
+   swap, drops its own temporary key, and leaves the live index untouched. On
+   swap failure `atomic_swap` logs the key and retains it only for
+   `preserve_for` seconds. `AtomicOperations.sweep_orphaned_temp_keys` clears
+   legacy `*:rebuild:*` keys that have no TTL and are older than the window; it
+   skips any candidate whose index has a live `:rebuild-lock`, and lock keys do
+   not match its pattern. All four rebuild call sites (`rebuild_instances` and
+   the three indexing strategies) go through `with_rebuild`.
 4. **Address expired-index entries separately.** A streaming rebuild limits Ruby
    peak memory but cannot remove persistent ghost entries by itself. Add an
    expiry-aware reaper or document and schedule the existing repair/audit tooling
@@ -91,11 +111,13 @@ ghost-bloated `instances` set—not the number of live records or `batch_size`.
   apart from the output index being built in Redis.
 - A rebuild remains correct when scans are unordered or repeat members.
 - No temporary rebuild key remains indefinitely after an interrupted or failed
-  rebuild.
+  rebuild. Met: temporary keys carry a TTL during the rebuild and a bounded
+  retention window after a failed swap.
 - Expiring models have an explicit, tested process for pruning stale `instances`
   and class-index entries.
 - Tryouts cover large collections, duplicate scan results, missing records,
-  interrupted swaps, and concurrent rebuild key generation.
+  interrupted swaps, temporary key naming, and lock contention between
+  concurrent rebuilds of the same index.
 
 ## Verification
 

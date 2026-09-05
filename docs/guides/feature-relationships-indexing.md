@@ -490,6 +490,56 @@ These methods work because **indexes are derived data** - they're computed from 
 - Recovering from index corruption
 - Adding indexes to existing data
 
+### Concurrency and temporary keys
+
+A rebuild writes into a temporary key and swaps it over the live index, so
+readers always see either the old index or the new one. Each rebuild first
+takes an advisory lock at `<index_key>:rebuild-lock`. If another rebuild of the
+same index already holds it, the call raises
+`Familia::RebuildInProgressError` immediately; rebuilds never wait or retry,
+because a second concurrent rebuild can only duplicate work and risk swapping a
+stale snapshot over a newer one. Catch that error if a scheduled job may overlap
+with a manual rebuild. A rebuild cannot run inside an enclosing
+`Familia.transaction` or pipeline, because the lock's `SET NX` would only be
+queued there; calling it that way raises `Familia::OperationModeError`.
+
+The temporary key carries a TTL of 300 seconds
+(`Familia::AtomicOperations::DEFAULT_REBUILD_TTL`), refreshed after each batch,
+so a crashed rebuild cleans up after itself. A single batch must therefore
+complete within that window. The live index never inherits this TTL. If the
+final swap fails, the temporary key is retained for 3600 seconds
+(`DEFAULT_PRESERVE_TTL`) so it can be inspected, then expires.
+
+If a batch overruns the lock TTL, another rebuild can take the lock over. The
+lock is refreshed by compare-and-extend, so the overrunning rebuild cannot
+reclaim it. It raises `Familia::RebuildLockLostError` (a subclass of
+`Familia::RebuildInProgressError`) at the next batch boundary or immediately
+before the swap, deletes its own temporary key, and leaves the live index
+untouched. Reduce `batch_size` if this happens routinely.
+
+The swap fails closed. If the temporary key is evicted, expires, or is swept
+between the rebuild and the swap, the rebuild raises rather than reporting
+success, and the live index keeps its previous contents. A rebuild that returns
+normally has swapped its full contents into place.
+
+Temporary keys written before this behavior existed have no TTL. Remove them
+with:
+
+```ruby
+# Preview first
+Familia::AtomicOperations.sweep_orphaned_temp_keys(Familia.dbclient, dry_run: true)
+
+# Then delete
+Familia::AtomicOperations.sweep_orphaned_temp_keys(Familia.dbclient)
+```
+
+The sweep only deletes keys matching `*:rebuild:*` that have no TTL, are
+older than `older_than:` (3600 seconds by default), and whose index has no
+live `:rebuild-lock`, so an in-progress rebuild is never swept. Lock keys do
+not match the pattern and are never touched. `Familia.dbclient` reaches the
+default logical database only. For a model that sets `logical_database`, run
+the sweep against that model's `dbclient` instead.
+
 ## Performance Tips
 
 ### Bulk Operations
