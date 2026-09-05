@@ -1148,10 +1148,13 @@ its own temporary key, and leaves the live index untouched. Calling a rebuild
 inside an enclosing `Familia.transaction` or pipeline raises
 `Familia::OperationModeError`, because the lock's `SET NX` would only be queued
 there. The temporary key used for the swap expires after 300 seconds between
-batches, and the swap fails closed: a rebuild that cannot complete the swap
-raises rather than leaving a partial or stale index reported as current. See
+batches, and the swap fails closed: it is one Lua script that verifies the lock
+token before the `RENAME`, and a rebuild that cannot complete the swap raises
+rather than leaving a partial or stale index reported as current. Any batch
+failure discards the whole temporary key. See
 [Concurrency and temporary keys](../guides/feature-relationships-indexing.md#concurrency-and-temporary-keys)
-for the sweep used to clear temporary keys left by older versions.
+for the sweep used to clear temporary keys left by older versions, and the
+precondition for running it.
 
 ### Memory Optimization
 Efficient memory usage patterns.

@@ -18,30 +18,59 @@
 require_relative '../support/helpers/test_helpers'
 require 'delegate'
 
-# Forces the swap MULTI to fail with a non-"no such key" CommandError so the
-# preserve-and-raise branch is exercised (see memory_leak_proof.rb PROOF C).
+# Makes the swap script raise the given error so the preserve-and-raise
+# branch is exercised (see memory_leak_proof.rb PROOF C). Lock scripts pass
+# through untouched.
 class AoFailingSwap < SimpleDelegator
-  def multi(*)
-    raise Redis::CommandError, 'OOM command not allowed (simulated)'
+  def initialize(client, error)
+    super(client)
+    @error = error
   end
 
-  def rename(*)
-    raise Redis::CommandError, 'OOM command not allowed (simulated)'
+  def eval(script, *, **)
+    raise @error if script == Familia::AtomicOperations::SWAP_SCRIPT
+
+    __getobj__.eval(script, *, **)
   end
 end
 
-# Deletes the temp key just before the real MULTI runs, reproducing an
-# eviction/expiry/sweep between the EXISTS guard and EXEC. The RENAME then
-# fails server-side, which is the fail-open case: the swap did not happen.
+# Deletes the temp key just before the real swap script runs, reproducing an
+# eviction/expiry/sweep between the EXISTS guard and the RENAME. The script
+# then finds no key, which is the fail-open case: the swap did not happen.
 class AoVanishingTempKey < SimpleDelegator
   def initialize(client, temp_key)
     super(client)
     @temp_key = temp_key
   end
 
-  def multi(*args, &block)
-    __getobj__.del(@temp_key)
-    __getobj__.multi(*args, &block)
+  def eval(script, *, **)
+    __getobj__.del(@temp_key) if script == Familia::AtomicOperations::SWAP_SCRIPT
+    __getobj__.eval(script, *, **)
+  end
+end
+
+# Deletes the temp key on the way into the swap script, after with_rebuild's
+# own presence guard has passed. Only the block's own record of what it
+# wrote, carried into the script, can make this fail closed.
+class AoVanishAfterGuard < SimpleDelegator
+  def eval(script, *args, **kwargs)
+    __getobj__.del(kwargs.fetch(:keys).first) if script == Familia::AtomicOperations::SWAP_SCRIPT
+    __getobj__.eval(script, *args, **kwargs)
+  end
+end
+
+# Hands the lock to a successor just before the real swap script runs: the
+# final touch already passed, so only the fence inside the script can stop
+# the stale RENAME.
+class AoLockStolenBeforeSwap < SimpleDelegator
+  def initialize(client, lock_key)
+    super(client)
+    @lock_key = lock_key
+  end
+
+  def eval(script, *, **)
+    __getobj__.set(@lock_key, 'successor', ex: 30) if script == Familia::AtomicOperations::SWAP_SCRIPT
+    __getobj__.eval(script, *, **)
   end
 end
 
@@ -138,7 +167,9 @@ ao_reset('ao_fail:final', 'ao_fail:temp')
 Familia.dbclient.hset('ao_fail:temp', 'k', 'v')
 begin
   Familia::AtomicOperations.atomic_swap(
-    'ao_fail:temp', 'ao_fail:final', AoFailingSwap.new(Familia.dbclient), preserve_for: 120
+    'ao_fail:temp', 'ao_fail:final',
+    AoFailingSwap.new(Familia.dbclient, Redis::CommandError.new('OOM command not allowed (simulated)')),
+    preserve_for: 120
   )
   @ao_fail_raised = false
 rescue Redis::CommandError
@@ -147,6 +178,78 @@ end
 @ao_fail_ttl = Familia.dbclient.ttl('ao_fail:temp')
 [@ao_fail_raised, Familia.dbclient.exists('ao_fail:temp'), @ao_fail_ttl.positive? && @ao_fail_ttl <= 120]
 #=> [true, 1, true]
+
+## a connection-level swap failure also bounds the preserved temp key
+# Not a CommandError: a dropped connection or timeout must take the same
+# retention path, or a direct atomic_swap caller's TTL-less temp key leaks.
+ao_reset('ao_fail2:final', 'ao_fail2:temp')
+Familia.dbclient.hset('ao_fail2:temp', 'k', 'v')
+begin
+  Familia::AtomicOperations.atomic_swap(
+    'ao_fail2:temp', 'ao_fail2:final',
+    AoFailingSwap.new(Familia.dbclient, Redis::TimeoutError.new('Connection timed out (simulated)')),
+    preserve_for: 120
+  )
+  @ao_fail2_raised = false
+rescue Redis::TimeoutError
+  @ao_fail2_raised = true
+end
+@ao_fail2_ttl = Familia.dbclient.ttl('ao_fail2:temp')
+[@ao_fail2_raised, Familia.dbclient.exists('ao_fail2:temp'), @ao_fail2_ttl.positive? && @ao_fail2_ttl <= 120]
+#=> [true, 1, true]
+
+## atomic_swap fenced on a lock it does not hold refuses to publish
+ao_reset('ao_fence:final', 'ao_fence:temp', Familia::AtomicOperations.rebuild_lock_key('ao_fence:final'))
+Familia.dbclient.hset('ao_fence:final', 'live', 'yes')
+Familia.dbclient.hset('ao_fence:temp', 'fresh', 'yes')
+Familia.dbclient.set(Familia::AtomicOperations.rebuild_lock_key('ao_fence:final'), 'successor', ex: 30)
+begin
+  Familia::AtomicOperations.atomic_swap(
+    'ao_fence:temp', 'ao_fence:final', Familia.dbclient,
+    lock: { key: Familia::AtomicOperations.rebuild_lock_key('ao_fence:final'), token: 'mine' }
+  )
+  'no error'
+rescue Familia::RebuildLockLostError
+  [
+    Familia.dbclient.hget('ao_fence:final', 'live'),
+    Familia.dbclient.hget('ao_fence:final', 'fresh'),
+    Familia.dbclient.exists('ao_fence:temp'),
+    Familia.dbclient.get(Familia::AtomicOperations.rebuild_lock_key('ao_fence:final')),
+  ]
+end
+#=> ['yes', nil, 0, 'successor']
+
+## atomic_swap rejects a fence with a blank token instead of silently unfencing
+ao_reset('ao_fence3:final', 'ao_fence3:temp', Familia::AtomicOperations.rebuild_lock_key('ao_fence3:final'))
+Familia.dbclient.hset('ao_fence3:final', 'live', 'yes')
+Familia.dbclient.hset('ao_fence3:temp', 'fresh', 'yes')
+Familia.dbclient.set(Familia::AtomicOperations.rebuild_lock_key('ao_fence3:final'), 'successor', ex: 30)
+begin
+  Familia::AtomicOperations.atomic_swap(
+    'ao_fence3:temp', 'ao_fence3:final', Familia.dbclient,
+    lock: { key: Familia::AtomicOperations.rebuild_lock_key('ao_fence3:final'), token: '' }
+  )
+  'no error'
+rescue ArgumentError
+  [Familia.dbclient.hget('ao_fence3:final', 'live'), Familia.dbclient.exists('ao_fence3:temp')]
+end
+#=> ['yes', 1]
+
+## atomic_swap fenced on a lock it holds publishes and persists
+ao_reset('ao_fence2:final', 'ao_fence2:temp', Familia::AtomicOperations.rebuild_lock_key('ao_fence2:final'))
+Familia.dbclient.hset('ao_fence2:temp', 'fresh', 'yes')
+Familia.dbclient.expire('ao_fence2:temp', 60)
+Familia.dbclient.set(Familia::AtomicOperations.rebuild_lock_key('ao_fence2:final'), 'mine', ex: 30)
+Familia::AtomicOperations.atomic_swap(
+  'ao_fence2:temp', 'ao_fence2:final', Familia.dbclient,
+  lock: { key: Familia::AtomicOperations.rebuild_lock_key('ao_fence2:final'), token: 'mine' }
+)
+[
+  Familia.dbclient.hget('ao_fence2:final', 'fresh'),
+  Familia.dbclient.ttl('ao_fence2:final'),
+  Familia.dbclient.exists('ao_fence2:temp'),
+]
+#=> ['yes', -1, 0]
 
 ## with_rebuild swaps the block's temp key into place and returns the block value
 ao_reset('ao_wr:final', Familia::AtomicOperations.rebuild_lock_key('ao_wr:final'))
@@ -257,7 +360,7 @@ Familia.dbclient.hset('ao_sweep5:idx:rebuild:1000000:0123456789abcdef', 'a', '1'
 ]
 #=> [['ao_sweep5:idx:rebuild:1000000:0123456789abcdef'], 1]
 
-## atomic_swap raises when the temp key vanishes between the guard and EXEC
+## atomic_swap raises when the temp key vanishes between the guard and the RENAME
 # Fail-closed: the RENAME never happened, so the live index is stale and the
 # caller must not be told the swap succeeded.
 ao_reset('ao_vanish:final', 'ao_vanish:temp')
@@ -268,10 +371,10 @@ begin
     'ao_vanish:temp', 'ao_vanish:final', AoVanishingTempKey.new(Familia.dbclient, 'ao_vanish:temp')
   )
   ['reported success', Familia.dbclient.hget('ao_vanish:final', 'stale')]
-rescue Redis::CommandError
-  ['raised', Familia.dbclient.hget('ao_vanish:final', 'stale')]
+rescue Familia::PersistenceError => e
+  [e.message.include?('vanished during the swap'), Familia.dbclient.hget('ao_vanish:final', 'stale')]
 end
-#=> ['raised', 'yes']
+#=> [true, 'yes']
 
 ## touch raises RebuildLockLostError when another rebuild steals the lock
 ao_reset('ao_steal:final', Familia::AtomicOperations.rebuild_lock_key('ao_steal:final'))
@@ -318,6 +421,33 @@ rescue Familia::RebuildLockLostError
 end
 #=> ['yes', nil]
 
+## a lock lost after the final touch is caught by the fence inside the swap
+# The last touch passes, then the lock changes hands before the swap script
+# runs. Only an ownership check atomic with the RENAME can stop this one.
+ao_reset('ao_steal3:final', Familia::AtomicOperations.rebuild_lock_key('ao_steal3:final'))
+Familia.dbclient.hset('ao_steal3:final', 'live', 'yes')
+@ao_steal3_temp = nil
+begin
+  Familia::AtomicOperations.with_rebuild(
+    'ao_steal3:final',
+    AoLockStolenBeforeSwap.new(Familia.dbclient, Familia::AtomicOperations.rebuild_lock_key('ao_steal3:final')),
+  ) do |temp_key, touch|
+    @ao_steal3_temp = temp_key
+    Familia.dbclient.hset(temp_key, 'fresh', 'yes')
+    touch.call
+    :never
+  end
+  'no error'
+rescue Familia::RebuildLockLostError
+  [
+    Familia.dbclient.hget('ao_steal3:final', 'live'),
+    Familia.dbclient.hget('ao_steal3:final', 'fresh'),
+    Familia.dbclient.exists(@ao_steal3_temp),
+    Familia.dbclient.get(Familia::AtomicOperations.rebuild_lock_key('ao_steal3:final')),
+  ]
+end
+#=> ['yes', nil, 0, 'successor']
+
 ## sweep keeps an old no-TTL temp key whose rebuild lock is still held
 ao_reset('ao_sweep6:idx:rebuild:1000000', 'ao_sweep6:idx:rebuild-lock')
 Familia.dbclient.hset('ao_sweep6:idx:rebuild:1000000', 'a', '1')
@@ -339,6 +469,45 @@ rescue Familia::OperationModeError => e
   e.message.include?('cannot run inside a transaction')
 end
 #=> true
+
+## with_rebuild refuses to run inside a pipeline
+# Separate Fiber[:familia_pipeline] branch of the guard; no lock or temp key
+# may be left behind by the rejected call.
+ao_reset('ao_pipe:final')
+begin
+  Familia.pipelined do |_pipe|
+    Familia::AtomicOperations.with_rebuild('ao_pipe:final', Familia.dbclient) { |_t, _touch| :never }
+  end
+  'no error'
+rescue Familia::OperationModeError => e
+  [
+    e.message.include?('cannot run inside a transaction or pipeline'),
+    Familia.dbclient.exists(Familia::AtomicOperations.rebuild_lock_key('ao_pipe:final')),
+    Familia.dbclient.scan_each(match: 'ao_pipe:final:rebuild:*').to_a,
+  ]
+end
+#=> [true, 0, []]
+
+## with_rebuild fails closed when the temp key vanishes after the presence guard
+# The block wrote a batch, assert_temp_key_present! passed, then the key is
+# gone by the time the swap script runs. Without populated: carried into the
+# script, the swap would read it as an empty rebuild and DEL the live index.
+ao_reset('ao_gone2:final', Familia::AtomicOperations.rebuild_lock_key('ao_gone2:final'))
+Familia.dbclient.hset('ao_gone2:final', 'live', 'yes')
+begin
+  Familia::AtomicOperations.with_rebuild(
+    'ao_gone2:final',
+    AoVanishAfterGuard.new(Familia.dbclient),
+  ) do |temp_key, touch|
+    Familia.dbclient.hset(temp_key, 'fresh', 'yes')
+    touch.call
+    :never
+  end
+  ['no error', Familia.dbclient.hget('ao_gone2:final', 'live')]
+rescue Familia::PersistenceError => e
+  [e.message.include?('vanished during the swap'), Familia.dbclient.hget('ao_gone2:final', 'live')]
+end
+#=> [true, 'yes']
 
 ## with_rebuild fails closed when a populated temp key vanishes before the swap
 # Without the temp_seen guard, atomic_swap reads the missing key as an empty
@@ -372,13 +541,18 @@ ao_reset(
   'ao_swap3:final', 'ao_swap3:temp',
   'ao_swap4:final', 'ao_swap4:temp',
   'ao_ttl:final', 'ao_ttl:temp',
-  'ao_fail:final', 'ao_fail:temp',
+  'ao_fail:final', 'ao_fail:temp', 'ao_fail2:final', 'ao_fail2:temp',
+  'ao_fence:final', 'ao_fence:temp', Familia::AtomicOperations.rebuild_lock_key('ao_fence:final'),
+  'ao_fence2:final', 'ao_fence2:temp', Familia::AtomicOperations.rebuild_lock_key('ao_fence2:final'),
+  'ao_fence3:final', 'ao_fence3:temp', Familia::AtomicOperations.rebuild_lock_key('ao_fence3:final'),
+  'ao_gone2:final', Familia::AtomicOperations.rebuild_lock_key('ao_gone2:final'),
   'ao_wr:final', 'ao_touch:final', 'ao_blockfail:final',
   'ao_lock:final', Familia::AtomicOperations.rebuild_lock_key('ao_lock:final'),
   'ao_sweep2:idx', 'ao_sweep3:idx:rebuild:1000000:0123456789abcdef',
   'ao_sweep4:idx:rebuild-lock', 'ao_sweep5:idx:rebuild:1000000:0123456789abcdef',
   @ao_sweep2, @ao_steal_temp,
-  'ao_vanish:final', 'ao_vanish:temp', 'ao_txn:final',
+  'ao_vanish:final', 'ao_vanish:temp', 'ao_txn:final', 'ao_pipe:final',
+  'ao_steal3:final', Familia::AtomicOperations.rebuild_lock_key('ao_steal3:final'), @ao_steal3_temp,
   'ao_steal:final', Familia::AtomicOperations.rebuild_lock_key('ao_steal:final'),
   'ao_steal2:final', Familia::AtomicOperations.rebuild_lock_key('ao_steal2:final'),
   'ao_sweep6:idx:rebuild:1000000', 'ao_sweep6:idx:rebuild-lock',

@@ -679,9 +679,11 @@ Familia.dbclient.exists(Familia::AtomicOperations.rebuild_lock_key(RebuildTestUs
 # queue until the main thread releases all four at once (no sleeps). Familia's
 # default connection chain creates a fresh client per dbclient call, so each
 # thread gets its own socket. Rebuilds can be fast enough that a thread lands
-# after the previous one released the lock, so the invariant asserted is the
-# one that must always hold: every attempt either fully succeeded or was
-# rejected, and the index is complete afterwards.
+# after the previous one released the lock, so no minimum rejection count is
+# asserted (the deterministic held-lock case is the previous test). The
+# invariant asserted is the one that must always hold: every attempt either
+# fully succeeded or was rejected with RebuildInProgressError, nothing else,
+# and the index is complete afterwards.
 expected = RebuildTestUser.rebuild_email_lookup
 gates = Array.new(4) { Queue.new }
 outcomes = Queue.new
@@ -707,9 +709,8 @@ busy = results.count { |status, _| status == :busy }
   Familia.dbclient.exists(Familia::AtomicOperations.rebuild_lock_key(RebuildTestUser.email_lookup.dbkey)),
   successes.empty?,
   busy == results.size - successes.size,
-  busy.positive?,
 ]
-#=> [4, true, true, 0, false, true, true]
+#=> [4, true, true, 0, false, true]
 
 # Teardown
 RebuildTestUser.email_lookup.clear

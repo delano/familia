@@ -67,10 +67,11 @@ ghost-bloated `instances` set—not the number of live records or `batch_size`.
   behind. Key-name collisions between rebuilds started in the same second are
   resolved: `build_temp_key` appends a 64-bit random nonce to the timestamp
   suffix, and a per-index lock prevents concurrent rebuilds of the same index
-  entirely. `atomic_swap` fails closed: it raises on an error object or aborted
-  transaction in the swap results, and a `RENAME` reporting "no such key" after
-  the temporary key passed the `EXISTS` check raises rather than reporting
-  success over a stale live index.
+  entirely. `atomic_swap` fails closed: the swap is one Lua script that
+  verifies the lock token before the `RENAME`, a temporary key that passed the
+  `EXISTS` check but is gone inside the script raises rather than reporting
+  success over a stale live index, and any error from the swap itself puts the
+  temporary key on the bounded diagnostic TTL before re-raising.
 
 ## Implementation plan
 
@@ -93,13 +94,17 @@ ghost-bloated `instances` set—not the number of live records or `batch_size`.
    by compare-and-extend, so a rebuild whose batch overran the lock TTL cannot
    extend a lock a successor has taken; it raises
    `Familia::RebuildLockLostError` at the next `touch` or immediately before the
-   swap, drops its own temporary key, and leaves the live index untouched. On
+   swap, drops its own temporary key, and leaves the live index untouched. The
+   swap itself is fenced: one Lua script checks the lock token and performs the
+   `RENAME`, so a lock lost after the final refresh still cannot publish. On
    swap failure `atomic_swap` logs the key and retains it only for
    `preserve_for` seconds. `AtomicOperations.sweep_orphaned_temp_keys` clears
    legacy `*:rebuild:*` keys that have no TTL and are older than the window; it
    skips any candidate whose index has a live `:rebuild-lock`, and lock keys do
-   not match its pattern. All four rebuild call sites (`rebuild_instances` and
-   the three indexing strategies) go through `with_rebuild`.
+   not match its pattern. Legacy rebuilds hold no lock, so the sweep must not
+   run while any process on an older version may still be rebuilding. All four
+   rebuild call sites (`rebuild_instances` and the three indexing strategies)
+   go through `with_rebuild`.
 4. **Address expired-index entries separately.** A streaming rebuild limits Ruby
    peak memory but cannot remove persistent ghost entries by itself. Add an
    expiry-aware reaper or document and schedule the existing repair/audit tooling

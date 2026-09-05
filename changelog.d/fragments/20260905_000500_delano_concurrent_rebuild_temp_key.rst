@@ -17,12 +17,17 @@ Security
   taken over. It raises ``Familia::RebuildLockLostError`` at the next batch or
   immediately before the swap, deletes its own temporary key, and leaves the
   live index untouched.
-- ``AtomicOperations.atomic_swap`` fails closed. It inspects the transaction
-  results and raises on any error object or aborted transaction, and a
-  ``RENAME`` reporting "no such key" after the temporary key passed the
-  ``EXISTS`` check now raises instead of returning as if the swap succeeded.
-  The live index is never replaced by a partial rebuild, and a lost rebuild is
-  never reported as a successful one.
+- ``AtomicOperations.atomic_swap`` fails closed. The swap is one Lua script
+  that, when fenced on the rebuild lock, verifies the lock token and performs
+  the ``RENAME`` (or the empty-rebuild ``DEL``) as a single atomic step, so a
+  rebuild whose lock expired or changed hands after its last refresh raises
+  ``Familia::RebuildLockLostError`` instead of publishing a stale snapshot. A
+  temporary key that was populated but is gone at swap time raises
+  ``Familia::PersistenceError`` instead of returning as if the swap succeeded.
+  Any error from the swap itself (command, connection, or timeout) puts the
+  temporary key on the bounded diagnostic TTL before re-raising. The live
+  index is never replaced by a partial rebuild, and a lost rebuild is never
+  reported as a successful one.
 
 Added
 -----
@@ -36,7 +41,9 @@ Added
   '*:rebuild:*', older_than: DEFAULT_PRESERVE_TTL, dry_run: false)``, which
   deletes temporary rebuild keys that have no TTL and are older than the
   window. It skips any candidate whose index has a live ``:rebuild-lock``, and
-  never matches lock keys itself.
+  never matches lock keys itself. Rebuilds started by older versions hold no
+  lock, so run it only after every process is on this version and no such
+  rebuild is still running; not during a rolling upgrade.
 - Added ``Familia::RebuildInProgressError`` (a ``Familia::PersistenceError``)
   with a ``#key`` reader.
 - Added ``Familia::RebuildLockLostError``, a subclass of
@@ -53,9 +60,13 @@ Changed
   under ``with_rebuild``. A rebuild of an index that is already being rebuilt
   raises ``Familia::RebuildInProgressError`` immediately instead of running
   concurrently; rebuilds never wait or retry.
-- ``AtomicOperations.atomic_swap`` now issues ``RENAME`` and ``PERSIST`` in one
-  transaction, so the live index does not inherit the temporary key's TTL. It
-  accepts a ``preserve_for:`` keyword.
+- ``AtomicOperations.atomic_swap`` now issues ``RENAME`` and ``PERSIST`` from
+  one Lua script, so the live index does not inherit the temporary key's TTL.
+  It accepts ``preserve_for:``, ``lock: { key:, token: }`` (fences the swap
+  on the rebuild lock; a blank token raises ``ArgumentError``), and
+  ``populated:`` (whether the temporary key is known to hold data, so a key
+  that vanishes on the way into the swap fails closed instead of being read
+  as an empty rebuild).
 - ``AtomicOperations.with_rebuild`` raises ``Familia::OperationModeError`` when
   called inside an enclosing ``Familia.transaction`` or pipeline, because the
   lock ``SET NX`` would only be queued there and could not enforce exclusion.

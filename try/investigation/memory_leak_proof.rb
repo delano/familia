@@ -323,13 +323,11 @@ puts "  unbounded base from Finding 1."
 section 'PROOF C - failed swap retains the temp key on a bounded TTL (Finding 3)'
 
 class FailingRename < SimpleDelegator
-  # atomic_swap issues RENAME + PERSIST inside a MULTI; fail both entry points.
-  def multi(*)
-    raise Redis::CommandError, 'OOM command not allowed (simulated)'
-  end
+  # atomic_swap issues RENAME + PERSIST from one Lua script; fail that script.
+  def eval(script, *, **)
+    raise Redis::CommandError, 'OOM command not allowed (simulated)' if script == AtomicOps::SWAP_SCRIPT
 
-  def rename(*)
-    raise Redis::CommandError, 'OOM command not allowed (simulated)'
+    __getobj__.eval(script, *, **)
   end
 end
 

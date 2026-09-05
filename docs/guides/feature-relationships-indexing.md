@@ -517,10 +517,17 @@ reclaim it. It raises `Familia::RebuildLockLostError` (a subclass of
 before the swap, deletes its own temporary key, and leaves the live index
 untouched. Reduce `batch_size` if this happens routinely.
 
-The swap fails closed. If the temporary key is evicted, expires, or is swept
+The swap fails closed. It runs as one Lua script that checks the lock still
+holds this rebuild's token, then renames the temporary key over the live index,
+so a rebuild whose lock expired or changed hands cannot publish a stale snapshot
+over its successor's work. If the temporary key is evicted, expires, or is swept
 between the rebuild and the swap, the rebuild raises rather than reporting
 success, and the live index keeps its previous contents. A rebuild that returns
 normally has swapped its full contents into place.
+
+A rebuild is all-or-nothing. If any batch raises, the whole temporary key is
+discarded, not just the failing batch, and the live index is left as it was.
+The next rebuild starts from scratch.
 
 Temporary keys written before this behavior existed have no TTL. Remove them
 with:
@@ -535,10 +542,18 @@ Familia::AtomicOperations.sweep_orphaned_temp_keys(Familia.dbclient)
 
 The sweep only deletes keys matching `*:rebuild:*` that have no TTL, are
 older than `older_than:` (3600 seconds by default), and whose index has no
-live `:rebuild-lock`, so an in-progress rebuild is never swept. Lock keys do
-not match the pattern and are never touched. `Familia.dbclient` reaches the
-default logical database only. For a model that sets `logical_database`, run
-the sweep against that model's `dbclient` instead.
+live `:rebuild-lock`, so a rebuild started by this version is never swept while
+it runs. Lock keys do not match the pattern and are never touched.
+
+Rebuilds started by older versions hold no lock and put no TTL on their
+temporary key, so the sweep cannot tell one that is still running from one that
+was abandoned. Past `older_than:` it deletes both, and the old code then treats
+the missing temporary key as an empty rebuild and deletes the live index. Run
+the sweep only after every process is on the new version and no rebuild started
+by older code is still running. Do not run it during a rolling upgrade.
+
+`Familia.dbclient` reaches the default logical database only. For a model that
+sets `logical_database`, run the sweep against that model's `dbclient` instead.
 
 ## Performance Tips
 

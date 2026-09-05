@@ -61,6 +61,37 @@ module Familia
       return -1
     LUA
 
+    # Fenced atomic swap. One script, so the lock-ownership check, the
+    # temp-key presence check, and the RENAME+PERSIST (or the empty-rebuild
+    # DEL) cannot be interleaved with another client's commands. A separate
+    # "check the lock, then RENAME in a MULTI" sequence would let a rebuild
+    # whose lock expired between the two steps publish its stale snapshot
+    # over a successor's newer index.
+    #
+    #   KEYS[1] temp_key   KEYS[2] final_key   KEYS[3] lock_key
+    #   ARGV[1] lock token; '' skips the ownership check (unfenced callers)
+    #   ARGV[2] '1' when the caller saw temp_key populated, so a missing key
+    #           is a loss and must fail closed; '0' when a missing key is a
+    #           legitimately empty rebuild
+    #
+    # @return [Integer] 1 renamed; 2 empty rebuild, final_key deleted;
+    #   0 temp key vanished, nothing changed; -1 lock not held, nothing changed
+    SWAP_SCRIPT = <<~LUA
+      if ARGV[1] ~= '' and redis.call('GET', KEYS[3]) ~= ARGV[1] then
+        return -1
+      end
+      if redis.call('EXISTS', KEYS[1]) == 0 then
+        if ARGV[2] == '1' then
+          return 0
+        end
+        redis.call('DEL', KEYS[2])
+        return 2
+      end
+      redis.call('RENAME', KEYS[1], KEYS[2])
+      redis.call('PERSIST', KEYS[2])
+      return 1
+    LUA
+
     # Builds a unique temporary key name for atomic swaps.
     #
     # The suffix combines a second-resolution timestamp with a 64-bit random
@@ -101,15 +132,23 @@ module Familia
     #   2. Build a unique temp key.
     #   3. Yield (temp_key, touch). The block writes batches into temp_key
     #      and calls +touch+ after each one.
-    #   4. On normal exit, {.atomic_swap} temp_key -> final_key.
-    #   5. On block failure, DEL temp_key; the live index is untouched.
+    #   4. On normal exit, {.atomic_swap} temp_key -> final_key, fenced on
+    #      our lock token so a rebuild that lost the lock cannot publish.
+    #   5. On block failure, DEL temp_key; the live index is untouched. Any
+    #      exception from the block discards the whole temp key, not just
+    #      the failing batch: a rebuild is all-or-nothing.
     #   6. Always release the lock (compare-and-delete on our token).
     #
     # A single batch must complete within +ttl+ seconds: the temp key and
     # the lock only survive that long between +touch+ calls.
     #
+    # The block must write temp_key through the same connection and logical
+    # database as +redis+. The lock, the TTL refreshes, and the swap all run
+    # on +redis+; a temp key written elsewhere would never be swapped.
+    #
     # @param final_key [String] The live key being rebuilt
-    # @param redis [Redis] Raw connection used for lock/TTL/swap commands
+    # @param redis [Redis] Raw connection used for lock/TTL/swap commands;
+    #   must be the connection the block writes temp_key through
     # @param ttl [Integer] Lock and temp-key TTL, refreshed by +touch+
     # @param preserve_for [Integer] Diagnostic retention after a failed swap
     # @yieldparam temp_key [String]
@@ -136,7 +175,10 @@ module Familia
         assert_temp_key_present!(redis, temp_key, final_key, seen[0])
         # A swap failure keeps the temp key on a bounded diagnostic window
         # (see .atomic_swap); it must not fall into the block cleanup.
-        atomic_swap(temp_key, final_key, redis, preserve_for: preserve_for)
+        # populated: carries what the block wrote into the script itself, so
+        # a temp key that vanishes after the guard above fails closed inside
+        # the atomic step instead of being read as an empty rebuild.
+        atomic_swap(temp_key, final_key, redis, preserve_for: preserve_for, lock: lock, populated: seen[0])
         result
       ensure
         begin
@@ -181,7 +223,7 @@ module Familia
     #
     def self.build_touch(redis, temp_key, final_key, lock, seen)
       lambda do
-        raise Familia::RebuildLockLostError, final_key unless lock_held?(redis, lock[:key], lock[:token], lock[:ttl])
+        raise Familia::RebuildLockLostError, final_key unless extend_lock(redis, lock[:key], lock[:token], lock[:ttl])
 
         seen[0] = true if [1, true].include?(redis.expire(temp_key, lock[:ttl]))
         nil
@@ -197,11 +239,7 @@ module Familia
       touch.call
       value
     rescue StandardError
-      begin
-        redis.del(temp_key)
-      rescue StandardError => e
-        Familia.warn "[AtomicOp] Failed to clean up temp key #{temp_key}: #{e.message}"
-      end
+      discard_temp_key(redis, temp_key)
       raise
     end
 
@@ -217,11 +255,14 @@ module Familia
             "Rebuild temp key #{temp_key} vanished before the swap; #{final_key} left unchanged"
     end
 
-    # Compare-and-extend the rebuild lock.
+    # Compare-and-extend the rebuild lock: refreshes the TTL to +ttl+ when
+    # +token+ still owns it. Named for the write it performs; the boolean is
+    # the ownership verdict that comes with it.
     #
-    # @return [Boolean] true while this token still owns the lock
+    # @return [Boolean] true when extended, false when the token no longer
+    #   owns the lock (nothing was changed)
     #
-    def self.lock_held?(redis, lock_key, token, ttl)
+    def self.extend_lock(redis, lock_key, token, ttl)
       redis.eval(EXTEND_LOCK_SCRIPT, keys: [lock_key], argv: [token, ttl]).to_i == 1
     end
 
@@ -235,7 +276,7 @@ module Familia
     #
     # RENAME carries the source key's TTL with it. Since {.with_rebuild}
     # puts a bounded TTL on the temp key, the RENAME is paired with a
-    # PERSIST inside a MULTI so the live index never inherits an
+    # PERSIST in the same script so the live index never inherits an
     # expiration. This matches the pre-TTL behavior exactly.
     #
     # Empty rebuilds (no temp key) intentionally DEL final_key so the
@@ -243,68 +284,112 @@ module Familia
     # can observe final_key as absent -- this is the correct outcome for
     # an index with zero members, not a transient gap.
     #
+    # The whole swap runs as one Lua script ({SWAP_SCRIPT}). With +lock+
+    # given, the script first checks that the lock still holds our token,
+    # so the ownership check and the RENAME (or DEL) are one atomic step: a
+    # rebuild whose lock expired or was taken over cannot publish a stale
+    # snapshot over its successor's work. It fails closed on every path:
+    # a lost lock raises {Familia::RebuildLockLostError}, a temp key that
+    # was populated but is gone at swap time raises
+    # {Familia::PersistenceError}, and any error from the script itself
+    # (OOM, a dropped connection, a timeout) is re-raised after the temp
+    # key is put on a bounded diagnostic TTL. Success is never reported
+    # unless the RENAME happened.
+    #
     # @param temp_key [String] The temporary key containing rebuilt index
     # @param final_key [String] The live index key
     # @param redis [Redis] The Redis connection
     # @param preserve_for [Integer] Seconds to retain temp_key after a
     #   failed swap, for diagnostics
+    # @param lock [Hash, nil] +{key:, token:}+ of the rebuild lock to fence
+    #   on; nil performs an unfenced swap. The token must be non-empty.
+    # @param populated [Boolean, nil] Whether temp_key is known to hold data.
+    #   nil (the default) asks Redis; {.with_rebuild} passes what its block
+    #   wrote, so a key that vanishes between that check and the script is
+    #   a loss rather than an empty rebuild.
+    # @raise [ArgumentError] If +lock+ is given with a blank token
+    # @raise [Familia::RebuildLockLostError] If +lock+ is given and no
+    #   longer holds our token; temp_key is deleted, final_key untouched
+    # @raise [Familia::PersistenceError] If a populated temp_key vanished
+    #   before the RENAME; final_key untouched
     #
-    def self.atomic_swap(temp_key, final_key, redis, preserve_for: DEFAULT_PRESERVE_TTL)
-      # Check if temp key exists first - RENAME fails on non-existent keys.
-      # redis.exists returns Integer across all supported redis-rb versions;
-      # using > 0 also tolerates a future boolean return without breaking.
-      unless redis.exists(temp_key) > 0
-        Familia.info "[AtomicOp] No temp key to swap (empty result set)"
-        # Empty rebuild: remove the live index so reads reflect zero members.
-        # This is the one path where readers can legitimately see final_key
-        # as absent -- the index genuinely has no entries.
-        redis.del(final_key)
-        return
-      end
+    def self.atomic_swap(temp_key, final_key, redis, preserve_for: DEFAULT_PRESERVE_TTL, lock: nil,
+                         populated: nil)
+      # redis-rb returns the Integer key count from EXISTS.
+      populated = redis.exists(temp_key).positive? if populated.nil?
+      Familia.info '[AtomicOp] No temp key to swap (empty result set)' unless populated
 
-      # RENAME atomically replaces final_key if it exists (Redis >= 2.6),
-      # so readers never observe a missing final_key during a non-empty
-      # swap. A preceding DEL would open a gap where concurrent HGETs
-      # return nil. PERSIST rides along in the same MULTI so the rebuilt
-      # index does not inherit the temp key's rebuild-window TTL.
+      lock_key, token = fence_for(lock, final_key)
+
       begin
-        raw = redis.multi do |tx|
-          tx.rename(temp_key, final_key)
-          tx.persist(final_key)
-        end
-        result = Familia::MultiResult.new(raw)
-
-        # redis-rb 5.x raises on a failed command inside MULTI, but the
-        # protocol returns it as an error object in the results array and
-        # other clients/versions surface it that way (see MultiResult). A
-        # failed RENAME with a "successful" return would leave the stale
-        # index live while the caller reported success -- fail closed.
-        raise result.errors.first if result.errors?
-        raise Familia::Problem, "Atomic swap transaction aborted: #{temp_key} -> #{final_key}" unless result.successful?
-      rescue Redis::CommandError => e
-        # The temp key existed at the EXISTS check above, so "no such key"
-        # here means it was evicted/expired/swept mid-swap: the rebuild is
-        # lost and the live index is stale. Raise -- reporting success would
-        # be the fail-open bug. There is nothing left to preserve.
-        if e.message.include?('no such key')
-          Familia.warn "[AtomicOp] Temp key #{temp_key} vanished during swap; index NOT updated"
-          raise
-        end
-
-        # For other errors, retain the temp key for a bounded diagnostic
-        # window instead of leaking a full index-sized key indefinitely.
+        outcome = redis.eval(SWAP_SCRIPT, keys: [temp_key, final_key, lock_key],
+                                          argv: [token, populated ? '1' : '0']).to_i
+      rescue StandardError => e
+        # Whatever failed -- OOM, a dropped connection, a timeout -- the
+        # caller must see the error, not a success. A timeout can outrun a
+        # script that did run, in which case the temp key is already gone
+        # and EXPIRE is a no-op; otherwise retain it for a bounded diagnostic
+        # window instead of leaking an index-sized key indefinitely.
         Familia.warn "[AtomicOp] Atomic swap failed: #{e.message}"
-        begin
-          redis.expire(temp_key, preserve_for)
-          Familia.warn "[AtomicOp] Temp key #{temp_key} preserved for #{preserve_for}s"
-        rescue StandardError => expire_error
-          Familia.warn "[AtomicOp] Could not bound temp key #{temp_key}: #{expire_error.message}"
-        end
-
+        preserve_temp_key(redis, temp_key, preserve_for) if populated
         raise
       end
 
-      Familia.info "[AtomicOp] Atomic swap completed: #{temp_key} -> #{final_key}"
+      handle_swap_outcome(outcome, temp_key, final_key, redis)
+    end
+
+    # Resolves the KEYS[3]/ARGV[1] pair for {SWAP_SCRIPT}. An empty token is
+    # the script's "unfenced" sentinel, so a caller asking for a fence with a
+    # blank token would silently get none; refuse it instead.
+    #
+    def self.fence_for(lock, final_key)
+      return [rebuild_lock_key(final_key), ''] if lock.nil?
+
+      token = lock.fetch(:token).to_s
+      raise ArgumentError, 'atomic_swap lock: token must be non-empty' if token.empty?
+
+      [lock.fetch(:key), token]
+    end
+
+    # Maps a {SWAP_SCRIPT} return code to success or a fail-closed raise.
+    #
+    def self.handle_swap_outcome(outcome, temp_key, final_key, redis)
+      case outcome
+      when 1
+        Familia.info "[AtomicOp] Atomic swap completed: #{temp_key} -> #{final_key}"
+      when 2
+        Familia.info "[AtomicOp] Empty rebuild: #{final_key} removed"
+      when 0
+        # Populated at the EXISTS check, gone inside the script: evicted,
+        # expired, or swept mid-swap. The live index is stale. Raise --
+        # reporting success would be the fail-open bug.
+        Familia.warn "[AtomicOp] Temp key #{temp_key} vanished during swap; index NOT updated"
+        raise Familia::PersistenceError,
+              "Rebuild temp key #{temp_key} vanished during the swap; #{final_key} left unchanged"
+      else
+        # -1: a successor owns the lock, so our snapshot is the stale one.
+        # Drop it rather than preserve it; there is nothing to diagnose.
+        Familia.warn "[AtomicOp] Rebuild lock for #{final_key} lost before swap; index NOT updated"
+        discard_temp_key(redis, temp_key)
+        raise Familia::RebuildLockLostError, final_key
+      end
+    end
+
+    # Best-effort deletion of a temp key that must not be swapped.
+    #
+    def self.discard_temp_key(redis, temp_key)
+      redis.del(temp_key)
+    rescue StandardError => e
+      Familia.warn "[AtomicOp] Failed to clean up temp key #{temp_key}: #{e.message}"
+    end
+
+    # Best-effort bounded retention of a temp key after a failed swap.
+    #
+    def self.preserve_temp_key(redis, temp_key, preserve_for)
+      redis.expire(temp_key, preserve_for)
+      Familia.warn "[AtomicOp] Temp key #{temp_key} preserved for #{preserve_for}s"
+    rescue StandardError => e
+      Familia.warn "[AtomicOp] Could not bound temp key #{temp_key}: #{e.message}"
     end
 
     # Deletes orphaned rebuild temp keys left behind by crashed processes.
@@ -315,7 +400,17 @@ module Familia
     #   - its embedded timestamp is older than +older_than+ seconds
     #
     # Lock keys ("<final_key>:rebuild-lock") never match the pattern or the
-    # suffix regex, so they are never touched.
+    # suffix regex, so they are never touched. A candidate whose base key has
+    # a live lock is skipped, so a rebuild started by this version is never
+    # swept while it runs.
+    #
+    # Rebuilds started by versions before the lock existed hold no lock and
+    # put no TTL on their temp key, so the sweep cannot tell one that is
+    # still running from one that was abandoned: past +older_than+ it deletes
+    # both, and the old code then swaps a missing temp key as an empty
+    # rebuild and DELs the live index. Run the sweep only once every process
+    # is on this version and no rebuild started by older code is still
+    # running. Do not run it during a rolling upgrade.
     #
     # No in-library caller: this is an operator tool, meant to be run once
     # after upgrading to clear pre-upgrade leftovers (see the indexing guide).
