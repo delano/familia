@@ -18,7 +18,7 @@ module Familia
         base.include ModelInstanceMethods
 
         # Ensure default format is set in feature options
-        base.add_feature_options(:external_identifier, format: "ext_#{CANONICAL_PLACEHOLDER}")
+        base.add_feature_options(:external_identifier, format: DEFAULT_FORMAT)
         validate_format!(base.feature_options(:external_identifier)[:format])
 
         # Add class-level mapping for extid -> id lookups
@@ -34,7 +34,8 @@ module Familia
       CANONICAL_PLACEHOLDER = '%{id}' # rubocop:disable Style/FormatStringToken
       # Exactly one canonical placeholder and no other format directives.
       FORMAT_PATTERN = /\A[^%]*#{Regexp.escape(CANONICAL_PLACEHOLDER)}[^%]*\z/
-      private_constant :FORMAT_PATTERN, :CANONICAL_PLACEHOLDER
+      DEFAULT_FORMAT = "ext_#{CANONICAL_PLACEHOLDER}".freeze
+      private_constant :FORMAT_PATTERN, :CANONICAL_PLACEHOLDER, :DEFAULT_FORMAT
 
       def self.validate_format!(format)
         return if format.is_a?(String) && format.match?(FORMAT_PATTERN)
@@ -225,7 +226,7 @@ module Familia
           return false if guess.to_s.empty?
 
           options = feature_options(:external_identifier)
-          format = options[:format] || "ext_#{CANONICAL_PLACEHOLDER}"
+          format = options[:format] || DEFAULT_FORMAT
 
           # The feature declaration validates that the template has exactly one
           # canonical placeholder, so this split mirrors minting exactly.
@@ -353,7 +354,7 @@ module Familia
         external_part = random_bytes.unpack1('H*').to_i(16).to_s(36).rjust(25, '0')
 
         # Get format from feature options and interpolate the ID
-        format = options[:format] || "ext_#{CANONICAL_PLACEHOLDER}"
+        format = options[:format] || DEFAULT_FORMAT
 
         format % { id: external_part }
       end
