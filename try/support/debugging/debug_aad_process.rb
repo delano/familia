@@ -49,8 +49,8 @@ class Familia::EncryptedFieldType
     original_decrypt_value(record, encrypted)
   end
 
-  def build_aad(record)
-    aad = original_build_aad(record)
+  def build_aad(record, **)
+    aad = original_build_aad(record, **)
     puts "[BUILD_AAD] Class: #{record.class}, ID: #{record.identifier}, AAD: #{aad}"
     aad
   end

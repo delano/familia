@@ -137,9 +137,18 @@ module Familia
       end
     end
 
+    # Encrypt plaintext using a context bound to a stable record identifier.
+    #
+    # @raise [Familia::NoIdentifier] if the record identifier is nil or empty
     def encrypt_value(record, value)
-      context = build_context(record)
-      additional_data = build_aad(record)
+      identifier = record.identifier
+      if identifier.nil? || identifier.to_s.empty?
+        raise Familia::NoIdentifier,
+              "Cannot encrypt '#{@name}' for #{record.class} without a record identifier"
+      end
+
+      context = build_context(record, identifier: identifier)
+      additional_data = build_aad(record, identifier: identifier)
       entropy = build_key_material(record)
       context = context_with_entropy(context, entropy)
 
@@ -242,8 +251,8 @@ module Familia
 
     private
 
-    def build_context(record)
-      "#{record.class.name}:#{@name}:#{record.identifier}"
+    def build_context(record, identifier: record.identifier)
+      "#{record.class.name}:#{@name}:#{identifier}"
     end
 
     def context_with_entropy(context, entropy)
@@ -266,8 +275,7 @@ module Familia
     end
 
     # Build AAD binding ciphertext to record context and optional field values.
-    def build_aad(record, fields: @aad_fields)
-      identifier = record.identifier
+    def build_aad(record, fields: @aad_fields, identifier: record.identifier)
       return nil if identifier.nil? || identifier.to_s.empty?
 
       base_components = [record.class.name, @name, identifier]
