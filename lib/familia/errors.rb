@@ -26,6 +26,31 @@ module Familia
   # retry
   class OptimisticLockError < PersistenceError; end
 
+  # Raised when a rebuild of a key is attempted while another rebuild holds
+  # the advisory lock for it. Rebuilds fail fast: they never wait or retry,
+  # because a second concurrent rebuild can only duplicate work and risk
+  # swapping a stale snapshot over a newer one.
+  class RebuildInProgressError < PersistenceError
+    attr_reader :key
+
+    def initialize(key)
+      @key = key
+      super("Rebuild already in progress for #{key}")
+    end
+  end
+
+  # Raised when a rebuild discovers it no longer owns its advisory lock --
+  # it stalled past the lock TTL and another rebuild took over. The stalled
+  # rebuild aborts (dropping its temp key) rather than swapping its now-stale
+  # snapshot over the successor's newer index. A subclass of
+  # RebuildInProgressError because the cause is the same condition seen from
+  # the other side: someone else is rebuilding this key.
+  class RebuildLockLostError < RebuildInProgressError
+    def message
+      "Rebuild lock lost for #{key}: another rebuild took over"
+    end
+  end
+
   # Raised when a field type is invalid or unexpected
   class FieldTypeError < HorreumError; end
 

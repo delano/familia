@@ -652,6 +652,66 @@ end
 missing_observations.value
 #=> 0
 
+# =============================================
+# 13. Rebuild lock (concurrent rebuild guard)
+# =============================================
+
+## a rebuild fails fast while another rebuild holds the lock
+lock_key = Familia::AtomicOperations.rebuild_lock_key(RebuildTestUser.email_lookup.dbkey)
+Familia.dbclient.set(lock_key, 'held-by-other', ex: 30)
+begin
+  RebuildTestUser.rebuild_email_lookup
+  'no error'
+rescue Familia::RebuildInProgressError
+  'rebuild in progress'
+ensure
+  Familia.dbclient.del(lock_key)
+end
+#=> 'rebuild in progress'
+
+## the lock key is absent after a successful rebuild
+RebuildTestUser.rebuild_email_lookup
+Familia.dbclient.exists(Familia::AtomicOperations.rebuild_lock_key(RebuildTestUser.email_lookup.dbkey))
+#=> 0
+
+## concurrent rebuilds: exactly the successes swap, the rest fail fast
+# Real contention, not a sequential loop: every thread blocks on its own start
+# queue until the main thread releases all four at once (no sleeps). Familia's
+# default connection chain creates a fresh client per dbclient call, so each
+# thread gets its own socket. Rebuilds can be fast enough that a thread lands
+# after the previous one released the lock, so no minimum rejection count is
+# asserted (the deterministic held-lock case is the previous test). The
+# invariant asserted is the one that must always hold: every attempt either
+# fully succeeded or was rejected with RebuildInProgressError, nothing else,
+# and the index is complete afterwards.
+expected = RebuildTestUser.rebuild_email_lookup
+gates = Array.new(4) { Queue.new }
+outcomes = Queue.new
+threads = gates.map do |gate|
+  Thread.new do
+    gate.pop
+    begin
+      outcomes << [:ok, RebuildTestUser.rebuild_email_lookup]
+    rescue Familia::RebuildInProgressError
+      outcomes << [:busy, nil]
+    end
+  end
+end
+gates.each { |gate| gate << :go }
+threads.each(&:join)
+results = Array.new(outcomes.size) { outcomes.pop }
+successes = results.select { |status, _| status == :ok }
+busy = results.count { |status, _| status == :busy }
+[
+  results.size,
+  successes.all? { |_, count| count == expected },
+  RebuildTestUser.email_lookup.size == expected,
+  Familia.dbclient.exists(Familia::AtomicOperations.rebuild_lock_key(RebuildTestUser.email_lookup.dbkey)),
+  successes.empty?,
+  busy == results.size - successes.size,
+]
+#=> [4, true, true, 0, false, true]
+
 # Teardown
 RebuildTestUser.email_lookup.clear
 RebuildTestUser.username_lookup.clear

@@ -67,40 +67,41 @@ module Familia
       def rebuild_instances(batch_size: 100, &progress)
         pattern = scan_pattern
         final_key = instances.dbkey
-        temp_key = Familia::AtomicOperations.build_temp_key(final_key)
 
         count = 0
-        cursor = "0"
-        batch = []
 
-        loop do
-          cursor, keys = dbclient.scan(cursor, match: pattern, count: batch_size)
+        Familia::AtomicOperations.with_rebuild(final_key, dbclient) do |temp_key, touch|
+          cursor = "0"
+          batch = []
 
-          keys.each do |key|
-            identifier = extract_identifier_from_key(key)
-            next if identifier.nil? || identifier.empty?
+          loop do
+            cursor, keys = dbclient.scan(cursor, match: pattern, count: batch_size)
 
-            batch << { key: key, identifier: identifier }
+            keys.each do |key|
+              identifier = extract_identifier_from_key(key)
+              next if identifier.nil? || identifier.empty?
+
+              batch << { key: key, identifier: identifier }
+            end
+
+            # Process batch when it reaches threshold
+            if batch.size >= batch_size
+              count += process_rebuild_batch(batch, temp_key)
+              touch.call
+              progress&.call(phase: :rebuilding, current: count, total: nil)
+              batch.clear
+            end
+
+            break if cursor == "0"
           end
 
-          # Process batch when it reaches threshold
-          if batch.size >= batch_size
+          # Process remaining batch
+          unless batch.empty?
             count += process_rebuild_batch(batch, temp_key)
+            touch.call
             progress&.call(phase: :rebuilding, current: count, total: nil)
-            batch.clear
           end
-
-          break if cursor == "0"
         end
-
-        # Process remaining batch
-        unless batch.empty?
-          count += process_rebuild_batch(batch, temp_key)
-          progress&.call(phase: :rebuilding, current: count, total: nil)
-        end
-
-        # Atomic swap
-        Familia::AtomicOperations.atomic_swap(temp_key, final_key, dbclient)
 
         progress&.call(phase: :completed, current: count, total: count)
         count

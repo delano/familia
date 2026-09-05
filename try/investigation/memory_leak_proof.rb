@@ -313,17 +313,21 @@ puts "  Ruby before batching; via_scan streams. O(N) high-watermark over the"
 puts "  unbounded base from Finding 1."
 
 # ==========================================================================
-# PROOF C - Finding 3: failed rebuild leaves an orphaned temp key (no TTL)
+# PROOF C - Finding 3: failed rebuild retains the temp key (bounded TTL)
 # ==========================================================================
-# Exercise the real atomic_swap rescue branch (atomic_operations.rb:80-83):
-# HSET into the temp key so the `exists > 0` guard passes, then force RENAME to
-# raise a non-"no such key" error. The temp key is preserved with no TTL.
+# Exercise the real atomic_swap rescue branch: HSET into the temp key so the
+# `exists > 0` guard passes, then force the swap to raise a non-"no such key"
+# error. The temp key is now preserved on a bounded diagnostic window
+# (DEFAULT_PRESERVE_TTL) instead of leaking with no TTL.
 
-section 'PROOF C - orphaned rebuild temp key with no TTL (Finding 3)'
+section 'PROOF C - failed swap retains the temp key on a bounded TTL (Finding 3)'
 
 class FailingRename < SimpleDelegator
-  def rename(*)
-    raise Redis::CommandError, 'OOM command not allowed (simulated)'
+  # atomic_swap issues RENAME + PERSIST from one Lua script; fail that script.
+  def eval(script, *, **)
+    raise Redis::CommandError, 'OOM command not allowed (simulated)' if script == AtomicOps::SWAP_SCRIPT
+
+    __getobj__.eval(script, *, **)
   end
 end
 
@@ -344,17 +348,20 @@ end
 temp_ttl    = Familia.dbclient.ttl(temp_key)
 temp_exists = Familia.dbclient.exists?(temp_key)
 
-# Timestamp-collision footnote: same-second rebuilds reuse the same temp key.
+# Temp key names carry a random nonce, so same-second rebuilds no longer share
+# a key (resolved; see docs/security/2026-07-26-audit.md#concurrent-rebuild-temp-key).
 collide = AtomicOps.build_temp_key(final_key) == AtomicOps.build_temp_key(final_key)
 
 puts "  after forced swap failure: exists=#{temp_exists} ttl=#{temp_ttl}"
 check("atomic_swap re-raised (preserve-and-raise branch taken)", raised)
-check("temp key was preserved (leaked), not cleaned up", temp_exists)
-check("temp key has NO expiration (ttl == -1)", temp_ttl == -1)
-check("build_temp_key collides within the same second", collide)
+check("temp key was preserved for diagnostics", temp_exists)
+check("temp key expiration is bounded (0 < ttl <= #{AtomicOps::DEFAULT_PRESERVE_TTL})",
+      temp_ttl.positive? && temp_ttl <= AtomicOps::DEFAULT_PRESERVE_TTL)
+check("build_temp_key does not collide within the same second", !collide)
 Familia.dbclient.del(final_key, temp_key)
-puts "  Interpretation: every failed/interrupted rebuild orphans a full"
-puts "  index-sized HASH with no TTL. Unbounded across failures."
+puts "  Interpretation: a failed rebuild retains its index-sized HASH only for"
+puts "  the documented diagnostic window; sweep_orphaned_temp_keys clears any"
+puts "  legacy/no-TTL leftovers."
 
 # ==========================================================================
 # PROOF D - Finding 4: README connection_provider recreates the pool per call
