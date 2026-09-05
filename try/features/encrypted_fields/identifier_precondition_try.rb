@@ -20,6 +20,16 @@ class EncryptionIdentifierPreconditionModel < Familia::Horreum
   encrypted_field :secret
 end
 
+# Declares context dependencies after the encrypted field to verify keyword
+# construction is independent of model field declaration order.
+EncryptionDeclarationOrderModel = Class.new(Familia::Horreum) do
+  feature :encrypted_fields
+  identifier_field :record_id
+  encrypted_field :secret, aad_fields: [:scope]
+  field :scope
+  field :record_id
+end
+
 ## Assigning plaintext without an identifier raises NoIdentifier before encryption
 Familia::Encryption.reset_derivation_count!
 @missing_id = EncryptionIdentifierPreconditionModel.new
@@ -45,6 +55,20 @@ EncryptionIdentifierPreconditionModel.new(secret: 'classified')
 @missing_id.secret = 'classified'
 @missing_id.secret.reveal { |plaintext| plaintext }
 #=> 'classified'
+
+## Keyword construction initializes context dependencies before encrypted fields
+@declaration_order = EncryptionDeclarationOrderModel.new(
+  secret: 'constructor-secret',
+  record_id: 'record-2',
+  scope: 'account-1',
+)
+[@declaration_order.identifier, @declaration_order.secret.reveal { |plaintext| plaintext }]
+#=> ['record-2', 'constructor-secret']
+
+## Constructor ciphertext remains bound to AAD declared after the encrypted field
+@declaration_order.scope = 'account-2'
+@declaration_order.secret.reveal { |plaintext| plaintext }
+#=!> Familia::EncryptionError
 
 ## Nil and empty values still clear the field without requiring an identifier
 @clear_only = EncryptionIdentifierPreconditionModel.new

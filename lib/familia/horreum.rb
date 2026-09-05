@@ -454,7 +454,16 @@ module Familia
     # @private
     def initialize_with_keyword_args(**fields)
       Familia.trace :INITIALIZE_KWARGS, nil, fields.keys if Familia.debug?
-      self.class.fields.filter_map do |field|
+
+      # Encrypted fields derive their context from the fully initialized record,
+      # including its identifier, AAD fields, and optional key material. Preserve
+      # declaration order within each group, but assign encrypted fields last so
+      # keyword construction does not depend on field declaration order.
+      regular_fields, encrypted_fields = self.class.fields.partition do |field|
+        self.class.field_types[field]&.category != :encrypted
+      end
+
+      [*regular_fields, *encrypted_fields].filter_map do |field|
         # Database will give us field names as strings back, but internally
         # we use symbols. So we check for both.
         # Use fetch with default to avoid || operator which skips false values
