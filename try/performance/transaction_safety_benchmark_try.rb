@@ -40,12 +40,28 @@ end
   customer
 end
 
+# Warm up the connection and transaction machinery so first-call costs
+# (connection setup, handler class resolution) don't land in the baseline.
+@customers.last.transaction do
+  @customers.last.hset(:status, 'warmup')
+end
+
+# Each timed loop runs several rounds over its customers so a single GC
+# pause or scheduler hiccup can't dominate the ratio between them.
+BENCHMARK_ROUNDS = 5
+
 ## Simple transaction performance baseline
+# Issues the same four commands as the nested benchmark below so the two
+# timings differ only by the reentrant transaction call, not by workload.
 @start_time = Familia.now
-@customers.first(10).each do |customer|
-  customer.transaction do
-    customer.hset(:login_count, '1')
-    customer.hset(:status, 'updated')
+BENCHMARK_ROUNDS.times do
+  @customers.first(10).each do |customer|
+    customer.transaction do
+      customer.hset(:login_count, '1')
+      customer.hset(:status, 'updated')
+      customer.orders.push('simple_order')
+      customer.hset(:balance, '950')
+    end
   end
 end
 @simple_duration = ((Familia.now - @start_time) * 1000).round(2)
@@ -54,17 +70,19 @@ end
 
 ## Nested transaction performance (reentrant)
 @start_time = Familia.now
-@customers[10, 10].each do |customer|
-  customer.transaction do
-    customer.hset(:login_count, '1')
-
-    # Nested transaction (reentrant)
+BENCHMARK_ROUNDS.times do
+  @customers[10, 10].each do |customer|
     customer.transaction do
-      customer.hset(:status, 'nested_updated')
-      customer.orders.push('nested_order')
-    end
+      customer.hset(:login_count, '1')
 
-    customer.hset(:balance, '950')
+      # Nested transaction (reentrant)
+      customer.transaction do
+        customer.hset(:status, 'nested_updated')
+        customer.orders.push('nested_order')
+      end
+
+      customer.hset(:balance, '950')
+    end
   end
 end
 @nested_duration = ((Familia.now - @start_time) * 1000).round(2)
