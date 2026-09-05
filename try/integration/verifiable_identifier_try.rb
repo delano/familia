@@ -258,3 +258,220 @@ ensure
   Familia::VerifiableIdentifier.reset_secret_key!
 end
 #=> :raised_key_error
+
+# --- IDENTIFIER_SECRET fallback (issue #423) ---
+#
+# Precedence: a nonblank VERIFIABLE_ID_HMAC_SECRET wins; otherwise a nonblank
+# IDENTIFIER_SECRET; otherwise KeyError. Every case below saves BOTH variables,
+# mutates them, and restores both in `ensure` (delete when the original was nil,
+# since ENV[k] = nil raises TypeError), then re-clears memoization so no state
+# leaks into a later case or a shared suite process.
+
+## IDENTIFIER_SECRET alone (legacy unset) is read as the secret
+@orig_legacy = ENV.fetch('VERIFIABLE_ID_HMAC_SECRET', nil)
+@orig_preferred = ENV.fetch('IDENTIFIER_SECRET', nil)
+Familia::VerifiableIdentifier.reset_secret_key!
+begin
+  ENV.delete('VERIFIABLE_ID_HMAC_SECRET')
+  ENV['IDENTIFIER_SECRET'] = 'preferred-identifier-secret-0123456789abcdef'
+  Familia::VerifiableIdentifier.secret_key
+ensure
+  @orig_legacy.nil? ? ENV.delete('VERIFIABLE_ID_HMAC_SECRET') : ENV['VERIFIABLE_ID_HMAC_SECRET'] = @orig_legacy
+  @orig_preferred.nil? ? ENV.delete('IDENTIFIER_SECRET') : ENV['IDENTIFIER_SECRET'] = @orig_preferred
+  Familia::VerifiableIdentifier.reset_secret_key!
+end
+#=> 'preferred-identifier-secret-0123456789abcdef'
+
+## IDENTIFIER_SECRET alone: generate/verify round-trips under the fallback secret
+@orig_legacy = ENV.fetch('VERIFIABLE_ID_HMAC_SECRET', nil)
+@orig_preferred = ENV.fetch('IDENTIFIER_SECRET', nil)
+Familia::VerifiableIdentifier.reset_secret_key!
+begin
+  ENV.delete('VERIFIABLE_ID_HMAC_SECRET')
+  ENV['IDENTIFIER_SECRET'] = 'preferred-identifier-secret-0123456789abcdef'
+  id = Familia::VerifiableIdentifier.generate_verifiable_id(scope: 'fallback')
+  [
+    Familia::VerifiableIdentifier.verified_identifier?(id, scope: 'fallback'),
+    Familia::VerifiableIdentifier.verified_identifier?(id, scope: 'other'),
+  ]
+ensure
+  @orig_legacy.nil? ? ENV.delete('VERIFIABLE_ID_HMAC_SECRET') : ENV['VERIFIABLE_ID_HMAC_SECRET'] = @orig_legacy
+  @orig_preferred.nil? ? ENV.delete('IDENTIFIER_SECRET') : ENV['IDENTIFIER_SECRET'] = @orig_preferred
+  Familia::VerifiableIdentifier.reset_secret_key!
+end
+#=> [true, false]
+
+## Only the secret value matters, not which variable supplied it: an identifier
+## minted under IDENTIFIER_SECRET verifies under the same value in the legacy var
+@orig_legacy = ENV.fetch('VERIFIABLE_ID_HMAC_SECRET', nil)
+@orig_preferred = ENV.fetch('IDENTIFIER_SECRET', nil)
+Familia::VerifiableIdentifier.reset_secret_key!
+begin
+  ENV.delete('VERIFIABLE_ID_HMAC_SECRET')
+  ENV['IDENTIFIER_SECRET'] = 'shared-secret-across-variable-names-0123456789'
+  id = Familia::VerifiableIdentifier.generate_verifiable_id
+  Familia::VerifiableIdentifier.reset_secret_key!
+  ENV.delete('IDENTIFIER_SECRET')
+  ENV['VERIFIABLE_ID_HMAC_SECRET'] = 'shared-secret-across-variable-names-0123456789'
+  Familia::VerifiableIdentifier.verified_identifier?(id)
+ensure
+  @orig_legacy.nil? ? ENV.delete('VERIFIABLE_ID_HMAC_SECRET') : ENV['VERIFIABLE_ID_HMAC_SECRET'] = @orig_legacy
+  @orig_preferred.nil? ? ENV.delete('IDENTIFIER_SECRET') : ENV['IDENTIFIER_SECRET'] = @orig_preferred
+  Familia::VerifiableIdentifier.reset_secret_key!
+end
+#=> true
+
+## Both set nonblank: the legacy VERIFIABLE_ID_HMAC_SECRET wins
+@orig_legacy = ENV.fetch('VERIFIABLE_ID_HMAC_SECRET', nil)
+@orig_preferred = ENV.fetch('IDENTIFIER_SECRET', nil)
+Familia::VerifiableIdentifier.reset_secret_key!
+begin
+  ENV['VERIFIABLE_ID_HMAC_SECRET'] = 'legacy-wins-0123456789abcdef'
+  ENV['IDENTIFIER_SECRET'] = 'preferred-loses-0123456789abcdef'
+  Familia::VerifiableIdentifier.secret_key
+ensure
+  @orig_legacy.nil? ? ENV.delete('VERIFIABLE_ID_HMAC_SECRET') : ENV['VERIFIABLE_ID_HMAC_SECRET'] = @orig_legacy
+  @orig_preferred.nil? ? ENV.delete('IDENTIFIER_SECRET') : ENV['IDENTIFIER_SECRET'] = @orig_preferred
+  Familia::VerifiableIdentifier.reset_secret_key!
+end
+#=> 'legacy-wins-0123456789abcdef'
+
+## Empty legacy ("") falls through to IDENTIFIER_SECRET instead of raising. This
+## is the `${VERIFIABLE_ID_HMAC_SECRET:-}` container case.
+@orig_legacy = ENV.fetch('VERIFIABLE_ID_HMAC_SECRET', nil)
+@orig_preferred = ENV.fetch('IDENTIFIER_SECRET', nil)
+Familia::VerifiableIdentifier.reset_secret_key!
+begin
+  ENV['VERIFIABLE_ID_HMAC_SECRET'] = ''
+  ENV['IDENTIFIER_SECRET'] = 'preferred-after-empty-legacy-0123456789abcdef'
+  Familia::VerifiableIdentifier.secret_key
+ensure
+  @orig_legacy.nil? ? ENV.delete('VERIFIABLE_ID_HMAC_SECRET') : ENV['VERIFIABLE_ID_HMAC_SECRET'] = @orig_legacy
+  @orig_preferred.nil? ? ENV.delete('IDENTIFIER_SECRET') : ENV['IDENTIFIER_SECRET'] = @orig_preferred
+  Familia::VerifiableIdentifier.reset_secret_key!
+end
+#=> 'preferred-after-empty-legacy-0123456789abcdef'
+
+## Whitespace-only legacy ("   ") is blank too and falls through to IDENTIFIER_SECRET
+@orig_legacy = ENV.fetch('VERIFIABLE_ID_HMAC_SECRET', nil)
+@orig_preferred = ENV.fetch('IDENTIFIER_SECRET', nil)
+Familia::VerifiableIdentifier.reset_secret_key!
+begin
+  ENV['VERIFIABLE_ID_HMAC_SECRET'] = '   '
+  ENV['IDENTIFIER_SECRET'] = 'preferred-after-blank-legacy-0123456789abcdef'
+  Familia::VerifiableIdentifier.secret_key
+ensure
+  @orig_legacy.nil? ? ENV.delete('VERIFIABLE_ID_HMAC_SECRET') : ENV['VERIFIABLE_ID_HMAC_SECRET'] = @orig_legacy
+  @orig_preferred.nil? ? ENV.delete('IDENTIFIER_SECRET') : ENV['IDENTIFIER_SECRET'] = @orig_preferred
+  Familia::VerifiableIdentifier.reset_secret_key!
+end
+#=> 'preferred-after-blank-legacy-0123456789abcdef'
+
+## The value is returned as-is: surrounding whitespace on a nonblank secret is kept
+@orig_legacy = ENV.fetch('VERIFIABLE_ID_HMAC_SECRET', nil)
+@orig_preferred = ENV.fetch('IDENTIFIER_SECRET', nil)
+Familia::VerifiableIdentifier.reset_secret_key!
+begin
+  ENV.delete('VERIFIABLE_ID_HMAC_SECRET')
+  ENV['IDENTIFIER_SECRET'] = '  padded-secret-0123456789abcdef  '
+  Familia::VerifiableIdentifier.secret_key
+ensure
+  @orig_legacy.nil? ? ENV.delete('VERIFIABLE_ID_HMAC_SECRET') : ENV['VERIFIABLE_ID_HMAC_SECRET'] = @orig_legacy
+  @orig_preferred.nil? ? ENV.delete('IDENTIFIER_SECRET') : ENV['IDENTIFIER_SECRET'] = @orig_preferred
+  Familia::VerifiableIdentifier.reset_secret_key!
+end
+#=> '  padded-secret-0123456789abcdef  '
+
+## Both unset raises KeyError
+@orig_legacy = ENV.fetch('VERIFIABLE_ID_HMAC_SECRET', nil)
+@orig_preferred = ENV.fetch('IDENTIFIER_SECRET', nil)
+Familia::VerifiableIdentifier.reset_secret_key!
+begin
+  ENV.delete('VERIFIABLE_ID_HMAC_SECRET')
+  ENV.delete('IDENTIFIER_SECRET')
+  Familia::VerifiableIdentifier.secret_key
+  :did_not_raise
+rescue KeyError
+  :raised_key_error
+ensure
+  @orig_legacy.nil? ? ENV.delete('VERIFIABLE_ID_HMAC_SECRET') : ENV['VERIFIABLE_ID_HMAC_SECRET'] = @orig_legacy
+  @orig_preferred.nil? ? ENV.delete('IDENTIFIER_SECRET') : ENV['IDENTIFIER_SECRET'] = @orig_preferred
+  Familia::VerifiableIdentifier.reset_secret_key!
+end
+#=> :raised_key_error
+
+## Both empty ("") raises KeyError
+@orig_legacy = ENV.fetch('VERIFIABLE_ID_HMAC_SECRET', nil)
+@orig_preferred = ENV.fetch('IDENTIFIER_SECRET', nil)
+Familia::VerifiableIdentifier.reset_secret_key!
+begin
+  ENV['VERIFIABLE_ID_HMAC_SECRET'] = ''
+  ENV['IDENTIFIER_SECRET'] = ''
+  Familia::VerifiableIdentifier.secret_key
+  :did_not_raise
+rescue KeyError
+  :raised_key_error
+ensure
+  @orig_legacy.nil? ? ENV.delete('VERIFIABLE_ID_HMAC_SECRET') : ENV['VERIFIABLE_ID_HMAC_SECRET'] = @orig_legacy
+  @orig_preferred.nil? ? ENV.delete('IDENTIFIER_SECRET') : ENV['IDENTIFIER_SECRET'] = @orig_preferred
+  Familia::VerifiableIdentifier.reset_secret_key!
+end
+#=> :raised_key_error
+
+## Legacy unset and IDENTIFIER_SECRET whitespace-only raises KeyError
+@orig_legacy = ENV.fetch('VERIFIABLE_ID_HMAC_SECRET', nil)
+@orig_preferred = ENV.fetch('IDENTIFIER_SECRET', nil)
+Familia::VerifiableIdentifier.reset_secret_key!
+begin
+  ENV.delete('VERIFIABLE_ID_HMAC_SECRET')
+  ENV['IDENTIFIER_SECRET'] = '   '
+  Familia::VerifiableIdentifier.secret_key
+  :did_not_raise
+rescue KeyError
+  :raised_key_error
+ensure
+  @orig_legacy.nil? ? ENV.delete('VERIFIABLE_ID_HMAC_SECRET') : ENV['VERIFIABLE_ID_HMAC_SECRET'] = @orig_legacy
+  @orig_preferred.nil? ? ENV.delete('IDENTIFIER_SECRET') : ENV['IDENTIFIER_SECRET'] = @orig_preferred
+  Familia::VerifiableIdentifier.reset_secret_key!
+end
+#=> :raised_key_error
+
+## The KeyError message names both variables so operators know what to set
+@orig_legacy = ENV.fetch('VERIFIABLE_ID_HMAC_SECRET', nil)
+@orig_preferred = ENV.fetch('IDENTIFIER_SECRET', nil)
+Familia::VerifiableIdentifier.reset_secret_key!
+begin
+  ENV.delete('VERIFIABLE_ID_HMAC_SECRET')
+  ENV.delete('IDENTIFIER_SECRET')
+  Familia::VerifiableIdentifier.secret_key
+  :did_not_raise
+rescue KeyError => e
+  [e.message.include?('VERIFIABLE_ID_HMAC_SECRET'), e.message.include?('IDENTIFIER_SECRET')]
+ensure
+  @orig_legacy.nil? ? ENV.delete('VERIFIABLE_ID_HMAC_SECRET') : ENV['VERIFIABLE_ID_HMAC_SECRET'] = @orig_legacy
+  @orig_preferred.nil? ? ENV.delete('IDENTIFIER_SECRET') : ENV['IDENTIFIER_SECRET'] = @orig_preferred
+  Familia::VerifiableIdentifier.reset_secret_key!
+end
+#=> [true, true]
+
+## The failure is not memoized: after a KeyError, fixing the environment makes
+## the very next call succeed without reset_secret_key!
+@orig_legacy = ENV.fetch('VERIFIABLE_ID_HMAC_SECRET', nil)
+@orig_preferred = ENV.fetch('IDENTIFIER_SECRET', nil)
+Familia::VerifiableIdentifier.reset_secret_key!
+begin
+  ENV.delete('VERIFIABLE_ID_HMAC_SECRET')
+  ENV.delete('IDENTIFIER_SECRET')
+  first = begin
+    Familia::VerifiableIdentifier.secret_key
+  rescue KeyError
+    :raised_key_error
+  end
+  ENV['IDENTIFIER_SECRET'] = 'set-after-failure-0123456789abcdef'
+  [first, Familia::VerifiableIdentifier.secret_key]
+ensure
+  @orig_legacy.nil? ? ENV.delete('VERIFIABLE_ID_HMAC_SECRET') : ENV['VERIFIABLE_ID_HMAC_SECRET'] = @orig_legacy
+  @orig_preferred.nil? ? ENV.delete('IDENTIFIER_SECRET') : ENV['IDENTIFIER_SECRET'] = @orig_preferred
+  Familia::VerifiableIdentifier.reset_secret_key!
+end
+#=> [:raised_key_error, 'set-after-failure-0123456789abcdef']

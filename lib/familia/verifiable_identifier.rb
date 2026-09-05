@@ -18,50 +18,72 @@ module Familia
     # This key is the root of trust for verifying identifier authenticity. It must be
     # a long, random, and cryptographically strong string.
     #
+    # Two environment variables are consulted, in this order:
+    #
+    # 1. +VERIFIABLE_ID_HMAC_SECRET+ -- the legacy name. When nonblank it wins.
+    # 2. +IDENTIFIER_SECRET+ -- the preferred name going forward. Read only when
+    #    the legacy variable is unset or blank.
+    #
+    # A blank (empty or whitespace-only) +VERIFIABLE_ID_HMAC_SECRET+ does not
+    # raise on its own; it falls through to +IDENTIFIER_SECRET+. Container setups
+    # that inject +VERIFIABLE_ID_HMAC_SECRET=${VERIFIABLE_ID_HMAC_SECRET:-}+ (an
+    # empty string whenever the outer variable is unset) therefore keep working
+    # when only +IDENTIFIER_SECRET+ is configured. +VERIFIABLE_ID_HMAC_SECRET+
+    # remains fully supported for compatibility and is not deprecated.
+    #
     # @note Security Considerations:
     #   - **Secrecy:** This key MUST be kept secret and secure, just like a database
     #     password or API key. Do not commit it to version control.
     #   - **Consistency:** All running instances of your application must use the
     #     exact same key, otherwise verification will fail across different servers.
+    #     If both variables are set, they must hold the same value: identifiers are
+    #     only verifiable with the secret that generated them.
     #   - **Rotation:** If this key is ever compromised, it must be rotated. Be
     #     aware that rotating the key will invalidate all previously generated
     #     verifiable identifiers.
     #   - **No committed fallback:** There is intentionally NO default. A hardcoded
     #     secret in source would be public knowledge, letting anyone forge valid
-    #     identifiers (issue #310, S1). A missing OR blank secret raises -- but
-    #     lazily, the first time an identifier is actually minted or verified, so
-    #     merely requiring this file (e.g. for introspection) never blows up.
+    #     identifiers (issue #310, S1). When neither variable holds a nonblank
+    #     value, this raises -- but lazily, the first time an identifier is
+    #     actually minted or verified, so merely requiring this file (e.g. for
+    #     introspection) never blows up. The failure is not memoized: fixing the
+    #     environment and calling again succeeds.
     #
-    # @example Generating and Setting the Key
-    #     1. Generate a new secure key in your terminal:
-    #        $ openssl rand -hex 32
-    #        > <64 hex characters>
+    # @example Generating the key
+    #     $ openssl rand -hex 32
+    #     > <64 hex characters>
     #
-    #     2. Set it as an environment variable in your production environment:
-    #        export VERIFIABLE_ID_HMAC_SECRET="<the generated value>"
+    # @example Configuring with the preferred variable
+    #     export IDENTIFIER_SECRET="<the generated value>"
     #
-    # @return [String] the configured secret
-    # @raise [KeyError] if VERIFIABLE_ID_HMAC_SECRET is unset or blank
+    # @example Configuring with the legacy variable (still supported)
+    #     export VERIFIABLE_ID_HMAC_SECRET="<the generated value>"
+    #
+    # @return [String] the configured secret, exactly as found in the environment
+    # @raise [KeyError] if neither VERIFIABLE_ID_HMAC_SECRET nor IDENTIFIER_SECRET
+    #   holds a nonblank value
     def self.secret_key
       # Treat a present-but-blank value the same as absent. ENV.fetch only fires
-      # its default block when the key is missing, so a blank
-      # VERIFIABLE_ID_HMAC_SECRET="" (or a whitespace-only "   ", e.g. from a YAML
-      # parser or templating tool) would otherwise sail through and HMAC every
-      # identifier under an effectively empty key -- silently reintroducing the
-      # forgeable-key weakness #310 S1 closed. This bites container setups that
-      # inject `VERIFIABLE_ID_HMAC_SECRET=${VERIFIABLE_ID_HMAC_SECRET:-}`, which
-      # supplies an empty string whenever the outer variable is unset. strip.empty?
-      # fails closed on nil, "", and all-whitespace alike.
+      # its default block when the key is missing, so a blank "" (or a
+      # whitespace-only "   ", e.g. from a YAML parser or templating tool) would
+      # otherwise sail through and HMAC every identifier under an effectively
+      # empty key -- silently reintroducing the forgeable-key weakness #310 S1
+      # closed. nonblank_env fails closed on nil, "", and all-whitespace alike,
+      # which is also what lets a blank legacy variable fall through to
+      # IDENTIFIER_SECRET instead of raising (issue #423).
       @secret_key ||= begin
-        value = ENV.fetch('VERIFIABLE_ID_HMAC_SECRET', nil)
-        if value.nil? || value.strip.empty?
+        value = nonblank_env('VERIFIABLE_ID_HMAC_SECRET') || nonblank_env('IDENTIFIER_SECRET')
+        if value.nil?
           raise KeyError, <<~MSG.strip
-            VERIFIABLE_ID_HMAC_SECRET is not set (or is blank). Familia::VerifiableIdentifier
-            refuses to fall back to a committed default or empty secret -- a known or empty
-            key would let anyone forge valid identifiers. Generate one with `openssl rand -hex
-            32` and export it before generating or verifying identifiers.
+            Neither VERIFIABLE_ID_HMAC_SECRET nor IDENTIFIER_SECRET is set (or both are blank).
+            Familia::VerifiableIdentifier reads VERIFIABLE_ID_HMAC_SECRET first and falls back
+            to IDENTIFIER_SECRET; it refuses to fall back to a committed default or empty
+            secret -- a known or empty key would let anyone forge valid identifiers. Generate
+            one with `openssl rand -hex 32` and export it as IDENTIFIER_SECRET before
+            generating or verifying identifiers.
           MSG
         end
+
         value
       end
     end
@@ -195,6 +217,17 @@ module Familia
         hmac = OpenSSL::HMAC.hexdigest(digest, secret_key, hmac_input)
         # Truncate to the desired length for the tag.
         hmac[0...TAG_HEX_LENGTH]
+      end
+
+      # Returns the value of the named environment variable, or nil when it is
+      # unset, empty, or whitespace-only. The value is returned as-is (not
+      # stripped) so a deliberately padded secret keeps its exact bytes.
+      # @private
+      def nonblank_env(name)
+        value = ENV.fetch(name, nil)
+        return nil if value.nil? || value.strip.empty?
+
+        value
       end
     end
   end
