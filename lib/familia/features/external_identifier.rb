@@ -31,8 +31,9 @@ module Familia
       # Error classes
       class ExternalIdentifierError < FieldTypeError; end
 
-      FORMAT_PATTERN = /\A[^%]*%\{id\}[^%]*\z/
       CANONICAL_PLACEHOLDER = '%{id}' # rubocop:disable Style/FormatStringToken
+      # Exactly one canonical placeholder and no other format directives.
+      FORMAT_PATTERN = /\A[^%]*#{Regexp.escape(CANONICAL_PLACEHOLDER)}[^%]*\z/
       private_constant :FORMAT_PATTERN, :CANONICAL_PLACEHOLDER
 
       def self.validate_format!(format)
