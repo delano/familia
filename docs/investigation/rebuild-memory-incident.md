@@ -58,12 +58,12 @@ ghost-bloated `instances` set—not the number of live records or `batch_size`.
   object in `cached_objects` for the full rebuild
   (`multi_index_generators.rb:232,235,498`). Their documented `batch_size:`
   controls Redis I/O, not total Ruby memory.
-- Temporary swap keys use a second-resolution timestamp and have no TTL
-  (`lib/familia/atomic_operations.rb:32-35`). On a non-"no such key" swap error,
+- Temporary swap keys have no TTL. On a non-"no such key" swap error,
   `atomic_swap` deliberately preserves the temporary key
-  (`atomic_operations.rb:73-83`). A failed rebuild can therefore leave a
-  full-index-sized HASH indefinitely, and two rebuilds in one second can
-  collide on a key name.
+  (`lib/familia/atomic_operations.rb`). A failed rebuild can therefore leave a
+  full-index-sized HASH indefinitely. (Key-name collisions between rebuilds
+  started in the same second are resolved: `build_temp_key` now appends a
+  random nonce to the timestamp suffix.)
 
 ## Implementation plan
 
@@ -76,8 +76,8 @@ ghost-bloated `instances` set—not the number of live records or `batch_size`.
 2. **Remove whole-rebuild object retention from multi-index rebuilds.** Discover
    field values and rebuild incrementally, or introduce a disk/Redis-backed
    intermediate representation. Do not retain `cached_objects` for reuse.
-3. **Make temporary rebuild keys safe.** Use a collision-resistant suffix and
-   apply a bounded TTL while a rebuild is in progress. On swap failure, log the
+3. **Make temporary rebuild keys safe.** Collision-resistant suffix: done.
+   Still open: apply a bounded TTL while a rebuild is in progress. On swap failure, log the
    key and retain it only for the documented diagnostic window; provide a sweep
    for existing `*:rebuild:*` keys.
 4. **Address expired-index entries separately.** A streaming rebuild limits Ruby
