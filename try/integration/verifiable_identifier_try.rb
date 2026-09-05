@@ -454,6 +454,44 @@ ensure
 end
 #=> [true, true]
 
+## verified_identifier? rejects a malformed identifier before reading the
+## secret, so it returns false (not KeyError) when neither variable is set
+@orig_legacy = ENV.fetch('VERIFIABLE_ID_HMAC_SECRET', nil)
+@orig_preferred = ENV.fetch('IDENTIFIER_SECRET', nil)
+Familia::VerifiableIdentifier.reset_secret_key!
+begin
+  ENV.delete('VERIFIABLE_ID_HMAC_SECRET')
+  ENV.delete('IDENTIFIER_SECRET')
+  Familia::VerifiableIdentifier.verified_identifier?('not-a-verifiable-id')
+ensure
+  @orig_legacy.nil? ? ENV.delete('VERIFIABLE_ID_HMAC_SECRET') : ENV['VERIFIABLE_ID_HMAC_SECRET'] = @orig_legacy
+  @orig_preferred.nil? ? ENV.delete('IDENTIFIER_SECRET') : ENV['IDENTIFIER_SECRET'] = @orig_preferred
+  Familia::VerifiableIdentifier.reset_secret_key!
+end
+#=> false
+
+## verified_identifier? on a plausible identifier does resolve the secret and
+## raises KeyError when neither variable is set
+@orig_legacy = ENV.fetch('VERIFIABLE_ID_HMAC_SECRET', nil)
+@orig_preferred = ENV.fetch('IDENTIFIER_SECRET', nil)
+Familia::VerifiableIdentifier.reset_secret_key!
+begin
+  ENV['IDENTIFIER_SECRET'] = 'plausible-probe-0123456789abcdef'
+  plausible = Familia::VerifiableIdentifier.generate_verifiable_id
+  Familia::VerifiableIdentifier.reset_secret_key!
+  ENV.delete('VERIFIABLE_ID_HMAC_SECRET')
+  ENV.delete('IDENTIFIER_SECRET')
+  Familia::VerifiableIdentifier.verified_identifier?(plausible)
+  :did_not_raise
+rescue KeyError
+  :raised_key_error
+ensure
+  @orig_legacy.nil? ? ENV.delete('VERIFIABLE_ID_HMAC_SECRET') : ENV['VERIFIABLE_ID_HMAC_SECRET'] = @orig_legacy
+  @orig_preferred.nil? ? ENV.delete('IDENTIFIER_SECRET') : ENV['IDENTIFIER_SECRET'] = @orig_preferred
+  Familia::VerifiableIdentifier.reset_secret_key!
+end
+#=> :raised_key_error
+
 ## The failure is not memoized: after a KeyError, fixing the environment makes
 ## the very next call succeed without reset_secret_key!
 @orig_legacy = ENV.fetch('VERIFIABLE_ID_HMAC_SECRET', nil)

@@ -12,7 +12,7 @@
 
 "Blank" means empty or whitespace-only. A blank legacy value falls through to `IDENTIFIER_SECRET` instead of raising, so container setups that inject `VERIFIABLE_ID_HMAC_SECRET=${VERIFIABLE_ID_HMAC_SECRET:-}` keep working when only `IDENTIFIER_SECRET` is set. The value is used exactly as found in the environment; it is not stripped.
 
-The `KeyError` is raised lazily on the first `generate_verifiable_id` / `verified_identifier?` / `secret_key` call and is not memoized, so fixing the environment and calling again succeeds.
+The `KeyError` is raised lazily on the first `generate_verifiable_id` or `secret_key` call, or the first `verified_identifier?` call with a plausible identifier. A malformed identifier returns `false` before the secret is read, so a rejected input is not proof that signing is configured. The failure is not memoized, so fixing the environment and calling again succeeds.
 
 ## Removing the downstream bridge
 

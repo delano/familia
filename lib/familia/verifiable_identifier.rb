@@ -45,9 +45,11 @@ module Familia
     #     secret in source would be public knowledge, letting anyone forge valid
     #     identifiers (issue #310, S1). When neither variable holds a nonblank
     #     value, this raises -- but lazily, the first time an identifier is
-    #     actually minted or verified, so merely requiring this file (e.g. for
-    #     introspection) never blows up. The failure is not memoized: fixing the
-    #     environment and calling again succeeds.
+    #     actually minted or a plausible one is verified, so merely requiring
+    #     this file (e.g. for introspection) never blows up. Malformed
+    #     identifiers are rejected by {.verified_identifier?} before the secret
+    #     is read. The failure is not memoized: fixing the environment and
+    #     calling again succeeds.
     #
     # @example Generating the key
     #     $ openssl rand -hex 32
