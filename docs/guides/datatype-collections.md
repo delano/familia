@@ -162,7 +162,9 @@ After the freeze there is no silent window:
 - Re-declaring a materialized field (`sorted_set :events` again after an instance exists, or `class_sorted_set :registry` again after `Klass.registry` was accessed) raises the same error; re-declaring before first use still replaces the definition. Declaring a genuinely new field on a materialized class remains allowed, which is what `participates_in` relies on.
 - Direct mutation of `Klass.related_fields[:x].opts` raises `FrozenError`.
 
-The first materialization holds the class's `related_fields_mutex` for the whole read-build-freeze pass, so a `configure_related_field` racing with the first `Klass.new` either lands before the build (and every instance sees it) or raises `RelatedFieldFrozenError` — never a process where the first instance and the rest disagree.
+Declaration, re-declaration, `configure_related_field`, and the freeze itself all serialize on the class's `related_fields_mutex`, which exists from the moment the class is created. The first materialization freezes the definitions under that lock *before* building anything, so a `configure_related_field` or re-declaration racing with the first `Klass.new` (or the first `Klass.registry`) either lands before the freeze (and every instance, and the registry, see it) or raises `RelatedFieldFrozenError` — never a process where the first instance, later instances, and the registry disagree.
+
+DataType construction runs outside that lock. `DataType#initialize` calls overridable setters and `init`, so a custom type whose `init` touches another collection on the same class (`parent.model_klass.registry`) works during either an instance-level or a class-level build instead of deadlocking on the non-reentrant mutex.
 
 A name may exist at both levels (`zset :instances` alongside the automatic `class_sorted_set :instances`). `configure_related_field` addresses the instance-level definition when both exist; pass `scope: :class` (or `scope: :instance`) to pick one explicitly:
 
@@ -175,6 +177,8 @@ Previously the reconfiguration window existed by accident and closed silently: a
 ### Class-level collections are lazy
 
 `class_sorted_set`, `class_list`, and friends no longer build their DataType at declaration. The collection is constructed on the first call to its accessor, which is also when its definition freezes. Options are still validated at the declaration line (a bad `max_length:` fails there, not on first access). `Klass.registry`, `Klass.registry=`, and `Klass.registry?` behave the same from the caller's side; only the construction moment moved, which is what leaves room for `configure_related_field` to run first.
+
+Built collections are held in a per-class cache (`Klass.class_related_field_cache`), not in a class instance variable named after the field. A class that happens to set `@registry` for its own purposes and also declares `class_list :registry` gets the collection from `Klass.registry` and keeps its `@registry` untouched; the eager build used to overwrite that variable.
 
 ### The freeze is per class
 
