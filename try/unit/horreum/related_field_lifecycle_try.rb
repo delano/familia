@@ -717,6 +717,30 @@ definition = Rfl428Owned.class_related_fields[:audit]
 [@owned_class.frozen?, definition.opts.frozen?, definition.opts[:max_length], Rfl428Owned.audit.max_length]
 #=> [false, true, 7, 7]
 
+## 19a. related_fields_mutex exists before first use and is the object the accessor returns
+# `@mutex ||= Mutex.new` is not atomic: two first callers can each allocate
+# their own and exclude nothing. The mutex is created when DefinitionMethods
+# is extended (Horreum.inherited), so a class never observes it nil.
+klass = Class.new(Familia::Horreum)
+eager = klass.instance_variable_get(:@related_fields_mutex)
+[eager.class, eager.equal?(klass.related_fields_mutex), eager.name]
+#=> [Familia::ThreadSafety::InstrumentedMutex, true, 'related_fields']
+
+## 19c. Concurrent first callers all get the same mutex object
+klass = Class.new(Familia::Horreum)
+seen = Array.new(8)
+latch = Queue.new
+threads = 8.times.map do |i|
+  Thread.new do
+    latch.pop
+    seen[i] = klass.related_fields_mutex
+  end
+end
+8.times { latch << true }
+threads.each(&:join)
+seen.uniq(&:object_id).size
+#=> 1
+
 # Teardown: remove only the keys this file wrote.
 Rfl428Registry.registry.delete!
 Rfl428SlowBuild.active = false

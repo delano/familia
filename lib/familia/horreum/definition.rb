@@ -282,12 +282,26 @@ module Familia
         @class_related_fields
       end
 
-      # Guards registry replacement in configure_related_field and the lazy
-      # build of class-level collections. One per class, like fields_mutex.
+      # Guards the related-field registries: declaration and re-declaration
+      # (attach_*_related_field), reconfiguration (configure_related_field)
+      # and the freeze that closes the window (initialize_relatives and
+      # materialize_class_related_field). One per class, like fields_mutex,
+      # but created eagerly in +extended+ rather than with `||=`: two threads
+      # taking the lock for the first time would otherwise each allocate a
+      # mutex and exclude nothing.
+      #
       # Backed by a non-reentrant Mutex: never call a class-level collection
       # accessor from inside a synchronize block on it.
       def related_fields_mutex
-        @related_fields_mutex ||= Familia::ThreadSafety::InstrumentedMutex.new('related_fields')
+        @related_fields_mutex
+      end
+
+      # The per-class lock must exist before any thread can race on it, so
+      # it is created when the module is extended (Horreum's +inherited+
+      # hook), not lazily on first use.
+      def self.extended(base)
+        base.instance_variable_set(:@related_fields_mutex,
+                                   Familia::ThreadSafety::InstrumentedMutex.new('related_fields'))
       end
 
       def related_fields
