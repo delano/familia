@@ -717,6 +717,121 @@ definition = Rfl428Owned.class_related_fields[:audit]
 [@owned_class.frozen?, definition.opts.frozen?, definition.opts[:max_length], Rfl428Owned.audit.max_length]
 #=> [false, true, 7, 7]
 
+## 17a. Race: first materialization vs instance-level re-declaration never splits a class
+# Same shape as 12a, but thread B re-declares (`sorted_set :events` again)
+# instead of calling configure_related_field. Re-declaration's frozen? check
+# and registry replacement run under related_fields_mutex, so either B lands
+# before the freeze (every instance sees 20, registry frozen at 20) or B is
+# refused (every instance sees 10). Unlocked, B could pass the check while
+# A was building, leaving the first instance on 10 and the registry on 20.
+Familia::SortedSet.prepend(Rfl428SlowBuild) unless Familia::SortedSet.ancestors.include?(Rfl428SlowBuild)
+Rfl428SlowBuild.active = true
+@redecl_tally = Hash.new(0)
+@redecl_mixed = []
+begin
+  60.times do |i|
+    klass = Class.new(Familia::Horreum) do
+      identifier_field :id
+      field :id
+      sorted_set :events, max_length: 10
+    end
+    barrier = Queue.new
+    inst_a = nil
+    decl_err = nil
+    jitter = rand(0..300)
+    ta = Thread.new { barrier.pop; inst_a = klass.new(id: "redecl-a-#{i}") }
+    tb = Thread.new do
+      barrier.pop
+      jitter.times { Thread.pass }
+      begin
+        klass.sorted_set :events, max_length: 20
+      rescue Familia::RelatedFieldFrozenError => e
+        decl_err = e
+      end
+    end
+    2.times { barrier << true }
+    [ta, tb].each(&:join)
+    inst_b = klass.new(id: "redecl-b-#{i}")
+    definition = klass.related_fields[:events]
+    a = inst_a.events.max_length
+    b = inst_b.events.max_length
+    r = definition.opts[:max_length]
+    outcome =
+      if decl_err
+        (a == 10 && b == 10 && r == 10) ? :frozen : :mixed
+      else
+        (a == 20 && b == 20 && r == 20) ? :redeclared : :mixed
+      end
+    @redecl_tally[outcome] += 1
+    @redecl_mixed << [i, a, b, r, definition.opts.frozen?, decl_err&.class] if outcome == :mixed
+    Familia.members.delete(klass)
+  end
+ensure
+  Rfl428SlowBuild.active = false
+end
+@redecl_mixed
+#=> []
+
+## 17b. Every iteration was classified as one of the two legal outcomes
+[@redecl_tally.values.sum, @redecl_tally.keys - %i[redeclared frozen]]
+#=> [60, []]
+
+## 18a. Race: first class-level access vs class-level re-declaration never splits cache and registry
+# Thread A calls Klass.registry (lazy build) while thread B re-declares
+# `class_sorted_set :registry, max_length: 30`. Either B lands before A's
+# freeze (built collection AND registry say 30) or B is refused (both say
+# 10). Unlocked, A could cache a collection built on 10 while the registry
+# moved to 30 and stayed configurable.
+Rfl428SlowBuild.active = true
+@cls_redecl_tally = Hash.new(0)
+@cls_redecl_mixed = []
+begin
+  60.times do |i|
+    klass = Class.new(Familia::Horreum) do
+      identifier_field :id
+      field :id
+      class_sorted_set :registry, max_length: 10
+    end
+    barrier = Queue.new
+    built_a = nil
+    decl_err = nil
+    jitter = rand(0..300)
+    ta = Thread.new { barrier.pop; built_a = klass.registry }
+    tb = Thread.new do
+      barrier.pop
+      jitter.times { Thread.pass }
+      begin
+        klass.class_sorted_set :registry, max_length: 30
+      rescue Familia::RelatedFieldFrozenError => e
+        decl_err = e
+      end
+    end
+    2.times { barrier << true }
+    [ta, tb].each(&:join)
+    definition = klass.class_related_fields[:registry]
+    a = built_a.max_length
+    c = klass.registry.max_length
+    r = definition.opts[:max_length]
+    outcome =
+      if decl_err
+        (a == 10 && c == 10 && r == 10 && definition.opts.frozen?) ? :frozen : :mixed
+      else
+        (a == 30 && c == 30 && r == 30 && definition.opts.frozen?) ? :redeclared : :mixed
+      end
+    @cls_redecl_tally[outcome] += 1
+    @cls_redecl_mixed << [i, a, c, r, definition.opts.frozen?, decl_err&.class] if outcome == :mixed
+    Familia.members.delete(klass)
+  end
+ensure
+  Rfl428SlowBuild.active = false
+end
+@cls_redecl_mixed
+#=> []
+
+## 18b. Every iteration was classified, and the slow-build hook is off again
+[@cls_redecl_tally.values.sum, @cls_redecl_tally.keys - %i[redeclared frozen], Rfl428SlowBuild.active]
+#=> [60, [], false]
+
 ## 19a. related_fields_mutex exists before first use and is the object the accessor returns
 # `@mutex ||= Mutex.new` is not atomic: two first callers can each allocate
 # their own and exclude nothing. The mutex is created when DefinitionMethods

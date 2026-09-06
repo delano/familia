@@ -183,10 +183,17 @@ module Familia
         # Dup: the lifecycle freezes this Hash at first materialization and
         # must not freeze an object the caller still owns.
         opts = opts.nil? ? {} : opts.dup
-        refuse_related_field_redeclaration!(related_fields[name], "#{self}##{name}")
         validate_related_field_opts!(opts, klass)
 
-        related_fields[name] = RelatedFieldDefinition.new(name, klass, opts)
+        # Check-and-replace under the same lock initialize_relatives freezes
+        # under. Unlocked, a re-declaration could pass the frozen? check,
+        # then the first instance builds and freezes the OLD definition, then
+        # the replacement lands: first instance on 10, registry (and every
+        # later instance) on 20.
+        related_fields_mutex.synchronize do
+          refuse_related_field_redeclaration!(related_fields[name], "#{self}##{name}")
+          related_fields[name] = RelatedFieldDefinition.new(name, klass, opts)
+        end
 
         # Create lazy-initializing accessor that calls initialize_relatives if needed
         define_method name do
@@ -241,10 +248,14 @@ module Familia
         name = name.to_s.to_sym
         opts = opts.nil? ? {} : opts.dup
         opts[:parent] = self unless opts.key?(:parent)
-        refuse_related_field_redeclaration!(class_related_fields[name], "#{self}.#{name}")
         validate_related_field_opts!(opts, klass)
 
-        class_related_fields[name] = RelatedFieldDefinition.new(name, klass, opts)
+        # Check-and-replace under the lock materialize_class_related_field
+        # freezes under; see attach_instance_related_field for the race.
+        related_fields_mutex.synchronize do
+          refuse_related_field_redeclaration!(class_related_fields[name], "#{self}.#{name}")
+          class_related_fields[name] = RelatedFieldDefinition.new(name, klass, opts)
+        end
 
         define_singleton_method name do
           materialize_class_related_field(name)
