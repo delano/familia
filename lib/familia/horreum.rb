@@ -321,59 +321,80 @@ module Familia
       # Store initialization flag on singleton class to avoid polluting instance variables
       return if singleton_class.instance_variable_defined?(:@relatives_initialized)
 
-      # Generate instances of each DataType. These need to be
-      # unique for each instance of this class so they can piggyback
-      # on the specifc index of this instance.
-      #
-      # i.e.
-      #     familia_object.dbkey              == v1:bone:INDEXVALUE:object
-      #     familia_object.related_object.dbkey == v1:bone:INDEXVALUE:name
-      #
-      self.class.related_fields.each_pair do |name, data_type_definition|
-        klass = data_type_definition.klass
-        opts = data_type_definition.opts
-        Familia.trace :INITIALIZE_RELATIVES, nil, "#{name} => #{klass} #{opts.keys}" if Familia.debug?
+      definitions = self.class.related_fields
 
-        # As a subclass of Familia::Horreum, we add ourselves as the parent
-        # automatically. This is what determines the dbkey for DataType
-        # instance and which database connection.
-        #
-        #   e.g. If the parent's dbkey is `customer:customer_id:object`
-        #     then the dbkey for this DataType instance will be
-        #     `customer:customer_id:name`.
-        #
-        # Store reference to the instance for lazy ParentDefinition creation.
-        # Merge rather than mutate: the definition's opts Hash is shared by
-        # every instance of this class (and frozen below after the first one
-        # is built), so the per-instance parent must not be written into it.
-        opts = opts.merge(parent: self)
+      if definitions.each_value.all? { |definition| definition.opts.frozen? }
+        # Fast path (every instance after the first): all definitions are
+        # frozen, so configure_related_field and re-declaration both raise
+        # without touching the registry and there is nothing to serialize
+        # against. This check costs the same single pass the freeze loop
+        # below does.
+        definitions.each_pair { |name, definition| build_related_field(name, definition) }
+      else
+        # First materialization: read, build and freeze under the same
+        # mutex configure_related_field replaces entries under. Without it a
+        # configure call can land between our read and our freeze, so the
+        # first instance is built on the old options, the freeze lands on
+        # the new definition, and every later instance silently disagrees.
+        # Non-reentrant: nothing in build_related_field may call
+        # configure_related_field or a class-level collection getter.
+        self.class.related_fields_mutex.synchronize do
+          definitions.each_pair { |name, definition| build_related_field(name, definition) }
 
-        suffix_override = opts.fetch(:suffix, name)
-
-        # Instantiate the DataType object and below we store it in
-        # an instance variable.
-        related_object = klass.new suffix_override, opts
-
-        # Freezes the related_object, making it immutable.
-        # This ensures the object's state remains consistent and prevents any modifications,
-        # safeguarding its integrity and making it thread-safe.
-        # Any attempts to change the object after this will raise a FrozenError.
-        related_object.freeze
-
-        # e.g. customer.name  #=> `#<Familia::HashKey:0x0000...>`
-        instance_variable_set :"@#{name}", related_object
+          # Closes the configuration window for every instance-level
+          # definition: configure_related_field and re-declaration raise
+          # from here on, so no two instances of this class can disagree
+          # about a field's options.
+          definitions.each_value { |definition| definition.opts.freeze }
+        end
       end
-
-      # First materialization closes the configuration window for every
-      # instance-level definition: configure_related_field raises from here
-      # on, so no two instances of this class can disagree about a field's
-      # options. Freezing an already-frozen Hash is a no-op, so the cost per
-      # subsequent instance is one pass over the registry.
-      self.class.related_fields.each_value { |definition| definition.opts.freeze }
 
       # Mark relatives as initialized on singleton class to avoid polluting instance variables
       singleton_class.instance_variable_set(:@relatives_initialized, true)
     end
+
+    # Builds one instance-level DataType from its definition and stores it
+    # in @<name>. These need to be unique for each instance of this class so
+    # they can piggyback on the specific index of this instance:
+    #
+    #     familia_object.dbkey                == v1:bone:INDEXVALUE:object
+    #     familia_object.related_object.dbkey == v1:bone:INDEXVALUE:name
+    #
+    # @param name [Symbol] the field name
+    # @param definition [Familia::RelatedFieldDefinition]
+    def build_related_field(name, definition)
+      klass = definition.klass
+      opts = definition.opts
+      Familia.trace :INITIALIZE_RELATIVES, nil, "#{name} => #{klass} #{opts.keys}" if Familia.debug?
+
+      # As a subclass of Familia::Horreum, we add ourselves as the parent
+      # automatically. This is what determines the dbkey for DataType
+      # instance and which database connection.
+      #
+      #   e.g. If the parent's dbkey is `customer:customer_id:object`
+      #     then the dbkey for this DataType instance will be
+      #     `customer:customer_id:name`.
+      #
+      # Store reference to the instance for lazy ParentDefinition creation.
+      # Merge rather than mutate: the definition's opts Hash is shared by
+      # every instance of this class (and frozen after the first one is
+      # built), so the per-instance parent must not be written into it.
+      opts = opts.merge(parent: self)
+
+      suffix_override = opts.fetch(:suffix, name)
+
+      related_object = klass.new suffix_override, opts
+
+      # Freezes the related_object, making it immutable.
+      # This ensures the object's state remains consistent and prevents any modifications,
+      # safeguarding its integrity and making it thread-safe.
+      # Any attempts to change the object after this will raise a FrozenError.
+      related_object.freeze
+
+      # e.g. customer.name  #=> `#<Familia::HashKey:0x0000...>`
+      instance_variable_set :"@#{name}", related_object
+    end
+    private :build_related_field
 
     def initialize_with_keyword_args_deserialize_value(**fields)
       # Deserialize Database string values back to their original types, then

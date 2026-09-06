@@ -159,13 +159,22 @@ Every related field declared on a Horreum class (`sorted_set`, `list`, `set`, `h
 After the freeze there is no silent window:
 
 - `configure_related_field` raises `Familia::RelatedFieldFrozenError` (a `Familia::Problem`) naming the class and field.
+- Re-declaring a materialized field (`sorted_set :events` again after an instance exists, or `class_sorted_set :registry` again after `Klass.registry` was accessed) raises the same error; re-declaring before first use still replaces the definition. Declaring a genuinely new field on a materialized class remains allowed, which is what `participates_in` relies on.
 - Direct mutation of `Klass.related_fields[:x].opts` raises `FrozenError`.
+
+The first materialization holds the class's `related_fields_mutex` for the whole read-build-freeze pass, so a `configure_related_field` racing with the first `Klass.new` either lands before the build (and every instance sees it) or raises `RelatedFieldFrozenError` — never a process where the first instance and the rest disagree.
+
+A name may exist at both levels (`zset :instances` alongside the automatic `class_sorted_set :instances`). `configure_related_field` addresses the instance-level definition when both exist; pass `scope: :class` (or `scope: :instance`) to pick one explicitly:
+
+```ruby
+Organization.configure_related_field(:instances, scope: :class, max_length: 10_000)
+```
 
 Previously the reconfiguration window existed by accident and closed silently: an app that mutated `opts` after some instances had materialized ended up with a mixed process — old instances on the compiled-in value, new ones on the configured value — and no diagnostic. Proc-valued options were considered and rejected, since they would move validation to first materialization, per instance.
 
 ### Class-level collections are lazy
 
-`class_sorted_set`, `class_list`, and friends no longer build their DataType at declaration. The collection is constructed on the first call to its accessor, which is also when its definition freezes. `Klass.registry`, `Klass.registry=`, and `Klass.registry?` behave the same from the caller's side; only the construction moment moved, which is what leaves room for `configure_related_field` to run first.
+`class_sorted_set`, `class_list`, and friends no longer build their DataType at declaration. The collection is constructed on the first call to its accessor, which is also when its definition freezes. Options are still validated at the declaration line (a bad `max_length:` fails there, not on first access). `Klass.registry`, `Klass.registry=`, and `Klass.registry?` behave the same from the caller's side; only the construction moment moved, which is what leaves room for `configure_related_field` to run first.
 
 ### The freeze is per class
 

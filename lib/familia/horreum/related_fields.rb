@@ -163,12 +163,28 @@ module Familia
       # End of RelatedFieldsAccessors module
 
       # Creates an instance-level relation
+      #
+      # Options are validated here, at declaration, with the same checks the
+      # DataType constructor runs (see validate_related_field_opts!).
+      #
+      # Re-declaring a name whose definition has already materialized (an
+      # instance of this class exists) raises RelatedFieldFrozenError:
+      # instances built before and after the re-declaration would otherwise
+      # disagree about the field's options. Re-declaring BEFORE first use
+      # replaces the definition, as it always has. The same name may also
+      # exist at class level (`zset :instances` alongside the automatic
+      # `class_sorted_set :instances`); configure_related_field takes a
+      # +scope:+ keyword to reach the class-level one.
       def attach_instance_related_field(name, klass, opts)
         Familia.trace :attach_instance_related_field, name, klass, opts if Familia.debug?
         raise ArgumentError, "Name is blank (#{klass})" if name.to_s.empty?
 
         name = name.to_s.to_sym
-        opts ||= {}
+        # Dup: the lifecycle freezes this Hash at first materialization and
+        # must not freeze an object the caller still owns.
+        opts = opts.nil? ? {} : opts.dup
+        refuse_related_field_redeclaration!(related_fields[name], "#{self}##{name}")
+        validate_related_field_opts!(opts, klass)
 
         related_fields[name] = RelatedFieldDefinition.new(name, klass, opts)
 
@@ -212,13 +228,21 @@ module Familia
       # freezes that definition's opts, closing the window for this field
       # only (Klass.instances is touched on every save and must not close it
       # for unrelated fields).
+      #
+      # Because the build is deferred, options are validated here so a bad
+      # `max_length:` still fails at the declaration line, not on first
+      # access. Re-declaring a name whose collection has already been built
+      # raises RelatedFieldFrozenError: the cached DataType would keep
+      # serving the old options while the registry showed the new ones.
       def attach_class_related_field(name, klass, opts)
         Familia.trace :attach_class_related_field, "#{name} #{klass}", opts if Familia.debug?
         raise ArgumentError, 'Name is blank (klass)' if name.to_s.empty?
 
         name = name.to_s.to_sym
-        opts = opts.nil? ? {} : opts.clone
+        opts = opts.nil? ? {} : opts.dup
         opts[:parent] = self unless opts.key?(:parent)
+        refuse_related_field_redeclaration!(class_related_fields[name], "#{self}.#{name}")
+        validate_related_field_opts!(opts, klass)
 
         class_related_fields[name] = RelatedFieldDefinition.new(name, klass, opts)
 
@@ -248,7 +272,15 @@ module Familia
       #    raises rather than leaving already-built DataTypes on old options.
       #
       # New declarations on a materialized class remain allowed (participation
-      # relies on that); only reconfiguring a frozen definition is refused.
+      # relies on that); only reconfiguring or re-declaring a frozen
+      # definition is refused.
+      #
+      # A name can be declared at both levels (`zset :instances` next to the
+      # automatic `class_sorted_set :instances`). Without +scope:+ the
+      # instance-level definition wins when both exist and the class-level
+      # one is used when only it exists; pass +scope: :class+ (or
+      # +scope: :instance+) to address one level explicitly, in which case
+      # only that registry is consulted.
       #
       # @example Raise a cap at boot from configuration
       #   class Customer < Familia::Horreum
@@ -258,20 +290,29 @@ module Familia
       #   Customer.configure_related_field(:events, max_length: settings.events_cap)
       #   Customer.configure_related_field(:registry, max_length: 500)
       #
+      # @example Same name at both levels: reach the class-level one
+      #   Customer.configure_related_field(:instances, scope: :class, max_length: 10_000)
+      #
       # @param name [Symbol, String] the field name as declared
+      # @param scope [nil, :instance, :class] which registry to address;
+      #   nil (default) prefers instance-level, falling back to class-level
       # @param opts [Hash] options merged over the current definition's opts
       # @return [Familia::RelatedFieldDefinition] the replacement definition
-      # @raise [ArgumentError] if the class has no such field, or the merged
-      #   options would be rejected by the DataType constructor (same error
-      #   class and message the constructor raises)
+      # @raise [ArgumentError] if the class has no such field in the given
+      #   scope, if scope is not nil/:instance/:class, or the merged options
+      #   would be rejected by the DataType constructor (same error class and
+      #   message the constructor raises)
       # @raise [Familia::RelatedFieldFrozenError] if the definition has
       #   already been materialized
-      def configure_related_field(name, **opts)
+      def configure_related_field(name, scope: nil, **opts)
         name = name.to_s.to_sym
 
         related_fields_mutex.synchronize do
-          registry = related_fields.key?(name) ? related_fields : class_related_fields
-          raise ArgumentError, "#{self} has no related field #{name.inspect}" unless registry.key?(name)
+          registry = related_field_registry_for(name, scope)
+          unless registry.key?(name)
+            level = { instance: 'instance-level ', class: 'class-level ' }[scope]
+            raise ArgumentError, "#{self} has no #{level}related field #{name.inspect}"
+          end
 
           definition = registry[name]
           if definition.opts.frozen?
@@ -292,6 +333,30 @@ module Familia
       end
 
       private
+
+      # Picks the registry configure_related_field operates on. See the
+      # +scope:+ documentation there.
+      def related_field_registry_for(name, scope)
+        case scope
+        when nil then related_fields.key?(name) ? related_fields : class_related_fields
+        when :instance then related_fields
+        when :class then class_related_fields
+        else raise ArgumentError, "scope must be nil, :instance or :class, got #{scope.inspect}"
+        end
+      end
+
+      # Shared by both attach paths. A frozen definition means a DataType has
+      # already been built from it (instance created, or class-level
+      # collection accessed); replacing the definition now would split the
+      # process between old and new options. An unfrozen existing definition
+      # is replaced silently, as before.
+      def refuse_related_field_redeclaration!(existing, label)
+        return unless existing&.opts&.frozen?
+
+        raise Familia::RelatedFieldFrozenError,
+              "#{label} is already materialized; re-declaration is not allowed. " \
+              'Declare a new name, or configure_related_field before first use.'
+      end
 
       # Builds (once) and returns the class-level DataType for +name+.
       #

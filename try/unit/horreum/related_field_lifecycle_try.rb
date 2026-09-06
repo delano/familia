@@ -111,6 +111,48 @@ class Rfl428Replace < Familia::Horreum
   sorted_set :events, max_length: 10
 end
 
+# 13. re-declaration: unfrozen replaces, frozen raises, new names still attach
+class Rfl428Redeclare < Familia::Horreum
+  identifier_field :id
+  field :id
+  sorted_set :events, max_length: 10
+  class_sorted_set :board, max_length: 4
+end
+
+# 15. scope: the same name at both levels
+class Rfl428Scoped < Familia::Horreum
+  identifier_field :id
+  field :id
+  zset :both, max_length: 10
+  class_sorted_set :both, max_length: 100
+  class_list :class_only, max_length: 3
+  list :inst_only, max_length: 3
+end
+
+# 16. caller-owned opts Hash is never frozen or mutated by the lifecycle
+class Rfl428Owned < Familia::Horreum
+  identifier_field :id
+  field :id
+end
+
+# 12. Widens the read-build-freeze window in initialize_relatives so the GVL
+# interleaves the materializing thread with configure_related_field. Inert
+# until +active+ is set; the race block turns it on and off again.
+module Rfl428SlowBuild
+  class << self
+    attr_accessor :active
+  end
+
+  def initialize(*args, **kwargs)
+    if Rfl428SlowBuild.active
+      Thread.pass
+      sleep 0.0005
+    end
+    super
+  end
+end
+Rfl428SlowBuild.active = false
+
 def rfl428_capture
   yield
   nil
@@ -123,7 +165,7 @@ end
 @rfl428_classes = [
   Rfl428Events, Rfl428Registry, Rfl428Validate, Rfl428Frozen, Rfl428ClassFirst,
   Rfl428Parent, Rfl428Child, Rfl428ParentB, Rfl428ChildB, Rfl428SubKey, Rfl428Loaded,
-  Rfl428Concurrent, Rfl428LazyReg, Rfl428Replace,
+  Rfl428Concurrent, Rfl428LazyReg, Rfl428Replace, Rfl428Redeclare, Rfl428Scoped, Rfl428Owned,
 ]
 
 ## 1a. Configuring max_length before the first instance is reflected on that instance
@@ -381,6 +423,7 @@ Rfl428Loaded.configure_related_field(:events, max_length: 33)
 Rfl428Loaded.dbclient.hset(Rfl428Loaded.dbkey(@ld_id), 'id', @ld_id, 'label', '"loaded"')
 before = Rfl428Loaded.related_fields[:events].opts.frozen?
 @loaded = Rfl428Loaded.load(@ld_id)
+@rfl428_instances << @loaded
 [before, @loaded.class, @loaded.label, @loaded.events.max_length]
 #=> [false, Rfl428Loaded, 'loaded', 33]
 
@@ -443,8 +486,240 @@ threads.each(&:join)
 [@old_def.opts.frozen?, @old_def.opts.equal?(@new_def.opts)]
 #=> [false, false]
 
+## 12a. Race: first materialization vs configure_related_field never splits a class
+# Thread A builds the first instance (read definitions, build, freeze) while
+# thread B reconfigures the same field. Either B wins and every instance
+# sees 20, or B is refused (frozen) and every instance sees 10. The window
+# is widened by Rfl428SlowBuild (prepended onto SortedSet#initialize); without
+# the mutex in initialize_relatives this yields :mixed outcomes.
+Familia::SortedSet.prepend(Rfl428SlowBuild) unless Familia::SortedSet.ancestors.include?(Rfl428SlowBuild)
+Rfl428SlowBuild.active = true
+@race_tally = Hash.new(0)
+@race_mixed = []
+begin
+  60.times do |i|
+    klass = Class.new(Familia::Horreum) do
+      identifier_field :id
+      field :id
+      sorted_set :events, max_length: 10
+    end
+    barrier = Queue.new
+    inst_a = nil
+    cfg_err = nil
+    jitter = rand(0..300)
+    ta = Thread.new { barrier.pop; inst_a = klass.new(id: "race-a-#{i}") }
+    tb = Thread.new do
+      barrier.pop
+      jitter.times { Thread.pass }
+      begin
+        klass.configure_related_field(:events, max_length: 20)
+      rescue Familia::RelatedFieldFrozenError => e
+        cfg_err = e
+      end
+    end
+    2.times { barrier << true }
+    [ta, tb].each(&:join)
+    inst_b = klass.new(id: "race-b-#{i}")
+    a = inst_a.events.max_length
+    b = inst_b.events.max_length
+    outcome =
+      if cfg_err
+        (a == 10 && b == 10) ? :frozen : :mixed
+      else
+        (a == 20 && b == 20) ? :configured : :mixed
+      end
+    @race_tally[outcome] += 1
+    @race_mixed << [i, a, b, cfg_err&.class] if outcome == :mixed
+    Familia.members.delete(klass)
+  end
+ensure
+  Rfl428SlowBuild.active = false
+end
+@race_mixed
+#=> []
+
+## 12b. Every iteration was classified, and the slow-build hook is off again
+[@race_tally.values.sum, @race_tally.keys - %i[configured frozen], Rfl428SlowBuild.active]
+#=> [60, [], false]
+
+## 13a. Re-declaring an UNFROZEN instance-level field replaces the definition
+Rfl428Redeclare.sorted_set :events, max_length: 15
+definition = Rfl428Redeclare.related_fields[:events]
+[definition.opts[:max_length], definition.opts.frozen?]
+#=> [15, false]
+
+## 13b. Re-declaring an UNFROZEN class-level field replaces the definition
+Rfl428Redeclare.class_sorted_set :board, max_length: 5
+definition = Rfl428Redeclare.class_related_fields[:board]
+[definition.opts[:max_length], definition.opts.frozen?]
+#=> [5, false]
+
+## 13c. Instance-level re-declare after Klass.new raises RelatedFieldFrozenError
+@rd = Rfl428Redeclare.new(id: "rd-#{@rfl428_run}")
+@rfl428_instances << @rd
+Rfl428Redeclare.sorted_set :events, max_length: 20
+#=!> Familia::RelatedFieldFrozenError
+#=~> /Rfl428Redeclare#events is already materialized; re-declaration is not allowed/
+
+## 13d. The refused re-declare left the frozen definition and the instance untouched
+definition = Rfl428Redeclare.related_fields[:events]
+[definition.opts[:max_length], definition.opts.frozen?, @rd.events.max_length]
+#=> [15, true, 15]
+
+## 13e. Class-level re-declare after the first accessor call raises
+Rfl428Redeclare.board
+Rfl428Redeclare.class_sorted_set :board, max_length: 6
+#=!> Familia::RelatedFieldFrozenError
+#=~> /Rfl428Redeclare\.board is already materialized; re-declaration is not allowed/
+
+## 13f. ...and the built collection still serves the pre-freeze options
+[Rfl428Redeclare.board.max_length, Rfl428Redeclare.class_related_fields[:board].opts[:max_length]]
+#=> [5, 5]
+
+## 13g. Declaring a brand-new field on a materialized class still works; new instances get it
+Rfl428Redeclare.list :log, max_length: 3
+inst = Rfl428Redeclare.new(id: "rd2-#{@rfl428_run}")
+@rfl428_instances << inst
+[inst.log.class, inst.log.max_length, Rfl428Redeclare.related_fields[:log].opts.frozen?]
+#=> [Familia::ListKey, 3, true]
+
+## 13h. A named subclass of a materialized parent still gets its own :instances (no raise in inherited)
+Rfl428Redeclare.instances # materialize the parent's class_sorted_set :instances
+err = rfl428_capture { Object.const_set(:Rfl428RedeclareChild, Class.new(Rfl428Redeclare)) }
+@rfl428_classes << Rfl428RedeclareChild
+[err,
+ Rfl428RedeclareChild.class_related_fields[:instances].opts.frozen?,
+ Rfl428RedeclareChild.related_fields[:events].opts.frozen?,
+ Rfl428RedeclareChild.instances.dbkey == Rfl428Redeclare.instances.dbkey,
+ Rfl428RedeclareChild.instances.dbkey]
+#=> [nil, false, false, false, "#{Rfl428RedeclareChild.prefix}:instances"]
+
+## 14a. class_set with max_length raises in the class body with the constructor's error
+direct = rfl428_capture { Familia::UnsortedSet.new('x', max_length: 5) }
+decl = rfl428_capture do
+  Class.new(Familia::Horreum) do
+    identifier_field :id
+    field :id
+    class_set :tags, max_length: 5
+  end
+end
+[decl.class, decl.message == direct.message, direct.message]
+#=> [ArgumentError, true, 'max_length is not supported by Familia::UnsortedSet (only SortedSet and ListKey trim on write)']
+
+## 14b. Instance-level set with max_length raises in the class body with the constructor's error
+direct = rfl428_capture { Familia::UnsortedSet.new('x', max_length: 5) }
+decl = rfl428_capture do
+  Class.new(Familia::Horreum) do
+    identifier_field :id
+    field :id
+    set :tags, max_length: 5
+  end
+end
+[decl.class, decl.message == direct.message]
+#=> [ArgumentError, true]
+
+## 14c. class_sorted_set with max_length: 0 raises in the class body with the constructor's error
+direct = rfl428_capture { Familia::SortedSet.new('x', max_length: 0) }
+decl = rfl428_capture do
+  Class.new(Familia::Horreum) do
+    identifier_field :id
+    field :id
+    class_sorted_set :t, max_length: 0
+  end
+end
+[decl.class, decl.message == direct.message, direct.message]
+#=> [ArgumentError, true, 'max_length must be a positive Integer, got 0']
+
+## 14d. A refused declaration leaves no definition behind
+klass = Class.new(Familia::Horreum) do
+  identifier_field :id
+  field :id
+end
+rfl428_capture { klass.sorted_set :bad, max_length: -1 }
+rfl428_capture { klass.class_sorted_set :bad, max_length: -1 }
+[klass.related_fields.key?(:bad), klass.class_related_fields.key?(:bad),
+ klass.method_defined?(:bad), klass.respond_to?(:bad)]
+#=> [false, false, false, false]
+
+## 15a. Default scope changes the instance-level definition only
+Rfl428Scoped.configure_related_field(:both, max_length: 11)
+[Rfl428Scoped.related_fields[:both].opts[:max_length],
+ Rfl428Scoped.class_related_fields[:both].opts[:max_length]]
+#=> [11, 100]
+
+## 15b. scope: :class changes the class-level definition only
+Rfl428Scoped.configure_related_field(:both, scope: :class, max_length: 101)
+[Rfl428Scoped.related_fields[:both].opts[:max_length],
+ Rfl428Scoped.class_related_fields[:both].opts[:max_length]]
+#=> [11, 101]
+
+## 15c. scope: :instance addresses the instance-level definition explicitly
+Rfl428Scoped.configure_related_field(:both, scope: :instance, max_length: 12)
+[Rfl428Scoped.related_fields[:both].opts[:max_length],
+ Rfl428Scoped.class_related_fields[:both].opts[:max_length]]
+#=> [12, 101]
+
+## 15d. scope: :instance on a class-only name raises ArgumentError
+Rfl428Scoped.configure_related_field(:class_only, scope: :instance, max_length: 4)
+#=!> ArgumentError
+#=~> /Rfl428Scoped has no instance-level related field :class_only/
+
+## 15e. scope: :class on an instance-only name raises ArgumentError
+Rfl428Scoped.configure_related_field(:inst_only, scope: :class, max_length: 4)
+#=!> ArgumentError
+#=~> /Rfl428Scoped has no class-level related field :inst_only/
+
+## 15f. An unknown scope raises ArgumentError before any lookup
+Rfl428Scoped.configure_related_field(:both, scope: :both, max_length: 4)
+#=!> ArgumentError
+#=~> /scope must be nil, :instance or :class, got :both/
+
+## 15g. A class-only name with the default scope still resolves (backward compat)
+Rfl428Scoped.configure_related_field(:class_only, max_length: 4)
+Rfl428Scoped.class_related_fields[:class_only].opts[:max_length]
+#=> 4
+
+## 15h. Freezing one level leaves the other configurable, and the error names the level
+Rfl428Scoped.both # class-level accessor: freezes only class_related_fields[:both]
+err = rfl428_capture { Rfl428Scoped.configure_related_field(:both, scope: :class, max_length: 102) }
+Rfl428Scoped.configure_related_field(:both, max_length: 13)
+[err.class, err.message.match?(/class-level \S*Rfl428Scoped\.both: the collection was already built/),
+ Rfl428Scoped.related_fields[:both].opts[:max_length],
+ Rfl428Scoped.both.max_length]
+#=> [Familia::RelatedFieldFrozenError, true, 13, 101]
+
+## 15i. Both definitions reach their own DataType with their own options
+inst = Rfl428Scoped.new(id: "sc-#{@rfl428_run}")
+@rfl428_instances << inst
+[inst.both.max_length, Rfl428Scoped.both.max_length, inst.both.dbkey == Rfl428Scoped.both.dbkey]
+#=> [13, 101, false]
+
+## 16a. A caller-owned opts Hash is copied, not frozen, by instance-level materialization
+@owned = { max_length: 10 }
+Rfl428Owned.sorted_set :events, @owned
+inst = Rfl428Owned.new(id: "own-#{@rfl428_run}")
+@rfl428_instances << inst
+definition = Rfl428Owned.related_fields[:events]
+[@owned.frozen?, definition.opts.frozen?, definition.opts.equal?(@owned), inst.events.max_length]
+#=> [false, true, false, 10]
+
+## 16b. Mutating the caller's Hash afterwards neither raises nor reaches the definition
+@owned[:max_length] = 99
+[@owned[:max_length], Rfl428Owned.related_fields[:events].opts[:max_length]]
+#=> [99, 10]
+
+## 16c. Same for a class-level declaration built lazily on first access
+@owned_class = { max_length: 7 }
+Rfl428Owned.class_list :audit, @owned_class
+Rfl428Owned.audit
+definition = Rfl428Owned.class_related_fields[:audit]
+@owned_class[:max_length] = 99
+[@owned_class.frozen?, definition.opts.frozen?, definition.opts[:max_length], Rfl428Owned.audit.max_length]
+#=> [false, true, 7, 7]
+
 # Teardown: remove only the keys this file wrote.
 Rfl428Registry.registry.delete!
-Rfl428Registry.dbclient.del(Rfl428Registry.dbkey(@ld_id)) if @ld_id
+Rfl428SlowBuild.active = false
+Rfl428Loaded.dbclient.del(Rfl428Loaded.dbkey(@ld_id)) if @ld_id
 @rfl428_instances.each { |inst| inst.destroy! rescue nil }
 @rfl428_classes.each { |klass| delete_test_dbkeys(klass) }

@@ -38,8 +38,11 @@ module Familia
       #
       # @yield Block to execute while holding the lock
       # @return Result of the block
-      def synchronize
-        return yield unless @monitor.enabled
+      def synchronize(&)
+        # Monitoring is off by default; the lock must still be taken. An
+        # earlier version returned `yield` here, which made every
+        # InstrumentedMutex a no-op outside a monitoring session.
+        return @mutex.synchronize(&) unless @monitor.enabled
 
         acquired = false
         wait_start = Familia.now_in_μs
