@@ -275,11 +275,9 @@ module Familia
     DIRTY_WRITE_MODES = %i[strict warn once off].freeze
 
     # @raise [ArgumentError] if mode is present and not a recognized mode
+    # @see DataType.validate_dirty_write_warnings!
     def validate_dirty_write_warnings!(mode)
-      return if mode.nil? || DIRTY_WRITE_MODES.include?(mode)
-
-      raise ArgumentError,
-            "dirty_write_warnings must be one of #{DIRTY_WRITE_MODES.inspect}, got #{mode.inspect}"
+      DataType.validate_dirty_write_warnings!(mode)
     end
     private :validate_dirty_write_warnings!
 
@@ -301,19 +299,9 @@ module Familia
 
     # @raise [ArgumentError] if value is present and not a positive Integer,
     #   or if this DataType does not implement max_length trimming
+    # @see DataType.validate_max_length!
     def validate_max_length!(value)
-      return if value.nil?
-
-      unless value.is_a?(Integer) && value.positive?
-        raise ArgumentError,
-              "max_length must be a positive Integer, got #{value.inspect}"
-      end
-
-      return if self.class.supports_max_length?
-
-      raise ArgumentError,
-            "max_length is not supported by #{self.class.name} " \
-            '(only SortedSet and ListKey trim on write)'
+      DataType.validate_max_length!(value, self.class)
     end
     private :validate_max_length!
 

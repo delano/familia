@@ -282,6 +282,14 @@ module Familia
         @class_related_fields
       end
 
+      # Guards registry replacement in configure_related_field and the lazy
+      # build of class-level collections. One per class, like fields_mutex.
+      # Backed by a non-reentrant Mutex: never call a class-level collection
+      # accessor from inside a synchronize block on it.
+      def related_fields_mutex
+        @related_fields_mutex ||= Familia::ThreadSafety::InstrumentedMutex.new('related_fields')
+      end
+
       def related_fields
         @related_fields ||= {}
         @related_fields

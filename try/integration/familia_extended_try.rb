@@ -38,7 +38,7 @@ Bone.list? :owners
 #=> true
 
 ## A Familia object can get a specific datatype relatives def
-definition = Bone.list :owners
+definition = Bone.related_fields[:owners]
 definition.klass
 #=> Familia::ListKey
 

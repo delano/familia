@@ -57,6 +57,39 @@ module Familia
         opts.slice(*DataType.valid_options)
       end
 
+      # Validates a +max_length:+ option against the DataType class that
+      # would receive it. Class-level so a caller holding only a definition
+      # (Horreum.configure_related_field) can fail at configuration time with
+      # exactly the error #initialize would raise at first use.
+      #
+      # @param value [Object, nil] the proposed cap
+      # @param klass [Class] the DataType subclass the cap is for
+      # @raise [ArgumentError] if value is present and not a positive Integer,
+      #   or if klass does not implement max_length trimming
+      def validate_max_length!(value, klass)
+        return if value.nil?
+
+        unless value.is_a?(Integer) && value.positive?
+          raise ArgumentError,
+                "max_length must be a positive Integer, got #{value.inspect}"
+        end
+
+        return if klass.supports_max_length?
+
+        raise ArgumentError,
+              "max_length is not supported by #{klass.name} " \
+              '(only SortedSet and ListKey trim on write)'
+      end
+
+      # @param mode [Symbol, nil] a +dirty_write_warnings:+ option value
+      # @raise [ArgumentError] if mode is present and not a recognized mode
+      def validate_dirty_write_warnings!(mode)
+        return if mode.nil? || DIRTY_WRITE_MODES.include?(mode)
+
+        raise ArgumentError,
+              "dirty_write_warnings must be one of #{DIRTY_WRITE_MODES.inspect}, got #{mode.inspect}"
+      end
+
       def relations?
         @has_related_fields ||= false
       end

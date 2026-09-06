@@ -205,6 +205,13 @@ module Familia
       end
 
       # Creates a class-level relation
+      #
+      # The DataType is built lazily on first access rather than at
+      # declaration, so configure_related_field can still adjust the
+      # definition between the class body and first use. The first access
+      # freezes that definition's opts, closing the window for this field
+      # only (Klass.instances is touched on every save and must not close it
+      # for unrelated fields).
       def attach_class_related_field(name, klass, opts)
         Familia.trace :attach_class_related_field, "#{name} #{klass}", opts if Familia.debug?
         raise ArgumentError, 'Name is blank (klass)' if name.to_s.empty?
@@ -215,9 +222,9 @@ module Familia
 
         class_related_fields[name] = RelatedFieldDefinition.new(name, klass, opts)
 
-        # An accessor method created in the metaclass will
-        # access the instance variables for this class.
-        singleton_class.attr_reader name
+        define_singleton_method name do
+          materialize_class_related_field(name)
+        end
 
         define_singleton_method :"#{name}=" do |v|
           send(name).replace v
@@ -226,13 +233,103 @@ module Familia
           !send(name).empty?
         end
 
-        related_field = klass.new name, opts
-        # Freeze for thread safety. This means define_singleton_method will
-        # raise FrozenError — stub the class method, not the DataType instance.
-        related_field.freeze
-        instance_variable_set(:"@#{name}", related_field)
-
         class_related_fields[name]
+      end
+
+      # Reconfigures a related field after the class body has run.
+      #
+      # Lifecycle:
+      # 1. Declare in the class body (`sorted_set :events, max_length: 100`).
+      # 2. Reconfigure at boot, before any instance is created or the
+      #    class-level collection is accessed.
+      # 3. Frozen at first use: instance-level definitions freeze together at
+      #    the end of the first initialize_relatives; each class-level
+      #    definition freezes on its own first accessor call. A later call
+      #    raises rather than leaving already-built DataTypes on old options.
+      #
+      # New declarations on a materialized class remain allowed (participation
+      # relies on that); only reconfiguring a frozen definition is refused.
+      #
+      # @example Raise a cap at boot from configuration
+      #   class Customer < Familia::Horreum
+      #     sorted_set :events, max_length: 100
+      #     class_sorted_set :registry
+      #   end
+      #   Customer.configure_related_field(:events, max_length: settings.events_cap)
+      #   Customer.configure_related_field(:registry, max_length: 500)
+      #
+      # @param name [Symbol, String] the field name as declared
+      # @param opts [Hash] options merged over the current definition's opts
+      # @return [Familia::RelatedFieldDefinition] the replacement definition
+      # @raise [ArgumentError] if the class has no such field, or the merged
+      #   options would be rejected by the DataType constructor (same error
+      #   class and message the constructor raises)
+      # @raise [Familia::RelatedFieldFrozenError] if the definition has
+      #   already been materialized
+      def configure_related_field(name, **opts)
+        name = name.to_s.to_sym
+
+        related_fields_mutex.synchronize do
+          registry = related_fields.key?(name) ? related_fields : class_related_fields
+          raise ArgumentError, "#{self} has no related field #{name.inspect}" unless registry.key?(name)
+
+          definition = registry[name]
+          if definition.opts.frozen?
+            scope = if registry.equal?(related_fields)
+              "instance-level #{self}##{name}: instances already exist"
+            else
+              "class-level #{self}.#{name}: the collection was already built"
+            end
+            raise Familia::RelatedFieldFrozenError,
+                  "Cannot reconfigure #{scope}. configure_related_field must run before first use."
+          end
+
+          merged = definition.opts.merge(opts)
+          validate_related_field_opts!(merged, definition.klass)
+
+          registry[name] = definition.with(opts: merged)
+        end
+      end
+
+      private
+
+      # Builds (once) and returns the class-level DataType for +name+.
+      #
+      # Double-checked under related_fields_mutex. Reads the CURRENT
+      # definition from the registry so a configure_related_field call made
+      # after the declaration is honored. Freezes the DataType (thread
+      # safety: stub the class method, not the instance) and the definition's
+      # opts. The keystring is the field name, not opts[:suffix], unchanged
+      # from the eager build this replaces.
+      def materialize_class_related_field(name)
+        ivar = :"@#{name}"
+        existing = instance_variable_get(ivar)
+        return existing unless existing.nil?
+
+        related_fields_mutex.synchronize do
+          existing = instance_variable_get(ivar)
+          next existing unless existing.nil?
+
+          definition = class_related_fields.fetch(name) do
+            raise ArgumentError, "#{self} has no class-level related field #{name.inspect}"
+          end
+          related_field = definition.klass.new(name, definition.opts)
+          related_field.freeze
+          definition.opts.freeze
+          instance_variable_set(ivar, related_field)
+        end
+      end
+
+      # Mirrors the eager checks in DataType#initialize so a bad option fails
+      # at configuration time with the same error the constructor would
+      # raise at first use. Unknown keys are deliberately NOT rejected:
+      # DataType.valid_keys_only silently slices them at construction today,
+      # and the registry keeps the full merged Hash (not the slice) so the
+      # definition reflects exactly what was declared and configured.
+      def validate_related_field_opts!(merged, klass)
+        Familia.warn '[familia] :maxlength is ignored; rename to max_length:' if merged.key?(:maxlength)
+        Familia::DataType.validate_max_length!(merged[:max_length], klass)
+        Familia::DataType.validate_dirty_write_warnings!(merged[:dirty_write_warnings])
       end
     end
     # End of RelatedFieldsManagement module

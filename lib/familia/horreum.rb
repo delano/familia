@@ -156,12 +156,12 @@ module Familia
             member.instance_variable_set(:@default_expiration, default_exp)
           end
 
-          # Copy DataType relationships
-          if parent_class.class_related_fields&.any?
-            member.instance_variable_set(:@class_related_fields, parent_class.class_related_fields.dup)
-          end
-          if parent_class.related_fields&.any?
-            member.instance_variable_set(:@related_fields, parent_class.related_fields.dup)
+          # Copy DataType relationships (deep-copied, see dup_related_field_definitions)
+          %i[class_related_fields related_fields].each do |registry|
+            defs = parent_class.send(registry)
+            next unless defs&.any?
+
+            member.instance_variable_set(:"@#{registry}", dup_related_field_definitions(defs, parent_class, member))
           end
           if parent_class.instance_variable_get(:@has_related_fields)
             member.instance_variable_set(:@has_related_fields,
@@ -177,6 +177,31 @@ module Familia
 
         super
       end
+
+      # Copies a related-field registry for a subclass. Each definition's
+      # opts Hash is duplicated so that freezing (first materialization) or
+      # reconfiguring (configure_related_field) in one class never leaks into
+      # the other. transform_values preserves declaration order.
+      #
+      # Class-level definitions carry opts[:parent] = the declaring class
+      # (set by attach_class_related_field). That is re-pointed at the
+      # subclass so an inherited, non-redeclared class_sorted_set/class_list
+      # is keyed under the subclass rather than silently aliasing the
+      # parent's Redis key. An explicit user-supplied `parent: OtherClass`
+      # is left alone.
+      #
+      # @param definitions [Hash{Symbol => RelatedFieldDefinition}]
+      # @param from_class [Class] the class being inherited from
+      # @param to_class [Class] the new subclass
+      # @return [Hash{Symbol => RelatedFieldDefinition}] a fresh registry
+      def dup_related_field_definitions(definitions, from_class, to_class)
+        definitions.transform_values do |definition|
+          opts = definition.opts.dup
+          opts[:parent] = to_class if opts[:parent].equal?(from_class)
+          definition.with(opts: opts)
+        end
+      end
+      private :dup_related_field_definitions
     end
 
     attr_writer :dbclient
@@ -317,8 +342,11 @@ module Familia
         #     then the dbkey for this DataType instance will be
         #     `customer:customer_id:name`.
         #
-        # Store reference to the instance for lazy ParentDefinition creation
-        opts[:parent] = self
+        # Store reference to the instance for lazy ParentDefinition creation.
+        # Merge rather than mutate: the definition's opts Hash is shared by
+        # every instance of this class (and frozen below after the first one
+        # is built), so the per-instance parent must not be written into it.
+        opts = opts.merge(parent: self)
 
         suffix_override = opts.fetch(:suffix, name)
 
@@ -335,6 +363,13 @@ module Familia
         # e.g. customer.name  #=> `#<Familia::HashKey:0x0000...>`
         instance_variable_set :"@#{name}", related_object
       end
+
+      # First materialization closes the configuration window for every
+      # instance-level definition: configure_related_field raises from here
+      # on, so no two instances of this class can disagree about a field's
+      # options. Freezing an already-frozen Hash is a no-op, so the cost per
+      # subsequent instance is one pass over the registry.
+      self.class.related_fields.each_value { |definition| definition.opts.freeze }
 
       # Mark relatives as initialized on singleton class to avoid polluting instance variables
       singleton_class.instance_variable_set(:@relatives_initialized, true)
