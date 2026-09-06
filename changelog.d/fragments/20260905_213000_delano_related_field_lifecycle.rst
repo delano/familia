@@ -50,6 +50,15 @@ Changed
   DataType whose ``init`` (or an option setter) reads another collection of
   the same class no longer raises ``ThreadError: deadlock; recursive
   locking`` during an instance-level or class-level build. (#428)
+- Class-level collections are built single-flight under a per-class
+  reentrant build lock: concurrent first calls to ``Klass.registry`` construct
+  the DataType (and run a custom ``init``) exactly once instead of once per
+  caller with all but one result discarded. (#428)
+- The first ``Klass.new`` builds its collections from a snapshot of the
+  related-field registry taken under ``related_fields_mutex`` instead of
+  iterating the live Hash, so a new field declared concurrently (as
+  ``participates_in`` does at load) no longer raises ``RuntimeError: can't
+  add a new key into hash during iteration``. (#428)
 - Lazily built class-level collections are cached in a per-class Hash
   (``Klass.class_related_field_cache``) instead of ``@<name>`` on the class,
   so a pre-existing class instance variable with the field's name is never

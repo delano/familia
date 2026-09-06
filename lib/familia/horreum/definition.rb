@@ -2,6 +2,8 @@
 #
 # frozen_string_literal: true
 
+require 'monitor'
+
 require_relative 'settings'
 
 require_relative '../field_type'
@@ -307,12 +309,32 @@ module Familia
         @related_fields_mutex
       end
 
-      # Per-class lock and cache must exist before any thread can race on
+      # Serializes class-level DataType construction so each collection is
+      # built exactly once (materialize_class_related_field). A reentrant
+      # ::Monitor rather than a Mutex: a custom type's +init+ may read a
+      # sibling collection of the same class from inside the build, which
+      # re-enters this lock on the same thread. One per class, not per
+      # field: a per-name table would need its own guarded creation, and
+      # serializing only the first builds of one class is a one-time cost.
+      #
+      # Lock order is build lock, then related_fields_mutex. Nothing takes
+      # them the other way round: the registry paths (attach_*,
+      # configure_related_field, the freeze in initialize_relatives) hold
+      # the mutex alone and never construct under it.
+      #
+      # Not ::Monitor's namesake Familia::ThreadSafety::Monitor, which is
+      # the contention reporter.
+      def class_related_field_build_lock
+        @class_related_field_build_lock
+      end
+
+      # Per-class locks and cache must exist before any thread can race on
       # them, so they are created when the module is extended (Horreum's
       # +inherited+ hook), not lazily on first use.
       def self.extended(base)
         base.instance_variable_set(:@related_fields_mutex,
                                    Familia::ThreadSafety::InstrumentedMutex.new('related_fields'))
+        base.instance_variable_set(:@class_related_field_build_lock, ::Monitor.new)
         base.instance_variable_set(:@class_related_field_cache, {})
       end
 

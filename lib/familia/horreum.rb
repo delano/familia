@@ -321,27 +321,34 @@ module Familia
       # Store initialization flag on singleton class to avoid polluting instance variables
       return if singleton_class.instance_variable_defined?(:@relatives_initialized)
 
-      definitions = self.class.related_fields
-
-      # First materialization: freeze every instance-level definition under
-      # the mutex configure_related_field and re-declaration replace entries
-      # under, THEN build. Once frozen, neither can replace an entry (both
-      # check frozen? under the same lock), so the definitions the build
-      # loop below reads are exactly the ones frozen here. A configure that
-      # took the lock first is honored by every instance; one that arrives
-      # after raises. Nothing can land in between.
+      # Freeze every instance-level definition and take a snapshot of the
+      # registry, both under the mutex configure_related_field and
+      # declaration replace entries under. Once frozen, neither can replace
+      # an entry (both check frozen? under the same lock), so the snapshot
+      # holds exactly the definitions frozen here: a configure that took the
+      # lock first is honored by every instance; one that arrives after
+      # raises. Nothing can land in between.
+      #
+      # The build loop iterates the snapshot, never the live Hash. Declaring
+      # a NEW field on a materialized class is allowed (participates_in does
+      # it at load) and inserts into the live Hash; iterating that Hash here
+      # would make the concurrent insert raise "can't add a new key into
+      # hash during iteration". A declaration lands either before the
+      # snapshot (this instance gets the field) or after it (it does not).
+      #
+      # There is no unlocked fast path: any check that walks the live Hash
+      # has the same hazard, and a "frozen once" flag would be wrong because
+      # late declarations add unfrozen entries. One uncontended mutex
+      # acquire per instance is noise next to the rest of Klass.new.
       #
       # The build itself runs outside the lock: DataType#initialize calls
       # overridable setters and +init+, and a custom type that touches a
       # class-level collection there would deadlock on the non-reentrant
       # mutex if we still held it.
-      #
-      # Every instance after the first takes the unlocked fast path. The
-      # all? check costs the same single pass the freeze loop does.
-      unless definitions.each_value.all? { |definition| definition.opts.frozen? }
-        self.class.related_fields_mutex.synchronize do
-          definitions.each_value { |definition| definition.opts.freeze }
-        end
+      definitions = self.class.related_fields_mutex.synchronize do
+        live = self.class.related_fields
+        live.each_value { |definition| definition.opts.freeze }
+        live.dup.freeze
       end
 
       definitions.each_pair { |name, definition| build_related_field(name, definition) }

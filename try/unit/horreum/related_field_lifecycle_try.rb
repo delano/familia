@@ -13,7 +13,9 @@
 # deep-copied definitions. The shared definition Hash must never receive an
 # instance-level :parent (that was a race). Declaration, re-declaration,
 # configuration and the freeze all serialize on related_fields_mutex, which
-# exists from class creation; DataType construction runs outside it.
+# exists from class creation; DataType construction runs outside it. Class-
+# level builds are single-flight under a per-class reentrant build lock, and
+# the first instance builds from a registry snapshot, not the live Hash.
 #
 # Every class here is fresh and uniquely named (Rfl428*) because the shared
 # test helper already materializes Customer/Session/CustomDomain at load, and
@@ -172,6 +174,36 @@ class Rfl428ChainInst < Familia::Horreum
   attach_instance_related_field :trail, Rfl428ChainedList, {}
 end
 
+# 21d. cross-thread: one thread builds :chain (re-entering the build lock for
+# :registry from init) while another asks for :registry directly
+class Rfl428ChainRace < Familia::Horreum
+  identifier_field :id
+  field :id
+  class_sorted_set :registry, max_length: 3
+  attach_class_related_field :chain, Rfl428ChainedList, {}
+end
+
+# 10b. a custom DataType whose init has a side effect (a counter) and a widened
+# window. The class-level build must run it exactly once per field.
+class Rfl428CountedList < Familia::ListKey
+  @constructions = Concurrent::AtomicFixnum.new(0)
+  class << self
+    attr_reader :constructions
+  end
+
+  def init
+    self.class.constructions.increment
+    Thread.pass
+    sleep 0.001
+  end
+end
+
+class Rfl428SingleFlight < Familia::Horreum
+  identifier_field :id
+  field :id
+  attach_class_related_field :counted, Rfl428CountedList, {}
+end
+
 # 12. Widens the read-build-freeze window in initialize_relatives so the GVL
 # interleaves the materializing thread with configure_related_field. Inert
 # until +active+ is set; the race block turns it on and off again.
@@ -203,7 +235,7 @@ end
   Rfl428Events, Rfl428Registry, Rfl428Validate, Rfl428Frozen, Rfl428ClassFirst,
   Rfl428Parent, Rfl428Child, Rfl428ParentB, Rfl428ChildB, Rfl428SubKey, Rfl428Loaded,
   Rfl428Concurrent, Rfl428LazyReg, Rfl428Replace, Rfl428Redeclare, Rfl428Scoped, Rfl428Owned,
-  Rfl428Preexisting, Rfl428Chain, Rfl428ChainInst,
+  Rfl428Preexisting, Rfl428Chain, Rfl428ChainInst, Rfl428ChainRace, Rfl428SingleFlight,
 ]
 
 ## 1a. Configuring max_length before the first instance is reflected on that instance
@@ -506,6 +538,27 @@ end
 threads.each(&:join)
 [seen.all? { |dt| dt.equal?(seen.first) }, seen.first.max_length, seen.first.frozen?]
 #=> [true, 9, true]
+
+## 10b. Concurrent class-level lazy build constructs the DataType exactly once
+# Rfl428CountedList#init counts constructions and widens the window. Before
+# the per-class build lock, every thread that missed the cache constructed
+# its own copy (8 threads, 8 init calls) and only the first store survived.
+seen = Array.new(8)
+latch = Queue.new
+threads = 8.times.map do |i|
+  Thread.new do
+    latch.pop
+    seen[i] = Rfl428SingleFlight.counted
+  end
+end
+8.times { latch << true }
+threads.each(&:join)
+[seen.all? { |dt| dt.equal?(seen.first) }, seen.first.class, Rfl428CountedList.constructions.value]
+#=> [true, Rfl428CountedList, 1]
+
+## 10c. A later access still returns the cached object without constructing again
+[Rfl428SingleFlight.counted.equal?(seen.first), Rfl428CountedList.constructions.value]
+#=> [true, 1]
 
 ## 11a. configure_related_field returns a RelatedFieldDefinition
 @old_def = Rfl428Replace.related_fields[:events]
@@ -941,9 +994,66 @@ inst = Rfl428ChainInst.new(id: "chain-#{@rfl428_run}")
  Rfl428ChainInst.class_related_fields[:registry].opts.frozen?]
 #=> [Rfl428ChainedList, true, true, true, true]
 
+## 21d. Cross-thread: a build that re-enters the build lock does not deadlock a concurrent sibling access
+# Thread A builds :chain, whose init re-enters the per-class build lock for
+# :registry; thread B asks for :registry at the same time and either builds
+# it first or waits for A. Both must end on the same :registry object.
+chain_a = nil
+registry_b = nil
+latch = Queue.new
+ta = Thread.new { latch.pop; chain_a = Rfl428ChainRace.chain }
+tb = Thread.new { latch.pop; registry_b = Rfl428ChainRace.registry }
+2.times { latch << true }
+finished = [ta, tb].map { |t| t.join(5) }
+[finished.none?(&:nil?), chain_a.class, registry_b.equal?(Rfl428ChainRace.registry),
+ chain_a.sibling_dbkey == registry_b.dbkey]
+#=> [true, Rfl428ChainedList, true, true]
+
+## 22a. Declaring a new field while another thread materializes an instance never raises
+# initialize_relatives used to iterate the live registry Hash while
+# building; a concurrent, permitted declaration (`klass.list :late_n`,
+# as participates_in does at load) then raised RuntimeError "can't add a
+# new key into hash during iteration" in the declaring thread. The build
+# now iterates a snapshot taken under the mutex. Rfl428SlowBuild keeps
+# each SortedSet build (and so the loop) open long enough to collide.
+Familia::SortedSet.prepend(Rfl428SlowBuild) unless Familia::SortedSet.ancestors.include?(Rfl428SlowBuild)
+Rfl428SlowBuild.active = true
+@late_klass = Class.new(Familia::Horreum) do
+  identifier_field :id
+  field :id
+  sorted_set :events, max_length: 10
+end
+@late_errors = []
+begin
+  barrier = Queue.new
+  ta = Thread.new { barrier.pop; 20.times { |i| @late_klass.new(id: "iter-#{i}") } }
+  tb = Thread.new do
+    barrier.pop
+    20.times do |i|
+      @late_klass.list :"late_#{i}"
+      Thread.pass
+    rescue StandardError => e
+      @late_errors << e
+    end
+  end
+  2.times { barrier << true }
+  [ta, tb].each(&:join)
+ensure
+  Rfl428SlowBuild.active = false
+end
+@late_errors.map { |e| [e.class, e.message] }
+#=> []
+
+## 22b. Every late declaration landed; an instance created afterwards builds all of them
+inst = @late_klass.new(id: 'iter-after')
+[@late_klass.related_fields.size, inst.late_19.class, inst.events.class,
+ @late_klass.related_fields[:late_19].opts.frozen?, Rfl428SlowBuild.active]
+#=> [21, Familia::ListKey, Familia::SortedSet, true, false]
+
 # Teardown: remove only the keys this file wrote.
 Rfl428Registry.registry.delete!
 Rfl428SlowBuild.active = false
 Rfl428Loaded.dbclient.del(Rfl428Loaded.dbkey(@ld_id)) if @ld_id
 @rfl428_instances.each { |inst| inst.destroy! rescue nil }
+Familia.members.delete(@late_klass) if @late_klass
 @rfl428_classes.each { |klass| delete_test_dbkeys(klass) }

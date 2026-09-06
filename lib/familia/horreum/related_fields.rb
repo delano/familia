@@ -371,19 +371,30 @@ module Familia
 
       # Builds (once) and returns the class-level DataType for +name+.
       #
-      # Two phases around related_fields_mutex, which is non-reentrant:
+      # Single flight under class_related_field_build_lock: every builder
+      # holds it across construction, so a second thread that missed the
+      # unlocked cache read blocks and then finds the built object. A custom
+      # type's +init+ therefore runs exactly once per field (it may have
+      # side effects; an earlier version let every thread that missed the
+      # cache construct and kept the first store).
       #
-      # 1. Under the lock: read the CURRENT definition (so a
+      # Inside the build lock, two phases around related_fields_mutex, which
+      # is non-reentrant:
+      #
+      # 1. Under the mutex: read the CURRENT definition (so a
       #    configure_related_field made after the declaration is honored)
       #    and freeze its opts. From here on configure_related_field and
       #    re-declaration raise, so the definition cannot change under us.
-      # 2. Outside the lock: construct the DataType. DataType#initialize runs
-      #    overridable setters and +init+; a custom type that touches another
-      #    class-level collection there would deadlock if we still held the
-      #    lock. Then store under the lock, first writer wins: two threads
-      #    that both got past phase 1 built identical objects from the same
-      #    frozen definition, and the loser's copy is simply dropped
-      #    (construction has no side effects).
+      # 2. Outside the mutex, still under the build lock: construct the
+      #    DataType and store it. DataType#initialize runs overridable
+      #    setters and +init+; a custom type that touches another class-level
+      #    collection there re-enters the build lock (a reentrant Monitor)
+      #    on this thread instead of deadlocking on the mutex. Cyclic
+      #    cross-class +init+ dependencies across threads would deadlock, as
+      #    with any single-flight scheme; keep such dependencies acyclic.
+      #
+      # A failed construction propagates, releases the lock and leaves the
+      # cache empty (the opts stay frozen); the next caller retries.
       #
       # Built objects live in class_related_field_cache, not in @<name> on
       # the class, so an unrelated class instance variable of the same name
@@ -394,22 +405,21 @@ module Familia
         built = cache[name]
         return built unless built.nil?
 
-        definition = nil
-        related_fields_mutex.synchronize do
+        class_related_field_build_lock.synchronize do
           built = cache[name]
           return built unless built.nil?
 
-          definition = class_related_fields.fetch(name) do
-            raise ArgumentError, "#{self} has no class-level related field #{name.inspect}"
+          definition = nil
+          related_fields_mutex.synchronize do
+            definition = class_related_fields.fetch(name) do
+              raise ArgumentError, "#{self} has no class-level related field #{name.inspect}"
+            end
+            definition.opts.freeze
           end
-          definition.opts.freeze
-        end
 
-        related_field = definition.klass.new(name, definition.opts)
-        related_field.freeze
-
-        related_fields_mutex.synchronize do
-          cache[name] ||= related_field
+          related_field = definition.klass.new(name, definition.opts)
+          related_field.freeze
+          cache[name] = related_field
         end
       end
 

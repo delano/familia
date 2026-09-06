@@ -166,6 +166,8 @@ Declaration, re-declaration, `configure_related_field`, and the freeze itself al
 
 DataType construction runs outside that lock. `DataType#initialize` calls overridable setters and `init`, so a custom type whose `init` touches another collection on the same class (`parent.model_klass.registry`) works during either an instance-level or a class-level build instead of deadlocking on the non-reentrant mutex.
 
+Class-level builds are single-flight: each class has a reentrant build lock that every builder holds across construction, so concurrent first calls to `Klass.registry` construct the DataType (and run its `init`) exactly once and the other callers receive the cached object. A custom `init` that reads a sibling collection re-enters that lock on the same thread. The first instance-level materialization freezes the definitions and takes a snapshot of the registry under the mutex, then builds from the snapshot, so a new field declared concurrently (as `participates_in` does at load) never collides with a build in progress.
+
 A name may exist at both levels (`zset :instances` alongside the automatic `class_sorted_set :instances`). `configure_related_field` addresses the instance-level definition when both exist; pass `scope: :class` (or `scope: :instance`) to pick one explicitly:
 
 ```ruby
