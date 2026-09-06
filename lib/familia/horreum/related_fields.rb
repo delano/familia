@@ -377,14 +377,18 @@ module Familia
       # safety: stub the class method, not the instance) and the definition's
       # opts. The keystring is the field name, not opts[:suffix], unchanged
       # from the eager build this replaces.
+      #
+      # Built objects live in class_related_field_cache, not in @<name> on
+      # the class, so an unrelated class instance variable of the same name
+      # is never returned as the collection.
       def materialize_class_related_field(name)
-        ivar = :"@#{name}"
-        existing = instance_variable_get(ivar)
-        return existing unless existing.nil?
+        cache = class_related_field_cache
+        built = cache[name]
+        return built unless built.nil?
 
         related_fields_mutex.synchronize do
-          existing = instance_variable_get(ivar)
-          next existing unless existing.nil?
+          built = cache[name]
+          next built unless built.nil?
 
           definition = class_related_fields.fetch(name) do
             raise ArgumentError, "#{self} has no class-level related field #{name.inspect}"
@@ -392,7 +396,7 @@ module Familia
           related_field = definition.klass.new(name, definition.opts)
           related_field.freeze
           definition.opts.freeze
-          instance_variable_set(ivar, related_field)
+          cache[name] = related_field
         end
       end
 

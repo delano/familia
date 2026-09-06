@@ -135,6 +135,16 @@ class Rfl428Owned < Familia::Horreum
   field :id
 end
 
+# 19. a pre-existing class instance variable sharing a class-level field's
+# name must not be served as the collection
+class Rfl428Preexisting < Familia::Horreum
+  identifier_field :id
+  field :id
+  @registry = :preexisting
+  class_list :registry, max_length: 4
+end
+
+
 # 12. Widens the read-build-freeze window in initialize_relatives so the GVL
 # interleaves the materializing thread with configure_related_field. Inert
 # until +active+ is set; the race block turns it on and off again.
@@ -166,6 +176,7 @@ end
   Rfl428Events, Rfl428Registry, Rfl428Validate, Rfl428Frozen, Rfl428ClassFirst,
   Rfl428Parent, Rfl428Child, Rfl428ParentB, Rfl428ChildB, Rfl428SubKey, Rfl428Loaded,
   Rfl428Concurrent, Rfl428LazyReg, Rfl428Replace, Rfl428Redeclare, Rfl428Scoped, Rfl428Owned,
+  Rfl428Preexisting,
 ]
 
 ## 1a. Configuring max_length before the first instance is reflected on that instance
@@ -841,6 +852,12 @@ eager = klass.instance_variable_get(:@related_fields_mutex)
 [eager.class, eager.equal?(klass.related_fields_mutex), eager.name]
 #=> [Familia::ThreadSafety::InstrumentedMutex, true, 'related_fields']
 
+## 19b. Each class in a hierarchy has its own mutex and its own class-level cache
+[Rfl428Child.related_fields_mutex.equal?(Rfl428Parent.related_fields_mutex),
+ Rfl428Child.class_related_field_cache.equal?(Rfl428Parent.class_related_field_cache),
+ Rfl428Child.class_related_field_cache.class]
+#=> [false, false, Hash]
+
 ## 19c. Concurrent first callers all get the same mutex object
 klass = Class.new(Familia::Horreum)
 seen = Array.new(8)
@@ -855,6 +872,24 @@ end
 threads.each(&:join)
 seen.uniq(&:object_id).size
 #=> 1
+
+## 20a. A class instance variable with the field's name is not served as the collection
+# Configure first so we can also see the lazy build honor it: the eager
+# declaration used to overwrite @registry; the lazy one must not read it.
+Rfl428Preexisting.configure_related_field(:registry, max_length: 8)
+@pre_built = Rfl428Preexisting.registry
+[@pre_built.class, @pre_built.max_length, Rfl428Preexisting.instance_variable_get(:@registry)]
+#=> [Familia::ListKey, 8, :preexisting]
+
+## 20b. The build went through the lifecycle: definition frozen, repeated access returns the cache
+[Rfl428Preexisting.class_related_fields[:registry].opts.frozen?,
+ Rfl428Preexisting.registry.equal?(@pre_built),
+ Rfl428Preexisting.class_related_field_cache[:registry].equal?(@pre_built)]
+#=> [true, true, true]
+
+## 20c. ...so a later configure is refused rather than silently "succeeding" against a dead accessor
+Rfl428Preexisting.configure_related_field(:registry, max_length: 9)
+#=!> Familia::RelatedFieldFrozenError
 
 # Teardown: remove only the keys this file wrote.
 Rfl428Registry.registry.delete!

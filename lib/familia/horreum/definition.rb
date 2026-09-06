@@ -282,6 +282,15 @@ module Familia
         @class_related_fields
       end
 
+      # Built class-level DataTypes, keyed by field name. A dedicated Hash
+      # rather than @<name> on the class: an unrelated class instance
+      # variable that happens to share a field's name must not be mistaken
+      # for the materialized collection. Per class; never copied by
+      # +inherited+ (a subclass builds its own, keyed under itself).
+      def class_related_field_cache
+        @class_related_field_cache
+      end
+
       # Guards the related-field registries: declaration and re-declaration
       # (attach_*_related_field), reconfiguration (configure_related_field)
       # and the freeze that closes the window (initialize_relatives and
@@ -296,12 +305,13 @@ module Familia
         @related_fields_mutex
       end
 
-      # The per-class lock must exist before any thread can race on it, so
-      # it is created when the module is extended (Horreum's +inherited+
-      # hook), not lazily on first use.
+      # Per-class lock and cache must exist before any thread can race on
+      # them, so they are created when the module is extended (Horreum's
+      # +inherited+ hook), not lazily on first use.
       def self.extended(base)
         base.instance_variable_set(:@related_fields_mutex,
                                    Familia::ThreadSafety::InstrumentedMutex.new('related_fields'))
+        base.instance_variable_set(:@class_related_field_cache, {})
       end
 
       def related_fields
