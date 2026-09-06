@@ -299,8 +299,10 @@ module Familia
       # taking the lock for the first time would otherwise each allocate a
       # mutex and exclude nothing.
       #
-      # Backed by a non-reentrant Mutex: never call a class-level collection
-      # accessor from inside a synchronize block on it.
+      # Backed by a non-reentrant Mutex. The lifecycle only holds it around
+      # registry reads, replacements and the opts freeze; DataType
+      # construction (which runs user-overridable setters and +init+) happens
+      # outside it so a custom type may touch other collections.
       def related_fields_mutex
         @related_fields_mutex
       end

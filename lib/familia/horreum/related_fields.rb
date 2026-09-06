@@ -371,32 +371,45 @@ module Familia
 
       # Builds (once) and returns the class-level DataType for +name+.
       #
-      # Double-checked under related_fields_mutex. Reads the CURRENT
-      # definition from the registry so a configure_related_field call made
-      # after the declaration is honored. Freezes the DataType (thread
-      # safety: stub the class method, not the instance) and the definition's
-      # opts. The keystring is the field name, not opts[:suffix], unchanged
-      # from the eager build this replaces.
+      # Two phases around related_fields_mutex, which is non-reentrant:
+      #
+      # 1. Under the lock: read the CURRENT definition (so a
+      #    configure_related_field made after the declaration is honored)
+      #    and freeze its opts. From here on configure_related_field and
+      #    re-declaration raise, so the definition cannot change under us.
+      # 2. Outside the lock: construct the DataType. DataType#initialize runs
+      #    overridable setters and +init+; a custom type that touches another
+      #    class-level collection there would deadlock if we still held the
+      #    lock. Then store under the lock, first writer wins: two threads
+      #    that both got past phase 1 built identical objects from the same
+      #    frozen definition, and the loser's copy is simply dropped
+      #    (construction has no side effects).
       #
       # Built objects live in class_related_field_cache, not in @<name> on
       # the class, so an unrelated class instance variable of the same name
-      # is never returned as the collection.
+      # is never returned as the collection. The keystring is the field
+      # name, not opts[:suffix], unchanged from the eager build this replaces.
       def materialize_class_related_field(name)
         cache = class_related_field_cache
         built = cache[name]
         return built unless built.nil?
 
+        definition = nil
         related_fields_mutex.synchronize do
           built = cache[name]
-          next built unless built.nil?
+          return built unless built.nil?
 
           definition = class_related_fields.fetch(name) do
             raise ArgumentError, "#{self} has no class-level related field #{name.inspect}"
           end
-          related_field = definition.klass.new(name, definition.opts)
-          related_field.freeze
           definition.opts.freeze
-          cache[name] = related_field
+        end
+
+        related_field = definition.klass.new(name, definition.opts)
+        related_field.freeze
+
+        related_fields_mutex.synchronize do
+          cache[name] ||= related_field
         end
       end
 

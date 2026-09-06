@@ -323,31 +323,28 @@ module Familia
 
       definitions = self.class.related_fields
 
-      if definitions.each_value.all? { |definition| definition.opts.frozen? }
-        # Fast path (every instance after the first): all definitions are
-        # frozen, so configure_related_field and re-declaration both raise
-        # without touching the registry and there is nothing to serialize
-        # against. This check costs the same single pass the freeze loop
-        # below does.
-        definitions.each_pair { |name, definition| build_related_field(name, definition) }
-      else
-        # First materialization: read, build and freeze under the same
-        # mutex configure_related_field replaces entries under. Without it a
-        # configure call can land between our read and our freeze, so the
-        # first instance is built on the old options, the freeze lands on
-        # the new definition, and every later instance silently disagrees.
-        # Non-reentrant: nothing in build_related_field may call
-        # configure_related_field or a class-level collection getter.
+      # First materialization: freeze every instance-level definition under
+      # the mutex configure_related_field and re-declaration replace entries
+      # under, THEN build. Once frozen, neither can replace an entry (both
+      # check frozen? under the same lock), so the definitions the build
+      # loop below reads are exactly the ones frozen here. A configure that
+      # took the lock first is honored by every instance; one that arrives
+      # after raises. Nothing can land in between.
+      #
+      # The build itself runs outside the lock: DataType#initialize calls
+      # overridable setters and +init+, and a custom type that touches a
+      # class-level collection there would deadlock on the non-reentrant
+      # mutex if we still held it.
+      #
+      # Every instance after the first takes the unlocked fast path. The
+      # all? check costs the same single pass the freeze loop does.
+      unless definitions.each_value.all? { |definition| definition.opts.frozen? }
         self.class.related_fields_mutex.synchronize do
-          definitions.each_pair { |name, definition| build_related_field(name, definition) }
-
-          # Closes the configuration window for every instance-level
-          # definition: configure_related_field and re-declaration raise
-          # from here on, so no two instances of this class can disagree
-          # about a field's options.
           definitions.each_value { |definition| definition.opts.freeze }
         end
       end
+
+      definitions.each_pair { |name, definition| build_related_field(name, definition) }
 
       # Mark relatives as initialized on singleton class to avoid polluting instance variables
       singleton_class.instance_variable_set(:@relatives_initialized, true)

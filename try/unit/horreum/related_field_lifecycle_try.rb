@@ -9,8 +9,11 @@
 # materialization: instance-level ones together at the end of the first
 # initialize_relatives (Klass.new or the load path), class-level ones one at a
 # time on the first accessor call. Class-level collections are now built
-# lazily. Subclasses get deep-copied definitions. The shared definition Hash
-# must never receive an instance-level :parent (that was a race).
+# lazily, into a per-class cache (not @<name> on the class). Subclasses get
+# deep-copied definitions. The shared definition Hash must never receive an
+# instance-level :parent (that was a race). Declaration, re-declaration,
+# configuration and the freeze all serialize on related_fields_mutex, which
+# exists from class creation; DataType construction runs outside it.
 #
 # Every class here is fresh and uniquely named (Rfl428*) because the shared
 # test helper already materializes Customer/Session/CustomDomain at load, and
@@ -144,6 +147,30 @@ class Rfl428Preexisting < Familia::Horreum
   class_list :registry, max_length: 4
 end
 
+# 20. a custom DataType whose init reads another class-level collection of
+# the same Horreum class. Construction must run outside related_fields_mutex
+# or this deadlocks (ThreadError: deadlock; recursive locking).
+class Rfl428ChainedList < Familia::ListKey
+  attr_reader :sibling_dbkey
+
+  def init
+    @sibling_dbkey = parent.model_klass.registry.dbkey
+  end
+end
+
+class Rfl428Chain < Familia::Horreum
+  identifier_field :id
+  field :id
+  class_sorted_set :registry, max_length: 3
+  attach_class_related_field :chain, Rfl428ChainedList, {}
+end
+
+class Rfl428ChainInst < Familia::Horreum
+  identifier_field :id
+  field :id
+  class_sorted_set :registry, max_length: 3
+  attach_instance_related_field :trail, Rfl428ChainedList, {}
+end
 
 # 12. Widens the read-build-freeze window in initialize_relatives so the GVL
 # interleaves the materializing thread with configure_related_field. Inert
@@ -176,7 +203,7 @@ end
   Rfl428Events, Rfl428Registry, Rfl428Validate, Rfl428Frozen, Rfl428ClassFirst,
   Rfl428Parent, Rfl428Child, Rfl428ParentB, Rfl428ChildB, Rfl428SubKey, Rfl428Loaded,
   Rfl428Concurrent, Rfl428LazyReg, Rfl428Replace, Rfl428Redeclare, Rfl428Scoped, Rfl428Owned,
-  Rfl428Preexisting,
+  Rfl428Preexisting, Rfl428Chain, Rfl428ChainInst,
 ]
 
 ## 1a. Configuring max_length before the first instance is reflected on that instance
@@ -890,6 +917,29 @@ Rfl428Preexisting.configure_related_field(:registry, max_length: 8)
 ## 20c. ...so a later configure is refused rather than silently "succeeding" against a dead accessor
 Rfl428Preexisting.configure_related_field(:registry, max_length: 9)
 #=!> Familia::RelatedFieldFrozenError
+
+## 21a. A custom DataType may read another class-level collection in init during a class-level build
+# DataType#initialize (setters + init) runs outside related_fields_mutex;
+# holding the non-reentrant lock across it raised ThreadError here.
+chain = Rfl428Chain.chain
+[chain.class, chain.sibling_dbkey == Rfl428Chain.registry.dbkey,
+ Rfl428Chain.class_related_fields[:chain].opts.frozen?,
+ Rfl428Chain.class_related_fields[:registry].opts.frozen?]
+#=> [Rfl428ChainedList, true, true, true]
+
+## 21b. ...and during an instance-level build (initialize_relatives), with the class-level field untouched so far
+[Rfl428ChainInst.class_related_fields[:registry].opts.frozen?,
+ Rfl428ChainInst.class_related_field_cache.key?(:registry)]
+#=> [false, false]
+
+## 21c. Klass.new builds the custom instance-level type, whose init materializes Klass.registry
+inst = Rfl428ChainInst.new(id: "chain-#{@rfl428_run}")
+@rfl428_instances << inst
+[inst.trail.class, inst.trail.sibling_dbkey == Rfl428ChainInst.registry.dbkey,
+ inst.trail.dbkey == Rfl428ChainInst.dbkey(inst.identifier, :trail),
+ Rfl428ChainInst.related_fields[:trail].opts.frozen?,
+ Rfl428ChainInst.class_related_fields[:registry].opts.frozen?]
+#=> [Rfl428ChainedList, true, true, true, true]
 
 # Teardown: remove only the keys this file wrote.
 Rfl428Registry.registry.delete!
