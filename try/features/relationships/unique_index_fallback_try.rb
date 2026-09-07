@@ -72,10 +72,14 @@ end
 @uif_record.save
 
 ## The backing HashKey is not selected as the fallback membership collection
+# The scope declares no membership collection for the indexed class, so the
+# helper must return nil (Strategy 3 scan) rather than the badge_index HashKey.
 @uif_scope.badge_index.clear
+selected = Familia::Features::Relationships::Indexing::UniqueIndexGenerators
+  .find_membership_collection(@uif_scope, UniqueIndexFallbackRecord, :badge_index)
 count = @uif_scope.rebuild_badge_index
-[count, @uif_scope.find_by_badge("badge-#{@uif_run}")&.record_id]
-#=> [1, "record-#{@uif_run}"]
+[selected, count, @uif_scope.find_by_badge("badge-#{@uif_run}")&.record_id]
+#=> [nil, 1, "record-#{@uif_run}"]
 
 ## Fallback selection tolerates a concurrent related-field declaration
 # Pause the fallback while it inspects the unrelated field. The declaration
@@ -107,13 +111,18 @@ ensure
   @uif_control[:release] << true
   @uif_rebuilder.join
 end
+# The late list carries no class: metadata, so after the race the helper
+# still selects nothing; the rebuild count came from the scan path.
+@uif_selected_after = Familia::Features::Relationships::Indexing::UniqueIndexGenerators
+  .find_membership_collection(@uif_scope, UniqueIndexFallbackRecord, :badge_index)
 [
   @uif_rebuild_error&.class,
   @uif_declaration_error&.class,
   @uif_rebuild_count,
   UniqueIndexFallbackScope.related_fields.key?(:late_members),
+  @uif_selected_after,
 ]
-#=> [nil, nil, 1, true]
+#=> [nil, nil, 1, true, nil]
 
 # Teardown
 @uif_control[:armed].make_false
