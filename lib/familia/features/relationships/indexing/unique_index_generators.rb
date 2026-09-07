@@ -195,8 +195,8 @@ module Familia
                 # (participates_in collections carry record_class:; reference
                 # collections carry class:.)
                 unless collection
-                  if self.class.respond_to?(:related_fields)
-                    self.class.related_fields&.each do |name, field_def|
+                  if self.class.respond_to?(:related_fields_snapshot)
+                    self.class.related_fields_snapshot.each do |name, field_def|
                       if [field_def.opts[:record_class], field_def.opts[:class]].include?(indexed_class)
                         collection = send(name)
                         break

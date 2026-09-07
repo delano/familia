@@ -158,8 +158,8 @@ module Familia
 
           # Copy DataType relationships (deep-copied, see dup_related_field_definitions)
           %i[class_related_fields related_fields].each do |registry|
-            defs = parent_class.send(registry)
-            next unless defs&.any?
+            defs = parent_class.send(:"#{registry}_snapshot")
+            next unless defs.any?
 
             member.instance_variable_set(:"@#{registry}", dup_related_field_definitions(defs, parent_class, member))
           end
