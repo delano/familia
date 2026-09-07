@@ -15,11 +15,15 @@
 # configuration and the freeze all serialize on related_fields_mutex, which
 # exists from class creation; DataType construction runs outside it. Class-
 # level builds are single-flight under a per-class reentrant build lock, and
-# the first instance builds from a registry snapshot, not the live Hash.
+# the first instance builds from a registry snapshot, not the live Hash. A
+# field declared after an instance took that snapshot is materialized by its
+# accessor on first access (issue #430), single-flight under the same lock.
 #
 # Every class here is fresh and uniquely named (Rfl428*) because the shared
 # test helper already materializes Customer/Session/CustomDomain at load, and
 # all tryouts share constants and db 0.
+
+require 'timeout'
 
 require_relative '../../support/helpers/test_helpers'
 
@@ -204,6 +208,24 @@ class Rfl428SingleFlight < Familia::Horreum
   attach_class_related_field :counted, Rfl428CountedList, {}
 end
 
+# Blocks while inherited deep-copies one definition. A concurrent declaration
+# can then deterministically mutate the parent's live registry during the copy.
+class Rfl428BlockingDupOptions < Hash
+  def initialize(control)
+    @control = control
+    super()
+  end
+
+  def initialize_copy(source)
+    super
+    return unless @control[:armed].true?
+
+    @control[:armed].make_false
+    @control[:entered] << true
+    @control[:release].pop
+  end
+end
+
 # 12. Widens the read-build-freeze window in initialize_relatives so the GVL
 # interleaves the materializing thread with configure_related_field. Inert
 # until +active+ is set; the race block turns it on and off again.
@@ -222,11 +244,120 @@ module Rfl428SlowBuild
 end
 Rfl428SlowBuild.active = false
 
+# 24. late declaration on a class that already has instances; the old
+# instance materializes the missing field on first access (#430)
+class Rfl428Late < Familia::Horreum
+  feature :expiration
+  identifier_field :id
+  field :id
+  sorted_set :events, max_length: 10
+end
+
+# 24h/24i. a DataType whose init parks on a gate while armed, so the test
+# fixes the interleaving instead of widening a window with sleep.
+class Rfl428GatedList < Familia::ListKey
+  @constructions = Concurrent::AtomicFixnum.new(0)
+  @entered = Queue.new
+  @gate = Queue.new
+  class << self
+    attr_reader :constructions, :entered, :gate
+    attr_accessor :armed
+  end
+
+  def init
+    self.class.constructions.increment
+    return unless self.class.armed
+
+    self.class.entered << true
+    self.class.gate.pop
+  end
+end
+Rfl428GatedList.armed = false
+
+# 24i. the gated build parks initialize_relatives after its snapshot
+class Rfl428GatedInit < Familia::Horreum
+  identifier_field :id
+  field :id
+  attach_instance_related_field :gated, Rfl428GatedList, {}
+end
+
+# 24j. accessor inherited, definition not: declared on the base after the
+# subclass copied the registry
+class Rfl428LateBase < Familia::Horreum
+  identifier_field :id
+  field :id
+  list :events
+end
+
+class Rfl428LateSub < Rfl428LateBase
+end
+
 def rfl428_capture
   yield
   nil
 rescue StandardError => e
   e
+end
+
+def rfl428_inherited_copy_race(scope)
+  parent = Class.new(Familia::Horreum) do
+    identifier_field :id
+    field :id
+  end
+  registry_name, declaration_method, original_name, late_name = if scope == :instance
+    [:related_fields, :list, :events, :late_events]
+  else
+    [:class_related_fields, :class_list, :registry, :late_registry]
+  end
+  parent.public_send(declaration_method, original_name)
+
+  control = {
+    armed: Concurrent::AtomicBoolean.new(false),
+    entered: Queue.new,
+    release: Queue.new,
+  }
+  registry = parent.public_send(registry_name)
+  definition = registry.fetch(original_name)
+  blocking_opts = Rfl428BlockingDupOptions.new(control)
+  blocking_opts.merge!(definition.opts)
+  parent.related_fields_mutex.synchronize do
+    registry[original_name] = definition.with(opts: blocking_opts)
+  end
+  control[:armed].make_true
+
+  child = nil
+  inherited_error = nil
+  declaration_error = nil
+  inheritor = Thread.new do
+    child = Class.new(parent)
+  rescue StandardError => e
+    inherited_error = e
+  end
+
+  begin
+    Timeout.timeout(5) { control[:entered].pop }
+    declarer = Thread.new do
+      parent.public_send(declaration_method, late_name)
+    rescue StandardError => e
+      declaration_error = e
+    end
+    declarer.join
+  rescue Timeout::Error => e
+    inherited_error ||= e
+  ensure
+    control[:release] << true
+    inheritor.join
+  end
+
+  {
+    parent: parent,
+    child: child,
+    registry_name: registry_name,
+    original_name: original_name,
+    late_name: late_name,
+    inherited_error: inherited_error,
+    declaration_error: declaration_error,
+  }
 end
 
 @rfl428_run = Familia.now.to_i.to_s
@@ -236,6 +367,7 @@ end
   Rfl428Parent, Rfl428Child, Rfl428ParentB, Rfl428ChildB, Rfl428SubKey, Rfl428Loaded,
   Rfl428Concurrent, Rfl428LazyReg, Rfl428Replace, Rfl428Redeclare, Rfl428Scoped, Rfl428Owned,
   Rfl428Preexisting, Rfl428Chain, Rfl428ChainInst, Rfl428ChainRace, Rfl428SingleFlight,
+  Rfl428Late, Rfl428GatedInit, Rfl428LateBase, Rfl428LateSub,
 ]
 
 ## 1a. Configuring max_length before the first instance is reflected on that instance
@@ -1099,11 +1231,167 @@ end
  @snap_klass.related_fields.key?(:snap_after)]
 #=> [true, false, true]
 
+## 24a. Subclass copying tolerates a concurrent instance-field declaration
+# The blocking opts Hash pauses the subclass's deep copy after inherited has
+# taken its registry snapshot. Mutating the parent's live Hash at that point
+# raised "can't add a new key into hash during iteration" before inherited
+# copied from related_fields_snapshot.
+@instance_copy_race = rfl428_inherited_copy_race(:instance)
+@rfl428_inherited_classes = [@instance_copy_race[:parent], @instance_copy_race[:child]]
+instance_parent_fields = @instance_copy_race[:parent].related_fields
+instance_child_fields = @instance_copy_race[:child]&.related_fields
+[
+  @instance_copy_race[:inherited_error]&.class,
+  @instance_copy_race[:declaration_error]&.class,
+  instance_parent_fields.key?(@instance_copy_race[:late_name]),
+  instance_child_fields&.key?(@instance_copy_race[:original_name]),
+  instance_child_fields&.key?(@instance_copy_race[:late_name]),
+]
+#=> [nil, nil, true, true, false]
+
+## 24b. Subclass copying tolerates a concurrent class-field declaration
+@class_copy_race = rfl428_inherited_copy_race(:class)
+@rfl428_inherited_classes.push(@class_copy_race[:parent], @class_copy_race[:child])
+class_parent_fields = @class_copy_race[:parent].class_related_fields
+class_child_fields = @class_copy_race[:child]&.class_related_fields
+[
+  @class_copy_race[:inherited_error]&.class,
+  @class_copy_race[:declaration_error]&.class,
+  class_parent_fields.key?(@class_copy_race[:late_name]),
+  class_child_fields&.key?(@class_copy_race[:original_name]),
+  class_child_fields&.key?(@class_copy_race[:late_name]),
+]
+#=> [nil, nil, true, true, false]
+
+## 24a. Snapshot before declaration: an existing instance materializes a late field on first access
+# initialize_relatives builds what its snapshot holds and marks the
+# instance initialized. A field declared afterwards (participates_in at
+# load, or any late `Klass.list :x`) has an accessor but no @ivar on that
+# instance; the accessor used to raise "is nil. Did you override
+# initialize without calling super?". It now builds that one field from
+# the current definition.
+@late_inst = Rfl428Late.new(id: "late-#{@rfl428_run}")
+@rfl428_instances << @late_inst
+@late_events = @late_inst.events
+Rfl428Late.list :late_notes
+ivar_before = @late_inst.instance_variable_get(:@late_notes)
+[ivar_before, @late_inst.late_notes.class,
+ @late_inst.late_notes.dbkey.end_with?(":late-#{@rfl428_run}:late_notes")]
+#=> [nil, Familia::ListKey, true]
+
+## 24b. Materialized once and frozen; the fields built at initialize are not rebuilt
+[@late_inst.late_notes.equal?(@late_inst.late_notes),
+ @late_inst.late_notes.frozen?,
+ @late_inst.events.equal?(@late_events),
+ Rfl428Late.related_fields[:late_notes].opts.frozen?]
+#=> [true, true, true, true]
+
+## 24c. Materialization uses the current definition: a configure between declaration and first access applies
+Rfl428Late.list :late_capped, max_length: 5
+Rfl428Late.configure_related_field(:late_capped, max_length: 8)
+@late_inst.late_capped.max_length
+#=> 8
+
+## 24d. ...and that first access froze the definition, so a later configure is refused
+Rfl428Late.configure_related_field(:late_capped, max_length: 9)
+#=!> Familia::RelatedFieldFrozenError
+
+## 24e. update_expiration, persist! and ttl_report on the old instance reach the late field
+@late_inst.late_notes << 'a'
+@late_inst.save
+@late_inst.update_expiration(expiration: 300)
+ttl_after_expire = @late_inst.late_notes.ttl
+@late_inst.persist!
+ttl_after_persist = @late_inst.late_notes.ttl
+report = @late_inst.ttl_report
+[ttl_after_expire.between?(1, 300), ttl_after_persist,
+ report[:relations].key?(:late_notes), report[:relations][:late_notes][:key] == @late_inst.late_notes.dbkey]
+#=> [true, -1, true, true]
+
+## 24f. Instance destroy! on the old instance removes the late field's key too
+late_key = @late_inst.late_notes.dbkey
+existed = @late_inst.late_notes.exists?
+@late_inst.destroy!
+[existed, Rfl428Late.dbclient.exists(late_key)]
+#=> [true, 0]
+
+## 24g. Declaration before the instance: the initial build includes the field, no late path involved
+@late_after_inst = Rfl428Late.new(id: "late-after-#{@rfl428_run}")
+@late_after_inst.instance_variable_get(:@late_notes).class
+#=> Familia::ListKey
+
+## 24h. Deterministic race: concurrent first access on one instance constructs the late field once
+# Thread A enters Rfl428GatedList#init (holding the class's build lock) and
+# parks on the gate; the test then starts thread B on the same accessor. B
+# must wait for A rather than construct a second DataType. Both get A's
+# object and the construction counter moved by exactly one. No Thread.pass
+# or sleep decides the interleaving; the gate does.
+Rfl428Late.attach_instance_related_field :gated, Rfl428GatedList, {}
+@late_race_inst = Rfl428Late.new(id: "late-race-#{@rfl428_run}")
+# Rfl428Late.new above built :gated for the new instance; the late path is
+# the instance from 24g, created before :gated was declared.
+old_inst = @late_after_inst
+built_before = Rfl428GatedList.constructions.value
+Rfl428GatedList.armed = true
+begin
+  ta = Thread.new { old_inst.gated }
+  Rfl428GatedList.entered.pop
+  tb = Thread.new { old_inst.gated }
+  tb_finished_early = !tb.join(0.05).nil?
+  Rfl428GatedList.gate << true
+  a = ta.value
+  b = tb.value
+ensure
+  Rfl428GatedList.armed = false
+end
+built = Rfl428GatedList.constructions.value - built_before
+[tb_finished_early, a.equal?(b), a.equal?(old_inst.gated), a.class, built]
+#=> [false, true, true, Rfl428GatedList, 1]
+
+## 24i. Deterministic ordering: a field declared during the initial build is materialized on access
+# Rfl428GatedInit.new takes its registry snapshot, then parks inside the
+# gated build. The declaration lands while it is parked: after the
+# snapshot, so the instance comes out of new without @late_mid, and before
+# @relatives_initialized is set. First access builds it. The declaring
+# thread does not raise (the build loop iterates the snapshot, not the
+# live Hash) and does not block (initialize_relatives does not hold the
+# build lock).
+Rfl428GatedList.armed = true
+begin
+  t = Thread.new { Rfl428GatedInit.new(id: "mid-#{@rfl428_run}") }
+  Rfl428GatedList.entered.pop
+  declared = rfl428_capture { Rfl428GatedInit.list :late_mid }
+  Rfl428GatedList.gate << true
+  @mid_inst = t.value
+ensure
+  Rfl428GatedList.armed = false
+end
+[declared, @mid_inst.instance_variable_get(:@late_mid), @mid_inst.late_mid.class,
+ @mid_inst.gated.class, Rfl428GatedInit.related_fields[:late_mid].opts.frozen?]
+#=> [nil, nil, Familia::ListKey, Rfl428GatedList, true]
+
+## 24j. A field declared on an ancestor after the subclass was defined: inherited accessor, no definition, clear error
+# The subclass copied the registry at definition time; the accessor is a
+# plain inherited method. Neither an old nor a new subclass instance can
+# build it. Previously the message blamed a missing super call.
+sub_old = Rfl428LateSub.new(id: "sub-old-#{@rfl428_run}")
+Rfl428LateBase.list :later_on_base
+sub_new = Rfl428LateSub.new(id: "sub-new-#{@rfl428_run}")
+errors = [sub_old, sub_new].map { |i| rfl428_capture { i.later_on_base } }
+expected_tail = 'Rfl428LateSub#later_on_base has no related-field definition ' \
+                '(was it declared on an ancestor after this class was defined?)'
+[errors.map(&:class).uniq,
+ errors.map { |e| e.message.end_with?(expected_tail) },
+ Rfl428LateBase.new(id: "base-#{@rfl428_run}").later_on_base.class]
+#=> [[Familia::HorreumError], [true, true], Familia::ListKey]
+
 # Teardown: remove only the keys this file wrote.
 Rfl428Registry.registry.delete!
 Rfl428SlowBuild.active = false
+Rfl428GatedList.armed = false
 Rfl428Loaded.dbclient.del(Rfl428Loaded.dbkey(@ld_id)) if @ld_id
 @rfl428_instances.each { |inst| inst.destroy! rescue nil }
 Familia.members.delete(@late_klass) if @late_klass
 Familia.members.delete(@snap_klass) if @snap_klass
+@rfl428_inherited_classes&.each { |klass| Familia.members.delete(klass) if klass }
 @rfl428_classes.each { |klass| delete_test_dbkeys(klass) }
