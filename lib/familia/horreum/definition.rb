@@ -357,6 +357,12 @@ module Familia
         related_fields_mutex.synchronize { related_fields.dup }
       end
 
+      # Class-level counterpart to +related_fields_snapshot+. Same mutex, same
+      # writer (attach_class_related_field), same hazard when iterated live.
+      def class_related_fields_snapshot
+        related_fields_mutex.synchronize { class_related_fields.dup }
+      end
+
       def relations?
         @has_related_fields ||= false
       end

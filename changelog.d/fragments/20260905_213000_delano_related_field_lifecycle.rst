@@ -60,13 +60,14 @@ Changed
   ``participates_in`` does at load) no longer raises ``RuntimeError: can't
   add a new key into hash during iteration``. (#428)
 - The related-field cascades (``update_expiration``, ``persist!``,
-  ``ttl_report``, ``delete_related_fields!`` and the class-level ``destroy!``)
-  iterate a snapshot from the new ``related_fields_snapshot`` helper, taken
-  under ``related_fields_mutex``, rather than the live Hash. Each issues a
-  Redis call per field, so a field declared concurrently (again, as
-  ``participates_in`` does at load) could raise the same ``RuntimeError:
-  can't add a new key into hash during iteration`` in the declaring thread;
-  it no longer can. (#428)
+  ``ttl_report``, ``delete_related_fields!``, the class-level ``destroy!`` and
+  the atomic-write guard ``guard_atomic_write_database!``) iterate a snapshot
+  from the new ``related_fields_snapshot`` /
+  ``class_related_fields_snapshot`` helpers, taken under
+  ``related_fields_mutex``, rather than the live Hash. Each runs on a write or
+  expire path, so a field declared concurrently (again, as ``participates_in``
+  does at load) could raise the same ``RuntimeError: can't add a new key into
+  hash during iteration`` in the declaring thread; it no longer can. (#428)
 - Lazily built class-level collections are cached in a per-class Hash
   (``Klass.class_related_field_cache``) instead of ``@<name>`` on the class,
   so a pre-existing class instance variable with the field's name is never

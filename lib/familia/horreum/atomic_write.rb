@@ -316,7 +316,8 @@ module Familia
       def guard_atomic_write_database!
         horreum_db = self.class.logical_database || Familia.logical_database || 0
 
-        [self.class.related_fields, self.class.class_related_fields].each do |registry|
+        registries = [self.class.related_fields_snapshot, self.class.class_related_fields_snapshot]
+        registries.each do |registry|
           registry.each do |field_name, definition|
             field_db = definition.opts[:logical_database]
             next if field_db.nil?
