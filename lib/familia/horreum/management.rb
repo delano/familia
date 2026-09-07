@@ -589,14 +589,15 @@ module Familia
         transaction do |conn|
           # Clean up related fields first to avoid orphaned keys
           if relations?
-            Familia.trace :DESTROY_RELATIONS!, nil, "#{self} has relations: #{related_fields.keys}" if Familia.debug?
+            fields = related_fields_snapshot
+            Familia.trace :DESTROY_RELATIONS!, nil, "#{self} has relations: #{fields.keys}" if Familia.debug?
 
             # Create a temporary instance to access related fields.
             # Pass identifier in constructor so init() sees it and can set dependent fields.
             identifier_field_name = self.identifier_field
             temp_instance = identifier_field_name ? new(identifier_field_name => identifier.to_s) : new
 
-            related_fields.each do |name, _definition|
+            fields.each do |name, _definition|
               obj = temp_instance.send(name)
               Familia.trace :DESTROY_RELATION!, name, "Deleting related field #{name} (#{obj.dbkey})" if Familia.debug?
               conn.del(obj.dbkey)

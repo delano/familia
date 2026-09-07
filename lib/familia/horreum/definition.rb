@@ -343,6 +343,20 @@ module Familia
         @related_fields
       end
 
+      # Returns a copy of the instance-level related-field registry, taken
+      # under related_fields_mutex.
+      #
+      # attach_instance_related_field adds keys under that mutex; a cascade
+      # loop that iterates the live Hash instead would, if a new field were
+      # declared mid-iteration (application autoloading finishing a
+      # participates_in while an early request saves or expires a record),
+      # make MRI raise "can't add a new key into hash during iteration" in
+      # the declaring thread. Iterating this copy closes that window and
+      # releases the lock before the Redis calls in the cascade run.
+      def related_fields_snapshot
+        related_fields_mutex.synchronize { related_fields.dup }
+      end
+
       def relations?
         @has_related_fields ||= false
       end

@@ -1051,10 +1051,59 @@ inst = @late_klass.new(id: 'iter-after')
  @late_klass.related_fields[:late_19].opts.frozen?, Rfl428SlowBuild.active]
 #=> [21, Familia::ListKey, Familia::SortedSet, true, false]
 
+## 23a. Cascade readers iterate related_fields_snapshot, not the live Hash
+# update_expiration, persist!, ttl_report, delete_related_fields! and the
+# class-level destroy! each iterate related_fields while issuing a Redis call
+# per field. Iterating the live Hash let a permitted concurrent declaration
+# (participates_in at load) raise RuntimeError "can't add a new key into hash
+# during iteration" in the declaring thread. They now iterate a snapshot
+# taken under related_fields_mutex; declaration and snapshot serialize on that
+# mutex, so neither thread raises. Widened here by Thread.pass inside the loop.
+@snap_klass = Class.new(Familia::Horreum) do
+  identifier_field :id
+  field :id
+  list :events
+end
+@snap_errors = []
+begin
+  barrier = Queue.new
+  ta = Thread.new do
+    barrier.pop
+    40.times do
+      @snap_klass.related_fields_snapshot.each_key { |_n| Thread.pass }
+    rescue StandardError => e
+      @snap_errors << e
+    end
+  end
+  tb = Thread.new do
+    barrier.pop
+    40.times do |i|
+      @snap_klass.list :"snap_#{i}"
+      Thread.pass
+    rescue StandardError => e
+      @snap_errors << e
+    end
+  end
+  2.times { barrier << true }
+  [ta, tb].each(&:join)
+end
+@snap_errors.map { |e| [e.class, e.message] }
+#=> []
+
+## 23b. The snapshot is a detached copy: a declaration after it is not reflected
+@snap_before = @snap_klass.related_fields_snapshot
+@snap_size_before = @snap_before.size
+@snap_klass.list :snap_after
+[@snap_before.size == @snap_size_before,
+ @snap_before.equal?(@snap_klass.related_fields),
+ @snap_klass.related_fields.key?(:snap_after)]
+#=> [true, false, true]
+
 # Teardown: remove only the keys this file wrote.
 Rfl428Registry.registry.delete!
 Rfl428SlowBuild.active = false
 Rfl428Loaded.dbclient.del(Rfl428Loaded.dbkey(@ld_id)) if @ld_id
 @rfl428_instances.each { |inst| inst.destroy! rescue nil }
 Familia.members.delete(@late_klass) if @late_klass
+Familia.members.delete(@snap_klass) if @snap_klass
 @rfl428_classes.each { |klass| delete_test_dbkeys(klass) }

@@ -270,8 +270,9 @@ module Familia
         # value instead. Relations with `no_expiration: true` are excluded
         # from cascade entirely and persist independently.
         if self.class.relations?
-          Familia.debug "[update_expiration] #{self.class} has relations: #{self.class.related_fields.keys}"
-          self.class.related_fields.each do |name, definition|
+          fields = self.class.related_fields_snapshot
+          Familia.debug "[update_expiration] #{self.class} has relations: #{fields.keys}"
+          fields.each do |name, definition|
             # Skip relations explicitly excluded from expiration cascade
             next if definition.opts[:no_expiration]
 
@@ -398,7 +399,7 @@ module Familia
       def persist!
         # Cascade to relations first, mirroring update_expiration behavior
         if self.class.relations?
-          self.class.related_fields.each do |name, definition|
+          self.class.related_fields_snapshot.each do |name, definition|
             next if definition.opts[:no_expiration]
 
             send(name).persist
@@ -447,7 +448,7 @@ module Familia
         relation_keys = []
 
         if self.class.relations?
-          self.class.related_fields.each_key do |name|
+          self.class.related_fields_snapshot.each_key do |name|
             relation_names << name
             relation_keys << send(name).dbkey
           end
