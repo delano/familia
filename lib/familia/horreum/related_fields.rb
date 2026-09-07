@@ -195,32 +195,26 @@ module Familia
           related_fields[name] = RelatedFieldDefinition.new(name, klass, opts)
         end
 
-        # Lazy-initializing accessor. Three paths:
-        #
-        # 1. @<name> is set: return it (every access after the first).
-        # 2. Relatives never initialized (initialize overridden without
-        #    super, or the load path): run initialize_relatives, which builds
-        #    every definition in the registry, this one included.
-        # 3. Relatives initialized but @<name> still nil: the field was
-        #    declared after this instance took its snapshot (participates_in
-        #    at load, or any late declaration). Materialize just this one
-        #    from the current definition (see materialize_related_field);
-        #    the instance is not recreated and the cascades
-        #    (update_expiration, persist!, ttl_report, destroy!) that walk
-        #    the current registry keep working on it.
+        # Create lazy-initializing accessor that calls initialize_relatives if needed
         define_method name do
           ivar = :"@#{name}"
           value = instance_variable_get(ivar)
-          return value unless value.nil?
 
+          # If nil and we haven't initialized relatives, do it now
           # Check singleton class to avoid polluting instance variables
-          unless singleton_class.instance_variable_defined?(:@relatives_initialized)
+          if value.nil? && !singleton_class.instance_variable_defined?(:"@relatives_initialized")
             initialize_relatives
             value = instance_variable_get(ivar)
-            return value unless value.nil?
           end
 
-          materialize_related_field(name)
+          # If still nil after lazy initialization attempt, raise helpful error
+          # Only raise if we tried to initialize but it's still nil
+          if value.nil? && singleton_class.instance_variable_defined?(:"@relatives_initialized")
+            raise "#{self.class}##{name} is nil. Did you override initialize without calling super? " \
+                  "(Field is nil after initialization attempt)"
+          end
+
+          value
         end
 
         define_method :"#{name}=" do |val|

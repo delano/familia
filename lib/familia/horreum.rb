@@ -334,8 +334,7 @@ module Familia
       # it at load) and inserts into the live Hash; iterating that Hash here
       # would make the concurrent insert raise "can't add a new key into
       # hash during iteration". A declaration lands either before the
-      # snapshot (this instance builds the field here) or after it (the
-      # accessor builds it on first access; see materialize_related_field).
+      # snapshot (this instance gets the field) or after it (it does not).
       #
       # There is no unlocked fast path: any check that walks the live Hash
       # has the same hazard, and a "frozen once" flag would be wrong because
@@ -399,56 +398,7 @@ module Familia
       # e.g. customer.name  #=> `#<Familia::HashKey:0x0000...>`
       instance_variable_set :"@#{name}", related_object
     end
-
-    # Builds one related field that initialize_relatives did not: the field
-    # was declared after this instance took its registry snapshot, so the
-    # accessor found @<name> nil with @relatives_initialized already set.
-    # Called from that accessor; also reached by every cascade that walks
-    # the current registry and calls +send(name)+ on an instance created
-    # before the declaration.
-    #
-    # Same lifecycle as the initial build, for one definition: freeze its
-    # opts under related_fields_mutex (so a configure_related_field that
-    # arrives afterwards raises rather than leaving this instance on old
-    # options), then construct outside that mutex (DataType#initialize runs
-    # overridable setters and +init+, which may touch other collections).
-    #
-    # Single-flight under the class's reentrant build lock, the same one
-    # class-level builds hold: two threads reaching the accessor at once
-    # construct the DataType (and run a custom +init+) once, and the second
-    # returns the first's object. The lock is per class, so late builds on
-    # different instances serialize too; that is a one-time cost per
-    # instance and field, on a path that only exists after a late
-    # declaration. Lock order is build lock, then related_fields_mutex, as
-    # everywhere else. An already-built field is never rebuilt: @<name> is
-    # re-checked under the lock and returned as is.
-    #
-    # @param name [Symbol] the field name
-    # @return [Familia::DataType] the built (frozen) DataType
-    # @raise [Familia::HorreumError] if this class's registry has no such
-    #   definition. The accessor is inherited, but the registry is copied
-    #   at subclass definition, so a field declared on an ancestor after the
-    #   subclass was defined has an accessor here and no definition.
-    def materialize_related_field(name)
-      ivar = :"@#{name}"
-      self.class.class_related_field_build_lock.synchronize do
-        value = instance_variable_get(ivar)
-        return value unless value.nil?
-
-        definition = self.class.related_fields_mutex.synchronize do
-          self.class.related_fields[name]&.tap { |d| d.opts.freeze }
-        end
-        if definition.nil?
-          raise Familia::HorreumError,
-                "#{self.class}##{name} has no related-field definition (was it declared on an " \
-                'ancestor after this class was defined?)'
-        end
-
-        build_related_field(name, definition)
-        instance_variable_get(ivar)
-      end
-    end
-    private :build_related_field, :materialize_related_field
+    private :build_related_field
 
     def initialize_with_keyword_args_deserialize_value(**fields)
       # Deserialize Database string values back to their original types, then

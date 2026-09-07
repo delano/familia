@@ -309,17 +309,13 @@ module Familia
         @related_fields_mutex
       end
 
-      # Serializes the DataType constructions that must happen exactly once:
-      # class-level collections (materialize_class_related_field) and
-      # instance-level fields built after the instance's initial snapshot
-      # (Horreum#materialize_related_field, for a field declared late). A
-      # reentrant ::Monitor rather than a Mutex: a custom type's +init+ may
-      # read a sibling collection of the same class from inside the build,
-      # which re-enters this lock on the same thread. One per class, not per
-      # field or instance: a per-name table would need its own guarded
-      # creation, and serializing these one-time builds is cheap. The
-      # ordinary per-instance build in initialize_relatives does not take
-      # it.
+      # Serializes class-level DataType construction so each collection is
+      # built exactly once (materialize_class_related_field). A reentrant
+      # ::Monitor rather than a Mutex: a custom type's +init+ may read a
+      # sibling collection of the same class from inside the build, which
+      # re-enters this lock on the same thread. One per class, not per
+      # field: a per-name table would need its own guarded creation, and
+      # serializing only the first builds of one class is a one-time cost.
       #
       # Lock order is build lock, then related_fields_mutex. Nothing takes
       # them the other way round: the registry paths (attach_*,
