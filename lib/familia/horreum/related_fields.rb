@@ -185,36 +185,39 @@ module Familia
         opts = opts.nil? ? {} : opts.dup
         validate_related_field_opts!(opts, klass)
 
-        # Check-and-replace under the same lock initialize_relatives freezes
-        # under. Unlocked, a re-declaration could pass the frozen? check,
-        # then the first instance builds and freezes the OLD definition, then
-        # the replacement lands: first instance on 10, registry (and every
-        # later instance) on 20.
-        related_fields_mutex.synchronize do
-          refuse_related_field_redeclaration!(related_fields[name], "#{self}##{name}")
-          related_fields[name] = RelatedFieldDefinition.new(name, klass, opts)
-        end
-
-        # Create lazy-initializing accessor that calls initialize_relatives if needed
+        # Accessors first, registry entry second. The cascades
+        # (update_expiration, persist!, ttl_report, destroy!) snapshot the
+        # registry and call +send(name)+ on the instance; a definition that
+        # landed before define_method ran would let a cascade snapshotting
+        # in between raise NoMethodError. The accessors depend only on the
+        # name, so redefining them for a re-declaration the check below
+        # refuses is harmless.
+        #
+        # Lazy-initializing accessor. Three paths:
+        #
+        # 1. @<name> is set: return it (every access after the first).
+        # 2. Relatives never initialized (initialize overridden without
+        #    super, or the load path): run initialize_relatives, which builds
+        #    every definition in the registry, this one included.
+        # 3. Relatives initialized but @<name> still nil: the field was
+        #    declared after this instance took its snapshot (participates_in
+        #    at load, or any late declaration). Materialize just this one
+        #    from the current definition (see materialize_related_field);
+        #    the instance is not recreated and the cascades that walk the
+        #    current registry keep working on it.
         define_method name do
           ivar = :"@#{name}"
           value = instance_variable_get(ivar)
+          return value unless value.nil?
 
-          # If nil and we haven't initialized relatives, do it now
           # Check singleton class to avoid polluting instance variables
-          if value.nil? && !singleton_class.instance_variable_defined?(:"@relatives_initialized")
+          unless singleton_class.instance_variable_defined?(:@relatives_initialized)
             initialize_relatives
             value = instance_variable_get(ivar)
+            return value unless value.nil?
           end
 
-          # If still nil after lazy initialization attempt, raise helpful error
-          # Only raise if we tried to initialize but it's still nil
-          if value.nil? && singleton_class.instance_variable_defined?(:"@relatives_initialized")
-            raise "#{self.class}##{name} is nil. Did you override initialize without calling super? " \
-                  "(Field is nil after initialization attempt)"
-          end
-
-          value
+          materialize_related_field(name)
         end
 
         define_method :"#{name}=" do |val|
@@ -224,7 +227,15 @@ module Familia
           !send(name).empty?
         end
 
-        related_fields[name]
+        # Check-and-replace under the same lock initialize_relatives freezes
+        # under. Unlocked, a re-declaration could pass the frozen? check,
+        # then the first instance builds and freezes the OLD definition, then
+        # the replacement lands: first instance on 10, registry (and every
+        # later instance) on 20.
+        related_fields_mutex.synchronize do
+          refuse_related_field_redeclaration!(related_fields[name], "#{self}##{name}")
+          related_fields[name] = RelatedFieldDefinition.new(name, klass, opts)
+        end
       end
 
       # Creates a class-level relation
@@ -250,13 +261,10 @@ module Familia
         opts[:parent] = self unless opts.key?(:parent)
         validate_related_field_opts!(opts, klass)
 
-        # Check-and-replace under the lock materialize_class_related_field
-        # freezes under; see attach_instance_related_field for the race.
-        related_fields_mutex.synchronize do
-          refuse_related_field_redeclaration!(class_related_fields[name], "#{self}.#{name}")
-          class_related_fields[name] = RelatedFieldDefinition.new(name, klass, opts)
-        end
-
+        # Accessors before the registry entry, for the same reason as
+        # attach_instance_related_field: readers of a registry snapshot
+        # (guard_atomic_write_database!, the class-level destroy!) must never
+        # see a name whose accessor does not exist yet.
         define_singleton_method name do
           materialize_class_related_field(name)
         end
@@ -268,7 +276,12 @@ module Familia
           !send(name).empty?
         end
 
-        class_related_fields[name]
+        # Check-and-replace under the lock materialize_class_related_field
+        # freezes under; see attach_instance_related_field for the race.
+        related_fields_mutex.synchronize do
+          refuse_related_field_redeclaration!(class_related_fields[name], "#{self}.#{name}")
+          class_related_fields[name] = RelatedFieldDefinition.new(name, klass, opts)
+        end
       end
 
       # Reconfigures a related field after the class body has run.
