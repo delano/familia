@@ -233,7 +233,7 @@ class Rfl428Late < Familia::Horreum
   sorted_set :events, max_length: 10
 end
 
-# 24h/24i. a DataType whose init parks on a gate while armed, so the test
+# 24j/24k. a DataType whose init parks on a gate while armed, so the test
 # fixes the interleaving instead of widening a window with sleep.
 class Rfl428GatedList < Familia::ListKey
   @constructions = Concurrent::AtomicFixnum.new(0)
@@ -254,14 +254,36 @@ class Rfl428GatedList < Familia::ListKey
 end
 Rfl428GatedList.armed = false
 
-# 24i. the gated build parks initialize_relatives after its snapshot
+# 24k. the gated build parks initialize_relatives after its snapshot
 class Rfl428GatedInit < Familia::Horreum
   identifier_field :id
   field :id
   attach_instance_related_field :gated, Rfl428GatedList, {}
 end
 
-# 24j. accessor inherited, definition not: declared on the base after the
+# 24m. a registry Hash that records, as each definition lands, whether the
+# accessors for that name already exist on the owner
+class Rfl428OrderRegistry < Hash
+  attr_reader :seen
+
+  def initialize(&check)
+    super(&nil) # not Hash's default proc
+    @check = check
+    @seen = {}
+  end
+
+  def []=(name, definition)
+    @seen[name] = %I[#{name} #{name}= #{name}?].all? { |m| @check.call(m) }
+    super
+  end
+end
+
+class Rfl428Order < Familia::Horreum
+  identifier_field :id
+  field :id
+end
+
+# 24l. accessor inherited, definition not: declared on the base after the
 # subclass copied the registry
 class Rfl428LateBase < Familia::Horreum
   identifier_field :id
@@ -286,7 +308,7 @@ end
   Rfl428Parent, Rfl428Child, Rfl428ParentB, Rfl428ChildB, Rfl428SubKey, Rfl428Loaded,
   Rfl428Concurrent, Rfl428LazyReg, Rfl428Replace, Rfl428Redeclare, Rfl428Scoped, Rfl428Owned,
   Rfl428Preexisting, Rfl428Chain, Rfl428ChainInst, Rfl428ChainRace, Rfl428SingleFlight,
-  Rfl428Late, Rfl428GatedInit, Rfl428LateBase, Rfl428LateSub,
+  Rfl428Late, Rfl428GatedInit, Rfl428Order, Rfl428LateBase, Rfl428LateSub,
 ]
 
 ## 1a. Configuring max_length before the first instance is reflected on that instance
@@ -1183,31 +1205,52 @@ Rfl428Late.configure_related_field(:late_capped, max_length: 8)
 Rfl428Late.configure_related_field(:late_capped, max_length: 9)
 #=!> Familia::RelatedFieldFrozenError
 
-## 24e. update_expiration, persist! and ttl_report on the old instance reach the late field
+## 24e. update_expiration on the old instance materializes an untouched late field
+# Each cascade below gets its own field, declared just before the cascade
+# runs and never touched by the test first, so the cascade's own send(name)
+# is what builds it. (late_notes was built by 24a, so it only shows the
+# cascade's effect on an already-built field.)
 @late_inst.late_notes << 'a'
-@late_inst.save
+@late_inst.save # save cascades update_expiration itself, so declare after it
+Rfl428Late.list :late_expire
+expire_before = @late_inst.instance_variable_get(:@late_expire)
 @late_inst.update_expiration(expiration: 300)
-ttl_after_expire = @late_inst.late_notes.ttl
+[expire_before, @late_inst.instance_variable_get(:@late_expire).class,
+ @late_inst.late_notes.ttl.between?(1, 300)]
+#=> [nil, Familia::ListKey, true]
+
+## 24f. persist! on the old instance materializes another untouched late field
+Rfl428Late.list :late_persist
+persist_before = @late_inst.instance_variable_get(:@late_persist)
 @late_inst.persist!
-ttl_after_persist = @late_inst.late_notes.ttl
+[persist_before, @late_inst.instance_variable_get(:@late_persist).class, @late_inst.late_notes.ttl]
+#=> [nil, Familia::ListKey, -1]
+
+## 24g. ttl_report on the old instance materializes another and reports its key
+Rfl428Late.list :late_report
+report_before = @late_inst.instance_variable_get(:@late_report)
 report = @late_inst.ttl_report
-[ttl_after_expire.between?(1, 300), ttl_after_persist,
- report[:relations].key?(:late_notes), report[:relations][:late_notes][:key] == @late_inst.late_notes.dbkey]
-#=> [true, -1, true, true]
+[report_before, @late_inst.instance_variable_get(:@late_report).class,
+ report[:relations][:late_report][:key] == @late_inst.late_report.dbkey]
+#=> [nil, Familia::ListKey, true]
 
-## 24f. Instance destroy! on the old instance removes the late field's key too
-late_key = @late_inst.late_notes.dbkey
-existed = @late_inst.late_notes.exists?
+## 24h. Instance destroy! on the old instance materializes another and deletes its key
+Rfl428Late.list :late_destroy
+destroy_key = @late_inst.late_notes.dbkey.sub(/late_notes\z/, 'late_destroy')
+Rfl428Late.dbclient.rpush(destroy_key, 'x')
+destroy_before = @late_inst.instance_variable_get(:@late_destroy)
+existed = Rfl428Late.dbclient.exists(destroy_key)
 @late_inst.destroy!
-[existed, Rfl428Late.dbclient.exists(late_key)]
-#=> [true, 0]
+[destroy_before, existed, @late_inst.instance_variable_get(:@late_destroy).dbkey == destroy_key,
+ Rfl428Late.dbclient.exists(destroy_key), Rfl428Late.dbclient.exists(@late_inst.late_notes.dbkey)]
+#=> [nil, 1, true, 0, 0]
 
-## 24g. Declaration before the instance: the initial build includes the field, no late path involved
+## 24i. Declaration before the instance: the initial build includes the field, no late path involved
 @late_after_inst = Rfl428Late.new(id: "late-after-#{@rfl428_run}")
 @late_after_inst.instance_variable_get(:@late_notes).class
 #=> Familia::ListKey
 
-## 24h. Deterministic race: concurrent first access on one instance constructs the late field once
+## 24j. Deterministic race: concurrent first access on one instance constructs the late field once
 # Thread A enters Rfl428GatedList#init (holding the class's build lock) and
 # parks on the gate; the test then starts thread B on the same accessor. B
 # must wait for A rather than construct a second DataType. Both get A's
@@ -1220,7 +1263,7 @@ existed = @late_inst.late_notes.exists?
 Rfl428Late.attach_instance_related_field :gated, Rfl428GatedList, {}
 @late_race_inst = Rfl428Late.new(id: "late-race-#{@rfl428_run}")
 # Rfl428Late.new above built :gated for the new instance; the late path is
-# the instance from 24g, created before :gated was declared.
+# the instance from 24i, created before :gated was declared.
 old_inst = @late_after_inst
 built_before = Rfl428GatedList.constructions.value
 Rfl428GatedList.armed = true
@@ -1253,7 +1296,7 @@ built = Rfl428GatedList.constructions.value - built_before
  a.equal?(b), a.equal?(old_inst.gated), a.class, built]
 #=> [true, false, false, true, true, Rfl428GatedList, 1]
 
-## 24i. Deterministic ordering: a field declared during the initial build is materialized on access
+## 24k. Deterministic ordering: a field declared during the initial build is materialized on access
 # Rfl428GatedInit.new takes its registry snapshot, then parks inside the
 # gated build. The declaration lands while it is parked: after the
 # snapshot, so the instance comes out of new without @late_mid, and before
@@ -1275,7 +1318,7 @@ end
  @mid_inst.gated.class, Rfl428GatedInit.related_fields[:late_mid].opts.frozen?]
 #=> [nil, nil, Familia::ListKey, Rfl428GatedList, true]
 
-## 24j. A field declared on an ancestor after the subclass was defined: inherited accessor, no definition, clear error
+## 24l. A field declared on an ancestor after the subclass was defined: inherited accessor, no definition, clear error
 # The subclass copied the registry at definition time; the accessor is a
 # plain inherited method. Neither an old nor a new subclass instance can
 # build it. Previously the message blamed a missing super call.
@@ -1289,6 +1332,24 @@ expected_tail = 'Rfl428LateSub#later_on_base has no related-field definition ' \
  errors.map { |e| e.message.end_with?(expected_tail) },
  Rfl428LateBase.new(id: "base-#{@rfl428_run}").later_on_base.class]
 #=> [[Familia::HorreumError], [true, true], Familia::ListKey]
+
+## 24m. A definition never lands in a registry before its accessors exist
+# The cascades snapshot the registry and call send(name). If the
+# definition were inserted first, a cascade snapshotting between the
+# insert and define_method would call a method that does not exist yet.
+# The recording Hash asks, at the moment of each insert, whether all three
+# accessors are already defined.
+inst_reg = Rfl428OrderRegistry.new { |m| Rfl428Order.method_defined?(m) }
+inst_reg.merge!(Rfl428Order.related_fields)
+Rfl428Order.instance_variable_set(:@related_fields, inst_reg)
+cls_reg = Rfl428OrderRegistry.new { |m| Rfl428Order.respond_to?(m) }
+cls_reg.merge!(Rfl428Order.class_related_fields)
+Rfl428Order.instance_variable_set(:@class_related_fields, cls_reg)
+Rfl428Order.list :inst_late
+Rfl428Order.class_list :class_late
+[inst_reg.seen, cls_reg.seen,
+ Rfl428Order.related_fields[:inst_late].class, Rfl428Order.class_related_fields[:class_late].class]
+#=> [{ inst_late: true }, { class_late: true }, Familia::RelatedFieldDefinition, Familia::RelatedFieldDefinition]
 
 # Teardown: remove only the keys this file wrote.
 Rfl428Registry.registry.delete!

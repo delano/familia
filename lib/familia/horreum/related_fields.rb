@@ -185,16 +185,14 @@ module Familia
         opts = opts.nil? ? {} : opts.dup
         validate_related_field_opts!(opts, klass)
 
-        # Check-and-replace under the same lock initialize_relatives freezes
-        # under. Unlocked, a re-declaration could pass the frozen? check,
-        # then the first instance builds and freezes the OLD definition, then
-        # the replacement lands: first instance on 10, registry (and every
-        # later instance) on 20.
-        related_fields_mutex.synchronize do
-          refuse_related_field_redeclaration!(related_fields[name], "#{self}##{name}")
-          related_fields[name] = RelatedFieldDefinition.new(name, klass, opts)
-        end
-
+        # Accessors first, registry entry second. The cascades
+        # (update_expiration, persist!, ttl_report, destroy!) snapshot the
+        # registry and call +send(name)+ on the instance; a definition that
+        # landed before define_method ran would let a cascade snapshotting
+        # in between raise NoMethodError. The accessors depend only on the
+        # name, so redefining them for a re-declaration the check below
+        # refuses is harmless.
+        #
         # Lazy-initializing accessor. Three paths:
         #
         # 1. @<name> is set: return it (every access after the first).
@@ -205,9 +203,8 @@ module Familia
         #    declared after this instance took its snapshot (participates_in
         #    at load, or any late declaration). Materialize just this one
         #    from the current definition (see materialize_related_field);
-        #    the instance is not recreated and the cascades
-        #    (update_expiration, persist!, ttl_report, destroy!) that walk
-        #    the current registry keep working on it.
+        #    the instance is not recreated and the cascades that walk the
+        #    current registry keep working on it.
         define_method name do
           ivar = :"@#{name}"
           value = instance_variable_get(ivar)
@@ -230,7 +227,15 @@ module Familia
           !send(name).empty?
         end
 
-        related_fields[name]
+        # Check-and-replace under the same lock initialize_relatives freezes
+        # under. Unlocked, a re-declaration could pass the frozen? check,
+        # then the first instance builds and freezes the OLD definition, then
+        # the replacement lands: first instance on 10, registry (and every
+        # later instance) on 20.
+        related_fields_mutex.synchronize do
+          refuse_related_field_redeclaration!(related_fields[name], "#{self}##{name}")
+          related_fields[name] = RelatedFieldDefinition.new(name, klass, opts)
+        end
       end
 
       # Creates a class-level relation
@@ -256,13 +261,10 @@ module Familia
         opts[:parent] = self unless opts.key?(:parent)
         validate_related_field_opts!(opts, klass)
 
-        # Check-and-replace under the lock materialize_class_related_field
-        # freezes under; see attach_instance_related_field for the race.
-        related_fields_mutex.synchronize do
-          refuse_related_field_redeclaration!(class_related_fields[name], "#{self}.#{name}")
-          class_related_fields[name] = RelatedFieldDefinition.new(name, klass, opts)
-        end
-
+        # Accessors before the registry entry, for the same reason as
+        # attach_instance_related_field: readers of a registry snapshot
+        # (guard_atomic_write_database!, the class-level destroy!) must never
+        # see a name whose accessor does not exist yet.
         define_singleton_method name do
           materialize_class_related_field(name)
         end
@@ -274,7 +276,12 @@ module Familia
           !send(name).empty?
         end
 
-        class_related_fields[name]
+        # Check-and-replace under the lock materialize_class_related_field
+        # freezes under; see attach_instance_related_field for the race.
+        related_fields_mutex.synchronize do
+          refuse_related_field_redeclaration!(class_related_fields[name], "#{self}.#{name}")
+          class_related_fields[name] = RelatedFieldDefinition.new(name, klass, opts)
+        end
       end
 
       # Reconfigures a related field after the class body has run.
