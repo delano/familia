@@ -553,11 +553,12 @@ threads = 8.times.map do |i|
 end
 8.times { latch << true }
 threads.each(&:join)
+@single_flight_seen = seen.first
 [seen.all? { |dt| dt.equal?(seen.first) }, seen.first.class, Rfl428CountedList.constructions.value]
 #=> [true, Rfl428CountedList, 1]
 
 ## 10c. A later access still returns the cached object without constructing again
-[Rfl428SingleFlight.counted.equal?(seen.first), Rfl428CountedList.constructions.value]
+[Rfl428SingleFlight.counted.equal?(@single_flight_seen), Rfl428CountedList.constructions.value]
 #=> [true, 1]
 
 ## 11a. configure_related_field returns a RelatedFieldDefinition
