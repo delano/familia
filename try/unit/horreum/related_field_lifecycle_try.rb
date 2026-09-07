@@ -1212,7 +1212,11 @@ existed = @late_inst.late_notes.exists?
 # parks on the gate; the test then starts thread B on the same accessor. B
 # must wait for A rather than construct a second DataType. Both get A's
 # object and the construction counter moved by exactly one. No Thread.pass
-# or sleep decides the interleaving; the gate does.
+# or sleep decides the interleaving; the gate does, and the gate is not
+# released until B is observed parked inside materialize_related_field
+# with no second construction started. A join timeout would return nil
+# for an unscheduled B as well as a blocked one; this waits for the
+# blocked state itself.
 Rfl428Late.attach_instance_related_field :gated, Rfl428GatedList, {}
 @late_race_inst = Rfl428Late.new(id: "late-race-#{@rfl428_run}")
 # Rfl428Late.new above built :gated for the new instance; the late path is
@@ -1224,16 +1228,30 @@ begin
   ta = Thread.new { old_inst.gated }
   Rfl428GatedList.entered.pop
   tb = Thread.new { old_inst.gated }
-  tb_finished_early = !tb.join(0.05).nil?
+  deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 5
+  tb_parked_at_lock = loop do
+    frames = tb.backtrace || []
+    in_materialize = frames.any? { |f| f.include?('materialize_related_field') }
+    break true if tb.status == 'sleep' && in_materialize
+    break false if !tb.alive? || Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
+
+    Thread.pass
+  end
+  b_built_while_a_parked = Rfl428GatedList.constructions.value - built_before != 1
+  b_entered_init = !Rfl428GatedList.entered.empty?
   Rfl428GatedList.gate << true
+  # a second construction (the failure this test guards) would also park on
+  # the gate; release it so the test fails instead of hanging on tb.value.
+  Rfl428GatedList.gate << true if b_entered_init
   a = ta.value
   b = tb.value
 ensure
   Rfl428GatedList.armed = false
 end
 built = Rfl428GatedList.constructions.value - built_before
-[tb_finished_early, a.equal?(b), a.equal?(old_inst.gated), a.class, built]
-#=> [false, true, true, Rfl428GatedList, 1]
+[tb_parked_at_lock, b_built_while_a_parked, b_entered_init,
+ a.equal?(b), a.equal?(old_inst.gated), a.class, built]
+#=> [true, false, false, true, true, Rfl428GatedList, 1]
 
 ## 24i. Deterministic ordering: a field declared during the initial build is materialized on access
 # Rfl428GatedInit.new takes its registry snapshot, then parks inside the
