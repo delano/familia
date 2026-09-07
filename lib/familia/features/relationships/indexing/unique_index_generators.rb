@@ -101,6 +101,22 @@ module Familia
             end
           end
 
+          # Finds an instance field that can enumerate indexed records for a rebuild.
+          # The backing index also carries class: indexed_class, so matching metadata
+          # alone is insufficient; participation rebuilds require #members.
+          def find_membership_collection(scope_instance, indexed_class, index_name)
+            return unless scope_instance.class.respond_to?(:related_fields_snapshot)
+
+            scope_instance.class.related_fields_snapshot.each do |name, field_def|
+              next if name == index_name
+              next unless [field_def.opts[:record_class], field_def.opts[:class]].include?(indexed_class)
+
+              candidate = scope_instance.send(name)
+              return candidate if candidate.respond_to?(:members)
+            end
+            nil
+          end
+
           # Generates query methods ON THE SCOPE CLASS (Company when within: Company)
           #
           # - company.find_by_badge_number(badge) - find by field value
@@ -190,20 +206,11 @@ module Familia
                   end
                 end
 
-                # Strategy 2: Fallback to checking related_fields for an explicit
-                # record_class:/class: option matching the indexed class.
-                # (participates_in collections carry record_class:; reference
-                # collections carry class:.)
-                unless collection
-                  if self.class.respond_to?(:related_fields_snapshot)
-                    self.class.related_fields_snapshot.each do |name, field_def|
-                      if [field_def.opts[:record_class], field_def.opts[:class]].include?(indexed_class)
-                        collection = send(name)
-                        break
-                      end
-                    end
-                  end
-                end
+                # Strategy 2: Use a related membership collection whose metadata
+                # identifies the indexed class.
+                collection ||= UniqueIndexGenerators.find_membership_collection(
+                  self, indexed_class, index_name
+                )
 
                 if collection
                   # Find the IndexingRelationship to get cardinality metadata
