@@ -18,6 +18,7 @@
 dump.rdb
 appendonlydir
 data
+doc
 log
 tmp
 vendor

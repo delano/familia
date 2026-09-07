@@ -58,7 +58,7 @@ customer.audit_events.max_length  #=> 10_000
 customer.tags.max_length          #=> nil
 ```
 
-It is read-only: the cap is fixed at definition time so that validation can happen once, up front. To change it, redeclare the collection.
+It is read-only on the collection instance: the cap is fixed when the definition freezes so that validation happens once, up front. To set it from application config rather than a literal, use `configure_related_field` at boot — see [Definition lifecycle](#definition-lifecycle--declare-configure-freeze) below.
 
 ### SortedSet: top-N by score
 
@@ -135,6 +135,62 @@ end
 - `max_length:` must be a **positive Integer** — anything else raises `ArgumentError` at definition time (`max_length: 0` would delete everything on every write).
 - Passing `max_length:` to a type that does not implement it (`HashKey`, `UnsortedSet`, `StringKey`, `Counter`, …) raises `ArgumentError` rather than being silently ignored.
 - The old `:maxlength` spelling was **never honored** and remains ignored; it now emits a warning (`[familia] :maxlength is ignored; rename to max_length:`). It is deliberately not treated as an alias — honoring it would start mass-deleting previously untrimmed data on upgrade. Rename to `max_length:` explicitly to opt in to trimming.
+
+## Definition lifecycle — declare, configure, freeze
+
+Every related field declared on a Horreum class (`sorted_set`, `list`, `set`, `hashkey`, and the `class_*` variants) is a definition in `Klass.related_fields` whose `opts` become the DataType's constructor options. The definition moves through three stages:
+
+1. **Declare** in the class body, as above. Options are validated the same way they always were.
+2. **Configure** at boot, after config is loaded, with `configure_related_field`. It merges the given options into the definition, so a literal in the class body becomes a default that an initializer can override:
+
+   ```ruby
+   class Organization < Familia::Horreum
+     sorted_set :secret_activity_events, max_length: 10_000
+   end
+
+   # config/initializers/familia.rb — after OT.conf is loaded
+   Organization.configure_related_field(:secret_activity_events, max_length: OT.conf[:activity_cap])
+   ```
+
+3. **Freeze** at first use. When the class materializes its instance-level collections — the first instance created or loaded — every instance-level definition's `opts` is frozen. Each class-level collection (`Organization.registry`) freezes its own definition on its first accessor call.
+
+`configure_related_field` validates eagerly, with the same rules and the same errors the DataType raises at construction: `max_length:` must be a positive Integer and is only accepted on `SortedSet`/`ListKey`, `dirty_write_warnings:` must be a valid mode, and the old `:maxlength` spelling gets the same warning described above. An unknown field name raises `ArgumentError`. It works for instance-level and class-level fields alike.
+
+After the freeze there is no silent window:
+
+- `configure_related_field` raises `Familia::RelatedFieldFrozenError` (a `Familia::Problem`) naming the class and field.
+- Re-declaring a materialized field (`sorted_set :events` again after an instance exists, or `class_sorted_set :registry` again after `Klass.registry` was accessed) raises the same error; re-declaring before first use still replaces the definition. Declaring a genuinely new field on a materialized class remains allowed, which is what `participates_in` relies on.
+- Direct mutation of `Klass.related_fields[:x].opts` raises `FrozenError`.
+
+Declaration, re-declaration, `configure_related_field`, and the freeze itself all serialize on the class's `related_fields_mutex`, which exists from the moment the class is created. The first materialization freezes the definitions under that lock *before* building anything, so a `configure_related_field` or re-declaration racing with the first `Klass.new` (or the first `Klass.registry`) either lands before the freeze (and every instance, and the registry, see it) or raises `RelatedFieldFrozenError` — never a process where the first instance, later instances, and the registry disagree.
+
+DataType construction runs outside that lock. `DataType#initialize` calls overridable setters and `init`, so a custom type whose `init` touches another collection on the same class (`parent.model_klass.registry`) works during either an instance-level or a class-level build instead of deadlocking on the non-reentrant mutex.
+
+Class-level builds are single-flight: each class has a reentrant build lock that every builder holds across construction, so concurrent first calls to `Klass.registry` construct the DataType (and run its `init`) exactly once and the other callers receive the cached object. A custom `init` that reads a sibling collection re-enters that lock on the same thread. The first instance-level materialization freezes the definitions and takes a snapshot of the registry under the mutex, then builds from the snapshot, so a new field declared concurrently (as `participates_in` does at load) never collides with a build in progress.
+
+A name may exist at both levels (`zset :instances` alongside the automatic `class_sorted_set :instances`). `configure_related_field` addresses the instance-level definition when both exist; pass `scope: :class` (or `scope: :instance`) to pick one explicitly:
+
+```ruby
+Organization.configure_related_field(:instances, scope: :class, max_length: 10_000)
+```
+
+Previously the reconfiguration window existed by accident and closed silently: an app that mutated `opts` after some instances had materialized ended up with a mixed process — old instances on the compiled-in value, new ones on the configured value — and no diagnostic. Proc-valued options were considered and rejected, since they would move validation to first materialization, per instance.
+
+### Class-level collections are lazy
+
+`class_sorted_set`, `class_list`, and friends no longer build their DataType at declaration. The collection is constructed on the first call to its accessor, which is also when its definition freezes. Options are still validated at the declaration line (a bad `max_length:` fails there, not on first access). `Klass.registry`, `Klass.registry=`, and `Klass.registry?` behave the same from the caller's side; only the construction moment moved, which is what leaves room for `configure_related_field` to run first.
+
+Built collections are held in a per-class cache (`Klass.class_related_field_cache`), not in a class instance variable named after the field. A class that happens to set `@registry` for its own purposes and also declares `class_list :registry` gets the collection from `Klass.registry` and keeps its `@registry` untouched; the eager build used to overwrite that variable.
+
+### The freeze is per class
+
+Subclasses get their own copies of the definitions, and a fresh or anonymous class starts with an open configuration window. Freezing `Organization` does not freeze a later `class Tenant < Organization`, and a test that needs a different `max_length:` can subclass or build an anonymous class rather than reach for an escape hatch — there is none.
+
+Storage follows the same rule. A class-level collection the subclass inherits without re-declaring (`Tenant.registry` when only `Organization` declared `class_sorted_set :registry`) is keyed under the subclass — `Tenant.registry.dbkey != Organization.registry.dbkey` — exactly as `instances` already is. Before this lifecycle change that accessor returned `nil` on the subclass. If the base and its subclasses should share one collection, set `prefix` on the base class so they share the key namespace.
+
+### Boot order
+
+Put `configure_related_field` calls in an initializer that runs after config is loaded and before any instance of the class is created or loaded — including by another initializer, a warm-up job, or a seed script. Materialization is what closes the window, so the error, when it comes, points at the first `configure_related_field` that arrived too late rather than at whatever created the instance.
 
 The iteration methods `each` and `each_record` efficiently handle large collections by paginating through Valkey/Redis data structures, but they serve different purposes and yield different results. Here's how the two iterate, using `ModelClass.instances` (a `SortedSet` with `reference: true`) as the running example.
 

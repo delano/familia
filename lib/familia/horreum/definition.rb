@@ -2,6 +2,8 @@
 #
 # frozen_string_literal: true
 
+require 'monitor'
+
 require_relative 'settings'
 
 require_relative '../field_type'
@@ -282,9 +284,83 @@ module Familia
         @class_related_fields
       end
 
+      # Built class-level DataTypes, keyed by field name. A dedicated Hash
+      # rather than @<name> on the class: an unrelated class instance
+      # variable that happens to share a field's name must not be mistaken
+      # for the materialized collection. Per class; never copied by
+      # +inherited+ (a subclass builds its own, keyed under itself).
+      def class_related_field_cache
+        @class_related_field_cache
+      end
+
+      # Guards the related-field registries: declaration and re-declaration
+      # (attach_*_related_field), reconfiguration (configure_related_field)
+      # and the freeze that closes the window (initialize_relatives and
+      # materialize_class_related_field). One per class, like fields_mutex,
+      # but created eagerly in +extended+ rather than with `||=`: two threads
+      # taking the lock for the first time would otherwise each allocate a
+      # mutex and exclude nothing.
+      #
+      # Backed by a non-reentrant Mutex. The lifecycle only holds it around
+      # registry reads, replacements and the opts freeze; DataType
+      # construction (which runs user-overridable setters and +init+) happens
+      # outside it so a custom type may touch other collections.
+      def related_fields_mutex
+        @related_fields_mutex
+      end
+
+      # Serializes class-level DataType construction so each collection is
+      # built exactly once (materialize_class_related_field). A reentrant
+      # ::Monitor rather than a Mutex: a custom type's +init+ may read a
+      # sibling collection of the same class from inside the build, which
+      # re-enters this lock on the same thread. One per class, not per
+      # field: a per-name table would need its own guarded creation, and
+      # serializing only the first builds of one class is a one-time cost.
+      #
+      # Lock order is build lock, then related_fields_mutex. Nothing takes
+      # them the other way round: the registry paths (attach_*,
+      # configure_related_field, the freeze in initialize_relatives) hold
+      # the mutex alone and never construct under it.
+      #
+      # Not ::Monitor's namesake Familia::ThreadSafety::Monitor, which is
+      # the contention reporter.
+      def class_related_field_build_lock
+        @class_related_field_build_lock
+      end
+
+      # Per-class locks and cache must exist before any thread can race on
+      # them, so they are created when the module is extended (Horreum's
+      # +inherited+ hook), not lazily on first use.
+      def self.extended(base)
+        base.instance_variable_set(:@related_fields_mutex,
+                                   Familia::ThreadSafety::InstrumentedMutex.new('related_fields'))
+        base.instance_variable_set(:@class_related_field_build_lock, ::Monitor.new)
+        base.instance_variable_set(:@class_related_field_cache, {})
+      end
+
       def related_fields
         @related_fields ||= {}
         @related_fields
+      end
+
+      # Returns a copy of the instance-level related-field registry, taken
+      # under related_fields_mutex.
+      #
+      # attach_instance_related_field adds keys under that mutex; a cascade
+      # loop that iterates the live Hash instead would, if a new field were
+      # declared mid-iteration (application autoloading finishing a
+      # participates_in while an early request saves or expires a record),
+      # make MRI raise "can't add a new key into hash during iteration" in
+      # the declaring thread. Iterating this copy closes that window and
+      # releases the lock before the Redis calls in the cascade run.
+      def related_fields_snapshot
+        related_fields_mutex.synchronize { related_fields.dup }
+      end
+
+      # Class-level counterpart to +related_fields_snapshot+. Same mutex, same
+      # writer (attach_class_related_field), same hazard when iterated live.
+      def class_related_fields_snapshot
+        related_fields_mutex.synchronize { class_related_fields.dup }
       end
 
       def relations?

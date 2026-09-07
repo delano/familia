@@ -890,12 +890,13 @@ module Familia
           delete!
 
           if self.class.relations?
+            fields = self.class.related_fields_snapshot
             if Familia.debug?
               Familia.trace :DELETE_RELATED_FIELDS!, nil,
-                            "#{self.class} has relations: #{self.class.related_fields.keys}"
+                            "#{self.class} has relations: #{fields.keys}"
             end
 
-            self.class.related_fields.each_key do |name|
+            fields.each_key do |name|
               obj = send(name)
               if Familia.debug?
                 Familia.trace :DELETE_RELATED_FIELD, name, "Deleting related field #{name} (#{obj.dbkey})"

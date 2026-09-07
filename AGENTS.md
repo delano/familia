@@ -11,6 +11,8 @@ Guidance for AI coding agents working in this repository.
 
 ### Testing (Tryouts v3)
 
+Use `valkey-server try/valkey.conf` to start the test redis.
+
 Each file has optional setup, testcases, and optional teardown. A testcase is a
 `##` description line, Ruby code, then one or more expectation comments
 (`#=>`, `#==>`, `#=:>`, `#=!>`, ...). The last expression is the result.

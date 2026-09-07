@@ -156,12 +156,12 @@ module Familia
             member.instance_variable_set(:@default_expiration, default_exp)
           end
 
-          # Copy DataType relationships
-          if parent_class.class_related_fields&.any?
-            member.instance_variable_set(:@class_related_fields, parent_class.class_related_fields.dup)
-          end
-          if parent_class.related_fields&.any?
-            member.instance_variable_set(:@related_fields, parent_class.related_fields.dup)
+          # Copy DataType relationships (deep-copied, see dup_related_field_definitions)
+          %i[class_related_fields related_fields].each do |registry|
+            defs = parent_class.send(:"#{registry}_snapshot")
+            next unless defs.any?
+
+            member.instance_variable_set(:"@#{registry}", dup_related_field_definitions(defs, parent_class, member))
           end
           if parent_class.instance_variable_get(:@has_related_fields)
             member.instance_variable_set(:@has_related_fields,
@@ -177,6 +177,31 @@ module Familia
 
         super
       end
+
+      # Copies a related-field registry for a subclass. Each definition's
+      # opts Hash is duplicated so that freezing (first materialization) or
+      # reconfiguring (configure_related_field) in one class never leaks into
+      # the other. transform_values preserves declaration order.
+      #
+      # Class-level definitions carry opts[:parent] = the declaring class
+      # (set by attach_class_related_field). That is re-pointed at the
+      # subclass so an inherited, non-redeclared class_sorted_set/class_list
+      # is keyed under the subclass rather than silently aliasing the
+      # parent's Redis key. An explicit user-supplied `parent: OtherClass`
+      # is left alone.
+      #
+      # @param definitions [Hash{Symbol => RelatedFieldDefinition}]
+      # @param from_class [Class] the class being inherited from
+      # @param to_class [Class] the new subclass
+      # @return [Hash{Symbol => RelatedFieldDefinition}] a fresh registry
+      def dup_related_field_definitions(definitions, from_class, to_class)
+        definitions.transform_values do |definition|
+          opts = definition.opts.dup
+          opts[:parent] = to_class if opts[:parent].equal?(from_class)
+          definition.with(opts: opts)
+        end
+      end
+      private :dup_related_field_definitions
     end
 
     attr_writer :dbclient
@@ -296,49 +321,84 @@ module Familia
       # Store initialization flag on singleton class to avoid polluting instance variables
       return if singleton_class.instance_variable_defined?(:@relatives_initialized)
 
-      # Generate instances of each DataType. These need to be
-      # unique for each instance of this class so they can piggyback
-      # on the specifc index of this instance.
+      # Freeze every instance-level definition and take a snapshot of the
+      # registry, both under the mutex configure_related_field and
+      # declaration replace entries under. Once frozen, neither can replace
+      # an entry (both check frozen? under the same lock), so the snapshot
+      # holds exactly the definitions frozen here: a configure that took the
+      # lock first is honored by every instance; one that arrives after
+      # raises. Nothing can land in between.
       #
-      # i.e.
-      #     familia_object.dbkey              == v1:bone:INDEXVALUE:object
-      #     familia_object.related_object.dbkey == v1:bone:INDEXVALUE:name
+      # The build loop iterates the snapshot, never the live Hash. Declaring
+      # a NEW field on a materialized class is allowed (participates_in does
+      # it at load) and inserts into the live Hash; iterating that Hash here
+      # would make the concurrent insert raise "can't add a new key into
+      # hash during iteration". A declaration lands either before the
+      # snapshot (this instance gets the field) or after it (it does not).
       #
-      self.class.related_fields.each_pair do |name, data_type_definition|
-        klass = data_type_definition.klass
-        opts = data_type_definition.opts
-        Familia.trace :INITIALIZE_RELATIVES, nil, "#{name} => #{klass} #{opts.keys}" if Familia.debug?
-
-        # As a subclass of Familia::Horreum, we add ourselves as the parent
-        # automatically. This is what determines the dbkey for DataType
-        # instance and which database connection.
-        #
-        #   e.g. If the parent's dbkey is `customer:customer_id:object`
-        #     then the dbkey for this DataType instance will be
-        #     `customer:customer_id:name`.
-        #
-        # Store reference to the instance for lazy ParentDefinition creation
-        opts[:parent] = self
-
-        suffix_override = opts.fetch(:suffix, name)
-
-        # Instantiate the DataType object and below we store it in
-        # an instance variable.
-        related_object = klass.new suffix_override, opts
-
-        # Freezes the related_object, making it immutable.
-        # This ensures the object's state remains consistent and prevents any modifications,
-        # safeguarding its integrity and making it thread-safe.
-        # Any attempts to change the object after this will raise a FrozenError.
-        related_object.freeze
-
-        # e.g. customer.name  #=> `#<Familia::HashKey:0x0000...>`
-        instance_variable_set :"@#{name}", related_object
+      # There is no unlocked fast path: any check that walks the live Hash
+      # has the same hazard, and a "frozen once" flag would be wrong because
+      # late declarations add unfrozen entries. One uncontended mutex
+      # acquire per instance is noise next to the rest of Klass.new.
+      #
+      # The build itself runs outside the lock: DataType#initialize calls
+      # overridable setters and +init+, and a custom type that touches a
+      # class-level collection there would deadlock on the non-reentrant
+      # mutex if we still held it.
+      definitions = self.class.related_fields_mutex.synchronize do
+        live = self.class.related_fields
+        live.each_value { |definition| definition.opts.freeze }
+        live.dup.freeze
       end
+
+      definitions.each_pair { |name, definition| build_related_field(name, definition) }
 
       # Mark relatives as initialized on singleton class to avoid polluting instance variables
       singleton_class.instance_variable_set(:@relatives_initialized, true)
     end
+
+    # Builds one instance-level DataType from its definition and stores it
+    # in @<name>. These need to be unique for each instance of this class so
+    # they can piggyback on the specific index of this instance:
+    #
+    #     familia_object.dbkey                == v1:bone:INDEXVALUE:object
+    #     familia_object.related_object.dbkey == v1:bone:INDEXVALUE:name
+    #
+    # @param name [Symbol] the field name
+    # @param definition [Familia::RelatedFieldDefinition]
+    def build_related_field(name, definition)
+      klass = definition.klass
+      opts = definition.opts
+      Familia.trace :INITIALIZE_RELATIVES, nil, "#{name} => #{klass} #{opts.keys}" if Familia.debug?
+
+      # As a subclass of Familia::Horreum, we add ourselves as the parent
+      # automatically. This is what determines the dbkey for DataType
+      # instance and which database connection.
+      #
+      #   e.g. If the parent's dbkey is `customer:customer_id:object`
+      #     then the dbkey for this DataType instance will be
+      #     `customer:customer_id:name`.
+      #
+      # Store reference to the instance for lazy ParentDefinition creation.
+      # Merge rather than mutate: the definition's opts Hash is shared by
+      # every instance of this class (and frozen after the first one is
+      # built), so the per-instance parent must not be written into it.
+      opts = opts.merge(parent: self)
+
+      suffix_override = opts.fetch(:suffix, name)
+
+      related_object = klass.new suffix_override, opts
+
+      # Freezes the related_object, making it immutable.
+      # This ensures the object's state remains consistent and prevents any modifications,
+      # safeguarding its integrity and making it thread-safe.
+      # Any attempts to change the object after this will raise a FrozenError.
+      related_object.freeze
+
+      # e.g. customer.name  #=> `#<Familia::HashKey:0x0000...>`
+      instance_variable_set :"@#{name}", related_object
+    end
+    private :build_related_field
 
     def initialize_with_keyword_args_deserialize_value(**fields)
       # Deserialize Database string values back to their original types, then

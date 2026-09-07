@@ -96,6 +96,14 @@ module Familia
   # Raised when attempting to reference a field that doesn't exist
   class UnknownFieldError < HorreumError; end
 
+  # Raised when configure_related_field targets a definition that has already
+  # been materialized: an instance of the model was created (instance-level
+  # fields freeze as a group in initialize_relatives) or the class-level
+  # collection was accessed (each class-level field freezes on its own first
+  # access). Reconfiguring after that point would leave already-built
+  # DataTypes on the old options, so the late write fails loudly instead.
+  class RelatedFieldFrozenError < HorreumError; end
+
   # Raised when a value cannot be converted to a distinguishable
   # string representation
   class NotDistinguishableError < HorreumError
