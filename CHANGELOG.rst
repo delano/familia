@@ -7,6 +7,283 @@ The format is based on `Keep a Changelog <https://keepachangelog.com/en/1.1.0/>`
 
    <!--scriv-insert-here-->
 
+.. _changelog-2.13.0:
+
+2.13.0 — 2026-09-16
+===================
+
+Added
+-----
+
+- Added ``Familia::AtomicOperations.with_rebuild(final_key, redis, ttl:
+  DEFAULT_REBUILD_TTL, preserve_for: DEFAULT_PRESERVE_TTL)``, which yields
+  ``(temp_key, touch)`` and owns the rebuild lock, the bounded-TTL temporary
+  key, the atomic swap, and cleanup. Raises
+  ``Familia::RebuildInProgressError`` when the lock is already held.
+- Added ``Familia::AtomicOperations.sweep_orphaned_temp_keys(redis, pattern:
+  '*:rebuild:*', older_than: DEFAULT_PRESERVE_TTL, dry_run: false)``, which
+  deletes temporary rebuild keys that have no TTL and are older than the
+  window. It skips any candidate whose index has a live ``:rebuild-lock``, and
+  never matches lock keys itself. Rebuilds started by older versions hold no
+  lock, so run it only after every process is on this version and no such
+  rebuild is still running; not during a rolling upgrade.
+- Added ``Familia::RebuildInProgressError`` (a ``Familia::PersistenceError``)
+  with a ``#key`` reader.
+- Added ``Familia::RebuildLockLostError``, a subclass of
+  ``Familia::RebuildInProgressError``, raised when a rebuild discovers another
+  rebuild took over its lock.
+- Added ``Familia::AtomicOperations::DEFAULT_REBUILD_TTL`` (300) and
+  ``DEFAULT_PRESERVE_TTL`` (3600).
+
+- ``Familia::VerifiableIdentifier.secret_key`` now reads ``IDENTIFIER_SECRET``
+  when ``VERIFIABLE_ID_HMAC_SECRET`` is unset or blank. ``VERIFIABLE_ID_HMAC_SECRET``
+  remains supported and takes precedence when nonblank. ``KeyError`` is still
+  raised on first use when neither variable holds a nonblank value. (#423)
+
+- Added ``Horreum.configure_related_field(name, **opts)``, which merges options
+  into a declared related-field definition (``sorted_set``, ``list``, ``set``,
+  ``hashkey``, and the ``class_*`` variants) at boot, after config is loaded.
+  Options are validated eagerly with the same rules and errors the DataType
+  raises at construction (``max_length:`` must be a positive Integer and is
+  only accepted on ``SortedSet``/``ListKey``, ``dirty_write_warnings:`` must be
+  a valid mode, the old ``:maxlength`` spelling warns). An unknown field name
+  raises ``ArgumentError``. (#428)
+- Related-field definitions now freeze at first use: instance-level definitions
+  when the class first materializes its collections (first instance created or
+  loaded), class-level definitions on the first accessor call. After that,
+  ``configure_related_field`` raises ``Familia::RelatedFieldFrozenError`` (a
+  ``Familia::Problem`` naming the class and field) and direct mutation of
+  ``Klass.related_fields[:x].opts`` raises ``FrozenError``. The freeze is per
+  class; subclasses and anonymous classes get a fresh window. (#428)
+
+Changed
+-------
+
+- ``Familia::FieldType#deserialize(value, record)`` is now called on the
+  storage-to-object path (``load``, ``find_by_id``, ``refresh!``,
+  ``naive_refresh``) for every persistent field, after JSON decoding and before
+  the setter. It was previously defined but never invoked. Custom field types
+  that override it will now see stored values pass through it. (#405)
+- Constructing a record with raw envelope JSON as a keyword argument
+  (``Model.new(secret: envelope_json)``) now encrypts that JSON as plaintext.
+  Rehydrate from a raw storage hash with ``naive_refresh`` instead. (#405)
+
+- ``rebuild_instances`` and the ``rebuild_via_instances``,
+  ``rebuild_via_participation``, and ``rebuild_via_scan`` strategies now run
+  under ``with_rebuild``. A rebuild of an index that is already being rebuilt
+  raises ``Familia::RebuildInProgressError`` immediately instead of running
+  concurrently; rebuilds never wait or retry.
+- ``AtomicOperations.atomic_swap`` now issues ``RENAME`` and ``PERSIST`` from
+  one Lua script, so the live index does not inherit the temporary key's TTL.
+  It accepts ``preserve_for:``, ``lock: { key:, token: }`` (fences the swap
+  on the rebuild lock; a blank token raises ``ArgumentError``), and
+  ``populated:`` (whether the temporary key is known to hold data, so a key
+  that vanishes on the way into the swap fails closed instead of being read
+  as an empty rebuild).
+- ``AtomicOperations.with_rebuild`` raises ``Familia::OperationModeError`` when
+  called inside an enclosing ``Familia.transaction`` or pipeline, because the
+  lock ``SET NX`` would only be queued there and could not enforce exclusion.
+
+- A blank ``VERIFIABLE_ID_HMAC_SECRET`` no longer raises on its own; it falls
+  through to ``IDENTIFIER_SECRET``. Deployments that set only the legacy variable
+  are unaffected. Applications that bridge
+  ``ENV['VERIFIABLE_ID_HMAC_SECRET'] ||= ENV['IDENTIFIER_SECRET']`` can remove
+  the bridge. See ``docs/migrating/identifier-secret.md``. (#423)
+
+- Re-declaring a related field whose definition has already materialized
+  (``sorted_set :events`` again after an instance exists, or a ``class_*``
+  field again after its accessor was called) now raises
+  ``Familia::RelatedFieldFrozenError`` instead of silently replacing the
+  definition and leaving earlier instances (or the cached class-level
+  collection) on the old options. Re-declaring before first use still
+  replaces the definition, and declaring a new name on a materialized class
+  is still allowed. (#428)
+- ``configure_related_field`` takes an optional ``scope:`` keyword
+  (``:instance`` or ``:class``) for the case where the same name is declared
+  at both levels (``zset :instances`` next to the automatic
+  ``class_sorted_set :instances``). Without it the instance-level definition
+  is addressed when both exist, as before. (#428)
+- Class-level related fields validate their options at the declaration line
+  again (``class_set :tags, max_length: 5`` raises there, not on first
+  access), matching instance-level fields, which now also validate at
+  declaration rather than on the first ``Klass.new``. (#428)
+- Declaration, re-declaration, ``configure_related_field`` and the freeze
+  all serialize on the class's ``related_fields_mutex``, which is now created
+  eagerly when the class is defined (``@mutex ||=`` let two first callers
+  allocate separate mutexes). The first materialization freezes the
+  definitions under that lock before building, so a configure or a
+  re-declaration racing the first ``Klass.new`` or the first class-level
+  accessor call either applies everywhere (instances and registry) or
+  raises; it can no longer leave the first instance or the cached collection
+  on old options while the registry shows new ones. (#428)
+- DataType construction runs outside ``related_fields_mutex``. A custom
+  DataType whose ``init`` (or an option setter) reads another collection of
+  the same class no longer raises ``ThreadError: deadlock; recursive
+  locking`` during an instance-level or class-level build. (#428)
+- Class-level collections are built single-flight under a per-class
+  reentrant build lock: concurrent first calls to ``Klass.registry`` construct
+  the DataType (and run a custom ``init``) exactly once instead of once per
+  caller with all but one result discarded. (#428)
+- The first ``Klass.new`` builds its collections from a snapshot of the
+  related-field registry taken under ``related_fields_mutex`` instead of
+  iterating the live Hash, so a new field declared concurrently (as
+  ``participates_in`` does at load) no longer raises ``RuntimeError: can't
+  add a new key into hash during iteration``. (#428)
+- The related-field cascades (``update_expiration``, ``persist!``,
+  ``ttl_report``, ``delete_related_fields!``, the class-level ``destroy!``,
+  the atomic-write guard ``guard_atomic_write_database!``, the unique-index
+  rebuild's related-field fallback scan and the subclass registry copy in
+  ``Horreum.inherited``) iterate a snapshot from the new
+  ``related_fields_snapshot`` / ``class_related_fields_snapshot`` helpers,
+  taken under ``related_fields_mutex``, rather than the live Hash. Each runs
+  on a write, expire, rebuild or class-definition path, so a field declared
+  concurrently (again, as ``participates_in`` does at load) could raise the
+  same ``RuntimeError: can't add a new key into hash during iteration`` in the
+  declaring thread; it no longer can. (#428)
+- Lazily built class-level collections are cached in a per-class Hash
+  (``Klass.class_related_field_cache``) instead of ``@<name>`` on the class,
+  so a pre-existing class instance variable with the field's name is never
+  returned in place of the collection. (#428)
+
+- Class-level collections (``class_sorted_set``, ``class_list``, ...) are built
+  lazily on the first accessor call instead of at declaration. ``Klass.name``,
+  ``Klass.name=``, and ``Klass.name?`` behave the same from the caller's view.
+  (#428)
+- ``initialize_relatives`` no longer writes ``parent`` into the shared
+  definition Hash, which was a race when two instances of the same class
+  materialized concurrently. (#428)
+- Subclasses now receive their own copies of related-field definitions rather
+  than sharing the parent's, so configuring or freezing one class does not
+  affect another. (#428)
+- A subclass that inherits a class-level field (``class_sorted_set``,
+  ``class_list``, ...) without re-declaring it now gets a working accessor
+  where it previously returned ``nil``. The copied definition's ``parent`` is
+  re-pointed at the subclass, so ``Tenant.registry`` is keyed under ``Tenant``
+  (like ``instances`` already was) rather than aliasing
+  ``Organization.registry``. Set ``prefix`` on the base class to share keys
+  across the hierarchy. (#428)
+
+Fixed
+-----
+
+- ``Model.find_by_id``, ``find_by_dbkey``, and ``load_multi`` no longer raise
+  ``Familia::NoIdentifier`` when the stored hash contains a field value that
+  is not valid JSON (a legacy plain string written by a pre-JSON serializer or
+  by hand via ``HSET``). ``log_deserialization_issue`` computed ``dbkey`` for
+  its log message before any field setter had run on the freshly allocated
+  instance, so the identifier was still nil. The lookup now falls back to
+  ``no dbkey`` and the record loads with the raw string as the field value,
+  logging the intended ``Legacy plain string in ...`` error. ``refresh!`` was
+  unaffected because the instance already had its identifier.
+
+- **`EncryptedData.valid?` no longer echoes the candidate value into the debug log**: `valid?` runs on every assignment to an encrypted field, so the string it inspects is normally the plaintext the application just supplied. With `Familia.debug` enabled (`FAMILIA_DEBUG=1`), its success-path debug line interpolated the entire parsed value, so any plaintext that happened to be a JSON object (an API credential blob, a serialized profile) landed in the log in full, keys and values alike. The rescue path had the same shape of problem: it logged the JSON parser's exception message, which on some `json` gem versions quotes the offending input, so ordinary non-JSON plaintexts could leak through that line too. The success line now reports only the outcome and which required envelope fields are missing (never the candidate's own keys), and the rescue line logs only the exception class. `EncryptedData.validate!` and `Encryption::Manager#decrypt` re-raised the same parser message inside their `EncryptionError` ("Invalid JSON structure: ..."); those now name only the parser error class as well, so a caller that logs the exception cannot echo the stored bytes. Return values are unchanged. (#406)
+
+- **Deserialization failure logs no longer carry the stored value**: when `deserialize_value` falls back to returning a raw string (a legacy plain string or corrupted JSON), `log_deserialization_issue` truncated the value to 50 characters in the structured `value_preview` field but interpolated the full `val.inspect` into the message itself. That message is logged at ERROR (ungated) and also wrapped in the `StandardError` handed to `Familia::Instrumentation.notify_error`, so on every load of an affected record the complete value, which can include raw ciphertext migrated from older encryption schemes, reached the log and any error-reporting sink. The message now carries only the classification, the `Class#field` context and the dbkey, so the ERROR line and the `notify_error` payload contain no bytes of the value at default settings. A new `value_length` (byte size) is always reported in both the log context and the `notify_error` context; the bounded `value_preview` is only added to the log context when `Familia.debug?` is on, and is never sent to `notify_error`. The classification is also computed once per call instead of twice. The return value and control flow of `deserialize_value` are unchanged. (#407)
+
+- ``ExternalIdentifier.extid?`` now rejects uppercase IDs and external identifier format declarations now require one ``%{id}`` placeholder. (#400, #401)
+
+- ``Familia::ThreadSafety::InstrumentedMutex#synchronize`` did not acquire
+  the underlying mutex unless the thread-safety monitor was enabled, which it
+  is not by default. Every class-level registry guard built on it
+  (``fields_mutex``, ``field_types_mutex``, ``field_groups_mutex``,
+  ``related_fields_mutex``, the connection-chain mutex) was therefore a
+  no-op in normal operation. It now always locks. (#428)
+
+- Instance-scoped unique-index rebuilds no longer mistake the backing index for a
+  membership collection when no participation collection is declared.
+
+Security
+--------
+
+- Encrypted field setters no longer duck-type the assigned value. Previously
+  any value that parsed as JSON with the envelope keys (``algorithm``,
+  ``nonce``, ``ciphertext``, ``auth_tag``, ``key_version``) was stored
+  verbatim, so caller-supplied plaintext shaped like an envelope landed at
+  rest unencrypted (and unreadable). A value is now taken verbatim only when
+  wrapped in the new ``Familia::Encryption::StoredEnvelope`` marker, which the
+  hydration path applies via ``EncryptedFieldType#deserialize``; every other
+  assignment (setter, fast writer, ``apply_fields``, keyword construction) is
+  encrypted whatever it looks like. ``multi_field_update`` and
+  ``multi_field_fast_write`` were unaffected: they already raise
+  ``ArgumentError`` for anything but a ``ConcealedString``. (#405)
+
+- The ``encoding`` field of an encryption envelope is now validated before it
+  is applied to the decrypted plaintext. It is the one envelope field that is
+  neither covered by the AEAD tag nor checked by ``validate_decryptable!``, so
+  a rewritten value used to reach ``force_encoding`` directly: an unknown name
+  raised ``ArgumentError`` (a non-string raised ``TypeError``) which the
+  generic rescue in ``Manager#decrypt`` reported as ``Decryption failed``,
+  indistinguishable from corrupted ciphertext. The value must now be a String
+  in ``Familia::Encryption::ENVELOPE_ENCODINGS`` (``Encoding.name_list`` minus
+  the host-dependent ``locale``, ``external``, ``internal`` and ``filesystem``
+  pseudo names). Anything else raises a defined
+  ``EncryptionError: Unsupported encoding`` from ``validate_decryptable!``,
+  ``Manager#decrypt`` (before any key derivation) and ``ConcealedString``
+  wrapping, and ``decryptable?`` returns false. Envelopes without the field
+  still decrypt as UTF-8. Binding the field into the AAD so that a
+  valid-but-wrong name is also rejected remains open; it needs a new envelope
+  version. (#408)
+
+- Assigning plaintext to an encrypted field now raises ``Familia::NoIdentifier``
+  when the record has no identifier, preventing ciphertext from becoming
+  undecryptable after an identifier is assigned.
+
+- Made ``rebuild_via_scan`` propagate batch failures and preserve the live index instead of replacing it with incomplete rebuilt contents.
+
+- Made ``AtomicOperations.build_temp_key`` append a 64-bit random nonce to the
+  timestamp suffix (``<key>:rebuild:<timestamp>:<16 hex>``) so concurrent
+  rebuilds of the same index started within one second no longer share a
+  temporary key.
+- Index rebuilds now hold a per-index advisory lock at
+  ``<final_key>:rebuild-lock`` for the duration of the rebuild, so two rebuilds
+  of the same index cannot run at once and swap a stale snapshot over a newer
+  one.
+- Temporary rebuild keys carry a TTL that is refreshed once per batch, and a
+  failed swap now retains the temporary key for a bounded diagnostic window
+  (``preserve_for``, default 3600 seconds) instead of indefinitely.
+- The rebuild lock is refreshed by compare-and-extend, so a rebuild that
+  stalled past the lock TTL can no longer extend a lock another rebuild has
+  taken over. It raises ``Familia::RebuildLockLostError`` at the next batch or
+  immediately before the swap, deletes its own temporary key, and leaves the
+  live index untouched.
+- ``AtomicOperations.atomic_swap`` fails closed. The swap is one Lua script
+  that, when fenced on the rebuild lock, verifies the lock token and performs
+  the ``RENAME`` (or the empty-rebuild ``DEL``) as a single atomic step, so a
+  rebuild whose lock expired or changed hands after its last refresh raises
+  ``Familia::RebuildLockLostError`` instead of publishing a stale snapshot. A
+  temporary key that was populated but is gone at swap time raises
+  ``Familia::PersistenceError`` instead of returning as if the swap succeeded.
+  Any error from the swap itself (command, connection, or timeout) puts the
+  temporary key on the bounded diagnostic TTL before re-raising. The live
+  index is never replaced by a partial rebuild, and a lost rebuild is never
+  reported as a successful one.
+
+Documentation
+-------------
+
+- Linked security audit status entries directly to their specific July 26 audit findings.
+
+AI Assistance
+-------------
+
+- The fix and regression test were developed with AI assistance.
+
+- The fix, the log-capture regression tests, and this entry were developed with AI assistance.
+
+- The redaction change, the debug-gated preview, and the accompanying log and instrumentation tests were developed with AI assistance.
+
+- The provenance-marker design, the hook wiring and the tests were developed
+  with AI assistance.
+
+- The allowlist placement (on ``EncryptedData`` so every validation entry
+  point shares it) and the accompanying tests were developed with AI
+  assistance.
+
+- The lock, TTL, and sweep design and the accompanying tests were developed
+  with AI assistance.
+
+- The fix and regression tests were developed with AI assistance.
+
 .. _changelog-2.12.0:
 
 2.12.0 — 2026-08-03
