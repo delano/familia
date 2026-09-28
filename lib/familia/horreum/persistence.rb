@@ -973,7 +973,8 @@ module Familia
       #
       def refresh!
         Familia.trace :REFRESH, nil, self.class.uri if Familia.debug?
-        raise Familia::KeyNotFoundError, dbkey unless dbclient.exists(dbkey)
+        # EXISTS returns a key count, and 0 is truthy in Ruby.
+        raise Familia::KeyNotFoundError, dbkey unless Familia.positive?(dbclient.exists(dbkey))
 
         fields = hgetall
         Familia.debug "[refresh!] #{self.class} #{dbkey} fields:#{fields.keys}"
