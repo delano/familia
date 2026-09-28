@@ -15,20 +15,8 @@
 # base64 and benchmark, and the development bundle contains both. The child
 # inherits Bundler's environment, so it resolves gems from the same bundle.
 
-require 'open3'
-require 'rbconfig'
 require_relative '../../support/helpers/test_helpers'
-
-@lib_dir = File.expand_path('../../../lib', __dir__)
-
-# Runs code in a fresh Ruby process with this checkout's lib/ first on the
-# load path and returns its output lines, stripped.
-def run_fresh_ruby(code)
-  out, status = Open3.capture2e(RbConfig.ruby, '-I', @lib_dir, '-e', code)
-  raise "fresh ruby exited #{status.exitstatus}:\n#{out}" unless status.success?
-
-  out.lines.map(&:strip)
-end
+require_relative '../../support/helpers/fresh_ruby'
 
 ## require 'familia' does not load base64
 run_fresh_ruby(<<~RUBY)
