@@ -26,8 +26,11 @@ module Familia
     alias length element_count
     alias count element_count
 
+    # @return [Boolean, Redis::Future] whether the list has no elements.
+    #   Inside a transaction or pipeline, the LLEN Future (resolves to the
+    #   count).
     def empty?
-      element_count.zero?
+      Familia.transform_reply(element_count, &:zero?)
     end
 
     # @note This method executes a Redis RPUSH immediately, unlike scalar field
@@ -87,12 +90,15 @@ module Familia
 
     # Removes and returns the last element(s) from the list
     # @param count [Integer, nil] Number of elements to pop (Redis 6.2+)
-    # @return [Object, Array<Object>, nil] Single element or array if count specified
+    # @return [Object, Array<Object>, nil, Redis::Future] Single element or
+    #   array if count specified. Inside a transaction or pipeline, the RPOP
+    #   Future (resolves to the raw reply).
     def pop(count = nil)
       warn_if_dirty!
       ret = if count
-        result = dbclient.rpop(dbkey, count)
-        result.nil? ? nil : deserialize_values(*result)
+        Familia.transform_reply(dbclient.rpop(dbkey, count)) do |result|
+          result.nil? ? nil : deserialize_values(*result)
+        end
       else
         deserialize_value dbclient.rpop(dbkey)
       end
@@ -102,12 +108,15 @@ module Familia
 
     # Removes and returns the first element(s) from the list
     # @param count [Integer, nil] Number of elements to shift (Redis 6.2+)
-    # @return [Object, Array<Object>, nil] Single element or array if count specified
+    # @return [Object, Array<Object>, nil, Redis::Future] Single element or
+    #   array if count specified. Inside a transaction or pipeline, the LPOP
+    #   Future (resolves to the raw reply).
     def shift(count = nil)
       warn_if_dirty!
       ret = if count
-        result = dbclient.lpop(dbkey, count)
-        result.nil? ? nil : deserialize_values(*result)
+        Familia.transform_reply(dbclient.lpop(dbkey, count)) do |result|
+          result.nil? ? nil : deserialize_values(*result)
+        end
       else
         deserialize_value dbclient.lpop(dbkey)
       end
@@ -130,8 +139,11 @@ module Familia
     end
     alias slice []
 
+    # @return [Boolean, Redis::Future] whether the list contains +value+.
+    #   Inside a transaction or pipeline, the LPOS Future (resolves to the
+    #   index or nil).
     def member?(value)
-      !dbclient.lpos(dbkey, serialize_value(value)).nil?
+      Familia.transform_reply(dbclient.lpos(dbkey, serialize_value(value))) { |pos| !pos.nil? }
     end
 
     # Removes elements equal to value from the list
@@ -146,9 +158,12 @@ module Familia
     end
     alias remove remove_element
 
+    # @return [Array<Object>, Redis::Future] deserialized elements. Inside a
+    #   transaction or pipeline, the LRANGE Future (resolves to raw strings).
     def range(sidx = 0, eidx = -1)
-      elements = rangeraw sidx, eidx
-      deserialize_values(*elements)
+      Familia.transform_reply(rangeraw(sidx, eidx)) do |elements|
+        deserialize_values(*elements)
+      end
     end
 
     def rangeraw(sidx = 0, eidx = -1)
@@ -187,6 +202,8 @@ module Familia
     def each(batch_size: 100, &block)
       return to_enum(:each, batch_size: batch_size) unless block
 
+      Familia.assert_replies_available!('ListKey#each')
+
       offset = 0
       loop do
         # LRANGE is inclusive on both ends, so end_idx = offset + batch_size - 1
@@ -203,19 +220,25 @@ module Familia
       self
     end
 
+    # The raw iterators need the LRANGE reply to iterate over, so they raise
+    # Familia::OperationModeError inside a transaction or pipeline.
     def eachraw(&)
+      Familia.assert_replies_available!('ListKey#eachraw')
       rangeraw.each(&)
     end
 
     def eachraw_with_index(&)
+      Familia.assert_replies_available!('ListKey#eachraw_with_index')
       rangeraw.each_with_index(&)
     end
 
     def collectraw(&)
+      Familia.assert_replies_available!('ListKey#collectraw')
       rangeraw.collect(&)
     end
 
     def selectraw(&)
+      Familia.assert_replies_available!('ListKey#selectraw')
       rangeraw.select(&)
     end
 
@@ -301,7 +324,7 @@ module Familia
               raise ArgumentError, "position must be :before or :after, got #{position.inspect}"
       end
       result = dbclient.linsert dbkey, pos, serialize_value(pivot), serialize_value(value)
-      update_expiration if Familia.positive?(result) == true
+      update_expiration_if_written(Familia.positive?(result))
       result
     end
     alias linsert insert
@@ -338,7 +361,7 @@ module Familia
 
       warn_if_dirty!
       result = dbclient.rpushx(dbkey, serialized_values)
-      update_expiration if Familia.positive?(result) == true
+      update_expiration_if_written(Familia.positive?(result))
       result
     end
     alias rpushx pushx
@@ -354,7 +377,7 @@ module Familia
 
       warn_if_dirty!
       result = dbclient.lpushx(dbkey, serialized_values)
-      update_expiration if Familia.positive?(result) == true
+      update_expiration_if_written(Familia.positive?(result))
       result
     end
     alias lpushx unshiftx
