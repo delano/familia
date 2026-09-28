@@ -103,6 +103,7 @@ empty.value.zero?  # => false, SCARD replies with the count
 | `Lock#locked?`, `#held_by?` | the stored token, or nil |
 | `Lock#release` | 1 when the lock was released, 0 otherwise |
 | `Horreum.any?`, `.count`, `.keys_count`, `.keys_any?`, `.in_instances?`, `.multiget`, `.storage_inspect` | the ZCARD count, the KEYS array, the ZRANK reply, the MGET array or the HGETALL hash |
+| `Migration::Registry#applied?`, `#applied_at`, `#all_applied`, `#metadata` | the ZSCORE, ZRANGE or HGET reply |
 
 Predicates need care: `empty?` resolves to a count, so test
 `future.value.zero?`, not `future.value`.
@@ -136,6 +137,13 @@ truthy Future would report success before the command runs.
 - Scans and maintenance: `scan_count` (`count!`), `scan_any?` (`any!`), the
   `audit_*`, `health_check`, `repair_*` and `rebuild_*` methods,
   `run_chores!`, and the `EnforceCollectionCaps` chore
+- Migrations: `Migration::Base.run` and `.check_only`, and
+  `Migration::Runner#run`, `#run_one`, `#rollback`, `#status` and `#pending`.
+  The `Migration::Registry` methods that decide from a reply (`pending`,
+  `status`, `record_rollback`, `schema_changed?`, `schema_drift`,
+  `restore_backup`) raise when the registry's own client is a transaction or
+  pipeline connection, so a registry built with its own client keeps working
+  inside a block
 - Writes that read first: the save methods in rule 1, `commit_fields`,
   `save_fields`, `multi_field_update`, `multi_field_fast_write`, class-level
   `destroy!`, instance `destroy!` on a class with instance-scoped indexes, the

@@ -28,7 +28,8 @@ Changed
   ``#empty?``, ``#to_s``, ``#to_i``, ``#to_f``; ``Counter#value``, ``#to_i``,
   ``#reset``; ``Lock#locked?``, ``#held_by?``, ``#release``; ``expired?``;
   ``Horreum.any?``, ``.keys_count``, ``.keys_any?``, ``.in_instances?``,
-  ``.multiget``, ``.storage_inspect``; the generated participation methods
+  ``.multiget``, ``.storage_inspect``; ``Migration::Registry#applied_at``,
+  ``#all_applied``, ``#metadata``; the generated participation methods
   ``score_in_<target>_<collection>`` and ``in_<target>_<collection>?`` on a
   sorted-set or list participation. Return values outside a block are
   unchanged.
@@ -44,7 +45,16 @@ Changed
   ``destroy!``, the index finders, rebuilds and ``guard_unique_*!`` methods,
   the participation readers, staged activation and unstaging, the
   ``audit_*``, ``health_check``, ``repair_*`` and ``scan_keys`` methods,
-  ``run_chores!`` and ``EnforceCollectionCaps``.
+  ``run_chores!``, ``EnforceCollectionCaps``, ``Migration::Base.run`` and
+  ``.check_only``, and ``Migration::Runner#run``, ``#run_one``,
+  ``#rollback``, ``#status``, ``#pending``.
+- ``Migration::Registry#pending``, ``#status``, ``#record_rollback``,
+  ``#schema_changed?``, ``#schema_drift`` and ``#restore_backup`` raise
+  ``Familia::OperationModeError`` when the registry's client is a
+  transaction or pipeline connection. ``Migration::Registry#client`` no
+  longer memoizes ``Familia.dbclient``, so a registry without its own client
+  follows the current transaction or pipeline and no longer keeps a
+  connection from a block that has completed.
 - ``save``, ``save_if_not_exists!``, ``create!``, ``build`` and
   ``atomic_write`` raise ``Familia::OperationModeError`` inside a pipeline as
   well as a transaction. On a class with a unique index they raised a
@@ -81,6 +91,10 @@ Fixed
   refreshes after setting a new field.
 - ``Lock#release`` returned ``false`` inside a transaction even when the
   queued script released the lock.
+- ``Migration::Registry#applied?`` returned ``true`` for every migration
+  inside a transaction or pipeline. It now returns the ZSCORE
+  ``Redis::Future``, which resolves to the score or ``nil`` after the block.
+  The Future is truthy, so read its value after the block.
 
 Documentation
 -------------
