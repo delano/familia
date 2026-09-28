@@ -451,21 +451,34 @@ module Familia
     private :build_related_field, :materialize_related_field
 
     def initialize_with_keyword_args_deserialize_value(**fields)
-      # Deserialize Database string values back to their original types, then
-      # hand each value to its field type's storage hook (FieldType#deserialize).
-      # EncryptedFieldType uses the hook to wrap the stored envelope in
-      # Familia::Encryption::StoredEnvelope, which is how its setter tells a
-      # rehydrated envelope apart from caller-supplied plaintext that merely
-      # looks like one (#405). This hydration path is the only caller of the
-      # hook; the public constructor (initialize_with_keyword_args) never is.
-      deserialized_fields = fields.each_with_object({}) do |(field_name, value), hsh|
+      initialize_with_keyword_args(**deserialize_stored_fields(fields))
+    end
+
+    # Deserializes a hash of stored field values without assigning them.
+    #
+    # Deserialize Database string values back to their original types, then
+    # hand each value to its field type's storage hook (FieldType#deserialize).
+    # EncryptedFieldType uses the hook to wrap the stored envelope in
+    # Familia::Encryption::StoredEnvelope, which is how its setter tells a
+    # rehydrated envelope apart from caller-supplied plaintext that merely
+    # looks like one (#405). This hydration path is the only caller of the
+    # hook; the public constructor (initialize_with_keyword_args) never is.
+    #
+    # Kept apart from the assignment so {Familia::Horreum::Persistence#refresh!}
+    # can deserialize while the object still has the identifier of the key it
+    # read. A value that fails to parse is logged with that dbkey.
+    #
+    # @param fields [Hash] field names to stored (serialized) values
+    # @return [Hash] the same keys with deserialized values
+    def deserialize_stored_fields(fields)
+      fields.each_with_object({}) do |(field_name, value), hsh|
         deserialized = deserialize_value(value, field_name: field_name)
         field_type = self.class.field_types[field_name.to_sym]
         deserialized = field_type.deserialize(deserialized, self) if field_type&.persistent?
         hsh[field_name] = deserialized
       end
-      initialize_with_keyword_args(**deserialized_fields)
     end
+    private :deserialize_stored_fields
 
     # A thin wrapper around the private initialize method that accepts a field
     # hash and refreshes the existing object.
