@@ -110,8 +110,10 @@ module Familia
       end
 
       # Benchmark available providers
+      #
+      # Times each provider with the monotonic clock, as Benchmark.realtime
+      # does, so the benchmark library is not needed.
       def benchmark(iterations: 1000)
-        require 'benchmark'
         test_data = 'x' * 1024 # 1KB test
         context = 'benchmark:test'
 
@@ -120,12 +122,12 @@ module Familia
           next unless provider_class.available?
 
           mgr = Manager.new(algorithm: algo)
-          time = Benchmark.realtime do
-            iterations.times do
-              encrypted = mgr.encrypt(test_data, context: context)
-              mgr.decrypt(encrypted, context: context)
-            end
+          started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+          iterations.times do
+            encrypted = mgr.encrypt(test_data, context: context)
+            mgr.decrypt(encrypted, context: context)
           end
+          time = Process.clock_gettime(Process::CLOCK_MONOTONIC) - started
 
           results[algo] = {
             time: time,

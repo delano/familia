@@ -2,16 +2,18 @@
 #
 # frozen_string_literal: true
 
-# Familia::Encryption must work without the base64 gem. Ruby 3.4.0's NEWS
-# lists base64 under "The following bundled gems are promoted from default
-# gems.", so under Bundler it loads only when the application's bundle
-# contains it. familia does not declare it, and encodes with core
-# Array#pack and String#unpack1 instead (Familia::Encryption::StrictBase64).
+# Familia::Encryption must work without the base64 and benchmark gems.
+# Ruby 3.4.0's NEWS lists base64, and Ruby 4.0.0's NEWS lists benchmark,
+# under "The following bundled gems are promoted from default gems.", so
+# under Bundler each loads only when the application's bundle contains it.
+# familia declares neither. It encodes with core Array#pack and
+# String#unpack1 (Familia::Encryption::StrictBase64) and times
+# Encryption.benchmark with Process.clock_gettime.
 #
 # Each case runs in a fresh Ruby process and inspects $LOADED_FEATURES
 # there. This process cannot answer the question: other tryouts require
-# base64, and the development bundle contains it. The child inherits
-# Bundler's environment, so it resolves gems from the same bundle.
+# base64 and benchmark, and the development bundle contains both. The child
+# inherits Bundler's environment, so it resolves gems from the same bundle.
 
 require 'open3'
 require 'rbconfig'
@@ -75,6 +77,20 @@ run_fresh_ruby(<<~RUBY)
   puts $LOADED_FEATURES.any? { |path| File.basename(path) == 'base64.rb' }
 RUBY
 #=> ['Current encryption key is not valid Base64', 'false', 'Invalid Base64 encoding in nonce field', 'false']
+
+## Encryption.benchmark times each provider without loading benchmark
+run_fresh_ruby(<<~RUBY)
+  require 'familia'
+  require 'securerandom'
+  Familia.config.encryption_keys = { v1: SecureRandom.base64(32) }
+  Familia.config.current_key_version = :v1
+  Familia::Encryption.validate_configuration!
+  results = Familia::Encryption.benchmark(iterations: 2)
+  puts results.key?('aes-256-gcm')
+  puts results.values.all? { |r| r[:time].is_a?(Float) && r[:time].positive? && r[:ops_per_sec].positive? }
+  puts $LOADED_FEATURES.any? { |path| File.basename(path) == 'benchmark.rb' }
+RUBY
+#=> ['true', 'true', 'false']
 
 ## StrictBase64 matches the base64 gem's strict methods byte for byte
 require 'base64'
