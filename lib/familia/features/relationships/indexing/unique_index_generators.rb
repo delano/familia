@@ -314,8 +314,9 @@ module Familia
               # Add a guard method to enforce unique constraint on this instance-scoped index
               #
               # @param scope_instance [Object] The scope instance providing uniqueness context (e.g., a Company)
-              # @raise [Familia::RecordExistsError] if a record with the same field value
-              #   exists in the scope's index. Values are compared as strings.
+              # @raise [Familia::RecordExistsError] if a different record holds the same
+              #   field value in the scope's index. Field values and identifiers are
+              #   compared as strings.
               # @return [void]
               #
               # @example
@@ -334,7 +335,10 @@ module Familia
                 index_hash = scope_instance.send(index_name)
                 existing_id = index_hash.get(field_value.to_s)
 
-                if existing_id && existing_id != identifier
+                # The index is a reference hash, so existing_id is the stored
+                # String. Compare it with the identifier's string form, or a
+                # record with an Integer identifier is refused its own entry.
+                if existing_id && existing_id != identifier.to_s
                   raise Familia::RecordExistsError.new(
                     "#{self.class} exists in #{scope_instance.class} with #{field}=#{field_value}",
                     existing_id: existing_id,
@@ -608,8 +612,9 @@ module Familia
               # for the first one and then failing on the second. Load-bearing,
               # not redundant with claim_unique_*!.
               #
-              # @raise [Familia::RecordExistsError] if a record with the same
-              # field value exists. Values are compared as strings.
+              # @raise [Familia::RecordExistsError] if a different record holds the
+              # same field value. Field values and identifiers are compared as
+              # strings.
               #
               # @return [void]
               define_method(:"guard_unique_#{index_name}!") do
@@ -619,7 +624,10 @@ module Familia
                 index_hash = self.class.send(index_name)
                 existing_id = index_hash.get(field_value.to_s)
 
-                if existing_id && existing_id != identifier
+                # The index is a reference hash, so existing_id is the stored
+                # String. Compare it with the identifier's string form, or a
+                # record with an Integer identifier is refused its own entry.
+                if existing_id && existing_id != identifier.to_s
                   raise Familia::RecordExistsError.new(
                     "#{self.class} exists #{field}=#{field_value}",
                     existing_id: existing_id,
