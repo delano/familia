@@ -275,9 +275,12 @@ end
 @combined.count
 #=> 20
 
-## Combined test refresh works
-combined = CombinedTest.new email: 'combined2@example.com'
-combined.count = 5  # unsaved change
-combined.refresh!
-combined.count
+## Combined test refresh! raises for a record that was never saved
+@combined2 = CombinedTest.new email: 'combined2@example.com'
+@combined2.count = 5  # unsaved change
+@combined2.refresh!
+#=!> Familia::KeyNotFoundError
+
+## Combined test unsaved change survives the failed refresh!
+@combined2.count
 #=> 5

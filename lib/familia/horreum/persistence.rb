@@ -973,9 +973,12 @@ module Familia
       #
       def refresh!
         Familia.trace :REFRESH, nil, self.class.uri if Familia.debug?
-        raise Familia::KeyNotFoundError, dbkey unless dbclient.exists(dbkey)
-
         fields = hgetall
+        # A hash with no fields does not exist, so an empty reply means the
+        # key is missing. Checking the reply instead of a separate EXISTS
+        # leaves no gap for the key to expire or be deleted before the read.
+        raise Familia::KeyNotFoundError, dbkey if fields.empty?
+
         Familia.debug "[refresh!] #{self.class} #{dbkey} fields:#{fields.keys}"
 
         # Reset transient fields to nil for semantic clarity and ORM consistency

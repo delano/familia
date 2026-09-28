@@ -166,7 +166,14 @@ result.successful?
 #=> false
 
 ## destroy! removes object from Valkey/Redis, not the in-memory object (2 of 2)
+@customer.name
+#=> "Bob Jones"
+
+## refresh! after destroy! raises because the key is gone
 @customer.refresh!
+#=!> Familia::KeyNotFoundError
+
+## the failed refresh! leaves the in-memory object as it was
 @customer.name
 #=> "Bob Jones"
 
