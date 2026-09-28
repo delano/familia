@@ -638,10 +638,11 @@ end
 # test/test_helper.rb
 require 'familia'
 
-# Use predictable test keys
+# Use predictable test keys: strict Base64 of 32 bytes. pack('m0') is core
+# Ruby's strict Base64 encoding, so no base64 gem is needed.
 test_keys = {
-  v1: Base64.strict_encode64('a' * 32),
-  v2: Base64.strict_encode64('b' * 32)
+  v1: ['a' * 32].pack('m0'),
+  v2: ['b' * 32].pack('m0')
 }
 
 Familia.configure do |config|
@@ -719,13 +720,14 @@ end
 # test/support/mock_encryption.rb
 module MockEncryption
   def self.setup
-    # Replace encryption with reversible encoding for speed
+    # Replace encryption with reversible encoding for speed. pack('m0') and
+    # unpack1('m0') are core Ruby's strict Base64 encode and decode.
     Familia::Encryption.define_singleton_method(:encrypt) do |data, **opts|
-      Base64.strict_encode64("MOCK:#{data}")
+      ["MOCK:#{data}"].pack('m0')
     end
 
     Familia::Encryption.define_singleton_method(:decrypt) do |encrypted_data, **opts|
-      decoded = Base64.strict_decode64(encrypted_data)
+      decoded = encrypted_data.unpack1('m0')
       decoded.sub(/^MOCK:/, '')
     end
   end

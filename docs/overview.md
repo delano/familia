@@ -823,11 +823,11 @@ end
 
 **Development Keys:**
 ```ruby
-# Generate base64-encoded 32-byte keys
+# Generate strict Base64 encoded 32-byte keys
 Familia.configure do |config|
   config.encryption_keys = {
-    v1: Base64.strict_encode64(SecureRandom.bytes(32)),
-    v2: Base64.strict_encode64(SecureRandom.bytes(32))
+    v1: SecureRandom.base64(32),
+    v2: SecureRandom.base64(32)
   }
   config.current_key_version = :v2
   config.encryption_personalization = "#{Rails.application.class.name}-#{Rails.env}"
@@ -960,10 +960,11 @@ require 'familia'
 # Use separate test database
 Familia.uri = 'redis://localhost:2525/3'
 
-# Setup encryption for tests
+# Setup encryption for tests. Keys are strict Base64 of 32 bytes; pack('m0')
+# is core Ruby's strict Base64 encoding, so no base64 gem is needed.
 test_keys = {
-  v1: Base64.strict_encode64('a' * 32),
-  v2: Base64.strict_encode64('b' * 32)
+  v1: ['a' * 32].pack('m0'),
+  v2: ['b' * 32].pack('m0')
 }
 Familia.config.encryption_keys = test_keys
 Familia.config.current_key_version = :v1
@@ -976,8 +977,8 @@ end
 # Feature-specific testing patterns
 def setup_encryption_for_tests
   test_keys = {
-    v1: Base64.strict_encode64('a' * 32),
-    v2: Base64.strict_encode64('b' * 32)
+    v1: ['a' * 32].pack('m0'),
+    v2: ['b' * 32].pack('m0')
   }
   Familia.configure do |config|
     config.encryption_keys = test_keys

@@ -1424,8 +1424,8 @@ class UserTest < Minitest::Test
 
   def setup_encryption_keys
     test_keys = {
-      v1: Base64.strict_encode64('a' * 32),
-      v2: Base64.strict_encode64('b' * 32)
+      v1: ['a' * 32].pack('m0'), # strict Base64, as encryption keys require
+      v2: ['b' * 32].pack('m0')
     }
     Familia.configure do |config|
       config.encryption_keys = test_keys
