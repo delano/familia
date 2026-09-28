@@ -11,13 +11,11 @@ Familia supports optional JSON Schema validation for model data. Schemas are def
 
 ## Setup
 
-### 1. Install json_schemer
+### 1. json_schemer
 
-Add to your Gemfile:
-
-```ruby
-gem 'json_schemer', '~> 2.0'
-```
+familia depends on json_schemer, so Bundler installs it with familia and
+your Gemfile needs no entry for it. familia requires it the first time it
+validates data against a schema.
 
 ### 2. Create Schema Files
 
