@@ -53,6 +53,55 @@ jobs:
             exit 1
           fi
 
+  # An application can resolve any release familia.gemspec allows, not only
+  # the newest one consumer-load gets. This job pins each runtime dependency
+  # to the lowest release the gemspec allows and fails if familia, or
+  # json_schemer (which familia requires on first schema validation), cannot
+  # be required or if Ruby warns that a library is leaving the default gems.
+  # Ruby 3.4 raises LoadError for the libraries that left the default gems in
+  # 3.4 and warns for those that leave in 4.0, so one Ruby covers both.
+  consumer-load-lowest:
+    timeout-minutes: 10
+
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@v7
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.4"
+
+      - name: Require familia with the lowest dependency releases it allows
+        run: |
+          consumer="$RUNNER_TEMP/consumer-lowest"
+          mkdir -p "$consumer"
+          cd "$consumer"
+          ruby - "$GITHUB_WORKSPACE" > Gemfile <<'RUBY'
+            workspace = ARGV.fetch(0)
+            spec = Dir.chdir(workspace) { Gem::Specification.load('familia.gemspec') }
+            puts "source 'https://rubygems.org'"
+            puts "gem 'familia', path: #{workspace.dump}"
+            spec.runtime_dependencies.each do |dep|
+              found, = Gem::SpecFetcher.fetcher.spec_for_dependency(dep)
+              lowest = found.map { |s, _source| s.version }.min or abort "no release satisfies #{dep}"
+              puts "gem #{dep.name.dump}, #{lowest.to_s.dump}"
+            end
+          RUBY
+          cat Gemfile
+          bundle install
+          probe='require "familia"; require "json_schemer"; puts "familia #{Familia::VERSION} and json_schemer #{JSONSchemer::VERSION} loaded"'
+          if ! out=$(bundle exec ruby -e "$probe" 2>&1); then
+            echo "$out"
+            echo "::error::familia or json_schemer failed to load with the lowest dependency releases familia.gemspec allows"
+            exit 1
+          fi
+          echo "$out"
+          if grep -q "loaded from the standard library" <<<"$out"; then
+            echo "::error::a dependency release familia.gemspec allows requires a library that is leaving Ruby's default gems without declaring it"
+            exit 1
+          fi
+
   build:
     timeout-minutes: 10
 
