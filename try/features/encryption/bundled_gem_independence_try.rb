@@ -91,11 +91,9 @@ bytes = (0..255).map(&:chr).join.b * 3
 
 ## StrictBase64.decode rejects input the base64 gem's strict decoder rejects
 %W[MDEyMzQ1Njc MDEyMzQ1Njc== MDEy\nMzQ1Njc= - _].map do |text|
-  begin
-    Familia::Encryption::StrictBase64.decode(text)
-    :accepted
-  rescue ArgumentError
-    :rejected
-  end
+  Familia::Encryption::StrictBase64.decode(text)
+  :accepted
+rescue ArgumentError
+  :rejected
 end
 #=> [:rejected, :rejected, :rejected, :rejected, :rejected]
