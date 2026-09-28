@@ -189,8 +189,11 @@ module Familia
         #
         # @param extid [String] The external identifier to search for
         # @return [Object, nil] The object if found, nil otherwise
+        # @raise [Familia::OperationModeError] inside a transaction or
+        #   pipeline, where the lookup reply is not available
         #
         def find_by_extid(extid)
+          Familia.assert_replies_available!("#{self}.find_by_extid")
           return nil if extid.to_s.empty?
 
           if Familia.debug?

@@ -256,8 +256,11 @@ module Familia
         #
         # @param objid [String] The object identifier to search for
         # @return [Object, nil] The object if found, nil otherwise
+        # @raise [Familia::OperationModeError] inside a transaction or
+        #   pipeline, where the lookup reply is not available
         #
         def find_by_objid(objid)
+          Familia.assert_replies_available!("#{self}.find_by_objid")
           return nil if objid.to_s.empty?
 
           if Familia.debug?
