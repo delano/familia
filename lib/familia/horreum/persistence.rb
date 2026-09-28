@@ -888,6 +888,10 @@ module Familia
       # method's documentation for that known gap.
       #
       # @return [void]
+      # @raise [Familia::OperationModeError] inside a transaction or pipeline
+      #   when the class has instance-scoped indexes, whose tracker must be
+      #   read to find the entries to remove. Without such indexes destroy!
+      #   queues its deletes into the caller's transaction.
       #
       # @example Remove a user object from storage
       #   user = User.new(id: 123)
@@ -910,8 +914,9 @@ module Familia
         # Pre-read instance-scoped index tracker before MULTI/EXEC
         # (HGETALL returns futures inside a transaction, not values).
         # Maps "<scope_config>\t<index_name>\t<scope_id>" => indexed value.
+        # Inside a caller's block the read refuses, naming destroy!.
         tracked_scopes = if respond_to?(:read_instance_index_scopes)
-          read_instance_index_scopes
+          read_instance_index_scopes(operation: "#{self.class}#destroy!")
         else
           {}
         end
@@ -1112,6 +1117,26 @@ module Familia
       def dbclient(...) = self.class.dbclient(...)
 
       private
+
+      # Refuses destroy! inside a transaction or pipeline when the class has
+      # instance-scoped indexes, before anything is queued.
+      #
+      # destroy! must read the instance-scoped index tracker to find the
+      # entries it removes, and it refuses that read inside a block. Feature
+      # overrides of destroy! that queue their own deletes before calling
+      # super (object_identifier and external_identifier remove their lookup
+      # entries) call this first. Otherwise a caller who rescued the refusal
+      # inside the block would commit those deletes with the outer EXEC and
+      # keep the record.
+      #
+      # @return [void]
+      # @raise [Familia::OperationModeError] inside a transaction or
+      #   pipeline, when the class has instance-scoped indexes
+      def assert_destroy_replies_available!
+        return unless respond_to?(:assert_instance_index_replies_available!)
+
+        assert_instance_index_replies_available!("#{self.class}#destroy!")
+      end
 
       # Validates that all field names are declared Familia fields.
       #

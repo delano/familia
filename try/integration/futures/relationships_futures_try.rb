@@ -39,6 +39,7 @@ end
 # Indexed participant: one index of every kind plus a staged participation.
 class FuturesRelEmployee < Familia::Horreum
   feature :object_identifier
+  feature :external_identifier
   feature :relationships
   identifier_field :emp_id
   field :emp_id
@@ -180,6 +181,59 @@ end
 ## unstaging inside a transaction raises and keeps the staged model
 [@refused.call { @company.transaction { @company.unstage_members_instance(@staged) } }, @staged.exists?]
 #=> [Familia::OperationModeError, true]
+
+## the instance-scoped guard names itself in the error
+@err = nil
+begin
+  FuturesRelCompany.pipelined { @emp.guard_unique_futures_rel_company_badge_index!(@company) }
+rescue Familia::OperationModeError => e
+  @err = e
+end
+@err.message.include?('#guard_unique_futures_rel_company_badge_index! cannot run inside')
+#=> true
+
+## destroy! of a record with instance-scoped indexes inside a transaction raises and keeps it
+[@refused.call { @emp.transaction { @emp.destroy! } }, @emp.exists?, @company.find_by_badge('B1').emp_id]
+#=> [Familia::OperationModeError, true, "fre-1"]
+
+## destroy! inside a transaction names destroy! in the error, not the tracker read
+@err = nil
+begin
+  @emp.transaction { @emp.destroy! }
+rescue Familia::OperationModeError => e
+  @err = e
+end
+[@err.message.include?('FuturesRelEmployee#destroy! cannot run inside'),
+ @err.message.include?('read_instance_index_scopes')]
+#=> [true, false]
+
+## destroy! refuses before queueing the objid and extid lookup deletes, so a rescued error commits nothing
+@err = nil
+@destroy_result = @emp.transaction do
+  @emp.destroy!
+rescue Familia::OperationModeError => e
+  @err = e
+end
+[@err.class, @destroy_result.results, @emp.exists?,
+ FuturesRelEmployee.find_by_objid(@emp.objid)&.emp_id, FuturesRelEmployee.find_by_extid(@emp.extid)&.emp_id]
+#=> [Familia::OperationModeError, [], true, "fre-1", "fre-1"]
+
+## destroy! refuses before queueing inside a pipeline too
+@err = nil
+@destroy_result = @emp.pipelined do
+  @emp.destroy!
+rescue Familia::OperationModeError => e
+  @err = e
+end
+[@err.class, @destroy_result.results, FuturesRelEmployee.find_by_objid(@emp.objid)&.emp_id]
+#=> [Familia::OperationModeError, [], "fre-1"]
+
+## destroy! of a record without instance-scoped indexes still queues inside a transaction
+@plain = FuturesRelCompany.new(company_id: 'frc-2', name: 'Plain')
+@plain.save
+@plain.transaction { @plain.destroy! }
+@plain.exists?
+#=> false
 
 ## outside a block: index finders still load records
 [FuturesRelEmployee.find_by_email('e1@example.com').emp_id, @company.find_by_badge('B1').emp_id,

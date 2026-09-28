@@ -434,6 +434,10 @@ module Familia
       end
 
       def destroy!
+        # Refuse before queueing the lookup delete: destroy! may need
+        # replies that a transaction or pipeline cannot give.
+        assert_destroy_replies_available!
+
         # Clean up objid mapping when object is destroyed
         current_objid = instance_variable_get(:@objid)
 

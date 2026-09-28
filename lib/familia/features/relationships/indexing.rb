@@ -361,11 +361,37 @@ module Familia
           # when the indexed field has since changed, or when the object was
           # loaded identifier-only and has no field values in memory.
           #
+          # @param operation [String] the public method reading the tracker,
+          #   named in the error raised inside a block
           # @return [Hash<String, String>] tracker entries, empty if none
-          def read_instance_index_scopes
+          # @raise [Familia::OperationModeError] inside a transaction or
+          #   pipeline, when the class has instance-scoped indexes
+          def read_instance_index_scopes(operation: "#{self.class}#read_instance_index_scopes")
             return {} unless _has_instance_scoped_indexes?
 
+            assert_instance_index_replies_available!(operation)
+
             _index_scope_tracker.hgetall
+          end
+
+          # Refuses, inside a transaction or pipeline, an operation that
+          # must read the instance-scoped index tracker. The tracker contents
+          # decide which index entries destroy! and save clean up, so a
+          # Future cannot stand in for them.
+          #
+          # Callers that queue other writes before the tracker read (the
+          # object_identifier and external_identifier destroy! overrides
+          # delete their lookup entries first) call this up front, so the
+          # refusal comes before anything is queued.
+          #
+          # @param operation [String] the public method, named in the error
+          # @return [void]
+          # @raise [Familia::OperationModeError] inside a transaction or
+          #   pipeline, when the class has instance-scoped indexes
+          def assert_instance_index_replies_available!(operation)
+            return unless _has_instance_scoped_indexes?
+
+            Familia.assert_replies_available!(operation)
           end
 
           # Remove instance-scoped index entries using pre-read tracker
@@ -663,10 +689,12 @@ module Familia
             klass.new(_scope_identifier_field(klass) => scope_id)
           end
           # All internal. The public surface of this module is deliberately
-          # narrow: read_instance_index_scopes, remove_tracked_index_entries!,
-          # auto_update_instance_indexes and guard_tracked_index_scopes! stay
-          # public because Horreum::Persistence reaches them through
-          # respond_to?, which does not see private methods.
+          # narrow: read_instance_index_scopes,
+          # assert_instance_index_replies_available!,
+          # remove_tracked_index_entries!, auto_update_instance_indexes and
+          # guard_tracked_index_scopes! stay public because
+          # Horreum::Persistence reaches them through respond_to?, which does
+          # not see private methods.
           private :_index_scope_tracker, :_build_scope_stub, :_has_instance_scoped_indexes?,
                   :_ensure_trackable_index_scope!, :_scope_identifier_field,
                   :_index_scope_entry, :_parse_index_scope_entry,

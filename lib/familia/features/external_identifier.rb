@@ -376,6 +376,10 @@ module Familia
       end
 
       def destroy!
+        # Refuse before queueing the lookup delete: destroy! may need
+        # replies that a transaction or pipeline cannot give.
+        assert_destroy_replies_available!
+
         # Clean up extid mapping when object is destroyed
         current_extid = instance_variable_get(:@extid)
         self.class.extid_lookup.remove_field(current_extid) if current_extid
