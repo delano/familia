@@ -414,9 +414,9 @@ end
 @err.class
 #=> Familia::OperationModeError
 
-## scoping: a partial write of only non-indexed fields does not trip the
-## refusal -- no index work would happen, so the pre-existing reentrant
-## behavior (broken in its own way, out of scope here) is unchanged
+## a partial write of only non-indexed fields refuses too: inside the
+## caller's MULTI it cannot read its own EXEC result to clear dirty state
+## (previously it queued the write and then raised NoMethodError)
 @err = nil
 begin
   @u1.transaction { @u1.save_fields(:nickname) }
@@ -424,7 +424,7 @@ rescue StandardError => e
   @err = e
 end
 @err.is_a?(Familia::OperationModeError)
-#=> false
+#=> true
 
 # =============================================
 # 7. RecordExistsError#message never raises

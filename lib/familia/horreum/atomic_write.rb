@@ -63,7 +63,8 @@ module Familia
       #   transaction was discarded or any queued command returned an error.
       # @raise [ArgumentError] If no block is given, or if +pre_check+ is
       #   provided without +watch_keys+.
-      # @raise [Familia::OperationModeError] If called within an existing transaction.
+      # @raise [Familia::OperationModeError] If called within an existing
+      #   transaction or pipeline.
       # @raise [Familia::CrossDatabaseError] If related fields span multiple databases.
       # @raise [Familia::NoIdentifier] If the identifier is nil or empty.
       # @raise [Familia::OptimisticLockError] If retries are exhausted after
@@ -113,9 +114,11 @@ module Familia
 
         # Mirror save's nesting guard -- atomic_write opens its own MULTI and
         # cannot be nested inside an outer transaction (see Persistence#save).
-        if Fiber[:familia_transaction]
+        # A pipeline is refused too: the unique-index guard in prepare_for_save
+        # would read Futures there and report a spurious RecordExistsError.
+        if Familia.transaction_or_pipeline?
           raise Familia::OperationModeError, <<~ERROR_MESSAGE
-            Cannot call atomic_write within an existing transaction. atomic_write opens its own MULTI/EXEC and cannot be nested.
+            Cannot call atomic_write within an existing transaction or pipeline. atomic_write opens its own MULTI/EXEC and cannot be nested.
           ERROR_MESSAGE
         end
 
