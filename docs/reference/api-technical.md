@@ -1187,6 +1187,8 @@ end
 Configure connection pools based on application needs.
 
 ```ruby
+require 'connection_pool' # list connection_pool in your Gemfile
+
 # High-throughput application
 HIGH_THROUGHPUT_POOL = ConnectionPool::Wrapper.new(size: 25, timeout: 5) do
   Redis.new(url: ENV['REDIS_URL'])
