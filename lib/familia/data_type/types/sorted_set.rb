@@ -31,8 +31,11 @@ module Familia
     alias length element_count
     alias count element_count
 
+    # @return [Boolean, Redis::Future] whether the sorted set has no members.
+    #   Inside a transaction or pipeline, the ZCARD Future (resolves to the
+    #   count).
     def empty?
-      element_count.zero?
+      Familia.transform_reply(element_count, &:zero?)
     end
 
     # Adds a new element to the sorted set with the current timestamp as the
@@ -200,35 +203,37 @@ module Familia
     end
     alias merge! update
 
+    # @return [Float, nil, Redis::Future] the member's score, or nil. redis-rb
+    #   already converts the ZSCORE reply to a Float. Inside a transaction or
+    #   pipeline, the Future of that Float.
     def score(val)
-      ret = dbclient.zscore dbkey, serialize_value(val)
-      ret&.to_f
+      dbclient.zscore dbkey, serialize_value(val)
     end
     alias [] score
 
+    # @return [Boolean, Redis::Future] whether +val+ is a member. Inside a
+    #   transaction or pipeline, the ZRANK Future (resolves to the rank or nil).
     def member?(val)
       Familia.trace :MEMBER, nil, "#{val}<#{val.class}>" if Familia.debug?
-      !rank(val).nil?
+      Familia.transform_reply(rank(val)) { |rank| !rank.nil? }
     end
     alias include? member?
 
-    # rank of member +v+ when ordered lowest to highest (starts at 0)
+    # rank of member +v+ when ordered lowest to highest (starts at 0). ZRANK
+    # replies with an Integer or nil, so no conversion is needed.
     def rank(v)
-      ret = dbclient.zrank dbkey, serialize_value(v)
-      ret&.to_i
+      dbclient.zrank dbkey, serialize_value(v)
     end
 
     # rank of member +v+ when ordered highest to lowest (starts at 0)
     def revrank(v)
-      ret = dbclient.zrevrank dbkey, serialize_value(v)
-      ret&.to_i
+      dbclient.zrevrank dbkey, serialize_value(v)
     end
 
     def members(count = -1, opts = {})
       # NOTE: count math (positive count -> end index) is handled once by
       # membersraw. Do not decrement here too, or members(n) returns n-1.
-      elements = membersraw count, opts
-      deserialize_values(*elements)
+      Familia.transform_reply(membersraw(count, opts)) { |elements| deserialize_values(*elements) }
     end
     alias to_a members
     alias all members
@@ -241,8 +246,7 @@ module Familia
     def revmembers(count = -1, opts = {})
       # See #members: revmembersraw already converts a positive count to the
       # correct end index; decrementing here as well would drop one element.
-      elements = revmembersraw count, opts
-      deserialize_values(*elements)
+      Familia.transform_reply(revmembersraw(count, opts)) { |elements| deserialize_values(*elements) }
     end
 
     def revmembersraw(count = -1, opts = {})
@@ -286,6 +290,8 @@ module Familia
 
       return to_enum(:each, since: since, until: until_score, batch_size: batch_size) unless block
 
+      Familia.assert_replies_available!('SortedSet#each')
+
       # Convert Time objects to numeric scores
       since_score = since.is_a?(Time) ? since.to_f : since
       until_score_val = until_score.is_a?(Time) ? until_score.to_f : until_score
@@ -323,26 +329,31 @@ module Familia
       self
     end
 
+    # The raw iterators need the ZRANGE reply to iterate over, so they raise
+    # Familia::OperationModeError inside a transaction or pipeline.
     def eachraw(&)
+      Familia.assert_replies_available!('SortedSet#eachraw')
       membersraw.each(&)
     end
 
     def eachraw_with_index(&)
+      Familia.assert_replies_available!('SortedSet#eachraw_with_index')
       membersraw.each_with_index(&)
     end
 
     def collectraw(&)
+      Familia.assert_replies_available!('SortedSet#collectraw')
       membersraw.collect(&)
     end
 
     def selectraw(&)
+      Familia.assert_replies_available!('SortedSet#selectraw')
       membersraw.select(&)
     end
 
     def range(sidx, eidx, opts = {})
       echo :range, Familia.pretty_stack(limit: 1) if Familia.debug
-      elements = rangeraw(sidx, eidx, opts)
-      deserialize_values(*elements)
+      Familia.transform_reply(rangeraw(sidx, eidx, opts)) { |elements| deserialize_values(*elements) }
     end
 
     def rangeraw(sidx, eidx, opts = {})
@@ -352,8 +363,7 @@ module Familia
 
     def revrange(sidx, eidx, opts = {})
       echo :revrange, Familia.pretty_stack(limit: 1) if Familia.debug
-      elements = revrangeraw(sidx, eidx, opts)
-      deserialize_values(*elements)
+      Familia.transform_reply(revrangeraw(sidx, eidx, opts)) { |elements| deserialize_values(*elements) }
     end
 
     def revrangeraw(sidx, eidx, opts = {})
@@ -363,8 +373,7 @@ module Familia
     # e.g. obj.metrics.rangebyscore (now-12.hours), now, :limit => [0, 10]
     def rangebyscore(sscore, escore, opts = {})
       echo :rangebyscore, Familia.pretty_stack(limit: 1) if Familia.debug
-      elements = rangebyscoreraw(sscore, escore, opts)
-      deserialize_values(*elements)
+      Familia.transform_reply(rangebyscoreraw(sscore, escore, opts)) { |elements| deserialize_values(*elements) }
     end
 
     def rangebyscoreraw(sscore, escore, opts = {})
@@ -375,8 +384,7 @@ module Familia
     # e.g. obj.metrics.revrangebyscore (now-12.hours), now, :limit => [0, 10]
     def revrangebyscore(sscore, escore, opts = {})
       echo :revrangebyscore, Familia.pretty_stack(limit: 1) if Familia.debug
-      elements = revrangebyscoreraw(sscore, escore, opts)
-      deserialize_values(*elements)
+      Familia.transform_reply(revrangebyscoreraw(sscore, escore, opts)) { |elements| deserialize_values(*elements) }
     end
 
     def revrangebyscoreraw(sscore, escore, opts = {})
@@ -423,11 +431,9 @@ module Familia
     def increment(val, by = 1)
       warn_if_dirty!
       # ZINCRBY creates the member if absent, so it is a capped path too.
+      # redis-rb already converts the ZINCRBY reply to a Float, and inside a
+      # transaction or pipeline the Future resolves to that Float.
       ret = capped_zadd_write { |conn| conn.zincrby(dbkey, by, serialize_value(val)) }
-      # Inside a transaction or pipeline the write is a Redis::Future, which
-      # cannot be coerced until the block commits — pass it through untouched
-      # (same contract as #add). See Familia.positive? for the same idiom.
-      ret = ret.to_f unless ret.is_a?(Redis::Future)
       update_expiration
       ret
     end
@@ -452,8 +458,11 @@ module Familia
     end
     alias remove remove_element # deprecated
 
+    # @return [Object, nil, Redis::Future] the member at +idx+. Inside a
+    #   transaction or pipeline, the ZRANGE Future (resolves to an Array of
+    #   raw members).
     def at(idx)
-      range(idx, idx).first
+      Familia.transform_reply(range(idx, idx), &:first)
     end
 
     # Return the first element in the list. Redis: ZRANGE(0)
@@ -470,7 +479,8 @@ module Familia
     #
     # @param count [Integer] Number of members to pop (default: 1)
     # @return [Array, nil] Array of [member, score] pairs, or single pair if count=1,
-    #   or nil if set is empty
+    #   or nil if set is empty. Inside a transaction or pipeline, the ZPOPMIN
+    #   Future (resolves to redis-rb's reply).
     #
     # @example Pop single lowest-scoring member
     #   zset.popmin  #=> ["member1", 1.0]
@@ -485,28 +495,18 @@ module Familia
       # redis-rb treats nil as count <= 1 and returns a flat pair.
       count = 1 if count.nil?
       result = dbclient.zpopmin(dbkey, count)
-      return nil if result.nil? || result.empty?
-
-      update_expiration
-
-      # redis-rb returns a flat [member, score] pair when count <= 1, and a
-      # nested [[member, score], ...] array when count > 1. Normalize by
-      # inspecting the result's structure rather than relying on count alone,
-      # so that a redis-rb version change or a member that serializes to an
-      # array-like string cannot mislead the dispatch.
-      if count == 1
-        pair = result.first.is_a?(Array) ? result.first : result
-        [deserialize_value(pair[0]), pair[1].to_f]
-      else
-        result.map { |member, score| [deserialize_value(member), score.to_f] }
-      end
+      # Refresh the TTL only when something was popped. Inside a transaction
+      # or pipeline that is unknown, so the refresh is queued with the pop.
+      update_expiration_if_written(Familia.transform_reply(result) { |popped| !(popped.nil? || popped.empty?) })
+      Familia.transform_reply(result) { |popped| deserialize_popped(popped, count) }
     end
 
     # Removes and returns the member(s) with the highest score(s).
     #
     # @param count [Integer] Number of members to pop (default: 1)
     # @return [Array, nil] Array of [member, score] pairs, or single pair if count=1,
-    #   or nil if set is empty
+    #   or nil if set is empty. Inside a transaction or pipeline, the ZPOPMAX
+    #   Future (resolves to redis-rb's reply).
     #
     # @example Pop single highest-scoring member
     #   zset.popmax  #=> ["member1", 100.0]
@@ -521,21 +521,10 @@ module Familia
       # redis-rb treats nil as count <= 1 and returns a flat pair.
       count = 1 if count.nil?
       result = dbclient.zpopmax(dbkey, count)
-      return nil if result.nil? || result.empty?
-
-      update_expiration
-
-      # redis-rb returns a flat [member, score] pair when count <= 1, and a
-      # nested [[member, score], ...] array when count > 1. Normalize by
-      # inspecting the result's structure rather than relying on count alone,
-      # so that a redis-rb version change or a member that serializes to an
-      # array-like string cannot mislead the dispatch.
-      if count == 1
-        pair = result.first.is_a?(Array) ? result.first : result
-        [deserialize_value(pair[0]), pair[1].to_f]
-      else
-        result.map { |member, score| [deserialize_value(member), score.to_f] }
-      end
+      # Refresh the TTL only when something was popped. Inside a transaction
+      # or pipeline that is unknown, so the refresh is queued with the pop.
+      update_expiration_if_written(Familia.transform_reply(result) { |popped| !(popped.nil? || popped.empty?) })
+      Familia.transform_reply(result) { |popped| deserialize_popped(popped, count) }
     end
 
     # Counts members within a score range.
@@ -567,8 +556,8 @@ module Familia
       return [] if members.empty?
 
       serialized = members.map { |m| serialize_value(m) }
-      result = dbclient.zmscore(dbkey, *serialized)
-      result.map { |s| s&.to_f }
+      # redis-rb already converts each ZMSCORE score to a Float (or nil).
+      dbclient.zmscore(dbkey, *serialized)
     end
 
     # Returns the union of this sorted set with other sorted sets.
@@ -592,7 +581,9 @@ module Familia
       opts = build_set_operation_opts(weights: weights, aggregate: aggregate, withscores: withscores)
 
       result = dbclient.zunion(*keys, **opts)
-      process_set_operation_result(result, withscores: withscores)
+      Familia.transform_reply(result) do |reply|
+        process_set_operation_result(reply, withscores: withscores)
+      end
     end
 
     # Returns the intersection of this sorted set with other sorted sets.
@@ -610,7 +601,9 @@ module Familia
       opts = build_set_operation_opts(weights: weights, aggregate: aggregate, withscores: withscores)
 
       result = dbclient.zinter(*keys, **opts)
-      process_set_operation_result(result, withscores: withscores)
+      Familia.transform_reply(result) do |reply|
+        process_set_operation_result(reply, withscores: withscores)
+      end
     end
 
     # Returns members in a lexicographical range (requires all members have same score).
@@ -628,7 +621,7 @@ module Familia
     #
     def rangebylex(min, max, limit: nil)
       result = dbclient.zrangebylex(dbkey, min, max, limit: limit)
-      deserialize_values(*result)
+      Familia.transform_reply(result) { |elements| deserialize_values(*elements) }
     end
 
     # Returns members in reverse lexicographical range.
@@ -640,7 +633,7 @@ module Familia
     #
     def revrangebylex(max, min, limit: nil)
       result = dbclient.zrevrangebylex(dbkey, max, min, limit: limit)
-      deserialize_values(*result)
+      Familia.transform_reply(result) { |elements| deserialize_values(*elements) }
     end
 
     # Removes members in a lexicographical range.
@@ -683,10 +676,9 @@ module Familia
     #
     def randmember(count = nil, withscores: false)
       if count.nil?
-        result = dbclient.zrandmember(dbkey)
-        return nil if result.nil?
-
-        deserialize_value(result)
+        Familia.transform_reply(dbclient.zrandmember(dbkey)) do |result|
+          result.nil? ? nil : deserialize_value(result)
+        end
       else
         result = if withscores
           dbclient.zrandmember(dbkey, count, withscores: true)
@@ -694,12 +686,8 @@ module Familia
           dbclient.zrandmember(dbkey, count)
         end
 
-        return [] if result.nil? || result.empty?
-
-        if withscores
-          result.map { |member, score| [deserialize_value(member), score.to_f] }
-        else
-          deserialize_values(*result)
+        Familia.transform_reply(result) do |reply|
+          process_set_operation_result(reply, withscores: withscores)
         end
       end
     end
@@ -709,7 +697,8 @@ module Familia
     # @param cursor [Integer] Cursor position (0 to start)
     # @param match [String, nil] Pattern to match member names
     # @param count [Integer, nil] Hint for number of elements to return per call
-    # @return [Array] [new_cursor, [[member, score], ...]]
+    # @return [Array, Redis::Future] [new_cursor, [[member, score], ...]].
+    #   Inside a transaction or pipeline, the ZSCAN Future.
     #
     # @example Scan all members
     #   cursor = 0
@@ -727,10 +716,11 @@ module Familia
       opts[:match] = match if match
       opts[:count] = count if count
 
-      new_cursor, result = dbclient.zscan(dbkey, cursor, **opts)
-
-      members = result.map { |member, score| [deserialize_value(member), score.to_f] }
-      [new_cursor.to_i, members]
+      # redis-rb already pairs each member with a Float score.
+      Familia.transform_reply(dbclient.zscan(dbkey, cursor, **opts)) do |(new_cursor, result)|
+        members = result.map { |member, score| [deserialize_value(member), score] }
+        [new_cursor.to_i, members]
+      end
     end
 
     # Stores the union of sorted sets into a destination key.
@@ -785,7 +775,9 @@ module Familia
         dbclient.zdiff(*keys)
       end
 
-      process_set_operation_result(result, withscores: withscores)
+      Familia.transform_reply(result) do |reply|
+        process_set_operation_result(reply, withscores: withscores)
+      end
     end
 
     # Stores the difference of sorted sets into a destination key.
@@ -859,7 +851,33 @@ module Familia
       opts
     end
 
+    # Deserializes a ZPOPMIN/ZPOPMAX reply.
+    #
+    # redis-rb returns a flat [member, score] pair when count <= 1, and a
+    # nested [[member, score], ...] array when count > 1, with each score
+    # already converted to a Float. Normalize by inspecting the result's
+    # structure rather than relying on count alone, so that a redis-rb
+    # version change or a member that serializes to an array-like string
+    # cannot mislead the dispatch.
+    #
+    # @param result [Array, nil] the reply
+    # @param count [Integer] the requested count
+    # @return [Array, nil] nil when nothing was popped
+    def deserialize_popped(result, count)
+      return nil if result.nil? || result.empty?
+
+      if count == 1
+        pair = result.first.is_a?(Array) ? result.first : result
+        [deserialize_value(pair[0]), pair[1]]
+      else
+        result.map { |member, score| [deserialize_value(member), score] }
+      end
+    end
+
     # Processes the result of set operations, deserializing values.
+    #
+    # With scores, redis-rb already pairs each member with a Float score, so
+    # only the members need deserializing.
     #
     # @param result [Array] Raw result from Redis
     # @param withscores [Boolean] Whether result includes scores
@@ -869,7 +887,7 @@ module Familia
       return [] if result.nil? || result.empty?
 
       if withscores
-        result.map { |member, score| [deserialize_value(member), score.to_f] }
+        result.map { |member, score| [deserialize_value(member), score] }
       else
         deserialize_values(*result)
       end
