@@ -270,6 +270,25 @@ module Familia
       emit_dirty_warning(mode, message, dirty)
     end
 
+    # Refreshes the TTL after a conditional write (HSETNX, SETNX, LINSERT,
+    # RPUSHX, ...) when +written+ says the write took effect.
+    #
+    # Inside a transaction or pipeline the write's reply is a Redis::Future,
+    # so whether it took effect is unknown until the block completes. The
+    # Future counts as written and the refresh is queued with the write: a
+    # write that creates the key (HSETNX, SETNX) must not leave it without
+    # its TTL. When the queued write turns out to do nothing, the refresh
+    # only resets the TTL of a key that already exists, and a missing key
+    # stays missing.
+    #
+    # @param written [Boolean, nil, Redis::Future] whether the write took
+    #   effect, or its Future
+    # @return [void]
+    def update_expiration_if_written(written)
+      update_expiration if written.is_a?(Redis::Future) || written
+    end
+    private :update_expiration_if_written
+
     # Valid +dirty_write_warnings+ modes, matching the class-level and global
     # settings of the same name.
     DIRTY_WRITE_MODES = %i[strict warn once off].freeze
