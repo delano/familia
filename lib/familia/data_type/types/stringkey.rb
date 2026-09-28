@@ -38,15 +38,18 @@ module Familia
     # made #char_count/#size/#empty? report a nonsense non-zero count for
     # a deleted/never-created key.
     #
-    # @return [Integer] number of characters
+    # @return [Integer, Redis::Future] number of characters. Inside a
+    #   transaction or pipeline, the GET Future (resolves to the raw value).
     def char_count
-      value.to_s.size
+      Familia.transform_reply(value) { |val| val.to_s.size }
     end
     alias size char_count
     alias length char_count
 
+    # @return [Boolean, Redis::Future] whether the value is missing or empty.
+    #   Inside a transaction or pipeline, the GET Future.
     def empty?
-      char_count.zero?
+      Familia.transform_reply(char_count, &:zero?)
     end
 
     def value
@@ -57,14 +60,19 @@ module Familia
     alias content value
     alias get value
 
+    # @return [String, Redis::Future] the stored value, or the inspect-style
+    #   string from Familia::Base#to_s when there is none. Inside a
+    #   transaction or pipeline, the GET Future (resolves to the raw value).
     def to_s
-      return super if value.to_s.empty?
-
-      value.to_s
+      Familia.transform_reply(value) do |val|
+        val.to_s.empty? ? super() : val.to_s
+      end
     end
 
+    # @return [Integer, Redis::Future] the stored value as an Integer. Inside
+    #   a transaction or pipeline, the GET Future (resolves to the raw value).
     def to_i
-      value.to_i
+      Familia.transform_reply(value, &:to_i)
     end
 
     # @note This method executes a Redis SET immediately, unlike scalar field

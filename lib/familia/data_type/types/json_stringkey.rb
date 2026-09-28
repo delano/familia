@@ -48,10 +48,11 @@ module Familia
 
     # Returns the number of characters in the string representation of the value.
     #
-    # @return [Integer] number of characters
+    # @return [Integer, Redis::Future] number of characters. Inside a
+    #   transaction or pipeline, the GET Future (resolves to the raw JSON).
     #
     def char_count
-      to_s&.size || 0
+      Familia.transform_reply(to_s) { |str| str&.size || 0 }
     end
     alias size char_count
     alias length char_count
@@ -67,7 +68,7 @@ module Familia
       echo :value, Familia.pretty_stack(limit: 1) if Familia.debug
       if @opts.key?(:default)
         was_set = dbclient.setnx(dbkey, serialize_value(@opts[:default]))
-        update_expiration if was_set
+        update_expiration_if_written(was_set)
       end
       deserialize_value dbclient.get(dbkey)
     end
@@ -98,7 +99,7 @@ module Familia
     def setnx(val)
       warn_if_dirty!
       ret = dbclient.setnx(dbkey, serialize_value(val))
-      update_expiration if ret
+      update_expiration_if_written(ret)
       ret
     end
 
@@ -113,43 +114,50 @@ module Familia
 
     # Checks if the value is nil (key does not exist or has no value).
     #
-    # @return [Boolean] true if the value is nil
+    # @return [Boolean, Redis::Future] true if the value is nil. Inside a
+    #   transaction or pipeline, the GET Future (resolves to the raw JSON).
     #
     def empty?
-      value.nil?
+      Familia.transform_reply(value, &:nil?)
     end
 
     # Returns the string representation of the deserialized value.
     #
-    # @return [String, nil] the deserialized value converted to string, or nil
+    # @return [String, nil, Redis::Future] the deserialized value converted
+    #   to string, or nil. Inside a transaction or pipeline, the GET Future
+    #   (resolves to the raw JSON).
     #
     def to_s
-      val = deserialize_value(dbclient.get(dbkey))
-      return nil if val.nil?
-
-      val.to_s
+      read_converted(&:to_s)
     end
 
     # Returns the integer representation of the deserialized value.
     #
-    # @return [Integer, nil] the deserialized value converted to integer, or nil
+    # @return [Integer, nil, Redis::Future] the deserialized value converted
+    #   to integer, or nil. Inside a transaction or pipeline, the GET Future.
     #
     def to_i
-      val = deserialize_value(dbclient.get(dbkey))
-      return nil if val.nil?
-
-      val.to_i
+      read_converted(&:to_i)
     end
 
     # Returns the float representation of the deserialized value.
     #
-    # @return [Float, nil] the deserialized value converted to float, or nil
+    # @return [Float, nil, Redis::Future] the deserialized value converted to
+    #   float, or nil. Inside a transaction or pipeline, the GET Future.
     #
     def to_f
-      val = deserialize_value(dbclient.get(dbkey))
-      return nil if val.nil?
+      read_converted(&:to_f)
+    end
 
-      val.to_f
+    private
+
+    # Reads the value with GET (no default applied) and converts a non-nil
+    # deserialized value with the block. Passes a Redis::Future through.
+    def read_converted
+      Familia.transform_reply(dbclient.get(dbkey)) do |raw|
+        val = deserialize_value(raw)
+        val.nil? ? nil : yield(val)
+      end
     end
 
     Familia::DataType.register self, :json_string

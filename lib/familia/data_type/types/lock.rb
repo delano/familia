@@ -51,18 +51,33 @@ module Familia
       [1, true].include?(success) ? token : false
     end
 
+    # Deletes the lock only if +token+ still holds it.
+    #
+    # Safe to queue inside a transaction: the ownership check and the delete
+    # run together in one server-side script.
+    #
+    # @param token [String] the token returned by #acquire
+    # @return [Boolean, Redis::Future] true when the lock was released.
+    #   Inside a transaction or pipeline, the EVAL Future (resolves to 1 when
+    #   released, 0 otherwise).
     def release(token)
       # Lua script to atomically check token and delete
       script = "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end"
-      dbclient.eval(script, [dbkey], [token]) == 1
+      Familia.transform_reply(dbclient.eval(script, [dbkey], [token])) { |reply| reply == 1 }
     end
 
+    # @return [Boolean, Redis::Future] whether any token holds the lock.
+    #   Inside a transaction or pipeline, the GET Future (resolves to the
+    #   stored token or nil).
     def locked?
-      !value.nil?
+      Familia.transform_reply(value) { |val| !val.nil? }
     end
 
+    # @return [Boolean, Redis::Future] whether +token+ holds the lock. Inside
+    #   a transaction or pipeline, the GET Future (resolves to the stored
+    #   token or nil).
     def held_by?(token)
-      value == token
+      Familia.transform_reply(value) { |val| val == token }
     end
 
     def force_unlock!
