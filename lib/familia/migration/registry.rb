@@ -38,12 +38,18 @@ module Familia
         @prefix = prefix || Familia::Migration.config.migrations_key
       end
 
-      # Get the Redis client, using lazy initialization.
+      # Get the Redis client: the one passed to #initialize, or else
+      # Familia.dbclient resolved on each call.
+      #
+      # The fallback is not memoized. Familia.dbclient returns the open
+      # transaction or pipeline connection inside those blocks, and a
+      # memoized one would keep queueing commands on it after the block
+      # completed.
       #
       # @return [Redis] The Redis client
       #
       def client
-        @redis ||= Familia.dbclient
+        @redis || Familia.dbclient
       end
 
       # --- Query Methods ---
@@ -51,37 +57,44 @@ module Familia
       # Check if a migration has been applied.
       #
       # @param migration_id [String] The migration identifier
-      # @return [Boolean] true if the migration is in the applied set
+      # @return [Boolean, Redis::Future] true if the migration is in the
+      #   applied set. On a transaction or pipeline connection, the ZSCORE Future.
       #
       def applied?(migration_id)
-        client.zscore(applied_key, migration_id.to_s) != nil
+        Familia.transform_reply(client.zscore(applied_key, migration_id.to_s)) { |score| !score.nil? }
       end
 
       # Get the timestamp when a migration was applied.
       #
       # @param migration_id [String] The migration identifier
-      # @return [Time, nil] The time the migration was applied, or nil if not applied
+      # @return [Time, nil, Redis::Future] The time the migration was applied,
+      #   or nil if not applied. On a transaction or pipeline connection, the
+      #   ZSCORE Future.
       #
       def applied_at(migration_id)
-        score = client.zscore(applied_key, migration_id.to_s)
-        return nil if score.nil?
-
-        Time.at(score)
+        Familia.transform_reply(client.zscore(applied_key, migration_id.to_s)) do |score|
+          score.nil? ? nil : Time.at(score)
+        end
       end
 
       # Get all applied migrations with their timestamps.
       #
-      # @return [Array<Hash>] Array of hashes with :migration_id and :applied_at keys
+      # @return [Array<Hash>, Redis::Future] Array of hashes with :migration_id
+      #   and :applied_at keys. On a transaction or pipeline connection, the
+      #   ZRANGE Future.
       #
       def all_applied
-        # ZRANGE with WITHSCORES returns [member, score, member, score, ...]
+        # redis-rb pairs the ZRANGE WITHSCORES reply as [[member, score], ...]
+        # with Float scores.
         results = client.zrange(applied_key, 0, -1, withscores: true)
 
-        results.map do |migration_id, score|
-          {
-            migration_id: migration_id,
-            applied_at: Time.at(score),
-          }
+        Familia.transform_reply(results) do |pairs|
+          pairs.map do |migration_id, score|
+            {
+              migration_id: migration_id,
+              applied_at: Time.at(score),
+            }
+          end
         end
       end
 
@@ -92,6 +105,8 @@ module Familia
       #
       def pending(all_migrations)
         return [] if all_migrations.nil? || all_migrations.empty?
+
+        assert_replies_available!(:pending)
 
         # Batch fetch all applied migration IDs in a single Redis call
         applied_ids = client.zrange(applied_key, 0, -1).to_set
@@ -105,13 +120,13 @@ module Familia
       # Get metadata for a specific migration.
       #
       # @param migration_id [String] The migration identifier
-      # @return [Hash, nil] Parsed JSON metadata or nil if not found
+      # @return [Hash, nil, Redis::Future] Parsed JSON metadata or nil if not
+      #   found. On a transaction or pipeline connection, the HGET Future.
       #
       def metadata(migration_id)
-        json = client.hget(metadata_key, migration_id.to_s)
-        return nil if json.nil?
-
-        JSON.parse(json, symbolize_names: true)
+        Familia.transform_reply(client.hget(metadata_key, migration_id.to_s)) do |json|
+          json.nil? ? nil : JSON.parse(json, symbolize_names: true)
+        end
       end
 
       # Get the status of all migrations.
@@ -121,6 +136,8 @@ module Familia
       #
       def status(all_migrations)
         return [] if all_migrations.nil? || all_migrations.empty?
+
+        assert_replies_available!(:status)
 
         # Batch fetch all applied migrations with timestamps in a single Redis call
         applied_info = all_applied.each_with_object({}) do |entry, hash|
@@ -178,6 +195,7 @@ module Familia
       # @param migration_id [String] The migration identifier
       #
       def record_rollback(migration_id)
+        assert_replies_available!(:record_rollback)
         migration_id = migration_id.to_s
 
         # Remove from applied set
@@ -237,6 +255,7 @@ module Familia
       # @return [Boolean] true if schema differs from stored version
       #
       def schema_changed?(model_class)
+        assert_replies_available!(:schema_changed?)
         stored = stored_schema(model_class)
         return false if stored.nil? # No stored schema = no drift
 
@@ -248,6 +267,7 @@ module Familia
       # @return [Array<String>] Model names with schema drift
       #
       def schema_drift
+        assert_replies_available!(:schema_drift)
         # Get all stored schemas
         stored = client.hgetall(schema_key)
         return [] if stored.empty?
@@ -287,6 +307,7 @@ module Familia
       # @return [Integer] Number of fields restored
       #
       def restore_backup(migration_id)
+        assert_replies_available!(:restore_backup)
         bkey = backup_key(migration_id)
         backup_data = client.hgetall(bkey)
         return 0 if backup_data.empty?
@@ -318,6 +339,24 @@ module Familia
       end
 
       private
+
+      # Refuses an operation that must read a reply before it can finish when
+      # the client queues commands (a transaction or pipeline connection,
+      # given explicitly or resolved by Familia.dbclient inside such a
+      # block). Every reply there is a Redis::Future until the block
+      # completes. Checks the client rather than the fiber context because a
+      # registry built with its own client is unaffected by an open block.
+      #
+      # @param operation [Symbol] the method name for the error message
+      # @raise [Familia::OperationModeError]
+      def assert_replies_available!(operation)
+        return unless client.is_a?(Redis::PipelinedConnection)
+
+        raise Familia::OperationModeError,
+              "Migration::Registry##{operation} cannot run on a transaction or pipeline " \
+              'connection: it needs command replies, which are Redis::Future objects ' \
+              'until the block completes. Call it outside the block.'
+      end
 
       # --- Key Helpers ---
 
