@@ -5,6 +5,9 @@ source 'https://rubygems.org'
 gemspec
 
 group :test do
+  # The tryouts build fixture keys and inspect envelopes with Base64. Declare
+  # it here rather than relying on another gem in the bundle to bring it in.
+  gem 'base64', require: false
   gem 'concurrent-ruby', '~> 1.3.8', require: false
   gem 'ruby-prof'
   gem 'stackprof'

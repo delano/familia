@@ -7,6 +7,7 @@
 # Comprehensive test coverage for core persistence methods: exists?, save, save_if_not_exists, create
 # This test addresses gaps that allowed the exists? bug to go undetected
 
+require 'base64'
 require_relative '../support/helpers/test_helpers'
 
 # Use a simple test class to isolate persistence behavior

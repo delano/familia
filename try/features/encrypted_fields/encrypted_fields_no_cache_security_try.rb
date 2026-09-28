@@ -7,6 +7,7 @@
 # Security tests for the no-cache encryption strategy
 # These tests verify that we maintain security properties by NOT caching derived keys
 
+require 'base64'
 require_relative '../../support/helpers/test_helpers'
 
 test_keys = {
