@@ -6,17 +6,19 @@ Familia uses Redis transactions (MULTI/EXEC) for atomic operations. However, Red
 
 ## Core Rules
 
-### 1. No Save Operations Inside Transactions
+### 1. No Save Operations Inside Transactions or Pipelines
 
-**Rule**: The following methods cannot be called within a transaction context:
+**Rule**: The following methods cannot be called within a transaction or pipeline context:
 - `save`
 - `save!`
 - `save_if_not_exists!`
 - `create!` (calls `save_if_not_exists!` internally)
+- `build`
+- `atomic_write` (it opens its own MULTI/EXEC)
 
-**Rationale**: These methods need to read current state for validation (checking existence, validating unique constraints), which would return uninspectable Redis::Future objects inside transactions.
+**Rationale**: These methods need to read current state for validation (checking existence, validating unique constraints), which would return uninspectable Redis::Future objects inside transactions and pipelines.
 
-**Error**: Calling these methods inside a transaction raises `Familia::OperationModeError`
+**Error**: Calling these methods inside a transaction or pipeline raises `Familia::OperationModeError`
 
 **Correct Pattern**:
 ```ruby
@@ -59,21 +61,102 @@ Customer.create!(email: 'new@example.com') do |customer|
 end
 ```
 
-### 4. Transaction-Safe vs Unsafe Methods
+### 4. Command Replies Inside Transactions and Pipelines
 
-#### Transaction-Safe (can be called inside transactions):
-- Write-only operations: `hmset`, `hdel`, `expire`, `hset`
-- Predictable operations: `increment`, `decrement`
-- Collection operations: `add`, `remove`, `push`
-- Instance-scoped index operations: `add_to_company_badge_index` (validation skipped)
+Inside a `transaction`, `atomic_write` or `pipelined` block every command is
+queued, and redis-rb returns a `Redis::Future` in place of its reply. The
+Future's `value` is available only after the block completes. Each Familia
+method handles this in one of three ways.
 
-#### Transaction-Unsafe (must be called outside transactions):
-- Read operations that need immediate values: `exists?`, `hget`, `size`
-- Validation operations: `guard_unique_indexes!`, `claim_unique_<index>!`
-- Save operations: `save`, `save_if_not_exists!`, `create!`
-- Fast writers (`field!`) on fields backing a class-level index — raise
-  `Familia::IndexedFieldFastWriteError` inside a transaction or pipeline,
-  since the index claim cannot run there
+#### Pass through
+
+A method that issues a command and only converts its reply returns that
+command's `Redis::Future`. Converting means deserializing values, coercing a
+number, or testing the reply (a count, a rank, a TTL) to answer a predicate.
+After the block, the Future's `value` is the command's reply as redis-rb
+returns it, without Familia's conversion. Outside a block the same methods
+return what they always did, with one exception:
+`HashKey#randfield(count, withvalues: true)` now returns `[field, value]` pairs.
+
+```ruby
+views = nil
+empty = nil
+user.atomic_write do
+  user.name = 'Alice'                    # deferred scalar, queued as HMSET
+  views = user.counts.increment('views') # Redis::Future
+  empty = user.tags.empty?               # Redis::Future of SCARD
+end
+views.value        # => 6, HINCRBY replies with an Integer
+empty.value.zero?  # => false, SCARD replies with the count
+```
+
+| Method | Future resolves to |
+|---|---|
+| `HashKey#[]`, `#values`, `#hgetall`, `#values_at`; `ListKey#range`, `#members`, `#pop`; `SortedSet#members`, `#range*`; `UnsortedSet#members`, `#sample` | the stored values, still serialized |
+| `HashKey#randfield(count, withvalues: true)` | `[field, value]` pairs, the values still serialized |
+| `empty?` on any collection | the count (HLEN, LLEN, SCARD, ZCARD) |
+| `ListKey#member?`, `SortedSet#member?`, `#rank`, `#revrank` | the index or rank, or nil |
+| The generated participation methods `in_<target>_<collection>?` and `score_in_<target>_<collection>` (`domain.in_customer_domains?(customer)`) | for `in_*?`, the ZRANK or LPOS index or nil on a sorted-set or list participation, and the SISMEMBER Boolean on a set one; for `score_in_*`, the Float score or nil |
+| `DataType#exists?`, `Horreum.exists?`, `expires?`, `expired?` | the EXISTS count or the TTL in seconds |
+| `HashKey#increment`, `#decrement`, `#incrbyfloat`; `SortedSet#score`, `#increment`, `#mscore` | the Integer or Float, which redis-rb converts itself |
+| `Counter#value`, `StringKey#to_s`, `#to_i`, `#size`, `#empty?`, `JsonStringKey#to_s`, `#to_i`, `#to_f`, `#empty?` | the raw stored string, or nil |
+| `Lock#locked?`, `#held_by?` | the stored token, or nil |
+| `Lock#release` | 1 when the lock was released, 0 otherwise |
+| `Horreum.any?`, `.count`, `.keys_count`, `.keys_any?`, `.in_instances?`, `.multiget`, `.storage_inspect` | the ZCARD count, the KEYS array, the ZRANK reply, the MGET array or the HGETALL hash |
+
+Predicates need care: `empty?` resolves to a count, so test
+`future.value.zero?`, not `future.value`.
+
+A top-level `transaction` or `pipelined` call returns a `MultiResult` whose
+`results` holds each queued command's reply in queue order. It is empty when
+a WATCH-guarded transaction aborted (see `MultiResult#aborted?`).
+`atomic_write` and `Familia.atomic_write` return `true` or `false` instead,
+so their callers read the values of the Futures they kept.
+
+#### Fail fast
+
+A method that needs a reply before it can finish raises
+`Familia::OperationModeError` before queueing anything. That covers methods
+that branch on a reply, raise from it, issue follow-up commands from it,
+iterate, load records, or derive an answer from the reply's contents. It
+also covers conditional writes whose verdict callers branch on, where a
+truthy Future would report success before the command runs.
+
+- Iteration: `each`, `eachraw`, `eachraw_with_index`, `collectraw` and
+  `selectraw` on every collection, `each_record`, and `scan_keys` with a block
+- Reads that decide: `HashKey#fetch`, `HashKey#refresh!` and `#refresh`,
+  `Horreum#refresh!` and `#refresh`, `extend_expiration`, `ttl_report`
+- Loading: `find_by_dbkey`, `find_by_identifier` (`find_by_id`, `find`,
+  `load`), `load_multi`, `load_multi_by_keys`, `all`, `find_by_objid`,
+  `find_by_extid`, the index finders (`find_by_*`, `find_all_by_*`,
+  `sample_from_*`), and the participation readers (`*_ids`, `*_count`,
+  `*_instances`, the participation predicate `<target>?` such as
+  `user.project_team?`, `current_participations`, `position_in_*`,
+  `*_with_permission`, `each_*_with_permission`)
+- Scans and maintenance: `scan_count` (`count!`), `scan_any?` (`any!`), the
+  `audit_*`, `health_check`, `repair_*` and `rebuild_*` methods,
+  `run_chores!`, and the `EnforceCollectionCaps` chore
+- Writes that read first: the save methods in rule 1, `commit_fields`,
+  `save_fields`, `multi_field_update`, `multi_field_fast_write`, class-level
+  `destroy!`, instance `destroy!` on a class with instance-scoped indexes, the
+  `guard_unique_*!` methods, and staged activation and unstaging
+- Verdicts: `Lock#acquire`, `Counter#increment_if_less_than`,
+  `HashKey#claim_field`, and `claim_unique_*!`
+- Fast writers (`field!`) on fields backing a class-level index raise
+  `Familia::IndexedFieldFastWriteError`, since the index claim cannot run
+  there
+
+Call these before or after the block.
+
+#### Queue gated side effects
+
+Some writes refresh the TTL only when they took effect: `HashKey#hsetnx`,
+`JsonStringKey#setnx` and `#value` with a default, `ListKey#insert`, `#pushx`
+and `#unshiftx`, and `SortedSet#popmin` and `#popmax`. Inside a block that
+outcome is a Future, so the refresh is queued with the write. A key that the
+queued write creates therefore keeps its TTL. When the write turns out to do
+nothing, the refresh resets the TTL of a key that already exists, and a
+missing key stays missing.
 
 ### 5. Handling Nested Transactions
 
@@ -85,8 +168,9 @@ queued into the outer MULTI and commit (or fail) with the outer EXEC.
 
 Nesting itself never raises. The `Familia::OperationModeError` cases described
 elsewhere in this document come from *what* runs inside a transaction (`save`,
-`create!`, partial writes on unique-indexed fields) or from connection handlers
-that do not support transactions — not from nested `transaction` calls.
+`create!`, partial writes, and the other methods rule 4 lists) or from
+connection handlers that do not support transactions, not from nested
+`transaction` calls.
 
 ```ruby
 Customer.transaction do |conn|

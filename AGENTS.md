@@ -175,6 +175,7 @@ in one MULTI/EXEC; collection mutations auto-route into the open transaction via
 - All related DataTypes must share the parent's `logical_database`, else `Familia::CrossDatabaseError` (fall back to `save_with_collections`). MULTI/EXEC is single-database only.
 - Cannot nest inside another `transaction`/`atomic_write` (`Familia::OperationModeError`).
 - Collection return values inside the block are `Redis::Future` — do not inspect before EXEC.
+- Methods that need a reply to continue (iterators, finders and loaders, `fetch`, `refresh!`, the partial writers) raise `Familia::OperationModeError` inside the block. The policy and method lists are in docs/reference/transaction_safety.md, rule 4.
 
 **Factory — `build` for create-and-populate:**
 
