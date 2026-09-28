@@ -958,7 +958,11 @@ module Familia
       #
       # @return [void]
       #
-      # @raise [Familia::KeyNotFoundError] If the Valkey key does not exist
+      # @raise [Familia::KeyNotFoundError] If the Valkey key does not exist.
+      #   The object is left unchanged.
+      # @raise [Familia::OperationModeError] inside a transaction, pipeline or
+      #   atomic_write block, where HGETALL is only queued and returns a
+      #   Redis::Future. The object is left unchanged.
       #
       # @example Refresh object from the DB
       #   user.name = "Changed Name"  # unsaved change
@@ -972,6 +976,13 @@ module Familia
       #   no authoritative source in Valkey storage.
       #
       def refresh!
+        if Fiber[:familia_transaction] || Fiber[:familia_pipeline]
+          raise Familia::OperationModeError,
+                "#{self.class}#refresh! cannot run inside a transaction or pipeline: " \
+                'HGETALL returns a Redis::Future there, so there is nothing to load ' \
+                'and a missing key cannot be detected. Call it before opening the block.'
+        end
+
         Familia.trace :REFRESH, nil, self.class.uri if Familia.debug?
         fields = hgetall
         # A hash with no fields does not exist, so an empty reply means the
@@ -1003,6 +1014,8 @@ module Familia
       # @return [self] The refreshed object instance, enabling method chaining
       #
       # @raise [Familia::KeyNotFoundError] If the Valkey key does not exist
+      # @raise [Familia::OperationModeError] inside a transaction, pipeline or
+      #   atomic_write block
       #
       # @example Refresh and chain operations
       #   user.refresh.save

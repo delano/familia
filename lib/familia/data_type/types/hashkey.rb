@@ -598,6 +598,9 @@ module Familia
     # @raise [Familia::KeyNotFoundError] when the hash does not exist. A hash
     #   with no fields does not exist, so one whose last field was removed
     #   raises too.
+    # @raise [Familia::OperationModeError] inside a transaction or pipeline,
+    #   where HGETALL is only queued and returns a Redis::Future, so a missing
+    #   key cannot be detected.
     #
     # @example Read the fields, raising when the hash is gone
     #   user.settings.refresh!  #=> {"theme" => "dark", "lang" => "en"}
@@ -612,6 +615,13 @@ module Familia
     # @see #refresh The same check, returning self.
     # @see #hgetall Returns an empty Hash for a missing key instead of raising.
     def refresh!
+      if Fiber[:familia_transaction] || Fiber[:familia_pipeline]
+        raise Familia::OperationModeError,
+              'HashKey#refresh! cannot run inside a transaction or pipeline: ' \
+              'HGETALL returns a Redis::Future there, so a missing key cannot ' \
+              'be detected. Call it before opening the block.'
+      end
+
       Familia.trace :REFRESH, nil, self.class.uri if Familia.debug?
       fields = hgetall
       # A hash with no fields does not exist, so an empty reply means the
@@ -634,6 +644,7 @@ module Familia
     # @return [self]
     #
     # @raise [Familia::KeyNotFoundError] when the hash does not exist
+    # @raise [Familia::OperationModeError] inside a transaction or pipeline
     #
     # @example Fail fast on a missing hash, then read one field
     #   user.settings.refresh['theme']  #=> "dark"
