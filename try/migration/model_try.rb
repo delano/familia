@@ -378,6 +378,30 @@ migration.prepare
 migration.interactive
 #=> false
 
+## interactive mode without pry-byebug in the bundle raises PreconditionFailed
+## The development bundle does not include pry-byebug, and familia does not
+## depend on it.
+class InteractiveModelMigration < SimpleModelMigration
+  self.migration_id = 'model_test_interactive'
+
+  def prepare
+    super
+    @interactive = true
+  end
+end
+migration = InteractiveModelMigration.new
+migration.prepare
+migration.migrate
+#=!> Familia::Migration::Errors::PreconditionFailed
+#==> error.message.include?("Add pry-byebug to the application's Gemfile")
+
+## Runner records a missing pry-byebug as a failed migration instead of raising
+registry = Familia::Migration::Registry.new(redis: @redis, prefix: @prefix)
+runner = Familia::Migration::Runner.new(migrations: [InteractiveModelMigration], registry: registry)
+result = runner.run_one(InteractiveModelMigration)
+[result[:status], result[:error].include?('pry-byebug'), registry.applied?('model_test_interactive')]
+#=> [:failed, true, false]
+
 ## dbclient returns Redis connection
 migration = SimpleModelMigration.new
 migration.prepare

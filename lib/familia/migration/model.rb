@@ -92,6 +92,12 @@ module Familia
       attr_reader :error_count
 
       # Interactive debugging mode flag
+      #
+      # When true, #migrate loads pry-byebug before it scans, and each record
+      # that raises opens a pry session in #handle_record_error. familia does
+      # not depend on pry-byebug, so the application's bundle must include
+      # it; otherwise #migrate raises Errors::PreconditionFailed.
+      #
       # @return [Boolean] whether to drop into pry on errors
       attr_reader :interactive
 
@@ -117,7 +123,7 @@ module Familia
 
         # Set `@interactive = true` in the implementing migration class
         # for an interactive debug session on a per-record basis.
-        require 'pry-byebug' if interactive
+        require_interactive_debugger if interactive
 
         print_database_details
         run_mode_banner
@@ -282,6 +288,17 @@ module Familia
         @scan_pattern = nil
         @interactive  = false
         @total_records = 0
+      end
+
+      # pry-byebug is an optional development tool that familia does not
+      # declare. Raising PreconditionFailed, a StandardError, lets Runner
+      # record the migration as failed; a bare LoadError would escape it.
+      def require_interactive_debugger
+        require 'pry-byebug'
+      rescue LoadError => e
+        raise Errors::PreconditionFailed,
+              'Interactive mode needs the pry-byebug gem, which familia does not depend on. ' \
+              "Add pry-byebug to the application's Gemfile, or turn off interactive mode (#{e.message})"
       end
 
       def validate_model_class!
