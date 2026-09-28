@@ -9,12 +9,13 @@
 # Left out on purpose:
 # - base64: Familia::Encryption::StrictBase64 uses core Array#pack and
 #   String#unpack1 instead.
+# - benchmark: Familia::Encryption.benchmark times with
+#   Process.clock_gettime instead.
 # - connection_pool: familia calls no connection_pool API. Applications that
 #   pool connections for Familia.connection_provider require it themselves.
-# - benchmark, pry-byebug, rake: optional. Familia::Encryption.benchmark
-#   times with Process.clock_gettime, interactive migrations need the
-#   application to bundle pry-byebug, and the migration rake tasks load from
-#   the application's Rakefile.
+# - pry-byebug, rake: optional. Interactive migrations need the application
+#   to bundle pry-byebug, and the migration rake tasks load from the
+#   application's Rakefile.
 
 require_relative '../../support/helpers/test_helpers'
 
