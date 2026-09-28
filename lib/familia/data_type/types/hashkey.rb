@@ -575,30 +575,42 @@ module Familia
 
     public
 
-    # The Great Database Refresh-o-matic 3000 for HashKey!
+    # Confirms the hash exists and returns its fields as stored right now.
     #
-    # This method performs a complete refresh of the hash's state from the database.
-    # It's like giving your hash a memory transfusion - out with the old state,
-    # in with the fresh data straight from Valkey/Redis!
+    # A HashKey keeps no field values in memory: every read method queries
+    # the database (see "Live Proxies, Not Cached Relations" on
+    # {Familia::DataType}), so there is no local copy to reload. refresh!
+    # reads the whole hash with one HGETALL, raises when the reply is empty,
+    # and returns what it read.
     #
-    # @note This operation is atomic - it either succeeds completely or fails
-    #   safely. Any unsaved changes to the hash will be overwritten.
+    # It is read-only. It sends no command besides the HGETALL: it does not
+    # write the fields back, does not change the key's expiration, and does
+    # not run the dirty-write check that collection writes run against the
+    # parent object.
     #
-    # @return [void] Returns nothing, but your hash will be sparkling clean
-    #   with all its fields synchronized with the database.
+    # The returned Hash is a new object each call. Reads made later through
+    # this HashKey query the database again and see writes made after this
+    # call.
     #
-    # @raise [Familia::KeyNotFoundError] If the dbkey for this hash no
-    #   longer exists. Time travelers beware!
+    # @return [Hash{String => Object}] every field with its deserialized
+    #   value, as {#hgetall} returns them
     #
-    # @example Basic usage
-    #   my_hash.refresh!  # ZAP! Fresh data loaded
+    # @raise [Familia::KeyNotFoundError] when the hash does not exist. A hash
+    #   with no fields does not exist, so one whose last field was removed
+    #   raises too.
     #
-    # @example With error handling
+    # @example Read the fields, raising when the hash is gone
+    #   user.settings.refresh!  #=> {"theme" => "dark", "lang" => "en"}
+    #
+    # @example Treat a missing hash as empty
     #   begin
-    #     my_hash.refresh!
+    #     user.settings.refresh!
     #   rescue Familia::KeyNotFoundError
-    #     puts "Oops! Our hash seems to have vanished into the Database void!"
+    #     {}
     #   end
+    #
+    # @see #refresh The same check, returning self.
+    # @see #hgetall Returns an empty Hash for a missing key instead of raising.
     def refresh!
       Familia.trace :REFRESH, nil, self.class.uri if Familia.debug?
       fields = hgetall
@@ -608,27 +620,25 @@ module Familia
       raise Familia::KeyNotFoundError, dbkey if fields.empty?
 
       Familia.debug "[refresh!] #{self.class} #{dbkey} #{fields.keys}"
-
-      # For HashKey, we update by merging the fresh data
-      update(fields)
+      fields
     end
 
-    # The friendly neighborhood refresh method!
+    # Confirms the hash exists and returns self.
     #
-    # This method is like refresh! but with better manners - it returns self
-    # so you can chain it with other methods. It's perfect for when you want
-    # to refresh your hash and immediately do something with it.
+    # Runs {#refresh!} and discards the fields it read. Like refresh! it is
+    # read-only. A method chained after it sends its own command, so it sees
+    # the hash as it is at that later moment, not as refresh read it. Use
+    # the return value of {#refresh!} when the fields must come from the
+    # same read as the existence check.
     #
-    # @return [self] Returns the refreshed hash, ready for more adventures!
+    # @return [self]
     #
-    # @raise [Familia::KeyNotFoundError] If the dbkey does not exist.
-    #   The hash must exist in Valkey/Redis-land for this to work!
+    # @raise [Familia::KeyNotFoundError] when the hash does not exist
     #
-    # @example Refresh and chain
-    #   my_hash.refresh.keys  # Refresh and get all keys
-    #   my_hash.refresh['field']  # Refresh and get a specific field
+    # @example Fail fast on a missing hash, then read one field
+    #   user.settings.refresh['theme']  #=> "dark"
     #
-    # @see #refresh! For the heavy lifting behind the scenes
+    # @see #refresh!
     def refresh
       refresh!
       self
