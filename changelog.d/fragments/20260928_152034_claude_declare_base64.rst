@@ -11,9 +11,7 @@ Fixed
 
 - ``require 'familia'`` no longer fails with ``cannot load such file --
   base64 (LoadError)`` on Ruby 3.4+ in an application bundle without
-  ``base64``. Encryption keys and envelope fields are encoded with
-  ``Array#pack('m0')`` and decoded with ``String#unpack1('m0')``, the calls
-  ``Base64.strict_encode64`` and ``Base64.strict_decode64`` make.
+  ``base64``.
 
 AI Assistance
 -------------
