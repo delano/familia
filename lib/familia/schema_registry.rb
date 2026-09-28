@@ -122,7 +122,13 @@ module Familia
           begin
             require 'json_schemer'
             JsonSchemerValidator.new
-          rescue LoadError
+          rescue LoadError => e
+            # Only json_schemer itself being absent disables validation. A
+            # LoadError for another path means json_schemer is installed but
+            # one of its own requires failed, so re-raise it rather than
+            # report a missing gem and skip validation.
+            raise unless e.path == 'json_schemer'
+
             warn '[Familia] json_schemer gem not installed. Schema validation disabled.'
             warn "[Familia] Add `gem 'json_schemer'` to your Gemfile to enable."
             NullValidator.new

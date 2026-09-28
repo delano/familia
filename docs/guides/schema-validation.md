@@ -161,6 +161,7 @@ config.schemas = {
 
 - **No schema file**: Validation returns `true` (no-op)
 - **No json_schemer gem**: Warning logged, validation disabled
+- **json_schemer present but one of its own requires fails**: The `LoadError` is raised on first validation
 - **Invalid JSON**: Warning logged, schema skipped
 
 ## API Reference
