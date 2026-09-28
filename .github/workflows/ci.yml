@@ -13,6 +13,46 @@ permissions:
   contents: read
 
 jobs:
+  # The repo's own bundle includes development and test gems, which can supply
+  # a library that familia requires but does not declare (base64 arrived this
+  # way, through ruby-prof). This job bundles familia alone, as an application
+  # does, and fails if it cannot be required or if Ruby warns that a required
+  # library is leaving the default gems.
+  consumer-load:
+    timeout-minutes: 10
+
+    runs-on: ubuntu-24.04
+
+    strategy:
+      fail-fast: false
+      matrix:
+        ruby: ["3.4", "4.0"]
+
+    steps:
+      - uses: actions/checkout@v7
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+
+      - name: Require familia from a bundle that contains only familia
+        run: |
+          consumer="$RUNNER_TEMP/consumer"
+          mkdir -p "$consumer"
+          cd "$consumer"
+          printf "source 'https://rubygems.org'\ngem 'familia', path: '%s'\n" "$GITHUB_WORKSPACE" > Gemfile
+          bundle install
+          if ! out=$(bundle exec ruby -e 'require "familia"; puts "familia #{Familia::VERSION} loaded"' 2>&1); then
+            echo "$out"
+            echo "::error::require 'familia' failed in a bundle that contains only familia"
+            exit 1
+          fi
+          echo "$out"
+          if grep -q "loaded from the standard library" <<<"$out"; then
+            echo "::error::familia requires a library that is leaving Ruby's default gems without declaring it in familia.gemspec"
+            exit 1
+          fi
+
   build:
     timeout-minutes: 10
 
