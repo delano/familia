@@ -5,7 +5,6 @@
 require 'oj'
 require 'redis'
 require 'uri/valkey'
-require 'connection_pool'
 require 'concurrent-ruby'
 
 # OJ configuration is handled internally by Familia::JsonSerializer

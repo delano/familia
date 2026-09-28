@@ -9,6 +9,9 @@ group :test do
   # it here rather than relying on another gem in the bundle to bring it in.
   gem 'base64', require: false
   gem 'concurrent-ruby', '~> 1.3.8', require: false
+  # The pooling tryouts build ConnectionPool::Wrapper providers, as an
+  # application would. familia itself does not use connection_pool.
+  gem 'connection_pool', require: false
   gem 'ruby-prof'
   gem 'stackprof'
   gem 'timecop', require: false

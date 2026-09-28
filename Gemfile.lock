@@ -3,7 +3,6 @@ PATH
   specs:
     familia (2.12.0)
       concurrent-ruby (~> 1.3)
-      connection_pool (>= 2.4, < 4.0)
       json_schemer (~> 2.0)
       logger (~> 1.7)
       oj (~> 3.16)
@@ -193,6 +192,7 @@ DEPENDENCIES
   base64
   benchmark (~> 0.4)
   concurrent-ruby (~> 1.3.8)
+  connection_pool
   debug
   dry-configurable (>= 1.3, < 1.5)
   familia!
