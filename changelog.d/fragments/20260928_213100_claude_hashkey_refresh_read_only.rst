@@ -4,7 +4,8 @@ Changed
 - ``HashKey#refresh!`` returns the fields it read as a ``Hash``, as
   ``HashKey#hgetall`` returns them, instead of the ``HMSET`` reply ``"OK"``.
 - ``HashKey#refresh!`` and ``HashKey#refresh`` no longer reset the key's
-  expiration. Call ``update_expiration`` to extend it.
+  expiration. Call ``update_expiration`` to extend it. See
+  ``docs/migrating/refresh.md``.
 - ``HashKey#refresh!`` and ``HashKey#refresh`` no longer run the dirty-write
   check against the parent, so they no longer warn or raise
   ``Familia::Problem`` when the parent has unsaved fields.

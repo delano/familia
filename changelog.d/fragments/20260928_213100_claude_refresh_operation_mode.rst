@@ -5,7 +5,7 @@ Fixed
   ``HashKey#refresh`` raise ``Familia::OperationModeError`` inside a
   transaction, pipeline or ``atomic_write`` block, before sending any command.
   They raised ``NoMethodError`` on the ``Redis::Future`` returned by
-  ``HGETALL``.
+  ``HGETALL``. See ``docs/migrating/refresh.md``.
 
 AI Assistance
 -------------

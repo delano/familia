@@ -1,6 +1,8 @@
 Documentation
 -------------
 
+- Added ``docs/migrating/refresh.md`` covering the ``Horreum#refresh!``,
+  ``Horreum#refresh``, ``HashKey#refresh!`` and ``HashKey#refresh`` changes.
 - Corrected the ``docs/overview.md`` transient-field examples. They called
   ``reload``, which does not exist, instead of ``refresh!``. The
   ``LoginAttempt`` example also used ``redacted_field`` and
