@@ -2,11 +2,11 @@
 #
 # frozen_string_literal: true
 
-require 'base64'
 require 'oj'
 require 'openssl'
 
 # Provider system components
+require_relative 'encryption/strict_base64'
 require_relative 'encryption/provider'
 require_relative 'encryption/providers/xchacha20_poly1305_provider'
 require_relative 'encryption/providers/aes_gcm_provider'
@@ -145,7 +145,7 @@ module Familia
         raise EncryptionError, "Current key version not found: #{current_key_version}" unless current_key
 
         begin
-          Base64.strict_decode64(current_key)
+          StrictBase64.decode(current_key)
         rescue ArgumentError
           raise EncryptionError, 'Current encryption key is not valid Base64'
         end
