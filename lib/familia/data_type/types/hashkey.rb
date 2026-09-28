@@ -601,10 +601,12 @@ module Familia
     #   end
     def refresh!
       Familia.trace :REFRESH, nil, self.class.uri if Familia.debug?
-      # EXISTS returns a key count, and 0 is truthy in Ruby.
-      raise Familia::KeyNotFoundError, dbkey unless Familia.positive?(dbclient.exists(dbkey))
-
       fields = hgetall
+      # A hash with no fields does not exist, so an empty reply means the
+      # key is missing. Checking the reply instead of a separate EXISTS
+      # leaves no gap for the key to expire or be deleted before the read.
+      raise Familia::KeyNotFoundError, dbkey if fields.empty?
+
       Familia.debug "[refresh!] #{self.class} #{dbkey} #{fields.keys}"
 
       # For HashKey, we update by merging the fresh data

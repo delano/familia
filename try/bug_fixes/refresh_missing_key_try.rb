@@ -8,7 +8,8 @@
 # count and 0 is truthy in Ruby, so the guard never fired. Horreum#refresh!
 # returned normally, kept unsaved in-memory values and cleared dirty
 # tracking. HashKey#refresh! went on to send HMSET with no field/value pairs
-# and raised Redis::CommandError instead.
+# and raised Redis::CommandError instead. Both now read the hash once and
+# raise when the reply is empty, since a hash with no fields does not exist.
 
 require_relative '../support/helpers/test_helpers'
 
@@ -61,6 +62,11 @@ end
 @saved.props.refresh!
 @saved.props['color']
 #=> 'blue'
+
+## HashKey#refresh! raises once the hash's last field is removed
+@saved.props.remove_field('color')
+@saved.props.refresh!
+#=!> Familia::KeyNotFoundError
 
 @saved.props.delete!
 @saved.destroy!
