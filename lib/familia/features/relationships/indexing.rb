@@ -473,8 +473,9 @@ module Familia
           # tracker entry or destroy! pass can find it to clean up.
           #
           # Skipped inside a transaction/pipeline, where the EXISTS probe would
-          # queue into the caller's MULTI and return a Future instead of a
-          # boolean (same conservatism as DataType#warn_if_dirty!). This is
+          # queue into the caller's MULTI or pipeline and return a Future
+          # instead of a boolean (same conservatism as DataType#warn_if_dirty!).
+          # This is
           # also what keeps the save path working: auto_update_class_indexes
           # and the rebuild strategies call these methods inside a MULTI,
           # where the object hash write is queued alongside the index write.
@@ -483,7 +484,7 @@ module Familia
           # @param scope_instance [Object, nil] scope for instance-scoped
           #   indexes; nil for class-level indexes
           def _ensure_persisted_before_index_write!(index_name, scope_instance = nil)
-            return if Fiber[:familia_transaction]
+            return if Familia.transaction_or_pipeline?
             return if exists?
 
             location = if scope_instance

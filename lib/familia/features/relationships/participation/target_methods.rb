@@ -275,6 +275,7 @@ collection_name: collection_name)
             method_name = "#{collection_name}_with_permission"
 
             target_class.define_method(method_name) do |min_permission = :read, limit: nil, offset: 0, batch_size: 500|
+              Familia.assert_replies_available!("#{self.class}##{__method__}")
               TargetMethods::Builder.validate_min_permission!(min_permission)
               TargetMethods::Builder.validate_permission_query_args!(
                 limit: limit, offset: offset, batch_size: batch_size,
@@ -398,6 +399,8 @@ collection_name: collection_name)
               unless block
                 return to_enum(:"each_#{collection_name}_with_permission", min_permission, batch_size: batch_size)
               end
+
+              Familia.assert_replies_available!("#{self.class}##{__method__}")
 
               collection = send(collection_name)
               cursor = 0

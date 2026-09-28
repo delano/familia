@@ -1,0 +1,203 @@
+# try/integration/futures/relationships_futures_try.rb
+#
+# frozen_string_literal: true
+
+# Relationship query and staging methods inside transaction,
+# atomic_write and pipelined blocks. They load records, scan, or derive an
+# answer from reply contents, so inside a block they raise
+# Familia::OperationModeError before issuing anything that matters. Thin
+# collection wrappers pass the command's Redis::Future through. See
+# docs/reference/transaction_safety.md for the policy these tests pin.
+
+require_relative '../../support/helpers/test_helpers'
+
+Familia.debug = false
+
+# These fixture classes belong to one scenario, so they share this file.
+# rubocop:disable Style/OneClassPerFile
+# Scope for the instance-scoped indexes and the participation collection.
+class FuturesRelCompany < Familia::Horreum
+  feature :object_identifier
+  feature :relationships
+  identifier_field :company_id
+  field :company_id
+  field :name
+end
+
+# Join model for the staged participation.
+class FuturesRelMembership < Familia::Horreum
+  feature :object_identifier
+  feature :relationships
+  identifier_field :objid
+  field :futures_rel_company_objid
+  field :futures_rel_invitee_objid
+  field :role
+  field :created_at
+  field :updated_at
+end
+
+# Indexed participant: one index of every kind plus a staged participation.
+class FuturesRelEmployee < Familia::Horreum
+  feature :object_identifier
+  feature :relationships
+  identifier_field :emp_id
+  field :emp_id
+  field :email
+  field :badge
+  field :dept
+  field :role
+  unique_index :email, :email_lookup
+  unique_index :badge, :badge_index, within: FuturesRelCompany
+  multi_index :dept, :dept_index
+  multi_index :role, :role_index, within: FuturesRelCompany
+  participates_in FuturesRelCompany, :staff
+  participates_in FuturesRelCompany, :queue, type: :list
+end
+
+# Participant in a staged, through-model collection.
+class FuturesRelInvitee < Familia::Horreum
+  feature :object_identifier
+  feature :relationships
+  identifier_field :invitee_id
+  field :invitee_id
+  participates_in FuturesRelCompany, :members, through: FuturesRelMembership, staged: :pending_members
+end
+# rubocop:enable Style/OneClassPerFile
+
+delete_test_dbkeys(FuturesRelCompany, FuturesRelEmployee, FuturesRelMembership, FuturesRelInvitee)
+
+@company = FuturesRelCompany.new(company_id: 'frc-1', name: 'Acme')
+@company.save
+@emp = FuturesRelEmployee.new(emp_id: 'fre-1', email: 'e1@example.com', badge: 'B1', dept: 'eng', role: 'dev')
+@emp.save
+@emp.add_to_futures_rel_company_badge_index(@company)
+@emp.add_to_futures_rel_company_role_index(@company)
+@emp.add_to_futures_rel_company_staff(@company)
+@emp.add_to_futures_rel_company_queue(@company)
+@staged = @company.stage_members_instance(through_attrs: { role: 'viewer' })
+
+# Runs the block inside atomic_write next to a scalar field change and
+# returns [block result, name as persisted after the block].
+@in_atomic_write = lambda do |name, &blk|
+  captured = nil
+  @company.atomic_write do
+    @company.name = name
+    captured = blk.call
+  end
+  [captured, FuturesRelCompany.load('frc-1').name]
+end
+
+@in_pipeline = lambda do |&blk|
+  captured = nil
+  FuturesRelCompany.pipelined { captured = blk.call }
+  captured
+end
+
+@refused = lambda do |&blk|
+  blk.call
+  :no_error
+rescue StandardError => e
+  e.class
+end
+
+## class-level unique index finders inside atomic_write raise and persist nothing
+@results = [
+  @refused.call { @in_atomic_write.call('aw-find') { FuturesRelEmployee.find_by_email('e1@example.com') } },
+  @refused.call { @in_atomic_write.call('aw-find') { FuturesRelEmployee.find_all_by_email(['e1@example.com']) } },
+  @refused.call { @in_atomic_write.call('aw-find') { FuturesRelEmployee.rebuild_email_lookup } },
+]
+[@results.uniq, FuturesRelCompany.load('frc-1').name]
+#=> [[Familia::OperationModeError], "Acme"]
+
+## class-level unique index finders and guard inside a pipeline raise OperationModeError
+[
+  @refused.call { @in_pipeline.call { FuturesRelEmployee.find_by_email('e1@example.com') } },
+  @refused.call { @in_pipeline.call { FuturesRelEmployee.find_all_by_email(['e1@example.com']) } },
+  @refused.call { @in_pipeline.call { @emp.guard_unique_email_lookup! } },
+].uniq
+#=> [Familia::OperationModeError]
+
+## instance-scoped unique index finders inside atomic_write raise OperationModeError
+[
+  @refused.call { @in_atomic_write.call('aw-scoped') { @company.find_by_badge('B1') } },
+  @refused.call { @in_atomic_write.call('aw-scoped') { @company.find_all_by_badge(['B1']) } },
+  @refused.call { @in_atomic_write.call('aw-scoped') { @emp.guard_unique_futures_rel_company_badge_index!(@company) } },
+].uniq
+#=> [Familia::OperationModeError]
+
+## instance-scoped unique index rebuild inside a pipeline raises OperationModeError
+@refused.call { @in_pipeline.call { @company.rebuild_badge_index } }
+#=> Familia::OperationModeError
+
+## multi index finders inside atomic_write raise OperationModeError
+[
+  @refused.call { @in_atomic_write.call('aw-multi') { FuturesRelEmployee.find_all_by_dept('eng') } },
+  @refused.call { @in_atomic_write.call('aw-multi') { FuturesRelEmployee.sample_from_dept('eng') } },
+  @refused.call { @in_atomic_write.call('aw-multi') { @company.find_all_by_role('dev') } },
+  @refused.call { @in_atomic_write.call('aw-multi') { @company.sample_from_role('dev') } },
+].uniq
+#=> [Familia::OperationModeError]
+
+## multi index rebuilds inside a pipeline raise OperationModeError
+[
+  @refused.call { @in_pipeline.call { FuturesRelEmployee.rebuild_dept_index } },
+  @refused.call { @in_pipeline.call { @company.rebuild_role_index } },
+].uniq
+#=> [Familia::OperationModeError]
+
+## participation queries inside atomic_write raise OperationModeError
+[
+  @refused.call { @in_atomic_write.call('aw-part') { @emp.futures_rel_company_ids } },
+  @refused.call { @in_atomic_write.call('aw-part') { @emp.futures_rel_company_count } },
+  @refused.call { @in_atomic_write.call('aw-part') { @emp.futures_rel_company? } },
+  @refused.call { @in_atomic_write.call('aw-part') { @emp.futures_rel_company_instances } },
+  @refused.call { @in_atomic_write.call('aw-part') { @emp.current_participations } },
+  @refused.call { @in_atomic_write.call('aw-part') { @emp.position_in_futures_rel_company_queue(@company) } },
+].uniq
+#=> [Familia::OperationModeError]
+
+## permission queries inside a pipeline raise OperationModeError
+[
+  @refused.call { @in_pipeline.call { @company.staff_with_permission(:read) } },
+  @refused.call { @in_pipeline.call { @company.each_staff_with_permission(:read) { |_m| nil } } },
+].uniq
+#=> [Familia::OperationModeError]
+
+## membership check and score inside atomic_write pass Futures through
+@ret, @persisted = @in_atomic_write.call('aw-member') do
+  [@emp.in_futures_rel_company_staff?(@company), @emp.score_in_futures_rel_company_staff(@company)]
+end
+[@ret.map(&:class).uniq, @ret.first.value, @ret.last.value.is_a?(Float), @persisted]
+#=> [[Redis::Future], 0, true, "aw-member"]
+
+## list membership check and score inside a pipeline pass the LPOS and ZSCORE Futures through
+@ret = @in_pipeline.call do
+  [@emp.in_futures_rel_company_queue?(@company), @emp.score_in_futures_rel_company_staff(@company)]
+end
+[@ret.map(&:class).uniq, @ret.first.value, @ret.last.value.is_a?(Float)]
+#=> [[Redis::Future], 0, true]
+
+## unstaging inside a transaction raises and keeps the staged model
+[@refused.call { @company.transaction { @company.unstage_members_instance(@staged) } }, @staged.exists?]
+#=> [Familia::OperationModeError, true]
+
+## outside a block: index finders still load records
+[FuturesRelEmployee.find_by_email('e1@example.com').emp_id, @company.find_by_badge('B1').emp_id,
+ FuturesRelEmployee.find_all_by_dept('eng').map(&:emp_id), @company.find_all_by_role('dev').map(&:emp_id)]
+#=> ["fre-1", "fre-1", ["fre-1"], ["fre-1"]]
+
+## outside a block: participation queries still answer
+[@emp.futures_rel_company_ids, @emp.futures_rel_company_count, @emp.futures_rel_company?,
+ @emp.in_futures_rel_company_staff?(@company), @emp.position_in_futures_rel_company_queue(@company)]
+#=> [["frc-1"], 1, true, true, 0]
+
+## outside a block: list membership and score still answer with a Boolean and a Float
+[@emp.in_futures_rel_company_queue?(@company), @emp.score_in_futures_rel_company_staff(@company).class]
+#=> [true, Float]
+
+## outside a block: unstaging still runs
+[@company.unstage_members_instance(@staged), @staged.exists?]
+#=> [true, false]
+
+# Teardown
+delete_test_dbkeys(FuturesRelCompany, FuturesRelEmployee, FuturesRelMembership, FuturesRelInvitee)

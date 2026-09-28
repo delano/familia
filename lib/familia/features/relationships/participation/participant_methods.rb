@@ -183,6 +183,11 @@ module Familia
 
           # Build method to check membership in target's collection
           # Creates: domain.in_customer_domains?(customer)
+          #
+          # The generated method returns a Boolean. Inside a transaction or
+          # pipeline it returns the membership command's Redis::Future, which
+          # is always truthy: the ZRANK or LPOS index (nil when absent) for a
+          # sorted-set or list collection, and the SISMEMBER Boolean for a set.
           def self.build_membership_check(participant_class, target_name, collection_name, _type)
             method_name = "in_#{target_name}_#{collection_name}?"
 
@@ -295,6 +300,10 @@ module Familia
           # Build score-related methods for sorted sets
           # Creates: domain.score_in_customer_domains(customer)
           #
+          # The generated method returns the Float score, or nil when the
+          # participant is not a member. Inside a transaction or pipeline it
+          # returns the ZSCORE Redis::Future, which resolves to the same value.
+          #
           # Note: Score updates use DataType API directly:
           #   customer.domains.add(domain, new_score, xx: true)
           def self.build_score_methods(participant_class, target_name, collection_name)
@@ -317,6 +326,7 @@ module Familia
             method_name = "position_in_#{target_name}_#{collection_name}"
 
             participant_class.define_method(method_name) do |target_instance|
+              Familia.assert_replies_available!("#{self.class}##{__method__}")
               return nil unless target_instance&.identifier
 
               # Use Horreum's DataType accessor instead of manual key construction

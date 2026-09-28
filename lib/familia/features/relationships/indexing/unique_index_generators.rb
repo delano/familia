@@ -147,6 +147,8 @@ module Familia
             # Generate instance query method (e.g., company.find_by_badge_number)
             actual_scope_class.class_eval do
               define_method(:"find_by_#{field}") do |provided_value|
+                Familia.assert_replies_available!("#{self.class}#find_by_#{field}")
+
                 # Use declared field accessor instead of manual instantiation
                 index_hash = send(index_name)
 
@@ -163,6 +165,8 @@ module Familia
 
               # Generate bulk query method (e.g., company.find_all_by_badge_number)
               define_method(:"find_all_by_#{field}") do |provided_ids|
+                Familia.assert_replies_available!("#{self.class}#find_all_by_#{field}")
+
                 # Convert to array and filter nil inputs before querying Redis.
                 # This prevents wasteful lookups for empty string keys (nil.to_s → "").
                 # Output may contain fewer elements than input (standard ORM behavior).
@@ -186,6 +190,8 @@ module Familia
 
               # Generate method to rebuild the unique index for this parent instance
               define_method(:"rebuild_#{index_name}") do |batch_size: 100, &progress_block|
+                Familia.assert_replies_available!("#{self.class}#rebuild_#{index_name}")
+
                 # Find the collection containing the indexed class.
                 #
                 # Strategy 1: Check if indexed_class has a participation relationship
@@ -326,6 +332,8 @@ module Familia
               Familia.debug("[UniqueIndexGenerators] #{name} method #{method_name}")
 
               define_method(method_name) do |scope_instance|
+                Familia.assert_replies_available!("#{self.class}##{__method__}")
+
                 return unless scope_instance
 
                 field_value = send(field)
@@ -438,6 +446,8 @@ module Familia
           def generate_query_methods_class(field, index_name, indexed_class)
             # Generate class-level single record method
             indexed_class.define_singleton_method(:"find_by_#{field}") do |provided_id|
+              Familia.assert_replies_available!("#{self}.find_by_#{field}")
+
               index_hash = send(index_name) # access the class-level hashkey DataType
 
               # Get the identifier from the db hashkey using .get method.
@@ -455,6 +465,8 @@ module Familia
 
             # Generate class-level bulk query method
             indexed_class.define_singleton_method(:"find_all_by_#{field}") do |provided_ids|
+              Familia.assert_replies_available!("#{self}.find_all_by_#{field}")
+
               # Convert to array and filter nil inputs before querying Redis.
               # This prevents wasteful lookups for empty string keys (nil.to_s → "").
               # Output may contain fewer elements than input (standard ORM behavior).
@@ -477,6 +489,8 @@ module Familia
 
             # Generate method to rebuild the class-level index
             indexed_class.define_singleton_method(:"rebuild_#{index_name}") do |batch_size: 100, &progress_block|
+              Familia.assert_replies_available!("#{self}.rebuild_#{index_name}")
+
               if respond_to?(:instances)
                 # Strategy 1: Use instances collection (fastest)
                 index_hashkey = send(index_name)  # Get the index HashKey for serialization
@@ -618,6 +632,8 @@ module Familia
               #
               # @return [void]
               define_method(:"guard_unique_#{index_name}!") do
+                Familia.assert_replies_available!("#{self.class}#guard_unique_#{index_name}!")
+
                 field_value = send(field)
                 return unless field_value
 

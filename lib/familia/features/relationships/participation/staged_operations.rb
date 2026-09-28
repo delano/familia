@@ -135,6 +135,8 @@ module Familia
           # @raise [ArgumentError] if staged model does not exist (already destroyed)
           #
           def activate(through_class:, staged_model:, target:, participant:, attrs: {})
+            Familia.assert_replies_available!('StagedOperations.activate')
+
             # Validate staged model still exists (may have been destroyed by previous activation or TTL)
             unless staged_model.exists?
               raise ArgumentError, 'Staged model does not exist (may have been already activated or expired)'
@@ -182,6 +184,8 @@ module Familia
           # @return [Boolean] true if destroyed, false if model didn't exist
           #
           def unstage(staged_model:)
+            Familia.assert_replies_available!('StagedOperations.unstage')
+
             return false unless staged_model.exists?
 
             staged_model.destroy!

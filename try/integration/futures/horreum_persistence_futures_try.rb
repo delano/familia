@@ -80,6 +80,10 @@ end
 @refused.call { FuturesSaveRecord.pipelined { @fresh.atomic_write { @fresh.name = 'x' } } }
 #=> Familia::OperationModeError
 
+## the generated unique-index guard inside a pipeline raises OperationModeError
+@refused.call { FuturesSaveRecord.pipelined { @fresh.guard_unique_email_lookup! } }
+#=> Familia::OperationModeError
+
 ## commit_fields inside a transaction raises and queues nothing
 @partial.name = 'txn-commit'
 [@refused.call { @partial.transaction { @partial.commit_fields } }, FuturesPartialRecord.load('fpr-1').name,
