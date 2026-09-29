@@ -194,7 +194,7 @@ module Familia
     # placeholder -- exclusion could not be enforced.
     #
     def self.assert_rebuild_context!
-      return unless Fiber[:familia_transaction] || Fiber[:familia_pipeline]
+      return unless Familia.transaction_or_pipeline?
 
       raise Familia::OperationModeError,
             'with_rebuild cannot run inside a transaction or pipeline: the lock SET NX ' \

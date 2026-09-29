@@ -76,7 +76,7 @@ module Familia
     # @see #release_field The matching ownership-checked delete.
     #
     def claim_field(field, val)
-      if Fiber[:familia_transaction] || Fiber[:familia_pipeline]
+      if Familia.transaction_or_pipeline?
         raise Familia::OperationModeError, <<~ERROR_MESSAGE
           Cannot claim_field inside a transaction or pipeline: EVAL returns a Future there, so the claim's verdict cannot be checked. Claim before opening the MULTI (see ADR-0002).
         ERROR_MESSAGE

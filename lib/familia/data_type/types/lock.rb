@@ -23,7 +23,7 @@ module Familia
     #   cannot be decided before EXEC, so a truthy Future would report a lock
     #   as acquired while another holder still owns it
     def acquire(token = nil, ttl: 10)
-      if Fiber[:familia_transaction] || Fiber[:familia_pipeline]
+      if Familia.transaction_or_pipeline?
         raise Familia::OperationModeError,
               'Lock#acquire cannot run inside a transaction or pipeline: ' \
               'the NX verdict resolves at EXEC, after the caller has already ' \

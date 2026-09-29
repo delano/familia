@@ -427,7 +427,7 @@ module Familia
     #   no hash key in the database.
     #
     def parent_new_record?
-      return false if Fiber[:familia_transaction] || Fiber[:familia_pipeline]
+      return false if Familia.transaction_or_pipeline?
       return false unless @parent_ref.respond_to?(:exists?)
 
       !@parent_ref.exists?(check_size: false)
