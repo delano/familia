@@ -98,13 +98,24 @@ module Familia
     # would act on a placeholder. It raises instead, before queueing
     # anything.
     #
+    # A method that takes its connection as an argument passes it as
+    # +conn+. The check then looks at that connection instead of the current
+    # fiber: a transaction or pipeline connection (a MULTI or pipeline
+    # block's yield, or Familia.dbclient inside a Familia block) queues its
+    # commands, while a separate plain client answers even inside a block.
+    #
     # @param operation [String] The method name for the error message,
     #   such as "HashKey#fetch"
+    # @param conn [Redis, Redis::PipelinedConnection, nil] the connection
+    #   the operation will issue its commands on, when it takes one
     # @return [void]
-    # @raise [Familia::OperationModeError] inside a transaction or pipeline
+    # @raise [Familia::OperationModeError] without +conn+, inside a
+    #   transaction or pipeline; with +conn+, only when +conn+ is a
+    #   transaction or pipeline connection
     #
-    def assert_replies_available!(operation)
-      return unless transaction_or_pipeline?
+    def assert_replies_available!(operation, conn: nil)
+      queued = conn.nil? ? transaction_or_pipeline? : conn.is_a?(Redis::PipelinedConnection)
+      return unless queued
 
       raise Familia::OperationModeError,
             "#{operation} cannot run inside a transaction or pipeline: it needs " \

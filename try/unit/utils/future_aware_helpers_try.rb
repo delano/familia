@@ -191,5 +191,31 @@ end
 @guard_error.class
 #=> Familia::OperationModeError
 
+## assert_replies_available! with conn: checks that connection instead of the fiber
+# A separate plain client answers even inside a block; the block's own
+# connection queues.
+@plain = Familia.dbclient
+@verdicts = []
+Familia.transaction do
+  [@plain, Familia.dbclient].each do |conn|
+    Familia.assert_replies_available!('Example#op', conn: conn)
+    @verdicts << :answers
+  rescue Familia::OperationModeError
+    @verdicts << :refused
+  end
+end
+@verdicts
+#=> [:answers, :refused]
+
+## assert_replies_available! with conn: refuses a raw pipeline connection outside a Familia block
+@guard_error = nil
+Familia.dbclient.pipelined do |pipe|
+  Familia.assert_replies_available!('Example#op', conn: pipe)
+rescue Familia::OperationModeError => e
+  @guard_error = e
+end
+[Familia.transaction_or_pipeline?, @guard_error.class]
+#=> [false, Familia::OperationModeError]
+
 # Teardown
 Familia.dbclient.del(@test_key)

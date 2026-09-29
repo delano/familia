@@ -160,6 +160,11 @@ string interpolation, `Array#join` and `puts`, with no error. Use the reader
   `run_chores!`, the `EnforceCollectionCaps` chore, and the index format
   checks `IndexDescriptor#stale_format?` and `#format_current?`,
   `Familia.stale_indexes` and `Familia.assert_indexes_current!`
+- Rebuild primitives, which take their connection as an argument:
+  `AtomicOperations.atomic_swap` and `.sweep_orphaned_temp_keys` raise when
+  that connection is a transaction or pipeline connection, which
+  `Familia.dbclient` is inside a Familia block. `AtomicOperations.with_rebuild`
+  raises in that case and inside any Familia block
 - Migrations: `Migration::Base.run` and `.check_only`, and
   `Migration::Runner#run`, `#run_one`, `#rollback`, `#status` and `#pending`.
   The `Migration::Registry` methods that decide from a reply (`pending`,

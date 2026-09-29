@@ -349,12 +349,7 @@ module Familia
       #   operation will issue its commands on
       # @raise [Familia::OperationModeError]
       def assert_replies_available!(operation, conn)
-        return unless conn.is_a?(Redis::PipelinedConnection)
-
-        raise Familia::OperationModeError,
-              "Migration::Registry##{operation} cannot run on a transaction or pipeline " \
-              'connection: it needs command replies, which are Redis::Future objects ' \
-              'until the block completes. Call it outside the block.'
+        Familia.assert_replies_available!("Migration::Registry##{operation}", conn: conn)
       end
 
       # Applied migrations with their timestamps, read on +conn+.

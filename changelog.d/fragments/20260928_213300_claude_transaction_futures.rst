@@ -5,8 +5,9 @@ Added
   reply and returns a ``Redis::Future`` untouched.
   ``Familia.transaction_or_pipeline?`` reports whether the current fiber is
   inside a Familia transaction or pipeline block.
-  ``Familia.assert_replies_available!(operation)`` raises
-  ``Familia::OperationModeError`` there.
+  ``Familia.assert_replies_available!(operation, conn: nil)`` raises
+  ``Familia::OperationModeError`` there. When ``conn`` is given it raises
+  only when ``conn`` is a transaction or pipeline connection.
 
 Changed
 -------
@@ -57,7 +58,10 @@ Changed
   index format checks ``IndexDescriptor#stale_format?``,
   ``#format_current?``, ``Familia.stale_indexes`` and
   ``Familia.assert_indexes_current!`` (raised ``TypeError`` after queueing
-  HRANDFIELD), ``run_chores!``, ``EnforceCollectionCaps``,
+  HRANDFIELD), ``AtomicOperations.atomic_swap``,
+  ``.sweep_orphaned_temp_keys`` and ``.with_rebuild`` given a transaction
+  or pipeline connection (``with_rebuild`` raised ``NoMethodError`` after
+  queueing its lock), ``run_chores!``, ``EnforceCollectionCaps``,
   ``Migration::Base.run`` and ``.check_only``, and
   ``Migration::Runner#run``, ``#run_one``, ``#rollback``, ``#status``,
   ``#pending``.

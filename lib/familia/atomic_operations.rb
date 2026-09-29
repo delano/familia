@@ -157,10 +157,11 @@ module Familia
     # @raise [Familia::RebuildInProgressError] If the lock is already held
     # @raise [Familia::RebuildLockLostError] If the lock was taken over mid-rebuild
     # @raise [Familia::PersistenceError] If a populated temp key vanished before the swap
-    # @raise [Familia::OperationModeError] If called inside a transaction or pipeline
+    # @raise [Familia::OperationModeError] If called inside a transaction or
+    #   pipeline, or given a transaction or pipeline connection as +redis+
     #
     def self.with_rebuild(final_key, redis, ttl: DEFAULT_REBUILD_TTL, preserve_for: DEFAULT_PRESERVE_TTL, &)
-      assert_rebuild_context!
+      assert_rebuild_context!(redis)
       lock_key = rebuild_lock_key(final_key)
       token = SecureRandom.hex(16)
       acquire_rebuild_lock!(redis, lock_key, token, ttl, final_key)
@@ -191,10 +192,12 @@ module Familia
 
     # Refuses to rebuild inside a transaction/pipeline, where dbclient hands
     # back the MULTI proxy and SET NX only returns a queued-command
-    # placeholder -- exclusion could not be enforced.
+    # placeholder, so exclusion could not be enforced. A transaction or
+    # pipeline connection passed in as +redis+ is refused for the same
+    # reason, even outside a Familia block.
     #
-    def self.assert_rebuild_context!
-      return unless Familia.transaction_or_pipeline?
+    def self.assert_rebuild_context!(redis)
+      return unless Familia.transaction_or_pipeline? || redis.is_a?(Redis::PipelinedConnection)
 
       raise Familia::OperationModeError,
             'with_rebuild cannot run inside a transaction or pipeline: the lock SET NX ' \
@@ -312,9 +315,13 @@ module Familia
     #   longer holds our token; temp_key is deleted, final_key untouched
     # @raise [Familia::PersistenceError] If a populated temp_key vanished
     #   before the RENAME; final_key untouched
+    # @raise [Familia::OperationModeError] If +redis+ is a transaction or
+    #   pipeline connection, where the EXISTS check and the script outcome
+    #   would be Redis::Future objects
     #
     def self.atomic_swap(temp_key, final_key, redis, preserve_for: DEFAULT_PRESERVE_TTL, lock: nil,
                          populated: nil)
+      Familia.assert_replies_available!('AtomicOperations.atomic_swap', conn: redis)
       # redis-rb returns the Integer key count from EXISTS.
       populated = redis.exists(temp_key).positive? if populated.nil?
       Familia.info '[AtomicOp] No temp key to swap (empty result set)' unless populated
@@ -420,9 +427,13 @@ module Familia
     # @param older_than [Integer] Minimum age in seconds
     # @param dry_run [Boolean] When true, report without deleting
     # @return [Array<String>] Keys deleted (or that would be deleted)
+    # @raise [Familia::OperationModeError] If +redis+ is a transaction or
+    #   pipeline connection, where SCAN, EXISTS and TTL would reply with
+    #   Redis::Future objects
     #
     def self.sweep_orphaned_temp_keys(redis, pattern: '*:rebuild:*', older_than: DEFAULT_PRESERVE_TTL,
                                       dry_run: false)
+      Familia.assert_replies_available!('AtomicOperations.sweep_orphaned_temp_keys', conn: redis)
       cutoff = Familia.now.to_i - older_than
       swept = []
 
