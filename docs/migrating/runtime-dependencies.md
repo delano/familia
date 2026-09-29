@@ -102,10 +102,11 @@ migration as `:failed` instead of letting the `LoadError` end the run.
 When `json_schemer` is installed but one of its own requires fails, schema
 validation now raises `Familia::SchemaValidatorLoadError`, whose `cause` is
 the `LoadError`. familia 2.12.0 warned `json_schemer gem not installed` in
-that case and disabled validation, so every record passed. A
-`Familia::Migration::Model` migration with validation hooks stops at the
-first record it validates, and `Familia::Migration::Runner` records it as
-`:failed`.
+that case and disabled validation, so every record passed. With validation
+hooks on, `Familia::Migration::Model#migrate` raises it at the first record
+it validates instead of returning. `Familia::Migration::Base.run` and
+`.cli_run` let it propagate rather than returning `false` or an exit code,
+and `Familia::Migration::Runner` records the migration as `:failed`.
 
 If you see this error, fix the bundle so that `json_schemer` loads. The
 error's `cause` names the file that could not be loaded. When `json_schemer`

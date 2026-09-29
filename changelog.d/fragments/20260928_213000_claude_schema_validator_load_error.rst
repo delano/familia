@@ -13,9 +13,11 @@ Changed
   raises ``Familia::SchemaValidatorLoadError`` when ``json_schemer`` is
   installed but one of its own requires fails. It previously warned
   ``json_schemer gem not installed`` and disabled validation, so every
-  record passed. A ``Familia::Migration::Model`` migration with validation
-  hooks stops at the first record it validates, and
-  ``Familia::Migration::Runner`` records it as ``:failed`` and not applied.
+  record passed. With validation hooks on,
+  ``Familia::Migration::Model#migrate`` raises it at the first record it
+  validates. ``Familia::Migration::Base.run`` and ``.cli_run`` let it
+  propagate, and ``Familia::Migration::Runner`` records the migration as
+  ``:failed`` and not applied.
   When ``json_schemer`` itself cannot be loaded, validation still warns and
   is disabled. See ``docs/migrating/runtime-dependencies.md``.
 
