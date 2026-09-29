@@ -168,7 +168,9 @@ string interpolation, `Array#join` and `puts`, with no error. Use the reader
 - Writes that read first: the save methods in rule 1, `commit_fields`,
   `save_fields`, `multi_field_update`, `multi_field_fast_write`, class-level
   `destroy!`, instance `destroy!` on a class with instance-scoped indexes, the
-  `guard_unique_*!` methods, and staged activation and unstaging
+  `guard_unique_*!` methods, the staged participation methods (`stage_*`,
+  `activate_*_instance`, `unstage_*`), and the add and remove methods of a
+  `through:` participation
 - Admission checks: `Lock#acquire`, `#locked?`, `#held_by?` and `#empty?`
   (and so the generated predicate of a `lock` field),
   `Counter#increment_if_less_than`, `HashKey#claim_field`, and

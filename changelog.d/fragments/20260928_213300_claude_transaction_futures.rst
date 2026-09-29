@@ -52,11 +52,11 @@ Changed
   ``scan_count``, ``scan_any?``, class-level ``destroy!``, the index
   finders, rebuilds and ``guard_unique_*!`` methods, the participation
   readers, ``current_indexings`` (reported every class-level index whose
-  field was set), ``relationship_status``, staged activation and unstaging,
-  the ``audit_*``, ``health_check``, ``repair_*`` and ``scan_keys`` methods,
-  ``run_chores!``, ``EnforceCollectionCaps``, ``Migration::Base.run`` and
-  ``.check_only``, and ``Migration::Runner#run``, ``#run_one``,
-  ``#rollback``, ``#status``, ``#pending``.
+  field was set), ``relationship_status``, the ``audit_*``,
+  ``health_check``, ``repair_*`` and ``scan_keys`` methods, ``run_chores!``,
+  ``EnforceCollectionCaps``, ``Migration::Base.run`` and ``.check_only``,
+  and ``Migration::Runner#run``, ``#run_one``, ``#rollback``, ``#status``,
+  ``#pending``.
 - ``Migration::Registry#pending``, ``#status``, ``#record_rollback``,
   ``#schema_changed?``, ``#schema_drift`` and ``#restore_backup`` raise
   ``Familia::OperationModeError`` when the registry's client is a
@@ -79,6 +79,16 @@ Changed
   previously queued their write, which committed with the outer EXEC; call
   them before the block or use ``atomic_write``. ``commit_fields`` and
   ``save_fields`` raised ``NoMethodError`` there.
+- The generated staged participation methods (``stage_<name>_instance``,
+  ``stage_<name>``, ``activate_<name>_instance``, ``unstage_<name>_instance``,
+  ``unstage_<name>``) and the add and remove methods of a ``through:``
+  participation raise ``Familia::OperationModeError`` inside any transaction
+  or pipeline before queueing anything, and the error names the generated
+  method. Inside a caller's transaction, ``unstage_<name>_instance``
+  previously queued its deletes, which committed with the outer EXEC, and
+  returned ``true``; call it before or after the block. The others raised
+  ``NoMethodError``, ``Familia::ConflictingContextError`` or an error naming
+  an internal call, some after queueing part of their writes.
 - ``Horreum#destroy!`` raises ``Familia::OperationModeError`` inside a
   transaction or pipeline, before queueing anything, when the class has
   instance-scoped indexes. It previously raised ``NoMethodError`` after
@@ -120,10 +130,11 @@ Documentation
   handles command replies inside transactions and pipelines.
 - ``docs/migrating/transaction-replies.md`` lists the calls inside a block
   that behaved differently before and need a code change: partial writes
-  that committed with an outer transaction, ``extend_expiration``, the
-  ``Lock`` ownership checks and ``release``, ``current_indexings``,
-  ``Migration::Registry#applied?``, ``as_json`` on a scalar DataType and
-  the TTL refresh of ``HashKey#hsetnx`` and ``ListKey#insert``.
+  and unstaging that committed with an outer transaction,
+  ``extend_expiration``, the ``Lock`` ownership checks and ``release``,
+  ``current_indexings``, ``Migration::Registry#applied?``, ``as_json`` on
+  a scalar DataType and the TTL refresh of ``HashKey#hsetnx`` and
+  ``ListKey#insert``.
 
 AI Assistance
 -------------

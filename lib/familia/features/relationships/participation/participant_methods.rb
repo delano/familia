@@ -206,6 +206,9 @@ module Familia
             method_name = "add_to_#{target_name}_#{collection_name}"
 
             participant_class.define_method(method_name) do |target_instance, score = nil, through_attrs: {}|
+              # Resolve through class if specified. It refuses inside a
+              # transaction or pipeline before anything is queued.
+              through_class = Participation::ThroughModelOperations.resolve_through_class(through, self, __method__)
               return unless target_instance&.identifier
 
               # Use Horreum's DataType accessor instead of manual creation
@@ -215,9 +218,6 @@ module Familia
               if type == :sorted_set && score.nil?
                 score = calculate_participation_score(target_instance.class, collection_name)
               end
-
-              # Resolve through class if specified
-              through_class = through ? Familia.resolve_class(through) : nil
 
               # Use transaction for atomicity between collection add and reverse index tracking
               # All operations use Horreum's DataType methods (not direct Redis calls)
@@ -266,13 +266,13 @@ module Familia
             method_name = "remove_from_#{target_name}_#{collection_name}"
 
             participant_class.define_method(method_name) do |target_instance|
+              # Resolve through class if specified. It refuses inside a
+              # transaction or pipeline before anything is queued.
+              through_class = Participation::ThroughModelOperations.resolve_through_class(through, self, __method__)
               return unless target_instance&.identifier
 
               # Use Horreum's DataType accessor instead of manual creation
               collection = target_instance.send(collection_name)
-
-              # Resolve through class if specified
-              through_class = through ? Familia.resolve_class(through) : nil
 
               # Use transaction for atomicity between collection remove and reverse index untracking
               # All operations use Horreum's DataType methods (not direct Redis calls)

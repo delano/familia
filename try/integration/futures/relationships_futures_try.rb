@@ -197,9 +197,74 @@ end
 [@ret.map(&:class).uniq, @ret.first.value, @ret.last.value.is_a?(Float)]
 #=> [[Redis::Future], 0, true]
 
-## unstaging inside a transaction raises and keeps the staged model
-[@refused.call { @company.transaction { @company.unstage_members_instance(@staged) } }, @staged.exists?]
-#=> [Familia::OperationModeError, true]
+## unstaging inside a transaction raises before queueing, so a rescued error commits nothing
+@err = nil
+@company.transaction do
+  @company.unstage_members_instance(@staged)
+rescue Familia::OperationModeError => e
+  @err = e
+end
+[@err.message.include?('FuturesRelCompany#unstage_members_instance cannot run inside'),
+ @staged.exists?, @company.pending_members.member?(@staged.objid)]
+#=> [true, true, true]
+
+## activating inside a transaction raises before queueing, so a rescued error commits nothing
+@invitee = FuturesRelInvitee.new(invitee_id: 'fri-1')
+@invitee.save
+@err = nil
+@company.transaction do
+  @company.activate_members_instance(@staged, @invitee)
+rescue Familia::OperationModeError => e
+  @err = e
+end
+[@err.message.include?('FuturesRelCompany#activate_members_instance cannot run inside'),
+ @company.members.member?(@invitee), @company.pending_members.member?(@staged.objid), @staged.exists?]
+#=> [true, false, true, true]
+
+## staging and bulk unstaging inside a transaction or pipeline raise OperationModeError
+@results = [
+  @refused.call { @company.transaction { @company.stage_members_instance(through_attrs: { role: 'viewer' }) } },
+  @refused.call { @in_pipeline.call { @company.stage_members([{ role: 'viewer' }]) } },
+  @refused.call { @company.transaction { @company.unstage_members([@staged]) } },
+  @refused.call { @in_pipeline.call { @company.unstage_members([@staged]) } },
+]
+[@results.size, @results.uniq, @company.pending_members.size, @staged.exists?]
+#=> [4, [Familia::OperationModeError], 1, true]
+
+## staging inside a transaction names the generated method in the error
+@err = nil
+begin
+  @company.transaction { @company.stage_members_instance(through_attrs: {}) }
+rescue Familia::OperationModeError => e
+  @err = e
+end
+@err.message.include?('FuturesRelCompany#stage_members_instance cannot run inside')
+#=> true
+
+## through-model adds and removes inside a transaction raise before queueing, so rescued errors commit nothing
+@member = FuturesRelInvitee.new(invitee_id: 'fri-2')
+@member.save
+@memberships_before = FuturesRelMembership.instances.size
+@errors = []
+@company.transaction do
+  [
+    -> { @company.add_members_instance(@member) },
+    -> { @company.remove_members_instance(@member) },
+    -> { @member.add_to_futures_rel_company_members(@company) },
+    -> { @member.remove_from_futures_rel_company_members(@company) },
+  ].each do |call|
+    call.call
+  rescue Familia::OperationModeError => e
+    @errors << e.message[/(\w+#\w+) cannot run inside/, 1]
+  end
+end
+@expected_names = %w[
+  FuturesRelCompany#add_members_instance FuturesRelCompany#remove_members_instance
+  FuturesRelInvitee#add_to_futures_rel_company_members FuturesRelInvitee#remove_from_futures_rel_company_members
+]
+[@errors == @expected_names, @company.members.member?(@member),
+ FuturesRelMembership.instances.size == @memberships_before]
+#=> [true, false, true]
 
 ## the instance-scoped guard names itself in the error
 @err = nil
@@ -272,6 +337,13 @@ end
 [@unsaved.current_indexings,
  @emp.current_indexings.select { |m| m[:scope_class] == 'class' }.map { |m| m[:index_name] }.sort]
 #=> [[], [:dept_index, :email_lookup]]
+
+## outside a block: through-model adds and removes still run
+@through = @company.add_members_instance(@member)
+@added = [@through.class, @company.members.member?(@member)]
+@company.remove_members_instance(@member)
+[@added, @company.members.member?(@member), @through.exists?]
+#=> [[FuturesRelMembership, true], false, false]
 
 ## outside a block: unstaging still runs
 [@company.unstage_members_instance(@staged), @staged.exists?]

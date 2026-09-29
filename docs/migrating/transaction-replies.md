@@ -48,6 +48,31 @@ user.multi_field_update(name: 'Alice')
 user.tags.add('renamed')
 ```
 
+## Unstaging inside a transaction now raises
+
+Inside a caller's `transaction`, `unstage_<name>_instance` queued the staging
+set ZREM and the staged model's `destroy!` into the outer MULTI, and they
+committed with the outer EXEC. It returned `true` whether or not the staged
+model existed. It now raises `Familia::OperationModeError` before queueing
+anything, because it checks that the staged model exists before destroying it
+and reports that outcome. Call it before or after the block:
+
+```ruby
+# Before: the unstage committed with the outer EXEC
+org.transaction do
+  org.unstage_members_instance(invitation)
+  org.revoked_invitations.add(invitation.objid)
+end
+
+# After: two separate writes
+org.unstage_members_instance(invitation)
+org.revoked_invitations.add(invitation.objid)
+```
+
+The other staged participation methods and the add and remove methods of a
+`through:` participation raised an error inside a block before and still do,
+now `Familia::OperationModeError` before queueing anything.
+
 ## `extend_expiration` inside a block now raises
 
 Inside a transaction or pipeline, `extend_expiration` returned `false` and left
