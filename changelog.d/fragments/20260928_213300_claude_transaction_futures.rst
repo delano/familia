@@ -38,7 +38,8 @@ Changed
   ``Familia::OperationModeError`` inside those blocks instead of
   ``NoMethodError`` or a wrong result: ``each`` and the raw iterators on
   every collection, ``HashKey#fetch``, ``#refresh!``, ``#refresh``,
-  ``Counter#increment_if_less_than``, ``Lock#locked?``, ``Lock#held_by?``
+  ``Counter#increment_if_less_than``, ``Lock#locked?``, ``Lock#empty?`` (and
+  so the generated predicate of a ``lock`` field), ``Lock#held_by?``
   (returned ``false``, even for the holder), ``extend_expiration`` (returned
   ``false``), ``ttl_report``, ``Horreum#refresh!``, ``#refresh``, the
   finders and loaders (``find_by_dbkey``, ``find_by_identifier``,
@@ -48,10 +49,10 @@ Changed
   the participation readers, ``current_indexings`` (reported every
   class-level index whose field was set), ``relationship_status``, staged
   activation and unstaging, the ``audit_*``, ``health_check``, ``repair_*``
-  and ``scan_keys`` methods,
-  ``run_chores!``, ``EnforceCollectionCaps``, ``Migration::Base.run`` and
-  ``.check_only``, and ``Migration::Runner#run``, ``#run_one``,
-  ``#rollback``, ``#status``, ``#pending``.
+  and ``scan_keys`` methods, ``run_chores!``, ``EnforceCollectionCaps``,
+  ``Migration::Base.run`` and ``.check_only``, and
+  ``Migration::Runner#run``, ``#run_one``, ``#rollback``, ``#status``,
+  ``#pending``.
 - ``Migration::Registry#pending``, ``#status``, ``#record_rollback``,
   ``#schema_changed?``, ``#schema_drift`` and ``#restore_backup`` raise
   ``Familia::OperationModeError`` when the registry's client is a

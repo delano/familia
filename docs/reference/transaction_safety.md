@@ -160,7 +160,8 @@ before the server has answered.
   `save_fields`, `multi_field_update`, `multi_field_fast_write`, class-level
   `destroy!`, instance `destroy!` on a class with instance-scoped indexes, the
   `guard_unique_*!` methods, and staged activation and unstaging
-- Admission checks: `Lock#acquire`, `#locked?` and `#held_by?`,
+- Admission checks: `Lock#acquire`, `#locked?`, `#held_by?` and `#empty?`
+  (and so the generated predicate of a `lock` field),
   `Counter#increment_if_less_than`, `HashKey#claim_field`, and
   `claim_unique_*!`. `Lock#release` is deliberately not one. It passes its
   Future through so that it can be queued as the last command of the block

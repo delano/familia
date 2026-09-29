@@ -222,6 +222,30 @@ end
 @refused.call { @in_pipeline.call { @owner.mutex.locked? } }
 #=> Familia::OperationModeError
 
+## Lock#empty? on a held lock inside a transaction raises instead of returning a truthy Future
+@reset.call
+@owner.mutex.acquire('holder')
+[@refused.call { @owner.transaction { @owner.mutex.empty? } }, @owner.mutex.held_by?('holder')]
+#=> [Familia::OperationModeError, true]
+
+## Lock#empty? inside a pipeline names itself in the error
+@reset.call
+@err = nil
+begin
+  @in_pipeline.call { @owner.mutex.empty? }
+rescue Familia::OperationModeError => e
+  @err = e
+end
+@err.message.start_with?('Lock#empty? cannot run inside a transaction or pipeline')
+#=> true
+
+## the generated predicate of a lock field inside atomic_write raises and persists nothing
+@reset.call
+@name_before = FuturesScalarOwner.load('fso-1').name
+[@refused.call { @in_atomic_write.call('aw-mutex-pred') { @owner.mutex? } },
+ FuturesScalarOwner.load('fso-1').name == @name_before]
+#=> [Familia::OperationModeError, true]
+
 ## outside a block: StringKey conversions keep their return types
 @reset.call
 [@owner.nick.size, @owner.nick.empty?, @owner.nick.to_s, FuturesScalarOwner.new(ownerid: 'fso-none').nick.empty?]
@@ -258,6 +282,13 @@ FuturesScalarOwner.new(ownerid: 'fso-none').nick.to_s.start_with?('#<Familia::St
 [@owner.mutex.locked?, @owner.mutex.held_by?('tok-4'), @owner.mutex.held_by?('x'),
  @owner.mutex.release('x'), @owner.mutex.release('tok-4'), @owner.mutex.locked?]
 #=> [true, true, false, false, true, false]
+
+## outside a block: Lock#empty? and the generated predicate keep Boolean results
+@reset.call
+@free = [@owner.mutex.empty?, @owner.mutex?]
+@owner.mutex.acquire('tok-5')
+[@free, [@owner.mutex.empty?, @owner.mutex?]]
+#=> [[true, false], [false, true]]
 
 # Teardown
 delete_test_dbkeys(FuturesScalarOwner)

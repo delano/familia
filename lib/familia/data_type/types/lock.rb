@@ -93,6 +93,19 @@ module Familia
       value == token
     end
 
+    # The inverse of #locked?, inherited from StringKey and refused inside a
+    # block for the same reason.
+    #
+    # @return [Boolean] whether no token holds the lock
+    # @raise [Familia::OperationModeError] inside a transaction or pipeline,
+    #   where StringKey#empty? would return the GET Future. The Future is
+    #   truthy, so a caller testing it would treat a held lock as free.
+    def empty?
+      Familia.assert_replies_available!('Lock#empty?')
+
+      super
+    end
+
     def force_unlock!
       del
     end
