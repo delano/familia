@@ -221,15 +221,27 @@ module Familia
 
     # rank of member +v+ when ordered lowest to highest (starts at 0). ZRANK
     # replies with an Integer or nil, so no conversion is needed.
+    #
+    # @return [Integer, nil, Redis::Future] the rank, or nil when +v+ is not
+    #   a member. Inside a transaction or pipeline, the ZRANK Future of that
+    #   reply.
     def rank(v)
       dbclient.zrank dbkey, serialize_value(v)
     end
 
     # rank of member +v+ when ordered highest to lowest (starts at 0)
+    #
+    # @return [Integer, nil, Redis::Future] the rank, or nil when +v+ is not
+    #   a member. Inside a transaction or pipeline, the ZREVRANK Future of
+    #   that reply.
     def revrank(v)
       dbclient.zrevrank dbkey, serialize_value(v)
     end
 
+    # @param count [Integer] Number of members to return (-1 for all)
+    # @return [Array, Redis::Future] Deserialized members, lowest score
+    #   first. Inside a transaction or pipeline, the ZRANGE Future (resolves
+    #   to the raw members).
     def members(count = -1, opts = {})
       # NOTE: count math (positive count -> end index) is handled once by
       # membersraw. Do not decrement here too, or members(n) returns n-1.
@@ -243,6 +255,10 @@ module Familia
       rangeraw 0, count, opts
     end
 
+    # @param count [Integer] Number of members to return (-1 for all)
+    # @return [Array, Redis::Future] Deserialized members, highest score
+    #   first. Inside a transaction or pipeline, the ZREVRANGE Future
+    #   (resolves to the raw members).
     def revmembers(count = -1, opts = {})
       # See #members: revmembersraw already converts a positive count to the
       # correct end index; decrementing here as well would drop one element.
@@ -351,6 +367,9 @@ module Familia
       membersraw.select(&)
     end
 
+    # @return [Array, Redis::Future] Deserialized members from +sidx+ to
+    #   +eidx+. Inside a transaction or pipeline, the ZRANGE Future (resolves
+    #   to the raw members).
     def range(sidx, eidx, opts = {})
       echo :range, Familia.pretty_stack(limit: 1) if Familia.debug
       Familia.transform_reply(rangeraw(sidx, eidx, opts)) { |elements| deserialize_values(*elements) }
@@ -361,6 +380,9 @@ module Familia
       dbclient.zrange(dbkey, sidx, eidx, **opts)
     end
 
+    # @return [Array, Redis::Future] Deserialized members from +sidx+ to
+    #   +eidx+, highest score first. Inside a transaction or pipeline, the
+    #   ZREVRANGE Future (resolves to the raw members).
     def revrange(sidx, eidx, opts = {})
       echo :revrange, Familia.pretty_stack(limit: 1) if Familia.debug
       Familia.transform_reply(revrangeraw(sidx, eidx, opts)) { |elements| deserialize_values(*elements) }
@@ -371,6 +393,10 @@ module Familia
     end
 
     # e.g. obj.metrics.rangebyscore (now-12.hours), now, :limit => [0, 10]
+    #
+    # @return [Array, Redis::Future] Deserialized members scored from
+    #   +sscore+ to +escore+. Inside a transaction or pipeline, the
+    #   ZRANGEBYSCORE Future (resolves to the raw members).
     def rangebyscore(sscore, escore, opts = {})
       echo :rangebyscore, Familia.pretty_stack(limit: 1) if Familia.debug
       Familia.transform_reply(rangebyscoreraw(sscore, escore, opts)) { |elements| deserialize_values(*elements) }
@@ -382,6 +408,10 @@ module Familia
     end
 
     # e.g. obj.metrics.revrangebyscore (now-12.hours), now, :limit => [0, 10]
+    #
+    # @return [Array, Redis::Future] Deserialized members scored from
+    #   +sscore+ down to +escore+. Inside a transaction or pipeline, the
+    #   ZREVRANGEBYSCORE Future (resolves to the raw members).
     def revrangebyscore(sscore, escore, opts = {})
       echo :revrangebyscore, Familia.pretty_stack(limit: 1) if Familia.debug
       Familia.transform_reply(revrangebyscoreraw(sscore, escore, opts)) { |elements| deserialize_values(*elements) }
@@ -428,6 +458,8 @@ module Familia
       ret
     end
 
+    # @return [Float, Redis::Future] the member's new score. Inside a
+    #   transaction or pipeline, the ZINCRBY Future of that Float.
     def increment(val, by = 1)
       warn_if_dirty!
       # ZINCRBY creates the member if absent, so it is a capped path too.
@@ -448,7 +480,9 @@ module Familia
 
     # Removes a member from the sorted set
     # @param value The value to remove from the sorted set
-    # @return [Integer] The number of members that were removed (0 or 1)
+    # @return [Boolean, Redis::Future] whether the member was removed;
+    #   redis-rb replies true or false to a single-member ZREM. Inside a
+    #   transaction or pipeline, the ZREM Future of that reply.
     def remove_element(value)
       warn_if_dirty!
       Familia.trace :REMOVE_ELEMENT, nil, "#{value}<#{value.class}>" if Familia.debug?
@@ -466,11 +500,19 @@ module Familia
     end
 
     # Return the first element in the list. Redis: ZRANGE(0)
+    #
+    # @return [Object, nil, Redis::Future] the member with the lowest score.
+    #   Inside a transaction or pipeline, the ZRANGE Future (resolves to an
+    #   Array of raw members).
     def first
       at(0)
     end
 
     # Return the last element in the list. Redis: ZRANGE(-1)
+    #
+    # @return [Object, nil, Redis::Future] the member with the highest score.
+    #   Inside a transaction or pipeline, the ZRANGE Future (resolves to an
+    #   Array of raw members).
     def last
       at(-1)
     end
@@ -478,9 +520,9 @@ module Familia
     # Removes and returns the member(s) with the lowest score(s).
     #
     # @param count [Integer] Number of members to pop (default: 1)
-    # @return [Array, nil] Array of [member, score] pairs, or single pair if count=1,
-    #   or nil if set is empty. Inside a transaction or pipeline, the ZPOPMIN
-    #   Future (resolves to redis-rb's reply).
+    # @return [Array, nil, Redis::Future] Array of [member, score] pairs, or
+    #   single pair if count=1, or nil if set is empty. Inside a transaction
+    #   or pipeline, the ZPOPMIN Future (resolves to redis-rb's reply).
     #
     # @example Pop single lowest-scoring member
     #   zset.popmin  #=> ["member1", 1.0]
@@ -504,9 +546,9 @@ module Familia
     # Removes and returns the member(s) with the highest score(s).
     #
     # @param count [Integer] Number of members to pop (default: 1)
-    # @return [Array, nil] Array of [member, score] pairs, or single pair if count=1,
-    #   or nil if set is empty. Inside a transaction or pipeline, the ZPOPMAX
-    #   Future (resolves to redis-rb's reply).
+    # @return [Array, nil, Redis::Future] Array of [member, score] pairs, or
+    #   single pair if count=1, or nil if set is empty. Inside a transaction
+    #   or pipeline, the ZPOPMAX Future (resolves to redis-rb's reply).
     #
     # @example Pop single highest-scoring member
     #   zset.popmax  #=> ["member1", 100.0]
@@ -547,7 +589,9 @@ module Familia
     # Gets scores for multiple members at once.
     #
     # @param members [Array<Object>] Members to get scores for
-    # @return [Array<Float, nil>] Scores for each member (nil if member doesn't exist)
+    # @return [Array<Float, nil>, Redis::Future] Scores for each member (nil
+    #   if member doesn't exist). Inside a transaction or pipeline, the
+    #   ZMSCORE Future (resolves to the same Array; redis-rb converts it).
     #
     # @example Get scores for multiple members
     #   zset.mscore('member1', 'member2', 'member3')  #=> [1.0, 2.0, nil]
@@ -565,7 +609,9 @@ module Familia
     # @param other_sets [Array<SortedSet, String>] Other sorted sets or key names
     # @param weights [Array<Numeric>, nil] Multiplication factors for each set's scores
     # @param aggregate [Symbol, nil] How to aggregate scores (:sum, :min, :max)
-    # @return [Array] Array of members (or [member, score] pairs with withscores)
+    # @return [Array, Redis::Future] Array of members (or [member, score]
+    #   pairs with withscores). Inside a transaction or pipeline, the ZUNION
+    #   Future (resolves to redis-rb's reply, members still serialized).
     #
     # @example Union of two sorted sets
     #   zset.union(other_zset)  #=> ["member1", "member2", "member3"]
@@ -591,7 +637,9 @@ module Familia
     # @param other_sets [Array<SortedSet, String>] Other sorted sets or key names
     # @param weights [Array<Numeric>, nil] Multiplication factors for each set's scores
     # @param aggregate [Symbol, nil] How to aggregate scores (:sum, :min, :max)
-    # @return [Array] Array of members (or [member, score] pairs with withscores)
+    # @return [Array, Redis::Future] Array of members (or [member, score]
+    #   pairs with withscores). Inside a transaction or pipeline, the ZINTER
+    #   Future (resolves to redis-rb's reply, members still serialized).
     #
     # @example Intersection of two sorted sets
     #   zset.inter(other_zset)  #=> ["common_member"]
@@ -611,7 +659,9 @@ module Familia
     # @param min [String] Minimum lex value (use '-' for unbounded, '[' or '(' prefix for inclusive/exclusive)
     # @param max [String] Maximum lex value (use '+' for unbounded, '[' or '(' prefix for inclusive/exclusive)
     # @param limit [Array<Integer>, nil] [offset, count] for pagination
-    # @return [Array] Members in the lexicographical range
+    # @return [Array, Redis::Future] Members in the lexicographical range.
+    #   Inside a transaction or pipeline, the ZRANGEBYLEX Future (resolves to
+    #   the raw members).
     #
     # @example Get members between 'a' and 'z' (inclusive)
     #   zset.rangebylex('[a', '[z')  #=> ["apple", "banana", "cherry"]
@@ -629,7 +679,9 @@ module Familia
     # @param max [String] Maximum lex value (use '+' for unbounded)
     # @param min [String] Minimum lex value (use '-' for unbounded)
     # @param limit [Array<Integer>, nil] [offset, count] for pagination
-    # @return [Array] Members in reverse lexicographical range
+    # @return [Array, Redis::Future] Members in reverse lexicographical
+    #   range. Inside a transaction or pipeline, the ZREVRANGEBYLEX Future
+    #   (resolves to the raw members).
     #
     def revrangebylex(max, min, limit: nil)
       result = dbclient.zrevrangebylex(dbkey, max, min, limit: limit)
@@ -663,7 +715,9 @@ module Familia
     #
     # @param count [Integer, nil] Number of members to return (nil for single member)
     # @param withscores [Boolean] Whether to include scores in result
-    # @return [Object, Array, nil] Random member(s), or nil if set is empty
+    # @return [Object, Array, nil, Redis::Future] Random member(s), or nil if
+    #   set is empty. Inside a transaction or pipeline, the ZRANDMEMBER Future
+    #   (resolves to redis-rb's reply, members still serialized).
     #
     # @example Get single random member
     #   zset.randmember  #=> "member1"
@@ -761,7 +815,9 @@ module Familia
     #
     # @param other_sets [Array<SortedSet, String>] Other sorted sets or key names
     # @param withscores [Boolean] Whether to include scores in result
-    # @return [Array] Members in this set but not in other sets
+    # @return [Array, Redis::Future] Members in this set but not in other
+    #   sets. Inside a transaction or pipeline, the ZDIFF Future (resolves to
+    #   redis-rb's reply, members still serialized).
     #
     # @example Difference of two sorted sets
     #   zset.diff(other_zset)  #=> ["unique_member"]

@@ -780,6 +780,12 @@ module Familia
           # Check if this object is indexed in a specific scope
           # For class-level indexes, checks the hash key (unique) or set membership (multi)
           # For instance-scoped indexes, returns false (requires scope instance)
+          #
+          # @param index_name [Symbol] the index to check
+          # @return [Boolean, Redis::Future] whether the record is in the
+          #   index. Inside a transaction or pipeline, the HEXISTS or
+          #   SISMEMBER Future (resolves to true or false; the Future itself
+          #   is always truthy).
           def indexed_in?(index_name)
             return false unless self.class.respond_to?(:indexing_relationships)
 

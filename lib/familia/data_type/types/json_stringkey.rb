@@ -62,7 +62,9 @@ module Familia
     # If a default option was provided during initialization, the default
     # is set via SETNX (set if not exists) before retrieval.
     #
-    # @return [Object] the deserialized value, or the default if not set
+    # @return [Object, Redis::Future] the deserialized value, or the default
+    #   if not set. Inside a transaction or pipeline, the GET Future (resolves
+    #   to the raw JSON).
     #
     def value
       echo :value, Familia.pretty_stack(limit: 1) if Familia.debug
@@ -94,7 +96,9 @@ module Familia
     # Sets the value only if the key does not already exist.
     #
     # @param val [Object] the value to store
-    # @return [Boolean] true if the key was set, false if it already existed
+    # @return [Boolean, Redis::Future] true if the key was set, false if it
+    #   already existed. Inside a transaction or pipeline, the SETNX Future
+    #   of that Boolean (the Future itself is always truthy).
     #
     def setnx(val)
       warn_if_dirty!

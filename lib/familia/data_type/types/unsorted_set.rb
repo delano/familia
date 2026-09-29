@@ -40,6 +40,9 @@ module Familia
       add v
     end
 
+    # @return [Array, Redis::Future] Deserialized members. Inside a
+    #   transaction or pipeline, the SMEMBERS Future (resolves to the raw
+    #   members).
     def members
       echo :members, Familia.pretty_stack(limit: 1) if Familia.debug
       Familia.transform_reply(membersraw) { |elements| deserialize_values(*elements) }
@@ -111,6 +114,9 @@ module Familia
       membersraw.select(&)
     end
 
+    # @return [Boolean, Redis::Future] whether +val+ is a member. Inside a
+    #   transaction or pipeline, the SISMEMBER Future (resolves to true or
+    #   false; the Future itself is always truthy).
     def member?(val)
       dbclient.sismember dbkey, serialize_value(val)
     end
@@ -129,7 +135,9 @@ module Familia
 
     # Returns the intersection of this set with one or more other sets.
     # @param other_sets [Array<UnsortedSet, String>] Other sets (as UnsortedSet instances or raw keys)
-    # @return [Array] Deserialized members present in all sets
+    # @return [Array, Redis::Future] Deserialized members present in all
+    #   sets. Inside a transaction or pipeline, the SINTER Future (resolves to
+    #   the raw members).
     def intersection(*other_sets)
       keys = extract_keys(other_sets)
       Familia.transform_reply(dbclient.sinter(dbkey, *keys)) { |elements| deserialize_values(*elements) }
@@ -138,7 +146,9 @@ module Familia
 
     # Returns the union of this set with one or more other sets.
     # @param other_sets [Array<UnsortedSet, String>] Other sets (as UnsortedSet instances or raw keys)
-    # @return [Array] Deserialized members present in any of the sets
+    # @return [Array, Redis::Future] Deserialized members present in any of
+    #   the sets. Inside a transaction or pipeline, the SUNION Future
+    #   (resolves to the raw members).
     def union(*other_sets)
       keys = extract_keys(other_sets)
       Familia.transform_reply(dbclient.sunion(dbkey, *keys)) { |elements| deserialize_values(*elements) }
@@ -146,7 +156,9 @@ module Familia
 
     # Returns the difference of this set minus one or more other sets.
     # @param other_sets [Array<UnsortedSet, String>] Other sets (as UnsortedSet instances or raw keys)
-    # @return [Array] Deserialized members present in this set but not in any other sets
+    # @return [Array, Redis::Future] Deserialized members present in this set
+    #   but not in any other sets. Inside a transaction or pipeline, the SDIFF
+    #   Future (resolves to the raw members).
     def difference(*other_sets)
       keys = extract_keys(other_sets)
       Familia.transform_reply(dbclient.sdiff(dbkey, *keys)) { |elements| deserialize_values(*elements) }
@@ -167,7 +179,9 @@ module Familia
     # @param cursor [Integer] Starting cursor position (default: 0)
     # @param match [String, nil] Optional pattern to filter members
     # @param count [Integer, nil] Optional hint for number of elements to return per call
-    # @return [Array<Integer, Array>] Two-element array: [new_cursor, deserialized_members]
+    # @return [Array<Integer, Array>, Redis::Future] Two-element array:
+    #   [new_cursor, deserialized_members]. Inside a transaction or pipeline,
+    #   the SSCAN Future (resolves to the raw cursor and members).
     def scan(cursor = 0, match: nil, count: nil)
       opts = {}
       opts[:match] = match if match
@@ -247,7 +261,9 @@ module Familia
 
     # Get one or more random members from the set
     # @param count [Integer] Number of random members to return (default: 1)
-    # @return [Array] Array of deserialized random members
+    # @return [Array, Redis::Future] Array of deserialized random members.
+    #   Inside a transaction or pipeline, the SRANDMEMBER Future (resolves to
+    #   the raw members).
     def sample(count = 1)
       Familia.transform_reply(sampleraw(count)) { |elements| deserialize_values(*elements) }
     end

@@ -52,6 +52,9 @@ module Familia
       Familia.transform_reply(char_count, &:zero?)
     end
 
+    # @return [String, nil, Redis::Future] the stored value, or the default
+    #   when one is configured and the key was missing. Inside a transaction
+    #   or pipeline, the GET Future (resolves to the raw value).
     def value
       echo :value, Familia.pretty_stack(limit: 1) if Familia.debug
       dbclient.setnx dbkey, @opts[:default] if @opts[:default]
@@ -87,6 +90,9 @@ module Familia
     alias replace value=
     alias set value=
 
+    # @return [Boolean, Redis::Future] true if the key was set, false if it
+    #   already existed. Inside a transaction or pipeline, the SETNX Future
+    #   of that Boolean (the Future itself is always truthy).
     def setnx(val)
       ret = dbclient.setnx(dbkey, serialize_value(val))
       update_expiration

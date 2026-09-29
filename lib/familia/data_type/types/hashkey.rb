@@ -160,6 +160,10 @@ module Familia
     alias store []=
     alias add []=
 
+    # @param field [String, Symbol] the field name
+    # @return [Object, nil, Redis::Future] the deserialized value, or nil when
+    #   the field is missing. Inside a transaction or pipeline, the HGET
+    #   Future (resolves to the stored value, still serialized).
     def [](field)
       deserialize_value dbclient.hget(dbkey, field.to_s)
     end
@@ -185,12 +189,18 @@ module Familia
       dbclient.hkeys dbkey
     end
 
+    # @return [Array, Redis::Future] Deserialized values. Inside a
+    #   transaction or pipeline, the HVALS Future (resolves to the raw
+    #   values).
     def values
       Familia.transform_reply(dbclient.hvals(dbkey)) do |vals|
         vals.map { |v| deserialize_value v }
       end
     end
 
+    # @return [Hash, Redis::Future] Fields mapped to deserialized values.
+    #   Inside a transaction or pipeline, the HGETALL Future (resolves to the
+    #   raw Hash).
     def hgetall
       Familia.transform_reply(dbclient.hgetall(dbkey)) do |hsh|
         hsh.transform_values { |v| deserialize_value v }
@@ -219,6 +229,10 @@ module Familia
       raise e.class, msg
     end
 
+    # @param field [String, Symbol] the field name
+    # @return [Boolean, Redis::Future] whether the field exists. Inside a
+    #   transaction or pipeline, the HEXISTS Future (resolves to true or
+    #   false; the Future itself is always truthy).
     def key?(field)
       dbclient.hexists dbkey, field.to_s
     end
@@ -253,6 +267,10 @@ module Familia
     alias incr increment
     alias incrby increment
 
+    # @param field [String, Symbol] The field name
+    # @param by [Integer] The amount to decrement by
+    # @return [Integer, Redis::Future] The new value. Inside a transaction or
+    #   pipeline, the HINCRBY Future of that Integer.
     def decrement(field, by = 1)
       increment field, -by
     end
@@ -271,6 +289,9 @@ module Familia
     end
     alias merge! update
 
+    # @return [Array, Redis::Future] Deserialized values of +fields+, with
+    #   missing fields dropped. Inside a transaction or pipeline, the HMGET
+    #   Future (resolves to the raw values, with nil for missing fields).
     def values_at *fields
       string_fields = fields.flatten.compact.map(&:to_s)
       Familia.transform_reply(dbclient.hmget(dbkey, *string_fields)) do |elements|
@@ -385,10 +406,13 @@ module Familia
     # @param count [Integer, nil] Number of fields to return. If nil, returns a single field.
     #   If positive, returns distinct fields. If negative, allows duplicates.
     # @param withvalues [Boolean] If true, returns fields with their values
-    # @return [String, Array<String>, Array<Array>] Depending on arguments:
+    # @return [String, Array<String>, Array<Array>, Redis::Future] Depending
+    #   on arguments:
     #   - No count: single field name (or nil if hash is empty)
     #   - With count: array of field names
     #   - With count and withvalues: array of [field, value] pairs
+    #   Inside a transaction or pipeline, the HRANDFIELD Future (resolves to
+    #   the same shape, with values still serialized).
     #
     # @example Get a single random field
     #   my_hash.randfield  #=> "some_field"

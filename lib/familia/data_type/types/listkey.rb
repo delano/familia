@@ -124,6 +124,12 @@ module Familia
       ret
     end
 
+    # @param idx [Integer, Range] an index, or a range of indexes
+    # @param count [Integer, nil] number of elements from +idx+
+    # @return [Object, Array<Object>, nil, Redis::Future] the element at
+    #   +idx+, or the elements of the range or count. Inside a transaction or
+    #   pipeline, the LINDEX or LRANGE Future (resolves to the raw element or
+    #   elements).
     def [](idx, count = nil)
       if idx.is_a? Range
         range idx.first, idx.last
@@ -170,6 +176,9 @@ module Familia
       dbclient.lrange(dbkey, sidx, eidx)
     end
 
+    # @param count [Integer] number of elements to return (-1 for all)
+    # @return [Array<Object>, Redis::Future] deserialized elements. Inside a
+    #   transaction or pipeline, the LRANGE Future (resolves to raw strings).
     def members(count = -1)
       echo :members, Familia.pretty_stack(limit: 1) if Familia.debug
       count -= 1 if count.positive?

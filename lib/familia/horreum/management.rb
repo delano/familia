@@ -185,6 +185,11 @@ module Familia
         instance
       end
 
+      # Reads each identifier's key with MGET and parses the stored JSON.
+      #
+      # @return [Array, Redis::Future] the parsed values, skipping missing
+      #   keys. Inside a transaction or pipeline, the MGET Future (resolves
+      #   to the raw values).
       def multiget(...)
         Familia.transform_reply(rawmultiget(...)) do |values|
           values.filter_map { |json| Familia::JsonSerializer.parse(json) }
@@ -517,14 +522,17 @@ module Familia
 
       # Checks whether the given identifier appears in the +instances+ sorted set.
       #
-      # This is a fast O(log N) ZSCORE lookup. It does NOT verify that the
-      # underlying hash key still exists in the database -- use {#exists?}
-      # for that. A true result means the object was persisted through
-      # Familia at some point and has not been removed from instances since.
+      # This is a fast O(log N) ZRANK lookup (SortedSet#member?). It does NOT
+      # verify that the underlying hash key still exists in the database --
+      # use {#exists?} for that. A true result means the object was persisted
+      # through Familia at some point and has not been removed from instances
+      # since.
       #
       # @param identifier [String, Integer] The unique identifier to check.
-      # @return [Boolean] true if the identifier is present in the instances
-      #   sorted set, false otherwise.
+      # @return [Boolean, Redis::Future] true if the identifier is present in
+      #   the instances sorted set, false otherwise. Inside a transaction or
+      #   pipeline, the ZRANK Future (resolves to the rank, or nil when
+      #   absent; the Future itself is always truthy).
       #
       # @example Quick instances check without hitting HGETALL
       #   User.in_instances?('cust_abc123')  # => true
@@ -542,7 +550,9 @@ module Familia
       #
       # @param identifier [String, Integer] The unique identifier for the object.
       # @param suffix [Symbol, nil] The suffix to use in the dbkey (default: class suffix).
-      # @return [Boolean] true if the object exists, false otherwise.
+      # @return [Boolean, Redis::Future] true if the object exists, false
+      #   otherwise. Inside a transaction or pipeline, the EXISTS Future
+      #   (resolves to the key count).
       #
       # This method constructs the full dbkey using the provided identifier and suffix,
       # then checks if the key exists in the database.
@@ -739,7 +749,8 @@ module Familia
       # Familia. However, objects deleted outside Familia (e.g., direct Redis commands)
       # may leave stale entries.
       #
-      # @return [Integer] Number of instances in the instances sorted set
+      # @return [Integer, Redis::Future] Number of instances in the instances
+      #   sorted set. Inside a transaction or pipeline, the ZCARD Future.
       #
       # @example
       #   User.create(email: 'test@example.com')

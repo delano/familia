@@ -340,7 +340,9 @@ module Familia
 
       # Check if this object's data will expire
       #
-      # @return [Boolean] true if TTL is set, false if data persists indefinitely
+      # @return [Boolean, Redis::Future] true if TTL is set, false if data
+      #   persists indefinitely. Inside a transaction or pipeline, the TTL
+      #   Future (resolves to the TTL in seconds).
       #
       def expires?
         Familia.positive?(ttl)
