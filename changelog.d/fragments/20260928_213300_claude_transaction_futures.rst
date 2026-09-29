@@ -57,10 +57,12 @@ Changed
   longer memoizes ``Familia.dbclient``, so a registry without its own client
   follows the current transaction or pipeline and no longer keeps a
   connection from a block that has completed.
-- ``save``, ``save_if_not_exists!``, ``create!``, ``build`` and
-  ``atomic_write`` raise ``Familia::OperationModeError`` inside a pipeline as
-  well as a transaction. On a class with a unique index they raised a
-  spurious ``Familia::RecordExistsError`` inside a pipeline.
+- ``save``, ``save_if_not_exists!``, ``create!``, ``build``,
+  ``atomic_write`` and ``Familia.atomic_write`` raise
+  ``Familia::OperationModeError`` inside a pipeline as well as a
+  transaction. Inside a pipeline they previously raised
+  ``Familia::ConflictingContextError`` or a spurious
+  ``Familia::RecordExistsError``.
 - ``commit_fields``, ``save_fields``, ``multi_field_update`` and
   ``multi_field_fast_write`` raise ``Familia::OperationModeError`` inside any
   transaction or pipeline, before changing state. Previously only

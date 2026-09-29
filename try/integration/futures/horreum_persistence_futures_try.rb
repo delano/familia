@@ -80,6 +80,45 @@ end
 @refused.call { FuturesSaveRecord.pipelined { @fresh.atomic_write { @fresh.name = 'x' } } }
 #=> Familia::OperationModeError
 
+## Familia.atomic_write inside a pipeline raises OperationModeError in every form
+# Plain, unique-indexed, and the create-only watch_keys/pre_check form,
+# whose pre_check would see a truthy Future from exists?.
+@plain = FuturesPartialRecord.new(recid: 'fpr-aw', name: 'plain')
+@indexed = FuturesSaveRecord.new(recid: 'fsr-aw', email: 'aw@example.com', name: 'aw')
+@create_only = lambda do
+  Familia.atomic_write(@plain, watch_keys: [@plain.dbkey],
+                               pre_check: -> { raise Familia::RecordExistsError, @plain.dbkey if @plain.exists? }) do
+    @plain.name = 'created'
+  end
+end
+[
+  @refused.call { Familia.pipelined { Familia.atomic_write(@plain) { @plain.name = 'x' } } },
+  @refused.call { Familia.pipelined { Familia.atomic_write(@indexed) { @indexed.name = 'x' } } },
+  @refused.call { Familia.pipelined { @create_only.call } },
+  FuturesPartialRecord.exists?('fpr-aw'),
+  FuturesSaveRecord.exists?('fsr-aw'),
+]
+#=> [Familia::OperationModeError, Familia::OperationModeError, Familia::OperationModeError, false, false]
+
+## Familia.atomic_write inside a pipeline names itself in the error
+@err = nil
+begin
+  Familia.pipelined { Familia.atomic_write(@indexed) { @indexed.name = 'x' } }
+rescue Familia::OperationModeError => e
+  @err = e
+end
+@err.message.start_with?('Cannot call Familia.atomic_write within a transaction or pipeline')
+#=> true
+
+## Familia.atomic_write inside a transaction raises OperationModeError
+@refused.call { Familia.transaction { Familia.atomic_write(@plain) { @plain.name = 'x' } } }
+#=> Familia::OperationModeError
+
+## outside a block: Familia.atomic_write persists both records, and create-only then refuses
+[Familia.atomic_write(@plain, @indexed) { @plain.name = 'together' }, FuturesPartialRecord.load('fpr-aw').name,
+ FuturesSaveRecord.find_by_email('aw@example.com').recid, @refused.call { @create_only.call }]
+#=> [true, "together", "fsr-aw", Familia::RecordExistsError]
+
 ## the generated unique-index guard inside a pipeline raises OperationModeError
 @refused.call { FuturesSaveRecord.pipelined { @fresh.guard_unique_email_lookup! } }
 #=> Familia::OperationModeError

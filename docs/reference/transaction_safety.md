@@ -14,7 +14,7 @@ Familia uses Redis transactions (MULTI/EXEC) for atomic operations. However, Red
 - `save_if_not_exists!`
 - `create!` (calls `save_if_not_exists!` internally)
 - `build`
-- `atomic_write` (it opens its own MULTI/EXEC)
+- `atomic_write` and `Familia.atomic_write` (they open their own MULTI/EXEC)
 
 **Rationale**: These methods need to read current state for validation (checking existence, validating unique constraints), which would return uninspectable Redis::Future objects inside transactions and pipelines.
 
