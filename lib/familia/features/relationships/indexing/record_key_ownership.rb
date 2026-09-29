@@ -86,6 +86,95 @@ module Familia
             nil
           end
 
+          # Returns the owner of +key+ when it is a multi_index bucket under
+          # the record prefix of +owner_class+, or nil when it is not.
+          #
+          # The owner is +owner_class+ for a bucket of a class-level
+          # multi_index declared on +owner_class+
+          # ("<prefix><delim><index><delim><value>"). For a bucket of an
+          # instance-scoped multi_index within +owner_class+
+          # ("<prefix><delim><scope id><delim><index><delim><value>") it is
+          # the scope identifier, and only when a record with that
+          # identifier exists. When several splits of +key+ name existing
+          # scopes, the longest identifier wins, as in .other_record_key.
+          #
+          # The audits of related fields and participation collections
+          # match "<prefix><delim>*<delim><name>" and read the part the
+          # wildcard matched as a record identifier. A field value equal to
+          # <name> puts a bucket in that pattern, so they call this method
+          # to leave such a key to the index it belongs to. The multi_index
+          # audit and repair own buckets.
+          #
+          # @param key [String] a key returned by SCAN
+          # @param owner_class [Class] the Horreum class whose record prefix
+          #   the key starts with
+          # @param names [Hash] .record_set_key_names of +owner_class+,
+          #   passed by callers that check many keys
+          # @return [Class, String, nil]
+          def index_bucket_owner(key, owner_class, names: nil)
+            rest = key_after_record_prefix(key, owner_class)
+            return nil unless rest
+            return owner_class if class_level_bucket?(key, owner_class)
+
+            names ||= record_set_key_names(owner_class)
+            existing_bucket_scope(rest, owner_class, names[:indexes], Familia.delim.to_s.b, key.encoding)
+          end
+
+          # Whether +key+ is "<prefix><delim><index><delim><value>" for a
+          # class-level multi_index <index> declared on +owner_class+. Only
+          # the key's shape is checked, so the key may also be a key of a
+          # record whose identifier starts with "<index><delim>".
+          #
+          # @param key [String]
+          # @param owner_class [Class]
+          # @return [Boolean]
+          def class_level_bucket?(key, owner_class)
+            rest = key_after_record_prefix(key, owner_class)
+            return false unless rest
+
+            delim = Familia.delim.to_s.b
+            class_level_index_names(owner_class).any? { |index| rest.start_with?(index + delim) }
+          end
+
+          # Returns the bytes of +key+ after "<prefix><delim>" of
+          # +owner_class+, or nil when +key+ does not start with them.
+          def key_after_record_prefix(key, owner_class)
+            record_prefix = Familia.join(owner_class.prefix, '').b
+            bkey = key.b
+            return nil unless bkey.start_with?(record_prefix)
+
+            bkey.byteslice(record_prefix.bytesize..)
+          end
+
+          # Names of the class-level multi_indexes declared on
+          # +owner_class+, whose buckets live under its record prefix, as
+          # binary strings.
+          #
+          # @param owner_class [Class]
+          # @return [Array<String>]
+          def class_level_index_names(owner_class)
+            Familia.multi_indexes(class_level: true, owner: owner_class).map do |descriptor|
+              descriptor.index_name.to_s.b
+            end
+          end
+
+          # Returns the longest identifier of an existing +owner_class+
+          # record that +rest+ (a key without the record prefix) names as
+          # the scope of a bucket of one of +indexes+, or nil. The
+          # identifier is returned in +encoding+, the encoding of the key.
+          def existing_bucket_scope(rest, owner_class, indexes, delim, encoding)
+            index_names = { fields: [], indexes: indexes }
+            scope_ids = []
+            each_delimiter_split(rest, delim) do |identifier, name|
+              scope_ids << identifier if !identifier.empty? && record_set_key_name?(name, index_names, delim)
+            end
+            scope_ids.reverse_each do |identifier|
+              identifier = identifier.force_encoding(encoding)
+              return identifier if owner_class.exists?(identifier)
+            end
+            nil
+          end
+
           # Yields each split of the binary string +text+ at an occurrence
           # of +delim+, as the part before it and the part after it.
           def each_delimiter_split(text, delim)
