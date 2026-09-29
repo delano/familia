@@ -77,6 +77,17 @@ Familia.pipelined { @registry.applied?('futures_migration_example') }
 [@registry.client.is_a?(Redis::PipelinedConnection), @registry.applied?('futures_migration_example')]
 #=> [false, true]
 
+## a registry without its own client issues all of a method's commands on one connection
+# Without a connection provider, Familia.dbclient opens a new connection per
+# call, so resolving the client per command would open one per restored field.
+10.times { |i| @registry.backup_field('futures_migration_example', "#{@prefix}:restored", "f#{i}", "v#{i}") }
+@stats_client = Familia.dbclient
+@connections = -> { @stats_client.info('stats')['total_connections_received'].to_i }
+@before = @connections.call
+@restored = @registry.restore_backup('futures_migration_example')
+[@restored, @connections.call - @before <= 1, Familia.dbclient.hget("#{@prefix}:restored", 'f9')]
+#=> [10, true, "v9"]
+
 ## a registry built with its own client still answers inside a pipeline
 @own_client_registry = Familia::Migration::Registry.new(redis: Familia.dbclient, prefix: @prefix)
 @ret = nil

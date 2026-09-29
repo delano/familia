@@ -44,7 +44,9 @@ module Familia
       # The fallback is not memoized. Familia.dbclient returns the open
       # transaction or pipeline connection inside those blocks, and a
       # memoized one would keep queueing commands on it after the block
-      # completed.
+      # completed. Each registry method resolves the client once and issues
+      # all of its commands on it, so a method opens at most one connection
+      # when Familia.dbclient creates a new one per call.
       #
       # @return [Redis] The Redis client
       #
@@ -84,18 +86,7 @@ module Familia
       #   ZRANGE Future.
       #
       def all_applied
-        # redis-rb pairs the ZRANGE WITHSCORES reply as [[member, score], ...]
-        # with Float scores.
-        results = client.zrange(applied_key, 0, -1, withscores: true)
-
-        Familia.transform_reply(results) do |pairs|
-          pairs.map do |migration_id, score|
-            {
-              migration_id: migration_id,
-              applied_at: Time.at(score),
-            }
-          end
-        end
+        applied_entries(client)
       end
 
       # Filter a list of migrations to only those not yet applied.
@@ -106,10 +97,11 @@ module Familia
       def pending(all_migrations)
         return [] if all_migrations.nil? || all_migrations.empty?
 
-        assert_replies_available!(:pending)
+        conn = client
+        assert_replies_available!(:pending, conn)
 
         # Batch fetch all applied migration IDs in a single Redis call
-        applied_ids = client.zrange(applied_key, 0, -1).to_set
+        applied_ids = conn.zrange(applied_key, 0, -1).to_set
 
         all_migrations.reject do |migration|
           migration_id = extract_migration_id(migration)
@@ -124,9 +116,7 @@ module Familia
       #   found. On a transaction or pipeline connection, the HGET Future.
       #
       def metadata(migration_id)
-        Familia.transform_reply(client.hget(metadata_key, migration_id.to_s)) do |json|
-          json.nil? ? nil : JSON.parse(json, symbolize_names: true)
-        end
+        read_metadata(client, migration_id)
       end
 
       # Get the status of all migrations.
@@ -137,10 +127,11 @@ module Familia
       def status(all_migrations)
         return [] if all_migrations.nil? || all_migrations.empty?
 
-        assert_replies_available!(:status)
+        conn = client
+        assert_replies_available!(:status, conn)
 
         # Batch fetch all applied migrations with timestamps in a single Redis call
-        applied_info = all_applied.each_with_object({}) do |entry, hash|
+        applied_info = applied_entries(conn).each_with_object({}) do |entry, hash|
           hash[entry[:migration_id]] = entry[:applied_at]
         end
 
@@ -171,9 +162,10 @@ module Familia
       def record_applied(migration, stats = {})
         migration_id = extract_migration_id(migration)
         now = Time.now
+        conn = client
 
         # ZADD to applied set with current timestamp
-        client.zadd(applied_key, now.to_f, migration_id)
+        conn.zadd(applied_key, now.to_f, migration_id)
 
         # Build metadata
         meta = {
@@ -187,7 +179,7 @@ module Familia
         }
 
         # HSET metadata JSON
-        client.hset(metadata_key, migration_id, JSON.generate(meta))
+        conn.hset(metadata_key, migration_id, JSON.generate(meta))
       end
 
       # Record that a migration has been rolled back.
@@ -195,19 +187,20 @@ module Familia
       # @param migration_id [String] The migration identifier
       #
       def record_rollback(migration_id)
-        assert_replies_available!(:record_rollback)
+        conn = client
+        assert_replies_available!(:record_rollback, conn)
         migration_id = migration_id.to_s
 
         # Remove from applied set
-        client.zrem(applied_key, migration_id)
+        conn.zrem(applied_key, migration_id)
 
         # Update metadata to show rolled_back status
-        existing = metadata(migration_id)
+        existing = read_metadata(conn, migration_id)
         meta = existing || {}
         meta[:status] = 'rolled_back'
         meta[:rolled_back_at] = Time.now.iso8601
 
-        client.hset(metadata_key, migration_id, JSON.generate(meta))
+        conn.hset(metadata_key, migration_id, JSON.generate(meta))
       end
 
       # --- Schema Tracking Methods ---
@@ -242,11 +235,11 @@ module Familia
       # Get the stored schema digest for a model class.
       #
       # @param model_class [Class] A Familia::Horreum subclass
-      # @return [String, nil] The stored digest or nil if not found
+      # @return [String, nil, Redis::Future] The stored digest or nil if not
+      #   found. On a transaction or pipeline connection, the HGET Future.
       #
       def stored_schema(model_class)
-        model_name = model_class.name || model_class.to_s
-        client.hget(schema_key, model_name)
+        read_stored_schema(client, model_class)
       end
 
       # Check if the schema has changed for a model class.
@@ -255,8 +248,9 @@ module Familia
       # @return [Boolean] true if schema differs from stored version
       #
       def schema_changed?(model_class)
-        assert_replies_available!(:schema_changed?)
-        stored = stored_schema(model_class)
+        conn = client
+        assert_replies_available!(:schema_changed?, conn)
+        stored = read_stored_schema(conn, model_class)
         return false if stored.nil? # No stored schema = no drift
 
         stored != schema_digest(model_class)
@@ -267,9 +261,10 @@ module Familia
       # @return [Array<String>] Model names with schema drift
       #
       def schema_drift
-        assert_replies_available!(:schema_drift)
+        conn = client
+        assert_replies_available!(:schema_drift, conn)
         # Get all stored schemas
-        stored = client.hgetall(schema_key)
+        stored = conn.hgetall(schema_key)
         return [] if stored.empty?
 
         drifted = []
@@ -297,8 +292,9 @@ module Familia
       #
       def backup_field(migration_id, key, field, value)
         bkey = backup_key(migration_id)
-        client.hset(bkey, "#{key}:#{field}", value)
-        client.expire(bkey, Familia::Migration.config.backup_ttl)
+        conn = client
+        conn.hset(bkey, "#{key}:#{field}", value)
+        conn.expire(bkey, Familia::Migration.config.backup_ttl)
       end
 
       # Restore all backed up fields for a migration.
@@ -307,9 +303,10 @@ module Familia
       # @return [Integer] Number of fields restored
       #
       def restore_backup(migration_id)
-        assert_replies_available!(:restore_backup)
+        conn = client
+        assert_replies_available!(:restore_backup, conn)
         bkey = backup_key(migration_id)
-        backup_data = client.hgetall(bkey)
+        backup_data = conn.hgetall(bkey)
         return 0 if backup_data.empty?
 
         count = 0
@@ -323,7 +320,7 @@ module Familia
 
           next if redis_key.empty? || field_name.empty?
 
-          client.hset(redis_key, field_name, value)
+          conn.hset(redis_key, field_name, value)
           count += 1
         end
 
@@ -348,14 +345,55 @@ module Familia
       # registry built with its own client is unaffected by an open block.
       #
       # @param operation [Symbol] the method name for the error message
+      # @param conn [Redis, Redis::PipelinedConnection] the client the
+      #   operation will issue its commands on
       # @raise [Familia::OperationModeError]
-      def assert_replies_available!(operation)
-        return unless client.is_a?(Redis::PipelinedConnection)
+      def assert_replies_available!(operation, conn)
+        return unless conn.is_a?(Redis::PipelinedConnection)
 
         raise Familia::OperationModeError,
               "Migration::Registry##{operation} cannot run on a transaction or pipeline " \
               'connection: it needs command replies, which are Redis::Future objects ' \
               'until the block completes. Call it outside the block.'
+      end
+
+      # Applied migrations with their timestamps, read on +conn+.
+      #
+      # @param conn [Redis, Redis::PipelinedConnection]
+      # @return [Array<Hash>, Redis::Future] the ZRANGE Future on a
+      #   transaction or pipeline connection
+      def applied_entries(conn)
+        # redis-rb pairs the ZRANGE WITHSCORES reply as [[member, score], ...]
+        # with Float scores.
+        results = conn.zrange(applied_key, 0, -1, withscores: true)
+
+        Familia.transform_reply(results) do |pairs|
+          pairs.map do |migration_id, score|
+            {
+              migration_id: migration_id,
+              applied_at: Time.at(score),
+            }
+          end
+        end
+      end
+
+      # Parsed metadata for +migration_id+, read on +conn+.
+      #
+      # @param conn [Redis, Redis::PipelinedConnection]
+      # @return [Hash, nil, Redis::Future] the HGET Future on a transaction
+      #   or pipeline connection
+      def read_metadata(conn, migration_id)
+        Familia.transform_reply(conn.hget(metadata_key, migration_id.to_s)) do |json|
+          json.nil? ? nil : JSON.parse(json, symbolize_names: true)
+        end
+      end
+
+      # Stored schema digest for +model_class+, read on +conn+.
+      #
+      # @param conn [Redis, Redis::PipelinedConnection]
+      # @return [String, nil, Redis::Future]
+      def read_stored_schema(conn, model_class)
+        conn.hget(schema_key, model_class.name || model_class.to_s)
       end
 
       # --- Key Helpers ---
