@@ -708,7 +708,12 @@ module Familia
           # since instance-scoped indexes require a specific scope instance
           #
           # @return [Array<Hash>] Array of index information
+          # @raise [Familia::OperationModeError] inside a transaction or
+          #   pipeline, where each membership check returns a truthy
+          #   Redis::Future and every index would be reported
           def current_indexings
+            Familia.assert_replies_available!("#{self.class}#current_indexings")
+
             return [] unless self.class.respond_to?(:indexing_relationships)
 
             memberships = []

@@ -181,7 +181,13 @@ module Familia
         # No need to override them here - use the existing infrastructure
 
         # Get comprehensive relationship status for this object
+        #
+        # @return [Hash] the identifier, participations and index memberships
+        # @raise [Familia::OperationModeError] inside a transaction or
+        #   pipeline, where the membership checks return Redis::Future objects
         def relationship_status
+          Familia.assert_replies_available!("#{self.class}#relationship_status")
+
           status = {
             identifier: identifier,
             current_participations: [],

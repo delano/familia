@@ -130,10 +130,11 @@ truthy Future would report success before the command runs.
 - Loading: `find_by_dbkey`, `find_by_identifier` (`find_by_id`, `find`,
   `load`), `load_multi`, `load_multi_by_keys`, `all`, `find_by_objid`,
   `find_by_extid`, the index finders (`find_by_*`, `find_all_by_*`,
-  `sample_from_*`), and the participation readers (`*_ids`, `*_count`,
+  `sample_from_*`), the participation readers (`*_ids`, `*_count`,
   `*_instances`, the participation predicate `<target>?` such as
   `user.project_team?`, `current_participations`, `position_in_*`,
-  `*_with_permission`, `each_*_with_permission`)
+  `*_with_permission`, `each_*_with_permission`), `current_indexings`
+  and `relationship_status`
 - Scans and maintenance: `scan_count` (`count!`), `scan_any?` (`any!`), the
   `audit_*`, `health_check`, `repair_*` and `rebuild_*` methods,
   `run_chores!`, and the `EnforceCollectionCaps` chore

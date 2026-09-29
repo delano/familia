@@ -157,6 +157,25 @@ end
 ].uniq
 #=> [Familia::OperationModeError]
 
+## current_indexings and relationship_status inside a pipeline raise OperationModeError
+# The record was never saved, so no index holds it. Each membership check
+# would be a truthy Redis::Future and report every index.
+@unsaved = FuturesRelEmployee.new(emp_id: 'fre-unsaved', email: 'nobody@example.com', dept: 'ops')
+[
+  @refused.call { @in_pipeline.call { @unsaved.current_indexings } },
+  @refused.call { @in_pipeline.call { @unsaved.relationship_status } },
+].uniq
+#=> [Familia::OperationModeError]
+
+## current_indexings inside a transaction raises OperationModeError
+@refused.call { @company.transaction { @unsaved.current_indexings } }
+#=> Familia::OperationModeError
+
+## indexed_in? inside a pipeline passes the membership Futures through
+@ret = @in_pipeline.call { [@unsaved.indexed_in?(:email_lookup), @emp.indexed_in?(:dept_index)] }
+[@ret.map(&:class).uniq, @ret.map(&:value)]
+#=> [[Redis::Future], [false, true]]
+
 ## permission queries inside a pipeline raise OperationModeError
 [
   @refused.call { @in_pipeline.call { @company.staff_with_permission(:read) } },
@@ -248,6 +267,11 @@ end
 ## outside a block: list membership and score still answer with a Boolean and a Float
 [@emp.in_futures_rel_company_queue?(@company), @emp.score_in_futures_rel_company_staff(@company).class]
 #=> [true, Float]
+
+## outside a block: current_indexings reports only the class-level indexes that hold the record
+[@unsaved.current_indexings,
+ @emp.current_indexings.select { |m| m[:scope_class] == 'class' }.map { |m| m[:index_name] }.sort]
+#=> [[], [:dept_index, :email_lookup]]
 
 ## outside a block: unstaging still runs
 [@company.unstage_members_instance(@staged), @staged.exists?]
