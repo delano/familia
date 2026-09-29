@@ -324,6 +324,43 @@ end
 @err.message.include?('#guard_unique_futures_rel_company_badge_index! cannot run inside')
 #=> true
 
+## unique index writers and claims inside a pipeline name themselves and queue nothing
+@writer_calls = {
+  'add_to_futures_rel_company_badge_index' => -> { @emp.add_to_futures_rel_company_badge_index(@company) },
+  'update_in_futures_rel_company_badge_index' => -> { @emp.update_in_futures_rel_company_badge_index(@company, 'B0') },
+  'add_to_class_email_lookup' => -> { @emp.add_to_class_email_lookup },
+  'update_in_class_email_lookup' => -> { @emp.update_in_class_email_lookup('e0@example.com') },
+  'claim_unique_email_lookup!' => -> { @emp.claim_unique_email_lookup! },
+}
+@writer_outcomes = @writer_calls.map do |name, call|
+  err = nil
+  result = FuturesRelCompany.pipelined do
+    call.call
+  rescue StandardError => e
+    err = e
+  end
+  [err.class, err.message.include?("FuturesRelEmployee##{name} cannot run inside"), result.results]
+end
+@writer_outcomes.uniq
+#=> [[Familia::OperationModeError, true, []]]
+
+## the class-level claim inside a transaction names itself too
+@err = nil
+begin
+  FuturesRelEmployee.transaction { @emp.claim_unique_email_lookup! }
+rescue Familia::OperationModeError => e
+  @err = e
+end
+@err.message.include?('FuturesRelEmployee#claim_unique_email_lookup! cannot run inside')
+#=> true
+
+## the instance-scoped add_to_* inside a transaction still writes without a check
+@emp2 = FuturesRelEmployee.new(emp_id: 'fre-2', email: 'e2@example.com', badge: 'B2', dept: 'ops', role: 'ops')
+@emp2.save
+FuturesRelCompany.transaction { @emp2.add_to_futures_rel_company_badge_index(@company) }
+@company.find_by_badge('B2').emp_id
+#=> "fre-2"
+
 ## destroy! of a record with instance-scoped indexes inside a transaction raises and keeps it
 [@refused.call { @emp.transaction { @emp.destroy! } }, @emp.exists?, @company.find_by_badge('B1').emp_id]
 #=> [Familia::OperationModeError, true, "fre-1"]

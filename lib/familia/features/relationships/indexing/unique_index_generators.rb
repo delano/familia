@@ -271,6 +271,11 @@ module Familia
               Familia.debug("[UniqueIndexGenerators] #{name} method #{method_name}")
 
               define_method(method_name) do |scope_instance|
+                # A pipeline has neither the guard's reply nor the MULTI that
+                # the transaction branch below writes into, so refuse under
+                # this method's name before the guard would.
+                Familia.assert_replies_available!("#{self.class}##{__method__}") unless Fiber[:familia_transaction]
+
                 return unless scope_instance
 
                 # Before any write: an untrackable scope produces an index
@@ -386,6 +391,11 @@ module Familia
               Familia.debug("[UniqueIndexGenerators] #{name} method #{method_name}")
 
               define_method(method_name) do |scope_instance, old_field_value = nil|
+                # In a pipeline the claim below has no verdict and the
+                # scope's transaction cannot open, so refuse under this
+                # method's name.
+                Familia.assert_replies_available!("#{self.class}##{__method__}") unless Fiber[:familia_transaction]
+
                 return unless scope_instance
 
                 _ensure_trackable_index_scope!(scope_instance)
@@ -541,6 +551,8 @@ module Familia
               #   has no value for the indexed field.
               # @raise [Familia::RecordExistsError] if another record owns the value
               define_method(:"claim_unique_#{index_name}!") do
+                Familia.assert_replies_available!("#{self.class}##{__method__}")
+
                 field_value = send(field)
                 return nil unless field_value
 
@@ -586,6 +598,11 @@ module Familia
               end
 
               define_method(:"add_to_class_#{index_name}") do
+                # Inside a transaction the HSET below re-affirms an earlier
+                # claim. A pipeline has no such path: the claim's verdict is a
+                # Future there, so refuse under this method's name.
+                Familia.assert_replies_available!("#{self.class}##{__method__}") unless Fiber[:familia_transaction]
+
                 field_value = send(field)
 
                 return unless field_value
@@ -664,6 +681,11 @@ module Familia
               end
 
               define_method(:"update_in_class_#{index_name}") do |old_field_value = nil|
+                # Same as add_to_class_*: only a transaction can re-affirm a
+                # claim, and the class-level transaction below cannot open
+                # inside a pipeline.
+                Familia.assert_replies_available!("#{self.class}##{__method__}") unless Fiber[:familia_transaction]
+
                 new_field_value = send(field)
 
                 _ensure_persisted_before_index_write!(index_name)
