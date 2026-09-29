@@ -693,7 +693,7 @@ module Familia
       def discover_instance_scoped_buckets(rel, scope_class)
         scope_prefix = "#{scope_class.prefix}#{Familia.delim}"
         marker = "#{Familia.delim}#{rel.index_name}#{Familia.delim}"
-        pattern = "#{scope_prefix}*#{marker}*"
+        pattern = "#{Familia.escape_glob(scope_prefix)}*#{Familia.escape_glob(marker)}*"
         bucket_entries = {}
 
         # Use the scope class's dbclient so multi-database setups address
@@ -1037,9 +1037,14 @@ module Familia
         target_class = rel.target_class
         results = []
 
-        # SCAN for all collection keys matching target_prefix{delim}*{delim}collection_name
-        pattern = "#{target_class.prefix}#{Familia.delim}*#{Familia.delim}#{collection_name}"
-        collection_keys = scan_matching_keys(pattern, target_class.dbclient)
+        # SCAN for all collection keys matching target_prefix{delim}*{delim}collection_name.
+        # repair_participations! removes members from the keys reported here,
+        # so keep only keys whose literal prefix and suffix match as well.
+        pattern = target_class.dbkey_pattern('*', collection_name)
+        collection_keys = scan_matching_keys(pattern, target_class.dbclient).select do |key|
+          identifier = target_class.extract_identifier_from_key(key, collection_name.to_s)
+          identifier && !identifier.empty?
+        end
 
         collection_keys.each do |collection_key|
           stale = audit_collection_key_members(
@@ -1111,7 +1116,7 @@ module Familia
       #
       def audit_single_related_field(definition)
         field_name = definition.name
-        pattern = "#{prefix}#{Familia.delim}*#{Familia.delim}#{field_name}"
+        pattern = dbkey_pattern('*', field_name)
         orphaned_keys = []
 
         # Batch SCAN results and pipeline EXISTS checks. Note we use the raw

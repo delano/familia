@@ -95,7 +95,9 @@ module Familia
       # @return [Boolean] whether to drop into pry on errors
       attr_reader :interactive
 
-      # Redis SCAN pattern for finding records
+      # Redis SCAN pattern for finding records. Defaults to the model
+      # class's scan_pattern, which escapes the class prefix, delimiter
+      # and suffix.
       # @return [String] pattern like "customer:*:object"
       attr_reader :scan_pattern
 
@@ -295,7 +297,7 @@ module Familia
 
         @total_records  = @model_class.respond_to?(:instances) ? @model_class.instances.size : 0
         @dbclient     ||= @model_class.respond_to?(:dbclient) ? @model_class.dbclient : Familia.dbclient
-        @scan_pattern ||= "#{@model_class.prefix}:*:object"
+        @scan_pattern ||= @model_class.scan_pattern
         nil
       end
 

@@ -369,13 +369,14 @@ module Familia
 
       # SCAN helper for enumerating keys matching a pattern.
       #
-      # @param filter [String] Glob filter appended to class prefix (default: '*')
+      # @param filter [String] Glob for the identifier part (default: '*').
+      #   The class prefix and suffix are escaped; see #dbkey_pattern.
       # @param batch_size [Integer] SCAN cursor count hint (default: 100)
       # @yield [String] Each matching key
       # @return [Enumerator] If no block given
       #
       def scan_keys(filter = '*', batch_size: 100, &block)
-        pattern = dbkey(filter)
+        pattern = dbkey_pattern(filter)
         return enum_for(:scan_keys, filter, batch_size: batch_size) unless block_given?
 
         cursor = "0"
