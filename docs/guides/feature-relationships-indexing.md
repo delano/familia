@@ -669,6 +669,11 @@ Index values (the object identifiers stored in hash keys and sets) are raw strin
   unless debug logging is on, while `update_in_*` skips the claim with no notice
   at all.
 
+  Inside a `pipelined` block, `add_to_*`, `update_in_*` and `claim_unique_*!`
+  raise this error for both kinds of unique index, and the message names the
+  method you called. A pipeline has no claim verdict to check and no MULTI to
+  write into, so call these outside the block.
+
   The error propagates out of the transaction block, so the MULTI is discarded
   whole: neither the index entry nor any scalar field queued alongside it is
   written. Only the stored state is rolled back, though — the in-memory record

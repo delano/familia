@@ -48,10 +48,11 @@ module Familia
 
     # Returns the number of characters in the string representation of the value.
     #
-    # @return [Integer] number of characters
+    # @return [Integer, Redis::Future] number of characters. Inside a
+    #   transaction or pipeline, the GET Future (resolves to the raw JSON).
     #
     def char_count
-      to_s&.size || 0
+      Familia.transform_reply(read_converted(&:to_s)) { |str| str&.size || 0 }
     end
     alias size char_count
     alias length char_count
@@ -61,13 +62,15 @@ module Familia
     # If a default option was provided during initialization, the default
     # is set via SETNX (set if not exists) before retrieval.
     #
-    # @return [Object] the deserialized value, or the default if not set
+    # @return [Object, Redis::Future] the deserialized value, or the default
+    #   if not set. Inside a transaction or pipeline, the GET Future (resolves
+    #   to the raw JSON).
     #
     def value
       echo :value, Familia.pretty_stack(limit: 1) if Familia.debug
       if @opts.key?(:default)
         was_set = dbclient.setnx(dbkey, serialize_value(@opts[:default]))
-        update_expiration if was_set
+        update_expiration_if_written(was_set)
       end
       deserialize_value dbclient.get(dbkey)
     end
@@ -93,12 +96,14 @@ module Familia
     # Sets the value only if the key does not already exist.
     #
     # @param val [Object] the value to store
-    # @return [Boolean] true if the key was set, false if it already existed
+    # @return [Boolean, Redis::Future] true if the key was set, false if it
+    #   already existed. Inside a transaction or pipeline, the SETNX Future
+    #   of that Boolean (the Future itself is always truthy).
     #
     def setnx(val)
       warn_if_dirty!
       ret = dbclient.setnx(dbkey, serialize_value(val))
-      update_expiration if ret
+      update_expiration_if_written(ret)
       ret
     end
 
@@ -113,43 +118,64 @@ module Familia
 
     # Checks if the value is nil (key does not exist or has no value).
     #
-    # @return [Boolean] true if the value is nil
+    # @return [Boolean, Redis::Future] true if the value is nil. Inside a
+    #   transaction or pipeline, the GET Future (resolves to the raw JSON).
     #
     def empty?
-      value.nil?
+      Familia.transform_reply(value, &:nil?)
     end
 
     # Returns the string representation of the deserialized value.
     #
-    # @return [String, nil] the deserialized value converted to string, or nil
+    # Ruby calls to_s implicitly (string interpolation, Array#join, puts) and
+    # prints the object's default "#<...>" form when it returns anything but
+    # a String, so it cannot hand back a Redis::Future. Use #value to get the
+    # GET Future inside a block.
+    #
+    # @return [String, nil] the deserialized value converted to string, or
+    #   nil
+    # @raise [Familia::OperationModeError] inside a transaction or pipeline
     #
     def to_s
-      val = deserialize_value(dbclient.get(dbkey))
-      return nil if val.nil?
+      Familia.assert_replies_available!('JsonStringKey#to_s')
 
-      val.to_s
+      read_converted(&:to_s)
     end
 
-    # Returns the integer representation of the deserialized value.
+    # Returns the integer representation of the deserialized value. A
+    # conversion method, refused inside a block like #to_s.
     #
-    # @return [Integer, nil] the deserialized value converted to integer, or nil
+    # @return [Integer, nil] the deserialized value converted to integer, or
+    #   nil
+    # @raise [Familia::OperationModeError] inside a transaction or pipeline
     #
     def to_i
-      val = deserialize_value(dbclient.get(dbkey))
-      return nil if val.nil?
+      Familia.assert_replies_available!('JsonStringKey#to_i')
 
-      val.to_i
+      read_converted(&:to_i)
     end
 
-    # Returns the float representation of the deserialized value.
+    # Returns the float representation of the deserialized value. A
+    # conversion method, refused inside a block like #to_s.
     #
     # @return [Float, nil] the deserialized value converted to float, or nil
+    # @raise [Familia::OperationModeError] inside a transaction or pipeline
     #
     def to_f
-      val = deserialize_value(dbclient.get(dbkey))
-      return nil if val.nil?
+      Familia.assert_replies_available!('JsonStringKey#to_f')
 
-      val.to_f
+      read_converted(&:to_f)
+    end
+
+    private
+
+    # Reads the value with GET (no default applied) and converts a non-nil
+    # deserialized value with the block. Passes a Redis::Future through.
+    def read_converted
+      Familia.transform_reply(dbclient.get(dbkey)) do |raw|
+        val = deserialize_value(raw)
+        val.nil? ? nil : yield(val)
+      end
     end
 
     Familia::DataType.register self, :json_string

@@ -2,8 +2,9 @@
 #
 # frozen_string_literal: true
 
-# Direct unit tests for Familia.success? and Familia.positive? —
-# the Future-aware utility methods added to Familia::Utils.
+# Direct unit tests for the Future-aware utility methods in Familia::Utils:
+# Familia.success?, Familia.positive?, Familia.transform_reply,
+# Familia.transaction_or_pipeline? and Familia.assert_replies_available!.
 #
 # These methods handle two cases:
 #   1. Concrete Integer return values from Redis commands
@@ -123,6 +124,98 @@ rescue NoMethodError => e
   e.class
 end
 #=> NoMethodError
+
+##
+## Familia.transform_reply
+##
+
+## transform_reply yields a concrete reply and returns the block result
+Familia.transform_reply(%w[a b]) { |reply| reply.map(&:upcase) }
+#=> ["A", "B"]
+
+## transform_reply returns a Future untouched and does not run the block
+@transform_ran = false
+@transform_future = nil
+Familia.dbclient.pipelined do |pipe|
+  fut = pipe.hkeys(@test_key)
+  @transform_future = Familia.transform_reply(fut) { @transform_ran = true }
+end
+[@transform_future.is_a?(Redis::Future), @transform_ran]
+#=> [true, false]
+
+## the passed-through Future resolves to the unconverted reply
+@transform_future.value
+#=> ["field"]
+
+##
+## Familia.transaction_or_pipeline? and Familia.assert_replies_available!
+##
+
+## transaction_or_pipeline? is false outside any block
+Familia.transaction_or_pipeline?
+#=> false
+
+## transaction_or_pipeline? is true inside a Familia transaction
+@inside_txn = nil
+Familia.transaction { @inside_txn = Familia.transaction_or_pipeline? }
+@inside_txn
+#=> true
+
+## transaction_or_pipeline? is true inside a Familia pipeline
+@inside_pipe = nil
+Familia.pipelined { @inside_pipe = Familia.transaction_or_pipeline? }
+@inside_pipe
+#=> true
+
+## assert_replies_available! returns nil outside any block
+Familia.assert_replies_available!('Example#op')
+#=> nil
+
+## assert_replies_available! raises OperationModeError inside a transaction
+@guard_error = nil
+Familia.transaction do
+  Familia.assert_replies_available!('Example#op')
+rescue Familia::OperationModeError => e
+  @guard_error = e
+end
+[@guard_error.class, @guard_error.message.start_with?('Example#op cannot run inside a transaction or pipeline')]
+#=> [Familia::OperationModeError, true]
+
+## assert_replies_available! raises OperationModeError inside a pipeline
+@guard_error = nil
+Familia.pipelined do
+  Familia.assert_replies_available!('Example#op')
+rescue Familia::OperationModeError => e
+  @guard_error = e
+end
+@guard_error.class
+#=> Familia::OperationModeError
+
+## assert_replies_available! with conn: checks that connection instead of the fiber
+# A separate plain client answers even inside a block; the block's own
+# connection queues.
+@plain = Familia.dbclient
+@verdicts = []
+Familia.transaction do
+  [@plain, Familia.dbclient].each do |conn|
+    Familia.assert_replies_available!('Example#op', conn: conn)
+    @verdicts << :answers
+  rescue Familia::OperationModeError
+    @verdicts << :refused
+  end
+end
+@verdicts
+#=> [:answers, :refused]
+
+## assert_replies_available! with conn: refuses a raw pipeline connection outside a Familia block
+@guard_error = nil
+Familia.dbclient.pipelined do |pipe|
+  Familia.assert_replies_available!('Example#op', conn: pipe)
+rescue Familia::OperationModeError => e
+  @guard_error = e
+end
+[Familia.transaction_or_pipeline?, @guard_error.class]
+#=> [false, Familia::OperationModeError]
 
 # Teardown
 Familia.dbclient.del(@test_key)

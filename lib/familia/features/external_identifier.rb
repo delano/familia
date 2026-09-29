@@ -189,8 +189,11 @@ module Familia
         #
         # @param extid [String] The external identifier to search for
         # @return [Object, nil] The object if found, nil otherwise
+        # @raise [Familia::OperationModeError] inside a transaction or
+        #   pipeline, where the lookup reply is not available
         #
         def find_by_extid(extid)
+          Familia.assert_replies_available!("#{self}.find_by_extid")
           return nil if extid.to_s.empty?
 
           if Familia.debug?
@@ -376,6 +379,10 @@ module Familia
       end
 
       def destroy!
+        # Refuse before queueing the lookup delete: destroy! may need
+        # replies that a transaction or pipeline cannot give.
+        assert_destroy_replies_available!
+
         # Clean up extid mapping when object is destroyed
         current_extid = instance_variable_get(:@extid)
         self.class.extid_lookup.remove_field(current_extid) if current_extid

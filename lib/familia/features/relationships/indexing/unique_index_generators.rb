@@ -147,6 +147,8 @@ module Familia
             # Generate instance query method (e.g., company.find_by_badge_number)
             actual_scope_class.class_eval do
               define_method(:"find_by_#{field}") do |provided_value|
+                Familia.assert_replies_available!("#{self.class}#find_by_#{field}")
+
                 # Use declared field accessor instead of manual instantiation
                 index_hash = send(index_name)
 
@@ -163,6 +165,8 @@ module Familia
 
               # Generate bulk query method (e.g., company.find_all_by_badge_number)
               define_method(:"find_all_by_#{field}") do |provided_ids|
+                Familia.assert_replies_available!("#{self.class}#find_all_by_#{field}")
+
                 # Convert to array and filter nil inputs before querying Redis.
                 # This prevents wasteful lookups for empty string keys (nil.to_s → "").
                 # Output may contain fewer elements than input (standard ORM behavior).
@@ -186,6 +190,8 @@ module Familia
 
               # Generate method to rebuild the unique index for this parent instance
               define_method(:"rebuild_#{index_name}") do |batch_size: 100, &progress_block|
+                Familia.assert_replies_available!("#{self.class}#rebuild_#{index_name}")
+
                 # Find the collection containing the indexed class.
                 #
                 # Strategy 1: Check if indexed_class has a participation relationship
@@ -265,6 +271,11 @@ module Familia
               Familia.debug("[UniqueIndexGenerators] #{name} method #{method_name}")
 
               define_method(method_name) do |scope_instance|
+                # A pipeline has neither the guard's reply nor the MULTI that
+                # the transaction branch below writes into, so refuse under
+                # this method's name before the guard would.
+                Familia.assert_replies_available!("#{self.class}##{__method__}") unless Fiber[:familia_transaction]
+
                 return unless scope_instance
 
                 # Before any write: an untrackable scope produces an index
@@ -326,6 +337,8 @@ module Familia
               Familia.debug("[UniqueIndexGenerators] #{name} method #{method_name}")
 
               define_method(method_name) do |scope_instance|
+                Familia.assert_replies_available!("#{self.class}##{__method__}")
+
                 return unless scope_instance
 
                 field_value = send(field)
@@ -378,6 +391,11 @@ module Familia
               Familia.debug("[UniqueIndexGenerators] #{name} method #{method_name}")
 
               define_method(method_name) do |scope_instance, old_field_value = nil|
+                # In a pipeline the claim below has no verdict and the
+                # scope's transaction cannot open, so refuse under this
+                # method's name.
+                Familia.assert_replies_available!("#{self.class}##{__method__}") unless Fiber[:familia_transaction]
+
                 return unless scope_instance
 
                 _ensure_trackable_index_scope!(scope_instance)
@@ -438,6 +456,8 @@ module Familia
           def generate_query_methods_class(field, index_name, indexed_class)
             # Generate class-level single record method
             indexed_class.define_singleton_method(:"find_by_#{field}") do |provided_id|
+              Familia.assert_replies_available!("#{self}.find_by_#{field}")
+
               index_hash = send(index_name) # access the class-level hashkey DataType
 
               # Get the identifier from the db hashkey using .get method.
@@ -455,6 +475,8 @@ module Familia
 
             # Generate class-level bulk query method
             indexed_class.define_singleton_method(:"find_all_by_#{field}") do |provided_ids|
+              Familia.assert_replies_available!("#{self}.find_all_by_#{field}")
+
               # Convert to array and filter nil inputs before querying Redis.
               # This prevents wasteful lookups for empty string keys (nil.to_s → "").
               # Output may contain fewer elements than input (standard ORM behavior).
@@ -477,6 +499,8 @@ module Familia
 
             # Generate method to rebuild the class-level index
             indexed_class.define_singleton_method(:"rebuild_#{index_name}") do |batch_size: 100, &progress_block|
+              Familia.assert_replies_available!("#{self}.rebuild_#{index_name}")
+
               if respond_to?(:instances)
                 # Strategy 1: Use instances collection (fastest)
                 index_hashkey = send(index_name)  # Get the index HashKey for serialization
@@ -527,6 +551,8 @@ module Familia
               #   has no value for the indexed field.
               # @raise [Familia::RecordExistsError] if another record owns the value
               define_method(:"claim_unique_#{index_name}!") do
+                Familia.assert_replies_available!("#{self.class}##{__method__}")
+
                 field_value = send(field)
                 return nil unless field_value
 
@@ -572,6 +598,11 @@ module Familia
               end
 
               define_method(:"add_to_class_#{index_name}") do
+                # Inside a transaction the HSET below re-affirms an earlier
+                # claim. A pipeline has no such path: the claim's verdict is a
+                # Future there, so refuse under this method's name.
+                Familia.assert_replies_available!("#{self.class}##{__method__}") unless Fiber[:familia_transaction]
+
                 field_value = send(field)
 
                 return unless field_value
@@ -618,6 +649,8 @@ module Familia
               #
               # @return [void]
               define_method(:"guard_unique_#{index_name}!") do
+                Familia.assert_replies_available!("#{self.class}#guard_unique_#{index_name}!")
+
                 field_value = send(field)
                 return unless field_value
 
@@ -648,6 +681,11 @@ module Familia
               end
 
               define_method(:"update_in_class_#{index_name}") do |old_field_value = nil|
+                # Same as add_to_class_*: only a transaction can re-affirm a
+                # claim, and the class-level transaction below cannot open
+                # inside a pipeline.
+                Familia.assert_replies_available!("#{self.class}##{__method__}") unless Fiber[:familia_transaction]
+
                 new_field_value = send(field)
 
                 _ensure_persisted_before_index_write!(index_name)

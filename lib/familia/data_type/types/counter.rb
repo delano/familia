@@ -10,11 +10,28 @@ module Familia
     end
 
     # Enhanced counter semantics
+    #
+    # @return [Boolean, Redis::Future] true when SET replied OK. Inside a
+    #   transaction or pipeline, the SET Future (resolves to "OK").
     def reset(val = 0)
-      set(val).to_s.eql?('OK')
+      Familia.transform_reply(set(val)) { |reply| reply.to_s.eql?('OK') }
     end
 
+    # Increments the counter by +amount+ only while its value is below
+    # +threshold+, atomically, server-side.
+    #
+    # @param threshold [Integer] the exclusive upper bound checked before
+    #   incrementing
+    # @param amount [Integer] the increment
+    # @return [Integer, false] the new value, or false when the counter had
+    #   already reached +threshold+
+    # @raise [Familia::OperationModeError] inside a transaction or pipeline,
+    #   where the EVAL is only queued and returns a Redis::Future. Callers
+    #   branch on the verdict (for example to enforce a rate limit), and a
+    #   truthy Future would report the increment as allowed before it runs.
     def increment_if_less_than(threshold, amount = 1)
+      Familia.assert_replies_available!('Counter#increment_if_less_than')
+
       lua = <<~LUA
         local current = tonumber(redis.call('GET', KEYS[1]) or '0')
         if current < tonumber(ARGV[1]) then
@@ -40,8 +57,10 @@ module Familia
       super(val.to_i)
     end
 
+    # @return [Integer, Redis::Future] the counter value. Inside a
+    #   transaction or pipeline, the GET Future (resolves to the raw value).
     def value
-      super.to_i
+      Familia.transform_reply(super, &:to_i)
     end
   end
 end

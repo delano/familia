@@ -270,6 +270,25 @@ module Familia
       emit_dirty_warning(mode, message, dirty)
     end
 
+    # Refreshes the TTL after a conditional write (HSETNX, SETNX, LINSERT,
+    # RPUSHX, ...) when +written+ says the write took effect.
+    #
+    # Inside a transaction or pipeline the write's reply is a Redis::Future,
+    # so whether it took effect is unknown until the block completes. The
+    # Future counts as written and the refresh is queued with the write: a
+    # write that creates the key (HSETNX, SETNX) must not leave it without
+    # its TTL. When the queued write turns out to do nothing, the refresh
+    # only resets the TTL of a key that already exists, and a missing key
+    # stays missing.
+    #
+    # @param written [Boolean, nil, Redis::Future] whether the write took
+    #   effect, or its Future
+    # @return [void]
+    def update_expiration_if_written(written)
+      update_expiration if written.is_a?(Redis::Future) || written
+    end
+    private :update_expiration_if_written
+
     # Valid +dirty_write_warnings+ modes, matching the class-level and global
     # settings of the same name.
     DIRTY_WRITE_MODES = %i[strict warn once off].freeze
@@ -408,7 +427,7 @@ module Familia
     #   no hash key in the database.
     #
     def parent_new_record?
-      return false if Fiber[:familia_transaction] || Fiber[:familia_pipeline]
+      return false if Familia.transaction_or_pipeline?
       return false unless @parent_ref.respond_to?(:exists?)
 
       !@parent_ref.exists?(check_size: false)
@@ -456,6 +475,21 @@ module Familia
 
       # Fall back to class-level default
       self.class.default_expiration
+    end
+
+    # JSON-ready contents of the key, read from the database (see
+    # Familia::Base#as_json). JSON generation calls as_json and to_json
+    # implicitly and cannot serialize a Redis::Future, so both refuse to run
+    # inside a block. Use the type's reader (#value, #members, #hgetall) to
+    # get the command's Future there.
+    #
+    # @param options [Hash, nil] ignored, accepted for the JSON protocol
+    # @return [Object] the stored contents
+    # @raise [Familia::OperationModeError] inside a transaction or pipeline
+    def as_json(options = nil)
+      Familia.assert_replies_available!("#{self.class}#as_json")
+
+      super
     end
 
     include Settings

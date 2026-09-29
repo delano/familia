@@ -40,6 +40,29 @@ module Familia
         module ThroughModelOperations
           module_function
 
+          # Resolve the through class of a generated add or remove method.
+          #
+          # Those methods load the through model and then save or destroy
+          # it, which needs command replies. When the participation has a
+          # through model, this refuses inside a transaction or pipeline
+          # before the caller queues anything, and the error names the
+          # generated method.
+          #
+          # @param through [Symbol, String, Class, nil] the participation's
+          #   through option
+          # @param owner [Familia::Horreum] the receiver of the generated method
+          # @param method_name [Symbol] the generated method, for the error
+          # @return [Class, nil] the through class, or nil without one
+          # @raise [Familia::OperationModeError] inside a transaction or
+          #   pipeline when +through+ is set
+          #
+          def resolve_through_class(through, owner, method_name)
+            return nil unless through
+
+            Familia.assert_replies_available!("#{owner.class}##{method_name}")
+            Familia.resolve_class(through)
+          end
+
           # Build a deterministic key for the through model
           #
           # The key format ensures uniqueness and allows direct lookup:

@@ -144,7 +144,10 @@ module Familia
             #       []  # Return empty array or other fallback
             #     end
             #
+            # Each generated reader refuses inside a transaction or pipeline
+            # under its own name, before the helper it delegates to would.
             participant_class.define_method("#{base_name}_instances") do
+              Familia.assert_replies_available!("#{self.class}##{__method__}")
               ids = participating_ids_for_target(target_class, collections_filter)
               # Use load_multi for Horreum objects (stored as Redis hashes)
               target_class.load_multi(ids).compact
@@ -157,6 +160,7 @@ module Familia
             # @note Database errors (connection, timeout) will bubble up to caller.
             #
             participant_class.define_method("#{base_name}_ids") do
+              Familia.assert_replies_available!("#{self.class}##{__method__}")
               participating_ids_for_target(target_class, collections_filter)
             end
 
@@ -167,6 +171,7 @@ module Familia
             # @note Database errors (connection, timeout) will bubble up to caller.
             #
             participant_class.define_method("#{base_name}?") do
+              Familia.assert_replies_available!("#{self.class}##{__method__}")
               participating_in_target?(target_class, collections_filter)
             end
 
@@ -177,12 +182,18 @@ module Familia
             # @note Database errors (connection, timeout) will bubble up to caller.
             #
             participant_class.define_method("#{base_name}_count") do
+              Familia.assert_replies_available!("#{self.class}##{__method__}")
               participating_ids_for_target(target_class, collections_filter).size
             end
           end
 
           # Build method to check membership in target's collection
           # Creates: domain.in_customer_domains?(customer)
+          #
+          # The generated method returns a Boolean. Inside a transaction or
+          # pipeline it returns the membership command's Redis::Future, which
+          # is always truthy: the ZRANK or LPOS index (nil when absent) for a
+          # sorted-set or list collection, and the SISMEMBER Boolean for a set.
           def self.build_membership_check(participant_class, target_name, collection_name, _type)
             method_name = "in_#{target_name}_#{collection_name}?"
 
@@ -201,6 +212,9 @@ module Familia
             method_name = "add_to_#{target_name}_#{collection_name}"
 
             participant_class.define_method(method_name) do |target_instance, score = nil, through_attrs: {}|
+              # Resolve through class if specified. It refuses inside a
+              # transaction or pipeline before anything is queued.
+              through_class = Participation::ThroughModelOperations.resolve_through_class(through, self, __method__)
               return unless target_instance&.identifier
 
               # Use Horreum's DataType accessor instead of manual creation
@@ -210,9 +224,6 @@ module Familia
               if type == :sorted_set && score.nil?
                 score = calculate_participation_score(target_instance.class, collection_name)
               end
-
-              # Resolve through class if specified
-              through_class = through ? Familia.resolve_class(through) : nil
 
               # Use transaction for atomicity between collection add and reverse index tracking
               # All operations use Horreum's DataType methods (not direct Redis calls)
@@ -261,13 +272,13 @@ module Familia
             method_name = "remove_from_#{target_name}_#{collection_name}"
 
             participant_class.define_method(method_name) do |target_instance|
+              # Resolve through class if specified. It refuses inside a
+              # transaction or pipeline before anything is queued.
+              through_class = Participation::ThroughModelOperations.resolve_through_class(through, self, __method__)
               return unless target_instance&.identifier
 
               # Use Horreum's DataType accessor instead of manual creation
               collection = target_instance.send(collection_name)
-
-              # Resolve through class if specified
-              through_class = through ? Familia.resolve_class(through) : nil
 
               # Use transaction for atomicity between collection remove and reverse index untracking
               # All operations use Horreum's DataType methods (not direct Redis calls)
@@ -295,6 +306,10 @@ module Familia
           # Build score-related methods for sorted sets
           # Creates: domain.score_in_customer_domains(customer)
           #
+          # The generated method returns the Float score, or nil when the
+          # participant is not a member. Inside a transaction or pipeline it
+          # returns the ZSCORE Redis::Future, which resolves to the same value.
+          #
           # Note: Score updates use DataType API directly:
           #   customer.domains.add(domain, new_score, xx: true)
           def self.build_score_methods(participant_class, target_name, collection_name)
@@ -317,6 +332,7 @@ module Familia
             method_name = "position_in_#{target_name}_#{collection_name}"
 
             participant_class.define_method(method_name) do |target_instance|
+              Familia.assert_replies_available!("#{self.class}##{__method__}")
               return nil unless target_instance&.identifier
 
               # Use Horreum's DataType accessor instead of manual key construction

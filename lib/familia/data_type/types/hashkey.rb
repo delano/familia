@@ -76,7 +76,7 @@ module Familia
     # @see #release_field The matching ownership-checked delete.
     #
     def claim_field(field, val)
-      if Fiber[:familia_transaction] || Fiber[:familia_pipeline]
+      if Familia.transaction_or_pipeline?
         raise Familia::OperationModeError, <<~ERROR_MESSAGE
           Cannot claim_field inside a transaction or pipeline: EVAL returns a Future there, so the claim's verdict cannot be checked. Claim before opening the MULTI (see ADR-0002).
         ERROR_MESSAGE
@@ -131,8 +131,10 @@ module Familia
     alias length field_count
     alias count field_count
 
+    # @return [Boolean, Redis::Future] whether the hash has no fields. Inside
+    #   a transaction or pipeline, the HLEN Future (resolves to the count).
     def empty?
-      field_count.zero?
+      Familia.transform_reply(field_count, &:zero?)
     end
 
     # +return+ [Integer] Returns 1 if the field is new and added, 0 if the
@@ -158,12 +160,21 @@ module Familia
     alias store []=
     alias add []=
 
+    # @param field [String, Symbol] the field name
+    # @return [Object, nil, Redis::Future] the deserialized value, or nil when
+    #   the field is missing. Inside a transaction or pipeline, the HGET
+    #   Future (resolves to the stored value, still serialized).
     def [](field)
       deserialize_value dbclient.hget(dbkey, field.to_s)
     end
     alias get []
 
+    # @raise [IndexError] when the field is missing and no default is given
+    # @raise [Familia::OperationModeError] inside a transaction or pipeline,
+    #   where the missing-field check cannot see the reply
     def fetch(field, default = nil)
+      Familia.assert_replies_available!('HashKey#fetch')
+
       ret = self[field.to_s]
       if ret.nil?
         raise IndexError, "No such index for: #{field}" if default.nil?
@@ -178,13 +189,21 @@ module Familia
       dbclient.hkeys dbkey
     end
 
+    # @return [Array, Redis::Future] Deserialized values. Inside a
+    #   transaction or pipeline, the HVALS Future (resolves to the raw
+    #   values).
     def values
-      dbclient.hvals(dbkey).map { |v| deserialize_value v }
+      Familia.transform_reply(dbclient.hvals(dbkey)) do |vals|
+        vals.map { |v| deserialize_value v }
+      end
     end
 
+    # @return [Hash, Redis::Future] Fields mapped to deserialized values.
+    #   Inside a transaction or pipeline, the HGETALL Future (resolves to the
+    #   raw Hash).
     def hgetall
-      dbclient.hgetall(dbkey).transform_values do |v|
-        deserialize_value v
+      Familia.transform_reply(dbclient.hgetall(dbkey)) do |hsh|
+        hsh.transform_values { |v| deserialize_value v }
       end
     end
     alias all hgetall
@@ -193,11 +212,13 @@ module Familia
     # If field already exists, this operation has no effect.
     # @param field [String] The field name
     # @param val [Object] The value to set
-    # @return [Integer] 1 if field is a new field and value was set, 0 if field already exists
+    # @return [Boolean, Redis::Future] true if field is a new field and value
+    #   was set, false if field already exists (redis-rb converts the 1/0
+    #   reply). Inside a transaction or pipeline, the Future of that Boolean.
     def hsetnx(field, val)
       warn_if_dirty!
       ret = dbclient.hsetnx dbkey, field.to_s, serialize_value(val)
-      update_expiration if ret == 1
+      update_expiration_if_written(ret)
       ret
     rescue TypeError => e
       Familia.error "[hsetnx] #{e.message}"
@@ -208,6 +229,10 @@ module Familia
       raise e.class, msg
     end
 
+    # @param field [String, Symbol] the field name
+    # @return [Boolean, Redis::Future] whether the field exists. Inside a
+    #   transaction or pipeline, the HEXISTS Future (resolves to true or
+    #   false; the Future itself is always truthy).
     def key?(field)
       dbclient.hexists dbkey, field.to_s
     end
@@ -227,14 +252,25 @@ module Familia
     alias remove remove_field
     alias remove_element remove_field
 
+    # Increments the integer value of a hash field.
+    #
+    # @param field [String, Symbol] The field name
+    # @param by [Integer] The amount to increment by (can be negative)
+    # @return [Integer, Redis::Future] The new value. HINCRBY replies with an
+    #   Integer, so no conversion is needed. Inside a transaction or pipeline,
+    #   the Future of that Integer.
     def increment(field, by = 1)
-      ret = dbclient.hincrby(dbkey, field.to_s, by).to_i
+      ret = dbclient.hincrby(dbkey, field.to_s, by)
       update_expiration
       ret
     end
     alias incr increment
     alias incrby increment
 
+    # @param field [String, Symbol] The field name
+    # @param by [Integer] The amount to decrement by
+    # @return [Integer, Redis::Future] The new value. Inside a transaction or
+    #   pipeline, the HINCRBY Future of that Integer.
     def decrement(field, by = 1)
       increment field, -by
     end
@@ -253,10 +289,14 @@ module Familia
     end
     alias merge! update
 
+    # @return [Array, Redis::Future] Deserialized values of +fields+, with
+    #   missing fields dropped. Inside a transaction or pipeline, the HMGET
+    #   Future (resolves to the raw values, with nil for missing fields).
     def values_at *fields
       string_fields = fields.flatten.compact.map(&:to_s)
-      elements = dbclient.hmget(dbkey, *string_fields)
-      deserialize_values(*elements)
+      Familia.transform_reply(dbclient.hmget(dbkey, *string_fields)) do |elements|
+        deserialize_values(*elements)
+      end
     end
 
     # Iterates over field-value pairs in the hash.
@@ -283,6 +323,8 @@ module Familia
     def each(matching: nil, batch_size: 100, &block)
       return to_enum(:each, matching: matching, batch_size: batch_size) unless block
 
+      Familia.assert_replies_available!('HashKey#each')
+
       cursor = 0
       loop do
         new_cursor, pairs = scan(cursor, match: matching, count: batch_size)
@@ -300,8 +342,9 @@ module Familia
     # @param cursor [Integer] The cursor position to start from (0 for initial call)
     # @param match [String, nil] Optional glob-style pattern to filter field names
     # @param count [Integer, nil] Optional hint for number of elements to return per call
-    # @return [Array<Integer, Hash>] A two-element array: [new_cursor, {field => value, ...}]
-    #   When new_cursor is 0, iteration is complete.
+    # @return [Array<Integer, Hash>, Redis::Future] A two-element array:
+    #   [new_cursor, {field => value, ...}]. When new_cursor is 0, iteration is
+    #   complete. Inside a transaction or pipeline, the HSCAN Future.
     #
     # @example Basic iteration
     #   cursor = 0
@@ -318,12 +361,12 @@ module Familia
       opts[:match] = match if match
       opts[:count] = count if count
 
-      new_cursor, pairs = dbclient.hscan(dbkey, cursor, **opts)
+      Familia.transform_reply(dbclient.hscan(dbkey, cursor, **opts)) do |(new_cursor, pairs)|
+        # pairs is an array of [field, value] pairs, convert to hash with deserialization
+        result_hash = pairs.to_h.transform_values { |v| deserialize_value(v) }
 
-      # pairs is an array of [field, value] pairs, convert to hash with deserialization
-      result_hash = pairs.to_h.transform_values { |v| deserialize_value(v) }
-
-      [new_cursor.to_i, result_hash]
+        [new_cursor.to_i, result_hash]
+      end
     end
     alias hscan scan
 
@@ -331,13 +374,15 @@ module Familia
     #
     # @param field [String] The field name
     # @param by [Float, Integer] The amount to increment by (can be negative)
-    # @return [Float] The new value after incrementing
+    # @return [Float, Redis::Future] The new value after incrementing.
+    #   redis-rb already converts the HINCRBYFLOAT reply to a Float. Inside a
+    #   transaction or pipeline, the Future of that Float.
     #
     # @example
     #   my_hash.incrbyfloat('temperature', 0.5)  #=> 23.5
     #   my_hash.incrbyfloat('temperature', -1.2) #=> 22.3
     def incrbyfloat(field, by)
-      ret = dbclient.hincrbyfloat(dbkey, field.to_s, by).to_f
+      ret = dbclient.hincrbyfloat(dbkey, field.to_s, by)
       update_expiration
       ret
     end
@@ -361,10 +406,13 @@ module Familia
     # @param count [Integer, nil] Number of fields to return. If nil, returns a single field.
     #   If positive, returns distinct fields. If negative, allows duplicates.
     # @param withvalues [Boolean] If true, returns fields with their values
-    # @return [String, Array<String>, Array<Array>] Depending on arguments:
+    # @return [String, Array<String>, Array<Array>, Redis::Future] Depending
+    #   on arguments:
     #   - No count: single field name (or nil if hash is empty)
     #   - With count: array of field names
     #   - With count and withvalues: array of [field, value] pairs
+    #   Inside a transaction or pipeline, the HRANDFIELD Future (resolves to
+    #   the same shape, with values still serialized).
     #
     # @example Get a single random field
     #   my_hash.randfield  #=> "some_field"
@@ -378,10 +426,11 @@ module Familia
       if count.nil?
         dbclient.hrandfield(dbkey)
       elsif withvalues
-        pairs = dbclient.hrandfield(dbkey, count, withvalues: true)
-        # pairs is array of [field, value, field, value, ...]
-        # Convert to array of [field, deserialized_value] pairs
-        pairs.each_slice(2).map { |field, val| [field, deserialize_value(val)] }
+        # redis-rb already groups the flat WITHVALUES reply into
+        # [field, value] pairs, so only the values need deserializing.
+        Familia.transform_reply(dbclient.hrandfield(dbkey, count, withvalues: true)) do |pairs|
+          pairs.map { |field, val| [field, deserialize_value(val)] }
+        end
       else
         dbclient.hrandfield(dbkey, count)
       end
@@ -589,6 +638,8 @@ module Familia
     #
     # @raise [Familia::KeyNotFoundError] If the dbkey for this hash no
     #   longer exists. Time travelers beware!
+    # @raise [Familia::OperationModeError] inside a transaction or pipeline,
+    #   where the fields read back are not available until the block completes
     #
     # @example Basic usage
     #   my_hash.refresh!  # ZAP! Fresh data loaded
@@ -600,6 +651,8 @@ module Familia
     #     puts "Oops! Our hash seems to have vanished into the Database void!"
     #   end
     def refresh!
+      Familia.assert_replies_available!('HashKey#refresh!')
+
       Familia.trace :REFRESH, nil, self.class.uri if Familia.debug?
       fields = hgetall
       # A hash with no fields does not exist, so an empty reply means the

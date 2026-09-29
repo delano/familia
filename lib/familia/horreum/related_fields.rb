@@ -223,8 +223,13 @@ module Familia
         define_method :"#{name}=" do |val|
           send(name).replace val
         end
+        # Whether the field holds anything. Inside a transaction or
+        # pipeline, empty? returns the command's Redis::Future, and a bare
+        # negation would answer false through BasicObject#!, so the Future
+        # is passed through (it resolves to what the field's empty? Future
+        # resolves to, such as the count).
         define_method :"#{name}?" do
-          !send(name).empty?
+          Familia.transform_reply(send(name).empty?, &:!)
         end
 
         # Check-and-replace under the same lock initialize_relatives freezes
@@ -272,8 +277,9 @@ module Familia
         define_singleton_method :"#{name}=" do |v|
           send(name).replace v
         end
+        # See attach_instance_related_field for the Future pass-through.
         define_singleton_method :"#{name}?" do
-          !send(name).empty?
+          Familia.transform_reply(send(name).empty?, &:!)
         end
 
         # Check-and-replace under the lock materialize_class_related_field
