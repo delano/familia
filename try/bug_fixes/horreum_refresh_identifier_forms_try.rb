@@ -10,13 +10,14 @@
 # There dbkey would raise Familia::NoIdentifier, and with a Proc that reads
 # objid the lazy objid getter would generate a new value that the objid
 # setter then removes from objid_lookup with HDEL. So refresh! deserializes
-# the stored values before the reset, while the fields still name the key it
-# read, and assigns them with initialize_with_keyword_args, not through
-# naive_refresh. The cases below pin that the fields are restored, that only
-# HGETALL is sent, and that the log entry for a value that is not JSON names
-# the key refresh! read. Before refresh! reset the fields, it computed the
-# identifier only while they were intact, and these identifier forms
-# refreshed without error.
+# the stored values before the reset and assigns them with
+# initialize_with_keyword_args, not through naive_refresh, and a value that
+# is not JSON is logged without computing the identifier (see
+# try/edge_cases/legacy_data_detection/deserialization_log_identifier_try.rb).
+# The refresh cases below pin that the fields are restored, that only HGETALL
+# is sent, and that the log entry names the key refresh! read. Before
+# refresh! reset the fields, it computed the identifier only while they were
+# intact, and these identifier forms refreshed without error.
 #
 # naive_refresh interpolated dbkey into its debug message before assigning
 # anything, even with debug logging off. It raised Familia::NoIdentifier on
@@ -153,6 +154,14 @@ end
 end
 [@sent, @naive_objid.objid]
 #=> [{}, 'idform-naive-objid']
+
+## naive_refresh with a value that is not JSON on a Proc(objid) object with no objid yet sends nothing
+@naive_legacy = RefreshIdentifierFormsTry::ObjidRecord.allocate
+@sent = RefreshIdentifierFormsTry.commands_during do
+  @naive_legacy.naive_refresh(objid: '"idform-naive-legacy"', note: 'plain-legacy')
+end
+[@sent, @naive_legacy.objid, @naive_legacy.note]
+#=> [{}, 'idform-naive-legacy', 'plain-legacy']
 
 delete_test_dbkeys(
   RefreshIdentifierFormsTry::ProcRecord,

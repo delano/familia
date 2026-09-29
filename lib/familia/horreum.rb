@@ -465,14 +465,16 @@ module Familia
     # hook; the public constructor (initialize_with_keyword_args) never is.
     #
     # Kept apart from the assignment so {Familia::Horreum::Persistence#refresh!}
-    # can deserialize while the object still has the identifier of the key it
-    # read. A value that fails to parse is logged with that dbkey.
+    # can deserialize before it clears the fields it is about to assign.
     #
     # @param fields [Hash] field names to stored (serialized) values
+    # @param dbkey [String, nil] the key the values were read from, named in
+    #   the log entry for a value that is not JSON
+    #   (see {Familia::Horreum::Serialization#deserialize_value})
     # @return [Hash] the same keys with deserialized values
-    def deserialize_stored_fields(fields)
+    def deserialize_stored_fields(fields, dbkey: nil)
       fields.each_with_object({}) do |(field_name, value), hsh|
-        deserialized = deserialize_value(value, field_name: field_name)
+        deserialized = deserialize_value(value, field_name: field_name, dbkey: dbkey)
         field_type = self.class.field_types[field_name.to_sym]
         deserialized = field_type.deserialize(deserialized, self) if field_type&.persistent?
         hsh[field_name] = deserialized
@@ -492,8 +494,12 @@ module Familia
     # setters, with the current values as the old ones. Fields it is not given
     # keep their values.
     #
-    # Its debug message does not compute the identifier, so it also works on
-    # an object whose identifier cannot be computed yet.
+    # It does not compute the identifier before it assigns the fields, and the
+    # log entry for a value that is not JSON does not compute it either. So it
+    # also works on an object whose identifier comes from the fields it is
+    # given. The setters run as usual. Encrypted fields are assigned after the
+    # others, so an encrypted field's setter that has to encrypt a value, and
+    # computes the identifier for that, sees the other fields assigned.
     #
     # @see #refresh!
     #

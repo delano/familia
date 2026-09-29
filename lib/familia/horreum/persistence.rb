@@ -1009,11 +1009,9 @@ module Familia
 
         Familia.debug "[refresh!] #{self.class} #{dbkey} fields:#{fields.keys}"
 
-        # Deserialize while the fields still name the key that was read. A
-        # stored value that fails to parse is logged with dbkey, and computing
-        # dbkey after the reset below would evaluate the identifier on nil
-        # fields.
-        values = deserialize_stored_fields(fields)
+        # Deserialize before the reset below, and name the key that was read
+        # in the log entry for a value that is not JSON.
+        values = deserialize_stored_fields(fields, dbkey: dbkey)
 
         # The reset and the assignment succeed or fail together. A setter can
         # raise on a stored value, for example an encrypted field whose
