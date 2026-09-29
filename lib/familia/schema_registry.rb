@@ -59,6 +59,8 @@ module Familia
       # @param klass_or_name [Class, String] the class whose schema to use
       # @param data [Hash] the data to validate
       # @return [Hash] { valid: Boolean, errors: Array }
+      # @raise [SchemaValidatorLoadError] if json_schemer is installed but
+      #   fails to load
       def validate(klass_or_name, data)
         schema = schema_for(klass_or_name)
         return { valid: true, errors: [] } unless schema
@@ -69,6 +71,8 @@ module Familia
 
       # Validate data or raise SchemaValidationError
       # @raise [SchemaValidationError] if validation fails
+      # @raise [SchemaValidatorLoadError] if json_schemer is installed but
+      #   fails to load
       def validate!(klass_or_name, data)
         result = validate(klass_or_name, data)
         raise SchemaValidationError.new(result[:errors]) unless result[:valid]
@@ -125,9 +129,14 @@ module Familia
           rescue LoadError => e
             # Only json_schemer itself being absent disables validation. A
             # LoadError for another path means json_schemer is installed but
-            # one of its own requires failed, so re-raise it rather than
-            # report a missing gem and skip validation.
-            raise unless e.path == 'json_schemer'
+            # one of its own requires failed. That must not skip validation,
+            # and it is raised as a StandardError so that callers which
+            # rescue StandardError, such as Migration::Runner, handle it.
+            # Ruby keeps the LoadError as the new error's cause.
+            unless e.path == 'json_schemer'
+              raise SchemaValidatorLoadError,
+                    "json_schemer is installed but failed to load, so schema validation cannot run: #{e.message}"
+            end
 
             warn '[Familia] json_schemer gem not installed. Schema validation disabled.'
             warn "[Familia] Add `gem 'json_schemer'` to your Gemfile to enable."
@@ -157,6 +166,12 @@ module Familia
       []
     end
   end
+
+  # Raised when schema validation cannot run because json_schemer is
+  # installed but fails to load, for example because the bundle lacks one of
+  # its dependencies. The LoadError is available as #cause. When json_schemer
+  # itself is absent, SchemaRegistry warns and disables validation instead.
+  class SchemaValidatorLoadError < Problem; end
 
   # Error raised when schema validation fails
   class SchemaValidationError < HorreumError

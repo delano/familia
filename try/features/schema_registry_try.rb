@@ -189,7 +189,7 @@ result[:valid]
 # The next two cases run in a fresh process, because json_schemer is
 # already loaded here and a second require of it does nothing.
 
-## A LoadError raised inside json_schemer propagates instead of disabling validation
+## A LoadError raised inside json_schemer raises SchemaValidatorLoadError instead of disabling validation
 @broken_gem_dir = Dir.mktmpdir('familia_broken_json_schemer')
 File.write(File.join(@broken_gem_dir, 'json_schemer.rb'), "require 'familia_probe_missing_dependency'\n")
 run_fresh_ruby(<<~RUBY, load_path: [@broken_gem_dir])
@@ -198,11 +198,14 @@ run_fresh_ruby(<<~RUBY, load_path: [@broken_gem_dir])
   begin
     result = Familia::SchemaRegistry.validate('Customer', {})
     puts "validated, valid: \#{result[:valid]}"
+  rescue StandardError => e
+    puts e.class
+    puts "cause: \#{e.cause.class} \#{e.cause.path}"
   rescue LoadError => e
     puts "LoadError: \#{e.path}"
   end
 RUBY
-#=> ['LoadError: familia_probe_missing_dependency']
+#=> ['Familia::SchemaValidatorLoadError', 'cause: LoadError familia_probe_missing_dependency']
 
 ## Without json_schemer on the load path, validation warns and is disabled
 run_fresh_ruby(<<~RUBY)
