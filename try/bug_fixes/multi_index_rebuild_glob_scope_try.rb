@@ -10,7 +10,9 @@
 # as wildcards. Rebuilding the index of company "c-*" deleted the index
 # sets of companies "c-1" and "c-2". The literal part of the pattern is
 # now escaped, and a matched key is deleted only if it starts with the
-# literal prefix and holds a set.
+# literal prefix and holds a set. Before it deletes anything, the rebuild
+# also checks that every bucket key it will write holds a set or does not
+# exist, and raises Familia::IndexBucketConflictError otherwise.
 
 require_relative '../support/helpers/test_helpers'
 
@@ -40,6 +42,7 @@ class ::GlobRoleUser < Familia::Horreum
   field :uid
   field :role
   list :notes
+  list :drafts
   sorted_set :scores
   multi_index :role, :role_index
 end
@@ -143,6 +146,36 @@ end
 ]
 #=> [1, [["gsb-0"], ["gsb-1"]]]
 
+## a rebuild raises before it deletes anything when a key it must write holds another type
+@glob_company = @companies['c-*']
+@eng_employee = GlobScopeEmployee.new(emp_id: 'gse-eng', department: 'eng')
+@eng_employee.save
+@eng_employee.add_to_glob_scope_company_employees(@glob_company)
+@eng_employee.add_to_glob_scope_company_dept_index(@glob_company)
+@ops_key = @bucket_key.call('c-*')
+@dbclient.del(@ops_key)
+@dbclient.zadd(@ops_key, 1, 'gse-0')
+begin
+  @glob_company.rebuild_dept_index(batch_size: 1)
+rescue Familia::IndexBucketConflictError => e
+  @conflict = e
+end
+[@conflict&.conflicts, @glob_company.dept_index_for('eng').members, @dbclient.type(@ops_key)]
+#=> [{ "glob_scope_company:c-*:dept_index:ops" => "zset" }, ["gse-eng"], "zset"]
+
+## the error message names each conflicting key and its type, and what the rebuild needs
+@conflict.message
+#=> 'Multi-index bucket keys hold a type other than set: "glob_scope_company:c-*:dept_index:ops" (zset). The rebuild stopped before it deleted or wrote anything. It can run once each of these keys holds a set or no longer exists.'
+
+## the stopped rebuild left the rival scopes' sets alone
+[@dbclient.smembers(@bucket_key.call('c-1')), @dbclient.smembers(@bucket_key.call('c-2'))]
+#=> [["gse-6"], ["gse-7"]]
+
+## once the conflicting key is gone the rebuild completes
+@dbclient.del(@ops_key)
+[@glob_company.rebuild_dept_index, @glob_company.dept_index_for('ops').members, @glob_company.dept_index_for('eng').members]
+#=> [2, ["gse-0"], ["gse-eng"]]
+
 ## the class-level rebuild of a glob-prefixed class leaves the rival class's sets alone
 GlobRoleUser.new(uid: 'gru-1', role: 'admin').save
 GlobRoleRival.new(uid: 'grr-1', role: 'admin').save
@@ -187,6 +220,41 @@ GlobRoleUser.health_check.multi_indexes.map { |result| result.values_at(:index_n
 ## repair_all! completes and keeps the record named after the index
 [GlobRoleUser.repair_all!.values_at(:status, :errors), GlobRoleUser.exists?('role_index')]
 #=> [[:ok, {}], true]
+
+## a class-level rebuild raises before it deletes anything when a live value's key is a record's list
+@role_client = GlobRoleUser.dbclient
+GlobRoleUser.new(uid: 'gru-drafts', role: 'drafts').save
+@role_client.del(GlobRoleUser.role_index_for('drafts').dbkey)
+@victim.drafts.push('draft 1')
+begin
+  GlobRoleUser.rebuild_role_index
+rescue Familia::IndexBucketConflictError => e
+  @class_conflict = e
+end
+[
+  @class_conflict&.conflicts,
+  @victim.drafts.members,
+  GlobRoleUser.role_index_for('admin').members,
+  GlobRoleUser.role_index_for('member').members,
+]
+#=> [{ "glob_role?:role_index:drafts" => "list" }, ["draft 1"], ["gru-1"], ["role_index"]]
+
+## repair_multi_indexes! raises the same conflict error and keeps the list
+begin
+  GlobRoleUser.repair_multi_indexes!
+rescue Familia::IndexBucketConflictError => e
+  [e.conflicts, @victim.drafts.members, GlobRoleUser.role_index_for('admin').members]
+end
+#=> [{ "glob_role?:role_index:drafts" => "list" }, ["draft 1"], ["gru-1"]]
+
+## repair_all! reports the conflict as a failed multi-index stage and keeps the list
+@repair_result = GlobRoleUser.repair_all!
+[
+  @repair_result[:status],
+  @repair_result[:errors].transform_values { |error| error[:class] },
+  @victim.drafts.members,
+]
+#=> [:partial_failure, { multi_indexes: "Familia::IndexBucketConflictError" }, ["draft 1"]]
 
 delete_test_dbkeys('glob_scope_company:*', 'glob_scope_employee:*')
 delete_test_dbkeys('glob_role\\?:*', 'glob_roleX:*')

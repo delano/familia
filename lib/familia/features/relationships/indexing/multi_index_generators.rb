@@ -37,6 +37,10 @@ module Familia
           # build each bucket as a Familia::UnsortedSet.
           BUCKET_KEY_TYPE = 'set'
 
+          # Types a key may hold before the rebuild writes it as a bucket:
+          # a set, or "none" when the key does not exist.
+          WRITABLE_BUCKET_KEY_TYPES = [BUCKET_KEY_TYPE, 'none'].freeze
+
           # Validates a field value for use in index key construction.
           # This is for data quality and debugging clarity. It does not make
           # values safe to put in a key pattern: code that builds a SCAN or
@@ -137,6 +141,11 @@ module Familia
           # +bucket_prefix+, including buckets for field values that no
           # object holds any more.
           #
+          # +live_bucket_keys+ are the keys the rebuild writes after this
+          # returns. They are checked with .check_live_bucket_keys! first,
+          # so a key the rebuild could not write stops it before any key is
+          # deleted.
+          #
           # Only the keys .each_index_bucket_slice yields are deleted. A key
           # under the prefix that holds another type is left alone. It was
           # not written as a bucket by this version, and it may belong to a
@@ -145,11 +154,14 @@ module Familia
           #
           # @param client [Redis] connection that owns the buckets
           # @param bucket_prefix [String] literal prefix from .bucket_key_prefix
-          # @param batch_size [Integer] SCAN count hint and DEL batch size
+          # @param live_bucket_keys [Array<String>] keys the rebuild writes next
+          # @param batch_size [Integer] SCAN count hint, DEL and TYPE batch size
           # @yieldparam key [String] a bucket key that was deleted
           # @yieldparam cleared [Integer] buckets deleted so far
           # @return [Integer] number of bucket keys deleted
-          def clear_index_buckets(client, bucket_prefix, batch_size: 100, &on_delete)
+          # @raise [Familia::IndexBucketConflictError] see .check_live_bucket_keys!
+          def clear_index_buckets(client, bucket_prefix, live_bucket_keys:, batch_size: 100, &on_delete)
+            check_live_bucket_keys!(client, live_bucket_keys, batch_size: batch_size)
             cleared = 0
 
             each_index_bucket_slice(client, bucket_prefix, batch_size: batch_size) do |buckets|
@@ -161,6 +173,40 @@ module Familia
             end
 
             cleared
+          end
+
+          # Raises Familia::IndexBucketConflictError when one of
+          # +bucket_keys+ holds a type other than a set.
+          #
+          # After the clearing phase, the rebuild adds every object to the
+          # bucket of its field value. A key of another type there is not a
+          # bucket and may be another record's data, such as the list of a
+          # record named after a class-level index when a live field value
+          # equals that list's name. SADD into it raises WRONGTYPE, which
+          # would stop the rebuild after clearing had already emptied the
+          # other buckets, and deleting it could destroy that data. So the
+          # rebuild checks every key it will write before it deletes any.
+          #
+          # @param client [Redis] connection that owns the buckets
+          # @param bucket_keys [Array<String>] keys the rebuild will write
+          # @param batch_size [Integer] number of TYPE commands per pipeline
+          # @return [nil]
+          # @raise [Familia::IndexBucketConflictError] naming each such key
+          #   and its type
+          def check_live_bucket_keys!(client, bucket_keys, batch_size: 100)
+            conflicts = {}
+
+            bucket_keys.each_slice(batch_size) do |keys|
+              types = client.pipelined do |pipe|
+                keys.each { |key| pipe.type(key) }
+              end
+              keys.zip(types) do |key, type|
+                conflicts[key] = type unless WRITABLE_BUCKET_KEY_TYPES.include?(type)
+              end
+            end
+            raise Familia::IndexBucketConflictError, conflicts unless conflicts.empty?
+
+            nil
           end
 
           # Returns the +keys+ that start with the literal +bucket_prefix+.
@@ -283,10 +329,10 @@ module Familia
               # Multi-indexes create separate sets for each field value, so the rebuild runs in three phases:
               # 1. Loading: Load every object in the participation collection once and cache it,
               #    collecting its field value.
-              # 2. Clearing: Delete this scope instance's bucket sets, including those of field
-              #    values no object holds any more. A SCAN over the escaped bucket prefix finds
-              #    them, and only keys that start with that literal prefix and hold a set are
-              #    deleted.
+              # 2. Clearing: Check every bucket key phase 3 will write (see @raise), then delete
+              #    this scope instance's bucket sets, including those of field values no object
+              #    holds any more. A SCAN over the escaped bucket prefix finds them, and only keys
+              #    that start with that literal prefix and hold a set are deleted.
               # 3. Rebuilding: Add each cached object to the bucket of its field value
               #    (no reload needed).
               #
@@ -299,6 +345,10 @@ module Familia
               #   - :key [String] Bucket key just deleted (:clearing phase only)
               # @return [Integer, nil] Number of objects processed, or nil when the indexed
               #   class has no participation relationship to this scope class
+              # @raise [Familia::IndexBucketConflictError] if a bucket key the rebuild will
+              #   write holds a type other than set. The rebuild raises before it deletes or
+              #   writes anything. The error's #conflicts maps each such key to its type.
+              #   The rebuild can run once each of those keys holds a set or no longer exists.
               #
               # @example Basic rebuild
               #   company.rebuild_dept_index
@@ -363,11 +413,15 @@ module Familia
                   # SCAN also finds orphaned sets left by field values no object holds any more.
                   # The identifier in the prefix (e.g. "company:c-*:dept_index:") is escaped,
                   # so a glob character in it cannot widen the match past that literal prefix.
+                  # The keys PHASE 4 writes are checked first: add_to_* writes the bucket of
+                  # every non-nil field value.
                   progress_block&.call(phase: :clearing, current: 0, total: field_values.size)
 
                   bucket_prefix = MultiIndexGenerators.bucket_key_prefix(self, index_name)
+                  live_bucket_keys = cached_objects.filter_map { |obj| obj.send(field) }.uniq
+                                                   .map { |value| send("#{index_name}_for", value).dbkey }.uniq
                   MultiIndexGenerators.clear_index_buckets(
-                    dbclient, bucket_prefix, batch_size: batch_size
+                    dbclient, bucket_prefix, live_bucket_keys: live_bucket_keys, batch_size: batch_size
                   ) do |key, cleared|
                     progress_block&.call(phase: :clearing, current: cleared, total: field_values.size, key: key)
                   end
@@ -596,15 +650,21 @@ module Familia
             #
             # For class-level indexes, we iterate all instances of the class.
             # The phases match the instance-scoped rebuild: load every object
-            # and its field value, delete the class's bucket sets under the
-            # escaped bucket prefix (e.g. "customer:role_index:"), then add
-            # each object to the bucket of its field value.
+            # and its field value, check every bucket key the rebuild will
+            # write, delete the class's bucket sets under the escaped bucket
+            # prefix (e.g. "customer:role_index:"), then add each object to
+            # the bucket of its field value.
             #
             # @param batch_size [Integer] Number of identifiers to process per batch
             # @yield [progress] Optional block called with progress updates; the
             #   phases are :discovering, :loading, :clearing and :rebuilding
             # @return [Integer] Number of objects processed, or 0 when the class
             #   has no instances collection
+            # @raise [Familia::IndexBucketConflictError] if a bucket key the rebuild
+            #   will write holds a type other than set. The rebuild raises before it
+            #   deletes or writes anything. The error's #conflicts maps each such key
+            #   to its type. The rebuild can run once each of those keys holds a set
+            #   or no longer exists.
             indexed_class.define_singleton_method(:"rebuild_#{index_name}") do |batch_size: 100, &progress_block|
               # PHASE 1: Discover all field values and collect objects
               progress_block&.call(phase: :discovering, current: 0, total: 0)
@@ -639,11 +699,13 @@ module Familia
 
               # PHASE 2: Clear existing index sets (e.g. "customer:role_index:*") using SCAN.
               # The class prefix and delimiter are escaped like any other literal part.
+              # The keys PHASE 3 writes, one per field value, are checked first.
               progress_block&.call(phase: :clearing, current: 0, total: field_values.size)
 
               bucket_prefix = MultiIndexGenerators.bucket_key_prefix(self, index_name)
+              live_bucket_keys = field_values.map { |value| send("#{index_name}_for", value).dbkey }
               MultiIndexGenerators.clear_index_buckets(
-                dbclient, bucket_prefix, batch_size: batch_size
+                dbclient, bucket_prefix, live_bucket_keys: live_bucket_keys, batch_size: batch_size
               ) do |key, cleared|
                 progress_block&.call(phase: :clearing, current: cleared, total: field_values.size, key: key)
               end

@@ -51,6 +51,27 @@ module Familia
     end
   end
 
+  # Raised by the rebuild of a multi_index when a key it must write as a
+  # bucket set holds another type, such as the list of a record whose
+  # identifier makes its keys share the bucket prefix. The rebuild checks
+  # those keys before it deletes or writes anything. +conflicts+ maps each
+  # such key to the type it holds.
+  #
+  # Such a key may be another record's data, so the rebuild does not
+  # replace it. Inspect each key in +conflicts+. The rebuild can run once
+  # each of them holds a set or no longer exists.
+  class IndexBucketConflictError < PersistenceError
+    attr_reader :conflicts
+
+    def initialize(conflicts)
+      @conflicts = conflicts
+      listed = conflicts.map { |key, type| "#{key.inspect} (#{type})" }.join(', ')
+      super("Multi-index bucket keys hold a type other than set: #{listed}. " \
+            'The rebuild stopped before it deleted or wrote anything. ' \
+            'It can run once each of these keys holds a set or no longer exists.')
+    end
+  end
+
   # Raised when a field type is invalid or unexpected
   class FieldTypeError < HorreumError; end
 
