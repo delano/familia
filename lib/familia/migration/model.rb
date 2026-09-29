@@ -256,9 +256,16 @@ module Familia
       # is enabled. Validates the object before and/or after the transform
       # based on {#validate_before_transform?} and {#validate_after_transform?}.
       #
+      # A Familia::SchemaValidatorLoadError raised here ends the run instead
+      # of counting as an error on the record. With only
+      # {#validate_after_transform?} enabled, the record it is raised for has
+      # already been transformed.
+      #
       # @param obj [Familia::Horreum] the object to process
       # @param key [String] the database key of the record
       # @return [void]
+      # @raise [Familia::SchemaValidatorLoadError] if json_schemer is
+      #   installed but fails to load
       def process_record_with_validation(obj, key)
         if validate_before_transform?
           result = validate_schema(obj, context: 'before transform')
@@ -360,6 +367,12 @@ module Familia
         else
           process_record(obj, key)
         end
+      rescue Familia::SchemaValidatorLoadError
+        # A validator that cannot load is not a fault of this record, and
+        # every record would fail the same way. Counting it once per record
+        # would let #migrate finish and Runner record the migration as
+        # applied, so it ends the run and Runner records it as failed.
+        raise
       rescue StandardError => ex
         handle_record_error(key, ex)
       end

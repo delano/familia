@@ -161,7 +161,10 @@ config.schemas = {
 
 - **No schema file**: Validation returns `true` (no-op)
 - **No json_schemer gem**: Warning logged, validation disabled
-- **json_schemer present but one of its own requires fails**: The `LoadError` is raised on first validation
+- **json_schemer present but one of its own requires fails**: The first validation raises
+  `Familia::SchemaValidatorLoadError`, with the `LoadError` as its `cause`. A
+  `Familia::Migration::Model` migration with validation hooks stops at the first record it
+  validates, and `Familia::Migration::Runner` records it as failed rather than applied.
 - **Invalid JSON**: Warning logged, schema skipped
 
 ## API Reference

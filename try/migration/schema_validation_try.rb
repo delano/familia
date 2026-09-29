@@ -3,6 +3,7 @@
 # frozen_string_literal: true
 
 require_relative '../support/helpers/test_helpers'
+require_relative '../support/helpers/fresh_ruby'
 require_relative '../../lib/familia/migration'
 require 'json'
 require 'tmpdir'
@@ -188,8 +189,65 @@ migration = Familia::Migration::Model.new
 end
 #=> true
 
+# The next case runs in a fresh process with a json_schemer.rb whose own
+# require fails, because json_schemer is already loaded here.
+
+## A validator that cannot load ends a Model migration run, and Runner records it as failed
+@broken_gem_dir = Dir.mktmpdir('familia_broken_json_schemer')
+File.write(File.join(@broken_gem_dir, 'json_schemer.rb'), "require 'familia_probe_missing_dependency'\n")
+File.write(File.join(@schema_dir, 'broken_validator_record.json'), JSON.generate({ type: 'object' }))
+run_fresh_ruby(<<~RUBY, load_path: [@broken_gem_dir])
+  require 'familia'
+  require 'familia/migration'
+
+  Familia.uri = #{Familia.uri.to_s.dump}
+  Familia.schema_path = #{@schema_dir.dump}
+  Familia::SchemaRegistry.load!
+  prefix = "familia:test:broken_validator:\#{Process.pid}"
+
+  class BrokenValidatorRecord < Familia::Horreum
+    identifier_field :rid
+    field :rid
+  end
+  BrokenValidatorRecord.prefix(prefix)
+
+  class BrokenValidatorMigration < Familia::Migration::Model
+    self.migration_id = 'broken_validator_probe'
+
+    class << self
+      attr_accessor :processed
+    end
+    self.processed = 0
+
+    def prepare
+      @model_class = BrokenValidatorRecord
+    end
+
+    def validate_before_transform? = true
+
+    def process_record(_obj, _key)
+      self.class.processed += 1
+    end
+  end
+
+  %w[r1 r2].each { |rid| BrokenValidatorRecord.new(rid: rid).save }
+  registry = Familia::Migration::Registry.new(prefix: prefix)
+  runner = Familia::Migration::Runner.new(migrations: [BrokenValidatorMigration], registry: registry)
+  begin
+    result = runner.run_one(BrokenValidatorMigration)
+    puts result[:status]
+    puts result[:error].to_s.include?('familia_probe_missing_dependency')
+    puts registry.applied?('broken_validator_probe')
+    puts BrokenValidatorMigration.processed
+  ensure
+    Familia.dbclient.scan_each(match: "\#{prefix}*").to_a.each { |key| Familia.dbclient.del(key) }
+  end
+RUBY
+#=> ['failed', 'true', 'false', '0']
+
 # Teardown
 FileUtils.rm_rf(@schema_dir)
+FileUtils.rm_rf(@broken_gem_dir)
 Familia.schema_path = @original_schema_path
 Familia.schemas = @original_schemas || {}
 Familia.schema_validator = @original_validator || :json_schemer

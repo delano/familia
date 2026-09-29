@@ -144,7 +144,10 @@ module Familia
       # @return [Hash] Result hash with keys:
       #   - :migration_id [String] The migration identifier
       #   - :dry_run [Boolean] Whether this was a dry run
-      #   - :status [Symbol] :success, :skipped, or :failed
+      #   - :status [Symbol] :success, :skipped, or :failed. :failed means
+      #     #migration_needed? or #migrate raised a StandardError, for
+      #     example Familia::SchemaValidatorLoadError; the migration is not
+      #     recorded as applied.
       #   - :stats [Hash] Statistics from the migration
       #   - :error [String] Error message (if failed)
       #
