@@ -11,27 +11,29 @@ Added
 Changed
 -------
 
-- Inside ``transaction``, ``atomic_write`` and ``pipelined`` blocks, DataType
-  and Horreum methods that only convert a reply now return the command's
-  ``Redis::Future`` instead of raising ``NoMethodError``. Its value is the
-  reply as redis-rb returns it, without Familia's conversion (for example
-  ``empty?`` resolves to the count). Affected: ``empty?`` on every
-  collection, ``HashKey#values``, ``#hgetall``, ``#values_at``, ``#scan``,
-  ``#randfield`` with ``withvalues: true``; ``ListKey#range``, ``#members``,
-  ``#[]``, ``#member?``, ``#pop`` and ``#shift`` with a count;
+- Inside ``transaction``, ``atomic_write`` and ``pipelined`` blocks,
+  DataType and Horreum methods that only convert a reply now return the
+  command's ``Redis::Future`` instead of raising ``NoMethodError``. Its
+  value is the reply as redis-rb returns it, without Familia's conversion
+  (for example ``empty?`` resolves to the count). Affected: ``empty?`` on
+  every collection, the generated related-field predicates (``user.tags?``,
+  ``User.instances?``), ``HashKey#values``, ``#hgetall``, ``#values_at``,
+  ``#scan``, ``#randfield`` with ``withvalues: true``; ``ListKey#range``,
+  ``#members``, ``#[]``, ``#member?``, ``#pop`` and ``#shift`` with a count;
   ``SortedSet#score``, ``#member?``, ``#rank``, ``#revrank``, ``#members``,
   ``#revmembers``, the range readers, ``#at``, ``#first``, ``#last``,
   ``#popmin``, ``#popmax``, ``#mscore``, ``#union``, ``#inter``, ``#diff``,
   ``#randmember``, ``#scan``; ``UnsortedSet#members``, ``#intersection``,
   ``#union``, ``#difference``, ``#scan``, ``#sample``; ``StringKey#size``,
   ``#empty?``, ``#to_s``, ``#to_i``; ``JsonStringKey#char_count``,
-  ``#empty?``, ``#to_s``, ``#to_i``, ``#to_f``; ``Counter#value``, ``#to_i``,
-  ``#reset``; ``expired?``; ``Horreum.any?``, ``.keys_count``,
+  ``#empty?``, ``#to_s``, ``#to_i``, ``#to_f``; ``Counter#value``,
+  ``#to_i``, ``#reset``; ``expired?``; ``Horreum.any?``, ``.keys_count``,
   ``.keys_any?``, ``.in_instances?``, ``.multiget``, ``.storage_inspect``;
   ``Migration::Registry#applied_at``, ``#all_applied``, ``#metadata``; the
   generated participation methods ``score_in_<target>_<collection>`` and
-  ``in_<target>_<collection>?`` on a sorted-set or list participation. Return
-  values outside a block are unchanged.
+  ``in_<target>_<collection>?`` on a sorted-set or list participation.
+  Return values outside a block are unchanged, except
+  ``HashKey#randfield(count, withvalues: true)`` (see Fixed).
 - Methods that need a reply to continue now raise
   ``Familia::OperationModeError`` inside those blocks instead of
   ``NoMethodError`` or a wrong result: ``each`` and the raw iterators on

@@ -95,6 +95,7 @@ empty.value.zero?  # => false, SCARD replies with the count
 | `HashKey#[]`, `#values`, `#hgetall`, `#values_at`; `ListKey#range`, `#members`, `#pop`; `SortedSet#members`, `#range*`; `UnsortedSet#members`, `#sample` | the stored values, still serialized |
 | `HashKey#randfield(count, withvalues: true)` | `[field, value]` pairs, the values still serialized |
 | `empty?` on any collection | the count (HLEN, LLEN, SCARD, ZCARD) |
+| The generated related-field predicates (`user.tags?`, `User.instances?`) | what the field's `empty?` resolves to: the count, or the raw stored string |
 | `ListKey#member?`, `SortedSet#member?`, `#rank`, `#revrank` | the index or rank, or nil |
 | The generated participation methods `in_<target>_<collection>?` and `score_in_<target>_<collection>` (`domain.in_customer_domains?(customer)`) | for `in_*?`, the ZRANK or LPOS index or nil on a sorted-set or list participation, and the SISMEMBER Boolean on a set one; for `score_in_*`, the Float score or nil |
 | `DataType#exists?`, `Horreum.exists?`, `expires?`, `expired?` | the EXISTS count or the TTL in seconds |

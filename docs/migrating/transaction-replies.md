@@ -98,8 +98,10 @@ connection provider each call opens a new connection. Pass `redis:` to
 
 These methods raised `NoMethodError` inside a block and now return the
 command's `Redis::Future`: `empty?` on collections and on `StringKey`,
-`Counter` and `JsonStringKey`, and `ListKey#member?` and
-`SortedSet#member?`. Rule 4 of
+`Counter` and `JsonStringKey`, the generated related-field predicates such
+as `user.tags?`, `ListKey#member?` and `SortedSet#member?`, and the generated
+participation methods `score_in_<target>_<collection>` and
+`in_<target>_<collection>?` on a sorted-set or list participation. Rule 4 of
 [Transaction Safety](../reference/transaction_safety.md) lists what each
 Future resolves to.
 
