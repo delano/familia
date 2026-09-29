@@ -503,7 +503,9 @@ module Familia
         # one round trip per slice. Only sets are returned: a record whose
         # identifier equals the index name has its hash and fields under
         # the same prefix, and SMEMBERS on a hash or list raises WRONGTYPE.
-        generators.each_index_bucket_slice(dbclient, bucket_prefix, batch_size: 100) do |valid_keys|
+        # That record's set fields are left out too, so they are not
+        # reported as buckets.
+        generators.each_index_bucket_slice(dbclient, self, rel.index_name, batch_size: 100) do |valid_keys|
           members_batch = dbclient.pipelined do |pipe|
             valid_keys.each { |k| pipe.smembers(k) }
           end
@@ -705,11 +707,18 @@ module Familia
         # rebuild, SCAN's TYPE option returns only sets: another key under
         # a scope's index prefix is not a bucket, and SMEMBERS on it would
         # raise WRONGTYPE.
-        bucket_type = Familia::Features::Relationships::Indexing::MultiIndexGenerators::BUCKET_KEY_TYPE
+        indexing = Familia::Features::Relationships::Indexing
+        names = indexing::RecordKeyOwnership.record_set_key_names(scope_class)
+        bucket_type = indexing::MultiIndexGenerators::BUCKET_KEY_TYPE
         client.scan_each(match: pattern, type: bucket_type).each_slice(100) do |keys|
           parsed = keys.filter_map do |key|
             scope_id, field_value = parse_instance_scoped_bucket_key(key, scope_prefix, marker)
             next nil if scope_id.nil? || scope_id.empty? || field_value.nil? || field_value.empty?
+
+            scope_id, field_value = reattribute_instance_scoped_bucket_key(
+              rel, scope_class, key, [scope_id, field_value], names
+            )
+            next nil if field_value.nil? || field_value.empty?
 
             [key, scope_id, field_value]
           end
@@ -754,6 +763,32 @@ module Familia
         scope_id = rest[0...marker_pos]
         field_value = rest[(marker_pos + marker.length)..]
         [scope_id, field_value]
+      end
+
+      # Assigns a bucket key to the scope whose rebuild clears it.
+      #
+      # parse_instance_scoped_bucket_key splits at the first marker, which
+      # gives the shortest scope identifier. When the key is also a key of
+      # an existing scope with a longer identifier (see
+      # RecordKeyOwnership.other_record_key), the rebuild leaves it to
+      # that scope. Returns that scope's identifier and field value when
+      # the key is one of its buckets of this index, [scope_id, nil] when
+      # it is another of its set keys, and +parsed+ otherwise.
+      #
+      # @param parsed [Array(String, String)] scope_id and field_value from
+      #   parse_instance_scoped_bucket_key
+      # @return [Array(String, String), Array(String, nil)]
+      #
+      def reattribute_instance_scoped_bucket_key(rel, scope_class, key, parsed, names)
+        ownership = Familia::Features::Relationships::Indexing::RecordKeyOwnership
+        other = ownership.other_record_key(key, scope_class, parsed.first, names: names)
+        return parsed unless other
+
+        other_id, name = other
+        index_prefix = "#{rel.index_name}#{Familia.delim}"
+        return [other_id, nil] unless name.b.start_with?(index_prefix.b)
+
+        [other_id, name.byteslice(index_prefix.bytesize..)]
       end
 
       # Batch-checks scope instance existence via pipelined EXISTS.

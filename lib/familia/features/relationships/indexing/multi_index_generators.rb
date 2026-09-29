@@ -102,44 +102,54 @@ module Familia
             Familia::UnsortedSet.new(Familia.join(index_name, ''), parent: owner).dbkey
           end
 
-          # Yields the keys of the per-value bucket sets whose keys start
-          # with +bucket_prefix+, in slices of up to +batch_size+ keys.
+          # Yields the keys of the per-value bucket sets of +index_name+ on
+          # +owner+, in slices of up to +batch_size+ keys.
           #
-          # The prefix is escaped with Familia.escape_glob before the SCAN
-          # wildcard is appended, so glob characters in a scope identifier,
-          # the class prefix or the delimiter cannot make the pattern match
-          # keys outside that literal prefix. SCAN's TYPE option leaves out
-          # every key that does not hold a set, the type the factories give
-          # each bucket. The Valkey and Redis SCAN command histories both
-          # list "Added the `TYPE` subcommand." under 6.0.0, and README.md
-          # lists the prerequisite "**Valkey/Redis**: 6.0+". Each returned
-          # key must also start with the literal prefix (see
-          # .select_index_buckets), a second check before the rebuild
-          # deletes it.
+          # The bucket prefix from .bucket_key_prefix is escaped with
+          # Familia.escape_glob before the SCAN wildcard is appended, so glob
+          # characters in a scope identifier, the class prefix or the
+          # delimiter cannot make the pattern match keys outside that
+          # literal prefix. SCAN's TYPE option leaves out every key that
+          # does not hold a set, the type the factories give each bucket.
+          # The Valkey and Redis SCAN command histories both list "Added the
+          # `TYPE` subcommand." under 6.0.0, and README.md lists the
+          # prerequisite "**Valkey/Redis**: 6.0+". Each returned key must
+          # also start with the literal prefix (see .select_index_buckets).
           #
-          # The rebuild deletes these keys and the audit reads them, so
-          # both act on the same keys.
+          # A key can start with the literal prefix and still be another
+          # record's key, because an identifier may contain the delimiter.
+          # "company:c-1:dept_index:x:dept_index:ops" is both the bucket of
+          # value "x:dept_index:ops" in scope "c-1" and the "ops" bucket of
+          # scope "c-1:dept_index:x". Keys that
+          # RecordKeyOwnership.other_record_key assigns to an existing record
+          # with a longer identifier are left out, so the rebuild does not
+          # delete them and the class-level audit does not read them.
           #
           # @param client [Redis] connection that owns the buckets
-          # @param bucket_prefix [String] literal prefix from .bucket_key_prefix
+          # @param owner [Familia::Horreum, Class] the scope instance, or the
+          #   indexed class for a class-level index
+          # @param index_name [Symbol] name of the index
           # @param batch_size [Integer] SCAN count hint and slice size
           # @yieldparam keys [Array<String>] a non-empty slice of bucket keys
           # @return [Enumerator, nil] an Enumerator when no block is given
-          def each_index_bucket_slice(client, bucket_prefix, batch_size: 100)
-            return enum_for(__method__, client, bucket_prefix, batch_size: batch_size) unless block_given?
+          def each_index_bucket_slice(client, owner, index_name, batch_size: 100)
+            return enum_for(__method__, client, owner, index_name, batch_size: batch_size) unless block_given?
 
+            bucket_prefix = bucket_key_prefix(owner, index_name)
+            names = RecordKeyOwnership.record_set_key_names(owner)
             pattern = "#{Familia.escape_glob(bucket_prefix)}*"
             client.scan_each(match: pattern, count: batch_size, type: BUCKET_KEY_TYPE)
                   .each_slice(batch_size) do |keys|
               buckets = select_index_buckets(keys, bucket_prefix)
+              buckets.reject! { |key| RecordKeyOwnership.other_record_key_owner(key, owner, names: names) }
               yield buckets unless buckets.empty?
             end
             nil
           end
 
-          # Deletes the per-value bucket sets whose keys start with
-          # +bucket_prefix+, including buckets for field values that no
-          # object holds any more.
+          # Deletes the per-value bucket sets of +index_name+ on +owner+,
+          # including buckets for field values that no object holds any
+          # more.
           #
           # +live_bucket_keys+ are the keys the rebuild writes after this
           # returns. They are checked with .check_live_bucket_keys! first,
@@ -147,24 +157,24 @@ module Familia
           # deleted.
           #
           # Only the keys .each_index_bucket_slice yields are deleted. A key
-          # under the prefix that holds another type is left alone. It was
-          # not written as a bucket by this version, and it may belong to a
-          # record whose identifier makes its keys share the prefix, such as
-          # the hash and list of a record named after a class-level index.
+          # under the prefix that holds another type is left alone, and so
+          # is a set that is another existing record's key.
           #
           # @param client [Redis] connection that owns the buckets
-          # @param bucket_prefix [String] literal prefix from .bucket_key_prefix
+          # @param owner [Familia::Horreum, Class] the scope instance, or the
+          #   indexed class for a class-level index
+          # @param index_name [Symbol] name of the index
           # @param live_bucket_keys [Array<String>] keys the rebuild writes next
           # @param batch_size [Integer] SCAN count hint, DEL and TYPE batch size
           # @yieldparam key [String] a bucket key that was deleted
           # @yieldparam cleared [Integer] buckets deleted so far
           # @return [Integer] number of bucket keys deleted
           # @raise [Familia::IndexBucketConflictError] see .check_live_bucket_keys!
-          def clear_index_buckets(client, bucket_prefix, live_bucket_keys:, batch_size: 100, &on_delete)
-            check_live_bucket_keys!(client, live_bucket_keys, batch_size: batch_size)
+          def clear_index_buckets(client, owner, index_name, live_bucket_keys:, batch_size: 100, &on_delete)
+            check_live_bucket_keys!(client, owner, live_bucket_keys, batch_size: batch_size)
             cleared = 0
 
-            each_index_bucket_slice(client, bucket_prefix, batch_size: batch_size) do |buckets|
+            each_index_bucket_slice(client, owner, index_name, batch_size: batch_size) do |buckets|
               client.del(*buckets)
               buckets.each do |key|
                 cleared += 1
@@ -176,7 +186,8 @@ module Familia
           end
 
           # Raises Familia::IndexBucketConflictError when one of
-          # +bucket_keys+ holds a type other than a set.
+          # +bucket_keys+ holds a type other than a set, or is another
+          # existing record's key (see RecordKeyOwnership.other_record_key_owner).
           #
           # After the clearing phase, the rebuild adds every object to the
           # bucket of its field value. A key of another type there is not a
@@ -184,27 +195,34 @@ module Familia
           # record named after a class-level index when a live field value
           # equals that list's name. SADD into it raises WRONGTYPE, which
           # would stop the rebuild after clearing had already emptied the
-          # other buckets, and deleting it could destroy that data. So the
-          # rebuild checks every key it will write before it deletes any.
+          # other buckets, and deleting it could destroy that data. A set
+          # that is another record's key would receive index members. So
+          # the rebuild checks every key it will write before it deletes any.
           #
           # @param client [Redis] connection that owns the buckets
+          # @param owner [Familia::Horreum, Class] the scope instance, or the
+          #   indexed class for a class-level index
           # @param bucket_keys [Array<String>] keys the rebuild will write
           # @param batch_size [Integer] number of TYPE commands per pipeline
           # @return [nil]
-          # @raise [Familia::IndexBucketConflictError] naming each such key
-          #   and its type
-          def check_live_bucket_keys!(client, bucket_keys, batch_size: 100)
+          # @raise [Familia::IndexBucketConflictError] naming each such key,
+          #   its type and, for another record's key, that record's hash key
+          def check_live_bucket_keys!(client, owner, bucket_keys, batch_size: 100)
             conflicts = {}
+            owners = {}
+            names = RecordKeyOwnership.record_set_key_names(owner)
 
             bucket_keys.each_slice(batch_size) do |keys|
               types = client.pipelined do |pipe|
                 keys.each { |key| pipe.type(key) }
               end
               keys.zip(types) do |key, type|
-                conflicts[key] = type unless WRITABLE_BUCKET_KEY_TYPES.include?(type)
+                record_key = RecordKeyOwnership.other_record_key_owner(key, owner, names: names)
+                owners[key] = record_key if record_key
+                conflicts[key] = type if record_key || !WRITABLE_BUCKET_KEY_TYPES.include?(type)
               end
             end
-            raise Familia::IndexBucketConflictError, conflicts unless conflicts.empty?
+            raise Familia::IndexBucketConflictError.new(conflicts, owners) unless conflicts.empty?
 
             nil
           end
@@ -332,7 +350,9 @@ module Familia
               # 2. Clearing: Check every bucket key phase 3 will write (see @raise), then delete
               #    this scope instance's bucket sets, including those of field values no object
               #    holds any more. A SCAN over the escaped bucket prefix finds them, and only keys
-              #    that start with that literal prefix and hold a set are deleted.
+              #    that start with that literal prefix and hold a set are deleted. A set that
+              #    also belongs to an existing scope record with a longer identifier is left
+              #    alone (see RecordKeyOwnership.other_record_key).
               # 3. Rebuilding: Add each cached object to the bucket of its field value
               #    (no reload needed).
               #
@@ -346,9 +366,10 @@ module Familia
               # @return [Integer, nil] Number of objects processed, or nil when the indexed
               #   class has no participation relationship to this scope class
               # @raise [Familia::IndexBucketConflictError] if a bucket key the rebuild will
-              #   write holds a type other than set. The rebuild raises before it deletes or
-              #   writes anything. The error's #conflicts maps each such key to its type.
-              #   The rebuild can run once each of those keys holds a set or no longer exists.
+              #   write holds a type other than set or is another existing record's key. The
+              #   rebuild raises before it deletes or writes anything. The error's #conflicts
+              #   maps each such key to its type, and #owners maps each key of another record
+              #   to that record's hash key.
               #
               # @example Basic rebuild
               #   company.rebuild_dept_index
@@ -417,11 +438,10 @@ module Familia
                   # every non-nil field value.
                   progress_block&.call(phase: :clearing, current: 0, total: field_values.size)
 
-                  bucket_prefix = MultiIndexGenerators.bucket_key_prefix(self, index_name)
                   live_bucket_keys = cached_objects.filter_map { |obj| obj.send(field) }.uniq
                                                    .map { |value| send("#{index_name}_for", value).dbkey }.uniq
                   MultiIndexGenerators.clear_index_buckets(
-                    dbclient, bucket_prefix, live_bucket_keys: live_bucket_keys, batch_size: batch_size
+                    dbclient, self, index_name, live_bucket_keys: live_bucket_keys, batch_size: batch_size
                   ) do |key, cleared|
                     progress_block&.call(phase: :clearing, current: cleared, total: field_values.size, key: key)
                   end
@@ -653,7 +673,10 @@ module Familia
             # and its field value, check every bucket key the rebuild will
             # write, delete the class's bucket sets under the escaped bucket
             # prefix (e.g. "customer:role_index:"), then add each object to
-            # the bucket of its field value.
+            # the bucket of its field value. A set under the prefix that is
+            # a set field of an existing record whose identifier starts with
+            # the index name is left alone (see
+            # RecordKeyOwnership.other_record_key).
             #
             # @param batch_size [Integer] Number of identifiers to process per batch
             # @yield [progress] Optional block called with progress updates; the
@@ -661,10 +684,10 @@ module Familia
             # @return [Integer] Number of objects processed, or 0 when the class
             #   has no instances collection
             # @raise [Familia::IndexBucketConflictError] if a bucket key the rebuild
-            #   will write holds a type other than set. The rebuild raises before it
-            #   deletes or writes anything. The error's #conflicts maps each such key
-            #   to its type. The rebuild can run once each of those keys holds a set
-            #   or no longer exists.
+            #   will write holds a type other than set or is another existing record's
+            #   key. The rebuild raises before it deletes or writes anything. The
+            #   error's #conflicts maps each such key to its type, and #owners maps
+            #   each key of another record to that record's hash key.
             indexed_class.define_singleton_method(:"rebuild_#{index_name}") do |batch_size: 100, &progress_block|
               # PHASE 1: Discover all field values and collect objects
               progress_block&.call(phase: :discovering, current: 0, total: 0)
@@ -702,10 +725,9 @@ module Familia
               # The keys PHASE 3 writes, one per field value, are checked first.
               progress_block&.call(phase: :clearing, current: 0, total: field_values.size)
 
-              bucket_prefix = MultiIndexGenerators.bucket_key_prefix(self, index_name)
               live_bucket_keys = field_values.map { |value| send("#{index_name}_for", value).dbkey }
               MultiIndexGenerators.clear_index_buckets(
-                dbclient, bucket_prefix, live_bucket_keys: live_bucket_keys, batch_size: batch_size
+                dbclient, self, index_name, live_bucket_keys: live_bucket_keys, batch_size: batch_size
               ) do |key, cleared|
                 progress_block&.call(phase: :clearing, current: cleared, total: field_values.size, key: key)
               end

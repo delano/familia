@@ -13,6 +13,13 @@
 # literal prefix and holds a set. Before it deletes anything, the rebuild
 # also checks that every bucket key it will write holds a set or does not
 # exist, and raises Familia::IndexBucketConflictError otherwise.
+#
+# An identifier may contain the delimiter, so a key under the literal
+# prefix can also be another record's key: the bucket of scope
+# "d-1:dept_index:x" lies under the prefix of scope "d-1", and the set
+# field "tags" of a record named "role_index" lies under the prefix of the
+# class-level role_index. The rebuild neither deletes nor writes such a
+# key when that other record exists.
 
 require_relative '../support/helpers/test_helpers'
 
@@ -21,6 +28,7 @@ class ::GlobScopeCompany < Familia::Horreum
   feature :relationships
   identifier_field :company_id
   field :company_id
+  set :tags
 end
 
 # Indexed class; its dept_index sets live under each company.
@@ -43,6 +51,7 @@ class ::GlobRoleUser < Familia::Horreum
   field :role
   list :notes
   list :drafts
+  set :tags
   sorted_set :scores
   multi_index :role, :role_index
 end
@@ -164,8 +173,11 @@ end
 #=> [{ "glob_scope_company:c-*:dept_index:ops" => "zset" }, ["gse-eng"], "zset"]
 
 ## the error message names each conflicting key and its type, and what the rebuild needs
-@conflict.message
-#=> 'Multi-index bucket keys hold a type other than set: "glob_scope_company:c-*:dept_index:ops" (zset). The rebuild stopped before it deleted or wrote anything. It can run once each of these keys holds a set or no longer exists.'
+@conflict.message == 'Multi-index bucket keys cannot be written as bucket sets: ' \
+                     '"glob_scope_company:c-*:dept_index:ops" (zset). ' \
+                     'The rebuild stopped before it deleted or wrote anything. ' \
+                     'It can run once none of these keys holds a type other than set or belongs to another record.'
+#=> true
 
 ## the stopped rebuild left the rival scopes' sets alone
 [@dbclient.smembers(@bucket_key.call('c-1')), @dbclient.smembers(@bucket_key.call('c-2'))]
@@ -173,8 +185,87 @@ end
 
 ## once the conflicting key is gone the rebuild completes
 @dbclient.del(@ops_key)
-[@glob_company.rebuild_dept_index, @glob_company.dept_index_for('ops').members, @glob_company.dept_index_for('eng').members]
+[
+  @glob_company.rebuild_dept_index,
+  @glob_company.dept_index_for('ops').members,
+  @glob_company.dept_index_for('eng').members,
+]
 #=> [2, ["gse-0"], ["gse-eng"]]
+
+## rebuilding a scope keeps the buckets of a scope whose identifier extends its bucket prefix
+@delim_companies = ['d-1', 'd-1:dept_index:x'].each_with_index.map do |company_id, idx|
+  company = GlobScopeCompany.new(company_id: company_id)
+  company.save
+  employee = GlobScopeEmployee.new(emp_id: "gsd-#{idx}", department: 'ops')
+  employee.save
+  employee.add_to_glob_scope_company_employees(company)
+  employee.add_to_glob_scope_company_dept_index(company)
+  company
+end
+@delim_companies.first.rebuild_dept_index
+@delim_companies.map { |company| company.dept_index_for('ops').members }
+#=> [["gsd-0"], ["gsd-1"]]
+
+## rebuilding the scope with the longer identifier keeps the shorter scope's bucket
+[@delim_companies.last.rebuild_dept_index, @delim_companies.map { |company| company.dept_index_for('ops').members }]
+#=> [1, [["gsd-0"], ["gsd-1"]]]
+
+## the instance-scoped audit reads each of those buckets for the scope whose rebuild clears it
+GlobScopeEmployee.audit_multi_indexes.map { |result| result.values_at(:index_name, :status) }
+#=> [[:dept_index, :ok]]
+
+## the rebuild still clears its own orphaned bucket whose value contains the delimiter
+@delim_companies.first.dept_index_for('y:dept_index:ops').add('gsd-ghost')
+@delim_companies.first.rebuild_dept_index
+[@delim_companies.first.dept_index_for('y:dept_index:ops').exists?, @delim_companies.last.dept_index_for('ops').members]
+#=> [false, ["gsd-1"]]
+
+## rebuilding a scope keeps the set field of a record named after the scope's index prefix
+@set_scope = GlobScopeCompany.new(company_id: 'c-9')
+@set_scope.save
+@set_owner = GlobScopeCompany.new(company_id: 'c-9:dept_index')
+@set_owner.save
+@set_owner.tags.add('keep')
+@c9_employee = GlobScopeEmployee.new(emp_id: 'gsn-1', department: 'ops')
+@c9_employee.save
+@c9_employee.add_to_glob_scope_company_employees(@set_scope)
+@c9_employee.add_to_glob_scope_company_dept_index(@set_scope)
+[@set_scope.rebuild_dept_index, @set_owner.tags.members, @set_scope.dept_index_for('ops').members]
+#=> [1, ["keep"], ["gsn-1"]]
+
+## the instance-scoped audit does not read that set field as a bucket
+GlobScopeEmployee.audit_multi_indexes.map { |result| result.values_at(:index_name, :status) }
+#=> [[:dept_index, :ok]]
+
+## a rebuild raises before it deletes anything when a live value's bucket is another record's set
+@tags_employee = GlobScopeEmployee.new(emp_id: 'gsn-2', department: 'tags')
+@tags_employee.save
+@tags_employee.add_to_glob_scope_company_employees(@set_scope)
+begin
+  @set_scope.rebuild_dept_index
+rescue Familia::IndexBucketConflictError => e
+  @owned_conflict = e
+end
+@owned_key = 'glob_scope_company:c-9:dept_index:tags'
+[
+  @owned_conflict&.conflicts,
+  @owned_conflict&.owners == { @owned_key => 'glob_scope_company:c-9:dept_index:object' },
+  @set_owner.tags.members,
+  @set_scope.dept_index_for('ops').members,
+]
+#=> [{ "glob_scope_company:c-9:dept_index:tags" => "set" }, true, ["keep"], ["gsn-1"]]
+
+## the error message names the record that owns the conflicting key
+@owned_conflict.message.start_with?(
+  'Multi-index bucket keys cannot be written as bucket sets: ' \
+  '"glob_scope_company:c-9:dept_index:tags" (set of record "glob_scope_company:c-9:dept_index:object").',
+)
+#=> true
+
+## once the other record is gone the rebuild writes that bucket
+@set_owner.destroy!
+[@set_scope.rebuild_dept_index, @set_scope.dept_index_for('tags').members]
+#=> [2, ["gsn-2"]]
 
 ## the class-level rebuild of a glob-prefixed class leaves the rival class's sets alone
 GlobRoleUser.new(uid: 'gru-1', role: 'admin').save
@@ -183,21 +274,23 @@ GlobRoleUser.rebuild_role_index
 [GlobRoleRival.role_index_for('admin').members, GlobRoleUser.role_index_for('admin').members]
 #=> [["grr-1"], ["gru-1"]]
 
-## the class-level rebuild keeps the hash, list and sorted set of a record named after the index
+## the class-level rebuild keeps the hash, list, sorted set and set of a record named after the index
 @victim = GlobRoleUser.new(uid: 'role_index', role: 'member')
 @victim.save
 @victim.notes.push('keep me')
 @victim.scores.add('keep me too', 1)
+@victim.tags.add('keep this set')
 GlobRoleUser.rebuild_role_index
 [
   GlobRoleUser.exists?('role_index'),
   @victim.notes.members,
   @victim.scores.members,
+  @victim.tags.members,
   GlobRoleUser.role_index_for('member').members,
 ]
-#=> [true, ["keep me"], ["keep me too"], ["role_index"]]
+#=> [true, ["keep me"], ["keep me too"], ["keep this set"], ["role_index"]]
 
-## the class-level audit skips the hash and list of a record named after the index
+## the class-level audit skips the hash, list and set of a record named after the index
 @victim.save
 GlobRoleUser.audit_multi_indexes.map { |result| result.values_at(:index_name, :status) }
 #=> [[:role_index, :ok]]
@@ -212,6 +305,20 @@ GlobRoleUser.role_index_for('ghost').add('nobody')
   GlobRoleUser.role_index_for('ghost').exists?,
 ]
 #=> [[:role_index], true, ["keep me"], false]
+
+## a class-level rebuild raises when a live value's bucket is the set of a record named after the index
+@tags_user = GlobRoleUser.new(uid: 'gru-tags', role: 'tags')
+@tags_user.save
+@role_client_tags = GlobRoleUser.dbclient
+@role_client_tags.srem(GlobRoleUser.role_index_for('tags').dbkey, 'gru-tags')
+begin
+  GlobRoleUser.rebuild_role_index
+rescue Familia::IndexBucketConflictError => e
+  @class_owned_conflict = e
+end
+@tags_user.destroy!
+[@class_owned_conflict&.owners, @victim.tags.members, GlobRoleUser.role_index_for('admin').members]
+#=> [{ "glob_role?:role_index:tags" => "glob_role?:role_index:object" }, ["keep this set"], ["gru-1"]]
 
 ## health_check completes with the record named after the index
 GlobRoleUser.health_check.multi_indexes.map { |result| result.values_at(:index_name, :status) }
