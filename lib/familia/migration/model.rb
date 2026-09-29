@@ -117,7 +117,16 @@ module Familia
       # executes the SCAN-based record processing, and displays
       # a comprehensive summary.
       #
-      # @return [Boolean] true if no errors occurred
+      # An error raised while processing one record is logged and counted,
+      # and the scan continues. The errors listed below end the run instead.
+      #
+      # @return [Boolean] true if no record raised an error
+      # @raise [Errors::PreconditionFailed] if the model class is not set or
+      #   is not a Familia::Horreum subclass, or if {#interactive} is set and
+      #   pry-byebug cannot be loaded
+      # @raise [Familia::SchemaValidatorLoadError] if a validation hook is on
+      #   and json_schemer is installed but fails to load. The run ends at
+      #   the first record it validates.
       def migrate
         validate_model_class!
 

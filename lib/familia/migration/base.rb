@@ -91,6 +91,8 @@ module Familia
         #
         # @param argv [Array<String>] command-line arguments (default: ARGV)
         # @return [Integer] exit code (0 = success, 1 = error/action required)
+        # @raise [StandardError] errors raised by {.run} or {.check_only}
+        #   propagate instead of becoming an exit code
         #
         # @example In migration script
         #   if __FILE__ == $0
@@ -124,9 +126,16 @@ module Familia
         # Orchestrates the full migration process including preparation,
         # conditional execution based on {#migration_needed?}, and cleanup.
         #
+        # Errors raised by {#prepare}, {#migration_needed?} or {#migrate}
+        # propagate to the caller; they are not returned as false. For
+        # example, {Model#migrate} raises Errors::PreconditionFailed and
+        # Familia::SchemaValidatorLoadError.
+        #
         # @param options [Hash] CLI options, typically { run: true/false }
-        # @return [Boolean, nil] true if migration completed successfully,
-        #   nil if not needed, false if failed
+        # @return [Boolean, nil] nil if not needed, otherwise what {#migrate}
+        #   returns: true if migration completed successfully, false if failed
+        # @raise [StandardError] any error raised by {#prepare},
+        #   {#migration_needed?} or {#migrate}
         def run(options = {})
           migration         = new
           migration.options = options

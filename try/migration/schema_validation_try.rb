@@ -192,7 +192,7 @@ end
 # The next case runs in a fresh process with a json_schemer.rb whose own
 # require fails, because json_schemer is already loaded here.
 
-## A validator that cannot load ends a Model migration run, and Runner records it as failed
+## A validator that cannot load ends a Model migration: Runner records it as failed, Base.run raises
 @broken_gem_dir = Dir.mktmpdir('familia_broken_json_schemer')
 File.write(File.join(@broken_gem_dir, 'json_schemer.rb'), "require 'familia_probe_missing_dependency'\n")
 File.write(File.join(@schema_dir, 'broken_validator_record.json'), JSON.generate({ type: 'object' }))
@@ -238,12 +238,18 @@ run_fresh_ruby(<<~RUBY, load_path: [@broken_gem_dir])
     puts result[:status]
     puts result[:error].to_s.include?('familia_probe_missing_dependency')
     puts registry.applied?('broken_validator_probe')
+    begin
+      returned = BrokenValidatorMigration.run(run: true)
+      puts "Base.run returned \#{returned.inspect}"
+    rescue StandardError => e
+      puts "Base.run raised \#{e.class}"
+    end
     puts BrokenValidatorMigration.processed
   ensure
     Familia.dbclient.scan_each(match: "\#{prefix}*").to_a.each { |key| Familia.dbclient.del(key) }
   end
 RUBY
-#=> ['failed', 'true', 'false', '0']
+#=> ['failed', 'true', 'false', 'Base.run raised Familia::SchemaValidatorLoadError', '0']
 
 # Teardown
 FileUtils.rm_rf(@schema_dir)
