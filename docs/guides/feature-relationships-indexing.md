@@ -555,6 +555,45 @@ by older code is still running. Do not run it during a rolling upgrade.
 `Familia.dbclient` reaches the default logical database only. For a model that
 sets `logical_database`, run the sweep against that model's `dbclient` instead.
 
+### Multi-value index rebuilds
+
+The `rebuild_<index>` method of a `multi_index`, such as
+`Customer.rebuild_role_index` or `company.rebuild_dept_index`, deletes the
+index's per-value bucket sets and then adds every object to the bucket of its
+current field value. It finds the buckets with a SCAN over the bucket prefix,
+such as `customer:role_index:` or `company:c-1:dept_index:`, with any glob
+characters in the prefix escaped, so a scope identifier such as `c-*` matches
+only itself. It deletes only keys that start with that literal prefix and hold
+a set. Keys of other types under the prefix stay in place.
+
+An identifier may contain the delimiter, so a set under the prefix can also be
+a key of another record of the same class. With companies `c-1` and
+`c-1:dept_index:x`, the key `company:c-1:dept_index:x:dept_index:ops` is both
+a bucket of `c-1` and the `ops` bucket of `c-1:dept_index:x`. Likewise
+`customer:role_index:tags` is both the bucket of value `tags` in the
+class-level `role_index` and the `tags` set field of a customer whose
+identifier is `role_index`. Such a key belongs to the existing record with the
+longest identifier, and a class-level bucket has no identifier. So rebuilding
+`c-1` leaves that key in place, rebuilding `c-1:dept_index:x` clears it, and
+`Customer.rebuild_role_index` leaves the `tags` set in place.
+`audit_multi_indexes` reads each such key for the record it belongs to. Only a
+set field or `multi_index` bucket of a record whose hash key exists counts.
+Without that hash key, the key belongs to the shorter identifier.
+
+Before it deletes any bucket, the rebuild checks every bucket key it is about
+to write. If one of them holds a type other than set, or belongs to another
+record as described above, the rebuild raises
+`Familia::IndexBucketConflictError` without deleting or writing anything. Such
+a key may be another record's data, such as a list of a record whose identifier
+equals the index name. The error's `conflicts` maps each key to the type it
+holds, and its `owners` maps each key of another record to that record's hash
+key. Inspect those keys. The rebuild can run once none of them holds a type
+other than set or belongs to another record.
+
+`repair_multi_indexes!` calls the same rebuild and raises the same error.
+`repair_all!` records it under `errors[:multi_indexes]` and returns status
+`:partial_failure`.
+
 ## Performance Tips
 
 ### Bulk Operations

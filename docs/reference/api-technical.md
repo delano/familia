@@ -1156,6 +1156,17 @@ failure discards the whole temporary key. See
 for the sweep used to clear temporary keys left by older versions, and the
 precondition for running it.
 
+The `rebuild_<index>` method of a `multi_index` checks every per-value bucket
+key it will write before it deletes any bucket. If one of them holds a type
+other than set, or is a set field or bucket of an existing record of the same
+class with a longer identifier, it raises `Familia::IndexBucketConflictError`
+without deleting or writing anything. The error's `conflicts` maps each key to
+the type it holds, and its `owners` maps each key of another record to that
+record's hash key. Inspect those keys: the rebuild can run once none of them
+holds a type other than set or belongs to another record. `repair_multi_indexes!` raises the same error, and
+`repair_all!` records it under `errors[:multi_indexes]`. See
+[Multi-value index rebuilds](../guides/feature-relationships-indexing.md#multi-value-index-rebuilds).
+
 ### Memory Optimization
 Efficient memory usage patterns.
 
