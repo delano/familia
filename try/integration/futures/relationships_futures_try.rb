@@ -345,6 +345,32 @@ end
 [@added, @company.members.member?(@member), @through.exists?]
 #=> [[FuturesRelMembership, true], false, false]
 
+## outside a block: activation logs a staging entry only when it was already gone
+# activate_*_instance removes the staging entry inside its own transaction,
+# so it reads the ZREM reply after that transaction completes.
+@activate_logging = lambda do |staged, participant|
+  log_io = StringIO.new
+  orig_logger = Familia.logger
+  Familia.logger = Familia::FamiliaLogger.new(log_io)
+  Familia.debug = true
+  begin
+    @company.activate_members_instance(staged, participant)
+  ensure
+    Familia.debug = false
+    Familia.logger = orig_logger
+  end
+  log_io.string.include?("Staging entry not found for #{staged.objid}")
+end
+@present = @company.stage_members_instance(through_attrs: { role: 'viewer' })
+@gone = @company.stage_members_instance(through_attrs: { role: 'viewer' })
+@company.pending_members.remove(@gone.objid)
+@first = FuturesRelInvitee.new(invitee_id: 'fri-3')
+@first.save
+@second = FuturesRelInvitee.new(invitee_id: 'fri-4')
+@second.save
+[@activate_logging.call(@present, @first), @activate_logging.call(@gone, @second)]
+#=> [false, true]
+
 ## outside a block: unstaging still runs
 [@company.unstage_members_instance(@staged), @staged.exists?]
 #=> [true, false]

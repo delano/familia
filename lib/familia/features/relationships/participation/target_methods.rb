@@ -493,6 +493,7 @@ collection_name: collection_name)
               end
 
               # Transaction: sorted set operations (ZADD active + SADD participations + ZREM staging)
+              removed = nil
               transaction do |_tx|
                 # Add to active collection
                 TargetMethods::Builder.add_to_collection(
@@ -509,10 +510,15 @@ collection_name: collection_name)
                   participant.track_participation_in(active_collection.dbkey)
                 end
 
-                # Remove from staging set and log warning if entry not found
+                # Remove from staging set
                 removed = staging_collection.remove(staged_model.objid)
-                Familia.debug "[activate] Staging entry not found for #{staged_model.objid}" if removed == 0
               end
+
+              # The ZREM reply is a Redis::Future until the transaction above
+              # completes, so the missing-entry check reads it afterwards. A
+              # single-member ZREM replies true or false.
+              removed = removed.value if removed.is_a?(Redis::Future)
+              Familia.debug "[activate] Staging entry not found for #{staged_model.objid}" unless removed
 
               # TRANSACTION BOUNDARY: Through model operations happen outside transaction
               # (same pattern as build_add_item - see that method for detailed rationale)
