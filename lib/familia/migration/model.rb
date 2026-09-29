@@ -300,9 +300,18 @@ module Familia
       # pry-byebug is an optional development tool that familia does not
       # declare. Raising PreconditionFailed, a StandardError, lets Runner
       # record the migration as failed; a bare LoadError would escape it.
+      # Only a LoadError for pry-byebug itself means the bundle lacks it. A
+      # LoadError for another path means pry-byebug is installed but one of
+      # its own requires failed, and adding it to the Gemfile would not help.
       def require_interactive_debugger
         require 'pry-byebug'
       rescue LoadError => e
+        unless e.path == 'pry-byebug'
+          raise Errors::PreconditionFailed,
+                "pry-byebug is installed but failed to load, so interactive mode cannot start: #{e.message}. " \
+                "Fix the application's bundle, or turn off interactive mode"
+        end
+
         raise Errors::PreconditionFailed,
               'Interactive mode needs the pry-byebug gem, which familia does not depend on. ' \
               "Add pry-byebug to the application's Gemfile, or turn off interactive mode (#{e.message})"
