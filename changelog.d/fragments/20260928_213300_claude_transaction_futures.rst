@@ -67,9 +67,11 @@ Changed
   ``Familia::RecordExistsError``.
 - ``commit_fields``, ``save_fields``, ``multi_field_update`` and
   ``multi_field_fast_write`` raise ``Familia::OperationModeError`` inside any
-  transaction or pipeline, before changing state. Previously only
-  unique-indexed fields were refused; other fields raised ``NoMethodError``
-  or left in-memory state out of step with the queued write.
+  transaction or pipeline, before changing state. Inside a caller's
+  transaction, ``multi_field_update`` and ``multi_field_fast_write``
+  previously queued their write, which committed with the outer EXEC; call
+  them before the block or use ``atomic_write``. ``commit_fields`` and
+  ``save_fields`` raised ``NoMethodError`` there.
 - ``Horreum#destroy!`` raises ``Familia::OperationModeError`` inside a
   transaction or pipeline, before queueing anything, when the class has
   instance-scoped indexes. It previously raised ``NoMethodError`` after
@@ -109,6 +111,12 @@ Documentation
 
 - ``docs/reference/transaction_safety.md`` rule 4 describes how each method
   handles command replies inside transactions and pipelines.
+- ``docs/migrating/transaction-replies.md`` lists the calls inside a block
+  that behaved differently before and need a code change: partial writes
+  that committed with an outer transaction, ``extend_expiration``, the
+  ``Lock`` ownership checks and ``release``, ``current_indexings``,
+  ``Migration::Registry#applied?`` and the TTL refresh of
+  ``HashKey#hsetnx`` and ``ListKey#insert``.
 
 AI Assistance
 -------------
