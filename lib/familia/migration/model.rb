@@ -124,9 +124,10 @@ module Familia
       # @raise [Errors::PreconditionFailed] if the model class is not set or
       #   is not a Familia::Horreum subclass, or if {#interactive} is set and
       #   pry-byebug cannot be loaded
-      # @raise [Familia::SchemaValidatorLoadError] if a validation hook is on
+      # @raise [Familia::SchemaValidatorLoadError] if a record is validated,
+      #   by a validation hook or a {#validate_schema} call in a record hook,
       #   and json_schemer is installed but fails to load. The run ends at
-      #   the first record it validates.
+      #   the first record validated.
       def migrate
         validate_model_class!
 

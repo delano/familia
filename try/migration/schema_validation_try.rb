@@ -189,7 +189,7 @@ migration = Familia::Migration::Model.new
 end
 #=> true
 
-# The next case runs in a fresh process with a json_schemer.rb whose own
+# The next two cases run in a fresh process with a json_schemer.rb whose own
 # require fails, because json_schemer is already loaded here.
 
 ## A validator that cannot load ends a Model migration: Runner records it as failed, Base.run raises
@@ -250,6 +250,56 @@ run_fresh_ruby(<<~RUBY, load_path: [@broken_gem_dir])
   end
 RUBY
 #=> ['failed', 'true', 'false', 'Base.run raised Familia::SchemaValidatorLoadError', '0']
+
+## A validator that cannot load ends a Pipeline migration whose hook validates, and Runner records it as failed
+File.write(File.join(@schema_dir, 'broken_pipeline_record.json'), JSON.generate({ type: 'object' }))
+run_fresh_ruby(<<~RUBY, load_path: [@broken_gem_dir])
+  require 'familia'
+  require 'familia/migration'
+
+  Familia.uri = #{Familia.uri.to_s.dump}
+  Familia.schema_path = #{@schema_dir.dump}
+  Familia::SchemaRegistry.load!
+  prefix = "familia:test:broken_pipeline:\#{Process.pid}"
+
+  class BrokenPipelineRecord < Familia::Horreum
+    identifier_field :rid
+    field :rid
+    field :flag
+  end
+  BrokenPipelineRecord.prefix(prefix)
+
+  class BrokenPipelineMigration < Familia::Migration::Pipeline
+    self.migration_id = 'broken_pipeline_probe'
+
+    def prepare
+      @model_class = BrokenPipelineRecord
+      @batch_size = 1
+    end
+
+    def should_process?(obj)
+      validate_schema!(obj, context: 'before update')
+      true
+    end
+
+    def build_update_fields(_obj)
+      { 'flag' => 'true' }
+    end
+  end
+
+  %w[r1 r2].each { |rid| BrokenPipelineRecord.new(rid: rid).save }
+  registry = Familia::Migration::Registry.new(prefix: prefix)
+  runner = Familia::Migration::Runner.new(migrations: [BrokenPipelineMigration], registry: registry)
+  begin
+    result = runner.run_one(BrokenPipelineMigration)
+    puts result[:status]
+    puts result[:error].to_s.include?('familia_probe_missing_dependency')
+    puts registry.applied?('broken_pipeline_probe')
+  ensure
+    Familia.dbclient.scan_each(match: "\#{prefix}*").to_a.each { |key| Familia.dbclient.del(key) }
+  end
+RUBY
+#=> ['failed', 'true', 'false']
 
 # Teardown
 FileUtils.rm_rf(@schema_dir)

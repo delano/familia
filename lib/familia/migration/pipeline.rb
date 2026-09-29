@@ -144,6 +144,13 @@ module Familia
         for_realsies_this_time? do
           process_batch(objects)
         end
+      rescue Familia::SchemaValidatorLoadError
+        # Raised when a hook such as #should_process? calls #validate_schema
+        # and json_schemer cannot load. Every batch would fail the same way,
+        # and counting it as batch errors would let #migrate finish and
+        # Runner record the migration as applied. As in
+        # Model#process_single_record, it ends the run instead.
+        raise
       rescue StandardError => ex
         @error_count += objects.size
         error("Error processing batch of #{objects.size}: #{ex.message}")
