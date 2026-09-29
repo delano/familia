@@ -17,7 +17,7 @@ Changed
   hooks stops at the first record it validates, and
   ``Familia::Migration::Runner`` records it as ``:failed`` and not applied.
   When ``json_schemer`` itself cannot be loaded, validation still warns and
-  is disabled.
+  is disabled. See ``docs/migrating/runtime-dependencies.md``.
 
 AI Assistance
 -------------

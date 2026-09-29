@@ -3,7 +3,8 @@ Changed
 
 - ``familia.gemspec`` requires ``oj`` ``~> 3.16, >= 3.16.5`` (was
   ``~> 3.16``) and ``json_schemer`` ``~> 2.2`` (was ``~> 2.0``). Bundles
-  that pin an older ``oj`` or ``json_schemer`` no longer resolve.
+  that pin an older ``oj`` or ``json_schemer`` no longer resolve. See
+  ``docs/migrating/runtime-dependencies.md``.
 
 Fixed
 -----

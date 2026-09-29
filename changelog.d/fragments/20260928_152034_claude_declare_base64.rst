@@ -4,7 +4,7 @@ Changed
 - ``require 'familia'`` no longer loads ``base64``, and ``familia.gemspec``
   does not depend on it. Applications that call ``Base64`` must
   ``require 'base64'`` themselves and, on Ruby 3.4+, list ``base64`` in their
-  Gemfile.
+  Gemfile. See ``docs/migrating/runtime-dependencies.md``.
 
 Fixed
 -----

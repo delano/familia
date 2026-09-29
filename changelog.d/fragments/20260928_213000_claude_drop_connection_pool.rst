@@ -7,7 +7,7 @@ Removed
   version an application resolves (previously ``>= 2.4, < 4.0``).
   Applications that pass a ``ConnectionPool`` to
   ``Familia.connection_provider`` should list ``connection_pool`` in their
-  Gemfile and require it.
+  Gemfile and require it. See ``docs/migrating/runtime-dependencies.md``.
 
 AI Assistance
 -------------
