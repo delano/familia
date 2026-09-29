@@ -494,22 +494,22 @@ module Familia
       # @return [Hash{String => Hash}] field_value => {key:, identifiers: [...]}
       #
       def discover_multi_index_buckets(rel)
-        bucket_pattern = "#{prefix}#{Familia.delim}#{rel.index_name}#{Familia.delim}*"
-        bucket_prefix = "#{prefix}#{Familia.delim}#{rel.index_name}#{Familia.delim}"
+        generators = Familia::Features::Relationships::Indexing::MultiIndexGenerators
+        bucket_prefix = generators.bucket_key_prefix(self, rel.index_name)
         bucket_entries = {}
 
-        # Batch SCAN results and pipeline SMEMBERS to collapse one round trip
-        # per bucket key into one round trip per slice of 100 keys.
-        dbclient.scan_each(match: bucket_pattern).each_slice(100) do |keys|
-          valid_keys = keys.select { |k| k.start_with?(bucket_prefix) }
-          next if valid_keys.empty?
-
+        # Read the keys the rebuild would clear, in slices of 100, and
+        # pipeline SMEMBERS to collapse one round trip per bucket key into
+        # one round trip per slice. Only sets are returned: a record whose
+        # identifier equals the index name has its hash and fields under
+        # the same prefix, and SMEMBERS on a hash or list raises WRONGTYPE.
+        generators.each_index_bucket_slice(dbclient, bucket_prefix, batch_size: 100) do |valid_keys|
           members_batch = dbclient.pipelined do |pipe|
             valid_keys.each { |k| pipe.smembers(k) }
           end
 
           valid_keys.each_with_index do |key, idx|
-            field_value = key[bucket_prefix.length..]
+            field_value = key.byteslice(bucket_prefix.bytesize..)
             next if field_value.nil? || field_value.empty?
 
             bucket_entries[field_value] = {
@@ -701,8 +701,12 @@ module Familia
         client = scope_class.dbclient
 
         # Batch SCAN results and pipeline SMEMBERS to collapse a round trip
-        # per bucket key into a round trip per slice of 100 keys.
-        client.scan_each(match: pattern).each_slice(100) do |keys|
+        # per bucket key into a round trip per slice of 100 keys. As in the
+        # rebuild, SCAN's TYPE option returns only sets: another key under
+        # a scope's index prefix is not a bucket, and SMEMBERS on it would
+        # raise WRONGTYPE.
+        bucket_type = Familia::Features::Relationships::Indexing::MultiIndexGenerators::BUCKET_KEY_TYPE
+        client.scan_each(match: pattern, type: bucket_type).each_slice(100) do |keys|
           parsed = keys.filter_map do |key|
             scope_id, field_value = parse_instance_scoped_bucket_key(key, scope_prefix, marker)
             next nil if scope_id.nil? || scope_id.empty? || field_value.nil? || field_value.empty?

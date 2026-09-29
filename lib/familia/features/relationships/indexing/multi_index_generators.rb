@@ -33,13 +33,15 @@ module Familia
           # Longer values are allowed but will trigger a warning.
           MAX_FIELD_VALUE_LENGTH = 256
 
+          # Redis type of every per-value bucket key. The factories below
+          # build each bucket as a Familia::UnsortedSet.
+          BUCKET_KEY_TYPE = 'set'
+
           # Validates a field value for use in index key construction.
-          # This is primarily for data quality and debugging clarity, not security.
-          #
-          # Security note: Redis SCAN patterns use the namespace prefix (e.g.,
-          # "customer:role_index:") which is derived from class/index metadata,
-          # not user input. Glob characters in stored field values are treated
-          # as literal characters in key names, not as pattern wildcards.
+          # This is for data quality and debugging clarity. It does not make
+          # values safe to put in a key pattern: code that builds a SCAN or
+          # KEYS pattern from keys like these escapes the literal part with
+          # Familia.escape_glob (see .each_index_bucket_slice).
           #
           # @param field_value [Object] The field value to validate
           # @param context [String] Description for warning messages
@@ -69,6 +71,112 @@ module Familia
             end
 
             str_value
+          end
+
+          # Returns the literal key prefix of the per-value buckets of
+          # +index_name+ on +owner+, for example "company:c-1:dept_index:"
+          # for a scope instance or "customer:role_index:" for a class.
+          #
+          # The factories pass a field value through .validate_field_value
+          # and name its bucket Familia.join(index_name, validated) under
+          # +owner+'s key. This method joins +index_name+ with '' instead,
+          # which leaves the index name followed by the delimiter. Every
+          # bucket of a non-blank field value starts with that prefix.
+          #
+          # A blank value is the exception. Validation turns it into nil,
+          # which Familia.join drops, so the factories name its bucket
+          # "<owner key>:<index_name>" with no trailing delimiter. That key
+          # is outside this prefix, and the SCAN in .each_index_bucket_slice
+          # does not return it. The instance-scoped add_to_* writes a blank
+          # value there; the class-level one skips blank values.
+          #
+          # @param owner [Familia::Horreum, Class] the scope instance, or the
+          #   indexed class for a class-level index
+          # @param index_name [Symbol] name of the index
+          # @return [String]
+          def bucket_key_prefix(owner, index_name)
+            Familia::UnsortedSet.new(Familia.join(index_name, ''), parent: owner).dbkey
+          end
+
+          # Yields the keys of the per-value bucket sets whose keys start
+          # with +bucket_prefix+, in slices of up to +batch_size+ keys.
+          #
+          # The prefix is escaped with Familia.escape_glob before the SCAN
+          # wildcard is appended, so glob characters in a scope identifier,
+          # the class prefix or the delimiter cannot make the pattern match
+          # keys outside that literal prefix. SCAN's TYPE option leaves out
+          # every key that does not hold a set, the type the factories give
+          # each bucket. The Valkey and Redis SCAN command histories both
+          # list "Added the `TYPE` subcommand." under 6.0.0, and README.md
+          # lists the prerequisite "**Valkey/Redis**: 6.0+". Each returned
+          # key must also start with the literal prefix (see
+          # .select_index_buckets), a second check before the rebuild
+          # deletes it.
+          #
+          # The rebuild deletes these keys and the audit reads them, so
+          # both act on the same keys.
+          #
+          # @param client [Redis] connection that owns the buckets
+          # @param bucket_prefix [String] literal prefix from .bucket_key_prefix
+          # @param batch_size [Integer] SCAN count hint and slice size
+          # @yieldparam keys [Array<String>] a non-empty slice of bucket keys
+          # @return [Enumerator, nil] an Enumerator when no block is given
+          def each_index_bucket_slice(client, bucket_prefix, batch_size: 100)
+            return enum_for(__method__, client, bucket_prefix, batch_size: batch_size) unless block_given?
+
+            pattern = "#{Familia.escape_glob(bucket_prefix)}*"
+            client.scan_each(match: pattern, count: batch_size, type: BUCKET_KEY_TYPE)
+                  .each_slice(batch_size) do |keys|
+              buckets = select_index_buckets(keys, bucket_prefix)
+              yield buckets unless buckets.empty?
+            end
+            nil
+          end
+
+          # Deletes the per-value bucket sets whose keys start with
+          # +bucket_prefix+, including buckets for field values that no
+          # object holds any more.
+          #
+          # Only the keys .each_index_bucket_slice yields are deleted. A key
+          # under the prefix that holds another type is left alone. It was
+          # not written as a bucket by this version, and it may belong to a
+          # record whose identifier makes its keys share the prefix, such as
+          # the hash and list of a record named after a class-level index.
+          #
+          # @param client [Redis] connection that owns the buckets
+          # @param bucket_prefix [String] literal prefix from .bucket_key_prefix
+          # @param batch_size [Integer] SCAN count hint and DEL batch size
+          # @yieldparam key [String] a bucket key that was deleted
+          # @yieldparam cleared [Integer] buckets deleted so far
+          # @return [Integer] number of bucket keys deleted
+          def clear_index_buckets(client, bucket_prefix, batch_size: 100, &on_delete)
+            cleared = 0
+
+            each_index_bucket_slice(client, bucket_prefix, batch_size: batch_size) do |buckets|
+              client.del(*buckets)
+              buckets.each do |key|
+                cleared += 1
+                on_delete&.call(key, cleared)
+              end
+            end
+
+            cleared
+          end
+
+          # Returns the +keys+ that start with the literal +bucket_prefix+.
+          #
+          # The check compares bytes. The client returns a key that is not
+          # valid UTF-8 as a binary String, and String#start_with? raises
+          # Encoding::CompatibilityError for a binary key and a UTF-8 prefix
+          # that both hold non-ASCII bytes, as they do when a scope
+          # identifier holds invalid UTF-8.
+          #
+          # @param keys [Array<String>] keys returned by SCAN
+          # @param bucket_prefix [String] literal prefix from .bucket_key_prefix
+          # @return [Array<String>]
+          def select_index_buckets(keys, bucket_prefix)
+            prefix = bucket_prefix.b
+            keys.select { |key| key.b.start_with?(prefix) }
           end
 
           # Main setup method that orchestrates multi-value index creation
@@ -172,10 +280,15 @@ module Familia
 
               # Generate method to rebuild the multi-value index for this parent instance
               #
-              # Multi-indexes create separate sets for each field value, requiring a three-phase approach:
-              # 1. Loading: Load all objects once and cache them (discovers field values simultaneously)
-              # 2. Clearing: Remove all existing index sets using SCAN
-              # 3. Rebuilding: Rebuild index from cached objects (no reload needed)
+              # Multi-indexes create separate sets for each field value, so the rebuild runs in three phases:
+              # 1. Loading: Load every object in the participation collection once and cache it,
+              #    collecting its field value.
+              # 2. Clearing: Delete this scope instance's bucket sets, including those of field
+              #    values no object holds any more. A SCAN over the escaped bucket prefix finds
+              #    them, and only keys that start with that literal prefix and hold a set are
+              #    deleted.
+              # 3. Rebuilding: Add each cached object to the bucket of its field value
+              #    (no reload needed).
               #
               # @param batch_size [Integer] Number of identifiers to process per batch
               # @yield [progress] Optional block called with progress updates
@@ -183,7 +296,9 @@ module Familia
               #   - :phase [Symbol] Current phase (:loading, :clearing, :rebuilding)
               #   - :current [Integer] Current item count
               #   - :total [Integer] Total items (when known)
-              #   - :field_value [String] Current field value being processed
+              #   - :key [String] Bucket key just deleted (:clearing phase only)
+              # @return [Integer, nil] Number of objects processed, or nil when the indexed
+              #   class has no participation relationship to this scope class
               #
               # @example Basic rebuild
               #   company.rebuild_dept_index
@@ -244,21 +359,17 @@ module Familia
                     progress_block&.call(phase: :loading, current: processed, total: collection.size)
                   end
 
-                  # PHASE 3: Clear all existing field-value-specific index sets
-                  # Use SCAN to find all existing index keys (including orphaned ones from deleted field values)
+                  # PHASE 3: Clear this scope instance's field-value-specific index sets.
+                  # SCAN also finds orphaned sets left by field values no object holds any more.
+                  # The identifier in the prefix (e.g. "company:c-*:dept_index:") is escaped,
+                  # so a glob character in it cannot widen the match past that literal prefix.
                   progress_block&.call(phase: :clearing, current: 0, total: field_values.size)
 
-                  # Get the base pattern for this index by creating a sample index set
-                  # The "*" creates a wildcard pattern like "company:123:dept_index:*" for SCAN
-                  sample_index = send(:"#{index_name}_for", "*")
-                  index_pattern = sample_index.dbkey
-
-                  # Find all existing index keys using SCAN
-                  cleared_count = 0
-                  dbclient.scan_each(match: index_pattern) do |key|
-                    dbclient.del(key)
-                    cleared_count += 1
-                    progress_block&.call(phase: :clearing, current: cleared_count, total: field_values.size, key: key)
+                  bucket_prefix = MultiIndexGenerators.bucket_key_prefix(self, index_name)
+                  MultiIndexGenerators.clear_index_buckets(
+                    dbclient, bucket_prefix, batch_size: batch_size
+                  ) do |key, cleared|
+                    progress_block&.call(phase: :clearing, current: cleared, total: field_values.size, key: key)
                   end
 
                   # PHASE 4: Rebuild index from cached objects (no reload needed)
@@ -482,7 +593,18 @@ module Familia
             end
 
             # rebuild_role_index(batch_size:, &progress)
-            # For class-level indexes, we iterate all instances of the class
+            #
+            # For class-level indexes, we iterate all instances of the class.
+            # The phases match the instance-scoped rebuild: load every object
+            # and its field value, delete the class's bucket sets under the
+            # escaped bucket prefix (e.g. "customer:role_index:"), then add
+            # each object to the bucket of its field value.
+            #
+            # @param batch_size [Integer] Number of identifiers to process per batch
+            # @yield [progress] Optional block called with progress updates; the
+            #   phases are :discovering, :loading, :clearing and :rebuilding
+            # @return [Integer] Number of objects processed, or 0 when the class
+            #   has no instances collection
             indexed_class.define_singleton_method(:"rebuild_#{index_name}") do |batch_size: 100, &progress_block|
               # PHASE 1: Discover all field values and collect objects
               progress_block&.call(phase: :discovering, current: 0, total: 0)
@@ -515,26 +637,15 @@ module Familia
                 progress_block&.call(phase: :loading, current: processed, total: total_count)
               end
 
-              # PHASE 2: Clear existing index sets using SCAN
+              # PHASE 2: Clear existing index sets (e.g. "customer:role_index:*") using SCAN.
+              # The class prefix and delimiter are escaped like any other literal part.
               progress_block&.call(phase: :clearing, current: 0, total: field_values.size)
 
-              # Get pattern for all index keys: "customer:role_index:*"
-              #
-              # Security note: The SCAN pattern is safe because:
-              # 1. The namespace prefix (e.g., "customer:role_index:") is derived from
-              #    class metadata and index name, not user input
-              # 2. The "*" wildcard only matches keys within this namespace
-              # 3. Glob characters stored IN field values (e.g., a role named "admin*")
-              #    are literal characters in the key name, not SCAN wildcards
-              # 4. SCAN cannot match keys outside the namespace prefix
-              sample_index = send(:"#{index_name}_for", "*")
-              index_pattern = sample_index.dbkey
-
-              cleared_count = 0
-              dbclient.scan_each(match: index_pattern) do |key|
-                dbclient.del(key)
-                cleared_count += 1
-                progress_block&.call(phase: :clearing, current: cleared_count, total: field_values.size, key: key)
+              bucket_prefix = MultiIndexGenerators.bucket_key_prefix(self, index_name)
+              MultiIndexGenerators.clear_index_buckets(
+                dbclient, bucket_prefix, batch_size: batch_size
+              ) do |key, cleared|
+                progress_block&.call(phase: :clearing, current: cleared, total: field_values.size, key: key)
               end
 
               # PHASE 3: Rebuild from cached objects
