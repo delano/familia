@@ -20,7 +20,8 @@ Changed
   every collection, the generated related-field predicates (``user.tags?``,
   ``User.instances?``), ``HashKey#values``, ``#hgetall``, ``#values_at``,
   ``#scan``, ``#randfield`` with ``withvalues: true``; ``ListKey#range``,
-  ``#members``, ``#[]``, ``#member?``, ``#pop`` and ``#shift`` with a count;
+  ``#members``, ``#[]`` (and ``#slice``) with a range or a start and
+  length, ``#member?``, ``#pop`` and ``#shift`` with a count;
   ``SortedSet#score``, ``#member?``, ``#rank``, ``#revrank``, ``#members``,
   ``#revmembers``, the range readers, ``#at``, ``#first``, ``#last``,
   ``#popmin``, ``#popmax``, ``#mscore``, ``#union``, ``#inter``, ``#diff``,
