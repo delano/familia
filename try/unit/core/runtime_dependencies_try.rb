@@ -28,11 +28,17 @@ require_relative '../../support/helpers/test_helpers'
 # An application's bundle can resolve any release a requirement allows, so
 # each floor must exclude releases that load a library leaving Ruby's
 # default gems (the SINCE table in Ruby's bundled_gems.rb) without declaring
-# it. On Ruby 3.4 such a release fails with LoadError under Bundler.
+# it. Under Bundler, requiring such a library raises LoadError on the Ruby
+# version the table lists for it and later. Ruby 3.4 also warns when it
+# loads a library listed at 4.0.0 from the standard library. So on Ruby 3.4,
+# bigdecimal and base64 (listed at 3.4.0) raise LoadError, and ostruct
+# (listed at 4.0.0) loads with a warning.
 # From each release's gemspec and lib/:
 # - oj 3.16.0 to 3.16.4 require bigdecimal (lib/oj/mimic.rb) and ostruct
-#   (lib/oj/json.rb). 3.16.0 and 3.16.1 declare neither, 3.16.2 to 3.16.4
-#   declare only bigdecimal, and 3.16.5 declares both.
+#   (lib/oj/mimic.rb, which rescues its failure, and lib/oj/json.rb).
+#   3.16.0 and 3.16.1 declare neither, so they raise LoadError on Ruby 3.4.
+#   3.16.2 to 3.16.4 declare only bigdecimal, so they warn about ostruct on
+#   Ruby 3.4. 3.16.5 declares both.
 # - json_schemer 2.0.0 to 2.1.1 require base64 and bigdecimal
 #   (lib/json_schemer.rb) and declare neither. 2.2.0 declares both.
 
