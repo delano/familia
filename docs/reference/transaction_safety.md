@@ -177,7 +177,10 @@ string interpolation, `Array#join` and `puts`, with no error. Use the reader
   `destroy!`, instance `destroy!` on a class with instance-scoped indexes, the
   `guard_unique_*!` methods, the staged participation methods (`stage_*`,
   `activate_*_instance`, `unstage_*`), and the add and remove methods of a
-  `through:` participation
+  `through:` participation. Inside a pipeline this also covers the
+  `add_to_*` and `update_in_*` methods of every `unique_index`, class-level
+  and instance-scoped. Inside a transaction they re-affirm a claim or write
+  without a uniqueness check instead (see Examples 3 and 4)
 - Admission checks: `Lock#acquire`, `#locked?`, `#held_by?` and `#empty?`
   (and so the generated predicate of a `lock` field),
   `Counter#increment_if_less_than`, `HashKey#claim_field`, and
@@ -287,6 +290,7 @@ end
 ```ruby
 # Instance-scoped indexes can be added within transactions
 # Uniqueness validation is automatically skipped inside transactions
+# Inside a pipeline, add_to_* raises Familia::OperationModeError instead
 Company.transaction do
   employees.each do |employee|
     # Safe: validation skipped, direct index write only

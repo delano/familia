@@ -80,6 +80,16 @@ Changed
   transaction. Inside a pipeline they previously raised
   ``Familia::ConflictingContextError`` or a spurious
   ``Familia::RecordExistsError``.
+- Inside a pipeline, the ``add_to_*`` and ``update_in_*`` methods of a
+  ``unique_index`` raise ``Familia::OperationModeError`` before queueing
+  anything, and the error names the method called. ``claim_unique_*!``
+  names itself the same way inside a transaction or pipeline. Inside a
+  pipeline they previously raised a spurious
+  ``Familia::RecordExistsError`` (``add_to_*`` on an instance-scoped
+  index), ``Familia::ConflictingContextError`` (``update_in_*`` with no
+  field value) or an error naming ``HashKey#claim_field``, and ``add_to_*``
+  with no field value returned ``nil``. Inside a transaction they behave as
+  before.
 - ``commit_fields``, ``save_fields``, ``multi_field_update`` and
   ``multi_field_fast_write`` raise ``Familia::OperationModeError`` inside any
   transaction or pipeline, before changing state. Inside a caller's
