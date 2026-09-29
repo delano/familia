@@ -153,8 +153,8 @@ string interpolation, `Array#join` and `puts`, with no error. Use the reader
   `sample_from_*`), the participation readers (`*_ids`, `*_count`,
   `*_instances`, the participation predicate `<target>?` such as
   `user.project_team?`, `current_participations`, `position_in_*`,
-  `*_with_permission`, `each_*_with_permission`), `current_indexings`
-  and `relationship_status`
+  `*_with_permission`, `each_*_with_permission`), `current_indexings`,
+  `relationship_status` and `validate_relationships!`
 - Scans and maintenance: `scan_count` (`count!`), `scan_any?` (`any!`), the
   `audit_*`, `health_check`, `repair_*` and `rebuild_*` methods,
   `run_chores!`, and the `EnforceCollectionCaps` chore

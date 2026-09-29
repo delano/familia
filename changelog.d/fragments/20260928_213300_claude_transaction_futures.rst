@@ -52,11 +52,11 @@ Changed
   ``scan_count``, ``scan_any?``, class-level ``destroy!``, the index
   finders, rebuilds and ``guard_unique_*!`` methods, the participation
   readers, ``current_indexings`` (reported every class-level index whose
-  field was set), ``relationship_status``, the ``audit_*``,
-  ``health_check``, ``repair_*`` and ``scan_keys`` methods, ``run_chores!``,
-  ``EnforceCollectionCaps``, ``Migration::Base.run`` and ``.check_only``,
-  and ``Migration::Runner#run``, ``#run_one``, ``#rollback``, ``#status``,
-  ``#pending``.
+  field was set), ``relationship_status``, ``validate_relationships!``, the
+  ``audit_*``, ``health_check``, ``repair_*`` and ``scan_keys`` methods,
+  ``run_chores!``, ``EnforceCollectionCaps``, ``Migration::Base.run`` and
+  ``.check_only``, and ``Migration::Runner#run``, ``#run_one``,
+  ``#rollback``, ``#status``, ``#pending``.
 - ``Migration::Registry#pending``, ``#status``, ``#record_rollback``,
   ``#schema_changed?``, ``#schema_drift`` and ``#restore_backup`` raise
   ``Familia::OperationModeError`` when the registry's client is a

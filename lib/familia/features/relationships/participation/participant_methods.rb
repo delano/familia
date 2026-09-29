@@ -144,7 +144,10 @@ module Familia
             #       []  # Return empty array or other fallback
             #     end
             #
+            # Each generated reader refuses inside a transaction or pipeline
+            # under its own name, before the helper it delegates to would.
             participant_class.define_method("#{base_name}_instances") do
+              Familia.assert_replies_available!("#{self.class}##{__method__}")
               ids = participating_ids_for_target(target_class, collections_filter)
               # Use load_multi for Horreum objects (stored as Redis hashes)
               target_class.load_multi(ids).compact
@@ -157,6 +160,7 @@ module Familia
             # @note Database errors (connection, timeout) will bubble up to caller.
             #
             participant_class.define_method("#{base_name}_ids") do
+              Familia.assert_replies_available!("#{self.class}##{__method__}")
               participating_ids_for_target(target_class, collections_filter)
             end
 
@@ -167,6 +171,7 @@ module Familia
             # @note Database errors (connection, timeout) will bubble up to caller.
             #
             participant_class.define_method("#{base_name}?") do
+              Familia.assert_replies_available!("#{self.class}##{__method__}")
               participating_in_target?(target_class, collections_filter)
             end
 
@@ -177,6 +182,7 @@ module Familia
             # @note Database errors (connection, timeout) will bubble up to caller.
             #
             participant_class.define_method("#{base_name}_count") do
+              Familia.assert_replies_available!("#{self.class}##{__method__}")
               participating_ids_for_target(target_class, collections_filter).size
             end
           end

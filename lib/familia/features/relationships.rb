@@ -220,7 +220,15 @@ module Familia
         end
 
         # Validate that this object's relationships are consistent
+        #
+        # @return [true]
+        # @raise [RelationshipError] when a participation entry is invalid
+        # @raise [Familia::OperationModeError] inside a transaction or
+        #   pipeline, where the participations read back are Redis::Future
+        #   objects
         def validate_relationships!
+          Familia.assert_replies_available!("#{self.class}#validate_relationships!")
+
           errors = []
 
           # Validate identifier exists

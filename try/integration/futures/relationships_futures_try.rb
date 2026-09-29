@@ -157,6 +157,26 @@ end
 ].uniq
 #=> [Familia::OperationModeError]
 
+## participation readers and validate_relationships! name themselves in the error
+@names = []
+[
+  -> { @emp.futures_rel_company_ids },
+  -> { @emp.futures_rel_company_count },
+  -> { @emp.futures_rel_company? },
+  -> { @emp.futures_rel_company_instances },
+  -> { @emp.validate_relationships! },
+].each do |call|
+  @in_pipeline.call(&call)
+rescue Familia::OperationModeError => e
+  @names << e.message[/#(\w+[?!]?) cannot run inside/, 1]
+end
+@expected_names = %w[
+  futures_rel_company_ids futures_rel_company_count futures_rel_company?
+  futures_rel_company_instances validate_relationships!
+]
+@names == @expected_names
+#=> true
+
 ## current_indexings and relationship_status inside a pipeline raise OperationModeError
 # The record was never saved, so no index holds it. Each membership check
 # would be a truthy Redis::Future and report every index.
