@@ -326,7 +326,9 @@ module Familia
       # SCANs DB hash keys and extracts identifiers.
       #
       # This is the source of truth for what objects actually exist — it
-      # bypasses the instances timeline entirely.
+      # bypasses the instances timeline entirely. Only keys that hold a hash
+      # are read (see OBJECT_KEY_TYPE), so a multi_index bucket named like
+      # an object key is not taken for an object.
       #
       # @param batch_size [Integer] SCAN cursor count hint (default: 100)
       # @yield [Hash] Optional progress callback
@@ -338,7 +340,7 @@ module Familia
         cursor = '0'
 
         loop do
-          cursor, keys = dbclient.scan(cursor, match: pattern, count: batch_size)
+          cursor, keys = dbclient.scan(cursor, match: pattern, count: batch_size, type: OBJECT_KEY_TYPE)
           keys.each do |key|
             identifier = extract_identifier_from_key(key)
             next if identifier.nil? || identifier.empty?

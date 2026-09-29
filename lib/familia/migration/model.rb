@@ -101,6 +101,15 @@ module Familia
       # @return [String] pattern like "customer:*:object"
       attr_reader :scan_pattern
 
+      # Redis SCAN TYPE option, or nil to scan keys of every type. When
+      # #prepare leaves @scan_pattern unset, it defaults to
+      # Familia::Horreum::OBJECT_KEY_TYPE, so the default pattern yields
+      # only object hashes and not a multi_index bucket set whose name
+      # ends with the class suffix. With a custom @scan_pattern it stays
+      # nil unless #prepare sets it.
+      # @return [String, nil] a Redis type such as "hash"
+      attr_reader :scan_type
+
       def initialize(options = {})
         super
         reset_counters
@@ -282,6 +291,7 @@ module Familia
         @batch_size   = Familia::Migration.config.batch_size
         @model_class  = nil
         @scan_pattern = nil
+        @scan_type    = nil
         @interactive  = false
         @total_records = 0
       end
@@ -297,8 +307,18 @@ module Familia
 
         @total_records  = @model_class.respond_to?(:instances) ? @model_class.instances.size : 0
         @dbclient     ||= @model_class.respond_to?(:dbclient) ? @model_class.dbclient : Familia.dbclient
-        @scan_pattern ||= @model_class.scan_pattern
+        unless @scan_pattern
+          @scan_pattern = @model_class.scan_pattern
+          @scan_type ||= Familia::Horreum::OBJECT_KEY_TYPE
+        end
         nil
+      end
+
+      # Options for each SCAN call over the records.
+      def scan_options
+        options = { match: @scan_pattern, count: @batch_size }
+        options[:type] = @scan_type if @scan_type
+        options
       end
 
       def familia_horreum_class?
@@ -312,7 +332,7 @@ module Familia
         cursor = '0'
 
         loop do
-          cursor, keys    = dbclient.scan(cursor, match: @scan_pattern, count: @batch_size)
+          cursor, keys    = dbclient.scan(cursor, **scan_options)
           @total_scanned += keys.size
 
           show_progress if should_show_progress?

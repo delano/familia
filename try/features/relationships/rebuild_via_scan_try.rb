@@ -59,10 +59,23 @@ ScanRebuildRecord.rebuild_via_scan_for_test(batch_size: 2) { |update| @progress 
 @progress.length >= 2 && @progress.all? { |update| update[:completed] <= update[:scanned] }
 #=> true
 
+## A key of another type at an object key is skipped, not loaded
+@live_index = ScanRebuildRecord.email_lookup.all
+@wrong_type_key = ScanRebuildRecord.dbkey('wrong-type')
+ScanRebuildRecord.dbclient.set(@wrong_type_key, 'not-a-hash')
+begin
+  [ScanRebuildRecord.rebuild_via_scan_for_test(batch_size: 100), ScanRebuildRecord.email_lookup.all == @live_index]
+ensure
+  ScanRebuildRecord.dbclient.del(@wrong_type_key)
+end
+#=> [3, true]
+
 ## A failed SCAN batch raises and leaves the live index unchanged
 @live_index = ScanRebuildRecord.email_lookup.all
-@invalid_record_key = ScanRebuildRecord.dbkey('wrong-type')
-ScanRebuildRecord.dbclient.set(@invalid_record_key, 'not-a-hash')
+# An object hash without its identifier field cannot be written to the
+# index, so the batch raises.
+@invalid_record_key = ScanRebuildRecord.dbkey('no-identifier')
+ScanRebuildRecord.dbclient.hset(@invalid_record_key, 'email', '"broken@example.com"')
 @raised = begin
   ScanRebuildRecord.rebuild_via_scan_for_test(batch_size: 100)
   false

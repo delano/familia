@@ -8,6 +8,15 @@ require_relative 'management/repair'
 
 module Familia
   class Horreum
+    # Redis type of the key that holds a Horreum object's fields.
+    #
+    # The methods that enumerate objects by a key pattern, such as #all,
+    # #scan_count and audit_instances, keep only keys of this type. The
+    # pattern "<prefix>:*:<suffix>" also matches keys that are not object
+    # hashes: the bucket set of a multi_index whose field value equals the
+    # suffix, such as "customer:role_index:object".
+    OBJECT_KEY_TYPE = 'hash'
+
     # ManagementMethods - Class-level methods for Horreum model management
     #
     # This module is extended into classes that include Familia::Horreum,
@@ -748,7 +757,8 @@ module Familia
       #   is escaped like the class prefix and delimiter (see #dbkey_pattern),
       #   because every matching key is loaded as an object hash.
       # @return [Array<Familia::Horreum>] The loaded objects. Keys that
-      #   cannot be loaded are left out.
+      #   cannot be loaded are left out, and so are matching keys that do
+      #   not hold a hash (see OBJECT_KEY_TYPE).
       #
       # @example
       #   User.all  # Loads the objects of every key matching user:*:object
@@ -756,7 +766,7 @@ module Familia
       def all(suffix = nil)
         suffix ||= self.suffix
         # objects that could not be parsed will be nil
-        dbclient.keys(dbkey_pattern('*', suffix)).filter_map { |k| find_by_key(k) }
+        object_keys(dbclient.keys(dbkey_pattern('*', suffix))).filter_map { |k| find_by_key(k) }
       end
 
       # Returns the number of tracked instances (fast, from instances sorted set).
@@ -790,7 +800,8 @@ module Familia
       #
       # @param filter [String] Glob for the identifier part (default: '*').
       #   The class prefix and suffix are escaped; see #dbkey_pattern.
-      # @return [Integer] Number of matching keys in Redis
+      # @return [Integer] Number of matching keys that hold a hash (see
+      #   OBJECT_KEY_TYPE)
       #
       # @example
       #   User.keys_count       #=> 1  (all User objects)
@@ -801,7 +812,7 @@ module Familia
       # @see #count Fast count from instances sorted set
       #
       def keys_count(filter = '*')
-        dbclient.keys(dbkey_pattern(filter)).compact.size
+        object_keys(dbclient.keys(dbkey_pattern(filter)).compact).size
       end
 
       # Returns authoritative count using non-blocking SCAN command (production-safe).
@@ -811,7 +822,8 @@ module Familia
       #
       # @param filter [String] Glob for the identifier part (default: '*').
       #   The class prefix and suffix are escaped; see #dbkey_pattern.
-      # @return [Integer] Number of matching keys in Redis
+      # @return [Integer] Number of matching keys that hold a hash (see
+      #   OBJECT_KEY_TYPE)
       #
       # @example
       #   User.scan_count       #=> 1  (all User objects)
@@ -827,7 +839,7 @@ module Familia
         cursor = "0"
 
         loop do
-          cursor, keys = dbclient.scan(cursor, match: pattern, count: 1000)
+          cursor, keys = dbclient.scan(cursor, match: pattern, count: 1000, type: OBJECT_KEY_TYPE)
           count += keys.size
           break if cursor == "0"
         end
@@ -863,7 +875,8 @@ module Familia
       #
       # @param filter [String] Glob for the identifier part (default: '*').
       #   The class prefix and suffix are escaped; see #dbkey_pattern.
-      # @return [Boolean] true if any matching keys exist in Redis
+      # @return [Boolean] true if a matching key that holds a hash exists
+      #   (see OBJECT_KEY_TYPE)
       #
       # @example
       #   User.keys_any?       #=> true  (any User objects)
@@ -884,7 +897,8 @@ module Familia
       #
       # @param filter [String] Glob for the identifier part (default: '*').
       #   The class prefix and suffix are escaped; see #dbkey_pattern.
-      # @return [Boolean] true if any matching keys exist in Redis
+      # @return [Boolean] true if a matching key that holds a hash exists
+      #   (see OBJECT_KEY_TYPE)
       #
       # @example
       #   User.scan_any?       #=> true  (any User objects)
@@ -899,7 +913,7 @@ module Familia
         cursor = "0"
 
         loop do
-          cursor, keys = dbclient.scan(cursor, match: pattern, count: 100)
+          cursor, keys = dbclient.scan(cursor, match: pattern, count: 100, type: OBJECT_KEY_TYPE)
           return true unless keys.empty?
           break if cursor == "0"
         end
@@ -988,6 +1002,22 @@ module Familia
             type: decoded.class.name
           }
         end
+      end
+
+      private
+
+      # Returns the +keys+ that hold a hash (OBJECT_KEY_TYPE), for the
+      # methods that match object keys with KEYS, which has no TYPE option.
+      #
+      # @param keys [Array<String>]
+      # @return [Array<String>]
+      def object_keys(keys)
+        return keys if keys.empty?
+
+        types = dbclient.pipelined do |pipe|
+          keys.each { |key| pipe.type(key) }
+        end
+        keys.zip(types).filter_map { |key, type| key if type == OBJECT_KEY_TYPE }
       end
     end
   end

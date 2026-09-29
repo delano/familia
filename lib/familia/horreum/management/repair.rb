@@ -58,7 +58,10 @@ module Familia
       # Full SCAN-based rebuild of the instances timeline with atomic swap.
       #
       # Scans all hash keys matching this class's pattern, extracts identifiers,
-      # and rebuilds the sorted set with timestamps from the objects.
+      # and rebuilds the sorted set with timestamps from the objects. Only
+      # keys that hold a hash are read (see OBJECT_KEY_TYPE), so a
+      # multi_index bucket named like "<prefix>:<index>:<suffix>" is not
+      # taken for an object.
       #
       # @param batch_size [Integer] SCAN cursor count hint (default: 100)
       # @yield [Hash] Progress: {phase:, current:, total:}
@@ -75,7 +78,7 @@ module Familia
           batch = []
 
           loop do
-            cursor, keys = dbclient.scan(cursor, match: pattern, count: batch_size)
+            cursor, keys = dbclient.scan(cursor, match: pattern, count: batch_size, type: OBJECT_KEY_TYPE)
 
             keys.each do |key|
               identifier = extract_identifier_from_key(key)
@@ -367,7 +370,9 @@ module Familia
         { rebuilt: rebuilt, rebuilt_per_scope: rebuilt_per_scope, skipped: skipped }
       end
 
-      # SCAN helper for enumerating keys matching a pattern.
+      # SCAN helper for enumerating object keys matching a pattern.
+      #
+      # Only keys that hold a hash are yielded (see OBJECT_KEY_TYPE).
       #
       # @param filter [String] Glob for the identifier part (default: '*').
       #   The class prefix and suffix are escaped; see #dbkey_pattern.
@@ -381,7 +386,7 @@ module Familia
 
         cursor = "0"
         loop do
-          cursor, keys = dbclient.scan(cursor, match: pattern, count: batch_size)
+          cursor, keys = dbclient.scan(cursor, match: pattern, count: batch_size, type: OBJECT_KEY_TYPE)
           keys.each(&block)
           break if cursor == "0"
         end
