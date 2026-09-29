@@ -26,18 +26,18 @@ Changed
   ``#union``, ``#difference``, ``#scan``, ``#sample``; ``StringKey#size``,
   ``#empty?``, ``#to_s``, ``#to_i``; ``JsonStringKey#char_count``,
   ``#empty?``, ``#to_s``, ``#to_i``, ``#to_f``; ``Counter#value``, ``#to_i``,
-  ``#reset``; ``Lock#locked?``, ``#held_by?``, ``#release``; ``expired?``;
-  ``Horreum.any?``, ``.keys_count``, ``.keys_any?``, ``.in_instances?``,
-  ``.multiget``, ``.storage_inspect``; ``Migration::Registry#applied_at``,
-  ``#all_applied``, ``#metadata``; the generated participation methods
-  ``score_in_<target>_<collection>`` and ``in_<target>_<collection>?`` on a
-  sorted-set or list participation. Return values outside a block are
-  unchanged.
+  ``#reset``; ``expired?``; ``Horreum.any?``, ``.keys_count``,
+  ``.keys_any?``, ``.in_instances?``, ``.multiget``, ``.storage_inspect``;
+  ``Migration::Registry#applied_at``, ``#all_applied``, ``#metadata``; the
+  generated participation methods ``score_in_<target>_<collection>`` and
+  ``in_<target>_<collection>?`` on a sorted-set or list participation. Return
+  values outside a block are unchanged.
 - Methods that need a reply to continue now raise
   ``Familia::OperationModeError`` inside those blocks instead of
   ``NoMethodError`` or a wrong result: ``each`` and the raw iterators on
   every collection, ``HashKey#fetch``, ``#refresh!``, ``#refresh``,
-  ``Counter#increment_if_less_than``, ``extend_expiration`` (returned
+  ``Counter#increment_if_less_than``, ``Lock#locked?``, ``Lock#held_by?``
+  (returned ``false``, even for the holder), ``extend_expiration`` (returned
   ``false``), ``ttl_report``, ``Horreum#refresh!``, ``#refresh``, the
   finders and loaders (``find_by_dbkey``, ``find_by_identifier``,
   ``load_multi``, ``load_multi_by_keys``, ``all``, ``find_by_objid``,
@@ -95,8 +95,10 @@ Fixed
   ``ArgumentError`` for more; it now returns ``[field, value]`` pairs.
 - ``HashKey#hsetnx`` outside a block never refreshed the TTL. It now
   refreshes after setting a new field.
-- ``Lock#release`` returned ``false`` inside a transaction even when the
-  queued script released the lock.
+- ``Lock#release`` returned ``false`` inside a transaction or pipeline even
+  when the queued script released the lock. It now returns the EVAL
+  ``Redis::Future``, which resolves to ``1`` or ``0`` after the block. The
+  Future is truthy whatever the outcome, so read its value after the block.
 - ``Migration::Registry#applied?`` returned ``true`` for every migration
   inside a transaction or pipeline. It now returns the ZSCORE
   ``Redis::Future``, which resolves to the score or ``nil`` after the block.

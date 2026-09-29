@@ -100,13 +100,21 @@ empty.value.zero?  # => false, SCARD replies with the count
 | `DataType#exists?`, `Horreum.exists?`, `expires?`, `expired?` | the EXISTS count or the TTL in seconds |
 | `HashKey#increment`, `#decrement`, `#incrbyfloat`; `SortedSet#score`, `#increment`, `#mscore` | the Integer or Float, which redis-rb converts itself |
 | `Counter#value`, `StringKey#to_s`, `#to_i`, `#size`, `#empty?`, `JsonStringKey#to_s`, `#to_i`, `#to_f`, `#empty?` | the raw stored string, or nil |
-| `Lock#locked?`, `#held_by?` | the stored token, or nil |
 | `Lock#release` | 1 when the lock was released, 0 otherwise |
 | `Horreum.any?`, `.count`, `.keys_count`, `.keys_any?`, `.in_instances?`, `.multiget`, `.storage_inspect` | the ZCARD count, the KEYS array, the ZRANK reply, the MGET array or the HGETALL hash |
 | `Migration::Registry#applied?`, `#applied_at`, `#all_applied`, `#metadata` | the ZSCORE, ZRANGE or HGET reply |
 
-Predicates need care: `empty?` resolves to a count, so test
-`future.value.zero?`, not `future.value`.
+A `Redis::Future` is always truthy, so never test one inside the block. A
+predicate or conditional write used as a condition there takes the true
+branch whatever the reply turns out to be. That applies to the predicates in
+the table (including `in_<target>_<collection>?`), to `HashKey#key?`,
+`UnsortedSet#member?` and `indexed_in?`, and to the conditional writes
+`HashKey#hsetnx`, `StringKey#setnx`, `JsonStringKey#setnx` and
+`Lock#release`. For example,
+`lock.release(token)` inside a transaction returns a truthy Future even when
+`token` does not hold the lock. Read `future.value` after the block. Some
+Futures resolve to a count rather than a Boolean: test
+`empty.value.zero?`, not `empty.value`.
 
 A top-level `transaction` or `pipelined` call returns a `MultiResult` whose
 `results` holds each queued command's reply in queue order. It is empty when
@@ -120,8 +128,10 @@ A method that needs a reply before it can finish raises
 `Familia::OperationModeError` before queueing anything. That covers methods
 that branch on a reply, raise from it, issue follow-up commands from it,
 iterate, load records, or derive an answer from the reply's contents. It
-also covers conditional writes whose verdict callers branch on, where a
-truthy Future would report success before the command runs.
+also covers admission checks, whose answer tells the caller whether it may
+proceed: whether it holds a lock, has claimed a value, or is under a limit.
+Inside a block that answer would be a truthy Future, which admits the caller
+before the server has answered.
 
 - Iteration: `each`, `eachraw`, `eachraw_with_index`, `collectraw` and
   `selectraw` on every collection, `each_record`, and `scan_keys` with a block
@@ -149,8 +159,12 @@ truthy Future would report success before the command runs.
   `save_fields`, `multi_field_update`, `multi_field_fast_write`, class-level
   `destroy!`, instance `destroy!` on a class with instance-scoped indexes, the
   `guard_unique_*!` methods, and staged activation and unstaging
-- Verdicts: `Lock#acquire`, `Counter#increment_if_less_than`,
-  `HashKey#claim_field`, and `claim_unique_*!`
+- Admission checks: `Lock#acquire`, `#locked?` and `#held_by?`,
+  `Counter#increment_if_less_than`, `HashKey#claim_field`, and
+  `claim_unique_*!`. `Lock#release` is deliberately not one. It passes its
+  Future through so that it can be queued as the last command of the block
+  the lock protects, and its script deletes the lock only if the token
+  still holds it when the script runs
 - Fast writers (`field!`) on fields backing a class-level index raise
   `Familia::IndexedFieldFastWriteError`, since the index claim cannot run
   there

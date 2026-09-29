@@ -180,25 +180,47 @@ end
 [@ret.class, @ret.value, @persisted, @owner.mutex.locked?]
 #=> [Redis::Future, 1, "aw-release", false]
 
-## Lock#release inside a pipeline passes the EVAL Future through
+## Lock#release by a non-owner inside a pipeline returns a Future that resolves to 0
+# The Future itself is truthy; only its value after the block says whether
+# the lock was released.
 @reset.call
 @owner.mutex.acquire('tok-2')
 @ret = @in_pipeline.call { @owner.mutex.release('other') }
-[@ret.class, @ret.value, @owner.mutex.locked?]
+[@ret.class, @ret.value, @owner.mutex.held_by?('tok-2')]
 #=> [Redis::Future, 0, true]
 
-## Lock#locked? and #held_by? inside atomic_write pass GET Futures through
+## Lock#locked? and #held_by? inside atomic_write raise and persist nothing
 @reset.call
 @owner.mutex.acquire('tok-3')
-@ret, @persisted = @in_atomic_write.call('aw-locked') { [@owner.mutex.locked?, @owner.mutex.held_by?('tok-3')] }
-[@ret.map(&:class), @ret.map(&:value), @persisted]
-#=> [[Redis::Future, Redis::Future], ["tok-3", "tok-3"], "aw-locked"]
+@name_before = FuturesScalarOwner.load('fso-1').name
+@refused = lambda do |&blk|
+  blk.call
+  :no_error
+rescue StandardError => e
+  e.class
+end
+[@refused.call { @in_atomic_write.call('aw-locked') { @owner.mutex.locked? } },
+ @refused.call { @in_atomic_write.call('aw-held') { @owner.mutex.held_by?('tok-3') } },
+ FuturesScalarOwner.load('fso-1').name == @name_before, @owner.mutex.held_by?('tok-3')]
+#=> [Familia::OperationModeError, Familia::OperationModeError, true, true]
 
-## Lock#held_by? inside a pipeline passes the GET Future through
+## Lock#held_by? by a non-owner inside a transaction raises instead of returning a truthy Future
 @reset.call
-@ret = @in_pipeline.call { @owner.mutex.held_by?('nobody') }
-[@ret.class, @ret.value]
-#=> [Redis::Future, nil]
+@owner.mutex.acquire('owner-token')
+@err = nil
+begin
+  @owner.transaction { @owner.mutex.held_by?('intruder') }
+rescue Familia::OperationModeError => e
+  @err = e
+end
+[@err.message.start_with?('Lock#held_by? cannot run inside a transaction or pipeline'),
+ @owner.mutex.held_by?('owner-token')]
+#=> [true, true]
+
+## Lock#locked? inside a pipeline raises OperationModeError
+@reset.call
+@refused.call { @in_pipeline.call { @owner.mutex.locked? } }
+#=> Familia::OperationModeError
 
 ## outside a block: StringKey conversions keep their return types
 @reset.call

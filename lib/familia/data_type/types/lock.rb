@@ -53,8 +53,14 @@ module Familia
 
     # Deletes the lock only if +token+ still holds it.
     #
-    # Safe to queue inside a transaction: the ownership check and the delete
-    # run together in one server-side script.
+    # Unlike the other Lock methods, release can be queued inside a
+    # transaction or pipeline, for example as the last command of the block
+    # the lock protects. The ownership check and the delete run in one
+    # server-side script, so the queued release deletes the lock only if
+    # +token+ holds it when the script runs. The outcome is known only after
+    # the block: the returned Future is truthy whether or not the lock was
+    # released, so read its value after the block instead of testing it
+    # inside.
     #
     # @param token [String] the token returned by #acquire
     # @return [Boolean, Redis::Future] true when the lock was released.
@@ -66,18 +72,25 @@ module Familia
       Familia.transform_reply(dbclient.eval(script, [dbkey], [token])) { |reply| reply == 1 }
     end
 
-    # @return [Boolean, Redis::Future] whether any token holds the lock.
-    #   Inside a transaction or pipeline, the GET Future (resolves to the
-    #   stored token or nil).
+    # @return [Boolean] whether any token holds the lock
+    # @raise [Familia::OperationModeError] inside a transaction or pipeline,
+    #   where the GET returns a Redis::Future. The Future is truthy, so a
+    #   caller testing it would act as though the lock were held.
     def locked?
-      Familia.transform_reply(value) { |val| !val.nil? }
+      Familia.assert_replies_available!('Lock#locked?')
+
+      !value.nil?
     end
 
-    # @return [Boolean, Redis::Future] whether +token+ holds the lock. Inside
-    #   a transaction or pipeline, the GET Future (resolves to the stored
-    #   token or nil).
+    # @param token [String] the token returned by #acquire
+    # @return [Boolean] whether +token+ holds the lock
+    # @raise [Familia::OperationModeError] inside a transaction or pipeline,
+    #   where the GET returns a Redis::Future. The Future is truthy, so a
+    #   caller testing it would proceed as the owner whatever token it holds.
     def held_by?(token)
-      Familia.transform_reply(value) { |val| val == token }
+      Familia.assert_replies_available!('Lock#held_by?')
+
+      value == token
     end
 
     def force_unlock!
