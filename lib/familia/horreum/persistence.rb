@@ -950,20 +950,41 @@ module Familia
         self.class.field_method_map.each_value { |method_name| send("#{method_name}=", nil) }
       end
 
-      # Refreshes the object state from the DB storage.
+      # Replaces the object's field values with what is stored in the database.
       #
-      # Reloads all persistent field values from the DB, overwriting any unsaved
-      # changes in the current object instance. This operation synchronizes the
-      # object with its stored state in the database.
+      # Reads the object hash with one HGETALL and assigns every stored field,
+      # the same way {Familia::Horreum::ManagementMethods#find_by_dbkey} builds
+      # a loaded object. A persistent field the stored hash does not contain is
+      # set to nil, because a nil field is stored as an absent one. That
+      # includes a value set in memory and never saved, and a default an
+      # +init+ hook assigned to an object built with +new+. The identifier
+      # field keeps its value, since it names the key that was read. Transient
+      # fields are reset to nil. Dirty tracking is cleared afterwards.
+      #
+      # It is read-only: it sends only the HGETALL. Field setters that act on
+      # the value they replace (the +objid+ and +extid+ setters remove the old
+      # value's lookup entry) see nil as the old value, as they do on a newly
+      # loaded object, so they send nothing.
+      #
+      # If it raises, the object is left as it was: its field values, its
+      # other instance variables and its dirty tracking are what they were
+      # before the call. That includes an error from a field setter while the
+      # stored values are assigned.
       #
       # @return [void]
       #
-      # @raise [Familia::KeyNotFoundError] If the Valkey key does not exist
+      # @raise [Familia::KeyNotFoundError] If the Valkey key does not exist.
+      # @raise [Familia::OperationModeError] inside a transaction, pipeline or
+      #   atomic_write block, where HGETALL is only queued and returns a
+      #   Redis::Future.
+      # @raise [StandardError] whatever a field setter raises for a stored
+      #   value, for example Familia::EncryptionError when an encrypted
+      #   field's stored envelope names an algorithm that is not available.
       #
-      # @example Refresh object from the DB
+      # @example Discard an unsaved change
       #   user.name = "Changed Name"  # unsaved change
       #   user.refresh!
-      #   # => user.name is now the value from the DB storage
+      #   user.name  # => the stored name, or nil if none is stored
       #
       # @note This method discards any unsaved changes to the object. Use with
       #   caution when the object has been modified but not yet persisted.
@@ -972,6 +993,13 @@ module Familia
       #   no authoritative source in Valkey storage.
       #
       def refresh!
+        if Fiber[:familia_transaction] || Fiber[:familia_pipeline]
+          raise Familia::OperationModeError,
+                "#{self.class}#refresh! cannot run inside a transaction or pipeline: " \
+                'HGETALL returns a Redis::Future there, so there is nothing to load ' \
+                'and a missing key cannot be detected. Call it before opening the block.'
+        end
+
         Familia.trace :REFRESH, nil, self.class.uri if Familia.debug?
         fields = hgetall
         # A hash with no fields does not exist, so an empty reply means the
@@ -981,12 +1009,32 @@ module Familia
 
         Familia.debug "[refresh!] #{self.class} #{dbkey} fields:#{fields.keys}"
 
-        # Reset transient fields to nil for semantic clarity and ORM consistency
-        # Transient fields have no authoritative source, so they should return to
-        # their uninitialized state during refresh operations
-        reset_transient_fields!
+        # Deserialize before the reset below, and name the key that was read
+        # in the log entry for a value that is not JSON.
+        values = deserialize_stored_fields(fields, dbkey: dbkey)
 
-        result = naive_refresh(**fields)
+        # The reset and the assignment succeed or fail together. A setter can
+        # raise on a stored value, for example an encrypted field whose
+        # envelope names an algorithm this process does not provide. Stopping
+        # there would leave every field after it nil, and a later save removes
+        # every nil persistent field from the stored hash
+        # (#remove_stale_nil_fields), including values nobody changed.
+        result = restoring_instance_state_on_error do
+          # Transient fields have no authoritative source, so they return to
+          # their uninitialized state.
+          reset_transient_fields!
+
+          # Between the reset and the assignment nothing may read the
+          # identifier. A Proc or method identifier computed from the
+          # persistent fields would see nil: dbkey would raise
+          # Familia::NoIdentifier, and a lazy getter such as objid would
+          # generate a value that the objid setter then treats as an old
+          # mapping to remove. So the values are assigned with
+          # initialize_with_keyword_args directly, as instantiate_from_hash
+          # does, and not through naive_refresh.
+          clear_persistent_fields_for_refresh!
+          initialize_with_keyword_args(**values)
+        end
 
         # Clear dirty tracking since object now matches DB state
         clear_dirty!
@@ -1003,6 +1051,10 @@ module Familia
       # @return [self] The refreshed object instance, enabling method chaining
       #
       # @raise [Familia::KeyNotFoundError] If the Valkey key does not exist
+      # @raise [Familia::OperationModeError] inside a transaction, pipeline or
+      #   atomic_write block
+      # @raise [StandardError] whatever a field setter raises for a stored
+      #   value. As with {#refresh!}, the object is left as it was.
       #
       # @example Refresh and chain operations
       #   user.refresh.save
@@ -1245,6 +1297,80 @@ module Familia
           Familia.debug "[reset_transient_fields!] Reset #{field_name} to nil"
         end
       end
+
+      # Sets every persistent field except the identifier field to nil,
+      # writing the instance variables directly instead of calling the setters.
+      #
+      # {#refresh!} calls this before assigning the stored values, so the
+      # object starts from the state a newly loaded one has: fields missing
+      # from the stored hash stay nil, and setters that act on the value they
+      # replace see nil. Going through the setters here would be wrong for the
+      # same reason: the +objid+ and +extid+ setters remove the old value's
+      # lookup entry, which is a write.
+      #
+      # The identifier field is skipped because it names the key refresh! read.
+      # A Proc identifier, or a Symbol naming a method that is not a field,
+      # has no single field to skip. The fields it reads are cleared here like
+      # any other and are assigned again from the stored hash, so until then
+      # the identifier cannot be computed. The caller must not read it in
+      # between (see {#refresh!}). A save stores every non-nil field, so a
+      # value the identifier reads is missing from the hash only if something
+      # removed it. The identifier then changes as it would on a record loaded
+      # from that hash.
+      #
+      # @return [void]
+      #
+      def clear_persistent_fields_for_refresh!
+        id_field = self.class.identifier_field
+        id_field = id_field.to_sym if id_field.is_a?(String) || id_field.is_a?(Symbol)
+
+        self.class.persistent_fields.each do |field_name|
+          next if field_name.to_sym == id_field
+
+          instance_variable_set(:"@#{field_name}", nil)
+        end
+      end
+      private :clear_persistent_fields_for_refresh!
+
+      # Runs the block. If the block does not finish, puts the object's
+      # instance variables and dirty tracking back as they were before it ran.
+      #
+      # {#refresh!} runs its field reset and assignment in this block, so a
+      # setter that raises on a stored value leaves the object as it was.
+      # Instance variables are saved by reference: one the block replaces is
+      # set back, and one it adds is removed. Setters change the dirty-tracking
+      # map in place, so its entries are copied and put back. A command a
+      # setter sends to the database is not undone.
+      #
+      # @yield the step to run
+      # @return [Object] the block's value
+      #
+      def restoring_instance_state_on_error
+        saved_ivars = instance_variables.to_h { |name| [name, instance_variable_get(name)] }
+        saved_dirty = {}
+        @dirty_fields&.each_pair { |field, old_value| saved_dirty[field] = old_value }
+        completed = false
+
+        begin
+          result = yield
+          completed = true
+          result
+        ensure
+          restore_instance_state(saved_ivars, saved_dirty) unless completed
+        end
+      end
+      private :restoring_instance_state_on_error
+
+      # @see #restoring_instance_state_on_error
+      def restore_instance_state(saved_ivars, saved_dirty)
+        (instance_variables - saved_ivars.keys).each { |name| remove_instance_variable(name) }
+        saved_ivars.each { |name, value| instance_variable_set(name, value) }
+        return unless @dirty_fields
+
+        @dirty_fields.clear
+        saved_dirty.each { |field, old_value| @dirty_fields[field] = old_value }
+      end
+      private :restore_instance_state
 
       # Whether +field_value+ was claimed for +index_name+ during the current
       # {#prepare_for_save}.

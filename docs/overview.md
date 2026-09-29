@@ -316,7 +316,7 @@ model.api_key.reveal                     # => "secret123" (actual value)
 # Transient field behavior
 model.password = "temp123"
 model.save
-model.reload
+model.refresh!
 model.password                           # => nil (not persisted)
 
 # Object identifier generation
@@ -445,10 +445,11 @@ Handle temporary or sensitive data that shouldn't persist:
 class LoginAttempt < Familia::Horreum
   feature :transient_fields
 
+  identifier_field :username
   field :username
   field :timestamp
   transient_field :password
-  redacted_field :security_token
+  transient_field :security_token
 end
 
 attempt = LoginAttempt.new(
@@ -457,20 +458,21 @@ attempt = LoginAttempt.new(
   security_token: "sensitive_data"
 )
 
-# Transient fields aren't saved to Valkey
-attempt.save
-attempt.reload
-attempt.password        # => nil (not persisted)
+# Transient values are wrapped in RedactedString
+attempt.security_token.class                      # => RedactedString
+attempt.security_token.to_s                       # => "[REDACTED]"
+attempt.security_token.expose { |token| token }   # => "sensitive_data"
 
-# Redacted fields return safe values
-attempt.security_token.class    # => RedactedString
-attempt.security_token.to_s     # => "[REDACTED]"
-attempt.security_token.reveal   # => "sensitive_data"
+# Transient fields aren't saved to Valkey, and refresh! resets them to nil
+attempt.save
+attempt.refresh!
+attempt.password        # => nil
+attempt.security_token  # => nil
 ```
 
 **Field Types:**
-- **Transient Fields**: Exist only in memory, never persisted
-- **Redacted Fields**: Return `[REDACTED]` when converted to strings for logging safety
+- **Transient Fields**: Exist only in memory, never persisted. `refresh!` resets them to nil.
+- **RedactedString values**: Return `[REDACTED]` from `to_s` and `inspect`. Use `expose` or `value` to read the wrapped value.
 
 > For RedactedString implementation details, single-use patterns, and security considerations, see the [Technical Reference](reference/api-technical.md#feature-system).
 

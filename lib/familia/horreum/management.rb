@@ -879,8 +879,16 @@ module Familia
         instance.send(:initialize_relatives)
         instance.send(:initialize_with_keyword_args_deserialize_value, **obj_hash)
         # Object was just loaded from Redis, so it matches DB state exactly.
-        # Clear dirty flags set during field assignment above, mirroring what
-        # initialize (horreum.rb:246) and refresh! (persistence.rb:608) do.
+        # Clear dirty flags set during field assignment above, as
+        # Horreum#initialize and Horreum#refresh! also do.
+        #
+        # refresh! assigns stored values to an existing object and is meant to
+        # leave it in the state this method produces: unstored fields nil, and
+        # setters that see nil as the old value. It gets there differently. It
+        # deserializes before clearing the fields, then assigns with
+        # initialize_with_keyword_args, and restores the object if an
+        # assignment raises. A change to how stored values are assigned here
+        # likely needs the same change there.
         instance.send(:clear_dirty!)
         instance
       end

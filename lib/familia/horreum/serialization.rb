@@ -204,9 +204,13 @@ module Familia
       # @param val [String] The string value from Redis to deserialize
       # @param symbolize [Boolean] Whether to symbolize hash keys (default: false)
       # @param field_name [Symbol, nil] Optional field name for better error context
+      # @param dbkey [String, nil] Optional key the value was read from, named
+      #   in the error log entry for a value that is not JSON. Without it the
+      #   entry names the key built from the identifier field's current value,
+      #   or +no dbkey+.
       # @return [Object] The deserialized value with original Ruby type, or the original string if not JSON
       #
-      def deserialize_value(val, symbolize: false, field_name: nil)
+      def deserialize_value(val, symbolize: false, field_name: nil, dbkey: nil)
         return nil if val.nil? || val == ''
 
         # Handle Redis::Future objects during transactions
@@ -215,23 +219,25 @@ module Familia
         begin
           Familia::JsonSerializer.parse(val, symbolize_names: symbolize)
         rescue Familia::SerializerError
-          log_deserialization_issue(val, field_name)
+          log_deserialization_issue(val, field_name, dbkey)
           val
         end
       end
 
       private
 
-      def log_deserialization_issue(val, field_name)
+      def log_deserialization_issue(val, field_name, dbkey = nil)
         context = field_name ? "#{self.class}##{field_name}" : self.class.to_s
-        # During instantiate_from_hash the instance is allocated and every
-        # field is deserialized before any setter runs, so the identifier is
-        # still nil here and dbkey would raise Familia::NoIdentifier.
-        dbkey_info = begin
-          respond_to?(:dbkey) ? dbkey : 'no dbkey'
-        rescue Familia::NoIdentifier
-          'no dbkey'
-        end
+        # The identifier is not computed here. Stored values are deserialized
+        # before they are assigned: on a newly allocated object in
+        # find_by_dbkey and load_multi, and on any object in naive_refresh.
+        # A Proc or method identifier may read fields that are not set yet,
+        # and a lazy getter runs: the objid getter generates a new objid,
+        # which the objid setter then removes from objid_lookup with HDEL when
+        # it assigns the stored objid. So the key is the one the caller read,
+        # or is built from the identifier field's instance variable.
+        ident = identifier_for_log
+        dbkey_info = dbkey || (ident ? self.class.dbkey(ident, suffix) : 'no dbkey')
         corrupted = looks_like_json?(val)
         error_type = corrupted ? :corrupted_json : :legacy_string
         value_length = val.to_s.bytesize
@@ -252,11 +258,6 @@ module Familia
         # Structured error logging with instrumentation. The length is always
         # safe to report; a bounded preview of the value is only included when
         # debug mode is on, so the default ERROR record contains no value bytes.
-        ident = begin
-          identifier
-        rescue StandardError
-          nil
-        end
         log_context = {
           error_type: error_type,
           field: field_name,
@@ -277,6 +278,23 @@ module Familia
           object_class: self.class.name,
           value_length: value_length,
         )
+      end
+
+      # The identifier as the instance variable of a Symbol or String
+      # identifier_field that names a field holds it, or nil. It calls no
+      # getter and no Proc, so it has no side effects. A Proc identifier, or
+      # an identifier_field naming a method, gives nil.
+      #
+      # @return [Object, nil]
+      def identifier_for_log
+        definition = self.class.identifier_field
+        return nil unless definition.is_a?(Symbol) || definition.is_a?(String)
+
+        field_type = self.class.field_types[definition.to_sym]
+        return nil unless field_type
+
+        value = instance_variable_get(:"@#{field_type.name}")
+        value.nil? || value.to_s.empty? ? nil : value
       end
 
       def looks_like_json?(val)
