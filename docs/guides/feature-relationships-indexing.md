@@ -594,6 +594,29 @@ other than set or belongs to another record.
 `repair_all!` records it under `errors[:multi_indexes]` and returns status
 `:partial_failure`.
 
+### Bucket names in other key patterns
+
+A bucket's key ends with a field value, so it can match a key pattern that
+other methods build for other keys. With a customer whose role is `notes`, the
+bucket `customer:role_index:notes` matches `customer:*:notes`, the pattern for
+the `notes` field of every customer. With role `object`, the bucket
+`customer:role_index:object` matches `customer:*:object`, the pattern for
+customer objects. These methods leave such buckets alone:
+
+- `audit_related_fields` and `audit_participations` look only at keys of the
+  type the field or collection stores. They also skip a key that is a bucket of
+  a class-level `multi_index` of the class, or of an instance-scoped
+  `multi_index` whose scope record exists, unless the record the key names
+  exists. So `repair_related_fields!` does not delete such a bucket and
+  `repair_participations!` does not remove its members.
+- `all`, `keys_count`, `scan_count`, `keys_any?`, `scan_any?`, `scan_keys`,
+  `audit_instances`, `rebuild_instances`, the SCAN fallback of a unique index
+  rebuild and model migrations with the default `@scan_pattern` look only at
+  keys that hold a hash (`Familia::Horreum::OBJECT_KEY_TYPE`).
+- `audit_multi_indexes` does not read a class-level bucket whose value
+  contains `:<index>:` as a bucket of an instance-scoped index, unless the
+  scope record the key names exists.
+
 ## Performance Tips
 
 ### Bulk Operations
