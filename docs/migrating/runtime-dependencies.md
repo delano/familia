@@ -75,10 +75,22 @@ The provider itself does not change. See "Connection Pooling" in the
 
 ## Minimum `oj` and `json_schemer` versions
 
-`familia.gemspec` now requires `oj` `~> 3.16, >= 3.16.5` (was `~> 3.16`) and
+`familia.gemspec` now requires `oj` `~> 3.16, >= 3.16.2` (was `~> 3.16`) and
 `json_schemer` `~> 2.2` (was `~> 2.0`). A Gemfile or lockfile that pins an
 older `oj` or `json_schemer` no longer resolves with familia. Raise or
 remove the pin.
+
+The excluded releases require libraries that Ruby 3.4 moved out of the
+default gems without declaring them, so under Bundler on Ruby 3.4 and later
+they fail to load unless the bundle happens to contain those libraries:
+`oj` 3.16.0 and 3.16.1 require `bigdecimal`, which breaks `require
+'familia'`, and `json_schemer` 2.0.0 to 2.1.1 require `base64` and
+`bigdecimal`, which breaks schema validation.
+
+`oj` 3.16.2 to 3.16.4 also require `ostruct` without declaring it, but they
+rescue the failure, so they load and work. Ruby 3.4 and later print a
+warning that `ostruct` was loaded from, or is no longer part of, the default
+gems. Upgrade `oj`, or add `ostruct` to your Gemfile, to silence it.
 
 familia declares `json_schemer`, so an application needs no Gemfile entry
 for it. If you keep one, it must allow 2.2 or later.
