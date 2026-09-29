@@ -378,10 +378,11 @@ migration.prepare
 migration.interactive
 #=> false
 
+# The development bundle does not include pry-byebug, and familia does not
+# depend on it.
+
 ## interactive mode without pry-byebug in the bundle raises PreconditionFailed
-## The development bundle does not include pry-byebug, and familia does not
-## depend on it.
-class InteractiveModelMigration < SimpleModelMigration
+InteractiveModelMigration = Class.new(SimpleModelMigration) do
   self.migration_id = 'model_test_interactive'
 
   def prepare
