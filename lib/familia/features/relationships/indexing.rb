@@ -3,6 +3,7 @@
 # frozen_string_literal: true
 
 require_relative 'indexing_relationship'
+require_relative 'indexing/record_key_ownership'
 require_relative 'indexing/multi_index_generators'
 require_relative 'indexing/unique_index_generators'
 require_relative 'indexing/rebuild_strategies'

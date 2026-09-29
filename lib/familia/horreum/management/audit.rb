@@ -12,6 +12,10 @@ module Familia
     # class methods (e.g. Customer.audit_instances, Customer.health_check).
     #
     module AuditMethods
+      # Redis type of the collection key of each participation type, for
+      # SCAN's TYPE option.
+      PARTICIPATION_KEY_TYPES = { sorted_set: 'zset', set: 'set', list: 'list' }.freeze
+
       # Compares the instances timeline against actual DB keys via SCAN.
       #
       # Detects:
@@ -322,7 +326,9 @@ module Familia
       # SCANs DB hash keys and extracts identifiers.
       #
       # This is the source of truth for what objects actually exist — it
-      # bypasses the instances timeline entirely.
+      # bypasses the instances timeline entirely. Only keys that hold a hash
+      # are read (see OBJECT_KEY_TYPE), so a multi_index bucket named like
+      # an object key is not taken for an object.
       #
       # @param batch_size [Integer] SCAN cursor count hint (default: 100)
       # @yield [Hash] Optional progress callback
@@ -334,7 +340,7 @@ module Familia
         cursor = '0'
 
         loop do
-          cursor, keys = dbclient.scan(cursor, match: pattern, count: batch_size)
+          cursor, keys = dbclient.scan(cursor, match: pattern, count: batch_size, type: OBJECT_KEY_TYPE)
           keys.each do |key|
             identifier = extract_identifier_from_key(key)
             next if identifier.nil? || identifier.empty?
@@ -494,22 +500,24 @@ module Familia
       # @return [Hash{String => Hash}] field_value => {key:, identifiers: [...]}
       #
       def discover_multi_index_buckets(rel)
-        bucket_pattern = "#{prefix}#{Familia.delim}#{rel.index_name}#{Familia.delim}*"
-        bucket_prefix = "#{prefix}#{Familia.delim}#{rel.index_name}#{Familia.delim}"
+        generators = Familia::Features::Relationships::Indexing::MultiIndexGenerators
+        bucket_prefix = generators.bucket_key_prefix(self, rel.index_name)
         bucket_entries = {}
 
-        # Batch SCAN results and pipeline SMEMBERS to collapse one round trip
-        # per bucket key into one round trip per slice of 100 keys.
-        dbclient.scan_each(match: bucket_pattern).each_slice(100) do |keys|
-          valid_keys = keys.select { |k| k.start_with?(bucket_prefix) }
-          next if valid_keys.empty?
-
+        # Read the keys the rebuild would clear, in slices of 100, and
+        # pipeline SMEMBERS to collapse one round trip per bucket key into
+        # one round trip per slice. Only sets are returned: a record whose
+        # identifier equals the index name has its hash and fields under
+        # the same prefix, and SMEMBERS on a hash or list raises WRONGTYPE.
+        # That record's set fields are left out too, so they are not
+        # reported as buckets.
+        generators.each_index_bucket_slice(dbclient, self, rel.index_name, batch_size: 100) do |valid_keys|
           members_batch = dbclient.pipelined do |pipe|
             valid_keys.each { |k| pipe.smembers(k) }
           end
 
           valid_keys.each_with_index do |key, idx|
-            field_value = key[bucket_prefix.length..]
+            field_value = key.byteslice(bucket_prefix.bytesize..)
             next if field_value.nil? || field_value.empty?
 
             bucket_entries[field_value] = {
@@ -686,6 +694,14 @@ module Familia
 
       # SCAN for instance-scoped bucket keys and load their members.
       #
+      # A bucket of a class-level multi_index of the scope class matches
+      # the pattern when its field value contains the marker: with value
+      # "x:dept_index:ops", "company:industry_index:x:dept_index:ops"
+      # parses as the "ops" bucket of scope "industry_index:x". Such a key
+      # is left out unless that scope record exists, because a class-level
+      # bucket yields to an existing record (see
+      # RecordKeyOwnership.other_record_key).
+      #
       # @param rel [IndexingRelationship]
       # @param scope_class [Class]
       # @return [Hash{String => Hash}] full_key => {key:, scope_id:, field_value:, identifiers:}
@@ -693,7 +709,7 @@ module Familia
       def discover_instance_scoped_buckets(rel, scope_class)
         scope_prefix = "#{scope_class.prefix}#{Familia.delim}"
         marker = "#{Familia.delim}#{rel.index_name}#{Familia.delim}"
-        pattern = "#{scope_prefix}*#{marker}*"
+        pattern = "#{Familia.escape_glob(scope_prefix)}*#{Familia.escape_glob(marker)}*"
         bucket_entries = {}
 
         # Use the scope class's dbclient so multi-database setups address
@@ -701,11 +717,23 @@ module Familia
         client = scope_class.dbclient
 
         # Batch SCAN results and pipeline SMEMBERS to collapse a round trip
-        # per bucket key into a round trip per slice of 100 keys.
-        client.scan_each(match: pattern).each_slice(100) do |keys|
+        # per bucket key into a round trip per slice of 100 keys. As in the
+        # rebuild, SCAN's TYPE option returns only sets: another key under
+        # a scope's index prefix is not a bucket, and SMEMBERS on it would
+        # raise WRONGTYPE.
+        indexing = Familia::Features::Relationships::Indexing
+        names = indexing::RecordKeyOwnership.record_set_key_names(scope_class)
+        bucket_type = indexing::MultiIndexGenerators::BUCKET_KEY_TYPE
+        client.scan_each(match: pattern, type: bucket_type).each_slice(100) do |keys|
           parsed = keys.filter_map do |key|
             scope_id, field_value = parse_instance_scoped_bucket_key(key, scope_prefix, marker)
             next nil if scope_id.nil? || scope_id.empty? || field_value.nil? || field_value.empty?
+
+            scope_id, field_value = reattribute_instance_scoped_bucket_key(
+              rel, scope_class, key, [scope_id, field_value], names
+            )
+            next nil if field_value.nil? || field_value.empty?
+            next nil if foreign_class_level_bucket?(key, scope_class, scope_id)
 
             [key, scope_id, field_value]
           end
@@ -726,6 +754,16 @@ module Familia
         end
 
         bucket_entries
+      end
+
+      # Whether +key+ is a bucket of a class-level multi_index of
+      # +scope_class+ and no scope record +scope_id+ exists.
+      #
+      # @return [Boolean]
+      #
+      def foreign_class_level_bucket?(key, scope_class, scope_id)
+        ownership = Familia::Features::Relationships::Indexing::RecordKeyOwnership
+        ownership.class_level_bucket?(key, scope_class) && !scope_class.exists?(scope_id)
       end
 
       # Splits a bucket key into (scope_id, field_value).
@@ -750,6 +788,32 @@ module Familia
         scope_id = rest[0...marker_pos]
         field_value = rest[(marker_pos + marker.length)..]
         [scope_id, field_value]
+      end
+
+      # Assigns a bucket key to the scope whose rebuild clears it.
+      #
+      # parse_instance_scoped_bucket_key splits at the first marker, which
+      # gives the shortest scope identifier. When the key is also a key of
+      # an existing scope with a longer identifier (see
+      # RecordKeyOwnership.other_record_key), the rebuild leaves it to
+      # that scope. Returns that scope's identifier and field value when
+      # the key is one of its buckets of this index, [scope_id, nil] when
+      # it is another of its set keys, and +parsed+ otherwise.
+      #
+      # @param parsed [Array(String, String)] scope_id and field_value from
+      #   parse_instance_scoped_bucket_key
+      # @return [Array(String, String), Array(String, nil)]
+      #
+      def reattribute_instance_scoped_bucket_key(rel, scope_class, key, parsed, names)
+        ownership = Familia::Features::Relationships::Indexing::RecordKeyOwnership
+        other = ownership.other_record_key(key, scope_class, parsed.first, names: names)
+        return parsed unless other
+
+        other_id, name = other
+        index_prefix = "#{rel.index_name}#{Familia.delim}"
+        return [other_id, nil] unless name.b.start_with?(index_prefix.b)
+
+        [other_id, name.byteslice(index_prefix.bytesize..)]
       end
 
       # Batch-checks scope instance existence via pipelined EXISTS.
@@ -1037,9 +1101,26 @@ module Familia
         target_class = rel.target_class
         results = []
 
-        # SCAN for all collection keys matching target_prefix{delim}*{delim}collection_name
-        pattern = "#{target_class.prefix}#{Familia.delim}*#{Familia.delim}#{collection_name}"
-        collection_keys = scan_matching_keys(pattern, target_class.dbclient)
+        # SCAN for all collection keys matching target_prefix{delim}*{delim}collection_name.
+        # repair_participations! removes members from the keys reported here,
+        # so keep only keys whose literal prefix and suffix match as well.
+        #
+        # The wildcard also matches a multi_index bucket of the target
+        # class whose field value equals the collection name, such as
+        # "company:industry_index:staff". SCAN's TYPE option leaves out
+        # keys of another type than the collection's, and a key that
+        # RecordKeyOwnership.index_bucket_owner reads as a bucket is left
+        # out unless the target record it parses as exists.
+        pattern = target_class.dbkey_pattern('*', collection_name)
+        ownership = Familia::Features::Relationships::Indexing::RecordKeyOwnership
+        names = ownership.record_set_key_names(target_class)
+        client = target_class.dbclient
+        collection_keys = scan_matching_keys(pattern, client, type: PARTICIPATION_KEY_TYPES[rel.type]).select do |key|
+          identifier = target_class.extract_identifier_from_key(key, collection_name.to_s)
+          next false if identifier.nil? || identifier.empty?
+
+          target_class.exists?(identifier) || !ownership.index_bucket_owner(key, target_class, names: names)
+        end
 
         collection_keys.each do |collection_key|
           stale = audit_collection_key_members(
@@ -1101,23 +1182,46 @@ module Familia
       # SCAN pattern "{prefix}:*:{field_name}" discovers all existing
       # collection keys for the field. For each match, extract the
       # identifier and check whether the parent hash still exists.
-      # Matches with a missing parent are reported as orphaned.
+      # Matches with a missing parent are reported as orphaned, and
+      # repair_related_fields! deletes them.
       #
       # The SCAN pattern does not match class-level keys because those
       # live at "{prefix}:{field_name}" (two segments, no middle wildcard).
+      #
+      # The wildcard can match keys that are not this field's keys,
+      # because a multi_index bucket name ends with a field value. With a
+      # class-level multi_index :role_index and a record whose role is
+      # "notes", the bucket "user:role_index:notes" matches "user:*:notes"
+      # and parses as the notes field of a record "role_index". Two checks
+      # leave such keys out:
+      #
+      # - SCAN's TYPE option returns only keys of the type the field's
+      #   DataType class stores (see .related_field_key_type).
+      # - A key whose parent is missing and that .index_bucket_owner of
+      #   RecordKeyOwnership reads as a bucket of a class-level
+      #   multi_index of this class, or of an instance-scoped multi_index
+      #   within this class whose scope record exists, is not reported.
+      #   The multi_index audit and repair own it. Such a key is not
+      #   reported even if it is also the field of a deleted record whose
+      #   identifier starts with the index name.
       #
       # @param definition [RelatedFieldDefinition]
       # @return [Hash] {field_name:, klass:, orphaned_keys: [], count:, status:}
       #
       def audit_single_related_field(definition)
         field_name = definition.name
-        pattern = "#{prefix}#{Familia.delim}*#{Familia.delim}#{field_name}"
+        pattern = dbkey_pattern('*', field_name)
+        scan_options = { match: pattern }
+        key_type = related_field_key_type(definition.klass)
+        scan_options[:type] = key_type if key_type
+        ownership = Familia::Features::Relationships::Indexing::RecordKeyOwnership
+        names = ownership.record_set_key_names(self)
         orphaned_keys = []
 
         # Batch SCAN results and pipeline EXISTS checks. Note we use the raw
         # integer EXISTS command here (not the exists? helper) so the result
         # inside the pipeline is aligned positionally with batch_map.values.
-        dbclient.scan_each(match: pattern).each_slice(100) do |keys|
+        dbclient.scan_each(**scan_options).each_slice(100) do |keys|
           batch_map = keys.each_with_object({}) do |key, map|
             id = extract_identifier_from_key(key, field_name.to_s)
             map[key] = id if id && !id.empty?
@@ -1129,7 +1233,10 @@ module Familia
           end
 
           batch_map.keys.each_with_index do |key, idx|
-            orphaned_keys << key if existing_flags[idx].to_i.zero?
+            next unless existing_flags[idx].to_i.zero?
+            next if ownership.index_bucket_owner(key, self, names: names)
+
+            orphaned_keys << key
           end
         end
 
@@ -1142,6 +1249,26 @@ module Familia
           count: orphaned_keys.size,
           status: status,
         }
+      end
+
+      # Returns the Redis type of the key a related field of DataType
+      # class +klass+ stores, for SCAN's TYPE option, or nil for a class
+      # this method does not know.
+      #
+      # @param klass [Class, Object] RelatedFieldDefinition#klass
+      # @return [String, nil]
+      #
+      def related_field_key_type(klass)
+        return nil unless klass.is_a?(Class)
+
+        {
+          Familia::UnsortedSet => 'set',
+          Familia::SortedSet => 'zset',
+          Familia::ListKey => 'list',
+          Familia::HashKey => 'hash',
+          Familia::StringKey => 'string',
+          Familia::JsonStringKey => 'string',
+        }.find { |base, _type| klass <= base }&.last
       end
 
       # Deserializes raw SMEMBERS output from a multi-index bucket.
@@ -1196,14 +1323,18 @@ module Familia
       # @param pattern [String] Redis key pattern (e.g. "customer:*:domains")
       # @param client [Redis] Redis client to use
       # @param batch_size [Integer] SCAN cursor count hint
+      # @param type [String, nil] SCAN TYPE option: only keys of this
+      #   Redis type, or keys of every type when nil
       # @return [Array<String>] Matching keys
       #
-      def scan_matching_keys(pattern, client, batch_size: 100)
+      def scan_matching_keys(pattern, client, batch_size: 100, type: nil)
         keys = []
         cursor = '0'
+        options = { match: pattern, count: batch_size }
+        options[:type] = type if type
 
         loop do
-          cursor, batch = client.scan(cursor, match: pattern, count: batch_size)
+          cursor, batch = client.scan(cursor, **options)
           keys.concat(batch)
           break if cursor == '0'
         end
