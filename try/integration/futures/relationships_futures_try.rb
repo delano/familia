@@ -196,6 +196,34 @@ end
 [@ret.map(&:class).uniq, @ret.map(&:value)]
 #=> [[Redis::Future], [false, true]]
 
+## index format checks inside a block raise OperationModeError before sampling
+@email_idx = Familia.unique_indexes(owner: FuturesRelEmployee, class_level: true).first
+[
+  @refused.call { @in_pipeline.call { @email_idx.stale_format? } },
+  @refused.call { @in_pipeline.call { @email_idx.format_current? } },
+  @refused.call { @company.transaction { Familia.stale_indexes(owner: FuturesRelEmployee) } },
+  @refused.call { @company.transaction { Familia.assert_indexes_current!(owner: FuturesRelEmployee) } },
+].uniq
+#=> [Familia::OperationModeError]
+
+## index format checks name themselves in the error
+@names = []
+[
+  -> { @email_idx.stale_format? },
+  -> { @email_idx.format_current? },
+  -> { Familia.stale_indexes(owner: FuturesRelEmployee) },
+  -> { Familia.assert_indexes_current!(owner: FuturesRelEmployee) },
+].each do |call|
+  @in_pipeline.call(&call)
+rescue Familia::OperationModeError => e
+  @names << e.message[/\A(\S+) cannot run inside/, 1]
+end
+@names == %w[
+  IndexDescriptor#stale_format? IndexDescriptor#format_current?
+  Familia.stale_indexes Familia.assert_indexes_current!
+]
+#=> true
+
 ## permission queries inside a pipeline raise OperationModeError
 [
   @refused.call { @in_pipeline.call { @company.staff_with_permission(:read) } },
@@ -352,6 +380,11 @@ end
 ## outside a block: list membership and score still answer with a Boolean and a Float
 [@emp.in_futures_rel_company_queue?(@company), @emp.score_in_futures_rel_company_staff(@company).class]
 #=> [true, Float]
+
+## outside a block: index format checks still answer
+[@email_idx.stale_format?, @email_idx.format_current?, Familia.stale_indexes(owner: FuturesRelEmployee),
+ Familia.assert_indexes_current!(owner: FuturesRelEmployee)]
+#=> [false, true, [], true]
 
 ## outside a block: current_indexings reports only the class-level indexes that hold the record
 [@unsaved.current_indexings,

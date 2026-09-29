@@ -157,7 +157,9 @@ string interpolation, `Array#join` and `puts`, with no error. Use the reader
   `relationship_status` and `validate_relationships!`
 - Scans and maintenance: `scan_count` (`count!`), `scan_any?` (`any!`), the
   `audit_*`, `health_check`, `repair_*` and `rebuild_*` methods,
-  `run_chores!`, and the `EnforceCollectionCaps` chore
+  `run_chores!`, the `EnforceCollectionCaps` chore, and the index format
+  checks `IndexDescriptor#stale_format?` and `#format_current?`,
+  `Familia.stale_indexes` and `Familia.assert_indexes_current!`
 - Migrations: `Migration::Base.run` and `.check_only`, and
   `Migration::Runner#run`, `#run_one`, `#rollback`, `#status` and `#pending`.
   The `Migration::Registry` methods that decide from a reply (`pending`,

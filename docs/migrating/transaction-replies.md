@@ -12,7 +12,7 @@ It used to return `[[[field, raw_value], nil]]` when one pair came back and
 raise `ArgumentError` for more.
 
 Most of the affected calls used to raise an error inside a block
-(`NoMethodError`, `Familia::SerializerError`,
+(`NoMethodError`, `TypeError`, `Familia::SerializerError`,
 `Familia::ConflictingContextError` or a spurious `Familia::RecordExistsError`),
 so code could not have relied on them. The calls below behaved differently,
 and code that uses them inside a block needs a change.
