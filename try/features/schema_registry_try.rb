@@ -3,6 +3,7 @@
 # frozen_string_literal: true
 
 require_relative '../support/helpers/test_helpers'
+require_relative '../support/helpers/fresh_ruby'
 require 'json'
 require 'tmpdir'
 require 'fileutils'
@@ -185,8 +186,44 @@ Familia.schema_validator = :json_schemer
 result[:valid]
 #=> true
 
+# The next two cases run in a fresh process, because json_schemer is
+# already loaded here and a second require of it does nothing.
+
+## A LoadError inside json_schemer makes every validation raise SchemaValidatorLoadError, not disable it
+@broken_gem_dir = Dir.mktmpdir('familia_broken_json_schemer')
+File.write(File.join(@broken_gem_dir, 'json_schemer.rb'), "require 'familia_probe_missing_dependency'\n")
+run_fresh_ruby(<<~RUBY, load_path: [@broken_gem_dir])
+  require 'familia'
+  Familia.schemas = { 'Customer' => #{File.join(@schema_dir, 'customer.json').dump} }
+  2.times do
+    result = Familia::SchemaRegistry.validate('Customer', {})
+    puts "validated, valid: \#{result[:valid]}"
+  rescue StandardError => e
+    puts "\#{e.class}, cause: \#{e.cause.class} \#{e.cause.path}"
+  rescue LoadError => e
+    puts "LoadError: \#{e.path}"
+  end
+RUBY
+#=> ['Familia::SchemaValidatorLoadError, cause: LoadError familia_probe_missing_dependency'] * 2
+
+## Without json_schemer on the load path, validation warns and is disabled
+run_fresh_ruby(<<~RUBY)
+  require 'familia'
+  require 'stringio'
+  $LOAD_PATH.reject! { |dir| dir.include?('json_schemer') }
+  Familia.schemas = { 'Customer' => #{File.join(@schema_dir, 'customer.json').dump} }
+  captured = StringIO.new
+  $stderr = captured
+  result = Familia::SchemaRegistry.validate('Customer', {})
+  $stderr = STDERR
+  puts "validated, valid: \#{result[:valid]}"
+  puts captured.string.lines.first
+RUBY
+#=> ['validated, valid: true', '[Familia] json_schemer gem not installed. Schema validation disabled.']
+
 # Teardown
 FileUtils.rm_rf(@schema_dir)
+FileUtils.rm_rf(@broken_gem_dir)
 Familia.schema_path = @original_schema_path
 Familia.schemas = @original_schemas || {}
 Familia.schema_validator = @original_validator || :json_schemer

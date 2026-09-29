@@ -2,11 +2,11 @@
 #
 # frozen_string_literal: true
 
-require 'base64'
 require 'oj'
 require 'openssl'
 
 # Provider system components
+require_relative 'encryption/strict_base64'
 require_relative 'encryption/provider'
 require_relative 'encryption/providers/xchacha20_poly1305_provider'
 require_relative 'encryption/providers/aes_gcm_provider'
@@ -110,8 +110,10 @@ module Familia
       end
 
       # Benchmark available providers
+      #
+      # Times each provider with the monotonic clock, as Benchmark.realtime
+      # does, so the benchmark library is not needed.
       def benchmark(iterations: 1000)
-        require 'benchmark'
         test_data = 'x' * 1024 # 1KB test
         context = 'benchmark:test'
 
@@ -120,12 +122,12 @@ module Familia
           next unless provider_class.available?
 
           mgr = Manager.new(algorithm: algo)
-          time = Benchmark.realtime do
-            iterations.times do
-              encrypted = mgr.encrypt(test_data, context: context)
-              mgr.decrypt(encrypted, context: context)
-            end
+          started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+          iterations.times do
+            encrypted = mgr.encrypt(test_data, context: context)
+            mgr.decrypt(encrypted, context: context)
           end
+          time = Process.clock_gettime(Process::CLOCK_MONOTONIC) - started
 
           results[algo] = {
             time: time,
@@ -145,7 +147,7 @@ module Familia
         raise EncryptionError, "Current key version not found: #{current_key_version}" unless current_key
 
         begin
-          Base64.strict_decode64(current_key)
+          StrictBase64.decode(current_key)
         rescue ArgumentError
           raise EncryptionError, 'Current encryption key is not valid Base64'
         end

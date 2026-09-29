@@ -4,6 +4,8 @@
 
 require_relative '../support/helpers/test_helpers'
 require_relative '../../lib/familia/migration'
+require 'fileutils'
+require 'tmpdir'
 
 Familia.debug = false
 
@@ -377,6 +379,48 @@ migration = SimpleModelMigration.new
 migration.prepare
 migration.interactive
 #=> false
+
+# The development bundle does not include pry-byebug, and familia does not
+# depend on it.
+
+## interactive mode without pry-byebug in the bundle raises PreconditionFailed
+InteractiveModelMigration = Class.new(SimpleModelMigration) do
+  self.migration_id = 'model_test_interactive'
+
+  def prepare
+    super
+    @interactive = true
+  end
+end
+migration = InteractiveModelMigration.new
+migration.prepare
+migration.migrate
+#=!> Familia::Migration::Errors::PreconditionFailed
+#==> error.message.include?("Add pry-byebug to the application's Gemfile")
+
+## Runner records a missing pry-byebug as a failed migration instead of raising
+registry = Familia::Migration::Registry.new(redis: @redis, prefix: @prefix)
+runner = Familia::Migration::Runner.new(migrations: [InteractiveModelMigration], registry: registry)
+result = runner.run_one(InteractiveModelMigration)
+[result[:status], result[:error].include?('pry-byebug'), registry.applied?('model_test_interactive')]
+#=> [:failed, true, false]
+
+## interactive mode names the failing require, not the Gemfile, when pry-byebug is installed but cannot load
+@broken_pry_dir = Dir.mktmpdir('familia_broken_pry_byebug')
+File.write(File.join(@broken_pry_dir, 'pry-byebug.rb'), "require 'familia_probe_missing_native_ext'\n")
+$LOAD_PATH.unshift(@broken_pry_dir)
+begin
+  migration = InteractiveModelMigration.new
+  migration.prepare
+  migration.migrate
+ensure
+  $LOAD_PATH.delete(@broken_pry_dir)
+  FileUtils.rm_rf(@broken_pry_dir)
+end
+#=!> Familia::Migration::Errors::PreconditionFailed
+#==> error.message.include?('pry-byebug is installed but failed to load')
+#==> error.message.include?('familia_probe_missing_native_ext')
+#==> !error.message.include?('Gemfile')
 
 ## dbclient returns Redis connection
 migration = SimpleModelMigration.new

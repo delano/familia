@@ -8,6 +8,9 @@
 #   familia:migrate:validate     Check dependency issues
 #   familia:migrate:schema_drift List models with changed schemas
 #
+# Load this file from a Rakefile. familia does not depend on rake, so the
+# application's bundle must include it, as it must to run rake at all.
+#
 # frozen_string_literal: true
 
 require 'rake'

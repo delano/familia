@@ -18,13 +18,14 @@ puts
 
 # Configure encryption keys for examples.
 #
-# Keys must decode to exactly 32 bytes. In production, generate them with
-# `Base64.strict_encode64(SecureRandom.bytes(32))` and load from the
-# environment or a secrets manager -- never hardcode real keys.
+# Keys are strict Base64 and must decode to exactly 32 bytes. In production,
+# generate them with `SecureRandom.base64(32)` and load them from the
+# environment or a secrets manager. Never hardcode real keys. The fixed example
+# keys below use `[bytes].pack('m0')`, core Ruby's strict Base64 encoding.
 Familia.configure do |config|
   config.encryption_keys = {
-    v1: Base64.strict_encode64('example-encryption-key-version-1'),
-    v2: Base64.strict_encode64('example-encryption-key-version-2'),
+    v1: ['example-encryption-key-version-1'].pack('m0'),
+    v2: ['example-encryption-key-version-2'].pack('m0'),
   }
   config.current_key_version = :v2
   config.encryption_personalization = 'FamiliaExamples'
@@ -201,7 +202,7 @@ original_current_key_version = Familia.config.current_key_version
 begin
   # Start with only v1 available so the initial save uses v1 as current.
   Familia.config.encryption_keys = {
-    v1: Base64.strict_encode64('example-encryption-key-version-1'),
+    v1: ['example-encryption-key-version-1'].pack('m0'),
   }
   Familia.config.current_key_version = :v1
 
@@ -217,8 +218,8 @@ begin
   # Rotate: add v2, promote v2 to current. v1 stays in the keyring so existing
   # ciphertext remains decryptable until it is re-encrypted.
   Familia.config.encryption_keys = {
-    v1: Base64.strict_encode64('example-encryption-key-version-1'),
-    v2: Base64.strict_encode64('example-encryption-key-version-2'),
+    v1: ['example-encryption-key-version-1'].pack('m0'),
+    v2: ['example-encryption-key-version-2'].pack('m0'),
   }
   Familia.config.current_key_version = :v2
 

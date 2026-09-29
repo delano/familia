@@ -144,9 +144,24 @@ module Familia
       # @return [Hash] Result hash with keys:
       #   - :migration_id [String] The migration identifier
       #   - :dry_run [Boolean] Whether this was a dry run
-      #   - :status [Symbol] :success, :skipped, or :failed
+      #   - :status [Symbol] :success, :skipped, or :failed.
+      #     :skipped means #migration_needed? returned false.
+      #     :success means #migrate returned without raising. Its return
+      #     value is not checked. Unless dry_run is set, the migration is
+      #     then recorded as applied.
+      #     :failed means #migration_needed?, #migrate, or recording the
+      #     migration as applied raised a StandardError, for example
+      #     Familia::SchemaValidatorLoadError from #migrate. When
+      #     #migration_needed? or #migrate raised, the migration is not
+      #     recorded as applied. When recording raised, the registry may
+      #     already list the migration as applied.
       #   - :stats [Hash] Statistics from the migration
       #   - :error [String] Error message (if failed)
+      # @raise [ArgumentError] if given neither a Class nor a String
+      # @raise [Errors::NotFound] if a migration ID is not registered
+      # @raise [Errors::DependencyNotMet] if a dependency is not applied
+      # @raise [StandardError] errors raised while the migration is
+      #   constructed or in its #prepare propagate and produce no result hash
       #
       def run_one(migration_class_or_id, dry_run: false)
         klass = resolve_migration(migration_class_or_id)
