@@ -63,19 +63,30 @@ module Familia
     alias content value
     alias get value
 
-    # @return [String, Redis::Future] the stored value, or the inspect-style
-    #   string from Familia::Base#to_s when there is none. Inside a
-    #   transaction or pipeline, the GET Future (resolves to the raw value).
+    # Ruby calls to_s implicitly (string interpolation, Array#join, puts) and
+    # prints the object's default "#<...>" form when it returns anything but
+    # a String, so it cannot hand back a Redis::Future. Use #value to get the
+    # GET Future inside a block.
+    #
+    # @return [String] the stored value, or the inspect-style string from
+    #   Familia::Base#to_s when there is none
+    # @raise [Familia::OperationModeError] inside a transaction or pipeline
     def to_s
-      Familia.transform_reply(value) do |val|
-        val.to_s.empty? ? super() : val.to_s
-      end
+      Familia.assert_replies_available!('StringKey#to_s')
+
+      val = value.to_s
+      val.empty? ? super : val
     end
 
-    # @return [Integer, Redis::Future] the stored value as an Integer. Inside
-    #   a transaction or pipeline, the GET Future (resolves to the raw value).
+    # A conversion method, refused inside a block like #to_s. Use #value to
+    # get the GET Future there.
+    #
+    # @return [Integer] the stored value as an Integer
+    # @raise [Familia::OperationModeError] inside a transaction or pipeline
     def to_i
-      Familia.transform_reply(value, &:to_i)
+      Familia.assert_replies_available!('StringKey#to_i')
+
+      value.to_i
     end
 
     # @note This method executes a Redis SET immediately, unlike scalar field

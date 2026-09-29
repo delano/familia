@@ -48,7 +48,19 @@ module Familia
       Familia.transform_reply(membersraw) { |elements| deserialize_values(*elements) }
     end
     alias all members
-    alias to_a members
+
+    # Ruby's conversion to an Array, used by splat and Array(). A
+    # conversion method must return its type, so inside a block to_a
+    # refuses instead of returning a Redis::Future; #members passes the
+    # Future through.
+    #
+    # @return [Array] the deserialized members
+    # @raise [Familia::OperationModeError] inside a transaction or pipeline
+    def to_a
+      Familia.assert_replies_available!('UnsortedSet#to_a')
+
+      members
+    end
 
     def membersraw
       dbclient.smembers(dbkey)

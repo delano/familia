@@ -107,10 +107,15 @@ end
 ## range, members and slices inside atomic_write pass LRANGE Futures through
 @reset.call
 @ret, @persisted = @in_atomic_write.call('aw-range') do
-  [@owner.events.range(0, 1), @owner.events.members, @owner.events[1..2], @owner.events[0, 2], @owner.events.to_a]
+  [@owner.events.range(0, 1), @owner.events.members, @owner.events[1..2], @owner.events[0, 2]]
 end
 [@ret.map(&:class).uniq, @ret.first.value, @ret[2].value, @persisted]
 #=> [[Redis::Future], ["\"a\"", "\"b\""], ["\"b\"", "\"c\""], "aw-range"]
+
+## to_a and Array() inside a pipeline raise OperationModeError
+[@refused.call { @in_pipeline.call { @owner.events.to_a } },
+ @refused.call { @in_pipeline.call { Array(@owner.events) } }]
+#=> [Familia::OperationModeError, Familia::OperationModeError]
 
 ## range and members inside a pipeline pass LRANGE Futures through
 @reset.call
@@ -193,6 +198,11 @@ end
 @reset.call
 [@owner.events.range(1, 2), @owner.events[0, 2], @owner.events.each.to_a, @owner.events.collectraw(&:upcase)]
 #=> [["b", "c"], ["a", "b"], ["a", "b", "c", "d"], ["\"A\"", "\"B\"", "\"C\"", "\"D\""]]
+
+## outside a block: to_a still returns the deserialized elements
+@reset.call
+[@owner.events.to_a, @owner.events.to_a(2), Array(@owner.events)]
+#=> [["a", "b", "c", "d"], ["a", "b"], ["a", "b", "c", "d"]]
 
 ## outside a block: insert and pushx refresh the TTL after a write
 @reset.call

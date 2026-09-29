@@ -52,7 +52,7 @@ module Familia
     #   transaction or pipeline, the GET Future (resolves to the raw JSON).
     #
     def char_count
-      Familia.transform_reply(to_s) { |str| str&.size || 0 }
+      Familia.transform_reply(read_converted(&:to_s)) { |str| str&.size || 0 }
     end
     alias size char_count
     alias length char_count
@@ -127,29 +127,43 @@ module Familia
 
     # Returns the string representation of the deserialized value.
     #
-    # @return [String, nil, Redis::Future] the deserialized value converted
-    #   to string, or nil. Inside a transaction or pipeline, the GET Future
-    #   (resolves to the raw JSON).
+    # Ruby calls to_s implicitly (string interpolation, Array#join, puts) and
+    # prints the object's default "#<...>" form when it returns anything but
+    # a String, so it cannot hand back a Redis::Future. Use #value to get the
+    # GET Future inside a block.
+    #
+    # @return [String, nil] the deserialized value converted to string, or
+    #   nil
+    # @raise [Familia::OperationModeError] inside a transaction or pipeline
     #
     def to_s
+      Familia.assert_replies_available!('JsonStringKey#to_s')
+
       read_converted(&:to_s)
     end
 
-    # Returns the integer representation of the deserialized value.
+    # Returns the integer representation of the deserialized value. A
+    # conversion method, refused inside a block like #to_s.
     #
-    # @return [Integer, nil, Redis::Future] the deserialized value converted
-    #   to integer, or nil. Inside a transaction or pipeline, the GET Future.
+    # @return [Integer, nil] the deserialized value converted to integer, or
+    #   nil
+    # @raise [Familia::OperationModeError] inside a transaction or pipeline
     #
     def to_i
+      Familia.assert_replies_available!('JsonStringKey#to_i')
+
       read_converted(&:to_i)
     end
 
-    # Returns the float representation of the deserialized value.
+    # Returns the float representation of the deserialized value. A
+    # conversion method, refused inside a block like #to_s.
     #
-    # @return [Float, nil, Redis::Future] the deserialized value converted to
-    #   float, or nil. Inside a transaction or pipeline, the GET Future.
+    # @return [Float, nil] the deserialized value converted to float, or nil
+    # @raise [Familia::OperationModeError] inside a transaction or pipeline
     #
     def to_f
+      Familia.assert_replies_available!('JsonStringKey#to_f')
+
       read_converted(&:to_f)
     end
 

@@ -68,11 +68,22 @@ end
 [@ret.class, @ret.value]
 #=> [Redis::Future, 3]
 
-## members, to_a and all inside atomic_write pass SMEMBERS Futures through
+## members and all inside atomic_write pass SMEMBERS Futures through
 @reset.call
-@ret, @persisted = @in_atomic_write.call('aw-members') { [@owner.tags.members, @owner.tags.to_a, @owner.tags.all] }
+@ret, @persisted = @in_atomic_write.call('aw-members') { [@owner.tags.members, @owner.tags.all] }
 [@ret.map(&:class).uniq, @ret.first.value.sort, @persisted]
 #=> [[Redis::Future], ["\"a\"", "\"b\"", "\"c\""], "aw-members"]
+
+## to_a, splat and JSON conversion inside atomic_write raise and persist nothing
+# Conversion methods must return their type, so they refuse rather than
+# hand back a Redis::Future.
+@reset.call
+@name_before = FuturesSetOwner.load('fso-1').name
+[@refused.call { @in_atomic_write.call('aw-to-a') { @owner.tags.to_a } },
+ @refused.call { @in_atomic_write.call('aw-splat') { [*@owner.tags] } },
+ @refused.call { @in_atomic_write.call('aw-json') { @owner.tags.to_json } },
+ FuturesSetOwner.load('fso-1').name == @name_before]
+#=> [Familia::OperationModeError, Familia::OperationModeError, Familia::OperationModeError, true]
 
 ## members inside a pipeline passes the SMEMBERS Future through
 @reset.call
@@ -160,6 +171,11 @@ end
 @reset.call
 [@owner.tags.empty?, @owner.tags.members.sort, @owner.tags.intersection(@other), @owner.tags.difference(@other).sort]
 #=> [false, ["a", "b", "c"], ["b"], ["a", "c"]]
+
+## outside a block: to_a and splat still return the deserialized members
+@reset.call
+[@owner.tags.to_a.sort, [*@owner.tags].sort]
+#=> [["a", "b", "c"], ["a", "b", "c"]]
 
 ## outside a block: scan, sample and the iterators still deserialize
 @reset.call

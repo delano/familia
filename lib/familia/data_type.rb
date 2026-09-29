@@ -477,6 +477,21 @@ module Familia
       self.class.default_expiration
     end
 
+    # JSON-ready contents of the key, read from the database (see
+    # Familia::Base#as_json). JSON generation calls as_json and to_json
+    # implicitly and cannot serialize a Redis::Future, so both refuse to run
+    # inside a block. Use the type's reader (#value, #members, #hgetall) to
+    # get the command's Future there.
+    #
+    # @param options [Hash, nil] ignored, accepted for the JSON protocol
+    # @return [Object] the stored contents
+    # @raise [Familia::OperationModeError] inside a transaction or pipeline
+    def as_json(options = nil)
+      Familia.assert_replies_available!("#{self.class}#as_json")
+
+      super
+    end
+
     include Settings
     include Connection
     include DatabaseCommands

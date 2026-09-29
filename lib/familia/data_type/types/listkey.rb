@@ -185,7 +185,20 @@ module Familia
       range 0, count
     end
     alias all members
-    alias to_a members
+
+    # Ruby's conversion to an Array, used by splat and Array(). A
+    # conversion method must return its type, so inside a block to_a
+    # refuses instead of returning a Redis::Future; #members passes the
+    # Future through.
+    #
+    # @param count [Integer] number of elements to return (-1 for all)
+    # @return [Array<Object>] the deserialized elements
+    # @raise [Familia::OperationModeError] inside a transaction or pipeline
+    def to_a(count = -1)
+      Familia.assert_replies_available!('ListKey#to_a')
+
+      members(count)
+    end
 
     def membersraw(count = -1)
       count -= 1 if count.positive?

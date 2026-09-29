@@ -53,6 +53,13 @@ end
   captured
 end
 
+@refused = lambda do |&blk|
+  blk.call
+  :no_error
+rescue StandardError => e
+  e.class
+end
+
 ## StringKey#char_count inside atomic_write passes the GET Future through
 @reset.call
 @ret, @persisted = @in_atomic_write.call('aw-size') { @owner.nick.size }
@@ -65,18 +72,43 @@ end
 [@ret.class, @ret.value]
 #=> [Redis::Future, "nickname"]
 
-## StringKey#to_s inside atomic_write passes the GET Future through
+## StringKey#to_s and #to_i inside atomic_write raise and persist nothing
+# Conversion methods must return their type. Ruby prints "#<...>" for a
+# to_s that returns anything else, so a Future there would be written out
+# silently.
 @reset.call
-@ret, @persisted = @in_atomic_write.call('aw-to-s') { @owner.nick.to_s }
-[@ret.class, @ret.value, @persisted]
-#=> [Redis::Future, "nickname", "aw-to-s"]
+@name_before = FuturesScalarOwner.load('fso-1').name
+[@refused.call { @in_atomic_write.call('aw-to-s') { @owner.nick.to_s } },
+ @refused.call { @in_atomic_write.call('aw-to-i') { @owner.nick.to_i } },
+ FuturesScalarOwner.load('fso-1').name == @name_before]
+#=> [Familia::OperationModeError, Familia::OperationModeError, true]
 
-## StringKey#to_i inside a pipeline passes the GET Future through
+## string interpolation of a StringKey and a Counter inside a transaction raises, so nothing commits
 @reset.call
-@owner.nick.value = '42'
-@ret = @in_pipeline.call { @owner.nick.to_i }
+@queued = nil
+@err = nil
+begin
+  @owner.transaction do |conn|
+    conn.set('fso-probe', 'x')
+    "motto=#{@owner.nick} hits=#{@owner.hits}"
+  end
+rescue Familia::OperationModeError => e
+  @err = e
+end
+[@err.message.start_with?('StringKey#to_s cannot run inside a transaction or pipeline'),
+ Familia.dbclient.exists('fso-probe')]
+#=> [true, 0]
+
+## Array#join of StringKeys inside a pipeline raises OperationModeError
+@reset.call
+@refused.call { @in_pipeline.call { [@owner.nick, @owner.hits].join(',') } }
+#=> Familia::OperationModeError
+
+## StringKey#value inside a pipeline still passes the GET Future through
+@reset.call
+@ret = @in_pipeline.call { @owner.nick.value }
 [@ret.class, @ret.value]
-#=> [Redis::Future, "42"]
+#=> [Redis::Future, "nickname"]
 
 ## JsonStringKey#char_count inside atomic_write passes the GET Future through
 @reset.call
@@ -90,19 +122,23 @@ end
 @ret.class
 #=> Redis::Future
 
-## JsonStringKey#to_s, #to_i and #to_f inside atomic_write pass Futures through
+## JsonStringKey#to_s, #to_i, #to_f and #to_json inside atomic_write raise and persist nothing
 @reset.call
 @owner.prefs.value = 7
-@ret, @persisted = @in_atomic_write.call('aw-json-conv') do
-  [@owner.prefs.to_s, @owner.prefs.to_i, @owner.prefs.to_f]
-end
-[@ret.map(&:class), @ret.map(&:value), @persisted]
-#=> [[Redis::Future, Redis::Future, Redis::Future], ["7", "7", "7"], "aw-json-conv"]
+@name_before = FuturesScalarOwner.load('fso-1').name
+@results = [
+  @refused.call { @in_atomic_write.call('aw-json-s') { @owner.prefs.to_s } },
+  @refused.call { @in_atomic_write.call('aw-json-i') { @owner.prefs.to_i } },
+  @refused.call { @in_atomic_write.call('aw-json-f') { @owner.prefs.to_f } },
+  @refused.call { @in_atomic_write.call('aw-json-j') { @owner.prefs.to_json } },
+]
+[@results.size, @results.uniq, FuturesScalarOwner.load('fso-1').name == @name_before]
+#=> [4, [Familia::OperationModeError], true]
 
-## JsonStringKey#to_i inside a pipeline passes the GET Future through
+## JsonStringKey#value inside a pipeline still passes the GET Future through
 @reset.call
 @owner.prefs.value = 8
-@ret = @in_pipeline.call { @owner.prefs.to_i }
+@ret = @in_pipeline.call { @owner.prefs.value }
 [@ret.class, @ret.value]
 #=> [Redis::Future, "8"]
 
@@ -118,11 +154,11 @@ end
 [@ret.class, @ret.value, @persisted]
 #=> [Redis::Future, "3", "aw-counter"]
 
-## Counter#to_i inside a pipeline passes the GET Future through
+## Counter#to_i and Integer() inside a pipeline raise OperationModeError
 @reset.call
-@ret = @in_pipeline.call { @owner.hits.to_i }
-[@ret.class, @ret.value]
-#=> [Redis::Future, "3"]
+[@refused.call { @in_pipeline.call { @owner.hits.to_i } },
+ @refused.call { @in_pipeline.call { Integer(@owner.hits) } }]
+#=> [Familia::OperationModeError, Familia::OperationModeError]
 
 ## Counter#reset inside atomic_write passes the SET Future through and persists both
 @reset.call
@@ -193,12 +229,6 @@ end
 @reset.call
 @owner.mutex.acquire('tok-3')
 @name_before = FuturesScalarOwner.load('fso-1').name
-@refused = lambda do |&blk|
-  blk.call
-  :no_error
-rescue StandardError => e
-  e.class
-end
 [@refused.call { @in_atomic_write.call('aw-locked') { @owner.mutex.locked? } },
  @refused.call { @in_atomic_write.call('aw-held') { @owner.mutex.held_by?('tok-3') } },
  FuturesScalarOwner.load('fso-1').name == @name_before, @owner.mutex.held_by?('tok-3')]
@@ -250,6 +280,12 @@ end
 @reset.call
 [@owner.nick.size, @owner.nick.empty?, @owner.nick.to_s, FuturesScalarOwner.new(ownerid: 'fso-none').nick.empty?]
 #=> [8, false, "nickname", true]
+
+## outside a block: interpolation, to_i and to_json still read the value
+@reset.call
+@owner.nick.value = '42'
+["n=#{@owner.nick} h=#{@owner.hits}", @owner.nick.to_i, @owner.hits.to_i, @owner.nick.to_json]
+#=> ["n=42 h=3", 42, 3, "\"42\""]
 
 ## outside a block: StringKey#to_s falls back to the inspect-style string
 FuturesScalarOwner.new(ownerid: 'fso-none').nick.to_s.start_with?('#<Familia::StringKey:0x')

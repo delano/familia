@@ -89,11 +89,18 @@ end
   [
     @owner.scores.members, @owner.scores.revmembers, @owner.scores.range(0, 0),
     @owner.scores.revrange(0, 0), @owner.scores.rangebyscore(2, 3), @owner.scores.revrangebyscore(3, 2),
-    @owner.scores.rangebylex('-', '+'), @owner.scores.revrangebylex('+', '-'), @owner.scores.to_a
+    @owner.scores.rangebylex('-', '+'), @owner.scores.revrangebylex('+', '-')
   ]
 end
 [@ret.map(&:class).uniq, @ret.map { |fut| fut.value.size }, @persisted]
-#=> [[Redis::Future], [3, 3, 1, 1, 2, 2, 3, 3, 3], "aw-range"]
+#=> [[Redis::Future], [3, 3, 1, 1, 2, 2, 3, 3], "aw-range"]
+
+## to_a inside atomic_write raises and persists nothing
+@reset.call
+@name_before = FuturesZsetOwner.load('fzo-1').name
+[@refused.call { @in_atomic_write.call('aw-to-a') { @owner.scores.to_a } },
+ FuturesZsetOwner.load('fzo-1').name == @name_before]
+#=> [Familia::OperationModeError, true]
 
 ## members and range inside a pipeline pass Futures through
 @reset.call
@@ -229,6 +236,11 @@ end
 [@owner.scores.members, @owner.scores.revrange(0, 0), @owner.scores.rangebyscore(2, 3), @owner.scores.at(1),
  @owner.scores.last, @owner.scores.rangebylex('-', '+')]
 #=> [["a", "b", "c"], ["c"], ["b", "c"], "b", "c", ["a", "b", "c"]]
+
+## outside a block: to_a still returns the deserialized members
+@reset.call
+[@owner.scores.to_a, @owner.scores.to_a(2)]
+#=> [["a", "b", "c"], ["a", "b"]]
 
 ## outside a block: popmin and popmax return deserialized pairs with Float scores
 @reset.call

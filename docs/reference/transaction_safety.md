@@ -100,7 +100,7 @@ empty.value.zero?  # => false, SCARD replies with the count
 | The generated participation methods `in_<target>_<collection>?` and `score_in_<target>_<collection>` (`domain.in_customer_domains?(customer)`) | for `in_*?`, the ZRANK or LPOS index or nil on a sorted-set or list participation, and the SISMEMBER Boolean on a set one; for `score_in_*`, the Float score or nil |
 | `DataType#exists?`, `Horreum.exists?`, `expires?`, `expired?` | the EXISTS count or the TTL in seconds |
 | `HashKey#increment`, `#decrement`, `#incrbyfloat`; `SortedSet#score`, `#increment`, `#mscore` | the Integer or Float, which redis-rb converts itself |
-| `Counter#value`, `StringKey#to_s`, `#to_i`, `#size`, `#empty?`, `JsonStringKey#to_s`, `#to_i`, `#to_f`, `#empty?` | the raw stored string, or nil |
+| `StringKey#value`, `#size`, `#empty?`, `Counter#value`, `JsonStringKey#value`, `#char_count`, `#empty?` | the raw stored string, or nil |
 | `Lock#release` | 1 when the lock was released, 0 otherwise |
 | `Horreum.any?`, `.count`, `.keys_count`, `.keys_any?`, `.in_instances?`, `.multiget`, `.storage_inspect` | the ZCARD count, the KEYS array, the ZRANK reply, the MGET array or the HGETALL hash |
 | `Migration::Registry#applied?`, `#applied_at`, `#all_applied`, `#metadata` | the ZSCORE, ZRANGE or HGET reply |
@@ -132,10 +132,19 @@ iterate, load records, or derive an answer from the reply's contents. It
 also covers admission checks, whose answer tells the caller whether it may
 proceed: whether it holds a lock, has claimed a value, or is under a limit.
 Inside a block that answer would be a truthy Future, which admits the caller
-before the server has answered.
+before the server has answered. Ruby's conversion methods (`to_s`, `to_i`,
+`to_f`, `to_a`, `as_json`, `to_json`) fail fast too, because Ruby and JSON
+generation call them implicitly and expect the converted type. A `to_s` that
+returns anything but a String is printed as `#<Familia::StringKey:0x...>` by
+string interpolation, `Array#join` and `puts`, with no error. Use the reader
+(`value`, `members`, `hgetall`) to get the command's Future instead.
 
 - Iteration: `each`, `eachraw`, `eachraw_with_index`, `collectraw` and
   `selectraw` on every collection, `each_record`, and `scan_keys` with a block
+- Conversions: `to_s` and `to_i` on `StringKey` (and so `Counter` and
+  `Lock`), `JsonStringKey#to_s`, `#to_i` and `#to_f`, `to_a` on `ListKey`,
+  `SortedSet` and `UnsortedSet`, and `as_json` and `to_json` on every
+  DataType
 - Reads that decide: `HashKey#fetch`, `HashKey#refresh!` and `#refresh`,
   `Horreum#refresh!` and `#refresh`, `extend_expiration`, `ttl_report`
 - Loading: `find_by_dbkey`, `find_by_identifier` (`find_by_id`, `find`,

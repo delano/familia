@@ -247,8 +247,22 @@ module Familia
       # membersraw. Do not decrement here too, or members(n) returns n-1.
       Familia.transform_reply(membersraw(count, opts)) { |elements| deserialize_values(*elements) }
     end
-    alias to_a members
     alias all members
+
+    # Ruby's conversion to an Array, used by splat and Array(). A
+    # conversion method must return its type, so inside a block to_a
+    # refuses instead of returning a Redis::Future; #members passes the
+    # Future through.
+    #
+    # @param count [Integer] number of members to return (-1 for all)
+    # @param opts [Hash] options for #members
+    # @return [Array] the deserialized members, lowest score first
+    # @raise [Familia::OperationModeError] inside a transaction or pipeline
+    def to_a(count = -1, opts = {})
+      Familia.assert_replies_available!('SortedSet#to_a')
+
+      members(count, opts)
+    end
 
     def membersraw(count = -1, opts = {})
       count -= 1 if count.positive?

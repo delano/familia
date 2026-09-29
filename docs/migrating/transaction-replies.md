@@ -11,10 +11,11 @@ every method returns what it did before, with one exception:
 It used to return `[[[field, raw_value], nil]]` when one pair came back and
 raise `ArgumentError` for more.
 
-Most of the affected calls used to raise `NoMethodError`,
-`Familia::ConflictingContextError` or a spurious `Familia::RecordExistsError`
-inside a block, so code could not have relied on them. The calls below
-behaved differently, and code that uses them inside a block needs a change.
+Most of the affected calls used to raise an error inside a block
+(`NoMethodError`, `Familia::SerializerError`,
+`Familia::ConflictingContextError` or a spurious `Familia::RecordExistsError`),
+so code could not have relied on them. The calls below behaved differently,
+and code that uses them inside a block needs a change.
 
 ## Partial writes inside a transaction now raise
 
@@ -93,6 +94,23 @@ A registry created without `redis:` no longer keeps the first connection it
 resolves. It calls `Familia.dbclient` once per method call, so without a
 connection provider each call opens a new connection. Pass `redis:` to
 `Familia::Migration::Registry.new` to reuse one client.
+
+## `as_json` on a scalar inside a block now raises
+
+Inside a transaction or pipeline, `as_json` on a `StringKey`, `JsonStringKey`
+or `Lock` returned the GET `Redis::Future`. It now raises
+`Familia::OperationModeError`, like Ruby's other conversion methods (`to_s`,
+`to_i`, `to_f`, `to_a` and `to_json`), which raised `NoMethodError` or
+`Familia::SerializerError` there. Call `value` inside the block to get the GET
+Future, and convert its value after the block:
+
+```ruby
+nick = nil
+user.transaction do
+  nick = user.nick.value
+end
+nick.value # => the raw stored string
+```
 
 ## Futures are truthy
 
