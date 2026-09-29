@@ -17,6 +17,12 @@
 # the key refresh! read. Before refresh! reset the fields, it computed the
 # identifier only while they were intact, and these identifier forms
 # refreshed without error.
+#
+# naive_refresh interpolated dbkey into its debug message before assigning
+# anything, even with debug logging off. It raised Familia::NoIdentifier on
+# an object whose identifier was not set yet, and on an object with no objid
+# yet whose Proc identifier reads objid it sent HDEL to objid_lookup. It no
+# longer computes dbkey. The naive_refresh cases below pin that.
 
 require_relative '../support/helpers/test_helpers'
 
@@ -51,6 +57,14 @@ module RefreshIdentifierFormsTry
     identifier_field ->(record) { "order_#{record.objid}" }
     field :name
     field :note
+  end
+
+  # Identifier held in a plain Symbol field.
+  class SymbolRecord < Familia::Horreum
+    prefix :refresh_idform_symbol
+    identifier_field :rid
+    field :rid
+    field :name
   end
 
   # Calls per command name sent to the server while the block runs, read
@@ -126,8 +140,23 @@ end
 [@sent, @objid_rec.note, @log_io.string.include?("(#{@objid_rec.dbkey})")]
 #=> [{ 'hgetall' => 1 }, 'plain-legacy', true]
 
+## naive_refresh assigns the identifier field on an object that has none yet
+@naive = RefreshIdentifierFormsTry::SymbolRecord.new
+@naive.naive_refresh(rid: '"idform_naive"', name: '"named"')
+[@naive.rid, @naive.name]
+#=> ['idform_naive', 'named']
+
+## naive_refresh on a Proc(objid) object with no objid yet assigns the objid and sends nothing
+@naive_objid = RefreshIdentifierFormsTry::ObjidRecord.allocate
+@sent = RefreshIdentifierFormsTry.commands_during do
+  @naive_objid.naive_refresh(objid: '"idform-naive-objid"', name: '"named"')
+end
+[@sent, @naive_objid.objid]
+#=> [{}, 'idform-naive-objid']
+
 delete_test_dbkeys(
   RefreshIdentifierFormsTry::ProcRecord,
   RefreshIdentifierFormsTry::MethodRecord,
   RefreshIdentifierFormsTry::ObjidRecord,
+  RefreshIdentifierFormsTry::SymbolRecord,
 )

@@ -488,13 +488,20 @@ module Familia
     # external sources. That's why it's called "naive" refresh: it assumes
     # the provided values are correct and updates the object accordingly.
     #
+    # Unlike {#refresh!}, it assigns only the fields it is given, through the
+    # setters, with the current values as the old ones. Fields it is not given
+    # keep their values.
+    #
+    # Its debug message does not compute the identifier, so it also works on
+    # an object whose identifier cannot be computed yet.
+    #
     # @see #refresh!
     #
     # @param fields [Hash] A hash of field names and their new values to update
     #   the object with.
     # @return [Array] The list of field names that were updated.
     def naive_refresh(**fields)
-      Familia.debug "[naive_refresh] #{self.class} #{dbkey} #{fields.keys}"
+      Familia.debug "[naive_refresh] #{self.class} #{fields.keys}"
       initialize_with_keyword_args_deserialize_value(**fields)
     end
 
