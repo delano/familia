@@ -1,13 +1,14 @@
-# Upgrading from 2.12: runtime dependencies
+# Upgrading from 2.13: runtime dependencies
 
-The first release after 2.12.0 changes which gems familia declares and which
-libraries `require 'familia'` loads. Each section below says what an
-application has to change. Sections that do not apply to your application
-need no action.
+The first release after 2.13.0 changes which gems familia declares and which
+libraries `require 'familia'` loads. familia 2.12.0 declared and loaded the
+same gems as 2.13.0, so this guide also covers an upgrade from 2.12. Each
+section below says what an application has to change. Sections that do not
+apply to your application need no action.
 
 ## `require 'familia'` no longer loads `base64`
 
-familia 2.12.0 required `base64` when it loaded, so application code could
+familia 2.13.0 required `base64` when it loaded, so application code could
 call `Base64` without requiring it. familia no longer requires `base64` or
 depends on it. Code that relied on this raises
 `NameError: uninitialized constant Base64` after the upgrade, on every Ruby
@@ -52,7 +53,7 @@ because Ruby 3.4 moved `base64` out of the default gems. Ruby 3.4's
 
 ## familia no longer depends on `connection_pool`
 
-familia 2.12.0 declared `connection_pool` (`>= 2.4, < 4.0`) and required it
+familia 2.13.0 declared `connection_pool` (`>= 2.4, < 4.0`) and required it
 when it loaded. familia calls no `connection_pool` API, so it now does
 neither, and it no longer limits which `connection_pool` version your
 bundle resolves. Another gem in the bundle may still install and load
@@ -113,7 +114,7 @@ migration as `:failed` instead of letting the `LoadError` end the run.
 
 When `json_schemer` is installed but one of its own requires fails, schema
 validation now raises `Familia::SchemaValidatorLoadError`, whose `cause` is
-the `LoadError`. familia 2.12.0 warned `json_schemer gem not installed` in
+the `LoadError`. familia 2.13.0 warned `json_schemer gem not installed` in
 that case and disabled validation, so every record passed.
 
 How a migration meets the error depends on its kind:

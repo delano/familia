@@ -2,7 +2,7 @@ Documentation
 -------------
 
 - Added ``docs/migrating/runtime-dependencies.md``, which lists the
-  application changes needed for familia's dependency changes since 2.12.0:
+  application changes needed for familia's dependency changes since 2.13.0:
   ``base64``, ``connection_pool``, the ``oj`` and ``json_schemer`` floors,
   interactive migrations and ``Familia::SchemaValidatorLoadError``.
 
