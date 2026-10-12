@@ -351,7 +351,7 @@ module Familia
       return if index_rels.empty?
       return unless Familia.transaction_or_pipeline?
 
-      raise Familia::IndexedFieldFastWriteError.new(@name, index_rels.first.index_name)
+      raise Familia::IndexedFieldFastWriteError.new(@name, index_rels.first.index_name, inside_block: true)
     end
 
     # Applies the in-memory setter, then maintains the class-level index

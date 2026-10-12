@@ -146,6 +146,11 @@ Fixed
 - ``JsonStringKey#empty?`` on a key declared with ``default:`` wrote the
   default to a missing key (SETNX) and refreshed the TTL. It now reads with
   GET only, inside and outside a block; its return values are unchanged.
+- ``Familia::IndexedFieldFastWriteError`` raised by a ``field!`` fast
+  writer inside a transaction or pipeline recommended ``multi_field_update``
+  or ``save``, which raise ``Familia::OperationModeError`` there. Its
+  message now says to write before or after the block, and the new
+  ``#inside_block`` reader is ``true`` for that case.
 - ``Migration::Registry#applied?`` returned ``true`` for every migration
   inside a transaction or pipeline. It now returns the ZSCORE
   ``Redis::Future``, which resolves to the score or ``nil`` after the block.
