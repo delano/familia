@@ -135,11 +135,16 @@ module Familia
 
     # Checks if the value is nil (key does not exist or has no value).
     #
+    # Reads with a plain GET, like #char_count, and leaves the key and its
+    # TTL untouched. A declared default stands in for a missing key, as it
+    # does for #value, but unlike #value this never writes the default.
+    #
     # @return [Boolean, Redis::Future] true if the value is nil. Inside a
-    #   transaction or pipeline, the GET Future (resolves to the raw JSON).
+    #   transaction or pipeline, the GET Future (resolves to the raw JSON, or
+    #   nil for a missing key whether or not a default is declared).
     #
     def empty?
-      Familia.transform_reply(value, &:nil?)
+      Familia.transform_reply(read_converted(&:itself), &:nil?)
     end
 
     # Returns the string representation of the deserialized value.

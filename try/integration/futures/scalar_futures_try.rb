@@ -123,6 +123,21 @@ end
 @ret.class
 #=> Redis::Future
 
+## JsonStringKey#empty? with a default inside a transaction reads without writing or touching the TTL
+@owner.settings.value = { 'theme' => 'dark' }
+@owner.settings.expire(2_592_000)
+@ret = nil
+@result = @owner.transaction { @ret = @owner.settings.empty? }
+[@ret.class, @result.results, @owner.settings.ttl > 3600]
+#=> [Redis::Future, ["{\"theme\":\"dark\"}"], true]
+
+## JsonStringKey#empty? with a default on a missing key inside a transaction leaves it missing
+@owner.settings.delete!
+@ret = nil
+@owner.transaction { @ret = @owner.settings.empty? }
+[@ret.value, @owner.settings.exists?]
+#=> [nil, false]
+
 ## JsonStringKey#to_s, #to_i, #to_f and #to_json inside atomic_write raise and persist nothing
 @reset.call
 @owner.prefs.value = 7
@@ -355,6 +370,18 @@ FuturesScalarOwner.new(ownerid: 'fso-none').nick.to_s.start_with?('#<Familia::St
 @owner.settings.expire(2_592_000)
 [@owner.settings.value, @owner.settings.setnx('x'), @owner.settings.ttl > 3600]
 #=> [{"theme"=>"dark"}, false, true]
+
+## outside a block: JsonStringKey#empty? with a default answers for a missing key without writing it
+# The default stands in for the missing key, as it does for #value.
+@owner.settings.delete!
+[@owner.settings.empty?, @owner.settings?, @owner.settings.exists?]
+#=> [false, true, false]
+
+## outside a block: JsonStringKey#empty? with a default leaves an extended TTL unchanged
+@owner.settings.value = { 'theme' => 'dark' }
+@owner.settings.expire(2_592_000)
+[@owner.settings.empty?, @owner.settings.ttl > 3600]
+#=> [false, true]
 
 ## outside a block: JsonStringKey conversions return nil for a missing key
 @owner.prefs.delete!
