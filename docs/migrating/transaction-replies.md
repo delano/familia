@@ -193,6 +193,24 @@ when the write takes effect, the same rule they follow outside a block. A
 field or key that is already set, or a missing pivot, leaves the existing
 key's TTL unchanged. `hsetnx` and `setnx` still return a Future that resolves
 to `true` or `false`, and `insert` one that resolves to the list length, `-1`
-or `0`; `MultiResult#results` carries the same values. Inside a block the
-server sees an EVAL in place of HSETNX, SETNX or LINSERT, which shows in
-`MONITOR` output and command logs.
+or `0`. Inside a block the server sees an EVAL in place of HSETNX, SETNX or
+LINSERT, which shows in `MONITOR` output and command logs.
+
+`JsonStringKey#setnx` and `JsonStringKey#value` with a default previously
+added two replies to `MultiResult#results` when the key had a TTL: the
+SETNX Boolean, then the EXPIRE reply. They now add one, the EVAL reply,
+which is the same `true` or `false`. Every reply queued after one of these
+calls moves up one index, so code that reads `MultiResult#results` by
+position needs its indexes updated. `hsetnx` and `insert` still add one
+reply each, as before.
+
+```ruby
+result = Familia.transaction do
+  account.settings.value          # json_string with a default and a TTL
+  account.settings.setnx({ 'theme' => 'dark' })
+end
+
+# Before: [false, true, "{\"theme\":\"light\"}", false, true]
+# After:  [false, "{\"theme\":\"light\"}", false]
+result.results
+```

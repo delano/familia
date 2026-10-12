@@ -210,7 +210,9 @@ outside a block:
   write that does nothing leaves an existing key's TTL unchanged, and a key
   the write creates gets its TTL. `hsetnx` and `setnx` return the EVAL
   Future, which resolves to the same `true` or `false` they return outside a
-  block; `insert` returns one that resolves to the same Integer.
+  block; `insert` returns one that resolves to the same Integer. Each of the
+  four adds one reply to `MultiResult#results`; for `JsonStringKey#value`
+  that is the `true` or `false` SETNX outcome, ahead of the GET reply.
 - `ListKey#pushx` and `#unshiftx`, and `SortedSet#popmin` and `#popmax`,
   write whenever the key exists (a pop with a count of 0 aside), and EXPIRE
   does nothing on a missing key. They queue the refresh after the write.

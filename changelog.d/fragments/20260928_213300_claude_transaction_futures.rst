@@ -123,6 +123,9 @@ Changed
   previously skipped the refresh there; ``JsonStringKey#setnx`` and
   ``#value`` reset an existing key's TTL even when the key was already set.
   The returned Futures resolve to the same values as before.
+  ``JsonStringKey#setnx`` and ``#value`` with a default now add one reply to
+  ``MultiResult#results`` instead of two (the separate ``EXPIRE`` reply is
+  gone), so later replies move up one index.
 
 Fixed
 -----
