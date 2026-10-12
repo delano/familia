@@ -48,6 +48,14 @@ module RefreshIdentityTry
     field :bio
   end
 
+  # Identifier held in the objid field, which has a lookup hash.
+  class Badge < Familia::Horreum
+    prefix :refresh_identity_badge
+    feature :object_identifier
+    identifier_field :objid
+    field :label
+  end
+
   # Identifier held in a field whose stored value is an Integer.
   class Ticket < Familia::Horreum
     prefix :refresh_identity_ticket
@@ -171,6 +179,30 @@ end
 [@member.handle, @member.dbkey == @member_key, RefreshIdentityTry.same_ivars?(@member, @member_ivars)]
 #=> ['Ada', true, true]
 
+## a stored objid identifier field that differs from the key raises IdentifierMismatchError
+@badge = RefreshIdentityTry::Badge.new(label: 'stored')
+@badge.save
+@badge_objid = @badge.objid
+@badge_key = @badge.dbkey
+@raw.hset(@badge_key, 'objid', '"someone-else"')
+@badge = RefreshIdentityTry::Badge.new(objid: @badge_objid)
+@badge_ivars = RefreshIdentityTry.ivars(@badge)
+begin
+  @badge.refresh!
+  :no_error
+rescue Familia::IdentifierMismatchError => e
+  [e.key == @badge_key, e.resolved_key == RefreshIdentityTry::Badge.dbkey('someone-else')]
+end
+#=> [true, true]
+
+## the object keeps its objid and the lookup entry for it is still there
+[
+  @badge.objid == @badge_objid,
+  RefreshIdentityTry.same_ivars?(@badge, @badge_ivars),
+  RefreshIdentityTry::Badge.objid_lookup.key?(@badge_objid),
+]
+#=> [true, true, true]
+
 ## a stored Integer identifier read into an object holding the same digits as a String names the same key
 RefreshIdentityTry::Ticket.new(num: 42, subject: 'stored').save
 @ticket = RefreshIdentityTry::Ticket.new(num: '42')
@@ -188,4 +220,5 @@ delete_test_dbkeys(
   RefreshIdentityTry::Document,
   RefreshIdentityTry::Member,
   RefreshIdentityTry::Ticket,
+  RefreshIdentityTry::Badge,
 )

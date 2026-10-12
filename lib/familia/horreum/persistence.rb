@@ -1048,13 +1048,14 @@ module Familia
 
           # Between the reset and the assignment nothing may read the
           # identifier. A Proc or method identifier computed from the
-          # persistent fields would see nil: dbkey would raise
+          # persistent fields, or a stored identifier field (cleared so its
+          # setter sees nil as the old value), would see nil: dbkey would raise
           # Familia::NoIdentifier, and a lazy getter such as objid would
           # generate a value that the objid setter then treats as an old
           # mapping to remove. So the values are assigned with
           # initialize_with_keyword_args directly, as instantiate_from_hash
           # does, and not through naive_refresh.
-          clear_persistent_fields_for_refresh!
+          clear_persistent_fields_for_refresh!(values)
           assigned = initialize_with_keyword_args(**values)
 
           # refresh! reloads this object; it never turns it into another
@@ -1329,8 +1330,9 @@ module Familia
         end
       end
 
-      # Sets every persistent field except the identifier field to nil,
-      # writing the instance variables directly instead of calling the setters.
+      # Sets every persistent field to nil, except a Symbol or String
+      # identifier field that the stored hash does not contain, writing the
+      # instance variables directly instead of calling the setters.
       #
       # {#refresh!} calls this before assigning the stored values, so the
       # object starts from the state a newly loaded one has: fields missing
@@ -1339,8 +1341,12 @@ module Familia
       # same reason: the +objid+ and +extid+ setters remove the old value's
       # lookup entry, which is a write.
       #
-      # The identifier field is skipped because it names the key refresh! read.
-      # A Proc identifier, or a Symbol naming a method that is not a field,
+      # A stored identifier field is cleared too, so its setter sees nil even
+      # when the stored value differs from the one in memory (an +objid+
+      # identifier field would otherwise remove its own lookup entry before
+      # {#ensure_refresh_kept_identity!} raises). An identifier field the
+      # stored hash lacks keeps its value, because it names the key refresh!
+      # read. A Proc identifier, or a Symbol naming a method that is not a field,
       # has no single field to skip. The fields it reads are cleared here like
       # any other and are assigned again from the stored hash, so until then
       # the identifier cannot be computed. The caller must not read it in
@@ -1350,14 +1356,19 @@ module Familia
       # it after the assignment ({#ensure_refresh_kept_identity!}) and raises,
       # which puts the cleared fields back.
       #
+      # @param values [Hash] the deserialized stored values refresh! is about
+      #   to assign, keyed by field name as a String or Symbol
       # @return [void]
       #
-      def clear_persistent_fields_for_refresh!
+      def clear_persistent_fields_for_refresh!(values)
         id_field = self.class.identifier_field
         id_field = id_field.to_sym if id_field.is_a?(String) || id_field.is_a?(Symbol)
 
         self.class.persistent_fields.each do |field_name|
-          next if field_name.to_sym == id_field
+          if field_name.to_sym == id_field
+            stored = values.fetch(id_field) { values[id_field.to_s] }
+            next if stored.nil?
+          end
 
           instance_variable_set(:"@#{field_name}", nil)
         end
