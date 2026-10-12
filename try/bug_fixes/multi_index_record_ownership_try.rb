@@ -284,6 +284,30 @@ RoCo.rebuild_industry_index
 [@stale.map { |entry| entry[:collection_key] }, RoCrew.repair_participations!, @c1.crew.members]
 #=> [["ro_co:c-1:crew"], { stale_removed: 1 }, ["m1"]]
 
+## Instance-scoped audit: a class-level bucket of the scope class is not read as a scope's bucket
+# "ro_co:industry_index:dept_index:x" parses as the "x" bucket of scope
+# "industry_index", and the bucket of industry "object" sits at the hash
+# key of that scope. The key holds a set, so no such scope exists.
+@c6 = RoCo.new(cid: 'c-6', industry: 'dept_index:x')
+@c6.save
+RoCo.rebuild_industry_index
+@scoped_audit = RoEmp.audit_multi_indexes.first
+[
+  @client.type('ro_co:industry_index:object'),
+  @client.type('ro_co:industry_index:dept_index:x'),
+  @scoped_audit[:status],
+  @scoped_audit[:orphaned_keys],
+  @scoped_audit[:stale_members],
+  RoEmp.health_check.healthy?,
+]
+#=> ["set", "set", :ok, [], [], true]
+
+## Removing that company removes its class-level bucket
+@c6.destroy!
+RoCo.rebuild_industry_index
+@client.exists('ro_co:industry_index:dept_index:x')
+#=> 0
+
 ## audit_participations reads an invalid UTF-8 identifier under a non-ASCII prefix
 @team = RoTeam.new(tid: "bad\xFF")
 @team.save
