@@ -121,6 +121,10 @@ Fixed
   no longer raise ``Encoding::CompatibilityError`` for a record whose
   identifier is not valid UTF-8. Neither does ``health_check`` of such a
   class when it declares no ``unique_index`` or ``multi_index``.
+- ``audit_multi_indexes`` and ``health_check`` of a class with an
+  instance-scoped ``multi_index`` no longer raise
+  ``Encoding::CompatibilityError`` when the scope class prefix holds
+  non-ASCII characters and a scope identifier is not valid UTF-8.
 - ``audit_multi_indexes`` no longer reports a class-level bucket of the scope
   class whose field value contains ``:<index>:`` as an orphaned bucket of an
   instance-scoped index, unless the hash key of the scope record the key

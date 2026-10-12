@@ -22,8 +22,8 @@
 # repair_multi_indexes! records a rebuild that raises the conflict error
 # and goes on with the next scope or index.
 #
-# Keys are compared as bytes, so a record identifier with invalid UTF-8
-# under a class prefix with non-ASCII characters no longer raises
+# Keys are compared as bytes, so a record or scope identifier with invalid
+# UTF-8 under a class prefix with non-ASCII characters no longer raises
 # Encoding::CompatibilityError in the audits.
 
 require_relative '../support/helpers/test_helpers'
@@ -84,13 +84,32 @@ class ::RoMember < Familia::Horreum
   participates_in ::RoTeam, :members
 end
 
+# Scope class whose prefix holds a non-ASCII character.
+class ::RoSquad < Familia::Horreum
+  prefix 'équipe_sq'
+  feature :relationships
+  identifier_field :sid
+  field :sid
+end
+
+# Instance-scoped multi_index within RoSquad.
+class ::RoPlayer < Familia::Horreum
+  feature :relationships
+  identifier_field :pid
+  field :pid
+  field :pos
+  multi_index :pos, :pos_index, within: ::RoSquad
+end
+
 @ownership = Familia::Features::Relationships::Indexing::RecordKeyOwnership
 @client = Familia.dbclient
-# One DEL per key: a team key with invalid UTF-8 comes back as a binary
+# One DEL per key: a team or squad key with invalid UTF-8 comes back as a binary
 # String, which the test command logger cannot join with UTF-8 keys.
 @delete_keys = lambda do
-  @client.scan_each(match: "#{Familia.escape_glob(RoTeam.key_prefix)}*").to_a.each { |key| @client.del(key) }
-  delete_test_dbkeys(RoUser, RoCo, RoEmp, RoCrew, RoMember)
+  [RoTeam, RoSquad].each do |klass|
+    @client.scan_each(match: "#{Familia.escape_glob(klass.key_prefix)}*").to_a.each { |key| @client.del(key) }
+  end
+  delete_test_dbkeys(RoUser, RoCo, RoEmp, RoCrew, RoMember, RoPlayer)
 end
 @delete_keys.call
 
@@ -331,6 +350,22 @@ RoCo.rebuild_industry_index
 @team_instances = RoTeam.audit_instances
 [@team_instances[:phantoms], @team_instances[:missing], RoTeam.health_check.healthy?]
 #=> [[], [], true]
+
+## Instance-scoped audit of a scope with an invalid UTF-8 identifier under a non-ASCII prefix
+@squad = RoSquad.new(sid: "bad\xFF")
+@squad.save
+@player = RoPlayer.new(pid: 'p1', pos: 'wing')
+@player.save
+@squad.pos_index_for('wing').add('p1')
+@squad_audit = RoPlayer.audit_multi_indexes.first
+[
+  @squad_audit[:status],
+  @squad_audit[:orphaned_keys],
+  @squad_audit[:stale_members],
+  @squad_audit[:foreign_owned_keys],
+  RoPlayer.health_check.healthy?,
+]
+#=> [:ok, [], [], [], true]
 
 ## repair_multi_indexes! records a conflicting scope and repairs the scopes after it
 @c3 = RoCo.new(cid: 'c-3')
