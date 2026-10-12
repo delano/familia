@@ -183,7 +183,8 @@ Future's value after the block.
 ## Conditional writes inside a block refresh the TTL as they do outside it
 
 Inside a transaction or pipeline, `HashKey#hsetnx` and `ListKey#insert` did
-not refresh the key's TTL, so a hash or list they created there had none.
+not refresh the key's TTL, so a hash that `hsetnx` created there had none,
+and a successful `insert` left the list's TTL as it was.
 `JsonStringKey#setnx`, and `JsonStringKey#value` with a default, reset the
 key's TTL to the configured default even when the key was already set, so a
 plain read with a default shortened an extended TTL.
