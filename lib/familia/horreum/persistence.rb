@@ -969,8 +969,10 @@ module Familia
       # field that holds a different value, and a stored hash that lacks a
       # field a Proc or method identifier reads (with
       # +feature :object_identifier+ a missing objid would be generated
-      # anew). find_by_dbkey and load build a new object from the same hash
-      # without this check.
+      # anew). An identifier that raises on the stored values, such as a Proc
+      # that calls a method on a missing field, counts as none, and its
+      # error is the +cause+ of the IdentifierMismatchError. find_by_dbkey
+      # and load build a new object from the same hash without this check.
       #
       # It is read-only: it sends only the HGETALL. Field setters that act on
       # the value they replace (the +objid+ and +extid+ setters remove the old
@@ -1384,13 +1386,23 @@ module Familia
       # stored where the object held the same digits as a String names the
       # same record.
       #
+      # The identifier was computed before the read to name +read_key+, so
+      # an error computing it now comes from the stored values, for example
+      # a Proc identifier that calls a method on a field the stored hash
+      # lacks. That counts as no identifier: the error is raised as
+      # Familia::IdentifierMismatchError, with the original as its +cause+.
+      #
       # @param read_key [String] the key refresh! read
-      # @raise [Familia::IdentifierMismatchError] when there is no identifier
-      #   or it names another key
+      # @raise [Familia::IdentifierMismatchError] when there is no identifier,
+      #   computing it raises, or it names another key
       # @return [void]
       #
       def ensure_refresh_kept_identity!(read_key)
-        current_key = identifier.to_s.empty? ? nil : dbkey
+        current_key = begin
+          identifier.to_s.empty? ? nil : dbkey
+        rescue StandardError
+          raise Familia::IdentifierMismatchError.new(read_key, nil)
+        end
         return if current_key == read_key
 
         raise Familia::IdentifierMismatchError.new(read_key, current_key)

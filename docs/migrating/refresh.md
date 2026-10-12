@@ -95,7 +95,7 @@ user = User.new(email: "alice@example.com")
 user.refresh!
 ```
 
-The error carries the key that was read (`key`) and the key the stored values name (`resolved_key`, `nil` when they give no identifier). `find_by_id` and `load` build a new object from the stored hash and do not raise, so use them to inspect such a record. The identifiers are compared through the key, so a stored `42` and an in-memory `"42"` name the same record.
+The error carries the key that was read (`key`) and the key the stored values name (`resolved_key`, `nil` when they give no identifier). A Proc identifier that raises on the stored values, for example by calling a method on a missing field, also counts as giving no identifier, and its error is the `cause`. `find_by_id` and `load` build a new object from the stored hash and do not raise, so use them to inspect such a record. The identifiers are compared through the key, so a stored `42` and an in-memory `"42"` name the same record.
 
 ### `HashKey#refresh!` raises `Familia::KeyNotFoundError` instead of `Redis::CommandError` (#443)
 

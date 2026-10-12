@@ -56,6 +56,15 @@ module RefreshIdentityTry
     field :label
   end
 
+  # Identifier computed by a Proc that calls a method on a persistent field
+  # without a nil guard.
+  class Handle < Familia::Horreum
+    prefix :refresh_identity_handle
+    identifier_field ->(record) { record.name.downcase }
+    field :name
+    field :note
+  end
+
   # Identifier held in a field whose stored value is an Integer.
   class Ticket < Familia::Horreum
     prefix :refresh_identity_ticket
@@ -179,6 +188,24 @@ end
 [@member.handle, @member.dbkey == @member_key, RefreshIdentityTry.same_ivars?(@member, @member_ivars)]
 #=> ['Ada', true, true]
 
+## a Proc identifier that raises on a field missing from the stored hash raises IdentifierMismatchError
+@handle = RefreshIdentityTry::Handle.new(name: 'Grace', note: 'stored')
+@handle.save
+@handle_key = @handle.dbkey
+@raw.hdel(@handle_key, 'name')
+@handle_ivars = RefreshIdentityTry.ivars(@handle)
+begin
+  @handle.refresh!
+  :no_error
+rescue Familia::IdentifierMismatchError => e
+  [e.key == @handle_key, e.resolved_key, e.cause.class]
+end
+#=> [true, nil, NoMethodError]
+
+## the object keeps the field its identifier reads
+[@handle.name, @handle.dbkey == @handle_key, RefreshIdentityTry.same_ivars?(@handle, @handle_ivars)]
+#=> ['Grace', true, true]
+
 ## a stored objid identifier field that differs from the key raises IdentifierMismatchError
 @badge = RefreshIdentityTry::Badge.new(label: 'stored')
 @badge.save
@@ -221,4 +248,5 @@ delete_test_dbkeys(
   RefreshIdentityTry::Member,
   RefreshIdentityTry::Ticket,
   RefreshIdentityTry::Badge,
+  RefreshIdentityTry::Handle,
 )
