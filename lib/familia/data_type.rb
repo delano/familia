@@ -54,7 +54,7 @@ module Familia
   #   SortedSet   | remrangebyrank   | ZREMRANGEBYRANK| yes        | no
   #   SortedSet   | remrangebyscore  | ZREMRANGEBYSCORE| yes       | no
   #   HashKey     | []=              | HSET           | yes        | no
-  #   HashKey     | hsetnx           | HSETNX         | conditional| no
+  #   HashKey     | hsetnx           | HSETNX (EVAL in a block) | conditional | no
   #   HashKey     | remove_field     | HDEL           | yes        | no
   #   HashKey     | increment        | HINCRBY        | yes        | no
   #   HashKey     | decrement        | HINCRBY (neg)  | yes (via increment) | no
@@ -88,8 +88,12 @@ module Familia
   # - Lock#release uses a Lua script (EVAL) which IS atomic on the server.
   # - StringKey#del and Lock methods that delete the key do not call
   #   update_expiration because the key no longer exists.
-  # - HashKey#hsetnx only calls update_expiration when the field was
-  #   actually set (ret == 1), which is correct conditional behavior.
+  # - HashKey#hsetnx refreshes the TTL only when it set a new field
+  #   (redis-rb returns true). Inside a transaction or pipeline it queues
+  #   HSETNX and the refresh as one EVAL that makes the same check when it
+  #   runs, so an existing field leaves the TTL unchanged there too. See
+  #   #queue_conditional_write; ListKey#insert, JsonStringKey#setnx and
+  #   JsonStringKey#value with a default work the same way.
   # - The (+ZREMRANGEBYRANK) / (+LTRIM) trims only fire when :max_length is
   #   set. Standalone capped writes wrap write + trim in their own MULTI so a
   #   crash cannot leave the collection over-cap; inside a caller transaction
