@@ -129,6 +129,12 @@ Changed
   default now add one reply to ``MultiResult#results`` instead of two (the
   separate ``EXPIRE`` reply is gone), so later replies move up one index.
   Without a default expiration they added one reply before and still do.
+- Inside a transaction or pipeline, ``HashKey#hsetnx``, ``ListKey#insert``,
+  ``JsonStringKey#setnx`` and ``JsonStringKey#value`` with a default send
+  ``EVAL`` and need scripting permission (ACL ``@scripting`` or ``+eval``).
+  Without it they raise ``Redis::PermissionError`` (``NOPERM``) and a
+  transaction applies none of the block's commands. Outside a block they
+  send the plain command as before.
 
 Fixed
 -----

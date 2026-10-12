@@ -213,6 +213,10 @@ outside a block:
   block; `insert` returns one that resolves to the same Integer. Each of the
   four adds one reply to `MultiResult#results`; for `JsonStringKey#value`
   that is the `true` or `false` SETNX outcome, ahead of the GET reply.
+  Because they send EVAL inside a block, the connection's user needs
+  scripting permission there (ACL `@scripting`, or `+eval`). Without it the
+  server answers `NOPERM`, Familia raises `Redis::PermissionError`, and a
+  transaction applies none of the block's commands.
 - `ListKey#pushx` and `#unshiftx`, and `SortedSet#popmin` and `#popmax`,
   write whenever the key exists (a pop with a count of 0 aside), and EXPIRE
   does nothing on a missing key. They queue the refresh after the write.

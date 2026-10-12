@@ -197,6 +197,15 @@ to `true` or `false`, and `insert` one that resolves to the list length, `-1`
 or `0`. Inside a block the server sees an EVAL in place of HSETNX, SETNX or
 LINSERT, which shows in `MONITOR` output and command logs.
 
+Because they send EVAL, these four calls need scripting permission inside a
+block: the ACL `@scripting` category, or at least `+eval`. Outside a block
+they still send the plain command and need no scripting permission. Where
+scripting is denied, the server answers the EVAL with `NOPERM` and Familia
+raises `Redis::PermissionError`. In a transaction or `atomic_write` nothing
+in the block is applied. In a pipeline the other commands still run and the
+error is raised after the pipeline. `JsonStringKey#value` on a `json_string`
+declared with `default:` counts, so a plain read can trigger this.
+
 When the `json_string` has a default expiration (a positive
 `default_expiration`, its own or inherited from the parent, and no
 `no_expiration: true`), `JsonStringKey#setnx` and `JsonStringKey#value`
