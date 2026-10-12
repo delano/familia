@@ -197,17 +197,21 @@ to `true` or `false`, and `insert` one that resolves to the list length, `-1`
 or `0`. Inside a block the server sees an EVAL in place of HSETNX, SETNX or
 LINSERT, which shows in `MONITOR` output and command logs.
 
-`JsonStringKey#setnx` and `JsonStringKey#value` with a default previously
-added two replies to `MultiResult#results` when the key had a TTL: the
+When the `json_string` has a default expiration (a positive
+`default_expiration`, its own or inherited from the parent, and no
+`no_expiration: true`), `JsonStringKey#setnx` and `JsonStringKey#value`
+with a default previously added two replies to `MultiResult#results`: the
 SETNX Boolean, then the EXPIRE reply. They now add one, the EVAL reply,
 which is the same `true` or `false`. Every reply queued after one of these
 calls moves up one index, so code that reads `MultiResult#results` by
-position needs its indexes updated. `hsetnx` and `insert` still add one
-reply each, as before.
+position needs its indexes updated. Without a default expiration no EXPIRE
+was queued, so these calls added one reply before and still do; the key's
+current TTL plays no part. `hsetnx` and `insert` still add one reply each,
+as before.
 
 ```ruby
 result = Familia.transaction do
-  account.settings.value          # json_string with a default and a TTL
+  account.settings.value          # json_string with a default and a default expiration
   account.settings.setnx({ 'theme' => 'dark' })
 end
 
