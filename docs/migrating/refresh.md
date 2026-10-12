@@ -163,7 +163,7 @@ end
 
 ### `Horreum#refresh!` no longer removes lookup entries
 
-`Horreum#refresh!` no longer sends `HDEL` to the `objid_lookup` or `extid_lookup` hash. The `objid` and `extid` setters (`lib/familia/features/object_identifier.rb` and `lib/familia/features/external_identifier.rb`) remove the lookup entry of the value they replace when the new value differs, and `refresh!` used to call them with the in-memory value still in place. On an object built from another record's attributes, that removed the other record's lookup entry. With `identifier_field :objid` (or `:extid`) and a stored value that differs from the key, it removed the object's own lookup entry before raising `Familia::IdentifierMismatchError`. `refresh!` now sends only `HGETALL`.
+`Horreum#refresh!` no longer sends `HDEL` to the `objid_lookup` or `extid_lookup` hash. The `objid` and `extid` setters (`lib/familia/features/object_identifier.rb` and `lib/familia/features/external_identifier.rb`) remove the lookup entry of the value they replace when the new value differs, and `refresh!` used to call them with the in-memory value still in place. On an object built from another record's attributes, that removed the other record's lookup entry. With `identifier_field :objid` (or `:extid`) and a stored value that differs from the key, it removed the object's own lookup entry and the object took the stored identifier. That case now raises `Familia::IdentifierMismatchError` without touching the lookup hash, as described under "`Horreum#refresh!` raises `Familia::IdentifierMismatchError` instead of changing the object's identity" above. `refresh!` now sends only `HGETALL`.
 
 ### A failed `Horreum#refresh!` leaves the object as it was
 

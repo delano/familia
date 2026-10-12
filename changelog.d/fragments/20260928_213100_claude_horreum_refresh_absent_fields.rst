@@ -27,8 +27,9 @@ Fixed
 
 - ``Horreum#refresh!`` and ``Horreum#refresh`` no longer send ``HDEL`` to the
   ``objid_lookup`` or ``extid_lookup`` hash when the in-memory ``objid`` or
-  ``extid`` differs from the stored one, including when that field is the
-  identifier field and ``Familia::IdentifierMismatchError`` is raised.
+  ``extid`` differs from the stored one. This removed another record's entry
+  for an object built from that record's attributes, and the object's own
+  entry when ``objid`` or ``extid`` is the identifier field.
 
 AI Assistance
 -------------
