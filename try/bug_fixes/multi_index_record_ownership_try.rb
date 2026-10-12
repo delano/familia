@@ -212,6 +212,26 @@ end
 ]
 #=> [:ok, [["ro_co:c-9:dept_index:tags", "ro_co:c-9:dept_index:object", :other_record, "c-9"]]]
 
+## An unchecked stale bucket is the only issue: the audit reports it and health_check counts it
+@over_cap_value = 'x:dept_index:' * 20
+@c5.dept_index_for(@over_cap_value).add('e6')
+@over_cap = RoEmp.audit_multi_indexes.first
+[
+  @over_cap[:status],
+  @over_cap[:missing],
+  @over_cap[:stale_members],
+  @over_cap[:orphaned_keys],
+  @over_cap[:foreign_owned_keys].map { |entry| entry.values_at(:owner_key, :reason, :scope_id) }.sort_by { |entry| entry[1] },
+  @c5.find_all_by_dept('ops').map(&:eid),
+  RoEmp.health_check.healthy?,
+]
+#=> [:issues_found, [], [], [], [["ro_co:c-9:dept_index:object", :other_record, "c-9"], [nil, :too_many_candidate_owners, "c-5"]], ["e6"], false]
+
+## Without the unchecked bucket the same index is healthy again
+@client.del(@c5.dept_index_for(@over_cap_value).dbkey)
+[RoEmp.audit_multi_indexes.first[:status], RoEmp.health_check.healthy?]
+#=> [:ok, true]
+
 ## A class-level set field of a record named after the index is reported the same way
 @u1.role = 'admin'
 @u1.save
