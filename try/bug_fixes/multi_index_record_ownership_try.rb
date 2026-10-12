@@ -21,6 +21,10 @@
 # raises for it before it deletes anything, and the audit reports it.
 # repair_multi_indexes! records a rebuild that raises the conflict error
 # and goes on with the next scope or index.
+#
+# Keys are compared as bytes, so a record identifier with invalid UTF-8
+# under a class prefix with non-ASCII characters no longer raises
+# Encoding::CompatibilityError in the audits.
 
 require_relative '../support/helpers/test_helpers'
 
@@ -64,10 +68,29 @@ class ::RoCrew < Familia::Horreum
   participates_in ::RoCo, :crew, type: :set
 end
 
+# Target class whose prefix holds a non-ASCII character.
+class ::RoTeam < Familia::Horreum
+  prefix 'équipe_ro'
+  feature :relationships
+  identifier_field :tid
+  field :tid
+end
+
+# Participant in the teams' member collections.
+class ::RoMember < Familia::Horreum
+  feature :relationships
+  identifier_field :mid
+  field :mid
+  participates_in ::RoTeam, :members
+end
+
 @ownership = Familia::Features::Relationships::Indexing::RecordKeyOwnership
 @client = Familia.dbclient
+# One DEL per key: a team key with invalid UTF-8 comes back as a binary
+# String, which the test command logger cannot join with UTF-8 keys.
 @delete_keys = lambda do
-  delete_test_dbkeys(RoUser, RoCo, RoEmp, RoCrew)
+  @client.scan_each(match: "#{Familia.escape_glob(RoTeam.key_prefix)}*").to_a.each { |key| @client.del(key) }
+  delete_test_dbkeys(RoUser, RoCo, RoEmp, RoCrew, RoMember)
 end
 @delete_keys.call
 
@@ -240,6 +263,30 @@ RoCo.rebuild_industry_index
 @stale = RoCrew.audit_participations.flat_map { |result| result[:stale_members] }
 [@stale.map { |entry| entry[:collection_key] }, RoCrew.repair_participations!, @c1.crew.members]
 #=> [["ro_co:c-1:crew"], { stale_removed: 1 }, ["m1"]]
+
+## audit_participations reads an invalid UTF-8 identifier under a non-ASCII prefix
+@team = RoTeam.new(tid: "bad\xFF")
+@team.save
+@member = RoMember.new(mid: 'rm1')
+@member.save
+@member.add_to_ro_team_members(@team)
+[
+  RoMember.audit_participations.flat_map { |result| result[:stale_members] },
+  RoMember.repair_participations!,
+  RoMember.health_check.participations.size,
+]
+#=> [[], { stale_removed: 0 }, 1]
+
+## extract_identifier_from_key compares that key as bytes and keeps its encoding
+@team_key = @client.scan_each(match: '*:members').find { |key| key.b.start_with?('équipe_ro:'.b) }
+@team_id = RoTeam.extract_identifier_from_key(@team_key, 'members')
+[@team_key.encoding, @team_id, @team_id == RoTeam.instances.members.first]
+#=> [Encoding::ASCII_8BIT, "bad\xFF".b, true]
+
+## The audit of that class matches the identifier with its instances entry
+@team_instances = RoTeam.audit_instances
+[@team_instances[:phantoms], @team_instances[:missing], RoTeam.health_check.healthy?]
+#=> [[], [], true]
 
 ## repair_multi_indexes! records a conflicting scope and repairs the scopes after it
 @c3 = RoCo.new(cid: 'c-3')

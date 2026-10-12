@@ -837,21 +837,28 @@ module Familia
       # the marker is used to support identifiers and field values that
       # themselves contain the delimiter character.
       #
+      # The key is compared and split as bytes, so a key with invalid
+      # UTF-8, which the client returns as a binary String, does not raise
+      # Encoding::CompatibilityError against a +scope_prefix+ with
+      # non-ASCII characters. Both parts keep the encoding of the key.
+      #
       # @param key [String]
       # @param scope_prefix [String]
       # @param marker [String]
       # @return [Array(String, String), Array(nil, nil)]
       #
       def parse_instance_scoped_bucket_key(key, scope_prefix, marker)
-        return [nil, nil] unless key.start_with?(scope_prefix)
+        bkey = key.b
+        prefix = scope_prefix.b
+        bmarker = marker.b
+        return [nil, nil] unless bkey.start_with?(prefix)
 
-        rest = key[scope_prefix.length..]
-        marker_pos = rest.index(marker)
+        marker_pos = bkey.index(bmarker, prefix.bytesize)
         return [nil, nil] unless marker_pos
 
-        scope_id = rest[0...marker_pos]
-        field_value = rest[(marker_pos + marker.length)..]
-        [scope_id, field_value]
+        scope_id = bkey.byteslice(prefix.bytesize, marker_pos - prefix.bytesize)
+        field_value = bkey.byteslice((marker_pos + bmarker.bytesize)..)
+        [scope_id.force_encoding(key.encoding), field_value.force_encoding(key.encoding)]
       end
 
       # Assigns each bucket key in +parsed+ to the scope whose rebuild
