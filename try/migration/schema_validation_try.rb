@@ -356,6 +356,7 @@ RUBY
 #=> ['success', 'true', 'true']
 
 ## A Pipeline dry run does not call should_process?, so its validate_schema! call cannot raise
+File.write(File.join(@schema_dir, 'broken_pipeline_record.json'), JSON.generate({ type: 'object' }))
 run_fresh_ruby(<<~RUBY, load_path: [@broken_gem_dir])
   require 'familia'
   require 'familia/migration'
