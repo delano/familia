@@ -62,12 +62,22 @@ module Familia
   # field of a record whose identifier equals a class-level index name
   # when a field value equals that field's name.
   #
-  # +conflicts+ maps each such key to the type it holds. +owners+ maps each
-  # conflicting key that is another record's key to that record's hash key.
+  # A key also conflicts when the rebuild cannot tell whether it belongs
+  # to another record: when it has more candidate owner records than
+  # Familia::Features::Relationships::Indexing::RecordKeyOwnership::MAX_CANDIDATE_SPLITS,
+  # as a field value that repeats the delimiter and an index name can
+  # make it. This applies to the keys the rebuild writes and to the stale
+  # buckets it would delete.
+  #
+  # +conflicts+ maps each such key to the type it holds, or to
+  # RecordKeyOwnership::TOO_MANY_CANDIDATES (+:too_many_candidate_owners+)
+  # when its owner was not checked. +owners+ maps each conflicting key
+  # that is another record's key to that record's hash key.
   #
   # Such a key may be another record's data, so the rebuild does not
   # replace it. Inspect each key in +conflicts+. The rebuild can run once
-  # none of them holds another type or belongs to another record.
+  # none of them holds another type or belongs to another record, and
+  # none has too many candidate owners.
   class IndexBucketConflictError < PersistenceError
     attr_reader :conflicts, :owners
 
@@ -75,13 +85,24 @@ module Familia
       @conflicts = conflicts
       @owners = owners
       listed = conflicts.map do |key, type|
-        owner = owners[key]
-        detail = owner ? "#{type} of record #{owner.inspect}" : type
-        "#{key.inspect} (#{detail})"
+        "#{key.inspect} (#{conflict_detail(type, owners[key])})"
       end
-      super("Multi-index bucket keys cannot be written as bucket sets: #{listed.join(', ')}. " \
-            'The rebuild stopped before it deleted or wrote anything. ' \
-            'It can run once none of these keys holds a type other than set or belongs to another record.')
+      message = "Multi-index bucket keys cannot be written as bucket sets: #{listed.join(', ')}. " \
+                'The rebuild stopped before it deleted or wrote anything. ' \
+                'It can run once none of these keys holds a type other than set or belongs to another record.'
+      if conflicts.values.any?(Symbol)
+        message += ' A key whose owner was not checked has more candidate owner records than the rebuild checks.'
+      end
+      super(message)
+    end
+
+    private
+
+    def conflict_detail(type, owner)
+      return "owner not checked: #{type}" if type.is_a?(Symbol)
+      return "#{type} of record #{owner.inspect}" if owner
+
+      type
     end
   end
 

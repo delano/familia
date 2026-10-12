@@ -461,13 +461,17 @@ module Familia
       #
       # Key layout: "{prefix}:{index_name}:{field_value}"
       #
+      # Sets under the bucket prefix that the rebuild leaves alone are
+      # listed in +foreign_owned_keys+ (see foreign_owned_entry).
+      #
       # @param rel [IndexingRelationship]
       # @param scanned_identifiers [Array<String>, nil] Optional cached SCAN result.
       # @param loaded_objects [Array<Horreum>, nil] Optional cached load_multi result.
-      # @return [Hash] {index_name:, stale_members:, missing:, orphaned_keys:, status:}
+      # @return [Hash] {index_name:, stale_members:, missing:, orphaned_keys:,
+      #   foreign_owned_keys:, status:}
       #
       def audit_class_level_multi_index(rel, scanned_identifiers: nil, loaded_objects: nil)
-        bucket_entries = discover_multi_index_buckets(rel)
+        bucket_entries, foreign_owned_keys = discover_multi_index_buckets(rel)
         discovered_field_values = bucket_entries.keys.to_set
 
         stale_members = detect_multi_index_stale_members(rel, bucket_entries)
@@ -479,7 +483,8 @@ module Familia
         )
         orphaned_keys = detect_multi_index_orphaned_keys(bucket_entries, actual_field_values)
 
-        status = if stale_members.empty? && missing.empty? && orphaned_keys.empty?
+        status = if stale_members.empty? && missing.empty? && orphaned_keys.empty? &&
+                    foreign_owned_keys.none? { |entry| entry[:owner_key].nil? }
           :ok
         else
           :issues_found
@@ -490,6 +495,7 @@ module Familia
           stale_members: stale_members,
           missing: missing,
           orphaned_keys: orphaned_keys,
+          foreign_owned_keys: foreign_owned_keys,
           status: status,
         }
       end
@@ -497,12 +503,15 @@ module Familia
       # Phase 1: SCAN for per-value set keys and load their raw members.
       #
       # @param rel [IndexingRelationship]
-      # @return [Hash{String => Hash}] field_value => {key:, identifiers: [...]}
+      # @return [Array(Hash{String => Hash}, Array<Hash>)] the buckets, as
+      #   field_value => {key:, identifiers: [...]}, and the
+      #   foreign_owned_keys entries
       #
       def discover_multi_index_buckets(rel)
         generators = Familia::Features::Relationships::Indexing::MultiIndexGenerators
         bucket_prefix = generators.bucket_key_prefix(self, rel.index_name)
         bucket_entries = {}
+        foreign_owned_keys = []
 
         # Read the keys the rebuild would clear, in slices of 100, and
         # pipeline SMEMBERS to collapse one round trip per bucket key into
@@ -511,7 +520,13 @@ module Familia
         # the same prefix, and SMEMBERS on a hash or list raises WRONGTYPE.
         # That record's set fields are left out too, so they are not
         # reported as buckets.
-        generators.each_index_bucket_slice(dbclient, self, rel.index_name, batch_size: 100) do |valid_keys|
+        generators.each_index_bucket_slice(dbclient, self, rel.index_name, batch_size: 100) do |valid_keys, others|
+          others.each do |key, owner_key|
+            field_value = key.byteslice(bucket_prefix.bytesize..)
+            foreign_owned_keys << foreign_owned_entry(key, field_value, owner_key)
+          end
+          next if valid_keys.empty?
+
           members_batch = dbclient.pipelined do |pipe|
             valid_keys.each { |k| pipe.smembers(k) }
           end
@@ -527,7 +542,38 @@ module Familia
           end
         end
 
-        bucket_entries
+        [bucket_entries, foreign_owned_keys]
+      end
+
+      # Returns a +foreign_owned_keys+ entry of a multi_index audit for
+      # +key+, a set under the index's bucket prefix that the rebuild
+      # leaves alone.
+      #
+      # With an +owner_key+, the entry is {key:, field_value:, owner_key:,
+      # reason: :other_record}: the key is a set field or bucket of the
+      # existing record whose hash key is +owner_key+ (see
+      # RecordKeyOwnership.other_record_key). Such an entry does not change
+      # the audit status, because the key is that record's data.
+      #
+      # With RecordKeyOwnership::TOO_MANY_CANDIDATES, the entry is {key:,
+      # field_value:, owner_key: nil, reason: :too_many_candidate_owners}:
+      # the key has more candidate owner records than the audit checks, so
+      # neither the audit nor the rebuild can tell whether it is a bucket.
+      # Such an entry sets the status to :issues_found, and the rebuild
+      # raises Familia::IndexBucketConflictError for it.
+      #
+      # @param key [String]
+      # @param field_value [String] the part of +key+ after the bucket prefix
+      # @param owner_key [String, Symbol]
+      # @return [Hash]
+      #
+      def foreign_owned_entry(key, field_value, owner_key)
+        ownership = Familia::Features::Relationships::Indexing::RecordKeyOwnership
+        if owner_key == ownership::TOO_MANY_CANDIDATES
+          { key: key, field_value: field_value, owner_key: nil, reason: owner_key }
+        else
+          { key: key, field_value: field_value, owner_key: owner_key, reason: :other_record }
+        end
       end
 
       # Phase 1 continued: detect stale members (object missing or value mismatch).
@@ -648,13 +694,18 @@ module Familia
       # missing dimension is set to `:not_audited` and a debug message
       # explains why.
       #
+      # Sets under a scope's bucket prefix that the rebuild leaves alone
+      # are listed in +foreign_owned_keys+ (see foreign_owned_entry), each
+      # with the +scope_id+ the key parses as.
+      #
       # @param rel [IndexingRelationship]
-      # @return [Hash] {index_name:, stale_members:, missing:, orphaned_keys:, status:}
+      # @return [Hash] {index_name:, stale_members:, missing:, orphaned_keys:,
+      #   foreign_owned_keys:, status:}
       #
       def audit_instance_scoped_multi_index(rel)
         scope_class = Familia.resolve_class(rel.scope_class)
 
-        bucket_entries = discover_instance_scoped_buckets(rel, scope_class)
+        bucket_entries, foreign_owned_keys = discover_instance_scoped_buckets(rel, scope_class)
         scope_ids = bucket_entries.values.map { |e| e[:scope_id] }.uniq
         scope_exists_flags = batch_check_scope_existence(scope_class, scope_ids)
 
@@ -672,7 +723,8 @@ module Familia
 
         orphaned_keys = orphaned_from_scope + orphaned_from_field_value
 
-        status = if stale_members.empty? && missing.empty? && orphaned_keys.empty?
+        status = if stale_members.empty? && missing.empty? && orphaned_keys.empty? &&
+                    foreign_owned_keys.none? { |entry| entry[:owner_key].nil? }
           :ok
         else
           :issues_found
@@ -683,6 +735,7 @@ module Familia
           stale_members: stale_members,
           missing: missing,
           orphaned_keys: orphaned_keys,
+          foreign_owned_keys: foreign_owned_keys,
           status: status,
         }
         # Surface a sub-status when the "missing" dimension could not be
@@ -700,17 +753,25 @@ module Familia
       # parses as the "ops" bucket of scope "industry_index:x". Such a key
       # is left out unless that scope record exists, because a class-level
       # bucket yields to an existing record (see
-      # RecordKeyOwnership.other_record_key).
+      # RecordKeyOwnership.other_record_key). The class-level audit reads
+      # it.
+      #
+      # A key that is another record's set field, or that has more
+      # candidate owner records than RecordKeyOwnership checks, is left
+      # out and listed as a foreign_owned_entry.
       #
       # @param rel [IndexingRelationship]
       # @param scope_class [Class]
-      # @return [Hash{String => Hash}] full_key => {key:, scope_id:, field_value:, identifiers:}
+      # @return [Array(Hash{String => Hash}, Array<Hash>)] the buckets, as
+      #   full_key => {key:, scope_id:, field_value:, identifiers:}, and the
+      #   foreign_owned_keys entries
       #
       def discover_instance_scoped_buckets(rel, scope_class)
         scope_prefix = "#{scope_class.prefix}#{Familia.delim}"
         marker = "#{Familia.delim}#{rel.index_name}#{Familia.delim}"
         pattern = "#{Familia.escape_glob(scope_prefix)}*#{Familia.escape_glob(marker)}*"
         bucket_entries = {}
+        foreign_owned_keys = []
 
         # Use the scope class's dbclient so multi-database setups address
         # the right Redis instance for the scope namespace.
@@ -729,14 +790,10 @@ module Familia
             scope_id, field_value = parse_instance_scoped_bucket_key(key, scope_prefix, marker)
             next nil if scope_id.nil? || scope_id.empty? || field_value.nil? || field_value.empty?
 
-            scope_id, field_value = reattribute_instance_scoped_bucket_key(
-              rel, scope_class, key, [scope_id, field_value], names
-            )
-            next nil if field_value.nil? || field_value.empty?
-            next nil if foreign_class_level_bucket?(key, scope_class, scope_id)
-
             [key, scope_id, field_value]
           end
+          parsed = reattribute_instance_scoped_bucket_keys(rel, scope_class, parsed, names, foreign_owned_keys)
+          parsed = drop_foreign_class_level_buckets(scope_class, parsed)
           next if parsed.empty?
 
           members_batch = client.pipelined do |pipe|
@@ -753,17 +810,24 @@ module Familia
           end
         end
 
-        bucket_entries
+        [bucket_entries, foreign_owned_keys]
       end
 
-      # Whether +key+ is a bucket of a class-level multi_index of
-      # +scope_class+ and no scope record +scope_id+ exists.
+      # Returns the +parsed+ [key, scope_id, field_value] entries without
+      # the keys that are buckets of a class-level multi_index of
+      # +scope_class+ and whose scope record +scope_id+ does not exist.
+      # The scope records are checked in one pipeline.
       #
-      # @return [Boolean]
+      # @return [Array<Array(String, String, String)>]
       #
-      def foreign_class_level_bucket?(key, scope_class, scope_id)
+      def drop_foreign_class_level_buckets(scope_class, parsed)
         ownership = Familia::Features::Relationships::Indexing::RecordKeyOwnership
-        ownership.class_level_bucket?(key, scope_class) && !scope_class.exists?(scope_id)
+        class_level = parsed.select { |(key, _sid, _fv)| ownership.class_level_bucket?(key, scope_class) }
+        return parsed if class_level.empty?
+
+        flags = ownership.existing_records(scope_class, class_level.map { |(_key, scope_id, _fv)| scope_id })
+        dropped = class_level.zip(flags).filter_map { |(entry, exists)| entry.first unless exists }
+        parsed.reject { |(key, _sid, _fv)| dropped.include?(key) }
       end
 
       # Splits a bucket key into (scope_id, field_value).
@@ -790,48 +854,73 @@ module Familia
         [scope_id, field_value]
       end
 
-      # Assigns a bucket key to the scope whose rebuild clears it.
+      # Assigns each bucket key in +parsed+ to the scope whose rebuild
+      # clears it.
       #
       # parse_instance_scoped_bucket_key splits at the first marker, which
-      # gives the shortest scope identifier. When the key is also a key of
+      # gives the shortest scope identifier. When a key is also a key of
       # an existing scope with a longer identifier (see
       # RecordKeyOwnership.other_record_key), the rebuild leaves it to
-      # that scope. Returns that scope's identifier and field value when
-      # the key is one of its buckets of this index, [scope_id, nil] when
-      # it is another of its set keys, and +parsed+ otherwise.
+      # that scope. When the key is one of that scope's buckets of this
+      # index, the entry gets that scope's identifier and field value.
+      # When it is another of that scope's set keys, or has more
+      # candidate owner records than RecordKeyOwnership checks, it is
+      # dropped and a foreign_owned_entry is added to +foreign_owned_keys+.
+      # The candidates of all keys are checked in one pipeline.
       #
-      # @param parsed [Array(String, String)] scope_id and field_value from
-      #   parse_instance_scoped_bucket_key
-      # @return [Array(String, String), Array(String, nil)]
+      # @param parsed [Array<Array(String, String, String)>] [key, scope_id,
+      #   field_value] from parse_instance_scoped_bucket_key
+      # @param foreign_owned_keys [Array<Hash>] receives the dropped keys
+      # @return [Array<Array(String, String, String)>]
       #
-      def reattribute_instance_scoped_bucket_key(rel, scope_class, key, parsed, names)
+      def reattribute_instance_scoped_bucket_keys(rel, scope_class, parsed, names, foreign_owned_keys)
+        return parsed if parsed.empty?
+
         ownership = Familia::Features::Relationships::Indexing::RecordKeyOwnership
-        other = ownership.other_record_key(key, scope_class, parsed.first, names: names)
-        return parsed unless other
+        others = ownership.other_record_keys(
+          parsed.map(&:first), scope_class, parsed.map { |(_key, scope_id, _fv)| scope_id }, names: names
+        )
+        index_prefix = "#{rel.index_name}#{Familia.delim}".b
 
-        other_id, name = other
-        index_prefix = "#{rel.index_name}#{Familia.delim}"
-        return [other_id, nil] unless name.b.start_with?(index_prefix.b)
+        parsed.each_with_index.filter_map do |(key, scope_id, field_value), idx|
+          other = others[idx]
+          next [key, scope_id, field_value] unless other
 
-        [other_id, name.byteslice(index_prefix.bytesize..)]
+          if other == ownership::TOO_MANY_CANDIDATES
+            foreign_owned_keys << foreign_owned_entry(key, field_value, other).merge(scope_id: scope_id)
+            next nil
+          end
+
+          other_id, name = other
+          unless name.b.start_with?(index_prefix)
+            owner_key = ownership.record_hash_key(scope_class, other_id).force_encoding(key.encoding)
+            foreign_owned_keys << foreign_owned_entry(key, field_value, owner_key).merge(scope_id: scope_id)
+            next nil
+          end
+
+          other_value = name.byteslice(index_prefix.bytesize..)
+          next nil if other_value.nil? || other_value.empty?
+
+          [key, other_id, other_value]
+        end
       end
 
-      # Batch-checks scope instance existence via pipelined EXISTS.
+      # Batch-checks scope instance existence with pipelined TYPE
+      # commands. A scope exists when its hash key holds a hash (see
+      # RecordKeyOwnership.existing_records).
       #
       # @param scope_class [Class]
       # @param scope_ids [Array<String>]
       # @return [Hash{String => Boolean}]
       #
       def batch_check_scope_existence(scope_class, scope_ids)
+        ownership = Familia::Features::Relationships::Indexing::RecordKeyOwnership
         flags = {}
         return flags if scope_ids.empty?
 
         scope_ids.each_slice(100) do |slice|
-          results = scope_class.dbclient.pipelined do |pipe|
-            slice.each { |id| pipe.exists(scope_class.dbkey(id)) }
-          end
-          slice.each_with_index do |id, idx|
-            flags[id] = results[idx].to_i.positive?
+          slice.zip(ownership.existing_records(scope_class, slice)) do |id, exists|
+            flags[id] = exists
           end
         end
 
@@ -1108,18 +1197,16 @@ module Familia
         # The wildcard also matches a multi_index bucket of the target
         # class whose field value equals the collection name, such as
         # "company:industry_index:staff". SCAN's TYPE option leaves out
-        # keys of another type than the collection's, and a key that
-        # RecordKeyOwnership.index_bucket_owner reads as a bucket is left
-        # out unless the target record it parses as exists.
+        # keys of another type than the collection's, and a key that may
+        # be a bucket is left out unless the target record it parses as
+        # exists (see participation_collection_keys).
         pattern = target_class.dbkey_pattern('*', collection_name)
         ownership = Familia::Features::Relationships::Indexing::RecordKeyOwnership
         names = ownership.record_set_key_names(target_class)
         client = target_class.dbclient
-        collection_keys = scan_matching_keys(pattern, client, type: PARTICIPATION_KEY_TYPES[rel.type]).select do |key|
-          identifier = target_class.extract_identifier_from_key(key, collection_name.to_s)
-          next false if identifier.nil? || identifier.empty?
-
-          target_class.exists?(identifier) || !ownership.index_bucket_owner(key, target_class, names: names)
+        collection_keys = []
+        scan_matching_keys(pattern, client, type: PARTICIPATION_KEY_TYPES[rel.type]).each_slice(100) do |keys|
+          collection_keys.concat(participation_collection_keys(keys, target_class, collection_name.to_s, names))
         end
 
         collection_keys.each do |collection_key|
@@ -1133,6 +1220,45 @@ module Familia
         # so the report structure is always consistent.
         results << { collection_name: collection_name, stale_members: [] } if results.empty?
         results
+      end
+
+      # Returns the +keys+ that are collection keys of +target_class+
+      # records, for audit_instance_participations.
+      #
+      # A key whose identifier is empty is left out. A key that
+      # RecordKeyOwnership.index_bucket_owner reads as a multi_index bucket,
+      # or whose owner it does not check because the key has too many
+      # candidate owners, is left out unless the target record it parses as
+      # exists: unless that record's hash key holds a hash (see
+      # RecordKeyOwnership.existing_records). EXISTS is not enough, because
+      # the bucket of field value "object" sits at the hash key of a record
+      # named after the index. Every other key is kept without an
+      # existence check. The candidate scopes and target records of the
+      # keys are checked in one pipeline each.
+      #
+      # @param keys [Array<String>] a batch of keys returned by SCAN
+      # @param target_class [Class]
+      # @param collection_name [String]
+      # @param names [Hash] RecordKeyOwnership.record_set_key_names of
+      #   +target_class+
+      # @return [Array<String>]
+      #
+      def participation_collection_keys(keys, target_class, collection_name, names)
+        ownership = Familia::Features::Relationships::Indexing::RecordKeyOwnership
+        parsed = keys.filter_map do |key|
+          identifier = target_class.extract_identifier_from_key(key, collection_name)
+          [key, identifier] unless identifier.nil? || identifier.empty?
+        end
+        return [] if parsed.empty?
+
+        owners = ownership.index_bucket_owners(parsed.map(&:first), target_class, names: names)
+        bucket_like = parsed.each_index.select { |idx| owners[idx] }
+        flags = ownership.existing_records(target_class, bucket_like.map { |idx| parsed[idx].last })
+        exists = bucket_like.zip(flags).to_h
+
+        parsed.each_index.filter_map do |idx|
+          parsed[idx].first if owners[idx].nil? || exists[idx]
+        end
       end
 
       # Check a single collection key for stale members.
@@ -1203,7 +1329,14 @@ module Familia
       #   within this class whose scope record exists, is not reported.
       #   The multi_index audit and repair own it. Such a key is not
       #   reported even if it is also the field of a deleted record whose
-      #   identifier starts with the index name.
+      #   identifier starts with the index name. Neither is a key whose
+      #   owner .index_bucket_owner does not check because the key has
+      #   more candidate owners than RecordKeyOwnership::MAX_CANDIDATE_SPLITS,
+      #   so repair_related_fields! does not delete it.
+      #
+      # The parent exists when its hash key holds a hash (see
+      # RecordKeyOwnership.existing_records): a multi_index bucket whose
+      # field value equals the class suffix is not a parent.
       #
       # @param definition [RelatedFieldDefinition]
       # @return [Hash] {field_name:, klass:, orphaned_keys: [], count:, status:}
@@ -1218,9 +1351,9 @@ module Familia
         names = ownership.record_set_key_names(self)
         orphaned_keys = []
 
-        # Batch SCAN results and pipeline EXISTS checks. Note we use the raw
-        # integer EXISTS command here (not the exists? helper) so the result
-        # inside the pipeline is aligned positionally with batch_map.values.
+        # Batch SCAN results and check the parents of each batch in one
+        # pipeline, then the bucket owners of the keys whose parent is
+        # missing in another.
         dbclient.scan_each(**scan_options).each_slice(100) do |keys|
           batch_map = keys.each_with_object({}) do |key, map|
             id = extract_identifier_from_key(key, field_name.to_s)
@@ -1228,16 +1361,12 @@ module Familia
           end
           next if batch_map.empty?
 
-          existing_flags = dbclient.pipelined do |pipe|
-            batch_map.values.each { |id| pipe.exists(dbkey(id)) }
-          end
+          existing_flags = ownership.existing_records(self, batch_map.values)
+          parentless = batch_map.keys.each_with_index.filter_map { |key, idx| key unless existing_flags[idx] }
+          next if parentless.empty?
 
-          batch_map.keys.each_with_index do |key, idx|
-            next unless existing_flags[idx].to_i.zero?
-            next if ownership.index_bucket_owner(key, self, names: names)
-
-            orphaned_keys << key
-          end
+          bucket_owners = ownership.index_bucket_owners(parentless, self, names: names)
+          parentless.zip(bucket_owners) { |key, owner| orphaned_keys << key unless owner }
         end
 
         status = orphaned_keys.empty? ? :ok : :issues_found

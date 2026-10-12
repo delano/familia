@@ -122,15 +122,23 @@ module Familia
           # value "x:dept_index:ops" in scope "c-1" and the "ops" bucket of
           # scope "c-1:dept_index:x". Keys that
           # RecordKeyOwnership.other_record_key assigns to an existing record
-          # with a longer identifier are left out, so the rebuild does not
-          # delete them and the class-level audit does not read them.
+          # with a longer identifier are yielded in +others+, not in
+          # +buckets+, so the rebuild does not delete them and the
+          # class-level audit does not read them. So is a key with more
+          # candidate owners than RecordKeyOwnership::MAX_CANDIDATE_SPLITS,
+          # whose owner is not checked. The candidates of every key in a
+          # slice are checked in one pipeline.
           #
           # @param client [Redis] connection that owns the buckets
           # @param owner [Familia::Horreum, Class] the scope instance, or the
           #   indexed class for a class-level index
           # @param index_name [Symbol] name of the index
           # @param batch_size [Integer] SCAN count hint and slice size
-          # @yieldparam keys [Array<String>] a non-empty slice of bucket keys
+          # @yieldparam buckets [Array<String>] bucket keys of the slice,
+          #   possibly empty
+          # @yieldparam others [Hash{String => String, Symbol}] the other
+          #   keys of the slice, each mapped to the hash key of the record
+          #   that owns it or to RecordKeyOwnership::TOO_MANY_CANDIDATES
           # @return [Enumerator, nil] an Enumerator when no block is given
           def each_index_bucket_slice(client, owner, index_name, batch_size: 100)
             return enum_for(__method__, client, owner, index_name, batch_size: batch_size) unless block_given?
@@ -140,9 +148,16 @@ module Familia
             pattern = "#{Familia.escape_glob(bucket_prefix)}*"
             client.scan_each(match: pattern, count: batch_size, type: BUCKET_KEY_TYPE)
                   .each_slice(batch_size) do |keys|
-              buckets = select_index_buckets(keys, bucket_prefix)
-              buckets.reject! { |key| RecordKeyOwnership.other_record_key_owner(key, owner, names: names) }
-              yield buckets unless buckets.empty?
+              candidates = select_index_buckets(keys, bucket_prefix)
+              next if candidates.empty?
+
+              owners = RecordKeyOwnership.other_record_key_owners(candidates, owner, names: names)
+              buckets = []
+              others = {}
+              candidates.zip(owners) do |key, record_key|
+                record_key ? others[key] = record_key : buckets << key
+              end
+              yield buckets, others
             end
             nil
           end
@@ -152,13 +167,16 @@ module Familia
           # more.
           #
           # +live_bucket_keys+ are the keys the rebuild writes after this
-          # returns. They are checked with .check_live_bucket_keys! first,
-          # so a key the rebuild could not write stops it before any key is
-          # deleted.
+          # returns. They are checked with .check_live_bucket_keys! first.
+          # Then every bucket under the prefix is found before any is
+          # deleted, and a key whose owner was not checked (see
+          # .each_index_bucket_slice) raises as well. So a key the rebuild
+          # could not write, or could not tell from another record's key,
+          # stops it before any key is deleted.
           #
-          # Only the keys .each_index_bucket_slice yields are deleted. A key
-          # under the prefix that holds another type is left alone, and so
-          # is a set that is another existing record's key.
+          # Only the bucket keys .each_index_bucket_slice yields are deleted.
+          # A key under the prefix that holds another type is left alone,
+          # and so is a set that is another existing record's key.
           #
           # @param client [Redis] connection that owns the buckets
           # @param owner [Familia::Horreum, Class] the scope instance, or the
@@ -169,12 +187,23 @@ module Familia
           # @yieldparam key [String] a bucket key that was deleted
           # @yieldparam cleared [Integer] buckets deleted so far
           # @return [Integer] number of bucket keys deleted
-          # @raise [Familia::IndexBucketConflictError] see .check_live_bucket_keys!
+          # @raise [Familia::IndexBucketConflictError] see .check_live_bucket_keys!,
+          #   and for a key under the prefix whose owner was not checked
           def clear_index_buckets(client, owner, index_name, live_bucket_keys:, batch_size: 100, &on_delete)
             check_live_bucket_keys!(client, owner, live_bucket_keys, batch_size: batch_size)
-            cleared = 0
 
-            each_index_bucket_slice(client, owner, index_name, batch_size: batch_size) do |buckets|
+            stale = []
+            unchecked = {}
+            each_index_bucket_slice(client, owner, index_name, batch_size: batch_size) do |buckets, others|
+              stale.concat(buckets)
+              others.each do |key, record_key|
+                unchecked[key] = record_key if record_key == RecordKeyOwnership::TOO_MANY_CANDIDATES
+              end
+            end
+            raise Familia::IndexBucketConflictError, unchecked unless unchecked.empty?
+
+            cleared = 0
+            stale.each_slice(batch_size) do |buckets|
               client.del(*buckets)
               buckets.each do |key|
                 cleared += 1
@@ -186,8 +215,9 @@ module Familia
           end
 
           # Raises Familia::IndexBucketConflictError when one of
-          # +bucket_keys+ holds a type other than a set, or is another
-          # existing record's key (see RecordKeyOwnership.other_record_key_owner).
+          # +bucket_keys+ holds a type other than a set, is another
+          # existing record's key (see RecordKeyOwnership.other_record_key_owner)
+          # or has more candidate owners than the rebuild checks.
           #
           # After the clearing phase, the rebuild adds every object to the
           # bucket of its field value. A key of another type there is not a
@@ -203,10 +233,11 @@ module Familia
           # @param owner [Familia::Horreum, Class] the scope instance, or the
           #   indexed class for a class-level index
           # @param bucket_keys [Array<String>] keys the rebuild will write
-          # @param batch_size [Integer] number of TYPE commands per pipeline
+          # @param batch_size [Integer] number of keys checked per pipeline
           # @return [nil]
           # @raise [Familia::IndexBucketConflictError] naming each such key,
-          #   its type and, for another record's key, that record's hash key
+          #   its type or RecordKeyOwnership::TOO_MANY_CANDIDATES and, for
+          #   another record's key, that record's hash key
           def check_live_bucket_keys!(client, owner, bucket_keys, batch_size: 100)
             conflicts = {}
             owners = {}
@@ -216,8 +247,15 @@ module Familia
               types = client.pipelined do |pipe|
                 keys.each { |key| pipe.type(key) }
               end
-              keys.zip(types) do |key, type|
-                record_key = RecordKeyOwnership.other_record_key_owner(key, owner, names: names)
+              record_keys = RecordKeyOwnership.other_record_key_owners(keys, owner, names: names)
+              keys.each_with_index do |key, idx|
+                type = types[idx]
+                record_key = record_keys[idx]
+                if record_key == RecordKeyOwnership::TOO_MANY_CANDIDATES
+                  conflicts[key] = record_key
+                  next
+                end
+
                 owners[key] = record_key if record_key
                 conflicts[key] = type if record_key || !WRITABLE_BUCKET_KEY_TYPES.include?(type)
               end
@@ -366,10 +404,12 @@ module Familia
               # @return [Integer, nil] Number of objects processed, or nil when the indexed
               #   class has no participation relationship to this scope class
               # @raise [Familia::IndexBucketConflictError] if a bucket key the rebuild will
-              #   write holds a type other than set or is another existing record's key. The
-              #   rebuild raises before it deletes or writes anything. The error's #conflicts
-              #   maps each such key to its type, and #owners maps each key of another record
-              #   to that record's hash key.
+              #   write holds a type other than set or is another existing record's key, or if
+              #   a key it will write or delete has more candidate owner records than
+              #   RecordKeyOwnership::MAX_CANDIDATE_SPLITS. The rebuild raises before it
+              #   deletes or writes anything. The error's #conflicts maps each such key to its
+              #   type or to RecordKeyOwnership::TOO_MANY_CANDIDATES, and #owners maps each
+              #   key of another record to that record's hash key.
               #
               # @example Basic rebuild
               #   company.rebuild_dept_index
@@ -685,9 +725,12 @@ module Familia
             #   has no instances collection
             # @raise [Familia::IndexBucketConflictError] if a bucket key the rebuild
             #   will write holds a type other than set or is another existing record's
-            #   key. The rebuild raises before it deletes or writes anything. The
-            #   error's #conflicts maps each such key to its type, and #owners maps
-            #   each key of another record to that record's hash key.
+            #   key, or if a key it will write or delete has more candidate owner
+            #   records than RecordKeyOwnership::MAX_CANDIDATE_SPLITS. The rebuild
+            #   raises before it deletes or writes anything. The error's #conflicts
+            #   maps each such key to its type or to
+            #   RecordKeyOwnership::TOO_MANY_CANDIDATES, and #owners maps each key of
+            #   another record to that record's hash key.
             indexed_class.define_singleton_method(:"rebuild_#{index_name}") do |batch_size: 100, &progress_block|
               # PHASE 1: Discover all field values and collect objects
               progress_block&.call(phase: :discovering, current: 0, total: 0)
