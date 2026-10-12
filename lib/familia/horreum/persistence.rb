@@ -983,7 +983,9 @@ module Familia
       # Familia::IdentifierMismatchError and an error from a field setter
       # while the stored values are assigned.
       #
-      # @return [void]
+      # @return [Array<Symbol>] the names of the fields assigned from the
+      #   stored hash, in assignment order (encrypted fields last). A field
+      #   the stored hash does not contain is not listed.
       #
       # @raise [Familia::KeyNotFoundError] If the Valkey key does not exist.
       # @raise [Familia::IdentifierMismatchError] If the stored values give
@@ -1321,7 +1323,7 @@ module Familia
           field_type = self.class.field_types[field_name]
           next unless field_type&.method_name
 
-          # UnsortedSet the transient field back to nil
+          # Set the transient field back to nil
           send("#{field_type.method_name}=", nil)
           Familia.debug "[reset_transient_fields!] Reset #{field_name} to nil"
         end
