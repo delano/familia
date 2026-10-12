@@ -47,6 +47,10 @@ Added
 - ``Familia::Features::Relationships::Indexing::RecordKeyOwnership::MAX_CANDIDATE_SPLITS``
   (8), the most candidate owner records the rebuild and audits check for one
   key.
+- ``Familia::Features::Relationships::Indexing::RecordKeyOwnership::MAX_CANDIDATE_BATCH_BYTES``
+  (1 MiB), the most bytes of candidate owner identifiers the rebuild and
+  audits check in one pipeline. An identifier longer than that is checked
+  in a pipeline of its own.
 - ``Familia::Horreum.dbkey_pattern(identifier_glob = '*', key_suffix = suffix)``
   returns a key pattern with the class prefix, delimiter and suffix escaped.
 - ``Familia::Horreum::OBJECT_KEY_TYPE`` (``"hash"``), the Redis type of an

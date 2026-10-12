@@ -816,7 +816,8 @@ module Familia
       # Returns the +parsed+ [key, scope_id, field_value] entries without
       # the keys that are buckets of a class-level multi_index of
       # +scope_class+ and whose scope record +scope_id+ does not exist.
-      # The scope records are checked in one pipeline.
+      # The scope records are checked with
+      # RecordKeyOwnership.existing_records.
       #
       # @return [Array<Array(String, String, String)>]
       #
@@ -873,7 +874,8 @@ module Familia
       # When it is another of that scope's set keys, or has more
       # candidate owner records than RecordKeyOwnership checks, it is
       # dropped and a foreign_owned_entry is added to +foreign_owned_keys+.
-      # The candidates of all keys are checked in one pipeline.
+      # The candidates are checked in pipelines of at most
+      # RecordKeyOwnership::MAX_CANDIDATE_BATCH_BYTES of identifiers.
       #
       # @param parsed [Array<Array(String, String, String)>] [key, scope_id,
       #   field_value] from parse_instance_scoped_bucket_key
@@ -1241,7 +1243,8 @@ module Familia
       # the bucket of field value "object" sits at the hash key of a record
       # named after the index. Every other key is kept without an
       # existence check. The candidate scopes and target records of the
-      # keys are checked in one pipeline each.
+      # keys are checked in pipelines of at most
+      # RecordKeyOwnership::MAX_CANDIDATE_BATCH_BYTES of identifiers.
       #
       # @param keys [Array<String>] a batch of keys returned by SCAN
       # @param target_class [Class]

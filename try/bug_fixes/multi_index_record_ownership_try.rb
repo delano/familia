@@ -16,9 +16,11 @@
 #   equaled a set collection name.
 #
 # A record now exists only when its hash key holds a hash. The candidate
-# owners of a key are checked in one pipeline, and a key with more of them
-# than RecordKeyOwnership::MAX_CANDIDATE_SPLITS is not checked: the rebuild
-# raises for it before it deletes anything, and the audit reports it.
+# owners of the keys are checked in pipelines of at most
+# RecordKeyOwnership::MAX_CANDIDATE_BATCH_BYTES of identifiers, and a key
+# with more of them than RecordKeyOwnership::MAX_CANDIDATE_SPLITS is not
+# checked: the rebuild raises for it before it deletes anything, and the
+# audit reports it.
 # repair_multi_indexes! records a rebuild that raises the conflict error
 # and goes on with the next scope or index.
 #
@@ -250,6 +252,47 @@ end
 @client.del(@c5.dept_index_for(@over_cap_value).dbkey)
 [RoEmp.audit_multi_indexes.first[:status], RoEmp.health_check.healthy?]
 #=> [:ok, true]
+
+## Long keys with several candidate owners each are checked in pipelines of bounded size
+# Each dept value is about 20 KB and has 8 candidate splits, so the 20
+# buckets of company c-7 hold about 3 MB of candidate identifiers.
+@c7 = RoCo.new(cid: 'c-7')
+@c7.save
+@wide = (1..20).map do |num|
+  employee = RoEmp.new(eid: "w#{num}", dept: ('A' * 20_000) + num.to_s + (':dept_index' * 8))
+  employee.save
+  employee.add_to_ro_co_staff(@c7)
+  employee
+end
+# Identifier bytes of each pipeline of TYPE commands on record hash keys.
+@identifier_bytes = lambda do |commands|
+  commands.filter_map do |entry|
+    record_types = entry.command.split(' | ')
+    next unless record_types.all? { |command| command.start_with?('type ro_co:') && command.end_with?(':object') }
+
+    record_types.sum { |command| command.delete_prefix('type ro_co:').delete_suffix(':object').bytesize }
+  end
+end
+@rebuild_groups = @identifier_bytes.call(DatabaseLogger.capture_commands { @wide_count = @c7.rebuild_dept_index })
+@audit_groups = @identifier_bytes.call(DatabaseLogger.capture_commands { @wide_audit = RoEmp.audit_multi_indexes.first })
+@limit = @ownership::MAX_CANDIDATE_BATCH_BYTES
+[
+  @wide_count,
+  @c7.find_all_by_dept(@wide.first.dept).map(&:eid),
+  @wide_audit[:status],
+  @rebuild_groups.sum > 2 * @limit,
+  @rebuild_groups.size > 2 && @rebuild_groups.max <= @limit,
+  @audit_groups.sum > 2 * @limit,
+  @audit_groups.size > 2 && @audit_groups.max <= @limit,
+]
+#=> [20, ["w1"], :ok, true, true, true, true]
+
+## Removing those employees and their company leaves no keys of c-7
+@wide.each(&:destroy!)
+@c7.destroy!
+@client.scan_each(match: 'ro_co:c-7:*').to_a.each { |key| @client.del(key) }
+[@client.scan_each(match: 'ro_co:c-7:*').to_a, RoEmp.audit_multi_indexes.first[:status]]
+#=> [[], :ok]
 
 ## A class-level set field of a record named after the index is reported the same way
 @u1.role = 'admin'

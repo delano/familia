@@ -126,8 +126,9 @@ module Familia
           # +buckets+, so the rebuild does not delete them and the
           # class-level audit does not read them. So is a key with more
           # candidate owners than RecordKeyOwnership::MAX_CANDIDATE_SPLITS,
-          # whose owner is not checked. The candidates of every key in a
-          # slice are checked in one pipeline.
+          # whose owner is not checked. The candidates of the keys in a
+          # slice are checked in pipelines of at most
+          # RecordKeyOwnership::MAX_CANDIDATE_BATCH_BYTES of identifiers.
           #
           # @param client [Redis] connection that owns the buckets
           # @param owner [Familia::Horreum, Class] the scope instance, or the

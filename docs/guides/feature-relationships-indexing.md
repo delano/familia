@@ -586,9 +586,12 @@ The candidate owners of a key are the splits whose identifier is followed by a
 set field name or an instance-scoped index name. The rebuild and the audit
 check at most
 `Familia::Features::Relationships::Indexing::RecordKeyOwnership::MAX_CANDIDATE_SPLITS`
-(8) of them per key, with one pipelined round trip for all the keys of a
-batch. A key with more candidates, such as the bucket of a field value that
-repeats `:dept_index:` many times, is not checked.
+(8) of them per key. The candidates of a batch of keys are checked in
+pipelines that each hold at most `RecordKeyOwnership::MAX_CANDIDATE_BATCH_BYTES`
+(1 MiB) of candidate identifiers, and an identifier longer than that gets a
+pipeline of its own. A key with more candidates than
+`MAX_CANDIDATE_SPLITS`, such as the bucket of a field value that repeats
+`:dept_index:` many times, is not checked.
 
 Before it deletes any bucket, the rebuild checks every bucket key it is about
 to write. If one of them holds a type other than set, belongs to another record

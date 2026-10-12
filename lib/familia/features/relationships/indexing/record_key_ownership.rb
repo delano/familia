@@ -18,15 +18,16 @@ module Familia
         #
         # A record exists when its hash key holds a hash (see
         # .existing_records). The methods that take a list of keys check
-        # every candidate record of every key in one pipelined round trip,
-        # and a key with no candidate costs no command.
+        # the candidate records of their keys in pipelines that each hold
+        # at most MAX_CANDIDATE_BATCH_BYTES of identifiers, and a key with
+        # no candidate costs no command.
         module RecordKeyOwnership
           module_function
 
           # The most candidate records checked for one key.
           #
           # A candidate is a split of the key at a delimiter where the part
-          # after it is a set key name (see .candidate_splits). An
+          # after it is a set key name (see .candidate_split_offsets). An
           # ordinary key has none. A key has one for each record whose
           # identifier is a prefix of the key followed by such a name, and
           # records nest like that rarely more than once or twice. A field
@@ -44,6 +45,18 @@ module Familia
           # reports it.
           TOO_MANY_CANDIDATES = :too_many_candidate_owners
 
+          # The most bytes of record identifiers checked in one pipeline.
+          #
+          # MAX_CANDIDATE_SPLITS bounds the candidates of one key, but the
+          # rebuild and audits pass keys in slices, and each candidate
+          # identifier can be as long as its key. The candidates of the
+          # keys in a slice are therefore checked in groups: a group is
+          # sent once adding the next key's candidates would pass this many
+          # bytes. .existing_records splits the identifiers of a group the
+          # same way, so an identifier longer than this is checked in a
+          # pipeline of its own.
+          MAX_CANDIDATE_BATCH_BYTES = 1_048_576
+
           # Returns, for each of +identifiers+, whether a record of
           # +owner_class+ with that identifier exists: whether its hash key
           # holds a hash (Familia::Horreum::OBJECT_KEY_TYPE).
@@ -53,7 +66,9 @@ module Familia
           # after the index: the bucket "customer:role_index:object" is a
           # set, and no record "role_index" exists.
           #
-          # The TYPE commands go out in one pipeline. The hash keys are
+          # The TYPE commands go out in pipelines of at most
+          # MAX_CANDIDATE_BATCH_BYTES of identifiers each (one identifier
+          # longer than that gets a pipeline of its own). The hash keys are
           # built from bytes, so an identifier with invalid UTF-8 does not
           # raise Encoding::CompatibilityError against a prefix with
           # non-ASCII characters.
@@ -62,12 +77,37 @@ module Familia
           # @param identifiers [Array<String>] record identifiers
           # @return [Array<Boolean>] one flag per identifier, in order
           def existing_records(owner_class, identifiers)
-            return [] if identifiers.empty?
-
-            types = owner_class.dbclient.pipelined do |pipe|
-              identifiers.each { |identifier| pipe.type(record_hash_key(owner_class, identifier)) }
+            flags = []
+            byte_bounded_groups(identifiers) { |identifier| identifier.to_s.bytesize }.each do |group|
+              types = owner_class.dbclient.pipelined do |pipe|
+                group.each { |identifier| pipe.type(record_hash_key(owner_class, identifier)) }
+              end
+              flags.concat(types.map { |type| type == Familia::Horreum::OBJECT_KEY_TYPE })
             end
-            types.map { |type| type == Familia::Horreum::OBJECT_KEY_TYPE }
+            flags
+          end
+
+          # Splits +items+ into consecutive groups whose sizes, as the block
+          # returns them, add up to at most MAX_CANDIDATE_BATCH_BYTES. An
+          # item larger than that forms a group of its own.
+          #
+          # @param items [Array]
+          # @yieldparam item [Object]
+          # @yieldreturn [Integer] the size of +item+ in bytes
+          # @return [Array<Array>]
+          def byte_bounded_groups(items)
+            groups = []
+            group_bytes = 0
+            items.each do |item|
+              bytes = yield(item)
+              if groups.empty? || group_bytes + bytes > MAX_CANDIDATE_BATCH_BYTES
+                groups << []
+                group_bytes = 0
+              end
+              groups.last << item
+              group_bytes += bytes
+            end
+            groups
           end
 
           # Returns the hash key of the record of +owner_class+ with
@@ -95,8 +135,9 @@ module Familia
             other_record_key_owners([key], owner, names: names).first
           end
 
-          # .other_record_key_owner for each of +keys+, with one pipeline
-          # for all their candidates.
+          # .other_record_key_owner for each of +keys+. The candidates are
+          # checked in pipelines of at most MAX_CANDIDATE_BATCH_BYTES (see
+          # .resolve_candidates).
           #
           # @param keys [Array<String>]
           # @param owner [Familia::Horreum, Class]
@@ -151,7 +192,8 @@ module Familia
           end
 
           # .other_record_key for each of +keys+, with the matching entry of
-          # +own_identifiers+, and one pipeline for all their candidates.
+          # +own_identifiers+. The candidates are checked in pipelines of
+          # at most MAX_CANDIDATE_BATCH_BYTES (see .resolve_candidates).
           #
           # @param keys [Array<String>]
           # @param owner_class [Class]
@@ -163,13 +205,12 @@ module Familia
             names ||= record_set_key_names(owner_class)
             delim = Familia.delim.to_s.b
             prefix = record_prefix(owner_class)
-            candidates = keys.each_with_index.map do |key, idx|
+            resolve_candidates(owner_class, keys, prefix.bytesize, delim) do |key, idx|
               rest = bytes_after_prefix(key, prefix)
-              next [] unless rest
+              next nil unless rest
 
-              candidate_splits(rest, delim, names, own_identifiers[idx].to_s.bytesize)
+              candidate_split_offsets(rest, delim, names, own_identifiers[idx].to_s.bytesize)
             end
-            resolve_candidates(owner_class, keys, candidates)
           end
 
           # Returns the owner of +key+ when it is a multi_index bucket under
@@ -202,8 +243,9 @@ module Familia
             index_bucket_owners([key], owner_class, names: names).first
           end
 
-          # .index_bucket_owner for each of +keys+, with one pipeline for
-          # all their candidate scopes.
+          # .index_bucket_owner for each of +keys+. The candidate scopes are
+          # checked in pipelines of at most MAX_CANDIDATE_BATCH_BYTES (see
+          # .resolve_candidates).
           #
           # @param keys [Array<String>]
           # @param owner_class [Class]
@@ -220,17 +262,16 @@ module Familia
             # record is that record's own key, not a bucket of any index.
             bucket_names = { fields: [], indexes: names[:indexes] }
             owners = Array.new(keys.size)
-            candidates = keys.each_with_index.map do |key, idx|
+            scopes = resolve_candidates(owner_class, keys, prefix.bytesize, delim) do |key, idx|
               rest = bytes_after_prefix(key, prefix)
-              next [] unless rest
+              next nil unless rest
 
               if class_level.any? { |index| rest.start_with?(index + delim) }
                 owners[idx] = owner_class
-                next []
+                next nil
               end
-              candidate_splits(rest, delim, bucket_names, 0)
+              candidate_split_offsets(rest, delim, bucket_names, 0)
             end
-            scopes = resolve_candidates(owner_class, keys, candidates)
             owners.each_with_index.map do |owner, idx|
               next owner if owner
 
@@ -293,23 +334,21 @@ module Familia
           # +longer_than+ bytes and whose name is a set key name from
           # +names+ (see .record_set_key_names): a set field's name, an index
           # name (the bucket of a blank value) or an index name followed by
-          # the delimiter and a value. The splits are [identifier, name]
-          # pairs in order of increasing identifier length. Returns
+          # the delimiter and a value. A split is the offset of its
+          # delimiter in +rest+, which is also the length of its
+          # identifier, and the offsets are in increasing order. Returns
           # TOO_MANY_CANDIDATES when there are more than
           # MAX_CANDIDATE_SPLITS.
           #
-          # The walk does not copy the part before each delimiter. A set
-          # field name must be the whole rest of the key, so each field is
-          # compared at the one offset where it would start. An index name
-          # is searched for with String#index, and only a split that
-          # qualifies is copied.
-          def candidate_splits(rest, delim, names, longer_than)
+          # The walk copies no part of +rest+. A set field name must be the
+          # whole rest of the key, so each field is compared at the one
+          # offset where it would start. An index name is searched for with
+          # String#index.
+          def candidate_split_offsets(rest, delim, names, longer_than)
             offsets = field_split_offsets(rest, delim, names[:fields], longer_than)
             return TOO_MANY_CANDIDATES unless index_split_offsets(rest, delim, names[:indexes], longer_than, offsets)
 
-            offsets.sort.map do |split_at|
-              [rest.byteslice(0, split_at), rest.byteslice((split_at + delim.bytesize)..)]
-            end
+            offsets.sort
           end
 
           # Offsets in +rest+ of the delimiter before a set field name that
@@ -344,27 +383,70 @@ module Familia
           end
 
           # Resolves the candidate splits of each of +keys+ to the one with
-          # the longest identifier of an existing record. All candidates of
-          # all keys are checked with one call to .existing_records. The
-          # identifier and name are returned in the encoding of the key.
+          # the longest identifier of an existing record. The block returns
+          # the offsets of a key's candidate splits in the part of the key
+          # after its first +prefix_bytes+ bytes (see
+          # .candidate_split_offsets), TOO_MANY_CANDIDATES, or nil for a key
+          # that is not under the prefix.
           #
+          # The block runs for one key at a time, and only the offsets are
+          # kept. The identifiers are copied out of the key when their
+          # group is checked. A group is checked once adding the next key's
+          # candidates would pass MAX_CANDIDATE_BATCH_BYTES of identifiers,
+          # so the copies and the pipeline for one group stay within that
+          # many bytes, or within one key's candidates when they alone pass
+          # it. The identifier and name are returned in the encoding of the
+          # key.
+          #
+          # @param prefix_bytes [Integer] bytesize of the record prefix
+          # @yieldparam key [String]
+          # @yieldparam idx [Integer]
+          # @yieldreturn [Array<Integer>, Symbol, nil]
           # @return [Array<Array(String, String), Symbol, nil>]
-          def resolve_candidates(owner_class, keys, candidates)
-            identifiers = candidates.flat_map { |list| list.is_a?(Array) ? list.map(&:first) : [] }
-            flags = existing_records(owner_class, identifiers)
-            offset = 0
-            keys.each_with_index.map do |key, idx|
-              list = candidates[idx]
-              next list unless list.is_a?(Array)
+          def resolve_candidates(owner_class, keys, prefix_bytes, delim)
+            results = Array.new(keys.size)
+            pending = []
+            pending_bytes = 0
+            keys.each_with_index do |key, idx|
+              offsets = yield(key, idx)
+              next results[idx] = offsets if offsets == TOO_MANY_CANDIDATES
+              next if offsets.nil? || offsets.empty?
 
-              found = flags[offset, list.size]
-              offset += list.size
-              last = found.rindex(true)
-              next nil unless last
-
-              identifier, name = list[last]
-              [identifier.force_encoding(key.encoding), name.force_encoding(key.encoding)]
+              bytes = offsets.sum
+              if !pending.empty? && pending_bytes + bytes > MAX_CANDIDATE_BATCH_BYTES
+                resolve_pending_candidates(owner_class, pending, prefix_bytes, delim, results)
+                pending_bytes = 0
+              end
+              pending << [idx, key, offsets]
+              pending_bytes += bytes
             end
+            resolve_pending_candidates(owner_class, pending, prefix_bytes, delim, results) unless pending.empty?
+            results
+          end
+
+          # Checks the candidates of the +pending+ [idx, key, offsets]
+          # entries with one call to .existing_records, stores each key's
+          # [identifier, name] or nil in +results+, and empties +pending+.
+          # The identifier and name are byte slices of the key, in its
+          # encoding.
+          def resolve_pending_candidates(owner_class, pending, prefix_bytes, delim, results)
+            identifiers = pending.flat_map do |(_idx, key, offsets)|
+              offsets.map { |split_at| key.byteslice(prefix_bytes, split_at) }
+            end
+            flags = existing_records(owner_class, identifiers)
+            position = 0
+            pending.each do |(idx, key, offsets)|
+              last = flags[position, offsets.size].rindex(true)
+              if last
+                split_at = offsets[last]
+                results[idx] = [
+                  identifiers[position + last].force_encoding(key.encoding),
+                  key.byteslice((prefix_bytes + split_at + delim.bytesize)..).force_encoding(key.encoding),
+                ]
+              end
+              position += offsets.size
+            end
+            pending.clear
           end
 
           # Returns the Horreum class whose records share key space with the
