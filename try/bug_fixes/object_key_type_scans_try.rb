@@ -24,6 +24,7 @@ class ::OtkUser < Familia::Horreum
   field :uid
   field :role
   field :email
+  field :note
   multi_index :role, :role_index
   unique_index :email, :email_lookup
 end
@@ -85,6 +86,34 @@ class ::OtkCustomMigration < Familia::Migration::Model
 
   def process_record(_obj, key)
     self.class.processed_keys << key
+  end
+end
+
+# Pipeline migration that records the keys it updates.
+class ::OtkPipelineMigration < Familia::Migration::Pipeline
+  self.migration_id = 'otk_pipeline_migration'
+
+  class << self
+    attr_accessor :processed_keys
+  end
+  self.processed_keys = []
+
+  def prepare
+    @model_class = ::OtkUser
+    @batch_size = 10
+  end
+
+  def should_process?(_obj)
+    true
+  end
+
+  def build_update_fields(_obj)
+    { note: 'migrated' }
+  end
+
+  def execute_update(pipe, obj, fields, original_key = nil)
+    self.class.processed_keys << original_key
+    super
   end
 end
 
@@ -173,6 +202,14 @@ OtkCustomMigration.processed_keys = []
 @custom.migrate
 [@custom.scan_type, OtkCustomMigration.processed_keys]
 #=> [nil, ["otk_user:role_index:object"]]
+
+## A pipeline migration with the default pattern processes only object hashes
+OtkPipelineMigration.processed_keys = []
+@pipeline = OtkPipelineMigration.new(run: true)
+@pipeline.prepare
+@pipeline.migrate
+[@pipeline.scan_type, @pipeline.error_count, OtkPipelineMigration.processed_keys, Familia.dbclient.hget('otk_user:u1:object', 'note')]
+#=> ["hash", 0, ["otk_user:u1:object"], "migrated"]
 
 ## The buckets are unchanged
 [OtkUser.find_all_by_role('object').map(&:uid), @c1.find_all_by_dept('object').map(&:eid)]
