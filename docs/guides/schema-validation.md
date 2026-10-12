@@ -163,10 +163,14 @@ config.schemas = {
 - **No json_schemer gem**: Warning logged, validation disabled
 - **json_schemer present but one of its own requires fails**: Every validation raises
   `Familia::SchemaValidatorLoadError`, with the `LoadError` as its `cause`, until json_schemer
-  loads. `Familia::Migration::Model#migrate`, which `Familia::Migration::Pipeline` inherits,
-  raises it at the first record it validates, through validation hooks or a `validate_schema`
-  call in a record hook. `Familia::Migration::Base.run` and `.cli_run` let it propagate, and
-  `Familia::Migration::Runner` records the migration as failed rather than applied.
+  loads. `Familia::Migration::Model#migrate` raises it at the first record it validates, through
+  `validate_before_transform?`, `validate_after_transform?` or a `validate_schema` call in
+  `#process_record`, in dry runs and actual runs. `Familia::Migration::Pipeline` does not run
+  the validation hooks, so it raises only when `#should_process?`, `#build_update_fields` or
+  `#execute_update` calls `validate_schema`, and only in an actual run; a Pipeline dry run does
+  not call those methods and succeeds. Where `#migrate` raises it, `Familia::Migration::Base.run`
+  and `.cli_run` let it propagate, and `Familia::Migration::Runner` records the migration as
+  failed rather than applied.
 - **Invalid JSON**: Warning logged, schema skipped
 
 ## API Reference

@@ -115,12 +115,24 @@ When `json_schemer` is installed but one of its own requires fails, schema
 validation now raises `Familia::SchemaValidatorLoadError`, whose `cause` is
 the `LoadError`. familia 2.12.0 warned `json_schemer gem not installed` in
 that case and disabled validation, so every record passed.
-`Familia::Migration::Model#migrate`, which `Familia::Migration::Pipeline`
-inherits, raises it at the first record it validates, through validation
-hooks or a `validate_schema` call in a record hook, instead of returning.
-`Familia::Migration::Base.run` and `.cli_run` let it propagate rather than
-returning `false` or an exit code, and `Familia::Migration::Runner` records
-the migration as `:failed`.
+
+How a migration meets the error depends on its kind:
+
+- `Familia::Migration::Model#migrate` raises it at the first record it
+  validates, through `validate_before_transform?`,
+  `validate_after_transform?` or a `validate_schema` call in
+  `#process_record`, in a dry run as well as an actual run.
+- `Familia::Migration::Pipeline` does not run the validation hooks, so
+  `validate_before_transform?` and `validate_after_transform?` have no
+  effect in a Pipeline, with or without a working `json_schemer`. A
+  Pipeline raises the error only when `#should_process?`,
+  `#build_update_fields` or `#execute_update` calls `validate_schema`, and
+  only in an actual run. A dry run does not call those methods, so a
+  Pipeline dry run succeeds while `json_schemer` cannot load.
+
+Where `#migrate` raises it, `Familia::Migration::Base.run` and `.cli_run`
+let it propagate rather than returning `false` or an exit code, and
+`Familia::Migration::Runner` records the migration as `:failed`.
 
 If you see this error, fix the bundle so that `json_schemer` loads. The
 error's `cause` names the file that could not be loaded. When `json_schemer`

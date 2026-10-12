@@ -125,9 +125,10 @@ module Familia
       #   is not a Familia::Horreum subclass, or if {#interactive} is set and
       #   pry-byebug cannot be loaded
       # @raise [Familia::SchemaValidatorLoadError] if a record is validated,
-      #   by a validation hook or a {#validate_schema} call in a record hook,
-      #   and json_schemer is installed but fails to load. The run ends at
-      #   the first record validated.
+      #   by a validation hook or a {#validate_schema} call in
+      #   {#process_record}, and json_schemer is installed but fails to load.
+      #   The run ends at the first record validated, in a dry run as well
+      #   as an actual run. {Pipeline} differs: see its class documentation.
       def migrate
         validate_model_class!
 

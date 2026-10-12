@@ -57,6 +57,16 @@ module Familia
     #     end
     #   end
     #
+    # ## Schema Validation
+    #
+    # Pipeline does not run {#validate_before_transform?} or
+    # {#validate_after_transform?}; they apply only to {Model}'s per-record
+    # processing. To validate, call {#validate_schema} or
+    # {#validate_schema!} from {#should_process?}, {#build_update_fields} or
+    # {#execute_update}. A dry run does not call those methods, so it does
+    # not validate. When json_schemer is installed but fails to load,
+    # Familia::SchemaValidatorLoadError raised from them ends an actual run.
+    #
     # ## Performance Notes
     #
     # - Use smaller batch sizes (50-200) compared to Model
