@@ -553,6 +553,10 @@ module Familia
       result = dbclient.zpopmin(dbkey, count)
       # Refresh the TTL only when something was popped. Inside a transaction
       # or pipeline that is unknown, so the refresh is queued with the pop.
+      # The two transform_reply calls each read the same reply: the first
+      # turns it into "popped anything" for the refresh, the second into the
+      # return value. Inside a block both pass the Future through, so the
+      # refresh is queued and the ZPOP* Future is returned.
       update_expiration_if_written(Familia.transform_reply(result) { |popped| !(popped.nil? || popped.empty?) })
       Familia.transform_reply(result) { |popped| deserialize_popped(popped, count) }
     end
@@ -579,6 +583,10 @@ module Familia
       result = dbclient.zpopmax(dbkey, count)
       # Refresh the TTL only when something was popped. Inside a transaction
       # or pipeline that is unknown, so the refresh is queued with the pop.
+      # The two transform_reply calls each read the same reply: the first
+      # turns it into "popped anything" for the refresh, the second into the
+      # return value. Inside a block both pass the Future through, so the
+      # refresh is queued and the ZPOP* Future is returned.
       update_expiration_if_written(Familia.transform_reply(result) { |popped| !(popped.nil? || popped.empty?) })
       Familia.transform_reply(result) { |popped| deserialize_popped(popped, count) }
     end
