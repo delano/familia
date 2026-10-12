@@ -9,7 +9,9 @@ Security
   part of the pattern is now escaped, and a matched key is deleted only if it
   starts with that literal prefix, holds a set and is not a set field or
   ``multi_index`` bucket of an existing record of the same class with a
-  longer identifier.
+  longer identifier. A record exists when its hash key holds a hash. A
+  matched key with more than ``MAX_CANDIDATE_SPLITS`` candidate owner
+  records stops the rebuild before it deletes anything.
 - ``repair_participations!`` removed members from another class's collection
   of the same name when the target class prefix held a glob character.
   ``audit_participations`` now escapes the pattern and keeps only keys with
@@ -22,8 +24,9 @@ Security
   bucket whose field value equaled a collection name. ``audit_related_fields``
   and ``audit_participations`` now skip a key that is a bucket of a
   class-level ``multi_index`` of the class, or of an instance-scoped
-  ``multi_index`` whose scope record exists, unless the record the key names
-  exists.
+  ``multi_index`` whose scope record exists, unless the hash key of the record
+  the key names holds a hash. The bucket of field value ``object`` is a set at
+  such a hash key and does not count as that record.
 
 Added
 -----
@@ -32,8 +35,18 @@ Added
   for use in KEYS and SCAN MATCH patterns. It escapes bytes and keeps the
   input's encoding, so it accepts strings with invalid UTF-8 and binary data.
 - ``Familia::IndexBucketConflictError`` (a ``Familia::PersistenceError``),
-  whose ``conflicts`` maps each key to the type it holds and whose ``owners``
-  maps each key of another record to that record's hash key.
+  whose ``conflicts`` maps each key to the type it holds, or to
+  ``:too_many_candidate_owners`` for a key whose owner was not checked, and
+  whose ``owners`` maps each key of another record to that record's hash key.
+- ``audit_multi_indexes`` results include ``foreign_owned_keys``: the sets
+  under the bucket prefix that the rebuild leaves alone, each with ``key``,
+  ``field_value``, ``owner_key`` and ``reason`` (``:other_record``, or
+  ``:too_many_candidate_owners`` with a nil ``owner_key``), plus ``scope_id``
+  for an instance-scoped index. An entry without an ``owner_key`` sets the
+  status to ``:issues_found`` and makes ``AuditReport#healthy?`` false.
+- ``Familia::Features::Relationships::Indexing::RecordKeyOwnership::MAX_CANDIDATE_SPLITS``
+  (8), the most candidate owner records the rebuild and audits check for one
+  key.
 - ``Familia::Horreum.dbkey_pattern(identifier_glob = '*', key_suffix = suffix)``
   returns a key pattern with the class prefix, delimiter and suffix escaped.
 - ``Familia::Horreum::OBJECT_KEY_TYPE`` (``"hash"``), the Redis type of an
@@ -56,7 +69,14 @@ Changed
   than set, or is a set field or ``multi_index`` bucket of an existing record
   of the same class with a longer identifier, it raises
   ``Familia::IndexBucketConflictError`` and leaves the index and that key
-  unchanged.
+  unchanged. It raises the same way, before deleting anything, when a key it
+  would write or delete has more than ``MAX_CANDIDATE_SPLITS`` candidate owner
+  records.
+- ``repair_multi_indexes!`` records a rebuild that raises
+  ``Familia::IndexBucketConflictError`` in ``:skipped`` with
+  ``reason: :bucket_conflict``, ``conflicts``, ``owners`` and, for an
+  instance-scoped index, ``scope_id``, and goes on with the next scope or
+  index. ``repair_all!`` returns status ``:partial_failure`` for such an entry.
 - The ``multi_index`` rebuild and ``audit_multi_indexes`` pass the ``TYPE``
   option to SCAN when they look for bucket sets.
 - ``audit_related_fields`` and ``audit_participations`` pass the ``TYPE``
@@ -95,9 +115,15 @@ Fixed
   ``Redis::WrongTypeError``.
 - ``audit_participations`` no longer raises ``Redis::WrongTypeError`` on a
   set bucket named like a sorted set or list collection.
+- ``extract_identifier_from_key`` compares and slices the key as bytes and
+  returns the identifier in the key's encoding. ``audit_instances``,
+  ``audit_related_fields`` and ``health_check`` of a class whose prefix holds
+  non-ASCII characters no longer raise ``Encoding::CompatibilityError`` for a
+  record whose identifier is not valid UTF-8.
 - ``audit_multi_indexes`` no longer reports a class-level bucket of the scope
   class whose field value contains ``:<index>:`` as an orphaned bucket of an
-  instance-scoped index, unless the scope record the key names exists.
+  instance-scoped index, unless the hash key of the scope record the key
+  names holds a hash.
 
 Documentation
 -------------

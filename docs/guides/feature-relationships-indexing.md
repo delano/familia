@@ -577,22 +577,46 @@ longest identifier, and a class-level bucket has no identifier. So rebuilding
 `c-1` leaves that key in place, rebuilding `c-1:dept_index:x` clears it, and
 `Customer.rebuild_role_index` leaves the `tags` set in place.
 `audit_multi_indexes` reads each such key for the record it belongs to. Only a
-set field or `multi_index` bucket of a record whose hash key exists counts.
-Without that hash key, the key belongs to the shorter identifier.
+set field or `multi_index` bucket of a record whose hash key holds a hash
+counts. Without that hash, the key belongs to the shorter identifier. A bucket
+is a set, so the bucket of value `object` at `customer:role_index:object` does
+not make `role_index` a record.
+
+The candidate owners of a key are the splits whose identifier is followed by a
+set field name or an instance-scoped index name. The rebuild and the audit
+check at most
+`Familia::Features::Relationships::Indexing::RecordKeyOwnership::MAX_CANDIDATE_SPLITS`
+(8) of them per key, with one pipelined round trip for all the keys of a
+batch. A key with more candidates, such as the bucket of a field value that
+repeats `:dept_index:` many times, is not checked.
 
 Before it deletes any bucket, the rebuild checks every bucket key it is about
-to write. If one of them holds a type other than set, or belongs to another
-record as described above, the rebuild raises
-`Familia::IndexBucketConflictError` without deleting or writing anything. Such
-a key may be another record's data, such as a list of a record whose identifier
-equals the index name. The error's `conflicts` maps each key to the type it
-holds, and its `owners` maps each key of another record to that record's hash
-key. Inspect those keys. The rebuild can run once none of them holds a type
-other than set or belongs to another record.
+to write. If one of them holds a type other than set, belongs to another record
+as described above, or has more candidate owners than the rebuild checks, the
+rebuild raises `Familia::IndexBucketConflictError` without deleting or writing
+anything. It raises the same way for a stale bucket under the prefix whose
+owner it did not check. Such a key may be another record's data, such as a list
+of a record whose identifier equals the index name. The error's `conflicts`
+maps each key to the type it holds, or to `:too_many_candidate_owners` for a key
+whose owner was not checked, and its `owners` maps each key of another record
+to that record's hash key. Inspect those keys. The rebuild can run once none of
+them holds a type other than set, belongs to another record or has too many
+candidate owners.
 
-`repair_multi_indexes!` calls the same rebuild and raises the same error.
-`repair_all!` records it under `errors[:multi_indexes]` and returns status
-`:partial_failure`.
+`audit_multi_indexes` lists the sets under a bucket prefix that the rebuild
+leaves alone in `foreign_owned_keys`. Each entry has `key`, `field_value`,
+`owner_key` and `reason`, plus `scope_id` for an instance-scoped index. With
+`reason: :other_record`, `owner_key` is the hash key of the record that owns
+the key; such an entry does not change the audit status. With
+`reason: :too_many_candidate_owners`, `owner_key` is nil; such an entry sets the
+status to `:issues_found`, and `health_check` reports the model as unhealthy.
+
+`repair_multi_indexes!` calls the same rebuild. When it raises
+`Familia::IndexBucketConflictError`, the repair records the index, or for an
+instance-scoped index the scope, in `:skipped` with `reason: :bucket_conflict`,
+`conflicts`, `owners` and, for a scope, `scope_id`, and goes on with the next
+scope or index. `repair_all!` then returns status `:partial_failure`; its
+`errors` does not list the conflict.
 
 ### Bucket names in other key patterns
 
@@ -606,16 +630,18 @@ customer objects. These methods leave such buckets alone:
 - `audit_related_fields` and `audit_participations` look only at keys of the
   type the field or collection stores. They also skip a key that is a bucket of
   a class-level `multi_index` of the class, or of an instance-scoped
-  `multi_index` whose scope record exists, unless the record the key names
-  exists. So `repair_related_fields!` does not delete such a bucket and
-  `repair_participations!` does not remove its members.
+  `multi_index` whose scope record exists, unless the hash key of the record
+  the key names holds a hash. They skip a key whose candidate owners were not
+  checked the same way. So `repair_related_fields!` does not delete such a
+  bucket and `repair_participations!` does not remove its members, also for a
+  `type: :set` collection and with a record whose field value is `object`.
 - `all`, `keys_count`, `scan_count`, `keys_any?`, `scan_any?`, `scan_keys`,
   `audit_instances`, `rebuild_instances`, the SCAN fallback of a unique index
   rebuild and model migrations with the default `@scan_pattern` look only at
   keys that hold a hash (`Familia::Horreum::OBJECT_KEY_TYPE`).
 - `audit_multi_indexes` does not read a class-level bucket whose value
-  contains `:<index>:` as a bucket of an instance-scoped index, unless the
-  scope record the key names exists.
+  contains `:<index>:` as a bucket of an instance-scoped index, unless the hash
+  key of the scope record the key names holds a hash.
 
 ## Performance Tips
 
