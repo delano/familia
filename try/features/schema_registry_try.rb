@@ -206,10 +206,17 @@ run_fresh_ruby(<<~RUBY, load_path: [@broken_gem_dir])
 RUBY
 #=> ['Familia::SchemaValidatorLoadError, cause: LoadError familia_probe_missing_dependency'] * 2
 
+# Removing json_schemer's directory from the load path is not enough on
+# its own. Without Bundler the gem is not yet activated, so RubyGems would
+# activate it again when SchemaRegistry requires it. Activating it first
+# with Kernel#gem, under Bundler or plain RubyGems, leaves a require of
+# json_schemer nowhere to look, so it raises LoadError for that path.
+
 ## Without json_schemer on the load path, validation warns and is disabled
 run_fresh_ruby(<<~RUBY)
   require 'familia'
   require 'stringio'
+  gem 'json_schemer'
   $LOAD_PATH.reject! { |dir| dir.include?('json_schemer') }
   Familia.schemas = { 'Customer' => #{File.join(@schema_dir, 'customer.json').dump} }
   captured = StringIO.new
