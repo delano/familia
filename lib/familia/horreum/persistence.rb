@@ -1001,25 +1001,31 @@ module Familia
         end
 
         Familia.trace :REFRESH, nil, self.class.uri if Familia.debug?
-        fields = hgetall
-        # A hash with no fields does not exist, so an empty reply means the
-        # key is missing. Checking the reply instead of a separate EXISTS
-        # leaves no gap for the key to expire or be deleted before the read.
-        raise Familia::KeyNotFoundError, dbkey if fields.empty?
 
-        Familia.debug "[refresh!] #{self.class} #{dbkey} fields:#{fields.keys}"
-
-        # Deserialize before the reset below, and name the key that was read
-        # in the log entry for a value that is not JSON.
-        values = deserialize_stored_fields(fields, dbkey: dbkey)
-
-        # The reset and the assignment succeed or fail together. A setter can
-        # raise on a stored value, for example an encrypted field whose
-        # envelope names an algorithm this process does not provide. Stopping
-        # there would leave every field after it nil, and a later save removes
-        # every nil persistent field from the stored hash
+        # Everything after the operation-mode check runs in this block, so
+        # whatever raises leaves the object as it was. Computing the key
+        # computes the identifier, and a lazy getter such as objid stores the
+        # value it generates; on a missing key that value must not remain.
+        # The reset and the assignment below also succeed or fail together.
+        # A setter can raise on a stored value, for example an encrypted
+        # field whose envelope names an algorithm this process does not
+        # provide. Stopping there would leave every field after it nil, and a
+        # later save removes every nil persistent field from the stored hash
         # (#remove_stale_nil_fields), including values nobody changed.
         result = restoring_instance_state_on_error do
+          read_key = dbkey
+          fields = hgetall
+          # A hash with no fields does not exist, so an empty reply means the
+          # key is missing. Checking the reply instead of a separate EXISTS
+          # leaves no gap for the key to expire or be deleted before the read.
+          raise Familia::KeyNotFoundError, read_key if fields.empty?
+
+          Familia.debug "[refresh!] #{self.class} #{read_key} fields:#{fields.keys}"
+
+          # Deserialize before the reset below, and name the key that was
+          # read in the log entry for a value that is not JSON.
+          values = deserialize_stored_fields(fields, dbkey: read_key)
+
           # Transient fields have no authoritative source, so they return to
           # their uninitialized state.
           reset_transient_fields!
@@ -1335,8 +1341,9 @@ module Familia
       # Runs the block. If the block does not finish, puts the object's
       # instance variables and dirty tracking back as they were before it ran.
       #
-      # {#refresh!} runs its field reset and assignment in this block, so a
-      # setter that raises on a stored value leaves the object as it was.
+      # {#refresh!} runs its read, field reset and assignment in this block,
+      # so a missing key, or a setter that raises on a stored value, leaves
+      # the object as it was.
       # Instance variables are saved by reference: one the block replaces is
       # set back, and one it adds is removed. Setters change the dirty-tracking
       # map in place, so its entries are copied and put back. A command a

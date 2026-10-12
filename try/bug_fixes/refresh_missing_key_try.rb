@@ -26,6 +26,21 @@ class ::RefreshMissingKeyRecord < Familia::Horreum
   hashkey :props
 end
 
+# objid is generated lazily the first time it is read, and the identifier
+# reads it.
+class ::RefreshMissingKeyObjidRecord < Familia::Horreum
+  feature :object_identifier
+  identifier_field :objid
+  field :name
+end
+
+# The same, with a Proc identifier that reads objid.
+class ::RefreshMissingKeyObjidProcRecord < Familia::Horreum
+  feature :object_identifier
+  identifier_field ->(record) { "doc_#{record.objid}" }
+  field :name
+end
+
 # The object's instance variables, each with the object it holds.
 def refresh_missing_key_ivars(obj)
   obj.instance_variables.to_h { |name| [name, obj.instance_variable_get(name)] }
@@ -69,6 +84,32 @@ refresh_missing_key_same_ivars?(@unsaved, @unsaved_ivars)
 ## the failed refresh leaves the object as it was too
 [refresh_missing_key_same_ivars?(@unsaved, @unsaved_ivars), @unsaved.changed_fields == @unsaved_changed]
 #=> [true, true]
+
+## an unsaved record whose identifier is an objid not generated yet raises KeyNotFoundError
+@lazy = RefreshMissingKeyObjidRecord.new(name: 'in-memory')
+@lazy.name = 'edited'
+@lazy_ivars = refresh_missing_key_ivars(@lazy)
+@lazy_changed = @lazy.changed_fields
+@lazy.refresh!
+#=!> Familia::KeyNotFoundError
+
+## computing the key generated an objid, and the failed refresh! removes it again
+[
+  @lazy.instance_variable_defined?(:@objid),
+  refresh_missing_key_same_ivars?(@lazy, @lazy_ivars),
+  @lazy.changed_fields == @lazy_changed,
+]
+#=> [false, true, true]
+
+## the same holds for a Proc identifier that reads an objid not generated yet
+@lazy_proc = RefreshMissingKeyObjidProcRecord.new(name: 'in-memory')
+@lazy_proc_ivars = refresh_missing_key_ivars(@lazy_proc)
+begin
+  @lazy_proc.refresh!
+rescue Familia::KeyNotFoundError => e
+  [e.class, @lazy_proc.instance_variable_defined?(:@objid), refresh_missing_key_same_ivars?(@lazy_proc, @lazy_proc_ivars)]
+end
+#=> [Familia::KeyNotFoundError, false, true]
 
 ## Horreum#refresh! still reloads a record whose key exists
 @saved.name = 'changed in memory'
