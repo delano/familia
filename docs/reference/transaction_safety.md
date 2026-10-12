@@ -198,13 +198,25 @@ Call these before or after the block.
 
 #### Queue gated side effects
 
-Some writes refresh the TTL only when they took effect: `HashKey#hsetnx`,
-`JsonStringKey#setnx` and `#value` with a default, `ListKey#insert`, `#pushx`
-and `#unshiftx`, and `SortedSet#popmin` and `#popmax`. Inside a block that
-outcome is a Future, so the refresh is queued with the write. A key that the
-queued write creates therefore keeps its TTL. When the write turns out to do
-nothing, the refresh resets the TTL of a key that already exists, and a
-missing key stays missing.
+Some writes refresh the TTL only when they took effect. Outside a block
+they read the write's reply to decide. Inside a block that reply is a Future,
+so the decision is queued with the write, and the TTL ends up as it would
+outside a block:
+
+- `HashKey#hsetnx`, `JsonStringKey#setnx`, `JsonStringKey#value` with a
+  default, and `ListKey#insert` can do nothing on a key that exists (the
+  field or key is already set, or the pivot is missing). They queue one EVAL
+  that runs the write and calls EXPIRE only when the write took effect, so a
+  write that does nothing leaves an existing key's TTL unchanged, and a key
+  the write creates gets its TTL. `hsetnx` and `setnx` return the EVAL
+  Future, which resolves to the same `true` or `false` they return outside a
+  block; `insert` returns one that resolves to the same Integer.
+- `ListKey#pushx` and `#unshiftx`, and `SortedSet#popmin` and `#popmax`,
+  write whenever the key exists (a pop with a count of 0 aside), and EXPIRE
+  does nothing on a missing key. They queue the refresh after the write.
+
+A DataType with no expiration (`default_expiration` 0, or a relation declared
+with `no_expiration: true`) queues no refresh.
 
 ### 5. Handling Nested Transactions
 

@@ -136,6 +136,35 @@ end
 [@ret.value, @owner.events.ttl > 100]
 #=> [5, true]
 
+## insert with a missing pivot inside a transaction leaves an extended TTL unchanged
+@reset.call
+@owner.events.expire(2_592_000)
+@ret = nil
+@result = @owner.transaction { @ret = @owner.events.insert(:after, 'missing', 'x') }
+[@ret.value, @result.results, @owner.events.size, @owner.events.ttl > 3600]
+#=> [-1, [-1], 4, true]
+
+## insert with a missing pivot inside a pipeline leaves an extended TTL unchanged
+@reset.call
+@owner.events.expire(2_592_000)
+@ret = @in_pipeline.call { @owner.events.insert(:before, 'missing', 'x') }
+[@ret.value, @owner.events.ttl > 3600]
+#=> [-1, true]
+
+## insert that finds its pivot inside a transaction refreshes an extended TTL to the default
+@reset.call
+@owner.events.expire(2_592_000)
+@ret = nil
+@owner.transaction { @ret = @owner.events.insert(:after, 'b', 'b2') }
+[@ret.value, @owner.events.members, @owner.events.ttl.between?(1, 3600)]
+#=> [5, ["a", "b", "b2", "c", "d"], true]
+
+## insert inside a pipeline on a missing list leaves it missing
+@owner.events.delete!
+@ret = @in_pipeline.call { @owner.events.insert(:after, 'a', 'x') }
+[@ret.value, @owner.events.exists?]
+#=> [0, false]
+
 ## pushx inside a pipeline queues the TTL refresh with the write
 @reset.call
 @owner.events.expire(100)
@@ -209,6 +238,12 @@ end
 @owner.events.expire(100)
 [@owner.events.insert(:after, 'd', 'e'), @owner.events.pushx('f'), @owner.events.ttl > 100]
 #=> [5, 6, true]
+
+## outside a block: insert with a missing pivot leaves an extended TTL unchanged
+@reset.call
+@owner.events.expire(2_592_000)
+[@owner.events.insert(:after, 'missing', 'x'), @owner.events.ttl > 3600]
+#=> [-1, true]
 
 # Teardown
 delete_test_dbkeys(FuturesListOwner)

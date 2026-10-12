@@ -9,7 +9,8 @@
 # transactions and pipelines"):
 #   - a method that only converts a reply returns the command's Future;
 #   - a method that needs the reply to continue raises OperationModeError;
-#   - a TTL refresh gated on a conditional write's reply is queued anyway.
+#   - a conditional write and its TTL refresh are queued as one EVAL that
+#     refreshes only when the write takes effect.
 
 require_relative '../../support/helpers/test_helpers'
 
@@ -23,6 +24,7 @@ class FuturesHashOwner < Familia::Horreum
   field :ownerid
   field :name
   hashkey :counts
+  hashkey :sticky, no_expiration: true
 end
 
 delete_test_dbkeys(FuturesHashOwner)
@@ -199,6 +201,43 @@ end
 [@ret.class, @ret.value, @owner.counts.ttl.positive?]
 #=> [Redis::Future, true, true]
 
+## hsetnx on an existing field inside a transaction leaves an extended TTL unchanged
+@reset.call
+@owner.counts.expire(2_592_000)
+@ret = nil
+@result = @owner.transaction { @ret = @owner.counts.hsetnx('views', 9) }
+[@ret.value, @result.results, @owner.counts['views'], @owner.counts.ttl > 3600]
+#=> [false, [false], 5, true]
+
+## hsetnx on an existing field inside a pipeline leaves an extended TTL unchanged
+@reset.call
+@owner.counts.expire(2_592_000)
+@ret = @in_pipeline.call { @owner.counts.hsetnx('views', 9) }
+[@ret.value, @owner.counts['views'], @owner.counts.ttl > 3600]
+#=> [false, 5, true]
+
+## hsetnx of a new field inside a transaction refreshes an extended TTL to the default
+@reset.call
+@owner.counts.expire(2_592_000)
+@ret = nil
+@owner.transaction { @ret = @owner.counts.hsetnx('fresh', 1) }
+[@ret.value, @owner.counts['fresh'], @owner.counts.ttl.between?(1, 3600)]
+#=> [true, 1, true]
+
+## hsetnx of a new field inside a pipeline refreshes an extended TTL to the default
+@reset.call
+@owner.counts.expire(2_592_000)
+@ret = @in_pipeline.call { @owner.counts.hsetnx('fresh', 1) }
+[@ret.value, @owner.counts.ttl.between?(1, 3600)]
+#=> [true, true]
+
+## hsetnx inside a transaction on a no_expiration hashkey sets no TTL
+@owner.sticky.delete!
+@ret = nil
+@owner.transaction { @ret = @owner.sticky.hsetnx('fresh', 1) }
+[@ret.value, @owner.sticky['fresh'], @owner.sticky.ttl]
+#=> [true, 1, -1]
+
 ## fetch inside atomic_write raises OperationModeError and persists nothing
 @reset.call
 @err = nil
@@ -304,6 +343,11 @@ end
 ## outside a block: hsetnx returns false for an existing field
 @owner.counts.hsetnx('fresh', 2)
 #=> false
+
+## outside a block: hsetnx on an existing field leaves an extended TTL unchanged
+@owner.counts.expire(2_592_000)
+[@owner.counts.hsetnx('fresh', 3), @owner.counts.ttl > 3600]
+#=> [false, true]
 
 # Teardown
 delete_test_dbkeys(FuturesHashOwner)

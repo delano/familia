@@ -60,7 +60,11 @@ module Familia
     # Returns the current value stored at the key.
     #
     # If a default option was provided during initialization, the default
-    # is set via SETNX (set if not exists) before retrieval.
+    # is set via SETNX (set if not exists) before retrieval, and the TTL is
+    # refreshed only when the default was written. Inside a transaction or
+    # pipeline the SETNX and the refresh are queued as one EVAL that makes
+    # the same decision when it runs, so reading an existing key leaves its
+    # TTL unchanged there too.
     #
     # @return [Object, Redis::Future] the deserialized value, or the default
     #   if not set. Inside a transaction or pipeline, the GET Future (resolves
@@ -68,11 +72,16 @@ module Familia
     #
     def value
       echo :value, Familia.pretty_stack(limit: 1) if Familia.debug
+      conn = dbclient
       if @opts.key?(:default)
-        was_set = dbclient.setnx(dbkey, serialize_value(@opts[:default]))
-        update_expiration_if_written(was_set)
+        default = serialize_value(@opts[:default])
+        if queued_connection?(conn)
+          queue_conditional_write(conn, :setnx, default)
+        else
+          update_expiration_if_written(conn.setnx(dbkey, default))
+        end
       end
-      deserialize_value dbclient.get(dbkey)
+      deserialize_value conn.get(dbkey)
     end
     alias content value
     alias get value
@@ -93,16 +102,24 @@ module Familia
     alias replace value=
     alias set value=
 
-    # Sets the value only if the key does not already exist.
+    # Sets the value only if the key does not already exist, and refreshes
+    # the TTL only when it was set. Inside a transaction or pipeline the
+    # SETNX and the refresh are queued as one EVAL that makes the same
+    # decision when it runs.
     #
     # @param val [Object] the value to store
     # @return [Boolean, Redis::Future] true if the key was set, false if it
-    #   already existed. Inside a transaction or pipeline, the SETNX Future
-    #   of that Boolean (the Future itself is always truthy).
+    #   already existed. Inside a transaction or pipeline, the EVAL Future,
+    #   which resolves to that Boolean (the Future itself is always truthy).
     #
     def setnx(val)
       warn_if_dirty!
-      ret = dbclient.setnx(dbkey, serialize_value(val))
+      conn = dbclient
+      if queued_connection?(conn)
+        return queue_conditional_write(conn, :setnx, serialize_value(val)) { |reply| reply == 1 }
+      end
+
+      ret = conn.setnx(dbkey, serialize_value(val))
       update_expiration_if_written(ret)
       ret
     end

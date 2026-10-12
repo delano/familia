@@ -270,16 +270,17 @@ module Familia
       emit_dirty_warning(mode, message, dirty)
     end
 
-    # Refreshes the TTL after a conditional write (HSETNX, SETNX, LINSERT,
-    # RPUSHX, ...) when +written+ says the write took effect.
+    # Refreshes the TTL after a conditional write (RPUSHX, LPUSHX, ZPOPMIN,
+    # ...) when +written+ says the write took effect.
     #
     # Inside a transaction or pipeline the write's reply is a Redis::Future,
     # so whether it took effect is unknown until the block completes. The
-    # Future counts as written and the refresh is queued with the write: a
-    # write that creates the key (HSETNX, SETNX) must not leave it without
-    # its TTL. When the queued write turns out to do nothing, the refresh
-    # only resets the TTL of a key that already exists, and a missing key
-    # stays missing.
+    # Future counts as written and the refresh is queued with the write.
+    # Pass a Future only for a write that always takes effect on a key that
+    # exists, so that the queued refresh matches the one outside a block: on
+    # a missing key EXPIRE does nothing. Writes that can do nothing on an
+    # existing key (HSETNX, SETNX, LINSERT) go through
+    # #queue_conditional_write instead.
     #
     # @param written [Boolean, nil, Redis::Future] whether the write took
     #   effect, or its Future
@@ -288,6 +289,68 @@ module Familia
       update_expiration if written.is_a?(Redis::Future) || written
     end
     private :update_expiration_if_written
+
+    # Lua scripts for #queue_conditional_write. Each runs one write on
+    # KEYS[1] and calls EXPIRE with ARGV[1] seconds only when the write's
+    # reply shows it took effect and ARGV[1] is positive, then returns the
+    # write's reply.
+    CONDITIONAL_WRITE_SCRIPTS = {
+      hsetnx: <<~LUA,
+        local written = redis.call('HSETNX', KEYS[1], ARGV[2], ARGV[3])
+        if written == 1 and tonumber(ARGV[1]) > 0 then redis.call('EXPIRE', KEYS[1], ARGV[1]) end
+        return written
+      LUA
+      setnx: <<~LUA,
+        local written = redis.call('SETNX', KEYS[1], ARGV[2])
+        if written == 1 and tonumber(ARGV[1]) > 0 then redis.call('EXPIRE', KEYS[1], ARGV[1]) end
+        return written
+      LUA
+      linsert: <<~LUA,
+        local length = redis.call('LINSERT', KEYS[1], ARGV[2], ARGV[3], ARGV[4])
+        if length > 0 and tonumber(ARGV[1]) > 0 then redis.call('EXPIRE', KEYS[1], ARGV[1]) end
+        return length
+      LUA
+    }.freeze
+
+    # Whether +conn+ queues its commands: a transaction or pipeline
+    # connection, whose replies are Redis::Future objects until the block
+    # completes.
+    #
+    # @param conn [Redis, Redis::PipelinedConnection] the connection
+    # @return [Boolean]
+    def queued_connection?(conn)
+      conn.is_a?(Redis::PipelinedConnection)
+    end
+    private :queued_connection?
+
+    # Queues a conditional write and its TTL refresh as one EVAL on a
+    # transaction or pipeline connection.
+    #
+    # Outside a block a conditional write refreshes the TTL only when its
+    # reply shows that it took effect. Inside a block that reply is a
+    # Future, so the decision moves into the script, which calls EXPIRE
+    # only when the write took effect. A write that does nothing therefore
+    # leaves an existing key's TTL alone, as it does outside a block.
+    #
+    # The TTL is the one #update_expiration would apply: the
+    # default_expiration, with 0 (no expiration, or a relation declared
+    # with no_expiration: true) skipping the refresh.
+    #
+    # @param conn [Redis::PipelinedConnection] the transaction or pipeline
+    #   connection
+    # @param script [Symbol] a key of CONDITIONAL_WRITE_SCRIPTS; the
+    #   remaining arguments are the write's arguments after the key
+    # @yieldparam reply [Integer] the write's reply, for redis-rb to coerce
+    #   into the Future's value
+    # @return [Redis::Future] the EVAL Future, resolving to the coerced reply
+    # @raise [Familia::Problem] if the default expiration is not a
+    #   non-negative number
+    def queue_conditional_write(conn, script, *, &)
+      expiration = default_expiration
+      validate_expiration!(expiration)
+      conn.call(:eval, CONDITIONAL_WRITE_SCRIPTS.fetch(script), 1, dbkey, expiration.to_i, *, &)
+    end
+    private :queue_conditional_write
 
     # Valid +dirty_write_warnings+ modes, matching the class-level and global
     # settings of the same name.

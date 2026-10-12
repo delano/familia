@@ -5,7 +5,7 @@ Inside `transaction`, `atomic_write` and `pipelined` blocks, redis-rb returns a
 in one of three ways, described in rule 4 of
 [Transaction Safety](../reference/transaction_safety.md): they return the
 command's Future, they raise `Familia::OperationModeError` before queueing
-anything, or they queue a TTL refresh together with the write. Outside a block
+anything, or they queue a write's TTL refresh with it. Outside a block
 every method returns what it did before, with one exception:
 `HashKey#randfield(count, withvalues: true)` now returns `[field, value]` pairs.
 It used to return `[[[field, raw_value], nil]]` when one pair came back and
@@ -180,12 +180,19 @@ A Future is always truthy, so a predicate or conditional write tested inside
 the block takes the true branch whatever the reply turns out to be. Read the
 Future's value after the block.
 
-## `HashKey#hsetnx` and `ListKey#insert` inside a block now refresh the TTL
+## Conditional writes inside a block refresh the TTL as they do outside it
 
 Inside a transaction or pipeline, `HashKey#hsetnx` and `ListKey#insert` did
-not refresh the key's TTL. They now queue the refresh with the write, whether
-or not the write turns out to take effect. When `hsetnx` finds the field
-already set, or `insert` does not find its pivot, the TTL of the existing hash
-or list is reset to the configured default. Outside a block both refresh only
-when the write takes effect, so call them outside the block if an existing key
-must keep its remaining TTL.
+not refresh the key's TTL, so a hash or list they created there had none.
+`JsonStringKey#setnx`, and `JsonStringKey#value` with a default, reset the
+key's TTL to the configured default even when the key was already set, so a
+plain read with a default shortened an extended TTL.
+
+All four now queue one EVAL that runs the write and refreshes the TTL only
+when the write takes effect, the same rule they follow outside a block. A
+field or key that is already set, or a missing pivot, leaves the existing
+key's TTL unchanged. `hsetnx` and `setnx` still return a Future that resolves
+to `true` or `false`, and `insert` one that resolves to the list length, `-1`
+or `0`; `MultiResult#results` carries the same values. Inside a block the
+server sees an EVAL in place of HSETNX, SETNX or LINSERT, which shows in
+`MONITOR` output and command logs.

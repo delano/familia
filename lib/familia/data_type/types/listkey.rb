@@ -333,10 +333,19 @@ module Familia
     alias lset set
 
     # Inserts an element before or after a pivot element
+    #
+    # Refreshes the TTL only when the element was inserted. Inside a
+    # transaction or pipeline the insert and the refresh are queued as one
+    # EVAL that makes the same decision when it runs, so a missing pivot
+    # leaves the list's TTL unchanged there too.
+    #
     # @param position [:before, :after] Where to insert relative to pivot
     # @param pivot The pivot element to search for
     # @param value The value to insert
-    # @return [Integer] Length of list after insert, or -1 if pivot not found
+    # @return [Integer, Redis::Future] Length of list after insert, -1 if
+    #   pivot not found, or 0 if the list does not exist. Inside a
+    #   transaction or pipeline, the EVAL Future, which resolves to that
+    #   Integer.
     def insert(position, pivot, value)
       warn_if_dirty!
       pos = case position
@@ -345,7 +354,12 @@ module Familia
             else
               raise ArgumentError, "position must be :before or :after, got #{position.inspect}"
       end
-      result = dbclient.linsert dbkey, pos, serialize_value(pivot), serialize_value(value)
+      conn = dbclient
+      if queued_connection?(conn)
+        return queue_conditional_write(conn, :linsert, pos, serialize_value(pivot), serialize_value(value))
+      end
+
+      result = conn.linsert dbkey, pos, serialize_value(pivot), serialize_value(value)
       update_expiration_if_written(Familia.positive?(result))
       result
     end

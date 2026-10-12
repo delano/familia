@@ -114,12 +114,16 @@ Changed
   queueing any ``object_identifier`` and ``external_identifier`` lookup
   deletes. Other classes still queue their deletes into the caller's
   transaction.
-- ``ListKey#insert``, ``#pushx``, ``#unshiftx`` and ``HashKey#hsetnx``
-  queue their TTL refresh inside a transaction or pipeline instead of
-  skipping it. ``SortedSet#popmin`` and ``#popmax`` queue theirs there too.
-  The queued refresh runs whether or not the write takes effect, so
-  ``hsetnx`` on an existing field and ``insert`` with a missing pivot reset
-  the key's TTL there.
+- ``ListKey#pushx`` and ``#unshiftx`` queue their TTL refresh inside a
+  transaction or pipeline instead of skipping it. ``SortedSet#popmin`` and
+  ``#popmax`` queue theirs there too.
+- Inside a transaction or pipeline, ``HashKey#hsetnx``, ``ListKey#insert``,
+  ``JsonStringKey#setnx`` and ``JsonStringKey#value`` with a default queue
+  their write and TTL refresh as one ``EVAL`` that refreshes only when the
+  write takes effect, as outside a block. ``hsetnx`` and ``insert``
+  previously skipped the refresh there; ``JsonStringKey#setnx`` and
+  ``#value`` reset an existing key's TTL even when the key was already set.
+  The returned Futures resolve to the same values as before.
 
 Fixed
 -----
@@ -155,8 +159,8 @@ Documentation
   and unstaging that committed with an outer transaction,
   ``extend_expiration``, the ``Lock`` ownership checks and ``release``,
   ``current_indexings``, ``Migration::Registry#applied?``, ``as_json`` on
-  a scalar DataType and the TTL refresh of ``HashKey#hsetnx`` and
-  ``ListKey#insert``.
+  a scalar DataType and the TTL refresh of ``HashKey#hsetnx``,
+  ``ListKey#insert``, ``JsonStringKey#setnx`` and ``JsonStringKey#value``.
 
 AI Assistance
 -------------

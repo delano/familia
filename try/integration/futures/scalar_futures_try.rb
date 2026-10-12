@@ -20,6 +20,7 @@ class FuturesScalarOwner < Familia::Horreum
   field :name
   string :nick
   json_string :prefs
+  json_string :settings, default: { 'theme' => 'light' }
   counter :hits
   lock :mutex
 end
@@ -147,6 +148,49 @@ end
 @ret = @in_pipeline.call { @owner.prefs.setnx('first') }
 [@ret.class, @ret.value, @owner.prefs.ttl.positive?]
 #=> [Redis::Future, true, true]
+
+## JsonStringKey#setnx on an existing key inside a transaction leaves an extended TTL unchanged
+@reset.call
+@owner.prefs.expire(2_592_000)
+@ret = nil
+@result = @owner.transaction { @ret = @owner.prefs.setnx('second') }
+[@ret.value, @result.results, @owner.prefs.value, @owner.prefs.ttl > 3600]
+#=> [false, [false], {"theme"=>"dark", "size"=>12}, true]
+
+## JsonStringKey#setnx on an existing key inside a pipeline leaves an extended TTL unchanged
+@reset.call
+@owner.prefs.expire(2_592_000)
+@ret = @in_pipeline.call { @owner.prefs.setnx('second') }
+[@ret.value, @owner.prefs.ttl > 3600]
+#=> [false, true]
+
+## JsonStringKey#value with a default on an existing key inside a transaction leaves an extended TTL unchanged
+@owner.settings.value = { 'theme' => 'dark' }
+@owner.settings.expire(2_592_000)
+@ret = nil
+@owner.transaction { @ret = @owner.settings.value }
+[@ret.value, @owner.settings.ttl > 3600]
+#=> ["{\"theme\":\"dark\"}", true]
+
+## JsonStringKey#value with a default on an existing key inside a pipeline leaves an extended TTL unchanged
+@owner.settings.value = { 'theme' => 'dark' }
+@owner.settings.expire(2_592_000)
+@ret = @in_pipeline.call { @owner.settings.value }
+[@ret.value, @owner.settings.ttl > 3600]
+#=> ["{\"theme\":\"dark\"}", true]
+
+## JsonStringKey#value with a default on a missing key inside a pipeline writes the default with the TTL
+@owner.settings.delete!
+@ret = @in_pipeline.call { @owner.settings.value }
+[@ret.value, @owner.settings.ttl.between?(1, 3600)]
+#=> ["{\"theme\":\"light\"}", true]
+
+## JsonStringKey#value with a default on a missing key inside a transaction writes the default with the TTL
+@owner.settings.delete!
+@ret = nil
+@owner.transaction { @ret = @owner.settings.value }
+[@ret.value, @owner.settings.ttl.between?(1, 3600)]
+#=> ["{\"theme\":\"light\"}", true]
 
 ## Counter#value inside atomic_write passes the GET Future through
 @reset.call
@@ -305,6 +349,12 @@ FuturesScalarOwner.new(ownerid: 'fso-none').nick.to_s.start_with?('#<Familia::St
 @owner.prefs.value = 7
 [@owner.prefs.to_s, @owner.prefs.to_i, @owner.prefs.to_f, @owner.prefs.char_count, @owner.prefs.empty?]
 #=> ["7", 7, 7.0, 1, false]
+
+## outside a block: JsonStringKey#value and #setnx on an existing key leave an extended TTL unchanged
+@owner.settings.value = { 'theme' => 'dark' }
+@owner.settings.expire(2_592_000)
+[@owner.settings.value, @owner.settings.setnx('x'), @owner.settings.ttl > 3600]
+#=> [{"theme"=>"dark"}, false, true]
 
 ## outside a block: JsonStringKey conversions return nil for a missing key
 @owner.prefs.delete!

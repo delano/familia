@@ -212,12 +212,24 @@ module Familia
     # If field already exists, this operation has no effect.
     # @param field [String] The field name
     # @param val [Object] The value to set
+    #
+    # Refreshes the TTL only when the field was set. Inside a transaction or
+    # pipeline the write and the refresh are queued as one EVAL that makes
+    # the same decision when it runs, so an existing field leaves the hash's
+    # TTL unchanged there too.
+    #
     # @return [Boolean, Redis::Future] true if field is a new field and value
     #   was set, false if field already exists (redis-rb converts the 1/0
-    #   reply). Inside a transaction or pipeline, the Future of that Boolean.
+    #   reply). Inside a transaction or pipeline, the EVAL Future, which
+    #   resolves to that Boolean.
     def hsetnx(field, val)
       warn_if_dirty!
-      ret = dbclient.hsetnx dbkey, field.to_s, serialize_value(val)
+      conn = dbclient
+      if queued_connection?(conn)
+        return queue_conditional_write(conn, :hsetnx, field.to_s, serialize_value(val)) { |reply| reply == 1 }
+      end
+
+      ret = conn.hsetnx dbkey, field.to_s, serialize_value(val)
       update_expiration_if_written(ret)
       ret
     rescue TypeError => e
