@@ -145,7 +145,8 @@ Fixed
   EXEC.
 - ``JsonStringKey#empty?`` on a key declared with ``default:`` wrote the
   default to a missing key (SETNX) and refreshed the TTL. It now reads with
-  GET only, inside and outside a block; its return values are unchanged.
+  GET only, inside and outside a block; its return value outside a block is
+  unchanged.
 - ``Familia::IndexedFieldFastWriteError`` raised by a ``field!`` fast
   writer inside a transaction or pipeline recommended ``multi_field_update``
   or ``save``, which raise ``Familia::OperationModeError`` there. Its
