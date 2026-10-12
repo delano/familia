@@ -62,7 +62,8 @@ module RefreshExceptionSafetyTry
   end
 end
 
-set_test_encryption_keys({ v1: Base64.strict_encode64('a' * 32) }, current_version: :v1)
+# pack('m0') is strict Base64 and needs no library.
+set_test_encryption_keys({ v1: ['a' * 32].pack('m0') }, current_version: :v1)
 
 @raw = Familia.dbclient
 
