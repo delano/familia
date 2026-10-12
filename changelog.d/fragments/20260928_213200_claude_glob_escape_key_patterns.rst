@@ -76,6 +76,9 @@ Changed
   unchanged. It raises the same way, before deleting anything, when a key it
   would write or delete has more than ``MAX_CANDIDATE_SPLITS`` candidate owner
   records.
+- The ``rebuild_<index>`` of a ``multi_index`` reports a bucket key to its
+  progress block in the ``:clearing`` phase, and counts it, only when its
+  ``DEL`` removed the key.
 - ``repair_multi_indexes!`` records a rebuild that raises
   ``Familia::IndexBucketConflictError`` in ``:skipped`` with
   ``reason: :bucket_conflict``, ``conflicts``, ``owners`` and, for an

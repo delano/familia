@@ -209,7 +209,9 @@ module Familia
           #
           # Only the bucket keys .each_index_bucket_slice yields are deleted.
           # A key under the prefix that holds another type is left alone,
-          # and so is a set that is another existing record's key.
+          # and so is a set that is another existing record's key. Each key
+          # gets its own DEL in one pipeline per batch, so a key that was
+          # already gone when its DEL ran is neither yielded nor counted.
           #
           # @param client [Redis] connection that owns the buckets
           # @param owner [Familia::Horreum, Class] the scope instance, or the
@@ -217,9 +219,9 @@ module Familia
           # @param index_name [Symbol] name of the index
           # @param live_bucket_keys [Array<String>] keys the rebuild writes next
           # @param batch_size [Integer] SCAN count hint, DEL and TYPE batch size
-          # @yieldparam key [String] a bucket key that was deleted
+          # @yieldparam key [String] a bucket key that DEL removed
           # @yieldparam cleared [Integer] buckets deleted so far
-          # @return [Integer] number of bucket keys deleted
+          # @return [Integer] number of bucket keys DEL removed
           # @raise [Familia::IndexBucketConflictError] see .check_live_bucket_keys!,
           #   and for a key under the prefix whose owner was not checked
           def clear_index_buckets(client, owner, index_name, live_bucket_keys:, batch_size: 100, &on_delete)
@@ -237,8 +239,12 @@ module Familia
 
             cleared = 0
             stale.each_slice(batch_size) do |buckets|
-              client.del(*buckets)
-              buckets.each do |key|
+              deleted = client.pipelined do |pipe|
+                buckets.each { |key| pipe.del(key) }
+              end
+              buckets.zip(deleted) do |key, count|
+                next unless count.to_i.positive?
+
                 cleared += 1
                 on_delete&.call(key, cleared)
               end

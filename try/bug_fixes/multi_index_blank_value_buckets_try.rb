@@ -163,5 +163,27 @@ BvUser.role_index_for('').add('u1')
 [BvUser.rebuild_role_index, @client.exists('bv_user:role_index'), BvUser.find_all_by_role('admin').map(&:uid), BvUser.audit_multi_indexes.first[:status]]
 #=> [2, 0, ["u1"], :ok]
 
+## The rebuild reports only the buckets its DEL removed
+# The "ops" and "sales" buckets and three stale buckets are deleted one per
+# batch. While the first is reported, another client deletes one stale
+# bucket that is still there, so its DEL removes nothing and it is not
+# reported or counted.
+@stale_keys = %w[a b c].map { |value| @co.dept_index_for(value).dbkey }
+@stale_keys.each { |key| @client.sadd(key, 'e9') }
+@reported = []
+@co.rebuild_dept_index(batch_size: 1) do |progress|
+  next unless progress[:phase] == :clearing && progress[:key]
+
+  @reported << [progress[:key], progress[:current]]
+  @client.del((@stale_keys - [progress[:key]]).first) if @reported.size == 1
+end
+[
+  @reported.size,
+  @reported.map(&:last),
+  @stale_keys.none? { |key| @client.exists(key).positive? },
+  @co.find_all_by_dept('ops').map(&:eid),
+]
+#=> [4, [1, 2, 3, 4], true, ["e3"]]
+
 # Teardown
 delete_test_dbkeys(BvCo, BvEmp, BvUser)
