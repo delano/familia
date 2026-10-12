@@ -183,9 +183,9 @@ end
 @owner.settings.value = { 'theme' => 'dark' }
 @owner.settings.expire(2_592_000)
 @ret = nil
-@owner.transaction { @ret = @owner.settings.value }
-[@ret.value, @owner.settings.ttl > 3600]
-#=> ["{\"theme\":\"dark\"}", true]
+@result = @owner.transaction { @ret = @owner.settings.value }
+[@ret.value, @result.results, @owner.settings.ttl > 3600]
+#=> ["{\"theme\":\"dark\"}", [false, "{\"theme\":\"dark\"}"], true]
 
 ## JsonStringKey#value with a default on an existing key inside a pipeline leaves an extended TTL unchanged
 @owner.settings.value = { 'theme' => 'dark' }
@@ -203,9 +203,9 @@ end
 ## JsonStringKey#value with a default on a missing key inside a transaction writes the default with the TTL
 @owner.settings.delete!
 @ret = nil
-@owner.transaction { @ret = @owner.settings.value }
-[@ret.value, @owner.settings.ttl.between?(1, 3600)]
-#=> ["{\"theme\":\"light\"}", true]
+@result = @owner.transaction { @ret = @owner.settings.value }
+[@ret.value, @result.results, @owner.settings.ttl.between?(1, 3600)]
+#=> ["{\"theme\":\"light\"}", [true, "{\"theme\":\"light\"}"], true]
 
 ## Counter#value inside atomic_write passes the GET Future through
 @reset.call

@@ -64,7 +64,8 @@ module Familia
     # refreshed only when the default was written. Inside a transaction or
     # pipeline the SETNX and the refresh are queued as one EVAL that makes
     # the same decision when it runs, so reading an existing key leaves its
-    # TTL unchanged there too.
+    # TTL unchanged there too. That EVAL adds one Boolean reply to
+    # MultiResult#results ahead of the GET reply.
     #
     # @return [Object, Redis::Future] the deserialized value, or the default
     #   if not set. Inside a transaction or pipeline, the GET Future (resolves
@@ -76,7 +77,7 @@ module Familia
       if @opts.key?(:default)
         default = serialize_value(@opts[:default])
         if queued_connection?(conn)
-          queue_conditional_write(conn, :setnx, default)
+          queue_conditional_write(conn, :setnx, default) { |reply| reply == 1 }
         else
           update_expiration_if_written(conn.setnx(dbkey, default))
         end
