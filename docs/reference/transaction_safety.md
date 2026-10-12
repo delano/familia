@@ -101,7 +101,7 @@ empty.value.zero?  # => false, SCARD replies with the count
 | `DataType#exists?`, `Horreum.exists?`, `expires?`, `expired?` | the EXISTS count or the TTL in seconds |
 | `HashKey#increment`, `#decrement`, `#incrbyfloat`; `SortedSet#score`, `#increment`, `#mscore` | the Integer or Float, which redis-rb converts itself |
 | `StringKey#value`, `#size`, `#empty?`, `Counter#value`, `JsonStringKey#value`, `#char_count`, `#empty?` | the raw stored string, or nil |
-| `Lock#release` | 1 when the lock was released, 0 otherwise |
+| `Lock#release` | true when the lock was released, false otherwise |
 | `Horreum.any?`, `.count`, `.keys_count`, `.keys_any?`, `.in_instances?`, `.multiget`, `.storage_inspect` | the ZCARD count, the KEYS array, the ZRANK reply, the MGET array or the HGETALL hash |
 | `Migration::Registry#applied?`, `#applied_at`, `#all_applied`, `#metadata` | the ZSCORE, ZRANGE or HGET reply |
 

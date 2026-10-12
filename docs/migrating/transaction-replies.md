@@ -98,7 +98,7 @@ Familia.transaction do
   # ... the writes the lock protects ...
   released = lock.release(token)
 end
-released.value # => 1 when this token released the lock, 0 otherwise
+released.value # => true when this token released the lock, false otherwise
 ```
 
 ## `current_indexings` inside a block now raises

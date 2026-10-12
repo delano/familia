@@ -64,12 +64,15 @@ module Familia
     #
     # @param token [String] the token returned by #acquire
     # @return [Boolean, Redis::Future] true when the lock was released.
-    #   Inside a transaction or pipeline, the EVAL Future (resolves to 1 when
-    #   released, 0 otherwise).
+    #   Inside a transaction or pipeline, the EVAL Future, which resolves to
+    #   true when released and false otherwise.
     def release(token)
       # Lua script to atomically check token and delete
       script = "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end"
-      Familia.transform_reply(dbclient.eval(script, [dbkey], [token])) { |reply| reply == 1 }
+      # The block is redis-rb's reply coercion. It runs on the reply outside
+      # a block, and inside one it runs when the Future is resolved, so the
+      # Future's value and the block's MultiResult carry the same Boolean.
+      dbclient.call(:eval, script, 1, dbkey, token) { |reply| reply == 1 }
     end
 
     # @return [Boolean] whether any token holds the lock

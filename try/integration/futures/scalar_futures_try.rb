@@ -214,16 +214,25 @@ end
 @owner.mutex.acquire('tok-1')
 @ret, @persisted = @in_atomic_write.call('aw-release') { @owner.mutex.release('tok-1') }
 [@ret.class, @ret.value, @persisted, @owner.mutex.locked?]
-#=> [Redis::Future, 1, "aw-release", false]
+#=> [Redis::Future, true, "aw-release", false]
 
-## Lock#release by a non-owner inside a pipeline returns a Future that resolves to 0
+## Lock#release by a non-owner inside a pipeline returns a Future that resolves to false
 # The Future itself is truthy; only its value after the block says whether
-# the lock was released.
+# the lock was released. The value is the Boolean the method returns outside
+# a block, so `unless released.value` detects the failed release.
 @reset.call
 @owner.mutex.acquire('tok-2')
 @ret = @in_pipeline.call { @owner.mutex.release('other') }
 [@ret.class, @ret.value, @owner.mutex.held_by?('tok-2')]
-#=> [Redis::Future, 0, true]
+#=> [Redis::Future, false, true]
+
+## Lock#release by a non-owner inside a transaction resolves to false in the Future and the MultiResult
+@reset.call
+@owner.mutex.acquire('tok-2b')
+@ret = nil
+@result = @owner.transaction { @ret = @owner.mutex.release('other') }
+[@ret.value, @result.results, @owner.mutex.held_by?('tok-2b')]
+#=> [false, [false], true]
 
 ## Lock#locked? and #held_by? inside atomic_write raise and persist nothing
 @reset.call

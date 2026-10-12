@@ -135,8 +135,9 @@ Fixed
   refreshes after setting a new field.
 - ``Lock#release`` returned ``false`` inside a transaction or pipeline even
   when the queued script released the lock. It now returns the EVAL
-  ``Redis::Future``, which resolves to ``1`` or ``0`` after the block. The
-  Future is truthy whatever the outcome, so read its value after the block.
+  ``Redis::Future``, which resolves to ``true`` or ``false`` after the block,
+  and ``MultiResult#results`` carries the same Boolean. The Future is truthy
+  whatever the outcome, so read its value after the block.
 - ``Migration::Registry#applied?`` returned ``true`` for every migration
   inside a transaction or pipeline. It now returns the ZSCORE
   ``Redis::Future``, which resolves to the score or ``nil`` after the block.
