@@ -280,21 +280,32 @@ session.objid  # => "a1b2c3d4e5f6" (hex)
 Familia provides specialized field types beyond basic fields:
 
 ```ruby
+# Encrypted fields need encryption keys (see Encrypted Fields below)
+Familia.configure do |config|
+  config.encryption_keys = { v1: ENV['FAMILIA_ENCRYPTION_KEY'] }
+  config.current_key_version = :v1
+end
+
 class SecureModel < Familia::Horreum
   feature :encrypted_fields
   feature :transient_fields
   feature :object_identifier
 
+  identifier_field :objid
+
   # Regular fields generate: name, name=, name!
-  field :name, :email
+  field :name
+  field :email
 
   # Encrypted fields return ConcealedString instances
-  encrypted_field :api_key, :credit_card
+  encrypted_field :api_key
+  encrypted_field :credit_card
   # → api_key, api_key=, api_key!
   # → Values wrapped in ConcealedString for safety
 
   # Transient fields never persist to database
-  transient_field :password, :session_token
+  transient_field :password
+  transient_field :session_token
   # → password, password= (no fast writer method)
   # → Values wrapped in RedactedString
 
@@ -306,12 +317,12 @@ class SecureModel < Familia::Horreum
 end
 
 # Usage examples
-model = SecureModel.create(name: "Alice", api_key: "secret123")
+model = SecureModel.create!(name: "Alice", api_key: "secret123")
 
 # Encrypted field safety
 model.api_key.class                      # => ConcealedString
 model.api_key.to_s                       # => "[CONCEALED]" (safe for logs)
-model.api_key.reveal                     # => "secret123" (actual value)
+model.api_key.reveal { |key| key }       # => "secret123" (actual value)
 
 # Transient field behavior
 model.password = "temp123"
