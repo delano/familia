@@ -17,6 +17,11 @@
 require_relative '../support/helpers/test_helpers'
 require_relative '../../lib/familia/migration'
 
+# Migration::Base.inherited registers every named subclass in
+# Familia::Migration.migrations. The snapshot is taken before the classes
+# below are defined so that the teardown removes them all.
+@initial_migrations = Familia::Migration.migrations.dup
+
 # Class-level multi_index plus a unique index for the SCAN rebuild.
 class ::OtkUser < Familia::Horreum
   feature :relationships
@@ -117,7 +122,6 @@ class ::OtkPipelineMigration < Familia::Migration::Pipeline
   end
 end
 
-@initial_migrations = Familia::Migration.migrations.dup
 delete_test_dbkeys(OtkUser, OtkCo, OtkEmp)
 
 @u1 = OtkUser.new(uid: 'u1', role: 'object', email: 'u1@example.com')
