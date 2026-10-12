@@ -248,4 +248,21 @@ BkEmp.repair_all!
 BkCo.find_all_by_industry('x:dept_index:ops').map(&:cid)
 #=> ["c-6"]
 
+## Sorted set participation: a set bucket of a destroyed scope is left out by type
+@c7 = BkCo.new(cid: 'c-7')
+@c7.save
+@e7 = BkEmp.new(eid: 'e7', dept: 'crew')
+@e7.save
+@e7.add_to_bk_co_staff(@c7)
+@c7.rebuild_dept_index
+@c7.destroy!
+@gone_bucket = 'bk_co:c-7:dept_index:crew'
+[
+  Familia.dbclient.type(@gone_bucket),
+  @ownership.index_bucket_owner(@gone_bucket, BkCo),
+  BkCrew.audit_participations.flat_map { |r| r[:stale_members] },
+  BkCrew.health_check.participations.flat_map { |r| r[:stale_members] },
+]
+#=> ["set", nil, [], []]
+
 delete_test_dbkeys(BkUser, BkCo, BkEmp, BkCrew, BkVendor)
