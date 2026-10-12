@@ -6,6 +6,7 @@ Check your code if it does any of the following:
 
 - refreshes a record that may not be saved yet, or may have expired or been deleted
 - expects a field to keep its in-memory value through `refresh!` when nothing is stored for it
+- refreshes records whose stored hash may hold a different identifier than its key, or lack a field the identifier reads
 - rescues `Redis::CommandError` around a `HashKey` refresh
 - reads the return value of `HashKey#refresh!`
 - relies on `HashKey#refresh!` to extend the key's TTL
@@ -44,7 +45,7 @@ Calling `exists?` first does not replace the rescue. The two calls are separate 
 
 ### `Horreum#refresh!` sets fields that are not stored to `nil`
 
-Familia stores a `nil` field by leaving it out of the hash. `refresh!` assigned only the fields present in the stored hash, so a field with nothing stored kept whatever value the object held in memory, and dirty tracking was cleared anyway. It now sets every persistent field that is not stored to `nil`, which is what `load` and `find_by_id` give. The identifier field keeps its value. A Proc identifier, or an `identifier_field` that names a method rather than a field, has no identifier field: the fields it reads are set from the stored hash like any other field. `Horreum#refresh` behaves the same way.
+Familia stores a `nil` field by leaving it out of the hash. `refresh!` assigned only the fields present in the stored hash, so a field with nothing stored kept whatever value the object held in memory, and dirty tracking was cleared anyway. It now sets every persistent field that is not stored to `nil`, which is what `load` and `find_by_id` give. A Symbol or String identifier field that is not stored keeps its value. A Proc identifier, or an `identifier_field` that names a method rather than a field, has no identifier field: the fields it reads are set from the stored hash like any other field. If that leaves no identifier, or one that names another key, `refresh!` raises instead (see the next section). `Horreum#refresh` behaves the same way.
 
 This affects values set in memory and never saved, fields another writer removed, and defaults assigned by an `init` hook to an object built with `new`:
 
@@ -69,6 +70,32 @@ user.status
 ```
 
 If code depends on a default surviving `refresh!`, apply the default where the value is read (`user.status || "active"`) or save it so that it is stored.
+
+### `Horreum#refresh!` raises `Familia::IdentifierMismatchError` instead of changing the object's identity
+
+`refresh!` never changes which record an object is. After it assigns the stored values it computes the identifier again. If there is none, or it names a key other than the one `refresh!` read, it raises `Familia::IdentifierMismatchError` and leaves the object as it was, so a later `save` writes to the key the object had. `Horreum#refresh` behaves the same way.
+
+Two kinds of stored hash cause this, for example after a raw `HSET` or `HDEL`, a migration, or another application writing the hash:
+
+- The stored identifier field holds a different value than the key it is stored under. `refresh!` used to assign it, so the object pointed at the other record, and a later `save` wrote this object's fields into that record.
+- A field that a Proc or method identifier reads is missing from the stored hash. `refresh!` used to leave it `nil`, so the identifier was gone, or with `feature :object_identifier` a new `objid` was generated, and a later `save` created a second record.
+
+```ruby
+class User < Familia::Horreum
+  identifier_field :email
+  field :email
+  field :name
+end
+
+user = User.new(email: "alice@example.com")
+# The stored hash for alice@example.com holds email "bob@example.com".
+
+# Before: user.email became "bob@example.com", and user.save wrote to Bob's record
+# After: raises Familia::IdentifierMismatchError; user.email is still "alice@example.com"
+user.refresh!
+```
+
+The error carries the key that was read (`key`) and the key the stored values name (`resolved_key`, `nil` when they give no identifier). `find_by_id` and `load` build a new object from the stored hash and do not raise, so use them to inspect such a record. The identifiers are compared through the key, so a stored `42` and an in-memory `"42"` name the same record.
 
 ### `HashKey#refresh!` raises `Familia::KeyNotFoundError` instead of `Redis::CommandError` (#443)
 

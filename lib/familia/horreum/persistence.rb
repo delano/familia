@@ -957,9 +957,20 @@ module Familia
       # a loaded object. A persistent field the stored hash does not contain is
       # set to nil, because a nil field is stored as an absent one. That
       # includes a value set in memory and never saved, and a default an
-      # +init+ hook assigned to an object built with +new+. The identifier
-      # field keeps its value, since it names the key that was read. Transient
-      # fields are reset to nil. Dirty tracking is cleared afterwards.
+      # +init+ hook assigned to an object built with +new+. A Symbol or
+      # String identifier field that the stored hash does not contain keeps
+      # its value. Transient fields are reset to nil. Dirty tracking is
+      # cleared afterwards.
+      #
+      # It never changes the object's identity. After assigning the stored
+      # values it computes the identifier again, and if there is none, or it
+      # names a key other than the one that was read, it raises
+      # Familia::IdentifierMismatchError. Examples are a stored identifier
+      # field that holds a different value, and a stored hash that lacks a
+      # field a Proc or method identifier reads (with
+      # +feature :object_identifier+ a missing objid would be generated
+      # anew). find_by_dbkey and load build a new object from the same hash
+      # without this check.
       #
       # It is read-only: it sends only the HGETALL. Field setters that act on
       # the value they replace (the +objid+ and +extid+ setters remove the old
@@ -968,12 +979,15 @@ module Familia
       #
       # If it raises, the object is left as it was: its field values, its
       # other instance variables and its dirty tracking are what they were
-      # before the call. That includes an error from a field setter while the
-      # stored values are assigned.
+      # before the call. That includes Familia::KeyNotFoundError,
+      # Familia::IdentifierMismatchError and an error from a field setter
+      # while the stored values are assigned.
       #
       # @return [void]
       #
       # @raise [Familia::KeyNotFoundError] If the Valkey key does not exist.
+      # @raise [Familia::IdentifierMismatchError] If the stored values give
+      #   no identifier, or one that names a different key.
       # @raise [Familia::OperationModeError] inside a transaction, pipeline or
       #   atomic_write block, where HGETALL is only queued and returns a
       #   Redis::Future.
@@ -1039,7 +1053,14 @@ module Familia
           # initialize_with_keyword_args directly, as instantiate_from_hash
           # does, and not through naive_refresh.
           clear_persistent_fields_for_refresh!
-          initialize_with_keyword_args(**values)
+          assigned = initialize_with_keyword_args(**values)
+
+          # refresh! reloads this object; it never turns it into another
+          # one. Raising here, inside the block, puts back the values the
+          # object had, including the identifier, so a later save still
+          # writes to the key that was read.
+          ensure_refresh_kept_identity!(read_key)
+          assigned
         end
 
         # Clear dirty tracking since object now matches DB state
@@ -1057,6 +1078,8 @@ module Familia
       # @return [self] The refreshed object instance, enabling method chaining
       #
       # @raise [Familia::KeyNotFoundError] If the Valkey key does not exist
+      # @raise [Familia::IdentifierMismatchError] If the stored values give
+      #   no identifier, or one that names a different key
       # @raise [Familia::OperationModeError] inside a transaction, pipeline or
       #   atomic_write block
       # @raise [StandardError] whatever a field setter raises for a stored
@@ -1321,8 +1344,9 @@ module Familia
       # the identifier cannot be computed. The caller must not read it in
       # between (see {#refresh!}). A save stores every non-nil field, so a
       # value the identifier reads is missing from the hash only if something
-      # removed it. The identifier then changes as it would on a record loaded
-      # from that hash.
+      # removed it. The identifier would then change, so {#refresh!} checks
+      # it after the assignment ({#ensure_refresh_kept_identity!}) and raises,
+      # which puts the cleared fields back.
       #
       # @return [void]
       #
@@ -1337,6 +1361,28 @@ module Familia
         end
       end
       private :clear_persistent_fields_for_refresh!
+
+      # Raises unless the object's identifier still names +read_key+.
+      #
+      # {#refresh!} calls this after it assigns the stored values, inside
+      # {#restoring_instance_state_on_error}, so the raise leaves the object
+      # with the identifier it had. The keys are compared, not the identifier
+      # values: the key holds the identifier as a string, so an Integer
+      # stored where the object held the same digits as a String names the
+      # same record.
+      #
+      # @param read_key [String] the key refresh! read
+      # @raise [Familia::IdentifierMismatchError] when there is no identifier
+      #   or it names another key
+      # @return [void]
+      #
+      def ensure_refresh_kept_identity!(read_key)
+        current_key = identifier.to_s.empty? ? nil : dbkey
+        return if current_key == read_key
+
+        raise Familia::IdentifierMismatchError.new(read_key, current_key)
+      end
+      private :ensure_refresh_kept_identity!
 
       # Runs the block. If the block does not finish, puts the object's
       # instance variables and dirty tracking back as they were before it ran.
