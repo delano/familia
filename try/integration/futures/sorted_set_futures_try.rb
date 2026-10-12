@@ -133,6 +133,27 @@ end
 [@ret.class, @ret.value, @owner.scores.ttl > 100]
 #=> [Redis::Future, [["\"c\"", 3.0], ["\"b\"", 2.0]], true]
 
+## popmin inside a pipeline queues the TTL refresh with the pop
+@reset.call
+@owner.scores.expire(100)
+@ret = @in_pipeline.call { @owner.scores.popmin }
+[@ret.value, @owner.scores.ttl > 100]
+#=> [["\"a\"", 1.0], true]
+
+## popmin inside a transaction queues the TTL refresh with the pop
+@reset.call
+@owner.scores.expire(100)
+@ret = nil
+@owner.transaction { @ret = @owner.scores.popmin(2) }
+[@ret.value, @owner.scores.ttl > 100]
+#=> [[["\"a\"", 1.0], ["\"b\"", 2.0]], true]
+
+## popmin inside a pipeline on a missing sorted set leaves it missing
+@owner.scores.delete!
+@ret = @in_pipeline.call { @owner.scores.popmin }
+[@ret.value, @owner.scores.exists?]
+#=> [nil, false]
+
 ## mscore inside atomic_write passes the Future through (Floats from redis-rb)
 @reset.call
 @ret, @persisted = @in_atomic_write.call('aw-mscore') { @owner.scores.mscore('a', 'zz', 'c') }

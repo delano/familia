@@ -178,6 +178,21 @@ end
 [@ret.value, @persisted, @owner.events.first]
 #=> [5, "aw-unshiftx", "first"]
 
+## unshiftx inside a pipeline on an existing list queues the TTL refresh with the write
+@reset.call
+@owner.events.expire(100)
+@ret = @in_pipeline.call { @owner.events.unshiftx('first') }
+[@ret.value, @owner.events.first, @owner.events.ttl > 100]
+#=> [5, "first", true]
+
+## unshiftx inside a transaction on an existing list queues the TTL refresh with the write
+@reset.call
+@owner.events.expire(100)
+@ret = nil
+@owner.transaction { @ret = @owner.events.unshiftx('first') }
+[@ret.value, @owner.events.ttl > 100]
+#=> [5, true]
+
 ## unshiftx inside a pipeline on a missing list leaves it missing
 @owner.events.delete!
 @ret = @in_pipeline.call { @owner.events.unshiftx('first') }
