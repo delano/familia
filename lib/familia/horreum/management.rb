@@ -680,6 +680,10 @@ module Familia
       # character (e.g., "mymodel:foo:bar:object" where the identifier is
       # "foo:bar"). A naive split on the delimiter would truncate these.
       #
+      # The comparison is on bytes, so a BINARY key (redis-rb returns keys
+      # that are not valid UTF-8 as BINARY) matches a non-ASCII prefix. The
+      # identifier is returned in the key's encoding.
+      #
       # @param key [String] Full Redis key (e.g., "user:alice:object")
       # @param key_suffix [String] The suffix to strip (default: class suffix)
       # @return [String, nil] The extracted identifier, or nil if the key
@@ -690,12 +694,14 @@ module Familia
       #
       def extract_identifier_from_key(key, key_suffix = suffix)
         d = Familia.delim
-        pfx = "#{prefix}#{d}"
-        sfx = "#{d}#{key_suffix}"
+        bkey = key.b
+        pfx = "#{prefix}#{d}".b
+        sfx = "#{d}#{key_suffix}".b
 
-        return nil unless key.start_with?(pfx) && key.end_with?(sfx)
+        return nil unless bkey.start_with?(pfx) && bkey.end_with?(sfx)
 
-        key[pfx.length..-(sfx.length + 1)]
+        length = [bkey.bytesize - pfx.bytesize - sfx.bytesize, 0].max
+        bkey.byteslice(pfx.bytesize, length).force_encoding(key.encoding)
       end
 
       def dbkey(identifier, suffix = self.suffix)

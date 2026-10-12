@@ -72,10 +72,19 @@ module Familia
     end
 
     # Joins array elements with Familia delimiter
+    #
+    # When the parts carry non-ASCII bytes in incompatible encodings, the
+    # parts are joined as bytes and the result is BINARY. This happens for a
+    # non-ASCII class prefix (e.g. 'équipe') with an identifier that
+    # redis-rb returned as BINARY because it is not valid UTF-8.
+    #
     # @param val [Array] elements to join
     # @return [String] joined string
     def join(*val)
-      val.compact.join(Familia.delim)
+      parts = val.compact
+      parts.join(Familia.delim)
+    rescue Encoding::CompatibilityError
+      parts.flatten.map { |part| part.to_s.b }.join(Familia.delim.to_s.b)
     end
 
     # Splits a string using Familia delimiter
