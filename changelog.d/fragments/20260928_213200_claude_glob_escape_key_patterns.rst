@@ -116,10 +116,11 @@ Fixed
 - ``audit_participations`` no longer raises ``Redis::WrongTypeError`` on a
   set bucket named like a sorted set or list collection.
 - ``extract_identifier_from_key`` compares and slices the key as bytes and
-  returns the identifier in the key's encoding. ``audit_instances``,
-  ``audit_related_fields`` and ``health_check`` of a class whose prefix holds
-  non-ASCII characters no longer raise ``Encoding::CompatibilityError`` for a
-  record whose identifier is not valid UTF-8.
+  returns the identifier in the key's encoding. ``audit_instances`` and
+  ``audit_related_fields`` of a class whose prefix holds non-ASCII characters
+  no longer raise ``Encoding::CompatibilityError`` for a record whose
+  identifier is not valid UTF-8. Neither does ``health_check`` of such a
+  class when it declares no ``unique_index`` or ``multi_index``.
 - ``audit_multi_indexes`` no longer reports a class-level bucket of the scope
   class whose field value contains ``:<index>:`` as an orphaned bucket of an
   instance-scoped index, unless the hash key of the scope record the key
