@@ -461,12 +461,16 @@ module Familia
           # set fields, and the instance-scoped multi_index names whose
           # buckets live under the record.
           #
+          # The fields are read from related_fields_snapshot, so a field
+          # declared in another thread meanwhile does not make MRI raise
+          # "can't add a new key into hash during iteration".
+          #
           # @param owner [Familia::Horreum, Class] a record, or its class
           # @return [Hash{Symbol => Array<String>}] :fields and :indexes, as
           #   binary strings
           def record_set_key_names(owner)
             owner_class = owner_class_of(owner)
-            fields = owner_class.related_fields.each_value.filter_map do |definition|
+            fields = owner_class.related_fields_snapshot.each_value.filter_map do |definition|
               next if definition.opts[:dbkey]
               next unless definition.klass.is_a?(Class) && definition.klass <= Familia::UnsortedSet
 
