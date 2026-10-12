@@ -346,22 +346,25 @@ end
 ]
 #=> [{ "glob_role?:role_index:drafts" => "list" }, ["draft 1"], ["gru-1"], ["role_index"]]
 
-## repair_multi_indexes! raises the same conflict error and keeps the list
-begin
-  GlobRoleUser.repair_multi_indexes!
-rescue Familia::IndexBucketConflictError => e
-  [e.conflicts, @victim.drafts.members, GlobRoleUser.role_index_for('admin').members]
-end
-#=> [{ "glob_role?:role_index:drafts" => "list" }, ["draft 1"], ["gru-1"]]
+## repair_multi_indexes! records the same conflict as skipped and keeps the list
+@repaired = GlobRoleUser.repair_multi_indexes!
+[
+  @repaired[:rebuilt],
+  @repaired[:skipped].map { |entry| entry.values_at(:index_name, :reason, :conflicts) },
+  @victim.drafts.members,
+  GlobRoleUser.role_index_for('admin').members,
+]
+#=> [[], [[:role_index, :bucket_conflict, { "glob_role?:role_index:drafts" => "list" }]], ["draft 1"], ["gru-1"]]
 
-## repair_all! reports the conflict as a failed multi-index stage and keeps the list
+## repair_all! reports the conflict with status :partial_failure and keeps the list
 @repair_result = GlobRoleUser.repair_all!
 [
   @repair_result[:status],
-  @repair_result[:errors].transform_values { |error| error[:class] },
+  @repair_result[:errors],
+  @repair_result[:multi_indexes][:skipped].map { |entry| entry[:reason] },
   @victim.drafts.members,
 ]
-#=> [:partial_failure, { multi_indexes: "Familia::IndexBucketConflictError" }, ["draft 1"]]
+#=> [:partial_failure, {}, [:bucket_conflict], ["draft 1"]]
 
 delete_test_dbkeys('glob_scope_company:*', 'glob_scope_employee:*')
 delete_test_dbkeys('glob_role\\?:*', 'glob_roleX:*')

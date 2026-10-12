@@ -19,6 +19,8 @@
 # owners of a key are checked in one pipeline, and a key with more of them
 # than RecordKeyOwnership::MAX_CANDIDATE_SPLITS is not checked: the rebuild
 # raises for it before it deletes anything, and the audit reports it.
+# repair_multi_indexes! records a rebuild that raises the conflict error
+# and goes on with the next scope or index.
 
 require_relative '../support/helpers/test_helpers'
 
@@ -238,5 +240,53 @@ RoCo.rebuild_industry_index
 @stale = RoCrew.audit_participations.flat_map { |result| result[:stale_members] }
 [@stale.map { |entry| entry[:collection_key] }, RoCrew.repair_participations!, @c1.crew.members]
 #=> [["ro_co:c-1:crew"], { stale_removed: 1 }, ["m1"]]
+
+## repair_multi_indexes! records a conflicting scope and repairs the scopes after it
+@c3 = RoCo.new(cid: 'c-3')
+@c3.save
+@e4 = RoEmp.new(eid: 'e4', dept: 'sales')
+@e4.save
+@e4.add_to_ro_co_staff(@c3)
+@client.set('ro_co:c-3:dept_index:sales', 'not a bucket')
+@c4 = RoCo.new(cid: 'c-4')
+@c4.save
+@e5 = RoEmp.new(eid: 'e5', dept: 'eng')
+@e5.save
+@e5.add_to_ro_co_staff(@c4)
+@repaired = RoEmp.repair_multi_indexes!
+[
+  @repaired[:rebuilt_per_scope],
+  @repaired[:skipped].map { |entry| entry.values_at(:index_name, :scope_id, :reason, :conflicts) },
+  @c4.dept_index_for('eng').members,
+  @client.get('ro_co:c-3:dept_index:sales'),
+]
+#=> [[{ index_name: :dept_index, scopes_rebuilt: 6 }], [[:dept_index, "c-3", :bucket_conflict, { "ro_co:c-3:dept_index:sales" => "string" }]], ["e5"], "not a bucket"]
+
+## repair_all! reports the conflict with status :partial_failure
+@c4.dept_index_for('eng').clear
+@result = RoEmp.repair_all!
+[
+  @result[:status],
+  @result[:errors],
+  @result[:multi_indexes][:skipped].map { |entry| entry.values_at(:scope_id, :reason) },
+  @c4.dept_index_for('eng').members,
+]
+#=> [:partial_failure, {}, [["c-3", :bucket_conflict]], ["e5"]]
+
+## repair_multi_indexes! records a conflicting class-level index and rebuilds the next one
+@client.del('ro_co:c-3:dept_index:sales')
+@c3.rebuild_dept_index
+@u3 = RoUser.new(uid: 'u3', role: 'notes', tier: 'gold')
+@u3.save
+@client.del('ro_user:role_index:notes')
+@client.set('ro_user:role_index:notes', 'not a bucket')
+@client.sadd('ro_user:tier_index:gold', '"tier-ghost"')
+@class_repaired = RoUser.repair_multi_indexes!
+[
+  @class_repaired[:rebuilt],
+  @class_repaired[:skipped].map { |entry| entry.values_at(:index_name, :reason, :conflicts) },
+  RoUser.tier_index_for('gold').members,
+]
+#=> [[:tier_index], [[:role_index, :bucket_conflict, { "ro_user:role_index:notes" => "string" }]], ["u3"]]
 
 @delete_keys.call
