@@ -156,3 +156,5 @@ end
 
 @saved.props.delete!
 @saved.destroy!
+# @gone was removed with delete!, which leaves its instances entry behind.
+delete_test_dbkeys(RefreshMissingKeyRecord, RefreshMissingKeyObjidRecord, RefreshMissingKeyObjidProcRecord)
