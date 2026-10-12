@@ -95,12 +95,12 @@ Familia.pipelined { @registry.applied?('futures_migration_example') }
 @conn_registry = Familia::Migration::Registry.new(prefix: @conn_prefix)
 @conn_runner = Familia::Migration::Runner.new(migrations: [FuturesMigrationExample], registry: @conn_registry)
 @before = @connections.call
-@conn_runner.run(dry_run: true)
+@conn_results = @conn_runner.run
 @conn_runner.status
 @conn_runner.status
 @conn_registry.applied?('futures_migration_example')
-[@connections.call - @before, @conn_registry.client.equal?(@conn_registry.client)]
-#=> [1, true]
+[@conn_results.map { |r| r[:status] }, @connections.call - @before, @conn_registry.client.equal?(@conn_registry.client)]
+#=> [[:success], 1, true]
 
 ## a registry that kept its connection still follows a later pipeline
 @conn_registry.applied?('futures_migration_example')
