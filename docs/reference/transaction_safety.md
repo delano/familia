@@ -184,10 +184,12 @@ string interpolation, `Array#join` and `puts`, with no error. Use the reader
 - Admission checks: `Lock#acquire`, `#locked?`, `#held_by?` and `#empty?`
   (and so the generated predicate of a `lock` field),
   `Counter#increment_if_less_than`, `HashKey#claim_field`, and
-  `claim_unique_*!`. `Lock#release` is deliberately not one. It passes its
-  Future through so that it can be queued as the last command of the block
-  the lock protects, and its script deletes the lock only if the token
-  still holds it when the script runs
+  `claim_unique_*!`. `Lock#release` is deliberately not one. Its script
+  checks the token and deletes the lock in one step when it runs, so it can
+  be queued, and its Future resolves to `true` or `false`. It does not
+  guard the block's other commands: a `false` reply does not stop them, so
+  a lock lost before EXEC is reported only after they have run (see the
+  `Lock` section of [the migration guide](../migrating/transaction-replies.md))
 - Fast writers (`field!`) on fields backing a class-level index raise
   `Familia::IndexedFieldFastWriteError`, since the index claim cannot run
   there

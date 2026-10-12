@@ -137,7 +137,9 @@ Fixed
   when the queued script released the lock. It now returns the EVAL
   ``Redis::Future``, which resolves to ``true`` or ``false`` after the block,
   and ``MultiResult#results`` carries the same Boolean. The Future is truthy
-  whatever the outcome, so read its value after the block.
+  whatever the outcome, so read its value after the block. A queued release
+  does not stop the block's other commands when the lock was lost before
+  EXEC.
 - ``Migration::Registry#applied?`` returned ``true`` for every migration
   inside a transaction or pipeline. It now returns the ZSCORE
   ``Redis::Future``, which resolves to the score or ``nil`` after the block.

@@ -86,20 +86,42 @@ the token that holds the lock, and `Lock#locked?` raised `NoMethodError`. Both
 now raise `Familia::OperationModeError`. Check ownership before the block.
 
 `Lock#release` inside a block returned `false`, even when the queued script
-released the lock. It now returns the EVAL `Redis::Future`. The Future is
-truthy whether or not the lock was released, so do not test it inside the
-block. Read its value after the block:
+released the lock. It now returns the EVAL `Redis::Future`, which resolves to
+`true` when the script released the lock and `false` otherwise, the same
+Boolean the method returns outside a block. The Future itself is truthy
+whether or not the lock was released, so do not test it inside the block.
+Read its value after the block:
 
 ```ruby
-raise LockLost unless lock.held_by?(token)
-
 released = nil
 Familia.transaction do
-  # ... the writes the lock protects ...
+  ledger.push('debit')
   released = lock.release(token)
 end
-released.value # => true when this token released the lock, false otherwise
+raise LockLost unless released.value
 ```
+
+A release queued in a block does not guard the other commands in that block.
+The script checks the token when it runs at EXEC, and its `false` reply does
+not stop the other queued commands. If the lock expired or passed to another
+holder before EXEC, `ledger.push` above still commits, and `released.value`
+only reports the loss afterwards. A `held_by?` check before the block does
+not close that gap. When the writes must not commit without the lock, WATCH
+the lock key and check the token with a GET on the same connection before
+the MULTI, so that EXEC aborts if the lock changes, or check the token and
+write in one server-side script. `Lock#held_by?` resolves its own
+connection, so it cannot serve as the check under WATCH.
+
+The [Redis transactions documentation](https://redis.io/docs/latest/develop/using-commands/transactions/)
+states that "if the EXEC command is called, all the operations are
+performed" and that "Redis does not support rollbacks of transactions". For
+WATCH it states: "If at least one watched key is modified before the EXEC
+command, the whole transaction aborts", where modifications include those
+"by Redis itself, like expiration or eviction"; it also notes that "In Redis
+versions before 6.0.9, an expired key would not cause a transaction to be
+aborted." Familia's [ADR-0002](../adr/0002-watch-for-private-keys-lua-for-shared-keys.md)
+likewise records that a server-side Lua check "cannot conditionally abort
+other commands queued in a surrounding MULTI."
 
 ## `current_indexings` inside a block now raises
 

@@ -54,13 +54,21 @@ module Familia
     # Deletes the lock only if +token+ still holds it.
     #
     # Unlike the other Lock methods, release can be queued inside a
-    # transaction or pipeline, for example as the last command of the block
-    # the lock protects. The ownership check and the delete run in one
+    # transaction or pipeline. The ownership check and the delete run in one
     # server-side script, so the queued release deletes the lock only if
-    # +token+ holds it when the script runs. The outcome is known only after
-    # the block: the returned Future is truthy whether or not the lock was
-    # released, so read its value after the block instead of testing it
-    # inside.
+    # +token+ holds it when the script runs at EXEC. The outcome is known
+    # only after the block: the returned Future is truthy whether or not the
+    # lock was released, so read its value after the block instead of
+    # testing it inside.
+    #
+    # A queued release does not make the other commands in the block depend
+    # on the lock. Its false reply does not stop them, so when the lock
+    # expired or passed to another holder before EXEC, they still run, and
+    # the release's value reports the loss only afterwards. A held_by? check
+    # before the block does not close that gap. When the writes must not run
+    # without the lock, WATCH the lock key and check the token on the
+    # connection that runs the MULTI, or check the token and write in one
+    # server-side script. See docs/migrating/transaction-replies.md.
     #
     # @param token [String] the token returned by #acquire
     # @return [Boolean, Redis::Future] true when the lock was released.
