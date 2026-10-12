@@ -288,19 +288,7 @@ module Familia
           end
         end
 
-        # Validate expiration value
-        # It's important to raise exceptions here and not just log warnings. We
-        # don't want to silently fail at setting expirations and cause data
-        # retention issues (e.g. not removed in a timely fashion).
-        unless expiration.is_a?(Numeric)
-          raise Familia::Problem,
-                "Default expiration must be a number (#{expiration.class} given for #{self.class})"
-        end
-
-        unless expiration >= 0
-          raise Familia::Problem,
-                "Default expiration must be non-negative (#{expiration} given for #{self.class})"
-        end
+        validate_expiration!(expiration)
 
         # If zero, simply skip setting an expiry for this key. If we were to set
         # 0, Valkey/Redis would drop the key immediately.
@@ -492,6 +480,29 @@ module Familia
         end
 
         report
+      end
+
+      private
+
+      # Raises unless +expiration+ is a non-negative number.
+      #
+      # It's important to raise exceptions here and not just log warnings. We
+      # don't want to silently fail at setting expirations and cause data
+      # retention issues (e.g. not removed in a timely fashion).
+      #
+      # @param expiration [Object] the TTL in seconds to check
+      # @return [void]
+      # @raise [Familia::Problem] if +expiration+ is not a non-negative number
+      def validate_expiration!(expiration)
+        unless expiration.is_a?(Numeric)
+          raise Familia::Problem,
+                "Default expiration must be a number (#{expiration.class} given for #{self.class})"
+        end
+
+        return if expiration >= 0
+
+        raise Familia::Problem,
+              "Default expiration must be non-negative (#{expiration} given for #{self.class})"
       end
     end
   end
