@@ -93,6 +93,13 @@ Changed
 - ``Familia::Migration::Model`` defaults ``@scan_pattern`` to the model
   class's ``scan_pattern``, which follows ``Familia.delim`` and the class
   suffix instead of a hardcoded ``:`` and ``object``.
+- The instance-scoped ``add_to_*`` and ``update_in_*`` of a ``multi_index``
+  no longer add an object whose field value is blank (``nil``, empty or
+  whitespace only) to the bucket ``<scope key>:<index>``, as the class-level
+  methods already did. They still record the membership, so ``save`` indexes
+  the object once its value is no longer blank. Buckets written for blank
+  values before are reported by ``audit_multi_indexes`` and ``health_check``
+  until ``rebuild_<index>`` or ``repair_multi_indexes!`` deletes them.
 
 Fixed
 -----
@@ -129,6 +136,11 @@ Fixed
   instance-scoped ``multi_index`` no longer raise
   ``Encoding::CompatibilityError`` when the scope class prefix holds
   non-ASCII characters and a scope identifier is not valid UTF-8.
+- ``rebuild_<index>`` and ``repair_multi_indexes!`` of a ``multi_index``
+  delete the bucket of a blank field value, such as ``company:c-1:dept_index``
+  or ``customer:role_index``, which the bucket SCAN did not match, so its
+  stale members were never removed. ``audit_multi_indexes`` reports that
+  bucket in ``orphaned_keys`` with ``field_value: ""``.
 - ``audit_multi_indexes`` no longer reports a class-level bucket of the scope
   class whose field value contains ``:<index>:`` as an orphaned bucket of an
   instance-scoped index, unless the hash key of the scope record the key

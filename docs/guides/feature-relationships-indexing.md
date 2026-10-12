@@ -368,6 +368,24 @@ Instance-scoped multi-indexes are tracked, refreshed on `save`, and cleaned up
 on `destroy!` the same way unique ones are — except that refresh is add-only.
 See [Automatic Refresh and Cleanup](#automatic-refresh-and-cleanup).
 
+### Blank field values
+
+A `multi_index` does not index a blank field value: `nil`, an empty string or a
+string of whitespace only. This holds for class-level and instance-scoped
+indexes alike. `add_to_*` adds the object to no bucket for a blank value,
+`update_in_*` moves it out of the old value's bucket and into none, and the
+rebuild skips objects whose value is blank. `find_all_by_*` with a blank value
+returns `[]` once the index has been rebuilt. The instance-scoped `add_to_*`
+and `update_in_*` still record the membership for a blank value, so `save`
+indexes the object once its value is no longer blank.
+
+The factories name the bucket of a blank value without the trailing delimiter,
+for example `company:c-1:dept_index` or `customer:role_index`. Instance-scoped
+`add_to_*` used to write blank values there. The rebuild deletes that key along
+with the other buckets, and `audit_multi_indexes` reports it in
+`orphaned_keys` with `field_value: ""`, so `health_check` reports the model as
+unhealthy until `rebuild_<index>` or `repair_multi_indexes!` removes it.
+
 ## Advanced Patterns
 
 ### Composite Keys
@@ -559,8 +577,9 @@ sets `logical_database`, run the sweep against that model's `dbclient` instead.
 
 The `rebuild_<index>` method of a `multi_index`, such as
 `Customer.rebuild_role_index` or `company.rebuild_dept_index`, deletes the
-index's per-value bucket sets and then adds every object to the bucket of its
-current field value. It finds the buckets with a SCAN over the bucket prefix,
+index's per-value bucket sets, including the bucket of a blank value (see
+[Blank field values](#blank-field-values)), and then adds every object to the
+bucket of its current field value. It finds the buckets with a SCAN over the bucket prefix,
 such as `customer:role_index:` or `company:c-1:dept_index:`, with any glob
 characters in the prefix escaped, so a scope identifier such as `c-*` matches
 only itself. It deletes only keys that start with that literal prefix and hold

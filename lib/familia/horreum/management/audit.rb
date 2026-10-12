@@ -502,6 +502,11 @@ module Familia
 
       # Phase 1: SCAN for per-value set keys and load their raw members.
       #
+      # The bucket of a blank value ("customer:role_index", see
+      # MultiIndexGenerators.blank_bucket_key) is read as field value "".
+      # No live object's blank value is indexed, so when that bucket exists
+      # it is reported in +orphaned_keys+.
+      #
       # @param rel [IndexingRelationship]
       # @return [Array(Hash{String => Hash}, Array<Hash>)] the buckets, as
       #   field_value => {key:, identifiers: [...]}, and the
@@ -510,6 +515,8 @@ module Familia
       def discover_multi_index_buckets(rel)
         generators = Familia::Features::Relationships::Indexing::MultiIndexGenerators
         bucket_prefix = generators.bucket_key_prefix(self, rel.index_name)
+        blank_key = generators.blank_bucket_key(self, rel.index_name).b
+        bucket_value = ->(key) { key.b == blank_key ? +'' : key.byteslice(bucket_prefix.bytesize..) }
         bucket_entries = {}
         foreign_owned_keys = []
 
@@ -522,8 +529,7 @@ module Familia
         # reported as buckets.
         generators.each_index_bucket_slice(dbclient, self, rel.index_name, batch_size: 100) do |valid_keys, others|
           others.each do |key, owner_key|
-            field_value = key.byteslice(bucket_prefix.bytesize..)
-            foreign_owned_keys << foreign_owned_entry(key, field_value, owner_key)
+            foreign_owned_keys << foreign_owned_entry(key, bucket_value.call(key), owner_key)
           end
           next if valid_keys.empty?
 
@@ -532,8 +538,8 @@ module Familia
           end
 
           valid_keys.each_with_index do |key, idx|
-            field_value = key.byteslice(bucket_prefix.bytesize..)
-            next if field_value.nil? || field_value.empty?
+            field_value = bucket_value.call(key)
+            next if field_value.nil? || (field_value.empty? && key.b != blank_key)
 
             bucket_entries[field_value] = {
               key: key,
@@ -760,6 +766,11 @@ module Familia
       # candidate owner records than RecordKeyOwnership checks, is left
       # out and listed as a foreign_owned_entry.
       #
+      # The bucket of a blank value of a scope ("company:c-1:dept_index",
+      # see MultiIndexGenerators.blank_bucket_key) is read as field value
+      # "". No blank value is indexed, so when that bucket exists it is
+      # reported in +orphaned_keys+.
+      #
       # @param rel [IndexingRelationship]
       # @param scope_class [Class]
       # @return [Array(Hash{String => Hash}, Array<Hash>)] the buckets, as
@@ -769,7 +780,11 @@ module Familia
       def discover_instance_scoped_buckets(rel, scope_class)
         scope_prefix = "#{scope_class.prefix}#{Familia.delim}"
         marker = "#{Familia.delim}#{rel.index_name}#{Familia.delim}"
-        pattern = "#{Familia.escape_glob(scope_prefix)}*#{Familia.escape_glob(marker)}*"
+        blank_suffix = "#{Familia.delim}#{rel.index_name}"
+        # Matches the buckets of non-blank values ("<scope>:<index>:<value>")
+        # and of a blank value ("<scope>:<index>"); the parse below keeps
+        # only those.
+        pattern = "#{Familia.escape_glob(scope_prefix)}*#{Familia.escape_glob(blank_suffix)}*"
         bucket_entries = {}
         foreign_owned_keys = []
 
@@ -787,10 +802,8 @@ module Familia
         bucket_type = indexing::MultiIndexGenerators::BUCKET_KEY_TYPE
         client.scan_each(match: pattern, type: bucket_type).each_slice(100) do |keys|
           parsed = keys.filter_map do |key|
-            scope_id, field_value = parse_instance_scoped_bucket_key(key, scope_prefix, marker)
-            next nil if scope_id.nil? || scope_id.empty? || field_value.nil? || field_value.empty?
-
-            [key, scope_id, field_value]
+            scope_id, field_value = parse_instance_scoped_bucket_entry(key, scope_prefix, marker, blank_suffix)
+            [key, scope_id, field_value] if scope_id
           end
           parsed = reattribute_instance_scoped_bucket_keys(rel, scope_class, parsed, names, foreign_owned_keys)
           parsed = drop_foreign_class_level_buckets(scope_class, parsed)
@@ -862,6 +875,48 @@ module Familia
         [scope_id.force_encoding(key.encoding), field_value.force_encoding(key.encoding)]
       end
 
+      # Returns [scope_id, field_value] for a bucket key of an
+      # instance-scoped index, with field value "" for the bucket of a
+      # blank value, or nil for any other key. A key with an empty scope
+      # identifier, or with nothing after the marker, is not a bucket.
+      #
+      # @return [Array(String, String), nil]
+      #
+      def parse_instance_scoped_bucket_entry(key, scope_prefix, marker, blank_suffix)
+        scope_id, field_value = parse_instance_scoped_bucket_key(key, scope_prefix, marker)
+        if scope_id
+          return nil if field_value.empty?
+        else
+          scope_id = parse_instance_scoped_blank_bucket_key(key, scope_prefix, blank_suffix)
+          field_value = String.new('', encoding: key.encoding)
+        end
+        return nil if scope_id.nil? || scope_id.empty?
+
+        [scope_id, field_value]
+      end
+
+      # Returns the scope identifier of +key+ when it is
+      # "{scope_prefix}{scope_id}{blank_suffix}", the bucket of a blank
+      # value, or nil. Compared and sliced as bytes, like
+      # parse_instance_scoped_bucket_key, and returned in the key's
+      # encoding.
+      #
+      # @param key [String]
+      # @param scope_prefix [String]
+      # @param blank_suffix [String] "{delim}{index_name}"
+      # @return [String, nil]
+      #
+      def parse_instance_scoped_blank_bucket_key(key, scope_prefix, blank_suffix)
+        bkey = key.b
+        prefix = scope_prefix.b
+        suffix = blank_suffix.b
+        return nil unless bkey.bytesize > prefix.bytesize + suffix.bytesize
+        return nil unless bkey.start_with?(prefix) && bkey.end_with?(suffix)
+
+        bkey.byteslice(prefix.bytesize, bkey.bytesize - prefix.bytesize - suffix.bytesize)
+            .force_encoding(key.encoding)
+      end
+
       # Assigns each bucket key in +parsed+ to the scope whose rebuild
       # clears it.
       #
@@ -870,7 +925,8 @@ module Familia
       # an existing scope with a longer identifier (see
       # RecordKeyOwnership.other_record_key), the rebuild leaves it to
       # that scope. When the key is one of that scope's buckets of this
-      # index, the entry gets that scope's identifier and field value.
+      # index, including the bucket of a blank value, the entry gets that
+      # scope's identifier and field value ("" for a blank value).
       # When it is another of that scope's set keys, or has more
       # candidate owner records than RecordKeyOwnership checks, it is
       # dropped and a foreign_owned_entry is added to +foreign_owned_keys+.
@@ -889,7 +945,8 @@ module Familia
         others = ownership.other_record_keys(
           parsed.map(&:first), scope_class, parsed.map { |(_key, scope_id, _fv)| scope_id }, names: names
         )
-        index_prefix = "#{rel.index_name}#{Familia.delim}".b
+        index_name = rel.index_name.to_s.b
+        index_prefix = "#{index_name}#{Familia.delim}".b
 
         parsed.each_with_index.filter_map do |(key, scope_id, field_value), idx|
           other = others[idx]
@@ -901,6 +958,8 @@ module Familia
           end
 
           other_id, name = other
+          next [key, other_id, String.new('', encoding: key.encoding)] if name.b == index_name
+
           unless name.b.start_with?(index_prefix)
             owner_key = ownership.record_hash_key(scope_class, other_id).force_encoding(key.encoding)
             foreign_owned_keys << foreign_owned_entry(key, field_value, owner_key).merge(scope_id: scope_id)
