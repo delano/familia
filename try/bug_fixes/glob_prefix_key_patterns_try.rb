@@ -105,6 +105,26 @@ class ::GlobPfxMigration < Familia::Migration::Model
   end
 end
 
+# Model migration over the class whose suffix holds brackets.
+class ::GlobSfxMigration < Familia::Migration::Model
+  self.migration_id = 'glob_sfx_migration'
+
+  class << self
+    attr_accessor :processed_keys
+  end
+  self.processed_keys = []
+
+  def prepare
+    @model_class = ::GlobSfxBracket
+    @batch_size = 10
+  end
+
+  def process_record(_obj, key)
+    self.class.processed_keys << key
+    track_stat(:records_updated)
+  end
+end
+
 @cleanup = lambda do
   delete_test_dbkeys('glob_pfx\\?:*', 'glob_pfxX:*', 'glob_team\\?:*', 'glob_teamX:*', 'glob_pfx_member:*')
   delete_test_dbkeys('glob_sfx:*', 'glob_sfx_b:*')
@@ -186,6 +206,30 @@ migration.prepare
 migration.migrate
 [migration.scan_pattern, GlobPfxMigration.processed_keys]
 #=> ["glob_pfx\\?:*:object", ["glob_pfx?:a1:object"]]
+
+## a model migration follows the class suffix by default
+GlobSfxMigration.processed_keys = []
+@sfx_migration = GlobSfxMigration.new(run: true)
+@sfx_migration.prepare
+@sfx_migration.migrate
+[@sfx_migration.scan_pattern, GlobSfxMigration.processed_keys]
+#=> ["glob_sfx_b:*:data\\[v2\\]", ["glob_sfx_b:b1:data[v2]"]]
+
+## a model migration follows Familia.delim by default
+@original_delim = Familia.delim
+begin
+  Familia.delim = '|'
+  GlobSfxBracket.new(wid: 'd1').save
+  GlobSfxMigration.processed_keys = []
+  @delim_migration = GlobSfxMigration.new(run: true)
+  @delim_migration.prepare
+  @delim_migration.migrate
+  [@delim_migration.scan_pattern, GlobSfxMigration.processed_keys]
+ensure
+  delete_test_dbkeys('glob_sfx_b|*')
+  Familia.delim = @original_delim
+end
+#=> ["glob_sfx_b|*|data\\[v2\\]", ["glob_sfx_b|d1|data[v2]"]]
 
 ## audit_participations reports no stale member from a rival class's same-named collection
 @team = GlobPfxTeam.new(tid: 't1')
