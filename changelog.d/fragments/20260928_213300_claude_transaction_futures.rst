@@ -69,12 +69,11 @@ Changed
 - ``Migration::Registry#pending``, ``#status``, ``#record_rollback``,
   ``#schema_changed?``, ``#schema_drift`` and ``#restore_backup`` raise
   ``Familia::OperationModeError`` when the registry's client is a
-  transaction or pipeline connection. ``Migration::Registry#client`` no
-  longer memoizes ``Familia.dbclient``. A registry without its own client
-  resolves it once per method call, so it follows the current transaction
-  or pipeline and no longer keeps a connection from a block that has
-  completed. Without a connection provider, each registry method call opens
-  one new connection; pass ``redis:`` to ``Registry.new`` to reuse one.
+  transaction or pipeline connection. ``Migration::Registry#client``
+  without ``redis:`` returns the current transaction or pipeline connection
+  inside a Familia block without keeping it, so it no longer keeps a
+  connection from a block that has completed. Outside a block it still
+  keeps the first ``Familia.dbclient`` it resolves.
 - ``save``, ``save_if_not_exists!``, ``create!``, ``build``,
   ``atomic_write`` and ``Familia.atomic_write`` raise
   ``Familia::OperationModeError`` inside a pipeline as well as a

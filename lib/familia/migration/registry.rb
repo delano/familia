@@ -39,19 +39,23 @@ module Familia
       end
 
       # Get the Redis client: the one passed to #initialize, or else
-      # Familia.dbclient resolved on each call.
+      # Familia.dbclient.
       #
-      # The fallback is not memoized. Familia.dbclient returns the open
-      # transaction or pipeline connection inside those blocks, and a
-      # memoized one would keep queueing commands on it after the block
-      # completed. Each registry method resolves the client once and issues
-      # all of its commands on it, so a method opens at most one connection
-      # when Familia.dbclient creates a new one per call.
+      # Outside a transaction or pipeline the fallback is resolved once and
+      # kept, so a registry reuses one connection across its method calls
+      # even when Familia.dbclient creates a new one per call. Inside a
+      # Familia transaction or pipeline block the fallback is the block's
+      # connection, returned without being kept: a kept one would keep
+      # queueing commands on it after the block completed. Each registry
+      # method resolves the client once and issues all of its commands on it.
       #
-      # @return [Redis] The Redis client
+      # @return [Redis, Redis::PipelinedConnection] The Redis client
       #
       def client
-        @redis || Familia.dbclient
+        return @redis if @redis
+        return Familia.dbclient if Familia.transaction_or_pipeline?
+
+        @default_client ||= Familia.dbclient
       end
 
       # --- Query Methods ---

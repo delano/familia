@@ -137,10 +137,10 @@ Inside a transaction or pipeline, `Migration::Registry#applied?` returned
 resolves to the score or `nil` after the block. The Future is truthy, so read
 its value after the block rather than testing it inside.
 
-A registry created without `redis:` no longer keeps the first connection it
-resolves. It calls `Familia.dbclient` once per method call, so without a
-connection provider each call opens a new connection. Pass `redis:` to
-`Familia::Migration::Registry.new` to reuse one client.
+A registry created without `redis:` no longer keeps a connection resolved
+inside a Familia transaction or pipeline block. Inside such a block it uses
+the block's connection for that call only. Outside a block it keeps the
+first connection it resolves, as before.
 
 ## `as_json` on a scalar inside a block now raises
 

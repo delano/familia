@@ -88,6 +88,27 @@ Familia.pipelined { @registry.applied?('futures_migration_example') }
 [@restored, @connections.call - @before <= 1, Familia.dbclient.hget("#{@prefix}:restored", 'f9')]
 #=> [10, true, "v9"]
 
+## a registry without its own client reuses one connection across Runner#run and #status
+# Familia.dbclient opens a new connection per call without a connection
+# provider; the registry keeps the one it resolves outside a block.
+@conn_prefix = "#{@prefix}:conns"
+@conn_registry = Familia::Migration::Registry.new(prefix: @conn_prefix)
+@conn_runner = Familia::Migration::Runner.new(migrations: [FuturesMigrationExample], registry: @conn_registry)
+@before = @connections.call
+@conn_runner.run(dry_run: true)
+@conn_runner.status
+@conn_runner.status
+@conn_registry.applied?('futures_migration_example')
+[@connections.call - @before, @conn_registry.client.equal?(@conn_registry.client)]
+#=> [1, true]
+
+## a registry that kept its connection still follows a later pipeline
+@conn_registry.applied?('futures_migration_example')
+@ret = nil
+Familia.pipelined { @ret = @conn_registry.applied?('futures_migration_example') }
+[@ret.class, @conn_registry.client.is_a?(Redis::PipelinedConnection)]
+#=> [Redis::Future, false]
+
 ## a registry built with its own client still answers inside a pipeline
 @own_client_registry = Familia::Migration::Registry.new(redis: Familia.dbclient, prefix: @prefix)
 @ret = nil
