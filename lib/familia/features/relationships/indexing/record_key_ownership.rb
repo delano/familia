@@ -332,13 +332,19 @@ module Familia
           # Returns the splits of the binary string +rest+ (a key without
           # the record prefix) whose identifier is longer than
           # +longer_than+ bytes and whose name is a set key name from
-          # +names+ (see .record_set_key_names): a set field's name, an index
-          # name (the bucket of a blank value) or an index name followed by
-          # the delimiter and a value. A split is the offset of its
-          # delimiter in +rest+, which is also the length of its
-          # identifier, and the offsets are in increasing order. Returns
-          # TOO_MANY_CANDIDATES when there are more than
-          # MAX_CANDIDATE_SPLITS.
+          # +names+ (see .record_set_key_names): a set field's name that
+          # ends the key, or an index name followed by the delimiter and a
+          # value (a bucket). A split is the offset of its delimiter in
+          # +rest+, which is also the length of its identifier, and the
+          # offsets are in increasing order. Returns TOO_MANY_CANDIDATES
+          # when there are more than MAX_CANDIDATE_SPLITS.
+          #
+          # An index name that ends the key makes no candidate. That is the
+          # key the factories name for a blank value (see
+          # MultiIndexGenerators.bucket_key_prefix), which is not index data
+          # and which no multi_index method reads or writes. When it is a
+          # related field of the same name, the field names already make it
+          # a candidate.
           #
           # The walk copies no part of +rest+. A set field name must be the
           # whole rest of the key, so each field is compared at the one
@@ -362,17 +368,16 @@ module Familia
           end
 
           # Adds to +offsets+ the offsets in +rest+ of the delimiter before
-          # an index name that ends the key or is followed by the delimiter,
-          # after +longer_than+ bytes. Returns false as soon as +offsets+
-          # holds more than MAX_CANDIDATE_SPLITS, true otherwise.
+          # an index name that is followed by the delimiter, after
+          # +longer_than+ bytes. Returns false as soon as +offsets+ holds
+          # more than MAX_CANDIDATE_SPLITS, true otherwise.
           def index_split_offsets(rest, delim, indexes, longer_than, offsets)
             indexes.each do |index|
               needle = delim + index
               position = longer_than + 1
               while (split_at = rest.index(needle, position))
                 after = split_at + needle.bytesize
-                if (after == rest.bytesize || rest.byteslice(after, delim.bytesize) == delim) &&
-                   !offsets.include?(split_at)
+                if rest.byteslice(after, delim.bytesize) == delim && !offsets.include?(split_at)
                   offsets << split_at
                   return false if offsets.size > MAX_CANDIDATE_SPLITS
                 end

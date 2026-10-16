@@ -54,9 +54,13 @@ end
 #=> [[20], ["c-1→dept_index→x"]]
 
 ## A two-byte delimiter finds every split, including one that ends in part of a delimiter
-@two = 'a:::dept_index'.b
+@two = 'a:::dept_index::ops'.b
 @ownership.candidate_split_offsets(@two, '::'.b, @names, 0)
 #=> [2]
+
+## An index name that ends the key is not a candidate split
+@ownership.candidate_split_offsets('a:::dept_index'.b, '::'.b, @names, 0)
+#=> []
 
 ## The bucket of the longer scope is owned by that scope
 @ownership.other_record_key_owner(@companies.last.dept_index_for('ops').dbkey, @companies.first)
