@@ -104,14 +104,17 @@ Changed
   longer blank. The instance-scoped ``find_all_by_*`` and ``sample_from_*``
   return ``[]`` for a blank value, as the class-level ``sample_from_*``
   already did. Keys these methods wrote for blank values before are not
-  deleted by ``rebuild_<index>`` or reported by ``audit_multi_indexes``,
-  because ``<scope key>:<index>`` can also be a related field of the scope
-  class with the index's name. The exception is such a key of a scope whose
-  identifier is ``<other scope>:<index>:<value>``, which is also the bucket
-  of ``<value>:<index>`` in the other scope: the other scope's audit reads it
-  as that bucket and its rebuild deletes or rewrites it. Nor are identifiers they added
-  to such a related field removed from it. The indexing guide's "Blank field values"
-  section gives the manual cleanup for both.
+  deleted by ``rebuild_<index>`` or reported by ``audit_multi_indexes`` as
+  keys of their scope, because ``<scope key>:<index>`` can also be a related
+  field of the scope class with the index's name. The exception is such a
+  key of a scope whose identifier is ``<other scope>:<index>:<value>``,
+  which is also the bucket of ``<value>:<index>`` in the other scope:
+  ``audit_multi_indexes`` reads it as that bucket and the other scope's
+  rebuild deletes or rewrites it, unless the scope class declares a set
+  field named ``<index>`` and the longer scope record exists. Identifiers
+  these methods added to such a related field are not removed from it
+  either. The indexing guide's "Blank field values" section gives the
+  manual cleanup for both.
 
 Fixed
 -----
@@ -120,16 +123,15 @@ Fixed
   methods above, the unique-index SCAN rebuild fallback and model migrations
   no longer include another class's keys or miss the class's own keys.
 - A ``multi_index`` rebuild no longer deletes these keys of other records of
-  the same class: the hash and fields of
-  a record whose identifier equals a class-level index name, the set fields
-  of a scope record whose identifier is ``<scope>:<index>``, and the buckets
-  of a scope whose identifier starts with ``<scope>:<index>:``. Such a key
-  belongs to the existing record with the longest identifier.
-  ``audit_multi_indexes`` reads it for that record. A key that ends in an
-  instance-scoped index name, such as ``company:c-1:dept_index:x:dept_index``,
-  is a key of record ``c-1:dept_index:x`` only when the scope class declares
-  a set field of that name; otherwise it is the bucket of ``x:dept_index`` in
-  ``c-1``.
+  the same class: the hash and fields of a record whose identifier equals a
+  class-level index name, the set fields of a scope record whose identifier is
+  ``<scope>:<index>``, and the buckets of a scope whose identifier starts with
+  ``<scope>:<index>:``. Such a key belongs to the existing record with the
+  longest identifier. ``audit_multi_indexes`` reads it for that record. A key
+  that ends in an instance-scoped index name, such as
+  ``company:c-1:dept_index:x:dept_index``, is a key of record
+  ``c-1:dept_index:x`` only when the scope class declares a set field of that
+  name; otherwise it is the bucket of ``x:dept_index`` in ``c-1``.
 - ``audit_multi_indexes``, ``repair_multi_indexes!``, ``repair_all!`` and
   ``health_check`` no longer raise ``Redis::WrongTypeError`` when a key under
   a multi-index bucket prefix is not a set, such as the hash of a record
@@ -154,9 +156,8 @@ Fixed
   non-ASCII characters and a scope identifier is not valid UTF-8.
 - With a blank field value, a ``multi_index`` no longer reads or changes a
   related field whose name equals the index name, such as a
-  ``class_set :roles`` beside ``multi_index :role, :roles`` or a
-  ``set :tags`` of the scope class beside
-  ``multi_index :tag, :tags, within: Company``. The
+  ``class_set :roles`` beside ``multi_index :role, :roles`` or a ``set :tags``
+  of the scope class beside ``multi_index :tag, :tags, within: Company``. The
   instance-scoped ``remove_from_*`` and ``update_in_*`` and the class-level
   ``update_in_class_*`` removed the object from it, the class-level
   ``find_all_by_*`` returned its members, and ``indexed_in?`` and
