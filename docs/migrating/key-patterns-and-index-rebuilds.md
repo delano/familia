@@ -1,4 +1,4 @@
-# Upgrading from 2.13: key patterns and index rebuilds
+# Migrating key patterns and index rebuilds
 
 The first release after 2.13.0 changes how `Familia::Horreum` builds the key
 patterns of its KEYS and SCAN methods, which matching keys those methods
