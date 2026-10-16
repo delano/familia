@@ -172,6 +172,46 @@ end
 [BvTeam.related_fields.key?(:pinned), BvTeam.related_fields.key?(:desk_index), @client.del('bv_team:t-1:desk_index'), @team.find_all_by_desk('north').map(&:mid)]
 #=> [true, false, 1, ["m2"]]
 
+## A legacy blank-value key of a scope named "<other scope>:<index>:<value>" is a live bucket of the shorter scope
+# The documented cleanup does not DEL it: "bv_team:t-1:desk_index:x:desk_index"
+# is also the "x:desk_index" bucket of t-1, which holds m4.
+@long_team = BvTeam.new(tid: 't-1:desk_index:x')
+@long_team.save
+@legacy = 'bv_team:t-1:desk_index:x:desk_index'
+@xdesk = BvMember.new(mid: 'm4', desk: 'x:desk_index')
+@xdesk.save
+@xdesk.add_to_bv_team_members(@team)
+@xdesk.add_to_bv_team_desk_index(@team)
+@client.sadd(@legacy, %w[m2 m9])
+[
+  @long_team.desk_index_for('').dbkey == @legacy,
+  @long_team.tid.include?("#{Familia.delim}desk_index#{Familia.delim}"),
+  BvTeam.exists?('t-1'),
+  @client.smembers(@legacy).sort,
+]
+#=> [true, true, true, ["m2", "m4", "m9"]]
+
+## The documented SREM removes only the members whose value is not the shorter scope's value
+@stray = @client.smembers(@legacy).reject { |id| BvMember.load(id)&.desk == 'x:desk_index' }
+@client.srem(@legacy, @stray) unless @stray.empty?
+[@stray.sort, @client.smembers(@legacy), @team.find_all_by_desk('x:desk_index').map(&:mid)]
+#=> [["m2", "m9"], ["m4"], ["m4"]]
+
+## The documented rebuild of the shorter scope replaces the key's members with that scope's objects
+@client.sadd(@legacy, %w[m2 m9])
+@team.rebuild_desk_index
+[@client.smembers(@legacy), @team.find_all_by_desk('x:desk_index').map(&:mid)]
+#=> [["m4"], ["m4"]]
+
+## Once no object of the shorter scope has that value, its rebuild deletes the key
+@xdesk.remove_from_bv_team_members(@team)
+@xdesk.destroy!
+@client.sadd(@legacy, %w[m2 m9])
+@team.rebuild_desk_index
+@long_team.destroy!
+@client.exists(@legacy)
+#=> 0
+
 ## Class-level: add_to_class_* and update_in_class_* do not touch the same-named class_set
 BvUser.featured.add('u1')
 BvUser.featured.add('u2')
