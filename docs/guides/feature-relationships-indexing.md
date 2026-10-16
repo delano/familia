@@ -404,6 +404,27 @@ Company.related_fields.key?(:dept_index)  # => false
 Familia.dbclient.del('company:c-1:dept_index')
 ```
 
+When the scope class does declare a related field named `<index>`, such as
+`set :tags` beside `multi_index :tag, :tags, within: Company`, do not `DEL`
+the key: it holds that field's members. Earlier versions may have added the
+identifiers of indexed objects with a blank value to it, and upgrading does
+not remove them. The index wrote each one as the raw identifier, while a
+plain `set` stores each value JSON-encoded. Find the members that are
+identifiers of existing records of the indexed class, review them, and remove
+the stray ones with `SREM`:
+
+```ruby
+key = Company.load('c-1').tags.dbkey   # => "company:c-1:tags"
+candidates = Familia.dbclient.smembers(key).select { |m| Employee.exists?(m) }
+# => ["e-1", "e-2"]; review them, then remove the stray ones
+Familia.dbclient.srem(key, %w[e-1 e-2])
+```
+
+Familia cannot tell such a member from one the application added itself, so
+check the candidates before removing them. An object whose value is no longer
+blank can still be among them, and the identifier of a record deleted since
+then does not pass the `exists?` check.
+
 Use the scope class's `dbclient` when it sets `logical_database`.
 
 ## Advanced Patterns

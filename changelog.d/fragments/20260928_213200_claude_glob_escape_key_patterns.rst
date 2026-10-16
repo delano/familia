@@ -106,8 +106,9 @@ Changed
   already did. Keys these methods wrote for blank values before are not
   deleted by ``rebuild_<index>`` or reported by ``audit_multi_indexes``,
   because ``<scope key>:<index>`` can also be a related field of the scope
-  class with the index's name. The indexing guide's "Blank field values"
-  section gives the manual cleanup.
+  class with the index's name. Nor are identifiers they added to such a
+  related field removed from it. The indexing guide's "Blank field values"
+  section gives the manual cleanup for both.
 
 Fixed
 -----
