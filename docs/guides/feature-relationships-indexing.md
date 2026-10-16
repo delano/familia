@@ -409,16 +409,45 @@ and the record `c-1:dept_index:x` exists: the key is then a key of that record
 Before this version, the instance-scoped `add_to_*` and `update_in_*` added
 objects with a blank value to `<scope key>:<index>`, such as
 `company:c-1:dept_index`. Such a key stays in place after upgrading, and no
-audit reports it as a key of that scope. It can be the bucket of a shorter
-scope, as described above. To remove the key, first confirm that the scope
-class declares no related field named `<index>` (for example,
-`Company.related_fields.key?(:dept_index)` returns `false`), then `DEL` the
-key:
+audit reports it as a key of that scope. To remove the key, first confirm
+that the scope class declares no related field named `<index>` (for example,
+`Company.related_fields.key?(:dept_index)` returns `false`). Then confirm
+that the scope identifier does not contain the index name between two
+delimiters, such as `:dept_index:`. When both hold, `DEL` the key:
 
 ```ruby
-Company.related_fields.key?(:dept_index)  # => false
+Company.related_fields.key?(:dept_index)       # => false
+'c-1'.include?("#{Familia.delim}dept_index#{Familia.delim}")  # => false
 Familia.dbclient.del('company:c-1:dept_index')
 ```
+
+When the identifier does contain it, as `c-1:dept_index:x` does, the key can
+be a live bucket of a shorter scope, as described above: the key
+`company:c-1:dept_index:x:dept_index` is the bucket of value `x:dept_index`
+in `c-1`, and a `DEL` removes the index entries of the objects of `c-1` that
+have that value. Do not `DEL` such a key while the shorter scope record
+exists; when no record `c-1` exists, `DEL` it as above. If the indexed class
+participates in the scope class, rebuild the shorter scope instead, which
+deletes the key or replaces its members with the objects of that scope that
+have that value. Otherwise, remove with `SREM` only the members whose field
+value differs from that value:
+
+```ruby
+Company.exists?('c-1')                         # => true
+Company.load('c-1').rebuild_dept_index         # with participates_in Company
+
+# Without a participation relationship, the rebuild does nothing:
+key = 'company:c-1:dept_index:x:dept_index'
+stray = Familia.dbclient.smembers(key).reject do |id|
+  Employee.load(id)&.department == 'x:dept_index'
+end
+Familia.dbclient.srem(key, stray) unless stray.empty?
+```
+
+An identifier that contains the index name between delimiters more than once
+has a shorter scope at each occurrence, each with its own value. Rebuild each
+of those scopes that exists, or keep every member whose field value is the
+value of one of them.
 
 When the scope class does declare a related field named `<index>`, such as
 `set :tags` beside `multi_index :tag, :tags, within: Company`, do not `DEL`
