@@ -174,6 +174,8 @@ Documentation
 
 - Documented ``multi_index`` rebuilds and ``Familia::IndexBucketConflictError``
   in the indexing guide and the index rebuilding reference.
+- Added ``docs/migrating/key-patterns-and-index-rebuilds.md``, the migration
+  guide for the changes above.
 
 AI Assistance
 -------------
