@@ -3,9 +3,9 @@
 The first release after 2.13.0 changes how `Familia::Horreum` builds the key
 patterns of its KEYS and SCAN methods, which matching keys those methods
 count, what the rebuild of a `multi_index` does with a key it cannot write as
-a bucket, and what the instance-scoped index methods do with a blank field
-value. Each section below says what changed and what an application has to
-change. Sections that do not apply to your application need no action.
+a bucket, and what the `multi_index` methods do with a blank field value.
+Each section below says what changed and what an application has to change.
+Sections that do not apply to your application need no action.
 
 Check your code if it does any of the following:
 
@@ -17,7 +17,7 @@ Check your code if it does any of the following:
 - calls the `rebuild_<index>` of a `multi_index`, `repair_multi_indexes!` or
   `repair_all!` and reads what they return
 - adds objects whose indexed field is blank to an instance-scoped
-  `multi_index`, or looks a blank value up
+  `multi_index`, or looks a blank value up in a `multi_index`
 - defines a `Familia::Migration::Model` that leaves `@scan_pattern` unset
 
 ## `all` and `scan_pattern` take a literal suffix
@@ -177,16 +177,21 @@ The progress block of the rebuild gets a `:clearing` call with `key:` only
 for a bucket its `DEL` removed, and `current:` counts those. It used to be
 called for every SCAN match.
 
-## Instance-scoped `multi_index` methods and blank values
+## `multi_index` methods and blank values
 
-The instance-scoped `add_to_<scope>_<index>` and `update_in_<scope>_<index>`
-added an object whose field value is blank (`nil`, empty or whitespace only)
-to the key `<index>_for` names for a blank value, `<scope key>:<index>` such
-as `company:c-1:dept_index`, and the instance-scoped `find_all_by_<field>`
-and `sample_from_<field>` returned that key's members. They now do what the
-class-level methods already did: nothing is written for a blank value, and
-the finders return `[]`. The membership is still recorded, so `save` indexes
-the object once its value is no longer blank.
+A blank field value is `nil`, or empty or whitespace only. The instance-scoped
+`add_to_<scope>_<index>` and `update_in_<scope>_<index>` skipped `nil` but
+added an object whose field value is empty or whitespace only to the key
+`<index>_for` names for a blank value, `<scope key>:<index>` such as
+`company:c-1:dept_index`, and the instance-scoped `find_all_by_<field>` and
+`sample_from_<field>` returned that key's members for any blank value. Nothing
+is now written for a blank value, as the class-level `add_to_class_<index>`
+and `update_in_class_<index>` already did, and the finders return `[]`, as
+the class-level `sample_from_<field>` already did. The class-level
+`find_all_by_<field>` returned the members of `<class prefix>:<index>`, such
+as `customer:role_index`, for a blank value, and now returns `[]` too. The
+membership is still recorded, so `save` indexes the object once its value is
+no longer blank.
 `Familia::IndexDescriptor#each_record` raises `ArgumentError` for a blank
 `value:` of a `multi_index`, as it already did for `nil`; it iterated that
 key's members.
