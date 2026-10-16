@@ -98,11 +98,16 @@ Changed
   suffix instead of a hardcoded ``:`` and ``object``.
 - The instance-scoped ``add_to_*`` and ``update_in_*`` of a ``multi_index``
   no longer add an object whose field value is blank (``nil``, empty or
-  whitespace only) to the bucket ``<scope key>:<index>``, as the class-level
-  methods already did. They still record the membership, so ``save`` indexes
-  the object once its value is no longer blank. Buckets written for blank
-  values before are reported by ``audit_multi_indexes`` and ``health_check``
-  until ``rebuild_<index>`` or ``repair_multi_indexes!`` deletes them.
+  whitespace only) to ``<scope key>:<index>``, the key ``<index>_for`` names
+  for a blank value, as the class-level methods already did. They still
+  record the membership, so ``save`` indexes the object once its value is no
+  longer blank. The instance-scoped ``find_all_by_*`` and ``sample_from_*``
+  return ``[]`` for a blank value, as the class-level ``sample_from_*``
+  already did. Keys these methods wrote for blank values before are not
+  deleted by ``rebuild_<index>`` or reported by ``audit_multi_indexes``,
+  because ``<scope key>:<index>`` can also be a related field of the scope
+  class with the index's name. The indexing guide's "Blank field values"
+  section gives the manual cleanup.
 
 Fixed
 -----
@@ -139,11 +144,15 @@ Fixed
   instance-scoped ``multi_index`` no longer raise
   ``Encoding::CompatibilityError`` when the scope class prefix holds
   non-ASCII characters and a scope identifier is not valid UTF-8.
-- ``rebuild_<index>`` and ``repair_multi_indexes!`` of a ``multi_index``
-  delete the bucket of a blank field value, such as ``company:c-1:dept_index``
-  or ``customer:role_index``, which the bucket SCAN did not match, so its
-  stale members were never removed. ``audit_multi_indexes`` reports that
-  bucket in ``orphaned_keys`` with ``field_value: ""``.
+- With a blank field value, a ``multi_index`` no longer reads or changes a
+  related field whose name equals the index name, such as a
+  ``class_set :roles`` beside ``multi_index :role, :roles`` or a
+  ``set :tags`` of the scope class beside
+  ``multi_index :tag, :tags, within: Company``. The
+  instance-scoped ``remove_from_*`` and ``update_in_*`` and the class-level
+  ``update_in_class_*`` removed the object from it, the class-level
+  ``find_all_by_*`` returned its members, and ``indexed_in?`` and
+  ``current_indexings`` read it.
 - ``audit_multi_indexes`` no longer reports a class-level bucket of the scope
   class whose field value contains ``:<index>:`` as an orphaned bucket of an
   instance-scoped index, unless the hash key of the scope record the key

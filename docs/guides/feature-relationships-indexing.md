@@ -373,18 +373,35 @@ See [Automatic Refresh and Cleanup](#automatic-refresh-and-cleanup).
 A `multi_index` does not index a blank field value: `nil`, an empty string or a
 string of whitespace only. This holds for class-level and instance-scoped
 indexes alike. `add_to_*` adds the object to no bucket for a blank value,
-`update_in_*` moves it out of the old value's bucket and into none, and the
-rebuild skips objects whose value is blank. `find_all_by_*` with a blank value
-returns `[]` once the index has been rebuilt. The instance-scoped `add_to_*`
+`update_in_*` removes it from no bucket for a blank old value and adds it to
+none for a blank new value, `remove_from_*` removes nothing for a blank value,
+and the rebuild skips objects whose value is blank. `find_all_by_*` and
+`sample_from_*` return `[]` for a blank value. The instance-scoped `add_to_*`
 and `update_in_*` still record the membership for a blank value, so `save`
 indexes the object once its value is no longer blank.
 
-The factories name the bucket of a blank value without the trailing delimiter,
-for example `company:c-1:dept_index` or `customer:role_index`. Instance-scoped
-`add_to_*` used to write blank values there. The rebuild deletes that key along
-with the other buckets, and `audit_multi_indexes` reports it in
-`orphaned_keys` with `field_value: ""`, so `health_check` reports the model as
-unhealthy until `rebuild_<index>` or `repair_multi_indexes!` removes it.
+The `<index>_for` factory names the key of a blank value without the trailing
+delimiter, for example `company:c-1:dept_index` or `customer:role_index`.
+That key is not exclusive to the index. It is also the key of a related field
+with the same name as the index: a `set :tags` on the scope class beside
+`multi_index :tag, :tags, within: Company`, or a `class_set :roles` beside
+`multi_index :role, :roles`. So Familia does not read, write, delete or audit
+that key: the rebuild SCANs `<owner key>:<index>:*` and the instance-scoped
+audit SCANs `<scope prefix>:*:<index>:*`, and neither pattern matches it.
+
+Before this version, the instance-scoped `add_to_*` and `update_in_*` added
+objects with a blank value to `<scope key>:<index>`, such as
+`company:c-1:dept_index`. Such a key stays in place after upgrading, and no
+audit reports it. To remove it, first confirm that the scope class declares no
+related field named `<index>` (for example, `Company.related_fields.key?(:dept_index)`
+returns `false`), then `DEL` the key:
+
+```ruby
+Company.related_fields.key?(:dept_index)  # => false
+Familia.dbclient.del('company:c-1:dept_index')
+```
+
+Use the scope class's `dbclient` when it sets `logical_database`.
 
 ## Advanced Patterns
 
@@ -577,9 +594,10 @@ sets `logical_database`, run the sweep against that model's `dbclient` instead.
 
 The `rebuild_<index>` method of a `multi_index`, such as
 `Customer.rebuild_role_index` or `company.rebuild_dept_index`, deletes the
-index's per-value bucket sets, including the bucket of a blank value (see
-[Blank field values](#blank-field-values)), and then adds every object to the
-bucket of its current field value. It finds the buckets with a SCAN over the bucket prefix,
+index's per-value bucket sets and then adds every object with a non-blank
+field value to the bucket of that value. It does not touch the key of a blank
+value (see [Blank field values](#blank-field-values)). It finds the buckets
+with a SCAN over the bucket prefix,
 such as `customer:role_index:` or `company:c-1:dept_index:`, with any glob
 characters in the prefix escaped, so a scope identifier such as `c-*` matches
 only itself. It deletes only keys that start with that literal prefix and hold
