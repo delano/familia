@@ -691,9 +691,12 @@ module Familia
       # "{scope_prefix}:" and ":{index_name}:" are escaped by
       # Familia.escape_glob (see discover_instance_scoped_buckets). The key
       # "{scope_prefix}:{scope_id}:{index_name}", which the factories name
-      # for a blank field value, is not matched and not read: no
+      # for a blank field value, is not read as a key of that scope: no
       # multi_index writes a blank value, and the key may be a related
-      # field of the same name on the scope class.
+      # field of the same name on the scope class. When scope_id is
+      # "{other id}:{index_name}:{value}", the pattern matches the key as
+      # the bucket of "{value}:{index_name}" in scope "{other id}" (see
+      # MultiIndexGenerators.bucket_key_prefix).
       #
       # Three failure modes are detected:
       #   - stale_members: bucket member object missing or field value drifted

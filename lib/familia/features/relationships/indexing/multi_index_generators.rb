@@ -94,12 +94,21 @@ module Familia
           # is also the key of a related field of +owner+ with the same name
           # as the index, such as a scope class's `set :tags` beside
           # `multi_index :tag, :tags, within: Scope`, or `class_set :roles`
-          # beside `multi_index :role, :roles`. So no multi_index method
-          # reads or writes it: add_to_*, update_in_*, remove_from_* and the
-          # rebuild skip blank values, find_all_by_* and sample_from_*
-          # return [] for them, IndexDescriptor#each_record raises for them,
-          # and the rebuild and audit do not match the key (see
-          # .blank_field_value?).
+          # beside `multi_index :role, :roles`. So the multi_index methods
+          # of +owner+ do not read or write it: add_to_*, update_in_*,
+          # remove_from_* and the rebuild skip blank values, find_all_by_*
+          # and sample_from_* return [] for them, IndexDescriptor#each_record
+          # raises for them, and the rebuild SCAN of +owner+ does not match
+          # the key (see .blank_field_value?).
+          #
+          # The key can still be the bucket of a shorter scope. When +owner+
+          # is a scope whose identifier is "<other id>:<index_name>:<value>",
+          # the key is also the bucket of "<value>:<index_name>" in scope
+          # "<other id>": audit_multi_indexes reads it as that bucket, and
+          # the rebuild of that scope deletes or rewrites it. This does not
+          # happen when the scope class declares a set field named
+          # +index_name+ and +owner+ exists, because the key is then a key
+          # of +owner+ (see RecordKeyOwnership.other_record_key).
           #
           # @param owner [Familia::Horreum, Class] the scope instance, or the
           #   indexed class for a class-level index
@@ -110,9 +119,9 @@ module Familia
           end
 
           # Whether +field_value+ is blank: nil, or empty or whitespace only
-          # as a String. A multi_index does not index a blank value, and its
-          # generated methods do not read or write the key the factories
-          # name for one (see .bucket_key_prefix).
+          # as a String. A multi_index does not index a blank value, and the
+          # generated methods of an owner do not read or write the key the
+          # factories name for one on that owner (see .bucket_key_prefix).
           #
           # @param field_value [Object]
           # @return [Boolean]

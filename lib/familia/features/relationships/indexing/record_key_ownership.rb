@@ -342,9 +342,10 @@ module Familia
           # An index name that ends the key makes no candidate. That is the
           # key the factories name for a blank value (see
           # MultiIndexGenerators.bucket_key_prefix), which is not index data
-          # and which no multi_index method reads or writes. When it is a
-          # related field of the same name, the field names already make it
-          # a candidate.
+          # of the scope it names: no multi_index method of that scope reads
+          # or writes it. When it is a set field of the same name, the field
+          # names already make it a candidate. Otherwise it is the bucket of
+          # the shorter scope whose prefix it starts with, if any.
           #
           # The walk copies no part of +rest+. A set field name must be the
           # whole rest of the key, so each field is compared at the one
