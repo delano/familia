@@ -35,23 +35,26 @@ Customer.scan_pattern('*')     # Before: "customer:*:*"
 Customer.dbkey_pattern('*', :tags)  # => "customer:*:tags"
 ```
 
-`Customer.all('*')` matched every key under the class prefix and loaded each
-one as an object, so it raised `Redis::WrongTypeError` at the first key that
-did not hold a hash, such as the key of a `set` field. It now matches only
-keys whose suffix is the one character `*`, and returns `[]` when there is
-none. Any other glob suffix changes the same way.
+`Customer.all('*')` matched every key of the form
+`customer:<identifier>:<name>` and loaded each one as an object, so it raised
+`Redis::WrongTypeError` at the first key that did not hold a hash, such as the
+key of a `set` field. It now matches only keys whose suffix is the one
+character `*`, and returns `[]` when there is none. Any other glob suffix
+changes the same way.
 
 `find_keys` keeps a glob suffix; only the class prefix and delimiter are
-escaped. Use it to list every key under the prefix. Like `all`, it uses the
-`KEYS` command. For a SCAN, build the pattern from the escaped parts:
+escaped. Use it to list the keys of the form `customer:<identifier>:<name>`;
+class-level keys with one delimiter, such as `customer:instances`, are not
+matched. Like `all`, it uses the `KEYS` command. For a SCAN, build the pattern
+from the escaped parts:
 
 ```ruby
 # Before
-Customer.all('*')           # every key under customer:, or WRONGTYPE
+Customer.all('*')           # every customer:<id>:<name> key, or WRONGTYPE
 Customer.scan_pattern('*')  # => "customer:*:*"
 
 # After
-Customer.find_keys('*')     # every key under customer:, with KEYS
+Customer.find_keys('*')     # every customer:<id>:<name> key, with KEYS
 
 delim = Familia.escape_glob(Familia.delim)
 pattern = "#{Familia.escape_glob(Customer.prefix)}#{delim}*#{delim}*"
@@ -185,9 +188,10 @@ added an object whose field value is empty or whitespace only to the key
 `<index>_for` names for a blank value, `<scope key>:<index>` such as
 `company:c-1:dept_index`, and the instance-scoped `find_all_by_<field>` and
 `sample_from_<field>` returned that key's members for any blank value. Nothing
-is now written for a blank value, as the class-level `add_to_class_<index>`
-and `update_in_class_<index>` already did, and the finders return `[]`, as
-the class-level `sample_from_<field>` already did. The class-level
+is now added for a blank value, as the class-level `add_to_class_<index>`
+already did, `update_in_class_<index>` no longer removes the object from
+that key for a blank old value, and the finders return `[]`, as the
+class-level `sample_from_<field>` already did. The class-level
 `find_all_by_<field>` returned the members of `<class prefix>:<index>`, such
 as `customer:role_index`, for a blank value, and now returns `[]` too. The
 membership is still recorded, so `save` indexes the object once its value is
