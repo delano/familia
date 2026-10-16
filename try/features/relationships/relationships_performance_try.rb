@@ -129,8 +129,9 @@ find_time = Benchmark.realtime do
   end
 end
 
-# Lookups should be fast (< 0.1 seconds for 10 lookups)
-find_time < 0.1
+# Ten round trips. The bound catches a lookup that scans or loads more than
+# one key, not runner noise.
+find_time < 1.0
 #=> true
 
 ## Measure collection query performance
@@ -142,8 +143,9 @@ query_time = Benchmark.realtime do
   end
 end
 
-# Queries should be fast (< 0.1 seconds for 30 operations)
-query_time < 0.1
+# Thirty round trips. 0.1 failed on a shared CI runner on Ruby 4.0 while the
+# same run passed on the other Rubies.
+query_time < 1.0
 #=> true
 
 # =============================================
@@ -312,8 +314,9 @@ stress_time = Benchmark.realtime do
   stress_obj.destroy!
 end
 
-# Should handle many relationships efficiently
-stress_time < 0.1
+# One save and one destroy! across many relationships; the bound catches
+# per-relationship work that grows with the number of relationships.
+stress_time < 1.0
 #=> true
 
 # =============================================
