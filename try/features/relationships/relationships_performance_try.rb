@@ -107,8 +107,10 @@ save_time = Benchmark.realtime do
   end
 end
 
-# Should complete in reasonable time (< 1 second for 50 objects)
-save_time < 1.0
+# 50 saves and 350 collection writes are about 400 round trips. The bound
+# catches a per-save scan or a quadratic step, not runner noise: 1.0 failed
+# twice on a shared CI runner while the same run passed on other Rubies.
+save_time < 3.0
 #=> true
 
 ## Verify all collections were maintained
