@@ -695,7 +695,9 @@ module Familia
       # multi_index writes a blank value, and the key may be a related
       # field of the same name on the scope class. When scope_id is
       # "{other id}:{index_name}:{value}", the pattern matches the key as
-      # the bucket of "{value}:{index_name}" in scope "{other id}" (see
+      # the bucket of "{value}:{index_name}" in scope "{other id}", and
+      # when scope_id is "{other id}:{index_name}", as the bucket of
+      # "{index_name}" in scope "{other id}" (see
       # MultiIndexGenerators.bucket_key_prefix).
       #
       # Three failure modes are detected:

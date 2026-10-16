@@ -104,11 +104,13 @@ module Familia
           # The key can still be the bucket of a shorter scope. When +owner+
           # is a scope whose identifier is "<other id>:<index_name>:<value>",
           # the key is also the bucket of "<value>:<index_name>" in scope
-          # "<other id>": audit_multi_indexes reads it as that bucket, and
-          # the rebuild of that scope deletes or rewrites it. This does not
-          # happen when the scope class declares a set field named
-          # +index_name+ and +owner+ exists, because the key is then a key
-          # of +owner+ (see RecordKeyOwnership.other_record_key).
+          # "<other id>". When the identifier is "<other id>:<index_name>",
+          # the key is also the bucket of "<index_name>" in scope
+          # "<other id>". In both cases audit_multi_indexes reads it as that
+          # bucket, and the rebuild of that scope deletes or rewrites it.
+          # This does not happen when the scope class declares a set field
+          # named +index_name+ and +owner+ exists, because the key is then a
+          # key of +owner+ (see RecordKeyOwnership.other_record_key).
           #
           # @param owner [Familia::Horreum, Class] the scope instance, or the
           #   indexed class for a class-level index
