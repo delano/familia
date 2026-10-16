@@ -376,7 +376,9 @@ indexes alike. `add_to_*` adds the object to no bucket for a blank value,
 `update_in_*` removes it from no bucket for a blank old value and adds it to
 none for a blank new value, `remove_from_*` removes nothing for a blank value,
 and the rebuild skips objects whose value is blank. `find_all_by_*` and
-`sample_from_*` return `[]` for a blank value. The instance-scoped `add_to_*`
+`sample_from_*` return `[]` for a blank value, and
+`Familia::IndexDescriptor#each_record` raises `ArgumentError` for a blank
+`value:`, as it does for `nil`. The instance-scoped `add_to_*`
 and `update_in_*` still record the membership for a blank value, so `save`
 indexes the object once its value is no longer blank.
 
@@ -388,6 +390,7 @@ with the same name as the index: a `set :tags` on the scope class beside
 `multi_index :role, :roles`. So Familia does not read, write, delete or audit
 that key: the rebuild SCANs `<owner key>:<index>:*` and the instance-scoped
 audit SCANs `<scope prefix>:*:<index>:*`, and neither pattern matches it.
+Code that calls `<index>_for` itself with a blank value gets a set on that key.
 
 Before this version, the instance-scoped `add_to_*` and `update_in_*` added
 objects with a blank value to `<scope key>:<index>`, such as
