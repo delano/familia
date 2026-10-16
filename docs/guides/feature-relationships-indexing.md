@@ -645,10 +645,11 @@ so a scope identifier such as `c-*` matches only itself. It deletes only keys
 that start with that literal prefix and hold a set. Keys of other types under
 the prefix stay in place.
 
-An identifier may contain the delimiter, so a set under the prefix can also be
-a key of another record of the same class. With companies `c-1` and
-`c-1:dept_index:x`, the key `company:c-1:dept_index:x:dept_index:ops` is both
-a bucket of `c-1` and the `ops` bucket of `c-1:dept_index:x`. Likewise
+An identifier may contain the delimiter or be an index name, so a set under
+the prefix can also be a key of another record of the same class. With
+companies `c-1` and `c-1:dept_index:x`, the key
+`company:c-1:dept_index:x:dept_index:ops` is both a bucket of `c-1` and the
+`ops` bucket of `c-1:dept_index:x`. Likewise
 `customer:role_index:tags` is both the bucket of value `tags` in the
 class-level `role_index` and the `tags` set field of a customer whose
 identifier is `role_index`. Such a key belongs to the existing record with the
