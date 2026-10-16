@@ -169,9 +169,10 @@ string interpolation, `Array#join` and `puts`, with no error. Use the reader
   `Migration::Runner#run`, `#run_one`, `#rollback`, `#status` and `#pending`.
   The `Migration::Registry` methods that decide from a reply (`pending`,
   `status`, `record_rollback`, `schema_changed?`, `schema_drift`,
-  `restore_backup`) raise when the registry's own client is a transaction or
-  pipeline connection, so a registry built with its own client keeps working
-  inside a block
+  `restore_backup`) raise when the registry's client is a transaction or
+  pipeline connection, which it is inside a Familia block for a registry
+  built without `redis:`. A registry built with a client passed as `redis:`
+  keeps that client and keeps working inside a block
 - Writes that read first: the save methods in rule 1, `commit_fields`,
   `save_fields`, `multi_field_update`, `multi_field_fast_write`, class-level
   `destroy!`, instance `destroy!` on a class with instance-scoped indexes, the

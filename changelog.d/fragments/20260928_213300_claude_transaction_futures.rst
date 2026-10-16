@@ -73,7 +73,20 @@ Changed
   without ``redis:`` returns the current transaction or pipeline connection
   inside a Familia block without keeping it, so it no longer keeps a
   connection from a block that has completed. Outside a block it still
-  keeps the first ``Familia.dbclient`` it resolves.
+  keeps the first ``Familia.dbclient`` it resolves. A registry built
+  without ``redis:``, as ``Migration::Runner`` builds its default, and
+  first used outside a block kept a plain connection for life: inside a
+  later block its commands ran at once, outside the MULTI, and every
+  registry method returned its usual value. Inside a block such a registry
+  now returns the ``Redis::Future`` from ``applied?``, ``applied_at``,
+  ``all_applied`` and ``metadata`` (``applied?`` resolves to the ZSCORE
+  score or ``nil``, and the Future is truthy), queues ``record_applied``
+  and returns its Future, and raises ``Familia::OperationModeError`` from
+  the six methods above. A registry first used inside a block returned
+  ``true`` from ``applied?`` for every migration and kept the block's
+  connection, so a later ``record_applied`` returned a Future and wrote
+  nothing. To keep a registry on its own connection, pass one:
+  ``Familia::Migration::Registry.new(redis: Familia.create_dbclient)``.
 - ``save``, ``save_if_not_exists!``, ``create!``, ``build``,
   ``atomic_write`` and ``Familia.atomic_write`` raise
   ``Familia::OperationModeError`` inside a pipeline as well as a
@@ -129,6 +142,13 @@ Changed
   default now add one reply to ``MultiResult#results`` instead of two (the
   separate ``EXPIRE`` reply is gone), so later replies move up one index.
   Without a default expiration they added one reply before and still do.
+  ``ListKey#pushx`` and ``#unshiftx`` on a list with a default expiration
+  added one reply, the count, and now add two, the count then the
+  ``EXPIRE`` reply, so the index of every later reply increases by one;
+  without a default expiration they add one as before.
+  ``SortedSet#popmin`` and ``#popmax``, which raised ``NoMethodError``
+  there, add the ZPOPMIN or ZPOPMAX reply and, with a default expiration,
+  the ``EXPIRE`` reply after it.
 - Inside a transaction or pipeline, ``HashKey#hsetnx``, ``ListKey#insert``,
   ``JsonStringKey#setnx`` and ``JsonStringKey#value`` with a default send
   ``EVAL`` and need scripting permission (ACL ``@scripting`` or ``+eval``).
@@ -164,10 +184,6 @@ Fixed
   or ``save``, which raise ``Familia::OperationModeError`` there. Its
   message now says to write before or after the block, and the new
   ``#inside_block`` reader is ``true`` for that case.
-- ``Migration::Registry#applied?`` returned ``true`` for every migration
-  inside a transaction or pipeline. It now returns the ZSCORE
-  ``Redis::Future``, which resolves to the score or ``nil`` after the block.
-  The Future is truthy, so read its value after the block.
 
 Documentation
 -------------

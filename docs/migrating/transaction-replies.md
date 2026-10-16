@@ -9,7 +9,9 @@ anything, or they queue a write's TTL refresh with it. Outside a block
 every method returns what it did before, with one exception:
 `HashKey#randfield(count, withvalues: true)` now returns `[field, value]` pairs.
 It used to return `[[[field, raw_value], nil]]` when one pair came back and
-raise `ArgumentError` for more.
+raise `ArgumentError` for more. One write changed outside a block too:
+`HashKey#hsetnx` now refreshes the hash's TTL after setting a new field (see
+the last section).
 
 Most of the affected calls used to raise an error inside a block
 (`NoMethodError`, `TypeError`, `Familia::SerializerError`,
@@ -130,17 +132,55 @@ class-level index whose field was set, whether or not the record was in the
 index. It now raises `Familia::OperationModeError`, and so does
 `relationship_status`. Call them outside the block.
 
-## `Migration::Registry#applied?` returns a Future inside a block
+## `add_to_*` with no field value inside a pipeline now raises
 
-Inside a transaction or pipeline, `Migration::Registry#applied?` returned
-`true` for every migration. It now returns the ZSCORE `Redis::Future`, which
-resolves to the score or `nil` after the block. The Future is truthy, so read
-its value after the block rather than testing it inside.
+Inside a pipeline, the instance-scoped `add_to_<scope>_<index>` method of a
+`unique_index` returned `nil` and wrote nothing when the indexed field was
+`nil`. It now raises `Familia::OperationModeError` before queueing anything,
+as it does inside a pipeline when the field is set (where it raised a
+spurious `Familia::RecordExistsError`). Outside a block and inside a
+transaction it still returns `nil` for a `nil` field. Call it before or after
+the pipeline.
 
-A registry created without `redis:` no longer keeps a connection resolved
-inside a Familia transaction or pipeline block. Inside such a block it uses
-the block's connection for that call only. Outside a block it keeps the
-first connection it resolves, as before.
+## `Migration::Registry` without `redis:` uses the block's connection
+
+`Migration::Registry#client` without `redis:` now returns the current
+transaction or pipeline connection inside a Familia block, without keeping
+it. It used to keep the first connection it resolved, whatever that was.
+`Migration::Runner` builds its default registry without `redis:`, so a
+registry first used outside a block kept a plain connection for life, and
+inside a later block its commands ran at once, outside the MULTI: every
+registry method returned its usual value. Inside a block such a registry now
+returns the `Redis::Future` from `applied?`, `applied_at`, `all_applied` and
+`metadata`, queues `record_applied` with the block and returns its Future,
+and raises `Familia::OperationModeError` from `pending`, `status`,
+`record_rollback`, `schema_changed?`, `schema_drift` and `restore_backup`.
+The `applied?` Future resolves to the ZSCORE score or `nil` after the block
+and is truthy, so read its value after the block rather than testing it
+inside.
+
+A registry first used inside a block returned `true` from `applied?` for
+every migration, and kept the block's connection after the block completed,
+so a later `record_applied` returned a Future and wrote nothing. It now
+behaves inside the block as above and resolves a plain connection after it.
+Outside a block `client` still keeps the first connection it resolves.
+
+To keep a registry on its own connection inside a block, as before, pass one:
+
+```ruby
+# Before: first use outside the block kept a plain connection
+registry = Familia::Migration::Registry.new
+registry.applied?('20260101_add_status')   # => false, plain connection kept
+Familia.transaction do
+  registry.applied?('20260101_add_status') # => false, ran at once
+end
+
+# After: pass a client to keep that behaviour
+registry = Familia::Migration::Registry.new(redis: Familia.create_dbclient)
+Familia.transaction do
+  registry.applied?('20260101_add_status') # => false, ran at once
+end
+```
 
 ## `as_json` on a scalar inside a block now raises
 
@@ -227,4 +267,49 @@ end
 # Before: [false, true, "{\"theme\":\"light\"}", false, true]
 # After:  [false, "{\"theme\":\"light\"}", false]
 result.results
+```
+
+`ListKey#pushx` and `#unshiftx` on a list with a default expiration added one
+reply, the RPUSHX or LPUSHX count, and now add two: the count, then the
+EXPIRE reply, because they queue the TTL refresh inside a block instead of
+skipping it. The index of every reply queued after one of them increases by
+one. `SortedSet#popmin` and `#popmax` raised `NoMethodError` inside a block;
+they now add the ZPOPMIN or ZPOPMAX reply and, on a sorted set with a default
+expiration, the EXPIRE reply after it. Without a default expiration each of
+the four adds one reply.
+
+```ruby
+result = Familia.transaction do
+  queue.items.pushx('a')   # list with a default expiration, one element before
+  queue.items.push('b')
+end
+
+# Before: [2, 3, true]
+# After:  [2, true, 3, true]
+result.results
+```
+
+## `HashKey#hsetnx` outside a block now sets the TTL
+
+Outside a block, `HashKey#hsetnx` never refreshed the key's TTL: it compared
+the HSETNX reply with `1`, and redis-rb returns `true` or `false`. It now
+applies the hash's default expiration (its own `default_expiration:` option,
+or the parent's `default_expiration`) after setting a new field, as `[]=`
+does, and leaves the TTL unchanged when the field was already set. A hash
+with a default expiration that was only ever written with `hsetnx` had no
+TTL and never expired; it now expires. To keep such a hash, declare it with
+`no_expiration: true`, or call `persist` after the write:
+
+```ruby
+class Worker < Familia::Horreum
+  feature :expiration
+  default_expiration 3600
+  identifier_field :wid
+  field :wid
+  hashkey :claims                      # Before: TTL -1 after hsetnx. After: 3600
+  hashkey :leases, no_expiration: true # TTL -1 before and after
+end
+
+worker.claims.hsetnx('job-1', 'a')
+worker.claims.persist                  # TTL -1 again
 ```
