@@ -395,16 +395,21 @@ it only where it is also the bucket of a shorter scope, as described next.
 Code that calls `<index>_for` itself with a blank value gets a set on that
 key.
 
-A scope whose identifier is `<other scope>:<index>:<value>` is the exception.
-With companies `c-1` and `c-1:dept_index:x`, the key
-`company:c-1:dept_index:x:dept_index` of a blank value in the longer company
-is also the bucket of value `x:dept_index` in `c-1`. `audit_multi_indexes`
-reads it as that bucket of `c-1`, and rebuilding `c-1` deletes it, or replaces
-its members with the objects of `c-1` that have that value. This holds for a
-set that `<index>_for` created and for a key that an earlier version wrote. It
-does not hold when the company class declares a set field named `dept_index`
-and the record `c-1:dept_index:x` exists: the key is then a key of that record
-(see [Multi-value index rebuilds](#multi-value-index-rebuilds)).
+A scope whose identifier is `<other scope>:<index>:<value>` or
+`<other scope>:<index>` is the exception. Its key `<scope key>:<index>` is also
+a bucket of the other scope: of value `<value>:<index>` for the first form, and
+of value `<index>` for the second. With companies `c-1`, `c-1:dept_index:x`
+and `c-1:dept_index`, the key `company:c-1:dept_index:x:dept_index` of a blank
+value in `c-1:dept_index:x` is also the bucket of value `x:dept_index` in
+`c-1`, and the key `company:c-1:dept_index:dept_index` of a blank value in
+`c-1:dept_index` is also the bucket of value `dept_index` in `c-1`.
+`audit_multi_indexes` reads such a key as that bucket of `c-1`, and rebuilding
+`c-1` deletes it, or replaces its members with the objects of `c-1` that have
+that value. This holds for a set that `<index>_for` created and for a key that
+an earlier version wrote. It does not hold when the company class declares a
+set field named `dept_index` and the longer company record exists: the key is
+then a key of that record (see
+[Multi-value index rebuilds](#multi-value-index-rebuilds)).
 
 Before this version, the instance-scoped `add_to_*` and `update_in_*` added
 objects with a blank value to `<scope key>:<index>`, such as
@@ -412,25 +417,29 @@ objects with a blank value to `<scope key>:<index>`, such as
 audit reports it as a key of that scope. To remove the key, first confirm
 that the scope class declares no related field named `<index>` (for example,
 `Company.related_fields.key?(:dept_index)` returns `false`). Then confirm
-that the scope identifier does not contain the index name between two
-delimiters, such as `:dept_index:`. When both hold, `DEL` the key:
+that the scope identifier does not contain the index name after a delimiter,
+followed by a delimiter or the end of the identifier: it neither contains
+`:dept_index:` nor ends with `:dept_index`. Appending a delimiter to the
+identifier checks both at once. When both conditions hold, `DEL` the key:
 
 ```ruby
 Company.related_fields.key?(:dept_index)       # => false
-'c-1'.include?("#{Familia.delim}dept_index#{Familia.delim}")  # => false
+"c-1#{Familia.delim}".include?("#{Familia.delim}dept_index#{Familia.delim}")  # => false
 Familia.dbclient.del('company:c-1:dept_index')
 ```
 
-When the identifier does contain it, as `c-1:dept_index:x` does, the key can
-be a live bucket of a shorter scope, as described above: the key
-`company:c-1:dept_index:x:dept_index` is the bucket of value `x:dept_index`
-in `c-1`, and a `DEL` removes the index entries of the objects of `c-1` that
-have that value. Do not `DEL` such a key while the shorter scope record
-exists; when no record `c-1` exists, `DEL` it as above. If the indexed class
-participates in the scope class, rebuild the shorter scope instead, which
-deletes the key or replaces its members with the objects of that scope that
-have that value. Otherwise, remove with `SREM` only the members whose field
-value differs from that value:
+When the identifier does contain it, as `c-1:dept_index:x` and
+`c-1:dept_index` do, the key can be a live bucket of a shorter scope, as
+described above: the key `company:c-1:dept_index:x:dept_index` is the bucket
+of value `x:dept_index` in `c-1`, the key `company:c-1:dept_index:dept_index`
+is the bucket of value `dept_index` in `c-1`, and a `DEL` removes the index
+entries of the objects of `c-1` that have that value. Do not `DEL` such a key
+while the shorter scope record exists; when no record `c-1` exists, `DEL` it
+as above. If the indexed class participates in the scope class, rebuild the
+shorter scope instead, which deletes the key or replaces its members with the
+objects of that scope that have that value. Otherwise, remove with `SREM` only
+the members whose field value differs from that value (`x:dept_index` below,
+or `dept_index` for the key of `c-1:dept_index`):
 
 ```ruby
 Company.exists?('c-1')                         # => true
@@ -444,8 +453,9 @@ end
 Familia.dbclient.srem(key, stray) unless stray.empty?
 ```
 
-An identifier that contains the index name between delimiters more than once
-has a shorter scope at each occurrence, each with its own value. Rebuild each
+An identifier that contains the index name after a delimiter more than once,
+each followed by a delimiter or the end of the identifier, has a shorter scope
+at each occurrence, each with its own value. Rebuild each
 of those scopes that exists, or keep every member whose field value is the
 value of one of them.
 
@@ -694,7 +704,10 @@ set field name that ends the key, or by an instance-scoped index name and the
 delimiter. An index name that ends the key, as in the key of a blank value,
 makes no candidate. So with companies `c-1` and `c-1:dept_index:x`, the bucket
 `company:c-1:dept_index:x:dept_index` of value `x:dept_index` belongs to
-`c-1`, unless the company class declares a set field named `dept_index`. The
+`c-1`, unless the company class declares a set field named `dept_index`.
+Likewise, with companies `c-1` and `c-1:dept_index`, the bucket
+`company:c-1:dept_index:dept_index` of value `dept_index` belongs to `c-1`
+under the same condition. The
 rebuild and the audit check at most
 `Familia::Features::Relationships::Indexing::RecordKeyOwnership::MAX_CANDIDATE_SPLITS`
 (8) of them per key. The candidates of a batch of keys are checked in
