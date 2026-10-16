@@ -295,23 +295,29 @@ module Familia
     private :update_expiration_if_written
 
     # Lua scripts for #queue_conditional_write. Each runs one write on
-    # KEYS[1] and calls EXPIRE with ARGV[1] seconds only when the write's
-    # reply shows it took effect and ARGV[1] is positive, then returns the
-    # write's reply.
+    # KEYS[1] and returns the write's reply. ARGV[1] is the TTL in whole
+    # seconds and ARGV[2] the refresh flag: '1' to call EXPIRE with ARGV[1]
+    # when the write's reply shows it took effect, '0' to never call it.
+    # The write's own arguments follow from ARGV[3].
+    #
+    # The script does not inspect ARGV[1]: Ruby decides whether to refresh,
+    # as #update_expiration does, so a positive default_expiration below
+    # one second is sent as EXPIRE 0, as outside a block, which deletes the
+    # key the write just created.
     CONDITIONAL_WRITE_SCRIPTS = {
       hsetnx: <<~LUA,
-        local written = redis.call('HSETNX', KEYS[1], ARGV[2], ARGV[3])
-        if written == 1 and tonumber(ARGV[1]) > 0 then redis.call('EXPIRE', KEYS[1], ARGV[1]) end
+        local written = redis.call('HSETNX', KEYS[1], ARGV[3], ARGV[4])
+        if written == 1 and ARGV[2] == '1' then redis.call('EXPIRE', KEYS[1], ARGV[1]) end
         return written
       LUA
       setnx: <<~LUA,
-        local written = redis.call('SETNX', KEYS[1], ARGV[2])
-        if written == 1 and tonumber(ARGV[1]) > 0 then redis.call('EXPIRE', KEYS[1], ARGV[1]) end
+        local written = redis.call('SETNX', KEYS[1], ARGV[3])
+        if written == 1 and ARGV[2] == '1' then redis.call('EXPIRE', KEYS[1], ARGV[1]) end
         return written
       LUA
       linsert: <<~LUA,
-        local length = redis.call('LINSERT', KEYS[1], ARGV[2], ARGV[3], ARGV[4])
-        if length > 0 and tonumber(ARGV[1]) > 0 then redis.call('EXPIRE', KEYS[1], ARGV[1]) end
+        local length = redis.call('LINSERT', KEYS[1], ARGV[3], ARGV[4], ARGV[5])
+        if length > 0 and ARGV[2] == '1' then redis.call('EXPIRE', KEYS[1], ARGV[1]) end
         return length
       LUA
     }.freeze
@@ -336,9 +342,12 @@ module Familia
     # only when the write took effect. A write that does nothing therefore
     # leaves an existing key's TTL alone, as it does outside a block.
     #
-    # The TTL is the one #update_expiration would apply: the
-    # default_expiration, with 0 (no expiration, or a relation declared
-    # with no_expiration: true) skipping the refresh.
+    # The TTL is the one #update_expiration would apply, decided the same
+    # way: the default_expiration, skipped only when it is 0 (no expiration,
+    # or a relation declared with no_expiration: true). The script receives
+    # the seconds as an integer (ARGV[1]) and that decision as a flag
+    # (ARGV[2]), so a positive default_expiration below one second is sent
+    # as EXPIRE 0, as outside a block, which deletes the key just written.
     #
     # @param conn [Redis::PipelinedConnection] the transaction or pipeline
     #   connection
@@ -352,7 +361,8 @@ module Familia
     def queue_conditional_write(conn, script, *, &)
       expiration = default_expiration
       validate_expiration!(expiration)
-      conn.call(:eval, CONDITIONAL_WRITE_SCRIPTS.fetch(script), 1, dbkey, expiration.to_i, *, &)
+      refresh = expiration.zero? ? '0' : '1'
+      conn.call(:eval, CONDITIONAL_WRITE_SCRIPTS.fetch(script), 1, dbkey, expiration.to_i, refresh, *, &)
     end
     private :queue_conditional_write
 
