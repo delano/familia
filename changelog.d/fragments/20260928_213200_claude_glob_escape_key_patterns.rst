@@ -152,7 +152,9 @@ Fixed
   instance-scoped ``remove_from_*`` and ``update_in_*`` and the class-level
   ``update_in_class_*`` removed the object from it, the class-level
   ``find_all_by_*`` returned its members, and ``indexed_in?`` and
-  ``current_indexings`` read it.
+  ``current_indexings`` read it. ``IndexDescriptor#each_record`` raises
+  ``ArgumentError`` for a blank ``value:`` of a ``multi_index``, as it does
+  for ``nil``; it iterated the related field's members.
 - ``audit_multi_indexes`` no longer reports a class-level bucket of the scope
   class whose field value contains ``:<index>:`` as an orphaned bucket of an
   instance-scoped index, unless the hash key of the scope record the key

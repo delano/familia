@@ -10,7 +10,8 @@
 # without the trailing delimiter of every other bucket. That key is not
 # exclusive to the index: when the owner declares a related field with the
 # index's name, it is that field's key. So no multi_index method reads,
-# writes, deletes or audits it. The instance-scoped add_to_* used to write
+# writes, deletes or audits it, and IndexDescriptor#each_record raises for
+# a blank value. The instance-scoped add_to_* used to write
 # blank values there; such a key is left for manual cleanup.
 
 require_relative '../support/helpers/test_helpers'
@@ -196,6 +197,31 @@ BvUser.featured.add('u2')
 end
 [@found, @commands.count { |entry| entry.command.include?('bv_user:featured') }]
 #=> [[[], [], [], false, []], 0]
+
+## IndexDescriptor#each_record raises for a blank value without reading the same-named set fields
+@class_idx = Familia.multi_indexes(owner: BvUser).find { |idx| idx.index_name == :featured }
+@scoped_idx = Familia.multi_indexes(owner: BvMember).find { |idx| idx.index_name == :pinned }
+@errors = []
+@commands = DatabaseLogger.capture_commands do
+  [
+    -> { @class_idx.each_record(value: '') { |user| user } },
+    -> { @class_idx.each_record(value: '  ').to_a },
+    -> { @scoped_idx.each_record(value: '', scope: @team) { |member| member } },
+    -> { @scoped_idx.each_record(value: "\t", scope: @team).to_a },
+  ].each do |call|
+    call.call
+    @errors << 'no raise'
+  rescue ArgumentError => e
+    @errors << e.message
+  end
+end
+[
+  @errors.uniq,
+  @commands.count { |entry| entry.command.include?('bv_user:featured') || entry.command.include?('bv_team:t-1:pinned') },
+  BvUser.featured.members.sort,
+  @scoped_idx.each_record(value: 'gold', scope: @team).map(&:mid),
+]
+#=> [["BvUser:featured is a multi_index and does not index a blank value", "BvMember:pinned is a multi_index and does not index a blank value"], 0, ["u1", "u2"], ["m3"]]
 
 ## The class-level rebuild leaves the class_set named like the index
 @cleared = []

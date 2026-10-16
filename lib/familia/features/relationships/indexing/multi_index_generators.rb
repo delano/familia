@@ -97,8 +97,9 @@ module Familia
           # beside `multi_index :role, :roles`. So no multi_index method
           # reads or writes it: add_to_*, update_in_*, remove_from_* and the
           # rebuild skip blank values, find_all_by_* and sample_from_*
-          # return [] for them, and the rebuild and audit do not match the
-          # key (see .blank_field_value?).
+          # return [] for them, IndexDescriptor#each_record raises for them,
+          # and the rebuild and audit do not match the key (see
+          # .blank_field_value?).
           #
           # @param owner [Familia::Horreum, Class] the scope instance, or the
           #   indexed class for a class-level index
