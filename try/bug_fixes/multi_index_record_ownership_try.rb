@@ -287,6 +287,63 @@ end
 ]
 #=> [20, ["w1"], :ok, true, true, true, true]
 
+## The keys are grouped: a group's pipelines go out before the next keys' candidates are found
+# The 20 bucket keys of c-7 hold about 3 MB of candidate identifiers. The
+# keys are passed as an Array that records how many commands DatabaseLogger
+# had captured when the last key was read, so pipelines sent by then were
+# sent for earlier groups, not after every key's candidates were collected.
+class ::RoObservedKeys < Array
+  attr_reader :commands_before_last
+
+  def each_with_index
+    super do |key, idx|
+      @commands_before_last = DatabaseLogger.commands.size if idx == size - 1
+      yield key, idx
+    end
+  end
+end
+@observed = RoObservedKeys.new(@wide.map { |employee| @c7.dept_index_for(employee.dept).dbkey })
+@grouped = @identifier_bytes.call(DatabaseLogger.capture_commands { @owners = @ownership.other_record_key_owners(@observed, @c7) })
+[
+  @owners.uniq,
+  @grouped.size > 2 && @grouped.max <= @limit,
+  @observed.commands_before_last >= 2,
+]
+#=> [[nil], true, true]
+
+## The candidates of one key are split too when they pass the limit
+# About 150 KB of dept value with 8 candidate splits: about 1.2 MB of
+# identifiers for one key, which resolve_candidates checks as one group.
+@c8 = RoCo.new(cid: 'c-8')
+@c8.save
+@one_wide = RoEmp.new(eid: 'w-one', dept: ('B' * 150_000) + (':dept_index' * 8))
+@one_wide.save
+@one_wide.add_to_ro_co_staff(@c8)
+@one_key_groups = @identifier_bytes.call(DatabaseLogger.capture_commands do
+  @ownership.other_record_key_owners([@c8.dept_index_for(@one_wide.dept).dbkey], @c8)
+end)
+[@one_key_groups.sum > @limit, @one_key_groups.size, @one_key_groups.max <= @limit, @c8.rebuild_dept_index]
+#=> [true, 2, true, 1]
+
+## An identifier longer than the limit gets a pipeline of its own
+@huge_id = 'H' * (@limit + 10)
+@solo_groups = DatabaseLogger.capture_commands do
+  @solo_flags = @ownership.existing_records(RoCo, ['c-8', @huge_id, 'c-404'])
+end
+[
+  @solo_flags,
+  @solo_groups.map { |entry| entry.command.split(' | ').size },
+  @identifier_bytes.call(@solo_groups),
+]
+#=> [[true, false, false], [1, 1, 1], [3, @limit + 10, 5]]
+
+## Removing the one-key company leaves no keys of c-8
+@one_wide.destroy!
+@c8.destroy!
+@client.scan_each(match: 'ro_co:c-8:*').to_a.each { |key| @client.del(key) }
+@client.scan_each(match: 'ro_co:c-8:*').to_a
+#=> []
+
 ## Removing those employees and their company leaves no keys of c-7
 @wide.each(&:destroy!)
 @c7.destroy!
