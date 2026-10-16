@@ -9,9 +9,11 @@ anything, or they queue a write's TTL refresh with it. Outside a block
 every method returns what it did before, with one exception:
 `HashKey#randfield(count, withvalues: true)` now returns `[field, value]` pairs.
 It used to return `[[[field, raw_value], nil]]` when one pair came back and
-raise `ArgumentError` for more. One write changed outside a block too:
-`HashKey#hsetnx` now refreshes the hash's TTL after setting a new field (see
-the last section).
+raise `ArgumentError` for more. Two persistence effects changed outside a
+block too: `HashKey#hsetnx` now refreshes the hash's TTL after setting a new
+field (see the last section), and `JsonStringKey#empty?` on a key declared
+with `default:` no longer writes the default to a missing key or refreshes
+the TTL; it reads with GET only.
 
 Most of the affected calls used to raise an error inside a block
 (`NoMethodError`, `TypeError`, `Familia::SerializerError`,

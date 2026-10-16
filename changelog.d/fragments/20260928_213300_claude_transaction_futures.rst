@@ -194,9 +194,11 @@ Documentation
   that behaved differently before and need a code change: partial writes
   and unstaging that committed with an outer transaction,
   ``extend_expiration``, the ``Lock`` ownership checks and ``release``,
-  ``current_indexings``, ``Migration::Registry#applied?``, ``as_json`` on
-  a scalar DataType and the TTL refresh of ``HashKey#hsetnx``,
-  ``ListKey#insert``, ``JsonStringKey#setnx`` and ``JsonStringKey#value``.
+  ``current_indexings``, ``Migration::Registry`` without ``redis:``,
+  ``as_json`` on a scalar DataType, the instance-scoped ``add_to_*`` with
+  no field value inside a pipeline, the TTL refresh of ``HashKey#hsetnx``,
+  ``ListKey#insert``, ``JsonStringKey#setnx`` and ``JsonStringKey#value``,
+  and the TTL ``HashKey#hsetnx`` now sets outside a block.
 
 AI Assistance
 -------------
