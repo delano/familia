@@ -9,10 +9,13 @@
 # The factories name the key of a blank value "<owner key>:<index>",
 # without the trailing delimiter of every other bucket. That key is not
 # exclusive to the index: when the owner declares a related field with the
-# index's name, it is that field's key. So no multi_index method reads,
-# writes, deletes or audits it, and IndexDescriptor#each_record raises for
-# a blank value. The instance-scoped add_to_* used to write
-# blank values there; such a key is left for manual cleanup.
+# index's name, it is that field's key. So the multi_index methods of that
+# owner do not read, write, delete or audit it as theirs, and
+# IndexDescriptor#each_record raises for a blank value. The instance-scoped
+# add_to_* used to write blank values there; such a key is left for manual
+# cleanup. The key of a scope whose identifier is
+# "<other scope>:<index>:<value>" or "<other scope>:<index>" is still a
+# bucket of the shorter scope, which the testcases below also cover.
 
 require_relative '../support/helpers/test_helpers'
 
@@ -211,6 +214,50 @@ end
 @long_team.destroy!
 @client.exists(@legacy)
 #=> 0
+
+## A legacy blank-value key of a scope named "<other scope>:<index>" is the bucket of value "<index>" in the shorter scope
+# "bv_team:t-1:desk_index:desk_index" is also the "desk_index" bucket of
+# t-1, which holds m5. The identifier does not contain ":desk_index:", so
+# the guide's check appends a delimiter to catch an index name at its end.
+@tail_team = BvTeam.new(tid: 't-1:desk_index')
+@tail_team.save
+@tail_key = 'bv_team:t-1:desk_index:desk_index'
+@named_desk = BvMember.new(mid: 'm5', desk: 'desk_index')
+@named_desk.save
+@named_desk.add_to_bv_team_members(@team)
+@named_desk.add_to_bv_team_desk_index(@team)
+@client.sadd(@tail_key, %w[m2 m9])
+[
+  @tail_team.desk_index_for('').dbkey == @tail_key,
+  @team.desk_index_for('desk_index').dbkey == @tail_key,
+  BvTeam.related_fields.key?(:desk_index),
+  @tail_team.tid.include?("#{Familia.delim}desk_index#{Familia.delim}"),
+  "#{@tail_team.tid}#{Familia.delim}".include?("#{Familia.delim}desk_index#{Familia.delim}"),
+  @client.smembers(@tail_key).sort,
+]
+#=> [true, true, false, false, true, ["m2", "m5", "m9"]]
+
+## The audit reads that key as the shorter scope's bucket and reports the legacy members as stale
+@tail_audit = BvMember.audit_multi_indexes.find { |result| result[:index_name] == :desk_index }
+@tail_audit[:stale_members].map { |entry| entry.values_at(:indexed_id, :reason, :scope_id) }.sort_by(&:first)
+#=> [["m2", :value_mismatch, "t-1"], ["m9", :object_missing, "t-1"]]
+
+## The documented SREM keeps the members whose value is the index name
+@stray = @client.smembers(@tail_key).reject { |id| BvMember.load(id)&.desk == 'desk_index' }
+@client.srem(@tail_key, @stray) unless @stray.empty?
+[@stray.sort, @client.smembers(@tail_key), @team.find_all_by_desk('desk_index').map(&:mid)]
+#=> [["m2", "m9"], ["m5"], ["m5"]]
+
+## The rebuild of the shorter scope replaces the key's members, and deletes the key once no object has that value
+@client.sadd(@tail_key, %w[m2 m9])
+@team.rebuild_desk_index
+@rewritten = @client.smembers(@tail_key)
+@named_desk.remove_from_bv_team_members(@team)
+@named_desk.destroy!
+@team.rebuild_desk_index
+@tail_team.destroy!
+[@rewritten, @client.exists(@tail_key)]
+#=> [["m5"], 0]
 
 ## Class-level: add_to_class_* and update_in_class_* do not touch the same-named class_set
 BvUser.featured.add('u1')
