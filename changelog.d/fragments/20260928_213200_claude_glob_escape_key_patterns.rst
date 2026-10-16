@@ -108,10 +108,12 @@ Changed
   not read the key as data, because ``<scope key>:<index>`` can also be a
   related field of the scope class with the index's name. When the scope
   identifier contains the delimiter, the key can also be a bucket of an index
-  of a shorter scope, or a class-level bucket of the scope class, which the
-  audit of that index reads and its rebuild deletes or rewrites, unless the
-  scope class declares a set field named ``<index>`` and the longer scope
-  record exists. Familia does not tell such a key apart from a live bucket or
+  of a shorter scope. When the scope identifier is the name of a class-level
+  index of the scope class, or starts with that name and the delimiter, the
+  key can also be a class-level bucket of that index. The audit of that
+  other index reads such a key and its rebuild deletes or rewrites it, unless
+  the scope class declares a set field named ``<index>`` and the scope record
+  with that identifier exists. Familia does not tell such a key apart from a live bucket or
   a related field; see the indexing guide's "Blank field values" section.
 
 Fixed

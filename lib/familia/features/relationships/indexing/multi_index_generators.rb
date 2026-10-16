@@ -101,14 +101,19 @@ module Familia
           # raises for them, and the rebuild SCAN of +owner+ does not match
           # the key (see .blank_field_value?).
           #
-          # An identifier may contain the delimiter, so the key can still be
-          # a bucket of an instance-scoped multi_index within the scope
-          # class in a shorter scope, or of a class-level multi_index of the
-          # scope class. With scopes "c-1" and "c-1:dept_index:x", the key
+          # The key can still be a bucket of another multi_index. An
+          # identifier that contains the delimiter can make it a bucket of
+          # an instance-scoped multi_index within the scope class in a
+          # shorter scope: with scopes "c-1" and "c-1:dept_index:x", the key
           # of a blank value in "c-1:dept_index:x" is the bucket of
-          # "x:dept_index" in "c-1". audit_multi_indexes of that index reads
-          # it as that bucket, and the rebuild of that index deletes or
-          # rewrites it. This does not happen when the scope class declares
+          # "x:dept_index" in "c-1". An identifier that is the name of a
+          # class-level multi_index of the scope class, or starts with that
+          # name and the delimiter, makes it a bucket of that index, with or
+          # without a delimiter in the identifier: the key of a blank value
+          # in scope "region_index" is the class-level "region_index" bucket
+          # of the value +index_name+. audit_multi_indexes of that other
+          # index reads it as that bucket, and the rebuild of that index
+          # deletes or rewrites it. This does not happen when the scope class declares
           # a set field named +index_name+ and +owner+ exists, because the
           # key is then a key of +owner+ (see
           # RecordKeyOwnership.other_record_key).

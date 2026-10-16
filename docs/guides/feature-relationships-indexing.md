@@ -393,17 +393,26 @@ class for a class-level index, do not read, write, delete or audit that key
 as theirs. Code that calls `<index>_for` itself with a blank value gets a set
 on that key.
 
-An identifier may contain the delimiter, so that key can also be a bucket of
-an instance-scoped index within the scope class in another, shorter scope, or
-a bucket of a class-level index of the scope class. With companies `c-1` and
-`c-1:dept_index:x`, the key `company:c-1:dept_index:x:dept_index` of a blank
-value in `c-1:dept_index:x` is also the bucket of value `x:dept_index` in
-`c-1`. `audit_multi_indexes` of that index then reads the key as its bucket,
+That key can also be a bucket of another index of the scope class:
+
+- When the identifier contains the delimiter, the key can be a bucket of an
+  instance-scoped index within the scope class in another, shorter scope.
+  With companies `c-1` and `c-1:dept_index:x`, the key
+  `company:c-1:dept_index:x:dept_index` of a blank value in
+  `c-1:dept_index:x` is also the bucket of value `x:dept_index` in `c-1`.
+- When the identifier is the name of a class-level index of the scope class,
+  or starts with that name and the delimiter, the key is a bucket of that
+  class-level index. This needs no delimiter in the identifier. With a
+  class-level `multi_index :region, :region_index` on `Company`, the key
+  `company:region_index:dept_index` of a blank value in a company
+  `region_index` is also the `region_index` bucket of value `dept_index`.
+
+`audit_multi_indexes` of that other index then reads the key as its bucket,
 and the rebuild of that index deletes it or replaces its members with the
 objects that have that value. This does not hold when the scope class
 declares a `set` field named `dept_index`, without a `dbkey:` option of its
-own, and the hash key of company `c-1:dept_index:x` holds a hash: the key is
-then that record's set field (see
+own, and the hash key of the company with that identifier holds a hash: the
+key is then that record's set field (see
 [Multi-value index rebuilds](#multi-value-index-rebuilds)).
 
 Before this version, the instance-scoped `add_to_*` and `update_in_*` added
@@ -411,8 +420,9 @@ objects with a blank value to `<scope key>:<index>`, such as
 `company:c-1:dept_index`. Such keys stay in place after upgrading. The index
 methods of their scope do not read them as data, so they can be left in
 place. Familia has no check that tells such a key apart from a related field
-of the same name or from a live bucket of another scope's index, so inspect a
-key before removing it by hand.
+of the same name, a live bucket of another scope's index or a live bucket of
+a class-level index of the scope class, so inspect a key before removing it
+by hand.
 
 When the scope class declares a related field named `<index>`, such as
 `set :tags` beside `multi_index :tag, :tags, within: Company`, the

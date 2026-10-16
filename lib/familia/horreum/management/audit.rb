@@ -695,8 +695,10 @@ module Familia
       # multi_index writes a blank value, and the key may be a related
       # field of the same name on the scope class. A scope_id that
       # contains the delimiter can still make the key a bucket of an index
-      # of a shorter scope, or a class-level bucket of the scope class,
-      # which the audit of that index reads as its own (see
+      # of a shorter scope. A scope_id that is the name of a class-level
+      # index of the scope class, or starts with that name and the
+      # delimiter, makes it a class-level bucket of that index. The audit
+      # of that other index reads such a key as its own (see
       # MultiIndexGenerators.bucket_key_prefix).
       #
       # Three failure modes are detected:
