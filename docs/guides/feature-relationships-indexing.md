@@ -387,23 +387,33 @@ delimiter, for example `company:c-1:dept_index` or `customer:role_index`.
 That key is not exclusive to the index. It is also the key of a related field
 with the same name as the index: a `set :tags` on the scope class beside
 `multi_index :tag, :tags, within: Company`, or a `class_set :roles` beside
-`multi_index :role, :roles`. So Familia does not read, write, delete or audit
-that key: the rebuild SCANs `<owner key>:<index>:*` and the instance-scoped
-audit SCANs `<scope prefix>:*:<index>:*`, and neither pattern matches it.
-Code that calls `<index>_for` itself with a blank value gets a set on that key.
+`multi_index :role, :roles`. So the index methods of that scope, or of the
+class for a class-level index, do not read, write, delete or audit that key as
+theirs. The rebuild SCANs `<owner key>:<index>:*`, which does not match it.
+The instance-scoped audit SCANs `<scope prefix>:*:<index>:*`, which matches
+it only where it is also the bucket of a shorter scope, as described next.
+Code that calls `<index>_for` itself with a blank value gets a set on that
+key.
+
+A scope whose identifier is `<other scope>:<index>:<value>` is the exception.
+With companies `c-1` and `c-1:dept_index:x`, the key
+`company:c-1:dept_index:x:dept_index` of a blank value in the longer company
+is also the bucket of value `x:dept_index` in `c-1`. `audit_multi_indexes`
+reads it as that bucket of `c-1`, and rebuilding `c-1` deletes it, or replaces
+its members with the objects of `c-1` that have that value. This holds for a
+set that `<index>_for` created and for a key that an earlier version wrote. It
+does not hold when the company class declares a set field named `dept_index`
+and the record `c-1:dept_index:x` exists: the key is then a key of that record
+(see [Multi-value index rebuilds](#multi-value-index-rebuilds)).
 
 Before this version, the instance-scoped `add_to_*` and `update_in_*` added
 objects with a blank value to `<scope key>:<index>`, such as
 `company:c-1:dept_index`. Such a key stays in place after upgrading, and no
-audit reports it as a key of that scope. It can be a bucket of a shorter scope,
-though: with companies `c-1` and `c-1:dept_index:x`, the old key
-`company:c-1:dept_index:x:dept_index` of the longer company is also the bucket
-of value `x:dept_index` in `c-1`. The audit of `c-1` reads it as that bucket,
-and rebuilding `c-1` deletes it, or replaces its members with the objects of
-`c-1` that have that value.
-To remove the key, first confirm that the scope class declares no
-related field named `<index>` (for example, `Company.related_fields.key?(:dept_index)`
-returns `false`), then `DEL` the key:
+audit reports it as a key of that scope. It can be the bucket of a shorter
+scope, as described above. To remove the key, first confirm that the scope
+class declares no related field named `<index>` (for example,
+`Company.related_fields.key?(:dept_index)` returns `false`), then `DEL` the
+key:
 
 ```ruby
 Company.related_fields.key?(:dept_index)  # => false
@@ -625,13 +635,14 @@ sets `logical_database`, run the sweep against that model's `dbclient` instead.
 The `rebuild_<index>` method of a `multi_index`, such as
 `Customer.rebuild_role_index` or `company.rebuild_dept_index`, deletes the
 index's per-value bucket sets and then adds every object with a non-blank
-field value to the bucket of that value. It does not touch the key of a blank
-value (see [Blank field values](#blank-field-values)). It finds the buckets
-with a SCAN over the bucket prefix,
-such as `customer:role_index:` or `company:c-1:dept_index:`, with any glob
-characters in the prefix escaped, so a scope identifier such as `c-*` matches
-only itself. It deletes only keys that start with that literal prefix and hold
-a set. Keys of other types under the prefix stay in place.
+field value to the bucket of that value. It does not touch its own key of a
+blank value, though such a key of a longer scope can be one of its buckets (see
+[Blank field values](#blank-field-values)). It finds the buckets with a SCAN
+over the bucket prefix, such as `customer:role_index:` or
+`company:c-1:dept_index:`, with any glob characters in the prefix escaped, so
+a scope identifier such as `c-*` matches only itself. It deletes only keys
+that start with that literal prefix and hold a set. Keys of other types under
+the prefix stay in place.
 
 An identifier may contain the delimiter, so a set under the prefix can also be
 a key of another record of the same class. With companies `c-1` and
@@ -651,11 +662,11 @@ not make `role_index` a record.
 
 The candidate owners of a key are the splits whose identifier is followed by a
 set field name that ends the key, or by an instance-scoped index name and the
-delimiter. An index name that ends the key, as in the key of a blank value, makes
-no candidate. So with companies `c-1` and `c-1:dept_index:x`, the bucket
-`company:c-1:dept_index:x:dept_index` of value `x:dept_index` belongs to `c-1`,
-unless the company class declares a set field named `dept_index`. The rebuild and the audit
-check at most
+delimiter. An index name that ends the key, as in the key of a blank value,
+makes no candidate. So with companies `c-1` and `c-1:dept_index:x`, the bucket
+`company:c-1:dept_index:x:dept_index` of value `x:dept_index` belongs to
+`c-1`, unless the company class declares a set field named `dept_index`. The
+rebuild and the audit check at most
 `Familia::Features::Relationships::Indexing::RecordKeyOwnership::MAX_CANDIDATE_SPLITS`
 (8) of them per key. The candidates of a batch of keys are checked in
 pipelines that each hold at most `RecordKeyOwnership::MAX_CANDIDATE_BATCH_BYTES`
