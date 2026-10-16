@@ -382,131 +382,57 @@ and the rebuild skips objects whose value is blank. `find_all_by_*` and
 and `update_in_*` still record the membership for a blank value, so `save`
 indexes the object once its value is no longer blank.
 
-The `<index>_for` factory names the key of a blank value without the trailing
-delimiter, for example `company:c-1:dept_index` or `customer:role_index`.
-That key is not exclusive to the index. It is also the key of a related field
-with the same name as the index: a `set :tags` on the scope class beside
+The `<index>_for` factory names the key of a blank value
+`<owner key>:<index>`, without the trailing delimiter of a bucket, for
+example `company:c-1:dept_index` or `customer:role_index`. That key is not
+exclusive to the index: it is also the key of a related field with the same
+name as the index, such as a `set :tags` on the scope class beside
 `multi_index :tag, :tags, within: Company`, or a `class_set :roles` beside
 `multi_index :role, :roles`. So the index methods of that scope, or of the
-class for a class-level index, do not read, write, delete or audit that key as
-theirs. The rebuild SCANs `<owner key>:<index>:*`, which does not match it.
-The instance-scoped audit SCANs `<scope prefix>:*:<index>:*`, which matches
-it only where it is also the bucket of a shorter scope. Other indexes of the
-scope class can also read it as one of their buckets, as described next.
-Code that calls `<index>_for` itself with a blank value gets a set on that
-key.
+class for a class-level index, do not read, write, delete or audit that key
+as theirs. Code that calls `<index>_for` itself with a blank value gets a set
+on that key.
 
-An identifier may contain the delimiter, so the key `<scope key>:<index>` can
-still be a bucket of an index of the scope class. The indexes of the scope
-class make it one for these identifiers, where `<name>` is the index name of
-any instance-scoped `multi_index` within the scope class, this index or
-another, declared on any class:
-
-- `<other scope>:<name>:<value>`: the key is the bucket of value
-  `<value>:<index>` of `<name>` in `<other scope>`.
-- `<other scope>:<name>`: the key is the bucket of value `<index>` of
-  `<name>` in `<other scope>`.
-- `<class index>:<value>` or `<class index>`, where `<class index>` is the
-  name of a class-level `multi_index` of the scope class: the key is the
-  class-level bucket of value `<value>:<index>` or `<index>`.
-
-With companies `c-1`, `c-1:dept_index:x` and `c-1:dept_index`, the key
-`company:c-1:dept_index:x:dept_index` of a blank value in `c-1:dept_index:x`
-is also the bucket of value `x:dept_index` in `c-1`, and the key
-`company:c-1:dept_index:dept_index` of a blank value in `c-1:dept_index` is
-also the bucket of value `dept_index` in `c-1`. With a second index
-`multi_index :role, :role_index, within: Company`, the key
-`company:c-1:role_index:dept_index` of a blank value in a company
-`c-1:role_index` is the `role_index` bucket of value `dept_index` in `c-1`.
-With a class-level `multi_index :region, :region_index` on `Company`, the key
-`company:region_index:dept_index` of a blank value in a company
-`region_index` is the `region_index` bucket of value `dept_index`.
-`audit_multi_indexes` of that index reads such a key as that bucket, and the
-rebuild of that index, for that scope or the class, deletes it, or replaces
-its members with the objects that have that value. This holds for a set that
-`<index>_for` created and for a key that an earlier version wrote. It does
-not hold when the company class declares a set field named `dept_index` and
-the longer company record exists: the key is then a key of that record (see
+An identifier may contain the delimiter, so that key can also be a bucket of
+an instance-scoped index within the scope class in another, shorter scope, or
+a bucket of a class-level index of the scope class. With companies `c-1` and
+`c-1:dept_index:x`, the key `company:c-1:dept_index:x:dept_index` of a blank
+value in `c-1:dept_index:x` is also the bucket of value `x:dept_index` in
+`c-1`. `audit_multi_indexes` of that index then reads the key as its bucket,
+and the rebuild of that index deletes it or replaces its members with the
+objects that have that value. This does not hold when the scope class
+declares a `set` field named `dept_index`, without a `dbkey:` option of its
+own, and the hash key of company `c-1:dept_index:x` holds a hash: the key is
+then that record's set field (see
 [Multi-value index rebuilds](#multi-value-index-rebuilds)).
 
 Before this version, the instance-scoped `add_to_*` and `update_in_*` added
 objects with a blank value to `<scope key>:<index>`, such as
-`company:c-1:dept_index`. Such a key stays in place after upgrading, and no
-audit reports it as a key of that scope. To remove the key, first confirm
-that the scope class declares no related field named `<index>` (for example,
-`Company.related_fields.key?(:dept_index)` returns `false`). Then confirm
-that the scope identifier names none of the buckets listed above: for the
-name of every instance-scoped `multi_index` within the scope class, the
-identifier with a delimiter appended does not contain the name between two
-delimiters, and for the name of every class-level `multi_index` of the scope
-class, the identifier with a delimiter appended does not start with the name
-followed by a delimiter. When both conditions hold, `DEL` the key:
+`company:c-1:dept_index`. Such keys stay in place after upgrading. The index
+methods of their scope do not read them as data, so they can be left in
+place. Familia has no check that tells such a key apart from a related field
+of the same name or from a live bucket of another scope's index, so inspect a
+key before removing it by hand.
 
-```ruby
-d = Familia.delim
-id = 'c-1'
-scoped = Familia.multi_indexes(class_level: false).select { |idx| idx.scope_class == Company }
-own = Familia.multi_indexes(class_level: true, owner: Company)
-Company.related_fields.key?(:dept_index)                                       # => false
-scoped.none? { |idx| "#{id}#{d}".include?("#{d}#{idx.index_name}#{d}") }      # => true
-own.none? { |idx| "#{id}#{d}".start_with?("#{idx.index_name}#{d}") }          # => true
-Familia.dbclient.del("company:#{id}:dept_index")
-```
-
-When a check fails, as it does for `c-1:dept_index:x`, `c-1:dept_index`,
-`c-1:role_index` and `region_index` above, the key can be a live bucket of
-that index, and a `DEL` removes the index entries of the objects that have
-that value. Do not `DEL` such a key. Rebuild that index instead: for an
-instance-scoped index whose indexed class participates in the scope class,
-rebuild the shorter scope, and for a class-level index, rebuild the class.
-That deletes the key or replaces its members with the objects that have that
-value. Otherwise, or when the shorter scope record does not exist, remove with
-`SREM` only the members whose value for that index differs from that value
-(`x:dept_index` below, `dept_index` for the key of `c-1:dept_index` or
-`c-1:role_index`):
-
-```ruby
-Company.exists?('c-1')                         # => true
-Company.load('c-1').rebuild_dept_index         # with participates_in Company
-Company.load('c-1').rebuild_role_index         # for the key of c-1:role_index
-Company.rebuild_region_index                   # for the key of region_index
-
-# Without a participation relationship, the rebuild does nothing:
-key = 'company:c-1:dept_index:x:dept_index'
-stray = Familia.dbclient.smembers(key).reject do |id|
-  Employee.load(id)&.department == 'x:dept_index'
-end
-Familia.dbclient.srem(key, stray) unless stray.empty?
-```
-
-An identifier can name more than one such bucket, for example when it
-contains index names after a delimiter more than once. Each is a bucket of
-its own index and scope, with its own value. Rebuild each of them, or keep
-every member whose value for one of those indexes is the value of its
-bucket.
-
-When the scope class does declare a related field named `<index>`, such as
-`set :tags` beside `multi_index :tag, :tags, within: Company`, do not `DEL`
-the key: it holds that field's members. Earlier versions may have added the
-identifiers of indexed objects with a blank value to it, and upgrading does
-not remove them. The index wrote each one as the raw identifier, while a
-plain `set` stores each value JSON-encoded. Find the members that are
-identifiers of existing records of the indexed class, review them, and remove
-the stray ones with `SREM`:
+When the scope class declares a related field named `<index>`, such as
+`set :tags` beside `multi_index :tag, :tags, within: Company`, the
+identifiers that earlier versions added to it for objects with a blank value
+stay in that field after upgrading. The index wrote each one as the raw
+identifier, while a plain `set` stores each value JSON-encoded. The members
+that are identifiers of existing records of the indexed class are the
+candidates:
 
 ```ruby
 key = Company.load('c-1').tags.dbkey   # => "company:c-1:tags"
-candidates = Familia.dbclient.smembers(key).select { |m| Employee.exists?(m) }
-# => ["e-1", "e-2"]; review them, then remove the stray ones
-Familia.dbclient.srem(key, %w[e-1 e-2])
+Familia.dbclient.smembers(key).select { |m| Employee.exists?(m) }
+# => ["e-1", "e-2"]
 ```
 
 Familia cannot tell such a member from one the application added itself, so
-check the candidates before removing them. An object whose value is no longer
+review the candidates before removing any. An object whose value is no longer
 blank can still be among them, and the identifier of a record deleted since
-then does not pass the `exists?` check.
-
-Use the scope class's `dbclient` when it sets `logical_database`.
+then does not pass the `exists?` check. Use the scope class's `dbclient` when
+it sets `logical_database`.
 
 ## Advanced Patterns
 
