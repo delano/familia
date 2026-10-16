@@ -246,11 +246,22 @@ module Familia
             end
             raise Familia::IndexBucketConflictError, unchecked unless unchecked.empty?
 
+            delete_index_buckets(client, stale, batch_size: batch_size, &on_delete)
+          end
+
+          # Deletes +bucket_keys+ for .clear_index_buckets, one DEL per key
+          # in one pipeline per batch, and counts only the keys DEL removed.
+          #
+          # @param client [Redis] connection that owns the buckets
+          # @param bucket_keys [Array<String>] bucket keys to delete
+          # @param batch_size [Integer] number of DEL commands per pipeline
+          # @yieldparam key [String] a bucket key that DEL removed
+          # @yieldparam cleared [Integer] buckets deleted so far
+          # @return [Integer] number of bucket keys DEL removed
+          def delete_index_buckets(client, bucket_keys, batch_size: 100, &on_delete)
             cleared = 0
-            stale.each_slice(batch_size) do |buckets|
-              deleted = client.pipelined do |pipe|
-                buckets.each { |key| pipe.del(key) }
-              end
+            bucket_keys.each_slice(batch_size) do |buckets|
+              deleted = client.pipelined { |pipe| buckets.each { |key| pipe.del(key) } }
               buckets.zip(deleted) do |key, count|
                 next unless count.to_i.positive?
 
@@ -297,20 +308,36 @@ module Familia
               end
               record_keys = RecordKeyOwnership.other_record_key_owners(keys, owner, names: names)
               keys.each_with_index do |key, idx|
-                type = types[idx]
-                record_key = record_keys[idx]
-                if record_key == RecordKeyOwnership::TOO_MANY_CANDIDATES
-                  conflicts[key] = record_key
-                  next
-                end
-
-                owners[key] = record_key if record_key
-                conflicts[key] = type if record_key || !WRITABLE_BUCKET_KEY_TYPES.include?(type)
+                record_live_bucket_conflict(conflicts, owners, key, types[idx], record_keys[idx])
               end
             end
             raise Familia::IndexBucketConflictError.new(conflicts, owners) unless conflicts.empty?
 
             nil
+          end
+
+          # Adds +key+ to +conflicts+ for .check_live_bucket_keys! when it
+          # has more candidate owners than RecordKeyOwnership checks, is
+          # another record's key, or holds a type other than a set. For
+          # another record's key, +owners+ gets that record's hash key.
+          #
+          # @param conflicts [Hash{String => String}] key to its type or
+          #   RecordKeyOwnership::TOO_MANY_CANDIDATES
+          # @param owners [Hash{String => String}] key to the owning
+          #   record's hash key
+          # @param key [String] a key the rebuild will write
+          # @param type [String] the TYPE reply for +key+
+          # @param record_key [String, nil] from
+          #   RecordKeyOwnership.other_record_key_owners
+          # @return [void]
+          def record_live_bucket_conflict(conflicts, owners, key, type, record_key)
+            if record_key == RecordKeyOwnership::TOO_MANY_CANDIDATES
+              conflicts[key] = record_key
+              return
+            end
+
+            owners[key] = record_key if record_key
+            conflicts[key] = type if record_key || !WRITABLE_BUCKET_KEY_TYPES.include?(type)
           end
 
           # Returns the +keys+ that start with the literal +bucket_prefix+.
