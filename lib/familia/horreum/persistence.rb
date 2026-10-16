@@ -1348,7 +1348,10 @@ module Familia
       # identifier field would otherwise remove its own lookup entry before
       # {#ensure_refresh_kept_identity!} raises). An identifier field the
       # stored hash lacks keeps its value, because it names the key refresh!
-      # read. A Proc identifier, or a Symbol naming a method that is not a field,
+      # read. The identifier field is the one whose name or accessor method
+      # name (+as:+) the Symbol or String gives
+      # ({Familia::Horreum::Serialization#identifier_field_type}).
+      # A Proc identifier, or a Symbol naming a method that is not a field,
       # has no single field to skip. The fields it reads are cleared here like
       # any other and are assigned again from the stored hash, so until then
       # the identifier cannot be computed. The caller must not read it in
@@ -1363,8 +1366,7 @@ module Familia
       # @return [void]
       #
       def clear_persistent_fields_for_refresh!(values)
-        id_field = self.class.identifier_field
-        id_field = id_field.to_sym if id_field.is_a?(String) || id_field.is_a?(Symbol)
+        id_field = identifier_field_type&.name
 
         self.class.persistent_fields.each do |field_name|
           if field_name.to_sym == id_field

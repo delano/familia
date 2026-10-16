@@ -280,17 +280,33 @@ module Familia
         )
       end
 
-      # The identifier as the instance variable of a Symbol or String
-      # identifier_field that names a field holds it, or nil. It calls no
-      # getter and no Proc, so it has no side effects. A Proc identifier, or
-      # an identifier_field naming a method, gives nil.
+      # The FieldType of a Symbol or String identifier_field that names a
+      # field, or nil. {Familia::Horreum#identifier} calls the method the
+      # definition names, so a field is matched by its accessor method name
+      # first, which differs from its name when the field is declared with
+      # +as:+ (+field :user_id, as: :uid+ with +identifier_field :uid+), and
+      # by its name otherwise. A Proc identifier, or an identifier_field
+      # naming a method that is not a field, gives nil.
       #
-      # @return [Object, nil]
-      def identifier_for_log
+      # @return [Familia::FieldType, nil]
+      def identifier_field_type
         definition = self.class.identifier_field
         return nil unless definition.is_a?(Symbol) || definition.is_a?(String)
 
-        field_type = self.class.field_types[definition.to_sym]
+        name = definition.to_sym
+        field_types = self.class.field_types
+        field_types.each_value.find { |field_type| field_type.method_name == name } || field_types[name]
+      end
+
+      # The identifier as the instance variable of a Symbol or String
+      # identifier_field that names a field holds it, or nil. It calls no
+      # getter and no Proc, so it has no side effects. A Proc identifier, or
+      # an identifier_field naming a method that is not a field, gives nil
+      # (see {#identifier_field_type}).
+      #
+      # @return [Object, nil]
+      def identifier_for_log
+        field_type = identifier_field_type
         return nil unless field_type
 
         value = instance_variable_get(:"@#{field_type.name}")

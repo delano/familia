@@ -13,7 +13,8 @@ Changed
   tracking. This covers a value set in memory and never saved, a field
   another writer removed, and a default that an ``init`` hook set on an
   object built with ``new``. A Symbol or String identifier field that is
-  not stored keeps its value. See ``docs/migrating/refresh.md``.
+  not stored keeps its value, including a field named by its ``as:``
+  method. See ``docs/migrating/refresh.md``.
 - ``Horreum#refresh!`` and ``Horreum#refresh`` raise
   ``Familia::IdentifierMismatchError`` and leave the object unchanged when
   the stored values give no identifier or one that names a different key,
