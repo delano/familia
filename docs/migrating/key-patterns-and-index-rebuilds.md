@@ -233,24 +233,30 @@ escaping, and every matching key was passed to `load_from_key`. It is now set
 to `@model_class.scan_pattern`, which follows `Familia.delim` and the class
 suffix and escapes them and the prefix, and the new `scan_type` reader is set
 to `Familia::Horreum::OBJECT_KEY_TYPE` (`"hash"`), the SCAN `TYPE` option, so
-only object hashes reach `load_from_key`. `Familia::Migration::Pipeline`
-scans the same way.
+only object hashes reach `load_from_key`. `migrate` applies the default after
+`prepare` has run; until then `scan_pattern` and `scan_type` return `nil`.
+`Familia::Migration::Pipeline` scans the same way.
 
 ```ruby
 class RoleMigration < Familia::Migration::Model
   def prepare
     @model_class = Customer   # @scan_pattern left unset
   end
+
+  def process_record(obj, key)
+    # the migration's work on each object
+  end
 end
 
 migration = RoleMigration.new(run: true)
 migration.prepare
-migration.scan_pattern   # => "customer:*:object", before and after
-migration.scan_type      # After: "hash" (Before: NoMethodError)
-migration.migrate
+migration.scan_pattern   # => nil, before and after
+migration.migrate        # Before: false   After: true
 # Before: the bucket customer:role_index:object was scanned, load_from_key
 #         raised Redis::WrongTypeError on it, and error_count was 1
 # After:  only the object hashes are processed, and error_count is 0
+migration.scan_pattern   # => "customer:*:object", before and after
+migration.scan_type      # After: "hash" (Before: NoMethodError)
 ```
 
 A migration that sets `@scan_pattern` in `prepare` is unaffected: the pattern
