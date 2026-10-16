@@ -806,6 +806,7 @@ module Familia
       #
       # ⚠️ WARNING: This method uses the KEYS command which blocks Redis during execution.
       # It scans ALL keys in the database and should NEVER be used in production.
+      # {#scan_count} uses SCAN with a TYPE filter instead and is the production-safe choice.
       #
       # @param filter [String] Glob for the identifier part (default: '*').
       #   The class prefix and suffix are escaped; see #dbkey_pattern.
@@ -881,6 +882,7 @@ module Familia
       #
       # ⚠️ WARNING: This method uses the KEYS command which blocks Redis during execution.
       # It scans ALL keys in the database and should NEVER be used in production.
+      # {#scan_any?} uses SCAN with a TYPE filter instead and is the production-safe choice.
       #
       # @param filter [String] Glob for the identifier part (default: '*').
       #   The class prefix and suffix are escaped; see #dbkey_pattern.
