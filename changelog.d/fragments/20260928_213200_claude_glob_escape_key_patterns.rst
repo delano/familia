@@ -106,16 +106,17 @@ Changed
   already did. Keys these methods wrote for blank values before are not
   deleted by ``rebuild_<index>`` or reported by ``audit_multi_indexes`` as
   keys of their scope, because ``<scope key>:<index>`` can also be a related
-  field of the scope class with the index's name. The exception is such a
-  key of a scope whose identifier is ``<other scope>:<index>:<value>`` or
-  ``<other scope>:<index>``, which is also the bucket of ``<value>:<index>``
-  or of ``<index>`` in the other scope:
-  ``audit_multi_indexes`` reads it as that bucket and the other scope's
-  rebuild deletes or rewrites it, unless the scope class declares a set
-  field named ``<index>`` and the longer scope record exists. Identifiers
-  these methods added to such a related field are not removed from it
-  either. The indexing guide's "Blank field values" section gives the
-  manual cleanup for both.
+  field of the scope class with the index's name. Such a key is still a
+  bucket of an index of the scope class when the scope identifier is
+  ``<other scope>:<name>:<value>`` or ``<other scope>:<name>``, with
+  ``<name>`` any instance-scoped index name within the scope class, or is
+  ``<name>`` or starts with ``<name>:``, with ``<name>`` a class-level index
+  name of the scope class: ``audit_multi_indexes`` reads it as that bucket
+  and the rebuild of that index deletes or rewrites it, unless the scope
+  class declares a set field named ``<index>`` and the longer scope record
+  exists. Identifiers these methods added to such a related field are not
+  removed from it either. The indexing guide's "Blank field values" section
+  gives the manual cleanup for both.
 
 Fixed
 -----

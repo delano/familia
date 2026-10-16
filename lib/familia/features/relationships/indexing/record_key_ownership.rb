@@ -345,7 +345,8 @@ module Familia
           # of the scope it names: no multi_index method of that scope reads
           # or writes it. When it is a set field of the same name, the field
           # names already make it a candidate. Otherwise it is the bucket of
-          # the shorter scope whose prefix it starts with, if any.
+          # the shorter scope whose prefix it starts with, if any, for this
+          # index or another one in +names+.
           #
           # The walk copies no part of +rest+. A set field name must be the
           # whole rest of the key, so each field is compared at the one

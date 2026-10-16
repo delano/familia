@@ -694,10 +694,13 @@ module Familia
       # for a blank field value, is not read as a key of that scope: no
       # multi_index writes a blank value, and the key may be a related
       # field of the same name on the scope class. When scope_id is
-      # "{other id}:{index_name}:{value}", the pattern matches the key as
-      # the bucket of "{value}:{index_name}" in scope "{other id}", and
-      # when scope_id is "{other id}:{index_name}", as the bucket of
-      # "{index_name}" in scope "{other id}" (see
+      # "{other id}:{name}:{value}" or "{other id}:{name}", where {name} is
+      # this or another instance-scoped index name within the scope class,
+      # the audit of {name} reads the key as its bucket of
+      # "{value}:{index_name}" or "{index_name}" in scope "{other id}".
+      # When scope_id is a class-level index name of the scope class, or
+      # starts with it and the delimiter, the audit of that class-level
+      # index reads the key as one of its buckets (see
       # MultiIndexGenerators.bucket_key_prefix).
       #
       # Three failure modes are detected:

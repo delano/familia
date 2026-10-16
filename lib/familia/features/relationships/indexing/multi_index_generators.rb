@@ -101,16 +101,22 @@ module Familia
           # raises for them, and the rebuild SCAN of +owner+ does not match
           # the key (see .blank_field_value?).
           #
-          # The key can still be the bucket of a shorter scope. When +owner+
-          # is a scope whose identifier is "<other id>:<index_name>:<value>",
-          # the key is also the bucket of "<value>:<index_name>" in scope
-          # "<other id>". When the identifier is "<other id>:<index_name>",
-          # the key is also the bucket of "<index_name>" in scope
-          # "<other id>". In both cases audit_multi_indexes reads it as that
-          # bucket, and the rebuild of that scope deletes or rewrites it.
-          # This does not happen when the scope class declares a set field
-          # named +index_name+ and +owner+ exists, because the key is then a
-          # key of +owner+ (see RecordKeyOwnership.other_record_key).
+          # The key can still be a bucket of an index of the scope class.
+          # With <name> the name of any instance-scoped multi_index within
+          # the scope class, this one or another, the key of a scope whose
+          # identifier is "<other id>:<name>:<value>" is also the bucket of
+          # "<value>:<index_name>" of <name> in scope "<other id>", and the
+          # key of a scope whose identifier is "<other id>:<name>" is also
+          # the bucket of "<index_name>" of <name> in "<other id>". With
+          # <name> the name of a class-level multi_index of the scope class,
+          # the key of a scope whose identifier is "<name>:<value>" or
+          # "<name>" is also the class-level bucket of
+          # "<value>:<index_name>" or "<index_name>". audit_multi_indexes of
+          # that index reads it as that bucket, and the rebuild of that
+          # index deletes or rewrites it. This does not happen when the
+          # scope class declares a set field named +index_name+ and +owner+
+          # exists, because the key is then a key of +owner+ (see
+          # RecordKeyOwnership.other_record_key).
           #
           # @param owner [Familia::Horreum, Class] the scope instance, or the
           #   indexed class for a class-level index
