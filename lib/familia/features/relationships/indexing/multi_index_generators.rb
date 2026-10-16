@@ -89,10 +89,16 @@ module Familia
           #
           # A blank value (nil, empty or whitespace only) is the exception.
           # Validation turns it into nil, which Familia.join drops, so the
-          # factories name its bucket "<owner key>:<index_name>" with no
-          # trailing delimiter (see .blank_bucket_key). No multi_index
-          # writes that bucket: add_to_*, update_in_* and the rebuild skip
-          # blank values, class-level and instance-scoped alike.
+          # factories name its key "<owner key>:<index_name>" with no
+          # trailing delimiter. That key is not exclusive to the index: it
+          # is also the key of a related field of +owner+ with the same name
+          # as the index, such as a scope class's `set :tags` beside
+          # `multi_index :tag, :tags, within: Scope`, or `class_set :roles`
+          # beside `multi_index :role, :roles`. So no multi_index method
+          # reads or writes it: add_to_*, update_in_*, remove_from_* and the
+          # rebuild skip blank values, find_all_by_* and sample_from_*
+          # return [] for them, and the rebuild and audit do not match the
+          # key (see .blank_field_value?).
           #
           # @param owner [Familia::Horreum, Class] the scope instance, or the
           #   indexed class for a class-level index
@@ -102,22 +108,10 @@ module Familia
             Familia::UnsortedSet.new(Familia.join(index_name, ''), parent: owner).dbkey
           end
 
-          # Returns the key the factories give the bucket of a blank field
-          # value of +index_name+ on +owner+, for example
-          # "company:c-1:dept_index". No multi_index writes it (see
-          # .bucket_key_prefix), but add_to_* of an instance-scoped index
-          # wrote blank values there before it skipped them. The rebuild
-          # deletes it with the other buckets, and the audit reports it.
-          #
-          # @param owner [Familia::Horreum, Class]
-          # @param index_name [Symbol]
-          # @return [String]
-          def blank_bucket_key(owner, index_name)
-            Familia::UnsortedSet.new(index_name.to_s, parent: owner).dbkey
-          end
-
           # Whether +field_value+ is blank: nil, or empty or whitespace only
-          # as a String. A multi_index does not index a blank value.
+          # as a String. A multi_index does not index a blank value, and its
+          # generated methods do not read or write the key the factories
+          # name for one (see .bucket_key_prefix).
           #
           # @param field_value [Object]
           # @return [Boolean]
@@ -128,7 +122,9 @@ module Familia
           # Yields the keys of the per-value bucket sets of +index_name+ on
           # +owner+, in slices of up to +batch_size+ keys.
           #
-          # The bucket prefix from .bucket_key_prefix is escaped with
+          # The SCAN pattern is "<bucket prefix>*", for example
+          # "company:c-1:dept_index:*" or "customer:role_index:*". The
+          # bucket prefix from .bucket_key_prefix is escaped with
           # Familia.escape_glob before the SCAN wildcard is appended, so glob
           # characters in a scope identifier, the class prefix or the
           # delimiter cannot make the pattern match keys outside that
@@ -153,9 +149,9 @@ module Familia
           # slice are checked in pipelines of at most
           # RecordKeyOwnership::MAX_CANDIDATE_BATCH_BYTES of identifiers.
           #
-          # The blank-value bucket (.blank_bucket_key) is outside the
-          # prefix. When it holds a set, it is yielded after the SCAN in a
-          # slice of its own, checked the same way.
+          # The key "<owner key>:<index_name>", which the factories name for
+          # a blank value, does not match the pattern and is not yielded
+          # (see .bucket_key_prefix).
           #
           # @param client [Redis] connection that owns the buckets
           # @param owner [Familia::Horreum, Class] the scope instance, or the
@@ -187,11 +183,6 @@ module Familia
               end
               yield buckets, others
             end
-            blank_key = blank_bucket_key(owner, index_name)
-            return nil unless client.type(blank_key) == BUCKET_KEY_TYPE
-
-            record_key = RecordKeyOwnership.other_record_key_owners([blank_key], owner, names: names).first
-            record_key ? yield([], { blank_key => record_key }) : yield([blank_key], {})
             nil
           end
 
@@ -402,6 +393,9 @@ module Familia
             actual_scope_class.class_eval do
 
               define_method(:"sample_from_#{field}") do |field_value, count = 1|
+                # A blank value is not indexed (see MultiIndexGenerators.bucket_key_prefix)
+                return [] if MultiIndexGenerators.blank_field_value?(field_value)
+
                 index_set = send("#{index_name}_for", field_value) # i.e. UnsortedSet
 
                 # Get random members efficiently (O(1) via SRANDMEMBER with count)
@@ -413,6 +407,9 @@ module Familia
 
               # Generate bulk query method (e.g., company.find_all_by_department)
               define_method(:"find_all_by_#{field}") do |field_value|
+                # A blank value is not indexed (see MultiIndexGenerators.bucket_key_prefix)
+                return [] if MultiIndexGenerators.blank_field_value?(field_value)
+
                 index_set = send("#{index_name}_for", field_value) # i.e. UnsortedSet
 
                 # Get all members from set
@@ -429,8 +426,10 @@ module Familia
               #    holds any more. A SCAN over the escaped bucket prefix finds them, and only keys
               #    that start with that literal prefix and hold a set are deleted. A set that
               #    also belongs to an existing scope record with a longer identifier is left
-              #    alone (see RecordKeyOwnership.other_record_key). The bucket of a blank value
-              #    ("company:c-1:dept_index") is deleted as well.
+              #    alone (see RecordKeyOwnership.other_record_key). The SCAN pattern is the
+              #    escaped prefix followed by "*", e.g. "company:c-1:dept_index:*", so the key
+              #    "company:c-1:dept_index" that the factory names for a blank value is not
+              #    touched: it may be a related field of the same name on this scope class.
               # 3. Rebuilding: Add each cached object to the bucket of its field value
               #    (no reload needed). An object with a blank field value is not indexed.
               #
@@ -511,8 +510,7 @@ module Familia
                   end
 
                   # PHASE 3: Clear this scope instance's field-value-specific index sets.
-                  # SCAN also finds orphaned sets left by field values no object holds any more,
-                  # and the blank-value bucket (e.g. "company:c-1:dept_index") is deleted too.
+                  # SCAN also finds orphaned sets left by field values no object holds any more.
                   # The identifier in the prefix (e.g. "company:c-*:dept_index:") is escaped,
                   # so a glob character in it cannot widen the match past that literal prefix.
                   # The keys PHASE 4 writes are checked first: add_to_* writes the bucket of
@@ -595,8 +593,10 @@ module Familia
 
                 _ensure_persisted_before_index_write!(index_name, scope_instance)
 
-                # A blank value is not indexed, as in the class-level index.
-                # Its tracker entry below is still recorded, so save keeps
+                # A blank value is not indexed, as in the class-level index:
+                # its key "<scope key>:<index>" may be a related field of the
+                # scope (see MultiIndexGenerators.bucket_key_prefix). Its
+                # tracker entry below is still recorded, so save keeps
                 # refreshing this membership once the value is no longer
                 # blank.
                 unless MultiIndexGenerators.blank_field_value?(field_value)
@@ -626,8 +626,12 @@ module Familia
                 field_value = send(field) if field_value.nil?
                 return unless field_value
 
-                index_set = scope_instance.send("#{index_name}_for", field_value)
-                index_set.remove(identifier)
+                # A blank value has no bucket (see add_to_*), so only its
+                # tracker entry is dropped.
+                unless MultiIndexGenerators.blank_field_value?(field_value)
+                  index_set = scope_instance.send("#{index_name}_for", field_value)
+                  index_set.remove(identifier)
+                end
 
                 # field_value is part of the multi entry key -- the bucket
                 # just left is the entry to drop, not the membership as a
@@ -646,18 +650,20 @@ module Familia
 
                 new_field_value = send(field)
                 # A blank value is not indexed, as in the class-level index,
-                # but the tracker below still records it (see add_to_*). The
-                # old value's bucket is still left, so a member that add_to_*
-                # wrote for a blank value before it skipped them is removed.
+                # but the tracker below still records it (see add_to_*).
+                # Neither a blank old value nor a blank new value touches
+                # the key "<scope key>:<index>", which may be a related field
+                # of the scope (see MultiIndexGenerators.bucket_key_prefix).
                 index_value = new_field_value unless MultiIndexGenerators.blank_field_value?(new_field_value)
+                retract_value = old_field_value unless MultiIndexGenerators.blank_field_value?(old_field_value)
 
                 _ensure_persisted_before_index_write!(index_name, scope_instance)
 
                 # Use Familia's transaction method for atomicity with DataType abstraction
                 scope_instance.transaction do |_tx|
                   # Remove from old index if provided - use helper method
-                  if old_field_value
-                    old_index_set = scope_instance.send("#{index_name}_for", old_field_value)
+                  if retract_value
+                    old_index_set = scope_instance.send("#{index_name}_for", retract_value)
                     old_index_set.remove(identifier)
                   end
 
@@ -742,6 +748,9 @@ module Familia
             # find_all_by_role(value)
             # Uses load_multi for efficient batch loading (avoids N+1 queries)
             indexed_class.define_singleton_method(:"find_all_by_#{field}") do |field_value|
+              # A blank value is not indexed (see MultiIndexGenerators.bucket_key_prefix)
+              return [] if MultiIndexGenerators.blank_field_value?(field_value)
+
               index_set = send("#{index_name}_for", field_value)
               identifiers = index_set.members
               load_multi(identifiers).compact
@@ -750,7 +759,7 @@ module Familia
             # sample_from_role(value, count)
             # Uses load_multi for efficient batch loading (avoids N+1 queries)
             indexed_class.define_singleton_method(:"sample_from_#{field}") do |field_value, count = 1|
-              return [] if field_value.nil? || field_value.to_s.strip.empty?
+              return [] if MultiIndexGenerators.blank_field_value?(field_value)
 
               index_set = send("#{index_name}_for", field_value)
               identifiers = index_set.sample(count)
@@ -763,9 +772,11 @@ module Familia
             # The phases match the instance-scoped rebuild: load every object
             # and its field value, check every bucket key the rebuild will
             # write, delete the class's bucket sets under the escaped bucket
-            # prefix (e.g. "customer:role_index:") and the bucket of a blank
-            # value ("customer:role_index"), then add each object with a
-            # non-blank field value to the bucket of that value. A set under
+            # prefix (e.g. SCAN "customer:role_index:*"), then add each
+            # object with a non-blank field value to the bucket of that
+            # value. The key "customer:role_index" that the factory names for
+            # a blank value is not matched or touched: it may be a
+            # class-level related field of the same name. A set under
             # the prefix that is a set field of an existing record whose
             # identifier starts with the index name is left alone (see
             # RecordKeyOwnership.other_record_key).
@@ -909,8 +920,12 @@ module Familia
 
                 # Use transaction for atomic remove + add to prevent data inconsistency
                 transaction do |conn|
-                  # Remove from old index
-                  conn.srem(old_set.dbkey, serialized_id)
+                  # Remove from old index. A blank old value has no bucket:
+                  # its key may be a class-level related field of the same
+                  # name (see MultiIndexGenerators.bucket_key_prefix).
+                  unless MultiIndexGenerators.blank_field_value?(old_field_value)
+                    conn.srem(old_set.dbkey, serialized_id)
+                  end
 
                   # Add to new index if present
                   if new_field_value && !new_field_value.to_s.strip.empty?
