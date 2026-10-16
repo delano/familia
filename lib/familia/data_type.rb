@@ -303,7 +303,7 @@ module Familia
     # The script does not inspect ARGV[1]: Ruby decides whether to refresh,
     # as #update_expiration does, so a positive default_expiration below
     # one second is sent as EXPIRE 0, as outside a block, which deletes the
-    # key the write just created.
+    # key just written.
     CONDITIONAL_WRITE_SCRIPTS = {
       hsetnx: <<~LUA,
         local written = redis.call('HSETNX', KEYS[1], ARGV[3], ARGV[4])
