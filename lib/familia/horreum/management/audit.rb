@@ -744,26 +744,35 @@ module Familia
 
         orphaned_keys = orphaned_from_scope + orphaned_from_field_value
 
-        status = if stale_members.empty? && missing.empty? && orphaned_keys.empty? &&
-                    foreign_owned_keys.none? { |entry| entry[:owner_key].nil? }
-          :ok
-        else
-          :issues_found
-        end
-
         result = {
           index_name: rel.index_name,
           stale_members: stale_members,
           missing: missing,
           orphaned_keys: orphaned_keys,
           foreign_owned_keys: foreign_owned_keys,
-          status: status,
+          status: instance_scoped_audit_status(stale_members, missing, orphaned_keys, foreign_owned_keys),
         }
         # Surface a sub-status when the "missing" dimension could not be
         # audited so callers can distinguish "checked and clean" from
         # "not checked due to missing participation".
         result[:missing_status] = missing_status if missing_status != :ok
         result
+      end
+
+      # Returns :ok when an instance-scoped multi_index audit found no
+      # stale members, missing entries or orphaned keys, and every entry of
+      # +foreign_owned_keys+ names its owner record. Otherwise returns
+      # :issues_found.
+      #
+      # @return [Symbol] :ok or :issues_found
+      #
+      def instance_scoped_audit_status(stale_members, missing, orphaned_keys, foreign_owned_keys)
+        if stale_members.empty? && missing.empty? && orphaned_keys.empty? &&
+           foreign_owned_keys.none? { |entry| entry[:owner_key].nil? }
+          :ok
+        else
+          :issues_found
+        end
       end
 
       # SCAN for instance-scoped bucket keys and load their members.
@@ -919,27 +928,45 @@ module Familia
         )
         index_prefix = "#{rel.index_name}#{Familia.delim}".b
 
-        parsed.each_with_index.filter_map do |(key, scope_id, field_value), idx|
+        parsed.each_with_index.filter_map do |entry, idx|
           other = others[idx]
-          next [key, scope_id, field_value] unless other
+          next entry unless other
 
-          if other == ownership::TOO_MANY_CANDIDATES
-            foreign_owned_keys << foreign_owned_entry(key, field_value, other).merge(scope_id: scope_id)
-            next nil
-          end
-
-          other_id, name = other
-          unless name.b.start_with?(index_prefix)
-            owner_key = ownership.record_hash_key(scope_class, other_id).force_encoding(key.encoding)
-            foreign_owned_keys << foreign_owned_entry(key, field_value, owner_key).merge(scope_id: scope_id)
-            next nil
-          end
-
-          other_value = name.byteslice(index_prefix.bytesize..)
-          next nil if other_value.nil? || other_value.empty?
-
-          [key, other_id, other_value]
+          reattribute_to_other_scope(scope_class, entry, other, index_prefix, foreign_owned_keys)
         end
+      end
+
+      # Handles one +entry+ of reattribute_instance_scoped_bucket_keys whose
+      # key is also a key of the existing scope +other+ names.
+      #
+      # @param entry [Array(String, String, String)] [key, scope_id, field_value]
+      # @param other [Array(String, String), String] [identifier, name] from
+      #   RecordKeyOwnership.other_record_keys, or
+      #   RecordKeyOwnership::TOO_MANY_CANDIDATES
+      # @param index_prefix [String] binary "<index_name><delim>"
+      # @param foreign_owned_keys [Array<Hash>] receives a dropped key
+      # @return [Array(String, String, String), nil] the entry with the
+      #   other scope's identifier and field value, or nil when dropped
+      #
+      def reattribute_to_other_scope(scope_class, entry, other, index_prefix, foreign_owned_keys)
+        ownership = Familia::Features::Relationships::Indexing::RecordKeyOwnership
+        key, scope_id, field_value = entry
+        if other == ownership::TOO_MANY_CANDIDATES
+          foreign_owned_keys << foreign_owned_entry(key, field_value, other).merge(scope_id: scope_id)
+          return nil
+        end
+
+        other_id, name = other
+        unless name.b.start_with?(index_prefix)
+          owner_key = ownership.record_hash_key(scope_class, other_id).force_encoding(key.encoding)
+          foreign_owned_keys << foreign_owned_entry(key, field_value, owner_key).merge(scope_id: scope_id)
+          return nil
+        end
+
+        other_value = name.byteslice(index_prefix.bytesize..)
+        return nil if other_value.nil? || other_value.empty?
+
+        [key, other_id, other_value]
       end
 
       # Batch-checks scope instance existence with pipelined TYPE
@@ -1283,10 +1310,7 @@ module Familia
       #
       def participation_collection_keys(keys, target_class, collection_name, names)
         ownership = Familia::Features::Relationships::Indexing::RecordKeyOwnership
-        parsed = keys.filter_map do |key|
-          identifier = target_class.extract_identifier_from_key(key, collection_name)
-          [key, identifier] unless identifier.nil? || identifier.empty?
-        end
+        parsed = parse_participation_collection_keys(keys, target_class, collection_name)
         return [] if parsed.empty?
 
         owners = ownership.index_bucket_owners(parsed.map(&:first), target_class, names: names)
@@ -1296,6 +1320,21 @@ module Familia
 
         parsed.each_index.filter_map do |idx|
           parsed[idx].first if owners[idx].nil? || exists[idx]
+        end
+      end
+
+      # Returns [key, identifier] for each of +keys+ whose target record
+      # identifier is not empty, for participation_collection_keys.
+      #
+      # @param keys [Array<String>]
+      # @param target_class [Class]
+      # @param collection_name [String]
+      # @return [Array<Array(String, String)>]
+      #
+      def parse_participation_collection_keys(keys, target_class, collection_name)
+        keys.filter_map do |key|
+          identifier = target_class.extract_identifier_from_key(key, collection_name)
+          [key, identifier] unless identifier.nil? || identifier.empty?
         end
       end
 
