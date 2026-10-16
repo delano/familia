@@ -106,8 +106,11 @@ Changed
   already did. Keys these methods wrote for blank values before are not
   deleted by ``rebuild_<index>`` or reported by ``audit_multi_indexes``,
   because ``<scope key>:<index>`` can also be a related field of the scope
-  class with the index's name. Nor are identifiers they added to such a
-  related field removed from it. The indexing guide's "Blank field values"
+  class with the index's name. The exception is such a key of a scope whose
+  identifier is ``<other scope>:<index>:<value>``, which is also the bucket
+  of ``<value>:<index>`` in the other scope: the other scope's audit reads it
+  as that bucket and its rebuild deletes or rewrites it. Nor are identifiers they added
+  to such a related field removed from it. The indexing guide's "Blank field values"
   section gives the manual cleanup for both.
 
 Fixed
@@ -122,7 +125,11 @@ Fixed
   of a scope record whose identifier is ``<scope>:<index>``, and the buckets
   of a scope whose identifier starts with ``<scope>:<index>:``. Such a key
   belongs to the existing record with the longest identifier.
-  ``audit_multi_indexes`` reads it for that record.
+  ``audit_multi_indexes`` reads it for that record. A key that ends in an
+  instance-scoped index name, such as ``company:c-1:dept_index:x:dept_index``,
+  is a key of record ``c-1:dept_index:x`` only when the scope class declares
+  a set field of that name; otherwise it is the bucket of ``x:dept_index`` in
+  ``c-1``.
 - ``audit_multi_indexes``, ``repair_multi_indexes!``, ``repair_all!`` and
   ``health_check`` no longer raise ``Redis::WrongTypeError`` when a key under
   a multi-index bucket prefix is not a set, such as the hash of a record

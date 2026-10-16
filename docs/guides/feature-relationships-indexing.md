@@ -395,7 +395,13 @@ Code that calls `<index>_for` itself with a blank value gets a set on that key.
 Before this version, the instance-scoped `add_to_*` and `update_in_*` added
 objects with a blank value to `<scope key>:<index>`, such as
 `company:c-1:dept_index`. Such a key stays in place after upgrading, and no
-audit reports it. To remove it, first confirm that the scope class declares no
+audit reports it as a key of that scope. It can be a bucket of a shorter scope,
+though: with companies `c-1` and `c-1:dept_index:x`, the old key
+`company:c-1:dept_index:x:dept_index` of the longer company is also the bucket
+of value `x:dept_index` in `c-1`. The audit of `c-1` reads it as that bucket,
+and rebuilding `c-1` deletes it, or replaces its members with the objects of
+`c-1` that have that value.
+To remove the key, first confirm that the scope class declares no
 related field named `<index>` (for example, `Company.related_fields.key?(:dept_index)`
 returns `false`), then `DEL` the key:
 
@@ -644,7 +650,11 @@ is a set, so the bucket of value `object` at `customer:role_index:object` does
 not make `role_index` a record.
 
 The candidate owners of a key are the splits whose identifier is followed by a
-set field name or an instance-scoped index name. The rebuild and the audit
+set field name that ends the key, or by an instance-scoped index name and the
+delimiter. An index name that ends the key, as in the key of a blank value, makes
+no candidate. So with companies `c-1` and `c-1:dept_index:x`, the bucket
+`company:c-1:dept_index:x:dept_index` of value `x:dept_index` belongs to `c-1`,
+unless the company class declares a set field named `dept_index`. The rebuild and the audit
 check at most
 `Familia::Features::Relationships::Indexing::RecordKeyOwnership::MAX_CANDIDATE_SPLITS`
 (8) of them per key. The candidates of a batch of keys are checked in
