@@ -71,20 +71,48 @@ module Familia
       val.is_a?(String) && val.length > 2 && val.start_with?('"') && val.end_with?('"')
     end
 
+    # Returns +str+ in the encoding redis-client gives a key or member with
+    # the same bytes: UTF-8 when the bytes are valid UTF-8, BINARY otherwise.
+    # (redis-client labels each bulk string it reads as UTF-8 and relabels it
+    # BINARY unless it is valid.) The bytes are not changed.
+    #
+    # Every key {#join} builds goes through here, so a key is one String
+    # value wherever it comes from. Before, a key built from a UTF-8
+    # identifier with invalid bytes was UTF-8 while the same key built from
+    # the member read back was BINARY, and the two were neither == nor equal
+    # as Hash keys.
+    #
+    # @param str [#to_s] key, key part or identifier
+    # @return [String] a UTF-8 String when the bytes are valid UTF-8, else a
+    #   BINARY String; +str+ itself when it is already a valid UTF-8 String
+    def normalize_key_encoding(str)
+      text = str.to_s
+      text = text.dup.force_encoding(Encoding::UTF_8) unless text.encoding == Encoding::UTF_8
+      text.valid_encoding? ? text : text.b
+    end
+
     # Joins array elements with Familia delimiter
     #
-    # When the parts carry non-ASCII bytes in incompatible encodings, the
-    # parts are joined as bytes and the result is BINARY. This happens for a
-    # non-ASCII class prefix (e.g. 'équipe') with an identifier that
-    # redis-rb returned as BINARY because it is not valid UTF-8.
+    # The result has the encoding {#normalize_key_encoding} gives it: UTF-8
+    # when its bytes are valid UTF-8, BINARY otherwise. So a key built from
+    # an identifier is == to the same key read back from the server, whatever
+    # encoding the identifier was given in.
+    #
+    # When the parts carry non-ASCII bytes in incompatible encodings, such as
+    # a non-ASCII class prefix (e.g. 'équipe') with an identifier that
+    # redis-client returned as BINARY because it is not valid UTF-8, the
+    # parts are joined as bytes.
     #
     # @param val [Array] elements to join
     # @return [String] joined string
     def join(*val)
       parts = val.compact
-      parts.join(Familia.delim)
-    rescue Encoding::CompatibilityError
-      parts.flatten.map { |part| part.to_s.b }.join(Familia.delim.to_s.b)
+      key = begin
+        parts.join(Familia.delim)
+      rescue Encoding::CompatibilityError
+        parts.flatten.map { |part| part.to_s.b }.join(Familia.delim.to_s.b)
+      end
+      normalize_key_encoding(key)
     end
 
     # Splits a string using Familia delimiter

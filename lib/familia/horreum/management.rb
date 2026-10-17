@@ -680,9 +680,12 @@ module Familia
       # character (e.g., "mymodel:foo:bar:object" where the identifier is
       # "foo:bar"). A naive split on the delimiter would truncate these.
       #
-      # The comparison is on bytes, so a BINARY key (redis-rb returns keys
-      # that are not valid UTF-8 as BINARY) matches a non-ASCII prefix. The
-      # identifier is returned in the key's encoding.
+      # The key is compared and sliced as bytes. The client returns a key
+      # that is not valid UTF-8 as a binary String, and comparing such a
+      # key with a prefix that holds non-ASCII characters as Strings raises
+      # Encoding::CompatibilityError. The identifier keeps the key's
+      # encoding, as the members of the instances sorted set do, so the
+      # identifiers of one record compare equal.
       #
       # @param key [String] Full Redis key (e.g., "user:alice:object")
       # @param key_suffix [String] The suffix to strip (default: class suffix)
@@ -694,14 +697,14 @@ module Familia
       #
       def extract_identifier_from_key(key, key_suffix = suffix)
         d = Familia.delim
+        pfx = "#{prefix}#{d}"
+        sfx = "#{d}#{key_suffix}"
         bkey = key.b
-        pfx = "#{prefix}#{d}".b
-        sfx = "#{d}#{key_suffix}".b
+        size = bkey.bytesize - pfx.bytesize - sfx.bytesize
 
-        return nil unless bkey.start_with?(pfx) && bkey.end_with?(sfx)
+        return nil unless size >= 0 && bkey.start_with?(pfx.b) && bkey.end_with?(sfx.b)
 
-        length = [bkey.bytesize - pfx.bytesize - sfx.bytesize, 0].max
-        bkey.byteslice(pfx.bytesize, length).force_encoding(key.encoding)
+        bkey.byteslice(pfx.bytesize, size).force_encoding(key.encoding)
       end
 
       def dbkey(identifier, suffix = self.suffix)
