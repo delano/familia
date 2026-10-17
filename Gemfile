@@ -5,7 +5,13 @@ source 'https://rubygems.org'
 gemspec
 
 group :test do
+  # The tryouts build fixture keys and inspect envelopes with Base64. Declare
+  # it here rather than relying on another gem in the bundle to bring it in.
+  gem 'base64', require: false
   gem 'concurrent-ruby', '~> 1.3.8', require: false
+  # The pooling tryouts build ConnectionPool::Wrapper providers, as an
+  # application would. familia itself does not use connection_pool.
+  gem 'connection_pool', require: false
   gem 'ruby-prof'
   gem 'stackprof'
   gem 'timecop', require: false
@@ -22,7 +28,6 @@ group :development, :test do
   # so cap below 1.4 to keep the dev bundle installable on Ruby 3.2.
   gem 'dry-configurable', '>= 1.3', '< 1.5', require: false
   gem 'irb', '~> 1.18.0', require: false
-  gem 'json_schemer', '~> 2.0', require: false
   gem 'rake', '~> 13.0', require: false
   gem 'redcarpet', require: false
   gem 'reek', require: false

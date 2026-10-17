@@ -1187,6 +1187,8 @@ end
 Configure connection pools based on application needs.
 
 ```ruby
+require 'connection_pool' # list connection_pool in your Gemfile
+
 # High-throughput application
 HIGH_THROUGHPUT_POOL = ConnectionPool::Wrapper.new(size: 25, timeout: 5) do
   Redis.new(url: ENV['REDIS_URL'])
@@ -1424,8 +1426,8 @@ class UserTest < Minitest::Test
 
   def setup_encryption_keys
     test_keys = {
-      v1: Base64.strict_encode64('a' * 32),
-      v2: Base64.strict_encode64('b' * 32)
+      v1: ['a' * 32].pack('m0'), # strict Base64, as encryption keys require
+      v2: ['b' * 32].pack('m0')
     }
     Familia.configure do |config|
       config.encryption_keys = test_keys

@@ -8,6 +8,9 @@
 #   familia:migrate:validate     Check dependency issues
 #   familia:migrate:schema_drift List models with changed schemas
 #
+# Load this file from a Rakefile. familia does not depend on rake, so the
+# application's bundle must include it, as it must to run rake at all.
+#
 # frozen_string_literal: true
 
 require 'rake'
@@ -126,7 +129,7 @@ module Familia
                              when :failed then 'Failed'
                              when :rolled_back then 'Rolled back'
                              else 'Unknown'
-                             end
+          end
 
           dry_run_note = result[:dry_run] ? ' (dry run)' : ''
           puts "#{status_indicator}: #{result[:migration_id]}#{dry_run_note}"

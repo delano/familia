@@ -91,6 +91,8 @@ module Familia
         #
         # @param argv [Array<String>] command-line arguments (default: ARGV)
         # @return [Integer] exit code (0 = success, 1 = error/action required)
+        # @raise [StandardError] errors raised by {.run} or {.check_only}
+        #   propagate instead of becoming an exit code
         #
         # @example In migration script
         #   if __FILE__ == $0
@@ -124,9 +126,16 @@ module Familia
         # Orchestrates the full migration process including preparation,
         # conditional execution based on {#migration_needed?}, and cleanup.
         #
+        # Errors raised by {#prepare}, {#migration_needed?} or {#migrate}
+        # propagate to the caller; they are not returned as false. For
+        # example, {Model#migrate} raises Errors::PreconditionFailed and
+        # Familia::SchemaValidatorLoadError.
+        #
         # @param options [Hash] CLI options, typically { run: true/false }
-        # @return [Boolean, nil] true if migration completed successfully,
-        #   nil if not needed, false if failed
+        # @return [Boolean, nil] nil if not needed, otherwise what {#migrate}
+        #   returns: true if migration completed successfully, false if failed
+        # @raise [StandardError] any error raised by {#prepare},
+        #   {#migration_needed?} or {#migrate}
         def run(options = {})
           migration         = new
           migration.options = options
@@ -365,12 +374,15 @@ module Familia
       # Validate an object against its schema
       #
       # Uses the SchemaRegistry to validate an object's data against
-      # its registered JSON schema. Returns validation results without
-      # raising exceptions.
+      # its registered JSON schema. Data that does not match the schema is
+      # reported in the result rather than raised; see {#validate_schema!}
+      # for the raising variant.
       #
       # @param obj [Object] object with to_h method
       # @param context [String, nil] context for error messages (e.g., 'before transform')
       # @return [Hash] { valid: Boolean, errors: Array }
+      # @raise [Familia::SchemaValidatorLoadError] if json_schemer is
+      #   installed but fails to load
       def validate_schema(obj, context: nil)
         return { valid: true, errors: [] } unless schema_validation_enabled?
 
@@ -399,6 +411,8 @@ module Familia
       # @param context [String, nil] context for error messages
       # @return [true] if valid
       # @raise [Familia::SchemaValidationError] if validation fails
+      # @raise [Familia::SchemaValidatorLoadError] if json_schemer is
+      #   installed but fails to load
       def validate_schema!(obj, context: nil)
         result = validate_schema(obj, context: context)
         unless result[:valid]

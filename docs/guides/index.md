@@ -86,7 +86,10 @@ end
 
 ### Connection Pooling (Performance)
 ```ruby
-# Configure connection provider for multi-database pooling
+# Configure connection provider for multi-database pooling. familia does not
+# depend on connection_pool; list it in your Gemfile.
+require 'connection_pool'
+
 POOLS = {}
 POOLS_MUTEX = Mutex.new
 
