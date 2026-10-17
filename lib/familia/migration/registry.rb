@@ -49,6 +49,15 @@ module Familia
       # queueing commands on it after the block completed. Each registry
       # method resolves the client once and issues all of its commands on it.
       #
+      # The block's connection is on the logical database the block was
+      # opened on: inside a block every Familia.dbclient lookup returns it,
+      # whatever database is asked for. A registry used inside a block that
+      # a model with another logical_database opened (+Order.transaction+
+      # with +logical_database 7+) reads and writes its keys in that
+      # database, and #applied? outside the block, on the registry's own
+      # database, does not see a #record_applied made there. Pass +redis:+
+      # for a registry that must stay on its database inside such a block.
+      #
       # @return [Redis, Redis::PipelinedConnection] The Redis client
       #
       def client

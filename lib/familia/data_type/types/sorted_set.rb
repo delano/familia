@@ -552,12 +552,14 @@ module Familia
       count = 1 if count.nil?
       result = dbclient.zpopmin(dbkey, count)
       # Refresh the TTL only when something was popped. Inside a transaction
-      # or pipeline that is unknown, so the refresh is queued with the pop.
-      # The two transform_reply calls each read the same reply: the first
-      # turns it into "popped anything" for the refresh, the second into the
-      # return value. Inside a block both pass the Future through, so the
-      # refresh is queued and the ZPOP* Future is returned.
-      update_expiration_if_written(Familia.transform_reply(result) { |popped| !(popped.nil? || popped.empty?) })
+      # or pipeline that is unknown, so the refresh is queued with the pop,
+      # unless the count pops nothing (0, or a negative count the server
+      # rejects). The two transform_reply calls each read the same reply:
+      # the first turns it into "popped anything" for the refresh, the
+      # second into the return value. Inside a block both pass the Future
+      # through, so the refresh is queued and the ZPOP* Future is returned.
+      popped_any = count.to_i.positive? && Familia.transform_reply(result) { |popped| !(popped.nil? || popped.empty?) }
+      update_expiration_if_written(popped_any)
       Familia.transform_reply(result) { |popped| deserialize_popped(popped, count) }
     end
 
@@ -582,12 +584,14 @@ module Familia
       count = 1 if count.nil?
       result = dbclient.zpopmax(dbkey, count)
       # Refresh the TTL only when something was popped. Inside a transaction
-      # or pipeline that is unknown, so the refresh is queued with the pop.
-      # The two transform_reply calls each read the same reply: the first
-      # turns it into "popped anything" for the refresh, the second into the
-      # return value. Inside a block both pass the Future through, so the
-      # refresh is queued and the ZPOP* Future is returned.
-      update_expiration_if_written(Familia.transform_reply(result) { |popped| !(popped.nil? || popped.empty?) })
+      # or pipeline that is unknown, so the refresh is queued with the pop,
+      # unless the count pops nothing (0, or a negative count the server
+      # rejects). The two transform_reply calls each read the same reply:
+      # the first turns it into "popped anything" for the refresh, the
+      # second into the return value. Inside a block both pass the Future
+      # through, so the refresh is queued and the ZPOP* Future is returned.
+      popped_any = count.to_i.positive? && Familia.transform_reply(result) { |popped| !(popped.nil? || popped.empty?) }
+      update_expiration_if_written(popped_any)
       Familia.transform_reply(result) { |popped| deserialize_popped(popped, count) }
     end
 
@@ -847,11 +851,7 @@ module Familia
     def diff(*other_sets, withscores: false)
       keys = [dbkey] + resolve_set_keys(other_sets)
 
-      result = if withscores
-        dbclient.zdiff(*keys, withscores: true)
-      else
-        dbclient.zdiff(*keys)
-      end
+      result = dbclient.zdiff(*keys, with_scores: withscores)
 
       Familia.transform_reply(result) do |reply|
         process_set_operation_result(reply, withscores: withscores)

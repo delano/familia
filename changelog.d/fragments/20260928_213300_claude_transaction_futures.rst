@@ -12,6 +12,14 @@ Added
 Changed
 -------
 
+- familia now requires ``redis`` 5.4 or later (``>= 5.4, < 6.0``, was
+  ``>= 5.0``). ``Lock#release``, and inside a block ``HashKey#hsetnx``,
+  ``JsonStringKey#setnx`` and ``JsonStringKey#value`` with a default, pass
+  a reply-coercion block to ``Redis#call``. redis-rb's changelog for 5.4.0:
+  "``Redis#call`` now accept a block, allowing to use ``Redis`` instances
+  where ``RedisClient`` is expected." Earlier versions drop the block, so
+  ``Lock#release`` returned ``0`` (truthy) for a failed release and the
+  Futures resolved to ``1`` or ``0`` instead of ``true`` or ``false``.
 - Inside ``transaction``, ``atomic_write`` and ``pipelined`` blocks,
   DataType and Horreum methods that only convert a reply now return the
   command's ``Redis::Future`` instead of raising ``NoMethodError``. Its
@@ -85,7 +93,10 @@ Changed
   the six methods above. A registry first used inside a block returned
   ``true`` from ``applied?`` for every migration and kept the block's
   connection, so a later ``record_applied`` returned a Future and wrote
-  nothing. To keep a registry on its own connection, pass one:
+  nothing. The block's connection is on the database the block was opened
+  on, so inside a block opened by a model with another
+  ``logical_database`` such a registry's commands go to that database. To
+  keep a registry on its own connection, pass one:
   ``Familia::Migration::Registry.new(redis: Familia.create_dbclient)``.
 - ``save``, ``save_if_not_exists!``, ``create!``, ``build``,
   ``atomic_write`` and ``Familia.atomic_write`` raise
@@ -159,6 +170,10 @@ Changed
 Fixed
 -----
 
+- ``SortedSet#diff(withscores: true)`` raised ``ArgumentError: unknown
+  keyword: :withscores``. It now returns ``[member, score]`` pairs.
+- ``SortedSet#popmin(0)`` and ``#popmax(0)`` inside a block no longer queue
+  a TTL refresh, matching their behaviour outside a block.
 - ``HashKey#increment``, ``#decrement`` and ``#incrbyfloat`` raised
   ``NoMethodError`` inside ``transaction``, ``atomic_write`` and
   ``pipelined`` blocks, which aborted the whole block. They now return the

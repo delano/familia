@@ -219,8 +219,9 @@ outside a block:
   server answers `NOPERM`, Familia raises `Redis::PermissionError`, and a
   transaction applies none of the block's commands.
 - `ListKey#pushx` and `#unshiftx`, and `SortedSet#popmin` and `#popmax`,
-  write whenever the key exists (a pop with a count of 0 aside), and EXPIRE
-  does nothing on a missing key. They queue the refresh after the write.
+  write whenever the key exists, and EXPIRE does nothing on a missing key.
+  They queue the refresh after the write. A pop with a count of 0 removes
+  nothing and queues no refresh.
 
 A DataType with no expiration (`default_expiration` 0, or a relation declared
 with `no_expiration: true`) queues no refresh.

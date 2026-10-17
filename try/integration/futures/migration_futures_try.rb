@@ -41,6 +41,13 @@ rescue StandardError => e
   e.class
 end
 
+# A model on a logical database other than the registry's (db 0).
+class FuturesMigrationDb7Record < Familia::Horreum
+  logical_database 7
+  identifier_field :recid
+  field :recid
+end
+
 ## migration entry points inside a pipeline raise OperationModeError
 [
   @refused.call { Familia.pipelined { FuturesMigrationExample.run(run: false) } },
@@ -116,6 +123,21 @@ Familia.pipelined { @ret = @own_client_registry.pending([FuturesMigrationExample
 @ret
 #=> []
 
+## a registry without redis: inside a block opened on another database writes there
+@switch_registry = Familia::Migration::Registry.new(prefix: "#{@prefix}:dbswitch")
+@switch_registry.applied?('dbswitch_example')
+FuturesMigrationDb7Record.transaction { @switch_registry.record_applied('dbswitch_example', {}) }
+[@switch_registry.applied?('dbswitch_example'),
+ Familia.with_isolated_dbclient(7) { |db7| !db7.zscore("#{@prefix}:dbswitch:applied", 'dbswitch_example').nil? }]
+#=> [false, true]
+
+## a registry given its own client stays on its database inside that block
+@own_db_registry = Familia::Migration::Registry.new(redis: Familia.create_dbclient, prefix: "#{@prefix}:dbown")
+FuturesMigrationDb7Record.transaction { @own_db_registry.record_applied('dbown_example', {}) }
+[@own_db_registry.applied?('dbown_example'),
+ Familia.with_isolated_dbclient(7) { |db7| db7.zscore("#{@prefix}:dbown:applied", 'dbown_example') }]
+#=> [true, nil]
+
 ## outside a block: the registry and runner keep their return types
 [@registry.applied?('futures_migration_example'), @registry.applied_at('futures_migration_example').class,
  @registry.metadata('futures_migration_example')[:status], @runner.status.first[:status], @runner.pending]
@@ -123,4 +145,8 @@ Familia.pipelined { @ret = @own_client_registry.pending([FuturesMigrationExample
 
 # Teardown
 Familia.dbclient.scan_each(match: "#{@prefix}*").each { |key| Familia.dbclient.del(key) }
+Familia.with_isolated_dbclient(7) do |db7|
+  db7.scan_each(match: "#{@prefix}*").each { |key| db7.del(key) }
+end
+@own_db_registry.redis.close
 Familia::Migration.migrations.replace(@initial_migrations)

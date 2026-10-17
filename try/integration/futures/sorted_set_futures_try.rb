@@ -148,6 +148,33 @@ end
 [@ret.value, @owner.scores.ttl > 100]
 #=> [[["\"a\"", 1.0], ["\"b\"", 2.0]], true]
 
+## popmin(0) inside a transaction pops nothing and queues no TTL refresh
+@reset.call
+@owner.scores.expire(100)
+@ret = nil
+@owner.transaction { @ret = @owner.scores.popmin(0) }
+[@ret.value, @owner.scores.ttl <= 100, @owner.scores.size]
+#=> [nil, true, 3]
+
+## popmax(0) inside a pipeline pops nothing and queues no TTL refresh
+@reset.call
+@owner.scores.expire(100)
+@ret = @in_pipeline.call { @owner.scores.popmax(0) }
+[@ret.value, @owner.scores.ttl <= 100, @owner.scores.size]
+#=> [nil, true, 3]
+
+## popmin(0) outside a block leaves the TTL alone too
+@reset.call
+@owner.scores.expire(100)
+[@owner.scores.popmin(0), @owner.scores.ttl <= 100]
+#=> [nil, true]
+
+## diff with scores inside a pipeline passes the ZDIFF Future through
+@reset.call
+@ret = @in_pipeline.call { @owner.scores.diff(@other, withscores: true) }
+[@ret.class, @ret.value]
+#=> [Redis::Future, [["\"a\"", 1.0], ["\"c\"", 3.0]]]
+
 ## popmin inside a pipeline on a missing sorted set leaves it missing
 @owner.scores.delete!
 @ret = @in_pipeline.call { @owner.scores.popmin }
@@ -272,6 +299,11 @@ end
 @reset.call
 [@owner.scores.mscore('a', 'zz'), @owner.scores.inter(@other, withscores: true), @owner.scores.diff(@other).sort]
 #=> [[1.0, nil], [["b", 22.0]], ["a", "c"]]
+
+## outside a block: diff with scores returns deserialized member and score pairs
+@reset.call
+[@owner.scores.diff(@other, withscores: true), @owner.scores.diff(@other).sort]
+#=> [[["a", 1.0], ["c", 3.0]], ["a", "c"]]
 
 ## outside a block: randmember and scan pair deserialized members with Float scores
 @reset.call

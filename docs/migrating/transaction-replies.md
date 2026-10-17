@@ -21,6 +21,25 @@ Most of the affected calls used to raise an error inside a block
 so code could not have relied on them. The calls below behaved differently,
 and code that uses them inside a block needs a change.
 
+## familia requires redis-rb 5.4 or later
+
+familia's gemspec now declares `redis` `>= 5.4, < 6.0` (it was `>= 5.0`).
+`Lock#release`, and inside a block `HashKey#hsetnx`, `JsonStringKey#setnx`
+and `JsonStringKey#value` with a default, pass a block to `Redis#call` that
+turns the script's `1` or `0` reply into `true` or `false`. redis-rb's
+changelog for 5.4.0 says: "`Redis#call` now accept a block, allowing to use
+`Redis` instances where `RedisClient` is expected." Versions 5.0 to 5.3
+drop the block, so with them `Lock#release` returned `0`, which is truthy,
+for a release that failed.
+
+A bundle that pins `redis` below 5.4 no longer resolves with this familia.
+Update it:
+
+```ruby
+# Gemfile
+gem 'redis', '>= 5.4', '< 6.0'
+```
+
 ## Partial writes inside a transaction now raise
 
 Inside a caller's `transaction`, `multi_field_update` and
@@ -167,7 +186,18 @@ so a later `record_applied` returned a Future and wrote nothing. It now
 behaves inside the block as above and resolves a plain connection after it.
 Outside a block `client` still keeps the first connection it resolves.
 
-To keep a registry on its own connection inside a block, as before, pass one:
+The block's connection is on the logical database the block was opened on.
+Inside a block every `Familia.dbclient` lookup returns that connection,
+whatever database is asked for, so a registry used inside
+`Order.transaction`, where `Order` declares `logical_database 7`, writes
+its records to database 7. `applied?` outside the block reads the
+registry's own database and does not find them, and the runner treats the
+migration as pending. A registry first used outside the block kept its own
+connection before this change, so its records stayed on its database. Pass
+a client to keep that:
+
+To keep a registry on its own connection inside any block, as before, pass
+one:
 
 ```ruby
 # Before: first use outside the block kept a plain connection
