@@ -1334,7 +1334,9 @@ module Familia
 
       # Sets every persistent field to nil, except a Symbol or String
       # identifier field that the stored hash does not contain, writing the
-      # instance variables directly instead of calling the setters.
+      # instance variables directly instead of calling the setters. For an
+      # object identifier field (+objid+) it also sets the generator
+      # provenance (+objid_generator_used+) to nil.
       #
       # {#refresh!} calls this before assigning the stored values, so the
       # object starts from the state a newly loaded one has: fields missing
@@ -1375,6 +1377,12 @@ module Familia
           end
 
           instance_variable_set(:"@#{field_name}", nil)
+          # The objid getter and setter also record the generator in
+          # @<field>_generator_used, which a loaded object without the field
+          # does not have.
+          if self.class.field_types[field_name]&.category == :object_identifier
+            instance_variable_set(:"@#{field_name}_generator_used", nil)
+          end
         end
       end
       private :clear_persistent_fields_for_refresh!

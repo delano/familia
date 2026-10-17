@@ -71,6 +71,23 @@ user.status
 
 If code depends on a default surviving `refresh!`, apply the default where the value is read (`user.status || "active"`) or save it so that it is stored.
 
+The same applies to an `objid` or `extid` that was generated on first read and never saved: `refresh!` discards it, and the next read generates a different value. If the generated value has already been shared, for example in a URL, save before calling `refresh!`:
+
+```ruby
+class User < Familia::Horreum
+  feature :object_identifier
+  feature :external_identifier
+  identifier_field :email
+  field :email
+end
+
+user = User.load("alice@example.com")  # the stored hash has no objid or extid
+link_id = user.extid                    # generates an objid and derives the extid from it
+user.save                               # without this, user.extid differs from link_id after refresh!
+user.refresh!
+user.extid == link_id  # => true
+```
+
 ### `Horreum#refresh!` raises `Familia::IdentifierMismatchError` instead of changing the object's identity
 
 `refresh!` never changes which record an object is. After it assigns the stored values it computes the identifier again. If there is none, or it names a key other than the one `refresh!` read, it raises `Familia::IdentifierMismatchError` and leaves the object as it was, so a later `save` writes to the key the object had. `Horreum#refresh` behaves the same way.
@@ -137,7 +154,7 @@ user.settings.update_expiration
 
 **Writes by other clients.** The Valkey `HMSET` documentation (<https://valkey.io/commands/hmset/>) says: "This command overwrites any specified fields already existing in the hash." The old `refresh!` sent every field it had read, so a value another client wrote between the `HGETALL` and the `HMSET` was replaced by the value read before it. The old `refresh!` also serialized each value again before writing it, so a value stored without JSON encoding (for example `not-json` written with `redis-cli HSET`) was stored back as the JSON string `"not-json"`. Both writes are gone, and no change is needed on your side.
 
-**Dirty-write check.** The old `refresh!` ran the check that collection writes run when the parent has unsaved field changes. It warned, or raised `Familia::Problem` under `dirty_write_warnings :strict`, with `Familia.strict_write_order`, or when the parent had never been saved. It no longer runs the check. Writes through the same `HashKey` still do.
+**Dirty-write check.** The old `refresh!` ran the check that collection writes run (`warn_if_dirty!` in `lib/familia/data_type.rb`). It did nothing when the parent had no unsaved field changes or when the resolved `dirty_write_warnings` mode was `:off`. Otherwise it raised `Familia::Problem` when `Familia.strict_write_order` was true, under `dirty_write_warnings :strict`, or when the parent's hash did not exist and `Familia.raise_on_unsaved_parent_write` was true (the default). In every other case it warned: on every call under `:warn`, and once per set of unsaved fields under `:once` (the default). It no longer runs the check. Writes through the same `HashKey` still do.
 
 ## Other changes
 

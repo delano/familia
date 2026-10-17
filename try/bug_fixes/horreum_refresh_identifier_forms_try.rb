@@ -19,6 +19,13 @@
 # refresh! reset the fields, it computed the identifier only while they were
 # intact, and these identifier forms refreshed without error.
 #
+# An encrypted field computes the identifier, and reads its aad_fields, when
+# its setter encrypts a legacy plaintext value at rest, and reveal computes
+# them again to decrypt. refresh! assigns the encrypted fields after the
+# others (initialize_with_keyword_args), so the fields a Proc identifier and
+# the aad_fields read are set by then. The legacy-plaintext cases below pin
+# that order; the envelope cases pin that stored envelopes survive refresh!.
+#
 # naive_refresh interpolated dbkey into its debug message before assigning
 # anything, even with debug logging off. It raised Familia::NoIdentifier on
 # an object whose identifier was not set yet, and on an object with no objid
@@ -60,6 +67,18 @@ module RefreshIdentifierFormsTry
     field :note
   end
 
+  # Identifier computed by a Proc, with encrypted fields, one of them bound
+  # to another field through aad_fields.
+  class EncryptedProcRecord < Familia::Horreum
+    prefix :refresh_idform_encrypted
+    feature :encrypted_fields
+    identifier_field ->(record) { record.email&.downcase }
+    field :email
+    field :region
+    encrypted_field :secret, aad_fields: [:region]
+    encrypted_field :token
+  end
+
   # Identifier held in a plain Symbol field.
   class SymbolRecord < Familia::Horreum
     prefix :refresh_idform_symbol
@@ -83,6 +102,9 @@ module RefreshIdentifierFormsTry
     Familia.dbclient.info('commandstats').transform_values { |stats| stats['calls'].to_i }
   end
 end
+
+# pack('m0') is strict Base64 and needs no library.
+set_test_encryption_keys({ v1: ['c' * 32].pack('m0') }, current_version: :v1)
 
 @raw = Familia.dbclient
 
@@ -141,6 +163,37 @@ end
 [@sent, @objid_rec.note, @log_io.string.include?("(#{@objid_rec.dbkey})")]
 #=> [{ 'hgetall' => 1 }, 'plain-legacy', true]
 
+## a Proc identifier with encrypted fields: a second instance reveals the stored plaintext after refresh!
+@enc = RefreshIdentifierFormsTry::EncryptedProcRecord.new(email: 'Enc@Example.com', region: 'eu', secret: 'S1', token: 'T1')
+@enc.save
+@enc_stored = @raw.hmget(@enc.dbkey, 'secret', 'token')
+@enc_copy = RefreshIdentifierFormsTry::EncryptedProcRecord.new(email: 'enc@example.com', region: 'stale', secret: 'old')
+@enc_copy.refresh!
+[@enc_copy.region, @enc_copy.secret.reveal { |plain| plain }, @enc_copy.token.reveal { |plain| plain }, @enc_copy.dirty?]
+#=> ['eu', 'S1', 'T1', false]
+
+## a save after refresh! leaves the stored envelopes unchanged
+@enc_copy.save
+@raw.hmget(@enc.dbkey, 'secret', 'token')
+#=> @enc_stored
+
+## legacy plaintext at rest in both encrypted fields is revealed after refresh!
+@raw.hset(@enc.dbkey, 'secret', '"legacy-secret"', 'token', '"legacy-token"')
+@enc_legacy = RefreshIdentifierFormsTry::EncryptedProcRecord.new(email: 'enc@example.com')
+@enc_legacy.refresh!
+[@enc_legacy.secret.reveal { |plain| plain }, @enc_legacy.token.reveal { |plain| plain }]
+#=> ['legacy-secret', 'legacy-token']
+
+## the next save stores the legacy plaintext as envelopes that a load reveals
+@enc_legacy.save
+@enc_loaded = RefreshIdentifierFormsTry::EncryptedProcRecord.load('enc@example.com')
+[
+  @raw.hmget(@enc.dbkey, 'secret', 'token').map { |stored| JSON.parse(stored).key?('ciphertext') },
+  @enc_loaded.secret.reveal { |plain| plain },
+  @enc_loaded.token.reveal { |plain| plain },
+]
+#=> [[true, true], 'legacy-secret', 'legacy-token']
+
 ## naive_refresh assigns the identifier field on an object that has none yet
 @naive = RefreshIdentifierFormsTry::SymbolRecord.new
 @naive.naive_refresh(rid: '"idform_naive"', name: '"named"')
@@ -167,5 +220,7 @@ delete_test_dbkeys(
   RefreshIdentifierFormsTry::ProcRecord,
   RefreshIdentifierFormsTry::MethodRecord,
   RefreshIdentifierFormsTry::ObjidRecord,
+  RefreshIdentifierFormsTry::EncryptedProcRecord,
   RefreshIdentifierFormsTry::SymbolRecord,
 )
+clear_test_encryption_keys

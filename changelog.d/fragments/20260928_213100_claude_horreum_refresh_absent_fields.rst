@@ -10,11 +10,13 @@ Changed
 - ``Horreum#refresh!`` and ``Horreum#refresh`` set every persistent field
   that the stored hash does not contain to ``nil``, as ``load`` and
   ``find_by_id`` do. They kept the in-memory value and then cleared dirty
-  tracking. This covers a value set in memory and never saved, a field
-  another writer removed, and a default that an ``init`` hook set on an
-  object built with ``new``. A Symbol or String identifier field that is
-  not stored keeps its value, including a field named by its ``as:``
-  method. See ``docs/migrating/refresh.md``.
+  tracking. This covers a value set in memory and never saved, including an
+  ``objid`` or ``extid`` generated on first read, a field another writer
+  removed, and a default that an ``init`` hook set on an object built with
+  ``new``. ``objid_generator_used`` is reset to ``nil`` with ``objid``. A
+  Symbol or String identifier field that is not stored keeps its value,
+  including a field named by its ``as:`` method. See
+  ``docs/migrating/refresh.md``.
 - ``Horreum#refresh!`` and ``Horreum#refresh`` raise
   ``Familia::IdentifierMismatchError`` and leave the object unchanged when
   the stored values give no identifier or one that names a different key,

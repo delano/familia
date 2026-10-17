@@ -296,7 +296,7 @@ module Familia
         return nil if obj.empty?
 
         # Create instance and deserialize fields using shared helper method
-        instantiate_from_hash(obj)
+        instantiate_from_hash(obj, dbkey: objkey)
       end
 
       # Removes a stale entry from the instances sorted set.
@@ -441,7 +441,7 @@ module Familia
           next if obj_hash.nil? || obj_hash.empty?
 
           # Instantiate object using shared helper method
-          objects[pos] = instantiate_from_hash(obj_hash)
+          objects[pos] = instantiate_from_hash(obj_hash, dbkey: valid_keys[result_idx])
         end
 
         objects
@@ -495,7 +495,7 @@ module Familia
           next if obj_hash.nil? || obj_hash.empty?
 
           # Instantiate object using shared helper method
-          objects[pos] = instantiate_from_hash(obj_hash)
+          objects[pos] = instantiate_from_hash(obj_hash, dbkey: objkeys[pos])
         end
 
         objects
@@ -864,6 +864,8 @@ module Familia
       # load_multi_by_keys to eliminate code duplication. Not intended for direct use.
       #
       # @param obj_hash [Hash] Hash of field names to serialized values from Redis
+      # @param dbkey [String, nil] the key obj_hash was read from, named in the
+      #   log entry for a value that is not JSON
       # @return [Object] Instantiated object with deserialized fields
       #
       # @note This method:
@@ -872,12 +874,13 @@ module Familia
       #   3. Deserializes and assigns field values from the hash
       #
       # @api private
-      def instantiate_from_hash(obj_hash)
+      def instantiate_from_hash(obj_hash, dbkey: nil)
         instance = allocate
         instance.instance_variable_set(:@dirty_fields, Concurrent::Map.new)
         instance.instance_variable_set(:@warned_dirty_signatures, Concurrent::Map.new)
         instance.send(:initialize_relatives)
-        instance.send(:initialize_with_keyword_args_deserialize_value, **obj_hash)
+        values = instance.send(:deserialize_stored_fields, obj_hash, dbkey: dbkey)
+        instance.send(:initialize_with_keyword_args, **values)
         # Object was just loaded from Redis, so it matches DB state exactly.
         # Clear dirty flags set during field assignment above, as
         # Horreum#initialize and Horreum#refresh! also do.
@@ -939,7 +942,7 @@ module Familia
         temp.send(:initialize_relatives)
 
         raw_hash.each_with_object({}) do |(field, raw_val), result|
-          decoded = temp.send(:deserialize_value, raw_val, field_name: field.to_sym)
+          decoded = temp.send(:deserialize_value, raw_val, field_name: field.to_sym, dbkey: objkey)
           result[field] = {
             raw: raw_val,
             decoded: decoded,

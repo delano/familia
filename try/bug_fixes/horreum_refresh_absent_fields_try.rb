@@ -99,4 +99,26 @@ end
 [@copy.objid == @other.objid, @copy.extid == @other.extid]
 #=> [true, true]
 
+## a record stored without objid matches a freshly loaded one after refresh!, generator provenance included
+@raw.hset(RefreshAbsentFieldsTry::Tracked.dbkey('ra_no_objid'), 'tid', '"ra_no_objid"', 'name', '"legacy"')
+@legacy = RefreshAbsentFieldsTry::Tracked.load('ra_no_objid')
+@legacy.objid
+@legacy.extid
+@legacy.refresh!
+@fresh = RefreshAbsentFieldsTry::Tracked.load('ra_no_objid')
+# Instance variables holding a value, with the dirty-tracking maps compared
+# by their keys. An instance variable set to nil reads the same as one never set.
+@set_ivars = lambda do |obj|
+  (obj.instance_variables - [:@dbclient]).sort.filter_map do |name|
+    value = obj.instance_variable_get(name)
+    [name, value.is_a?(Concurrent::Map) ? value.keys : value] unless value.nil?
+  end
+end
+@set_ivars.call(@legacy)
+#=> @set_ivars.call(@fresh)
+
+## the refreshed record reports no objid generator, as the loaded one does
+[@legacy.objid_generator_used, @fresh.objid_generator_used]
+#=> [nil, nil]
+
 delete_test_dbkeys(RefreshAbsentFieldsTry::Record, RefreshAbsentFieldsTry::Tracked)

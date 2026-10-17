@@ -15,7 +15,8 @@
 #
 # The log entry no longer computes the identifier. It names the key the
 # caller read, the key built from the identifier field's instance variable,
-# or no dbkey.
+# or no dbkey. find_by_id, find_by_dbkey, load_multi, load_multi_by_keys and
+# storage_inspect pass the key they read.
 
 require_relative '../../support/helpers/test_helpers'
 require 'stringio'
@@ -98,11 +99,18 @@ end
 ## find_by_id with a Proc(objid) identifier loads the stored objid and sends no HDEL
 @proc_rec = DeserializationLogIdentifierTry.saved_with_legacy_note(DeserializationLogIdentifierTry::ProcObjid)
 @loaded = nil
+@log = nil
 @sent = DeserializationLogIdentifierTry.commands_during do
-  @loaded = DeserializationLogIdentifierTry::ProcObjid.find_by_id(@proc_rec.identifier)
+  @log = DeserializationLogIdentifierTry.log_during do
+    @loaded = DeserializationLogIdentifierTry::ProcObjid.find_by_id(@proc_rec.identifier)
+  end
 end
 [@sent.key?('hdel'), @loaded.objid == @proc_rec.objid, @loaded.note]
 #=> [false, true, 'plain-legacy']
+
+## the Proc(objid) log entry names the key find_by_id read
+@log[/Legacy plain string in \S+#note \(([^)]*)\)/, 1]
+#=> @proc_rec.dbkey
 
 ## the Proc(objid) record's objid_lookup entry is kept
 DeserializationLogIdentifierTry::ProcObjid.objid_lookup[@proc_rec.objid] == @proc_rec.identifier
@@ -119,9 +127,9 @@ end
 [@sent.key?('hdel'), @loaded.objid == @objid_rec.objid]
 #=> [false, true]
 
-## the log entry names the record's key or no key, not a key built from a generated objid
+## the log entry names the key find_by_id read, not a key built from a generated objid
 @log[/Legacy plain string in \S+#note \(([^)]*)\)/, 1]
-#==> ['no dbkey', @objid_rec.dbkey].include?(result)
+#=> @objid_rec.dbkey
 
 ## the identifier_field :objid record's objid_lookup entry is kept
 DeserializationLogIdentifierTry::FieldObjid.objid_lookup[@objid_rec.objid] == @objid_rec.objid
@@ -133,6 +141,14 @@ DeserializationLogIdentifierTry::FieldObjid.objid_lookup[@objid_rec.objid] == @o
 end
 [@sent.key?('hdel'), @loaded.objid == @objid_rec.objid]
 #=> [false, true]
+
+## load_multi and load_multi_by_keys log the key each record was read from, after a skipped entry
+@log = DeserializationLogIdentifierTry.log_during do
+  DeserializationLogIdentifierTry::ProcObjid.load_multi(['', @proc_rec.identifier])
+  DeserializationLogIdentifierTry::ProcObjid.load_multi_by_keys(['', @proc_rec.dbkey])
+end
+@log.scan(/Legacy plain string in \S+#note \(([^)]*)\)/).flatten
+#=> [@proc_rec.dbkey, @proc_rec.dbkey]
 
 ## find_by_id with identifier_field :extid loads the stored ids and sends no HDEL
 @extid_rec = DeserializationLogIdentifierTry.saved_with_legacy_note(DeserializationLogIdentifierTry::FieldExtid)
@@ -149,12 +165,12 @@ end
 ]
 #=> [true, true]
 
-## storage_inspect does not log a key built from a generated objid
+## storage_inspect logs the key it read, not a key built from a generated objid
 @log = DeserializationLogIdentifierTry.log_during do
   DeserializationLogIdentifierTry::FieldObjid.storage_inspect(@objid_rec.dbkey)
 end
 @log[/Legacy plain string in \S+#note \(([^)]*)\)/, 1]
-#==> ['no dbkey', @objid_rec.dbkey].include?(result)
+#=> @objid_rec.dbkey
 
 ## deserialize_value on a record with a plain identifier field names the record's key
 @plain = DeserializationLogIdentifierTry::Plain.new(pid: 'deslog_plain')
