@@ -197,8 +197,12 @@ module Familia
         begin
           attempts += 1
           conn = dbclient_proc.call
-          txn_result = conn.watch(*watch_keys) do
-            yield(conn)
+          # Inside a connection scope, keep other lookups in the WATCH
+          # window off +conn+: an EXEC there would clear this WATCH.
+          txn_result = Familia::Connection::Scope.watching(conn) do
+            conn.watch(*watch_keys) do
+              yield(conn)
+            end
           end
           # Detect a WATCH abort regardless of how the block opened the MULTI: a
           # block that goes through execute_normal_transaction gets a

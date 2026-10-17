@@ -396,6 +396,64 @@ end
 ConnScopeTryWidget.load('watch_bump').name
 #=> 'intruder'
 
+## 10. A transaction run from pre_check does not clear the outer WATCH
+# The save of another record commits a MULTI/EXEC inside the WATCH window,
+# and EXEC clears every key its connection watches. The scope gives that
+# save a client other than the one holding the WATCH, so the concurrent
+# write that follows still aborts the outer EXEC on every attempt.
+@guarded = ConnScopeTryWidget.new(wid: 'watch_side')
+@guarded.name = 'original'
+@guarded.save
+@bystander = ConnScopeTryWidget.new(wid: 'watch_side_bystander')
+@side_sizes = []
+@side_intruder = Redis.new(url: 'redis://127.0.0.1:2525/0')
+begin
+  Familia.with_connection_scope do
+    @guarded.name = 'mine'
+    Familia.atomic_write(@guarded, watch_keys: [@guarded.dbkey], pre_check: lambda {
+      @bystander.name = 'saved in the window'
+      @bystander.save
+      @side_sizes << Familia.current_connection_scope.size
+      @side_intruder.hset(@guarded.dbkey, 'name', '"intruder"')
+    })
+  end
+ensure
+  @side_intruder.close
+end
+#=!> Familia::OptimisticLockError
+
+## 10. The guarded record keeps the concurrent write and the nested save landed
+[ConnScopeTryWidget.load('watch_side').name, ConnScopeTryWidget.load('watch_side_bystander').name]
+#=> ['intruder', 'saved in the window']
+
+## 10. The window used one extra client for the URI, reused across the retries
+@side_sizes
+#=> [2, 2, 2]
+
+## 10. Horreum#watch inside a scope keeps its WATCH when the block saves another record
+@watch_target = ConnScopeTryWidget.new(wid: 'watch_method')
+@watch_target.name = 'original'
+@watch_target.save
+@watch_other = ConnScopeTryWidget.new(wid: 'watch_method_other')
+@method_intruder = Redis.new(url: 'redis://127.0.0.1:2525/0')
+begin
+  Familia.with_connection_scope do
+    @watch_target.watch do |conn|
+      @watch_other.name = 'saved in the block'
+      @watch_other.save
+      @method_intruder.hset(@watch_target.dbkey, 'name', '"intruder"')
+      conn.multi { |m| m.hset(@watch_target.dbkey, 'name', '"mine"') }
+    end
+  end
+ensure
+  @method_intruder.close
+end
+#=> nil
+
+## 10. The aborted EXEC left the concurrent write in place
+ConnScopeTryWidget.load('watch_method').name
+#=> 'intruder'
+
 ## 11. A close that raises a non-StandardError still closes the other clients
 # Stands in for an Interrupt or a Thread#raise timeout arriving mid-close.
 class ConnScopeTryHalt < Exception; end

@@ -72,6 +72,17 @@ module Familia
     #   in the block, so per-connection state set on it (SELECT, CLIENT
     #   SETNAME, SUBSCRIBE) is visible to the next lookup.
     #
+    # ## WATCH windows
+    #
+    # EXEC, DISCARD and UNWATCH on a connection clear every key that
+    # connection watches. While a WATCH-guarded transaction holds a scope
+    # client between its WATCH and its EXEC ({.watching} marks it), the
+    # scope does not hand that client to other lookups: they get another
+    # client for the same URI, which the scope also holds and closes. So a
+    # transaction run from an atomic_write +pre_check+ cannot clear the
+    # outer WATCH by committing on the same connection. The watched MULTI
+    # itself runs on the connection it was given, not through a lookup.
+    #
     # @see Familia::Connection#with_connection_scope
     # @see Familia::Connection::ScopedConnectionHandler
     class Scope
@@ -112,6 +123,21 @@ module Familia
             scope.release!
           end
         end
+
+        # Runs the block with +conn+ marked as holding a WATCH in the
+        # current fiber's scope, so lookups made in the block do not get
+        # +conn+ (see "WATCH windows" above). Without an open scope it only
+        # yields.
+        #
+        # @param conn [Redis] the connection the WATCH was or will be sent on
+        # @yield []
+        # @return [Object] the block's return value
+        def watching(conn, &)
+          scope = current
+          return yield unless scope
+
+          scope.hold_for_watch(conn, &)
+        end
       end
 
       # @return [Fiber] the fiber that opened this scope
@@ -125,6 +151,7 @@ module Familia
         @middleware_version = Familia.middleware_version
         @clients = {}
         @retired = []
+        @watching = {}.compare_by_identity
         @released = false
       end
 
@@ -144,7 +171,9 @@ module Familia
       end
 
       # Returns the client this scope holds for `uri`, creating it on first
-      # use with `Familia.create_dbclient`.
+      # use with `Familia.create_dbclient`. While that client holds a WATCH
+      # (see {.watching}), returns another client for the same URI, held
+      # and reused the same way.
       #
       # @param uri [URI] a normalized URI (see `Familia.normalize_uri`)
       # @return [Redis]
@@ -155,18 +184,35 @@ module Familia
         raise Familia::Problem, 'Connection scope belongs to another fiber' unless owned_by_current_fiber?
 
         retire_stale_clients!
-        @clients[uri.conf] ||= acquire(uri)
+        pool = (@clients[uri.conf] ||= [])
+        pool.find { |held| !@watching.key?(held) } || (pool << acquire(uri)).last
+      end
+
+      # Marks +conn+ as holding a WATCH for the duration of the block.
+      # Called through {.watching}.
+      #
+      # @param conn [Redis]
+      # @yield []
+      # @return [Object] the block's return value
+      def hold_for_watch(conn)
+        @watching[conn] = @watching.fetch(conn, 0) + 1
+        begin
+          yield
+        ensure
+          remaining = @watching[conn] - 1
+          remaining.zero? ? @watching.delete(conn) : @watching[conn] = remaining
+        end
       end
 
       # @return [Array<Redis>] every client the scope holds open, retired
       #   ones first, then the current ones in acquisition order
       def clients
-        (@retired + @clients.values).freeze
+        (@retired + pooled_clients).freeze
       end
 
       # @return [Integer] number of clients the scope holds open
       def size
-        @retired.size + @clients.size
+        @retired.size + @clients.each_value.sum(&:size)
       end
 
       # Closes every client the scope holds and marks the scope released.
@@ -193,6 +239,13 @@ module Familia
 
       private
 
+      # The current clients of every URI, in acquisition order. Concatenates
+      # the pools instead of calling Array#flatten, which would send #to_ary
+      # to each client, and Redis forwards unknown methods to the server.
+      def pooled_clients
+        @clients.each_value.flat_map(&:itself)
+      end
+
       def acquire(uri)
         client = Familia.create_dbclient(uri)
         Familia.trace :DBCLIENT_SCOPE, nil, "Scope created connection for #{uri.serverid}"
@@ -207,14 +260,14 @@ module Familia
         current = Familia.middleware_version
         return if current == @middleware_version
 
-        @retired.concat(@clients.values)
+        @retired.concat(pooled_clients)
         @clients = {}
         @middleware_version = current
       end
 
       # Closes every held client and forgets them.
       def close_all!
-        pending = @retired + @clients.values
+        pending = @retired + pooled_clients
         @retired = []
         @clients = {}
         close_each(pending)

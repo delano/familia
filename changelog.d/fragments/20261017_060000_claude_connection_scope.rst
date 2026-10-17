@@ -11,6 +11,9 @@ Added
   client for ``uri`` (``Familia.uri`` when nil). A nested call in the same
   fiber joins the open scope. ``transaction``, ``pipelined`` and
   ``atomic_write`` inside the block run on the scope's client for their URI.
+  Between the WATCH and the EXEC of a WATCH-guarded transaction, other
+  lookups get a second scope client for that URI, so a transaction they run
+  cannot clear the WATCH.
   Threads and fibers spawned inside the block are not the owner and resolve
   connections as if no scope were open. A ``Familia.middleware_version`` bump
   (``Familia.reconnect!``) makes the scope retire its clients on the next

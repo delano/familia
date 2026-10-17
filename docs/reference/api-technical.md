@@ -725,6 +725,16 @@ MULTI/EXEC on it. While a transaction or pipeline block is open,
 `FiberTransactionHandler` or `FiberPipelineHandler` serves that connection
 ahead of the scope.
 
+**WATCH windows.** EXEC, DISCARD and UNWATCH on a connection clear every key
+that connection watches. Between the WATCH and the EXEC of a WATCH-guarded
+transaction (`atomic_write` and `Familia.atomic_write` with `watch_keys:`,
+`save_if_not_exists!`, `Horreum#watch`), the scope does not hand the watching
+client to other lookups: they get a second client for the same URI, which the
+scope holds, reuses and closes like the first. A record saved from a
+`pre_check` therefore commits on its own connection and cannot clear the
+outer WATCH. The watched MULTI itself runs on the connection the transaction
+resolved.
+
 **Ownership.** A scope belongs to the fiber that opened it. A new fiber starts
 with a copy of the opener's fiber storage (Ruby's documentation for
 `Fiber.new`: "If the storage is unspecified, the default is to inherit a copy
