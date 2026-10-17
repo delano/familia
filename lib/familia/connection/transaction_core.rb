@@ -30,6 +30,7 @@ module Familia
     # ### Rule 4: Connection Handler Compatibility
     # - **FiberTransactionHandler**: Supports reentrant transactions
     # - **ProviderConnectionHandler**: Full transaction support
+    # - **ScopedConnectionHandler**: Full transaction support, on the scope's connection
     # - **CreateConnectionHandler**: Full transaction support
     # - **FiberConnectionHandler**: Blocked (raises OperationModeError)
     # - **DefaultConnectionHandler**: Blocked (raises OperationModeError)
