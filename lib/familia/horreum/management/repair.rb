@@ -16,6 +16,8 @@ module Familia
       # @return [Hash] {phantoms_removed: N, missing_added: N}
       #
       def repair_instances!(audit_result = nil)
+        Familia.assert_replies_available!("#{self}.repair_instances!")
+
         audit_result ||= audit_instances
 
         phantoms_removed = 0
@@ -113,6 +115,8 @@ module Familia
       # @return [Hash] {rebuilt: [index_names]}
       #
       def repair_indexes!(audit_results = nil)
+        Familia.assert_replies_available!("#{self}.repair_indexes!")
+
         audit_results ||= audit_unique_indexes
 
         rebuilt = []
@@ -146,6 +150,8 @@ module Familia
       # @return [Hash] {stale_removed: N}
       #
       def repair_participations!(audit_results = nil)
+        Familia.assert_replies_available!("#{self}.repair_participations!")
+
         audit_results ||= audit_participations
 
         # Build a lookup from collection_name to the target class's dbclient.
@@ -194,6 +200,8 @@ module Familia
       # @return [Hash] {removed_keys: [key, ...], failed_keys: [{key:, error:}, ...], status:}
       #
       def repair_related_fields!(audit_results = nil, &progress)
+        Familia.assert_replies_available!("#{self}.repair_related_fields!")
+
         audit_results ||= audit_related_fields
 
         orphaned_keys = audit_results.flat_map { |entry| Array(entry[:orphaned_keys]) }
@@ -264,6 +272,8 @@ module Familia
       #
       def repair_all!(batch_size: 100, audit_collections: false, check_cross_refs: false,
                       verify: false, &progress)
+        Familia.assert_replies_available!("#{self}.repair_all!")
+
         report = health_check(
           batch_size: batch_size,
           audit_collections: audit_collections,
@@ -328,6 +338,8 @@ module Familia
       # @return [Hash] {rebuilt:, rebuilt_per_scope:, skipped:}
       #
       def repair_multi_indexes!(audit_results = nil)
+        Familia.assert_replies_available!("#{self}.repair_multi_indexes!")
+
         audit_results ||= audit_multi_indexes
 
         rebuilt = []
@@ -377,6 +389,8 @@ module Familia
       def scan_keys(filter = '*', batch_size: 100, &block)
         pattern = dbkey(filter)
         return enum_for(:scan_keys, filter, batch_size: batch_size) unless block_given?
+
+        Familia.assert_replies_available!("#{self}.scan_keys")
 
         cursor = "0"
         loop do

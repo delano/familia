@@ -669,6 +669,11 @@ Index values (the object identifiers stored in hash keys and sets) are raw strin
   unless debug logging is on, while `update_in_*` skips the claim with no notice
   at all.
 
+  Inside a `pipelined` block, `add_to_*`, `update_in_*` and `claim_unique_*!`
+  raise this error for both kinds of unique index, and the message names the
+  method you called. A pipeline has no claim verdict to check and no MULTI to
+  write into, so call these outside the block.
+
   The error propagates out of the transaction block, so the MULTI is discarded
   whole: neither the index entry nor any scalar field queued alongside it is
   written. Only the stored state is rolled back, though — the in-memory record
@@ -687,9 +692,12 @@ Index values (the object identifiers stored in hash keys and sets) are raw strin
   the write cannot take the out-of-transaction claim that index maintenance
   requires: `multi_field_fast_write` never can (its contract is a single
   HMSET), `field!` only when called inside a transaction or pipeline. Nothing
-  is written — use `multi_field_update`, `save_fields`, or `save`, or call
-  `field!` outside the transaction, where it claims and maintains the index
-  itself.
+  is written. For `multi_field_fast_write`, use `multi_field_update`,
+  `save_fields`, or `save`. For `field!`, call it before or after the
+  transaction or pipeline, where it claims and maintains the index itself;
+  `multi_field_update`, `save_fields` and `save` raise
+  `Familia::OperationModeError` inside the block, so they too belong outside
+  it.
 
 **`Familia::NoIdentifier` / `ArgumentError` from `add_to_*` / `update_in_*`:**
 

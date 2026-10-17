@@ -156,12 +156,18 @@ module Familia
   end
 
   # Raised when a fast-write method is asked to write a field that backs a
-  # class-level index. Fast writers issue a single HMSET with no surrounding
-  # claim, so they cannot maintain index consistency without violating the
-  # fail-closed ordering in ADR-0002. Use multi_field_update, save_fields,
-  # or save for indexed fields.
+  # class-level index and cannot run the index claim first, which the
+  # fail-closed ordering in ADR-0002 requires.
+  #
+  # multi_field_fast_write raises it outside a transaction or pipeline,
+  # since its single HMSET leaves no room for the claim: use
+  # multi_field_update, save_fields or save there. A field! fast writer
+  # raises it inside a transaction or pipeline, where the claim cannot run
+  # and where multi_field_update, save_fields and save raise
+  # Familia::OperationModeError too: call field! or one of those methods
+  # before or after the block.
   class IndexedFieldFastWriteError < PersistenceError
-    attr_reader :field, :index_name, :offenders
+    attr_reader :field, :index_name, :offenders, :inside_block
 
     # @param field [Symbol] the (first) offending field
     # @param index_name [Symbol] the index that field backs
@@ -170,10 +176,13 @@ module Familia
     #   all, so a batch write with several indexed fields is diagnosed in
     #   one pass instead of one retry per field. field/index_name stay the
     #   first pair for callers that predate the batch guard.
-    def initialize(field, index_name, offenders: nil)
+    # @param inside_block [Boolean] whether the write was refused inside a
+    #   transaction or pipeline, which changes the remedy the message gives
+    def initialize(field, index_name, offenders: nil, inside_block: false)
       @field = field
       @index_name = index_name
       @offenders = offenders || [[field, index_name]]
+      @inside_block = inside_block
       super(build_message)
     end
 
@@ -181,9 +190,15 @@ module Familia
 
     def build_message
       described = offenders.map { |f, idx| "#{f} (backs #{idx})" }.join(', ')
-      "Cannot fast-write #{described}: a class-level index cannot be " \
-        'maintained by a single HMSET (ADR-0002). Use multi_field_update ' \
-        'or save so the index is claimed and updated with the hash write.'
+      if inside_block
+        "Cannot fast-write #{described} inside a transaction or pipeline: " \
+          'the class-level index claim cannot run there (ADR-0002). Call the ' \
+          'fast writer, multi_field_update or save before or after the block.'
+      else
+        "Cannot fast-write #{described}: a class-level index cannot be " \
+          'maintained by a single HMSET (ADR-0002). Use multi_field_update ' \
+          'or save so the index is claimed and updated with the hash write.'
+      end
     end
   end
 

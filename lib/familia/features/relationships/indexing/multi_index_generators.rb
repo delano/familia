@@ -153,6 +153,8 @@ module Familia
             actual_scope_class.class_eval do
 
               define_method(:"sample_from_#{field}") do |field_value, count = 1|
+                Familia.assert_replies_available!("#{self.class}#sample_from_#{field}")
+
                 index_set = send("#{index_name}_for", field_value) # i.e. UnsortedSet
 
                 # Get random members efficiently (O(1) via SRANDMEMBER with count)
@@ -164,6 +166,8 @@ module Familia
 
               # Generate bulk query method (e.g., company.find_all_by_department)
               define_method(:"find_all_by_#{field}") do |field_value|
+                Familia.assert_replies_available!("#{self.class}#find_all_by_#{field}")
+
                 index_set = send("#{index_name}_for", field_value) # i.e. UnsortedSet
 
                 # Get all members from set
@@ -205,6 +209,8 @@ module Familia
               #   batching but does not affect memory usage since all objects are cached.
               #
               define_method(:"rebuild_#{index_name}") do |batch_size: 100, &progress_block|
+                Familia.assert_replies_available!("#{self.class}#rebuild_#{index_name}")
+
                 # PHASE 1: Find the collection containing the indexed objects
                 # Look for a participation relationship where indexed_class participates in this scope_class
                 collection_name = nil
@@ -466,6 +472,8 @@ module Familia
             # find_all_by_role(value)
             # Uses load_multi for efficient batch loading (avoids N+1 queries)
             indexed_class.define_singleton_method(:"find_all_by_#{field}") do |field_value|
+              Familia.assert_replies_available!("#{self}.find_all_by_#{field}")
+
               index_set = send("#{index_name}_for", field_value)
               identifiers = index_set.members
               load_multi(identifiers).compact
@@ -474,6 +482,8 @@ module Familia
             # sample_from_role(value, count)
             # Uses load_multi for efficient batch loading (avoids N+1 queries)
             indexed_class.define_singleton_method(:"sample_from_#{field}") do |field_value, count = 1|
+              Familia.assert_replies_available!("#{self}.sample_from_#{field}")
+
               return [] if field_value.nil? || field_value.to_s.strip.empty?
 
               index_set = send("#{index_name}_for", field_value)
@@ -484,6 +494,8 @@ module Familia
             # rebuild_role_index(batch_size:, &progress)
             # For class-level indexes, we iterate all instances of the class
             indexed_class.define_singleton_method(:"rebuild_#{index_name}") do |batch_size: 100, &progress_block|
+              Familia.assert_replies_available!("#{self}.rebuild_#{index_name}")
+
               # PHASE 1: Discover all field values and collect objects
               progress_block&.call(phase: :discovering, current: 0, total: 0)
 

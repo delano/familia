@@ -72,7 +72,8 @@ module Familia
       # @param update_expiration [Boolean] Whether to refresh key expiration (default: true)
       # @return [Boolean] true on success
       #
-      # @raise [Familia::OperationModeError] If called within a transaction
+      # @raise [Familia::OperationModeError] If called within a transaction or
+      #   pipeline
       # @raise [Familia::RecordExistsError] If unique index constraint violated
       #
       # @example Basic usage
@@ -103,11 +104,13 @@ module Familia
       def save(update_expiration: true)
         start_time = Familia.now_in_μs if Familia.debug?
 
-        # Prevent save within transaction - unique index guards require read operations
-        # which are not available in Redis MULTI/EXEC blocks
-        if Fiber[:familia_transaction]
+        # Prevent save within a transaction or pipeline. Unique index guards
+        # require read operations whose replies are Redis::Future objects there
+        # (a pipeline would otherwise report a spurious RecordExistsError), and
+        # save opens its own MULTI/EXEC.
+        if Familia.transaction_or_pipeline?
           raise Familia::OperationModeError, <<~ERROR_MESSAGE
-            Cannot call save within a transaction. Save operations must be called outside transactions to ensure unique constraints can be validated.
+            Cannot call save within a transaction or pipeline. Save operations must be called outside transactions and pipelines to ensure unique constraints can be validated.
           ERROR_MESSAGE
         end
 
@@ -234,7 +237,8 @@ module Familia
       # @yield Block containing collection operations to execute after save
       # @return [Boolean] true if save succeeded and block completed
       #
-      # @raise [Familia::OperationModeError] If called within a transaction
+      # @raise [Familia::OperationModeError] If called within a transaction or
+      #   pipeline
       # @raise [Familia::RecordExistsError] If unique index constraint violated
       #
       # @example Save a plan then update its feature set
@@ -292,17 +296,19 @@ module Familia
       #
       # @raise [Familia::RecordExistsError] If object already exists
       # @raise [Familia::OptimisticLockError] If retries exhausted (max 3 attempts)
-      # @raise [Familia::OperationModeError] If called within a transaction
+      # @raise [Familia::OperationModeError] If called within a transaction or
+      #   pipeline
       #
       # @example
       #   user = User.new(id: 123)
       #   user.save_if_not_exists!  # => true or raises
       def save_if_not_exists!(update_expiration: true)
-        # Prevent save_if_not_exists! within transaction - needs to read existence state
-        if Fiber[:familia_transaction]
+        # Prevent save_if_not_exists! within a transaction or pipeline: it
+        # needs to read existence state.
+        if Familia.transaction_or_pipeline?
           raise Familia::OperationModeError, <<~ERROR_MESSAGE
-            Cannot call save_if_not_exists! within a transaction. This method
-            must be called outside transactions to properly check existence.
+            Cannot call save_if_not_exists! within a transaction or pipeline. This method
+            must be called outside transactions and pipelines to properly check existence.
           ERROR_MESSAGE
         end
 
@@ -399,6 +405,10 @@ module Familia
       #   of the Valkey key. Defaults to true.
       #
       # @return [Object] The result of the HMSET operation from the DB.
+      # @raise [Familia::OperationModeError] inside a transaction or pipeline,
+      #   where the unique-index guard reads and this method's own EXEC result
+      #   are not available. Raised before any state changes. Use atomic_write
+      #   to combine field and collection writes in one MULTI/EXEC.
       # @raise [Familia::RecordExistsError] if a class-level unique index
       #   already maps an indexed field's value to another record. Raised
       #   before the transaction opens; the object hash is untouched.
@@ -427,6 +437,8 @@ module Familia
       # @see #save Full persistence lifecycle (timestamps, indexes, instances)
       #
       def commit_fields(update_expiration: true)
+        Familia.assert_replies_available!("#{self.class}#commit_fields")
+
         prepared_value = to_h_for_storage
         Familia.debug "[commit_fields] Begin #{self.class} #{dbkey} #{prepared_value} (exp: #{update_expiration})"
 
@@ -552,6 +564,10 @@ module Familia
       # @param kwargs [Hash] Field names and values to update. Special key :update_expiration
       #   controls whether to update key expiration (default: true)
       # @return [MultiResult] Transaction result
+      # @raise [Familia::OperationModeError] inside a transaction or pipeline,
+      #   where the unique-index guard reads and this method's own EXEC result
+      #   are not available. Raised before any state changes. Use atomic_write
+      #   to combine field and collection writes in one MULTI/EXEC.
       # @raise [ArgumentError] if a field is undeclared, transient, an
       #   encrypted field given a value that is not nil or a ConcealedString,
       #   or an objid/extid field (their setters carry lookup-hash side
@@ -568,6 +584,8 @@ module Familia
       #   user.multi_field_update(name: "John", email: "john@example.com")
       #
       def multi_field_update(**kwargs)
+        Familia.assert_replies_available!("#{self.class}#multi_field_update")
+
         update_expiration = kwargs.delete(:update_expiration) { true }
         fields = kwargs
 
@@ -672,6 +690,10 @@ module Familia
       #   :update_expiration controls whether to refresh key expiration
       #   (default: true).
       # @return [self] Returns self for method chaining
+      # @raise [Familia::OperationModeError] inside a transaction or pipeline,
+      #   where this method's own EXEC result, which decides whether the
+      #   in-memory fields are updated, is not available. Raised before any
+      #   state changes.
       # @raise [ArgumentError] if a field is undeclared, transient, or an
       #   encrypted field given a value that is not nil or a ConcealedString
       # @raise [Familia::IndexedFieldFastWriteError] if a field backs a
@@ -687,6 +709,8 @@ module Familia
       # @see #save_fields Persists current in-memory values of named fields
       #
       def multi_field_fast_write(**kwargs)
+        Familia.assert_replies_available!("#{self.class}#multi_field_fast_write")
+
         update_exp = kwargs.delete(:update_expiration) { true }
         fields = kwargs
 
@@ -746,6 +770,10 @@ module Familia
       # @param field_names [Array<Symbol, String>] Names of fields to persist
       # @param update_expiration [Boolean] Whether to refresh key expiration
       # @return [self] Returns self for method chaining
+      # @raise [Familia::OperationModeError] inside a transaction or pipeline,
+      #   where the unique-index guard reads and this method's own EXEC result
+      #   are not available. Raised before any state changes. Use atomic_write
+      #   to combine field and collection writes in one MULTI/EXEC.
       # @raise [Familia::RecordExistsError] if a class-level unique index
       #   already maps a written field's value to another record. Raised
       #   before the transaction opens; the object hash is untouched.
@@ -761,6 +789,8 @@ module Familia
       #   customer.update_passphrase('secret').save_fields(:passphrase, :passphrase_encryption)
       #
       def save_fields(*field_names, update_expiration: true)
+        Familia.assert_replies_available!("#{self.class}#save_fields")
+
         raise ArgumentError, 'No fields specified' if field_names.empty?
 
         Familia.trace :SAVE_FIELDS, nil, field_names if Familia.debug?
@@ -858,6 +888,10 @@ module Familia
       # method's documentation for that known gap.
       #
       # @return [void]
+      # @raise [Familia::OperationModeError] inside a transaction or pipeline
+      #   when the class has instance-scoped indexes, whose tracker must be
+      #   read to find the entries to remove. Without such indexes destroy!
+      #   queues its deletes into the caller's transaction.
       #
       # @example Remove a user object from storage
       #   user = User.new(id: 123)
@@ -880,8 +914,9 @@ module Familia
         # Pre-read instance-scoped index tracker before MULTI/EXEC
         # (HGETALL returns futures inside a transaction, not values).
         # Maps "<scope_config>\t<index_name>\t<scope_id>" => indexed value.
+        # Inside a caller's block the read refuses, naming destroy!.
         tracked_scopes = if respond_to?(:read_instance_index_scopes)
-          read_instance_index_scopes
+          read_instance_index_scopes(operation: "#{self.class}#destroy!")
         else
           {}
         end
@@ -959,6 +994,8 @@ module Familia
       # @return [void]
       #
       # @raise [Familia::KeyNotFoundError] If the Valkey key does not exist
+      # @raise [Familia::OperationModeError] inside a transaction or pipeline,
+      #   where the fields read back are not available until the block completes
       #
       # @example Refresh object from the DB
       #   user.name = "Changed Name"  # unsaved change
@@ -972,6 +1009,8 @@ module Familia
       #   no authoritative source in Valkey storage.
       #
       def refresh!
+        Familia.assert_replies_available!("#{self.class}#refresh!")
+
         Familia.trace :REFRESH, nil, self.class.uri if Familia.debug?
         fields = hgetall
         # A hash with no fields does not exist, so an empty reply means the
@@ -1078,6 +1117,26 @@ module Familia
       def dbclient(...) = self.class.dbclient(...)
 
       private
+
+      # Refuses destroy! inside a transaction or pipeline when the class has
+      # instance-scoped indexes, before anything is queued.
+      #
+      # destroy! must read the instance-scoped index tracker to find the
+      # entries it removes, and it refuses that read inside a block. Feature
+      # overrides of destroy! that queue their own deletes before calling
+      # super (object_identifier and external_identifier remove their lookup
+      # entries) call this first. Otherwise a caller who rescued the refusal
+      # inside the block would commit those deletes with the outer EXEC and
+      # keep the record.
+      #
+      # @return [void]
+      # @raise [Familia::OperationModeError] inside a transaction or
+      #   pipeline, when the class has instance-scoped indexes
+      def assert_destroy_replies_available!
+        return unless respond_to?(:assert_instance_index_replies_available!)
+
+        assert_instance_index_replies_available!("#{self.class}#destroy!")
+      end
 
       # Validates that all field names are declared Familia fields.
       #
@@ -1735,33 +1794,21 @@ module Familia
       #
       # Must run OUTSIDE the transaction the caller is about to open (see
       # #claim_unique_indexes!), which is what makes the write fail-closed: a
-      # constraint violation raises before any hash command is queued. Inside
-      # a caller's MULTI/pipeline the guard's index reads come back as futures
-      # (truthy, never equal to the identifier), which would surface as a
-      # spurious RecordExistsError -- so when a class-level unique index
-      # covers the written fields, the write is refused outright with the
-      # same OperationModeError save raises. Classes without a covering
-      # unique index are untouched: no index work would happen, so their
-      # in-transaction behavior is unchanged.
+      # constraint violation raises before any hash command is queued. The
+      # partial writers therefore refuse to run inside a caller's MULTI or
+      # pipeline (see Familia.assert_replies_available!) before calling this:
+      # there the guard's index reads come back as futures, and the writers
+      # could not read their own EXEC result to clear dirty state or release
+      # claims.
       #
       # @param field_names [Array<Symbol, String>, nil] fields about to be
       #   written; nil means the full hash is being written (commit_fields)
-      # @raise [Familia::OperationModeError] if called within a transaction or
-      #   pipeline while a class-level unique index covers the written fields
       # @raise [Familia::RecordExistsError] if another record owns a value
       # @return [Array<Symbol>] the index names newly claimed by this call
       #   (see #claim_unique_indexes!), for release if the caller's
       #   transaction never lands
       #
       def prepare_for_partial_write(field_names = nil)
-        if (Fiber[:familia_transaction] || Fiber[:familia_pipeline]) &&
-           self.class.respond_to?(:indexing_relationships) &&
-           !class_level_unique_indexes_for(field_names&.map(&:to_sym)).empty?
-          raise Familia::OperationModeError, <<~ERROR_MESSAGE
-            Cannot perform a partial write (commit_fields, save_fields, multi_field_update) on unique-indexed fields within a transaction or pipeline. Unique constraints require read operations whose results are unavailable inside MULTI, so perform the write outside the transaction.
-          ERROR_MESSAGE
-        end
-
         guard_unique_indexes!(only: field_names)
         claim_unique_indexes!(only: field_names)
       end
