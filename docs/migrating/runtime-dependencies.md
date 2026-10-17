@@ -59,6 +59,14 @@ neither, and it no longer limits which `connection_pool` version your
 bundle resolves. Another gem in the bundle may still install and load
 `connection_pool`, but nothing in familia ensures it.
 
+Currently `redis-client`, which `redis` depends on, does both: the
+`redis-client` 0.29.0 gem specification declares
+`s.add_runtime_dependency(%q<connection_pool>.freeze, [">= 0".freeze])`,
+and its `lib/redis_client/pooled.rb` contains `require "connection_pool"`.
+With that version `require 'familia'` still defines `ConnectionPool`, so
+the steps below keep a pool working if a later `redis-client` stops
+providing it.
+
 An application that uses a `ConnectionPool` in `Familia.connection_provider`
 should add the gem to its Gemfile and require it before building the pool:
 
@@ -109,6 +117,11 @@ migration as `:failed` instead of letting the `LoadError` end the run.
   the development group.
 - Code that rescued `LoadError` around `#migrate` should rescue
   `Familia::Migration::Errors::PreconditionFailed` instead.
+- `rake familia:migrate:run` and `familia:migrate:dry_run` now print
+  `Failed: <migration id>` with the error and exit 0, as they do for any
+  other failed migration. The uncaught `LoadError` used to end them with
+  exit status 1. A deploy step that relied on that status should check the
+  task's output or `rake familia:migrate:status` instead.
 
 ## Schema validation raises when `json_schemer` cannot load
 
