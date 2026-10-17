@@ -396,6 +396,29 @@ end
 ConnScopeTryWidget.load('watch_bump').name
 #=> 'intruder'
 
+## 11. A close that raises a non-StandardError still closes the other clients
+# Stands in for an Interrupt or a Thread#raise timeout arriving mid-close.
+class ConnScopeTryHalt < Exception; end
+@halting_clients = nil
+@halt_outcome = begin
+  Familia.with_connection_scope do |db0|
+    db1 = Familia.dbclient(1)
+    db0.ping
+    db1.ping
+    @halting_clients = [db0, db1]
+    def db0.close
+      super
+      raise ConnScopeTryHalt, 'halt during close'
+    end
+    :block_done
+  end
+rescue ConnScopeTryHalt => e
+  e.message
+end
+[@halt_outcome, @halting_clients.map { |client| conn_scope_try_open?(client) },
+ Familia.current_connection_scope]
+#=> ['halt during close', [false, false], nil]
+
 ## 11. A released scope rejects lookups
 @released_scope = Familia.with_connection_scope { Familia.current_connection_scope }
 @released_scope.client(Familia.uri)

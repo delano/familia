@@ -180,6 +180,10 @@ module Familia
         nil
       end
 
+      # Omits the held clients' connection parameters, which can carry a
+      # password.
+      #
+      # @return [String]
       def inspect
         "#<#{self.class.name} clients=#{size} released=#{@released}>"
       end
@@ -205,20 +209,28 @@ module Familia
         @middleware_version = current
       end
 
-      # Closes every held client. A close that raises a StandardError is
-      # logged and skipped so one failure cannot leave the others open; a
-      # client whose close raises anything else stays queued for the next
-      # {#release!} call.
+      # Closes every held client and forgets them.
       def close_all!
-        @retired.concat(@clients.values)
+        pending = @retired + @clients.values
+        @retired = []
         @clients = {}
-        until @retired.empty?
-          begin
-            @retired.first.close
-          rescue StandardError => e
-            Familia.trace :DBCLIENT_SCOPE, nil, "Ignoring #{e.class} while closing scoped connection: #{e.message}"
-          end
-          @retired.shift
+        close_each(pending)
+      end
+
+      # Closes each client in turn. A StandardError from one close is logged
+      # and skipped. Any other exception (an Interrupt or a Thread#raise
+      # timeout arriving mid-close) propagates, but only after the remaining
+      # clients have been closed, because the rest run from the ensure.
+      def close_each(clients)
+        return if clients.empty?
+
+        first, *rest = clients
+        begin
+          first.close
+        rescue StandardError => e
+          Familia.trace :DBCLIENT_SCOPE, nil, "Ignoring #{e.class} while closing scoped connection: #{e.message}"
+        ensure
+          close_each(rest)
         end
       end
     end
