@@ -368,6 +368,82 @@ Instance-scoped multi-indexes are tracked, refreshed on `save`, and cleaned up
 on `destroy!` the same way unique ones are — except that refresh is add-only.
 See [Automatic Refresh and Cleanup](#automatic-refresh-and-cleanup).
 
+### Blank field values
+
+A `multi_index` does not index a blank field value: `nil`, an empty string or a
+string of whitespace only. This holds for class-level and instance-scoped
+indexes alike. `add_to_*` adds the object to no bucket for a blank value,
+`update_in_*` removes it from no bucket for a blank old value and adds it to
+none for a blank new value, `remove_from_*` removes nothing for a blank value,
+and the rebuild skips objects whose value is blank. `find_all_by_*` and
+`sample_from_*` return `[]` for a blank value, and
+`Familia::IndexDescriptor#each_record` raises `ArgumentError` for a blank
+`value:`, as it does for `nil`. The instance-scoped `add_to_*`
+and `update_in_*` still record the membership for a blank value, so `save`
+indexes the object once its value is no longer blank.
+
+The `<index>_for` factory names the key of a blank value
+`<owner key>:<index>`, without the trailing delimiter of a bucket, for
+example `company:c-1:dept_index` or `customer:role_index`. That key is not
+exclusive to the index: it is also the key of a related field with the same
+name as the index, such as a `set :tags` on the scope class beside
+`multi_index :tag, :tags, within: Company`, or a `class_set :roles` beside
+`multi_index :role, :roles`. So the index methods of that scope, or of the
+class for a class-level index, do not read, write, delete or audit that key
+as theirs. Code that calls `<index>_for` itself with a blank value gets a set
+on that key.
+
+That key can also be a bucket of another index of the scope class:
+
+- When the identifier contains the delimiter, the key can be a bucket of an
+  instance-scoped index within the scope class in another, shorter scope.
+  With companies `c-1` and `c-1:dept_index:x`, the key
+  `company:c-1:dept_index:x:dept_index` of a blank value in
+  `c-1:dept_index:x` is also the bucket of value `x:dept_index` in `c-1`.
+- When the identifier is the name of a class-level index of the scope class,
+  or starts with that name and the delimiter, the key is a bucket of that
+  class-level index. This needs no delimiter in the identifier. With a
+  class-level `multi_index :region, :region_index` on `Company`, the key
+  `company:region_index:dept_index` of a blank value in a company
+  `region_index` is also the `region_index` bucket of value `dept_index`.
+
+`audit_multi_indexes` of that other index then reads the key as its bucket,
+and the rebuild of that index deletes it or replaces its members with the
+objects that have that value. This does not hold when the scope class
+declares a `set` field named `dept_index`, without a `dbkey:` option of its
+own, and the hash key of the company with that identifier holds a hash: the
+key is then that record's set field (see
+[Multi-value index rebuilds](#multi-value-index-rebuilds)).
+
+Before this version, the instance-scoped `add_to_*` and `update_in_*` added
+objects with a blank value to `<scope key>:<index>`, such as
+`company:c-1:dept_index`. Such keys stay in place after upgrading. The index
+methods of their scope do not read them as data, so they can be left in
+place. Familia has no check that tells such a key apart from a related field
+of the same name, a live bucket of another scope's index or a live bucket of
+a class-level index of the scope class, so inspect a key before removing it
+by hand.
+
+When the scope class declares a related field named `<index>`, such as
+`set :tags` beside `multi_index :tag, :tags, within: Company`, the
+identifiers that earlier versions added to it for objects with a blank value
+stay in that field after upgrading. The index wrote each one as the raw
+identifier, while a plain `set` stores each value JSON-encoded. The members
+that are identifiers of existing records of the indexed class are the
+candidates:
+
+```ruby
+key = Company.load('c-1').tags.dbkey   # => "company:c-1:tags"
+Familia.dbclient.smembers(key).select { |m| Employee.exists?(m) }
+# => ["e-1", "e-2"]
+```
+
+Familia cannot tell such a member from one the application added itself, so
+review the candidates before removing any. An object whose value is no longer
+blank can still be among them, and the identifier of a record deleted since
+then does not pass the `exists?` check. Use the scope class's `dbclient` when
+it sets `logical_database`.
+
 ## Advanced Patterns
 
 ### Composite Keys
@@ -554,6 +630,108 @@ by older code is still running. Do not run it during a rolling upgrade.
 
 `Familia.dbclient` reaches the default logical database only. For a model that
 sets `logical_database`, run the sweep against that model's `dbclient` instead.
+
+### Multi-value index rebuilds
+
+The `rebuild_<index>` method of a `multi_index`, such as
+`Customer.rebuild_role_index` or `company.rebuild_dept_index`, deletes the
+index's per-value bucket sets and then adds every object with a non-blank
+field value to the bucket of that value. It does not touch its own key of a
+blank value, though the key of a blank value of another scope or index can be
+one of its buckets (see [Blank field values](#blank-field-values)). It finds
+the buckets with a SCAN over the bucket prefix, such as `customer:role_index:`
+or `company:c-1:dept_index:`, with any glob characters in the prefix escaped,
+so a scope identifier such as `c-*` matches only itself. It deletes only keys
+that start with that literal prefix and hold a set. Keys of other types under
+the prefix stay in place.
+
+An identifier may contain the delimiter or be an index name, so a set under
+the prefix can also be a key of another record of the same class. With
+companies `c-1` and `c-1:dept_index:x`, the key
+`company:c-1:dept_index:x:dept_index:ops` is both a bucket of `c-1` and the
+`ops` bucket of `c-1:dept_index:x`. Likewise
+`customer:role_index:tags` is both the bucket of value `tags` in the
+class-level `role_index` and the `tags` set field of a customer whose
+identifier is `role_index`. Such a key belongs to the existing record with the
+longest identifier, and a class-level bucket has no identifier. So rebuilding
+`c-1` leaves that key in place, rebuilding `c-1:dept_index:x` clears it, and
+`Customer.rebuild_role_index` leaves the `tags` set in place.
+`audit_multi_indexes` reads each such key for the record it belongs to. Only a
+set field or `multi_index` bucket of a record whose hash key holds a hash
+counts. Without that hash, the key belongs to the shorter identifier. A bucket
+is a set, so the bucket of value `object` at `customer:role_index:object` does
+not make `role_index` a record.
+
+The candidate owners of a key are the splits whose identifier is followed by a
+set field name that ends the key, or by an instance-scoped index name and the
+delimiter. An index name that ends the key, as in the key of a blank value,
+makes no candidate. So with companies `c-1` and `c-1:dept_index:x`, the bucket
+`company:c-1:dept_index:x:dept_index` of value `x:dept_index` belongs to
+`c-1`, unless the company class declares a set field named `dept_index`.
+Likewise, with companies `c-1` and `c-1:dept_index`, the bucket
+`company:c-1:dept_index:dept_index` of value `dept_index` belongs to `c-1`
+under the same condition. The
+rebuild and the audit check at most
+`Familia::Features::Relationships::Indexing::RecordKeyOwnership::MAX_CANDIDATE_SPLITS`
+(8) of them per key. The candidates of a batch of keys are checked in
+pipelines that each hold at most `RecordKeyOwnership::MAX_CANDIDATE_BATCH_BYTES`
+(1 MiB) of candidate identifiers, and an identifier longer than that gets a
+pipeline of its own. A key with more candidates than
+`MAX_CANDIDATE_SPLITS`, such as the bucket of a field value that repeats
+`:dept_index:` many times, is not checked.
+
+Before it deletes any bucket, the rebuild checks every bucket key it is about
+to write. If one of them holds a type other than set, belongs to another record
+as described above, or has more candidate owners than the rebuild checks, the
+rebuild raises `Familia::IndexBucketConflictError` without deleting or writing
+anything. It raises the same way for a stale bucket under the prefix whose
+owner it did not check. Such a key may be another record's data, such as a list
+of a record whose identifier equals the index name. The error's `conflicts`
+maps each key to the type it holds, or to `:too_many_candidate_owners` for a key
+whose owner was not checked, and its `owners` maps each key of another record
+to that record's hash key. Inspect those keys. The rebuild can run once none of
+them holds a type other than set, belongs to another record or has too many
+candidate owners.
+
+`audit_multi_indexes` lists the sets under a bucket prefix that the rebuild
+leaves alone in `foreign_owned_keys`. Each entry has `key`, `field_value`,
+`owner_key` and `reason`, plus `scope_id` for an instance-scoped index. With
+`reason: :other_record`, `owner_key` is the hash key of the record that owns
+the key; such an entry does not change the audit status. With
+`reason: :too_many_candidate_owners`, `owner_key` is nil; such an entry sets the
+status to `:issues_found`, and `health_check` reports the model as unhealthy.
+
+`repair_multi_indexes!` calls the same rebuild. When it raises
+`Familia::IndexBucketConflictError`, the repair records the index, or for an
+instance-scoped index the scope, in `:skipped` with `reason: :bucket_conflict`,
+`conflicts`, `owners` and, for a scope, `scope_id`, and goes on with the next
+scope or index. `repair_all!` then returns status `:partial_failure`; its
+`errors` does not list the conflict.
+
+### Bucket names in other key patterns
+
+A bucket's key ends with a field value, so it can match a key pattern that
+other methods build for other keys. With a customer whose role is `notes`, the
+bucket `customer:role_index:notes` matches `customer:*:notes`, the pattern for
+the `notes` field of every customer. With role `object`, the bucket
+`customer:role_index:object` matches `customer:*:object`, the pattern for
+customer objects. These methods leave such buckets alone:
+
+- `audit_related_fields` and `audit_participations` look only at keys of the
+  type the field or collection stores. They also skip a key that is a bucket of
+  a class-level `multi_index` of the class, or of an instance-scoped
+  `multi_index` whose scope record exists, unless the hash key of the record
+  the key names holds a hash. They skip a key whose candidate owners were not
+  checked the same way. So `repair_related_fields!` does not delete such a
+  bucket and `repair_participations!` does not remove its members, also for a
+  `type: :set` collection and with a record whose field value is `object`.
+- `all`, `keys_count`, `scan_count`, `keys_any?`, `scan_any?`, `scan_keys`,
+  `audit_instances`, `rebuild_instances`, the SCAN fallback of a unique index
+  rebuild and model migrations with the default `@scan_pattern` look only at
+  keys that hold a hash (`Familia::Horreum::OBJECT_KEY_TYPE`).
+- `audit_multi_indexes` does not read a class-level bucket whose value
+  contains `:<index>:` as a bucket of an instance-scoped index, unless the hash
+  key of the scope record the key names holds a hash.
 
 ## Performance Tips
 

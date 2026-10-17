@@ -134,6 +134,7 @@ Built on `BaseMigration`, adds:
 
 - `@model_class` — Target Horreum subclass
 - `@scan_pattern` — Redis key pattern for iteration
+- `@scan_type`, the Redis SCAN `TYPE` option: `hash` when `@scan_pattern` is left to the model's default, otherwise nil (every type)
 - `@batch_size` — Keys per SCAN (default 1000)
 - `scan_and_process_records` — SCAN-based iteration
 - `process_record(obj, key)` — Per-record hook (required override)
