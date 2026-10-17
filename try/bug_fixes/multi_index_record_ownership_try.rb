@@ -515,4 +515,26 @@ RoCo.rebuild_industry_index
 ]
 #=> [[:tier_index], [[:role_index, :bucket_conflict, { "ro_user:role_index:notes" => "string" }]], ["u3"]]
 
+## repair_multi_indexes! names a stale bucket whose owner was not checked and leaves it in place
+@client.del('ro_user:role_index:notes')
+@c10 = RoCo.new(cid: 'c-10')
+@c10.save
+@e7 = RoEmp.new(eid: 'e7', dept: 'eng')
+@e7.save
+@e7.add_to_ro_co_staff(@c10)
+@unchecked_bucket = @c10.dept_index_for('x:dept_index:' * 9)
+@unchecked_bucket.add('e7')
+@unchecked_repair = RoEmp.repair_multi_indexes!
+[
+  @unchecked_repair[:skipped].map { |entry| entry.values_at(:index_name, :scope_id, :reason, :conflicts, :owners) },
+  @unchecked_bucket.members,
+  @c10.find_all_by_dept('eng'),
+]
+#=> [[[:dept_index, "c-10", :bucket_conflict, { @unchecked_bucket.dbkey => :too_many_candidate_owners }, {}]], ["e7"], []]
+
+## Once that key is deleted, the rebuild of the scope and repair_all! go through
+@client.del(@unchecked_bucket.dbkey)
+[@c10.rebuild_dept_index, @c10.find_all_by_dept('eng').map(&:eid), RoEmp.repair_all![:status]]
+#=> [1, ["e7"], :ok]
+
 @delete_keys.call

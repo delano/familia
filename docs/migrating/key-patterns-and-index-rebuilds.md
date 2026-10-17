@@ -35,6 +35,10 @@ Customer.scan_pattern('*')     # Before: "customer:*:*"
 Customer.dbkey_pattern('*', :tags)  # => "customer:*:tags"
 ```
 
+`scan_pattern(nil)` now leaves the suffix out, as `dbkey` does for a `nil`
+suffix: `Customer.scan_pattern(nil)` returned `"customer:*:"` and now returns
+`"customer:*"`, which matches every key under the class prefix.
+
 `Customer.all('*')` matched every key of the form
 `customer:<identifier>:<name>` and loaded each one as an object, so it raised
 `Redis::WrongTypeError` at the first key that did not hold a hash, such as the
@@ -146,7 +150,11 @@ Inspect those keys, with `Familia.dbclient.type(key)` for the type and the
 record named in `owners` for its field. The rebuild can run once none of them
 holds a type other than set, belongs to another record or has too many
 candidate owners. `audit_multi_indexes` lists the sets under the prefix that
-the rebuild leaves alone in `foreign_owned_keys`. See
+the rebuild leaves alone in `foreign_owned_keys`. The rebuild and
+`audit_multi_indexes` pass SCAN the `TYPE` option `set`, so a key of another
+type under the prefix that the rebuild does not write, such as a sorted set at
+`customer:role_index:old`, is left in place, and neither
+`audit_multi_indexes` nor `health_check` reports it. See
 [Multi-value index rebuilds](../guides/feature-relationships-indexing.md#multi-value-index-rebuilds).
 
 `repair_multi_indexes!` rescues the error. It records the index, or for an
@@ -175,6 +183,25 @@ result[:multi_indexes][:skipped]  # the entries above
 Code that reads `errors` for the cause of a `:partial_failure` should also
 read `result[:multi_indexes][:skipped]` for entries with
 `reason: :bucket_conflict`.
+
+The rebuild does not delete a key with more candidate owners than
+`MAX_CANDIDATE_SPLITS` (8). A key under a class's record prefix gets a
+candidate owner for each place where it continues with the delimiter and the
+name of an instance-scoped multi_index declared within that class. A field
+value that repeats that pattern, such as `:dept_index:` nine times in the
+department of an `Employee` indexed per `Company` with
+`multi_index :department, :dept_index, within: Company`, therefore gives a
+`dept_index` bucket under the `Company` prefix too many. A class-level
+index's own name does not count, so a stale `role_index` bucket whose value
+repeats `:role_index:` is deleted as usual. For a key with too many,
+`repair_multi_indexes!` and `repair_all!` record its index or scope in
+`:skipped` on every run until the key is removed. The `conflicts` of the error and of the `:skipped` entry map
+the key to `:too_many_candidate_owners`, the warning `repair_multi_indexes!`
+logs names it, and `audit_multi_indexes` lists it in `foreign_owned_keys`
+with a nil `owner_key`. Once you have confirmed that the key is a stale
+bucket of this index, not a key of another record, delete it with `DEL` and
+run the rebuild again. While an object still holds that field value, the
+rebuild raises for the bucket it would write as well.
 
 The progress block of the rebuild gets a `:clearing` call with `key:` only
 for a bucket its `DEL` removed, and `current:` counts those. It used to be

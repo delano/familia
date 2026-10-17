@@ -513,6 +513,9 @@ module Familia
               #   and consider processing in chunks or using a streaming approach if memory
               #   constraints are encountered. The batch_size parameter controls Redis I/O
               #   batching but does not affect memory usage since all objects are cached.
+              #   The clearing phase also holds every bucket key under the prefix in memory
+              #   before it deletes any (see MultiIndexGenerators.clear_index_buckets), so
+              #   memory grows with the number of bucket keys as well.
               #
               define_method(:"rebuild_#{index_name}") do |batch_size: 100, &progress_block|
                 # PHASE 1: Find the collection containing the indexed objects
@@ -839,6 +842,10 @@ module Familia
             #   maps each such key to its type or to
             #   RecordKeyOwnership::TOO_MANY_CANDIDATES, and #owners maps each key of
             #   another record to that record's hash key.
+            # @note Like the instance-scoped rebuild, this caches every object, and
+            #   the clearing phase holds every bucket key under the prefix in memory
+            #   before it deletes any, so memory grows with the number of objects
+            #   and of bucket keys.
             indexed_class.define_singleton_method(:"rebuild_#{index_name}") do |batch_size: 100, &progress_block|
               # PHASE 1: Discover all field values and collect objects
               progress_block&.call(phase: :discovering, current: 0, total: 0)

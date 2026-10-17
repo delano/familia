@@ -66,6 +66,8 @@ Changed
   ``scan_any?`` and ``scan_keys`` escape the class prefix, delimiter and
   suffix. Identifier filters are still glob patterns. The ``all`` and
   ``scan_pattern`` arguments are now literal suffixes.
+- ``scan_pattern(nil)`` leaves the suffix out, as ``dbkey`` does, and returns
+  ``"customer:*"`` instead of ``"customer:*:"``.
 - ``find_keys`` escapes the class prefix and delimiter. Its suffix argument
   is still a glob pattern.
 - The generated ``rebuild_<index>`` of a ``multi_index`` checks every bucket
