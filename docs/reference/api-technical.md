@@ -783,10 +783,15 @@ scope the current fiber has open, or nil. `Familia::Connection::Scope` exposes
 `owner` (the opening fiber), `clients` (the held clients, in acquisition
 order), `size`, `active?`, `released?` and `release!`. `release!` closes every
 held client and marks the scope released; a later `Scope#client` call raises
-`Familia::Problem`, and lookups in the rest of the block, including a joined
-inner block, resolve as if no scope were open. It is safe to call more than
+`Familia::Problem`. Called anywhere in the block, a joined inner block
+included, it releases the scope for the rest of the outer block: plain
+lookups after it resolve as if no scope were open, and a
+`with_connection_scope` opened after it opens a new scope of its own, which
+closes its clients when that inner block exits. It is safe to call more than
 once; the block's own exit calls it again as a no-op. Only the owning fiber
-may call it; any other fiber gets `Familia::Problem`.
+may call it; any other fiber gets `Familia::Problem`. If a client's `close`
+raises something other than a `StandardError`, such as an `Interrupt`, the
+scope still closes the other clients and then raises it.
 
 **Horreum classes and DataType instances.** `Familia::Connection::Behavior`
 adds `with_connection_scope(uri = nil)` to Horreum classes and DataType

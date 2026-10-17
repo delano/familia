@@ -40,8 +40,11 @@ module Familia
     #
     # Opening a scope inside an active scope of the same fiber joins it:
     # nothing new is acquired and nothing is released until the outer block
-    # exits. An explicit {#release!} from anywhere inside the block releases
-    # the scope for the rest of the outer block. Transactions and pipelines
+    # exits. An explicit {#release!} from anywhere inside the block, a joined
+    # inner block included, releases the scope for the rest of the outer
+    # block: plain lookups after it resolve as if no scope were open, and a
+    # with_connection_scope opened after it opens a new scope of its own,
+    # closed when that inner block exits. Transactions and pipelines
     # opened inside a scope run on the scope's client for their URI, because
     # the fiber-local transaction and pipeline handlers take precedence while
     # a block is open and then hand back to the scope.
@@ -217,21 +220,24 @@ module Familia
         close_each(pending)
       end
 
-      # Closes each client in turn. A StandardError from one close is logged
-      # and skipped. Any other exception (an Interrupt or a Thread#raise
-      # timeout arriving mid-close) propagates, but only after the remaining
-      # clients have been closed, because the rest run from the ensure.
+      # Closes each client in turn, in one loop however many there are (a
+      # long scope that retires clients on every version bump can hold
+      # thousands). A StandardError from one close is logged and skipped.
+      # Any other exception (an Interrupt or a Thread#raise timeout arriving
+      # mid-close) is held until every client has been closed, and then the
+      # first one is raised.
       def close_each(clients)
-        return if clients.empty?
-
-        first, *rest = clients
-        begin
-          first.close
+        interrupted = nil
+        clients.each do |client|
+          client.close
         rescue StandardError => e
           Familia.trace :DBCLIENT_SCOPE, nil, "Ignoring #{e.class} while closing scoped connection: #{e.message}"
-        ensure
-          close_each(rest)
+        # Held, not swallowed: it is raised below once the loop has closed
+        # the remaining clients.
+        rescue Exception => e # rubocop:disable Lint/RescueException
+          interrupted ||= e
         end
+        raise interrupted if interrupted
       end
     end
   end

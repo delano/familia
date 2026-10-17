@@ -224,7 +224,9 @@ module Familia
     #   until the block exits so a handle the block holds, or a WATCH in
     #   flight on it, keeps its connection. {#current_connection_scope}
     #   exposes the scope for inspection and an explicit {Scope#release!},
-    #   which releases it for the rest of the block.
+    #   which releases it for the rest of the block. After it, plain lookups
+    #   resolve as if no scope were open, and a +with_connection_scope+
+    #   opened later in the block opens a new scope of its own.
     # - **Limits**: a client reference kept past the block reconnects on its
     #   next command as an unowned connection. `Enumerator#next` runs its
     #   enumerator in a fiber of its own, so lookups made there resolve as if

@@ -419,6 +419,41 @@ end
  Familia.current_connection_scope]
 #=> ['halt during close', [false, false], nil]
 
+## 11. Closing thousands of retired clients does not exhaust the stack
+# A version bump retires the held client and the next lookup gets a fresh
+# one, so a long scope can hold one client per bump. Clients that never
+# sent a command hold no socket, so this costs no server connections.
+@many_scope = nil
+Familia.with_connection_scope do
+  20_000.times do
+    Familia.increment_middleware_version!
+    Familia.dbclient
+  end
+  @many_scope = Familia.current_connection_scope
+  @many_scope.size
+end
+#=> 20_001
+
+## 11. Every one of those clients was released with the scope
+[@many_scope.released?, @many_scope.size]
+#=> [true, 0]
+
+## 11. release! mid-block, then a new with_connection_scope opens a scope of its own
+@outer_scope = nil
+@inner_scope = nil
+Familia.with_connection_scope do
+  @outer_scope = Familia.current_connection_scope
+  @outer_scope.release!
+  plain_lookup_scoped = !Familia.current_connection_scope.nil?
+  Familia.with_connection_scope do |client|
+    client.ping
+    @inner_scope = Familia.current_connection_scope
+  end
+  [plain_lookup_scoped, @inner_scope.equal?(@outer_scope), @inner_scope.released?,
+   Familia.current_connection_scope]
+end
+#=> [false, false, true, nil]
+
 ## 11. A released scope rejects lookups
 @released_scope = Familia.with_connection_scope { Familia.current_connection_scope }
 @released_scope.client(Familia.uri)
