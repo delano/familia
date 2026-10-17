@@ -303,11 +303,14 @@ module Familia
       #
       # @param suffix_override [String, nil] Optional suffix override
       # @return [String] 'OK' on success
-      def watch(...)
-        raise ArgumentError, 'Block required' unless block_given?
+      def watch(*keys, &block)
+        raise ArgumentError, 'Block required' unless block
 
-        # Forward all arguments including the block to the watch command
-        dbclient.watch(dbkey, ...)
+        # Forward the extra keys and the block to the watch command. Inside a
+        # connection scope, other lookups in the block get another client, so
+        # an EXEC they run cannot clear this WATCH.
+        conn = dbclient
+        Familia::Connection::Scope.watching(conn) { conn.watch(dbkey, *keys, &block) }
 
       rescue Redis::BaseError => e
         raise OptimisticLockError, "Redis error: #{e.message}"

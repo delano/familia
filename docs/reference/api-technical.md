@@ -679,6 +679,183 @@ end
 Without that `ensure`, a bare `pool.checkout` in the provider leaks a
 connection on every call and the pool exhausts.
 
+When a provider is configured, `Familia.with_connection_scope` steps aside:
+`ProviderConnectionHandler` runs before `ScopedConnectionHandler`, so the scope
+holds nothing for the lookups the provider serves.
+
+### Connection Scopes
+
+`Familia.with_connection_scope` holds one connection per URI for the duration
+of a block and closes those connections when the block exits.
+
+Without a provider, every `dbclient` lookup that reaches
+`CreateConnectionHandler` returns a new `Redis` client that nothing closes. A
+scope gives those lookups an owner. While the block runs, each lookup in the
+calling fiber that would otherwise reach `CreateConnectionHandler` resolves to
+the client the scope holds for that connection configuration, created on
+first use with `Familia.create_dbclient`. When the block exits, by return or by
+exception, the scope closes every client it created. Resolution outside a
+scope is unchanged.
+
+```ruby
+Familia.with_connection_scope do |client|
+  client.ping                       # the scope's client for Familia.uri
+  customer = Customer.load(custid)  # resolves to the same client
+  customer.plan = 'premium'
+  customer.save
+end
+# The clients the scope created are closed.
+```
+
+**Yielded client.** The block receives the scope's client for `uri`
+(`Familia.uri` when nil; an Integer selects a logical database on the default
+server), resolved through `Familia.dbclient`. Inside an open transaction or
+pipeline the yielded client is that transaction or pipeline connection.
+
+**Nesting.** A `with_connection_scope` opened inside an active scope of the
+same fiber joins it. Nothing is acquired or released until the outer block
+exits.
+
+**Transactions and pipelines.** `ScopedConnectionHandler` declares
+`supports transaction: true, pipelined: true`. `transaction`, `pipelined` and
+`atomic_write` inside the block resolve their connection through the chain, so
+the MULTI/EXEC or pipeline runs on the scope's client for its URI. A
+WATCH-guarded `atomic_write` resolves the connection once and issues WATCH and
+MULTI/EXEC on it. While a transaction or pipeline block is open,
+`FiberTransactionHandler` or `FiberPipelineHandler` serves that connection
+ahead of the scope.
+
+**WATCH windows.** EXEC, DISCARD and UNWATCH on a connection clear every key
+that connection watches. Between the WATCH and the EXEC of a WATCH-guarded
+transaction (`atomic_write` and `Familia.atomic_write` with `watch_keys:`,
+`save_if_not_exists!`, `Horreum#watch`), the scope does not hand the watching
+client to other lookups: they get a second client for the same URI, which the
+scope holds, reuses and closes like the first. A record saved from a
+`pre_check` therefore commits on its own connection and cannot clear the
+outer WATCH. The watched MULTI itself runs on the connection the transaction
+resolved.
+
+**Ownership.** A scope belongs to the fiber that opened it. A new fiber starts
+with a copy of the opener's fiber storage (Ruby's documentation for
+`Fiber.new`: "If the storage is unspecified, the default is to inherit a copy
+of the storage from the current fiber."), and a new thread's root fiber does
+the same on Ruby 3.3 (observed; the Thread documentation does not state it).
+A thread or fiber spawned inside the block therefore sees the same
+`Fiber[:familia_connection_scope]` value, but `Scope.current` compares the
+scope's owner with `Fiber.current` and returns nil for them. Those threads and
+fibers resolve connections as if no scope were open and open their own scope
+when they need one. A direct `Scope#client` call from another fiber raises
+`Familia::Problem`.
+
+**URI identity.** Clients are keyed by `URI#conf`, the connection parameters
+the URI resolves to (host, port, database, TLS, password and query options such
+as timeout). `redis://host:6379` and `redis://host:6379/0` share one client; a
+different logical database or server gets its own.
+
+**Precedence.** A fiber-local connection set with `Familia.fiber_connection=`,
+a configured `connection_provider` and a Horreum class `@dbclient` run before
+the scope in their chains, so the scope holds nothing for the lookups they
+serve. A standalone DataType instance's `@dbclient` is checked by
+`StandaloneConnectionHandler` before it calls `Familia.dbclient`.
+
+**Reset.** `Familia.reconnect!` and the setters that bump
+`Familia.middleware_version` (`enable_database_logging=`,
+`enable_database_counter=`, `connection_provider=`) do not touch an open
+scope. The scope compares the version on its next lookup and retires the
+clients it created under the old version: new lookups get fresh clients, and
+the retired ones stay open until the block exits, so a handle the block
+already holds, or a WATCH or MULTI in flight on it, keeps its connection.
+`Scope#clients` and `Scope#size` include retired clients. Closing them at once
+would let the `Redis` object reconnect silently on its next command, which
+drops a WATCH and lets the following EXEC commit over a concurrent write.
+
+**Limits.** A client reference kept past the block reconnects on its next
+command as an unowned connection that nothing closes; `Familia::Migration`
+instances memoize `dbclient`, so run a migration inside one scope rather than
+across several. `Enumerator#next` and `#peek` run the enumerator in a fiber of
+its own, so lookups made there resolve as if no scope were open. The scope's
+client for a URI is shared by every lookup for that URI in the block, so
+per-connection state set on it (SELECT, CLIENT SETNAME, SUBSCRIBE) is visible
+to the next lookup.
+
+**Fork.** A scope that spans `fork` keeps its `Redis` objects in the child.
+What happens to an inherited socket is decided by redis-client, not by Familia.
+redis-client 0.29.0, `lib/redis_client.rb`, in `ensure_connected`:
+
+```ruby
+close if !config.inherit_socket && @pid != PIDCache.pid
+```
+
+Opening the scope after the fork avoids relying on that behaviour.
+
+**Inspection and release.** `Familia.current_connection_scope` returns the
+scope the current fiber has open, or nil. `Familia::Connection::Scope` exposes
+`owner` (the opening fiber), `clients` (the held clients, in acquisition
+order), `size`, `active?`, `released?` and `release!`. `release!` closes every
+held client and marks the scope released; a later `Scope#client` call raises
+`Familia::Problem`. Called anywhere in the block, a joined inner block
+included, it releases the scope for the rest of the outer block: plain
+lookups after it resolve as if no scope were open, and a
+`with_connection_scope` opened after it opens a new scope of its own, which
+closes its clients when that inner block exits. It is safe to call more than
+once; the block's own exit calls it again as a no-op. Only the owning fiber
+may call it; any other fiber gets `Familia::Problem`. If a client's `close`
+raises something other than a `StandardError`, such as an `Interrupt`, the
+scope still closes the other clients and then raises it.
+
+**Horreum classes and DataType instances.** `Familia::Connection::Behavior`
+adds `with_connection_scope(uri = nil)` to Horreum classes and DataType
+instances. It opens the same scope and yields the client resolved through the
+receiver's own chain, so a class-level `@dbclient` or a `logical_database`
+setting is honoured.
+
+```ruby
+Customer.with_connection_scope do
+  custids.each do |custid|
+    customer = Customer.load(custid)
+    customer.plan = 'premium'
+    customer.save
+  end
+end
+```
+
+#### Rack middleware
+
+```ruby
+class FamiliaConnectionScope
+  def initialize(app)
+    @app = app
+  end
+
+  def call(env)
+    Familia.with_connection_scope { @app.call(env) }
+  end
+end
+
+use FamiliaConnectionScope
+```
+
+Each request holds one client per URI it touches and closes them when `call`
+returns. Commands issued after `call` returns, for example by a streaming body,
+run outside the scope.
+
+#### Job or script
+
+```ruby
+Familia.with_connection_scope do
+  custids.each do |custid|
+    customer = Customer.load(custid)
+    next unless customer
+
+    customer.plan = 'premium'
+    customer.save
+  end
+end
+```
+
+Without the scope, every `dbclient` lookup that reaches the chain's fallback
+returns a new client.
+
 ### Multi-Database Support
 Configure different logical databases for different models.
 
@@ -751,11 +928,18 @@ Familia.trace :LOAD, redis_client, "user:123", "from cache"
 Understand connection resolution order.
 
 ```ruby
-# Connection resolution order:
-# 1. Instance @dbclient if set
-# 2. Class logical_database if configured
-# 3. Connection provider if set
-# 4. Global Familia connection
+# Connection resolution order (Familia.dbclient and Horreum class chains):
+# 1. Active pipeline or transaction connection
+#    (Fiber[:familia_pipeline], Fiber[:familia_transaction])
+# 2. Fiber-local connection (Familia.fiber_connection=)
+# 3. connection_provider
+# 4. Class-level @dbclient (Horreum classes only)
+# 5. Open connection scope (Familia.with_connection_scope)
+# 6. Fresh connection (CreateConnectionHandler)
+#
+# A DataType instance runs steps 1 to 3, then delegates to its parent's chain
+# or, when standalone, uses its own @dbclient if set and otherwise
+# Familia.dbclient.
 
 class DebugModel < Familia::Horreum
   logical_database 3
@@ -765,8 +949,8 @@ end
 model = DebugModel.new(name: "test")
 # Uses database 3 from logical_database
 
-model.dbclient = custom_connection
-# Now uses custom_connection instead
+DebugModel.dbclient = custom_connection
+# Class-level @dbclient now serves DebugModel and its instances
 ```
 
 ## Performance Considerations
@@ -789,6 +973,7 @@ end
 - Use connection_provider for multi-threaded environments
 - Pool size should match thread count
 - Connections are thread-safe when using provider pattern
+- Wrap scripts, jobs and tests in `Familia.with_connection_scope` to hold one connection per URI for the block and close it afterwards
 
 ### Feature Performance Impact
 - **Encryption**: ~10-20% overhead for field access
