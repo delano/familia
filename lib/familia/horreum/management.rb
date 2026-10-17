@@ -680,6 +680,13 @@ module Familia
       # character (e.g., "mymodel:foo:bar:object" where the identifier is
       # "foo:bar"). A naive split on the delimiter would truncate these.
       #
+      # The key is compared and sliced as bytes. The client returns a key
+      # that is not valid UTF-8 as a binary String, and comparing such a
+      # key with a prefix that holds non-ASCII characters as Strings raises
+      # Encoding::CompatibilityError. The identifier keeps the key's
+      # encoding, as the members of the instances sorted set do, so the
+      # identifiers of one record compare equal.
+      #
       # @param key [String] Full Redis key (e.g., "user:alice:object")
       # @param key_suffix [String] The suffix to strip (default: class suffix)
       # @return [String, nil] The extracted identifier, or nil if the key
@@ -692,10 +699,12 @@ module Familia
         d = Familia.delim
         pfx = "#{prefix}#{d}"
         sfx = "#{d}#{key_suffix}"
+        bkey = key.b
+        size = bkey.bytesize - pfx.bytesize - sfx.bytesize
 
-        return nil unless key.start_with?(pfx) && key.end_with?(sfx)
+        return nil unless size >= 0 && bkey.start_with?(pfx.b) && bkey.end_with?(sfx.b)
 
-        key[pfx.length..-(sfx.length + 1)]
+        bkey.byteslice(pfx.bytesize, size).force_encoding(key.encoding)
       end
 
       def dbkey(identifier, suffix = self.suffix)

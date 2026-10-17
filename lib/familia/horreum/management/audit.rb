@@ -735,21 +735,28 @@ module Familia
       # the marker is used to support identifiers and field values that
       # themselves contain the delimiter character.
       #
+      # The key is compared and split as bytes, so a key with invalid
+      # UTF-8, which the client returns as a binary String, does not raise
+      # Encoding::CompatibilityError against a +scope_prefix+ with
+      # non-ASCII characters. Both parts keep the encoding of the key.
+      #
       # @param key [String]
       # @param scope_prefix [String]
       # @param marker [String]
       # @return [Array(String, String), Array(nil, nil)]
       #
       def parse_instance_scoped_bucket_key(key, scope_prefix, marker)
-        return [nil, nil] unless key.start_with?(scope_prefix)
+        bkey = key.b
+        prefix = scope_prefix.b
+        bmarker = marker.b
+        return [nil, nil] unless bkey.start_with?(prefix)
 
-        rest = key[scope_prefix.length..]
-        marker_pos = rest.index(marker)
+        marker_pos = bkey.index(bmarker, prefix.bytesize)
         return [nil, nil] unless marker_pos
 
-        scope_id = rest[0...marker_pos]
-        field_value = rest[(marker_pos + marker.length)..]
-        [scope_id, field_value]
+        scope_id = bkey.byteslice(prefix.bytesize, marker_pos - prefix.bytesize)
+        field_value = bkey.byteslice((marker_pos + bmarker.bytesize)..)
+        [scope_id.force_encoding(key.encoding), field_value.force_encoding(key.encoding)]
       end
 
       # Batch-checks scope instance existence via pipelined EXISTS.
@@ -975,11 +982,15 @@ module Familia
 
       # Rebuilds the expected bucket key for a (scope_id, field_value) pair.
       #
+      # The key is built the way the scope instance's +<index_name>_for+
+      # factory builds it (MultiIndexGenerators.generate_factory_method), so
+      # it is == to the key SCAN returned for the bucket whatever the
+      # encodings of the scope prefix and the scope_id.
+      #
       # @return [String]
       #
       def build_instance_scoped_bucket_key(scope_class, scope_id, index_name, field_value)
-        d = Familia.delim
-        "#{scope_class.prefix}#{d}#{scope_id}#{d}#{index_name}#{d}#{field_value}"
+        scope_class.dbkey(scope_id, Familia.join(index_name, field_value))
       end
 
       # Audit a class-level participation collection (from class_participates_in).
