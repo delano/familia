@@ -90,7 +90,11 @@ module Familia
     #
     # @param sample [Integer] number of raw values to sample
     # @return [Boolean]
+    # @raise [Familia::OperationModeError] inside a transaction or pipeline,
+    #   where the sampled fields would be a Redis::Future that the follow-up
+    #   HMGET cannot take
     def stale_format?(sample: 100)
+      Familia.assert_replies_available!('IndexDescriptor#stale_format?')
       return false unless class_level? && unique?
 
       sample_raw_values(sample).any? { |v| Familia.legacy_json_encoded?(v) }
@@ -99,7 +103,10 @@ module Familia
     # Convenience inverse of #stale_format?.
     #
     # @return [Boolean]
+    # @raise [Familia::OperationModeError] inside a transaction or pipeline
     def format_current?(**opts)
+      Familia.assert_replies_available!('IndexDescriptor#format_current?')
+
       !stale_format?(**opts)
     end
 
@@ -228,7 +235,10 @@ module Familia
     # @param sample [Integer] raw values sampled per index
     # @param owner [Class, nil] restrict to a single owning class
     # @return [Array<Familia::IndexDescriptor>]
+    # @raise [Familia::OperationModeError] inside a transaction or pipeline
     def stale_indexes(sample: 100, owner: nil)
+      Familia.assert_replies_available!('Familia.stale_indexes')
+
       unique_indexes(class_level: true, owner: owner)
         .select(&:query?)
         .reject { |idx| idx.format_current?(sample: sample) }
@@ -245,6 +255,7 @@ module Familia
     # @return [Boolean] true when all checked indexes are current
     # @raise [ArgumentError] when on_stale is not :raise or :warn
     # @raise [Familia::Problem] when stale indexes are found and on_stale: :raise
+    # @raise [Familia::OperationModeError] inside a transaction or pipeline
     #
     # @example Fail fast at boot
     #   Familia.assert_indexes_current!
@@ -252,6 +263,7 @@ module Familia
     # @example Non-fatal CI smoke test
     #   Familia.assert_indexes_current!(on_stale: :warn)
     def assert_indexes_current!(sample: 100, owner: nil, on_stale: :raise)
+      Familia.assert_replies_available!('Familia.assert_indexes_current!')
       unless %i[raise warn].include?(on_stale)
         raise ArgumentError, "on_stale: must be :raise or :warn; got #{on_stale.inspect}"
       end

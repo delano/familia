@@ -441,6 +441,8 @@ module Familia
                 # A blank value is not indexed (see MultiIndexGenerators.bucket_key_prefix)
                 return [] if MultiIndexGenerators.blank_field_value?(field_value)
 
+                Familia.assert_replies_available!("#{self.class}#sample_from_#{field}")
+
                 index_set = send("#{index_name}_for", field_value) # i.e. UnsortedSet
 
                 # Get random members efficiently (O(1) via SRANDMEMBER with count)
@@ -454,6 +456,8 @@ module Familia
               define_method(:"find_all_by_#{field}") do |field_value|
                 # A blank value is not indexed (see MultiIndexGenerators.bucket_key_prefix)
                 return [] if MultiIndexGenerators.blank_field_value?(field_value)
+
+                Familia.assert_replies_available!("#{self.class}#find_all_by_#{field}")
 
                 index_set = send("#{index_name}_for", field_value) # i.e. UnsortedSet
 
@@ -518,6 +522,8 @@ module Familia
               #   memory grows with the number of bucket keys as well.
               #
               define_method(:"rebuild_#{index_name}") do |batch_size: 100, &progress_block|
+                Familia.assert_replies_available!("#{self.class}#rebuild_#{index_name}")
+
                 # PHASE 1: Find the collection containing the indexed objects
                 # Look for a participation relationship where indexed_class participates in this scope_class
                 collection_name = nil
@@ -799,6 +805,8 @@ module Familia
               # A blank value is not indexed (see MultiIndexGenerators.bucket_key_prefix)
               return [] if MultiIndexGenerators.blank_field_value?(field_value)
 
+              Familia.assert_replies_available!("#{self}.find_all_by_#{field}")
+
               index_set = send("#{index_name}_for", field_value)
               identifiers = index_set.members
               load_multi(identifiers).compact
@@ -808,6 +816,8 @@ module Familia
             # Uses load_multi for efficient batch loading (avoids N+1 queries)
             indexed_class.define_singleton_method(:"sample_from_#{field}") do |field_value, count = 1|
               return [] if MultiIndexGenerators.blank_field_value?(field_value)
+
+              Familia.assert_replies_available!("#{self}.sample_from_#{field}")
 
               index_set = send("#{index_name}_for", field_value)
               identifiers = index_set.sample(count)
@@ -847,6 +857,8 @@ module Familia
             #   before it deletes any, so memory grows with the number of objects
             #   and of bucket keys.
             indexed_class.define_singleton_method(:"rebuild_#{index_name}") do |batch_size: 100, &progress_block|
+              Familia.assert_replies_available!("#{self}.rebuild_#{index_name}")
+
               # PHASE 1: Discover all field values and collect objects
               progress_block&.call(phase: :discovering, current: 0, total: 0)
 

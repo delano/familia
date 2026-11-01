@@ -630,6 +630,8 @@ module Familia
           # @param collection_names [Array<String>, nil] Optional collection name filter
           # @return [Array<String>] Array of unique target instance IDs
           def participating_ids_for_target(target_class, collection_names = nil)
+            Familia.assert_replies_available!("#{self.class}#participating_ids_for_target")
+
             # Use centralized key_prefix method for consistent key generation
             target_prefix = target_class.key_prefix
             ids = Set.new
@@ -664,6 +666,8 @@ module Familia
           # @param collection_names [Array<String>, nil] Optional collection name filter
           # @return [Boolean] true if any matching participation exists
           def participating_in_target?(target_class, collection_names = nil)
+            Familia.assert_replies_available!("#{self.class}#participating_in_target?")
+
             # Use centralized key_prefix method for consistent key generation
             target_prefix = target_class.key_prefix
 
@@ -681,6 +685,8 @@ module Familia
           end
 
           def current_participations
+            Familia.assert_replies_available!("#{self.class}#current_participations")
+
             return [] unless self.class.respond_to?(:participation_relationships)
 
             # Use the reverse index as the single source of truth

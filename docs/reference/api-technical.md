@@ -1096,21 +1096,26 @@ user = User.find_by_id(123, check_exists: false)
 Minimize Valkey/Redis round trips with batch operations.
 
 ```ruby
-# Instead of multiple individual operations
-users = []
-100.times do |i|
-  user = User.new(name: "User #{i}", email: "user#{i}@example.com")
-  users << user
+users = 100.times.map do |i|
+  User.new(name: "User #{i}", email: "user#{i}@example.com")
 end
 
-# Use transactions for batch saves
-User.pipelined do
-  users.each do |user|
-    # All operations batched in pipeline
-    user.save
-  end
-end
+# Persist every record in one MULTI/EXEC. Each record's unique-index
+# checks and claims run before the MULTI opens.
+Familia.atomic_write(*users)
+
+# Load many records in one pipeline of HGETALL commands
+User.load_multi(users.map(&:identifier))
 ```
+
+Do not wrap `save` in `pipelined` or `transaction`. It needs command
+replies to check unique indexes and existence, so it raises
+`Familia::OperationModeError` there, as do `create!`, `build`,
+`atomic_write` and the partial writers `commit_fields`, `save_fields`,
+`multi_field_update` and `multi_field_fast_write`. Without
+`Familia.atomic_write`, save the records one at a time; each `save` runs
+its own MULTI/EXEC. See
+[Transaction Safety](transaction_safety.md), rules 1 and 4.
 
 ### Index Rebuilding
 
