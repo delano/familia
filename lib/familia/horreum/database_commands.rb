@@ -301,13 +301,34 @@ module Familia
       #    If you don't need to read before deciding, WATCH adds complexity
       #    without benefit. SET NX handles the "claim" pattern in one atomic shot.
       #
-      # @param suffix_override [String, nil] Optional suffix override
-      # @return [String] 'OK' on success
-      def watch(...)
-        raise ArgumentError, 'Block required' unless block_given?
+      # Issue the MULTI/EXEC, UNWATCH and DISCARD on the connection the block
+      # receives, which is the connection that sent the WATCH. Other lookups
+      # during the block, including this object's own +transaction+,
+      # +unwatch+ and +discard+, can resolve to a different client (inside a
+      # connection scope they always do, and without a connection provider
+      # each lookup creates one). A MULTI/EXEC on another client is not
+      # guarded by this WATCH.
+      #
+      # @example
+      #   account.watch do |conn|
+      #     balance = conn.hget(account.dbkey, 'balance').to_i
+      #     conn.multi { |m| m.hset(account.dbkey, 'balance', (balance - 100).to_s) }
+      #   end
+      #
+      # @param keys [Array<String>] further keys to WATCH with this object's key
+      # @yieldparam conn [Redis] the connection that sent the WATCH
+      # @return [Object] the block's return value. For a block that ends with
+      #   +conn.multi+, the EXEC replies, or nil when a watched key changed
+      # @raise [ArgumentError] without a block
+      # @raise [Familia::OptimisticLockError] on a Redis error
+      def watch(*keys, &block)
+        raise ArgumentError, 'Block required' unless block
 
-        # Forward all arguments including the block to the watch command
-        dbclient.watch(dbkey, ...)
+        # Forward the extra keys and the block to the watch command. Inside a
+        # connection scope, other lookups in the block get another client, so
+        # an EXEC they run cannot clear this WATCH.
+        conn = dbclient
+        Familia::Connection::Scope.watching(conn) { conn.watch(dbkey, *keys, &block) }
 
       rescue Redis::BaseError => e
         raise OptimisticLockError, "Redis error: #{e.message}"

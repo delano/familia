@@ -160,13 +160,14 @@ end
 @watch_customer.save
 @watch_customer.hset(:balance, '1000')
 
-@success = @watch_customer.watch do
-  current_balance = @watch_customer.hget(:balance).to_i
+# The MULTI/EXEC goes on the yielded connection, the one holding the WATCH.
+@success = @watch_customer.watch do |conn|
+  current_balance = conn.hget(@watch_customer.dbkey, 'balance').to_i
 
   if current_balance >= 100
-    @watch_customer.transaction do
-      @watch_customer.hset(:balance, (current_balance - 100).to_s)
-      @watch_customer.hset(:purchases, '1')
+    conn.multi do |multi|
+      multi.hset(@watch_customer.dbkey, 'balance', (current_balance - 100).to_s)
+      multi.hset(@watch_customer.dbkey, 'purchases', '1')
     end
   end
 end

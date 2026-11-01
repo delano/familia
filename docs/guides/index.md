@@ -105,6 +105,20 @@ Familia.connection_provider = lambda do |uri|
 end
 ```
 
+### Connection Scopes (Scripts, Jobs, Tests)
+```ruby
+# Without a provider, each lookup that reaches the fallback creates a new client.
+# A scope holds one client per URI for the block and closes them on exit.
+Familia.with_connection_scope do |client|
+  client.ping
+  custids.each do |custid|
+    customer = Customer.load(custid)
+    customer.plan = 'premium'
+    customer.save
+  end
+end
+```
+
 ### Object Relationships
 ```ruby
 class Customer < Familia::Horreum

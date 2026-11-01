@@ -85,6 +85,7 @@ module Familia
       # @note Connection Handler Compatibility:
       #   - FiberTransactionHandler: Supports reentrant transactions
       #   - ProviderConnectionHandler: Full transaction support
+      #   - ScopedConnectionHandler: Full transaction support, on the scope's connection
       #   - CreateConnectionHandler: Full transaction support
       #   - FiberConnectionHandler: Blocked (raises OperationModeError)
       #   - DefaultConnectionHandler: Blocked (raises OperationModeError)
@@ -371,6 +372,7 @@ module Familia
       # @note Connection Handler Compatibility:
       #   - FiberPipelineHandler: Supports reentrant pipelines
       #   - ProviderConnectionHandler: Full pipeline support
+      #   - ScopedConnectionHandler: Full pipeline support, on the scope's connection
       #   - CreateConnectionHandler: Full pipeline support
       #   - FiberTransactionHandler: Blocked (raises OperationModeError)
       #   - FiberConnectionHandler: Blocked (raises OperationModeError)
@@ -400,6 +402,10 @@ module Familia
       #   commands in the block may run on different connections. When several
       #   commands must share one connection -- WATCH, MULTI, SUBSCRIBE --
       #   use {#transaction}, {#pipelined}, or check out from your own pool.
+      #   Without a provider, the yielded client is a fresh connection that
+      #   this method does not close; wrap the work in
+      #   {Familia::Connection#with_connection_scope} to hold one connection
+      #   for the block and close it afterwards.
       #
       # @yield [Redis] A Database connection
       # @return The result of the block

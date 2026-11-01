@@ -541,7 +541,8 @@ module Familia
     # 3. FiberConnectionHandler - Fiber[:familia_connection] (middleware-provided)
     # 4. ProviderConnectionHandler - connection_provider callback
     # 5. CachedConnectionHandler - @dbclient instance variable
-    # 6. CreateConnectionHandler - creates new connection (fallback)
+    # 6. ScopedConnectionHandler - connection held by an open Familia.with_connection_scope
+    # 7. CreateConnectionHandler - creates new connection (fallback)
     #
     # @return [Redis] the Database connection instance.
     #

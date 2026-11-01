@@ -1197,6 +1197,7 @@ module Familia
       def transaction(...) = self.class.transaction(...)
       def pipelined(...) = self.class.pipelined(...)
       def dbclient(...) = self.class.dbclient(...)
+      def with_connection_scope(...) = self.class.with_connection_scope(...)
 
       private
 

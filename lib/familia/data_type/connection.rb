@@ -27,6 +27,11 @@ module Familia
     # 5. ParentDelegationHandler - Delegate to parent object (primary for owned DataTypes)
     # 6. StandaloneConnectionHandler - Independent DataType connection
     #
+    # An open Familia.with_connection_scope is honoured through steps 5 and 6:
+    # the parent's chain and Familia.dbclient both include
+    # ScopedConnectionHandler, so an owned or standalone DataType resolves to
+    # the scope's client for its URI.
+    #
     # @example Parent-owned DataType (automatic delegation)
     #   class User < Familia::Horreum
     #     logical_database 2
