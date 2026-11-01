@@ -15,8 +15,8 @@ The format is based on `Keep a Changelog <https://keepachangelog.com/en/1.1.0/>`
 Added
 -----
 
-- Added ``Familia::AtomicOperations.with_rebuild(final_key, redis, ttl:, preserve_for:)``, which yields ``(temp_key, touch)`` and owns the rebuild lock, the bounded-TTL temporary key, the atomic swap, and cleanup. Raises ``Familia::RebuildInProgressError`` when the lock is already held.
-- Added ``Familia::AtomicOperations.sweep_orphaned_temp_keys(redis, pattern:, older_than:, dry_run:)``, which deletes temporary rebuild keys that have no TTL and are older than the window, skipping any index with a live ``:rebuild-lock``. Run it only once every process is on this version.
+- Added ``Familia::AtomicOperations.with_rebuild(final_key, redis, ttl: DEFAULT_REBUILD_TTL, preserve_for: DEFAULT_PRESERVE_TTL)``, which yields ``(temp_key, touch)`` and owns the rebuild lock, the bounded-TTL temporary key, the atomic swap, and cleanup. Raises ``Familia::RebuildInProgressError`` when the lock is already held.
+- Added ``Familia::AtomicOperations.sweep_orphaned_temp_keys(redis, pattern: '*:rebuild:*', older_than: DEFAULT_PRESERVE_TTL, dry_run: false)``, which deletes temporary rebuild keys that have no TTL and are older than the window, skipping any index with a live ``:rebuild-lock``. Run it only once every process is on this version.
 - Added ``Familia::RebuildInProgressError`` (a ``Familia::PersistenceError`` with ``#key``) and its subclass ``Familia::RebuildLockLostError``.
 - Added ``Familia::AtomicOperations::DEFAULT_REBUILD_TTL`` (300) and ``DEFAULT_PRESERVE_TTL`` (3600).
 - ``Familia::VerifiableIdentifier.secret_key`` now reads ``IDENTIFIER_SECRET`` when ``VERIFIABLE_ID_HMAC_SECRET`` is unset or blank. ``VERIFIABLE_ID_HMAC_SECRET`` takes precedence when nonblank, and ``KeyError`` is still raised on first use when neither is set. #423
@@ -54,7 +54,7 @@ Security
 --------
 
 - Encrypted field setters no longer duck-type the assigned value. Only a ``Familia::Encryption::StoredEnvelope``, applied by ``EncryptedFieldType#deserialize`` on hydration, is stored verbatim; every other assignment is encrypted. #405
-- The envelope ``encoding`` field is validated against ``Familia::Encryption::ENVELOPE_ENCODINGS`` before use. Anything else raises ``EncryptionError: Unsupported encoding`` from ``validate_decryptable!``, ``Manager#decrypt``, and ``ConcealedString`` wrapping, and ``decryptable?`` returns false. #408
+- The envelope ``encoding`` field is validated against ``Familia::Encryption::ENVELOPE_ENCODINGS`` before use. Anything else raises ``EncryptionError: Unsupported encoding`` from ``validate_decryptable!``, ``Manager#decrypt``, and ``ConcealedString`` wrapping, and ``decryptable?`` returns false. Envelopes without the field still decrypt as UTF-8. Binding the field into the AAD so that a valid-but-wrong name is also rejected remains open; it needs a new envelope version. #408
 - Assigning plaintext to an encrypted field raises ``Familia::NoIdentifier`` when the record has no identifier, so ciphertext cannot become undecryptable once an identifier is assigned.
 - ``rebuild_via_scan`` propagates batch failures and preserves the live index instead of replacing it with incomplete contents.
 - Index rebuilds hold a per-index ``<final_key>:rebuild-lock`` refreshed by compare-and-extend and raise ``Familia::RebuildLockLostError`` when another rebuild takes it over. ``AtomicOperations.build_temp_key`` appends a 64-bit random nonce (``<key>:rebuild:<timestamp>:<16 hex>``), temporary keys carry a refreshed TTL, and a failed swap retains the key for ``preserve_for`` (default 3600 seconds).
