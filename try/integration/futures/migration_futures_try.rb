@@ -109,6 +109,20 @@ Familia.pipelined { @registry.applied?('futures_migration_example') }
 [@conn_results.map { |r| r[:status] }, @connections.call - @before, @conn_registry.client.equal?(@conn_registry.client)]
 #=> [[:success], 1, true]
 
+## a registry without its own client reports the connection it kept through #redis
+@reader_registry = Familia::Migration::Registry.new(prefix: "#{@prefix}:reader")
+@reader_before = @reader_registry.redis
+@reader_in_block = nil
+Familia.pipelined do
+  @reader_registry.applied?('futures_migration_example')
+  @reader_in_block = @reader_registry.redis
+end
+@reader_after_block = @reader_registry.redis
+@reader_registry.applied?('futures_migration_example')
+[@reader_before, @reader_in_block, @reader_after_block,
+ @reader_registry.redis.equal?(@reader_registry.client), @reader_registry.redis.class]
+#=> [nil, nil, nil, true, Redis]
+
 ## a registry that kept its connection still follows a later pipeline
 @conn_registry.applied?('futures_migration_example')
 @ret = nil

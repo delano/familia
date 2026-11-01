@@ -14,12 +14,12 @@ Changed
 
 - familia now requires ``redis`` 5.4 or later (``>= 5.4, < 6.0``, was
   ``>= 5.0``). ``Lock#release``, and inside a block ``HashKey#hsetnx``,
-  ``JsonStringKey#setnx`` and ``JsonStringKey#value`` with a default, pass
-  a reply-coercion block to ``Redis#call``. redis-rb's changelog for 5.4.0:
-  "``Redis#call`` now accept a block, allowing to use ``Redis`` instances
-  where ``RedisClient`` is expected." Earlier versions drop the block, so
-  ``Lock#release`` returned ``0`` (truthy) for a failed release and the
-  Futures resolved to ``1`` or ``0`` instead of ``true`` or ``false``.
+  ``JsonStringKey#setnx`` and ``JsonStringKey#value`` with a default, now
+  pass a reply-coercion block to ``Redis#call``. redis-rb's changelog for
+  5.4.0: "``Redis#call`` now accept a block, allowing to use ``Redis``
+  instances where ``RedisClient`` is expected." Earlier versions ignore the
+  block, so with them these methods would return, or their Futures resolve
+  to, ``1`` or ``0`` instead of ``true`` or ``false``.
 - Inside ``transaction``, ``atomic_write`` and ``pipelined`` blocks,
   DataType and Horreum methods that only convert a reply now return the
   command's ``Redis::Future`` instead of raising ``NoMethodError``. Its
@@ -81,7 +81,9 @@ Changed
   without ``redis:`` returns the current transaction or pipeline connection
   inside a Familia block without keeping it, so it no longer keeps a
   connection from a block that has completed. Outside a block it still
-  keeps the first ``Familia.dbclient`` it resolves. A registry built
+  keeps the first ``Familia.dbclient`` it resolves, and ``#redis`` returns
+  that kept connection (or the ``redis:`` client), never a transaction or
+  pipeline connection. A registry built
   without ``redis:``, as ``Migration::Runner`` builds its default, and
   first used outside a block kept a plain connection for life: inside a
   later block its commands ran at once, outside the MULTI, and every
@@ -139,7 +141,8 @@ Changed
   transaction.
 - ``ListKey#pushx`` and ``#unshiftx`` queue their TTL refresh inside a
   transaction or pipeline instead of skipping it. ``SortedSet#popmin`` and
-  ``#popmax`` queue theirs there too.
+  ``#popmax`` queue theirs there too, except with a count that pops
+  nothing (``0`` or negative), as outside a block.
 - Inside a transaction or pipeline, ``HashKey#hsetnx``, ``ListKey#insert``,
   ``JsonStringKey#setnx`` and ``JsonStringKey#value`` with a default queue
   their write and TTL refresh as one ``EVAL`` that refreshes only when the
@@ -172,8 +175,6 @@ Fixed
 
 - ``SortedSet#diff(withscores: true)`` raised ``ArgumentError: unknown
   keyword: :withscores``. It now returns ``[member, score]`` pairs.
-- ``SortedSet#popmin(0)`` and ``#popmax(0)`` inside a block no longer queue
-  a TTL refresh, matching their behaviour outside a block.
 - ``HashKey#increment``, ``#decrement`` and ``#incrbyfloat`` raised
   ``NoMethodError`` inside ``transaction``, ``atomic_write`` and
   ``pipelined`` blocks, which aborted the whole block. They now return the

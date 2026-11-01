@@ -75,8 +75,10 @@ command's `Redis::Future`. Converting means deserializing values, coercing a
 number, or testing the reply (a count, a rank, a TTL) to answer a predicate.
 After the block, the Future's `value` is the command's reply as redis-rb
 returns it, without Familia's conversion. Outside a block the same methods
-return what they always did, with one exception:
-`HashKey#randfield(count, withvalues: true)` now returns `[field, value]` pairs.
+return what they always did, with two exceptions:
+`HashKey#randfield(count, withvalues: true)` now returns `[field, value]` pairs,
+and `SortedSet#diff(withscores: true)` returns `[member, score]` pairs instead
+of raising `ArgumentError`.
 
 ```ruby
 views = nil

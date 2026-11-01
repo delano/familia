@@ -6,10 +6,12 @@ in one of three ways, described in rule 4 of
 [Transaction Safety](../reference/transaction_safety.md): they return the
 command's Future, they raise `Familia::OperationModeError` before queueing
 anything, or they queue a write's TTL refresh with it. Outside a block
-every method returns what it did before, with one exception:
+every method returns what it did before, with two exceptions:
 `HashKey#randfield(count, withvalues: true)` now returns `[field, value]` pairs.
 It used to return `[[[field, raw_value], nil]]` when one pair came back and
-raise `ArgumentError` for more. Two persistence effects changed outside a
+raise `ArgumentError` for more. `SortedSet#diff(withscores: true)` raised
+`ArgumentError: unknown keyword: :withscores` and now returns
+`[member, score]` pairs. Two persistence effects changed outside a
 block too: `HashKey#hsetnx` now refreshes the hash's TTL after setting a new
 field (see the last section), and `JsonStringKey#empty?` on a key declared
 with `default:` no longer writes the default to a missing key or refreshes
@@ -25,12 +27,14 @@ and code that uses them inside a block needs a change.
 
 familia's gemspec now declares `redis` `>= 5.4, < 6.0` (it was `>= 5.0`).
 `Lock#release`, and inside a block `HashKey#hsetnx`, `JsonStringKey#setnx`
-and `JsonStringKey#value` with a default, pass a block to `Redis#call` that
-turns the script's `1` or `0` reply into `true` or `false`. redis-rb's
+and `JsonStringKey#value` with a default, now pass a block to `Redis#call`
+that turns the script's `1` or `0` reply into `true` or `false`. redis-rb's
 changelog for 5.4.0 says: "`Redis#call` now accept a block, allowing to use
 `Redis` instances where `RedisClient` is expected." Versions 5.0 to 5.3
-drop the block, so with them `Lock#release` returned `0`, which is truthy,
-for a release that failed.
+ignore the block, so with them this code would return `1` or `0` instead of
+a Boolean, and a failed `Lock#release` would return `0`, which is truthy.
+familia 2.13.0's `Lock#release` compared the reply with `1`, so it returned
+a Boolean on every redis-rb 5.x.
 
 A bundle that pins `redis` below 5.4 no longer resolves with this familia.
 Update it:
@@ -193,8 +197,7 @@ whatever database is asked for, so a registry used inside
 its records to database 7. `applied?` outside the block reads the
 registry's own database and does not find them, and the runner treats the
 migration as pending. A registry first used outside the block kept its own
-connection before this change, so its records stayed on its database. Pass
-a client to keep that:
+connection before this change, so its records stayed on its database.
 
 To keep a registry on its own connection inside any block, as before, pass
 one:

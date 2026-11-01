@@ -22,8 +22,15 @@ module Familia
     #   registry.applied?('20260131_add_status_field')  # => true
     #
     class Registry
-      # @return [Redis, nil] The Redis client for this registry
-      attr_reader :redis
+      # The Redis client for this registry: the one passed as +redis:+, or
+      # else the Familia.dbclient fallback #client resolved and kept outside
+      # a block (nil until then). A transaction or pipeline connection is
+      # never returned, because #client does not keep one.
+      #
+      # @return [Redis, nil]
+      def redis
+        @redis || @default_client
+      end
 
       # @return [String] The key prefix for all registry data
       attr_reader :prefix
