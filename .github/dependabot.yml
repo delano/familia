@@ -13,3 +13,8 @@ updates:
     directory: "/" # Location of package manifests
     schedule:
       interval: "weekly"
+    ignore:
+      # dry-configurable 1.4.0 requires Ruby >= 3.3. Remove with Ruby 3.2
+      # support (see the Gemfile).
+      - dependency-name: "dry-configurable"
+        versions: [">= 1.4"]
