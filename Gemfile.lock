@@ -8,7 +8,7 @@ PATH
       json_schemer (~> 2.0)
       logger (~> 1.7)
       oj (~> 3.16)
-      redis (>= 5.0, < 6.0)
+      redis (>= 5.4, < 6.0)
       uri-valkey (~> 1.4)
 
 GEM

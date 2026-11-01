@@ -59,7 +59,7 @@ module Familia
       # @return [Object] The write command's result (or its future in-transaction)
       #
       def execute_capped_write(&)
-        return yield(dbclient) if Fiber[:familia_transaction] || Fiber[:familia_pipeline]
+        return yield(dbclient) if Familia.transaction_or_pipeline?
 
         transaction(&).results.first
       end

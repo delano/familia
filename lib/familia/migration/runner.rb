@@ -55,6 +55,8 @@ module Familia
       #   - :reversible [Boolean] Whether the migration has a down method
       #
       def status
+        Familia.assert_replies_available!('Migration::Runner#status')
+
         # Batch fetch all applied migrations with timestamps in a single Redis call
         applied_info = @registry.all_applied.each_with_object({}) do |entry, hash|
           hash[entry[:migration_id]] = entry[:applied_at]
@@ -78,6 +80,8 @@ module Familia
       # @return [Array<Class>] Migration classes that haven't been applied
       #
       def pending
+        Familia.assert_replies_available!('Migration::Runner#pending')
+
         @registry.pending(@migrations)
       end
 
@@ -125,6 +129,8 @@ module Familia
       # @return [Array<Hash>] Results for each migration attempted
       #
       def run(dry_run: false, limit: nil)
+        Familia.assert_replies_available!('Migration::Runner#run')
+
         pending_migrations = topological_sort(pending)
         pending_migrations = pending_migrations.first(limit) if limit
 
@@ -149,6 +155,8 @@ module Familia
       #   - :error [String] Error message (if failed)
       #
       def run_one(migration_class_or_id, dry_run: false)
+        Familia.assert_replies_available!('Migration::Runner#run_one')
+
         klass = resolve_migration(migration_class_or_id)
 
         # Validate dependencies are applied
@@ -198,6 +206,8 @@ module Familia
       # @raise [Errors::NotReversible] if migration has no down method
       #
       def rollback(migration_id)
+        Familia.assert_replies_available!('Migration::Runner#rollback')
+
         klass = resolve_migration(migration_id)
 
         unless @registry.applied?(migration_id)

@@ -27,6 +27,8 @@ module Familia
       # @return [Hash] {phantoms: [], missing: [], count_timeline: N, count_scan: N}
       #
       def audit_instances(batch_size: 100, &progress)
+        Familia.assert_replies_available!("#{self}.audit_instances")
+
         # Phase 1: Collect identifiers from timeline
         timeline_ids = Set.new(instances.members)
         progress&.call(phase: :timeline_collected, current: timeline_ids.size, total: nil)
@@ -63,6 +65,8 @@ module Familia
       # @return [Array<Hash>] [{index_name:, stale: [...], missing: [...]}]
       #
       def audit_unique_indexes(scanned_identifiers: nil, loaded_objects: nil)
+        Familia.assert_replies_available!("#{self}.audit_unique_indexes")
+
         return [] unless respond_to?(:indexing_relationships)
 
         indexing_relationships.select do |r|
@@ -91,6 +95,8 @@ module Familia
       # @return [Array<Hash>] [{index_name:, stale_members: [], orphaned_keys: []}]
       #
       def audit_multi_indexes(scanned_identifiers: nil, loaded_objects: nil)
+        Familia.assert_replies_available!("#{self}.audit_multi_indexes")
+
         return [] unless respond_to?(:indexing_relationships)
 
         indexing_relationships.select do |r|
@@ -116,6 +122,8 @@ module Familia
       # @return [Array<Hash>] [{collection_name:, stale_members: [{identifier:, collection_key:, reason:}]}]
       #
       def audit_participations(sample_size: nil)
+        Familia.assert_replies_available!("#{self}.audit_participations")
+
         return [] unless respond_to?(:participation_relationships)
 
         participation_relationships.flat_map do |rel|
@@ -144,6 +152,8 @@ module Familia
       #   [{field_name:, klass:, orphaned_keys: [...], count:, status:}]
       #
       def audit_related_fields
+        Familia.assert_replies_available!("#{self}.audit_related_fields")
+
         return [] unless relations?
 
         related_fields.values.map { |definition| audit_single_related_field(definition) }
@@ -171,6 +181,8 @@ module Familia
       # @return [Hash] {in_instances_missing_unique_index: [], index_points_to_wrong_identifier: [], status:}
       #
       def audit_cross_references(batch_size: 100, &progress)
+        Familia.assert_replies_available!("#{self}.audit_cross_references")
+
         empty_result = {
           in_instances_missing_unique_index: [],
           index_points_to_wrong_identifier: [],
@@ -274,6 +286,8 @@ module Familia
       #
       def health_check(batch_size: 100, sample_size: nil, audit_collections: false,
                        check_cross_refs: false, &progress)
+        Familia.assert_replies_available!("#{self}.health_check")
+
         start_time = Familia.now
 
         inst = audit_instances(batch_size: batch_size, &progress)
