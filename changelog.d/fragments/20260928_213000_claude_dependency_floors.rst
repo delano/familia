@@ -14,7 +14,11 @@ Fixed
 
 - On Ruby 3.4+, ``require 'familia'`` no longer fails with ``cannot load
   such file -- bigdecimal (LoadError)`` when the bundle resolves ``oj``
-  3.16.0 or 3.16.1.
+  3.16.0 or 3.16.1 and nothing in it declares ``bigdecimal`` (for example
+  with ``json_schemer`` 2.0.0 to 2.1.1). The ``json_schemer`` floor fixes
+  it: ``json_schemer`` 2.2.0 to 2.5.0 declare ``bigdecimal``, so the bundle
+  contains it. The ``oj`` floor also excludes 3.16.0 and 3.16.1, which
+  require ``bigdecimal`` without declaring it.
 
 Documentation
 -------------

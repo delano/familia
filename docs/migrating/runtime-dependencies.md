@@ -96,6 +96,12 @@ they fail to load unless the bundle happens to contain those libraries:
 'familia'`, and `json_schemer` 2.0.0 to 2.1.1 require `base64` and
 `bigdecimal`, which breaks schema validation.
 
+`json_schemer` 2.2.0 to 2.5.0 declare `bigdecimal`, so a bundle that
+resolves familia's new `json_schemer` requirement contains `bigdecimal`, and
+`oj` 3.16.0 and 3.16.1 would load in it. The `json_schemer` floor is what
+fixes the `oj` failure. The `oj` floor excludes those releases as well,
+because they require `bigdecimal` without declaring it.
+
 `oj` 3.16.2 to 3.16.4 also require `ostruct` without declaring it, but they
 rescue the failure, so they load and work. Ruby 3.4 and later print a
 warning that `ostruct` was loaded from, or is no longer part of, the default

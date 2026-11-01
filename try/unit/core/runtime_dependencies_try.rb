@@ -26,16 +26,19 @@ require_relative '../../support/helpers/test_helpers'
 #=> %w[concurrent-ruby json_schemer logger oj redis uri-valkey]
 
 # An application's bundle can resolve any release a requirement allows, so
-# each floor excludes releases that make require 'familia' or schema
-# validation fail. Under Bundler, requiring a library that Ruby's
+# each floor excludes releases that require a library they do not declare,
+# which can make require 'familia' or schema validation fail. Under
+# Bundler, requiring a library that Ruby's
 # bundled_gems.rb lists as leaving the default gems raises LoadError on the
 # Ruby version listed for it and later, unless the bundle contains it.
 # bigdecimal and base64 are listed at 3.4.0.
 # From each release's gemspec and lib/:
 # - oj 3.16.0 and 3.16.1 declare no runtime dependencies, and lib/oj.rb
 #   requires lib/oj/mimic.rb, which starts with require 'bigdecimal'. On
-#   Ruby 3.4 that raises LoadError. 3.16.2 is the first release that
-#   declares bigdecimal. Up to 3.16.4, oj also requires ostruct without
+#   Ruby 3.4 that raises LoadError unless the bundle contains bigdecimal.
+#   json_schemer 2.2.0 to 2.5.0 declare it, so with the json_schemer floor
+#   below these releases would load; the oj floor excludes them anyway.
+#   3.16.2 is the first release that declares bigdecimal. Up to 3.16.4, oj also requires ostruct without
 #   declaring it, but inside begin/rescue Exception, so Ruby 3.4 and 4.0
 #   only warn and oj still loads. That warning alone does not justify
 #   excluding those releases.
