@@ -1206,11 +1206,15 @@ module Familia
 
       # Rebuilds the expected bucket key for a (scope_id, field_value) pair.
       #
+      # The key is built the way the scope instance's +<index_name>_for+
+      # factory builds it (MultiIndexGenerators.generate_factory_method), so
+      # it is == to the key SCAN returned for the bucket whatever the
+      # encodings of the scope prefix and the scope_id.
+      #
       # @return [String]
       #
       def build_instance_scoped_bucket_key(scope_class, scope_id, index_name, field_value)
-        d = Familia.delim
-        "#{scope_class.prefix}#{d}#{scope_id}#{d}#{index_name}#{d}#{field_value}"
+        scope_class.dbkey(scope_id, Familia.join(index_name, field_value))
       end
 
       # Audit a class-level participation collection (from class_participates_in).
