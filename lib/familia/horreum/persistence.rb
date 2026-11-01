@@ -72,7 +72,8 @@ module Familia
       # @param update_expiration [Boolean] Whether to refresh key expiration (default: true)
       # @return [Boolean] true on success
       #
-      # @raise [Familia::OperationModeError] If called within a transaction
+      # @raise [Familia::OperationModeError] If called within a transaction or
+      #   pipeline
       # @raise [Familia::RecordExistsError] If unique index constraint violated
       #
       # @example Basic usage
@@ -103,11 +104,13 @@ module Familia
       def save(update_expiration: true)
         start_time = Familia.now_in_μs if Familia.debug?
 
-        # Prevent save within transaction - unique index guards require read operations
-        # which are not available in Redis MULTI/EXEC blocks
-        if Fiber[:familia_transaction]
+        # Prevent save within a transaction or pipeline. Unique index guards
+        # require read operations whose replies are Redis::Future objects there
+        # (a pipeline would otherwise report a spurious RecordExistsError), and
+        # save opens its own MULTI/EXEC.
+        if Familia.transaction_or_pipeline?
           raise Familia::OperationModeError, <<~ERROR_MESSAGE
-            Cannot call save within a transaction. Save operations must be called outside transactions to ensure unique constraints can be validated.
+            Cannot call save within a transaction or pipeline. Save operations must be called outside transactions and pipelines to ensure unique constraints can be validated.
           ERROR_MESSAGE
         end
 
@@ -234,7 +237,8 @@ module Familia
       # @yield Block containing collection operations to execute after save
       # @return [Boolean] true if save succeeded and block completed
       #
-      # @raise [Familia::OperationModeError] If called within a transaction
+      # @raise [Familia::OperationModeError] If called within a transaction or
+      #   pipeline
       # @raise [Familia::RecordExistsError] If unique index constraint violated
       #
       # @example Save a plan then update its feature set
@@ -292,17 +296,19 @@ module Familia
       #
       # @raise [Familia::RecordExistsError] If object already exists
       # @raise [Familia::OptimisticLockError] If retries exhausted (max 3 attempts)
-      # @raise [Familia::OperationModeError] If called within a transaction
+      # @raise [Familia::OperationModeError] If called within a transaction or
+      #   pipeline
       #
       # @example
       #   user = User.new(id: 123)
       #   user.save_if_not_exists!  # => true or raises
       def save_if_not_exists!(update_expiration: true)
-        # Prevent save_if_not_exists! within transaction - needs to read existence state
-        if Fiber[:familia_transaction]
+        # Prevent save_if_not_exists! within a transaction or pipeline: it
+        # needs to read existence state.
+        if Familia.transaction_or_pipeline?
           raise Familia::OperationModeError, <<~ERROR_MESSAGE
-            Cannot call save_if_not_exists! within a transaction. This method
-            must be called outside transactions to properly check existence.
+            Cannot call save_if_not_exists! within a transaction or pipeline. This method
+            must be called outside transactions and pipelines to properly check existence.
           ERROR_MESSAGE
         end
 
@@ -399,6 +405,10 @@ module Familia
       #   of the Valkey key. Defaults to true.
       #
       # @return [Object] The result of the HMSET operation from the DB.
+      # @raise [Familia::OperationModeError] inside a transaction or pipeline,
+      #   where the unique-index guard reads and this method's own EXEC result
+      #   are not available. Raised before any state changes. Use atomic_write
+      #   to combine field and collection writes in one MULTI/EXEC.
       # @raise [Familia::RecordExistsError] if a class-level unique index
       #   already maps an indexed field's value to another record. Raised
       #   before the transaction opens; the object hash is untouched.
@@ -427,6 +437,8 @@ module Familia
       # @see #save Full persistence lifecycle (timestamps, indexes, instances)
       #
       def commit_fields(update_expiration: true)
+        Familia.assert_replies_available!("#{self.class}#commit_fields")
+
         prepared_value = to_h_for_storage
         Familia.debug "[commit_fields] Begin #{self.class} #{dbkey} #{prepared_value} (exp: #{update_expiration})"
 
@@ -552,6 +564,10 @@ module Familia
       # @param kwargs [Hash] Field names and values to update. Special key :update_expiration
       #   controls whether to update key expiration (default: true)
       # @return [MultiResult] Transaction result
+      # @raise [Familia::OperationModeError] inside a transaction or pipeline,
+      #   where the unique-index guard reads and this method's own EXEC result
+      #   are not available. Raised before any state changes. Use atomic_write
+      #   to combine field and collection writes in one MULTI/EXEC.
       # @raise [ArgumentError] if a field is undeclared, transient, an
       #   encrypted field given a value that is not nil or a ConcealedString,
       #   or an objid/extid field (their setters carry lookup-hash side
@@ -568,6 +584,8 @@ module Familia
       #   user.multi_field_update(name: "John", email: "john@example.com")
       #
       def multi_field_update(**kwargs)
+        Familia.assert_replies_available!("#{self.class}#multi_field_update")
+
         update_expiration = kwargs.delete(:update_expiration) { true }
         fields = kwargs
 
@@ -672,6 +690,10 @@ module Familia
       #   :update_expiration controls whether to refresh key expiration
       #   (default: true).
       # @return [self] Returns self for method chaining
+      # @raise [Familia::OperationModeError] inside a transaction or pipeline,
+      #   where this method's own EXEC result, which decides whether the
+      #   in-memory fields are updated, is not available. Raised before any
+      #   state changes.
       # @raise [ArgumentError] if a field is undeclared, transient, or an
       #   encrypted field given a value that is not nil or a ConcealedString
       # @raise [Familia::IndexedFieldFastWriteError] if a field backs a
@@ -687,6 +709,8 @@ module Familia
       # @see #save_fields Persists current in-memory values of named fields
       #
       def multi_field_fast_write(**kwargs)
+        Familia.assert_replies_available!("#{self.class}#multi_field_fast_write")
+
         update_exp = kwargs.delete(:update_expiration) { true }
         fields = kwargs
 
@@ -746,6 +770,10 @@ module Familia
       # @param field_names [Array<Symbol, String>] Names of fields to persist
       # @param update_expiration [Boolean] Whether to refresh key expiration
       # @return [self] Returns self for method chaining
+      # @raise [Familia::OperationModeError] inside a transaction or pipeline,
+      #   where the unique-index guard reads and this method's own EXEC result
+      #   are not available. Raised before any state changes. Use atomic_write
+      #   to combine field and collection writes in one MULTI/EXEC.
       # @raise [Familia::RecordExistsError] if a class-level unique index
       #   already maps a written field's value to another record. Raised
       #   before the transaction opens; the object hash is untouched.
@@ -761,6 +789,8 @@ module Familia
       #   customer.update_passphrase('secret').save_fields(:passphrase, :passphrase_encryption)
       #
       def save_fields(*field_names, update_expiration: true)
+        Familia.assert_replies_available!("#{self.class}#save_fields")
+
         raise ArgumentError, 'No fields specified' if field_names.empty?
 
         Familia.trace :SAVE_FIELDS, nil, field_names if Familia.debug?
@@ -858,6 +888,10 @@ module Familia
       # method's documentation for that known gap.
       #
       # @return [void]
+      # @raise [Familia::OperationModeError] inside a transaction or pipeline
+      #   when the class has instance-scoped indexes, whose tracker must be
+      #   read to find the entries to remove. Without such indexes destroy!
+      #   queues its deletes into the caller's transaction.
       #
       # @example Remove a user object from storage
       #   user = User.new(id: 123)
@@ -880,8 +914,9 @@ module Familia
         # Pre-read instance-scoped index tracker before MULTI/EXEC
         # (HGETALL returns futures inside a transaction, not values).
         # Maps "<scope_config>\t<index_name>\t<scope_id>" => indexed value.
+        # Inside a caller's block the read refuses, naming destroy!.
         tracked_scopes = if respond_to?(:read_instance_index_scopes)
-          read_instance_index_scopes
+          read_instance_index_scopes(operation: "#{self.class}#destroy!")
         else
           {}
         end
@@ -950,20 +985,59 @@ module Familia
         self.class.field_method_map.each_value { |method_name| send("#{method_name}=", nil) }
       end
 
-      # Refreshes the object state from the DB storage.
+      # Replaces the object's field values with what is stored in the database.
       #
-      # Reloads all persistent field values from the DB, overwriting any unsaved
-      # changes in the current object instance. This operation synchronizes the
-      # object with its stored state in the database.
+      # Reads the object hash with one HGETALL and assigns every stored field,
+      # the same way {Familia::Horreum::ManagementMethods#find_by_dbkey} builds
+      # a loaded object. A persistent field the stored hash does not contain is
+      # set to nil, because a nil field is stored as an absent one. That
+      # includes a value set in memory and never saved, and a default an
+      # +init+ hook assigned to an object built with +new+. A Symbol or
+      # String identifier field that the stored hash does not contain keeps
+      # its value. Transient fields are reset to nil. Dirty tracking is
+      # cleared afterwards.
       #
-      # @return [void]
+      # It never changes the object's identity. After assigning the stored
+      # values it computes the identifier again, and if there is none, or it
+      # names a key other than the one that was read, it raises
+      # Familia::IdentifierMismatchError. Examples are a stored identifier
+      # field that holds a different value, and a stored hash that lacks a
+      # field a Proc or method identifier reads (with
+      # +feature :object_identifier+ a missing objid would be generated
+      # anew). An identifier that raises on the stored values, such as a Proc
+      # that calls a method on a missing field, counts as none, and its
+      # error is the +cause+ of the IdentifierMismatchError. find_by_dbkey
+      # and load build a new object from the same hash without this check.
       #
-      # @raise [Familia::KeyNotFoundError] If the Valkey key does not exist
+      # It is read-only: it sends only the HGETALL. Field setters that act on
+      # the value they replace (the +objid+ and +extid+ setters remove the old
+      # value's lookup entry) see nil as the old value, as they do on a newly
+      # loaded object, so they send nothing.
       #
-      # @example Refresh object from the DB
+      # If it raises, the object is left as it was: its field values, its
+      # other instance variables and its dirty tracking are what they were
+      # before the call. That includes Familia::KeyNotFoundError,
+      # Familia::IdentifierMismatchError and an error from a field setter
+      # while the stored values are assigned.
+      #
+      # @return [Array<Symbol>] the names of the fields assigned from the
+      #   stored hash, in assignment order (encrypted fields last). A field
+      #   the stored hash does not contain is not listed.
+      #
+      # @raise [Familia::KeyNotFoundError] If the Valkey key does not exist.
+      # @raise [Familia::IdentifierMismatchError] If the stored values give
+      #   no identifier, or one that names a different key.
+      # @raise [Familia::OperationModeError] inside a transaction, pipeline or
+      #   atomic_write block, where HGETALL is only queued and returns a
+      #   Redis::Future.
+      # @raise [StandardError] whatever a field setter raises for a stored
+      #   value, for example Familia::EncryptionError when an encrypted
+      #   field's stored envelope names an algorithm that is not available.
+      #
+      # @example Discard an unsaved change
       #   user.name = "Changed Name"  # unsaved change
       #   user.refresh!
-      #   # => user.name is now the value from the DB storage
+      #   user.name  # => the stored name, or nil if none is stored
       #
       # @note This method discards any unsaved changes to the object. Use with
       #   caution when the object has been modified but not yet persisted.
@@ -972,21 +1046,62 @@ module Familia
       #   no authoritative source in Valkey storage.
       #
       def refresh!
+        if Fiber[:familia_transaction] || Fiber[:familia_pipeline]
+          raise Familia::OperationModeError,
+                "#{self.class}#refresh! cannot run inside a transaction or pipeline: " \
+                'HGETALL returns a Redis::Future there, so there is nothing to load ' \
+                'and a missing key cannot be detected. Call it before opening the block.'
+        end
+
         Familia.trace :REFRESH, nil, self.class.uri if Familia.debug?
-        fields = hgetall
-        # A hash with no fields does not exist, so an empty reply means the
-        # key is missing. Checking the reply instead of a separate EXISTS
-        # leaves no gap for the key to expire or be deleted before the read.
-        raise Familia::KeyNotFoundError, dbkey if fields.empty?
 
-        Familia.debug "[refresh!] #{self.class} #{dbkey} fields:#{fields.keys}"
+        # Everything after the operation-mode check runs in this block, so
+        # whatever raises leaves the object as it was. Computing the key
+        # computes the identifier, and a lazy getter such as objid stores the
+        # value it generates; on a missing key that value must not remain.
+        # The reset and the assignment below also succeed or fail together.
+        # A setter can raise on a stored value, for example an encrypted
+        # field whose envelope names an algorithm this process does not
+        # provide. Stopping there would leave every field after it nil, and a
+        # later save removes every nil persistent field from the stored hash
+        # (#remove_stale_nil_fields), including values nobody changed.
+        result = restoring_instance_state_on_error do
+          read_key = dbkey
+          fields = hgetall
+          # A hash with no fields does not exist, so an empty reply means the
+          # key is missing. Checking the reply instead of a separate EXISTS
+          # leaves no gap for the key to expire or be deleted before the read.
+          raise Familia::KeyNotFoundError, read_key if fields.empty?
 
-        # Reset transient fields to nil for semantic clarity and ORM consistency
-        # Transient fields have no authoritative source, so they should return to
-        # their uninitialized state during refresh operations
-        reset_transient_fields!
+          Familia.debug "[refresh!] #{self.class} #{read_key} fields:#{fields.keys}"
 
-        result = naive_refresh(**fields)
+          # Deserialize before the reset below, and name the key that was
+          # read in the log entry for a value that is not JSON.
+          values = deserialize_stored_fields(fields, dbkey: read_key)
+
+          # Transient fields have no authoritative source, so they return to
+          # their uninitialized state.
+          reset_transient_fields!
+
+          # Between the reset and the assignment nothing may read the
+          # identifier. A Proc or method identifier computed from the
+          # persistent fields, or a stored identifier field (cleared so its
+          # setter sees nil as the old value), would see nil: dbkey would raise
+          # Familia::NoIdentifier, and a lazy getter such as objid would
+          # generate a value that the objid setter then treats as an old
+          # mapping to remove. So the values are assigned with
+          # initialize_with_keyword_args directly, as instantiate_from_hash
+          # does, and not through naive_refresh.
+          clear_persistent_fields_for_refresh!(values)
+          assigned = initialize_with_keyword_args(**values)
+
+          # refresh! reloads this object; it never turns it into another
+          # one. Raising here, inside the block, puts back the values the
+          # object had, including the identifier, so a later save still
+          # writes to the key that was read.
+          ensure_refresh_kept_identity!(read_key)
+          assigned
+        end
 
         # Clear dirty tracking since object now matches DB state
         clear_dirty!
@@ -1003,6 +1118,12 @@ module Familia
       # @return [self] The refreshed object instance, enabling method chaining
       #
       # @raise [Familia::KeyNotFoundError] If the Valkey key does not exist
+      # @raise [Familia::IdentifierMismatchError] If the stored values give
+      #   no identifier, or one that names a different key
+      # @raise [Familia::OperationModeError] inside a transaction, pipeline or
+      #   atomic_write block
+      # @raise [StandardError] whatever a field setter raises for a stored
+      #   value. As with {#refresh!}, the object is left as it was.
       #
       # @example Refresh and chain operations
       #   user.refresh.save
@@ -1079,6 +1200,26 @@ module Familia
       def with_connection_scope(...) = self.class.with_connection_scope(...)
 
       private
+
+      # Refuses destroy! inside a transaction or pipeline when the class has
+      # instance-scoped indexes, before anything is queued.
+      #
+      # destroy! must read the instance-scoped index tracker to find the
+      # entries it removes, and it refuses that read inside a block. Feature
+      # overrides of destroy! that queue their own deletes before calling
+      # super (object_identifier and external_identifier remove their lookup
+      # entries) call this first. Otherwise a caller who rescued the refusal
+      # inside the block would commit those deletes with the outer EXEC and
+      # keep the record.
+      #
+      # @return [void]
+      # @raise [Familia::OperationModeError] inside a transaction or
+      #   pipeline, when the class has instance-scoped indexes
+      def assert_destroy_replies_available!
+        return unless respond_to?(:assert_instance_index_replies_available!)
+
+        assert_instance_index_replies_available!("#{self.class}#destroy!")
+      end
 
       # Validates that all field names are declared Familia fields.
       #
@@ -1241,11 +1382,139 @@ module Familia
           field_type = self.class.field_types[field_name]
           next unless field_type&.method_name
 
-          # UnsortedSet the transient field back to nil
+          # Set the transient field back to nil
           send("#{field_type.method_name}=", nil)
           Familia.debug "[reset_transient_fields!] Reset #{field_name} to nil"
         end
       end
+
+      # Sets every persistent field to nil, except a Symbol or String
+      # identifier field that the stored hash does not contain, writing the
+      # instance variables directly instead of calling the setters. For an
+      # object identifier field (+objid+) it also sets the generator
+      # provenance (+objid_generator_used+) to nil.
+      #
+      # {#refresh!} calls this before assigning the stored values, so the
+      # object starts from the state a newly loaded one has: fields missing
+      # from the stored hash stay nil, and setters that act on the value they
+      # replace see nil. Going through the setters here would be wrong for the
+      # same reason: the +objid+ and +extid+ setters remove the old value's
+      # lookup entry, which is a write.
+      #
+      # A stored identifier field is cleared too, so its setter sees nil even
+      # when the stored value differs from the one in memory (an +objid+
+      # identifier field would otherwise remove its own lookup entry before
+      # {#ensure_refresh_kept_identity!} raises). An identifier field the
+      # stored hash lacks keeps its value, because it names the key refresh!
+      # read. The identifier field is the one whose name or accessor method
+      # name (+as:+) the Symbol or String gives
+      # ({Familia::Horreum::Serialization#identifier_field_type}).
+      # A Proc identifier, or a Symbol naming a method that is not a field,
+      # has no single field to skip. The fields it reads are cleared here like
+      # any other and are assigned again from the stored hash, so until then
+      # the identifier cannot be computed. The caller must not read it in
+      # between (see {#refresh!}). A save stores every non-nil field, so a
+      # value the identifier reads is missing from the hash only if something
+      # removed it. The identifier would then change, so {#refresh!} checks
+      # it after the assignment ({#ensure_refresh_kept_identity!}) and raises,
+      # which puts the cleared fields back.
+      #
+      # @param values [Hash] the deserialized stored values refresh! is about
+      #   to assign, keyed by field name as a String or Symbol
+      # @return [void]
+      #
+      def clear_persistent_fields_for_refresh!(values)
+        id_field = identifier_field_type&.name
+
+        self.class.persistent_fields.each do |field_name|
+          if field_name.to_sym == id_field
+            stored = values.fetch(id_field) { values[id_field.to_s] }
+            next if stored.nil?
+          end
+
+          instance_variable_set(:"@#{field_name}", nil)
+          # The objid getter and setter also record the generator in
+          # @<field>_generator_used, which a loaded object without the field
+          # does not have.
+          if self.class.field_types[field_name]&.category == :object_identifier
+            instance_variable_set(:"@#{field_name}_generator_used", nil)
+          end
+        end
+      end
+      private :clear_persistent_fields_for_refresh!
+
+      # Raises unless the object's identifier still names +read_key+.
+      #
+      # {#refresh!} calls this after it assigns the stored values, inside
+      # {#restoring_instance_state_on_error}, so the raise leaves the object
+      # with the identifier it had. The keys are compared, not the identifier
+      # values: the key holds the identifier as a string, so an Integer
+      # stored where the object held the same digits as a String names the
+      # same record.
+      #
+      # The identifier was computed before the read to name +read_key+, so
+      # an error computing it now comes from the stored values, for example
+      # a Proc identifier that calls a method on a field the stored hash
+      # lacks. That counts as no identifier: the error is raised as
+      # Familia::IdentifierMismatchError, with the original as its +cause+.
+      #
+      # @param read_key [String] the key refresh! read
+      # @raise [Familia::IdentifierMismatchError] when there is no identifier,
+      #   computing it raises, or it names another key
+      # @return [void]
+      #
+      def ensure_refresh_kept_identity!(read_key)
+        current_key = begin
+          identifier.to_s.empty? ? nil : dbkey
+        rescue StandardError
+          raise Familia::IdentifierMismatchError.new(read_key, nil)
+        end
+        return if current_key == read_key
+
+        raise Familia::IdentifierMismatchError.new(read_key, current_key)
+      end
+      private :ensure_refresh_kept_identity!
+
+      # Runs the block. If the block does not finish, puts the object's
+      # instance variables and dirty tracking back as they were before it ran.
+      #
+      # {#refresh!} runs its read, field reset and assignment in this block,
+      # so a missing key, or a setter that raises on a stored value, leaves
+      # the object as it was.
+      # Instance variables are saved by reference: one the block replaces is
+      # set back, and one it adds is removed. Setters change the dirty-tracking
+      # map in place, so its entries are copied and put back. A command a
+      # setter sends to the database is not undone.
+      #
+      # @yield the step to run
+      # @return [Object] the block's value
+      #
+      def restoring_instance_state_on_error
+        saved_ivars = instance_variables.to_h { |name| [name, instance_variable_get(name)] }
+        saved_dirty = {}
+        @dirty_fields&.each_pair { |field, old_value| saved_dirty[field] = old_value }
+        completed = false
+
+        begin
+          result = yield
+          completed = true
+          result
+        ensure
+          restore_instance_state(saved_ivars, saved_dirty) unless completed
+        end
+      end
+      private :restoring_instance_state_on_error
+
+      # @see #restoring_instance_state_on_error
+      def restore_instance_state(saved_ivars, saved_dirty)
+        (instance_variables - saved_ivars.keys).each { |name| remove_instance_variable(name) }
+        saved_ivars.each { |name, value| instance_variable_set(name, value) }
+        return unless @dirty_fields
+
+        @dirty_fields.clear
+        saved_dirty.each { |field, old_value| @dirty_fields[field] = old_value }
+      end
+      private :restore_instance_state
 
       # Whether +field_value+ was claimed for +index_name+ during the current
       # {#prepare_for_save}.
@@ -1736,33 +2005,21 @@ module Familia
       #
       # Must run OUTSIDE the transaction the caller is about to open (see
       # #claim_unique_indexes!), which is what makes the write fail-closed: a
-      # constraint violation raises before any hash command is queued. Inside
-      # a caller's MULTI/pipeline the guard's index reads come back as futures
-      # (truthy, never equal to the identifier), which would surface as a
-      # spurious RecordExistsError -- so when a class-level unique index
-      # covers the written fields, the write is refused outright with the
-      # same OperationModeError save raises. Classes without a covering
-      # unique index are untouched: no index work would happen, so their
-      # in-transaction behavior is unchanged.
+      # constraint violation raises before any hash command is queued. The
+      # partial writers therefore refuse to run inside a caller's MULTI or
+      # pipeline (see Familia.assert_replies_available!) before calling this:
+      # there the guard's index reads come back as futures, and the writers
+      # could not read their own EXEC result to clear dirty state or release
+      # claims.
       #
       # @param field_names [Array<Symbol, String>, nil] fields about to be
       #   written; nil means the full hash is being written (commit_fields)
-      # @raise [Familia::OperationModeError] if called within a transaction or
-      #   pipeline while a class-level unique index covers the written fields
       # @raise [Familia::RecordExistsError] if another record owns a value
       # @return [Array<Symbol>] the index names newly claimed by this call
       #   (see #claim_unique_indexes!), for release if the caller's
       #   transaction never lands
       #
       def prepare_for_partial_write(field_names = nil)
-        if (Fiber[:familia_transaction] || Fiber[:familia_pipeline]) &&
-           self.class.respond_to?(:indexing_relationships) &&
-           !class_level_unique_indexes_for(field_names&.map(&:to_sym)).empty?
-          raise Familia::OperationModeError, <<~ERROR_MESSAGE
-            Cannot perform a partial write (commit_fields, save_fields, multi_field_update) on unique-indexed fields within a transaction or pipeline. Unique constraints require read operations whose results are unavailable inside MULTI, so perform the write outside the transaction.
-          ERROR_MESSAGE
-        end
-
         guard_unique_indexes!(only: field_names)
         claim_unique_indexes!(only: field_names)
       end

@@ -57,6 +57,16 @@ module Familia
     #     end
     #   end
     #
+    # ## Schema Validation
+    #
+    # Pipeline does not run {#validate_before_transform?} or
+    # {#validate_after_transform?}; they apply only to {Model}'s per-record
+    # processing. To validate, call {#validate_schema} or
+    # {#validate_schema!} from {#should_process?}, {#build_update_fields} or
+    # {#execute_update}. A dry run does not call those methods, so it does
+    # not validate. When json_schemer is installed but fails to load,
+    # Familia::SchemaValidatorLoadError raised from them ends an actual run.
+    #
     # ## Performance Notes
     #
     # - Use smaller batch sizes (50-200) compared to Model
@@ -109,7 +119,7 @@ module Familia
         batch_objects = []
 
         loop do
-          cursor, keys    = dbclient.scan(cursor, match: @scan_pattern, count: @batch_size)
+          cursor, keys    = dbclient.scan(cursor, **scan_options)
           @total_scanned += keys.size
 
           # Progress reporting
@@ -144,6 +154,13 @@ module Familia
         for_realsies_this_time? do
           process_batch(objects)
         end
+      rescue Familia::SchemaValidatorLoadError
+        # Raised when a hook such as #should_process? calls #validate_schema
+        # and json_schemer cannot load. Every batch would fail the same way,
+        # and counting it as batch errors would let #migrate finish and
+        # Runner record the migration as applied. As in
+        # Model#process_single_record, it ends the run instead.
+        raise
       rescue StandardError => ex
         @error_count += objects.size
         error("Error processing batch of #{objects.size}: #{ex.message}")

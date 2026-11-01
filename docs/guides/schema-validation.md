@@ -11,13 +11,11 @@ Familia supports optional JSON Schema validation for model data. Schemas are def
 
 ## Setup
 
-### 1. Install json_schemer
+### 1. json_schemer
 
-Add to your Gemfile:
-
-```ruby
-gem 'json_schemer', '~> 2.0'
-```
+familia depends on json_schemer, so Bundler installs it with familia and
+your Gemfile needs no entry for it. familia requires it the first time it
+validates data against a schema.
 
 ### 2. Create Schema Files
 
@@ -163,6 +161,16 @@ config.schemas = {
 
 - **No schema file**: Validation returns `true` (no-op)
 - **No json_schemer gem**: Warning logged, validation disabled
+- **json_schemer present but one of its own requires fails**: Every validation raises
+  `Familia::SchemaValidatorLoadError`, with the `LoadError` as its `cause`, until json_schemer
+  loads. `Familia::Migration::Model#migrate` raises it at the first record it validates, through
+  `validate_before_transform?`, `validate_after_transform?` or a `validate_schema` call in
+  `#process_record`, in dry runs and actual runs. `Familia::Migration::Pipeline` does not run
+  the validation hooks, so it raises only when `#should_process?`, `#build_update_fields` or
+  `#execute_update` calls `validate_schema`, and only in an actual run; a Pipeline dry run does
+  not call those methods and succeeds. Where `#migrate` raises it, `Familia::Migration::Base.run`
+  and `.cli_run` let it propagate, and `Familia::Migration::Runner` records the migration as
+  failed rather than applied.
 - **Invalid JSON**: Warning logged, schema skipped
 
 ## API Reference

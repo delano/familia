@@ -23,7 +23,7 @@ module Familia
     #   cannot be decided before EXEC, so a truthy Future would report a lock
     #   as acquired while another holder still owns it
     def acquire(token = nil, ttl: 10)
-      if Fiber[:familia_transaction] || Fiber[:familia_pipeline]
+      if Familia.transaction_or_pipeline?
         raise Familia::OperationModeError,
               'Lock#acquire cannot run inside a transaction or pipeline: ' \
               'the NX verdict resolves at EXEC, after the caller has already ' \
@@ -51,18 +51,70 @@ module Familia
       [1, true].include?(success) ? token : false
     end
 
+    # Deletes the lock only if +token+ still holds it.
+    #
+    # Unlike the other Lock methods, release can be queued inside a
+    # transaction or pipeline. The ownership check and the delete run in one
+    # server-side script, so the queued release deletes the lock only if
+    # +token+ holds it when the script runs at EXEC. The outcome is known
+    # only after the block: the returned Future is truthy whether or not the
+    # lock was released, so read its value after the block instead of
+    # testing it inside.
+    #
+    # A queued release does not make the other commands in the block depend
+    # on the lock. Its false reply does not stop them, so when the lock
+    # expired or passed to another holder before EXEC, they still run, and
+    # the release's value reports the loss only afterwards. A held_by? check
+    # before the block does not close that gap. When the writes must not run
+    # without the lock, WATCH the lock key and check the token on the
+    # connection that runs the MULTI, or check the token and write in one
+    # server-side script. See docs/migrating/transaction-replies.md.
+    #
+    # @param token [String] the token returned by #acquire
+    # @return [Boolean, Redis::Future] true when the lock was released.
+    #   Inside a transaction or pipeline, the EVAL Future, which resolves to
+    #   true when released and false otherwise.
     def release(token)
       # Lua script to atomically check token and delete
       script = "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end"
-      dbclient.eval(script, [dbkey], [token]) == 1
+      # The block is redis-rb's reply coercion. It runs on the reply outside
+      # a block, and inside one it runs when the Future is resolved, so the
+      # Future's value and the block's MultiResult carry the same Boolean.
+      dbclient.call(:eval, script, 1, dbkey, token) { |reply| reply == 1 }
     end
 
+    # @return [Boolean] whether any token holds the lock
+    # @raise [Familia::OperationModeError] inside a transaction or pipeline,
+    #   where the GET returns a Redis::Future. The Future is truthy, so a
+    #   caller testing it would act as though the lock were held.
     def locked?
+      Familia.assert_replies_available!('Lock#locked?')
+
       !value.nil?
     end
 
+    # @param token [String] the token returned by #acquire
+    # @return [Boolean] whether +token+ holds the lock
+    # @raise [Familia::OperationModeError] inside a transaction or pipeline,
+    #   where the GET returns a Redis::Future. The Future is truthy, so a
+    #   caller testing it would proceed as the owner whatever token it holds.
     def held_by?(token)
+      Familia.assert_replies_available!('Lock#held_by?')
+
       value == token
+    end
+
+    # The inverse of #locked?, inherited from StringKey and refused inside a
+    # block for the same reason.
+    #
+    # @return [Boolean] whether no token holds the lock
+    # @raise [Familia::OperationModeError] inside a transaction or pipeline,
+    #   where StringKey#empty? would return the GET Future. The Future is
+    #   truthy, so a caller testing it would treat a held lock as free.
+    def empty?
+      Familia.assert_replies_available!('Lock#empty?')
+
+      super
     end
 
     def force_unlock!

@@ -122,9 +122,9 @@ module Familia
 
         # Validate Base64 encoding of binary fields
         begin
-          Base64.strict_decode64(nonce)
-          Base64.strict_decode64(ciphertext)
-          Base64.strict_decode64(auth_tag)
+          StrictBase64.decode(nonce)
+          StrictBase64.decode(ciphertext)
+          StrictBase64.decode(auth_tag)
         rescue ArgumentError
           return false
         end
@@ -154,7 +154,7 @@ module Familia
 
         # Validate Base64 encoding and sizes
         begin
-          decoded_nonce = Base64.strict_decode64(nonce)
+          decoded_nonce = StrictBase64.decode(nonce)
           if decoded_nonce.bytesize != provider.nonce_size
             raise EncryptionError, "Invalid nonce size: expected #{provider.nonce_size}, got #{decoded_nonce.bytesize}"
           end
@@ -163,13 +163,13 @@ module Familia
         end
 
         begin
-          Base64.strict_decode64(ciphertext) # ciphertext can be variable size
+          StrictBase64.decode(ciphertext) # ciphertext can be variable size
         rescue ArgumentError
           raise EncryptionError, 'Invalid Base64 encoding in ciphertext field'
         end
 
         begin
-          decoded_auth_tag = Base64.strict_decode64(auth_tag)
+          decoded_auth_tag = StrictBase64.decode(auth_tag)
           if decoded_auth_tag.bytesize != provider.auth_tag_size
             raise EncryptionError,
                   "Invalid auth_tag size: expected #{provider.auth_tag_size}, got #{decoded_auth_tag.bytesize}"

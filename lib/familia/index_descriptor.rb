@@ -51,6 +51,10 @@ module Familia
     # @param scope [Familia::Horreum, nil] required for instance-scoped indexes
     # @param opts [Hash] forwarded to the collection's #each_record
     # @return [Enumerator, Object] Enumerator without a block, else the collection
+    # @raise [ArgumentError] for a multi_index called with a nil or blank
+    #   value. A multi_index does not index a blank value, and the key
+    #   <index_name>_for names for one may be a related field of the same
+    #   name (see MultiIndexGenerators.bucket_key_prefix).
     def each_record(value: nil, scope: nil, **opts, &block)
       backing(value: value, scope: scope).each_record(**opts, &block)
     end
@@ -86,7 +90,11 @@ module Familia
     #
     # @param sample [Integer] number of raw values to sample
     # @return [Boolean]
+    # @raise [Familia::OperationModeError] inside a transaction or pipeline,
+    #   where the sampled fields would be a Redis::Future that the follow-up
+    #   HMGET cannot take
     def stale_format?(sample: 100)
+      Familia.assert_replies_available!('IndexDescriptor#stale_format?')
       return false unless class_level? && unique?
 
       sample_raw_values(sample).any? { |v| Familia.legacy_json_encoded?(v) }
@@ -95,7 +103,10 @@ module Familia
     # Convenience inverse of #stale_format?.
     #
     # @return [Boolean]
+    # @raise [Familia::OperationModeError] inside a transaction or pipeline
     def format_current?(**opts)
+      Familia.assert_replies_available!('IndexDescriptor#format_current?')
+
       !stale_format?(**opts)
     end
 
@@ -119,16 +130,26 @@ module Familia
     def backing(value:, scope:)
       if class_level?
         return owner.public_send(index_name) if unique?
-        raise ArgumentError, "#{coordinate} is a multi_index; pass value:" if value.nil?
 
+        check_multi_value!(value)
         owner.public_send(:"#{index_name}_for", value)
       else
         raise Familia::Problem, "#{coordinate} is instance-scoped; pass scope:" if scope.nil?
         return scope.public_send(index_name) if unique?
-        raise ArgumentError, "#{coordinate} is a multi_index; pass value:" if value.nil?
 
+        check_multi_value!(value)
         scope.public_send(:"#{index_name}_for", value)
       end
+    end
+
+    # A multi_index has no bucket for a blank value: the key its factory
+    # names for one is "<owner key>:<index_name>", which may be a related
+    # field of the same name rather than index data.
+    def check_multi_value!(value)
+      raise ArgumentError, "#{coordinate} is a multi_index; pass value:" if value.nil?
+      return unless Familia::Features::Relationships::Indexing::MultiIndexGenerators.blank_field_value?(value)
+
+      raise ArgumentError, "#{coordinate} is a multi_index and does not index a blank value"
     end
 
     # Read raw stored values (no deserialize -> no legacy-strip warnings).
@@ -214,7 +235,10 @@ module Familia
     # @param sample [Integer] raw values sampled per index
     # @param owner [Class, nil] restrict to a single owning class
     # @return [Array<Familia::IndexDescriptor>]
+    # @raise [Familia::OperationModeError] inside a transaction or pipeline
     def stale_indexes(sample: 100, owner: nil)
+      Familia.assert_replies_available!('Familia.stale_indexes')
+
       unique_indexes(class_level: true, owner: owner)
         .select(&:query?)
         .reject { |idx| idx.format_current?(sample: sample) }
@@ -231,6 +255,7 @@ module Familia
     # @return [Boolean] true when all checked indexes are current
     # @raise [ArgumentError] when on_stale is not :raise or :warn
     # @raise [Familia::Problem] when stale indexes are found and on_stale: :raise
+    # @raise [Familia::OperationModeError] inside a transaction or pipeline
     #
     # @example Fail fast at boot
     #   Familia.assert_indexes_current!
@@ -238,6 +263,7 @@ module Familia
     # @example Non-fatal CI smoke test
     #   Familia.assert_indexes_current!(on_stale: :warn)
     def assert_indexes_current!(sample: 100, owner: nil, on_stale: :raise)
+      Familia.assert_replies_available!('Familia.assert_indexes_current!')
       unless %i[raise warn].include?(on_stale)
         raise ArgumentError, "on_stale: must be :raise or :warn; got #{on_stale.inspect}"
       end

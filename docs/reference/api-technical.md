@@ -1286,21 +1286,26 @@ user = User.find_by_id(123, check_exists: false)
 Minimize Valkey/Redis round trips with batch operations.
 
 ```ruby
-# Instead of multiple individual operations
-users = []
-100.times do |i|
-  user = User.new(name: "User #{i}", email: "user#{i}@example.com")
-  users << user
+users = 100.times.map do |i|
+  User.new(name: "User #{i}", email: "user#{i}@example.com")
 end
 
-# Use transactions for batch saves
-User.pipelined do
-  users.each do |user|
-    # All operations batched in pipeline
-    user.save
-  end
-end
+# Persist every record in one MULTI/EXEC. Each record's unique-index
+# checks and claims run before the MULTI opens.
+Familia.atomic_write(*users)
+
+# Load many records in one pipeline of HGETALL commands
+User.load_multi(users.map(&:identifier))
 ```
+
+Do not wrap `save` in `pipelined` or `transaction`. It needs command
+replies to check unique indexes and existence, so it raises
+`Familia::OperationModeError` there, as do `create!`, `build`,
+`atomic_write` and the partial writers `commit_fields`, `save_fields`,
+`multi_field_update` and `multi_field_fast_write`. Without
+`Familia.atomic_write`, save the records one at a time; each `save` runs
+its own MULTI/EXEC. See
+[Transaction Safety](transaction_safety.md), rules 1 and 4.
 
 ### Index Rebuilding
 
@@ -1346,6 +1351,23 @@ failure discards the whole temporary key. See
 for the sweep used to clear temporary keys left by older versions, and the
 precondition for running it.
 
+The `rebuild_<index>` method of a `multi_index` checks every per-value bucket
+key it will write before it deletes any bucket. If one of them holds a type
+other than set, or is a set field or bucket of an existing record of the same
+class with a longer identifier, it raises `Familia::IndexBucketConflictError`
+without deleting or writing anything. A record exists when its hash key holds a
+hash. The rebuild also raises when a key it would write or delete has more
+candidate owner records than `RecordKeyOwnership::MAX_CANDIDATE_SPLITS` (8),
+whose owner it does not check. The error's `conflicts` maps each key to the
+type it holds, or to `:too_many_candidate_owners`, and its `owners` maps each
+key of another record to that record's hash key. Inspect those keys: the
+rebuild can run once none of them holds a type other than set, belongs to
+another record or has too many candidate owners. `repair_multi_indexes!`
+records such a rebuild in `:skipped` with `reason: :bucket_conflict` and goes
+on with the next scope or index, and `repair_all!` then returns status
+`:partial_failure`. See
+[Multi-value index rebuilds](../guides/feature-relationships-indexing.md#multi-value-index-rebuilds).
+
 ### Memory Optimization
 Efficient memory usage patterns.
 
@@ -1377,6 +1399,8 @@ end
 Configure connection pools based on application needs.
 
 ```ruby
+require 'connection_pool' # list connection_pool in your Gemfile
+
 # High-throughput application
 HIGH_THROUGHPUT_POOL = ConnectionPool::Wrapper.new(size: 25, timeout: 5) do
   Redis.new(url: ENV['REDIS_URL'])
@@ -1614,8 +1638,8 @@ class UserTest < Minitest::Test
 
   def setup_encryption_keys
     test_keys = {
-      v1: Base64.strict_encode64('a' * 32),
-      v2: Base64.strict_encode64('b' * 32)
+      v1: ['a' * 32].pack('m0'), # strict Base64, as encryption keys require
+      v2: ['b' * 32].pack('m0')
     }
     Familia.configure do |config|
       config.encryption_keys = test_keys
