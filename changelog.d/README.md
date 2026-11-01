@@ -16,7 +16,7 @@ Benefits:
 
 ### Relevant Paths
 
-* `changelog.d/` - Fragment directory (e.g. `changelog.d/YYYYMMDD_HHmmss_username_branch.rst`)
+* `changelog.d/fragments/` - Fragment directory (e.g. `changelog.d/fragments/YYYYMMDD_HHmmss_username_branch.rst`)
 * `docs/migrating/` - Migration guides (e.g. `docs/migrating/v2.0.0-pre.md`)
 * `CHANGELOG.rst` - The full changelog (reverse chronological, large file; read only the top 100 lines default)
 * `changelog.d/scriv.ini` - Scriv configuration
@@ -25,15 +25,17 @@ Benefits:
 
 1. **Create a New Fragment:**
    ```bash
-   scriv create
+   scriv create --config changelog.d/scriv.ini
    ```
+   Pass `--config` explicitly: scriv only looks for `scriv.ini` in its default
+   `changelog.d/` directory, and our fragments live in `changelog.d/fragments/`.
 2. **Edit the Fragment:**
    Open the new `.rst` file and write your entry under the relevant category using the guidelines below.
 3. **Add or Update Migrating Guide (Optional):**
    If the change requires developer action to upgrade, add or update a guide in `docs/migrating/`. Use existing guides as a reference and ensure headers do not repeat.
 4. **Commit with Your Code:**
    ```bash
-   git add changelog.d/YYYYMMDD_HHmmss_username_branch.rst [docs/migrating/v2.0.0-pre.md]
+   git add changelog.d/fragments/YYYYMMDD_HHmmss_username_branch.rst [docs/migrating/v2.0.0-pre.md]
    git commit
    ```
 
@@ -66,4 +68,4 @@ Use these standard headers in your fragment:
 
 ## Release Process
 
-At release, run `scriv collect` to aggregate all fragments into `CHANGELOG.rst`. The version is parsed automatically from `lib/familia/version.rb`.
+At release, bump `Familia::VERSION` in `lib/familia/version.rb`, then run `scriv collect --config changelog.d/scriv.ini` to aggregate all fragments into `CHANGELOG.rst`. The version is parsed automatically from `lib/familia/version.rb`.
