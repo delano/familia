@@ -1064,8 +1064,13 @@ module Familia
           temp.instance_variable_set(:@warned_dirty_signatures, Concurrent::Map.new)
           temp.send(:initialize_relatives)
 
+          pass_dbkey = temp.send(:deserialize_value_takes_dbkey?)
           raw_hash.each_with_object({}) do |(field, raw_val), result|
-            decoded = temp.send(:deserialize_value, raw_val, field_name: field.to_sym, dbkey: objkey)
+            decoded = if pass_dbkey
+              temp.send(:deserialize_value, raw_val, field_name: field.to_sym, dbkey: objkey)
+            else
+              temp.send(:deserialize_value, raw_val, field_name: field.to_sym)
+            end
             result[field] = {
               raw: raw_val,
               decoded: decoded,

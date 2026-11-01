@@ -16,7 +16,7 @@ Added
 -----
 
 - Added ``Familia::IdentifierMismatchError`` (a ``Familia::HorreumError``), with ``#key`` and ``#resolved_key``. #445
-- ``Horreum#deserialize_value`` accepts ``dbkey:``, the key the value was read from. The error log entry for a value that is not JSON names it. #445
+- ``Horreum#deserialize_value`` accepts ``dbkey:``, the key the value was read from. The error log entry for a value that is not JSON names it. Familia passes ``dbkey:`` only when every ``deserialize_value`` in the object's super chain accepts it, by name or through ``**``; an override with the 2.13.0 signature, ``deserialize_value(val, symbolize: false, field_name: nil)``, is called without it. #445
 - Added ``Familia.escape_glob(str)``, which escapes ``*``, ``?``, ``[``, ``]`` and ``\`` for use in KEYS and SCAN MATCH patterns. It escapes bytes and keeps the input's encoding, so it accepts strings with invalid UTF-8 and binary data. #446
 - Added ``Familia::Horreum.dbkey_pattern(identifier_glob = '*', key_suffix = suffix)``, which returns a key pattern with the class prefix, delimiter and suffix escaped, and ``Familia::Horreum::OBJECT_KEY_TYPE`` (``"hash"``), the Redis type of an object key. #446
 - Added ``Familia::IndexBucketConflictError`` (a ``Familia::PersistenceError``), whose ``conflicts`` maps each key to the type it holds, or to ``:too_many_candidate_owners`` for a key whose owner was not checked, and whose ``owners`` maps each key of another record to that record's hash key. #446
