@@ -13,9 +13,25 @@
 # as those documented at the top of the todo file). This is
 # useful for a gradual migration of the codebase.
 #
+# .rubocop_todo.yml is the baseline of offenses that existed when the
+# Ruby Lint workflow started failing on offenses. For most cops it
+# lists the files that already broke that cop. Any other offense makes
+# `bundle exec rubocop` exit non-zero, locally and in CI; a new offense
+# in a file the cop already lists is not reported. Regenerate it with
+# `bundle exec rubocop --regenerate-todo` after fixing offenses, and
+# review the diff: it should only remove entries.
+#
+# With `NewCops: enable`, a RuboCop upgrade (including Dependabot bumps
+# of rubocop or its plugins) can add cops that flag existing code and
+# fail the Ruby Lint workflow on that pull request. Fix the new
+# offenses, or run `bundle exec rubocop --regenerate-todo` on the
+# upgrade branch and commit the new entries with the version bump.
+#
 # How to resolve "RuboCop version incompatibility found":
 #  `rubocop --stop-server`
 #
+
+inherit_from: .rubocop_todo.yml
 
 plugins:
   - rubocop-performance
