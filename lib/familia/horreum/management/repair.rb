@@ -60,7 +60,10 @@ module Familia
       # Full SCAN-based rebuild of the instances timeline with atomic swap.
       #
       # Scans all hash keys matching this class's pattern, extracts identifiers,
-      # and rebuilds the sorted set with timestamps from the objects.
+      # and rebuilds the sorted set with timestamps from the objects. Only
+      # keys that hold a hash are read (see OBJECT_KEY_TYPE), so a
+      # multi_index bucket named like "<prefix>:<index>:<suffix>" is not
+      # taken for an object.
       #
       # @param batch_size [Integer] SCAN cursor count hint (default: 100)
       # @yield [Hash] Progress: {phase:, current:, total:}
@@ -77,7 +80,7 @@ module Familia
           batch = []
 
           loop do
-            cursor, keys = dbclient.scan(cursor, match: pattern, count: batch_size)
+            cursor, keys = dbclient.scan(cursor, match: pattern, count: batch_size, type: OBJECT_KEY_TYPE)
 
             keys.each do |key|
               identifier = extract_identifier_from_key(key)
@@ -245,7 +248,9 @@ module Familia
       #   - +:errors+ -- map of stage name to exception details for any
       #     stage that raised
       #   - +:status+ -- +:ok+ when every stage finished cleanly,
-      #     +:partial_failure+ when one or more stages errored
+      #     +:partial_failure+ when one or more stages errored or the
+      #     multi-index stage skipped a rebuild for a bucket conflict (an
+      #     entry with reason +:bucket_conflict+ in its +:skipped+)
       #
       # When +verify:+ is true, a second health_check runs after repair
       # and the resulting report is exposed as +:post_audit+, with
@@ -301,10 +306,11 @@ module Familia
           }
         end
 
+        conflicts = Array(stages.dig(:multi_indexes, :skipped)).any? { |entry| entry[:reason] == :bucket_conflict }
         result = stages.merge(
           report: report,
           errors: errors,
-          status: errors.empty? ? :ok : :partial_failure,
+          status: errors.empty? && !conflicts ? :ok : :partial_failure,
         )
 
         if verify
@@ -333,6 +339,14 @@ module Familia
       # Indexes whose audit status is :ok are skipped. Indexes for
       # which a rebuild method is unavailable or a scope class has no
       # instances collection are recorded in +:skipped+ with a reason.
+      #
+      # A rebuild that raises Familia::IndexBucketConflictError deletes
+      # and writes nothing, so the index (or, for an instance-scoped
+      # index, the scope) is left as it was and the next one is rebuilt.
+      # It is recorded in +:skipped+ as {index_name:, reason:
+      # :bucket_conflict, conflicts:, owners:}, plus +scope_id:+ for a
+      # scope, where +conflicts+ and +owners+ come from the error.
+      # repair_all! reports such an entry with status :partial_failure.
       #
       # @param audit_results [Array<Hash>, nil] Results from audit_multi_indexes
       # @return [Hash] {rebuilt:, rebuilt_per_scope:, skipped:}
@@ -365,8 +379,12 @@ module Familia
           if rel.class_level?
             method = :"rebuild_#{index_name}"
             if respond_to?(method)
-              send(method)
-              rebuilt << index_name
+              begin
+                send(method)
+                rebuilt << index_name
+              rescue Familia::IndexBucketConflictError => e
+                skipped << bucket_conflict_entry(index_name, e)
+              end
             else
               skipped << { index_name: index_name, reason: :rebuild_method_missing }
             end
@@ -379,22 +397,25 @@ module Familia
         { rebuilt: rebuilt, rebuilt_per_scope: rebuilt_per_scope, skipped: skipped }
       end
 
-      # SCAN helper for enumerating keys matching a pattern.
+      # SCAN helper for enumerating object keys matching a pattern.
       #
-      # @param filter [String] Glob filter appended to class prefix (default: '*')
+      # Only keys that hold a hash are yielded (see OBJECT_KEY_TYPE).
+      #
+      # @param filter [String] Glob for the identifier part (default: '*').
+      #   The class prefix and suffix are escaped; see #dbkey_pattern.
       # @param batch_size [Integer] SCAN cursor count hint (default: 100)
       # @yield [String] Each matching key
       # @return [Enumerator] If no block given
       #
       def scan_keys(filter = '*', batch_size: 100, &block)
-        pattern = dbkey(filter)
+        pattern = dbkey_pattern(filter)
         return enum_for(:scan_keys, filter, batch_size: batch_size) unless block_given?
 
         Familia.assert_replies_available!("#{self}.scan_keys")
 
         cursor = "0"
         loop do
-          cursor, keys = dbclient.scan(cursor, match: pattern, count: batch_size)
+          cursor, keys = dbclient.scan(cursor, match: pattern, count: batch_size, type: OBJECT_KEY_TYPE)
           keys.each(&block)
           break if cursor == "0"
         end
@@ -428,10 +449,13 @@ module Familia
       # Rebuilds an instance-scoped multi-index across every scope
       # instance. Returns the number of scope instances successfully
       # rebuilt, or nil when the scope class lacks an instances
-      # collection (in which case +skipped+ is appended to).
+      # collection (in which case +skipped+ is appended to). A scope whose
+      # rebuild raises Familia::IndexBucketConflictError is appended to
+      # +skipped+ (see bucket_conflict_entry), and the loop goes on.
       #
       # @param rel [IndexingRelationship]
       # @param skipped [Array<Hash>] Mutated when no scope path is available
+      #   and for each scope with a bucket conflict
       # @return [Integer, nil]
       #
       def rebuild_instance_scoped_multi_index(rel, skipped)
@@ -453,10 +477,25 @@ module Familia
           next unless scope
           next unless scope.respond_to?(method)
 
-          scope.send(method)
-          count += 1
+          begin
+            scope.send(method)
+            count += 1
+          rescue Familia::IndexBucketConflictError => e
+            skipped << bucket_conflict_entry(rel.index_name, e).merge(scope_id: scope_id)
+          end
         end
         count
+      end
+
+      # Returns the +:skipped+ entry of repair_multi_indexes! for a rebuild
+      # of +index_name+ that raised +error+.
+      #
+      # @param index_name [Symbol]
+      # @param error [Familia::IndexBucketConflictError]
+      # @return [Hash] {index_name:, reason: :bucket_conflict, conflicts:, owners:}
+      def bucket_conflict_entry(index_name, error)
+        Familia.warn "[repair_multi_indexes!] #{index_name} not rebuilt: #{error.message}"
+        { index_name: index_name, reason: :bucket_conflict, conflicts: error.conflicts, owners: error.owners }
       end
 
       # Process a batch of key/identifier pairs for rebuild_instances.

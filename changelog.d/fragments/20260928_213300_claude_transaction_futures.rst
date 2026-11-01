@@ -36,8 +36,8 @@ Changed
   ``#randmember``, ``#scan``; ``UnsortedSet#members``, ``#intersection``,
   ``#union``, ``#difference``, ``#scan``, ``#sample``; ``StringKey#size``,
   ``#empty?``; ``JsonStringKey#char_count``, ``#empty?``; ``Counter#value``,
-  ``#reset``; ``expired?``; ``Horreum.any?``, ``.keys_count``,
-  ``.keys_any?``, ``.in_instances?``, ``.multiget``, ``.storage_inspect``;
+  ``#reset``; ``expired?``; ``Horreum.any?``, ``.in_instances?``,
+  ``.multiget``, ``.storage_inspect``;
   ``Migration::Registry#applied_at``, ``#all_applied``, ``#metadata``; the
   generated participation methods ``score_in_<target>_<collection>`` and
   ``in_<target>_<collection>?`` on a sorted-set or list participation.
@@ -59,7 +59,8 @@ Changed
   ``Horreum#refresh!``, ``#refresh``, the finders and loaders
   (``find_by_dbkey``, ``find_by_identifier``, ``load_multi``,
   ``load_multi_by_keys``, ``all``, ``find_by_objid``, ``find_by_extid``),
-  ``scan_count``, ``scan_any?``, class-level ``destroy!``, the index
+  ``keys_count``, ``keys_any?``, ``scan_count``, ``scan_any?``,
+  class-level ``destroy!``, the index
   finders, rebuilds and ``guard_unique_*!`` methods, the participation
   readers, ``current_indexings`` (reported every class-level index whose
   field was set), ``relationship_status``, ``validate_relationships!``, the

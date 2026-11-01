@@ -30,6 +30,9 @@ AllCops:
     - "rspec/**/*.rb"
     - "tmp/**/*.rb"
     - "try/**/*.rb"
+    # Setting Exclude here replaces RuboCop's default list, which excludes
+    # vendor/. CI installs gems into vendor/bundle inside the checkout.
+    - "vendor/**/*"
 
 #
 # Trailing commas

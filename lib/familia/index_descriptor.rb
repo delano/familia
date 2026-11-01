@@ -51,6 +51,10 @@ module Familia
     # @param scope [Familia::Horreum, nil] required for instance-scoped indexes
     # @param opts [Hash] forwarded to the collection's #each_record
     # @return [Enumerator, Object] Enumerator without a block, else the collection
+    # @raise [ArgumentError] for a multi_index called with a nil or blank
+    #   value. A multi_index does not index a blank value, and the key
+    #   <index_name>_for names for one may be a related field of the same
+    #   name (see MultiIndexGenerators.bucket_key_prefix).
     def each_record(value: nil, scope: nil, **opts, &block)
       backing(value: value, scope: scope).each_record(**opts, &block)
     end
@@ -126,16 +130,26 @@ module Familia
     def backing(value:, scope:)
       if class_level?
         return owner.public_send(index_name) if unique?
-        raise ArgumentError, "#{coordinate} is a multi_index; pass value:" if value.nil?
 
+        check_multi_value!(value)
         owner.public_send(:"#{index_name}_for", value)
       else
         raise Familia::Problem, "#{coordinate} is instance-scoped; pass scope:" if scope.nil?
         return scope.public_send(index_name) if unique?
-        raise ArgumentError, "#{coordinate} is a multi_index; pass value:" if value.nil?
 
+        check_multi_value!(value)
         scope.public_send(:"#{index_name}_for", value)
       end
+    end
+
+    # A multi_index has no bucket for a blank value: the key its factory
+    # names for one is "<owner key>:<index_name>", which may be a related
+    # field of the same name rather than index data.
+    def check_multi_value!(value)
+      raise ArgumentError, "#{coordinate} is a multi_index; pass value:" if value.nil?
+      return unless Familia::Features::Relationships::Indexing::MultiIndexGenerators.blank_field_value?(value)
+
+      raise ArgumentError, "#{coordinate} is a multi_index and does not index a blank value"
     end
 
     # Read raw stored values (no deserialize -> no legacy-strip warnings).

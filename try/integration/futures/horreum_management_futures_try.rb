@@ -99,18 +99,25 @@ end
 
 ## count helpers inside atomic_write pass Futures through and persist both writes
 @ret, @persisted = @in_atomic_write.call('aw-count') do
-  [FuturesMgmtRecord.any?, FuturesMgmtRecord.keys_count, FuturesMgmtRecord.keys_any?,
-   FuturesMgmtRecord.in_instances?('fmr-2')]
+  [FuturesMgmtRecord.any?, FuturesMgmtRecord.in_instances?('fmr-2')]
 end
-[@ret.map(&:class).uniq, @ret.first.value, @ret[1].value.sort, @persisted]
-#=> [[Redis::Future], 2, ["futures_mgmt_record:fmr-1:object", "futures_mgmt_record:fmr-2:object"], "aw-count"]
+[@ret.map(&:class).uniq, @ret.first.value, @persisted]
+#=> [[Redis::Future], 2, "aw-count"]
 
 ## count helpers inside a pipeline pass Futures through
 @ret = @in_pipeline.call do
-  [FuturesMgmtRecord.any?, FuturesMgmtRecord.keys_count, FuturesMgmtRecord.in_instances?('nope')]
+  [FuturesMgmtRecord.any?, FuturesMgmtRecord.in_instances?('nope')]
 end
 [@ret.map(&:class).uniq, @ret.last.value]
 #=> [[Redis::Future], nil]
+
+## keys_count and keys_any? raise inside a transaction or pipeline: the hash-type filter needs the KEYS reply
+[
+  @refused.call { FuturesMgmtRecord.transaction { FuturesMgmtRecord.keys_count } },
+  @refused.call { @in_pipeline.call { FuturesMgmtRecord.keys_any? } },
+  @refused.call { @in_atomic_write.call('aw-keys') { FuturesMgmtRecord.keys_count('fmr*') } },
+].uniq
+#=> [Familia::OperationModeError]
 
 ## multiget and storage_inspect inside atomic_write pass Futures through
 @ret, @persisted = @in_atomic_write.call('aw-inspect') do

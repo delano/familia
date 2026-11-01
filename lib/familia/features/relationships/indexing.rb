@@ -3,6 +3,7 @@
 # frozen_string_literal: true
 
 require_relative 'indexing_relationship'
+require_relative 'indexing/record_key_ownership'
 require_relative 'indexing/multi_index_generators'
 require_relative 'indexing/unique_index_generators'
 require_relative 'indexing/rebuild_strategies'
@@ -744,7 +745,11 @@ module Familia
                     type: 'unique_index',
                   }
                 else
-                  # Class-level multi index - check set membership using factory method
+                  # Class-level multi index - check set membership using factory method.
+                  # A blank value is not indexed, and its key may be a class-level
+                  # related field (see MultiIndexGenerators.bucket_key_prefix).
+                  next if MultiIndexGenerators.blank_field_value?(field_value)
+
                   index_set = self.class.send("#{index_name}_for", field_value)
                   next unless index_set.member?(identifier)
 
@@ -804,7 +809,10 @@ module Familia
                 index_hash = self.class.send(index_name)
                 index_hash.key?(field_value.to_s)
               else
-                # Class-level multi index - check set membership using factory method
+                # Class-level multi index - check set membership using factory method.
+                # A blank value is not indexed (see MultiIndexGenerators.bucket_key_prefix).
+                return false if MultiIndexGenerators.blank_field_value?(field_value)
+
                 index_set = self.class.send("#{index_name}_for", field_value)
                 index_set.member?(identifier)
               end
