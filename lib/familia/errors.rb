@@ -51,6 +51,35 @@ module Familia
     end
   end
 
+  # Raised by Horreum#refresh! when the stored values it assigns would give
+  # the object an identifier other than the one that named the key it read.
+  # Examples are a stored identifier field that differs from the key, and
+  # a stored hash that lacks a field a Proc or method identifier reads.
+  # refresh! leaves the object as it was before raising, so it keeps the
+  # key it had.
+  #
+  # +key+ is the key refresh! read. +resolved_key+ is the key the assigned
+  # values resolve to, or nil when they give no identifier.
+  class IdentifierMismatchError < HorreumError
+    attr_reader :key, :resolved_key
+
+    def initialize(key, resolved_key = nil)
+      @key = key
+      @resolved_key = resolved_key
+      super(build_message)
+    end
+
+    private
+
+    def build_message
+      if resolved_key.nil?
+        "Stored values at #{key} give no identifier"
+      else
+        "Stored values at #{key} name a different key: #{resolved_key}"
+      end
+    end
+  end
+
   # Raised when a field type is invalid or unexpected
   class FieldTypeError < HorreumError; end
 
