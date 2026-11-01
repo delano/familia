@@ -538,6 +538,34 @@ Familia.with_connection_scope(1) do |db1|
 end
 #=> [true, true, '1', 'v', 1]
 
+## 12. An instance's with_connection_scope forwards to its class and yields the class's client
+@scoped_gadget = ConnScopeTryGadget.new(gid: 'instance_scope')
+@scoped_gadget.with_connection_scope do |client|
+  [@scoped_gadget.dbclient.equal?(client), conn_scope_try_client_db(client),
+   Familia.current_connection_scope.size]
+end
+#=> [true, '2', 1]
+
+## 12. A related DataType's with_connection_scope yields its parent's client
+@scoped_gadget.tags.with_connection_scope do |client|
+  [@scoped_gadget.tags.dbclient.equal?(client), @scoped_gadget.dbclient.equal?(client),
+   conn_scope_try_client_db(client), Familia.current_connection_scope.size]
+end
+#=> [true, true, '2', 1]
+
+## 12. save_if_not_exists! inside a scope creates once, then raises, using one extra client for its WATCH window
+Familia.with_connection_scope do
+  first = ConnScopeTryWidget.new(wid: 'save_if_not_exists_scope', name: 'first').save_if_not_exists!
+  second = begin
+    ConnScopeTryWidget.new(wid: 'save_if_not_exists_scope', name: 'second').save_if_not_exists!
+  rescue Familia::RecordExistsError
+    :exists
+  end
+  [first, second, ConnScopeTryWidget.load('save_if_not_exists_scope').name,
+   Familia.current_connection_scope.size]
+end
+#=> [true, :exists, 'first', 2]
+
 ## 13. A forked child inherits the scope and talks on its own socket
 Familia.with_connection_scope do |client|
   parent_id = conn_scope_try_client_id(client)

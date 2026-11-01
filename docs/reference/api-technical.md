@@ -733,7 +733,11 @@ client to other lookups: they get a second client for the same URI, which the
 scope holds, reuses and closes like the first. A record saved from a
 `pre_check` therefore commits on its own connection and cannot clear the
 outer WATCH. The watched MULTI itself runs on the connection the transaction
-resolved.
+resolved. `Horreum#watch` yields the watching connection, and the MULTI/EXEC,
+UNWATCH and DISCARD must be issued on it:
+`model.watch { |conn| conn.multi { |m| ... } }`. Inside the block,
+`model.transaction`, `model.unwatch` and `model.discard` resolve to the second
+client, so a MULTI/EXEC sent through them is not guarded by the WATCH.
 
 **Ownership.** A scope belongs to the fiber that opened it. A new fiber starts
 with a copy of the opener's fiber storage (Ruby's documentation for
@@ -790,8 +794,9 @@ Opening the scope after the fork avoids relying on that behaviour.
 
 **Inspection and release.** `Familia.current_connection_scope` returns the
 scope the current fiber has open, or nil. `Familia::Connection::Scope` exposes
-`owner` (the opening fiber), `clients` (the held clients, in acquisition
-order), `size`, `active?`, `released?` and `release!`. `release!` closes every
+`owner` (the opening fiber), `clients` (the held clients: retired ones first,
+then the current ones grouped by connection configuration in the order each
+was first used, each group in acquisition order), `size`, `active?`, `released?` and `release!`. `release!` closes every
 held client and marks the scope released; a later `Scope#client` call raises
 `Familia::Problem`. Called anywhere in the block, a joined inner block
 included, it releases the scope for the rest of the outer block: plain

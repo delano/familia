@@ -13,7 +13,10 @@ Added
   ``atomic_write`` inside the block run on the scope's client for their URI.
   Between the WATCH and the EXEC of a WATCH-guarded transaction, other
   lookups get a second scope client for that URI, so a transaction they run
-  cannot clear the WATCH.
+  cannot clear the WATCH. Inside ``Horreum#watch``, issue the MULTI/EXEC,
+  UNWATCH and DISCARD on the yielded connection; the receiver's own
+  ``transaction``, ``unwatch`` and ``discard`` run on the second client and
+  are not guarded by the WATCH.
   Threads and fibers spawned inside the block are not the owner and resolve
   connections as if no scope were open. A ``Familia.middleware_version`` bump
   (``Familia.reconnect!``) makes the scope retire its clients on the next
@@ -21,7 +24,7 @@ Added
   the block exits. A fiber-local connection, a ``connection_provider`` and a
   class-level ``@dbclient`` take precedence over the scope. Connection
   resolution outside a scope is unchanged: without a provider, lookups still
-  create fresh clients. (issue #456)
+  create fresh clients. (#456)
 - Added ``Familia.current_connection_scope``, returning the
   ``Familia::Connection::Scope`` the current fiber has open, or nil.
 - Added ``Familia::Connection::Scope`` with ``owner``, ``clients``, ``size``,

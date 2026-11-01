@@ -205,7 +205,9 @@ module Familia
       end
 
       # @return [Array<Redis>] every client the scope holds open, retired
-      #   ones first, then the current ones in acquisition order
+      #   ones first, then the current ones grouped by connection
+      #   configuration (URI#conf) in the order each was first used, each
+      #   group in acquisition order
       def clients
         (@retired + pooled_clients).freeze
       end

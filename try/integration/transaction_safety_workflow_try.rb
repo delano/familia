@@ -256,16 +256,17 @@ end
 @concurrent_customer.save
 @concurrent_customer.hset(:version, '1')
 
-@watch_success = @concurrent_customer.watch do
-  current_version = @concurrent_customer.hget(:version).to_i
-  current_balance = @concurrent_customer.hget(:balance).to_i
+# The MULTI/EXEC goes on the yielded connection, the one holding the WATCH.
+@watch_success = @concurrent_customer.watch do |conn|
+  current_version = conn.hget(@concurrent_customer.dbkey, 'version').to_i
+  current_balance = conn.hget(@concurrent_customer.dbkey, 'balance').to_i
 
   # Only proceed if version hasn't changed and sufficient balance
   if current_version == 1 && current_balance >= 100
-    @concurrent_customer.transaction do |conn|
-      conn.hset(@concurrent_customer.dbkey, 'balance', (current_balance - 100).to_s)
-      conn.hset(@concurrent_customer.dbkey, 'version', '2')
-      conn.hset(@concurrent_customer.dbkey, 'last_transaction', Familia.now.to_i.to_s)
+    conn.multi do |multi|
+      multi.hset(@concurrent_customer.dbkey, 'balance', (current_balance - 100).to_s)
+      multi.hset(@concurrent_customer.dbkey, 'version', '2')
+      multi.hset(@concurrent_customer.dbkey, 'last_transaction', Familia.now.to_i.to_s)
     end
     true
   else
