@@ -374,6 +374,9 @@ end
 
 ### Connection Pooling
 
+familia does not depend on the `connection_pool` gem, so list it in your
+application's Gemfile and require it yourself.
+
 ```ruby
 require 'connection_pool'
 
