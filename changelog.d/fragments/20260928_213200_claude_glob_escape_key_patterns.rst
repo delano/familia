@@ -151,11 +151,16 @@ Fixed
   ``audit_related_fields`` of a class whose prefix holds non-ASCII characters
   no longer raise ``Encoding::CompatibilityError`` for a record whose
   identifier is not valid UTF-8. Neither does ``health_check`` of such a
-  class when it declares no ``unique_index`` or ``multi_index``.
+  class when it declares no ``unique_index``, ``multi_index`` or
+  ``participates_in``. ``audit_participations``, and so ``health_check``,
+  still raise it when such an identifier is a member of a participation
+  collection.
 - ``audit_multi_indexes`` and ``health_check`` of a class with an
   instance-scoped ``multi_index`` no longer raise
   ``Encoding::CompatibilityError`` when the scope class prefix holds
-  non-ASCII characters and a scope identifier is not valid UTF-8.
+  non-ASCII characters and a scope identifier is not valid UTF-8, unless
+  the class also declares ``participates_in`` of the scope class. With
+  that declaration they still raise it.
 - With a blank field value, a ``multi_index`` no longer reads or changes a
   related field whose name equals the index name, such as a
   ``class_set :roles`` beside ``multi_index :role, :roles`` or a ``set :tags``
