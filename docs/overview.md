@@ -280,21 +280,32 @@ session.objid  # => "a1b2c3d4e5f6" (hex)
 Familia provides specialized field types beyond basic fields:
 
 ```ruby
+# Encrypted fields need encryption keys (see Encrypted Fields below)
+Familia.configure do |config|
+  config.encryption_keys = { v1: ENV['FAMILIA_ENCRYPTION_KEY'] }
+  config.current_key_version = :v1
+end
+
 class SecureModel < Familia::Horreum
   feature :encrypted_fields
   feature :transient_fields
   feature :object_identifier
 
+  identifier_field :objid
+
   # Regular fields generate: name, name=, name!
-  field :name, :email
+  field :name
+  field :email
 
   # Encrypted fields return ConcealedString instances
-  encrypted_field :api_key, :credit_card
+  encrypted_field :api_key
+  encrypted_field :credit_card
   # → api_key, api_key=, api_key!
   # → Values wrapped in ConcealedString for safety
 
   # Transient fields never persist to database
-  transient_field :password, :session_token
+  transient_field :password
+  transient_field :session_token
   # → password, password= (no fast writer method)
   # → Values wrapped in RedactedString
 
@@ -306,17 +317,17 @@ class SecureModel < Familia::Horreum
 end
 
 # Usage examples
-model = SecureModel.create(name: "Alice", api_key: "secret123")
+model = SecureModel.create!(name: "Alice", api_key: "secret123")
 
 # Encrypted field safety
 model.api_key.class                      # => ConcealedString
 model.api_key.to_s                       # => "[CONCEALED]" (safe for logs)
-model.api_key.reveal                     # => "secret123" (actual value)
+model.api_key.reveal { |key| key }       # => "secret123" (actual value)
 
 # Transient field behavior
 model.password = "temp123"
 model.save
-model.reload
+model.refresh!
 model.password                           # => nil (not persisted)
 
 # Object identifier generation
@@ -445,10 +456,11 @@ Handle temporary or sensitive data that shouldn't persist:
 class LoginAttempt < Familia::Horreum
   feature :transient_fields
 
+  identifier_field :username
   field :username
   field :timestamp
   transient_field :password
-  redacted_field :security_token
+  transient_field :security_token
 end
 
 attempt = LoginAttempt.new(
@@ -457,20 +469,21 @@ attempt = LoginAttempt.new(
   security_token: "sensitive_data"
 )
 
-# Transient fields aren't saved to Valkey
-attempt.save
-attempt.reload
-attempt.password        # => nil (not persisted)
+# Transient values are wrapped in RedactedString
+attempt.security_token.class                      # => RedactedString
+attempt.security_token.to_s                       # => "[REDACTED]"
+attempt.security_token.expose { |token| token }   # => "sensitive_data"
 
-# Redacted fields return safe values
-attempt.security_token.class    # => RedactedString
-attempt.security_token.to_s     # => "[REDACTED]"
-attempt.security_token.reveal   # => "sensitive_data"
+# Transient fields aren't saved to Valkey, and refresh! resets them to nil
+attempt.save
+attempt.refresh!
+attempt.password        # => nil
+attempt.security_token  # => nil
 ```
 
 **Field Types:**
-- **Transient Fields**: Exist only in memory, never persisted
-- **Redacted Fields**: Return `[REDACTED]` when converted to strings for logging safety
+- **Transient Fields**: Exist only in memory, never persisted. `refresh!` resets them to nil.
+- **RedactedString values**: Return `[REDACTED]` from `to_s` and `inspect`. Use `expose` or `value` to read the wrapped value.
 
 > For RedactedString implementation details, single-use patterns, and security considerations, see the [Technical Reference](reference/api-technical.md#feature-system).
 

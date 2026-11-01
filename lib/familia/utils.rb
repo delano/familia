@@ -56,6 +56,73 @@ module Familia
       ret.is_a?(Redis::Future) ? ret : ret.positive?
     end
 
+    # Future-aware conversion of a Redis command reply.
+    #
+    # Yields a concrete reply to the block and returns the block's result.
+    # Returns a Redis::Future untouched: inside a pipeline or transaction the
+    # reply is not available until the block completes, so the conversion
+    # cannot run. The Future then resolves to the reply as redis-rb returns
+    # it, without the block's conversion. See docs/reference/transaction_safety.md.
+    #
+    # @param ret [Object, Redis::Future] The return value from a Redis command
+    # @yieldparam reply [Object] The concrete reply
+    # @return [Object, Redis::Future] The block's result for concrete values,
+    #   passthrough for Futures
+    #
+    # @example Deserialize a reply
+    #   Familia.transform_reply(dbclient.hvals(key)) do |vals|
+    #     vals.map { |v| deserialize_value(v) }
+    #   end
+    #
+    def transform_reply(ret)
+      ret.is_a?(Redis::Future) ? ret : yield(ret)
+    end
+
+    # Whether the current fiber is inside a Familia transaction or pipeline
+    # block. Commands issued there are queued, and each returns a
+    # Redis::Future instead of its reply.
+    #
+    # @return [Boolean]
+    #
+    def transaction_or_pipeline?
+      !(Fiber[:familia_transaction].nil? && Fiber[:familia_pipeline].nil?)
+    end
+
+    # Refuses to run an operation that needs command replies inside a
+    # transaction or pipeline block.
+    #
+    # Some methods must read a reply before they can finish: they branch on
+    # it, raise from it, issue follow-up commands based on it, iterate over
+    # it, or load records from it. Inside a transaction or pipeline every
+    # reply is a Redis::Future until the block completes, so such a method
+    # would act on a placeholder. It raises instead, before queueing
+    # anything.
+    #
+    # A method that takes its connection as an argument passes it as
+    # +conn+. The check then looks at that connection instead of the current
+    # fiber: a transaction or pipeline connection (a MULTI or pipeline
+    # block's yield, or Familia.dbclient inside a Familia block) queues its
+    # commands, while a separate plain client answers even inside a block.
+    #
+    # @param operation [String] The method name for the error message,
+    #   such as "HashKey#fetch"
+    # @param conn [Redis, Redis::PipelinedConnection, nil] the connection
+    #   the operation will issue its commands on, when it takes one
+    # @return [void]
+    # @raise [Familia::OperationModeError] without +conn+, inside a
+    #   transaction or pipeline; with +conn+, only when +conn+ is a
+    #   transaction or pipeline connection
+    #
+    def assert_replies_available!(operation, conn: nil)
+      queued = conn.nil? ? transaction_or_pipeline? : conn.is_a?(Redis::PipelinedConnection)
+      return unless queued
+
+      raise Familia::OperationModeError,
+            "#{operation} cannot run inside a transaction or pipeline: it needs " \
+            'command replies, which are Redis::Future objects until the block ' \
+            'completes. Call it outside the block.'
+    end
+
     # Detects the legacy JSON-encoded string format written by pre-2.10.0
     # reference collections (e.g. unique_index hashkeys stored `"\"u1\""`
     # instead of the raw `"u1"`).
@@ -90,6 +157,43 @@ module Familia
     # @return [String] dbkey
     def dbkey(*val)
       join(*val)
+    end
+
+    # Glob pattern characters escaped by {#escape_glob}: the wildcards, both
+    # brackets and the escape character itself. The documented patterns use
+    # the caret and the hyphen only inside brackets (h[^e]llo, h[a-b]llo),
+    # and no bracket expression can open once every opening bracket is
+    # escaped, so those two need no escape.
+    GLOB_SPECIAL_CHARACTERS = /[*?\[\]\\]/
+
+    # Escapes +str+ so that it matches only itself inside a key pattern.
+    #
+    # Use it for every literal part of a KEYS or SCAN MATCH pattern that is
+    # built from data (identifiers, field values, prefixes, suffixes, the
+    # delimiter) and leave only the intended wildcards unescaped. The Valkey
+    # and Redis KEYS documentation (https://valkey.io/commands/keys/ and
+    # https://redis.io/docs/latest/commands/keys/) both state: "Use `\` to
+    # escape special characters if you want to match them verbatim." The
+    # Valkey SCAN documentation (https://valkey.io/commands/scan/) describes
+    # the MATCH option as a glob-style pattern that works "similarly to the
+    # behavior of the `KEYS` command".
+    #
+    # The escaping works on the bytes: it puts an ASCII backslash before
+    # each ASCII special character and leaves every other byte as it is. So
+    # a String that is not valid in its encoding, such as an identifier with
+    # invalid UTF-8 bytes or binary data, is escaped without raising, and
+    # the result keeps the encoding of the input.
+    #
+    # @param str [#to_s] the literal text
+    # @return [String] the text with each glob special character escaped
+    #
+    # @example
+    #   Familia.escape_glob('c-*')                      #=> "c-\\*"
+    #   "#{Familia.escape_glob('company:c-*:dept:')}*"  #=> "company:c-\\*:dept:*"
+    #
+    def escape_glob(str)
+      text = str.to_s
+      text.b.gsub(GLOB_SPECIAL_CHARACTERS) { |char| "\\#{char}" }.force_encoding(text.encoding)
     end
 
     # Gets server ID without DB component for pool identification

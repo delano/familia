@@ -296,6 +296,12 @@ user.relationship_status
 #      index_memberships: [...] }
 ```
 
+`current_indexings`, `current_participations` and `relationship_status` read
+the database, so they raise `Familia::OperationModeError` inside a
+`transaction`, `atomic_write` or `pipelined` block. `indexed_in?` returns the
+membership command's `Redis::Future` there. See
+[Transaction Safety](../reference/transaction_safety.md) rule 4.
+
 ### Verifying and repairing indexes
 
 If your goal is to *verify or repair* indexes rather than simply *list* them,

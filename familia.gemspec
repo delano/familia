@@ -23,7 +23,7 @@ Gem::Specification.new do |spec|
   spec.add_dependency 'json_schemer', '~> 2.2'
   spec.add_dependency 'logger', '~> 1.7'
   spec.add_dependency 'oj', '~> 3.16', '>= 3.16.2'
-  spec.add_dependency 'redis', '>= 5.0', '< 6.0'
+  spec.add_dependency 'redis', '>= 5.4', '< 6.0'
   spec.add_dependency 'uri-valkey', '~> 1.4'
 
   spec.metadata['rubygems_mfa_required'] = 'true'

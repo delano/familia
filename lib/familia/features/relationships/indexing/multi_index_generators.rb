@@ -33,13 +33,19 @@ module Familia
           # Longer values are allowed but will trigger a warning.
           MAX_FIELD_VALUE_LENGTH = 256
 
+          # Redis type of every per-value bucket key. The factories below
+          # build each bucket as a Familia::UnsortedSet.
+          BUCKET_KEY_TYPE = 'set'
+
+          # Types a key may hold before the rebuild writes it as a bucket:
+          # a set, or "none" when the key does not exist.
+          WRITABLE_BUCKET_KEY_TYPES = [BUCKET_KEY_TYPE, 'none'].freeze
+
           # Validates a field value for use in index key construction.
-          # This is primarily for data quality and debugging clarity, not security.
-          #
-          # Security note: Redis SCAN patterns use the namespace prefix (e.g.,
-          # "customer:role_index:") which is derived from class/index metadata,
-          # not user input. Glob characters in stored field values are treated
-          # as literal characters in key names, not as pattern wildcards.
+          # This is for data quality and debugging clarity. It does not make
+          # values safe to put in a key pattern: code that builds a SCAN or
+          # KEYS pattern from keys like these escapes the literal part with
+          # Familia.escape_glob (see .each_index_bucket_slice).
           #
           # @param field_value [Object] The field value to validate
           # @param context [String] Description for warning messages
@@ -69,6 +75,285 @@ module Familia
             end
 
             str_value
+          end
+
+          # Returns the literal key prefix of the per-value buckets of
+          # +index_name+ on +owner+, for example "company:c-1:dept_index:"
+          # for a scope instance or "customer:role_index:" for a class.
+          #
+          # The factories pass a field value through .validate_field_value
+          # and name its bucket Familia.join(index_name, validated) under
+          # +owner+'s key. This method joins +index_name+ with '' instead,
+          # which leaves the index name followed by the delimiter. Every
+          # bucket of a non-blank field value starts with that prefix.
+          #
+          # A blank value (nil, empty or whitespace only) is the exception.
+          # Validation turns it into nil, which Familia.join drops, so the
+          # factories name its key "<owner key>:<index_name>" with no
+          # trailing delimiter. That key is not exclusive to the index: it
+          # is also the key of a related field of +owner+ with the same name
+          # as the index, such as a scope class's `set :tags` beside
+          # `multi_index :tag, :tags, within: Scope`, or `class_set :roles`
+          # beside `multi_index :role, :roles`. So the multi_index methods
+          # of +owner+ do not read or write it: add_to_*, update_in_*,
+          # remove_from_* and the rebuild skip blank values, find_all_by_*
+          # and sample_from_* return [] for them, IndexDescriptor#each_record
+          # raises for them, and the rebuild SCAN of +owner+ does not match
+          # the key (see .blank_field_value?).
+          #
+          # The key can still be a bucket of another multi_index. An
+          # identifier that contains the delimiter can make it a bucket of
+          # an instance-scoped multi_index within the scope class in a
+          # shorter scope: with scopes "c-1" and "c-1:dept_index:x", the key
+          # of a blank value in "c-1:dept_index:x" is the bucket of
+          # "x:dept_index" in "c-1". An identifier that is the name of a
+          # class-level multi_index of the scope class, or starts with that
+          # name and the delimiter, makes it a bucket of that index, with or
+          # without a delimiter in the identifier: the key of a blank value
+          # in scope "region_index" is the class-level "region_index" bucket
+          # of the value +index_name+. audit_multi_indexes of that other
+          # index reads it as that bucket, and the rebuild of that index
+          # deletes or rewrites it. This does not happen when the scope class declares
+          # a set field named +index_name+ and +owner+ exists, because the
+          # key is then a key of +owner+ (see
+          # RecordKeyOwnership.other_record_key).
+          #
+          # @param owner [Familia::Horreum, Class] the scope instance, or the
+          #   indexed class for a class-level index
+          # @param index_name [Symbol] name of the index
+          # @return [String]
+          def bucket_key_prefix(owner, index_name)
+            Familia::UnsortedSet.new(Familia.join(index_name, ''), parent: owner).dbkey
+          end
+
+          # Whether +field_value+ is blank: nil, or empty or whitespace only
+          # as a String. A multi_index does not index a blank value, and the
+          # generated methods of an owner do not read or write the key the
+          # factories name for one on that owner (see .bucket_key_prefix).
+          #
+          # @param field_value [Object]
+          # @return [Boolean]
+          def blank_field_value?(field_value)
+            field_value.nil? || field_value.to_s.strip.empty?
+          end
+
+          # Yields the keys of the per-value bucket sets of +index_name+ on
+          # +owner+, in slices of up to +batch_size+ keys.
+          #
+          # The SCAN pattern is "<bucket prefix>*", for example
+          # "company:c-1:dept_index:*" or "customer:role_index:*". The
+          # bucket prefix from .bucket_key_prefix is escaped with
+          # Familia.escape_glob before the SCAN wildcard is appended, so glob
+          # characters in a scope identifier, the class prefix or the
+          # delimiter cannot make the pattern match keys outside that
+          # literal prefix. SCAN's TYPE option leaves out every key that
+          # does not hold a set, the type the factories give each bucket.
+          # The Valkey and Redis SCAN command histories both list "Added the
+          # `TYPE` subcommand." under 6.0.0, and README.md lists the
+          # prerequisite "**Valkey/Redis**: 6.0+". Each returned key must
+          # also start with the literal prefix (see .select_index_buckets).
+          #
+          # A key can start with the literal prefix and still be another
+          # record's key, because an identifier may contain the delimiter.
+          # "company:c-1:dept_index:x:dept_index:ops" is both the bucket of
+          # value "x:dept_index:ops" in scope "c-1" and the "ops" bucket of
+          # scope "c-1:dept_index:x". Keys that
+          # RecordKeyOwnership.other_record_key assigns to an existing record
+          # with a longer identifier are yielded in +others+, not in
+          # +buckets+, so the rebuild does not delete them and the
+          # class-level audit does not read them. So is a key with more
+          # candidate owners than RecordKeyOwnership::MAX_CANDIDATE_SPLITS,
+          # whose owner is not checked. The candidates of the keys in a
+          # slice are checked in pipelines of at most
+          # RecordKeyOwnership::MAX_CANDIDATE_BATCH_BYTES of identifiers.
+          #
+          # The key "<owner key>:<index_name>", which the factories name for
+          # a blank value, does not match the pattern and is not yielded
+          # (see .bucket_key_prefix).
+          #
+          # @param client [Redis] connection that owns the buckets
+          # @param owner [Familia::Horreum, Class] the scope instance, or the
+          #   indexed class for a class-level index
+          # @param index_name [Symbol] name of the index
+          # @param batch_size [Integer] SCAN count hint and slice size
+          # @yieldparam buckets [Array<String>] bucket keys of the slice,
+          #   possibly empty
+          # @yieldparam others [Hash{String => String, Symbol}] the other
+          #   keys of the slice, each mapped to the hash key of the record
+          #   that owns it or to RecordKeyOwnership::TOO_MANY_CANDIDATES
+          # @return [Enumerator, nil] an Enumerator when no block is given
+          def each_index_bucket_slice(client, owner, index_name, batch_size: 100)
+            return enum_for(__method__, client, owner, index_name, batch_size: batch_size) unless block_given?
+
+            bucket_prefix = bucket_key_prefix(owner, index_name)
+            names = RecordKeyOwnership.record_set_key_names(owner)
+            pattern = "#{Familia.escape_glob(bucket_prefix)}*"
+            client.scan_each(match: pattern, count: batch_size, type: BUCKET_KEY_TYPE)
+                  .each_slice(batch_size) do |keys|
+              candidates = select_index_buckets(keys, bucket_prefix)
+              next if candidates.empty?
+
+              owners = RecordKeyOwnership.other_record_key_owners(candidates, owner, names: names)
+              buckets = []
+              others = {}
+              candidates.zip(owners) do |key, record_key|
+                record_key ? others[key] = record_key : buckets << key
+              end
+              yield buckets, others
+            end
+            nil
+          end
+
+          # Deletes the per-value bucket sets of +index_name+ on +owner+,
+          # including buckets for field values that no object holds any
+          # more.
+          #
+          # +live_bucket_keys+ are the keys the rebuild writes after this
+          # returns. They are checked with .check_live_bucket_keys! first.
+          # Then every bucket under the prefix is found before any is
+          # deleted, and a key whose owner was not checked (see
+          # .each_index_bucket_slice) raises as well. So a key the rebuild
+          # could not write, or could not tell from another record's key,
+          # stops it before any key is deleted.
+          #
+          # Only the bucket keys .each_index_bucket_slice yields are deleted.
+          # A key under the prefix that holds another type is left alone,
+          # and so is a set that is another existing record's key. Each key
+          # gets its own DEL in one pipeline per batch, so a key that was
+          # already gone when its DEL ran is neither yielded nor counted.
+          #
+          # @param client [Redis] connection that owns the buckets
+          # @param owner [Familia::Horreum, Class] the scope instance, or the
+          #   indexed class for a class-level index
+          # @param index_name [Symbol] name of the index
+          # @param live_bucket_keys [Array<String>] keys the rebuild writes next
+          # @param batch_size [Integer] SCAN count hint, DEL and TYPE batch size
+          # @yieldparam key [String] a bucket key that DEL removed
+          # @yieldparam cleared [Integer] buckets deleted so far
+          # @return [Integer] number of bucket keys DEL removed
+          # @raise [Familia::IndexBucketConflictError] see .check_live_bucket_keys!,
+          #   and for a key under the prefix whose owner was not checked
+          def clear_index_buckets(client, owner, index_name, live_bucket_keys:, batch_size: 100, &on_delete)
+            check_live_bucket_keys!(client, owner, live_bucket_keys, batch_size: batch_size)
+
+            stale = []
+            unchecked = {}
+            each_index_bucket_slice(client, owner, index_name, batch_size: batch_size) do |buckets, others|
+              stale.concat(buckets)
+              others.each do |key, record_key|
+                unchecked[key] = record_key if record_key == RecordKeyOwnership::TOO_MANY_CANDIDATES
+              end
+            end
+            raise Familia::IndexBucketConflictError, unchecked unless unchecked.empty?
+
+            delete_index_buckets(client, stale, batch_size: batch_size, &on_delete)
+          end
+
+          # Deletes +bucket_keys+ for .clear_index_buckets, one DEL per key
+          # in one pipeline per batch, and counts only the keys DEL removed.
+          #
+          # @param client [Redis] connection that owns the buckets
+          # @param bucket_keys [Array<String>] bucket keys to delete
+          # @param batch_size [Integer] number of DEL commands per pipeline
+          # @yieldparam key [String] a bucket key that DEL removed
+          # @yieldparam cleared [Integer] buckets deleted so far
+          # @return [Integer] number of bucket keys DEL removed
+          def delete_index_buckets(client, bucket_keys, batch_size: 100, &on_delete)
+            cleared = 0
+            bucket_keys.each_slice(batch_size) do |buckets|
+              deleted = client.pipelined { |pipe| buckets.each { |key| pipe.del(key) } }
+              buckets.zip(deleted) do |key, count|
+                next unless count.to_i.positive?
+
+                cleared += 1
+                on_delete&.call(key, cleared)
+              end
+            end
+
+            cleared
+          end
+
+          # Raises Familia::IndexBucketConflictError when one of
+          # +bucket_keys+ holds a type other than a set, is another
+          # existing record's key (see RecordKeyOwnership.other_record_key_owner)
+          # or has more candidate owners than the rebuild checks.
+          #
+          # After the clearing phase, the rebuild adds every object to the
+          # bucket of its field value. A key of another type there is not a
+          # bucket and may be another record's data, such as the list of a
+          # record named after a class-level index when a live field value
+          # equals that list's name. SADD into it raises WRONGTYPE, which
+          # would stop the rebuild after clearing had already emptied the
+          # other buckets, and deleting it could destroy that data. A set
+          # that is another record's key would receive index members. So
+          # the rebuild checks every key it will write before it deletes any.
+          #
+          # @param client [Redis] connection that owns the buckets
+          # @param owner [Familia::Horreum, Class] the scope instance, or the
+          #   indexed class for a class-level index
+          # @param bucket_keys [Array<String>] keys the rebuild will write
+          # @param batch_size [Integer] number of keys checked per pipeline
+          # @return [nil]
+          # @raise [Familia::IndexBucketConflictError] naming each such key,
+          #   its type or RecordKeyOwnership::TOO_MANY_CANDIDATES and, for
+          #   another record's key, that record's hash key
+          def check_live_bucket_keys!(client, owner, bucket_keys, batch_size: 100)
+            conflicts = {}
+            owners = {}
+            names = RecordKeyOwnership.record_set_key_names(owner)
+
+            bucket_keys.each_slice(batch_size) do |keys|
+              types = client.pipelined do |pipe|
+                keys.each { |key| pipe.type(key) }
+              end
+              record_keys = RecordKeyOwnership.other_record_key_owners(keys, owner, names: names)
+              keys.each_with_index do |key, idx|
+                record_live_bucket_conflict(conflicts, owners, key, types[idx], record_keys[idx])
+              end
+            end
+            raise Familia::IndexBucketConflictError.new(conflicts, owners) unless conflicts.empty?
+
+            nil
+          end
+
+          # Adds +key+ to +conflicts+ for .check_live_bucket_keys! when it
+          # has more candidate owners than RecordKeyOwnership checks, is
+          # another record's key, or holds a type other than a set. For
+          # another record's key, +owners+ gets that record's hash key.
+          #
+          # @param conflicts [Hash{String => String}] key to its type or
+          #   RecordKeyOwnership::TOO_MANY_CANDIDATES
+          # @param owners [Hash{String => String}] key to the owning
+          #   record's hash key
+          # @param key [String] a key the rebuild will write
+          # @param type [String] the TYPE reply for +key+
+          # @param record_key [String, nil] from
+          #   RecordKeyOwnership.other_record_key_owners
+          # @return [void]
+          def record_live_bucket_conflict(conflicts, owners, key, type, record_key)
+            if record_key == RecordKeyOwnership::TOO_MANY_CANDIDATES
+              conflicts[key] = record_key
+              return
+            end
+
+            owners[key] = record_key if record_key
+            conflicts[key] = type if record_key || !WRITABLE_BUCKET_KEY_TYPES.include?(type)
+          end
+
+          # Returns the +keys+ that start with the literal +bucket_prefix+.
+          #
+          # The check compares bytes. The client returns a key that is not
+          # valid UTF-8 as a binary String, and String#start_with? raises
+          # Encoding::CompatibilityError for a binary key and a UTF-8 prefix
+          # that both hold non-ASCII bytes, as they do when a scope
+          # identifier holds invalid UTF-8.
+          #
+          # @param keys [Array<String>] keys returned by SCAN
+          # @param bucket_prefix [String] literal prefix from .bucket_key_prefix
+          # @return [Array<String>]
+          def select_index_buckets(keys, bucket_prefix)
+            prefix = bucket_prefix.b
+            keys.select { |key| key.b.start_with?(prefix) }
           end
 
           # Main setup method that orchestrates multi-value index creation
@@ -153,6 +438,11 @@ module Familia
             actual_scope_class.class_eval do
 
               define_method(:"sample_from_#{field}") do |field_value, count = 1|
+                # A blank value is not indexed (see MultiIndexGenerators.bucket_key_prefix)
+                return [] if MultiIndexGenerators.blank_field_value?(field_value)
+
+                Familia.assert_replies_available!("#{self.class}#sample_from_#{field}")
+
                 index_set = send("#{index_name}_for", field_value) # i.e. UnsortedSet
 
                 # Get random members efficiently (O(1) via SRANDMEMBER with count)
@@ -164,6 +454,11 @@ module Familia
 
               # Generate bulk query method (e.g., company.find_all_by_department)
               define_method(:"find_all_by_#{field}") do |field_value|
+                # A blank value is not indexed (see MultiIndexGenerators.bucket_key_prefix)
+                return [] if MultiIndexGenerators.blank_field_value?(field_value)
+
+                Familia.assert_replies_available!("#{self.class}#find_all_by_#{field}")
+
                 index_set = send("#{index_name}_for", field_value) # i.e. UnsortedSet
 
                 # Get all members from set
@@ -172,10 +467,20 @@ module Familia
 
               # Generate method to rebuild the multi-value index for this parent instance
               #
-              # Multi-indexes create separate sets for each field value, requiring a three-phase approach:
-              # 1. Loading: Load all objects once and cache them (discovers field values simultaneously)
-              # 2. Clearing: Remove all existing index sets using SCAN
-              # 3. Rebuilding: Rebuild index from cached objects (no reload needed)
+              # Multi-indexes create separate sets for each field value, so the rebuild runs in three phases:
+              # 1. Loading: Load every object in the participation collection once and cache it,
+              #    collecting its field value.
+              # 2. Clearing: Check every bucket key phase 3 will write (see @raise), then delete
+              #    this scope instance's bucket sets, including those of field values no object
+              #    holds any more. A SCAN over the escaped bucket prefix finds them, and only keys
+              #    that start with that literal prefix and hold a set are deleted. A set that
+              #    also belongs to an existing scope record with a longer identifier is left
+              #    alone (see RecordKeyOwnership.other_record_key). The SCAN pattern is the
+              #    escaped prefix followed by "*", e.g. "company:c-1:dept_index:*", so the key
+              #    "company:c-1:dept_index" that the factory names for a blank value is not
+              #    touched: it may be a related field of the same name on this scope class.
+              # 3. Rebuilding: Add each cached object to the bucket of its field value
+              #    (no reload needed). An object with a blank field value is not indexed.
               #
               # @param batch_size [Integer] Number of identifiers to process per batch
               # @yield [progress] Optional block called with progress updates
@@ -183,7 +488,16 @@ module Familia
               #   - :phase [Symbol] Current phase (:loading, :clearing, :rebuilding)
               #   - :current [Integer] Current item count
               #   - :total [Integer] Total items (when known)
-              #   - :field_value [String] Current field value being processed
+              #   - :key [String] Bucket key just deleted (:clearing phase only)
+              # @return [Integer, nil] Number of objects processed, or nil when the indexed
+              #   class has no participation relationship to this scope class
+              # @raise [Familia::IndexBucketConflictError] if a bucket key the rebuild will
+              #   write holds a type other than set or is another existing record's key, or if
+              #   a key it will write or delete has more candidate owner records than
+              #   RecordKeyOwnership::MAX_CANDIDATE_SPLITS. The rebuild raises before it
+              #   deletes or writes anything. The error's #conflicts maps each such key to its
+              #   type or to RecordKeyOwnership::TOO_MANY_CANDIDATES, and #owners maps each
+              #   key of another record to that record's hash key.
               #
               # @example Basic rebuild
               #   company.rebuild_dept_index
@@ -203,8 +517,13 @@ module Familia
               #   and consider processing in chunks or using a streaming approach if memory
               #   constraints are encountered. The batch_size parameter controls Redis I/O
               #   batching but does not affect memory usage since all objects are cached.
+              #   The clearing phase also holds every bucket key under the prefix in memory
+              #   before it deletes any (see MultiIndexGenerators.clear_index_buckets), so
+              #   memory grows with the number of bucket keys as well.
               #
               define_method(:"rebuild_#{index_name}") do |batch_size: 100, &progress_block|
+                Familia.assert_replies_available!("#{self.class}#rebuild_#{index_name}")
+
                 # PHASE 1: Find the collection containing the indexed objects
                 # Look for a participation relationship where indexed_class participates in this scope_class
                 collection_name = nil
@@ -244,21 +563,19 @@ module Familia
                     progress_block&.call(phase: :loading, current: processed, total: collection.size)
                   end
 
-                  # PHASE 3: Clear all existing field-value-specific index sets
-                  # Use SCAN to find all existing index keys (including orphaned ones from deleted field values)
+                  # PHASE 3: Clear this scope instance's field-value-specific index sets.
+                  # SCAN also finds orphaned sets left by field values no object holds any more.
+                  # The identifier in the prefix (e.g. "company:c-*:dept_index:") is escaped,
+                  # so a glob character in it cannot widen the match past that literal prefix.
+                  # The keys PHASE 4 writes are checked first: add_to_* writes the bucket of
+                  # every non-blank field value.
                   progress_block&.call(phase: :clearing, current: 0, total: field_values.size)
 
-                  # Get the base pattern for this index by creating a sample index set
-                  # The "*" creates a wildcard pattern like "company:123:dept_index:*" for SCAN
-                  sample_index = send(:"#{index_name}_for", "*")
-                  index_pattern = sample_index.dbkey
-
-                  # Find all existing index keys using SCAN
-                  cleared_count = 0
-                  dbclient.scan_each(match: index_pattern) do |key|
-                    dbclient.del(key)
-                    cleared_count += 1
-                    progress_block&.call(phase: :clearing, current: cleared_count, total: field_values.size, key: key)
+                  live_bucket_keys = field_values.map { |value| send("#{index_name}_for", value).dbkey }
+                  MultiIndexGenerators.clear_index_buckets(
+                    dbclient, self, index_name, live_bucket_keys: live_bucket_keys, batch_size: batch_size
+                  ) do |key, cleared|
+                    progress_block&.call(phase: :clearing, current: cleared, total: field_values.size, key: key)
                   end
 
                   # PHASE 4: Rebuild index from cached objects (no reload needed)
@@ -330,8 +647,16 @@ module Familia
 
                 _ensure_persisted_before_index_write!(index_name, scope_instance)
 
-                index_set = scope_instance.send("#{index_name}_for", field_value)
-                index_set.add(identifier)
+                # A blank value is not indexed, as in the class-level index:
+                # its key "<scope key>:<index>" may be a related field of the
+                # scope (see MultiIndexGenerators.bucket_key_prefix). Its
+                # tracker entry below is still recorded, so save keeps
+                # refreshing this membership once the value is no longer
+                # blank.
+                unless MultiIndexGenerators.blank_field_value?(field_value)
+                  index_set = scope_instance.send("#{index_name}_for", field_value)
+                  index_set.add(identifier)
+                end
 
                 # Per-value entry: add_to_* is add-only, so the object may now
                 # occupy several buckets and each needs its own cleanup entry.
@@ -355,8 +680,12 @@ module Familia
                 field_value = send(field) if field_value.nil?
                 return unless field_value
 
-                index_set = scope_instance.send("#{index_name}_for", field_value)
-                index_set.remove(identifier)
+                # A blank value has no bucket (see add_to_*), so only its
+                # tracker entry is dropped.
+                unless MultiIndexGenerators.blank_field_value?(field_value)
+                  index_set = scope_instance.send("#{index_name}_for", field_value)
+                  index_set.remove(identifier)
+                end
 
                 # field_value is part of the multi entry key -- the bucket
                 # just left is the entry to drop, not the membership as a
@@ -374,20 +703,27 @@ module Familia
                 _ensure_trackable_index_scope!(scope_instance)
 
                 new_field_value = send(field)
+                # A blank value is not indexed, as in the class-level index,
+                # but the tracker below still records it (see add_to_*).
+                # Neither a blank old value nor a blank new value touches
+                # the key "<scope key>:<index>", which may be a related field
+                # of the scope (see MultiIndexGenerators.bucket_key_prefix).
+                index_value = new_field_value unless MultiIndexGenerators.blank_field_value?(new_field_value)
+                retract_value = old_field_value unless MultiIndexGenerators.blank_field_value?(old_field_value)
 
                 _ensure_persisted_before_index_write!(index_name, scope_instance)
 
                 # Use Familia's transaction method for atomicity with DataType abstraction
                 scope_instance.transaction do |_tx|
                   # Remove from old index if provided - use helper method
-                  if old_field_value
-                    old_index_set = scope_instance.send("#{index_name}_for", old_field_value)
+                  if retract_value
+                    old_index_set = scope_instance.send("#{index_name}_for", retract_value)
                     old_index_set.remove(identifier)
                   end
 
                   # Add to new index if present - use helper method
-                  if new_field_value
-                    new_index_set = scope_instance.send("#{index_name}_for", new_field_value)
+                  if index_value
+                    new_index_set = scope_instance.send("#{index_name}_for", index_value)
                     new_index_set.add(identifier)
                   end
                 end
@@ -466,6 +802,11 @@ module Familia
             # find_all_by_role(value)
             # Uses load_multi for efficient batch loading (avoids N+1 queries)
             indexed_class.define_singleton_method(:"find_all_by_#{field}") do |field_value|
+              # A blank value is not indexed (see MultiIndexGenerators.bucket_key_prefix)
+              return [] if MultiIndexGenerators.blank_field_value?(field_value)
+
+              Familia.assert_replies_available!("#{self}.find_all_by_#{field}")
+
               index_set = send("#{index_name}_for", field_value)
               identifiers = index_set.members
               load_multi(identifiers).compact
@@ -474,7 +815,9 @@ module Familia
             # sample_from_role(value, count)
             # Uses load_multi for efficient batch loading (avoids N+1 queries)
             indexed_class.define_singleton_method(:"sample_from_#{field}") do |field_value, count = 1|
-              return [] if field_value.nil? || field_value.to_s.strip.empty?
+              return [] if MultiIndexGenerators.blank_field_value?(field_value)
+
+              Familia.assert_replies_available!("#{self}.sample_from_#{field}")
 
               index_set = send("#{index_name}_for", field_value)
               identifiers = index_set.sample(count)
@@ -482,8 +825,40 @@ module Familia
             end
 
             # rebuild_role_index(batch_size:, &progress)
-            # For class-level indexes, we iterate all instances of the class
+            #
+            # For class-level indexes, we iterate all instances of the class.
+            # The phases match the instance-scoped rebuild: load every object
+            # and its field value, check every bucket key the rebuild will
+            # write, delete the class's bucket sets under the escaped bucket
+            # prefix (e.g. SCAN "customer:role_index:*"), then add each
+            # object with a non-blank field value to the bucket of that
+            # value. The key "customer:role_index" that the factory names for
+            # a blank value is not matched or touched: it may be a
+            # class-level related field of the same name. A set under
+            # the prefix that is a set field of an existing record whose
+            # identifier starts with the index name is left alone (see
+            # RecordKeyOwnership.other_record_key).
+            #
+            # @param batch_size [Integer] Number of identifiers to process per batch
+            # @yield [progress] Optional block called with progress updates; the
+            #   phases are :discovering, :loading, :clearing and :rebuilding
+            # @return [Integer] Number of objects processed, or 0 when the class
+            #   has no instances collection
+            # @raise [Familia::IndexBucketConflictError] if a bucket key the rebuild
+            #   will write holds a type other than set or is another existing record's
+            #   key, or if a key it will write or delete has more candidate owner
+            #   records than RecordKeyOwnership::MAX_CANDIDATE_SPLITS. The rebuild
+            #   raises before it deletes or writes anything. The error's #conflicts
+            #   maps each such key to its type or to
+            #   RecordKeyOwnership::TOO_MANY_CANDIDATES, and #owners maps each key of
+            #   another record to that record's hash key.
+            # @note Like the instance-scoped rebuild, this caches every object, and
+            #   the clearing phase holds every bucket key under the prefix in memory
+            #   before it deletes any, so memory grows with the number of objects
+            #   and of bucket keys.
             indexed_class.define_singleton_method(:"rebuild_#{index_name}") do |batch_size: 100, &progress_block|
+              Familia.assert_replies_available!("#{self}.rebuild_#{index_name}")
+
               # PHASE 1: Discover all field values and collect objects
               progress_block&.call(phase: :discovering, current: 0, total: 0)
 
@@ -515,26 +890,16 @@ module Familia
                 progress_block&.call(phase: :loading, current: processed, total: total_count)
               end
 
-              # PHASE 2: Clear existing index sets using SCAN
+              # PHASE 2: Clear existing index sets (e.g. "customer:role_index:*") using SCAN.
+              # The class prefix and delimiter are escaped like any other literal part.
+              # The keys PHASE 3 writes, one per field value, are checked first.
               progress_block&.call(phase: :clearing, current: 0, total: field_values.size)
 
-              # Get pattern for all index keys: "customer:role_index:*"
-              #
-              # Security note: The SCAN pattern is safe because:
-              # 1. The namespace prefix (e.g., "customer:role_index:") is derived from
-              #    class metadata and index name, not user input
-              # 2. The "*" wildcard only matches keys within this namespace
-              # 3. Glob characters stored IN field values (e.g., a role named "admin*")
-              #    are literal characters in the key name, not SCAN wildcards
-              # 4. SCAN cannot match keys outside the namespace prefix
-              sample_index = send(:"#{index_name}_for", "*")
-              index_pattern = sample_index.dbkey
-
-              cleared_count = 0
-              dbclient.scan_each(match: index_pattern) do |key|
-                dbclient.del(key)
-                cleared_count += 1
-                progress_block&.call(phase: :clearing, current: cleared_count, total: field_values.size, key: key)
+              live_bucket_keys = field_values.map { |value| send("#{index_name}_for", value).dbkey }
+              MultiIndexGenerators.clear_index_buckets(
+                dbclient, self, index_name, live_bucket_keys: live_bucket_keys, batch_size: batch_size
+              ) do |key, cleared|
+                progress_block&.call(phase: :clearing, current: cleared, total: field_values.size, key: key)
               end
 
               # PHASE 3: Rebuild from cached objects
@@ -619,8 +984,12 @@ module Familia
 
                 # Use transaction for atomic remove + add to prevent data inconsistency
                 transaction do |conn|
-                  # Remove from old index
-                  conn.srem(old_set.dbkey, serialized_id)
+                  # Remove from old index. A blank old value has no bucket:
+                  # its key may be a class-level related field of the same
+                  # name (see MultiIndexGenerators.bucket_key_prefix).
+                  unless MultiIndexGenerators.blank_field_value?(old_field_value)
+                    conn.srem(old_set.dbkey, serialized_id)
+                  end
 
                   # Add to new index if present
                   if new_field_value && !new_field_value.to_s.strip.empty?

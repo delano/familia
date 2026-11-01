@@ -44,11 +44,16 @@ allow(ApiConfig).to receive(:delete_for_domain!).and_return(true)
 # Inefficient: N Redis calls
 ids.each { |id| User.instances.member?(id) }
 
-# Better: single pipeline
-User.dbclient.pipelined do
+# Better: one round trip. Inside the block member? returns a Redis::Future,
+# and the MultiResult holds each ZRANK reply: a rank, or nil for a non-member.
+ranks = User.pipelined do
   ids.each { |id| User.instances.member?(id) }
-end
+end.results
+ranks.map { |rank| !rank.nil? }
 ```
+
+Use Familia's `pipelined`, not `User.dbclient.pipelined`: only Familia's block
+routes DataType commands into the pipeline.
 
 ## Scalar Fields vs Collection Fields
 

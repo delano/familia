@@ -116,6 +116,8 @@ module Familia
         #
         # @return [Integer] 0 if no migration needed, 1 if migration needed
         def check_only
+          Familia.assert_replies_available!("#{self}.check_only")
+
           migration = new
           migration.prepare
           migration.migration_needed? ? 1 : 0
@@ -137,6 +139,8 @@ module Familia
         # @raise [StandardError] any error raised by {#prepare},
         #   {#migration_needed?} or {#migrate}
         def run(options = {})
+          Familia.assert_replies_available!("#{self}.run")
+
           migration         = new
           migration.options = options
           migration.prepare
