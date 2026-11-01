@@ -5,15 +5,17 @@
 # Horreum#refresh! assigns every stored field and sets the persistent fields
 # the stored hash lacks to nil (see
 # try/bug_fixes/horreum_refresh_absent_fields_try.rb). Two kinds of stored
-# hash then gave the object another identity, with dirty tracking cleared:
+# hash can then give the object another identity, with dirty tracking
+# cleared:
 #
 # - a stored identifier field that differs from the key it is stored under
 #   (a raw HSET, a migration or another writer). refresh! assigned it, and
 #   a later save wrote this object's fields into the other record.
-# - a hash that lacks a field a Proc identifier reads. refresh! left that
-#   field nil, so the identifier was gone, or with feature
-#   :object_identifier a new objid was generated, and a later save created
-#   a second record.
+# - a hash that lacks a field a Proc identifier reads. Setting that field
+#   to nil leaves no identifier, or with feature :object_identifier
+#   generates a new objid, and a later save would create a second record.
+#   Before absent fields were set to nil, refresh! kept the in-memory value
+#   and the identity did not change.
 #
 # refresh! now computes the identifier again after the assignment. If there
 # is none, or it names a key other than the one read, it raises

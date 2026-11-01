@@ -94,8 +94,8 @@ user.extid == link_id  # => true
 
 Two kinds of stored hash cause this, for example after a raw `HSET` or `HDEL`, a migration, or another application writing the hash:
 
-- The stored identifier field holds a different value than the key it is stored under. `refresh!` used to assign it, so the object pointed at the other record, and a later `save` wrote this object's fields into that record.
-- A field that a Proc or method identifier reads is missing from the stored hash. `refresh!` used to leave it `nil`, so the identifier was gone, or with `feature :object_identifier` a new `objid` was generated, and a later `save` created a second record.
+- The stored identifier field, or a stored field that a Proc or method identifier reads, holds a value that names a different key than the one it is stored under. `refresh!` used to assign it, so the object pointed at the other key, and a later `save` wrote this object's fields there, into another record or a new one.
+- A field that a Proc or method identifier reads is missing from the stored hash. `refresh!` used to keep the in-memory value, so the identity did not change. Now that `refresh!` sets fields that are not stored to `nil` (see the previous section), the identifier would be gone, or with `feature :object_identifier` a new `objid` would be generated, so it raises instead.
 
 ```ruby
 class User < Familia::Horreum

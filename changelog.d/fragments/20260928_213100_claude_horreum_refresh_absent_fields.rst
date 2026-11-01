@@ -21,9 +21,9 @@ Changed
   ``Familia::IdentifierMismatchError`` and leave the object unchanged when
   the stored values give no identifier or one that names a different key,
   for example a stored identifier field that differs from the key, or a
-  missing field that a Proc or method identifier reads. They assigned those values,
-  so a later ``save`` wrote to another record or created a new one. See
-  ``docs/migrating/refresh.md``.
+  missing field that a Proc or method identifier reads. They assigned a
+  stored identifier that differed from the key, so a later ``save`` wrote to
+  another record or created a new one. See ``docs/migrating/refresh.md``.
 
 Fixed
 -----
