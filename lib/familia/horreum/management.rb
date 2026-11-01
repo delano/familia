@@ -8,6 +8,15 @@ require_relative 'management/repair'
 
 module Familia
   class Horreum
+    # Redis type of the key that holds a Horreum object's fields.
+    #
+    # The methods that enumerate objects by a key pattern, such as #all,
+    # #scan_count and audit_instances, keep only keys of this type. The
+    # pattern "<prefix>:*:<suffix>" also matches keys that are not object
+    # hashes: the bucket set of a multi_index whose field value equals the
+    # suffix, such as "customer:role_index:object".
+    OBJECT_KEY_TYPE = 'hash'
+
     # ManagementMethods - Class-level methods for Horreum model management
     #
     # This module is extended into classes that include Familia::Horreum,
@@ -185,8 +194,15 @@ module Familia
         instance
       end
 
+      # Reads each identifier's key with MGET and parses the stored JSON.
+      #
+      # @return [Array, Redis::Future] the parsed values, skipping missing
+      #   keys. Inside a transaction or pipeline, the MGET Future (resolves
+      #   to the raw values).
       def multiget(...)
-        rawmultiget(...).filter_map { |json| Familia::JsonSerializer.parse(json) }
+        Familia.transform_reply(rawmultiget(...)) do |values|
+          values.filter_map { |json| Familia::JsonSerializer.parse(json) }
+        end
       end
 
       def rawmultiget(*hids)
@@ -232,6 +248,9 @@ module Familia
       # @return [Object, nil] An instance of the class if the key exists, nil
       #   otherwise.
       # @raise [ArgumentError] If the provided key is empty.
+      # @raise [Familia::OperationModeError] inside a transaction or pipeline,
+      #   where the replies needed to decide existence and build the object
+      #   are not available until the block completes.
       #
       # This method can operate in two modes:
       #
@@ -264,6 +283,7 @@ module Familia
       #   which we detect and return nil (not an empty object instance).
       #
       def find_by_dbkey(objkey, check_exists: true)
+        Familia.assert_replies_available!("#{self}.find_by_dbkey")
         raise ArgumentError, 'Empty key' if objkey.to_s.empty?
 
         if check_exists
@@ -296,7 +316,7 @@ module Familia
         return nil if obj.empty?
 
         # Create instance and deserialize fields using shared helper method
-        instantiate_from_hash(obj)
+        instantiate_from_hash(obj, dbkey: objkey)
       end
 
       # Removes a stale entry from the instances sorted set.
@@ -337,6 +357,8 @@ module Familia
       #   (default: true). See find_by_dbkey for details.
       # @return [Object, nil] An instance of the class if found, +nil+ if the
       #   key does not exist in the database.
+      # @raise [Familia::OperationModeError] inside a transaction or pipeline
+      #   (see find_by_dbkey).
       #
       # This method constructs the full dbkey using the provided identifier
       # and suffix, then delegates to `find_by_key` for the actual retrieval and
@@ -364,6 +386,7 @@ module Familia
       # @see #exists? For checking the database key directly
       #
       def find_by_identifier(identifier, suffix: nil, check_exists: true)
+        Familia.assert_replies_available!("#{self}.find_by_identifier")
         suffix ||= self.suffix
         return nil if identifier.to_s.empty?
 
@@ -403,9 +426,12 @@ module Familia
       #
       # @note Returns nil for non-existent keys (maintains same contract as find_by_id)
       # @note Objects are returned in the same order as input identifiers
+      # @raise [Familia::OperationModeError] inside a transaction or pipeline,
+      #   where the HGETALL replies are not available until the block completes
       # @note Empty/nil identifiers are skipped and return nil in result array
       #
       def load_multi(identifiers, suffix = nil)
+        Familia.assert_replies_available!("#{self}.load_multi")
         suffix ||= self.suffix
         return [] if identifiers.empty?
 
@@ -441,7 +467,7 @@ module Familia
           next if obj_hash.nil? || obj_hash.empty?
 
           # Instantiate object using shared helper method
-          objects[pos] = instantiate_from_hash(obj_hash)
+          objects[pos] = instantiate_from_hash(obj_hash, dbkey: valid_keys[result_idx])
         end
 
         objects
@@ -461,10 +487,12 @@ module Familia
       #   users = User.load_multi_by_keys(keys)
       #
       # @note Returns nil for empty/nil keys, maintaining position alignment with input array
+      # @raise [Familia::OperationModeError] inside a transaction or pipeline
       #
       # @see load_multi For loading by identifiers
       #
       def load_multi_by_keys(objkeys)
+        Familia.assert_replies_available!("#{self}.load_multi_by_keys")
         return [] if objkeys.empty?
 
         Familia.trace :LOAD_MULTI_BY_KEYS, nil, "Loading #{objkeys.size} objects" if Familia.debug?
@@ -495,7 +523,7 @@ module Familia
           next if obj_hash.nil? || obj_hash.empty?
 
           # Instantiate object using shared helper method
-          objects[pos] = instantiate_from_hash(obj_hash)
+          objects[pos] = instantiate_from_hash(obj_hash, dbkey: objkeys[pos])
         end
 
         objects
@@ -503,14 +531,17 @@ module Familia
 
       # Checks whether the given identifier appears in the +instances+ sorted set.
       #
-      # This is a fast O(log N) ZSCORE lookup. It does NOT verify that the
-      # underlying hash key still exists in the database -- use {#exists?}
-      # for that. A true result means the object was persisted through
-      # Familia at some point and has not been removed from instances since.
+      # This is a fast O(log N) ZRANK lookup (SortedSet#member?). It does NOT
+      # verify that the underlying hash key still exists in the database --
+      # use {#exists?} for that. A true result means the object was persisted
+      # through Familia at some point and has not been removed from instances
+      # since.
       #
       # @param identifier [String, Integer] The unique identifier to check.
-      # @return [Boolean] true if the identifier is present in the instances
-      #   sorted set, false otherwise.
+      # @return [Boolean, Redis::Future] true if the identifier is present in
+      #   the instances sorted set, false otherwise. Inside a transaction or
+      #   pipeline, the ZRANK Future (resolves to the rank, or nil when
+      #   absent; the Future itself is always truthy).
       #
       # @example Quick instances check without hitting HGETALL
       #   User.in_instances?('cust_abc123')  # => true
@@ -528,7 +559,9 @@ module Familia
       #
       # @param identifier [String, Integer] The unique identifier for the object.
       # @param suffix [Symbol, nil] The suffix to use in the dbkey (default: class suffix).
-      # @return [Boolean] true if the object exists, false otherwise.
+      # @return [Boolean, Redis::Future] true if the object exists, false
+      #   otherwise. Inside a transaction or pipeline, the EXISTS Future
+      #   (resolves to the key count).
       #
       # This method constructs the full dbkey using the provided identifier and suffix,
       # then checks if the key exists in the database.
@@ -561,6 +594,8 @@ module Familia
       # @param identifier [String, Integer] The unique identifier for the object to destroy.
       # @param suffix [Symbol, nil] The suffix to use in the dbkey (default: class suffix).
       # @return [Boolean] true if the object was successfully destroyed, false otherwise.
+      # @raise [Familia::OperationModeError] inside a transaction or pipeline,
+      #   where the record cannot be loaded to clean up its class indexes.
       #
       # This method is part of Familia's high-level object lifecycle management. While `delete!`
       # operates directly on dbkeys, `destroy!` operates at the object level and is used for
@@ -571,6 +606,8 @@ module Familia
       #   User.destroy!(123)  # Removes user:123:object from Valkey/Redis
       #
       def destroy!(identifier, suffix = nil)
+        # Loads the record first (to clean its class indexes), which needs replies.
+        Familia.assert_replies_available!("#{self}.destroy!")
         suffix ||= self.suffix
         raise Familia::NoIdentifier, "#{self} requires non-empty identifier" if identifier.to_s.empty?
 
@@ -620,17 +657,18 @@ module Familia
       # Finds all keys in Database matching the given suffix pattern.
       #
       # @param suffix [String] The suffix pattern to match (default: '*').
+      #   It is used as given, so it may contain glob wildcards. The class
+      #   prefix and the delimiter are escaped (see #dbkey_pattern).
       # @return [Array<String>] An array of matching dbkeys.
       #
-      # This method searches for all dbkeys that match the given suffix pattern.
-      # It uses the class's dbkey method to construct the search pattern.
-      #
       # @example
-      #   User.find  # Returns all keys matching user:*:object
-      #   User.find('active')  # Returns all keys matching user:*:active
+      #   User.find_keys            # Returns all keys matching user:*:*
+      #   User.find_keys('active')  # Returns all keys matching user:*:active
       #
       def find_keys(suffix = '*')
-        dbclient.keys(dbkey('*', suffix)) || []
+        delim = Familia.escape_glob(Familia.delim)
+        pattern = [Familia.escape_glob(prefix), '*', suffix].compact.join(delim)
+        dbclient.keys(pattern) || []
       end
 
       # +identifier+ can be a value or an Array of values used to create the index.
@@ -663,14 +701,43 @@ module Familia
       # Centralizes SCAN pattern generation to ensure consistency across
       # rebuild strategies and other key enumeration operations.
       #
-      # @param match_suffix [String] The suffix to match (default: class suffix)
+      # @param match_suffix [String] The literal suffix to match (default:
+      #   class suffix). It is escaped like the prefix; see #dbkey_pattern.
       # @return [String] The SCAN pattern (e.g., "customer:*:object")
       # @example
       #   User.scan_pattern           #=> "user:*:object"
       #   User.scan_pattern('active') #=> "user:*:active"
       #
       def scan_pattern(match_suffix = suffix)
-        "#{prefix}#{Familia.delim}*#{Familia.delim}#{match_suffix}"
+        dbkey_pattern('*', match_suffix)
+      end
+
+      # Returns a KEYS or SCAN MATCH pattern for this class's keys.
+      #
+      # +identifier_glob+ is used as given, so it may contain glob wildcards.
+      # The class prefix, the delimiter and +key_suffix+ are escaped with
+      # Familia.escape_glob so they match only themselves: a class whose
+      # prefix is "app[1]" does not match the keys of a class whose prefix
+      # is "app1".
+      #
+      # @param identifier_glob [String] Glob for the identifier part (default: '*')
+      # @param key_suffix [String, Symbol, nil] Literal suffix (default: class
+      #   suffix). nil leaves the suffix out, as it does for #dbkey.
+      # @return [String] The pattern (e.g., "customer:*:object")
+      # @raise [Familia::NoIdentifier] if +identifier_glob+ is empty, as #dbkey does
+      # @example
+      #   User.dbkey_pattern               #=> "user:*:object"
+      #   User.dbkey_pattern('a*')         #=> "user:a*:object"
+      #   User.dbkey_pattern('*', :tags)   #=> "user:*:tags"
+      #
+      def dbkey_pattern(identifier_glob = '*', key_suffix = suffix)
+        if identifier_glob.to_s.empty?
+          raise NoIdentifier, "#{self} requires non-empty identifier pattern, got: #{identifier_glob.inspect}"
+        end
+
+        parts = [Familia.escape_glob(prefix), identifier_glob.to_s]
+        parts << Familia.escape_glob(key_suffix) unless key_suffix.nil?
+        parts.join(Familia.escape_glob(Familia.delim))
       end
 
       # Extracts the identifier from a full Redis key by stripping the
@@ -679,6 +746,13 @@ module Familia
       # This is safe for compound identifiers that contain the delimiter
       # character (e.g., "mymodel:foo:bar:object" where the identifier is
       # "foo:bar"). A naive split on the delimiter would truncate these.
+      #
+      # The key is compared and sliced as bytes. The client returns a key
+      # that is not valid UTF-8 as a binary String, and comparing such a
+      # key with a prefix that holds non-ASCII characters as Strings raises
+      # Encoding::CompatibilityError. The identifier keeps the key's
+      # encoding, as the members of the instances sorted set do, so the
+      # identifiers of one record compare equal.
       #
       # @param key [String] Full Redis key (e.g., "user:alice:object")
       # @param key_suffix [String] The suffix to strip (default: class suffix)
@@ -692,10 +766,12 @@ module Familia
         d = Familia.delim
         pfx = "#{prefix}#{d}"
         sfx = "#{d}#{key_suffix}"
+        bkey = key.b
+        size = bkey.bytesize - pfx.bytesize - sfx.bytesize
 
-        return nil unless key.start_with?(pfx) && key.end_with?(sfx)
+        return nil unless size >= 0 && bkey.start_with?(pfx.b) && bkey.end_with?(sfx.b)
 
-        key[pfx.length..-(sfx.length + 1)]
+        bkey.byteslice(pfx.bytesize, size).force_encoding(key.encoding)
       end
 
       def dbkey(identifier, suffix = self.suffix)
@@ -707,10 +783,28 @@ module Familia
         Familia.dbkey(prefix, identifier, suffix)
       end
 
+      # Loads every object of this class whose key ends in +suffix+.
+      #
+      # This method uses the KEYS command, which blocks Redis while it scans
+      # every key in the database, so like #keys_count it is not meant for
+      # production use.
+      #
+      # @param suffix [String, Symbol, nil] The literal key suffix (default:
+      #   class suffix). Unlike the #find_keys argument it is not a glob: it
+      #   is escaped like the class prefix and delimiter (see #dbkey_pattern),
+      #   because every matching key is loaded as an object hash.
+      # @return [Array<Familia::Horreum>] The loaded objects. Keys that
+      #   cannot be loaded are left out, and so are matching keys that do
+      #   not hold a hash (see OBJECT_KEY_TYPE).
+      #
+      # @example
+      #   User.all  # Loads the objects of every key matching user:*:object
+      #
       def all(suffix = nil)
+        Familia.assert_replies_available!("#{self}.all")
         suffix ||= self.suffix
         # objects that could not be parsed will be nil
-        find_keys(suffix).filter_map { |k| find_by_key(k) }
+        object_keys(dbclient.keys(dbkey_pattern('*', suffix))).filter_map { |k| find_by_key(k) }
       end
 
       # Returns the number of tracked instances (fast, from instances sorted set).
@@ -720,7 +814,8 @@ module Familia
       # Familia. However, objects deleted outside Familia (e.g., direct Redis commands)
       # may leave stale entries.
       #
-      # @return [Integer] Number of instances in the instances sorted set
+      # @return [Integer, Redis::Future] Number of instances in the instances
+      #   sorted set. Inside a transaction or pipeline, the ZCARD Future.
       #
       # @example
       #   User.create(email: 'test@example.com')
@@ -741,9 +836,15 @@ module Familia
       #
       # ⚠️ WARNING: This method uses the KEYS command which blocks Redis during execution.
       # It scans ALL keys in the database and should NEVER be used in production.
+      # {#scan_count} uses SCAN with a TYPE filter instead and is the production-safe choice.
       #
-      # @param filter [String] Key pattern to match (default: '*')
-      # @return [Integer] Number of matching keys in Redis
+      # @param filter [String] Glob for the identifier part (default: '*').
+      #   The class prefix and suffix are escaped; see #dbkey_pattern.
+      # @return [Integer] Number of matching keys that hold a hash (see
+      #   OBJECT_KEY_TYPE)
+      # @raise [Familia::OperationModeError] inside a transaction or pipeline,
+      #   where the KEYS reply the type filter needs is not available until
+      #   the block completes
       #
       # @example
       #   User.keys_count       #=> 1  (all User objects)
@@ -754,7 +855,9 @@ module Familia
       # @see #count Fast count from instances sorted set
       #
       def keys_count(filter = '*')
-        dbclient.keys(dbkey(filter)).compact.size
+        Familia.assert_replies_available!("#{self}.keys_count")
+
+        object_keys(dbclient.keys(dbkey_pattern(filter)).compact).size
       end
 
       # Returns authoritative count using non-blocking SCAN command (production-safe).
@@ -762,24 +865,30 @@ module Familia
       # This method uses cursor-based SCAN iteration to count matching keys without
       # blocking Redis. Safe for production use as it processes keys in chunks.
       #
-      # @param filter [String] Key pattern to match (default: '*')
-      # @return [Integer] Number of matching keys in Redis
+      # @param filter [String] Glob for the identifier part (default: '*').
+      #   The class prefix and suffix are escaped; see #dbkey_pattern.
+      # @return [Integer] Number of matching keys that hold a hash (see
+      #   OBJECT_KEY_TYPE)
       #
       # @example
       #   User.scan_count       #=> 1  (all User objects)
       #   User.scan_count('a*') #=> 1  (Users with IDs starting with 'a')
       #
       # @note For fast count (potentially stale), use {#count}
+      # @raise [Familia::OperationModeError] inside a transaction or pipeline,
+      #   where the SCAN cursor needed to continue is not available
       # @see #count Fast count from instances sorted set
       # @see #keys_count Blocking alternative (production-dangerous)
       #
       def scan_count(filter = '*')
-        pattern = dbkey(filter)
+        Familia.assert_replies_available!("#{self}.scan_count")
+
+        pattern = dbkey_pattern(filter)
         count = 0
         cursor = "0"
 
         loop do
-          cursor, keys = dbclient.scan(cursor, match: pattern, count: 1000)
+          cursor, keys = dbclient.scan(cursor, match: pattern, count: 1000, type: OBJECT_KEY_TYPE)
           count += keys.size
           break if cursor == "0"
         end
@@ -793,7 +902,8 @@ module Familia
       # This method provides O(1) performance by querying the `instances` sorted set.
       # However, objects deleted outside Familia may leave stale entries.
       #
-      # @return [Boolean] true if instances sorted set is non-empty
+      # @return [Boolean, Redis::Future] true if instances sorted set is
+      #   non-empty. Inside a transaction or pipeline, the ZCARD Future.
       #
       # @example
       #   User.create(email: 'test@example.com')
@@ -805,16 +915,21 @@ module Familia
       # @see #count Fast count of instances
       #
       def any?
-        count.positive?
+        Familia.positive?(count)
       end
 
       # Checks if any objects exist using blocking KEYS command (production-dangerous).
       #
       # ⚠️ WARNING: This method uses the KEYS command which blocks Redis during execution.
       # It scans ALL keys in the database and should NEVER be used in production.
+      # {#scan_any?} uses SCAN with a TYPE filter instead and is the production-safe choice.
       #
-      # @param filter [String] Key pattern to match (default: '*')
-      # @return [Boolean] true if any matching keys exist in Redis
+      # @param filter [String] Glob for the identifier part (default: '*').
+      #   The class prefix and suffix are escaped; see #dbkey_pattern.
+      # @return [Boolean] true if a matching key that holds a hash exists
+      #   (see OBJECT_KEY_TYPE)
+      # @raise [Familia::OperationModeError] inside a transaction or pipeline
+      #   (see #keys_count)
       #
       # @example
       #   User.keys_any?       #=> true  (any User objects)
@@ -825,7 +940,7 @@ module Familia
       # @see #any? Fast existence check from instances sorted set
       #
       def keys_any?(filter = '*')
-        keys_count(filter).positive?
+        Familia.positive?(keys_count(filter))
       end
 
       # Checks if any objects exist using non-blocking SCAN command (production-safe).
@@ -833,23 +948,29 @@ module Familia
       # This method uses cursor-based SCAN iteration to check for matching keys without
       # blocking Redis. Safe for production use and returns early on first match.
       #
-      # @param filter [String] Key pattern to match (default: '*')
-      # @return [Boolean] true if any matching keys exist in Redis
+      # @param filter [String] Glob for the identifier part (default: '*').
+      #   The class prefix and suffix are escaped; see #dbkey_pattern.
+      # @return [Boolean] true if a matching key that holds a hash exists
+      #   (see OBJECT_KEY_TYPE)
       #
       # @example
       #   User.scan_any?       #=> true  (any User objects)
       #   User.scan_any?('a*') #=> true  (Users with IDs starting with 'a')
       #
       # @note For fast check (potentially stale), use {#any?}
+      # @raise [Familia::OperationModeError] inside a transaction or pipeline,
+      #   where the SCAN cursor needed to continue is not available
       # @see #any? Fast existence check from instances sorted set
       # @see #keys_any? Blocking alternative (production-dangerous)
       #
       def scan_any?(filter = '*')
-        pattern = dbkey(filter)
+        Familia.assert_replies_available!("#{self}.scan_any?")
+
+        pattern = dbkey_pattern(filter)
         cursor = "0"
 
         loop do
-          cursor, keys = dbclient.scan(cursor, match: pattern, count: 100)
+          cursor, keys = dbclient.scan(cursor, match: pattern, count: 100, type: OBJECT_KEY_TYPE)
           return true unless keys.empty?
           break if cursor == "0"
         end
@@ -864,6 +985,8 @@ module Familia
       # load_multi_by_keys to eliminate code duplication. Not intended for direct use.
       #
       # @param obj_hash [Hash] Hash of field names to serialized values from Redis
+      # @param dbkey [String, nil] the key obj_hash was read from, named in the
+      #   log entry for a value that is not JSON
       # @return [Object] Instantiated object with deserialized fields
       #
       # @note This method:
@@ -872,15 +995,24 @@ module Familia
       #   3. Deserializes and assigns field values from the hash
       #
       # @api private
-      def instantiate_from_hash(obj_hash)
+      def instantiate_from_hash(obj_hash, dbkey: nil)
         instance = allocate
         instance.instance_variable_set(:@dirty_fields, Concurrent::Map.new)
         instance.instance_variable_set(:@warned_dirty_signatures, Concurrent::Map.new)
         instance.send(:initialize_relatives)
-        instance.send(:initialize_with_keyword_args_deserialize_value, **obj_hash)
+        values = instance.send(:deserialize_stored_fields, obj_hash, dbkey: dbkey)
+        instance.send(:initialize_with_keyword_args, **values)
         # Object was just loaded from Redis, so it matches DB state exactly.
-        # Clear dirty flags set during field assignment above, mirroring what
-        # initialize (horreum.rb:246) and refresh! (persistence.rb:608) do.
+        # Clear dirty flags set during field assignment above, as
+        # Horreum#initialize and Horreum#refresh! also do.
+        #
+        # refresh! assigns stored values to an existing object and is meant to
+        # leave it in the state this method produces: unstored fields nil, and
+        # setters that see nil as the old value. It gets there differently. It
+        # deserializes before clearing the fields, then assigns with
+        # initialize_with_keyword_args, and restores the object if an
+        # assignment raises. A change to how stored values are assigned here
+        # likely needs the same change there.
         instance.send(:clear_dirty!)
         instance
       end
@@ -902,6 +1034,8 @@ module Familia
       #   - +:decoded+ [Object] The deserialized Ruby value
       #   - +:type+ [String] The Ruby class name of the decoded value
       # @return [nil] If the key does not exist
+      # @return [Redis::Future] Inside a transaction or pipeline, the HGETALL
+      #   Future (resolves to the raw field hash)
       #
       # @example Inspect a stored object by identifier
       #   Customer.storage_inspect('cust_abc123')
@@ -921,23 +1055,40 @@ module Familia
           dbkey(identifier_or_key)
         end
 
-        raw_hash = dbclient.hgetall(objkey)
-        return nil if raw_hash.empty?
+        Familia.transform_reply(dbclient.hgetall(objkey)) do |raw_hash|
+          next nil if raw_hash.empty?
 
-        # Use a temporary instance for deserialization (needs serialize_value/deserialize_value)
-        temp = allocate
-        temp.instance_variable_set(:@dirty_fields, Concurrent::Map.new)
-        temp.instance_variable_set(:@warned_dirty_signatures, Concurrent::Map.new)
-        temp.send(:initialize_relatives)
+          # Use a temporary instance for deserialization (needs serialize_value/deserialize_value)
+          temp = allocate
+          temp.instance_variable_set(:@dirty_fields, Concurrent::Map.new)
+          temp.instance_variable_set(:@warned_dirty_signatures, Concurrent::Map.new)
+          temp.send(:initialize_relatives)
 
-        raw_hash.each_with_object({}) do |(field, raw_val), result|
-          decoded = temp.send(:deserialize_value, raw_val, field_name: field.to_sym)
-          result[field] = {
-            raw: raw_val,
-            decoded: decoded,
-            type: decoded.class.name
-          }
+          raw_hash.each_with_object({}) do |(field, raw_val), result|
+            decoded = temp.send(:deserialize_value, raw_val, field_name: field.to_sym, dbkey: objkey)
+            result[field] = {
+              raw: raw_val,
+              decoded: decoded,
+              type: decoded.class.name
+            }
+          end
         end
+      end
+
+      private
+
+      # Returns the +keys+ that hold a hash (OBJECT_KEY_TYPE), for the
+      # methods that match object keys with KEYS, which has no TYPE option.
+      #
+      # @param keys [Array<String>]
+      # @return [Array<String>]
+      def object_keys(keys)
+        return keys if keys.empty?
+
+        types = dbclient.pipelined do |pipe|
+          keys.each { |key| pipe.type(key) }
+        end
+        keys.zip(types).filter_map { |key, type| key if type == OBJECT_KEY_TYPE }
       end
     end
   end

@@ -38,17 +38,23 @@ module Familia
     # made #char_count/#size/#empty? report a nonsense non-zero count for
     # a deleted/never-created key.
     #
-    # @return [Integer] number of characters
+    # @return [Integer, Redis::Future] number of characters. Inside a
+    #   transaction or pipeline, the GET Future (resolves to the raw value).
     def char_count
-      value.to_s.size
+      Familia.transform_reply(value) { |val| val.to_s.size }
     end
     alias size char_count
     alias length char_count
 
+    # @return [Boolean, Redis::Future] whether the value is missing or empty.
+    #   Inside a transaction or pipeline, the GET Future.
     def empty?
-      char_count.zero?
+      Familia.transform_reply(char_count, &:zero?)
     end
 
+    # @return [String, nil, Redis::Future] the stored value, or the default
+    #   when one is configured and the key was missing. Inside a transaction
+    #   or pipeline, the GET Future (resolves to the raw value).
     def value
       echo :value, Familia.pretty_stack(limit: 1) if Familia.debug
       dbclient.setnx dbkey, @opts[:default] if @opts[:default]
@@ -57,13 +63,29 @@ module Familia
     alias content value
     alias get value
 
+    # Ruby calls to_s implicitly (string interpolation, Array#join, puts) and
+    # prints the object's default "#<...>" form when it returns anything but
+    # a String, so it cannot hand back a Redis::Future. Use #value to get the
+    # GET Future inside a block.
+    #
+    # @return [String] the stored value, or the inspect-style string from
+    #   Familia::Base#to_s when there is none
+    # @raise [Familia::OperationModeError] inside a transaction or pipeline
     def to_s
-      return super if value.to_s.empty?
+      Familia.assert_replies_available!('StringKey#to_s')
 
-      value.to_s
+      val = value.to_s
+      val.empty? ? super : val
     end
 
+    # A conversion method, refused inside a block like #to_s. Use #value to
+    # get the GET Future there.
+    #
+    # @return [Integer] the stored value as an Integer
+    # @raise [Familia::OperationModeError] inside a transaction or pipeline
     def to_i
+      Familia.assert_replies_available!('StringKey#to_i')
+
       value.to_i
     end
 
@@ -79,6 +101,9 @@ module Familia
     alias replace value=
     alias set value=
 
+    # @return [Boolean, Redis::Future] true if the key was set, false if it
+    #   already existed. Inside a transaction or pipeline, the SETNX Future
+    #   of that Boolean (the Future itself is always truthy).
     def setnx(val)
       ret = dbclient.setnx(dbkey, serialize_value(val))
       update_expiration

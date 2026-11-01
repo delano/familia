@@ -54,7 +54,7 @@ module Familia
   #   SortedSet   | remrangebyrank   | ZREMRANGEBYRANK| yes        | no
   #   SortedSet   | remrangebyscore  | ZREMRANGEBYSCORE| yes       | no
   #   HashKey     | []=              | HSET           | yes        | no
-  #   HashKey     | hsetnx           | HSETNX         | conditional| no
+  #   HashKey     | hsetnx           | HSETNX (EVAL in a block) | conditional | no
   #   HashKey     | remove_field     | HDEL           | yes        | no
   #   HashKey     | increment        | HINCRBY        | yes        | no
   #   HashKey     | decrement        | HINCRBY (neg)  | yes (via increment) | no
@@ -88,8 +88,12 @@ module Familia
   # - Lock#release uses a Lua script (EVAL) which IS atomic on the server.
   # - StringKey#del and Lock methods that delete the key do not call
   #   update_expiration because the key no longer exists.
-  # - HashKey#hsetnx only calls update_expiration when the field was
-  #   actually set (ret == 1), which is correct conditional behavior.
+  # - HashKey#hsetnx refreshes the TTL only when it set a new field
+  #   (redis-rb returns true). Inside a transaction or pipeline it queues
+  #   HSETNX and the refresh as one EVAL that makes the same check when it
+  #   runs, so an existing field leaves the TTL unchanged there too. See
+  #   #queue_conditional_write; ListKey#insert, JsonStringKey#setnx and
+  #   JsonStringKey#value with a default work the same way.
   # - The (+ZREMRANGEBYRANK) / (+LTRIM) trims only fire when :max_length is
   #   set. Standalone capped writes wrap write + trim in their own MULTI so a
   #   crash cannot leave the collection over-cap; inside a caller transaction
@@ -270,6 +274,98 @@ module Familia
       emit_dirty_warning(mode, message, dirty)
     end
 
+    # Refreshes the TTL after a conditional write (RPUSHX, LPUSHX, ZPOPMIN,
+    # ...) when +written+ says the write took effect.
+    #
+    # Inside a transaction or pipeline the write's reply is a Redis::Future,
+    # so whether it took effect is unknown until the block completes. The
+    # Future counts as written and the refresh is queued with the write.
+    # Pass a Future only for a write that always takes effect on a key that
+    # exists, so that the queued refresh matches the one outside a block: on
+    # a missing key EXPIRE does nothing. Writes that can do nothing on an
+    # existing key (HSETNX, SETNX, LINSERT) go through
+    # #queue_conditional_write instead.
+    #
+    # @param written [Boolean, nil, Redis::Future] whether the write took
+    #   effect, or its Future
+    # @return [void]
+    def update_expiration_if_written(written)
+      update_expiration if written.is_a?(Redis::Future) || written
+    end
+    private :update_expiration_if_written
+
+    # Lua scripts for #queue_conditional_write. Each runs one write on
+    # KEYS[1] and returns the write's reply. ARGV[1] is the TTL in whole
+    # seconds and ARGV[2] the refresh flag: '1' to call EXPIRE with ARGV[1]
+    # when the write's reply shows it took effect, '0' to never call it.
+    # The write's own arguments follow from ARGV[3].
+    #
+    # The script does not inspect ARGV[1]: Ruby decides whether to refresh,
+    # as #update_expiration does, so a positive default_expiration below
+    # one second is sent as EXPIRE 0, as outside a block, which deletes the
+    # key just written.
+    CONDITIONAL_WRITE_SCRIPTS = {
+      hsetnx: <<~LUA,
+        local written = redis.call('HSETNX', KEYS[1], ARGV[3], ARGV[4])
+        if written == 1 and ARGV[2] == '1' then redis.call('EXPIRE', KEYS[1], ARGV[1]) end
+        return written
+      LUA
+      setnx: <<~LUA,
+        local written = redis.call('SETNX', KEYS[1], ARGV[3])
+        if written == 1 and ARGV[2] == '1' then redis.call('EXPIRE', KEYS[1], ARGV[1]) end
+        return written
+      LUA
+      linsert: <<~LUA,
+        local length = redis.call('LINSERT', KEYS[1], ARGV[3], ARGV[4], ARGV[5])
+        if length > 0 and ARGV[2] == '1' then redis.call('EXPIRE', KEYS[1], ARGV[1]) end
+        return length
+      LUA
+    }.freeze
+
+    # Whether +conn+ queues its commands: a transaction or pipeline
+    # connection, whose replies are Redis::Future objects until the block
+    # completes.
+    #
+    # @param conn [Redis, Redis::PipelinedConnection] the connection
+    # @return [Boolean]
+    def queued_connection?(conn)
+      conn.is_a?(Redis::PipelinedConnection)
+    end
+    private :queued_connection?
+
+    # Queues a conditional write and its TTL refresh as one EVAL on a
+    # transaction or pipeline connection.
+    #
+    # Outside a block a conditional write refreshes the TTL only when its
+    # reply shows that it took effect. Inside a block that reply is a
+    # Future, so the decision moves into the script, which calls EXPIRE
+    # only when the write took effect. A write that does nothing therefore
+    # leaves an existing key's TTL alone, as it does outside a block.
+    #
+    # The TTL is the one #update_expiration would apply, decided the same
+    # way: the default_expiration, skipped only when it is 0 (no expiration,
+    # or a relation declared with no_expiration: true). The script receives
+    # the seconds as an integer (ARGV[1]) and that decision as a flag
+    # (ARGV[2]), so a positive default_expiration below one second is sent
+    # as EXPIRE 0, as outside a block, which deletes the key just written.
+    #
+    # @param conn [Redis::PipelinedConnection] the transaction or pipeline
+    #   connection
+    # @param script [Symbol] a key of CONDITIONAL_WRITE_SCRIPTS; the
+    #   remaining arguments are the write's arguments after the key
+    # @yieldparam reply [Integer] the write's reply, for redis-rb to coerce
+    #   into the Future's value
+    # @return [Redis::Future] the EVAL Future, resolving to the coerced reply
+    # @raise [Familia::Problem] if the default expiration is not a
+    #   non-negative number
+    def queue_conditional_write(conn, script, *, &)
+      expiration = default_expiration
+      validate_expiration!(expiration)
+      refresh = expiration.zero? ? '0' : '1'
+      conn.call(:eval, CONDITIONAL_WRITE_SCRIPTS.fetch(script), 1, dbkey, expiration.to_i, refresh, *, &)
+    end
+    private :queue_conditional_write
+
     # Valid +dirty_write_warnings+ modes, matching the class-level and global
     # settings of the same name.
     DIRTY_WRITE_MODES = %i[strict warn once off].freeze
@@ -408,7 +504,7 @@ module Familia
     #   no hash key in the database.
     #
     def parent_new_record?
-      return false if Fiber[:familia_transaction] || Fiber[:familia_pipeline]
+      return false if Familia.transaction_or_pipeline?
       return false unless @parent_ref.respond_to?(:exists?)
 
       !@parent_ref.exists?(check_size: false)
@@ -456,6 +552,21 @@ module Familia
 
       # Fall back to class-level default
       self.class.default_expiration
+    end
+
+    # JSON-ready contents of the key, read from the database (see
+    # Familia::Base#as_json). JSON generation calls as_json and to_json
+    # implicitly and cannot serialize a Redis::Future, so both refuse to run
+    # inside a block. Use the type's reader (#value, #members, #hgetall) to
+    # get the command's Future there.
+    #
+    # @param options [Hash, nil] ignored, accepted for the JSON protocol
+    # @return [Object] the stored contents
+    # @raise [Familia::OperationModeError] inside a transaction or pipeline
+    def as_json(options = nil)
+      Familia.assert_replies_available!("#{self.class}#as_json")
+
+      super
     end
 
     include Settings

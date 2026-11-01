@@ -10,6 +10,11 @@
 # tracking. HashKey#refresh! went on to send HMSET with no field/value pairs
 # and raised Redis::CommandError instead. Both now read the hash once and
 # raise when the reply is empty, since a hash with no fields does not exist.
+#
+# The Horreum#refresh! docstring says a failed call leaves the object as it
+# was: its field values, its other instance variables and its dirty
+# tracking. The cases below pin all three for a missing key, on an object
+# that holds an unsaved edit.
 
 require_relative '../support/helpers/test_helpers'
 
@@ -17,7 +22,35 @@ class ::RefreshMissingKeyRecord < Familia::Horreum
   identifier_field :rid
   field :rid
   field :name
+  field :note
   hashkey :props
+end
+
+# objid is generated lazily the first time it is read, and the identifier
+# reads it.
+class ::RefreshMissingKeyObjidRecord < Familia::Horreum
+  feature :object_identifier
+  identifier_field :objid
+  field :name
+end
+
+# The same, with a Proc identifier that reads objid.
+class ::RefreshMissingKeyObjidProcRecord < Familia::Horreum
+  feature :object_identifier
+  identifier_field ->(record) { "doc_#{record.objid}" }
+  field :name
+end
+
+# The object's instance variables, each with the object it holds.
+def refresh_missing_key_ivars(obj)
+  obj.instance_variables.to_h { |name| [name, obj.instance_variable_get(name)] }
+end
+
+# Whether obj holds exactly the instance variables in +saved+, each still
+# the same object.
+def refresh_missing_key_same_ivars?(obj, saved)
+  obj.instance_variables.sort == saved.keys.sort &&
+    saved.all? { |name, value| obj.instance_variable_get(name).equal?(value) }
 end
 
 @saved = RefreshMissingKeyRecord.new(rid: 'refresh_missing_saved', name: 'stored')
@@ -26,16 +59,57 @@ end
 
 ## Horreum#refresh! raises KeyNotFoundError for a record that was never saved
 @unsaved = RefreshMissingKeyRecord.new(rid: 'refresh_missing_unsaved', name: 'in-memory')
+@unsaved.note = 'unsaved edit'
+@unsaved_ivars = refresh_missing_key_ivars(@unsaved)
+@unsaved_changed = @unsaved.changed_fields
 @unsaved.refresh!
 #=!> Familia::KeyNotFoundError
 
-## the failed refresh! leaves the unsaved in-memory value in place
-@unsaved.name
-#=> 'in-memory'
+## the failed refresh! leaves every field value in place
+[@unsaved.rid, @unsaved.name, @unsaved.note]
+#=> ['refresh_missing_unsaved', 'in-memory', 'unsaved edit']
+
+## the failed refresh! leaves the unsaved edit marked dirty
+[@unsaved.dirty?(:note), @unsaved.changed_fields == @unsaved_changed]
+#=> [true, true]
+
+## the failed refresh! adds, removes and replaces no instance variable
+refresh_missing_key_same_ivars?(@unsaved, @unsaved_ivars)
+#=> true
 
 ## the chainable Horreum#refresh raises the same error
 @unsaved.refresh
 #=!> Familia::KeyNotFoundError
+
+## the failed refresh leaves the object as it was too
+[refresh_missing_key_same_ivars?(@unsaved, @unsaved_ivars), @unsaved.changed_fields == @unsaved_changed]
+#=> [true, true]
+
+## an unsaved record whose identifier is an objid not generated yet raises KeyNotFoundError
+@lazy = RefreshMissingKeyObjidRecord.new(name: 'in-memory')
+@lazy.name = 'edited'
+@lazy_ivars = refresh_missing_key_ivars(@lazy)
+@lazy_changed = @lazy.changed_fields
+@lazy.refresh!
+#=!> Familia::KeyNotFoundError
+
+## computing the key generated an objid, and the failed refresh! removes it again
+[
+  @lazy.instance_variable_defined?(:@objid),
+  refresh_missing_key_same_ivars?(@lazy, @lazy_ivars),
+  @lazy.changed_fields == @lazy_changed,
+]
+#=> [false, true, true]
+
+## the same holds for a Proc identifier that reads an objid not generated yet
+@lazy_proc = RefreshMissingKeyObjidProcRecord.new(name: 'in-memory')
+@lazy_proc_ivars = refresh_missing_key_ivars(@lazy_proc)
+begin
+  @lazy_proc.refresh!
+rescue Familia::KeyNotFoundError => e
+  [e.class, @lazy_proc.instance_variable_defined?(:@objid), refresh_missing_key_same_ivars?(@lazy_proc, @lazy_proc_ivars)]
+end
+#=> [Familia::KeyNotFoundError, false, true]
 
 ## Horreum#refresh! still reloads a record whose key exists
 @saved.name = 'changed in memory'
@@ -47,8 +121,20 @@ end
 @gone = RefreshMissingKeyRecord.new(rid: 'refresh_missing_gone', name: 'short-lived')
 @gone.save
 @gone.delete!
+@gone.name = 'edited after delete'
+@gone_ivars = refresh_missing_key_ivars(@gone)
+@gone_changed = @gone.changed_fields
 @gone.refresh!
 #=!> Familia::KeyNotFoundError
+
+## the failed refresh! on a deleted record leaves its values, dirty tracking and instance variables as they were
+[
+  @gone.name,
+  @gone.dirty?(:name),
+  @gone.changed_fields == @gone_changed,
+  refresh_missing_key_same_ivars?(@gone, @gone_ivars),
+]
+#=> ['edited after delete', true, true, true]
 
 ## HashKey#refresh! raises KeyNotFoundError, not Redis::CommandError, for a missing key
 @unsaved.props.refresh!
@@ -70,3 +156,5 @@ end
 
 @saved.props.delete!
 @saved.destroy!
+# @gone was removed with delete!, which leaves its instances entry behind.
+delete_test_dbkeys(RefreshMissingKeyRecord, RefreshMissingKeyObjidRecord, RefreshMissingKeyObjidProcRecord)
