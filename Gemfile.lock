@@ -74,7 +74,7 @@ GEM
     lint_roller (1.1.0)
     logger (1.7.0)
     minitest (5.27.0)
-    oj (3.17.6)
+    oj (3.17.7)
       bigdecimal (>= 3.0)
       ostruct (>= 0.2)
     ostruct (0.6.3)
