@@ -92,6 +92,43 @@ module Familia
       join(*val)
     end
 
+    # Glob pattern characters escaped by {#escape_glob}: the wildcards, both
+    # brackets and the escape character itself. The documented patterns use
+    # the caret and the hyphen only inside brackets (h[^e]llo, h[a-b]llo),
+    # and no bracket expression can open once every opening bracket is
+    # escaped, so those two need no escape.
+    GLOB_SPECIAL_CHARACTERS = /[*?\[\]\\]/
+
+    # Escapes +str+ so that it matches only itself inside a key pattern.
+    #
+    # Use it for every literal part of a KEYS or SCAN MATCH pattern that is
+    # built from data (identifiers, field values, prefixes, suffixes, the
+    # delimiter) and leave only the intended wildcards unescaped. The Valkey
+    # and Redis KEYS documentation (https://valkey.io/commands/keys/ and
+    # https://redis.io/docs/latest/commands/keys/) both state: "Use `\` to
+    # escape special characters if you want to match them verbatim." The
+    # Valkey SCAN documentation (https://valkey.io/commands/scan/) describes
+    # the MATCH option as a glob-style pattern that works "similarly to the
+    # behavior of the `KEYS` command".
+    #
+    # The escaping works on the bytes: it puts an ASCII backslash before
+    # each ASCII special character and leaves every other byte as it is. So
+    # a String that is not valid in its encoding, such as an identifier with
+    # invalid UTF-8 bytes or binary data, is escaped without raising, and
+    # the result keeps the encoding of the input.
+    #
+    # @param str [#to_s] the literal text
+    # @return [String] the text with each glob special character escaped
+    #
+    # @example
+    #   Familia.escape_glob('c-*')                      #=> "c-\\*"
+    #   "#{Familia.escape_glob('company:c-*:dept:')}*"  #=> "company:c-\\*:dept:*"
+    #
+    def escape_glob(str)
+      text = str.to_s
+      text.b.gsub(GLOB_SPECIAL_CHARACTERS) { |char| "\\#{char}" }.force_encoding(text.encoding)
+    end
+
     # Gets server ID without DB component for pool identification
     def serverid(uri)
       # Create a copy of URI without DB for server identification

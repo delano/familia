@@ -109,7 +109,7 @@ module Familia
         batch_objects = []
 
         loop do
-          cursor, keys    = dbclient.scan(cursor, match: @scan_pattern, count: @batch_size)
+          cursor, keys    = dbclient.scan(cursor, **scan_options)
           @total_scanned += keys.size
 
           # Progress reporting
