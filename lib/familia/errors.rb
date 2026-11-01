@@ -51,6 +51,90 @@ module Familia
     end
   end
 
+  # Raised by Horreum#refresh! when the stored values it assigns would give
+  # the object an identifier other than the one that named the key it read.
+  # Examples are a stored identifier field that differs from the key, and
+  # a stored hash that lacks a field a Proc or method identifier reads.
+  # refresh! leaves the object as it was before raising, so it keeps the
+  # key it had.
+  #
+  # +key+ is the key refresh! read. +resolved_key+ is the key the assigned
+  # values resolve to, or nil when they give no identifier.
+  class IdentifierMismatchError < HorreumError
+    attr_reader :key, :resolved_key
+
+    def initialize(key, resolved_key = nil)
+      @key = key
+      @resolved_key = resolved_key
+      super(build_message)
+    end
+
+    private
+
+    def build_message
+      if resolved_key.nil?
+        "Stored values at #{key} give no identifier"
+      else
+        "Stored values at #{key} name a different key: #{resolved_key}"
+      end
+    end
+  end
+
+  # Raised by the rebuild of a multi_index when a key it must write as a
+  # bucket set cannot be used as one. The rebuild checks those keys before
+  # it deletes or writes anything.
+  #
+  # A key conflicts when it holds a type other than set, such as the list
+  # of a record whose identifier makes its keys share the bucket prefix.
+  # It also conflicts when it holds a set that belongs to another existing
+  # record of the same class with a longer identifier, such as the set
+  # field of a record whose identifier equals a class-level index name
+  # when a field value equals that field's name.
+  #
+  # A key also conflicts when the rebuild cannot tell whether it belongs
+  # to another record: when it has more candidate owner records than
+  # Familia::Features::Relationships::Indexing::RecordKeyOwnership::MAX_CANDIDATE_SPLITS,
+  # as a field value that repeats the delimiter and an index name can
+  # make it. This applies to the keys the rebuild writes and to the stale
+  # buckets it would delete.
+  #
+  # +conflicts+ maps each such key to the type it holds, or to
+  # RecordKeyOwnership::TOO_MANY_CANDIDATES (+:too_many_candidate_owners+)
+  # when its owner was not checked. +owners+ maps each conflicting key
+  # that is another record's key to that record's hash key.
+  #
+  # Such a key may be another record's data, so the rebuild does not
+  # replace it. Inspect each key in +conflicts+. The rebuild can run once
+  # none of them holds another type or belongs to another record, and
+  # none has too many candidate owners.
+  class IndexBucketConflictError < PersistenceError
+    attr_reader :conflicts, :owners
+
+    def initialize(conflicts, owners = {})
+      @conflicts = conflicts
+      @owners = owners
+      listed = conflicts.map do |key, type|
+        "#{key.inspect} (#{conflict_detail(type, owners[key])})"
+      end
+      message = "Multi-index bucket keys cannot be written as bucket sets: #{listed.join(', ')}. " \
+                'The rebuild stopped before it deleted or wrote anything. ' \
+                'It can run once none of these keys holds a type other than set or belongs to another record.'
+      if conflicts.values.any?(Symbol)
+        message += ' A key whose owner was not checked has more candidate owner records than the rebuild checks.'
+      end
+      super(message)
+    end
+
+    private
+
+    def conflict_detail(type, owner)
+      return "owner not checked: #{type}" if type.is_a?(Symbol)
+      return "#{type} of record #{owner.inspect}" if owner
+
+      type
+    end
+  end
+
   # Raised when a field type is invalid or unexpected
   class FieldTypeError < HorreumError; end
 
