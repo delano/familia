@@ -7,10 +7,10 @@ The format is based on `Keep a Changelog <https://keepachangelog.com/en/1.1.0/>`
 
    <!--scriv-insert-here-->
 
-.. _changelog-2.14.0:
+.. _changelog-2.14.0.pre1:
 
-2.14.0 — 2026-11-01
-===================
+2.14.0.pre1 — 2026-11-03
+========================
 
 Added
 -----
