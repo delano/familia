@@ -5,19 +5,21 @@ it the encoding of `Familia.dbkey`, `Horreum.dbkey`, `Horreum#dbkey` and the
 `dbkey` of a DataType that has a parent. The bytes of every key are
 unchanged, so no stored key moves. One stored value changes: the
 participations reverse-index entry for a target whose identifier is in an
-encoding other than UTF-8 or BINARY. Sections that do not apply to your
-application need no action.
+encoding other than UTF-8 or BINARY. This version also writes some records
+that 2.14 refused to write; see [Rolling back to 2.14](#rolling-back-to-214).
+Sections that do not apply to your application need no action.
 
 Check your code if it does any of the following:
 
 - reads `dbkey.encoding`, or compares, hashes or deduplicates dbkeys that come
   from different places, such as a key it built and a key from `SCAN`
 - parses the command text `DatabaseLogger` captures or writes to unstructured
-  log lines
+  log lines, or parses Familia's own log lines
 - rescues `Encoding::CompatibilityError` around `Familia.join`, a `dbkey`,
   `exists?`, `load`, `save`, `destroy!`, the `add_to_*` index and
   participation methods, or the audits
 - uses `participates_in` with identifiers in an encoding such as ISO-8859-1
+- may need to roll back to 2.14 after this version has written data
 
 ## A key is UTF-8 when its bytes are valid UTF-8, BINARY otherwise
 
@@ -39,9 +41,9 @@ is `==` to the same key read back from the server.
 
 That is with an ASCII class prefix. With a non-ASCII prefix such as
 `prefix 'équipe'`, the last three rows raised `Encoding::CompatibilityError`
-and now return the key. `Familia.join` of parts that are all US-ASCII or
-Symbols returns UTF-8 instead of US-ASCII. That label change is not visible
-to `==` or Hash lookups, because the result is ASCII-only.
+and now return the key. `Familia.join` of parts that are all US-ASCII,
+Symbols or Integers returns UTF-8 instead of US-ASCII. That label change is
+not visible to `==` or Hash lookups, because the result is ASCII-only.
 
 These keep the encoding they are given and are not normalized: a DataType's
 `dbkey:` option, a standalone DataType's key, and the patterns
@@ -56,7 +58,7 @@ that rescued `Encoding::CompatibilityError` from `Familia.join` or a `dbkey`
 to skip such records can drop the rescue; `dbkey_pattern` still raises it as
 described above.
 
-## DatabaseLogger command text
+## Command and log text
 
 `DatabaseLogger.command_string` gives the text of captured commands
 (`DatabaseLogger.capture_commands`) and of unstructured log lines. It now
@@ -76,10 +78,20 @@ are read as UTF-8 and each byte that is not valid UTF-8 is written as `\xNN`:
 
 Structured log lines (`args=`) are unchanged.
 
-**What to do.** A parser that read raw bytes from captured commands should
-read `\xNN` escapes instead. An argument that holds a literal backslash
-followed by `xNN` renders the same way, so do not decode the text back to
-bytes.
+Familia's own log lines follow the same rule where they name a key next to
+other text: the deserialization, `find_by_id`, `commit_fields`, `refresh!`
+and `HashKey` write lines, the `key=value` context of `Familia.debug`,
+`Familia.info` and `Familia.error`, and `Familia.trace` output. So do the
+messages of the `TypeError` a `HashKey` store raises, of
+`Familia::IdentifierMismatchError` and of the dirty-write warning and error. A key
+whose bytes are not valid UTF-8 now reads `team:bin\xFE:members` there, with
+a literal backslash. The legacy JSON-encoded identifier warning writes `->`
+where it wrote `→`.
+
+**What to do.** A parser that read raw bytes from captured commands or log
+lines should read `\xNN` escapes instead. An argument that holds a literal
+backslash followed by `xNN` renders the same way, so do not decode the text
+back to bytes.
 
 ## Participations reverse index for ISO-8859-1 identifiers
 
@@ -93,15 +105,23 @@ identifiers in UTF-8 or BINARY are unchanged.
 
 After the upgrade, `remove_from_<target>_<collection>` does not remove an
 entry written by 2.13 or 2.14, and adding the membership again leaves both
-entries. A process still on
-2.14 does not remove an entry written by this version either. The collection
-membership itself is removed either way.
+entries. A process still on 2.14 does not remove an entry written by this
+version either. The collection membership itself is removed either way.
 
-`participating_ids_for_target`, `participating_in_target?` and
-`current_participations` now raise `ArgumentError` for such a target, as they
-already did for a target whose identifier is not valid UTF-8. With 2.14,
-`participating_ids_for_target` returned an identifier that found no record
-and `current_participations` left the membership out.
+When the identifier's bytes are not valid UTF-8, as for `"caf\xE9"`,
+`participating_ids_for_target`, `current_participations`, and
+`participating_in_target?` given collection names now raise `ArgumentError`
+for such a target, as they already did for a BINARY target identifier that
+is not valid UTF-8. `participating_in_target?` without collection names
+returns `true`. With 2.14, `participating_ids_for_target` returned an
+identifier that found no record and `current_participations` left the
+membership out.
+
+When the bytes are valid UTF-8, as for `"\xC3\xA9t\xC3\xA9"` labelled
+ISO-8859-1, none of them raise. `participating_ids_for_target` returns the
+bytes as the UTF-8 identifier `"été"`, which finds the target; 2.14 returned
+an identifier transcoded a second time, which found no record.
+`current_participations` leaves the membership out, as it did with 2.14.
 
 **What to do.** Prefer UTF-8 identifiers. A field value is stored as JSON,
 which transcodes it, so a record saved under `"caf\xE9"` (ISO-8859-1) loads
@@ -114,3 +134,57 @@ fed = Federation.new(fid: latin1_id)
 legacy = fed.clubs.dbkey.b.force_encoding(latin1_id.encoding).encode(Encoding::UTF_8)
 club.participations.remove(legacy)
 ```
+
+## Instance-scoped indexes under ISO-8859-1 scope identifiers
+
+The same transcoding affects `audit_multi_indexes` and
+`repair_multi_indexes!` for an instance-scoped `multi_index` whose scope
+identifier is in an encoding such as ISO-8859-1 and has non-ASCII bytes. The
+audit loads the scope with its transcoded identifier and reads a
+participation collection other than the one the records joined, so it
+reports each of the scope's buckets as an orphaned key with reason
+`:field_value_unheld`. `repair_multi_indexes!` rebuilds the scope on every
+run, leaves the keys as they were, and the next audit reports the same. 2.14
+does the same with an ASCII field value and raised
+`Encoding::CompatibilityError` when writing a non-ASCII one, which this
+version writes. The index itself is correct: `find_all_by_<field>` on a
+scope built from the original identifier returns the records. On the scope
+`find_by_id` loads, whose identifier is transcoded, it returns none.
+
+**What to do.** Prefer UTF-8 identifiers for scope classes. Until such a
+scope is migrated to a UTF-8 identifier, treat these audit results for it as
+expected and do not schedule `repair_multi_indexes!` on them.
+
+## Rolling back to 2.14
+
+Under the rule above, this version writes records that 2.14 raised
+`Encoding::CompatibilityError` for before writing anything. 2.14 can read
+some of them and not others:
+
+- **Instance-scoped indexes under a scope identifier that is not valid
+  UTF-8**, given as BINARY (`"bin\xFE".b`) or ISO-8859-1 (`"caf\xE9"`), with a
+  non-ASCII field value such as `'rôle'`. 2.14 loads such a record, but
+  its `save` raises, and its `destroy!` raises before deleting anything,
+  so the record's hash, its `_idx_scopes` and `participations` keys, and
+  its bucket membership stay. `health_check` and `audit_multi_indexes` of
+  the record's class raise.
+- **Records under a non-ASCII class prefix** (`prefix 'membré'`) whose
+  identifier bytes are not valid UTF-8, given as BINARY or ISO-8859-1. 2.14
+  raises in `load` and `exists?`, in `find_by_id` and class `destroy!` given
+  the identifier read back from `instances`, and in `health_check` and
+  `repair_all!` of the class.
+- **Records whose indexed field value is not valid UTF-8**, given as BINARY
+  (`"r\xFEle".b`), under a non-ASCII class prefix. 2.14 loads such a record,
+  but `health_check`, `audit_multi_indexes` and `repair_all!` of its class
+  raise, its `save` raises, and its `destroy!` raises and leaves the hash.
+  2.14 fails the same way for such a value under an ASCII prefix, which it
+  could write.
+- **Participations reverse-index entries** for ISO-8859-1 targets, as
+  described above: 2.14 does not remove an entry this version wrote.
+
+2.14 changes nothing for these records when it raises. Running this
+version again makes them readable, savable and deletable again.
+
+**What to do.** Before rolling back, delete or migrate the records above, or
+plan to run this version again to remove them. Expect `health_check` and
+`repair_all!` of the affected classes to raise on 2.14 until they are gone.
