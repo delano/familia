@@ -892,7 +892,12 @@ module Familia
       # The key is compared and split as bytes, so a key with invalid
       # UTF-8, which the client returns as a binary String, does not raise
       # Encoding::CompatibilityError against a +scope_prefix+ with
-      # non-ASCII characters. Both parts keep the encoding of the key.
+      # non-ASCII characters. Each part is returned in the encoding
+      # Familia.normalize_key_encoding gives its own bytes, whichever part
+      # made the key BINARY: a scope id that is not valid UTF-8 is BINARY,
+      # like the members of the scope class's instances, and a field value
+      # that is valid UTF-8 is UTF-8, like the indexed field's value. The
+      # audit compares both with those.
       #
       # @param key [String]
       # @param scope_prefix [String]
@@ -910,7 +915,7 @@ module Familia
 
         scope_id = bkey.byteslice(prefix.bytesize, marker_pos - prefix.bytesize)
         field_value = bkey.byteslice((marker_pos + bmarker.bytesize)..)
-        [scope_id.force_encoding(key.encoding), field_value.force_encoding(key.encoding)]
+        [Familia.normalize_key_encoding(scope_id), Familia.normalize_key_encoding(field_value)]
       end
 
       # Assigns each bucket key in +parsed+ to the scope whose rebuild
