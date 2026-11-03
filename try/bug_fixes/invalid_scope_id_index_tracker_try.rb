@@ -55,7 +55,8 @@ end
 @leftover_keys = lambda do
   league_keys = TrackedScopeLeague.dbclient.scan_each(match: 'ligue_suivie:*').map(&:b)
   team_keys = TrackedScopeTeam.dbclient.scan_each(match: 'tracked_scope_team:*').map(&:b)
-  (league_keys + team_keys).reject { |key| key.end_with?(':object'.b, ':instances'.b) && key.start_with?('ligue_suivie:'.b) }.sort
+  league_keys.reject! { |key| key.end_with?(':object'.b, ':instances'.b) }
+  (league_keys + team_keys).sort
 end
 
 @binary_league = TrackedScopeLeague.new(lid: "bin\xFE".b)

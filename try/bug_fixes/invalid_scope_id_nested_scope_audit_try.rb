@@ -58,10 +58,9 @@ end
 @nested_key = "nested_scope_fed:inv\xFF:division_index:z:division_index:rôle".b
 
 ## the longer scope's bucket holds its club and comes back BINARY
-[@client.smembers(@nested_key), @client.scan_each(match: 'nested_scope_fed:*:division_index:*', type: 'set').to_a.sort == [
-  "nested_scope_fed:inv\xFF:division_index:rôle".b, @nested_key,
-].sort]
-#=> [['club-1'], true]
+bucket_keys = @client.scan_each(match: 'nested_scope_fed:*:division_index:*', type: 'set').to_a
+[@client.smembers(@nested_key), bucket_keys.include?(@nested_key), bucket_keys.map(&:encoding).uniq]
+#=> [['club-1'], true, [Encoding::BINARY]]
 
 ## the audit of the index is :ok
 @result = NestedScopeClub.audit_multi_indexes.first
