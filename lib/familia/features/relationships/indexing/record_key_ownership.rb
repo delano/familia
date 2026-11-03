@@ -402,8 +402,9 @@ module Familia
           # candidates would pass MAX_CANDIDATE_BATCH_BYTES of identifiers,
           # so the copies and the pipeline for one group stay within that
           # many bytes, or within one key's candidates when they alone pass
-          # it. The identifier and name are returned in the encoding of the
-          # key.
+          # it. The identifier and name are returned in the encoding
+          # Familia.normalize_key_encoding gives each one's bytes (see
+          # .resolve_pending_candidates).
           #
           # @param prefix_bytes [Integer] bytesize of the record prefix
           # @yieldparam key [String]
@@ -434,8 +435,13 @@ module Familia
           # Checks the candidates of the +pending+ [idx, key, offsets]
           # entries with one call to .existing_records, stores each key's
           # [identifier, name] or nil in +results+, and empties +pending+.
-          # The identifier and name are byte slices of the key, in its
-          # encoding.
+          # The identifier and name are byte slices of the key, each in the
+          # encoding Familia.normalize_key_encoding gives its own bytes. The
+          # key is BINARY when any of its parts is not valid UTF-8, and the
+          # multi_index audit compares the identifier with the members of
+          # the scope class's instances and the value in the name with the
+          # indexed field's value, so a valid part must not keep the label
+          # of an invalid one.
           def resolve_pending_candidates(owner_class, pending, prefix_bytes, delim, results)
             identifiers = pending.flat_map do |(_idx, key, offsets)|
               offsets.map { |split_at| key.byteslice(prefix_bytes, split_at) }
@@ -447,8 +453,8 @@ module Familia
               if last
                 split_at = offsets[last]
                 results[idx] = [
-                  identifiers[position + last].force_encoding(key.encoding),
-                  key.byteslice((prefix_bytes + split_at + delim.bytesize)..).force_encoding(key.encoding),
+                  Familia.normalize_key_encoding(identifiers[position + last]),
+                  Familia.normalize_key_encoding(key.byteslice((prefix_bytes + split_at + delim.bytesize)..)),
                 ]
               end
               position += offsets.size
