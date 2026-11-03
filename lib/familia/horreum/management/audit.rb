@@ -218,7 +218,7 @@ module Familia
               next unless obj
 
               field_value = obj.send(rel.field)
-              next if field_value.nil? || field_value.to_s.strip.empty?
+              next if field_value.nil? || Familia.blank_text?(field_value)
 
               lookups << [identifier, field_value.to_s]
             end
@@ -411,8 +411,12 @@ module Familia
             next
           end
 
-          # Verify field value still matches
-          current_value = obj.send(field).to_s
+          # Verify field value still matches. The field value is compared in
+          # the encoding the client gives the index's field names (see
+          # Familia.normalize_key_encoding): a value with bytes that are not
+          # valid UTF-8 loads as UTF-8 and is read back from the index as
+          # BINARY.
+          current_value = Familia.normalize_key_encoding(obj.send(field).to_s)
           unless current_value == field_value
             stale << { field_value: field_value, indexed_id: identifier, reason: :value_mismatch,
                        current_value: current_value }
@@ -431,9 +435,12 @@ module Familia
           next unless obj
 
           value = obj.send(field)
-          next if value.nil? || value.to_s.strip.empty?
+          next if value.nil? || Familia.blank_text?(value)
 
-          missing << { identifier: identifier, field_value: value.to_s } unless indexed_values.include?(value.to_s)
+          expected_value = Familia.normalize_key_encoding(value.to_s)
+          next if indexed_values.include?(expected_value)
+
+          missing << { identifier: identifier, field_value: expected_value }
         end
 
         { index_name: index_name, stale: stale, missing: missing }
@@ -635,7 +642,10 @@ module Familia
           }
         end
 
-        current_value = obj.send(rel.field).to_s
+        # +field_value+ is part of a bucket key the client returned, so
+        # compare the record's value in the encoding the client gives the
+        # same bytes (see Familia.normalize_key_encoding).
+        current_value = Familia.normalize_key_encoding(obj.send(rel.field).to_s)
         return nil if current_value == field_value
 
         {
@@ -667,9 +677,9 @@ module Familia
           next unless obj
 
           value = obj.send(rel.field)
-          next if value.nil? || value.to_s.strip.empty?
+          next if value.nil? || Familia.blank_text?(value)
 
-          expected_value = value.to_s
+          expected_value = Familia.normalize_key_encoding(value.to_s)
           actual_field_values << expected_value
 
           next if discovered_field_values.include?(expected_value)
@@ -1117,9 +1127,9 @@ module Familia
             next unless obj
 
             value = obj.send(rel.field)
-            next if value.nil? || value.to_s.strip.empty?
+            next if value.nil? || Familia.blank_text?(value)
 
-            expected_field_value = value.to_s
+            expected_field_value = Familia.normalize_key_encoding(value.to_s)
             expected_key = build_instance_scoped_bucket_key(scope_class, scope_id, rel.index_name, expected_field_value)
             bucket = bucket_entries[expected_key]
             next if bucket && bucket[:identifiers].any? { |m| m.to_s == identifier.to_s }
@@ -1158,9 +1168,9 @@ module Familia
             next unless obj
 
             value = obj.send(rel.field)
-            next if value.nil? || value.to_s.strip.empty?
+            next if value.nil? || Familia.blank_text?(value)
 
-            result[scope_id] << value.to_s
+            result[scope_id] << Familia.normalize_key_encoding(value.to_s)
           end
         end
 

@@ -138,6 +138,23 @@ module Familia
       val.is_a?(String) && val.length > 2 && val.start_with?('"') && val.end_with?('"')
     end
 
+    # Whether +value.to_s+ is empty or holds only whitespace and NULs, the
+    # field values the indexes skip. String#strip raises ArgumentError or
+    # Encoding::CompatibilityError on a String whose bytes are not valid in
+    # its encoding, such as a field value given as BINARY "r\xFEle" and
+    # loaded back as UTF-8 with the same bytes, so such a String is checked
+    # as bytes. The characters strip removes are all ASCII, so the answer is
+    # the same for a valid String.
+    #
+    # @param value [#to_s] field value
+    # @return [Boolean]
+    # @api private
+    def blank_text?(value)
+      text = value.to_s
+      text = text.b unless text.valid_encoding?
+      text.strip.empty?
+    end
+
     # Returns +str+ in the encoding redis-client gives a key or member with
     # the same bytes: UTF-8 when the bytes are valid UTF-8, BINARY otherwise.
     # (redis-client labels each bulk string it reads as UTF-8 and relabels it

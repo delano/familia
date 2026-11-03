@@ -118,7 +118,7 @@ module Familia
                   objects.each do |obj|
                     value = obj.send(field)
                     # Skip nil/empty field values gracefully
-                    next unless value && !value.to_s.strip.empty?
+                    next unless value && !Familia.blank_text?(value)
 
                     # For class-level indexes, use HSET with serialized value for consistency
                     tx.hset(temp_key, value.to_s, index_hashkey.serialize_value(obj))
@@ -233,7 +233,7 @@ module Familia
                 scope_instance.transaction do |tx|
                   objects.each do |obj|
                     value = obj.send(field)
-                    next unless value && !value.to_s.strip.empty?
+                    next unless value && !Familia.blank_text?(value)
 
                     # For unique index: HSET temp_key field_value serialized_identifier
                     # For multi-index: SADD temp_key:field_value identifier
@@ -410,7 +410,7 @@ module Familia
             transaction_result = indexed_class.transaction do |tx|
               objects.each do |obj|
                 value = obj.send(field)
-                next unless value && !value.to_s.strip.empty?
+                next unless value && !Familia.blank_text?(value)
 
                 tx.hset(temp_key, value.to_s, index_hashkey.serialize_value(obj))
                 batch_indexed += 1
