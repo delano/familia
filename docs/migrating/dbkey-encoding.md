@@ -21,8 +21,8 @@ Check your code if it does any of the following:
 
 ## A key is UTF-8 when its bytes are valid UTF-8, BINARY otherwise
 
-redis-client labels every key and member it reads this way. Its Ruby
-driver's `parse_blob` (`resp3.rb`, redis-client 0.29.0) runs
+redis-client's default Ruby driver labels every key and member it reads
+this way: its `parse_blob` (`resp3.rb`, redis-client 0.29.0) runs
 `str.force_encoding(Encoding::BINARY) unless str.valid_encoding?`.
 `Familia.join` now applies the same rule to the key it returns, through the
 new `Familia.normalize_key_encoding(str)`, so a key built from an identifier
@@ -52,8 +52,9 @@ glob with non-ASCII bytes under a non-ASCII prefix.
 **What to do.** Compare keys with `==` or use them as Hash keys; do not
 branch on `dbkey.encoding`. To compare a key from another source with one
 Familia built, pass it through `Familia.normalize_key_encoding` first. Code
-that rescued `Encoding::CompatibilityError` to skip such records can drop the
-rescue.
+that rescued `Encoding::CompatibilityError` from `Familia.join` or a `dbkey`
+to skip such records can drop the rescue; `dbkey_pattern` still raises it as
+described above.
 
 ## DatabaseLogger command text
 
@@ -90,8 +91,9 @@ the collection at `federation:caf\xE9:clubs`. The entry now holds the
 collection key's bytes, `"federation:caf\xE9:clubs"`. Entries for
 identifiers in UTF-8 or BINARY are unchanged.
 
-After the upgrade, `remove_from_*` does not remove an entry written by 2.13 or
-2.14, and adding the membership again leaves both entries. A process still on
+After the upgrade, `remove_from_<target>_<collection>` does not remove an
+entry written by 2.13 or 2.14, and adding the membership again leaves both
+entries. A process still on
 2.14 does not remove an entry written by this version either. The collection
 membership itself is removed either way.
 

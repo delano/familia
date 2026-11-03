@@ -33,11 +33,11 @@ Changed
   in an encoding other than UTF-8 or BINARY and has non-ASCII bytes, such as
   ISO-8859-1 ``"caf\xE9"``, holds the collection key's bytes. 2.13 and 2.14
   stored the key transcoded to UTF-8, which is not the collection's key.
-  ``remove_from_*`` does not remove an entry written by 2.13 or 2.14, and
-  adding the membership again leaves both. ``participating_ids_for_target``,
-  ``participating_in_target?`` and ``current_participations`` raise
-  ``ArgumentError`` for such a target, as they already did for a target
-  identifier that is not valid UTF-8. PR #453
+  ``remove_from_<target>_<collection>`` does not remove an entry written by
+  2.13 or 2.14, and adding the membership again leaves both.
+  ``participating_ids_for_target``, ``participating_in_target?`` and
+  ``current_participations`` raise ``ArgumentError`` for such a target, as
+  they already did for a target identifier that is not valid UTF-8. PR #453
 
 Fixed
 -----
